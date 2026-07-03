@@ -189,6 +189,14 @@ public sealed class FileLifecycleTests : IDisposable
         package.Plan.Route.Should().Be(PresentationPrintOutputPackageRoute.NotesPagePdf);
         package.Plan.PrintPlan.CommandId.Should().Be(PresentationExportPlanner.PrintCommandId);
         package.Plan.PrintPlan.SlideRange.SlideNumbers.Should().Equal(1);
+        package.Plan.PreviewPlan.Pages.Should().ContainSingle()
+            .Which.Should().Match<PresentationPrintPreviewPage>(page =>
+                page.PageIndex == 0 &&
+                page.PageNumber == 1 &&
+                page.Kind == PresentationPrintPreviewPageKind.NotesPage &&
+                page.SlideNumbers.SequenceEqual(new[] { 1 }) &&
+                page.ThumbnailLabel == "Slide 1 notes" &&
+                page.Detail == "Notes page for slide 1");
         package.Plan.NativePrinterDialogDeferred.Should().BeTrue();
         package.Bytes.Length.Should().BeGreaterThan(100);
         System.Text.Encoding.ASCII.GetString(package.Bytes, 0, 5).Should().Be("%PDF-");
@@ -212,6 +220,8 @@ public sealed class FileLifecycleTests : IDisposable
         backstagePlan.PageCount.Should().Be(renderPlan.Pages.Count);
         backstagePlan.LayoutSummary.Should().Be($"Notes Pages - All slides, {renderPlan.Pages.Count} pages");
         backstagePlan.SelectedLayout.PackagePlan.PageCount.Should().Be(renderPlan.Pages.Count);
+        backstagePlan.PreviewPlan.PageCount.Should().Be(renderPlan.Pages.Count);
+        backstagePlan.PreviewPlan.Pages.Should().HaveCount(renderPlan.Pages.Count);
     }
 
     [StaFact]

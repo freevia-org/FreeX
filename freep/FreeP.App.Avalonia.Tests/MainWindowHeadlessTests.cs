@@ -1353,6 +1353,9 @@ public sealed class MainWindowHeadlessTests
         printPlan!.PackagePlan.PrintPlan.CommandId.Should().Be(PresentationExportPlanner.PrintCommandId);
         printPlan.SelectedLayout.Layout.Layout.Should().Be(PresentationPrintLayoutKind.FullPageSlides);
         printPlan.PackagePlan.Route.Should().Be(PresentationPrintOutputPackageRoute.FullPageSlidesRasterPdf);
+        printPlan.PreviewPlan.Pages.Select(page => page.ThumbnailLabel)
+            .Should()
+            .Equal("Slide 1", "Slide 2", "Slide 3", "Slide 4");
         printPlan.NativePrinterDialogDeferred.Should().BeTrue();
         printPlan.LayoutChoices.Select(choice => choice.Layout.SlidesPerPage).Should().Equal(1, 1, 1, 2, 3, 4, 6, 9);
         printPlan.RangeChoices.Select(choice => choice.Kind).Should().Contain(PresentationSlideRangeKind.CurrentSlide);
@@ -1365,6 +1368,7 @@ public sealed class MainWindowHeadlessTests
         string heading = string.Empty;
         string message = string.Empty;
         IReadOnlyList<string> renderedOptionLines = [];
+        IReadOnlyList<string> renderedPreviewRows = [];
         IReadOnlyList<string> renderedLayoutRows = [];
         IReadOnlyList<string> renderedRangeRows = [];
         var renderedRowCount = 0;
@@ -1391,6 +1395,7 @@ public sealed class MainWindowHeadlessTests
             heading = window.PrintOptionsPaneHeading;
             message = window.PrintOptionsPaneMessage;
             renderedOptionLines = window.PrintOptionsPaneRenderedOptionLines.ToArray();
+            renderedPreviewRows = window.PrintOptionsPaneRenderedPreviewRows.ToArray();
             renderedLayoutRows = window.PrintOptionsPaneRenderedLayoutRows.ToArray();
             renderedRangeRows = window.PrintOptionsPaneRenderedRangeRows.ToArray();
             renderedRowCount = window.PrintOptionsPaneRenderedRowCount;
@@ -1408,6 +1413,8 @@ public sealed class MainWindowHeadlessTests
             "Print hidden slides",
             "Frame slides",
             "Print comments and ink markup");
+        renderedPreviewRows.Should().ContainSingle()
+            .Which.Should().Be("Selected: Handout page 1: Handout with slides 1, 3");
         renderedLayoutRows.Should().HaveCount(printPlan.LayoutChoices.Count);
         renderedLayoutRows.Should().Contain(row => row.StartsWith("Selected: Handouts (3 slides per page)", StringComparison.Ordinal));
         renderedRangeRows.Should().HaveCount(printPlan.RangeChoices.Count);
@@ -1477,6 +1484,8 @@ public sealed class MainWindowHeadlessTests
         printPlan!.PageCount.Should().Be(renderPlan.Pages.Count);
         printPlan.LayoutSummary.Should().Be($"Notes Pages - All slides, {renderPlan.Pages.Count} pages");
         printPlan.SelectedLayout.PackagePlan.PageCount.Should().Be(renderPlan.Pages.Count);
+        printPlan.PreviewPlan.PageCount.Should().Be(renderPlan.Pages.Count);
+        printPlan.PreviewPlan.Pages.Should().HaveCount(renderPlan.Pages.Count);
         renderedOptionLines.Should().Equal(printPlan.Options.SummaryLines);
     }
 

@@ -48,6 +48,14 @@ public sealed class PresentationPrintBackstagePlannerTests
         plan.PageCount.Should().Be(1);
         plan.LayoutSummary.Should().Be("Handouts (3 slides per page) - Slides 2, 4, 1 page including hidden slides");
         plan.SlideRangeSummary.Should().Be("Slides 2, 4");
+        plan.PreviewPlan.PageCount.Should().Be(1);
+        plan.PreviewPlan.PageCountText.Should().Be("1 printable page");
+        plan.PreviewPlan.Pages.Should().ContainSingle()
+            .Which.Should().Match<PresentationPrintPreviewPage>(page =>
+                page.Kind == PresentationPrintPreviewPageKind.Handout &&
+                page.PageNumber == 1 &&
+                page.SlideNumbers.SequenceEqual(new[] { 2, 4 }) &&
+                page.Detail == "Handout with slides 2, 4");
         plan.CanBuildPackage.Should().BeTrue();
         plan.NativePrinterDialogDeferred.Should().BeTrue();
         plan.NativePrinterDialogDeferredMessage.Should().Be(
@@ -102,6 +110,9 @@ public sealed class PresentationPrintBackstagePlannerTests
             PresentationSlideRangeKind.CustomRange);
         plan.PageCount.Should().Be(0);
         plan.SlideRangeSummary.Should().Be("No slides");
+        plan.PreviewPlan.CanPreview.Should().BeFalse();
+        plan.PreviewPlan.PageCountText.Should().Be("No printable pages");
+        plan.PreviewPlan.Pages.Should().BeEmpty();
         plan.CanBuildPackage.Should().BeFalse();
         plan.DisabledReason.Should().Be("Print output requires at least one slide.");
         plan.LayoutChoices.Should().OnlyContain(choice => !choice.PackagePlan.CanBuildPackage);

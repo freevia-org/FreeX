@@ -9,6 +9,28 @@ public enum PresentationPrintOutputPackageRoute
     HandoutPdf,
 }
 
+public enum PresentationPrintPreviewPageKind
+{
+    FullPageSlide,
+    NotesPage,
+    Handout,
+}
+
+public sealed record PresentationPrintPreviewPage(
+    int PageIndex,
+    int PageNumber,
+    PresentationPrintPreviewPageKind Kind,
+    IReadOnlyList<int> SlideNumbers,
+    string ThumbnailLabel,
+    string Detail);
+
+public sealed record PresentationPrintPreviewPlan(
+    int PageCount,
+    string PageCountText,
+    bool CanPreview,
+    string? DisabledReason,
+    IReadOnlyList<PresentationPrintPreviewPage> Pages);
+
 public sealed record PresentationPrintOutputPackagePlan(
     PresentationPrintPlan PrintPlan,
     PresentationPrintOutputPackageRoute Route,
@@ -18,6 +40,7 @@ public sealed record PresentationPrintOutputPackagePlan(
     string LayoutSummary,
     string SlideRangeSummary,
     PresentationPrintOptionsPlan Options,
+    PresentationPrintPreviewPlan PreviewPlan,
     bool CanBuildPackage,
     bool NativePrinterDialogDeferred,
     string? DisabledReason);
@@ -51,34 +74,39 @@ public static class PresentationPrintOutputPackageExecutor
         ArgumentNullException.ThrowIfNull(presentation);
 
         var printPlan = PresentationExportPlanner.BuildPrintPlan(request, presentation.Slides.Count);
-        var notesPageCount = printPlan.Layout.Layout == PresentationPrintLayoutKind.NotesPages &&
+        var notesRenderPlan = printPlan.Layout.Layout == PresentationPrintLayoutKind.NotesPages &&
             printPlan.SlideRange.SlideNumbers.Count > 0
                 ? PresentationNotesPagePdfExporter.BuildRenderPlan(
                     presentation,
                     new PresentationNotesPagePdfExportRequest(ToPrintRequest(printPlan)))
-                    .Pages.Count
-                : (int?)null;
+                : null;
 
-        return BuildPackagePlan(printPlan, notesPageCount);
+        return BuildPackagePlan(printPlan, notesRenderPlan?.Pages.Count, notesRenderPlan?.PreviewPlans);
     }
 
     private static PresentationPrintOutputPackagePlan BuildPackagePlan(
         PresentationPrintPlan printPlan,
-        int? notesPageCount)
+        int? notesPageCount,
+        IReadOnlyList<PresentationNotesPagePreviewPlan>? notesPreviewPlans = null)
     {
         var canBuild = printPlan.SlideRange.SlideNumbers.Count > 0;
+        var route = ResolveRoute(printPlan.Layout.Layout);
+        var pageCount = CalculatePageCount(printPlan, notesPageCount);
+        var disabledReason = canBuild ? null : "Print output requires at least one slide.";
+        var previewPlan = BuildPreviewPlan(printPlan, route, pageCount, canBuild, disabledReason, notesPreviewPlans);
         return new PresentationPrintOutputPackagePlan(
             printPlan,
-            ResolveRoute(printPlan.Layout.Layout),
+            route,
             PdfContentType,
             PresentationExportPlanner.PdfExportExtension,
-            CalculatePageCount(printPlan, notesPageCount),
+            pageCount,
             BuildLayoutSummary(printPlan, notesPageCount),
             printPlan.SlideRange.DisplayName,
             printPlan.Options,
+            previewPlan,
             canBuild,
             NativePrinterDialogDeferred: true,
-            canBuild ? null : "Print output requires at least one slide.");
+            disabledReason);
     }
 
     public static PresentationPrintOutputPackage BuildPackage(
@@ -148,6 +176,135 @@ public static class PresentationPrintOutputPackageExecutor
         var hiddenText = plan.PrintHiddenSlides ? " including hidden slides" : string.Empty;
         return $"{plan.Layout.DisplayName} - {plan.SlideRange.DisplayName}, {pageText}{hiddenText}";
     }
+
+    private static PresentationPrintPreviewPlan BuildPreviewPlan(
+        PresentationPrintPlan printPlan,
+        PresentationPrintOutputPackageRoute route,
+        int pageCount,
+        bool canBuild,
+        string? disabledReason,
+        IReadOnlyList<PresentationNotesPagePreviewPlan>? notesPreviewPlans)
+    {
+        if (!canBuild)
+        {
+            return new PresentationPrintPreviewPlan(
+                0,
+                "No printable pages",
+                CanPreview: false,
+                disabledReason,
+                []);
+        }
+
+        var pages = route switch
+        {
+            PresentationPrintOutputPackageRoute.FullPageSlidesRasterPdf =>
+                BuildFullPagePreviewPages(printPlan.SlideRange.SlideNumbers),
+            PresentationPrintOutputPackageRoute.NotesPagePdf =>
+                notesPreviewPlans is { Count: > 0 }
+                    ? BuildNotesPreviewPages(notesPreviewPlans)
+                    : BuildNotesPreviewPages(printPlan.SlideRange.SlideNumbers, pageCount),
+            PresentationPrintOutputPackageRoute.HandoutPdf =>
+                BuildHandoutPreviewPages(printPlan.SlideRange.SlideNumbers, printPlan.Layout.SlidesPerPage),
+            _ => throw new ArgumentOutOfRangeException(nameof(route), route, "Unsupported print preview route."),
+        };
+
+        return new PresentationPrintPreviewPlan(
+            pageCount,
+            pageCount == 1 ? "1 printable page" : $"{pageCount} printable pages",
+            CanPreview: pages.Count > 0,
+            DisabledReason: null,
+            pages);
+    }
+
+    private static IReadOnlyList<PresentationPrintPreviewPage> BuildFullPagePreviewPages(
+        IReadOnlyList<int> slideNumbers) =>
+        slideNumbers
+            .Select((slideNumber, index) => new PresentationPrintPreviewPage(
+                index,
+                index + 1,
+                PresentationPrintPreviewPageKind.FullPageSlide,
+                [slideNumber],
+                $"Slide {slideNumber}",
+                $"Full-page slide {slideNumber}"))
+            .ToArray();
+
+    private static IReadOnlyList<PresentationPrintPreviewPage> BuildNotesPreviewPages(
+        IReadOnlyList<int> slideNumbers,
+        int pageCount)
+    {
+        var pages = new List<PresentationPrintPreviewPage>(pageCount);
+        for (var index = 0; index < pageCount; index++)
+        {
+            var slideNumber = slideNumbers[Math.Min(index, slideNumbers.Count - 1)];
+            var isContinuation = index >= slideNumbers.Count;
+            pages.Add(new PresentationPrintPreviewPage(
+                index,
+                index + 1,
+                PresentationPrintPreviewPageKind.NotesPage,
+                [slideNumber],
+                isContinuation ? $"Slide {slideNumber} notes continued" : $"Slide {slideNumber} notes",
+                isContinuation
+                    ? $"Notes continuation page for slide {slideNumber}"
+                    : $"Notes page for slide {slideNumber}"));
+        }
+
+        return pages;
+    }
+
+    private static IReadOnlyList<PresentationPrintPreviewPage> BuildNotesPreviewPages(
+        IReadOnlyList<PresentationNotesPagePreviewPlan> previewPlans)
+    {
+        var pages = new List<PresentationPrintPreviewPage>();
+        foreach (var previewPlan in previewPlans)
+        {
+            var slideNumber = previewPlan.SlideNumber ?? 0;
+            var renderedPageCount = PresentationNotesPagePdfExporter.CountRenderedPages(previewPlan);
+            for (var index = 0; index < renderedPageCount; index++)
+            {
+                var isContinuation = index > 0;
+                pages.Add(new PresentationPrintPreviewPage(
+                    pages.Count,
+                    pages.Count + 1,
+                    PresentationPrintPreviewPageKind.NotesPage,
+                    slideNumber > 0 ? [slideNumber] : [],
+                    isContinuation ? $"Slide {slideNumber} notes continued" : $"Slide {slideNumber} notes",
+                    isContinuation
+                        ? $"Notes continuation page for slide {slideNumber}"
+                        : $"Notes page for slide {slideNumber}"));
+            }
+        }
+
+        return pages;
+    }
+
+    private static IReadOnlyList<PresentationPrintPreviewPage> BuildHandoutPreviewPages(
+        IReadOnlyList<int> slideNumbers,
+        int slidesPerPage)
+    {
+        var pages = new List<PresentationPrintPreviewPage>(
+            (int)Math.Ceiling(slideNumbers.Count / (double)slidesPerPage));
+        for (var index = 0; index < slideNumbers.Count; index += slidesPerPage)
+        {
+            var pageSlideNumbers = slideNumbers
+                .Skip(index)
+                .Take(slidesPerPage)
+                .ToArray();
+            pages.Add(new PresentationPrintPreviewPage(
+                pages.Count,
+                pages.Count + 1,
+                PresentationPrintPreviewPageKind.Handout,
+                pageSlideNumbers,
+                $"Handout page {pages.Count + 1}",
+                $"Handout with {FormatSlideSet(pageSlideNumbers)}"));
+        }
+
+        return pages;
+    }
+
+    private static string FormatSlideSet(IReadOnlyList<int> slideNumbers) =>
+        slideNumbers.Count == 1
+            ? $"slide {slideNumbers[0]}"
+            : $"slides {string.Join(", ", slideNumbers)}";
 
     private static PresentationPrintRequest ToPrintRequest(PresentationPrintPlan plan) =>
         new(

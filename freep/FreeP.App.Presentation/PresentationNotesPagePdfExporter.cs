@@ -92,6 +92,20 @@ public static class PresentationNotesPagePdfExporter
         return new PresentationNotesPagePdfRenderPlan(printPlan, previewPlans, pages);
     }
 
+    internal static int CountRenderedPages(PresentationNotesPagePreviewPlan plan)
+    {
+        var top = plan.PageBounds.Height - plan.NotesBounds.Top - NotesInset - NotesFontSize;
+        var bottom = plan.PageBounds.Height - plan.NotesBounds.Bottom + NotesInset;
+        if (top < bottom || plan.NoteLines.Count == 0)
+            return 1;
+
+        var linesPerPage = 0;
+        for (var y = top; y >= bottom; y -= NotesLeading)
+            linesPerPage++;
+
+        return Math.Max(1, (int)Math.Ceiling(plan.NoteLines.Count / (double)Math.Max(1, linesPerPage)));
+    }
+
     /// <summary>
     /// Builds one notes page for <paramref name="plan"/>'s slide, plus as many continuation pages
     /// as needed when the speaker notes overflow the notes box. PowerPoint's own notes-page export
