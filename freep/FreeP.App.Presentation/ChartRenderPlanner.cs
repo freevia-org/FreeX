@@ -120,6 +120,7 @@ public readonly record struct ChartDataTableCellPlan(
     int RowIndex,
     int ColumnIndex,
     string Text,
+    ChartPlanRect CellBounds,
     ChartPlanRect Bounds,
     bool IsHeader,
     bool IsBold,
@@ -936,6 +937,7 @@ public static partial class ChartRenderPlanner
                 RowIndex: 0,
                 ColumnIndex: columnIndex,
                 Text: text,
+                CellBounds: cellBounds,
                 Bounds: InsetDataTableCellText(cellBounds),
                 IsHeader: true,
                 IsBold: headerTextStyle.IsBold,
@@ -967,6 +969,7 @@ public static partial class ChartRenderPlanner
                 RowIndex: seriesIndex + 1,
                 ColumnIndex: 0,
                 Text: series.Name,
+                CellBounds: seriesCellBounds,
                 Bounds: keyBounds.HasValue
                     ? new ChartPlanRect(
                         keyBounds.Value.Right + DataTableTextInset,
@@ -998,6 +1001,7 @@ public static partial class ChartRenderPlanner
                     RowIndex: seriesIndex + 1,
                     ColumnIndex: categoryIndex + 1,
                     Text: text,
+                    CellBounds: cellBounds,
                     Bounds: InsetDataTableCellText(cellBounds),
                     IsHeader: false,
                     IsBold: bodyTextStyle.IsBold,
