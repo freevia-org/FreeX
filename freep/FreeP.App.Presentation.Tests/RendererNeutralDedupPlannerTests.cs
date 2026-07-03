@@ -412,6 +412,7 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().Contain("plan.VerticalBorders");
             source.Should().Contain("plan.OutlineBorders");
             source.Should().Contain("ToPen(plan.BorderStroke)");
+            source.Should().Contain("Fill = stroke.Fill");
             source.Should().Contain("stroke.Dash");
             source.Should().Contain("cell.IsItalic");
             source.Should().Contain("cell.TextColor");
@@ -419,6 +420,7 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().NotContain("chart.DataTable?.ShowLegendKeys");
             source.Should().NotContain("chart.DataTable?.TextStyle");
             source.Should().NotContain("chart.DataTable?.BorderOutline");
+            source.Should().NotContain("ShapeOutline.GradientVisible");
             source.Should().NotContain("DataTableHeaderHeight + chart.Series.Count");
         }
     }
