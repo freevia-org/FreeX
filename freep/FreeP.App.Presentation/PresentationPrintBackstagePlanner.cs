@@ -20,6 +20,7 @@ public sealed record PresentationPrintBackstagePlan(
     PresentationPrintBackstageLayoutChoice SelectedLayout,
     PresentationPrintBackstageRangeChoice SelectedRange,
     bool PrintHiddenSlides,
+    PresentationPrintOptionsPlan Options,
     int PageCount,
     string LayoutSummary,
     string SlideRangeSummary,
@@ -66,6 +67,7 @@ public static class PresentationPrintBackstagePlanner
             selectedLayout,
             selectedRange,
             printPlan.PrintHiddenSlides,
+            packagePlan.Options,
             packagePlan.PageCount,
             packagePlan.LayoutSummary,
             packagePlan.SlideRangeSummary,
@@ -167,7 +169,12 @@ public static class PresentationPrintBackstagePlanner
             plan.Layout.Layout,
             ToRangeRequest(plan.SlideRange),
             plan.Layout.IsHandout ? plan.Layout.SlidesPerPage : null,
-            plan.PrintHiddenSlides);
+            plan.PrintHiddenSlides,
+            plan.Options.Copies,
+            plan.Options.Collate,
+            plan.Options.ColorMode,
+            plan.Options.FrameSlides,
+            plan.Options.IncludeCommentsAndInkMarkup);
 
     private static PresentationSlideRangeRequest ToRangeRequest(PresentationSlideRangePlan range) =>
         range.Kind switch

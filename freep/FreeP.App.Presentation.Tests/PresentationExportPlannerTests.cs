@@ -96,7 +96,12 @@ public sealed class PresentationExportPlannerTests
                 PresentationSlideRangeKind.SelectedSlides,
                 SelectedSlideNumbers: [4, 2, 99, 2, 0]),
             HandoutSlidesPerPage: 5,
-            PrintHiddenSlides: true);
+            PrintHiddenSlides: true,
+            Copies: 1000,
+            Collate: false,
+            ColorMode: PresentationPrintColorMode.Grayscale,
+            FrameSlides: true,
+            IncludeCommentsAndInkMarkup: true);
 
         var plan = PresentationExportPlanner.BuildPrintPlan(request, slideCount: 6);
 
@@ -110,6 +115,20 @@ public sealed class PresentationExportPlannerTests
         plan.SlideRange.Kind.Should().Be(PresentationSlideRangeKind.SelectedSlides);
         plan.SlideRange.SlideNumbers.Should().Equal(2, 4);
         plan.SlideRange.DisplayName.Should().Be("Slides 2, 4");
+        plan.Options.Copies.Should().Be(999);
+        plan.Options.Collate.Should().BeFalse();
+        plan.Options.ColorMode.Should().Be(PresentationPrintColorMode.Grayscale);
+        plan.Options.FrameSlides.Should().BeTrue();
+        plan.Options.IncludeCommentsAndInkMarkup.Should().BeTrue();
+        plan.Options.DisplaySummary.Should().Be(
+            "999 copies, Uncollated, Grayscale, Print hidden slides, Frame slides, Print comments and ink markup");
+        plan.Options.SummaryLines.Should().Equal(
+            "999 copies",
+            "Uncollated",
+            "Grayscale",
+            "Print hidden slides",
+            "Frame slides",
+            "Print comments and ink markup");
     }
 
     [Fact]
@@ -155,6 +174,7 @@ public sealed class PresentationExportPlannerTests
         fullPage.PageCount.Should().Be(1);
         fullPage.SlideRangeSummary.Should().Be("Slide 2");
         fullPage.LayoutSummary.Should().Be("Full Page Slides - Slide 2, 1 page");
+        fullPage.Options.DisplaySummary.Should().Be("1 copy, Collated, Color");
         fullPage.CanBuildPackage.Should().BeTrue();
         fullPage.NativePrinterDialogDeferred.Should().BeTrue();
         fullPage.DisabledReason.Should().BeNull();

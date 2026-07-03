@@ -12,7 +12,12 @@ public sealed class PresentationPrintBackstagePlannerTests
                     PresentationSlideRangeKind.SelectedSlides,
                     SelectedSlideNumbers: [4, 2, 2, 99]),
                 HandoutSlidesPerPage: 3,
-                PrintHiddenSlides: true),
+                PrintHiddenSlides: true,
+                Copies: 3,
+                Collate: false,
+                ColorMode: PresentationPrintColorMode.PureBlackAndWhite,
+                FrameSlides: true,
+                IncludeCommentsAndInkMarkup: true),
             slideCount: 6,
             currentSlideNumber: 5,
             selectedSlideNumbers: [2, 4]);
@@ -31,6 +36,15 @@ public sealed class PresentationPrintBackstagePlannerTests
         plan.SelectedLayout.Layout.SlidesPerPage.Should().Be(3);
         plan.LayoutChoices.Single(choice => choice.IsSelected).Should().BeSameAs(plan.SelectedLayout);
         plan.PrintHiddenSlides.Should().BeTrue();
+        plan.Options.DisplaySummary.Should().Be(
+            "3 copies, Uncollated, Pure Black and White, Print hidden slides, Frame slides, Print comments and ink markup");
+        plan.Options.SummaryLines.Should().Equal(
+            "3 copies",
+            "Uncollated",
+            "Pure Black and White",
+            "Print hidden slides",
+            "Frame slides",
+            "Print comments and ink markup");
         plan.PageCount.Should().Be(1);
         plan.LayoutSummary.Should().Be("Handouts (3 slides per page) - Slides 2, 4, 1 page including hidden slides");
         plan.SlideRangeSummary.Should().Be("Slides 2, 4");
@@ -40,6 +54,7 @@ public sealed class PresentationPrintBackstagePlannerTests
             PresentationPrintOutputPackageExecutor.NativePrinterDialogDeferredReason);
         plan.DisabledReason.Should().BeNull();
         plan.PackagePlan.Route.Should().Be(PresentationPrintOutputPackageRoute.HandoutPdf);
+        plan.PackagePlan.Options.Should().BeSameAs(plan.Options);
     }
 
     [Fact]
