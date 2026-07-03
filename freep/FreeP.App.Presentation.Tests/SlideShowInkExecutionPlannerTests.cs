@@ -144,6 +144,52 @@ public sealed class SlideShowInkExecutionPlannerTests
     }
 
     [Fact]
+    public void BuildOverlayRenderPlan_ProjectsPowerPointStyleInkPrimitivesForHosts()
+    {
+        var penState = CreateState(SlideShowPresenterPointerMode.Highlighter, "#FFEE00", 10);
+        var committed = CommitStroke(penState, new SlideShowInkPoint(10, 20), new SlideShowInkPoint(110, 220));
+        var laserState = SlideShowInkExecutionPlanner.SelectPointerInk(
+            committed,
+            SlideShowPresenterToolPlanner.PlanPointerInk(
+                SlideShowPresenterPointerMode.LaserPointer,
+                "#00FF00",
+                6,
+                SlideShowInkRetentionDecision.KeepInk));
+        var laser = SlideShowInkExecutionPlanner.Begin(laserState, new SlideShowInkPoint(50, 100)).State;
+
+        var plan = SlideShowInkExecutionPlanner.BuildOverlayRenderPlan(
+            laser,
+            canvasWidthDip: 1920,
+            canvasHeightDip: 1080,
+            new SlideShowSlideMetrics(960, 540));
+
+        plan.HasVisibleInk.Should().BeTrue();
+        plan.CanvasWidthDip.Should().Be(1920);
+        plan.CanvasHeightDip.Should().Be(1080);
+        plan.Primitives.Should().HaveCount(2);
+
+        var stroke = plan.Primitives[0];
+        stroke.Kind.Should().Be(SlideShowInkOverlayPrimitiveKind.StrokePath);
+        stroke.PointerMode.Should().Be(SlideShowPresenterPointerMode.Highlighter);
+        stroke.InkState.ColorHex.Should().Be("#FFEE00");
+        stroke.InkState.Opacity.Should().Be(0.45);
+        stroke.StrokeThicknessDip.Should().Be(20);
+        stroke.UseRoundLineCaps.Should().BeTrue();
+        stroke.UseRoundLineJoin.Should().BeTrue();
+        stroke.Points.Should().Equal(
+            new SlideShowPoint(20, 40),
+            new SlideShowPoint(220, 440));
+
+        var dot = plan.Primitives[1];
+        dot.Kind.Should().Be(SlideShowInkOverlayPrimitiveKind.LaserDot);
+        dot.PointerMode.Should().Be(SlideShowPresenterPointerMode.LaserPointer);
+        dot.CenterPoint.Should().Be(new SlideShowPoint(100, 200));
+        dot.RadiusDip.Should().Be(12);
+        dot.OutlineColorHex.Should().Be("#FFFFFF");
+        dot.OutlineThicknessDip.Should().Be(1);
+    }
+
+    [Fact]
     public void MoveToSlide_CommitsActiveStrokeAndClearsTransientLaserOverlay()
     {
         var drawing = SlideShowInkExecutionPlanner.Append(

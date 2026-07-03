@@ -478,86 +478,74 @@ public sealed class SlideShowWindow : Window
     {
         _inkOverlay.Children.Clear();
 
-        var plan = SlideShowInkExecutionPlanner.BuildOverlayPlan(_inkExecutionState);
         var canvasWidth = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : _slideDipW;
         var canvasHeight = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : _slideDipH;
+        var plan = SlideShowInkExecutionPlanner.BuildOverlayRenderPlan(
+            _inkExecutionState,
+            canvasWidth,
+            canvasHeight,
+            CurrentSlideMetrics());
         _inkOverlay.Width = canvasWidth;
         _inkOverlay.Height = canvasHeight;
 
-        foreach (var stroke in plan.CommittedStrokes)
+        foreach (var primitive in plan.Primitives)
         {
-            AddInkStroke(stroke, canvasWidth, canvasHeight);
-        }
-
-        if (plan.ActiveStroke is not null)
-        {
-            AddInkStroke(plan.ActiveStroke, canvasWidth, canvasHeight);
-        }
-
-        if (plan.LaserOverlayPoint is not null)
-        {
-            AddLaserOverlay(plan.LaserOverlayPoint, _inkExecutionState.ActiveInkState, canvasWidth, canvasHeight);
+            if (primitive.Kind == SlideShowInkOverlayPrimitiveKind.StrokePath)
+            {
+                AddInkStroke(primitive);
+            }
+            else if (primitive.Kind == SlideShowInkOverlayPrimitiveKind.LaserDot)
+            {
+                AddLaserOverlay(primitive);
+            }
         }
     }
 
-    private void AddInkStroke(SlideShowInkStroke stroke, double canvasWidth, double canvasHeight)
+    private void AddInkStroke(SlideShowInkOverlayPrimitive primitive)
     {
-        if (stroke.Points.Count == 0)
+        if (primitive.Points.Count == 0)
         {
             return;
         }
 
-        var scale = InkScale(canvasWidth, canvasHeight);
         var polyline = new global::Avalonia.Controls.Shapes.Polyline
         {
-            Stroke = InkBrush(stroke.InkState),
-            StrokeThickness = Math.Max(1, stroke.InkState.ThicknessDip * scale),
-            StrokeLineCap = PenLineCap.Round,
-            StrokeJoin = PenLineJoin.Round,
-            Opacity = stroke.InkState.Opacity,
+            Stroke = InkBrush(primitive.InkState),
+            StrokeThickness = primitive.StrokeThicknessDip,
+            StrokeLineCap = primitive.UseRoundLineCaps ? PenLineCap.Round : PenLineCap.Flat,
+            StrokeJoin = primitive.UseRoundLineJoin ? PenLineJoin.Round : PenLineJoin.Miter,
+            Opacity = primitive.InkState.Opacity,
             IsHitTestVisible = false,
         };
-        foreach (var point in stroke.Points)
+        foreach (var point in primitive.Points)
         {
-            polyline.Points.Add(ToCanvasPoint(point, canvasWidth, canvasHeight));
+            polyline.Points.Add(new Point(point.X, point.Y));
         }
 
         _inkOverlay.Children.Add(polyline);
     }
 
-    private void AddLaserOverlay(
-        SlideShowInkPoint point,
-        SlideShowInkState inkState,
-        double canvasWidth,
-        double canvasHeight)
+    private void AddLaserOverlay(SlideShowInkOverlayPrimitive primitive)
     {
-        var scale = InkScale(canvasWidth, canvasHeight);
-        var radius = Math.Max(3, inkState.ThicknessDip * scale);
-        var center = ToCanvasPoint(point, canvasWidth, canvasHeight);
+        if (primitive.CenterPoint is null)
+        {
+            return;
+        }
+
         var dot = new global::Avalonia.Controls.Shapes.Ellipse
         {
-            Width = radius * 2,
-            Height = radius * 2,
-            Fill = InkBrush(inkState),
-            Stroke = Brushes.White,
-            StrokeThickness = 1,
-            Opacity = inkState.Opacity,
+            Width = primitive.RadiusDip * 2,
+            Height = primitive.RadiusDip * 2,
+            Fill = InkBrush(primitive.InkState),
+            Stroke = InkOutlineBrush(primitive),
+            StrokeThickness = primitive.OutlineThicknessDip,
+            Opacity = primitive.InkState.Opacity,
             IsHitTestVisible = false,
         };
-        Canvas.SetLeft(dot, center.X - radius);
-        Canvas.SetTop(dot, center.Y - radius);
+        Canvas.SetLeft(dot, primitive.CenterPoint.X - primitive.RadiusDip);
+        Canvas.SetTop(dot, primitive.CenterPoint.Y - primitive.RadiusDip);
         _inkOverlay.Children.Add(dot);
     }
-
-    private Point ToCanvasPoint(SlideShowInkPoint point, double canvasWidth, double canvasHeight)
-    {
-        var scaleX = canvasWidth / Math.Max(1, _slideDipW);
-        var scaleY = canvasHeight / Math.Max(1, _slideDipH);
-        return new Point(point.X * scaleX, point.Y * scaleY);
-    }
-
-    private double InkScale(double canvasWidth, double canvasHeight)
-        => Math.Min(canvasWidth / Math.Max(1, _slideDipW), canvasHeight / Math.Max(1, _slideDipH));
 
     private static IBrush InkBrush(SlideShowInkState inkState)
     {
@@ -568,6 +556,23 @@ public sealed class SlideShowWindow : Window
         catch (FormatException)
         {
             return Brushes.Red;
+        }
+    }
+
+    private static IBrush InkOutlineBrush(SlideShowInkOverlayPrimitive primitive)
+    {
+        if (string.IsNullOrWhiteSpace(primitive.OutlineColorHex))
+        {
+            return Brushes.Transparent;
+        }
+
+        try
+        {
+            return new SolidColorBrush(Color.Parse(primitive.OutlineColorHex));
+        }
+        catch (FormatException)
+        {
+            return Brushes.White;
         }
     }
 
