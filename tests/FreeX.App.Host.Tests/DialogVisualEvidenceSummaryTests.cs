@@ -113,11 +113,13 @@ public sealed class DialogVisualEvidenceSummaryTests
         result.Output.Should().Contain("Avalonia-manifest-only screenshot surface ids needing WPF manifest pair: 1");
         result.Output.Should().Contain("Nonblank PNG check failures: 0");
         result.Output.Should().Contain("Paired dimension mismatches: 1");
+        result.Output.Should().Contain("Paired expected-size evidence mismatches: 0");
 
         var markdown = File.ReadAllText(markdownPath);
         markdown.Should().Contain("| WPF captured manifest surfaces with committed PNGs | 1 |");
         markdown.Should().Contain("| Paired captured surface ids | 1 |");
         markdown.Should().Contain("| Paired dimension mismatches | 1 |");
+        markdown.Should().Contain("| Paired expected-size evidence mismatches | 0 |");
         markdown.Should().Contain("| dialog.Sample.Valid | dialog.Sample.Valid.png | 3x2 | True | dialog.Sample.Valid.png | 4x2 | True |");
         markdown.Should().Contain("| dialog.Sample | 1 | dialog.Sample.Extra |");
         markdown.Should().Contain("dialog.Sample.Valid");
@@ -131,11 +133,13 @@ public sealed class DialogVisualEvidenceSummaryTests
         summary.GetProperty("additionalAvaloniaCapturedSurfaceIds").GetInt32().Should().Be(1);
         summary.GetProperty("nonBlankPngFailures").GetInt32().Should().Be(0);
         summary.GetProperty("pairedDimensionMismatches").GetInt32().Should().Be(1);
+        summary.GetProperty("pairedExpectedSizeMismatches").GetInt32().Should().Be(0);
 
         var paired = json.RootElement.GetProperty("pairedSurfaces")[0];
         paired.GetProperty("wpf").GetProperty("width").GetInt32().Should().Be(3);
         paired.GetProperty("avalonia").GetProperty("height").GetInt32().Should().Be(2);
         paired.GetProperty("comparison").GetProperty("dimensionMatch").GetBoolean().Should().BeFalse();
+        paired.GetProperty("comparison").GetProperty("expectedSizeMismatch").GetBoolean().Should().BeFalse();
 
         var checkResult = PowerShellScriptRunner.RunToolScript(
             "Generate-DialogVisualEvidenceSummary.ps1",
@@ -144,6 +148,103 @@ public sealed class DialogVisualEvidenceSummaryTests
 
         checkResult.ExitCode.Should().Be(0, checkResult.CombinedOutput);
         checkResult.Output.Should().Contain("Dialog visual evidence summary is up to date.");
+    }
+
+    [Fact]
+    public void DialogVisualEvidenceSummary_FlagsWorkbookFileDialogExpectedSizeEvidenceMismatch()
+    {
+        using var temp = new TestTemporaryDirectory();
+
+        var inventoryPath = Path.Combine(temp.Path, "dialog-parity-inventory.json");
+        var wpfManifestDirectory = Path.Combine(temp.Path, "wpf-capture");
+        var avaloniaManifestDirectory = Path.Combine(temp.Path, "avalonia-capture");
+        Directory.CreateDirectory(wpfManifestDirectory);
+        Directory.CreateDirectory(avaloniaManifestDirectory);
+
+        var wpfManifestPath = Path.Combine(wpfManifestDirectory, "manifest.json");
+        var avaloniaManifestPath = Path.Combine(avaloniaManifestDirectory, "manifest.json");
+        var markdownPath = Path.Combine(temp.Path, "summary.md");
+        var jsonPath = Path.Combine(temp.Path, "summary.json");
+
+        File.WriteAllText(
+            inventoryPath,
+            """
+            {
+              "summary": {
+                "totalRoutes": 1,
+                "wpfCaptures": 1,
+                "avaloniaCaptures": 1,
+                "avaloniaHarnessRoutes": 1,
+                "sharedOrPresentationBacked": 1
+              },
+              "rows": [
+                { "routeId": "dialog.OpenWorkbook" }
+              ]
+            }
+            """);
+
+        File.WriteAllText(
+            wpfManifestPath,
+            """
+            {
+              "platform": "windows",
+              "shell": "wpf",
+              "surfaces": [
+                {
+                  "id": "dialog.OpenWorkbook",
+                  "kind": "dialog",
+                  "png": "dialog.OpenWorkbook.png",
+                  "captured": true,
+                  "note": ""
+                }
+              ]
+            }
+            """);
+
+        File.WriteAllText(
+            avaloniaManifestPath,
+            """
+            {
+              "platform": "windows",
+              "shell": "avalonia",
+              "surfaces": [
+                {
+                  "id": "dialog.OpenWorkbook",
+                  "kind": "dialog",
+                  "png": "dialog.OpenWorkbook.png",
+                  "captured": true,
+                  "note": ""
+                }
+              ]
+            }
+            """);
+
+        WritePng(Path.Combine(wpfManifestDirectory, "dialog.OpenWorkbook.png"), width: 1280, height: 800, nonBlank: true);
+        WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.OpenWorkbook.png"), width: 640, height: 420, nonBlank: true);
+
+        var result = PowerShellScriptRunner.RunToolScript(
+            "Generate-DialogVisualEvidenceSummary.ps1",
+            WorkspaceFileLocator.FindWorkspaceRoot(),
+            $"-MarkdownPath \"{markdownPath}\" -JsonPath \"{jsonPath}\" -InventoryPath \"{inventoryPath}\" -WpfManifestPath \"{wpfManifestPath}\" -AvaloniaManifestPath \"{avaloniaManifestPath}\"");
+
+        result.ExitCode.Should().Be(0, result.CombinedOutput);
+        result.Output.Should().Contain("Paired expected-size evidence mismatches: 1");
+
+        var markdown = File.ReadAllText(markdownPath);
+        markdown.Should().Contain("| Paired expected-size evidence mismatches | 1 |");
+        markdown.Should().Contain("## Expected-Size Evidence Mismatches");
+        markdown.Should().Contain("| dialog.OpenWorkbook | 640x420 | WorkbookFileDialogSurfacePlanner.Width/Height | 1280x800 | False | 640x420 | True |");
+
+        using var json = JsonDocument.Parse(File.ReadAllText(jsonPath));
+        var summary = json.RootElement.GetProperty("summary");
+        summary.GetProperty("pairedExpectedSizeMismatches").GetInt32().Should().Be(1);
+
+        var comparison = json.RootElement.GetProperty("pairedSurfaces")[0].GetProperty("comparison");
+        comparison.GetProperty("expectedSizeMismatch").GetBoolean().Should().BeTrue();
+        comparison.GetProperty("expectedWidth").GetInt32().Should().Be(640);
+        comparison.GetProperty("expectedHeight").GetInt32().Should().Be(420);
+        comparison.GetProperty("wpfExpectedSizeMatch").GetBoolean().Should().BeFalse();
+        comparison.GetProperty("avaloniaExpectedSizeMatch").GetBoolean().Should().BeTrue();
     }
 
     [Fact]
