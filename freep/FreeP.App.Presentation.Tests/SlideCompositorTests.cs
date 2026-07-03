@@ -2458,6 +2458,41 @@ public sealed class SlideCompositorTests
     }
 
     [Fact]
+    public void BV1_DoughnutChart_FillPlans_PreservePerPointFallbackColors()
+    {
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+
+        var chart = new ChartShape { ChartType = ChartType.Doughnut };
+        chart.Categories.AddRange(new[] { "Slice A", "Slice B" });
+        var series = new ChartSeries { Name = "Doughnut" };
+        series.Values.AddRange(new double?[] { 40.0, 60.0 });
+        chart.Series.Add(series);
+        p.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 10,
+            Kind = SlideShapeKind.Chart,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 3429000,
+            Chart = chart
+        });
+
+        var chartOp = SlideCompositor.Compose(p, FirstSlide(p)).OfType<DrawOp.Chart>().Single();
+        var slices = ChartRenderPlanner.BuildDoughnutSlicePrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100),
+            chartOp.SeriesColors,
+            chartOp.FillPlans);
+
+        slices.Should().HaveCount(2);
+        slices[0].Fill!.Value.Color.Should().Be(chartOp.SeriesColors[0]);
+        slices[1].Fill!.Value.Color.Should().Be(chartOp.SeriesColors[1],
+            "fill plans must keep doughnut's per-point accent cycle rather than collapsing to the first slice");
+    }
+
+    [Fact]
     public void Compose_ChartGradientFill_BuildsResolvedFillPlan()
     {
         var p = MakePresentation();

@@ -275,7 +275,19 @@ public sealed class ChartTests : IDisposable
         using (var archive = ZipFile.OpenRead(path))
         {
             var chartDoc = LoadChartXml(archive, chartIndex: 1);
-            chartDoc.Descendants(DrawingNs + "gradFill").Should().HaveCountGreaterThanOrEqualTo(3);
+            var ser = chartDoc.Descendants(ChartNs + "ser").First();
+            ser.Element(ChartNs + "spPr")
+                ?.Element(DrawingNs + "gradFill")
+                .Should().NotBeNull("series gradient fill must be emitted under c:ser/c:spPr");
+            ser.Elements(ChartNs + "dPt")
+                .Single(dpt => dpt.Element(ChartNs + "idx")?.Attribute("val")?.Value == "1")
+                .Element(ChartNs + "spPr")
+                ?.Element(DrawingNs + "gradFill")
+                .Should().NotBeNull("point gradient fill must be emitted under c:dPt/c:spPr");
+            ser.Element(ChartNs + "marker")
+                ?.Element(ChartNs + "spPr")
+                ?.Element(DrawingNs + "gradFill")
+                .Should().NotBeNull("marker gradient fill must be emitted under c:marker/c:spPr");
         }
 
         var reloaded = PptxPackageReader.Read(path);
