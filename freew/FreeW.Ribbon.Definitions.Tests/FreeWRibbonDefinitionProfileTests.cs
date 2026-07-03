@@ -10,7 +10,6 @@ public sealed class FreeWRibbonDefinitionProfileTests
     private static readonly string[] WpfOnlyTabIds =
     [
         "developer",
-        "header-footer-design",
         "help",
     ];
 
@@ -776,8 +775,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
             AssertParagraphListSurfaceUsesResources(ParagraphListSurface(FreeWRibbonCapabilities.Wpf), includesMultilevel: true);
             AssertParagraphListSurfaceUsesResources(
                 ParagraphListSurface(FreeWRibbonCapabilities.Avalonia),
-                includesMultilevel: true,
-                includesMultilevelMenu: false);
+                includesMultilevel: true);
 
             return true;
         }).Should().BeTrue();
