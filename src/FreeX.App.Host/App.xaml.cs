@@ -44,6 +44,8 @@ public partial class App : Application
 
     private void App_OnStartup(object sender, StartupEventArgs e)
     {
+        var startupArgs = GetStartupArgs(e);
+
         // Always apply the active brand theme early — before the main window loads — so that
         // DynamicResource references in the title-bar chrome pick up the correct brushes.
         // For the DEFAULT (FreeX) theme the values are BYTE-IDENTICAL to ThemeResources.xaml,
@@ -116,7 +118,7 @@ public partial class App : Application
         // Headless cross-platform visual-parity capture: render each app surface to a PNG and exit,
         // without launching the interactive app. Additive and isolated — only engaged by the
         // --parity-capture <outDir> switch (used by the WPF<->Avalonia visual-parity runner).
-        if (ParityCapture.TryGetOutputDirectory(e.Args) is { } parityOutDir)
+        if (ParityCapture.TryGetOutputDirectory(startupArgs) is { } parityOutDir)
         {
             try
             {
@@ -163,7 +165,7 @@ public partial class App : Application
         var recoveryAccepted = OfferStartupRecovery(mainWindow, snapshotStore);
 
         var openedStartupFile = false;
-        foreach (var startupWorkbookPath in e.Args)
+        foreach (var startupWorkbookPath in startupArgs)
         {
             if (!File.Exists(startupWorkbookPath))
                 continue;
@@ -226,6 +228,14 @@ public partial class App : Application
             }
             catch (Exception ex) { Log.Debug(ex, "Background update check failed."); }
         });
+    }
+
+    private static IReadOnlyList<string> GetStartupArgs(StartupEventArgs e)
+    {
+        if (e.Args.Length > 0)
+            return e.Args;
+
+        return Environment.GetCommandLineArgs().Skip(1).ToArray();
     }
 
     private static void ConfigureServices(IServiceCollection services)
