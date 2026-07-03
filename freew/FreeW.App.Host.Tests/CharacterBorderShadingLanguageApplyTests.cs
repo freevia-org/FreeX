@@ -32,6 +32,48 @@ public sealed class CharacterBorderShadingLanguageApplyTests
         view.Selection.Select(paragraphs[0].ContentStart, paragraphs[^1].ContentEnd);
     }
 
+    private static void SelectTextRange(
+        DocumentView view,
+        int startParagraphIndex,
+        int startOffset,
+        int endParagraphIndex,
+        int endOffset)
+    {
+        var paragraphs = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().ToList();
+        view.Selection.Select(
+            PositionAtTextOffset(paragraphs[startParagraphIndex], startOffset),
+            PositionAtTextOffset(paragraphs[endParagraphIndex], endOffset));
+    }
+
+    private static System.Windows.Documents.TextPointer PositionAtTextOffset(
+        System.Windows.Documents.Paragraph paragraph,
+        int offset)
+    {
+        var remaining = Math.Max(0, offset);
+        var pointer = paragraph.ContentStart;
+        while (pointer is not null && pointer.CompareTo(paragraph.ContentEnd) < 0)
+        {
+            if (pointer.GetPointerContext(System.Windows.Documents.LogicalDirection.Forward) == System.Windows.Documents.TextPointerContext.Text)
+            {
+                var text = pointer.GetTextInRun(System.Windows.Documents.LogicalDirection.Forward);
+                if (remaining <= text.Length)
+                    return pointer.GetPositionAtOffset(remaining, System.Windows.Documents.LogicalDirection.Forward) ?? pointer;
+
+                remaining -= text.Length;
+                pointer = pointer.GetPositionAtOffset(text.Length, System.Windows.Documents.LogicalDirection.Forward);
+            }
+            else
+            {
+                pointer = pointer.GetNextContextPosition(System.Windows.Documents.LogicalDirection.Forward);
+            }
+        }
+
+        return paragraph.ContentEnd;
+    }
+
+    private static string DumpLanguageTags(Paragraph paragraph) =>
+        string.Join("|", paragraph.Runs.Select(run => $"{run.Text}:{run.Formatting.LanguageTag}"));
+
     // ---- SetCharacterBorder ----
 
     [StaFact]
@@ -160,11 +202,66 @@ public sealed class CharacterBorderShadingLanguageApplyTests
         SelectAllParagraphs(view);
 
         view.SetProofingLanguage("en-US");
+        SelectAllParagraphs(view);
         view.SetProofingLanguage(null);
 
         foreach (var paragraph in view.Model.Blocks.OfType<Paragraph>())
         foreach (var run in paragraph.Runs)
             run.Formatting.LanguageTag.Should().BeNull();
+    }
+
+    [StaFact]
+    public void SetProofingLanguage_AppliesTagOnlyToSelectedSubrange()
+    {
+        var view = ViewWith("hello world");
+        SelectTextRange(view, 0, 3, 0, 8);
+
+        view.SetProofingLanguage(" fr-FR ");
+
+        var paragraph = view.Model.Blocks.OfType<Paragraph>().Single();
+        DumpLanguageTags(paragraph).Should().Be("hel:|lo wo:fr-FR|rld:");
+    }
+
+    [StaFact]
+    public void SetProofingLanguage_AppliesTagOnlyToSelectedMultiParagraphRanges()
+    {
+        var view = ViewWith("alpha bravo", "charlie delta", "echo foxtrot");
+        SelectTextRange(view, 0, 6, 2, 4);
+
+        view.SetProofingLanguage("de-DE");
+
+        var paragraphs = view.Model.Blocks.OfType<Paragraph>().ToList();
+        DumpLanguageTags(paragraphs[0]).Should().Be("alpha :|bravo:de-DE");
+        DumpLanguageTags(paragraphs[1]).Should().Be("charlie delta:de-DE");
+        DumpLanguageTags(paragraphs[2]).Should().Be("echo:de-DE| foxtrot:");
+    }
+
+    [StaFact]
+    public void SetProofingLanguage_Blank_ClearsOnlySelectedSubrange()
+    {
+        var view = ViewWith("clear range");
+        SelectAllParagraphs(view);
+        view.SetProofingLanguage("en-US");
+        SelectTextRange(view, 0, 6, 0, 11);
+
+        view.SetProofingLanguage(" ");
+
+        var paragraph = view.Model.Blocks.OfType<Paragraph>().Single();
+        DumpLanguageTags(paragraph).Should().Be("clear :en-US|range:");
+    }
+
+    [StaFact]
+    public void SetProofingLanguage_CollapsedCaret_DoesNotRetagExistingText()
+    {
+        var view = ViewWith("caret text");
+        var paragraph = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+        view.CaretPosition = PositionAtTextOffset(paragraph, 2);
+
+        view.SetProofingLanguage("fr-FR");
+
+        var modelParagraph = view.Model.Blocks.OfType<Paragraph>().Single();
+        DumpLanguageTags(modelParagraph).Should().Be("caret text:");
+        view.Commands.CanUndo.Should().BeFalse();
     }
 
     [StaFact]
@@ -180,6 +277,20 @@ public sealed class CharacterBorderShadingLanguageApplyTests
 
         var run = view.Model.Blocks.OfType<Paragraph>().First().Runs.First();
         run.Formatting.LanguageTag.Should().Be("de-DE");
+    }
+
+    [StaFact]
+    public void SetProofingLanguage_MultiParagraphSelection_IsReversibleWithSingleUndo()
+    {
+        var view = ViewWith("first line", "second line");
+        SelectTextRange(view, 0, 6, 1, 6);
+
+        view.SetProofingLanguage("it-IT");
+        view.Commands.Undo().Should().BeTrue();
+
+        foreach (var paragraph in view.Model.Blocks.OfType<Paragraph>())
+        foreach (var run in paragraph.Runs)
+            run.Formatting.LanguageTag.Should().BeNull();
     }
 
     // ---- Command parity: the three new commands must be backed ----

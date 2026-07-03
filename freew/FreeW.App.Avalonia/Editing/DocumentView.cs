@@ -8122,14 +8122,45 @@ public sealed class DocumentView : Control
         var normalizedTag = ProofingLanguageCatalog.NormalizeTag(languageTag);
         var sel = NormalizedSelection();
 
-        if (sel is { } s && s.Start.Block == s.End.Block)
+        if (sel is { } s)
         {
+            var selectedBlocks = Enumerable.Range(s.Start.Block, s.End.Block - s.Start.Block + 1).ToArray();
+            var plan = ProofingLanguageApplyPlanner.Build(languageTag, selectedBlocks, s.Start.Offset, s.End.Offset);
+            if (!plan.HasSelectedText)
+                return;
+
+            if (plan.Ranges.Count != 1)
+            {
+                _bus.BeginUndoGroup();
+                foreach (var plannedRange in plan.Ranges)
+                {
+                    if (plannedRange.BlockIndex >= _doc.Blocks.Count || _doc.Blocks[plannedRange.BlockIndex] is not Paragraph plannedParagraph || !IsEditable(plannedParagraph))
+                        continue;
+
+                    var capturedBlock = plannedRange.BlockIndex;
+                    var capturedA = plannedRange.StartOffset;
+                    var capturedB = plannedRange.EndOffset;
+                    _bus.Execute(new ReplaceParagraphRunsCommand(capturedBlock, p =>
+                    {
+                        var live = ParaCells(p);
+                        var lo = Math.Clamp(capturedA, 0, live.Count);
+                        var hi = Math.Clamp(capturedB, 0, live.Count);
+                        for (var i = lo; i < hi; i++)
+                            live[i] = live[i] with { Fmt = live[i].Fmt with { LanguageTag = normalizedTag } };
+                        SetRuns(p, live);
+                    }));
+                }
+                _bus.CommitUndoGroup("Proofing Language");
+                return;
+            }
+
             // Single-block selection: tag only the selected character range.
-            var block = s.Start.Block;
+            var range = plan.Ranges[0];
+            var block = range.BlockIndex;
             if (_doc.Blocks[block] is not Paragraph p0 || !IsEditable(p0))
                 return;
-            var a = s.Start.Offset;
-            var b = s.End.Offset;
+            var a = range.StartOffset;
+            var b = range.EndOffset;
             _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
             {
                 var live = ParaCells(p);
@@ -8140,7 +8171,7 @@ public sealed class DocumentView : Control
             return;
         }
 
-        if (sel is { } multi && multi.Start.Block != multi.End.Block)
+        else if (sel is { } multi && multi.Start.Block != multi.End.Block)
         {
             // Multi-paragraph selection: first block from Start.Offset to its end, middle blocks in
             // full, last block from its start to End.Offset — only the selected ranges are retagged.

@@ -8,6 +8,7 @@ using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 using FreeW.App.Host;
 using System.Diagnostics;
@@ -3858,11 +3859,33 @@ public sealed class DocumentView : RichTextBox
         });
 
     /// <summary>
-    /// Set (or clear when <paramref name="languageTag"/> is null/empty) the proofing language on every
-    /// run in the selected paragraphs. Routes through the undo/redo bus and re-renders.
+    /// Set (or clear when <paramref name="languageTag"/> is null/empty) the proofing language on the
+    /// selected text range only. A collapsed caret has no staged future-typing format path in the WPF
+    /// host, so it leaves existing text untouched instead of retagging the caret paragraph.
     /// </summary>
-    public void SetProofingLanguage(string? languageTag) =>
-        FormatSelectedModelRuns(f => f with { LanguageTag = string.IsNullOrEmpty(languageTag) ? null : languageTag });
+    public void SetProofingLanguage(string? languageTag)
+    {
+        Focus();
+
+        var selectedRange = SelectedVisibleTextRange();
+        if (selectedRange is null)
+            return;
+
+        CommitToModel();
+
+        var selectedBlocks = selectedRange.Value.VisibleBlockIndices
+            .Select(ModelIndexFromVisible)
+            .ToArray();
+        var plan = ProofingLanguageApplyPlanner.Build(
+            languageTag,
+            selectedBlocks,
+            selectedRange.Value.StartOffset,
+            selectedRange.Value.EndOffset);
+        if (!plan.HasSelectedText)
+            return;
+
+        ApplyProofingLanguagePlan(plan);
+    }
 
     /// <summary>
     /// Apply all fields of <paramref name="fmt"/> to the current selection, covering both WPF-backed
@@ -3946,6 +3969,36 @@ public sealed class DocumentView : RichTextBox
         for (var i = Math.Min(startIndex, endIndex); i <= Math.Max(startIndex, endIndex); i++)
             result.Add(ModelIndexFromVisible(i));
         return result;
+    }
+
+    private (IReadOnlyList<int> VisibleBlockIndices, int StartOffset, int EndOffset)? SelectedVisibleTextRange()
+    {
+        var start = Selection.Start.Paragraph ?? CaretPosition?.Paragraph;
+        var end = Selection.End.Paragraph ?? start;
+        if (start is null || end is null)
+            return null;
+
+        var indexOf = new Dictionary<WpfParagraph, int>();
+        var modelIndex = 0;
+        foreach (var block in Document.Blocks)
+            NumberLeafBlocks(block, indexOf, ref modelIndex);
+
+        if (!indexOf.TryGetValue(start, out var startIndex))
+            return null;
+        if (!indexOf.TryGetValue(end, out var endIndex))
+            endIndex = startIndex;
+
+        var startOffset = OffsetInParagraph(start, Selection.Start);
+        var endOffset = OffsetInParagraph(end, Selection.End);
+        var firstIndex = Math.Min(startIndex, endIndex);
+        var lastIndex = Math.Max(startIndex, endIndex);
+        var indices = new List<int>();
+        for (var i = firstIndex; i <= lastIndex; i++)
+            indices.Add(i);
+
+        return startIndex <= endIndex
+            ? (indices, startOffset, endOffset)
+            : (indices, endOffset, startOffset);
     }
 
     // Walk a FlowDocument block in the same order CommitToModel reads it, assigning each top-level
@@ -11201,6 +11254,121 @@ public sealed class DocumentView : RichTextBox
         var range = new TextRange(paragraph.ContentStart, position);
         return range.Text.Length;
     }
+
+    private void ApplyProofingLanguagePlan(ProofingLanguageApplyPlan plan)
+    {
+        var ranges = plan.Ranges
+            .Where(range => range.BlockIndex < _model.Blocks.Count
+                && _model.Blocks[range.BlockIndex] is ModelParagraph paragraph
+                && TextRangeCoversParagraphText(paragraph, range.StartOffset, range.EndOffset))
+            .ToList();
+        if (ranges.Count == 0)
+            return;
+
+        if (ranges.Count == 1)
+        {
+            ExecuteProofingLanguageRange(ranges[0], plan.LanguageTag);
+            return;
+        }
+
+        _commands.BeginUndoGroup();
+        foreach (var range in ranges)
+            ExecuteProofingLanguageRange(range, plan.LanguageTag);
+        _commands.CommitUndoGroup("Proofing Language");
+    }
+
+    private void ExecuteProofingLanguageRange(ProofingLanguageTextRange range, string? languageTag) =>
+        _commands.Execute(new ReplaceParagraphRunsCommand(range.BlockIndex, paragraph =>
+            ApplyRunFormattingToTextRange(
+                paragraph,
+                range.StartOffset,
+                range.EndOffset,
+                formatting => formatting with { LanguageTag = languageTag })));
+
+    private static bool TextRangeCoversParagraphText(ModelParagraph paragraph, int startOffset, int endOffset)
+    {
+        var textLength = paragraph.Runs.Sum(run => run.Text.Length);
+        var start = Math.Clamp(startOffset, 0, textLength);
+        var end = Math.Clamp(endOffset, 0, textLength);
+        return end > start;
+    }
+
+    private static void ApplyRunFormattingToTextRange(
+        ModelParagraph paragraph,
+        int startOffset,
+        int endOffset,
+        Func<RunFormatting, RunFormatting> transform)
+    {
+        var rebuilt = new List<ModelRun>();
+        var position = 0;
+        foreach (var source in paragraph.Runs)
+        {
+            var length = source.Text.Length;
+            var runStart = position;
+            var runEnd = position + length;
+            position = runEnd;
+            if (length == 0)
+            {
+                rebuilt.Add(CloneRunWithText(source, source.Text));
+                continue;
+            }
+
+            var coverStart = Math.Max(runStart, startOffset);
+            var coverEnd = Math.Min(runEnd, endOffset);
+            if (coverStart >= coverEnd)
+            {
+                rebuilt.Add(CloneRunWithText(source, source.Text));
+                continue;
+            }
+
+            var localStart = coverStart - runStart;
+            var localEnd = coverEnd - runStart;
+
+            if (localStart > 0)
+                rebuilt.Add(CloneRunWithText(source, source.Text[..localStart]));
+
+            var covered = CloneRunWithText(source, source.Text[localStart..localEnd]);
+            covered.Formatting = transform(source.Formatting);
+            rebuilt.Add(covered);
+
+            if (localEnd < length)
+                rebuilt.Add(CloneRunWithText(source, source.Text[localEnd..]));
+        }
+
+        paragraph.Runs.Clear();
+        paragraph.Runs.AddRange(rebuilt);
+    }
+
+    private static ModelRun CloneRunWithText(ModelRun source, string text) => new(text, source.Formatting)
+    {
+        Image = source.Image,
+        Equation = source.Equation,
+        Shape = source.Shape,
+        WordArt = source.WordArt,
+        Chart = source.Chart,
+        EmbeddedObject = source.EmbeddedObject,
+        SmartArt = source.SmartArt,
+        PreservedDrawing = source.PreservedDrawing,
+        DrawingGroup = source.DrawingGroup,
+        HyperlinkUrl = source.HyperlinkUrl,
+        HyperlinkAnchor = source.HyperlinkAnchor,
+        HyperlinkTooltip = source.HyperlinkTooltip,
+        FieldKind = source.FieldKind,
+        TableFormula = source.TableFormula,
+        Citation = source.Citation,
+        CrossReference = source.CrossReference,
+        ComplexField = source.ComplexField,
+        FootnoteId = source.FootnoteId,
+        EndnoteId = source.EndnoteId,
+        CommentId = source.CommentId,
+        IsCommentReference = source.IsCommentReference,
+        IsPageBreak = source.IsPageBreak,
+        Revision = source.Revision,
+        Control = source.Control,
+        RevisionAuthor = source.RevisionAuthor,
+        RevisionDateXml = source.RevisionDateXml,
+        FormatRevision = source.FormatRevision
+    };
 
     /// <summary>
     /// Marks the model runs of <paramref name="paragraph"/> covering the character range

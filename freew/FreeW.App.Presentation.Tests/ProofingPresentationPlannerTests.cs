@@ -19,6 +19,36 @@ public sealed class ProofingPresentationPlannerTests
     }
 
     [Fact]
+    public void Proofing_language_apply_planner_normalizes_tag_and_single_range()
+    {
+        var plan = ProofingLanguageApplyPlanner.Build(" fr-FR ", [2], 3, 8);
+
+        plan.LanguageTag.Should().Be("fr-FR");
+        plan.Ranges.Should().Equal(new ProofingLanguageTextRange(2, 3, 8));
+    }
+
+    [Fact]
+    public void Proofing_language_apply_planner_spans_selected_blocks_only()
+    {
+        var plan = ProofingLanguageApplyPlanner.Build("de-DE", [4, 7, 9], 5, 2);
+
+        plan.Ranges.Should().Equal(
+            new ProofingLanguageTextRange(4, 5, int.MaxValue),
+            new ProofingLanguageTextRange(7, 0, int.MaxValue),
+            new ProofingLanguageTextRange(9, 0, 2));
+    }
+
+    [Fact]
+    public void Proofing_language_apply_planner_collapsed_range_has_no_selected_text()
+    {
+        var plan = ProofingLanguageApplyPlanner.Build("", [1], 4, 4);
+
+        plan.LanguageTag.Should().BeNull();
+        plan.HasSelectedText.Should().BeFalse();
+        plan.Ranges.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Shared_thesaurus_lookup_returns_known_synonyms()
     {
         var entry = ThesaurusLookup.Instance.Lookup("happy");
