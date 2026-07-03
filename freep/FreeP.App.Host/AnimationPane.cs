@@ -55,9 +55,12 @@ public sealed class AnimationPane : Border
     private readonly Action?        _onPreview;   // callback → MainWindow.StartSlideShow(false)
 
     private readonly StackPanel _listPanel;
+    private readonly StackPanel _playbackControlsPanel;
     private int _selectedRowIndex = -1;   // -1 = none
 
     internal AnimationPaneTimelinePlan CurrentTimelinePlanForTest => BuildTimelinePlan();
+    internal IReadOnlyList<AnimationPanePlaybackControlDescriptor> CurrentPlaybackControlsForTest =>
+        BuildTimelinePlan().PlaybackControls;
 
     // ── Construction ──────────────────────────────────────────────────────────────
 
@@ -77,6 +80,7 @@ public sealed class AnimationPane : Border
         BorderThickness = new Thickness(1, 0, 0, 0);
 
         _listPanel = new StackPanel { Orientation = Orientation.Vertical };
+        _playbackControlsPanel = new StackPanel { Orientation = Orientation.Horizontal };
 
         var scroll = new ScrollViewer
         {
@@ -120,24 +124,8 @@ public sealed class AnimationPane : Border
 
         var headerPanel = new DockPanel { LastChildFill = true };
 
-        if (_onPreview is not null)
-        {
-            var previewBtn = new Button
-            {
-                Content         = "▶",
-                ToolTip         = "Preview animations for this slide",
-                Padding         = new Thickness(6, 2, 6, 2),
-                Margin          = new Thickness(0, 4, 6, 4),
-                Background      = Freeze(new SolidColorBrush(Color.FromRgb(0x8F, 0x37, 0x21))),
-                Foreground      = Freeze(new SolidColorBrush(Colors.White)),
-                BorderThickness = new Thickness(0),
-                FontSize        = 12,
-            };
-            previewBtn.Click += (_, _) => _onPreview();
-            DockPanel.SetDock(previewBtn, Dock.Right);
-            headerPanel.Children.Add(previewBtn);
-        }
-
+        DockPanel.SetDock(_playbackControlsPanel, Dock.Right);
+        headerPanel.Children.Add(_playbackControlsPanel);
         headerPanel.Children.Add(title);
 
         return new Border
@@ -159,6 +147,7 @@ public sealed class AnimationPane : Border
         _listPanel.Children.Clear();
 
         var plan = BuildTimelinePlan();
+        RenderPlaybackControls(plan);
         if (!plan.HasAnimations)
         {
             _listPanel.Children.Add(new TextBlock
@@ -178,6 +167,44 @@ public sealed class AnimationPane : Border
         {
             var row = BuildRow(item);
             _listPanel.Children.Add(row);
+        }
+    }
+
+    private void RenderPlaybackControls(AnimationPaneTimelinePlan plan)
+    {
+        _playbackControlsPanel.Children.Clear();
+        foreach (var control in plan.PlaybackControls)
+        {
+            var button = new Button
+            {
+                Content         = control.Label,
+                Tag             = control,
+                ToolTip         = control.DisabledReason ?? control.ToolTip,
+                IsEnabled       = control.IsEnabled,
+                Padding         = new Thickness(6, 2, 6, 2),
+                Margin          = new Thickness(0, 4, 6, 4),
+                Background      = Freeze(new SolidColorBrush(Color.FromRgb(0x8F, 0x37, 0x21))),
+                Foreground      = Freeze(new SolidColorBrush(Colors.White)),
+                BorderThickness = new Thickness(0),
+                FontSize        = 12,
+            };
+            button.Click += (_, _) => ExecutePlaybackControl(control);
+            _playbackControlsPanel.Children.Add(button);
+        }
+    }
+
+    private void ExecutePlaybackControl(AnimationPanePlaybackControlDescriptor control)
+    {
+        if (!control.IsEnabled)
+            return;
+
+        switch (control.Kind)
+        {
+            case AnimationPanePlaybackControlKind.PreviewCurrentSlide:
+            case AnimationPanePlaybackControlKind.PlayFromSelected:
+            case AnimationPanePlaybackControlKind.PlayCurrentSlide:
+                _onPreview?.Invoke();
+                break;
         }
     }
 

@@ -49,7 +49,8 @@ public sealed record AnimationPaneTimingMutationPlan(
 public sealed record AnimationPaneTimelinePlan(
     IReadOnlyList<AnimationPaneTimelineItemPlan> Items,
     int SelectedIndex,
-    AnimationPanePlaybackIntent PreviewIntent)
+    AnimationPanePlaybackIntent PreviewIntent,
+    IReadOnlyList<AnimationPanePlaybackControlDescriptor> PlaybackControls)
 {
     public bool HasAnimations => Items.Count > 0;
     public AnimationPaneTimelineItemPlan? SelectedItem =>
@@ -85,12 +86,30 @@ public enum AnimationPanePlaybackIntentKind
     PreviewCurrentSlide,
 }
 
+public enum AnimationPanePlaybackControlKind
+{
+    PreviewCurrentSlide,
+    PlayFromSelected,
+    PlayCurrentSlide,
+    Stop,
+}
+
 public sealed record AnimationPanePlaybackIntent(
     AnimationPanePlaybackIntentKind Kind,
     bool CanExecute,
     int? SelectedAnimationIndex,
     int TotalDurationMs,
     string Description);
+
+public sealed record AnimationPanePlaybackControlDescriptor(
+    string CommandId,
+    AnimationPanePlaybackControlKind Kind,
+    string Label,
+    bool IsEnabled,
+    int? StartAnimationIndex,
+    int TotalDurationMs,
+    string ToolTip,
+    string? DisabledReason);
 
 public sealed record AnimationPaneReorderIntent(
     bool CanMove,
@@ -126,6 +145,7 @@ public static class AnimationPanePlanner
         var animations = slide?.Animations;
         if (animations is null || animations.Count == 0)
         {
+            var controls = BuildPlaybackControls(-1, 0, 0);
             return new AnimationPaneTimelinePlan(
                 Array.Empty<AnimationPaneTimelineItemPlan>(),
                 -1,
@@ -134,7 +154,8 @@ public static class AnimationPanePlanner
                     false,
                     null,
                     0,
-                    "No animations to preview"));
+                    "No animations to preview"),
+                controls);
         }
 
         var selectedIndex = NormalizeSelectedIndex(animations, selectedShapeIds, selectedAnimationIndex);
@@ -187,15 +208,75 @@ public static class AnimationPanePlanner
                 effectOptions));
         }
 
+        var playbackControls = BuildPlaybackControls(selectedIndex, animations.Count, totalDurationMs);
+        var previewControl = playbackControls.First(control =>
+            control.Kind == AnimationPanePlaybackControlKind.PreviewCurrentSlide);
         return new AnimationPaneTimelinePlan(
             items,
             selectedIndex,
             new AnimationPanePlaybackIntent(
                 AnimationPanePlaybackIntentKind.PreviewCurrentSlide,
-                true,
+                previewControl.IsEnabled,
                 selectedIndex >= 0 ? selectedIndex : null,
                 totalDurationMs,
-                "Preview current slide animations"));
+                previewControl.ToolTip),
+            playbackControls);
+    }
+
+    public static IReadOnlyList<AnimationPanePlaybackControlDescriptor> BuildPlaybackControls(
+        int selectedAnimationIndex,
+        int animationCount,
+        int totalDurationMs)
+    {
+        var hasAnimations = animationCount > 0;
+        var hasSelectedAnimation = selectedAnimationIndex >= 0 && selectedAnimationIndex < animationCount;
+        var safeDurationMs = Math.Max(0, totalDurationMs);
+
+        return
+        [
+            new AnimationPanePlaybackControlDescriptor(
+                "freep.anim.pane.preview",
+                AnimationPanePlaybackControlKind.PreviewCurrentSlide,
+                "Preview",
+                hasAnimations,
+                null,
+                safeDurationMs,
+                hasAnimations
+                    ? "Preview current slide animations"
+                    : "No animations to preview",
+                hasAnimations ? null : "No animations to preview"),
+            new AnimationPanePlaybackControlDescriptor(
+                "freep.anim.pane.play-selected",
+                AnimationPanePlaybackControlKind.PlayFromSelected,
+                "Play From Selected",
+                hasSelectedAnimation,
+                hasSelectedAnimation ? selectedAnimationIndex : null,
+                safeDurationMs,
+                hasSelectedAnimation
+                    ? "Play animation preview from the selected row"
+                    : "Select an animation row to play from it",
+                hasSelectedAnimation ? null : "Select an animation row to play from it"),
+            new AnimationPanePlaybackControlDescriptor(
+                "freep.anim.pane.play-slide",
+                AnimationPanePlaybackControlKind.PlayCurrentSlide,
+                "Play All",
+                hasAnimations,
+                null,
+                safeDurationMs,
+                hasAnimations
+                    ? "Play all animations on the current slide"
+                    : "No animations to play",
+                hasAnimations ? null : "No animations to play"),
+            new AnimationPanePlaybackControlDescriptor(
+                "freep.anim.pane.stop",
+                AnimationPanePlaybackControlKind.Stop,
+                "Stop",
+                false,
+                null,
+                safeDurationMs,
+                "No animation preview is currently running",
+                "No animation preview is currently running"),
+        ];
     }
 
     public static AnimationPaneReorderIntent BuildReorderIntent(

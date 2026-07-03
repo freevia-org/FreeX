@@ -324,6 +324,14 @@ public sealed class AnimationPaneTests
         plan.SelectedItem.CanMoveEarlier.Should().BeTrue();
         plan.SelectedItem.CanMoveLater.Should().BeFalse();
         plan.PreviewIntent.CanExecute.Should().BeTrue();
+        pane.CurrentPlaybackControlsForTest.Should().HaveCount(4);
+        pane.CurrentPlaybackControlsForTest.Should().Contain(control =>
+            control.Kind == AnimationPanePlaybackControlKind.PlayFromSelected
+            && control.IsEnabled
+            && control.StartAnimationIndex == 1);
+        pane.CurrentPlaybackControlsForTest.Should().Contain(control =>
+            control.Kind == AnimationPanePlaybackControlKind.Stop
+            && !control.IsEnabled);
     }
 
     [Fact]
@@ -332,6 +340,8 @@ public sealed class AnimationPaneTests
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "AnimationPane.cs");
 
         source.Should().Contain("AnimationPanePlanner.BuildTimelinePlan(");
+        source.Should().Contain("plan.PlaybackControls");
+        source.Should().Contain("AnimationPanePlaybackControlKind.PlayFromSelected");
         source.Should().Contain("var effectText = item.EffectText");
         source.Should().Contain("item.EffectOptions.Options");
         source.Should().Contain("AnimationPanePlanner.BuildEffectOptionMutationPlan(");
