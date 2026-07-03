@@ -196,6 +196,7 @@ public sealed class MainWindow : Window
     internal PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
     internal PresentationPrintOutputPackage? LastPrintOutputPackage { get; private set; }
     internal PresentationVideoExportPlan? LastVideoExportPlan { get; private set; }
+    internal PresentationVideoFramePackage? LastVideoFramePackage { get; private set; }
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
     internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
     internal TableInsertionPickerPlan? LastTablePickerPlan { get; private set; }
@@ -998,7 +999,7 @@ public sealed class MainWindow : Window
         r.Register(PresentationExportPlanner.NotesPagePdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportNotesPagePdfAsync()));
         r.Register(PresentationExportPlanner.ImageExportCommandId, new ActionRibbonCommand(() => _ = FileExportImagesAsync()));
         r.Register(PresentationExportPlanner.PrintCommandId, new ActionRibbonCommand(() => RefreshPrintOutputPackage()));
-        r.Register(PresentationExportPlanner.VideoExportCommandId, new ActionRibbonCommand(() => RefreshVideoExportPlan()));
+        r.Register(PresentationExportPlanner.VideoExportCommandId, new ActionRibbonCommand(() => RefreshVideoFramePackage()));
 
         // Slide navigation/management
         r.Register("freep.new-slide",       new ActionRibbonCommand(() => Editor.InsertSlide()));
@@ -1740,6 +1741,18 @@ public sealed class MainWindow : Window
         LastVideoExportPlan = PresentationExportPlanner.BuildVideoExportPlan(request, _presentation);
         _statusText.Text = LastVideoExportPlan.DisabledReason ?? "Video export planned";
         return LastVideoExportPlan;
+    }
+
+    internal PresentationVideoFramePackage RefreshVideoFramePackage(PresentationVideoExportRequest? request = null)
+    {
+        LastVideoFramePackage = PresentationVideoFramePackageExecutor.BuildPackage(
+            _presentation,
+            request,
+            SlideRenderer.RenderToBytes);
+        LastVideoExportPlan = LastVideoFramePackage.Plan.ExportPlan;
+        _statusText.Text = LastVideoFramePackage.Plan.DisabledReason ??
+            PresentationVideoFramePackageExecutor.EncoderDeferredReason;
+        return LastVideoFramePackage;
     }
 
     private void RegisterReviewWorkflowCommands(RibbonCommandRegistry registry)

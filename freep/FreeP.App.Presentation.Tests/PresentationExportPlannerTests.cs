@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Text;
+using System.Text.Json;
 using System.Xml.Linq;
 using Free.Shared.Pdf;
 using FreeP.App.Compositor;
@@ -967,6 +968,128 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void VideoFramePackageExecutor_RendersStoryboardFramesAndManifest()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide
+        {
+            Title = "Intro",
+            Transition = new SlideTransition { AdvanceAfterMs = 2500 },
+        });
+        presentation.Slides.Add(new Slide { Title = "Agenda" });
+        presentation.Slides.Add(new Slide
+        {
+            Title = "Decision",
+            Transition = new SlideTransition { AdvanceAfterMs = 6000 },
+        });
+
+        var calls = new List<(int SlideIndex, int Width, int Height)>();
+        var package = PresentationVideoFramePackageExecutor.BuildPackage(
+            presentation,
+            new PresentationVideoExportRequest(
+                new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.SelectedSlides,
+                    SelectedSlideNumbers: [3, 1, 2, 2]),
+                PresentationVideoQualityKind.Hd,
+                SecondsPerSlide: 4,
+                UseRecordedTimings: true,
+                IncludeNarration: true),
+            (deck, slideIndex, width, height) =>
+            {
+                deck.Should().BeSameAs(presentation);
+                calls.Add((slideIndex, width, height));
+                return TinyPng.Concat([(byte)slideIndex]).ToArray();
+            });
+
+        package.Plan.CanBuildPackage.Should().BeTrue();
+        package.Plan.ContentType.Should().Be(PresentationVideoFramePackageExecutor.PackageContentType);
+        package.Plan.DefaultExtensionWithDot.Should().Be(PresentationVideoFramePackageExecutor.PackageExtension);
+        package.Plan.DeferredCapabilities.Should().Contain(PresentationVideoFramePackageExecutor.EncoderDeferred);
+        package.Plan.DeferredCapabilities.Should().Contain(PresentationVideoFramePackageExecutor.Mp4EncoderDeferred);
+        package.Plan.ExportPlan.IsImplemented.Should().BeFalse();
+        package.Plan.ExportPlan.CanExecute.Should().BeFalse();
+        package.Plan.ExportPlan.DisabledReason.Should().Be(PresentationExportPlanner.VideoExportDeferredMessage);
+        package.Frames.Select(frame => frame.FileName)
+            .Should()
+            .Equal(
+                "frames/slide-01-frame-0001.png",
+                "frames/slide-02-frame-0002.png",
+                "frames/slide-03-frame-0003.png");
+        package.Frames.Select(frame => frame.SlideTitle).Should().Equal("Intro", "Agenda", "Decision");
+        package.Frames.Select(frame => frame.Duration)
+            .Should()
+            .Equal(TimeSpan.FromMilliseconds(2500), TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(6));
+        package.Frames.Select(frame => frame.TimingSource)
+            .Should()
+            .Equal(
+                PresentationVideoTimingSource.RecordedTransitionAdvance,
+                PresentationVideoTimingSource.DefaultDuration,
+                PresentationVideoTimingSource.RecordedTransitionAdvance);
+        calls.Should().Equal((0, 1280, 720), (1, 1280, 720), (2, 1280, 720));
+
+        using var archive = new ZipArchive(new MemoryStream(package.Bytes), ZipArchiveMode.Read);
+        archive.Entries.Select(entry => entry.FullName)
+            .Should()
+            .Equal(
+                "manifest.json",
+                "encoder-deferred.txt",
+                "frames/slide-01-frame-0001.png",
+                "frames/slide-02-frame-0002.png",
+                "frames/slide-03-frame-0003.png");
+        ReadZipText(archive, "encoder-deferred.txt").Should().Contain("MP4 encoding");
+
+        using var manifest = JsonDocument.Parse(ReadZipText(archive, "manifest.json"));
+        var root = manifest.RootElement;
+        root.GetProperty("PackageKind").GetString().Should().Be("FreePVideoFramePackage");
+        root.GetProperty("DeferredCapabilities")
+            .EnumerateArray()
+            .Select(value => value.GetString())
+            .Should()
+            .Contain([PresentationVideoFramePackageExecutor.EncoderDeferred, PresentationVideoFramePackageExecutor.Mp4EncoderDeferred]);
+        root.GetProperty("Mp4ExportPlanImplemented").GetBoolean().Should().BeFalse();
+        root.GetProperty("Mp4ExportCanExecute").GetBoolean().Should().BeFalse();
+        root.GetProperty("SlideRange").GetProperty("SlideNumbers")
+            .EnumerateArray()
+            .Select(value => value.GetInt32())
+            .Should()
+            .Equal(1, 2, 3);
+        root.GetProperty("Quality").GetProperty("Quality").GetString().Should().Be("Hd");
+        root.GetProperty("Quality").GetProperty("WidthPx").GetInt32().Should().Be(1280);
+        root.GetProperty("Quality").GetProperty("HeightPx").GetInt32().Should().Be(720);
+        root.GetProperty("Quality").GetProperty("FrameRateHint").GetDouble().Should().Be(30);
+
+        var frames = root.GetProperty("Frames").EnumerateArray().ToArray();
+        frames.Should().HaveCount(3);
+        frames[0].GetProperty("SlideTitle").GetString().Should().Be("Intro");
+        frames[0].GetProperty("FileName").GetString().Should().Be("frames/slide-01-frame-0001.png");
+        TimeSpan.Parse(frames[0].GetProperty("Duration").GetString()!).Should().Be(TimeSpan.FromMilliseconds(2500));
+        frames[0].GetProperty("TimingSource").GetString().Should().Be(nameof(PresentationVideoTimingSource.RecordedTransitionAdvance));
+        frames[1].GetProperty("SlideTitle").GetString().Should().Be("Agenda");
+        TimeSpan.Parse(frames[1].GetProperty("StartTime").GetString()!).Should().Be(TimeSpan.FromMilliseconds(2500));
+        TimeSpan.Parse(frames[1].GetProperty("Duration").GetString()!).Should().Be(TimeSpan.FromSeconds(4));
+        frames[1].GetProperty("TimingSource").GetString().Should().Be(nameof(PresentationVideoTimingSource.DefaultDuration));
+    }
+
+    [Fact]
+    public void VideoFramePackageExecutor_EmptyDeckBuildsNoFrames()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+
+        var package = PresentationVideoFramePackageExecutor.BuildPackage(
+            presentation,
+            request: null,
+            (_, _, _, _) => throw new InvalidOperationException("Empty decks should not render frames."));
+
+        package.Plan.CanBuildPackage.Should().BeFalse();
+        package.Plan.DisabledReason.Should().Be("Video frame package requires at least one slide.");
+        package.Plan.ExportPlan.DisabledReason.Should().Be("Video export requires at least one slide.");
+        package.Frames.Should().BeEmpty();
+        package.Bytes.Should().BeEmpty();
+    }
+
+    [Fact]
     public void ImageExportExecutor_ExportsSelectedSlidesWithSharedNamingAndHostRenderCallback()
     {
         var outputDirectory = Path.Combine(Path.GetTempPath(), $"freep-image-export-{Guid.NewGuid():N}");
@@ -1053,5 +1176,12 @@ public sealed class PresentationExportPlannerTests
         }
 
         return body;
+    }
+
+    private static string ReadZipText(ZipArchive archive, string path)
+    {
+        using var stream = archive.GetEntry(path)!.Open();
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        return reader.ReadToEnd();
     }
 }

@@ -889,20 +889,22 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
-    public void MainWindow_VideoExportRequest_RecordsSharedDeferredPlan()
+    public void MainWindow_VideoExportRequest_RecordsSharedFramePackage()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             window.Editor.InsertSlide();
 
-            var plan = window.RefreshVideoExportPlan(new PresentationVideoExportRequest(
+            var package = window.RefreshVideoFramePackage(new PresentationVideoExportRequest(
                 new PresentationSlideRangeRequest(
                     PresentationSlideRangeKind.SelectedSlides,
                     SelectedSlideNumbers: [2, 1, 2]),
                 PresentationVideoQualityKind.Standard,
                 SecondsPerSlide: 8));
+            var plan = package.Plan.ExportPlan;
 
+            window.LastVideoFramePackage.Should().BeSameAs(package);
             window.LastVideoExportPlan.Should().BeSameAs(plan);
             plan.CommandId.Should().Be(PresentationExportPlanner.VideoExportCommandId);
             plan.SlideRange.SlideNumbers.Should().Equal(1, 2);
@@ -920,6 +922,13 @@ public sealed class ReviewWorkflowAdapterTests
             plan.Storyboard.TotalDuration.Should().Be(plan.EstimatedDuration);
             plan.CanExecute.Should().BeFalse();
             plan.DisabledReason.Should().Be(PresentationExportPlanner.VideoExportDeferredMessage);
+            package.Plan.DeferredCapabilities.Should().Contain(PresentationVideoFramePackageExecutor.EncoderDeferred);
+            package.Plan.DeferredCapabilities.Should().Contain(PresentationVideoFramePackageExecutor.Mp4EncoderDeferred);
+            package.Frames.Select(frame => frame.FileName)
+                .Should()
+                .Equal("frames/slide-01-frame-0001.png", "frames/slide-02-frame-0002.png");
+            package.Frames.Should().OnlyContain(frame => frame.WidthPx == 852 && frame.HeightPx == 480);
+            package.Bytes.Length.Should().BeGreaterThan(100);
         }
         finally
         {
