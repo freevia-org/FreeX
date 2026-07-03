@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Headless;
@@ -164,6 +165,8 @@ public sealed class SlideShowWindowHeadlessTests
         SlideShowPresenterToolPlan? plan = null;
         SlideShowPresenterState? state = null;
         IReadOnlyList<SlideShowPresenterCommandState>? commandStates = null;
+        SlideShowRecordingExecutionState? recordingState = null;
+        IReadOnlyList<SlideShowRecordingExecutionAction>? recordingActions = null;
         var ran = await OnUiThread(() =>
         {
             var pres = MakePresentation(1);
@@ -177,6 +180,8 @@ public sealed class SlideShowWindowHeadlessTests
                 8,
                 SlideShowInkRetentionDecision.ClearInk);
             commandStates = window.PresenterCommandStates;
+            recordingState = window.RecordingExecutionState;
+            recordingActions = window.RecordingExecutionActions;
             state = window.CreatePresenterState(window.PresenterStartedAtUtc.AddSeconds(3));
         });
 
@@ -203,6 +208,19 @@ public sealed class SlideShowWindowHeadlessTests
                 SlideShowPresenterToolPlanner.NarrationAndMediaCommandId,
                 SlideShowPresenterToolPlanner.HighlighterPointerCommandId,
                 SlideShowPresenterToolPlanner.ClearInkCommandId);
+        recordingState.Should().NotBeNull();
+        recordingState!.IsSessionActive.Should().BeTrue();
+        recordingState.CurrentSlideIndex.Should().Be(0);
+        recordingState.IsNarrationCaptureActive.Should().BeFalse();
+        recordingState.IsCameraCaptureActive.Should().BeFalse();
+        recordingActions.Should().NotBeNull();
+        recordingActions!.Where(action => action.IsDeferred)
+            .Select(action => action.Kind)
+            .Should().Equal(
+                SlideShowRecordingExecutionActionKind.CaptureUnavailable,
+                SlideShowRecordingExecutionActionKind.CaptureUnavailable);
+        recordingActions!.Where(action => action.IsDeferred)
+            .Should().OnlyContain(action => action.StatusText.Contains("Avalonia slideshow"));
         state.ToolPlan.Should().BeSameAs(plan);
     }
 
@@ -377,6 +395,64 @@ public sealed class SlideShowWindowHeadlessTests
             new SlideShowInkPoint(10, 20),
             new SlideShowInkPoint(30, 40));
         overlayVisualCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task SlideShowWindow_close_with_keep_ink_persists_ink_through_shared_planner()
+    {
+        bool sessionClosed = false;
+        int inkShapeCount = -1;
+        string? inkXml = null;
+        var ran = await OnUiThread(() =>
+        {
+            var pres = MakePresentation(1);
+            var window = new SlideShowWindow(pres, 0);
+            window.ApplyPresenterToolIntent(
+                pointerMode: SlideShowPresenterPointerMode.Pen,
+                inkColorHex: "#336699",
+                inkThicknessDip: 5,
+                inkRetentionDecision: SlideShowInkRetentionDecision.KeepInk);
+            window.BeginPresenterInkStroke(10, 20);
+            window.EndPresenterInkStroke(30, 40);
+
+            window.ExecuteAdvance();
+
+            sessionClosed = window.IsPresenterSessionClosed;
+            var inkShapes = pres.Slides[0].Shapes.Where(shape => shape.Kind == SlideShapeKind.Ink).ToArray();
+            inkShapeCount = inkShapes.Length;
+            inkXml = Encoding.UTF8.GetString(inkShapes.Single().PreservedObject!.Parts.Values.Single());
+        });
+
+        if (!ran) return;
+        sessionClosed.Should().BeTrue();
+        inkShapeCount.Should().Be(1);
+        inkXml.Should().Contain("10,20 30,40");
+    }
+
+    [Fact]
+    public async Task SlideShowWindow_close_with_clear_ink_does_not_persist_generated_ink()
+    {
+        bool sessionClosed = false;
+        int inkShapeCount = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var pres = MakePresentation(1);
+            var window = new SlideShowWindow(pres, 0);
+            window.ApplyPresenterToolIntent(
+                pointerMode: SlideShowPresenterPointerMode.Pen,
+                inkRetentionDecision: SlideShowInkRetentionDecision.ClearInk);
+            window.BeginPresenterInkStroke(10, 20);
+            window.EndPresenterInkStroke(30, 40);
+
+            window.ExecuteAdvance();
+
+            sessionClosed = window.IsPresenterSessionClosed;
+            inkShapeCount = pres.Slides[0].Shapes.Count(shape => shape.Kind == SlideShapeKind.Ink);
+        });
+
+        if (!ran) return;
+        sessionClosed.Should().BeTrue();
+        inkShapeCount.Should().Be(0);
     }
 
     [Fact]

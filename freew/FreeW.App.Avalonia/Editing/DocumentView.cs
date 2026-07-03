@@ -2363,6 +2363,27 @@ public sealed class DocumentView : Control
         }
     }
 
+    /// <summary>
+    /// Test-facing snapshot of grouped child drawing-object effect intent carried by the Avalonia renderer.
+    /// </summary>
+    public IReadOnlyList<string> FloatingGroupChildEffectSummaries
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _floatingGroups
+                .SelectMany(group => group.Children)
+                .Where(child => child.Kind == FloatingGroupChildData.ChildKind.Shape
+                    && child.Shape?.Effects.HasAny == true)
+                .Select(child =>
+                    "GroupChild"
+                    + child.ChildIndex.ToString(CultureInfo.InvariantCulture)
+                    + ":Shape:"
+                    + child.Shape!.Effects.Summary.Replace(", ", "+", StringComparison.Ordinal))
+                .ToList();
+        }
+    }
+
     /// <summary>Number of floating charts collected during the last layout pass.</summary>
     public int FloatingChartCount
     {
@@ -10778,8 +10799,11 @@ public sealed class DocumentView : Control
     public void InsertTableOfAuthorities(ToaOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        TableOfAuthorities.EnsureStyles(_doc);
-        InsertGeneratedReferenceBlocks(TableOfAuthorities.Build(_doc, options), "Insert Table of Authorities", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
+        var plan = TableOfAuthoritiesRegionPlanner.BuildInsertPlan(
+            _doc,
+            Math.Clamp(_caret.Block, 0, _doc.Blocks.Count),
+            options);
+        ApplyGeneratedReferencePlan(plan, "Insert Table of Authorities", adjustCaretForInsert: true);
     }
 
     public void RefreshTableOfAuthorities() => RefreshTableOfAuthorities(ToaOptions.Default);
@@ -10787,8 +10811,8 @@ public sealed class DocumentView : Control
     public void RefreshTableOfAuthorities(ToaOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        TableOfAuthorities.EnsureStyles(_doc);
-        RefreshGeneratedReferenceBlocks(TableOfAuthorities.IsTableOfAuthoritiesParagraph, () => TableOfAuthorities.Build(_doc, options), "Update Table of Authorities");
+        var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(_doc, options);
+        ApplyGeneratedReferencePlan(plan, "Update Table of Authorities", adjustCaretForInsert: false);
     }
 
     public void ShowNotes()
@@ -10818,6 +10842,29 @@ public sealed class DocumentView : Control
         if (paragraphs.Count > 0 && appliedIndex <= originalCaret.Block)
         {
             _caret = originalCaret with { Block = originalCaret.Block + paragraphs.Count };
+            _selectionAnchor = _caret;
+        }
+    }
+
+    private void ApplyGeneratedReferencePlan(
+        TableOfAuthoritiesRegionPlan plan,
+        string label,
+        bool adjustCaretForInsert)
+    {
+        var originalCaret = _caret;
+        _bus.BeginUndoGroup();
+        foreach (var deleteIndex in plan.DeleteIndicesDescending)
+            _bus.Execute(new DeleteParagraphCommand(deleteIndex));
+
+        var index = Math.Clamp(plan.InsertIndex, 0, _doc.Blocks.Count);
+        var appliedIndex = index;
+        foreach (var paragraph in plan.Paragraphs)
+            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
+        _bus.CommitUndoGroup(label);
+
+        if (adjustCaretForInsert && plan.Paragraphs.Count > 0 && appliedIndex <= originalCaret.Block)
+        {
+            _caret = originalCaret with { Block = originalCaret.Block + plan.Paragraphs.Count };
             _selectionAnchor = _caret;
         }
     }
@@ -13300,6 +13347,7 @@ public sealed class DocumentView : Control
     {
         // Resolved page-space sub-rect for this child (group origin + child offset).
         public Rect Rect;
+        public int ChildIndex;
         // What kind of child: Image, Shape, Chart, WordArt, SmartArt.
         public enum ChildKind { Image, Shape, Chart, WordArt, SmartArt }
         public ChildKind Kind;
@@ -13384,7 +13432,11 @@ public sealed class DocumentView : Control
             var childRect = planChildren.TryGetValue(childSnapshot.ChildIndex, out var planChild)
                 ? ToAvaloniaRect(planChild.Visual.Rect)
                 : ToAvaloniaRect(childSnapshot.Rect);
-            var childData = new FloatingGroupChildData { Rect = childRect };
+            var childData = new FloatingGroupChildData
+            {
+                Rect = childRect,
+                ChildIndex = childSnapshot.ChildIndex
+            };
 
             switch (childSnapshot.Kind)
             {
