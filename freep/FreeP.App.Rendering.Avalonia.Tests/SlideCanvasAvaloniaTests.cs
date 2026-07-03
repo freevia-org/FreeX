@@ -596,6 +596,10 @@ public sealed class SlideCanvasAvaloniaTests
         adapter.Should().Contain("TableCellEditPlanner.BeginEdit");
         adapter.Should().Contain("TableCellEditPlanner.CommitRichText");
         adapter.Should().Contain("TableCellEditPlanner.Cancel");
+        adapter.Should().Contain("TableCellEditPlanner.PlanTextFormat");
+        adapter.Should().Contain("TableCellEditPlanner.PlanFontFamily");
+        adapter.Should().Contain("TableCellEditPlanner.PlanFontSize");
+        adapter.Should().Contain("TableCellEditPlanner.PlanColor");
     }
 
     [Fact]
@@ -611,6 +615,11 @@ public sealed class SlideCanvasAvaloniaTests
         source.Should().Contain("AvaloniaTableCellEditAdapter.BeginEdit");
         source.Should().Contain("AvaloniaTableCellEditAdapter.CommitRichText");
         source.Should().Contain("AvaloniaTableCellEditAdapter.Cancel");
+        source.Should().Contain("AvaloniaTableCellEditAdapter.PlanTextFormat");
+        source.Should().Contain("AvaloniaTableCellEditAdapter.PlanFontFamily");
+        source.Should().Contain("AvaloniaTableCellEditAdapter.PlanFontSize");
+        source.Should().Contain("AvaloniaTableCellEditAdapter.PlanColor");
+        source.Should().NotContain("_editor.PlanActiveTableCell");
         source.Should().Contain("TryApplyActiveTableCellTextFormat");
     }
 
