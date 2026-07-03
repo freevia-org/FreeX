@@ -223,6 +223,52 @@ public sealed class DocumentViewProtectionTests
     }
 
     [Fact]
+    public async Task CommentsOnly_allows_comment_history_undo_redo_but_blocks_body_history()
+    {
+        var canUndoCommentHistory = false;
+        var commentsAfterCommentUndo = -1;
+        var canRedoCommentHistory = false;
+        var commentsAfterCommentRedo = -1;
+        var canUndoBodyHistory = true;
+        var textAfterBlockedBodyUndo = "";
+
+        var ran = await OnUiThread(() =>
+        {
+            var view = BuildView("Hello world");
+
+            view.SetSelectionRangePublic(0, 0, 0, 5);
+            view.SetProtection(ProtectionMode.CommentsOnly);
+            view.NewComment("note");
+
+            canUndoCommentHistory = view.CanUndo;
+            view.Undo();
+            commentsAfterCommentUndo = view.Document.Comments.Count;
+
+            canRedoCommentHistory = view.CanRedo;
+            view.Redo();
+            commentsAfterCommentRedo = view.Document.Comments.Count;
+
+            var bodyView = BuildView("Hello");
+            bodyView.InsertText("X");
+            bodyView.SetProtection(ProtectionMode.CommentsOnly);
+
+            canUndoBodyHistory = bodyView.CanUndo;
+            bodyView.Undo();
+            textAfterBlockedBodyUndo = bodyView.PlainText;
+        });
+
+        if (!ran)
+            return;
+
+        canUndoCommentHistory.Should().BeTrue();
+        commentsAfterCommentUndo.Should().Be(0);
+        canRedoCommentHistory.Should().BeTrue();
+        commentsAfterCommentRedo.Should().Be(1);
+        canUndoBodyHistory.Should().BeFalse();
+        textAfterBlockedBodyUndo.Should().Be("XHello");
+    }
+
+    [Fact]
     public async Task FillingForms_blocks_body_edits_and_reports_form_only_policy()
     {
         var textAfterBlockedTyping = "";

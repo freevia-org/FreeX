@@ -28,6 +28,8 @@ internal sealed class AddCommentCommand(
 
     public string Label => "Insert Comment";
 
+    public DocumentCommandMutationKind MutationKind => DocumentCommandMutationKind.Comment;
+
     /// <summary>The id allocated for this comment (echoed so callers can navigate to it).</summary>
     public int CommentId => commentId;
 
@@ -150,6 +152,8 @@ internal sealed class DeleteCommentCommand(int commentId) : IDocumentCommand
     private int _savedOrdinal = -1;
 
     public string Label => "Delete Comment";
+
+    public DocumentCommandMutationKind MutationKind => DocumentCommandMutationKind.Comment;
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -290,6 +294,8 @@ internal sealed class AddCommentReplyCommand(int topLevelCommentId, Comment repl
 
     public string Label => "Reply to Comment";
 
+    public DocumentCommandMutationKind MutationKind => DocumentCommandMutationKind.Comment;
+
     public void Apply(IDocumentCommandContext context)
     {
         if (!context.Document.Comments.TryGetValue(topLevelCommentId, out var comment))
@@ -330,6 +336,8 @@ internal sealed class SetCommentResolvedCommand(int commentId, bool resolved) : 
     private bool _applied;
 
     public string Label => resolved ? "Resolve Comment" : "Reopen Comment";
+
+    public DocumentCommandMutationKind MutationKind => DocumentCommandMutationKind.Comment;
 
     public void Apply(IDocumentCommandContext context)
     {
