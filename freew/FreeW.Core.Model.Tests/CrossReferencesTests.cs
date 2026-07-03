@@ -215,6 +215,105 @@ public class CrossReferencesTests
     }
 
     [Fact]
+    public void ResolveField_RefText_UsesCurrentBookmarkedParagraphText()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Chapter Two") { BookmarkName = "_Ref1", StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.CrossReferenceFieldRun(
+                    new CrossReferenceField(CrossRefFieldKind.Ref, "_Ref1", CrossRefInsertAs.Text, Hyperlink: true),
+                    "Chapter One")
+            }
+        });
+
+        var run = ((Paragraph)doc.Blocks[1]).Runs[0];
+
+        CrossReferences.ResolveField(doc, run.CrossReference!, run.Text, sourceBlockIndex: 1)
+            .Should().Be("Chapter Two");
+    }
+
+    [Fact]
+    public void ResolveField_DanglingRef_PreservesCachedText()
+    {
+        var doc = new TextDocument();
+        var field = new CrossReferenceField(CrossRefFieldKind.Ref, "missing", CrossRefInsertAs.Text, Hyperlink: false);
+
+        CrossReferences.ResolveField(doc, field, "Stale text", sourceBlockIndex: 0)
+            .Should().Be("Stale text");
+    }
+
+    [Fact]
+    public void ResolveField_HeadingAndParagraphNumbers_RecomputeFromCurrentDocument()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("Section A") { StyleId = "Heading2", BookmarkName = "sectionA" });
+        doc.Blocks.Add(new Paragraph("Step one") { Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Number } });
+        doc.Blocks.Add(new Paragraph("Step two") { BookmarkName = "step2", Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Number } });
+
+        CrossReferences.ResolveField(
+                doc,
+                new CrossReferenceField(CrossRefFieldKind.Ref, "sectionA", CrossRefInsertAs.HeadingNumber, Hyperlink: false),
+                "old",
+                sourceBlockIndex: 3)
+            .Should().Be("1.1");
+        CrossReferences.ResolveField(
+                doc,
+                new CrossReferenceField(CrossRefFieldKind.Ref, "step2", CrossRefInsertAs.ParagraphNumber, Hyperlink: false),
+                "old",
+                sourceBlockIndex: 0)
+            .Should().Be("2)");
+    }
+
+    [Fact]
+    public void ResolveField_AboveBelow_AndPageRef_UseCurrentTargetPosition()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Target") { BookmarkName = "target" });
+        doc.Blocks.Add(new Paragraph("Reference"));
+
+        CrossReferences.ResolveField(
+                doc,
+                new CrossReferenceField(CrossRefFieldKind.Ref, "target", CrossRefInsertAs.AboveBelow, Hyperlink: false),
+                "below",
+                sourceBlockIndex: 1)
+            .Should().Be("above");
+        CrossReferences.ResolveField(
+                doc,
+                new CrossReferenceField(CrossRefFieldKind.PageRef, "target", CrossRefInsertAs.PageNumber, Hyperlink: false),
+                "1",
+                sourceBlockIndex: 1,
+                pageOf: block => block == 0 ? 4 : null)
+            .Should().Be("4");
+    }
+
+    [Fact]
+    public void ResolveField_NoteRef_ReturnsCurrentNoteMarkerAndPreservesDanglingCache()
+    {
+        var doc = new TextDocument();
+        doc.Footnotes[10] = new Footnote(10, "first");
+        doc.Footnotes[20] = new Footnote(20, "second");
+        doc.FootnoteNumbering.StartAt = 3;
+        doc.FootnoteNumbering.NumberFormat = NoteNumberFormat.UpperLetter;
+
+        CrossReferences.ResolveField(
+                doc,
+                new CrossReferenceField(CrossRefFieldKind.NoteRef, "20", CrossRefInsertAs.Text, Hyperlink: true),
+                "2",
+                sourceBlockIndex: 0)
+            .Should().Be("D");
+        CrossReferences.ResolveField(
+                doc,
+                new CrossReferenceField(CrossRefFieldKind.NoteRef, "99", CrossRefInsertAs.Text, Hyperlink: true),
+                "stale",
+                sourceBlockIndex: 0)
+            .Should().Be("stale");
+    }
+
+    [Fact]
     public void ReferenceText_ReturnsDisplayForEachTarget()
     {
         CrossReferences.ReferenceText(new CrossRefTarget("Chapter One", "ch1", 0))

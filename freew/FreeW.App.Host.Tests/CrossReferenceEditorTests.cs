@@ -81,4 +81,33 @@ public sealed class CrossReferenceEditorTests
         field.Kind.Should().Be(CrossRefFieldKind.NoteRef);
         field.Target.Should().Be("1");
     }
+
+    [StaFact]
+    public void UpdateFields_CrossReference_RefreshesCachedHeadingText()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Chapter Two") { StyleId = "Heading1", BookmarkName = "_Ref1" });
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("See "),
+                Run.CrossReferenceFieldRun(
+                    new CrossReferenceField(CrossRefFieldKind.Ref, "_Ref1", CrossRefInsertAs.Text, Hyperlink: true),
+                    "Chapter One")
+            }
+        });
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        var fieldRun = view.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Single(r => r.CrossReference is not null);
+        fieldRun.Text.Should().Be("Chapter Two");
+    }
 }
