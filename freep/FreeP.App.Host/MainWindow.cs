@@ -315,7 +315,8 @@ public sealed class MainWindow : Window
             onReopenComment: () => ReopenSelectedComment(),
             // Wave 16B: Animation pane toggle.
             onAnimPane:         () => ToggleAnimationPane(),
-            onTablePicker:      () => OpenTablePicker());
+            onTablePicker:      () => OpenTablePicker(),
+            onHeaderFooter:     focus => OpenHeaderFooterDialog(focus));
         var ribbon = BuildRibbon(FreePRibbon.Build(), commands, stateStore);
 
         // Body: slide pane + stage.
@@ -2427,6 +2428,14 @@ public sealed class MainWindow : Window
     internal void OpenSlideSizeDialog()
     {
         var dialog = new SlideSizeDialog(Editor);
+        if (IsVisible)
+            dialog.Owner = this;
+        dialog.ShowDialog();
+    }
+
+    internal void OpenHeaderFooterDialog(HeaderFooterCommandFocus focus)
+    {
+        var dialog = new HeaderFooterDialog(Editor, focus);
         if (IsVisible)
             dialog.Owner = this;
         dialog.ShowDialog();

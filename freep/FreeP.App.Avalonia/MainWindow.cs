@@ -112,6 +112,11 @@ public sealed class MainWindow : Window
     private TextBlock _slideSizeValidationText = null!;
     private bool _slideSizePaneRefreshing;
     private SlideSizeDialogUnit _slideSizeUnit = SlideSizeDialogUnit.Inches;
+    private Border _headerFooterPaneHost = null!;
+    private CheckBox _headerFooterDateTimeCheck = null!;
+    private CheckBox _headerFooterFooterCheck = null!;
+    private TextBox _headerFooterFooterBox = null!;
+    private CheckBox _headerFooterSlideNumberCheck = null!;
     private Border _reviewCommentsPaneHost = null!;
     private StackPanel _reviewCommentsPanePanel = null!;
     private int? _selectedCommentIndex;
@@ -205,6 +210,9 @@ public sealed class MainWindow : Window
     internal PresentationDesignCommandPlan? LastCustomSlideSizeRequestPlan { get; private set; }
     internal SlideSizeDialogInitialState? LastCustomSlideSizeInitialState { get; private set; }
     internal SlideSizeDialogResultPlan? LastCustomSlideSizeResultPlan { get; private set; }
+    internal HeaderFooterCommandFocus? LastHeaderFooterFocus { get; private set; }
+    internal HeaderFooterState? LastHeaderFooterState { get; private set; }
+    internal HeaderFooterApplyPlan? LastHeaderFooterApplyPlan { get; private set; }
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationHandoutLayoutPlan? LastHandoutLayoutPlan { get; private set; }
     internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
@@ -218,6 +226,7 @@ public sealed class MainWindow : Window
     internal bool IsLayoutPickerVisible => _layoutPickerHost?.IsVisible == true;
     internal bool IsTablePickerVisible => _tablePickerHost?.IsVisible == true;
     internal bool IsCustomSlideSizePaneVisible => _slideSizePaneHost?.IsVisible == true;
+    internal bool IsHeaderFooterPaneVisible => _headerFooterPaneHost?.IsVisible == true;
     internal string CustomSlideSizeWidthText => _slideSizeWidthBox?.Text ?? string.Empty;
     internal string CustomSlideSizeHeightText => _slideSizeHeightBox?.Text ?? string.Empty;
     internal string CustomSlideSizeValidationText => _slideSizeValidationText?.Text ?? string.Empty;
@@ -525,6 +534,7 @@ public sealed class MainWindow : Window
         _proofingPaneHost = BuildProofingPaneHost();
         _animationPaneHost = BuildAnimationPaneHost();
         _slideSizePaneHost = BuildSlideSizePaneHost();
+        _headerFooterPaneHost = BuildHeaderFooterPaneHost();
         Grid.SetRow(canvasHost, 0);
         Grid.SetRow(_layoutPickerHost, 1);
         Grid.SetRow(_tablePickerHost, 2);
@@ -565,17 +575,20 @@ public sealed class MainWindow : Window
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(slidePaneHost, 0);
         Grid.SetColumn(rightGrid,      1);
         Grid.SetColumn(_slideSizePaneHost, 2);
-        Grid.SetColumn(_accessibilityCheckerPaneHost, 3);
-        Grid.SetColumn(_altTextPaneHost, 4);
-        Grid.SetColumn(_readingOrderPaneHost, 5);
-        Grid.SetColumn(_proofingPaneHost, 6);
-        Grid.SetColumn(_animationPaneHost, 7);
+        Grid.SetColumn(_headerFooterPaneHost, 3);
+        Grid.SetColumn(_accessibilityCheckerPaneHost, 4);
+        Grid.SetColumn(_altTextPaneHost, 5);
+        Grid.SetColumn(_readingOrderPaneHost, 6);
+        Grid.SetColumn(_proofingPaneHost, 7);
+        Grid.SetColumn(_animationPaneHost, 8);
         body.Children.Add(slidePaneHost);
         body.Children.Add(rightGrid);
         body.Children.Add(_slideSizePaneHost);
+        body.Children.Add(_headerFooterPaneHost);
         body.Children.Add(_accessibilityCheckerPaneHost);
         body.Children.Add(_altTextPaneHost);
         body.Children.Add(_readingOrderPaneHost);
@@ -786,6 +799,89 @@ public sealed class MainWindow : Window
         Orientation = Orientation.Horizontal,
         Children = { box, unitLabel },
     };
+
+    private Border BuildHeaderFooterPaneHost()
+    {
+        _headerFooterDateTimeCheck = new CheckBox
+        {
+            Content = "Date and time",
+            Margin = new Thickness(12, 4, 12, 8),
+        };
+        _headerFooterFooterCheck = new CheckBox
+        {
+            Content = "Footer",
+            Margin = new Thickness(12, 4, 12, 4),
+        };
+        _headerFooterFooterBox = new TextBox
+        {
+            Margin = new Thickness(28, 0, 12, 8),
+            MinWidth = 180,
+        };
+        _headerFooterSlideNumberCheck = new CheckBox
+        {
+            Content = "Slide number",
+            Margin = new Thickness(12, 4, 12, 12),
+        };
+        _headerFooterFooterCheck.IsCheckedChanged += (_, _) =>
+            _headerFooterFooterBox.IsEnabled = _headerFooterFooterCheck.IsChecked == true;
+
+        var apply = new Button
+        {
+            Content = "Apply",
+            MinWidth = 78,
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        apply.Click += (_, _) => ApplyHeaderFooter(HeaderFooterApplyScope.CurrentSlide);
+
+        var applyAll = new Button
+        {
+            Content = "Apply All",
+            MinWidth = 78,
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        applyAll.Click += (_, _) => ApplyHeaderFooter(HeaderFooterApplyScope.AllSlides);
+
+        var close = new Button
+        {
+            Content = "Close",
+            MinWidth = 78,
+        };
+        close.Click += (_, _) => HideHeaderFooterPane();
+
+        return new Border
+        {
+            Width = 260,
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
+            BorderThickness = new Thickness(1, 0, 0, 0),
+            IsVisible = false,
+            Child = new StackPanel
+            {
+                Orientation = Orientation.Vertical,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = "Header and Footer",
+                        FontSize = 15,
+                        FontWeight = FontWeight.SemiBold,
+                        Margin = new Thickness(12, 12, 12, 4),
+                    },
+                    _headerFooterDateTimeCheck,
+                    _headerFooterFooterCheck,
+                    _headerFooterFooterBox,
+                    _headerFooterSlideNumberCheck,
+                    new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        HorizontalAlignment = HorizontalAlignment.Right,
+                        Margin = new Thickness(12, 4, 12, 12),
+                        Children = { apply, applyAll, close },
+                    },
+                },
+            },
+        };
+    }
 
     private static TextBlock BuildAltTextPaneLabel()
         => new()
@@ -1235,6 +1331,12 @@ public sealed class MainWindow : Window
         r.Register(ChartDataDialogPlanner.EditDataCommandId, new ActionRibbonCommand(OpenChartDataDialog));
         r.Register("freep.insert-link", new ActionRibbonCommand(OpenHyperlinkDialog));
         r.Register("freep.remove-link", new ActionRibbonCommand(() => Editor.RemoveShapeHyperlink()));
+        r.Register(HeaderFooterCommandPlanner.HeaderFooterCommandId,
+            new ActionRibbonCommand(() => OpenHeaderFooterPane(HeaderFooterCommandFocus.HeaderFooter)));
+        r.Register(HeaderFooterCommandPlanner.DateTimeCommandId,
+            new ActionRibbonCommand(() => OpenHeaderFooterPane(HeaderFooterCommandFocus.DateTime)));
+        r.Register(HeaderFooterCommandPlanner.SlideNumberCommandId,
+            new ActionRibbonCommand(() => OpenHeaderFooterPane(HeaderFooterCommandFocus.SlideNumber)));
 
         // Undo / Redo
         r.Register("freep.undo", new ActionRibbonCommand(() => Editor.Undo()));
@@ -1472,6 +1574,7 @@ public sealed class MainWindow : Window
 
         HideLayoutPicker();
         HideCustomSlideSizePane();
+        HideHeaderFooterPane();
         _tablePickerHost.IsVisible = true;
     }
 
@@ -1528,6 +1631,7 @@ public sealed class MainWindow : Window
 
         HideTablePicker();
         HideCustomSlideSizePane();
+        HideHeaderFooterPane();
         _layoutPickerHost.IsVisible = true;
     }
 
@@ -1544,6 +1648,7 @@ public sealed class MainWindow : Window
 
         HideLayoutPicker();
         HideTablePicker();
+        HideHeaderFooterPane();
 
         _slideSizePaneRefreshing = true;
         try
@@ -1566,6 +1671,66 @@ public sealed class MainWindow : Window
     {
         if (_slideSizePaneHost is not null)
             _slideSizePaneHost.IsVisible = false;
+    }
+
+    internal void OpenHeaderFooterPane(HeaderFooterCommandFocus focus)
+    {
+        LastHeaderFooterFocus = focus;
+        LastHeaderFooterState = HeaderFooterCommandPlanner.BuildState(Editor);
+        var options = HeaderFooterCommandPlanner.BuildDefaultOptions(LastHeaderFooterState, focus);
+
+        _headerFooterDateTimeCheck.IsChecked = options.ShowDateTime;
+        _headerFooterFooterCheck.IsChecked = options.ShowFooter;
+        _headerFooterFooterBox.Text = options.FooterText;
+        _headerFooterFooterBox.IsEnabled = options.ShowFooter;
+        _headerFooterSlideNumberCheck.IsChecked = options.ShowSlideNumber;
+
+        HideLayoutPicker();
+        HideTablePicker();
+        HideCustomSlideSizePane();
+        _headerFooterPaneHost.IsVisible = true;
+        _statusText.Text = "Header and Footer";
+    }
+
+    private void HideHeaderFooterPane()
+    {
+        if (_headerFooterPaneHost is not null)
+            _headerFooterPaneHost.IsVisible = false;
+    }
+
+    internal bool ApplyHeaderFooterForTests(
+        bool showDateTime,
+        bool showFooter,
+        bool showSlideNumber,
+        string footerText,
+        HeaderFooterApplyScope scope)
+    {
+        _headerFooterDateTimeCheck.IsChecked = showDateTime;
+        _headerFooterFooterCheck.IsChecked = showFooter;
+        _headerFooterFooterBox.Text = footerText;
+        _headerFooterSlideNumberCheck.IsChecked = showSlideNumber;
+        return ApplyHeaderFooter(scope);
+    }
+
+    internal bool ApplyHeaderFooter(HeaderFooterApplyScope scope)
+    {
+        var options = new HeaderFooterApplyOptions(
+            _headerFooterDateTimeCheck.IsChecked == true,
+            _headerFooterFooterCheck.IsChecked == true,
+            _headerFooterSlideNumberCheck.IsChecked == true,
+            _headerFooterFooterBox.Text ?? string.Empty,
+            scope);
+
+        if (!HeaderFooterCommandPlanner.TryApply(Editor, options, out var plan))
+        {
+            return false;
+        }
+
+        LastHeaderFooterApplyPlan = plan;
+        RefreshCanvas();
+        UpdateStatus();
+        HideHeaderFooterPane();
+        return true;
     }
 
     private void OnSlideSizePresetChanged(object? sender, SelectionChangedEventArgs e)
