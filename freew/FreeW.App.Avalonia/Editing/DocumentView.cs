@@ -4577,7 +4577,27 @@ public sealed class DocumentView : Control
             rowHeights[pr] = prRowHeight;
         }
 
-        for (var r = 0; r < table.Rows.Count; r++)
+        var repeatedHeaderRowsByFirstSourceRow = _viewMode == DocumentViewMode.PrintLayout
+            ? DocumentViewLayoutPlanner.BuildTablePaginationPlan(table, _doc.Page).Pages
+                .Where(page => page.IncludesRepeatedHeader && page.SourceRowIndexes.Count > 0)
+                .ToDictionary(page => page.SourceRowIndexes[0], page => page.RepeatedHeaderRowIndexes)
+            : new Dictionary<int, IReadOnlyList<int>>();
+
+        double NextPhysicalPageStartContentY()
+        {
+            if (_layoutTextAreaHeight <= 0)
+                return _layoutContentY;
+
+            var slotsPerPage = Math.Max(1, _colCount);
+            var currentSlot = Math.Max(0, (int)(_layoutContentY / _layoutTextAreaHeight));
+            var currentPage = currentSlot / slotsPerPage;
+            var currentPageStart = currentPage * slotsPerPage * _layoutTextAreaHeight;
+            return _layoutContentY <= currentPageStart + 0.5
+                ? _layoutContentY
+                : (currentPage + 1) * slotsPerPage * _layoutTextAreaHeight;
+        }
+
+        void RenderTableRow(int r, double? reservedContentY = null)
         {
             var row = table.Rows[r];
             var isHeader = table.Formatting.HeaderRow && r == 0;
@@ -4622,7 +4642,7 @@ public sealed class DocumentView : Control
             }
 
             // Treat the row as a unit: reserve space on the current page (or push to next).
-            var rowContentY = ReserveContentY(rowHeight);
+            var rowContentY = reservedContentY ?? ReserveContentY(rowHeight);
             var rowPageSpaceY = ContentYToPageSpaceY(rowContentY);
 
             // AV-COL-NONTXT AG1: use the column band that this row's content-Y falls in.
@@ -4724,6 +4744,30 @@ public sealed class DocumentView : Control
             }
 
             _layoutContentY = rowContentY + rowHeight;
+        }
+
+        for (var r = 0; r < table.Rows.Count; r++)
+        {
+            if (repeatedHeaderRowsByFirstSourceRow.TryGetValue(r, out var repeatedHeaderRowIndexes))
+            {
+                var nextPageStart = NextPhysicalPageStartContentY();
+                if (nextPageStart > _layoutContentY)
+                    _layoutContentY = nextPageStart;
+
+                var firstBodyRowHeight = r >= 0 && r < rowHeights.Length ? rowHeights[r] : 0;
+                var repeatedHeaderHeight = repeatedHeaderRowIndexes
+                    .Where(index => index >= 0 && index < rowHeights.Length)
+                    .Sum(index => rowHeights[index]);
+                _layoutContentY = ReserveContentY(repeatedHeaderHeight + firstBodyRowHeight);
+
+                foreach (var repeatedHeaderRowIndex in repeatedHeaderRowIndexes)
+                {
+                    if (repeatedHeaderRowIndex >= 0 && repeatedHeaderRowIndex < table.Rows.Count)
+                        RenderTableRow(repeatedHeaderRowIndex, _layoutContentY);
+                }
+            }
+
+            RenderTableRow(r);
         }
 
         _layoutContentY += 8;
