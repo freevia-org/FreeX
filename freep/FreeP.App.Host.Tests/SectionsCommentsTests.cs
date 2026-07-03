@@ -234,6 +234,96 @@ public sealed class SectionsCommentsTests : IDisposable
     }
 
     [Fact]
+    public void ModernComments_Read_MapsReviewMetadataRepliesAndSharedPaneDescriptor()
+    {
+        using var ms = BuildModernCommentsPptx();
+
+        var pres = PptxPackageReader.Read(ms);
+
+        var comment = pres.Slides.Should().ContainSingle().Subject.Comments.Should().ContainSingle().Subject;
+        comment.Author.Should().Be("Alice Reviewer");
+        comment.Initials.Should().Be("AR");
+        comment.Text.Should().Be("Modern thread root.");
+        comment.DateTime.Should().Be(new DateTime(2026, 7, 3, 10, 15, 30, DateTimeKind.Utc));
+        comment.IsResolved.Should().BeTrue();
+        comment.UsesModernCommentSchema.Should().BeTrue();
+        comment.Xemu.Should().Be(1200);
+        comment.Yemu.Should().Be(2400);
+        comment.Replies.Should().ContainSingle().Which.Should().Match<SlideCommentReply>(reply =>
+            reply.Author == "Bob Reviewer" &&
+            reply.Initials == "BR" &&
+            reply.Text == "Reply retained." &&
+            reply.DateTime == new DateTime(2026, 7, 3, 10, 20, 0, DateTimeKind.Utc));
+
+        var pane = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(pres.Slides, 0, selectedCommentIndex: 0);
+        pane.SelectedComment.Should().NotBeNull();
+        pane.SelectedComment!.ThreadStatus.Should().Be(PresentationCommentThreadStatus.Resolved);
+        pane.SelectedComment.AuthorDisplayName.Should().Be("Alice Reviewer");
+        pane.SelectedComment.Replies.Should().ContainSingle().Which.AuthorDisplayName.Should().Be("Bob Reviewer");
+    }
+
+    [Fact]
+    public void ModernComments_RoundTrip_RetainsReviewMetadataAndModernPackageParts()
+    {
+        var pres = new Presentation();
+        var slide = new Slide { Title = "Modern review" };
+        slide.Comments.Add(new SlideComment
+        {
+            Author = "Alice Reviewer",
+            Initials = "AR",
+            Text = "Resolve after chart update.",
+            DateTime = new DateTime(2026, 7, 3, 11, 0, 0, DateTimeKind.Utc),
+            IsResolved = true,
+            Xemu = 3600,
+            Yemu = 7200,
+            Replies =
+            {
+                new SlideCommentReply
+                {
+                    Author = "Bob Reviewer",
+                    Initials = "BR",
+                    Text = "Confirmed.",
+                    DateTime = new DateTime(2026, 7, 3, 11, 5, 0, DateTimeKind.Utc)
+                }
+            }
+        });
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+        var reloaded = PptxPackageReader.Read(path);
+
+        var comment = reloaded.Slides[0].Comments.Should().ContainSingle().Subject;
+        comment.Author.Should().Be("Alice Reviewer");
+        comment.Initials.Should().Be("AR");
+        comment.Text.Should().Be("Resolve after chart update.");
+        comment.DateTime.Should().Be(new DateTime(2026, 7, 3, 11, 0, 0, DateTimeKind.Utc));
+        comment.IsResolved.Should().BeTrue();
+        comment.UsesModernCommentSchema.Should().BeTrue();
+        comment.Replies.Should().ContainSingle().Which.Should().Match<SlideCommentReply>(reply =>
+            reply.Author == "Bob Reviewer" &&
+            reply.Initials == "BR" &&
+            reply.Text == "Confirmed." &&
+            reply.DateTime == new DateTime(2026, 7, 3, 11, 5, 0, DateTimeKind.Utc));
+
+        using var zip = ZipFile.OpenRead(path);
+        zip.GetEntry("ppt/authors/author1.xml").Should().NotBeNull();
+        zip.GetEntry("ppt/commentAuthors.xml").Should().BeNull("modern-only comments should not be downgraded to legacy authors");
+
+        var slideRels = LoadXml(zip, "ppt/slides/_rels/slide1.xml.rels");
+        Relationship(slideRels, "http://schemas.microsoft.com/office/2018/10/relationships/comments", "../comments/comment1.xml")
+            .Should().NotBeNull();
+        var presRels = LoadXml(zip, "ppt/_rels/presentation.xml.rels");
+        Relationship(presRels, "http://schemas.microsoft.com/office/2018/10/relationships/authors", "authors/author1.xml")
+            .Should().NotBeNull();
+
+        var contentTypes = LoadXml(zip, "[Content_Types].xml");
+        Override(contentTypes, "/ppt/comments/comment1.xml", "application/vnd.ms-powerpoint.comments+xml")
+            .Should().NotBeNull();
+        Override(contentTypes, "/ppt/authors/author1.xml", "application/vnd.ms-powerpoint.authors+xml")
+            .Should().NotBeNull();
+    }
+
+    [Fact]
     public void Comments_RoundTrip_SlideWithNoComments_RemainsEmpty()
     {
         var pres = new Presentation();
@@ -878,6 +968,130 @@ public sealed class SectionsCommentsTests : IDisposable
 
         ms.Position = 0;
         return ms;
+    }
+
+    private static MemoryStream BuildModernCommentsPptx()
+    {
+        var ms = new MemoryStream();
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WriteZipEntry(zip, "_rels/.rels", """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>
+                </Relationships>
+                """);
+
+            WriteZipEntry(zip, "ppt/_rels/presentation.xml.rels", """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>
+                  <Relationship Id="rIdAuthors" Type="http://schemas.microsoft.com/office/2018/10/relationships/authors" Target="authors/author1.xml"/>
+                </Relationships>
+                """);
+
+            WriteZipEntry(zip, "ppt/presentation.xml", """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                                xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <p:sldSz cx="9144000" cy="6858000"/>
+                  <p:sldIdLst>
+                    <p:sldId id="256" r:id="rId2"/>
+                  </p:sldIdLst>
+                </p:presentation>
+                """);
+
+            WriteZipEntry(zip, "ppt/authors/author1.xml", """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <p188:authorLst xmlns:p188="http://schemas.microsoft.com/office/powerpoint/2018/8/main">
+                  <p188:author id="{11111111-1111-1111-1111-111111111111}" name="Alice Reviewer" initials="AR" userId="alice@example.com::1" providerId=""/>
+                  <p188:author id="{22222222-2222-2222-2222-222222222222}" name="Bob Reviewer" initials="BR" userId="bob@example.com::2" providerId=""/>
+                </p188:authorLst>
+                """);
+
+            WriteZipEntry(zip, "ppt/slides/_rels/slide1.xml.rels", """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rModernComments1" Type="http://schemas.microsoft.com/office/2018/10/relationships/comments" Target="../comments/comment1.xml"/>
+                </Relationships>
+                """);
+
+            WriteZipEntry(zip, "ppt/slides/slide1.xml", """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                       xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+                       xmlns:p188="http://schemas.microsoft.com/office/powerpoint/2018/8/main">
+                  <p:cSld><p:spTree/></p:cSld>
+                  <p:extLst>
+                    <p:ext uri="{6950BFC3-D8DA-4A85-94F7-54DA5524770B}">
+                      <p188:commentRel r:id="rModernComments1"/>
+                    </p:ext>
+                  </p:extLst>
+                </p:sld>
+                """);
+
+            WriteZipEntry(zip, "ppt/comments/comment1.xml", """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <p188:cmLst xmlns:p188="http://schemas.microsoft.com/office/powerpoint/2018/8/main"
+                             xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+                  <p188:cm id="{33333333-3333-3333-3333-333333333333}"
+                           authorId="{11111111-1111-1111-1111-111111111111}"
+                           status="resolved"
+                           created="2026-07-03T10:15:30Z">
+                    <p188:unknownAnchor/>
+                    <p188:pos x="1200" y="2400"/>
+                    <p188:replyLst>
+                      <p188:reply id="{44444444-4444-4444-4444-444444444444}"
+                                  authorId="{22222222-2222-2222-2222-222222222222}"
+                                  status="active"
+                                  created="2026-07-03T10:20:00Z">
+                        <p188:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Reply retained.</a:t></a:r></a:p></p188:txBody>
+                      </p188:reply>
+                    </p188:replyLst>
+                    <p188:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Modern thread root.</a:t></a:r></a:p></p188:txBody>
+                  </p188:cm>
+                </p188:cmLst>
+                """);
+
+            WriteZipEntry(zip, "[Content_Types].xml", """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
+                  <Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
+                  <Override PartName="/ppt/authors/author1.xml" ContentType="application/vnd.ms-powerpoint.authors+xml"/>
+                  <Override PartName="/ppt/comments/comment1.xml" ContentType="application/vnd.ms-powerpoint.comments+xml"/>
+                </Types>
+                """);
+        }
+
+        ms.Position = 0;
+        return ms;
+    }
+
+    private static XDocument LoadXml(ZipArchive archive, string path)
+    {
+        var entry = archive.GetEntry(path) ?? throw new InvalidOperationException($"{path} not found");
+        using var stream = entry.Open();
+        return XDocument.Load(stream);
+    }
+
+    private static XElement? Relationship(XDocument doc, string type, string target)
+    {
+        XNamespace rels = "http://schemas.openxmlformats.org/package/2006/relationships";
+        return doc.Root?.Elements(rels + "Relationship").FirstOrDefault(r =>
+            r.Attribute("Type")?.Value == type &&
+            r.Attribute("Target")?.Value == target);
+    }
+
+    private static XElement? Override(XDocument doc, string partName, string contentType)
+    {
+        XNamespace ct = "http://schemas.openxmlformats.org/package/2006/content-types";
+        return doc.Root?.Elements(ct + "Override").FirstOrDefault(o =>
+            o.Attribute("PartName")?.Value == partName &&
+            o.Attribute("ContentType")?.Value == contentType);
     }
 
     private static void WriteZipEntry(System.IO.Compression.ZipArchive zip, string path, string content)
