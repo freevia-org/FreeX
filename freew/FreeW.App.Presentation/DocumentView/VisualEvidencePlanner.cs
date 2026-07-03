@@ -150,7 +150,24 @@ public sealed record FreeWVisualDrawingObjectExpectation(
     bool HasSquareWrap,
     bool HasTopAndBottomWrap,
     bool HasZOrder,
+    FreeWVisualDrawingObjectEffectExpectation Effects,
     IReadOnlyList<DocumentFloatingObjectSnapshot> Objects);
+
+public sealed record FreeWVisualDrawingObjectEffectExpectation(
+    int EffectObjectCount,
+    int ShapeEffectObjectCount,
+    int ImageEffectObjectCount,
+    int WordArtEffectObjectCount,
+    bool HasShadow,
+    bool HasGlow,
+    bool HasReflection,
+    bool HasSoftEdge,
+    bool HasBevel,
+    bool HasArtisticEffect,
+    IReadOnlyList<string> EffectSummaries)
+{
+    public bool HasAny => EffectObjectCount > 0;
+}
 
 public sealed record FreeWVisualChartSmartArtExpectation(
     int ChartCount,
@@ -477,11 +494,20 @@ public static class FreeWVisualEvidencePlanner
                 "floating-objects",
                 "print-layout",
                 "body-text",
+                "drawing-effects",
                 "shapes",
+                "images",
                 "charts",
                 "smartart",
                 "wordart",
                 "drawing-groups",
+                "shape-effects",
+                "image-effects",
+                "wordart-effects",
+                "shadow",
+                "glow",
+                "reflection",
+                "artistic-effect",
                 "square-wrap",
                 "top-bottom-wrap",
                 "behind-text",
@@ -500,7 +526,12 @@ public static class FreeWVisualEvidencePlanner
                 "floating-objects",
                 "print-layout",
                 "body-text",
+                "drawing-effects",
                 "wordart",
+                "shape-effects",
+                "wordart-effects",
+                "shadow",
+                "glow",
                 "watermark",
                 "page-border",
                 "square-wrap",
@@ -1066,7 +1097,157 @@ public static class FreeWVisualEvidencePlanner
             HasSquareWrap: objects.Any(o => o.Wrapping == ImageWrapping.Square),
             HasTopAndBottomWrap: objects.Any(o => o.Wrapping == ImageWrapping.TopAndBottom),
             HasZOrder: objects.Select(o => o.ZOrderIndex).Distinct().Count() > 1,
+            Effects: BuildDrawingObjectEffectExpectation(document, objects),
             Objects: objects);
+    }
+
+    private static FreeWVisualDrawingObjectEffectExpectation BuildDrawingObjectEffectExpectation(
+        TextDocument document,
+        IReadOnlyList<DocumentFloatingObjectSnapshot> objects)
+    {
+        var summaries = new List<string>();
+        var shapeEffectObjects = 0;
+        var imageEffectObjects = 0;
+        var wordArtEffectObjects = 0;
+        var hasShadow = false;
+        var hasGlow = false;
+        var hasReflection = false;
+        var hasSoftEdge = false;
+        var hasBevel = false;
+        var hasArtisticEffect = false;
+
+        foreach (var snapshot in objects)
+        {
+            if (!TryGetRun(document, snapshot, out var run))
+                continue;
+
+            switch (snapshot.Kind)
+            {
+                case DocumentFloatingObjectKind.Image when run.Image is { } image:
+                    AddImageEffects(image, summaries, ref imageEffectObjects, ref hasShadow, ref hasGlow,
+                        ref hasReflection, ref hasSoftEdge, ref hasBevel, ref hasArtisticEffect);
+                    break;
+                case DocumentFloatingObjectKind.Shape when run.Shape is { } shape:
+                    AddVisualEffects(
+                        "Shape",
+                        DrawingObjectVisualPlanner.BuildVisualPlan(shape, snapshot),
+                        summaries,
+                        ref shapeEffectObjects,
+                        ref hasShadow,
+                        ref hasGlow,
+                        ref hasReflection,
+                        ref hasSoftEdge,
+                        ref hasBevel,
+                        countAsWordArt: false,
+                        wordArtEffectObjects: ref wordArtEffectObjects);
+                    break;
+                case DocumentFloatingObjectKind.WordArt when run.WordArt is { } wordArt:
+                    AddVisualEffects(
+                        "WordArt",
+                        DrawingObjectVisualPlanner.BuildVisualPlan(wordArt, snapshot),
+                        summaries,
+                        ref shapeEffectObjects,
+                        ref hasShadow,
+                        ref hasGlow,
+                        ref hasReflection,
+                        ref hasSoftEdge,
+                        ref hasBevel,
+                        countAsWordArt: true,
+                        wordArtEffectObjects: ref wordArtEffectObjects);
+                    break;
+            }
+        }
+
+        return new FreeWVisualDrawingObjectEffectExpectation(
+            shapeEffectObjects + imageEffectObjects + wordArtEffectObjects,
+            shapeEffectObjects,
+            imageEffectObjects,
+            wordArtEffectObjects,
+            hasShadow,
+            hasGlow,
+            hasReflection,
+            hasSoftEdge,
+            hasBevel,
+            hasArtisticEffect,
+            summaries);
+    }
+
+    private static void AddImageEffects(
+        InlineImage image,
+        List<string> summaries,
+        ref int imageEffectObjects,
+        ref bool hasShadow,
+        ref bool hasGlow,
+        ref bool hasReflection,
+        ref bool hasSoftEdge,
+        ref bool hasBevel,
+        ref bool hasArtisticEffect)
+    {
+        if (!image.HasEffects && !image.HasArtisticEffect)
+            return;
+
+        imageEffectObjects++;
+        hasShadow |= image.ShadowPreset != 0;
+        hasGlow |= image.GlowSizePt > 0;
+        hasReflection |= image.ReflectionPreset != 0;
+        hasSoftEdge |= image.SoftEdgePt > 0;
+        hasBevel |= image.BevelPreset != 0;
+        hasArtisticEffect |= image.HasArtisticEffect;
+
+        var parts = new List<string>();
+        if (image.ShadowPreset != 0) parts.Add("shadow");
+        if (image.GlowSizePt > 0) parts.Add("glow");
+        if (image.ReflectionPreset != 0) parts.Add("reflection");
+        if (image.SoftEdgePt > 0) parts.Add("soft-edge");
+        if (image.BevelPreset != 0) parts.Add("bevel");
+        if (image.HasArtisticEffect) parts.Add("artistic:" + image.ArtisticEffect);
+        summaries.Add("Image:" + string.Join("+", parts));
+    }
+
+    private static void AddVisualEffects(
+        string source,
+        DrawingObjectVisualPlan visual,
+        List<string> summaries,
+        ref int shapeEffectObjects,
+        ref bool hasShadow,
+        ref bool hasGlow,
+        ref bool hasReflection,
+        ref bool hasSoftEdge,
+        ref bool hasBevel,
+        bool countAsWordArt,
+        ref int wordArtEffectObjects)
+    {
+        if (!visual.Effects.HasAny)
+            return;
+
+        if (countAsWordArt || visual.Kind == DrawingObjectVisualKind.WordArt)
+            wordArtEffectObjects++;
+        else
+            shapeEffectObjects++;
+
+        hasShadow |= visual.Effects.HasShadow;
+        hasGlow |= visual.Effects.HasGlow;
+        hasReflection |= visual.Effects.HasReflection;
+        hasSoftEdge |= visual.Effects.HasSoftEdge;
+        hasBevel |= visual.Effects.HasBevel;
+        summaries.Add(source + ":" + visual.Effects.Summary.Replace(", ", "+", StringComparison.Ordinal));
+    }
+
+    private static bool TryGetRun(
+        TextDocument document,
+        DocumentFloatingObjectSnapshot snapshot,
+        out Run run)
+    {
+        run = null!;
+        if (snapshot.BlockIndex < 0 || snapshot.BlockIndex >= document.Blocks.Count)
+            return false;
+        if (document.Blocks[snapshot.BlockIndex] is not Paragraph paragraph)
+            return false;
+        if (snapshot.RunIndex < 0 || snapshot.RunIndex >= paragraph.Runs.Count)
+            return false;
+
+        run = paragraph.Runs[snapshot.RunIndex];
+        return true;
     }
 
     public static FreeWVisualChartSmartArtExpectation BuildChartSmartArtExpectation(TextDocument? document)
@@ -1378,6 +1559,18 @@ public static class FreeWVisualEvidencePlanner
         HasSquareWrap: false,
         HasTopAndBottomWrap: false,
         HasZOrder: false,
+        Effects: new FreeWVisualDrawingObjectEffectExpectation(
+            EffectObjectCount: 0,
+            ShapeEffectObjectCount: 0,
+            ImageEffectObjectCount: 0,
+            WordArtEffectObjectCount: 0,
+            HasShadow: false,
+            HasGlow: false,
+            HasReflection: false,
+            HasSoftEdge: false,
+            HasBevel: false,
+            HasArtisticEffect: false,
+            EffectSummaries: []),
         Objects: []);
 
     private static FreeWVisualChartSmartArtExpectation EmptyChartSmartArtExpectation { get; } = new(

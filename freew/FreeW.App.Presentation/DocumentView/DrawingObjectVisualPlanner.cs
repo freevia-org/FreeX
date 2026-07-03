@@ -191,7 +191,7 @@ public static class DrawingObjectVisualPlanner
             Outline: new DrawingObjectOutlinePlan(false, null, 0, null),
             Text: null,
             WordArt: BuildWordArtPlan(wordArt),
-            Effects: DrawingObjectEffectsPlan.None,
+            Effects: BuildWordArtEffectsPlan(wordArt.Style),
             GroupChildren: []);
     }
 
@@ -371,6 +371,44 @@ public static class DrawingObjectVisualPlanner
             outline,
             bold);
     }
+
+    private static DrawingObjectEffectsPlan BuildWordArtEffectsPlan(WordArtStyle style) =>
+        style switch
+        {
+            WordArtStyle.Shadow or WordArtStyle.ShadowOrange => new DrawingObjectEffectsPlan(
+                HasShadow: true,
+                ShadowColorHex: "#000000",
+                ShadowBlurDip: 4,
+                ShadowDistanceDip: 3,
+                ShadowDirectionDegrees: 45,
+                ShadowOpacity: 0.35,
+                HasGlow: false,
+                GlowColorHex: "#4472C4",
+                GlowRadiusDip: 0,
+                GlowOpacity: 0,
+                HasSoftEdge: false,
+                SoftEdgeRadiusDip: 0,
+                HasReflection: false,
+                HasBevel: false),
+            WordArtStyle.GlowBlue or WordArtStyle.GlowGold => new DrawingObjectEffectsPlan(
+                HasShadow: false,
+                ShadowColorHex: "#000000",
+                ShadowBlurDip: 0,
+                ShadowDistanceDip: 0,
+                ShadowDirectionDegrees: 0,
+                ShadowOpacity: 0,
+                HasGlow: true,
+                GlowColorHex: style == WordArtStyle.GlowGold ? "#FFC000" : "#4472C4",
+                GlowRadiusDip: 6,
+                GlowOpacity: 0.6,
+                HasSoftEdge: false,
+                SoftEdgeRadiusDip: 0,
+                HasReflection: false,
+                HasBevel: false),
+            WordArtStyle.Reflection => DrawingObjectEffectsPlan.None with { HasReflection = true },
+            WordArtStyle.Bevel => DrawingObjectEffectsPlan.None with { HasBevel = true },
+            _ => DrawingObjectEffectsPlan.None
+        };
 
     private static (string FillHex, string? OutlineHex, bool Bold) WordArtStyleToColors(WordArtStyle style) =>
         style switch

@@ -722,6 +722,26 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("drawing-object evidence expects top-and-bottom wrapping but the object plan records none");
         if (tags.Contains("z-order", StringComparer.OrdinalIgnoreCase) && !objects.HasZOrder)
             rowFailures.Add("drawing-object evidence expects z-order depth but the object plan records a single layer");
+        if (tags.Contains("drawing-effects", StringComparer.OrdinalIgnoreCase) && !objects.Effects.HasAny)
+            rowFailures.Add("drawing-object evidence expects effect metadata but the object plan records no effects");
+        if (tags.Contains("shape-effects", StringComparer.OrdinalIgnoreCase) && objects.Effects.ShapeEffectObjectCount <= 0)
+            rowFailures.Add("drawing-object evidence expects shape effects but the object plan records none");
+        if (tags.Contains("image-effects", StringComparer.OrdinalIgnoreCase) && objects.Effects.ImageEffectObjectCount <= 0)
+            rowFailures.Add("drawing-object evidence expects image effects but the object plan records none");
+        if (tags.Contains("wordart-effects", StringComparer.OrdinalIgnoreCase) && objects.Effects.WordArtEffectObjectCount <= 0)
+            rowFailures.Add("drawing-object evidence expects WordArt effects but the object plan records none");
+        if (tags.Contains("shadow", StringComparer.OrdinalIgnoreCase) && !objects.Effects.HasShadow)
+            rowFailures.Add("drawing-object evidence expects shadow effects but the object plan records none");
+        if (tags.Contains("glow", StringComparer.OrdinalIgnoreCase) && !objects.Effects.HasGlow)
+            rowFailures.Add("drawing-object evidence expects glow effects but the object plan records none");
+        if (tags.Contains("reflection", StringComparer.OrdinalIgnoreCase) && !objects.Effects.HasReflection)
+            rowFailures.Add("drawing-object evidence expects reflection effects but the object plan records none");
+        if (tags.Contains("soft-edge", StringComparer.OrdinalIgnoreCase) && !objects.Effects.HasSoftEdge)
+            rowFailures.Add("drawing-object evidence expects soft-edge effects but the object plan records none");
+        if (tags.Contains("bevel", StringComparer.OrdinalIgnoreCase) && !objects.Effects.HasBevel)
+            rowFailures.Add("drawing-object evidence expects bevel effects but the object plan records none");
+        if (tags.Contains("artistic-effect", StringComparer.OrdinalIgnoreCase) && !objects.Effects.HasArtisticEffect)
+            rowFailures.Add("drawing-object evidence expects artistic image effects but the object plan records none");
     }
 
     private static void ValidateChartSmartArtFeatureTags(
@@ -1145,6 +1165,12 @@ public static class FreeWVisualEvidenceManifestNormalizer
             parts.Add(
                 $"{row.DrawingObjects.FloatingObjectCount.ToString(CultureInfo.InvariantCulture)} drawing object(s), " +
                 $"{row.DrawingObjects.BehindTextCount.ToString(CultureInfo.InvariantCulture)} behind text");
+            if (row.DrawingObjects.Effects.HasAny)
+            {
+                parts.Add(
+                    $"{row.DrawingObjects.Effects.EffectObjectCount.ToString(CultureInfo.InvariantCulture)} drawing effect object(s): " +
+                    string.Join("/", row.DrawingObjects.Effects.EffectSummaries));
+            }
         }
         if (row.ChartSmartArt.ChartCount > 0 || row.ChartSmartArt.SmartArtCount > 0)
         {

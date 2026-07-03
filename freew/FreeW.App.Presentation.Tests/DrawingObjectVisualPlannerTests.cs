@@ -132,6 +132,8 @@ public sealed class DrawingObjectVisualPlannerTests
         plan.WordArt.Warp.Should().Be(WordArtWarp.Wave1);
         plan.WordArt.FontSizeDip.Should().BeApproximately(40, 0.01);
         plan.WordArt.FillColorHex.Should().Be("#4472C4");
+        plan.Effects.HasGlow.Should().BeTrue();
+        plan.Effects.Summary.Should().Be("glow");
         plan.Wrapping.Should().Be(ImageWrapping.InFront);
         plan.ZOrderIndex.Should().Be(9);
     }
