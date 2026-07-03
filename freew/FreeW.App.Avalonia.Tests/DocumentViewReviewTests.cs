@@ -915,13 +915,45 @@ public sealed class DocumentViewReviewTests
             pane.Refresh();
             count = pane.BalloonItemCount;
             kinds = ReviewBalloonsPane.EnumerateBalloons(view.Document, view.CurrentReviewDisplayPolicy)
-                .Select(item => item.Kind)
+                .Select(item => item.KindLabel)
                 .ToArray();
         });
         if (!ran) return;
 
         count.Should().Be(2, "the strip renders one tracked revision and one comment balloon");
         kinds.Should().Equal("Comment", "Inserted");
+    }
+
+    [Fact]
+    public async Task Review_balloons_pane_uses_shared_anchored_leader_line_layout()
+    {
+        IReadOnlyList<ReviewBalloonLayout> layouts = [];
+        int visualChildren = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithInsertion();
+            var p = (Paragraph)doc.Blocks[0];
+            p.Runs[0].CommentId = 1;
+            p.Runs.Insert(1, Run.CommentReference(1));
+            doc.Comments[1] = new Comment(1, "check intro", "Casey", "C");
+
+            var view = Build(doc);
+            var pane = new ReviewBalloonsPane(view);
+            pane.Measure(new Size(260, 420));
+            pane.Refresh();
+
+            layouts = pane.LayoutsForTest;
+            visualChildren = pane.VisualChildCountForTest;
+        });
+        if (!ran) return;
+
+        layouts.Should().HaveCount(2);
+        layouts.Select(layout => layout.Source.KindLabel).Should().Equal("Comment", "Inserted");
+        layouts.Select(layout => layout.BalloonY).Should().Equal(8, 72);
+        layouts.Should().OnlyContain(layout => layout.LeaderEndX == layout.BalloonX);
+        layouts.Should().OnlyContain(layout => layout.LeaderEndY == layout.BalloonMidY);
+        layouts.Select(layout => layout.LeaderStartY).Should().BeInAscendingOrder();
+        visualChildren.Should().Be(layouts.Count * 2, "Avalonia draws one leader line and one balloon container per shared layout item");
     }
 
     [Fact]

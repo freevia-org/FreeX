@@ -172,7 +172,8 @@ public sealed class ThesaurusAndBalloonsTests
         doc.Blocks.Clear();
 
         var p0 = new Paragraph();
-        p0.Runs.Add(new Run("Hello "));
+        p0.Runs.Add(new Run("Hello ") { CommentId = 0 });
+        p0.Runs.Add(Run.CommentReference(0));
         p0.Runs.Add(new Run("world") { Revision = RevisionKind.Inserted, RevisionAuthor = "Alice" });
         p0.Runs.Add(new Run(" old") { Revision = RevisionKind.Deleted, RevisionAuthor = "Bob" });
         doc.Blocks.Add(p0);

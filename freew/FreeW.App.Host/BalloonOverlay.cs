@@ -1,10 +1,9 @@
-using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using FreeW.App.Host.Editing;
-using FreeW.Core.Model;
+using FreeW.App.Presentation.DocumentView;
 
 namespace FreeW.App.Host;
 
@@ -102,24 +101,22 @@ internal sealed class BalloonOverlay
         _canvas.Children.Clear();
         if (!BalloonsEnabled) return;
 
-        var items = CollectItems();
         var canvasHeight = _canvas.ActualHeight > 0 ? _canvas.ActualHeight : 800;
+        var layouts = ReviewBalloonLayoutPlanner.BuildLayout(
+            _editor.Model,
+            _editor.CurrentReviewDisplayPolicy,
+            canvasHeight);
 
-        var totalSlots = Math.Max(items.Count, 1);
-        for (var i = 0; i < items.Count; i++)
+        foreach (var layout in layouts)
         {
-            var item = items[i];
-
-            // Y position: stack from the top, capped so we don't overflow the visible strip.
-            var balloonY = BalloonGap + i * (BalloonHeight + BalloonGap);
-            // The proportional anchor Y on the editor is approximated by ordinal fraction of doc length.
-            var anchorY  = canvasHeight * (i + 0.5) / totalSlots;
-
-            DrawBalloon(item, BalloonX, balloonY, anchorY);
+            var item = new BalloonItem(
+                OverlayKind(layout.Source.Kind),
+                layout.Source.Author,
+                TruncatePreview(layout.Source.Text, 60),
+                layout.Ordinal);
+            DrawBalloon(item, layout.BalloonX, layout.BalloonY, layout.LeaderStartY);
         }
     }
-
-    // ── Data collection ──────────────────────────────────────────────────────────────────────────
 
     private sealed record BalloonItem(
         string Kind,          // "comment" | "insert" | "delete" | "format"
@@ -127,42 +124,16 @@ internal sealed class BalloonOverlay
         string Preview,
         int    Ordinal);
 
-    private List<BalloonItem> CollectItems()
-    {
-        var result = new List<BalloonItem>();
-        int ordinal = 0;
-
-        // 1. Tracked-change revisions (from model via DocumentView.ListRevisions).
-        var revisions = _editor.ListRevisions();
-        foreach (var rev in revisions)
-        {
-            var kind = rev.Kind switch
-            {
-                RevisionEntryKind.Insertion  => "insert",
-                RevisionEntryKind.Deletion   => "delete",
-                _                            => "format"
-            };
-            var preview = TruncatePreview(rev.Text.Replace('\r', ' ').Replace('\n', ' ').Trim(), 60);
-            var author  = string.IsNullOrWhiteSpace(rev.Author) ? "Author" : rev.Author;
-            result.Add(new BalloonItem(kind, author, preview, ordinal++));
-        }
-
-        // 2. Comments (from TextDocument.Comments dictionary, keyed by id, in id order).
-        foreach (var (_, comment) in _editor.Model.Comments.OrderBy(kv => kv.Key))
-        {
-            var author  = string.IsNullOrWhiteSpace(comment.Author) ? "Commenter" : comment.Author;
-            var firstPara = comment.Content.FirstOrDefault();
-            var preview = firstPara is not null
-                ? TruncatePreview(string.Join("", firstPara.Runs.Select(r => r.Text ?? "")).Trim(), 60)
-                : string.Empty;
-            result.Add(new BalloonItem("comment", author, preview, ordinal++));
-        }
-
-        return result;
-    }
-
     private static string TruncatePreview(string text, int maxLen) =>
         text.Length <= maxLen ? text : text[..maxLen] + "…";
+
+    private static string OverlayKind(ReviewBalloonKind kind) => kind switch
+    {
+        ReviewBalloonKind.Insertion => "insert",
+        ReviewBalloonKind.Deletion => "delete",
+        ReviewBalloonKind.Formatting => "format",
+        _ => "comment"
+    };
 
     // ── Drawing ──────────────────────────────────────────────────────────────────────────────────
 

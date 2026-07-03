@@ -1,0 +1,74 @@
+using FreeW.App.Presentation.DocumentView;
+
+namespace FreeW.App.Presentation.Tests;
+
+public sealed class ReviewBalloonLayoutPlannerTests
+{
+    [Fact]
+    public void BuildSources_orders_comments_and_revisions_by_document_anchor()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Intro ") { CommentId = 7 });
+        paragraph.Runs.Add(Run.CommentReference(7));
+        paragraph.Runs.Add(new Run("added") { Revision = RevisionKind.Inserted, RevisionAuthor = "Ann" });
+        document.Blocks.Add(paragraph);
+        document.Comments[7] = new Comment(7, "Check the introduction.", "Casey", "C");
+
+        var sources = ReviewBalloonLayoutPlanner.BuildSources(document, ReviewDisplayPolicy.Default);
+
+        sources.Select(source => source.Kind).Should().Equal(ReviewBalloonKind.Comment, ReviewBalloonKind.Insertion);
+        sources.Select(source => source.Author).Should().Equal("Casey", "Ann");
+        sources.Select(source => source.BlockIndex).Should().Equal(0, 0);
+        sources.Select(source => source.Offset).Should().Equal(0, 6);
+    }
+
+    [Fact]
+    public void BuildSources_respects_show_markup_filters()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("old") { Revision = RevisionKind.Deleted, RevisionAuthor = "Bob" });
+        paragraph.Runs.Add(new Run("styled")
+        {
+            FormatRevision = new FormatRevision(RunFormatting.Default, "Deb", "2026-07-03T10:00:00Z")
+        });
+        paragraph.Runs.Add(new Run("note") { CommentId = 2 });
+        paragraph.Runs.Add(Run.CommentReference(2));
+        document.Blocks.Add(paragraph);
+        document.Comments[2] = new Comment(2, "Needs review.", "Commenter", "C");
+
+        var policy = new ReviewDisplayPolicy(
+            ReviewDisplayMode.AllMarkup,
+            ShowInsertionsAndDeletions: false,
+            ShowComments: false,
+            ShowFormatting: true);
+
+        var sources = ReviewBalloonLayoutPlanner.BuildSources(document, policy);
+
+        sources.Should().ContainSingle();
+        sources[0].Kind.Should().Be(ReviewBalloonKind.Formatting);
+    }
+
+    [Fact]
+    public void BuildLayout_matches_wpf_balloon_anchor_and_leader_geometry()
+    {
+        var sources = new[]
+        {
+            new ReviewBalloonSource(ReviewBalloonKind.Comment, "A", "one", 0, 0, 1),
+            new ReviewBalloonSource(ReviewBalloonKind.Insertion, "B", "two", 0, 8, 0),
+            new ReviewBalloonSource(ReviewBalloonKind.Deletion, "C", "three", 1, 0, 0),
+        };
+
+        var layouts = ReviewBalloonLayoutPlanner.BuildLayout(sources, viewportHeight: 600);
+
+        layouts.Select(layout => layout.BalloonY).Should().Equal(8, 72, 136);
+        layouts.Select(layout => layout.LeaderStartY).Should().Equal(100, 300, 500);
+        layouts.Should().OnlyContain(layout => layout.BalloonX == 12);
+        layouts.Should().OnlyContain(layout => layout.LeaderStartX == 0);
+        layouts.Should().OnlyContain(layout => layout.LeaderEndX == layout.BalloonX);
+        layouts.Should().OnlyContain(layout => layout.LeaderEndY == layout.BalloonMidY);
+    }
+}
