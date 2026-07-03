@@ -667,6 +667,49 @@ public sealed class DocumentViewReviewTests
         runsDump.Should().Be("Hello:| worl:fr-FR|d:");
     }
 
+    [Fact]
+    public async Task Proofing_language_collapsed_caret_applies_to_current_word()
+    {
+        string? runsDump = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("Alpha Beta"));
+            var view = Build(doc);
+
+            view.MoveCaretToBlock(0, 2);
+            view.SetProofingLanguage("fr-FR");
+
+            runsDump = DumpLanguageTags((Paragraph)view.Document.Blocks[0]);
+        });
+        if (!ran) return;
+
+        runsDump.Should().Be("Alpha:fr-FR| Beta:");
+    }
+
+    [Fact]
+    public async Task Proofing_language_collapsed_caret_without_current_word_does_not_stage_next_typed_text()
+    {
+        string? runsDump = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("Alpha  Beta"));
+            var view = Build(doc);
+
+            view.MoveCaretToBlock(0, 6);
+            view.SetProofingLanguage("fr-FR");
+            view.InsertText("X");
+
+            runsDump = DumpLanguageTags((Paragraph)view.Document.Blocks[0]);
+        });
+        if (!ran) return;
+
+        runsDump.Should().Be("Alpha X Beta:");
+    }
+
     // Helper: renders each Run's text alongside its resolved LanguageTag (empty when null), so a test
     // can assert exactly which characters were retagged without depending on Cell-splitting internals.
     private static string DumpLanguageTags(Paragraph paragraph) =>
@@ -704,9 +747,8 @@ public sealed class DocumentViewReviewTests
             Execute(registry, "freew.spellcheck-toggle");
             Execute(registry, "freew.thesaurus");
 
-            // GB1: SetProofingLanguage now retags only the SELECTED range (a collapsed caret stages a
-            // pending format instead of touching existing text) — select the whole paragraph so this
-            // wiring test can still observe the tag land on the model.
+            // Select the whole paragraph so this command-wiring test observes the tag land on the model
+            // independently from the collapsed-caret proofing-word behavior covered above.
             view.SetSelectionRangePublic(0, 0, 0, "teh example".Length);
             Execute(registry, "freew.set-proofing-language");
 

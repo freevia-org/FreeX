@@ -3893,8 +3893,7 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>
     /// Set (or clear when <paramref name="languageTag"/> is null/empty) the proofing language on the
-    /// selected text range only. A collapsed caret has no staged future-typing format path in the WPF
-    /// host, so it leaves existing text untouched instead of retagging the caret paragraph.
+    /// selected text range, or on the current proofing word when the caret is collapsed inside one.
     /// </summary>
     public void SetProofingLanguage(string? languageTag)
     {
@@ -3909,11 +3908,23 @@ public sealed class DocumentView : RichTextBox
         var selectedBlocks = selectedRange.Value.VisibleBlockIndices
             .Select(ModelIndexFromVisible)
             .ToArray();
-        var plan = ProofingLanguageApplyPlanner.Build(
+        var caretContext = selectedBlocks.Length == 1
+            && selectedRange.Value.StartOffset == selectedRange.Value.EndOffset
+            && selectedBlocks[0] >= 0
+            && selectedBlocks[0] < _model.Blocks.Count
+            && _model.Blocks[selectedBlocks[0]] is ModelParagraph caretParagraph
+                ? new ProofingLanguageCaretContext(
+                    selectedBlocks[0],
+                    selectedRange.Value.StartOffset,
+                    caretParagraph.PlainText)
+                : null;
+
+        var plan = ProofingLanguageApplyPlanner.BuildForSelectionOrCaretWord(
             languageTag,
             selectedBlocks,
             selectedRange.Value.StartOffset,
-            selectedRange.Value.EndOffset);
+            selectedRange.Value.EndOffset,
+            caretContext);
         if (!plan.HasSelectedText)
             return;
 
