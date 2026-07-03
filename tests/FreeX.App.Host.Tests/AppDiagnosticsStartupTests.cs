@@ -28,12 +28,23 @@ public sealed class AppDiagnosticsStartupTests
     }
 
     [Fact]
+    public void AppStartup_UsesCommandLineFallbackForParityCaptureSwitch()
+    {
+        var appSource = DialogSourceTestSupport.ReadHostSources("App.xaml.cs");
+
+        appSource.Should().Contain("var startupArgs = GetStartupArgs(e);");
+        appSource.Should().Contain("ParityCapture.TryGetOutputDirectory(startupArgs)");
+        appSource.Should().Contain("Environment.GetCommandLineArgs().Skip(1).ToArray()");
+    }
+
+    [Fact]
     public void AppStartup_OpensExistingWorkbookArgument()
     {
         var appSource = DialogSourceTestSupport.ReadHostSources("App.xaml.cs");
         var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
-        appSource.Should().Contain("foreach (var startupWorkbookPath in e.Args)");
+        appSource.Should().Contain("var startupArgs = GetStartupArgs(e);");
+        appSource.Should().Contain("foreach (var startupWorkbookPath in startupArgs)");
         appSource.Should().Contain("if (!File.Exists(startupWorkbookPath))");
         appSource.Should().Contain("OpenStartupFileAsync(startupWorkbookPath)");
         appSource.Should().Contain("break;");
