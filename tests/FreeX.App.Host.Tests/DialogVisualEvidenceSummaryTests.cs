@@ -113,16 +113,20 @@ public sealed class DialogVisualEvidenceSummaryTests
         result.Output.Should().Contain("Avalonia-manifest-only screenshot surface ids needing WPF manifest pair: 1");
         result.Output.Should().Contain("Nonblank PNG check failures: 0");
         result.Output.Should().Contain("Paired dimension mismatches: 1");
+        result.Output.Should().Contain("Raw PNG pixel dimension mismatches: 1");
+        result.Output.Should().Contain("Raw PNG mismatches normalized by capture DPI: 0");
         result.Output.Should().Contain("Paired expected-size evidence mismatches: 0");
         result.Output.Should().Contain("Stale promoted expected-size evidence: 0");
 
         var markdown = File.ReadAllText(markdownPath);
         markdown.Should().Contain("| WPF captured manifest surfaces with committed PNGs | 1 |");
         markdown.Should().Contain("| Paired captured surface ids | 1 |");
-        markdown.Should().Contain("| Paired dimension mismatches | 1 |");
+        markdown.Should().Contain("| Paired dimension mismatches (scale-aware logical units) | 1 |");
+        markdown.Should().Contain("| Raw PNG pixel dimension mismatches | 1 |");
+        markdown.Should().Contain("| Raw PNG mismatches normalized by capture DPI | 0 |");
         markdown.Should().Contain("| Paired expected-size evidence mismatches | 0 |");
         markdown.Should().Contain("| Stale promoted expected-size evidence | 0 |");
-        markdown.Should().Contain("| dialog.Sample.Valid | dialog.Sample.Valid.png | 3x2 | True | dialog.Sample.Valid.png | 4x2 | True |");
+        markdown.Should().Contain("| dialog.Sample.Valid | dialog.Sample.Valid.png | 3x2 | 3x2 px @ 96 DPI | True | dialog.Sample.Valid.png | 4x2 | 4x2 px @ 96 DPI | True | False |");
         markdown.Should().Contain("| dialog.Sample | 1 | dialog.Sample.Extra |");
         markdown.Should().Contain("dialog.Sample.Valid");
         markdown.Should().NotContain("dialog.Sample.Missing |");
@@ -135,6 +139,8 @@ public sealed class DialogVisualEvidenceSummaryTests
         summary.GetProperty("additionalAvaloniaCapturedSurfaceIds").GetInt32().Should().Be(1);
         summary.GetProperty("nonBlankPngFailures").GetInt32().Should().Be(0);
         summary.GetProperty("pairedDimensionMismatches").GetInt32().Should().Be(1);
+        summary.GetProperty("pairedRawPixelDimensionMismatches").GetInt32().Should().Be(1);
+        summary.GetProperty("pairedCaptureScaleNormalizedDimensionMatches").GetInt32().Should().Be(0);
         summary.GetProperty("pairedExpectedSizeMismatches").GetInt32().Should().Be(0);
         summary.GetProperty("stalePromotedExpectedSizeEvidence").GetInt32().Should().Be(0);
 
@@ -142,6 +148,9 @@ public sealed class DialogVisualEvidenceSummaryTests
         paired.GetProperty("wpf").GetProperty("width").GetInt32().Should().Be(3);
         paired.GetProperty("avalonia").GetProperty("height").GetInt32().Should().Be(2);
         paired.GetProperty("comparison").GetProperty("dimensionMatch").GetBoolean().Should().BeFalse();
+        paired.GetProperty("comparison").GetProperty("logicalDimensionMatch").GetBoolean().Should().BeFalse();
+        paired.GetProperty("comparison").GetProperty("rawPixelDimensionMatch").GetBoolean().Should().BeFalse();
+        paired.GetProperty("comparison").GetProperty("captureScaleNormalizedDimensionMatch").GetBoolean().Should().BeFalse();
         paired.GetProperty("comparison").GetProperty("expectedSizeMismatch").GetBoolean().Should().BeFalse();
 
         var checkResult = PowerShellScriptRunner.RunToolScript(
@@ -151,6 +160,113 @@ public sealed class DialogVisualEvidenceSummaryTests
 
         checkResult.ExitCode.Should().Be(0, checkResult.CombinedOutput);
         checkResult.Output.Should().Contain("Dialog visual evidence summary is up to date.");
+    }
+
+    [Fact]
+    public void DialogVisualEvidenceSummary_NormalizesCaptureDpiBeforeCountingDimensionMismatches()
+    {
+        using var temp = new TestTemporaryDirectory();
+
+        var inventoryPath = Path.Combine(temp.Path, "dialog-parity-inventory.json");
+        var wpfManifestDirectory = Path.Combine(temp.Path, "wpf-capture");
+        var avaloniaManifestDirectory = Path.Combine(temp.Path, "avalonia-capture");
+        Directory.CreateDirectory(wpfManifestDirectory);
+        Directory.CreateDirectory(avaloniaManifestDirectory);
+
+        var wpfManifestPath = Path.Combine(wpfManifestDirectory, "manifest.json");
+        var avaloniaManifestPath = Path.Combine(avaloniaManifestDirectory, "manifest.json");
+        var markdownPath = Path.Combine(temp.Path, "summary.md");
+        var jsonPath = Path.Combine(temp.Path, "summary.json");
+
+        File.WriteAllText(
+            inventoryPath,
+            """
+            {
+              "summary": {
+                "totalRoutes": 1,
+                "wpfCaptures": 1,
+                "avaloniaCaptures": 1,
+                "avaloniaHarnessRoutes": 1,
+                "sharedOrPresentationBacked": 1
+              },
+              "rows": [
+                { "routeId": "dialog.Scaled" }
+              ]
+            }
+            """);
+
+        File.WriteAllText(
+            wpfManifestPath,
+            """
+            {
+              "platform": "windows",
+              "shell": "wpf",
+              "surfaces": [
+                {
+                  "id": "dialog.Scaled",
+                  "kind": "dialog",
+                  "png": "dialog.Scaled.png",
+                  "captured": true,
+                  "note": ""
+                }
+              ]
+            }
+            """);
+
+        File.WriteAllText(
+            avaloniaManifestPath,
+            """
+            {
+              "platform": "windows",
+              "shell": "avalonia",
+              "surfaces": [
+                {
+                  "id": "dialog.Scaled",
+                  "kind": "dialog",
+                  "png": "dialog.Scaled.png",
+                  "captured": true,
+                  "note": ""
+                }
+              ]
+            }
+            """);
+
+        WritePng(Path.Combine(wpfManifestDirectory, "dialog.Scaled.png"), width: 6, height: 4, nonBlank: true, dpiX: 192, dpiY: 192);
+        WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.Scaled.png"), width: 3, height: 2, nonBlank: true);
+
+        var result = PowerShellScriptRunner.RunToolScript(
+            "Generate-DialogVisualEvidenceSummary.ps1",
+            WorkspaceFileLocator.FindWorkspaceRoot(),
+            $"-MarkdownPath \"{markdownPath}\" -JsonPath \"{jsonPath}\" -InventoryPath \"{inventoryPath}\" -WpfManifestPath \"{wpfManifestPath}\" -AvaloniaManifestPath \"{avaloniaManifestPath}\"");
+
+        result.ExitCode.Should().Be(0, result.CombinedOutput);
+        result.Output.Should().Contain("Paired dimension mismatches: 0");
+        result.Output.Should().Contain("Raw PNG pixel dimension mismatches: 1");
+        result.Output.Should().Contain("Raw PNG mismatches normalized by capture DPI: 1");
+
+        var markdown = File.ReadAllText(markdownPath);
+        markdown.Should().Contain("| Paired dimension mismatches (scale-aware logical units) | 0 |");
+        markdown.Should().Contain("| Raw PNG pixel dimension mismatches | 1 |");
+        markdown.Should().Contain("| Raw PNG mismatches normalized by capture DPI | 1 |");
+        markdown.Should().Contain("| dialog.Scaled | dialog.Scaled.png | 3x2 | 6x4 px @ ");
+        markdown.Should().Contain("DPI | True | dialog.Scaled.png | 3x2 | 3x2 px @ 96 DPI | True | True |");
+
+        using var json = JsonDocument.Parse(File.ReadAllText(jsonPath));
+        var summary = json.RootElement.GetProperty("summary");
+        summary.GetProperty("pairedDimensionMismatches").GetInt32().Should().Be(0);
+        summary.GetProperty("pairedRawPixelDimensionMismatches").GetInt32().Should().Be(1);
+        summary.GetProperty("pairedCaptureScaleNormalizedDimensionMatches").GetInt32().Should().Be(1);
+
+        var pairedSurface = json.RootElement.GetProperty("pairedSurfaces")[0];
+        pairedSurface.GetProperty("wpf").GetProperty("width").GetInt32().Should().Be(6);
+        pairedSurface.GetProperty("wpf").GetProperty("logicalWidth").GetDouble().Should().BeApproximately(3, 0.001);
+        pairedSurface.GetProperty("avalonia").GetProperty("logicalHeight").GetDouble().Should().BeApproximately(2, 0.001);
+
+        var comparison = pairedSurface.GetProperty("comparison");
+        comparison.GetProperty("dimensionMatch").GetBoolean().Should().BeTrue();
+        comparison.GetProperty("logicalDimensionMatch").GetBoolean().Should().BeTrue();
+        comparison.GetProperty("rawPixelDimensionMatch").GetBoolean().Should().BeFalse();
+        comparison.GetProperty("captureScaleNormalizedDimensionMatch").GetBoolean().Should().BeTrue();
     }
 
     [Fact]
@@ -243,9 +359,9 @@ public sealed class DialogVisualEvidenceSummaryTests
         markdown.Should().Contain("| Paired expected-size evidence mismatches | 1 |");
         markdown.Should().Contain("| Stale promoted expected-size evidence | 1 |");
         markdown.Should().Contain("## Expected-Size Evidence Mismatches");
-        markdown.Should().Contain("| dialog.OpenWorkbook | 640x420 | WorkbookFileDialogSurfacePlanner.Width/Height | 1280x800 | False | 640x420 | True |");
+        markdown.Should().Contain("| dialog.OpenWorkbook | 640x420 | WorkbookFileDialogSurfacePlanner.Width/Height | 1280x800 | 1280x800 px @ 96 DPI | False | 640x420 | 640x420 px @ 96 DPI | True |");
         markdown.Should().Contain("## Stale Promoted Expected-Size Evidence");
-        markdown.Should().Contain("| dialog.OpenWorkbook | WPF | 1280x800 | 640x420 | screenshots\\open-workbook-dialog-tour\\freex_open_workbook_dialog_opened.png | blocked-transparent-direct-parity-capture |");
+        markdown.Should().Contain("| dialog.OpenWorkbook | WPF | 1280x800 logical (1280x800 px @ 96 DPI) | 640x420 | screenshots\\open-workbook-dialog-tour\\freex_open_workbook_dialog_opened.png | blocked-transparent-direct-parity-capture |");
 
         using var json = JsonDocument.Parse(File.ReadAllText(jsonPath));
         var summary = json.RootElement.GetProperty("summary");
@@ -356,7 +472,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         json.RootElement.GetProperty("summary").GetProperty("nonBlankPngFailures").GetInt32().Should().Be(1);
     }
 
-    private static void WritePng(string path, int width, int height, bool nonBlank)
+    private static void WritePng(string path, int width, int height, bool nonBlank, double dpiX = 96, double dpiY = 96)
     {
         var stride = width * 4;
         var pixels = new byte[stride * height];
@@ -376,7 +492,7 @@ public sealed class DialogVisualEvidenceSummaryTests
             pixels[3] = 0xFF;
         }
 
-        var source = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, pixels, stride);
+        var source = BitmapSource.Create(width, height, dpiX, dpiY, PixelFormats.Bgra32, null, pixels, stride);
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(source));
         using var stream = File.Create(path);
