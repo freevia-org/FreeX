@@ -393,13 +393,21 @@ public static class OmmlParser
         bool hideBottom = IsOnOffOn(borderBoxPr?.Element(M + "hideBot"));
         bool hideLeft = IsOnOffOn(borderBoxPr?.Element(M + "hideLeft"));
         bool hideRight = IsOnOffOn(borderBoxPr?.Element(M + "hideRight"));
+        bool strikeHorizontal = IsOnOffOn(borderBoxPr?.Element(M + "strikeH"));
+        bool strikeVertical = IsOnOffOn(borderBoxPr?.Element(M + "strikeV"));
+        bool strikeBottomLeftToTopRight = IsOnOffOn(borderBoxPr?.Element(M + "strikeBLTR"));
+        bool strikeTopLeftToBottomRight = IsOnOffOn(borderBoxPr?.Element(M + "strikeTLBR"));
 
         return new MathNode.BorderBox(
             eEl is null ? new MathNode.Unknown(FlattenText(el)) : ParseRow(eEl),
             showTop: !hideTop,
             showBottom: !hideBottom,
             showLeft: !hideLeft,
-            showRight: !hideRight);
+            showRight: !hideRight,
+            strikeHorizontal: strikeHorizontal,
+            strikeVertical: strikeVertical,
+            strikeBottomLeftToTopRight: strikeBottomLeftToTopRight,
+            strikeTopLeftToBottomRight: strikeTopLeftToBottomRight);
     }
 
     private static bool IsOnOffOn(XElement? element)
