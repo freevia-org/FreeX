@@ -48,7 +48,7 @@ public sealed partial class FormulaEvaluator
         "LARGE", "SMALL", "RANK", "RANK.EQ", "RANK.AVG", "DEVSQ",
         "MULTINOMIAL", "SERIESSUM", "SUMSQ", "SUMX2MY2", "SUMX2PY2", "SUMXMY2",
         "MMULT", "MINVERSE", "MDETERM", "MUNIT",
-        "SUMIFS", "COUNTIFS", "AVERAGEIFS",
+        "SUMIFS", "COUNTIFS", "AVERAGEIFS", "MAXIFS", "MINIFS",
         "XLOOKUP",
         "WORKDAY", "NETWORKDAYS", "WORKDAY.INTL", "NETWORKDAYS.INTL",
         "CORREL", "COVAR", "COVARIANCE.P", "COVARIANCE.S",
@@ -165,7 +165,7 @@ public sealed partial class FormulaEvaluator
         {
             "SUMIF" or "AVERAGEIF" => argIndex is 0 or 2,
             "COUNTIF" => argIndex == 0,
-            "SUMIFS" or "AVERAGEIFS" => argIndex == 0 || (argIndex > 0 && (argIndex & 1) == 1),
+            "SUMIFS" or "AVERAGEIFS" or "MAXIFS" or "MINIFS" => argIndex == 0 || (argIndex > 0 && (argIndex & 1) == 1),
             "COUNTIFS" => (argIndex & 1) == 0,
             _ => false
         };

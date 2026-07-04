@@ -11,7 +11,7 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand
     private readonly SheetId _sheetId;
     private readonly IReadOnlyList<(CellAddress Address, Cell NewCell)> _edits;
     private readonly IReadOnlyList<CellAddress> _affectedCells;
-    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
+    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly, bool HadRichTextRuns, IReadOnlyList<CellTextRun>? OldRichTextRuns, bool HadHyperlink, string? OldHyperlink, bool HadHyperlinkMetadata, HyperlinkMetadata? OldHyperlinkMetadata)>? _snapshot;
 
     public string Label => _edits.Count == 1 ? "Edit Cell" : $"Edit {_edits.Count} Cells";
 
@@ -61,13 +61,32 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         {
             // Save old state for undo
             var oldCell = sheet.GetCell(addr)?.Clone();
-            _snapshot.Add((addr, oldCell, sheet.GetStyleOnly(addr.Row, addr.Col)));
+            var hadRichTextRuns = sheet.RichTextRuns.TryGetValue(addr, out var oldRuns);
+            var hadHyperlink = sheet.Hyperlinks.TryGetValue(addr, out var oldHyperlink);
+            var hadHyperlinkMetadata = sheet.HyperlinkMetadata.TryGetValue(addr, out var oldHyperlinkMetadata);
+            _snapshot.Add((
+                addr,
+                oldCell,
+                sheet.GetStyleOnly(addr.Row, addr.Col),
+                hadRichTextRuns,
+                oldRuns,
+                hadHyperlink,
+                oldHyperlink,
+                hadHyperlinkMetadata,
+                oldHyperlinkMetadata));
 
             // Apply new state while preserving the cell's existing formatting.
             var appliedCell = newCell.Clone();
             if (oldCell is not null)
                 appliedCell.StyleId = oldCell.StyleId;
             sheet.SetCell(addr, appliedCell);
+
+            // The cell's content is being replaced, so any rich-text runs and hyperlink that
+            // belonged to the old content are stale and must not carry over to the new content
+            // (matching ClearContentsCommand/FillCellsCommand's handling of the same dictionaries).
+            sheet.RichTextRuns.Remove(addr);
+            sheet.Hyperlinks.Remove(addr);
+            sheet.HyperlinkMetadata.Remove(addr);
         }
 
         return new CommandOutcome(true, AffectedCells: _affectedCells);
@@ -79,7 +98,7 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 
         var sheet = ctx.GetSheet(_sheetId);
 
-        foreach (var (addr, oldCell, oldStyleOnly) in _snapshot)
+        foreach (var (addr, oldCell, oldStyleOnly, hadRichTextRuns, oldRichTextRuns, hadHyperlink, oldHyperlink, hadHyperlinkMetadata, oldHyperlinkMetadata) in _snapshot)
         {
             if (oldCell is null)
             {
@@ -90,6 +109,21 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             {
                 sheet.SetCell(addr, oldCell.Clone());
             }
+
+            if (hadRichTextRuns && oldRichTextRuns is not null)
+                sheet.RichTextRuns[addr] = oldRichTextRuns;
+            else
+                sheet.RichTextRuns.Remove(addr);
+
+            if (hadHyperlink && oldHyperlink is not null)
+                sheet.Hyperlinks[addr] = oldHyperlink;
+            else
+                sheet.Hyperlinks.Remove(addr);
+
+            if (hadHyperlinkMetadata && oldHyperlinkMetadata is not null)
+                sheet.HyperlinkMetadata[addr] = oldHyperlinkMetadata;
+            else
+                sheet.HyperlinkMetadata.Remove(addr);
         }
     }
 

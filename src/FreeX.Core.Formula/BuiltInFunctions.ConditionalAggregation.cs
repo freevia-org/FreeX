@@ -249,6 +249,80 @@ public static partial class BuiltInFunctions
         return NumberResult(total / count);
     }
 
+    // ── MAXIFS ─────────────────────────────────────────────────────────────────
+
+    private static ScalarValue Maxifs(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue maxRangeError) return maxRangeError;
+        if (args[0] is not RangeValue maxRange) return ErrorValue.Value;
+        if (args.Count < 3 || (args.Count - 1) % 2 != 0) return ErrorValue.Value;
+
+        // Array-criteria: criteria-value slots for MAXIFS are at indices 2, 4, 6, … (step 2).
+        var arrayCriteriaArgs = FindAllArrayCriteriaArgs(args, firstCriteriaArgIndex: 2, criteriaArgStep: 2);
+        if (arrayCriteriaArgs.Count > 0)
+            return ExpandConditionalArrayCriteriaMulti(args, arrayCriteriaArgs, ctx, Maxifs);
+
+        int pairCount = (args.Count - 1) / 2;
+        if (TryCreateConditionalCriteriaSet(args, 1, pairCount, maxRange, out var criteriaSet) is { } pairError)
+            return pairError;
+
+        double best = 0;
+        bool found = false;
+        for (int r = 0; r < maxRange.RowCount; r++)
+        {
+            for (int c = 0; c < maxRange.ColCount; c++)
+            {
+                if (!criteriaSet.Includes(r, c)) continue;
+
+                var maxValue = maxRange.Cells[r, c];
+                if (maxValue is ErrorValue e) return e;
+                if (TryCellNumber(maxValue, out double value))
+                {
+                    if (!found || value > best) best = value;
+                    found = true;
+                }
+            }
+        }
+        return NumberResult(best);
+    }
+
+    // ── MINIFS ─────────────────────────────────────────────────────────────────
+
+    private static ScalarValue Minifs(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue minRangeError) return minRangeError;
+        if (args[0] is not RangeValue minRange) return ErrorValue.Value;
+        if (args.Count < 3 || (args.Count - 1) % 2 != 0) return ErrorValue.Value;
+
+        // Array-criteria: criteria-value slots for MINIFS are at indices 2, 4, 6, … (step 2).
+        var arrayCriteriaArgs = FindAllArrayCriteriaArgs(args, firstCriteriaArgIndex: 2, criteriaArgStep: 2);
+        if (arrayCriteriaArgs.Count > 0)
+            return ExpandConditionalArrayCriteriaMulti(args, arrayCriteriaArgs, ctx, Minifs);
+
+        int pairCount = (args.Count - 1) / 2;
+        if (TryCreateConditionalCriteriaSet(args, 1, pairCount, minRange, out var criteriaSet) is { } pairError)
+            return pairError;
+
+        double best = 0;
+        bool found = false;
+        for (int r = 0; r < minRange.RowCount; r++)
+        {
+            for (int c = 0; c < minRange.ColCount; c++)
+            {
+                if (!criteriaSet.Includes(r, c)) continue;
+
+                var minValue = minRange.Cells[r, c];
+                if (minValue is ErrorValue e) return e;
+                if (TryCellNumber(minValue, out double value))
+                {
+                    if (!found || value < best) best = value;
+                    found = true;
+                }
+            }
+        }
+        return NumberResult(best);
+    }
+
     // ── Array-criteria expansion ────────────────────────────────────────────────
 
     /// <summary>

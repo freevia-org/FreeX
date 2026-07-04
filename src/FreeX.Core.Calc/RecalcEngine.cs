@@ -14,6 +14,9 @@ public sealed class RecalcEngine
     // Keep only tiny ranges as exact cell edges; larger ranges avoid repeated dependent-list fan-out.
     private const long CompactRangeCellThreshold = 8;
     private const int MaxDependencyPlanCacheEntries = 1024;
+    // Sane upper bound on chained spill-dependent follow-up passes (see the loop in Recalculate),
+    // so a pathological/self-perpetuating chain cannot spin forever; ordinary sheets converge in 1-2.
+    private const int MaxSpillDependentPasses = 64;
     private static readonly IReadOnlySet<CellAddress> EmptyDependencyCells = FrozenSet<CellAddress>.Empty;
     private static readonly IReadOnlyList<CellAddress> EmptyCells = [];
     private static readonly IReadOnlyList<(CellAddress Cell, string Error)> EmptyErrors = [];
@@ -251,16 +254,24 @@ public sealed class RecalcEngine
             errors ?? EmptyErrors,
             cyclicCells ?? EmptyCells);
 
-        // Second pass: formula cells that read spill-target cells could not be ordered relative to
-        // the spill anchor (the targets have no graph node), so re-evaluate them now that all spill
-        // ranges are populated. Guarded by resolveSpillDependents so this recurses at most once.
+        // Follow-up passes: formula cells that read spill-target cells could not be ordered
+        // relative to the spill anchor (the targets have no graph node), so re-evaluate them now
+        // that all spill ranges are populated. A follow-up pass can itself spill (e.g. a chain of
+        // dependent dynamic arrays), which would dirty a further generation of spill-target
+        // readers — so this is not capped at one recursion level; it iterates to a fixpoint
+        // (bounded by MaxSpillDependentPasses as a sane guard against runaway chains).
         if (resolveSpillDependents && spillTargetsMayHaveChanged)
         {
-            var spillDependents = CollectSpillTargetDependentFormulaCells(workbook);
-            if (spillDependents.Count > 0)
+            var seenSpillDependents = new HashSet<CellAddress>();
+            for (var pass = 0; pass < MaxSpillDependentPasses; pass++)
             {
+                var spillDependents = CollectSpillTargetDependentFormulaCells(workbook);
+                spillDependents.RemoveAll(addr => !seenSpillDependents.Add(addr));
+                if (spillDependents.Count == 0)
+                    break;
+
                 var spillReport = Recalculate(workbook, spillDependents, resolveSpillDependents: false);
-                return MergeRecalcReports(report, spillReport);
+                report = MergeRecalcReports(report, spillReport);
             }
         }
 
@@ -271,6 +282,10 @@ public sealed class RecalcEngine
     /// Parse and register dependencies for freshly-edited formula cells (those whose AST has not
     /// been cached yet) so the dependency graph reflects their current precedents before the
     /// recalc order is computed.
+    /// Also covers a cell that already carries a cached AST but has no graph entry of its own —
+    /// e.g. a same-position paste (zero row/col delta), where Cell.Clone() copies the source
+    /// cell's CachedAst by reference and Sheet.SetCell never touches the dependency graph. Such a
+    /// cell must still be registered under its own address, or it silently goes stale forever.
     /// </summary>
     private void EnsureChangedFormulaDependenciesRegistered(
         Workbook workbook,
@@ -284,8 +299,17 @@ public sealed class RecalcEngine
             var addr = changedFormulaCells[i];
             var sheet = workbook.GetSheet(addr.Sheet);
             var cell = sheet?.GetCell(addr);
-            if (cell is null || !cell.HasFormula || cell.CachedAst is FormulaNode)
+            if (cell is null || !cell.HasFormula)
                 continue;
+
+            if (cell.CachedAst is FormulaNode existingAst)
+            {
+                // Cached AST present, but this address may still be unregistered (shared-reference
+                // clone case above) — register it under its own address without re-parsing.
+                if (!_graph.HasDependencies(addr))
+                    RegisterFormulaDependencies(addr, existingAst, addr.Sheet, workbook);
+                continue;
+            }
 
             try
             {

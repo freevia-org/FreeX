@@ -168,6 +168,7 @@ public static class PortablePdfPageContentPlanner
             cell.Value,
             style.NumberFormat,
             workbook.IndexedColors,
-            workbook.Theme).Text;
+            workbook.Theme,
+            workbook.Uses1904DateSystem).Text;
     }
 }

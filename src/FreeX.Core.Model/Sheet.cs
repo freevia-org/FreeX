@@ -462,15 +462,29 @@ public sealed partial class Sheet
     public HashSet<uint> FilterHiddenRows { get; } = [];
 
     /// <summary>
-    /// Runtime (non-serialized) per-column value-filter state, keyed by absolute 1-based column index.
+    /// Runtime per-column value-filter state, keyed by absolute 1-based column index.
     /// Each entry is the set of allowed cell-text values for that column's active AutoFilter criteria.
     /// Excel ANDs AutoFilter criteria across columns: a row is hidden if it fails ANY active column's
     /// filter. <see cref="FilterHiddenRows"/> is kept as the recomputed union of every column's
     /// exclusions (see FreeX.Core.Commands.FilterCommand, finding F8) so applying/clearing one column's
     /// filter never disturbs another column's hidden rows. This is separate from the heavyweight
-    /// XLSX-serialization AutoFilter model — it exists purely to drive that recompute.
+    /// XLSX-serialization AutoFilter model — it exists purely to drive that recompute. Keyed by
+    /// absolute column index like <see cref="ColumnWidths"/>, so it must shift the same way on
+    /// column insert/delete, and roll back on undo (see finding G1). Persisted alongside
+    /// <see cref="FilterHiddenRows"/> so a reload doesn't leave the two out of sync (finding G32).
     /// </summary>
     public Dictionary<uint, IReadOnlyList<string>> ActiveValueFilterColumns { get; } = [];
+
+    /// <summary>
+    /// Runtime bookkeeping: the subset of <see cref="FilterHiddenRows"/> that is attributable to
+    /// <see cref="ActiveValueFilterColumns"/>'s AND-across-columns recompute (see
+    /// FreeX.Core.Commands.FilterCommand.RecomputeHiddenRows, finding G7). Other filter mechanisms
+    /// (Top 10/Above-Average/color/custom-condition filters) hide rows by mutating
+    /// <see cref="FilterHiddenRows"/> directly without registering anything here, so recompute must
+    /// never blindly un-hide a row outside this set — doing so would silently discard those other
+    /// filters' hidden rows the next time a value-list filter is applied on a different column.
+    /// </summary>
+    public HashSet<uint> ValueFilterHiddenRows { get; } = [];
 
     /// <summary>Set of column numbers that are hidden (1-based).</summary>
     public HashSet<uint> HiddenCols { get; } = [];

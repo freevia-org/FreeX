@@ -33,13 +33,14 @@ public static partial class NumberFormatter
         string[] sections,
         int? targetWidthCharacters,
         WorkbookIndexedColorPalette? indexedColors,
-        WorkbookTheme? theme)
+        WorkbookTheme? theme,
+        bool uses1904DateSystem = false)
     {
         var parsed = SelectDateTimeSection(oaDate, sections, indexedColors, theme);
         if (parsed.Format == "")
             return new FormatResult("", parsed.ColorHex);
 
-        var text = FormatDateTime(oaDate, parsed.Format);
+        var text = FormatDateTime(oaDate, parsed.Format, uses1904DateSystem);
         text = ApplyAccountingTargetWidth(text, parsed.Format, targetWidthCharacters);
         return new FormatResult(text, parsed.ColorHex);
     }
@@ -71,7 +72,7 @@ public static partial class NumberFormatter
         return parsedSections[0];
     }
 
-    private static string FormatDateTime(double oaDate, string format)
+    private static string FormatDateTime(double oaDate, string format, bool uses1904DateSystem = false)
     {
         string NativeDigits(string text) => ApplyNativeDigitSubstitution(text, format);
 
@@ -82,8 +83,13 @@ public static partial class NumberFormatter
             {
                 // Use DateTime.FromOADate (not ExcelDateSystem.SerialToDate) so the
                 // roundtrip DateTime→ToOADate→FromOADate is lossless for modern dates.
-                // The 1900 phantom-leap-day correction only matters for regular date formats.
-                return NativeDigits(FormatSpecialDateTimeLocaleValue(DateTime.FromOADate(oaDate), specialDateTimeToken));
+                // The 1900 phantom-leap-day correction only matters for regular date formats;
+                // under the 1904 date system the epoch itself differs, so route through
+                // ExcelDateSystem.SerialToDate there instead.
+                var specialDt = uses1904DateSystem
+                    ? ExcelDateSystem.SerialToDate(oaDate, uses1904DateSystem)
+                    : DateTime.FromOADate(oaDate);
+                return NativeDigits(FormatSpecialDateTimeLocaleValue(specialDt, specialDateTimeToken));
             }
             catch { return oaDate.ToString(CultureInfo.InvariantCulture); }
         }
@@ -101,7 +107,7 @@ public static partial class NumberFormatter
         cleanFmt = RemoveSpacingAndFillDirectives(directiveFormat.Format);
         try
         {
-            var dt = ExcelDateSystem.SerialToDate(oaDate);
+            var dt = ExcelDateSystem.SerialToDate(oaDate, uses1904DateSystem);
             if (IsDateTimeFormat(cleanFmt))
                 return NativeDigits(FormatDateTimeValue(dt, cleanFmt, dateTimeFormat));
             return NativeDigits(dt.ToString(cleanFmt, dateTimeFormat));
@@ -112,6 +118,7 @@ public static partial class NumberFormatter
     private static bool TryFormatCachedSimpleDateTime(
         double oaDate,
         string format,
+        bool uses1904DateSystem,
         out string text)
     {
         if (!TryGetSimpleDateTimeFormatPlan(format, out var plan))
@@ -122,7 +129,7 @@ public static partial class NumberFormatter
 
         try
         {
-            var dt = ExcelDateSystem.SerialToDate(oaDate);
+            var dt = ExcelDateSystem.SerialToDate(oaDate, uses1904DateSystem);
             if (plan.FractionalSecondPrecision > 0)
                 dt = RoundToFractionalSecondPrecision(dt, plan.FractionalSecondPrecision);
             else if (plan.HasSecond)

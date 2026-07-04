@@ -229,7 +229,7 @@ public partial class MainWindow
         var style = _workbook.GetStyle(cell.StyleId);
         return sheet.ShowFormulas && cell.FormulaText is not null
             ? "=" + cell.FormulaText
-            : NumberFormatter.Format(cell.Value, style.NumberFormat);
+            : NumberFormatter.Format(cell.Value, style.NumberFormat, _workbook.Uses1904DateSystem);
     }
     private void FormatDefaultWidthMenuItem_Click(object sender, RoutedEventArgs e) { FormatColWidthMenuItem_Click(sender, e); }
     private void FormatHideRowMenuItem_Click(object sender, RoutedEventArgs e)

@@ -595,12 +595,19 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             }
             else
             {
+                // A real (non-frozen) window split (state="split") stores xSplit/ySplit as
+                // twentieths-of-a-point pixel positions per the OOXML spec, not row/column
+                // counts -- unlike the frozen-pane case above. ClosedXML's own SheetView
+                // SplitRow/SplitColumn are only populated for its freeze-pane API, so they
+                // are safe to use as literal row/column indices here; the raw xmlLayout
+                // PaneRowSplit/PaneColumnSplit value must never be used as a fallback for a
+                // real split, since it is a pixel position, not an index.
                 var splitRow = xlSheet.SheetView.SplitRow > 0
-                    ? (uint)xlSheet.SheetView.SplitRow
-                    : xmlLayout?.PaneRowSplit;
+                    ? (uint?)xlSheet.SheetView.SplitRow
+                    : null;
                 var splitColumn = xlSheet.SheetView.SplitColumn > 0
-                    ? (uint)xlSheet.SheetView.SplitColumn
-                    : xmlLayout?.PaneColumnSplit;
+                    ? (uint?)xlSheet.SheetView.SplitColumn
+                    : null;
                 if (splitRow > 0)
                     sheet.SplitRow = splitRow;
                 if (splitColumn > 0)
@@ -700,8 +707,17 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     xlSheet.PageSetup.PagesTall > 0 ? xlSheet.PageSetup.PagesTall : null)
                 : new WorksheetScaleToFit(xlSheet.PageSetup.Scale, null, null);
 
-            // Load CellIs conditional format rules (best-effort; skip anything we can't map)
-            try { XlsxConditionalFormatClosedXmlMapper.Load(xlSheet, sheet, workbook.Theme, XlsxClosedXmlCellMapper.MapStyle); }
+            // Load CellIs conditional format rules (best-effort; skip anything we can't map).
+            // Priorities come from xmlLayout.ClassicConditionalFormatPriorities (real file priorities,
+            // in document order) rather than a private counter, so they share one priority sequence
+            // with the advanced (ColorScale/DataBar/IconSet/long-tail) rules already added above via
+            // ApplySheetXmlLayout, preserving the original file's relative evaluation order.
+            try
+            {
+                XlsxConditionalFormatClosedXmlMapper.Load(
+                    xlSheet, sheet, workbook.Theme, XlsxClosedXmlCellMapper.MapStyle,
+                    xmlLayout?.ClassicConditionalFormatPriorities);
+            }
             catch (Exception ex) { warnings.Add($"[conditional-format] Sheet '{xlSheet.Name}': {ex.Message}"); }
 
             // Load data validation rules (best-effort)

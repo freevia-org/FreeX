@@ -50,9 +50,10 @@ public sealed class ColumnBarLayoutTests
 
         var catScale = layout.CategoryAxis!.Scale;
         var firstBar = layout.Series[0].Bars[0];
-        // Bar spans index -0.4 .. 0.4 (default column half-width) around category 0.
-        firstBar.Rect.Left.Should().BeApproximately(catScale.Transform(-0.4), 1e-6);
-        firstBar.Rect.Right.Should().BeApproximately(catScale.Transform(0.4), 1e-6);
+        // Bar spans index -0.35 .. 0.35 (default column half-width, matching the WPF renderer's
+        // ColumnBarHalfWidth default -- see G18 regression fix) around category 0.
+        firstBar.Rect.Left.Should().BeApproximately(catScale.Transform(-0.35), 1e-6);
+        firstBar.Rect.Right.Should().BeApproximately(catScale.Transform(0.35), 1e-6);
     }
 
     [Fact]
@@ -361,10 +362,11 @@ public sealed class ColumnBarLayoutTests
 
         var catScale = layout.CategoryAxis!.Scale;
         var firstBar = layout.Series[0].Bars[0];
-        // Default halfWidth=0.4 → slot is [-0.4, 0.4] relative to category 0.
-        firstBar.Rect.Left.Should().BeApproximately(catScale.Transform(-0.4), 1e-6,
+        // Default halfWidth=0.35 → slot is [-0.35, 0.35] relative to category 0 (matching the WPF
+        // renderer's ColumnBarHalfWidth default -- see G18 regression fix).
+        firstBar.Rect.Left.Should().BeApproximately(catScale.Transform(-0.35), 1e-6,
             "single-series bar must span the full default slot");
-        firstBar.Rect.Right.Should().BeApproximately(catScale.Transform(0.4), 1e-6);
+        firstBar.Rect.Right.Should().BeApproximately(catScale.Transform(0.35), 1e-6);
     }
 
     [Fact]
