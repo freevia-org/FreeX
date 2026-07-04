@@ -191,6 +191,9 @@ public sealed class MediaCaptionTrackInfo
     /// <summary>Original target path or URI for the caption/subtitle resource.</summary>
     public string Source { get; set; } = string.Empty;
 
+    /// <summary>Caption/subtitle resource bytes for authored or read internal tracks.</summary>
+    public byte[] Bytes { get; set; } = Array.Empty<byte>();
+
     /// <summary>MIME content type for the caption resource, when known.</summary>
     public string ContentType { get; set; } = string.Empty;
 

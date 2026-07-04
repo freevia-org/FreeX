@@ -1,6 +1,7 @@
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Text;
 using System.Xml.Linq;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
@@ -95,6 +96,86 @@ public sealed class MediaFieldsTests
         track.Language.Should().Be("en-US");
         track.Label.Should().Be("English captions");
         track.IsExternal.Should().BeFalse();
+        Encoding.UTF8.GetString(track.Bytes).Should().Contain("Demo caption");
+    }
+
+    [Fact]
+    public void Media_WriterEmitsModeledCaptionTrackRelationshipsAndParts()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        var captionBytes = Encoding.UTF8.GetBytes(
+            "WEBVTT\r\n\r\n00:00.000 --> 00:01.000\r\nAuthored caption\r\n");
+
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 1,
+            Name        = "Captioned video",
+            Kind        = SlideShapeKind.Media,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Picture = new ImagePart { Bytes = CreateMinimal1x1Png(), ContentType = "image/png" },
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                Bytes = new byte[] { 0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70 },
+                ContentType = "video/mp4",
+                CaptionTracks =
+                {
+                    new MediaCaptionTrackInfo
+                    {
+                        Source = "ppt/media/authored-captions.vtt",
+                        Bytes = captionBytes,
+                        ContentType = "text/vtt",
+                        Language = "en-US",
+                        Label = "English captions"
+                    }
+                }
+            }
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+
+        ms.Position = 0;
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            ReadText(zip, "ppt/media/slide1_caption1.vtt").Should().Contain("Authored caption");
+
+            var rels = ReadXml(zip, "ppt/slides/_rels/slide1.xml.rels");
+            var relNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships");
+            var captionRel = rels.Root!.Elements(relNs + "Relationship")
+                .Single(e => e.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2011/relationships/mediaCaption");
+            captionRel.Attribute("Id")!.Value.Should().Be("rIdCaption1");
+            captionRel.Attribute("Target")!.Value.Should().Be("../media/slide1_caption1.vtt");
+            captionRel.Attribute("TargetMode").Should().BeNull();
+
+            var slideXml = ReadXml(zip, "ppt/slides/slide1.xml");
+            var r = XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+            var captionEl = slideXml.Descendants().Single(e => e.Name.LocalName == "caption");
+            captionEl.Attribute(r + "embed")!.Value.Should().Be("rIdCaption1");
+            captionEl.Attribute("lang")!.Value.Should().Be("en-US");
+            captionEl.Attribute("label")!.Value.Should().Be("English captions");
+
+            var contentTypes = ReadXml(zip, "[Content_Types].xml");
+            var ct = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/content-types");
+            contentTypes.Root!.Elements(ct + "Default")
+                .Single(e => e.Attribute("Extension")?.Value == "vtt")
+                .Attribute("ContentType")!.Value.Should().Be("text/vtt");
+        }
+
+        ms.Position = 0;
+        var roundTripped = PptxPackageReader.Read(ms);
+        var track = roundTripped.Slides[0].Shapes[0].Media!.CaptionTracks.Should().ContainSingle().Subject;
+        track.RelationshipId.Should().Be("rIdCaption1");
+        track.Source.Should().Be("ppt/media/slide1_caption1.vtt");
+        track.ContentType.Should().Be("text/vtt");
+        track.Language.Should().Be("en-US");
+        track.Label.Should().Be("English captions");
+        track.Bytes.Should().Equal(captionBytes);
     }
 
     [Fact]
@@ -576,5 +657,12 @@ public sealed class MediaFieldsTests
         var entry = archive.CreateEntry(path, CompressionLevel.Optimal);
         using var writer = new StreamWriter(entry.Open());
         writer.Write(text);
+    }
+
+    private static string ReadText(ZipArchive archive, string path)
+    {
+        using var stream = archive.GetEntry(path)!.Open();
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        return reader.ReadToEnd();
     }
 }

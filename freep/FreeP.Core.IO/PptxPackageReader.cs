@@ -2863,11 +2863,15 @@ public static class PptxPackageReader
             var source = isExternal
                 ? target
                 : ResolveRelativeZipPath(GetDirectoryName(partPath), target);
+            var captionBytes = isExternal
+                ? Array.Empty<byte>()
+                : ReadEntryBytes(archive, source) ?? Array.Empty<byte>();
 
             tracks.Add(new MediaCaptionTrackInfo
             {
                 RelationshipId = rel.Id,
                 Source = source,
+                Bytes = captionBytes,
                 ContentType = GetCaptionTrackContentType(source),
                 Language = ReadCaptionTrackLanguage(metadata),
                 Label = ReadCaptionTrackLabel(metadata, source),
