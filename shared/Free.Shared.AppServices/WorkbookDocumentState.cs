@@ -1,12 +1,12 @@
 namespace Free.Shared.AppServices;
 
 /// <summary>
-/// Owns the save/dirty cluster for one workbook window: dirty flag, dirty-generation counter,
+/// Owns the save/dirty cluster for one open document: dirty flag, dirty-generation counter,
 /// current file path, and the suppress-close-prompt flag.
 /// <para>
-/// Registered as <c>Transient</c> in DI — one instance per <c>MainWindow</c> (which is also
-/// Transient), giving each window its own independent document state even in the multi-window
-/// ("New Window") scenario.
+/// One instance per document context: each independently opened/created workbook window has its
+/// own instance, while the several views of one document created via "New Window" share the
+/// originating window's instance (dirty/clean is a document property, not a per-view property).
 /// </para>
 /// <para>
 /// Pure logic; no WPF references. All state transitions are synchronous and must be called on

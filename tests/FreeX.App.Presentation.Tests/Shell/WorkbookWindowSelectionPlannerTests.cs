@@ -45,4 +45,33 @@ public sealed class WorkbookWindowSelectionPlannerTests
         WorkbookWindowSelectionPlanner.FormatDisplayName("  ", 1, 3)
             .Should().Be("Workbook - 2");
     }
+
+    [Fact]
+    public void BuildSwitchWindowTargets_PrefersPerEntryDisplayNamesForMultiDocumentLists()
+    {
+        // With windows spanning several documents, each entry supplies its own
+        // "{workbook name}{per-document suffix}" text instead of numbering every entry
+        // under one shared workbook name.
+        var windows = new[]
+        {
+            new WorkbookWindowSelectionEntry<string>("w1", 0, "Budget.xlsx - 1"),
+            new WorkbookWindowSelectionEntry<string>("w2", 1, "Budget.xlsx - 2"),
+            new WorkbookWindowSelectionEntry<string>("w3", 2, "Forecast.xlsx")
+        };
+
+        var targets = WorkbookWindowSelectionPlanner.BuildSwitchWindowTargets(windows, "w2", "Budget.xlsx", 3);
+
+        targets.Select(target => target.DisplayName)
+            .Should().Equal("Budget.xlsx - 1", "Budget.xlsx - 2", "Forecast.xlsx");
+        targets.Select(target => target.IsCurrent).Should().Equal(false, true, false);
+    }
+
+    [Fact]
+    public void FormatDisplayName_WithKnownSuffix_AppendsItVerbatim()
+    {
+        WorkbookWindowSelectionPlanner.FormatDisplayName("Budget.xlsx", " - 2")
+            .Should().Be("Budget.xlsx - 2");
+        WorkbookWindowSelectionPlanner.FormatDisplayName("  ", "")
+            .Should().Be("Workbook");
+    }
 }

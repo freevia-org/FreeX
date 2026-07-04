@@ -273,35 +273,13 @@ public partial class App : Application
         foreach (var adapter in WorkbookFileAdapterCatalog.CreateDefaultAdapters())
             services.AddSingleton<IFileAdapter>(adapter);
 
-        // Workbook (single workbook for now, will expand later)
-        services.AddSingleton(_ => NewWorkbookFactory.Create(options));
-
-        // Mutable reference wrapper — updated whenever a new file is loaded.
-        services.AddSingleton(sp =>
-            new WorkbookRef { Current = sp.GetRequiredService<Workbook>() });
-
-        // Command bus always resolves through WorkbookRef so it sees the current workbook.
-        services.AddSingleton<ICommandBus>(sp =>
-        {
-            var wbRef = sp.GetRequiredService<WorkbookRef>();
-            return new CommandBus(
-                _ => new WorkbookCommandContext(wbRef.Current),
-                (id, ctx) => XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(ctx.Workbook, out _));
-        });
-
         // Message service
         services.AddSingleton<IUserMessageService, WpfUserMessageService>();
 
-        // Multi-window registry: tracks every live window viewing the single shared workbook
-        // (Excel "New Window"). Singleton so all windows coordinate through one registry.
+        // Multi-window registry: tracks every live workbook window in the process, across all
+        // open documents. Singleton so all windows coordinate through one registry; every
+        // notify/refresh/numbering decision inside it is scoped per document (H39).
         services.AddSingleton<WorkbookWindowRegistry>();
-
-        // Document state (dirty flag, generation, file path, close-prompt flag).
-        // Singleton — the workbook is shared across all windows in the multi-window
-        // ("New Window") model, so dirty/clean state is a document property, not a
-        // per-view property.  All windows share this one instance; title-bar refresh
-        // after a dirty/saved transition is broadcast via WorkbookWindowRegistry.
-        services.AddSingleton<WorkbookDocumentState>();
 
         // New-workbook name sequence (Book1, Book2, …) shared across the session so File > New
         // keeps advancing the default name instead of repeatedly producing Book1 (Issue 121).
@@ -321,8 +299,35 @@ public partial class App : Application
                 logger: sp.GetService<ILoggerFactory>()?.CreateLogger<FreeX.App.Services.Updates.VelopackUpdateService>());
         });
 
-        // UI
-        services.AddTransient<MainWindow>();
+        // UI. Every MainWindow resolved from DI gets its OWN document context — workbook,
+        // WorkbookRef, command bus, and WorkbookDocumentState — so File > Open or File > New in
+        // one window can never replace another window's document (H39). The only "same document,
+        // several views" path is View > New Window, which bypasses this factory and constructs
+        // the secondary window over the originating window's context (see ViewNewWindowBtn_Click).
+        services.AddTransient(sp =>
+        {
+            var workbook = NewWorkbookFactory.Create(sp.GetRequiredService<FreeXOptions>());
+            var workbookRef = new WorkbookRef { Current = workbook };
+            return ActivatorUtilities.CreateInstance<MainWindow>(
+                sp,
+                CreateWorkbookCommandBus(workbookRef),
+                workbookRef,
+                workbook,
+                new WorkbookDocumentState());
+        });
+    }
+
+    /// <summary>
+    /// Builds the command bus for one document context. The bus resolves its command context
+    /// through <paramref name="workbookRef"/> on every dispatch, so it always targets that
+    /// document's current workbook — and only that document's.
+    /// </summary>
+    internal static ICommandBus CreateWorkbookCommandBus(WorkbookRef workbookRef)
+    {
+        ArgumentNullException.ThrowIfNull(workbookRef);
+        return new CommandBus(
+            _ => new WorkbookCommandContext(workbookRef.Current),
+            (id, ctx) => XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(ctx.Workbook, out _));
     }
 
     private static void RegisterCrashHandlers(IAppDiagnostics diagnostics, AutosaveSnapshotStore snapshotStore)
@@ -572,7 +577,11 @@ public partial class App : Application
     }
 }
 
-/// <summary>Mutable holder for the active workbook, updated on file open.</summary>
+/// <summary>
+/// Mutable holder for one document context's active workbook, updated on file open. Per window —
+/// except that the views of one document created via View &gt; New Window share one instance —
+/// so repointing it never affects windows over other documents (H39).
+/// </summary>
 public sealed class WorkbookRef
 {
     public Workbook Current { get; set; } = null!;

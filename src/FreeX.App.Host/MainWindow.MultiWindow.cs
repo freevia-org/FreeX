@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Extensions.DependencyInjection;
 using FreeX.App.Presentation.Shell;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -12,15 +13,52 @@ public partial class MainWindow
 {
     // ── Multi-window registry wiring (Excel "New Window" / "Switch Windows") ──
     //
-    // All windows share the one workbook + command bus + recalc engine (see App.xaml.cs DI).
-    // This partial keeps the WPF glue thin: registration, activation, and refresh; every ordering
-    // decision lives in the pure WorkbookWindowOrdering / WorkbookWindowRegistry.
+    // Each window owns its document context (workbook ref + command bus + document state, see
+    // App.xaml.cs DI); the views of one document created via View > New Window share that
+    // context. This partial keeps the WPF glue thin: registration, activation, refresh, and the
+    // share/detach transitions; every ordering decision lives in the pure
+    // WorkbookWindowOrdering / WorkbookWindowRegistry.
+
+    /// <summary>
+    /// Identity of the document this window currently views; the registry scopes refreshes,
+    /// title numbering, and dirty-state broadcasts to windows sharing this id.
+    /// </summary>
+    public WorkbookId DocumentId => _workbook.Id;
 
     /// <summary>
     /// True when this window was opened as a secondary view of an already-open workbook and must
     /// adopt the shared workbook instead of creating a fresh one in <c>MainWindow_Loaded</c>.
     /// </summary>
     private bool ShouldAdoptSharedWorkbookOnLoad => _adoptSharedWorkbookOnLoad;
+
+    /// <summary>
+    /// True when at least one other live window views this window's current document (Excel
+    /// "New Window" siblings). Such siblings keep the document alive: replacing this window's
+    /// document must detach into a fresh context, and closing this window must neither prompt
+    /// to save nor tear the document down.
+    /// </summary>
+    private bool DocumentSharedWithOtherWindows() =>
+        _windowRegistry?.HasOtherWindowsForDocument(this) == true;
+
+    /// <summary>
+    /// Splits this window off the document context it shares with "New Window" siblings, right
+    /// before it hosts a different document (File &gt; Open / File &gt; New). The siblings keep
+    /// the existing WorkbookRef / command bus / document state — and with them the current
+    /// workbook, its undo history, and its dirty flag — while this window continues with fresh
+    /// instances, so the incoming document is fully independent (H39).
+    /// </summary>
+    private void DetachFromSharedDocumentContext()
+    {
+        if (_commandStackChangeNotifier is not null)
+            _commandStackChangeNotifier.StackChanged -= CommandStackChangeNotifier_StackChanged;
+
+        _workbookRef = new WorkbookRef { Current = _workbook };
+        _commandBus = App.CreateWorkbookCommandBus(_workbookRef);
+        _commandStackChangeNotifier = _commandBus as ICommandStackChangeNotifier;
+        if (_commandStackChangeNotifier is not null)
+            _commandStackChangeNotifier.StackChanged += CommandStackChangeNotifier_StackChanged;
+        _documentState = new WorkbookDocumentState();
+    }
 
     private void RegisterWithWindowRegistry()
     {
@@ -41,7 +79,8 @@ public partial class MainWindow
 
     /// <summary>
     /// Adopts the shared workbook for a secondary window without recreating it (the injected
-    /// workbook/ref are already the shared singletons; we only need to bind the UI to them).
+    /// workbook/ref/bus/state are the originating window's — passed by ViewNewWindowBtn_Click —
+    /// so we only need to bind the UI to them).
     /// </summary>
     private void AdoptSharedWorkbook()
     {
@@ -63,8 +102,8 @@ public partial class MainWindow
 
     /// <summary>
     /// Resolves the sheet id that a newly-adopted secondary window should open on.
-    /// Prefers the currently-visible sheet in any already-registered window (i.e. the
-    /// window that triggered "New Window"); falls back to <c>Sheets[0]</c>.
+    /// Prefers the currently-visible sheet in an already-registered window OF THE SAME
+    /// document (i.e. the window that triggered "New Window"); falls back to <c>Sheets[0]</c>.
     /// </summary>
     private SheetId ResolveAdoptedSheetId()
     {
@@ -72,7 +111,7 @@ public partial class MainWindow
         {
             foreach (var win in _windowRegistry.Windows)
             {
-                if (win is MainWindow mw && !ReferenceEquals(mw, this))
+                if (win is MainWindow mw && !ReferenceEquals(mw, this) && mw.DocumentId == _workbook.Id)
                 {
                     var candidateId = mw._currentSheetId;
                     if (_workbook.GetSheet(candidateId) is not null)
@@ -106,7 +145,9 @@ public partial class MainWindow
         var workbook = _workbookRef.Current;
         if (_workbook.Id != workbook.Id)
         {
-            // The workbook was replaced in a sibling window (e.g. File > Open there).
+            // The shared ref was repointed at a different workbook (defensive: the File > Open /
+            // File > New paths now detach the opener into its own context instead, so siblings
+            // should no longer observe a replacement — but a stale view must still recover).
             // Close our Find/Replace dialog so it cannot operate on a stale workbook.
             InvalidateToolbarVisualState();
             CloseFindReplaceDialogIfOpen();
@@ -192,7 +233,7 @@ public partial class MainWindow
         _windowRegistry?.BroadcastScrollOffset(this, GetScrollOffset());
     }
 
-    /// <summary>Broadcasts a shared-workbook change to every other live window.</summary>
+    /// <summary>Broadcasts a workbook change to the other live views of this window's document.</summary>
     private void NotifyOtherWindowsOfWorkbookChange()
     {
         _windowRegistry?.NotifyWorkbookChanged(this);
@@ -209,9 +250,18 @@ public partial class MainWindow
             return;
         }
 
-        // Resolve a brand-new MainWindow from DI. Because the registry already has windows, the new
-        // window's ctor flags itself secondary and adopts the shared workbook instead of replacing it.
-        var newWindow = App.Services.GetRequiredService<MainWindow>();
+        // Construct the new window over THIS window's document context (workbook ref, command
+        // bus, document state) so it becomes a second view of the same document — Excel "New
+        // Window". Resolving a plain DI MainWindow would instead create an independent document
+        // (see the MainWindow factory in App.ConfigureServices). The ctor sees a registered
+        // window (this one) with the same DocumentId and flags itself secondary, so it adopts
+        // the shared workbook on load instead of creating a fresh one.
+        var newWindow = ActivatorUtilities.CreateInstance<MainWindow>(
+            App.Services,
+            _commandBus,
+            _workbookRef,
+            _workbookRef.Current,
+            _documentState);
         newWindow.Show();
         newWindow.Activate();
         RefreshViewWindowCommandState();
@@ -342,13 +392,22 @@ public partial class MainWindow
         RefreshViewWindowCommandState();
     }
 
+    /// <summary>
+    /// "{workbook name}{per-document window suffix}" — the entry text this window contributes to
+    /// the Switch Windows / Unhide Window lists. Windows over different documents show their own
+    /// workbook names, matching their title bars.
+    /// </summary>
+    internal string WindowMenuDisplayName =>
+        WorkbookWindowSelectionPlanner.FormatDisplayName(_workbook.Name, _windowTitleSuffix);
+
     private static IReadOnlyList<WorkbookWindowSelectionEntry<IWorkbookWindow>> BuildWorkbookWindowSelectionEntries(
         WorkbookWindowRegistry registry,
         IEnumerable<IWorkbookWindow> windows) =>
         windows
             .Select(window => new WorkbookWindowSelectionEntry<IWorkbookWindow>(
                 window,
-                registry.IndexOf(window)))
+                registry.IndexOf(window),
+                (window as MainWindow)?.WindowMenuDisplayName))
             .ToList();
 
     // ── Ribbon: View ▸ Window ▸ Reset Window Position ─────────────────────────

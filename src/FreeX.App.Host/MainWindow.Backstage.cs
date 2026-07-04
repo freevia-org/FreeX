@@ -544,6 +544,11 @@ public partial class MainWindow
 
     private void AdoptWorkbookAsInitial(Workbook wb)
     {
+        // When "New Window" siblings still view the current document, leave their context
+        // (workbook ref / command bus / dirty state) untouched and continue on a fresh one:
+        // File > New replaces the document in THIS window only (H39).
+        if (DocumentSharedWithOtherWindows())
+            DetachFromSharedDocumentContext();
         _workbook = wb;
         _workbookRef.Current = wb;
         InvalidateToolbarVisualState();
@@ -558,14 +563,21 @@ public partial class MainWindow
         RefreshSheetTabs();
         UpdateViewport();
         MarkWorkbookSaved();
-        // Notify siblings so they rebind to the new workbook.
+        // Document-scoped broadcast: after a detach there are no same-document siblings, so
+        // this is a no-op for windows over other documents (they keep their own workbooks).
         NotifyOtherWindowsOfWorkbookChange();
+        // This window may have just left a "New Window" group — renumber so a now-lone
+        // sibling drops its " - 1" suffix and this window starts unnumbered.
+        _windowRegistry?.RefreshWindowNumbering();
         RecordDiagnosticEvent("workbook_new");
     }
 
     private async Task RequestNewWorkbookAsync()
     {
-        if (!await CanProceedAfterSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeCreatingWorkbook")))
+        // Skip the save prompt when a "New Window" sibling still views this document — the
+        // document (and its dirty state) stays alive there; only this view is being replaced.
+        if (!DocumentSharedWithOtherWindows() &&
+            !await CanProceedAfterSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeCreatingWorkbook")))
             return;
 
         // Advance the session name sequence so File > New produces Book2, Book3, … rather than
@@ -594,7 +606,10 @@ public partial class MainWindow
         using var operationCancellation = BeginFileOperationCancellation();
         try
         {
-            if (!await CanProceedAfterSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeOpeningWorkbook")))
+            // Skip the save prompt when a "New Window" sibling still views this document — the
+            // document (and its dirty state) stays alive there; only this view is being replaced.
+            if (!DocumentSharedWithOtherWindows() &&
+                !await CanProceedAfterSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeOpeningWorkbook")))
                 return;
 
             _operationProgressFileName = System.IO.Path.GetFileName(target.Path);
@@ -622,6 +637,11 @@ public partial class MainWindow
                     result.LoadWarnings ?? []),
                 suppressRecentFiles);
             CloseFindReplaceDialogIfOpen();
+            // When "New Window" siblings still view the current document, leave their context
+            // (workbook ref / command bus / dirty state) untouched and continue on a fresh one:
+            // File > Open loads into THIS window only, the siblings keep their document (H39).
+            if (DocumentSharedWithOtherWindows())
+                DetachFromSharedDocumentContext();
             _currentXlsxFeatureReport = plan.FeatureReport;
             _workbook = plan.Workbook;
             _workbookRef.Current = plan.Workbook;
@@ -633,10 +653,13 @@ public partial class MainWindow
             _currentFilePath = plan.CurrentFilePath;
             UpdateTitleBar();
             MarkWorkbookSaved();
-            // Notify sibling windows so they rebind their viewports to the new workbook.
-            // Without this, siblings keep a stale _workbook while the shared command bus
-            // resolves the new one — their mutations would target the wrong workbook.
+            // Document-scoped broadcast: after a detach there are no same-document siblings,
+            // so windows over other documents are untouched. (Kept for the defensive case of
+            // a sibling that somehow still shares this ref — it must rebind, not go stale.)
             NotifyOtherWindowsOfWorkbookChange();
+            // This window may have just left a "New Window" group — renumber so a now-lone
+            // sibling drops its " - 1" suffix and this window starts unnumbered.
+            _windowRegistry?.RefreshWindowNumbering();
 
             // Reload from disk immediately before writing: with multiple windows sharing this
             // process (View > New Window), each window's cached _recentFiles snapshot goes stale

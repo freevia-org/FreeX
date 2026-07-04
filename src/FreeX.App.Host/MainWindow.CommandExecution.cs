@@ -366,7 +366,7 @@ public partial class MainWindow
         {
             // Cleaned via save-point — still update title bar and fan out.
             UpdateTitleBar();
-            _windowRegistry?.NotifyDocumentStateChanged();
+            _windowRegistry?.NotifyDocumentStateChanged(this);
         }
 
         InvalidateNavigationCaches();
@@ -393,7 +393,7 @@ public partial class MainWindow
         {
             // Cleaned via save-point — still update title bar and fan out.
             UpdateTitleBar();
-            _windowRegistry?.NotifyDocumentStateChanged();
+            _windowRegistry?.NotifyDocumentStateChanged(this);
         }
 
         InvalidateNavigationCaches();

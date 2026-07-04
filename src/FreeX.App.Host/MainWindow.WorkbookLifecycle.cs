@@ -12,25 +12,25 @@ public partial class MainWindow
 {
     private void MarkWorkbookDirty()
     {
-        // Delegates to the shared (singleton) WorkbookDocumentState.
+        // Delegates to this document's WorkbookDocumentState (shared by its "New Window" views).
         // MarkDirty() increments DirtyGeneration and sets IsDirty = true in one atomic step.
         _documentState.MarkDirty();
         UpdateTitleBar();
-        // Fan out the title-bar refresh to every other window so all windows reflect
+        // Fan out the title-bar refresh to this document's other views so they reflect
         // the dirty indicator without needing a full viewport refresh.
-        _windowRegistry?.NotifyDocumentStateChanged();
+        _windowRegistry?.NotifyDocumentStateChanged(this);
     }
 
     private void MarkWorkbookSaved()
     {
-        // Delegates to the shared (singleton) WorkbookDocumentState.
+        // Delegates to this document's WorkbookDocumentState (shared by its "New Window" views).
         // Record the undo-stack depth at save time so ExecuteUndo/Redo can detect
         // when the stack returns to the save point and clear the dirty flag cleanly.
         var undoDepth = _commandBus.GetUndoStackDepth(_workbook.Id);
         _documentState.MarkSavedAtUndoDepth(undoDepth);
         UpdateTitleBar();
-        // Fan out to sibling windows so they also reflect the saved (clean) state.
-        _windowRegistry?.NotifyDocumentStateChanged();
+        // Fan out to this document's sibling views so they also reflect the saved (clean) state.
+        _windowRegistry?.NotifyDocumentStateChanged(this);
         NotifyAutosaveSaved();
     }
 
@@ -84,7 +84,9 @@ public partial class MainWindow
 
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
-        if (_suppressClosePrompt || !_workbookDirty)
+        // A sibling "New Window" view keeps the document (and its dirty state) alive, so closing
+        // this view must not prompt to save — only the document's last view prompts (Excel parity).
+        if (_suppressClosePrompt || !_workbookDirty || DocumentSharedWithOtherWindows())
         {
             PrepareActiveWorkbookForFinalClose();
             return;
@@ -119,13 +121,14 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// True when this is the last window to close.  Must be called AFTER
+    /// True when this window is the last remaining view of ITS document — windows over other
+    /// documents do not keep this one alive.  Must be called AFTER
     /// <c>_windowRegistry.Unregister(this)</c> has run (in
-    /// <see cref="PrepareActiveWorkbookForFinalClose"/>), so <c>Count</c> reflects
+    /// <see cref="PrepareActiveWorkbookForFinalClose"/>), so the registry reflects
     /// the remaining windows rather than including this one.
     /// </summary>
     private bool IsFinalWorkbookWindowClose() =>
-        _windowRegistry is null || _windowRegistry.Count == 0;
+        _windowRegistry is null || !_windowRegistry.HasWindowForDocument(_workbook.Id);
 
     /// <summary>
     /// Bypasses the save-changes prompt on the next Close() call.
@@ -139,13 +142,15 @@ public partial class MainWindow
         ReleaseWorkbookUiStateForClose();
 
         // Pre-unregister from the registry *before* the IsFinalWorkbookWindowClose()
-        // check so that Count has already been decremented when we decide whether this
-        // is the last window.  This closes the concurrent-close race: if two windows
-        // close simultaneously, each pre-unregisters first; the window that sees
-        // Count<=1 after its own pre-unregister is definitively the last one.
-        // Unregister is idempotent — the Closed handler calls it again safely.
+        // check so this window is already excluded when we decide whether it is the last
+        // view of its document.  This closes the concurrent-close race: if two views
+        // close simultaneously, each pre-unregisters first; the view that sees no other
+        // registered window for the document after its own pre-unregister is definitively
+        // the last one.  Unregister is idempotent — the Closed handler calls it again safely.
         _windowRegistry?.Unregister(this);
 
+        // A surviving "New Window" sibling still views this document: leave the workbook,
+        // its loaded-package snapshot, and the shared document state untouched.
         if (!IsFinalWorkbookWindowClose())
             return;
 

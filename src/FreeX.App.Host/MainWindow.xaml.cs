@@ -32,8 +32,13 @@ public partial class MainWindow : Window, IWorkbookWindow
 
     private readonly ILogger<MainWindow> _logger;
     private readonly IViewportService _viewportService;
-    private readonly ICommandBus _commandBus;
-    private readonly ICommandStackChangeNotifier? _commandStackChangeNotifier;
+    // ── Per-window document context: _workbookRef + _commandBus + _documentState ──
+    // Each window owns its document's ref/bus/state. Windows opened via View > New Window
+    // share the originating window's instances (several views of one document); File > Open
+    // or File > New in such a view swaps in fresh instances (DetachFromSharedDocumentContext)
+    // so the new document is independent of the siblings (H39). Not readonly for that reason.
+    private ICommandBus _commandBus;
+    private ICommandStackChangeNotifier? _commandStackChangeNotifier;
     private readonly IUserMessageService _messageService;
     private readonly RecalcEngine _recalcEngine;
     private readonly IEnumerable<IFileAdapter> _fileAdapters;
@@ -49,7 +54,7 @@ public partial class MainWindow : Window, IWorkbookWindow
     private bool _legacyEditKeyTipSequence;
     private ContextMenu? _activeRibbonKeyTipMenu;
     private ItemsControl? _activeRibbonKeyTipItemsControl;
-    private readonly WorkbookRef _workbookRef;
+    private WorkbookRef _workbookRef;
     private Workbook _workbook;
     private SheetId _currentSheetId;
     private readonly System.Collections.ObjectModel.ObservableCollection<SheetTabViewModel> _sheetTabs = [];
@@ -250,8 +255,8 @@ public partial class MainWindow : Window, IWorkbookWindow
     private bool _adoptSharedWorkbookOnLoad;
     private bool _suppressScrollBroadcast;
 
-    // ── Per-window document save/dirty state service ──────────────────────────
-    private readonly WorkbookDocumentState _documentState;
+    // ── Per-document save/dirty state service (shared by the views of one document) ──
+    private WorkbookDocumentState _documentState;
     private readonly NewWorkbookNameSequence _newWorkbookNameSequence;
 
     public MainWindow(
@@ -271,7 +276,8 @@ public partial class MainWindow : Window, IWorkbookWindow
         WorkbookWindowRegistry? windowRegistry = null,
         NewWorkbookNameSequence? newWorkbookNameSequence = null)
     {
-        // DI supplies a Transient WorkbookDocumentState; tests that omit it get a fresh default.
+        // The MainWindow DI factory supplies a fresh per-document WorkbookDocumentState (View >
+        // New Window passes the originating window's instead); tests that omit it get a default.
         _documentState = documentState ?? new WorkbookDocumentState();
         _newWorkbookNameSequence = newWorkbookNameSequence ?? new NewWorkbookNameSequence();
         _logger = logger;
@@ -289,9 +295,12 @@ public partial class MainWindow : Window, IWorkbookWindow
         _currentSheetId = _workbook.Sheets[0].Id;
         _options = options ?? FreeXOptions.Load();
         _windowRegistry = windowRegistry;
-        // A window created while others already exist over the shared workbook is a secondary
-        // view (Excel "New Window"); it must adopt the existing workbook instead of replacing it.
-        _adoptSharedWorkbookOnLoad = windowRegistry?.HasWindows == true;
+        // A window handed a workbook that a registered window already views is a secondary view
+        // of that document (View > New Window passed the originating window's context); it must
+        // adopt the shared workbook on load instead of creating a fresh one. A window built with
+        // its own fresh context (app startup, startup recovery, command-line file arguments)
+        // never matches a registered window's document and initializes its own workbook (H39).
+        _adoptSharedWorkbookOnLoad = windowRegistry?.HasWindowForDocument(workbook.Id) == true;
         _recentFiles = RecentFilesStore.Load();
 
         InitializeComponent();

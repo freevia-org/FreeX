@@ -372,8 +372,14 @@ public sealed partial class MainWindowSourceHygieneTests
         startupSource.Should().Contain("AdoptSharedWorkbook();");
         startupSource.Should().Contain("RegisterWithWindowRegistry();");
 
-        // New Window resolves a fresh MainWindow from DI; Switch Windows cycles via the registry.
-        multiWindowSource.Should().Contain("App.Services.GetRequiredService<MainWindow>()");
+        // New Window constructs the secondary window over the originating window's document
+        // context (workbook ref + command bus + document state) so it shares the document; a
+        // plain DI resolve would create an independent document (H39: File > Open / File > New
+        // in one window must never replace another window's document). A shared view that opens
+        // a different document detaches into its own context first.
+        multiWindowSource.Should().Contain("ActivatorUtilities.CreateInstance<MainWindow>(");
+        multiWindowSource.Should().Contain("public WorkbookId DocumentId => _workbook.Id;");
+        multiWindowSource.Should().Contain("private void DetachFromSharedDocumentContext()");
         multiWindowSource.Should().Contain("_windowRegistry.SwitchToNextWindow(this)");
         multiWindowSource.Should().Contain("_windowRegistry.Register(this)");
         multiWindowSource.Should().Contain("_windowRegistry?.Unregister(this)");

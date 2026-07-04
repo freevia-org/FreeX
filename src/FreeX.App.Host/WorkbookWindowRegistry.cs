@@ -19,6 +19,15 @@ public readonly record struct WorkbookScrollOffset(double Row, double Column);
 /// </summary>
 public interface IWorkbookWindow
 {
+    /// <summary>
+    /// Identity of the document this window is currently viewing. Windows opened via
+    /// View &gt; New Window share their originating window's document (same id); windows
+    /// hosting an independently opened/created workbook have their own id. The registry
+    /// uses this to scope refreshes, title numbering, and dirty-state broadcasts to the
+    /// windows of one document instead of every window in the process.
+    /// </summary>
+    WorkbookId DocumentId { get; }
+
     /// <summary>Applies an Excel-style window-number suffix (e.g. " - 2", or "" for a lone window).</summary>
     void ApplyWindowTitleSuffix(string suffix);
 
@@ -49,13 +58,20 @@ public interface IWorkbookWindow
 }
 
 /// <summary>
-/// Tracks the live workbook windows that all view the single shared workbook (Excel-style
-/// "New Window"). The registry is a thin coordinator: every ordering decision (which window to
+/// Tracks every live workbook window in the process, across all open documents. Several windows
+/// may view the same document (Excel-style "New Window" — same <see cref="IWorkbookWindow.DocumentId"/>);
+/// windows over different documents coexist independently (File &gt; Open in one window never
+/// affects another document's windows). Workbook-content refreshes, dirty-state broadcasts, and
+/// Excel-style title numbering are scoped per document; window switching, hide/unhide, Arrange All,
+/// and View Side by Side deliberately span all documents (Excel parity — side-by-side exists to
+/// compare two different workbooks).
+///
+/// The registry is a thin coordinator: every ordering decision (which window to
 /// switch to, how to number titles, which windows to refresh) is delegated to the pure, unit-tested
 /// <see cref="WorkbookWindowOrdering"/> helper; geometry decisions are delegated to
 /// <see cref="WindowResetPositionPlanner"/>, <see cref="ArrangeAllLayoutPlanner"/>, and <see cref="SideBySideLayoutPlanner"/>.
 ///
-/// Registered as a DI singleton so all windows over the shared workbook see the same registry.
+/// Registered as a DI singleton so all windows coordinate through one registry.
 /// </summary>
 public sealed class WorkbookWindowRegistry
 {
@@ -123,8 +139,8 @@ public sealed class WorkbookWindowRegistry
     }
 
     /// <summary>
-    /// True once at least one window exists; lets a window decide whether it is the first window
-    /// (create the workbook) or a secondary view (adopt the existing shared workbook) before it loads.
+    /// True once at least one window exists. (Whether a new window adopts an existing document is
+    /// decided per document via <see cref="HasWindowForDocument"/>, not by this process-wide flag.)
     /// </summary>
     public bool HasWindows => _windows.Count > 0;
 
@@ -222,22 +238,29 @@ public sealed class WorkbookWindowRegistry
     }
 
     /// <summary>
-    /// Tells every registered window to refresh its title bar after a document-state change
-    /// (dirty/saved transition).  Because <see cref="WorkbookDocumentState"/> is a shared
-    /// singleton, the dirty flag is already consistent across all windows; this call ensures
-    /// every title bar reflects the new state without a full viewport refresh.
+    /// Tells every window viewing the same document as <paramref name="origin"/> to refresh its
+    /// title bar after a document-state change (dirty/saved transition). The views of one document
+    /// share a <see cref="WorkbookDocumentState"/>, so the dirty flag is already consistent among
+    /// them; this call ensures their title bars reflect the new state without a full viewport
+    /// refresh. Windows over other documents are left untouched — their dirty state is unrelated.
     /// The <paramref name="origin"/> window has already updated its own title bar before
     /// calling this, but including it in the refresh is safe and simplifies the loop.
     /// </summary>
-    public void NotifyDocumentStateChanged()
+    public void NotifyDocumentStateChanged(IWorkbookWindow origin)
     {
+        ArgumentNullException.ThrowIfNull(origin);
         foreach (var window in _windows)
-            window.RefreshTitleBar();
+        {
+            if (window.DocumentId == origin.DocumentId)
+                window.RefreshTitleBar();
+        }
     }
 
     /// <summary>
-    /// Tells every window other than <paramref name="origin"/> to refresh its viewport/status from
-    /// the shared workbook, so an edit (or undo/redo) in one window appears in the others.
+    /// Tells every OTHER window viewing the same document as <paramref name="origin"/> to refresh
+    /// its viewport/status from the shared workbook, so an edit (or undo/redo) in one view appears
+    /// in the sibling views. Windows over other documents are not refreshed — their content did
+    /// not change (H39: File &gt; Open in one window must never rebind another document's windows).
     /// </summary>
     public void NotifyWorkbookChanged(IWorkbookWindow origin)
     {
@@ -247,8 +270,50 @@ public sealed class WorkbookWindowRegistry
 
         var originIndex = _windows.IndexOf(origin);
         foreach (var index in WorkbookWindowOrdering.IndicesToNotify(originIndex, _windows.Count))
-            _windows[index].RefreshFromSharedWorkbook();
+        {
+            var window = _windows[index];
+            if (window.DocumentId == origin.DocumentId)
+                window.RefreshFromSharedWorkbook();
+        }
     }
+
+    /// <summary>
+    /// True when at least one registered window other than <paramref name="window"/> views the
+    /// same document. Such siblings keep the document alive: replacing this window's document
+    /// (File &gt; Open / File &gt; New) must detach into a fresh context instead of mutating the
+    /// shared one, and closing this window must neither prompt to save nor tear the document down.
+    /// </summary>
+    public bool HasOtherWindowsForDocument(IWorkbookWindow window)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        foreach (var candidate in _windows)
+        {
+            if (!ReferenceEquals(candidate, window) && candidate.DocumentId == window.DocumentId)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>True when any registered window currently views the document <paramref name="documentId"/>.</summary>
+    public bool HasWindowForDocument(WorkbookId documentId)
+    {
+        foreach (var candidate in _windows)
+        {
+            if (candidate.DocumentId == documentId)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Recomputes every window's Excel-style title suffix. Register/Unregister renumber
+    /// automatically; this entry point is for document swaps (File &gt; Open / File &gt; New in a
+    /// window that shared its document with siblings), where a window changes document group
+    /// without registering or unregistering.
+    /// </summary>
+    public void RefreshWindowNumbering() => RenumberTitles();
 
     // Arrange All
 
@@ -412,13 +477,29 @@ public sealed class WorkbookWindowRegistry
         return null;
     }
 
+    /// <summary>
+    /// Excel numbers windows per workbook: "Book1 - 1" / "Book1 - 2" only when a document has
+    /// several views, while a document's lone window carries no suffix. Positions count in
+    /// registration order within each document group.
+    /// </summary>
     private void RenumberTitles()
     {
-        var total = _windows.Count;
-        for (var i = 0; i < total; i++)
+        var groupTotals = new Dictionary<WorkbookId, int>();
+        foreach (var window in _windows)
         {
-            var suffix = WorkbookWindowOrdering.FormatWindowTitleSuffix(position: i + 1, totalWindowCount: total);
-            _windows[i].ApplyWindowTitleSuffix(suffix);
+            groupTotals.TryGetValue(window.DocumentId, out var total);
+            groupTotals[window.DocumentId] = total + 1;
+        }
+
+        var groupPositions = new Dictionary<WorkbookId, int>();
+        foreach (var window in _windows)
+        {
+            groupPositions.TryGetValue(window.DocumentId, out var previousPosition);
+            var position = previousPosition + 1;
+            groupPositions[window.DocumentId] = position;
+            window.ApplyWindowTitleSuffix(WorkbookWindowOrdering.FormatWindowTitleSuffix(
+                position,
+                totalWindowCount: groupTotals[window.DocumentId]));
         }
     }
 }
