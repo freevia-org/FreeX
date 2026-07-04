@@ -768,6 +768,42 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Button("freew.inspect-document", "Inspect Document");
                 });
             })
+            .Tab("developer", "Developer", "D", tab =>
+            {
+                tab.Group("controls", "Controls", null, 100, g =>
+                {
+                    g.Button("freew.cc-text", "Text Control", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Medium,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextBox)
+                    });
+                    g.Button("freew.cc-richtext", "Rich Text", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Medium,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.QuickParts)
+                    });
+                    g.Button("freew.cc-checkbox", "Check Box", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Medium,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.CheckBox)
+                    });
+                    g.Button("freew.cc-date", "Date Picker", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Medium,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Date)
+                    });
+                    g.Button("freew.cc-dropdown", "Drop-Down List", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Medium,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.List)
+                    });
+                    g.Button("freew.cc-combo", "Combo Box", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Medium,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.ChevronDown)
+                    });
+                });
+            })
             .Tab("references", "References", "S", tab =>
             {
                 // AV-REF: References-tab depth — TOC, footnotes/endnotes, captions, cross-ref, citations.

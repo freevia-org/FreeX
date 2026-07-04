@@ -9,7 +9,6 @@ public sealed class FreeWRibbonDefinitionProfileTests
 {
     private static readonly string[] WpfOnlyTabIds =
     [
-        "developer",
         "help",
     ];
 
@@ -137,7 +136,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
             .Equal("home", "insert", "design", "layout", "references", "mailings", "review", "view", "help", "developer");
         avalonia.Tabs.Select(tab => tab.Id)
             .Should()
-            .Contain(new[] { "file", "home", "insert", "design", "layout", "references", "mailings", "review", "view" });
+            .Contain(new[] { "file", "home", "insert", "design", "layout", "references", "mailings", "review", "view", "developer" });
     }
 
     [Fact]
@@ -426,7 +425,12 @@ public sealed class FreeWRibbonDefinitionProfileTests
         AssertGapClassification(commands, "freew.bookmark", "shared-profile");
         AssertGapClassification(commands, "freew.insert-bookmark", "command-id-alias");
         AssertGapClassification(commands, "freew.about", "platform-only");
-        AssertGapClassification(commands, "freew.cc-checkbox", "deferred");
+        AssertGapClassification(commands, "freew.cc-text", "shared-profile");
+        AssertGapClassification(commands, "freew.cc-richtext", "shared-profile");
+        AssertGapClassification(commands, "freew.cc-checkbox", "shared-profile");
+        AssertGapClassification(commands, "freew.cc-date", "shared-profile");
+        AssertGapClassification(commands, "freew.cc-dropdown", "shared-profile");
+        AssertGapClassification(commands, "freew.cc-combo", "shared-profile");
         AssertGapClassification(commands, "freew.add-to-dictionary", "shared-profile");
         AssertGapClassification(commands, "freew.split", "command-id-alias");
 
