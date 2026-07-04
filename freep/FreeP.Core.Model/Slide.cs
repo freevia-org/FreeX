@@ -177,6 +177,31 @@ public sealed class MediaInfo
     /// Empty when the media is embedded.
     /// </summary>
     public string LinkUrl { get; set; } = string.Empty;
+
+    /// <summary>Closed-caption or subtitle tracks associated with this media object.</summary>
+    public List<MediaCaptionTrackInfo> CaptionTracks { get; } = new();
+}
+
+/// <summary>Metadata for a PowerPoint media caption/subtitle track.</summary>
+public sealed class MediaCaptionTrackInfo
+{
+    /// <summary>Relationship id from the slide part, when the track is relationship-backed.</summary>
+    public string RelationshipId { get; set; } = string.Empty;
+
+    /// <summary>Original target path or URI for the caption/subtitle resource.</summary>
+    public string Source { get; set; } = string.Empty;
+
+    /// <summary>MIME content type for the caption resource, when known.</summary>
+    public string ContentType { get; set; } = string.Empty;
+
+    /// <summary>Language tag such as "en-US", when present in the package metadata.</summary>
+    public string Language { get; set; } = string.Empty;
+
+    /// <summary>Human-readable track label or name, when present in the package metadata.</summary>
+    public string Label { get; set; } = string.Empty;
+
+    /// <summary>True when the track points to an external URI rather than an embedded package part.</summary>
+    public bool IsExternal { get; set; }
 }
 
 /// <summary>

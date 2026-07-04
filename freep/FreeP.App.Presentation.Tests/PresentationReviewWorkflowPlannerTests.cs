@@ -1148,6 +1148,28 @@ public sealed class PresentationReviewWorkflowPlannerTests
             Media = new MediaInfo { IsVideo = true },
             IsDecorative = true
         });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 18,
+            Name = "Training video",
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                CaptionTracks =
+                {
+                    new MediaCaptionTrackInfo
+                    {
+                        RelationshipId = "rIdCaption1",
+                        Source = "ppt/media/training.vtt",
+                        ContentType = "text/vtt",
+                        Language = "en-US",
+                        Label = "English captions"
+                    }
+                }
+            },
+            AlternativeText = "Training walkthrough."
+        });
 
         var summary = PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation);
         var pane = PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(presentation, summary);

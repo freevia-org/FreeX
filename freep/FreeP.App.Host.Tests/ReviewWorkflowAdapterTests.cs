@@ -496,6 +496,66 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_AccessibilityCheckerMediaCaptionTracks_UsesSharedPlan()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.Editor.CurrentSlide!.Title = "Media accessibility";
+            var missingCaptions = new SlideShape
+            {
+                Id = 711,
+                Name = "Demo video",
+                Kind = SlideShapeKind.Media,
+                Media = new MediaInfo { IsVideo = true },
+                AlternativeText = "Demo walkthrough."
+            };
+            var captioned = new SlideShape
+            {
+                Id = 712,
+                Name = "Training video",
+                Kind = SlideShapeKind.Media,
+                Media = new MediaInfo
+                {
+                    IsVideo = true,
+                    CaptionTracks =
+                    {
+                        new MediaCaptionTrackInfo
+                        {
+                            RelationshipId = "rIdCaption1",
+                            Source = "ppt/media/training.vtt",
+                            ContentType = "text/vtt",
+                            Language = "en-US",
+                            Label = "English captions"
+                        }
+                    }
+                },
+                AlternativeText = "Training walkthrough."
+            };
+            window.Editor.CurrentSlide.Shapes.Add(missingCaptions);
+            window.Editor.CurrentSlide.Shapes.Add(captioned);
+
+            var opened = window.ShowAccessibilityCheckerPane();
+
+            opened.Rows.Should().ContainSingle(row => row.Title == "Video captions missing")
+                .Which.Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
+                    row.Category == "Media" &&
+                    row.ShapeId == missingCaptions.Id &&
+                    row.ShapeName == "Demo video" &&
+                    row.ActionLabel == "Select Media" &&
+                    row.CommandHint == null &&
+                    row.ShouldNavigateToSlide &&
+                    row.ShouldSelectShape);
+            window.LastAccessibilitySummaryPlan!.Issues.Should().NotContain(issue =>
+                issue.ShapeId == captioned.Id && issue.Title == "Video captions missing");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_ApplyProofingCorrection_UsesSharedMutationAndRefreshesPlans()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
