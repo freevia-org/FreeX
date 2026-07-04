@@ -52,6 +52,11 @@ public sealed class SourceRecord
     public string Title { get; set; } = string.Empty;
     public string Year { get; set; } = string.Empty;
     public string? Publisher { get; set; }
+    public string? City { get; set; }
+    public string? Edition { get; set; }
+    public string? StandardNumber { get; set; }
+    public string? ShortTitle { get; set; }
+    public string? Comments { get; set; }
     public string? Journal { get; set; }
     public string? Volume { get; set; }
     public string? Issue { get; set; }
@@ -72,6 +77,11 @@ public sealed class SourceRecord
         Title = Title,
         Year = Year,
         Publisher = Publisher,
+        City = City,
+        Edition = Edition,
+        StandardNumber = StandardNumber,
+        ShortTitle = ShortTitle,
+        Comments = Comments,
         Journal = Journal,
         Volume = Volume,
         Issue = Issue,
@@ -97,6 +107,11 @@ public sealed class SourceRecord
             Title = source.Title,
             Year = source.Year,
             Publisher = source.Publisher,
+            City = source.City,
+            Edition = source.Edition,
+            StandardNumber = source.StandardNumber,
+            ShortTitle = source.ShortTitle,
+            Comments = source.Comments,
             Journal = source.Journal,
             Volume = source.Volume,
             Issue = source.Issue,

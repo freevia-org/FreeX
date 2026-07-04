@@ -460,6 +460,80 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void Phantom_Hidden_ReservesNaturalMetricsButEmitsNoGlyphs()
+    {
+        var child = new MathNode.Frac(Run("1"), new MathNode.Rad(null, Run("x")));
+        var natural = MathLayoutEngine.Layout(child, "Cambria Math", FontSizePt);
+        var layout = MathLayoutEngine.Layout(
+            new MathNode.Phantom(child, show: false),
+            "Cambria Math",
+            FontSizePt);
+
+        var phantomBox = Assert.IsType<MathBox.Container>(layout.Children[0]);
+        phantomBox.Children.Should().BeEmpty("show=0 phantom reserves space without visible child boxes");
+        layout.Metrics.Width.Should().BeApproximately(natural.Metrics.Width, 0.01);
+        layout.Metrics.Height.Should().BeApproximately(natural.Metrics.Height, 0.01);
+        layout.Metrics.Ascent.Should().BeApproximately(natural.Metrics.Ascent, 0.01);
+
+        var ops = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math");
+        ops.OfType<MathDrawOp.DrawGlyph>().Should().BeEmpty("hidden phantom children must not reach the shared draw plan");
+        ops.Should().BeEmpty("hidden phantom with only glyph/radical descendants should not emit any draw operations");
+    }
+
+    [Fact]
+    public void Phantom_ZeroWidth_ReportsZeroWidthButKeepsVisibleChild()
+    {
+        var child = Run("wide");
+        var natural = MathLayoutEngine.Layout(child, "Cambria Math", FontSizePt);
+        var layout = MathLayoutEngine.Layout(
+            new MathNode.Phantom(child, zeroWidth: true),
+            "Cambria Math",
+            FontSizePt);
+
+        var phantomBox = Assert.IsType<MathBox.Container>(layout.Children[0]);
+        phantomBox.Children.Should().ContainSingle("show=true phantom keeps its child boxes visible");
+        layout.Metrics.Width.Should().Be(0);
+        layout.Metrics.Height.Should().BeApproximately(natural.Metrics.Height, 0.01);
+        layout.Metrics.Ascent.Should().BeApproximately(natural.Metrics.Ascent, 0.01);
+
+        var ops = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math");
+        ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text).Should().Contain("wide");
+    }
+
+    [Fact]
+    public void Phantom_ZeroAscent_ReportsNoAscentAndKeepsNaturalDescent()
+    {
+        var child = Run("x");
+        var natural = MathLayoutEngine.Layout(child, "Cambria Math", FontSizePt);
+        var naturalDescent = natural.Metrics.Height - natural.Metrics.Ascent;
+        var layout = MathLayoutEngine.Layout(
+            new MathNode.Phantom(child, show: false, zeroAscent: true),
+            "Cambria Math",
+            FontSizePt);
+
+        layout.Metrics.Width.Should().BeApproximately(natural.Metrics.Width, 0.01);
+        layout.Metrics.Ascent.Should().Be(0);
+        layout.Metrics.Height.Should().BeApproximately(naturalDescent, 0.01);
+        layout.Metrics.Descent.Should().BeApproximately(naturalDescent, 0.01);
+    }
+
+    [Fact]
+    public void Phantom_ZeroDescent_ReportsNoDescent()
+    {
+        var child = Run("x");
+        var natural = MathLayoutEngine.Layout(child, "Cambria Math", FontSizePt);
+        var layout = MathLayoutEngine.Layout(
+            new MathNode.Phantom(child, show: false, zeroDescent: true),
+            "Cambria Math",
+            FontSizePt);
+
+        layout.Metrics.Width.Should().BeApproximately(natural.Metrics.Width, 0.01);
+        layout.Metrics.Ascent.Should().BeApproximately(natural.Metrics.Ascent, 0.01);
+        layout.Metrics.Height.Should().BeApproximately(natural.Metrics.Ascent, 0.01);
+        layout.Metrics.Descent.Should().BeApproximately(0, 0.01);
+    }
+
+    [Fact]
     public void BorderBox_EmitsVisibleSideLinesAndPadsNestedChild()
     {
         var child = new MathNode.Frac(Run("1"), new MathNode.Rad(null, Run("x")));

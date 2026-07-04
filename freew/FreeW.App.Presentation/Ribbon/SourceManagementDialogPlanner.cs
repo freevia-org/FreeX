@@ -9,6 +9,11 @@ public enum SourceManagementSourceField
     Title,
     Year,
     Publisher,
+    City,
+    Edition,
+    StandardNumber,
+    ShortTitle,
+    Comments,
     Journal,
     Volume,
     Issue,
@@ -29,6 +34,11 @@ public sealed record SourceManagementSourceEntry(
     string Title,
     string Year,
     string Publisher,
+    string City,
+    string Edition,
+    string StandardNumber,
+    string ShortTitle,
+    string Comments,
     string Journal,
     string Volume,
     string Issue,
@@ -39,6 +49,40 @@ public sealed record SourceManagementSourceEntry(
     public IReadOnlyList<SourceAuthorPerson> PersonalAuthors { get; init; } = [];
 
     public string? CorporateAuthor { get; init; }
+
+    public SourceManagementSourceEntry(
+        SourceType Type,
+        string Tag,
+        string Author,
+        string Title,
+        string Year,
+        string Publisher,
+        string Journal,
+        string Volume,
+        string Issue,
+        string Pages,
+        string Url,
+        string Accessed)
+        : this(
+            Type,
+            Tag,
+            Author,
+            Title,
+            Year,
+            Publisher,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            Journal,
+            Volume,
+            Issue,
+            Pages,
+            Url,
+            Accessed)
+    {
+    }
 
     public SourceManagementSourceEntry(
         string Tag,
@@ -53,6 +97,11 @@ public sealed record SourceManagementSourceEntry(
             Title,
             Year,
             Publisher,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
             string.Empty,
             string.Empty,
             string.Empty,
@@ -119,7 +168,12 @@ public static class SourceManagementDialogPlanner
                 SourceManagementSourceField.Author,
                 SourceManagementSourceField.Title,
                 SourceManagementSourceField.Year,
-                SourceManagementSourceField.Publisher
+                SourceManagementSourceField.City,
+                SourceManagementSourceField.Publisher,
+                SourceManagementSourceField.Edition,
+                SourceManagementSourceField.StandardNumber,
+                SourceManagementSourceField.ShortTitle,
+                SourceManagementSourceField.Comments
             ],
             [SourceType.JournalArticle] =
             [
@@ -130,7 +184,10 @@ public static class SourceManagementDialogPlanner
                 SourceManagementSourceField.Journal,
                 SourceManagementSourceField.Volume,
                 SourceManagementSourceField.Issue,
-                SourceManagementSourceField.Pages
+                SourceManagementSourceField.Pages,
+                SourceManagementSourceField.StandardNumber,
+                SourceManagementSourceField.ShortTitle,
+                SourceManagementSourceField.Comments
             ],
             [SourceType.WebSite] =
             [
@@ -140,7 +197,9 @@ public static class SourceManagementDialogPlanner
                 SourceManagementSourceField.Year,
                 SourceManagementSourceField.Publisher,
                 SourceManagementSourceField.Url,
-                SourceManagementSourceField.Accessed
+                SourceManagementSourceField.Accessed,
+                SourceManagementSourceField.ShortTitle,
+                SourceManagementSourceField.Comments
             ]
         };
 
@@ -152,6 +211,11 @@ public static class SourceManagementDialogPlanner
             [SourceManagementSourceField.Title] = "Title:",
             [SourceManagementSourceField.Year] = "Year:",
             [SourceManagementSourceField.Publisher] = "Publisher / Site name (optional):",
+            [SourceManagementSourceField.City] = "City:",
+            [SourceManagementSourceField.Edition] = "Edition:",
+            [SourceManagementSourceField.StandardNumber] = "Standard number:",
+            [SourceManagementSourceField.ShortTitle] = "Short title:",
+            [SourceManagementSourceField.Comments] = "Comments:",
             [SourceManagementSourceField.Journal] = "Journal:",
             [SourceManagementSourceField.Volume] = "Volume:",
             [SourceManagementSourceField.Issue] = "Issue:",
@@ -201,6 +265,11 @@ public static class SourceManagementDialogPlanner
             source?.Title ?? string.Empty,
             source?.Year ?? string.Empty,
             source?.Publisher ?? string.Empty,
+            source?.City ?? string.Empty,
+            source?.Edition ?? string.Empty,
+            source?.StandardNumber ?? string.Empty,
+            source?.ShortTitle ?? string.Empty,
+            source?.Comments ?? string.Empty,
             source?.Journal ?? string.Empty,
             source?.Volume ?? string.Empty,
             source?.Issue ?? string.Empty,
@@ -241,6 +310,11 @@ public static class SourceManagementDialogPlanner
             TrimmedValue(values, SourceManagementSourceField.Title),
             TrimmedValue(values, SourceManagementSourceField.Year),
             TrimmedValue(values, SourceManagementSourceField.Publisher),
+            TrimmedValue(values, SourceManagementSourceField.City),
+            TrimmedValue(values, SourceManagementSourceField.Edition),
+            TrimmedValue(values, SourceManagementSourceField.StandardNumber),
+            TrimmedValue(values, SourceManagementSourceField.ShortTitle),
+            TrimmedValue(values, SourceManagementSourceField.Comments),
             TrimmedValue(values, SourceManagementSourceField.Journal),
             TrimmedValue(values, SourceManagementSourceField.Volume),
             TrimmedValue(values, SourceManagementSourceField.Issue),
@@ -340,6 +414,13 @@ public static class SourceManagementDialogPlanner
             Publisher = type is SourceType.Book or SourceType.WebSite
                 ? NullIfWhiteSpace(entry.Publisher)
                 : null,
+            City = type == SourceType.Book ? NullIfWhiteSpace(entry.City) : null,
+            Edition = type == SourceType.Book ? NullIfWhiteSpace(entry.Edition) : null,
+            StandardNumber = type is SourceType.Book or SourceType.JournalArticle
+                ? NullIfWhiteSpace(entry.StandardNumber)
+                : null,
+            ShortTitle = NullIfWhiteSpace(entry.ShortTitle),
+            Comments = NullIfWhiteSpace(entry.Comments),
             Journal = type == SourceType.JournalArticle ? NullIfWhiteSpace(entry.Journal) : null,
             Volume = type == SourceType.JournalArticle ? NullIfWhiteSpace(entry.Volume) : null,
             Issue = type == SourceType.JournalArticle ? NullIfWhiteSpace(entry.Issue) : null,
@@ -363,6 +444,11 @@ public static class SourceManagementDialogPlanner
             Title = source.Title,
             Year = source.Year,
             Publisher = source.Publisher,
+            City = source.City,
+            Edition = source.Edition,
+            StandardNumber = source.StandardNumber,
+            ShortTitle = source.ShortTitle,
+            Comments = source.Comments,
             Journal = source.Journal,
             Volume = source.Volume,
             Issue = source.Issue,
@@ -530,6 +616,11 @@ public static class SourceManagementDialogPlanner
         || entry.Title.Length > 0
         || entry.Year.Length > 0
         || entry.Publisher.Length > 0
+        || entry.City.Length > 0
+        || entry.Edition.Length > 0
+        || entry.StandardNumber.Length > 0
+        || entry.ShortTitle.Length > 0
+        || entry.Comments.Length > 0
         || entry.Journal.Length > 0
         || entry.Volume.Length > 0
         || entry.Issue.Length > 0
@@ -548,6 +639,11 @@ public static class SourceManagementDialogPlanner
             SourceManagementSourceField.Title => entry.Title,
             SourceManagementSourceField.Year => entry.Year,
             SourceManagementSourceField.Publisher => entry.Publisher,
+            SourceManagementSourceField.City => entry.City,
+            SourceManagementSourceField.Edition => entry.Edition,
+            SourceManagementSourceField.StandardNumber => entry.StandardNumber,
+            SourceManagementSourceField.ShortTitle => entry.ShortTitle,
+            SourceManagementSourceField.Comments => entry.Comments,
             SourceManagementSourceField.Journal => entry.Journal,
             SourceManagementSourceField.Volume => entry.Volume,
             SourceManagementSourceField.Issue => entry.Issue,

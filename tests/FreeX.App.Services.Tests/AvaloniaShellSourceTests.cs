@@ -2459,6 +2459,13 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("ShowAddWatchDialogAsync(\"Sheet1!$B$2\")");
         ribbonMenuDialogSource.Should().Contain("await ShowAddWatchDialogAsync(FormatRangeReference(_session.SelectedRange))");
         ribbonMenuDialogSource.Should().Contain("WatchWindowService.AddWatches(_session.Workbook, _session.SelectedRange)");
+        ribbonMenuDialogSource.Should().Contain("Width = WatchWindowDialogPlanner.Width");
+        ribbonMenuDialogSource.Should().Contain("Height = WatchWindowDialogPlanner.Height");
+        ribbonMenuDialogSource.Should().Contain("MinWidth = WatchWindowDialogPlanner.MinWidth");
+        ribbonMenuDialogSource.Should().Contain("MinHeight = WatchWindowDialogPlanner.MinHeight");
+        ribbonMenuDialogSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, WatchWindowDialogPlanner.DialogAutomationId)");
+        ribbonMenuDialogSource.Should().Contain("(\"WatchWindow_Book\", WatchWindowDialogPlanner.BookColumnWidth)");
+        ribbonMenuDialogSource.Should().Contain("(\"WatchWindow_Formula\", WatchWindowDialogPlanner.FormulaColumnWidth)");
         ribbonMenuDialogSource.Should().Contain("Title = UiText.Get(AddWatchDialogPlanner.TitleKey)");
         ribbonMenuDialogSource.Should().Contain("Width = AddWatchDialogPlanner.Width");
         ribbonMenuDialogSource.Should().Contain("Height = AddWatchDialogPlanner.Height");

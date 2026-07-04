@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -10,8 +11,6 @@ namespace FreeX.App.Host;
 
 public sealed class WatchWindowDialog : Window
 {
-    private const double WatchWindowColumnsWidth = 640;
-    private const double WatchWindowChromeAndPaddingWidth = 120;
     private readonly Func<IReadOnlyList<WatchWindowEntry>> _getEntries;
     private readonly Action? _addWatch;
     private readonly Func<string> _getSelectionText;
@@ -34,11 +33,11 @@ public sealed class WatchWindowDialog : Window
         _navigateTo = navigateTo;
         _removeWatch = removeWatch;
 
-        Title = UiText.Get("WatchWindow_WatchWindow");
-        Width = WatchWindowColumnsWidth + WatchWindowChromeAndPaddingWidth;
-        Height = 320;
-        MinWidth = WatchWindowColumnsWidth + 80;
-        MinHeight = 220;
+        Title = UiText.Get(WatchWindowDialogPlanner.TitleKey);
+        Width = WatchWindowDialogPlanner.Width;
+        Height = WatchWindowDialogPlanner.Height;
+        MinWidth = WatchWindowDialogPlanner.MinWidth;
+        MinHeight = WatchWindowDialogPlanner.MinHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
         var root = new DockPanel { Margin = new Thickness(10) };
@@ -112,12 +111,12 @@ public sealed class WatchWindowDialog : Window
         {
             Columns =
             {
-                new GridViewColumn { Header = UiText.Get("WatchWindow_Book"), Width = 90, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Book)) },
-                new GridViewColumn { Header = UiText.Get("WatchWindow_Sheet"), Width = 110, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Sheet)) },
-                new GridViewColumn { Header = UiText.Get("WatchWindow_Name"), Width = 80, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Name)) },
-                new GridViewColumn { Header = UiText.Get("WatchWindow_Cell"), Width = 70, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Cell)) },
-                new GridViewColumn { Header = UiText.Get("WatchWindow_Value"), Width = 120, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Value)) },
-                new GridViewColumn { Header = UiText.Get("WatchWindow_Formula"), Width = 170, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Formula)) }
+                new GridViewColumn { Header = UiText.Get("WatchWindow_Book"), Width = WatchWindowDialogPlanner.BookColumnWidth, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Book)) },
+                new GridViewColumn { Header = UiText.Get("WatchWindow_Sheet"), Width = WatchWindowDialogPlanner.SheetColumnWidth, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Sheet)) },
+                new GridViewColumn { Header = UiText.Get("WatchWindow_Name"), Width = WatchWindowDialogPlanner.NameColumnWidth, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Name)) },
+                new GridViewColumn { Header = UiText.Get("WatchWindow_Cell"), Width = WatchWindowDialogPlanner.CellColumnWidth, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Cell)) },
+                new GridViewColumn { Header = UiText.Get("WatchWindow_Value"), Width = WatchWindowDialogPlanner.ValueColumnWidth, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Value)) },
+                new GridViewColumn { Header = UiText.Get("WatchWindow_Formula"), Width = WatchWindowDialogPlanner.FormulaColumnWidth, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Formula)) }
             }
         };
         listPanel.Children.Add(_listView);

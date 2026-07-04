@@ -60,6 +60,7 @@ public static class MathLayoutEngine
             MathNode.Acc     a  => LayoutAcc(a, fontFamily, fontSizePt),
             MathNode.Bar     b  => LayoutBar(b, fontFamily, fontSizePt),
             MathNode.Box     bx => LayoutBox(bx, fontFamily, fontSizePt),
+            MathNode.Phantom ph => LayoutPhantom(ph, fontFamily, fontSizePt),
             MathNode.BorderBox bb => LayoutBorderBox(bb, fontFamily, fontSizePt),
             MathNode.GroupChr g => LayoutGroupChr(g, fontFamily, fontSizePt),
             MathNode.Matrix  m  => LayoutMatrix(m, fontFamily, fontSizePt),
@@ -878,6 +879,29 @@ public static class MathLayoutEngine
         baseBox.X = 0;
         baseBox.Y = 0;
         c.Children.Add(baseBox);
+
+        return c;
+    }
+
+    private static MathBox LayoutPhantom(MathNode.Phantom phantom, string fontFamily, double fontSizePt)
+    {
+        var baseBox = LayoutNode(phantom.Base, fontFamily, fontSizePt);
+
+        double naturalDescent = Math.Max(0, baseBox.Metrics.Height - baseBox.Metrics.Ascent);
+        double reportedAscent = phantom.ZeroAscent ? 0 : baseBox.Metrics.Ascent;
+        double reportedDescent = phantom.ZeroDescent ? 0 : naturalDescent;
+
+        var c = new MathBox.Container();
+        c.Metrics.Width = phantom.ZeroWidth ? 0 : baseBox.Metrics.Width;
+        c.Metrics.Ascent = reportedAscent;
+        c.Metrics.Height = Math.Max(0, reportedAscent + reportedDescent);
+
+        if (phantom.Show)
+        {
+            baseBox.X = 0;
+            baseBox.Y = 0;
+            c.Children.Add(baseBox);
+        }
 
         return c;
     }
