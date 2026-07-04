@@ -447,11 +447,11 @@ public sealed partial class MainWindow
 
         // Dialog title matches the WPF ChartAreaLegendDialog ("Format Chart Area").
         var dialog = NewChartDialog(UiText.Get("ChartAreaLegend_Title"), "FormatChartAreaDialog");
-        // Explicit size so the headless parity capture (which reads dialog.Bounds verbatim) shows the full
-        // two-group layout + OK/Cancel without clipping and without a stray scrollbar track on the right.
+        // Shared explicit size so the headless parity capture (which reads dialog.Bounds verbatim) matches
+        // the WPF chart-area dialog contract.
         dialog.SizeToContent = SizeToContent.Manual;
-        dialog.Width = 432;
-        dialog.Height = 760;
+        dialog.Width = ChartAreaFormatPlanner.DialogWidth;
+        dialog.Height = ChartAreaFormatPlanner.DialogHeight;
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("FormatChartArea");
         okButton.Click += (_, _) =>
@@ -498,22 +498,24 @@ public sealed partial class MainWindow
             Children = { fillLineGroup, legendGroup },
         };
 
-        dialog.Content = new StackPanel
+        var scrollContent = new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+            Content = bodyStack,
+        };
+        Grid.SetRow(scrollContent, 0);
+        Grid.SetRow(buttonRow, 1);
+
+        var contentGrid = new Grid
         {
             Margin = new Thickness(16),
-            Spacing = 0,
             MinWidth = 380,
-            Children =
-            {
-                new ScrollViewer
-                {
-                    HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
-                    VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
-                    Content = bodyStack,
-                },
-                buttonRow,
-            },
+            RowDefinitions = new RowDefinitions("*,Auto"),
+            Children = { scrollContent, buttonRow },
         };
+
+        dialog.Content = contentGrid;
 
         return await dialog.ShowDialog<ChartAreaFormatInput?>(this);
 

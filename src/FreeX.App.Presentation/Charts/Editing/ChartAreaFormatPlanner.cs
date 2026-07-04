@@ -94,6 +94,12 @@ public enum ChartAreaFormatValidationIssue
 /// </summary>
 public static class ChartAreaFormatPlanner
 {
+    /// <summary>Logical dialog width shared by WPF and Avalonia parity captures.</summary>
+    public const double DialogWidth = 420;
+
+    /// <summary>Logical dialog height shared by WPF and Avalonia parity captures.</summary>
+    public const double DialogHeight = 590;
+
     /// <summary>The plot-area / legend border width bounds Core clamps to (see <c>ApplyOptions</c>).</summary>
     public const double MinBorderThickness = 0;
     public const double MaxBorderThickness = 10;

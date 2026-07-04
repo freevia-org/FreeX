@@ -40,11 +40,14 @@ public sealed class ChartCommandSourceTests
     public void ChartHandlers_UseSharedWorkflowCommandDescriptorsForCoreDialogFlows()
     {
         var source = ReadHostSourceFile("MainWindow.ChartCommands.cs");
+        var chartDialogSource = ReadHostSourceFile("ChartFormatDialogs.cs");
 
         source.Should().Contain("ChartWorkflowCommandCatalog.ChangeChartType");
         source.Should().Contain("ChartWorkflowCommandCatalog.SelectDataSource");
         source.Should().Contain("ChartWorkflowCommandCatalog.MoveChart");
         source.Should().Contain("ChartWorkflowCommandCatalog.FormatChartArea");
+        chartDialogSource.Should().Contain("Width = ChartAreaFormatPlanner.DialogWidth;");
+        chartDialogSource.Should().Contain("Height = ChartAreaFormatPlanner.DialogHeight;");
         source.Should().Contain("TryGetActiveNormalChart(ChartWorkflowCommandDescriptor command");
         source.Should().Contain("TryGetFirstChartForDialog(ChartWorkflowCommandDescriptor command");
         source.Should().Contain("UiText.Get(command.HostMissingSelectionMessageResourceKey)");

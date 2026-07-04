@@ -519,6 +519,13 @@ function Get-ExpectedEvidenceSize {
                     source = "WorkbookStatisticsDialogPlanner.Width/Height"
                 }
             }
+            "dialog.FormatChartArea" {
+                return [pscustomobject]@{
+                    width = 420
+                    height = 590
+                    source = "ChartAreaFormatPlanner.DialogWidth/DialogHeight"
+                }
+            }
             "dialog.ProtectSheet" {
                 return [pscustomobject]@{
                     width = 430
