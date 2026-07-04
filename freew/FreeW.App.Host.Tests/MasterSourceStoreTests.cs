@@ -24,7 +24,12 @@ public sealed class MasterSourceStoreTests
                 Author    = "Smith, John",
                 Title     = "Test Book",
                 Year      = "2020",
-                Publisher = "Test Press"
+                Publisher = "Test Press",
+                City = "London",
+                Edition = "2",
+                StandardNumber = "ISBN-1",
+                ShortTitle = "Test",
+                Comments = "Master note"
             });
             var settingsStore = JsonSettingsStore<MasterSourceStore>.ForPath(path);
             settingsStore.Save(store1);
@@ -34,6 +39,11 @@ public sealed class MasterSourceStoreTests
             store2.Sources.Should().HaveCount(1);
             store2.Sources[0].Tag.Should().Be("Smith2020");
             store2.Sources[0].Author.Should().Be("Smith, John");
+            store2.Sources[0].City.Should().Be("London");
+            store2.Sources[0].Edition.Should().Be("2");
+            store2.Sources[0].StandardNumber.Should().Be("ISBN-1");
+            store2.Sources[0].ShortTitle.Should().Be("Test");
+            store2.Sources[0].Comments.Should().Be("Master note");
         }
         finally
         {
@@ -45,12 +55,28 @@ public sealed class MasterSourceStoreTests
     public void MasterStore_ToSources_ReturnsModelObjects()
     {
         var store = new MasterSourceStore();
-        store.AddOrUpdate(new Source { Tag = "A1", Author = "Alice", Title = "Alpha", Year = "2021" });
+        store.AddOrUpdate(new Source
+        {
+            Tag = "A1",
+            Author = "Alice",
+            Title = "Alpha",
+            Year = "2021",
+            City = "Paris",
+            Edition = "1",
+            StandardNumber = "ISBN-A",
+            ShortTitle = "Alpha",
+            Comments = "Preserved"
+        });
         store.AddOrUpdate(new Source { Tag = "B2", Author = "Bob",   Title = "Beta",  Year = "2022" });
 
         var sources = store.ToSources();
         sources.Should().HaveCount(2);
         sources.Select(s => s.Tag).Should().Equal("A1", "B2");
+        sources[0].City.Should().Be("Paris");
+        sources[0].Edition.Should().Be("1");
+        sources[0].StandardNumber.Should().Be("ISBN-A");
+        sources[0].ShortTitle.Should().Be("Alpha");
+        sources[0].Comments.Should().Be("Preserved");
     }
 
     [Fact]

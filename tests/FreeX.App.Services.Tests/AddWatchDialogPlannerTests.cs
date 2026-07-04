@@ -20,3 +20,25 @@ public sealed class AddWatchDialogPlannerTests
         AddWatchDialogPlanner.CancelButtonAutomationId.Should().Be("AddWatchCancelButton");
     }
 }
+
+public sealed class WatchWindowDialogPlannerTests
+{
+    [Fact]
+    public void DialogContract_UsesStableWindowsSizedSurfaceAndColumns()
+    {
+        WatchWindowDialogPlanner.TitleKey.Should().Be("WatchWindow_WatchWindow");
+        WatchWindowDialogPlanner.DialogAutomationId.Should().Be("WatchWindowDialog");
+        WatchWindowDialogPlanner.BookColumnWidth.Should().Be(90);
+        WatchWindowDialogPlanner.SheetColumnWidth.Should().Be(110);
+        WatchWindowDialogPlanner.NameColumnWidth.Should().Be(80);
+        WatchWindowDialogPlanner.CellColumnWidth.Should().Be(70);
+        WatchWindowDialogPlanner.ValueColumnWidth.Should().Be(120);
+        WatchWindowDialogPlanner.FormulaColumnWidth.Should().Be(170);
+        WatchWindowDialogPlanner.ColumnsWidth.Should().Be(640);
+        WatchWindowDialogPlanner.ChromeAndPaddingWidth.Should().Be(120);
+        WatchWindowDialogPlanner.Width.Should().Be(760);
+        WatchWindowDialogPlanner.Height.Should().Be(320);
+        WatchWindowDialogPlanner.MinWidth.Should().Be(720);
+        WatchWindowDialogPlanner.MinHeight.Should().Be(220);
+    }
+}

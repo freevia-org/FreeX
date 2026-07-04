@@ -438,6 +438,46 @@ public class CitationsTests
     }
 
     [Fact]
+    public void FormatInText_DocumentAwareNumericStyle_UntaggedEqualityIncludesWordFieldDepth()
+    {
+        var source = new Source
+        {
+            Author = "Ada Lovelace",
+            Title = "Notes",
+            City = "London",
+            Edition = "Annotated",
+            StandardNumber = "ISBN-1",
+            ShortTitle = "Notes",
+            Comments = "Original note"
+        };
+        var clone = new Source
+        {
+            Author = "Ada Lovelace",
+            Title = "Notes",
+            City = "London",
+            Edition = "Annotated",
+            StandardNumber = "ISBN-1",
+            ShortTitle = "Notes",
+            Comments = "Original note"
+        };
+        var differentComment = new Source
+        {
+            Author = "Ada Lovelace",
+            Title = "Notes",
+            City = "London",
+            Edition = "Annotated",
+            StandardNumber = "ISBN-1",
+            ShortTitle = "Notes",
+            Comments = "Different note"
+        };
+        var doc = new TextDocument();
+        doc.Sources.Add(source);
+
+        Citations.FormatInText(doc, clone, CitationStyle.Ieee).Should().Be("[1]");
+        Citations.FormatInText(doc, differentComment, CitationStyle.Ieee).Should().Be("[Lovelace]");
+    }
+
+    [Fact]
     public void FormatInText_DocumentAwareNumericStyle_MissingSourceFallsBackToPlaceholder()
     {
         var doc = new TextDocument();
@@ -759,6 +799,23 @@ public class CitationsTests
         entry.Should().Contain("Wiley; 2020.");
     }
 
+    [Fact]
+    public void FormatBibliographyEntry_Vancouver_BookUsesCityPublisherWhenPresent()
+    {
+        var book = new Source
+        {
+            Type = SourceType.Book,
+            Author = "Smith",
+            Title = "Book",
+            City = "London",
+            Publisher = "Wiley",
+            Year = "2020"
+        };
+
+        Citations.FormatBibliographyEntry(book, CitationStyle.Vancouver)
+            .Should().Contain("London: Wiley; 2020.");
+    }
+
     // --- GOST -----------------------------------------------------------------------------------
 
     [Fact]
@@ -770,6 +827,15 @@ public class CitationsTests
         entry.Should().Contain("Иванов И.И.");
         entry.Should().Contain("Книга.");
         entry.Should().Contain("Наука, 2010.");
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_Gost_BookUsesCityPublisherWhenPresent()
+    {
+        var book = new Source { Author = "Ivanov I.", Title = "Book", City = "Moscow", Publisher = "Nauka", Year = "2010" };
+
+        Citations.FormatBibliographyEntry(book, CitationStyle.Gost)
+            .Should().Contain("Moscow: Nauka, 2010.");
     }
 
     [Fact]
@@ -806,6 +872,15 @@ public class CitationsTests
         entry.Should().StartWith("KNUTH, D., 1997.");
         entry.Should().Contain("TAOCP.");
         entry.Should().Contain("AW.");
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_Iso690_BookUsesCityPublisherWhenPresent()
+    {
+        var book = new Source { Author = "Knuth, D.", Year = "1997", Title = "TAOCP", City = "Reading", Publisher = "AW" };
+
+        Citations.FormatBibliographyEntry(book, CitationStyle.Iso690)
+            .Should().Contain("Reading: AW.");
     }
 
     [Fact]

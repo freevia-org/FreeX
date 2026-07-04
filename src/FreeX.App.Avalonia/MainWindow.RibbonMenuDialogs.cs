@@ -115,15 +115,15 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = UiText.Get("RibbonWire_WatchWindowTitle"),
-            Width = 700,
-            Height = 360,
-            MinWidth = 560,
-            MinHeight = 260,
+            Title = UiText.Get(WatchWindowDialogPlanner.TitleKey),
+            Width = WatchWindowDialogPlanner.Width,
+            Height = WatchWindowDialogPlanner.Height,
+            MinWidth = WatchWindowDialogPlanner.MinWidth,
+            MinHeight = WatchWindowDialogPlanner.MinHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
-        AutomationProperties.SetAutomationId(dialog, "WatchWindowDialog");
+        AutomationProperties.SetAutomationId(dialog, WatchWindowDialogPlanner.DialogAutomationId);
 
         // Multi-column grid matching the WPF Watch Window (Book | Sheet | Name | Cell | Value | Formula).
         // Extended (multi) selection mirrors the WPF ListView so Delete / Delete-Watch act on the picked rows.
@@ -287,12 +287,12 @@ public sealed partial class MainWindow
     // Watch Window grid columns mirror the WPF dialog (Book | Sheet | Name | Cell | Value | Formula).
     private static readonly (string Key, double Width)[] WatchWindowColumns =
     [
-        ("WatchWindow_Book", 90),
-        ("WatchWindow_Sheet", 110),
-        ("WatchWindow_Name", 80),
-        ("WatchWindow_Cell", 70),
-        ("WatchWindow_Value", 120),
-        ("WatchWindow_Formula", 170),
+        ("WatchWindow_Book", WatchWindowDialogPlanner.BookColumnWidth),
+        ("WatchWindow_Sheet", WatchWindowDialogPlanner.SheetColumnWidth),
+        ("WatchWindow_Name", WatchWindowDialogPlanner.NameColumnWidth),
+        ("WatchWindow_Cell", WatchWindowDialogPlanner.CellColumnWidth),
+        ("WatchWindow_Value", WatchWindowDialogPlanner.ValueColumnWidth),
+        ("WatchWindow_Formula", WatchWindowDialogPlanner.FormulaColumnWidth),
     ];
 
     private static Grid CreateWatchWindowColumnGrid()
