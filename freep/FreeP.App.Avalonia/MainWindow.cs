@@ -5494,15 +5494,27 @@ public sealed class MainWindow : Window
         if (_presentation.Slides.Count == 0)
             return; // nothing to show
 
-        int startIdx = fromStart ? 0 : Math.Max(0, Editor.CurrentSlideIndex);
-        var slideShow = new SlideShowWindow(_presentation, startIdx);
+        var choiceId = fromStart
+            ? SlideShowCustomShowPlanner.FullPresentationChoiceId
+            : SlideShowCustomShowPlanner.FromCurrentSlideChoiceId;
+        if (!SlideShowCustomShowPlanner.TryBuildRouteForLaunchChoice(
+                _presentation,
+                choiceId,
+                Editor.CurrentSlideIndex,
+                out var route))
+        {
+            return;
+        }
+
+        var slideShow = new SlideShowWindow(_presentation, route);
 
         // DA5: restore the editor's selected slide to wherever the slideshow ended.
         slideShow.Closed += (_, _) =>
         {
             int exitIdx = slideShow.Controller.CurrentSlideIndex;
-            if (exitIdx >= 0 && exitIdx < _presentation.Slides.Count)
-                Editor.SelectSlide(exitIdx);
+            int sourceIdx = route.GetSourceSlideIndex(exitIdx);
+            if (sourceIdx >= 0 && sourceIdx < _presentation.Slides.Count)
+                Editor.SelectSlide(sourceIdx);
         };
 
         slideShow.Show();
@@ -5517,6 +5529,9 @@ public sealed class MainWindow : Window
             customShowName,
             startIndex,
             out route);
+
+    internal SlideShowLaunchPlan BuildSlideShowLaunchPlan() =>
+        SlideShowCustomShowPlanner.BuildLaunchPlan(_presentation, Editor.CurrentSlideIndex);
 
     internal bool TryStartCustomSlideShow(string? customShowName, int startIndex = 0)
     {

@@ -998,6 +998,44 @@ public sealed class SlideShowMainWindowTests
 public sealed partial class SlideShowMainWindowCustomShowTests
 {
     [StaFact]
+    public void MainWindow_BuildSlideShowLaunchPlan_ExposesSharedCustomShowChoices()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var presentation = window.Editor.Presentation;
+            presentation.Slides.Clear();
+            presentation.Slides.Add(new Slide { Title = "Intro" });
+            presentation.Slides.Add(new Slide { Title = "Deep dive" });
+            presentation.Slides.Add(new Slide { Title = "Appendix" });
+
+            var customShow = new PresentationCustomShow { Name = "Executive review" };
+            customShow.SlideIds.Add(presentation.Slides[2].Id);
+            customShow.SlideIds.Add(presentation.Slides[0].Id);
+            presentation.CustomShows.Add(customShow);
+            window.Editor.SelectSlide(1);
+
+            var plan = window.BuildSlideShowLaunchPlan();
+
+            plan.CurrentSlideIndex.Should().Be(1);
+            plan.Choices.Select(choice => choice.ChoiceId).Should().Equal(
+                SlideShowCustomShowPlanner.FullPresentationChoiceId,
+                SlideShowCustomShowPlanner.FromCurrentSlideChoiceId,
+                SlideShowCustomShowPlanner.CustomShowChoicePrefix + "0");
+            plan.Choices[1].StartIndex.Should().Be(1);
+            plan.Choices[2].Should().Match<SlideShowLaunchChoice>(choice =>
+                choice.Kind == SlideShowLaunchChoiceKind.CustomShow &&
+                choice.Label == "Executive review" &&
+                choice.SlideCount == 2 &&
+                choice.IsEnabled);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_TryBuildCustomSlideShowRoute_SelectsStoredCustomShow()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);

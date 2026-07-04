@@ -7,6 +7,15 @@ namespace FreeX.App.Presentation.Tests.PivotUI;
 public sealed class PivotOptionsPlannerTests
 {
     [Fact]
+    public void DialogMetrics_MatchSharedVisualEvidenceContract()
+    {
+        PivotOptionsPlanner.DialogWidth.Should().Be(520);
+        PivotOptionsPlanner.DialogMinHeight.Should().Be(500);
+        PivotOptionsPlanner.LayoutAndFormatCaptureHeight.Should().Be(676);
+        PivotOptionsPlanner.LayoutAndFormatAvaloniaSpacerHeight.Should().Be(56);
+    }
+
+    [Fact]
     public void ReportLayoutRoundTrip_FindsAndResolvesIndex()
     {
         var index = PivotOptionsPlanner.FindReportLayoutIndex(PivotReportLayout.Outline);
