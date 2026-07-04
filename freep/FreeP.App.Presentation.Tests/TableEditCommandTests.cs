@@ -759,6 +759,25 @@ public sealed class TableEditCommandTests
     }
 
     [Fact]
+    public void EditingSession_AlignActiveTableCellParagraph_UsesSharedPlanAndUndo()
+    {
+        var sess = MakeSession(out var shape);
+        shape.Table!.Rows[0].Cells[0].TextBody = MakeBody("Cell");
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Align = TextAlign.Left;
+        sess.SetActiveTableCell(0, 0);
+
+        var plan = sess.PlanActiveTableCellParagraphAlignment(TextAlign.Center);
+        plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+        plan.Value.Should().Be(TextAlign.Center);
+
+        sess.TryApplyActiveTableCellParagraphAlignment(TextAlign.Center).Should().BeTrue();
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Align.Should().Be(TextAlign.Center);
+
+        sess.Undo();
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Align.Should().Be(TextAlign.Left);
+    }
+
+    [Fact]
     public void EditingSession_InsertRowBelow_GrowsGrid()
     {
         var sess = MakeSession(out var shape, 2, 2);

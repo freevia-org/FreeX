@@ -142,6 +142,15 @@ internal static class FreePRibbonCommands
             editor.ToggleUnderlineOnSelection();
         }));
 
+        registry.Register("freep.paragraph.align-left",
+            new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Left)));
+        registry.Register("freep.paragraph.align-center",
+            new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Center)));
+        registry.Register("freep.paragraph.align-right",
+            new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Right)));
+        registry.Register("freep.paragraph.align-justify",
+            new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Justify)));
+
         // ── Clipboard — Wave 5B / 10B ─────────────────────────────────────────────
         // When osClipboard is provided (MainWindow injects it), Copy and Cut also push
         // content to the OS clipboard (PNG image + plain text); Paste checks OS first.

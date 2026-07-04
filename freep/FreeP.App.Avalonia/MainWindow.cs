@@ -1611,6 +1611,26 @@ public sealed class MainWindow : Window
             if (Editor.ToggleUnderlineOnActiveTableCell()) return;
             Editor.ToggleUnderlineOnSelection();
         }));
+        r.Register("freep.paragraph.align-left", new ActionRibbonCommand(() =>
+        {
+            if (_textEditor?.TryApplyActiveTableCellParagraphAlignment(TextAlign.Left) == true) return;
+            Editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Left);
+        }));
+        r.Register("freep.paragraph.align-center", new ActionRibbonCommand(() =>
+        {
+            if (_textEditor?.TryApplyActiveTableCellParagraphAlignment(TextAlign.Center) == true) return;
+            Editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Center);
+        }));
+        r.Register("freep.paragraph.align-right", new ActionRibbonCommand(() =>
+        {
+            if (_textEditor?.TryApplyActiveTableCellParagraphAlignment(TextAlign.Right) == true) return;
+            Editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Right);
+        }));
+        r.Register("freep.paragraph.align-justify", new ActionRibbonCommand(() =>
+        {
+            if (_textEditor?.TryApplyActiveTableCellParagraphAlignment(TextAlign.Justify) == true) return;
+            Editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Justify);
+        }));
 
         foreach (var route in ArrangeCommandRoutes)
         {
