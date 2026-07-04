@@ -1811,6 +1811,15 @@ public sealed class VisualEvidencePlannerTests
                 row.GetProperty("pageNumber").GetInt32() == 1 &&
                 row.GetProperty("status").GetString() == "failed" &&
                 row.GetProperty("notes").GetString() == "output file 'avalonia/backstage-print-preview_p1.png' does not exist");
+            var evidence = doc.RootElement
+                .GetProperty("evidence")
+                .EnumerateArray()
+                .ToArray();
+            evidence.Should().Contain(row =>
+                row.GetProperty("hostId").GetString() == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
+                row.GetProperty("scenarioId").GetString() == "backstage-print-preview-fidelity" &&
+                row.GetProperty("pageNumber").GetInt32() == 1 &&
+                row.GetProperty("hostMetadata").GetProperty("backstageWorkflow").GetString() == "print-preview");
         }
         finally
         {
