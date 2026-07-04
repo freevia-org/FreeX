@@ -813,12 +813,17 @@ public static class PresentationReviewWorkflowPlanner
 
         var comment = CloneComment(current);
         var effectiveAuthor = NormalizeText(author) ?? "FreeP User";
+        var effectiveInitials = NormalizeInitials(initials, effectiveAuthor);
+        var modernAuthorIdentity = FindMatchingModernAuthorIdentity(current, effectiveAuthor, effectiveInitials);
         comment.Replies.Add(new SlideCommentReply
         {
             Author = effectiveAuthor,
-            Initials = NormalizeInitials(initials, effectiveAuthor),
+            Initials = effectiveInitials,
             Text = normalizedText,
-            DateTime = timestamp
+            DateTime = timestamp,
+            ModernAuthorId = modernAuthorIdentity.Id,
+            ModernAuthorUserId = modernAuthorIdentity.UserId,
+            ModernAuthorProviderId = modernAuthorIdentity.ProviderId
         });
 
         return new PresentationCommentMutationPlan(
@@ -2519,6 +2524,49 @@ public static class PresentationReviewWorkflowPlanner
         };
         CopyReplies(comment, clone);
         return clone;
+    }
+
+    private static (string Id, string UserId, string ProviderId) FindMatchingModernAuthorIdentity(
+        SlideComment comment,
+        string author,
+        string initials)
+    {
+        if (Matches(comment.Author, comment.Initials, author, initials) &&
+            !string.IsNullOrWhiteSpace(comment.ModernAuthorId))
+        {
+            return (
+                comment.ModernAuthorId,
+                comment.ModernAuthorUserId,
+                comment.ModernAuthorProviderId);
+        }
+
+        foreach (var reply in comment.Replies)
+        {
+            if (Matches(reply.Author, reply.Initials, author, initials) &&
+                !string.IsNullOrWhiteSpace(reply.ModernAuthorId))
+            {
+                return (
+                    reply.ModernAuthorId,
+                    reply.ModernAuthorUserId,
+                    reply.ModernAuthorProviderId);
+            }
+        }
+
+        return (string.Empty, string.Empty, string.Empty);
+
+        static bool Matches(string candidateAuthor, string candidateInitials, string author, string initials)
+        {
+            var normalizedAuthor = NormalizeText(candidateAuthor);
+            if (!string.Equals(normalizedAuthor, author, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return string.Equals(
+                NormalizeInitials(candidateInitials, normalizedAuthor ?? author),
+                initials,
+                StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     private static void CopyReplies(SlideComment source, SlideComment target)

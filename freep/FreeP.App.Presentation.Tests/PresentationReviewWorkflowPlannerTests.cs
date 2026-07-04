@@ -569,6 +569,56 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildReplyCommentPlan_ReusesMatchingModernAuthorIdentity()
+    {
+        var slides = new[] { new Slide { Title = "Modern review" } };
+        slides[0].Comments.Add(new SlideComment
+        {
+            Author = "Alice Reviewer",
+            Initials = "AR",
+            Text = "Please verify the updated chart.",
+            UsesModernCommentSchema = true,
+            ModernAuthorId = "{11111111-1111-1111-1111-111111111111}",
+            ModernAuthorUserId = "alice@example.com::powerpoint",
+            ModernAuthorProviderId = "aad",
+            Idx = 1,
+            Replies =
+            {
+                new SlideCommentReply
+                {
+                    Author = "Bob Reviewer",
+                    Initials = "BR",
+                    Text = "I will check it.",
+                    ModernAuthorId = "{22222222-2222-2222-2222-222222222222}",
+                    ModernAuthorUserId = "bob@example.com::powerpoint",
+                    ModernAuthorProviderId = "aad"
+                }
+            }
+        });
+
+        var plan = PresentationReviewWorkflowPlanner.BuildReplyCommentPlan(
+            slides,
+            0,
+            0,
+            "  Confirmed after the update. ",
+            " bob reviewer ",
+            "br",
+            new DateTime(2026, 7, 4, 8, 30, 0, DateTimeKind.Utc));
+
+        plan.ShouldApply.Should().BeTrue();
+        plan.Comment.Should().NotBeNull();
+        plan.Comment!.Replies.Should().HaveCount(2);
+        var reply = plan.Comment.Replies[1];
+        reply.Should().Match<SlideCommentReply>(value =>
+            value.Author == "bob reviewer" &&
+            value.Initials == "br" &&
+            value.Text == "Confirmed after the update." &&
+            value.ModernAuthorId == "{22222222-2222-2222-2222-222222222222}" &&
+            value.ModernAuthorUserId == "bob@example.com::powerpoint" &&
+            value.ModernAuthorProviderId == "aad");
+    }
+
+    [Fact]
     public void TryApplyCommentMutationPlan_ResolvesAndReopensSelectedComment()
     {
         var slides = new[] { new Slide { Title = "Intro" } };

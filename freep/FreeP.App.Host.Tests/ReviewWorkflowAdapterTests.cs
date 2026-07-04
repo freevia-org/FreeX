@@ -628,6 +628,64 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_ReplyToModernComment_ReusesPowerPointAuthorIdentity()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Alice Reviewer",
+                Initials = "AR",
+                Text = "Needs a second reviewer.",
+                UsesModernCommentSchema = true,
+                ModernAuthorId = "{11111111-1111-1111-1111-111111111111}",
+                ModernAuthorUserId = "alice@example.com::powerpoint",
+                ModernAuthorProviderId = "aad",
+                Idx = 1,
+                Replies =
+                {
+                    new SlideCommentReply
+                    {
+                        Author = "Bob Reviewer",
+                        Initials = "BR",
+                        Text = "Taking a look.",
+                        ModernAuthorId = "{22222222-2222-2222-2222-222222222222}",
+                        ModernAuthorUserId = "bob@example.com::powerpoint",
+                        ModernAuthorProviderId = "aad"
+                    }
+                }
+            });
+            window.SetSelectedReviewCommentIndexForTests(0);
+
+            var reply = window.ReplyToSelectedComment(
+                "  Confirmed after checking the deck. ",
+                new DateTime(2026, 7, 4, 9, 0, 0, DateTimeKind.Utc),
+                "bob reviewer",
+                "br");
+
+            reply.ShouldApply.Should().BeTrue();
+            var comment = window.Editor.CurrentSlide.Comments.Single();
+            comment.Replies.Should().HaveCount(2);
+            comment.Replies[1].Should().Match<SlideCommentReply>(value =>
+                value.Author == "bob reviewer" &&
+                value.Initials == "br" &&
+                value.Text == "Confirmed after checking the deck." &&
+                value.ModernAuthorId == "{22222222-2222-2222-2222-222222222222}" &&
+                value.ModernAuthorUserId == "bob@example.com::powerpoint" &&
+                value.ModernAuthorProviderId == "aad");
+            window.LastCommentPanePlan!.SelectedComment!.Replies[1].Should().Match<PresentationCommentReplyDescriptor>(value =>
+                value.ModernAuthorId == "{22222222-2222-2222-2222-222222222222}" &&
+                value.ModernAuthorUserId == "bob@example.com::powerpoint" &&
+                value.ModernAuthorProviderId == "aad");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_DeleteComment_AppliesSharedPlanAndNormalizesSelection()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);

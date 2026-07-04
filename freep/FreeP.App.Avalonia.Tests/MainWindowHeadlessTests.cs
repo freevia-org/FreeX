@@ -2948,6 +2948,73 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Review_modern_comment_reply_reuses_powerpoint_author_identity()
+    {
+        SlideComment? repliedComment = null;
+        PresentationCommentPanePlan? replyPanePlan = null;
+        PresentationCommentMutationPlan? replyPlan = null;
+        var dirtyAfterReply = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Alice Reviewer",
+                Initials = "AR",
+                Text = "Needs a second reviewer.",
+                UsesModernCommentSchema = true,
+                ModernAuthorId = "{11111111-1111-1111-1111-111111111111}",
+                ModernAuthorUserId = "alice@example.com::powerpoint",
+                ModernAuthorProviderId = "aad",
+                Idx = 1,
+                Replies =
+                {
+                    new SlideCommentReply
+                    {
+                        Author = "Bob Reviewer",
+                        Initials = "BR",
+                        Text = "Taking a look.",
+                        ModernAuthorId = "{22222222-2222-2222-2222-222222222222}",
+                        ModernAuthorUserId = "bob@example.com::powerpoint",
+                        ModernAuthorProviderId = "aad"
+                    }
+                }
+            });
+            window.SetSelectedReviewCommentIndexForTests(0);
+
+            replyPlan = window.ReplyToSelectedComment(
+                "  Confirmed after checking the deck. ",
+                new DateTime(2026, 7, 4, 9, 15, 0, DateTimeKind.Utc),
+                "bob reviewer",
+                "br");
+
+            repliedComment = window.Editor.CurrentSlide.Comments.Single();
+            replyPanePlan = window.LastCommentPanePlan;
+            dirtyAfterReply = window.IsDirty;
+        });
+
+        if (!ran) return;
+        replyPlan.Should().NotBeNull();
+        replyPlan!.ShouldApply.Should().BeTrue();
+        repliedComment.Should().NotBeNull();
+        repliedComment!.Replies.Should().HaveCount(2);
+        repliedComment.Replies[1].Should().Match<SlideCommentReply>(reply =>
+            reply.Author == "bob reviewer" &&
+            reply.Initials == "br" &&
+            reply.Text == "Confirmed after checking the deck." &&
+            reply.ModernAuthorId == "{22222222-2222-2222-2222-222222222222}" &&
+            reply.ModernAuthorUserId == "bob@example.com::powerpoint" &&
+            reply.ModernAuthorProviderId == "aad");
+        replyPanePlan.Should().NotBeNull();
+        replyPanePlan!.SelectedComment!.Replies[1].Should().Match<PresentationCommentReplyDescriptor>(reply =>
+            reply.ModernAuthorId == "{22222222-2222-2222-2222-222222222222}" &&
+            reply.ModernAuthorUserId == "bob@example.com::powerpoint" &&
+            reply.ModernAuthorProviderId == "aad");
+        dirtyAfterReply.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Review_comment_next_previous_commands_navigate_through_shared_plan()
     {
         PresentationCommentNavigationPlan? sameSlideNext = null;
