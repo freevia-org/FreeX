@@ -137,7 +137,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
     ];
     public static IReadOnlyList<string> FieldRendererScenarioIds { get; } =
     [
-        "field-page-number-variants"
+        "field-page-number-variants",
+        "references-heavy-fields"
     ];
 
     public static IReadOnlyList<FreeWVisualEvidenceExpectedScenario> DefaultExpectedScenarios { get; } =

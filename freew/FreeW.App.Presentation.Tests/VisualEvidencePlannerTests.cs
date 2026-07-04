@@ -16,6 +16,7 @@ public sealed class VisualEvidencePlannerTests
             "f2-hf-firstpage",
             "f2-hf-oddeven",
             "field-page-number-variants",
+            "references-heavy-fields",
             "f2-footnotes",
             "f2-endnotes",
             "f2-columns",
@@ -63,6 +64,17 @@ public sealed class VisualEvidencePlannerTests
         fieldScenario.ExpectedOutputNamePattern.Should().Be("field-page-number-variants_p{page}.png");
         fieldScenario.MinimumExpectedOutputs.Should().Be(3);
         fieldScenario.Composition.ExpectsHeadersFooters.Should().BeTrue();
+
+        var referencesScenario = FreeWVisualEvidencePlanner.ResolveScenario("references-heavy-fields");
+        referencesScenario.ExpectedFeatureTags.Should().Contain([
+            "references",
+            "source-manager",
+            "citation-fields",
+            "bibliography-fields",
+            "toa-fields",
+            "legal-authorities"]);
+        referencesScenario.ExpectedOutputNamePattern.Should().Be("references-heavy-fields_p{page}.png");
+        referencesScenario.MinimumExpectedOutputs.Should().Be(2);
 
         var floatingScenario = FreeWVisualEvidencePlanner.ResolveScenario("page-composition-floating-image");
         floatingScenario.Composition.ExpectsFloatingObjects.Should().BeTrue();
@@ -346,6 +358,48 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void SharedReferencesHeavyFactory_BuildsCitationBibliographyAndToaContracts()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildReferencesHeavyFieldDocument();
+
+        document.BibliographyStyle.Should().Be(CitationStyle.Ieee);
+        document.Sources.Should().HaveCount(3);
+        document.Sources.Select(s => s.Type).Should().Contain([
+            SourceType.Book,
+            SourceType.JournalArticle,
+            SourceType.WebSite]);
+        document.Blocks.OfType<Paragraph>()
+            .Should().Contain(p => Citations.IsBibliographyParagraph(p));
+        document.Blocks.OfType<Paragraph>()
+            .Should().Contain(p => TableOfAuthorities.IsTableOfAuthoritiesParagraph(p));
+        document.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Where(r => r.Citation is not null)
+            .Select(r => r.Citation!.Category)
+            .Should().Contain([CitationCategory.Cases, CitationCategory.Statutes]);
+
+        var fields = FreeWVisualEvidencePlanner.BuildFieldExpectation(document);
+        fields.SimpleFieldCount.Should().Be(0);
+        fields.ComplexFieldCount.Should().Be(7);
+        fields.BodyFieldCount.Should().Be(7);
+        fields.HeaderFooterFieldCount.Should().Be(0);
+        fields.HasComplexFields.Should().BeTrue();
+        fields.HasComplexResultFields.Should().BeTrue();
+        fields.ComplexFieldKeywords.Should().BeEquivalentTo(["BIBLIOGRAPHY", "CITATION", "TOA"]);
+        fields.FieldKinds.Should().Contain(["Complex:BIBLIOGRAPHY", "Complex:CITATION", "Complex:TOA"]);
+
+        var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "references-heavy-fields",
+            document.Page,
+            pageNumber: 2,
+            pageCount: 2,
+            outputName: "references-heavy-fields_p2.png",
+            document: document);
+        expectation.ExpectedOutputName.Should().Be("references-heavy-fields_p2.png");
+        expectation.Fields.ComplexFieldKeywords.Should().Contain(["CITATION", "BIBLIOGRAPHY", "TOA"]);
+    }
+
+    [Fact]
     public void SharedSectionGeometryFactory_BuildsMixedPortraitLandscapeContract()
     {
         var document = FreeWVisualEvidenceDocumentFactory.BuildSectionGeometryDocument();
@@ -613,11 +667,12 @@ public sealed class VisualEvidencePlannerTests
 
             plan.WordApplicationProgId.Should().Be("Word.Application");
             plan.MaxPagesPerDocument.Should().Be(3);
-            plan.ExpectedFixtureCount.Should().Be(19);
-            plan.ExpectedBaselinePngCount.Should().Be(57);
+            plan.ExpectedFixtureCount.Should().Be(20);
+            plan.ExpectedBaselinePngCount.Should().Be(60);
             plan.Fixtures.Select(f => f.DocumentName).Should().Contain([
                 "f2-hf-basic.docx",
                 "field-page-number-variants.docx",
+                "references-heavy-fields.docx",
                 "table-layout-complex.docx",
                 "table-pagination-repeat-header.docx",
                 "drawing-objects-complex.docx",
@@ -634,6 +689,8 @@ public sealed class VisualEvidencePlannerTests
                 .ExpectedBaselinePaths.Should().Contain("table-pagination-repeat-header/table-pagination-repeat-header_p2.png");
             plan.Fixtures.Single(f => f.ScenarioId == "field-page-number-variants")
                 .ExpectedBaselinePaths.Should().Contain("field-page-number-variants/field-page-number-variants_p1.png");
+            plan.Fixtures.Single(f => f.ScenarioId == "references-heavy-fields")
+                .ExpectedBaselinePaths.Should().Contain("references-heavy-fields/references-heavy-fields_p2.png");
         }
         finally
         {
@@ -2700,6 +2757,7 @@ public sealed class VisualEvidencePlannerTests
             "f2-footnotes" => FreeWVisualEvidenceDocumentFactory.BuildFootnotePlacementDocument(),
             "f2-endnotes" => FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument(),
             "field-page-number-variants" => FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument(),
+            "references-heavy-fields" => FreeWVisualEvidenceDocumentFactory.BuildReferencesHeavyFieldDocument(),
             "f2-tracked-changes" => FreeWVisualEvidenceDocumentFactory.BuildTrackedChangesReviewDocument(),
             "f2-comments" => FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument(),
             "table-layout-complex" => FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument(),
