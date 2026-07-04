@@ -721,6 +721,42 @@ public sealed class SlideShowWindowHeadlessTests
     }
 
     [Fact]
+    public async Task MainWindow_BuildSlideShowLaunchPlan_exposes_shared_custom_show_choices()
+    {
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var presentation = window.Editor.Presentation;
+            presentation.Slides.Clear();
+            presentation.Slides.Add(new Slide { Title = "Intro" });
+            presentation.Slides.Add(new Slide { Title = "Deep dive" });
+            presentation.Slides.Add(new Slide { Title = "Appendix" });
+
+            var customShow = new PresentationCustomShow { Name = "Executive review" };
+            customShow.SlideIds.Add(presentation.Slides[2].Id);
+            customShow.SlideIds.Add(presentation.Slides[0].Id);
+            presentation.CustomShows.Add(customShow);
+            window.Editor.SelectSlide(1);
+
+            var plan = window.BuildSlideShowLaunchPlan();
+
+            plan.CurrentSlideIndex.Should().Be(1);
+            plan.Choices.Select(choice => choice.ChoiceId).Should().Equal(
+                SlideShowCustomShowPlanner.FullPresentationChoiceId,
+                SlideShowCustomShowPlanner.FromCurrentSlideChoiceId,
+                SlideShowCustomShowPlanner.CustomShowChoicePrefix + "0");
+            plan.Choices[1].StartIndex.Should().Be(1);
+            plan.Choices[2].Should().Match<SlideShowLaunchChoice>(choice =>
+                choice.Kind == SlideShowLaunchChoiceKind.CustomShow &&
+                choice.Label == "Executive review" &&
+                choice.SlideCount == 2 &&
+                choice.IsEnabled);
+        });
+
+        if (!ran) return;
+    }
+
+    [Fact]
     public void RibbonDefinition_has_slideshow_group()
     {
         var definition = FreePRibbonAvalonia.Build();
