@@ -960,6 +960,15 @@ internal static class PptxChartReader
         axis.HasMajorGridlines = axEl.Element(C + "majorGridlines") is not null;
         axis.Title = ReadTitle(axEl.Element(C + "title"));
 
+        var numFmt = axEl.Element(C + "numFmt");
+        if (numFmt is not null)
+        {
+            var formatCode = numFmt.Attribute("formatCode")?.Value;
+            axis.NumberFormatCode = string.IsNullOrWhiteSpace(formatCode) ? null : formatCode;
+            axis.NumberFormatSourceLinked =
+                ParseNullableBoolAttr(numFmt.Attribute("sourceLinked")?.Value);
+        }
+
         var scaling = axEl.Element(C + "scaling");
         if (scaling is not null)
         {

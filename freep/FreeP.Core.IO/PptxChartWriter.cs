@@ -994,6 +994,7 @@ internal static class PptxChartWriter
                 ? new XElement(C + "majorGridlines")
                 : null,
             axis.Title is not null ? BuildTitleEl(axis.Title) : null,
+            BuildAxisNumFmtEl(axis),
             new XElement(C + "crossAx", new XAttribute("val", crossAxId)));
 
     // BV2: axPos parameter — scatter/bubble X value axis must use "b" (bottom), Y stays "l" (left).
@@ -1020,10 +1021,26 @@ internal static class PptxChartWriter
                 ? new XElement(C + "majorGridlines")
                 : null,
             axis.Title is not null ? BuildTitleEl(axis.Title) : null,
+            BuildAxisNumFmtEl(axis),
             crosses is not null
                 ? new XElement(C + "crosses", new XAttribute("val", crosses))
                 : null,
             new XElement(C + "crossAx", new XAttribute("val", crossAxId)));
+    }
+
+    private static XElement? BuildAxisNumFmtEl(ChartAxis axis)
+    {
+        if (string.IsNullOrWhiteSpace(axis.NumberFormatCode))
+            return null;
+
+        var el = new XElement(C + "numFmt",
+            new XAttribute("formatCode", axis.NumberFormatCode));
+        if (axis.NumberFormatSourceLinked.HasValue)
+            el.Add(new XAttribute(
+                "sourceLinked",
+                axis.NumberFormatSourceLinked.Value ? "1" : "0"));
+
+        return el;
     }
 
     // ── Color helpers ─────────────────────────────────────────────────────────

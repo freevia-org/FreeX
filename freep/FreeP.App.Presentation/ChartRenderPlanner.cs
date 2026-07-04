@@ -200,12 +200,17 @@ public readonly record struct ChartDataTablePrimitivePlan(
     IReadOnlyList<ChartGridLinePlan> OutlineBorders,
     ChartStrokePlan BorderStroke);
 
+public readonly record struct ChartAxisLabelFormatPlan(
+    string FormatCode,
+    bool? SourceLinked);
+
 public readonly record struct ChartTextPlan(
     string Text,
     ChartPlanRect Bounds,
     bool IsBold,
     double FontSize,
-    ChartPlanTextAlignment Alignment);
+    ChartPlanTextAlignment Alignment,
+    ChartAxisLabelFormatPlan? AxisLabelFormat = null);
 
 public readonly record struct ChartRectPrimitive(
     int SeriesIndex,
@@ -792,7 +797,8 @@ public static partial class ChartRenderPlanner
                     new ChartPlanRect(plot.X - BarCategoryLabelWidth, y, BarCategoryLabelWidth - 4, categoryStep),
                     IsBold: false,
                     FontSize: 6.5,
-                    Alignment: ChartPlanTextAlignment.Right));
+                    Alignment: ChartPlanTextAlignment.Right,
+                    AxisLabelFormat: BuildAxisLabelFormatPlan(chart.CategoryAxis)));
             }
         }
         else
@@ -806,7 +812,8 @@ public static partial class ChartRenderPlanner
                     new ChartPlanRect(x, plot.Bottom + 2, categoryStep, CategoryLabelHeight),
                     IsBold: false,
                     FontSize: 7.0,
-                    Alignment: ChartPlanTextAlignment.Center));
+                    Alignment: ChartPlanTextAlignment.Center,
+                    AxisLabelFormat: BuildAxisLabelFormatPlan(chart.CategoryAxis)));
             }
         }
 
@@ -839,7 +846,8 @@ public static partial class ChartRenderPlanner
                     new ChartPlanRect(x - AxisLabelWidth / 2, plot.Bottom + 2, AxisLabelWidth, CategoryLabelHeight),
                     IsBold: false,
                     FontSize: 6.5,
-                    Alignment: ChartPlanTextAlignment.Center));
+                    Alignment: ChartPlanTextAlignment.Center,
+                    AxisLabelFormat: BuildAxisLabelFormatPlan(chart.ValueAxis)));
             }
             else
             {
@@ -849,7 +857,8 @@ public static partial class ChartRenderPlanner
                     new ChartPlanRect(plot.X - AxisLabelWidth, y - 6, AxisLabelWidth - GridlinePad, 12),
                     IsBold: false,
                     FontSize: 6.5,
-                    Alignment: ChartPlanTextAlignment.Right));
+                    Alignment: ChartPlanTextAlignment.Right,
+                    AxisLabelFormat: BuildAxisLabelFormatPlan(chart.ValueAxis)));
             }
         }
 
@@ -1203,7 +1212,8 @@ public static partial class ChartRenderPlanner
                 new ChartPlanRect(labelX, y - 6, labelWidth, 12),
                 IsBold: false,
                 FontSize: 6.5,
-                Alignment: ChartPlanTextAlignment.Left));
+                Alignment: ChartPlanTextAlignment.Left,
+                AxisLabelFormat: BuildAxisLabelFormatPlan(chart.SecondaryValueAxis)));
         }
 
         ChartAxisTitlePlan? title = null;
@@ -1671,7 +1681,9 @@ public static partial class ChartRenderPlanner
             xUnit,
             yMin,
             yRange,
-            yUnit);
+            yUnit,
+            BuildAxisLabelFormatPlan(chart.CategoryAxis),
+            BuildAxisLabelFormatPlan(chart.ValueAxis));
 
         var seriesPrimitives = new List<ChartScatterSeriesPrimitive>();
         var dataLabels = new List<ChartDataLabelPlan>();
@@ -1832,7 +1844,9 @@ public static partial class ChartRenderPlanner
             xUnit,
             yMin,
             yRange,
-            yUnit);
+            yUnit,
+            BuildAxisLabelFormatPlan(chart.CategoryAxis),
+            BuildAxisLabelFormatPlan(chart.ValueAxis));
 
         return new ChartBubblePrimitivePlan(
             gridLines,
@@ -2256,7 +2270,9 @@ public static partial class ChartRenderPlanner
             double xUnit,
             double yMin,
             double yRange,
-            double yUnit)
+            double yUnit,
+            ChartAxisLabelFormatPlan? xAxisLabelFormat,
+            ChartAxisLabelFormatPlan? yAxisLabelFormat)
     {
         double xSteps = xRange / xUnit;
         double ySteps = yRange / yUnit;
@@ -2285,7 +2301,8 @@ public static partial class ChartRenderPlanner
                 new ChartPlanRect(x - 20, plot.Bottom + 2, 40, 12),
                 IsBold: false,
                 FontSize: 6.5,
-                Alignment: ChartPlanTextAlignment.Center));
+                Alignment: ChartPlanTextAlignment.Center,
+                AxisLabelFormat: xAxisLabelFormat));
         }
 
         for (int tickIndex = 0; tickIndex <= yTickCount; tickIndex++)
@@ -2301,11 +2318,17 @@ public static partial class ChartRenderPlanner
                 new ChartPlanRect(plot.X - 38, y - 6, 36, 12),
                 IsBold: false,
                 FontSize: 6.5,
-                Alignment: ChartPlanTextAlignment.Right));
+                Alignment: ChartPlanTextAlignment.Right,
+                AxisLabelFormat: yAxisLabelFormat));
         }
 
         return (gridLines, xLabels, yLabels);
     }
+
+    private static ChartAxisLabelFormatPlan? BuildAxisLabelFormatPlan(ChartAxis? axis) =>
+        string.IsNullOrWhiteSpace(axis?.NumberFormatCode)
+            ? null
+            : new ChartAxisLabelFormatPlan(axis.NumberFormatCode!, axis.NumberFormatSourceLinked);
 
     private static double GetRadarAngle(int categoryIndex, int categoryCount) =>
         -Math.PI / 2 + 2 * Math.PI * categoryIndex / categoryCount;
