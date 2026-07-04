@@ -366,6 +366,97 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void PrintOutputPackageExecutionDescriptor_ValidatesAndMaterializesHostReadyPdf()
+    {
+        var package = PresentationPrintOutputPackageExecutor.BuildPackage(
+            BuildHandoutDeck(4),
+            new PresentationPrintRequest(
+                PresentationPrintLayoutKind.Handouts,
+                new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.CustomRange,
+                    StartSlideNumber: 2,
+                    EndSlideNumber: 4),
+                HandoutSlidesPerPage: 3,
+                Copies: 2,
+                Collate: false),
+            (_, _, _, _) => throw new InvalidOperationException("Handout route must stay shared."),
+            _ => throw new InvalidOperationException("Handout route must stay shared."));
+        var targetPath = Path.Combine(Path.GetTempPath(), $"freep-print-package-{Guid.NewGuid():N}.pdf");
+
+        try
+        {
+            var descriptor = PresentationPrintOutputPackageExecutor.BuildExecutionDescriptor(
+                package,
+                PresentationNativePrintHandoffHostCapabilities.Deferred(
+                    "Unit test print host",
+                    "Unit tests do not open native print UI."),
+                "Quarter Review.pptx");
+
+            descriptor.PackageKind.Should().Be(PresentationPrintOutputPackageExecutor.PrintOutputPackageKind);
+            descriptor.PackagePlan.Should().BeSameAs(package.Plan);
+            descriptor.HandoffPlan.Status.Should().Be(PresentationNativePrintHandoffStatus.HostPrinterUnavailableDeferredByHost);
+            descriptor.HandoffPlan.SuggestedDocumentName.Should().Be("Quarter Review");
+            descriptor.HandoffPlan.SuggestedPrintJobName.Should().Be("Quarter Review - Handouts (3 slides per page) - Slides 2-4, 1 page");
+            descriptor.SuggestedFileName.Should().Be("Quarter Review-print.pdf");
+            descriptor.SuggestedDocumentName.Should().Be("Quarter Review");
+            descriptor.SuggestedPrintJobName.Should().Be(descriptor.HandoffPlan.SuggestedPrintJobName);
+            descriptor.ByteCount.Should().Be(package.Bytes.Length);
+            descriptor.Validation.Should().Be(new PresentationPrintOutputPackageValidation(
+                package.Bytes.Length,
+                HasBytes: true,
+                HasPdfHeader: true,
+                HasPdfEofMarker: true,
+                PlanCanBuildPackage: true,
+                IsValid: true,
+                FailureReason: null));
+            descriptor.IsHostReadyPdfPackage.Should().BeTrue();
+            descriptor.CanMaterialize.Should().BeTrue();
+            descriptor.DisabledReason.Should().BeNull();
+
+            var result = PresentationPrintOutputPackageExecutor.MaterializePackageForHandoff(
+                package,
+                targetPath,
+                PresentationNativePrintHandoffHostCapabilities.Deferred(
+                    "Unit test print host",
+                    "Unit tests do not open native print UI."),
+                "Quarter Review.pptx");
+
+            result.Succeeded.Should().BeTrue();
+            result.FailureReason.Should().BeNull();
+            result.Descriptor.Validation.IsValid.Should().BeTrue();
+            File.ReadAllBytes(targetPath).Should().Equal(package.Bytes);
+        }
+        finally
+        {
+            if (File.Exists(targetPath))
+                File.Delete(targetPath);
+        }
+    }
+
+    [Fact]
+    public void PrintOutputPackageExecutionDescriptor_BlocksMaterializationForInvalidPdfBytes()
+    {
+        var packagePlan = PresentationPrintOutputPackageExecutor.BuildPackagePlan(
+            new PresentationPrintRequest(PresentationPrintLayoutKind.FullPageSlides),
+            slideCount: 1);
+        var package = new PresentationPrintOutputPackage(packagePlan, Encoding.ASCII.GetBytes("not a pdf"));
+        var targetPath = Path.Combine(Path.GetTempPath(), $"freep-invalid-print-package-{Guid.NewGuid():N}.pdf");
+
+        var result = PresentationPrintOutputPackageExecutor.MaterializePackageForHandoff(
+            package,
+            targetPath,
+            suggestedBaseFileName: "Broken.pptx");
+
+        result.Succeeded.Should().BeFalse();
+        result.Descriptor.CanMaterialize.Should().BeFalse();
+        result.Descriptor.IsHostReadyPdfPackage.Should().BeFalse();
+        result.Descriptor.Validation.IsValid.Should().BeFalse();
+        result.Descriptor.Validation.FailureReason.Should().Be("Printable PDF package does not start with a PDF header.");
+        result.FailureReason.Should().Be(result.Descriptor.DisabledReason);
+        File.Exists(targetPath).Should().BeFalse();
+    }
+
+    [Fact]
     public void NotesPagePreviewPlan_UsesCurrentSlideNotesPageRangeAndGeometry()
     {
         var presentation = Presentation.CreateEmpty();

@@ -95,6 +95,8 @@ internal sealed class FileCommands
 
     public PresentationNativePrintHandoffPlan? LastNativePrintHandoffPlan { get; private set; }
 
+    public PresentationPrintOutputPackageExecutionDescriptor? LastPrintExecutionDescriptor { get; private set; }
+
     public PresentationVideoFramePackage? LastVideoFramePackage { get; private set; }
 
     public PresentationVideoExportHandoffPlan? LastVideoExportHandoffPlan { get; private set; }
@@ -281,7 +283,11 @@ internal sealed class FileCommands
             request,
             WpfPresentationSlideImageRenderer.RenderSlideToPng,
             WpfRasterPdfWriter.WriteToBytes);
-        LastNativePrintHandoffPlan = BuildNativePrintHandoffPlan(LastPrintOutputPackage.Plan);
+        LastPrintExecutionDescriptor = PresentationPrintOutputPackageExecutor.BuildExecutionDescriptor(
+            LastPrintOutputPackage,
+            NativePrintHostCapabilities,
+            _workflow.CurrentFileName);
+        LastNativePrintHandoffPlan = LastPrintExecutionDescriptor.HandoffPlan;
         return LastPrintOutputPackage;
     }
 
@@ -304,8 +310,8 @@ internal sealed class FileCommands
     /// </summary>
     public PresentationNativePrintHandoffPlan ExecuteNativePrintHandoff(PresentationPrintRequest? request = null)
     {
-        var package = BuildPrintOutputPackage(request);
-        return BuildNativePrintHandoffPlan(package.Plan);
+        BuildPrintOutputPackage(request);
+        return LastPrintExecutionDescriptor!.HandoffPlan;
     }
 
     /// <summary>

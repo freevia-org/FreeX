@@ -277,6 +277,7 @@ public sealed class MainWindow : Window
     internal PresentationPrintOutputPackage? LastPrintOutputPackage { get; private set; }
     internal PresentationPrintBackstagePlan? LastPrintBackstagePlan { get; private set; }
     internal PresentationNativePrintHandoffPlan? LastNativePrintHandoffPlan { get; private set; }
+    internal PresentationPrintOutputPackageExecutionDescriptor? LastPrintExecutionDescriptor { get; private set; }
     internal PresentationVideoExportPlan? LastVideoExportPlan { get; private set; }
     internal PresentationVideoFramePackage? LastVideoFramePackage { get; private set; }
     internal PresentationVideoExportHandoffPlan? LastVideoExportHandoffPlan { get; private set; }
@@ -2758,10 +2759,11 @@ public sealed class MainWindow : Window
             request,
             SlideRenderer.RenderToBytes,
             SkiaRasterPdfWriter.WriteToBytes);
-        LastNativePrintHandoffPlan = PresentationPrintOutputPackageExecutor.BuildNativePrintHandoffPlan(
-            LastPrintOutputPackage.Plan,
+        LastPrintExecutionDescriptor = PresentationPrintOutputPackageExecutor.BuildExecutionDescriptor(
+            LastPrintOutputPackage,
             NativePrintHostCapabilities,
             suggestedBaseFileName: _fileWorkflow.CurrentFileName);
+        LastNativePrintHandoffPlan = LastPrintExecutionDescriptor.HandoffPlan;
         _statusText.Text = LastPrintOutputPackage.Plan.DisabledReason ??
             LastNativePrintHandoffPlan.Reason;
         return LastPrintOutputPackage;
@@ -2769,11 +2771,8 @@ public sealed class MainWindow : Window
 
     internal PresentationNativePrintHandoffPlan RefreshNativePrintHandoffPlan(PresentationPrintRequest? request = null)
     {
-        var package = RefreshPrintOutputPackage(request);
-        LastNativePrintHandoffPlan = PresentationPrintOutputPackageExecutor.BuildNativePrintHandoffPlan(
-            package.Plan,
-            NativePrintHostCapabilities,
-            suggestedBaseFileName: _fileWorkflow.CurrentFileName);
+        RefreshPrintOutputPackage(request);
+        LastNativePrintHandoffPlan = LastPrintExecutionDescriptor!.HandoffPlan;
         _statusText.Text = LastNativePrintHandoffPlan.Reason;
         return LastNativePrintHandoffPlan;
     }

@@ -1497,6 +1497,46 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Print_output_package_records_shared_execution_descriptor()
+    {
+        PresentationPrintOutputPackage? printPackage = null;
+        PresentationNativePrintHandoffPlan? handoffPlan = null;
+        PresentationPrintOutputPackageExecutionDescriptor? descriptor = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Title = "Opening";
+            window.Editor.CurrentSlide.Notes = MakeTextBody("Opening speaker note.");
+            window.Editor.InsertSlide();
+
+            printPackage = window.RefreshPrintOutputPackage(new PresentationPrintRequest(
+                PresentationPrintLayoutKind.NotesPages,
+                new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.CurrentSlide,
+                    CurrentSlideNumber: 1)));
+            handoffPlan = window.LastNativePrintHandoffPlan;
+            descriptor = window.LastPrintExecutionDescriptor;
+        });
+
+        if (!ran) return;
+        printPackage.Should().NotBeNull();
+        handoffPlan.Should().NotBeNull();
+        descriptor.Should().NotBeNull();
+        descriptor!.PackagePlan.Should().BeSameAs(printPackage!.Plan);
+        descriptor.HandoffPlan.Should().BeSameAs(handoffPlan);
+        descriptor.Validation.IsValid.Should().BeTrue();
+        descriptor.Validation.ByteCount.Should().Be(printPackage.Bytes.Length);
+        descriptor.IsHostReadyPdfPackage.Should().BeTrue();
+        descriptor.CanMaterialize.Should().BeTrue();
+        descriptor.SuggestedDocumentName.Should().Be("Presentation");
+        descriptor.SuggestedPrintJobName.Should().Be("Presentation - Notes Pages - Slide 1, 1 page");
+        handoffPlan!.Status.Should().Be(PresentationNativePrintHandoffStatus.HostPrinterUnavailableDeferredByHost);
+        handoffPlan.SuggestedTempFileName.Should().Be("Presentation-print.pdf");
+        handoffPlan.SuggestedPrintJobName.Should().Be(descriptor.SuggestedPrintJobName);
+    }
+
+    [Fact]
     public async Task Print_options_pane_projects_shared_summary_lines()
     {
         PresentationPrintBackstagePlan? printPlan = null;

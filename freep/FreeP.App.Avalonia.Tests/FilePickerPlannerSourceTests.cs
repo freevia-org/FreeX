@@ -41,6 +41,7 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().Contain("PresentationVideoFramePackageExecutor.BuildPackage(");
         source.Should().Contain("PresentationVideoFramePackageExecutor.BuildHandoffPlan(");
         source.Should().Contain("PresentationPrintOutputPackageExecutor.BuildPackage(");
+        source.Should().Contain("PresentationPrintOutputPackageExecutor.BuildExecutionDescriptor(");
         source.Should().Contain("PresentationPrintBackstagePlanner.Build(");
         source.Should().Contain("ShowPrintOptionsPane()");
         source.Should().Contain("RenderPrintOptionsPane(plan)");
@@ -61,6 +62,7 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().Contain("LastNotesPagePdfRenderPlan");
         source.Should().Contain("LastPrintOutputPackage");
         source.Should().Contain("LastPrintBackstagePlan");
+        source.Should().Contain("LastPrintExecutionDescriptor");
         source.Should().Contain("LastVideoExportPlan");
         source.Should().Contain("LastVideoFramePackage");
         source.Should().Contain("LastVideoExportHandoffPlan");
