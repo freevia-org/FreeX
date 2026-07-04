@@ -709,9 +709,24 @@ public sealed class WordArtTests : IDisposable
         {
             Alpha = 128, BlurPt = 1.0, DistPt = 2.0, DirDeg = 90.0, ScaleY = -1.0
         };
+        var glow = new RunTextGlow
+        {
+            Color = new ThemeAwareColor(new SrgbColor(0x22, 0x88, 0xFF)),
+            Alpha = 144,
+            RadiusPt = 4.5
+        };
+        var softEdge = new RunTextSoftEdge { RadiusPt = 2.25 };
 
         var tb = new TextBody { WarpPreset = "textCircle" };
-        var run = new Run { Text = "Clone", TextFill = fill, TextShadow = shadow, TextReflection = reflection };
+        var run = new Run
+        {
+            Text = "Clone",
+            TextFill = fill,
+            TextShadow = shadow,
+            TextReflection = reflection,
+            TextGlow = glow,
+            TextSoftEdge = softEdge
+        };
         tb.Paragraphs.Add(new Paragraph { Runs = { run } });
 
         var shape = new SlideShape
@@ -737,12 +752,24 @@ public sealed class WordArtTests : IDisposable
         clonedRun.TextShadow!.BlurPt.Should().Be(4.0);
         clonedRun.TextReflection.Should().NotBeNull();
         clonedRun.TextReflection!.DistPt.Should().Be(2.0);
+        clonedRun.TextGlow.Should().NotBeNull();
+        clonedRun.TextGlow.Should().NotBeSameAs(glow);
+        clonedRun.TextGlow!.Color.Resolved.B.Should().Be(0xFF);
+        clonedRun.TextGlow.Alpha.Should().Be(144);
+        clonedRun.TextGlow.RadiusPt.Should().Be(4.5);
+        clonedRun.TextSoftEdge.Should().NotBeNull();
+        clonedRun.TextSoftEdge.Should().NotBeSameAs(softEdge);
+        clonedRun.TextSoftEdge!.RadiusPt.Should().Be(2.25);
 
         // Verify deep copy — mutating source must not affect clone
         run.TextShadow.BlurPt = 99.0;
         run.TextReflection.DistPt = 99.0;
+        run.TextGlow.RadiusPt = 99.0;
+        run.TextSoftEdge.RadiusPt = 99.0;
         clonedRun.TextShadow.BlurPt.Should().Be(4.0, "deep copy must be independent");
         clonedRun.TextReflection.DistPt.Should().Be(2.0, "deep copy must be independent");
+        clonedRun.TextGlow.RadiusPt.Should().Be(4.5, "deep copy must be independent");
+        clonedRun.TextSoftEdge.RadiusPt.Should().Be(2.25, "deep copy must be independent");
     }
 
     // ─── BA1: rPr child-order + OpenXmlValidator ────────────────────────────

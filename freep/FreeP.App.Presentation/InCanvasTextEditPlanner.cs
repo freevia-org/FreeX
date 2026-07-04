@@ -584,6 +584,8 @@ internal static class TextBodyRunMutationPlanner
         TextOutline = source.TextOutline,
         TextShadow = source.TextShadow,
         TextReflection = source.TextReflection,
+        TextGlow = source.TextGlow,
+        TextSoftEdge = source.TextSoftEdge,
         Math = source.Math,
     };
 
@@ -603,6 +605,8 @@ internal static class TextBodyRunMutationPlanner
         && a.TextOutline == b.TextOutline
         && a.TextShadow == b.TextShadow
         && a.TextReflection == b.TextReflection
+        && a.TextGlow == b.TextGlow
+        && a.TextSoftEdge == b.TextSoftEdge
         && a.Math == b.Math;
 
     private static void MergeAdjacentRunsWithSameFormat(TextBody body)
@@ -879,6 +883,8 @@ internal static class TextBodyModelCloner
         TextOutline = source.TextOutline,
         TextShadow = CloneRunShadow(source.TextShadow),
         TextReflection = CloneRunReflection(source.TextReflection),
+        TextGlow = CloneRunGlow(source.TextGlow),
+        TextSoftEdge = CloneRunSoftEdge(source.TextSoftEdge),
         Math = CloneMath(source.Math),
     };
 
@@ -937,6 +943,24 @@ internal static class TextBodyModelCloner
                 DistPt = source.DistPt,
                 DirDeg = source.DirDeg,
                 ScaleY = source.ScaleY,
+            };
+
+    private static RunTextGlow? CloneRunGlow(RunTextGlow? source) =>
+        source is null
+            ? null
+            : new RunTextGlow
+            {
+                Color = source.Color,
+                Alpha = source.Alpha,
+                RadiusPt = source.RadiusPt,
+            };
+
+    private static RunTextSoftEdge? CloneRunSoftEdge(RunTextSoftEdge? source) =>
+        source is null
+            ? null
+            : new RunTextSoftEdge
+            {
+                RadiusPt = source.RadiusPt,
             };
 
     private static TextStyleLevels? CloneTextStyleLevels(TextStyleLevels? source)
