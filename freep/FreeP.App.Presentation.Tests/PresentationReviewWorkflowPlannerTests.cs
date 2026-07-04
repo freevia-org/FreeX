@@ -1182,6 +1182,93 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildAccessibilitySummaryPlan_DoesNotFlagDeclaredPopulatedTableHeaderRow()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Quarterly review";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 45,
+            Name = "Revenue table",
+            Kind = SlideShapeKind.Table,
+            Table = new TableShape
+            {
+                Flags = new TableStyleFlags { FirstRow = true },
+                Rows =
+                {
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("Region") },
+                            new TableCell { TextBody = TextBody("Revenue") }
+                        }
+                    },
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("North") },
+                            new TableCell { TextBody = TextBody("$42K") }
+                        }
+                    }
+                }
+            }
+        });
+
+        var summary = PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation);
+
+        summary.Issues.Should().NotContain(issue => issue.Title == "Table header row missing");
+        summary.Issues.Should().NotContain(issue => issue.Title == "Blank table header cells");
+    }
+
+    [Fact]
+    public void BuildAccessibilitySummaryPlan_MissingHeaderRowDoesNotCountCandidateHeaderBlanksAsBodyCells()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Quarterly review";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 46,
+            Name = "Forecast table",
+            Kind = SlideShapeKind.Table,
+            Table = new TableShape
+            {
+                Rows =
+                {
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell(),
+                            new TableCell { TextBody = TextBody(" ") }
+                        }
+                    },
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("North") },
+                            new TableCell()
+                        }
+                    }
+                }
+            }
+        });
+
+        var summary = PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation);
+
+        summary.Issues.Select(issue => issue.Title).Should().Equal(
+            "Table header row missing",
+            "Blank table body cells");
+        summary.Issues.Should().NotContain(issue => issue.Title == "Blank table header cells");
+        summary.Issues.Single(issue => issue.Title == "Blank table body cells")
+            .Detail.Should().Be("Forecast table has 1 blank body cell.");
+    }
+
+    [Fact]
     public void BuildAccessibilitySummaryPlan_FlagsTableDiagnosticsWithSharedActionSummaries()
     {
         var presentation = Presentation.CreateEmpty();
