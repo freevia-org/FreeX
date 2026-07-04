@@ -175,6 +175,48 @@ internal static class FreeWCommandInventory
             "Sets or clears selected chart axis titles through the shared chart edit command, clears quick-layout overrides, and keeps the change undoable in both shells.",
             "FreeWRibbonParityTests.ChartDesign_AxisTitlesSetterMutatesSelectedChartAndUndoRestoresIt",
             "ChartSmartArtContextualTabTests.ToggleChartAxisTitles_command_sets_default_titles_and_reverts_on_undo"),
+        ["freew.citation"] = ReferencesEvidence(
+            "Inserts tagged Word-like CITATION complex-field runs and proves Update Fields renumbers source-order numeric citations in both shells.",
+            "freew/FreeW.App.Host.Tests/CitationEditorTests.cs",
+            "CitationEditorTests.InsertCitation_TaggedSourceWithQuotedFieldArgument_RenumbersOnUpdateFields",
+            "freew/FreeW.App.Avalonia.Tests/ReferencesTabTests.cs",
+            "ReferencesTabTests.InsertCitation_tagged_source_with_quoted_field_argument_renumbers_on_update_fields"),
+        ["freew.manage-sources"] = ReferencesEvidence(
+            "Replaces the current document source list through backed source-management flow and keeps replacement undoable in both shells.",
+            "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
+            "FreeWRibbonParityTests.ReferencesCitations_ExposesBackedWordStyleManageSources",
+            "freew/FreeW.App.Avalonia.Tests/ReferencesTabTests.cs",
+            "ReferencesTabTests.ReplaceSources_replaces_source_list_and_undo_reverts"),
+        ["freew.bibliography"] = ReferencesEvidence(
+            "Builds generated bibliography/reference-list paragraphs from document sources and keeps insertion undoable in both shells.",
+            "freew/FreeW.App.Host.Tests/CitationEditorTests.cs",
+            "CitationEditorTests.InsertBibliography_BuildsBlockFromSourcesAndUndoReverts",
+            "freew/FreeW.App.Avalonia.Tests/ReferencesTabTests.cs",
+            "ReferencesTabTests.InsertBibliography_builds_block_from_sources_and_undo_reverts"),
+        ["freew.mark-citation"] = ReferencesEvidence(
+            "Creates durable hidden Word-style TA citation marks with category/short-citation data in both shells.",
+            "freew/FreeW.App.Host.Tests/MarkCitationEditorTests.cs",
+            "MarkCitationEditorTests.MarkCitation_DropsAHiddenCitationMarkThatSurvivesCommit",
+            "freew/FreeW.App.Avalonia.Tests/ReferencesTabTests.cs",
+            "ReferencesTabTests.MarkCitation_accepts_full_citation_dialog_result"),
+        ["freew.table-of-authorities"] = ReferencesEvidence(
+            "Builds a generated Table of Authorities from body citation marks and preserves grouped legal-authority output in both shells.",
+            "freew/FreeW.App.Host.Tests/MarkCitationEditorTests.cs",
+            "MarkCitationEditorTests.InsertTableOfAuthorities_BuildsAGroupedTableFromTheMarks",
+            "freew/FreeW.App.Avalonia.Tests/ReferencesTabTests.cs",
+            "ReferencesTabTests.MarkCitation_body_mark_builds_table_and_survives_docx_roundtrip"),
+        ["freew.table-of-authorities-refresh"] = ReferencesEvidence(
+            "Refreshes an existing Table of Authorities region through shared region planning without duplicating stale generated paragraphs in both shells.",
+            "freew/FreeW.App.Host.Tests/MarkCitationEditorTests.cs",
+            "MarkCitationEditorTests.RefreshTableOfAuthorities_ReplacesThePriorRegionInPlaceWithoutDuplicating",
+            "freew/FreeW.App.Avalonia.Tests/ReferencesTabTests.cs",
+            "ReferencesTabTests.UpdateFields_refreshes_existing_table_of_authorities_with_explicit_break_page_references"),
+        ["freew.update-fields"] = ReferencesEvidence(
+            "Refreshes stale generated references in one field-update pass, including TOC, bibliography, citation fields, and Table of Authorities coverage.",
+            "freew/FreeW.App.Host.Tests/NumericCitationEditorTests.cs",
+            "NumericCitationEditorTests.UpdateFields_CitationFieldAndBibliographyRefresh_DoNotOverwriteCitationFromStaleView",
+            "freew/FreeW.App.Avalonia.Tests/ReferencesTabTests.cs",
+            "ReferencesTabTests.UpdateFields_refreshes_toc_and_bibliography_in_same_pass"),
         ["freew.print-layout"] = PrintFamilyViewEvidence(
             "Routes the shared Print Layout command through WPF stateful view-mode commands and the Avalonia host callback so the Word-style page surface can be restored from print-family view changes."),
         ["freew.print-preview"] = BackstagePrintEvidence(
@@ -314,6 +356,23 @@ internal static class FreeWCommandInventory
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Avalonia.Tests/ViewTabDepthTests.cs",
                 Test: "ViewTabDepthTests.Print_preview_command_invokes_host_callback"));
+
+    private static CommandBehaviorEvidence ReferencesEvidence(
+        string summary,
+        string wpfPath,
+        string wpfTest,
+        string avaloniaPath,
+        string avaloniaTest) =>
+        new(
+            EvidenceId: "freew.references-fields.shared-behavior",
+            Slice: "References fields and generated regions",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: wpfPath,
+                Test: wpfTest),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: avaloniaPath,
+                Test: avaloniaTest));
 
     private static CommandBehaviorEvidence PrintFamilyViewEvidence(string summary) =>
         new(
