@@ -3088,6 +3088,44 @@ public sealed class SetChartLegendCommand(int paragraphIndex, int runIndex, bool
 }
 
 /// <summary>
+/// Set or clear the title for the chart carried by the run at (paragraphIndex, runIndex).
+/// Snaps the prior title and quick-layout id for undo. No-op when the run carries no chart.
+/// </summary>
+public sealed class SetChartTitleCommand(int paragraphIndex, int runIndex, string? title) : IDocumentCommand
+{
+    private string? _previousTitle;
+    private int _previousQuickLayoutId;
+    private bool _applied;
+
+    public string Label => "Set Chart Title";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart)
+            return;
+
+        _previousTitle = chart.Title;
+        _previousQuickLayoutId = chart.QuickLayoutId;
+        chart.Title = Normalize(title);
+        chart.QuickLayoutId = 0;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart)
+            return;
+
+        chart.Title = _previousTitle;
+        chart.QuickLayoutId = _previousQuickLayoutId;
+        _applied = false;
+    }
+
+    private static string? Normalize(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}
+
+/// <summary>
 /// Set or clear the axis titles for the chart carried by the run at (paragraphIndex, runIndex).
 /// Snaps the prior axis titles and quick-layout id for undo. No-op for axis-less chart kinds.
 /// </summary>

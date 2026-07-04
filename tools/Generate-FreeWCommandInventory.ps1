@@ -157,6 +157,10 @@ internal static class FreeWCommandInventory
             "Toggles the selected chart legend through the WPF and Avalonia ribbon command registries, clears layout overrides where applicable, and keeps the change undoable.",
             "FreeWRibbonParityTests.ChartDesign_ToggleLegendRibbonCommandMutatesSelectedChartAndUndoRestoresIt",
             "ChartSmartArtContextualTabTests.ToggleChartLegend_command_clears_layout_override_and_reverts_on_undo"),
+        ["freew.chart-title"] = ChartCommandEvidence(
+            "Sets or clears the selected chart title through the shared chart edit command, clears quick-layout overrides, and keeps the change undoable in both shells.",
+            "FreeWRibbonParityTests.ChartDesign_TitleSetterMutatesSelectedChartAndUndoRestoresIt",
+            "ChartSmartArtContextualTabTests.ToggleChartTitle_command_sets_default_title_and_reverts_on_undo"),
         ["freew.chart-axis-titles"] = ChartCommandEvidence(
             "Sets or clears selected chart axis titles through the shared chart edit command, clears quick-layout overrides, and keeps the change undoable in both shells.",
             "FreeWRibbonParityTests.ChartDesign_AxisTitlesSetterMutatesSelectedChartAndUndoRestoresIt",
