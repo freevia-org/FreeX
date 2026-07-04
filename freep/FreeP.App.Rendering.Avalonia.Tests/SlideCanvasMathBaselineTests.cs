@@ -140,4 +140,40 @@ public sealed class SlideCanvasMathBaselineTests
 
         thrown.Should().BeNull("Avalonia must render matrix math from the shared MathBox plan without host-specific layout branching");
     }
+
+    [Fact]
+    public async Task RenderParaWithMath_BorderBoxNestedMath_UsesSharedLinePlan_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var mathNode = new MathNode.BorderBox(
+                    new MathNode.Frac(
+                        new MathNode.Run("1"),
+                        new MathNode.Rad(null, new MathNode.Run("x"))));
+                var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+                var ops = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math");
+                ops.OfType<MathDrawOp.DrawLine>().Should().HaveCount(4,
+                    "borderBox side selection must be resolved in the shared math plan before Avalonia draws it");
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "B = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+                    }
+                };
+
+                var rtb = new RenderTargetBitmap(new PixelSize(260, 140));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must render borderBox math from the shared MathBox line plan without host-specific layout branching");
+    }
 }

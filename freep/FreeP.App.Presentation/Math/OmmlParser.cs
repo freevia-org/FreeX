@@ -117,6 +117,8 @@ public static class OmmlParser
             "d"        => ParseDelim(el),
             "acc"      => ParseAcc(el),
             "bar"      => ParseBar(el),
+            "box"      => ParseBox(el),
+            "borderBox"=> ParseBorderBox(el),
             "groupChr" => ParseGroupChr(el),
             "m"        => ParseMatrix(el),
             "eqArr"    => ParseEqArray(el),
@@ -344,6 +346,49 @@ public static class OmmlParser
     }
 
     // ── m:groupChr ────────────────────────────────────────────────────────
+
+    private static MathNode ParseBox(XElement el)
+    {
+        var eEl = el.Element(M + "e");
+        return new MathNode.Box(eEl is null ? new MathNode.Unknown(FlattenText(el)) : ParseRow(eEl));
+    }
+
+    private static MathNode ParseBorderBox(XElement el)
+    {
+        var borderBoxPr = el.Element(M + "borderBoxPr");
+        var eEl = el.Element(M + "e");
+
+        bool hideTop = IsOnOffOn(borderBoxPr?.Element(M + "hideTop"));
+        bool hideBottom = IsOnOffOn(borderBoxPr?.Element(M + "hideBot"));
+        bool hideLeft = IsOnOffOn(borderBoxPr?.Element(M + "hideLeft"));
+        bool hideRight = IsOnOffOn(borderBoxPr?.Element(M + "hideRight"));
+
+        return new MathNode.BorderBox(
+            eEl is null ? new MathNode.Unknown(FlattenText(el)) : ParseRow(eEl),
+            showTop: !hideTop,
+            showBottom: !hideBottom,
+            showLeft: !hideLeft,
+            showRight: !hideRight);
+    }
+
+    private static bool IsOnOffOn(XElement? element)
+    {
+        if (element is null)
+            return false;
+
+        var val = element.Attribute(M + "val")?.Value
+               ?? element.Attribute("val")?.Value
+               ?? element.Value;
+
+        if (string.IsNullOrWhiteSpace(val))
+            return true;
+
+        return val.Trim().ToLowerInvariant() switch
+        {
+            "0" or "false" or "off" => false,
+            _ => true
+        };
+    }
 
     private static MathNode ParseGroupChr(XElement el)
     {
