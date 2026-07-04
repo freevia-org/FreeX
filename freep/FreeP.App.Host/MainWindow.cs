@@ -166,6 +166,7 @@ public sealed class MainWindow : Window
     internal PresentationProofingRequestPlan? LastProofingRequestPlan { get; private set; }
     internal PresentationProofingExecutionPlan? LastProofingExecutionPlan { get; private set; }
     internal PresentationProofingPanePlan? LastProofingPanePlan { get; private set; }
+    internal PresentationMediaTranscriptPlan? LastMediaTranscriptPlan { get; private set; }
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
     internal PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
@@ -1514,6 +1515,7 @@ public sealed class MainWindow : Window
 
     private void RefreshAccessibilitySummaryPlan()
     {
+        LastMediaTranscriptPlan = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(_presentation);
         LastAccessibilitySummaryPlan =
             PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(_presentation);
         LastAccessibilityCheckerPanePlan =

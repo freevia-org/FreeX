@@ -1,4 +1,5 @@
 using System.IO;
+using System.Xml.Linq;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
 using FreeP.Core.IO;
@@ -73,6 +74,15 @@ public sealed class ChartDataLabelsTests : IDisposable
     public void ChartShape_SecondaryValueAxis_DefaultNull()
     {
         new ChartShape().SecondaryValueAxis.Should().BeNull();
+    }
+
+    [Fact]
+    public void ChartAxis_NumberFormatDefaults()
+    {
+        var axis = new ChartAxis();
+
+        axis.NumberFormatCode.Should().BeNull();
+        axis.NumberFormatSourceLinked.Should().BeNull();
     }
 
     // ── 2. Round-trip: ShowValue + OutsideEnd + numFmt ───────────────────────
@@ -161,6 +171,28 @@ public sealed class ChartDataLabelsTests : IDisposable
         rt.Series.Should().HaveCountGreaterThanOrEqualTo(2, "both series survive round-trip");
         rt.Series[0].OnSecondaryAxis.Should().BeFalse("primary series stays on primary axis");
         rt.Series[1].OnSecondaryAxis.Should().BeTrue("secondary series flag round-trips");
+    }
+
+    [Fact]
+    public void RoundTrip_AxisNumberFormats_Preserved()
+    {
+        var chart = BuildComboChartWithSecondaryAxis();
+        chart.CategoryAxis.NumberFormatCode = "m/d/yy";
+        chart.CategoryAxis.NumberFormatSourceLinked = true;
+        chart.ValueAxis.NumberFormatCode = "#,##0.0";
+        chart.ValueAxis.NumberFormatSourceLinked = false;
+        chart.SecondaryValueAxis!.NumberFormatCode = "0.00%";
+        chart.SecondaryValueAxis.NumberFormatSourceLinked = false;
+
+        var rt = DoRoundTrip(chart);
+
+        rt.CategoryAxis.NumberFormatCode.Should().Be("m/d/yy");
+        rt.CategoryAxis.NumberFormatSourceLinked.Should().BeTrue();
+        rt.ValueAxis.NumberFormatCode.Should().Be("#,##0.0");
+        rt.ValueAxis.NumberFormatSourceLinked.Should().BeFalse();
+        rt.SecondaryValueAxis.Should().NotBeNull();
+        rt.SecondaryValueAxis!.NumberFormatCode.Should().Be("0.00%");
+        rt.SecondaryValueAxis.NumberFormatSourceLinked.Should().BeFalse();
     }
 
     /// <summary>
@@ -641,6 +673,36 @@ public sealed class ChartDataLabelsTests : IDisposable
             "numFmt must appear before dLblPos (CT_DLbls schema order)");
         dLblPosPos.Should().BeLessThan(showValPos,
             "dLblPos must appear before showVal (CT_DLbls schema order)");
+    }
+
+    [Fact]
+    public void AxisNumFmt_WrittenForCategoryPrimaryAndSecondaryValueAxes()
+    {
+        var chart = BuildComboChartWithSecondaryAxis();
+        chart.CategoryAxis.NumberFormatCode = "m/d/yy";
+        chart.CategoryAxis.NumberFormatSourceLinked = true;
+        chart.ValueAxis.NumberFormatCode = "#,##0";
+        chart.ValueAxis.NumberFormatSourceLinked = false;
+        chart.SecondaryValueAxis!.NumberFormatCode = "0.0%";
+        chart.SecondaryValueAxis.NumberFormatSourceLinked = false;
+
+        var pptxPath = WriteToTempPptx(chart);
+        var doc = XDocument.Parse(ExtractFirstChartXml(pptxPath));
+        XNamespace c = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+
+        var catFmt = doc.Descendants(c + "catAx").First().Element(c + "numFmt");
+        var valFormats = doc.Descendants(c + "valAx")
+            .Select(axis => axis.Element(c + "numFmt"))
+            .ToList();
+
+        catFmt.Should().NotBeNull();
+        catFmt!.Attribute("formatCode")!.Value.Should().Be("m/d/yy");
+        catFmt.Attribute("sourceLinked")!.Value.Should().Be("1");
+        valFormats.Should().HaveCount(2);
+        valFormats[0]!.Attribute("formatCode")!.Value.Should().Be("#,##0");
+        valFormats[0]!.Attribute("sourceLinked")!.Value.Should().Be("0");
+        valFormats[1]!.Attribute("formatCode")!.Value.Should().Be("0.0%");
+        valFormats[1]!.Attribute("sourceLinked")!.Value.Should().Be("0");
     }
 
     // ── CA3: dLblPos gating ───────────────────────────────────────────────────
