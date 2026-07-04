@@ -1318,9 +1318,10 @@ public sealed record SourceAuthorPerson(string First, string Middle, string Last
 
 /// <summary>
 /// A bibliographic source the document can cite: a short <see cref="Tag"/> (a stable identifier used
-/// to reference the source, e.g. <c>"Knuth1997"</c>) plus author/title/year and an optional publisher.
-/// A <see cref="SourceType"/> selects type-specific formatting and carries the extra fields that type
-/// needs (journal/volume/issue/pages for an article, url/accessed for a web site). Kept deliberately
+/// to reference the source, e.g. <c>"Knuth1997"</c>) plus author/title/year and common Word bibliography
+/// fields such as city, edition, standard number, short title and comments. A <see cref="SourceType"/>
+/// selects type-specific formatting and carries the extra fields that type needs
+/// (journal/volume/issue/pages for an article, url/accessed for a web site). Kept deliberately
 /// small and immutable-friendly (init-only properties) so it round-trips cleanly and the
 /// citation/bibliography formatting helpers (see <see cref="Citations"/>) can stay pure. Missing fields
 /// are represented as empty strings / null and handled gracefully by the formatters.
@@ -1356,6 +1357,21 @@ public sealed class Source
 
     /// <summary>The publisher of the work, or null when unknown / not applicable.</summary>
     public string? Publisher { get; init; }
+
+    /// <summary>The publication city/place for a book; null when unknown / not applicable.</summary>
+    public string? City { get; init; }
+
+    /// <summary>The edition statement for a book; null when unknown / not applicable.</summary>
+    public string? Edition { get; init; }
+
+    /// <summary>A Word-style standard number such as ISBN or ISSN; null when unknown / not applicable.</summary>
+    public string? StandardNumber { get; init; }
+
+    /// <summary>A shortened citation title; null when unknown.</summary>
+    public string? ShortTitle { get; init; }
+
+    /// <summary>Free-form source comments/notes; null when unknown.</summary>
+    public string? Comments { get; init; }
 
     /// <summary>The periodical name for a <see cref="SourceType.JournalArticle"/>; null otherwise / when unknown.</summary>
     public string? Journal { get; init; }

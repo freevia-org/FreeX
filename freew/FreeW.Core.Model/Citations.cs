@@ -770,9 +770,12 @@ public static class Citations
         }
         else
         {
-            // Book / website: Publisher; Year.
+            // Book / website: Publisher; Year. Books use City: Publisher when the Word place field is present.
             var tail = new List<string>(2);
-            AddIfPresent(tail, source.Publisher);
+            if (source.Type == SourceType.Book && PlacePublisher(source) is { } placePublisher)
+                tail.Add(placePublisher);
+            else
+                AddIfPresent(tail, source.Publisher);
             AddIfPresent(tail, source.Year);
             if (tail.Count > 0)
                 segments.Add(WithPeriod(string.Join("; ", tail)));
@@ -839,8 +842,8 @@ public static class Citations
         }
         else
         {
-            // City: Publisher, Year.  (GOST typically uses City but FreeW has no City field; use Publisher.)
-            var publisher = source.Publisher?.Trim() ?? string.Empty;
+            // City: Publisher, Year.
+            var publisher = PlacePublisher(source) ?? (source.Publisher?.Trim() ?? string.Empty);
             var year = source.Year?.Trim() ?? string.Empty;
             if (publisher.Length > 0 && year.Length > 0)
                 segments.Add($"{publisher}, {year}.");
@@ -893,7 +896,7 @@ public static class Citations
         }
         else
         {
-            var publisher = source.Publisher?.Trim() ?? string.Empty;
+            var publisher = PlacePublisher(source) ?? (source.Publisher?.Trim() ?? string.Empty);
             if (publisher.Length > 0)
                 segments.Add(WithPeriod(publisher));
         }
@@ -905,6 +908,22 @@ public static class Citations
     {
         var trimmed = value?.Trim();
         return string.IsNullOrEmpty(trimmed) ? null : trimmed;
+    }
+
+    private static string? PlacePublisher(Source source)
+    {
+        if (source.Type != SourceType.Book)
+            return null;
+
+        var city = NonEmpty(source.City);
+        var publisher = NonEmpty(source.Publisher);
+        return (city, publisher) switch
+        {
+            ({ } c, { } p) => $"{c}: {p}",
+            ({ } c, null) => c,
+            (null, { } p) => p,
+            _ => null,
+        };
     }
 
     private static void AddIfPresent(List<string> parts, string? value)
@@ -984,6 +1003,11 @@ public static class Citations
         && Same(left.Title, right.Title)
         && Same(left.Year, right.Year)
         && Same(left.Publisher, right.Publisher)
+        && Same(left.City, right.City)
+        && Same(left.Edition, right.Edition)
+        && Same(left.StandardNumber, right.StandardNumber)
+        && Same(left.ShortTitle, right.ShortTitle)
+        && Same(left.Comments, right.Comments)
         && Same(left.Journal, right.Journal)
         && Same(left.Volume, right.Volume)
         && Same(left.Issue, right.Issue)
