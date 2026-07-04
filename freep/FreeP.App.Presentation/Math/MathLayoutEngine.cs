@@ -51,6 +51,7 @@ public static class MathLayoutEngine
             MathNode.Sup     s  => LayoutSup(s, fontFamily, fontSizePt),
             MathNode.Sub     s  => LayoutSub(s, fontFamily, fontSizePt),
             MathNode.SubSup  ss => LayoutSubSup(ss, fontFamily, fontSizePt),
+            MathNode.PreSubSup ps => LayoutPreSubSup(ps, fontFamily, fontSizePt),
             MathNode.Rad     r  => LayoutRad(r, fontFamily, fontSizePt),
             MathNode.Nary    n  => LayoutNary(n, fontFamily, fontSizePt),
             MathNode.Limit   l  => LayoutLimit(l, fontFamily, fontSizePt),
@@ -352,6 +353,48 @@ public static class MathLayoutEngine
     }
 
     // ── Radical layout ────────────────────────────────────────────────────
+
+    private static MathBox LayoutPreSubSup(MathNode.PreSubSup ps, string fontFamily, double fontSizePt)
+    {
+        double em = Em(fontSizePt);
+        double scriptSizePt = fontSizePt * 0.70;
+
+        var baseBox = LayoutNode(ps.Base, fontFamily, fontSizePt);
+        var subBox  = LayoutNode(ps.Sub,  fontFamily, scriptSizePt);
+        var supBox  = LayoutNode(ps.Sup,  fontFamily, scriptSizePt);
+
+        double baseline = baseBox.Metrics.Ascent;
+        double supY = baseline - em * 0.40 - supBox.Metrics.Ascent;
+        double subY = baseline + em * 0.25;
+
+        double deficit = supY < 0 ? -supY : 0;
+        double baseY = deficit;
+        supY += deficit;
+        subY += deficit;
+
+        double scriptW = Math.Max(subBox.Metrics.Width, supBox.Metrics.Width);
+        double gap = em * 0.03;
+        double baseX = scriptW + gap;
+
+        double totalH = Math.Max(baseY + baseBox.Metrics.Height, Math.Max(
+            supY + supBox.Metrics.Height,
+            subY + subBox.Metrics.Height));
+        double totalW = baseX + baseBox.Metrics.Width;
+
+        var container = new MathBox.Container();
+        container.Metrics.Width = totalW;
+        container.Metrics.Height = totalH;
+        container.Metrics.Ascent = baseline + deficit;
+
+        supBox.X = scriptW - supBox.Metrics.Width; supBox.Y = supY;
+        subBox.X = scriptW - subBox.Metrics.Width; subBox.Y = subY;
+        baseBox.X = baseX; baseBox.Y = baseY;
+
+        container.Children.Add(supBox);
+        container.Children.Add(subBox);
+        container.Children.Add(baseBox);
+        return container;
+    }
 
     private static MathBox LayoutRad(MathNode.Rad rad, string fontFamily, double fontSizePt)
     {

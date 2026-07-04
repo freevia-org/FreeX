@@ -160,6 +160,62 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void PreSubSup_PlacesScriptStackLeftOfBase_WithSupAboveSub()
+    {
+        var pre = new MathNode.PreSubSup(Run("x"), Run("i"), Run("2"));
+        var box = MathLayoutEngine.Layout(pre, "Cambria Math", FontSizePt);
+
+        var container = (MathBox.Container)box.Children[0];
+        var supBox = container.Children[0];
+        var subBox = container.Children[1];
+        var baseBox = container.Children[2];
+
+        (supBox.X + supBox.Metrics.Width).Should().BeLessThanOrEqualTo(baseBox.X,
+            "the pre-superscript must be laid out to the left of the base");
+        (subBox.X + subBox.Metrics.Width).Should().BeLessThanOrEqualTo(baseBox.X,
+            "the pre-subscript must be laid out to the left of the base");
+        supBox.Y.Should().BeLessThan(subBox.Y,
+            "the pre-superscript must sit above the pre-subscript in the left-side stack");
+        (baseBox.Y + baseBox.Metrics.Ascent).Should().BeApproximately(box.Metrics.Ascent, 0.01,
+            "the base baseline should remain the reported baseline for the prescript expression");
+    }
+
+    [Fact]
+    public void PreSubSup_UsesReducedScriptFontSize()
+    {
+        var pre = new MathNode.PreSubSup(Run("x"), Run("i"), Run("2"));
+        var box = MathLayoutEngine.Layout(pre, "Cambria Math", FontSizePt);
+
+        var container = (MathBox.Container)box.Children[0];
+        var supGlyph = Assert.IsType<MathBox.Glyph>(container.Children[0]);
+        var subGlyph = Assert.IsType<MathBox.Glyph>(container.Children[1]);
+        var baseGlyph = Assert.IsType<MathBox.Glyph>(container.Children[2]);
+
+        supGlyph.FontSizePt.Should().BeApproximately(FontSizePt * 0.70, 0.01);
+        subGlyph.FontSizePt.Should().BeApproximately(FontSizePt * 0.70, 0.01);
+        baseGlyph.FontSizePt.Should().Be(FontSizePt);
+    }
+
+    [Fact]
+    public void PreSubSup_ContainsTallBaseAndTallScriptsWithoutClipping()
+    {
+        var pre = new MathNode.PreSubSup(TallFraction(), TallFraction(), TallFraction());
+        var box = MathLayoutEngine.Layout(pre, "Cambria Math", FontSizePt);
+
+        var container = (MathBox.Container)box.Children[0];
+        foreach (var child in container.Children)
+        {
+            child.Y.Should().BeGreaterThanOrEqualTo(0,
+                "prescript layout must shift upward extents into the container instead of clipping above");
+            (child.Y + child.Metrics.Height).Should().BeLessThanOrEqualTo(container.Metrics.Height + 0.01,
+                "prescript layout metrics must include the full base and script extents");
+        }
+
+        box.Metrics.Ascent.Should().BeGreaterThan(0);
+        box.Metrics.Descent.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void Sub_OnNormalBase_DescentGrowsForDeepSubscript_AscentUnchanged()
     {
         var sub = new MathNode.Sub(Run("x"), Run("i"));
