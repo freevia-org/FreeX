@@ -17,6 +17,14 @@ namespace FreeP.Core.IO;
 /// </summary>
 public static class PptxPackageWriter
 {
+    private sealed record ModernCommentAuthorProfile(
+        string Name,
+        string Initials,
+        string Id,
+        string UserId,
+        string ProviderId,
+        bool IsPreserved);
+
     // ── Namespaces ────────────────────────────────────────────────────────────────
     private static readonly XNamespace P       = "http://schemas.openxmlformats.org/presentationml/2006/main";
     private static readonly XNamespace A       = PptxColorReader.A;
@@ -1241,36 +1249,68 @@ public static class PptxPackageWriter
             comment.IsResolved ||
             comment.Replies.Count > 0);
 
-    private static Dictionary<(string name, string initials), string> BuildModernAuthorMap(List<Slide> slides)
+    private static Dictionary<(string name, string initials), ModernCommentAuthorProfile> BuildModernAuthorMap(List<Slide> slides)
     {
-        var map = new Dictionary<(string name, string initials), string>();
+        var map = new Dictionary<(string name, string initials), ModernCommentAuthorProfile>();
         foreach (var comment in slides.SelectMany(slide => slide.Comments))
         {
-            AddModernAuthor(comment.Author, comment.Initials);
+            AddModernAuthor(
+                comment.Author,
+                comment.Initials,
+                comment.ModernAuthorId,
+                comment.ModernAuthorUserId,
+                comment.ModernAuthorProviderId);
             foreach (var reply in comment.Replies)
-                AddModernAuthor(reply.Author, reply.Initials);
+            {
+                AddModernAuthor(
+                    reply.Author,
+                    reply.Initials,
+                    reply.ModernAuthorId,
+                    reply.ModernAuthorUserId,
+                    reply.ModernAuthorProviderId);
+            }
         }
 
         return map;
 
-        void AddModernAuthor(string name, string initials)
+        void AddModernAuthor(
+            string name,
+            string initials,
+            string? preservedId,
+            string? preservedUserId,
+            string? preservedProviderId)
         {
             var key = (name, initials);
-            if (!map.ContainsKey(key))
-                map[key] = DeterministicGuidString($"freep-modern-comment-author|{name}|{initials}");
+            var hasPreservedId = !string.IsNullOrWhiteSpace(preservedId);
+            var profile = new ModernCommentAuthorProfile(
+                name,
+                initials,
+                hasPreservedId
+                    ? preservedId!.Trim()
+                    : DeterministicGuidString($"freep-modern-comment-author|{name}|{initials}"),
+                string.IsNullOrWhiteSpace(preservedUserId)
+                    ? $"{NormalizeModernUserId(name)}::freep"
+                    : preservedUserId!.Trim(),
+                preservedProviderId ?? string.Empty,
+                hasPreservedId);
+
+            if (!map.TryGetValue(key, out var existing) || (!existing.IsPreserved && profile.IsPreserved))
+            {
+                map[key] = profile;
+            }
         }
     }
 
     private static XDocument BuildModernAuthorsXml(
-        Dictionary<(string name, string initials), string> modernAuthorMap)
+        Dictionary<(string name, string initials), ModernCommentAuthorProfile> modernAuthorMap)
     {
-        var authorElements = modernAuthorMap.Select(kv =>
+        var authorElements = modernAuthorMap.Values.Select(profile =>
             new XElement(P188 + "author",
-                new XAttribute("id", kv.Value),
-                new XAttribute("name", kv.Key.name),
-                new XAttribute("initials", kv.Key.initials),
-                new XAttribute("userId", $"{NormalizeModernUserId(kv.Key.name)}::freep"),
-                new XAttribute("providerId", string.Empty)));
+                new XAttribute("id", profile.Id),
+                new XAttribute("name", profile.Name),
+                new XAttribute("initials", profile.Initials),
+                new XAttribute("userId", profile.UserId),
+                new XAttribute("providerId", profile.ProviderId)));
 
         return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
@@ -1282,7 +1322,7 @@ public static class PptxPackageWriter
     private static XDocument BuildModernCommentsXml(
         List<SlideComment> comments,
         int slideIndex,
-        Dictionary<(string name, string initials), string> modernAuthorMap)
+        Dictionary<(string name, string initials), ModernCommentAuthorProfile> modernAuthorMap)
     {
         var cmElements = comments.Select((comment, commentIndex) =>
         {
@@ -1302,8 +1342,10 @@ public static class PptxPackageWriter
                     {
                         var replyAuthorId = ModernAuthorId(modernAuthorMap, reply.Author, reply.Initials);
                         return new XElement(P188 + "reply",
-                            new XAttribute("id", DeterministicGuidString(
-                                $"freep-modern-comment-reply|{slideIndex}|{commentIndex}|{replyIndex}|{replyAuthorId}|{reply.Text}|{FormatModernDate(reply.DateTime)}")),
+                            new XAttribute("id", string.IsNullOrWhiteSpace(reply.ModernReplyId)
+                                ? DeterministicGuidString(
+                                    $"freep-modern-comment-reply|{slideIndex}|{commentIndex}|{replyIndex}|{replyAuthorId}|{reply.Text}|{FormatModernDate(reply.DateTime)}")
+                                : reply.ModernReplyId.Trim()),
                             new XAttribute("authorId", replyAuthorId),
                             new XAttribute("status", "active"),
                             new XAttribute("created", FormatModernDate(reply.DateTime)),
@@ -1314,8 +1356,10 @@ public static class PptxPackageWriter
             children.Add(BuildModernTextBody(comment.Text));
 
             return new XElement(P188 + "cm",
-                new XAttribute("id", DeterministicGuidString(
-                    $"freep-modern-comment|{slideIndex}|{commentIndex}|{authorId}|{comment.Text}|{FormatModernDate(comment.DateTime)}")),
+                new XAttribute("id", string.IsNullOrWhiteSpace(comment.ModernCommentId)
+                    ? DeterministicGuidString(
+                        $"freep-modern-comment|{slideIndex}|{commentIndex}|{authorId}|{comment.Text}|{FormatModernDate(comment.DateTime)}")
+                    : comment.ModernCommentId.Trim()),
                 new XAttribute("authorId", authorId),
                 new XAttribute("status", comment.IsResolved ? "resolved" : "active"),
                 new XAttribute("created", FormatModernDate(comment.DateTime)),
@@ -1369,11 +1413,11 @@ public static class PptxPackageWriter
                     new XElement(A + "t", text))));
 
     private static string ModernAuthorId(
-        Dictionary<(string name, string initials), string> modernAuthorMap,
+        Dictionary<(string name, string initials), ModernCommentAuthorProfile> modernAuthorMap,
         string name,
         string initials)
-        => modernAuthorMap.TryGetValue((name, initials), out var authorId)
-            ? authorId
+        => modernAuthorMap.TryGetValue((name, initials), out var profile)
+            ? profile.Id
             : DeterministicGuidString($"freep-modern-comment-author|{name}|{initials}");
 
     private static string FormatModernDate(DateTime? value)

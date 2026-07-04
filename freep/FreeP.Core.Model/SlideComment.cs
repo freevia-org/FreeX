@@ -45,6 +45,18 @@ public sealed class SlideComment
     /// <summary>True when this comment came from or should be saved as a modern PowerPoint comment part.</summary>
     public bool UsesModernCommentSchema { get; set; }
 
+    /// <summary>Modern PowerPoint comment id from the p188:cm id attribute.</summary>
+    public string ModernCommentId { get; set; } = string.Empty;
+
+    /// <summary>Modern PowerPoint author id from the p188:cm authorId attribute.</summary>
+    public string ModernAuthorId { get; set; } = string.Empty;
+
+    /// <summary>Modern PowerPoint author user id from the p188:author userId attribute.</summary>
+    public string ModernAuthorUserId { get; set; } = string.Empty;
+
+    /// <summary>Modern PowerPoint author provider id from the p188:author providerId attribute.</summary>
+    public string ModernAuthorProviderId { get; set; } = string.Empty;
+
     /// <summary>
     /// Local element name for the modern PowerPoint comment anchor, such as
     /// <c>unknownAnchor</c>. Empty for legacy comments.
@@ -78,6 +90,14 @@ public sealed class SlideComment
 public sealed class SlideCommentReply
 {
     public int AuthorId { get; set; }
+
+    public string ModernReplyId { get; set; } = string.Empty;
+
+    public string ModernAuthorId { get; set; } = string.Empty;
+
+    public string ModernAuthorUserId { get; set; } = string.Empty;
+
+    public string ModernAuthorProviderId { get; set; } = string.Empty;
 
     public string Author { get; set; } = string.Empty;
 
