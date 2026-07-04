@@ -512,6 +512,7 @@ public static class DocxReader
                 CorporateAuthor = author.CorporateAuthor,
                 Title = Field(element, "Title") ?? string.Empty,
                 BookTitle = Field(element, "BookTitle"),
+                ConferenceName = Field(element, "ConferenceName"),
                 Year = Field(element, "Year") ?? string.Empty,
                 Institution = Field(element, "Institution"),
                 Publisher = Field(element, "Publisher"),
@@ -581,6 +582,7 @@ public static class DocxReader
         "DocumentFromInternetSite" => SourceType.WebSite,
         "Report" => SourceType.Report,
         "BookSection" => SourceType.BookSection,
+        "ConferenceProceedings" => SourceType.ConferenceProceedings,
         _ => SourceType.Book,
     };
 
