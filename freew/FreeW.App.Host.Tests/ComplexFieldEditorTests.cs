@@ -88,4 +88,28 @@ public sealed class ComplexFieldEditorTests
         FieldRun(view)!.Text.Should().Be(today);
         FieldRun(view)!.Text.Should().NotBe("1/1/2000");
     }
+
+    [StaFact]
+    public void UpdateFields_StyleRef_RefreshesCachedHeadingText()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Chapter Two") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("See "),
+                Run.ComplexFieldRun(" STYLEREF 1 ", "Chapter One")
+            }
+        });
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        FieldRun(view)!.Text.Should().Be("Chapter Two");
+    }
 }

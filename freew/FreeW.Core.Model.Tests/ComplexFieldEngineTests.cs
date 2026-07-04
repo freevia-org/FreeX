@@ -18,12 +18,13 @@ public class ComplexFieldEngineTests
     }
 
     [Fact]
-    public void CanRecompute_OnlyRefPageRefAndSeq()
+    public void CanRecompute_ReferenceNumberCitationAndStyleRefFields()
     {
         new ComplexField(" REF mark ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" PAGEREF mark ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" SEQ Figure ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" CITATION Ada1843 ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" STYLEREF 1 ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" PAGE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
         new ComplexField(" DATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
     }
@@ -35,6 +36,7 @@ public class ComplexFieldEngineTests
     [InlineData(" REF \"My Mark\" ", "My Mark")]
     [InlineData(" CITATION \"Doe 2024\" ", "Doe 2024")]
     [InlineData(" CITATION \"Doe \\\"AI\\\" 2024\" \\l 1033 ", "Doe \"AI\" 2024")]
+    [InlineData(" STYLEREF \"Heading 1\" ", "Heading 1")]
     public void Argument_ExtractsFirstNonSwitchToken(string instruction, string expected)
     {
         ComplexFieldEngine.Argument(instruction).Should().Be(expected);
@@ -94,6 +96,81 @@ public class ComplexFieldEngineTests
         AddField(doc, " PAGEREF t ", cached: "9");
 
         ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("1");
+    }
+
+    [Fact]
+    public void StyleRef_NumericLevel_ResolvesNearestPrecedingHeading1()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("Body"));
+        doc.Blocks.Add(new Paragraph("Chapter Two   ") { StyleId = "Heading1" });
+        AddField(doc, " STYLEREF 1 ", cached: "stale");
+
+        ComplexFieldEngine.Recompute(doc, 3, 0).Should().Be("Chapter Two");
+    }
+
+    [Fact]
+    public void StyleRef_AfterHeadingTextChanges_RecomputesToNewText()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var heading = new Paragraph("Original heading") { StyleId = "Heading1" };
+        doc.Blocks.Add(heading);
+        AddField(doc, " STYLEREF 1 ", cached: "Original heading");
+
+        heading.Runs.Clear();
+        heading.Runs.Add(new Run("Renamed heading"));
+
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("Renamed heading");
+    }
+
+    [Theory]
+    [InlineData(" STYLEREF Heading1 ")]
+    [InlineData(" STYLEREF \"Heading 1\" ")]
+    public void StyleRef_StyleIdOrQuotedStyleName_ResolvesHeading(string instruction)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Named heading") { StyleId = "Heading1" });
+        AddField(doc, instruction, cached: "stale");
+
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("Named heading");
+    }
+
+    [Fact]
+    public void StyleRef_NoMatchingHeading_KeepsCachedText()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Body"));
+        AddField(doc, " STYLEREF 1 ", cached: "last value");
+
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("last value");
+    }
+
+    [Fact]
+    public void StyleRef_NoArgument_KeepsCachedText()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1" });
+        AddField(doc, " STYLEREF ", cached: "last value");
+
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("last value");
+    }
+
+    [Fact]
+    public void StyleRef_EmptyMatchingHeading_KeepsCachedText()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Earlier heading") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph { StyleId = "Heading1" });
+        AddField(doc, " STYLEREF 1 ", cached: "last value");
+
+        ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("last value");
     }
 
     [Fact]

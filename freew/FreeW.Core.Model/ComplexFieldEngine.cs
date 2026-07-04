@@ -19,6 +19,8 @@ namespace FreeW.Core.Model;
 /// <item><c>SEQ name</c> — the running counter for that sequence name (the basis of captions like
 /// "Figure 1"/"Table 2"), counting how many earlier SEQ fields of the same name precede this one, with
 /// support for the <c>\c</c> (repeat current), <c>\r N</c> (reset to N) and <c>\n</c>/<c>\h</c> switches.</item>
+/// <item><c>STYLEREF 1</c> / <c>STYLEREF "Heading 1"</c> — the nearest preceding body paragraph using the
+/// requested heading style.</item>
 /// </list>
 /// <para>
 /// Lives in the model project so it is fully unit-testable without any UI. Deterministic and side-effect
@@ -28,14 +30,15 @@ namespace FreeW.Core.Model;
 public static class ComplexFieldEngine
 {
     /// <summary>
-    /// True when <paramref name="field"/> is a reference/numbering field this engine can recompute
-    /// (<c>REF</c>, <c>PAGEREF</c> or <c>SEQ</c>). Other keywords (PAGE/DATE/AUTHOR/…) are resolved
-    /// elsewhere or left to their cached value, so the caller can cheaply skip them.
+    /// True when <paramref name="field"/> is a field family this engine can recompute
+    /// (<c>REF</c>, <c>PAGEREF</c>, <c>SEQ</c>, <c>CITATION</c> or <c>STYLEREF</c>). Other keywords
+    /// (PAGE/DATE/AUTHOR/…) are resolved elsewhere or left to their cached value, so the caller can
+    /// cheaply skip them.
     /// </summary>
     public static bool CanRecompute(ComplexField field)
     {
         ArgumentNullException.ThrowIfNull(field);
-        return field.Keyword is "REF" or "PAGEREF" or "SEQ" or "CITATION";
+        return field.Keyword is "REF" or "PAGEREF" or "SEQ" or "CITATION" or "STYLEREF";
     }
 
     /// <summary>
@@ -43,7 +46,8 @@ public static class ComplexFieldEngine
     /// (<paramref name="blockIndex"/>, <paramref name="runIndex"/>) in <paramref name="document"/>, against
     /// the document's current bookmarks (REF/PAGEREF) and sequence counters (SEQ). Returns the run's
     /// existing <see cref="Run.Text"/> unchanged for fields this engine does not handle, for unresolvable
-    /// references, or for an empty instruction — so an F9 pass never blanks a field it cannot evaluate.
+    /// references/style lookups, or for an empty instruction — so an F9 pass never blanks a field it cannot
+    /// evaluate.
     /// </summary>
     /// <param name="document">The document whose current state the field resolves against.</param>
     /// <param name="blockIndex">Index of the field run's paragraph in <see cref="TextDocument.Blocks"/>.</param>
@@ -73,6 +77,7 @@ public static class ComplexFieldEngine
             "PAGEREF" => ResolvePageRef(document, field, run.Text, pageOf),
             "SEQ" => ResolveSeq(document, field, blockIndex, runIndex),
             "CITATION" => Citations.ResolveCitationField(document, field, run.Text),
+            "STYLEREF" => ResolveStyleRef(document, field, blockIndex, run.Text),
             _ => run.Text
         };
     }
@@ -209,6 +214,47 @@ public static class ComplexFieldEngine
         && int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)
             ? n
             : (int?)null;
+
+    // STYLEREF: nearest preceding body paragraph matching the requested style. This bounded slice covers
+    // Word's common heading-reference form; page-aware/header-footer behavior and switches remain cached.
+    private static string ResolveStyleRef(TextDocument document, ComplexField field, int blockIndex, string cached)
+    {
+        var argument = Argument(field.Instruction);
+        if (argument.Length == 0)
+            return cached;
+
+        var headingStyleId = argument.Length == 1 && argument[0] is >= '1' and <= '9'
+            ? "Heading" + argument
+            : null;
+
+        for (var b = Math.Min(blockIndex - 1, document.Blocks.Count - 1); b >= 0; b--)
+        {
+            if (document.Blocks[b] is not Paragraph paragraph
+                || !StyleRefMatches(document, paragraph, argument, headingStyleId))
+                continue;
+
+            var text = paragraph.PlainText.TrimEnd();
+            return text.Length > 0 ? text : cached;
+        }
+
+        return cached;
+    }
+
+    private static bool StyleRefMatches(
+        TextDocument document, Paragraph paragraph, string argument, string? headingStyleId)
+    {
+        if (paragraph.StyleId is not { Length: > 0 } styleId)
+            return false;
+
+        if (headingStyleId is not null)
+            return string.Equals(styleId, headingStyleId, StringComparison.OrdinalIgnoreCase);
+
+        if (string.Equals(styleId, argument, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return document.Styles.TryGetValue(styleId, out var style)
+            && string.Equals(style.Name, argument, StringComparison.OrdinalIgnoreCase);
+    }
 
     // Splits a field instruction into whitespace-separated tokens, skipping the leading keyword, honouring
     // double-quoted spans (so a quoted argument with spaces stays one token) and splitting a "\x" switch
