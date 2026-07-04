@@ -42,6 +42,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
         _insertIndex = sourceIndex + 1;
         _copySheetId = copyId;
         ctx.Workbook.InsertSheet(_insertIndex, copy);
+        CopyScopedNamedRangesAndFormulas(ctx.Workbook, _sourceSheetId, copyId);
         return new CommandOutcome(true);
     }
 
@@ -49,6 +50,33 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
     {
         if (_copySheetId.HasValue)
             ctx.Workbook.RemoveSheet(_copySheetId.Value);
+    }
+
+    /// <summary>
+    /// Copies the source sheet's sheet-scoped defined names (plain ranges and formula
+    /// expressions) onto the newly duplicated sheet, re-scoped to the copy — matching Excel,
+    /// which carries a sheet's local names over to a duplicated copy. The range/formula text
+    /// itself is copied verbatim, not remapped to the copy's sheet name, mirroring how cell
+    /// formulas are left unrewritten by <see cref="Sheet.Clone"/>.
+    /// </summary>
+    private static void CopyScopedNamedRangesAndFormulas(Workbook workbook, SheetId sourceSheetId, SheetId copySheetId)
+    {
+        foreach (var ((name, sheetId), range) in workbook.ScopedNamedRanges.ToList())
+        {
+            if (sheetId != sourceSheetId)
+                continue;
+
+            workbook.TryGetScopedNamedRangeMetadata(name, sheetId, out var metadata);
+            workbook.DefineNamedRange(name, range, metadata, copySheetId);
+        }
+
+        foreach (var ((name, sheetId), formulaText) in workbook.ScopedNamedFormulas.ToList())
+        {
+            if (sheetId != sourceSheetId)
+                continue;
+
+            workbook.DefineNamedFormula(name, formulaText, copySheetId);
+        }
     }
 
     private static int FindSheetIndex(Workbook workbook, SheetId sheetId)

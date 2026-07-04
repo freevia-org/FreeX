@@ -22,12 +22,16 @@ public static class SlicerTimelineInteractionPlanner
     /// hit, builds the <see cref="SetSlicerSelectionCommand"/> that toggles it. Returns null when the
     /// point misses every tile or lands on the synthetic "all" preview tile (which has no item to
     /// toggle). The new selection is computed by the portable <see cref="SlicerLayoutBuilder.Toggle"/>.
+    /// <paramref name="additive"/> mirrors Excel's Ctrl+click semantics: false (the default, a plain
+    /// click) replaces the whole selection with just the clicked tile; true toggles the tile's
+    /// membership in the existing selection instead.
     /// </summary>
     public static SetSlicerSelectionCommand? BuildSlicerToggleCommand(
         SlicerModel slicer,
         IEnumerable<string> availableItems,
         SlicerLayoutModel layout,
-        LayoutPoint point)
+        LayoutPoint point,
+        bool additive = false)
     {
         ArgumentNullException.ThrowIfNull(slicer);
         ArgumentNullException.ThrowIfNull(availableItems);
@@ -37,7 +41,7 @@ public static class SlicerTimelineInteractionPlanner
         if (SlicerLayoutBuilder.HitTest(layout, point) is not { IsAllPreview: false } tile)
             return null;
 
-        var toggle = SlicerLayoutBuilder.Toggle(slicer, items, tile.Caption);
+        var toggle = SlicerLayoutBuilder.Toggle(slicer, items, tile.Caption, additive);
         return new SetSlicerSelectionCommand(slicer.Name, toggle.SelectedItems.ToList());
     }
 

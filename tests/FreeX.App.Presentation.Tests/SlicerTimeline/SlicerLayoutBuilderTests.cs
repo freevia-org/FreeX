@@ -118,42 +118,89 @@ public sealed class SlicerLayoutBuilderTests
     }
 
     [Fact]
-    public void Toggle_FromCleared_SelectsAllExceptToggledItem()
+    public void Toggle_PlainClick_FromCleared_SelectsOnlyClickedItem()
     {
+        // H45: a plain click (the default, non-additive) always REPLACES the selection with just the
+        // clicked item, matching Excel — it is never additive against the "all selected" default.
         var slicer = Slicer("Region"); // no selection => "all selected"
 
         var result = SlicerLayoutBuilder.Toggle(slicer, ["North", "South", "East"], "North");
+
+        result.SelectedItems.Should().BeEquivalentTo("North");
+        result.IsCleared.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Toggle_PlainClick_ReplacesExistingSingleSelectionWithClickedItem()
+    {
+        // H45: North is selected; plain-clicking South must replace the selection with South only,
+        // not add South alongside North.
+        var slicer = Slicer("Region", "North");
+
+        var result = SlicerLayoutBuilder.Toggle(slicer, ["North", "South", "East"], "South");
+
+        result.SelectedItems.Should().BeEquivalentTo("South");
+    }
+
+    [Fact]
+    public void Toggle_PlainClick_OnSoleSelectedItem_ClearsFilter()
+    {
+        // Clicking the only currently-selected tile again clears the filter (Excel: deselect back to "all").
+        var slicer = Slicer("Region", "South");
+
+        var result = SlicerLayoutBuilder.Toggle(slicer, ["North", "South", "East"], "South");
+
+        result.SelectedItems.Should().BeEmpty();
+        result.IsCleared.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Toggle_PlainClick_WithMultiSelection_ReplacesWithSingleClickedItem()
+    {
+        var slicer = Slicer("Region", "North", "South");
+
+        var result = SlicerLayoutBuilder.Toggle(slicer, ["North", "South", "East"], "South");
+
+        result.SelectedItems.Should().BeEquivalentTo("South");
+    }
+
+    [Fact]
+    public void Toggle_AdditiveClick_FromCleared_SelectsAllExceptToggledItem()
+    {
+        var slicer = Slicer("Region"); // no selection => "all selected"
+
+        var result = SlicerLayoutBuilder.Toggle(slicer, ["North", "South", "East"], "North", additive: true);
 
         result.SelectedItems.Should().BeEquivalentTo("South", "East");
         result.IsCleared.Should().BeFalse();
     }
 
     [Fact]
-    public void Toggle_AddsUnselectedItem()
+    public void Toggle_AdditiveClick_AddsUnselectedItem()
     {
         var slicer = Slicer("Region", "North");
 
-        var result = SlicerLayoutBuilder.Toggle(slicer, ["North", "South", "East"], "South");
+        var result = SlicerLayoutBuilder.Toggle(slicer, ["North", "South", "East"], "South", additive: true);
 
         result.SelectedItems.Should().BeEquivalentTo("North", "South");
     }
 
     [Fact]
-    public void Toggle_RemovingItem_FromSelection()
+    public void Toggle_AdditiveClick_RemovingItem_FromSelection()
     {
         var slicer = Slicer("Region", "North", "South");
 
-        var result = SlicerLayoutBuilder.Toggle(slicer, ["North", "South", "East"], "South");
+        var result = SlicerLayoutBuilder.Toggle(slicer, ["North", "South", "East"], "South", additive: true);
 
         result.SelectedItems.Should().BeEquivalentTo("North");
     }
 
     [Fact]
-    public void Toggle_SelectingEveryItem_CollapsesToCleared()
+    public void Toggle_AdditiveClick_SelectingEveryItem_CollapsesToCleared()
     {
         var slicer = Slicer("Region", "North", "South");
 
-        var result = SlicerLayoutBuilder.Toggle(slicer, ["North", "South", "East"], "East");
+        var result = SlicerLayoutBuilder.Toggle(slicer, ["North", "South", "East"], "East", additive: true);
 
         result.SelectedItems.Should().BeEmpty();
         result.IsCleared.Should().BeTrue();

@@ -7,6 +7,7 @@ using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FreeX.App.Presentation.PageLayout;
+using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -54,6 +55,7 @@ public static partial class PrintRenderer
                 AvailableWidth: printPlan.Viewport.RequestWidth));
 
         var cellLookup = viewport.Cells.ToDictionary(c => (c.Row, c.Col));
+        var columnWidthsPixels = BuildColumnWidthsPixels(sheet);
 
         IReadOnlyList<PrintCommentSummaryPagePlan> commentSummaryPages =
             sheet.PrintComments == WorksheetPrintComments.AtEnd
@@ -84,12 +86,15 @@ public static partial class PrintRenderer
             var measurement = PrintLayoutPlanner.MeasurePrintableGrid(
                 printPlan.Metrics.PrintableWidth,
                 printPlan.Metrics.PrintableHeight,
-                (uint)pageRows.Count,
-                (uint)pageColumns.Count,
+                pageRows,
+                pageColumns,
+                sheet.RowHeights,
+                columnWidthsPixels,
                 sheet.PrintHeadings);
             var pageNumber = page.PageNumber;
             var (pageHeader, pageFooter, pageHeaderPictures, pageFooterPictures) = ResolveHeaderFooterForPage(sheet, pageNumber);
             var (visual, textOverlays, linkOverlays, cellDestinationOverlays) = RenderPageVisual(
+                sheet,
                 pageW,
                 pageH,
                 marginLeft,
@@ -251,6 +256,21 @@ public static partial class PrintRenderer
         var clone = new PageContent();
         ((IAddChild)clone).AddChild(fixedPage);
         return clone;
+    }
+
+    /// <summary>
+    /// Converts the sheet's character-unit column widths to pixels (matching
+    /// <see cref="PagePaginationPlanner.AverageColumnWidthPixels"/>'s per-column conversion), so
+    /// <see cref="PrintLayoutPlanner.MeasurePrintableGrid(double, double, IReadOnlyList{uint}, IReadOnlyList{uint}, IReadOnlyDictionary{uint, double}, IReadOnlyDictionary{uint, double}, bool)"/>
+    /// can measure each printed page from the sheet's real per-column pixel sizes.
+    /// </summary>
+    private static IReadOnlyDictionary<uint, double> BuildColumnWidthsPixels(Sheet sheet)
+    {
+        var pixels = new Dictionary<uint, double>(sheet.ColumnWidths.Count);
+        foreach (var (col, width) in sheet.ColumnWidths)
+            pixels[col] = ColumnWidthPixelMapper.ColumnWidthToPixels(width);
+
+        return pixels;
     }
 
     private sealed record PdfLinkTarget(

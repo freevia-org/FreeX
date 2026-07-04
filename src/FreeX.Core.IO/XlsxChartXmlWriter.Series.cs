@@ -356,7 +356,7 @@ internal static partial class XlsxChartXmlWriter
                 new XElement(chartNs + "order", new XAttribute("val", seriesIndex)),
                 txElement,
                 ToSeriesShapeProperties(chart, seriesIndex, chartNs, drawingNs),
-                seriesIndex == 0 ? ToExplodedSliceXml(chart, chartNs) : null,
+                ToDataPointsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToCategoryRangeXml(effectiveCategoryRange, effectiveCategoryIsNumeric, chartNs),
                 new XElement(chartNs + "val",
@@ -394,16 +394,62 @@ internal static partial class XlsxChartXmlWriter
                 new XAttribute("val", Math.Clamp((int)Math.Round(normalized), 0, 360)));
     }
 
-    private static XElement? ToExplodedSliceXml(ChartModel chart, XNamespace chartNs)
+    /// <summary>
+    /// Emits one <c>&lt;c:dPt&gt;</c> element per data point that needs a per-point override —
+    /// either the exploded-slice distance (pie-family series index 0 only, matching Excel) or
+    /// an explicit per-point fill color (<see cref="ChartModel.PointFillColors"/>). Child element
+    /// order follows CT_DPt: idx, then explosion, then spPr.
+    /// </summary>
+    private static IEnumerable<XElement> ToDataPointsXml(
+        ChartModel chart,
+        int seriesIndex,
+        XNamespace chartNs,
+        XNamespace drawingNs)
     {
         var pointCount = ChartTypeSupport.GetDataPointCount(chart);
-        if (chart.ExplodedSliceIndex < 0 || chart.ExplodedSliceIndex >= pointCount || chart.ExplodedSliceDistance <= 0)
+        var explodedIndex = seriesIndex == 0 &&
+            chart.ExplodedSliceIndex >= 0 &&
+            chart.ExplodedSliceIndex < pointCount &&
+            chart.ExplodedSliceDistance > 0
+            ? chart.ExplodedSliceIndex
+            : (int?)null;
+
+        var pointIndexes = chart.PointFillColors
+            .Where(point => point.SeriesIndex == seriesIndex)
+            .Select(point => point.PointIndex)
+            .Concat(explodedIndex is { } idx ? [idx] : [])
+            .Distinct()
+            .OrderBy(index => index);
+
+        foreach (var pointIndex in pointIndexes)
+        {
+            var explosion = pointIndex == explodedIndex
+                ? new XElement(chartNs + "explosion",
+                    new XAttribute("val", Math.Clamp((int)Math.Round(chart.ExplodedSliceDistance * 100), 0, 50)))
+                : null;
+            var spPr = ToPointShapeProperties(chart, seriesIndex, pointIndex, chartNs, drawingNs);
+
+            yield return new XElement(chartNs + "dPt",
+                new XElement(chartNs + "idx", new XAttribute("val", pointIndex)),
+                explosion,
+                spPr);
+        }
+    }
+
+    private static XElement? ToPointShapeProperties(
+        ChartModel chart,
+        int seriesIndex,
+        int pointIndex,
+        XNamespace chartNs,
+        XNamespace drawingNs)
+    {
+        var point = chart.PointFillColors.LastOrDefault(item =>
+            item.SeriesIndex == seriesIndex && item.PointIndex == pointIndex);
+        if (point is null)
             return null;
 
-        return new XElement(chartNs + "dPt",
-            new XElement(chartNs + "idx", new XAttribute("val", chart.ExplodedSliceIndex)),
-            new XElement(chartNs + "explosion",
-                new XAttribute("val", Math.Clamp((int)Math.Round(chart.ExplodedSliceDistance * 100), 0, 50))));
+        var fill = ToSolidFill(point.FillThemeColor, point.FillColor, drawingNs);
+        return fill is null ? null : new XElement(chartNs + "spPr", fill);
     }
 
     private static XElement? ToSeriesLineShapeProperties(
@@ -478,11 +524,13 @@ internal static partial class XlsxChartXmlWriter
         if (format is null)
             return null;
 
-        var fill = ToSolidFill(format.FillThemeColor, format.FillColor, drawingNs);
+        var solidFill = ToSolidFill(format.FillThemeColor, format.FillColor, drawingNs);
+        var fill = solidFill ?? (format.NoFill ? new XElement(drawingNs + "noFill") : null);
         var lineFill = ToSolidFill(format.StrokeThemeColor, format.StrokeColor, drawingNs);
         var hasLineFormatting = lineFill is not null ||
             format.StrokeThickness is not null ||
-            format.DashStyle is not null;
+            format.DashStyle is not null ||
+            format.NoLine;
 
         return fill is null && !hasLineFormatting
             ? null
@@ -493,7 +541,7 @@ internal static partial class XlsxChartXmlWriter
                         format.StrokeThickness is { } strokeThickness
                             ? new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(strokeThickness, 0.5, 10) * DrawingMlUnits.EmuPerPoint)))
                             : null,
-                        lineFill,
+                        lineFill ?? (format.NoLine ? new XElement(drawingNs + "noFill") : null),
                         format.DashStyle is { } dashStyle
                             ? ToPresetDash(dashStyle, drawingNs)
                             : null)

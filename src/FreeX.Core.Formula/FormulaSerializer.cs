@@ -92,6 +92,18 @@ public static class FormulaSerializer
                 sb.Append(']');
                 break;
 
+            // ANCHORARRAY(ref) is the internal representation of the A1# spill-anchor operator
+            // (see Parser.WrapSpillAnchor, which only ever wraps a CellRefNode) — serialize it back
+            // to that literal syntax rather than the function-call form so a formula containing '#'
+            // round-trips unchanged through structural rewrites (insert/delete rows or columns).
+            // Guard on the argument actually being a CellRefNode so this only rewrites the shape the
+            // parser produces; anything else falls through to the ordinary function-call rendering.
+            case FunctionCallNode f when f.FunctionName == "ANCHORARRAY" &&
+                                         f.Arguments is [CellRefNode anchorRef]:
+                WriteCellRef(anchorRef, sb);
+                sb.Append('#');
+                break;
+
             case FunctionCallNode f:
                 sb.Append(f.FunctionName);
                 sb.Append('(');
@@ -198,6 +210,29 @@ public static class FormulaSerializer
 
     private static void WriteRangeRef(RangeRefNode rr, StringBuilder sb)
     {
+        if (rr.EndSheetName is not null)
+        {
+            // 3-D sheet-span reference (e.g. Sheet1:Sheet3!A1 or Sheet1:Sheet3!A1:B5). Excel quotes
+            // the whole "Start:End" span as a single token when either name needs quoting (never
+            // each name individually) — mirror that here so the Lexer (which reads a quoted
+            // SheetQualifier token's embedded ':' as the span separator; see
+            // Lexer.ReadQuotedSheetQualifier / Parser's SheetQualifier primary case) round-trips it.
+            // Note: this normalizes an unusual "mixed quoting" input (e.g. Sheet1:'Last Sheet'!A1,
+            // where only the end name was quoted) to the canonical whole-span-quoted form
+            // ('Sheet1:Last Sheet'!A1) rather than preserving the original mixed style — the parsed
+            // AST only records each sheet name, not which quoting style produced it, and Excel's own
+            // canonical form is exactly this whole-span quoting, so this is the more correct output.
+            WriteSheetSpanName(rr.SheetName!, rr.EndSheetName, sb);
+            sb.Append('!');
+            WriteRefPart(rr.Start, sb);
+            if (!rr.IsSingleCellSpan)
+            {
+                sb.Append(':');
+                WriteRefPart(rr.End, sb);
+            }
+            return;
+        }
+
         var sheetName = rr.SheetName ?? rr.Start.SheetName;
         if (sheetName is not null)
         {
@@ -208,6 +243,23 @@ public static class FormulaSerializer
         WriteRefPart(rr.Start, sb);
         sb.Append(':');
         WriteRefPart(rr.End, sb);
+    }
+
+    private static void WriteSheetSpanName(string startSheetName, string endSheetName, StringBuilder sb)
+    {
+        if (!SheetNameFormatter.NeedsQuoting(startSheetName) && !SheetNameFormatter.NeedsQuoting(endSheetName))
+        {
+            sb.Append(startSheetName);
+            sb.Append(':');
+            sb.Append(endSheetName);
+            return;
+        }
+
+        sb.Append('\'');
+        sb.Append(startSheetName.Replace("'", "''", StringComparison.Ordinal));
+        sb.Append(':');
+        sb.Append(endSheetName.Replace("'", "''", StringComparison.Ordinal));
+        sb.Append('\'');
     }
 
     private static void WriteFullColumnRangeRef(FullColumnRangeRefNode fcr, StringBuilder sb)

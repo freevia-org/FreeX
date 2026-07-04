@@ -21,7 +21,8 @@ internal static class XlsxWorksheetFormControlPreserver
     public static void Preserve(
         ZipArchive sourceArchive,
         ZipArchive targetArchive,
-        XlsxSourcePackagePreservationContext? context)
+        XlsxSourcePackagePreservationContext? context,
+        Workbook? workbook = null)
     {
         if (context is null)
             return;
@@ -50,6 +51,14 @@ internal static class XlsxWorksheetFormControlPreserver
             if (targetRoot is null)
                 continue;
 
+            // Write the live FormControlModel state (IsChecked/Value/SelectedIndex, mutated by user
+            // interaction since load) back into the source archive's ctrlProp parts BEFORE cloning
+            // the controls block or copying ctrlProps forward, so the round-tripped file reflects the
+            // control's current state rather than silently reverting to its file-load state.
+            var sheet = workbook?.GetSheet(sheetName);
+            if (sheet is not null)
+                WriteControlStateToCtrlProps(sourceArchive, targetArchive, context, sourceWorksheetPath, sheet);
+
             // If a controls block already survived (clean byte-copy path), leave it alone.
             if (FindControlsContainer(targetRoot, context.WorkbookNs) is not null)
                 continue;
@@ -74,6 +83,145 @@ internal static class XlsxWorksheetFormControlPreserver
         {
             // Re-bind the freshly injected <control> r:id values to the copied ctrlProps parts.
             XlsxWorksheetOleControlNormalizer.NormalizePackage(targetArchive);
+        }
+    }
+
+    /// <summary>
+    /// Rewrites each control's <c>checked</c>/<c>val</c>/<c>sel</c> <c>formControlPr</c> attributes
+    /// (in the TARGET archive's already-copied ctrlProp part — see
+    /// <see cref="XlsxPackageMetadataMerger.CopyUnknownPackageParts"/>) from the corresponding
+    /// <see cref="FormControlModel"/>'s live state, matched primarily by <c>shapeId</c> (unique per
+    /// control) against <paramref name="sheet"/>.<see cref="Sheet.FormControls"/>, falling back to
+    /// document order when a shapeId is unavailable on either side. Only the attributes we actually
+    /// model are touched; every other attribute is left untouched so unmodeled state still
+    /// round-trips byte-for-byte.
+    /// </summary>
+    private static void WriteControlStateToCtrlProps(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        XlsxSourcePackagePreservationContext context,
+        string sourceWorksheetPath,
+        Sheet sheet)
+    {
+        if (sheet.FormControls.Count == 0)
+            return;
+
+        var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceArchive, sourceWorksheetPath);
+        var sourceRoot = sourceWorksheetXml?.Root;
+        if (sourceRoot is null)
+            return;
+
+        var controlElements = EnumerateControlElements(sourceRoot, context.WorkbookNs + "control").ToList();
+        if (controlElements.Count == 0)
+            return;
+
+        var worksheetRels = XlsxRelationshipReader.LoadTargets(
+            sourceArchive,
+            XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath),
+            sourceWorksheetPath,
+            context.PackageRelNs);
+
+        // Controls are read into FormControlModel in the same document order they're enumerated
+        // here (XlsxFormControlMapper.ReadWorksheet uses the identical traversal), so pairing by
+        // index recovers each model's originating <control> element PROVIDED every control parsed
+        // successfully on load. XlsxFormControlMapper.ReadWorksheet swallows a single malformed
+        // control's parse failure rather than aborting the whole sheet, which can shift a purely
+        // positional pairing out of sync — so prefer matching by ShapeId (unique per control,
+        // present on both the XML element and the loaded model) and only fall back to positional
+        // pairing when ShapeId is unavailable on either side.
+        var controlsByShapeId = sheet.FormControls
+            .Where(c => c.ShapeId is not null)
+            .ToDictionary(c => c.ShapeId!.Value, c => c);
+
+        for (var i = 0; i < controlElements.Count; i++)
+        {
+            var element = controlElements[i];
+            FormControlModel? control = null;
+            if (uint.TryParse(element.Attribute("shapeId")?.Value, out var shapeId))
+                controlsByShapeId.TryGetValue(shapeId, out control);
+
+            control ??= i < sheet.FormControls.Count ? sheet.FormControls[i] : null;
+            if (control is null)
+                continue;
+
+            var relId = element.Attribute(context.RelNs + "id")?.Value;
+            if (string.IsNullOrWhiteSpace(relId) ||
+                !worksheetRels.TryGetValue(relId, out var ctrlPropPath) ||
+                string.IsNullOrWhiteSpace(ctrlPropPath))
+            {
+                continue;
+            }
+
+            var targetEntry = targetArchive.GetEntry(ctrlPropPath);
+            if (targetEntry is null)
+                continue;
+
+            var ctrlPropXml = XlsxPackageXmlEditor.LoadXml(targetEntry);
+            var formControlPr = ctrlPropXml.Root;
+            if (formControlPr is null)
+                continue;
+
+            ApplyControlStateToFormControlPr(formControlPr, control);
+            XlsxPackageXmlEditor.ReplaceXml(targetArchive, ctrlPropPath, ctrlPropXml);
+        }
+    }
+
+    /// <summary>Writes IsChecked/Value/SelectedIndex onto a <c>formControlPr</c> element's attributes.</summary>
+    private static void ApplyControlStateToFormControlPr(XElement formControlPr, FormControlModel control)
+    {
+        switch (control.Kind)
+        {
+            case FormControlKind.CheckBox:
+            case FormControlKind.OptionButton:
+                // Excel's tri-state checkbox value ("Mixed") is not modeled — we only ever write
+                // the two states FormControlModel.IsChecked can represent.
+                formControlPr.SetAttributeValue("checked", control.IsChecked ? "Checked" : "Unchecked");
+                break;
+
+            case FormControlKind.Spinner:
+            case FormControlKind.ScrollBar:
+                if (control.Value is { } value)
+                    formControlPr.SetAttributeValue("val", value);
+                break;
+
+            case FormControlKind.ListBox:
+            case FormControlKind.DropDown:
+                if (control.SelectedIndex is { } selectedIndex)
+                    formControlPr.SetAttributeValue("sel", selectedIndex);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Enumerates a worksheet's <c>&lt;control&gt;</c> elements in document order, descending
+    /// through <c>mc:AlternateContent</c>/<c>mc:Choice</c>/<c>mc:Fallback</c> wrappers exactly like
+    /// <see cref="XlsxFormControlMapper"/>'s loader does (same namespace-qualified name match and
+    /// first-Choice-else-Fallback traversal), so the two traversals stay paired.
+    /// </summary>
+    private static IEnumerable<XElement> EnumerateControlElements(XElement element, XName controlName)
+    {
+        foreach (var child in element.Elements())
+        {
+            if (child.Name == controlName)
+            {
+                yield return child;
+                continue;
+            }
+
+            if (child.Name == McNs + "AlternateContent")
+            {
+                var preferred = child.Element(McNs + "Choice") ?? child.Element(McNs + "Fallback");
+                if (preferred is not null)
+                {
+                    foreach (var match in EnumerateControlElements(preferred, controlName))
+                        yield return match;
+                }
+
+                continue;
+            }
+
+            foreach (var match in EnumerateControlElements(child, controlName))
+                yield return match;
         }
     }
 

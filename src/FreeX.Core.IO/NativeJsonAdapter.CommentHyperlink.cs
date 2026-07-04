@@ -4,7 +4,7 @@ namespace FreeX.Core.IO;
 
 public sealed partial class NativeJsonAdapter
 {
-    private static (CellAddress Address, string Text)? TryLoadComment(CommentDto? commentDto, SheetId sheetId)
+    private static (CellAddress Address, string Text, string? Author, bool IsShown)? TryLoadComment(CommentDto? commentDto, SheetId sheetId)
     {
         if (string.IsNullOrWhiteSpace(commentDto?.Address) || commentDto.Text is null)
             return null;
@@ -13,7 +13,7 @@ public sealed partial class NativeJsonAdapter
         {
             var address = CellAddress.Parse(commentDto.Address, sheetId);
             return address.Sheet == sheetId
-                ? (address, commentDto.Text)
+                ? (address, commentDto.Text, commentDto.Author, commentDto.IsShown)
                 : null;
         }
         catch (FormatException)
@@ -81,11 +81,17 @@ public sealed partial class NativeJsonAdapter
         }
     }
 
-    private static CommentDto ToCommentDto(KeyValuePair<CellAddress, string> pair) => new()
+    private static CommentDto ToCommentDto(Sheet sheet, KeyValuePair<CellAddress, string> pair)
     {
-        Address = pair.Key.ToA1(),
-        Text = pair.Value
-    };
+        sheet.CommentAuthors.TryGetValue(pair.Key, out var author);
+        return new CommentDto
+        {
+            Address = pair.Key.ToA1(),
+            Text = pair.Value,
+            Author = string.IsNullOrEmpty(author) ? null : author,
+            IsShown = sheet.ShownComments.Contains(pair.Key)
+        };
+    }
 
     private static ThreadedCommentDto ToThreadedCommentDto(KeyValuePair<CellAddress, ThreadedComment> pair) => new()
     {

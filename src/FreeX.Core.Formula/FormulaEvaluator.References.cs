@@ -90,6 +90,15 @@ public sealed partial class FormulaEvaluator
 
     private static ScalarValue EvaluateRange(RangeRefNode range, IEvalContext context)
     {
+        // A 3-D sheet-span reference (Sheet1:Sheet3!A1) is only meaningful as an argument to the
+        // aggregate functions that expand it across every spanned sheet (see
+        // FormulaEvaluator.Functions.cs's TryExpandSheetSpanAggregateRange). Anywhere else —
+        // a bare reference, an arithmetic operand, a non-aggregate function argument — Excel
+        // evaluates it to #VALUE!, so surface that directly rather than silently collapsing to
+        // just the start sheet's cell.
+        if (range.EndSheetName is not null)
+            return ErrorValue.Value;
+
         // A bare range reference outside a function context returns the first value
         // (This matches Excel's implicit intersection behavior for simple cases)
         return range.SheetName is not null
@@ -102,6 +111,16 @@ public sealed partial class FormulaEvaluator
     {
         if (node is RangeRefNode range)
             return BuildRangeValueOrError(range, context);
+
+        // A bare full-column/full-row reference (e.g. =A:A, =1:1) as the entire body of a dynamic-array
+        // formula must spill the used extent of that column/row, matching Excel. Route through the same
+        // ToRangeRef + BuildRangeValueOrError machinery used for finite ranges (which already clamps the
+        // open end via ClampOpenEndedRangeToUsed) instead of collapsing to a single scalar.
+        if (node is FullColumnRangeRefNode fullColumn)
+            return BuildRangeValueOrError(ToRangeRef(fullColumn), context);
+
+        if (node is FullRowRangeRefNode fullRow)
+            return BuildRangeValueOrError(ToRangeRef(fullRow), context);
 
         if (node is NamedRangeNode named)
         {
@@ -185,6 +204,16 @@ public sealed partial class FormulaEvaluator
 
     private static RangeValue BuildRangeValue(RangeRefNode range, IEvalContext context)
     {
+        // A 3-D sheet-span reference (EndSheetName set) is only valid as a direct argument to the
+        // aggregate functions that expand it across every spanned sheet (see
+        // TryExpandSheetSpanAggregateRange in FormulaEvaluator.Functions.cs, which intercepts spans
+        // before they ever reach this general-purpose single-sheet materializer). Every other
+        // consumer of BuildRangeValue (INDEX, VLOOKUP, MMULT, structured functions, ISREF's 2-D
+        // path, ...) reaches here for a span only when used outside an aggregate context, which is
+        // exactly where Excel returns #VALUE!.
+        if (range.EndSheetName is not null)
+            throw new FormulaEvalException("#VALUE!", "3-D sheet-span reference used outside an aggregate function");
+
         // A full-column (A:A) / full-row (1:1) reference nominally spans 1,048,576 rows or 16,384
         // columns, which exceeds the materialization cap and would otherwise return #REF! — even for
         // a single column. Excel only ever materializes the populated extent, so clamp the open end
@@ -248,11 +277,20 @@ public sealed partial class FormulaEvaluator
         if (endRow == range.End.Row && endCol == range.End.ColumnNumber)
             return range;
 
-        var end = range.End with
-        {
-            ColumnName = FreeX.Core.Model.CellAddress.NumberToColumnName(endCol),
-            Row = endRow
-        };
+        // Must construct a fresh CellRefNode via its constructor rather than `range.End with { ... }`.
+        // CellRefNode.ColumnNumber is a property with a field initializer computed from ColumnName —
+        // under a `with` expression the compiler-generated copy constructor copies that already-computed
+        // backing field verbatim and does NOT re-run the initializer, so a `with` that changes ColumnName
+        // (as the full-row clamp below does) would silently leave ColumnNumber stale at the old,
+        // unclamped value (e.g. still 16384) even though ColumnName correctly shows the clamped letter.
+        // Full-column clamping only changes Row (a plain copied field), which is why that case never
+        // surfaced this bug — only changing ColumnName does.
+        var end = new CellRefNode(
+            FreeX.Core.Model.CellAddress.NumberToColumnName(endCol),
+            endRow,
+            range.End.IsColAbsolute,
+            range.End.IsRowAbsolute,
+            range.End.SheetName);
         return new RangeRefNode(range.Start, end, range.SheetName);
     }
 
@@ -308,6 +346,15 @@ public sealed partial class FormulaEvaluator
     {
         range = node switch
         {
+            // A 3-D sheet-span (EndSheetName set) is deliberately excluded here: every caller of
+            // TryAsRangeRef is either a single-sheet "direct range" fast path (INDEX, MATCH, VLOOKUP,
+            // NPV, ROWS/COLUMNS/AREAS, ...) or a structured-function argument builder, none of which
+            // understand multi-sheet expansion. Returning false sends span arguments down the
+            // generic per-argument loop in EvaluateFunction instead, where
+            // TryExpandSheetSpanAggregateRange is the ONLY place that knows how to expand a span —
+            // everywhere else a span reaching one of these call sites correctly ends up as #VALUE!
+            // (matching Excel, which only accepts 3-D references inside aggregate functions).
+            RangeRefNode { EndSheetName: not null } => null!,
             RangeRefNode rr => rr,
             FullColumnRangeRefNode fcr => ToRangeRef(fcr),
             FullRowRangeRefNode frr => ToRangeRef(frr),
@@ -504,7 +551,12 @@ public sealed partial class FormulaEvaluator
         return arg switch
         {
             CellRefNode cell  => cell.SheetName is null || context.SheetExists(cell.SheetName) ? TrueValue : FalseValue,
-            RangeRefNode rng  => rng.SheetName is null || context.SheetExists(rng.SheetName) ? TrueValue : FalseValue,
+            // A 3-D sheet-span (EndSheetName set) is still syntactically a reference for ISREF's
+            // purposes — Excel accepts Sheet1:Sheet3!A1 here — so both the start and end sheet must
+            // resolve, not just the start.
+            RangeRefNode rng  => (rng.SheetName is null || context.SheetExists(rng.SheetName)) &&
+                                  (rng.EndSheetName is null || context.SheetExists(rng.EndSheetName))
+                                  ? TrueValue : FalseValue,
             FullColumnRangeRefNode col => col.SheetName is null || context.SheetExists(col.SheetName) ? TrueValue : FalseValue,
             FullRowRangeRefNode row => row.SheetName is null || context.SheetExists(row.SheetName) ? TrueValue : FalseValue,
             NamedRangeNode nm => context.TryResolveNamedRange(nm.Name) is not null ? TrueValue : FalseValue,
@@ -713,6 +765,10 @@ public sealed partial class FormulaEvaluator
                 baseSheet = cellRef.SheetName;
                 break;
             case RangeRefNode rangeRef:
+                // OFFSET always returns a single-sheet reference; a 3-D span base (Sheet1:Sheet3!A1)
+                // has no single well-defined sheet to offset from, so Excel disallows it here.
+                if (rangeRef.EndSheetName is not null)
+                    return ErrorValue.Value;
                 if (rangeRef.SheetName is not null && !context.SheetExists(rangeRef.SheetName))
                     return ErrorValue.Ref;
                 uint r0 = Math.Min(rangeRef.Start.Row, rangeRef.End.Row);
@@ -758,6 +814,19 @@ public sealed partial class FormulaEvaluator
                 baseHeight = (int)(nr1 - nr0 + 1);
                 baseWidth = (int)(nc1 - nc0 + 1);
                 baseSheet = context.TryGetSheetName(g.Start.Sheet);
+                break;
+            case FunctionCallNode fn when fn.FunctionName is "OFFSET" or "INDIRECT":
+                // The base argument may itself be a reference-returning function call, e.g.
+                // OFFSET(INDIRECT("A1"),1,1) or OFFSET(OFFSET(A1,0,0),1,1) — both are valid in
+                // Excel. Resolve the nested call to its RangeValue via the same path used
+                // elsewhere for reference-returning arguments (EvaluateCellReferenceArgument,
+                // EvaluateIsRef) and use its bounds as the OFFSET base.
+                var nestedReference = EvaluateReferenceReturningFunction(fn, context);
+                if (nestedReference is ErrorValue nestedError) return nestedError;
+                if (nestedReference is not RangeValue nestedRange) return ErrorValue.Value;
+                baseRow = nestedRange.StartRow; baseCol = nestedRange.StartCol;
+                baseHeight = nestedRange.RowCount; baseWidth = nestedRange.ColCount;
+                baseSheet = nestedRange.SheetName;
                 break;
             default:
                 return ErrorValue.Value;

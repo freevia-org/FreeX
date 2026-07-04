@@ -43,6 +43,7 @@ public sealed class RenameSheetCommand : IWorkbookCommand
     private string? _oldName;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private Dictionary<string, string>? _namedFormulaSnapshot;
+    private Dictionary<(string Name, SheetId Sheet), string>? _scopedNamedFormulaSnapshot;
     // T6: string sheet-name refs on model objects
     private List<(PivotCacheModel Cache, string OldValue)>? _pivotCacheNameSnapshot;
     private List<(ChartModel Chart, string OldValue)>? _chartPivotSourceNameSnapshot;
@@ -76,8 +77,9 @@ public sealed class RenameSheetCommand : IWorkbookCommand
         RowColumnShiftHelpers.RewriteAllFormulas(
             ctx.Workbook, new RenameSheetOp(_oldName, _newName), _formulaSnapshot);
         _namedFormulaSnapshot = [];
+        _scopedNamedFormulaSnapshot = [];
         RowColumnShiftHelpers.RewriteNamedFormulas(
-            ctx.Workbook, new RenameSheetOp(_oldName, _newName), _namedFormulaSnapshot);
+            ctx.Workbook, new RenameSheetOp(_oldName, _newName), _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
 
         // T6: update string sheet-name refs on model objects
         _pivotCacheNameSnapshot = [];
@@ -181,7 +183,7 @@ public sealed class RenameSheetCommand : IWorkbookCommand
             var s = ctx.GetSheet(_sheetId);
             s.Name = _oldName;
             RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
-            RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot);
+            RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
 
             // T6 restore: string sheet-name refs
             if (_pivotCacheNameSnapshot is not null)

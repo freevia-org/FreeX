@@ -20,6 +20,8 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
     private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
     private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
     private Dictionary<CellAddress, IReadOnlyList<CellTextRun>>? _richTextRunsSnapshot;
+    private HashSet<uint>? _filterHiddenRowsSnapshot;
+    private HashSet<uint>? _valueFilterHiddenRowsSnapshot;
 
     public int RemovedRowCount { get; private set; }
 
@@ -65,6 +67,8 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
             _hyperlinkSnapshot = [];
             _hyperlinkMetadataSnapshot = [];
             _richTextRunsSnapshot = [];
+            _filterHiddenRowsSnapshot = [];
+            _valueFilterHiddenRowsSnapshot = [];
             return new CommandOutcome(true);
         }
 
@@ -76,10 +80,22 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
         _hyperlinkSnapshot = CaptureDictionary(sheet.Hyperlinks, allInRangeAddresses);
         _hyperlinkMetadataSnapshot = CaptureDictionary(sheet.HyperlinkMetadata, allInRangeAddresses);
         _richTextRunsSnapshot = CaptureDictionary(sheet.RichTextRuns, allInRangeAddresses);
+        _filterHiddenRowsSnapshot = CaptureHiddenRowSet(sheet.FilterHiddenRows, _range.Start.Row, _range.End.Row);
+        _valueFilterHiddenRowsSnapshot = CaptureHiddenRowSet(sheet.ValueFilterHiddenRows, _range.Start.Row, _range.End.Row);
 
         // ── 3. Clear the entire in-range area ─────────────────────────────
         foreach (var address in allInRangeAddresses)
             ClearAddress(sheet, address);
+
+        // sheet.FilterHiddenRows/ValueFilterHiddenRows must be permuted in lockstep with the row
+        // content below (mirroring SortCommand's per-row IsFilterHidden/IsValueFilterHidden carry):
+        // each surviving row's hidden-by-filter flags move with it to its new compacted row index,
+        // and vacated trailing rows are unhidden since they no longer hold any content.
+        for (var row = _range.Start.Row; row <= _range.End.Row; row++)
+        {
+            sheet.FilterHiddenRows.Remove(row);
+            sheet.ValueFilterHiddenRows.Remove(row);
+        }
 
         // Build a fast lookup from the snapshot list.
         var snapshotMap = _snapshot.ToDictionary(s => s.Address);
@@ -88,6 +104,11 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
         uint targetRow = _range.Start.Row;
         foreach (var sourceRow in survivingRows)
         {
+            if (_filterHiddenRowsSnapshot.Contains(sourceRow))
+                sheet.FilterHiddenRows.Add(targetRow);
+            if (_valueFilterHiddenRowsSnapshot.Contains(sourceRow))
+                sheet.ValueFilterHiddenRows.Add(targetRow);
+
             for (uint col = _range.Start.Col; col <= _range.End.Col; col++)
             {
                 var source = new CellAddress(_sheetId, sourceRow, col);
@@ -156,6 +177,22 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
         RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot, allInRangeAddresses);
         RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot, allInRangeAddresses);
         RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot, allInRangeAddresses);
+
+        // Restore FilterHiddenRows/ValueFilterHiddenRows to their pre-Apply state (undoing the
+        // lockstep permutation performed in Apply).
+        if (_filterHiddenRowsSnapshot is not null && _valueFilterHiddenRowsSnapshot is not null)
+        {
+            for (var row = _range.Start.Row; row <= _range.End.Row; row++)
+            {
+                sheet.FilterHiddenRows.Remove(row);
+                sheet.ValueFilterHiddenRows.Remove(row);
+            }
+
+            foreach (var row in _filterHiddenRowsSnapshot)
+                sheet.FilterHiddenRows.Add(row);
+            foreach (var row in _valueFilterHiddenRowsSnapshot)
+                sheet.ValueFilterHiddenRows.Add(row);
+        }
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -194,6 +231,18 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
         foreach (var offset in _columnOffsets.Distinct().Order())
             if (offset < _range.ColCount)
                 yield return _range.Start.Col + offset;
+    }
+
+    private static HashSet<uint> CaptureHiddenRowSet(HashSet<uint> source, uint startRow, uint endRow)
+    {
+        var snapshot = new HashSet<uint>();
+        for (var row = startRow; row <= endRow; row++)
+        {
+            if (source.Contains(row))
+                snapshot.Add(row);
+        }
+
+        return snapshot;
     }
 
     private static List<CellSnapshot> CaptureCellSnapshots(Sheet sheet, IReadOnlyList<CellAddress> addresses)

@@ -25,9 +25,9 @@ public static partial class PrintRenderer
         for (var colIndex = 0; colIndex < pageColumns.Count; colIndex++)
         {
             var rect = new Rect(
-                marginLeft + measurement.HeaderWidth + colIndex * measurement.ColumnWidth,
+                marginLeft + measurement.HeaderWidth + measurement.ColumnOffset(colIndex),
                 marginTop,
-                measurement.ColumnWidth,
+                measurement.ColumnWidthAt(colIndex),
                 measurement.HeaderHeight);
             dc.DrawRectangle(headerBrush, headerPen, rect);
             DrawCenteredText(dc, CellAddress.NumberToColumnName(pageColumns[colIndex]), rect, typeface);
@@ -37,9 +37,9 @@ public static partial class PrintRenderer
         {
             var rect = new Rect(
                 marginLeft,
-                marginTop + measurement.HeaderHeight + rowIndex * measurement.RowHeight,
+                marginTop + measurement.HeaderHeight + measurement.RowOffset(rowIndex),
                 measurement.HeaderWidth,
-                measurement.RowHeight);
+                measurement.RowHeightAt(rowIndex));
             dc.DrawRectangle(headerBrush, headerPen, rect);
             DrawCenteredText(dc, pageRows[rowIndex].ToString(CultureInfo.InvariantCulture), rect, typeface);
         }

@@ -204,7 +204,8 @@ public sealed partial class MainWindow : Window
         Button CancelButton);
     private sealed record DataValidationDialogResult(
         DataValidationDialogAction Action,
-        DataValidation? Rule);
+        DataValidation? Rule,
+        bool ApplyToSameSettings = false);
     private sealed record DataValidationDialogSmokeProbe(
         Window Dialog,
         TextBlock SummaryText,
@@ -322,6 +323,9 @@ public sealed partial class MainWindow : Window
     private static readonly IBrush HeaderBackground = Brush(242, 242, 242);
     private static readonly IBrush HeaderForeground = Brushes.Black;
     private static readonly IBrush GridLine = Brush(231, 231, 231);
+    // Freeze Panes divider line — matches WPF's GridView.cs MakeFreezePen (RGB 100,100,200 @ 2px).
+    private static readonly IBrush FreezeDividerBrush = Brush(100, 100, 200);
+    private const double FreezeDividerThickness = 2;
     private static readonly IBrush ToolbarBorder = Brush(218, 222, 228);
     private static readonly IBrush FormulaBarControlBorder = Brush(192, 192, 192);
     private static readonly FontFamily FormulaBarFontFamily =
@@ -4031,6 +4035,17 @@ public sealed partial class MainWindow : Window
             }
         }
 
+        // Merged regions: map each visible row/col to its grid index so a merge's anchor cell can
+        // span the full merged rectangle (Grid.RowSpan/ColumnSpan) instead of rendering as separate
+        // 1x1 slots. Non-anchor member cells are skipped entirely below — the anchor's spanned
+        // Border paints over their slots, which suppresses inner gridlines/borders for free.
+        var rowIndexByRow = new Dictionary<uint, int>(viewport.RowMetrics.Count);
+        for (var i = 0; i < viewport.RowMetrics.Count; i++)
+            rowIndexByRow[viewport.RowMetrics[i].Row] = i;
+        var colIndexByCol = new Dictionary<uint, int>(viewport.ColMetrics.Count);
+        for (var i = 0; i < viewport.ColMetrics.Count; i++)
+            colIndexByCol[viewport.ColMetrics[i].Col] = i;
+
         for (var rowIndex = 0; rowIndex < viewport.RowMetrics.Count; rowIndex++)
         {
             var rowMetric = viewport.RowMetrics[rowIndex];
@@ -4046,9 +4061,32 @@ public sealed partial class MainWindow : Window
             {
                 var colMetric = viewport.ColMetrics[colIndex];
                 var col = colMetric.Col;
+                var address = new CellAddress(_session.ActiveSheet.Id, row, col);
+                var mergeRegion = _session.ActiveSheet.GetMergeRegion(address);
+                if (mergeRegion is { } merge && (merge.Start.Row != row || merge.Start.Col != col))
+                {
+                    // Non-anchor member of a merge: the anchor's spanned Border (added when we
+                    // reach merge.Start below) covers this slot, so skip rendering a separate cell.
+                    continue;
+                }
+
                 var colWidth = GetDisplayedColumnWidth(colMetric, zoomFactor);
                 cellsByAddress.TryGetValue((row, col), out var cell);
-                AddGridChild(grid, CreateCell(cell, row, col, zoomFactor, colWidth, rowHeight), rowIndex + headerOffset, colIndex + headerOffset);
+
+                var rowSpan = 1;
+                var colSpan = 1;
+                if (mergeRegion is { } anchorMerge)
+                {
+                    (rowSpan, colSpan, rowHeight, colWidth) = ResolveVisibleMergeSpan(
+                        anchorMerge, rowIndex, colIndex, rowIndexByRow, colIndexByCol, viewport, zoomFactor, rowHeight, colWidth);
+                }
+
+                var cellControl = CreateCell(cell, row, col, zoomFactor, colWidth, rowHeight, mergeRegion);
+                if (rowSpan > 1)
+                    AvaloniaGrid.SetRowSpan(cellControl, rowSpan);
+                if (colSpan > 1)
+                    AvaloniaGrid.SetColumnSpan(cellControl, colSpan);
+                AddGridChild(grid, cellControl, rowIndex + headerOffset, colIndex + headerOffset);
             }
         }
 
@@ -4073,6 +4111,49 @@ public sealed partial class MainWindow : Window
             composite.Children.Add(overlay);
 
         return composite;
+    }
+
+    /// <summary>
+    /// Computes how far a merge's anchor cell should span in grid rows/columns, clipped to the
+    /// portion of the merge that is actually contiguous and visible in the current viewport (a
+    /// merge can be partially scrolled off, or straddle the frozen/scrollable boundary where row
+    /// indices are not contiguous — in either case we only span as far as metrics are present and
+    /// consecutive). Returns the resolved span plus the summed height/width across that span so
+    /// the anchor's content (text alignment, ShrinkToFit measurement) lays out against the full
+    /// merged rectangle rather than just its own single row/column.
+    /// </summary>
+    private static (int RowSpan, int ColSpan, double Height, double Width) ResolveVisibleMergeSpan(
+        GridRange merge,
+        int rowIndex,
+        int colIndex,
+        Dictionary<uint, int> rowIndexByRow,
+        Dictionary<uint, int> colIndexByCol,
+        ViewportModel viewport,
+        double zoomFactor,
+        double anchorHeight,
+        double anchorWidth)
+    {
+        var rowSpan = 1;
+        var height = anchorHeight;
+        for (var r = merge.Start.Row + 1; r <= merge.End.Row; r++)
+        {
+            if (!rowIndexByRow.TryGetValue(r, out var nextRowIndex) || nextRowIndex != rowIndex + rowSpan)
+                break;
+            height += GetDisplayedRowHeight(viewport.RowMetrics[nextRowIndex], zoomFactor);
+            rowSpan++;
+        }
+
+        var colSpan = 1;
+        var width = anchorWidth;
+        for (var c = merge.Start.Col + 1; c <= merge.End.Col; c++)
+        {
+            if (!colIndexByCol.TryGetValue(c, out var nextColIndex) || nextColIndex != colIndex + colSpan)
+                break;
+            width += GetDisplayedColumnWidth(viewport.ColMetrics[nextColIndex], zoomFactor);
+            colSpan++;
+        }
+
+        return (rowSpan, colSpan, height, width);
     }
 
     private Canvas BuildDrawingObjectOverlay(ViewportModel viewport)
@@ -4107,6 +4188,11 @@ public sealed partial class MainWindow : Window
 
         // Data ▸ Circle Invalid Data overlay is also app-side — paint before the early-out.
         AddValidationCircleOverlay(overlay, viewport);
+
+        // Freeze Panes divider: the frozen rows/columns are already pinned at the head of
+        // viewport.RowMetrics/ColMetrics (BuildFrozenAwareRowMetrics/ColMetrics), so only the
+        // separating line itself needs to be drawn here — mirrors WPF's RenderFreezeDivider.
+        AddFreezePaneDividerOverlay(overlay, viewport, showHeadings, zoomFactor);
 
         if (viewport.DrawingObjects is not { Count: > 0 })
             return overlay;
@@ -4143,6 +4229,61 @@ public sealed partial class MainWindow : Window
         }
 
         return overlay;
+    }
+
+    /// <summary>
+    /// Draws the Freeze Panes divider line(s) at the boundary between the pinned frozen
+    /// rows/columns and the scrollable body — the frozen region itself is already pinned by
+    /// BuildFrozenAwareRowMetrics/ColMetrics (consumed via viewport.RowMetrics/ColMetrics ordering),
+    /// so this only needs to draw the separating line(s), matching WPF's
+    /// GridView.Rendering.Headers.cs RenderFreezeDivider.
+    /// </summary>
+    private void AddFreezePaneDividerOverlay(Canvas overlay, ViewportModel viewport, bool showHeadings, double zoomFactor)
+    {
+        var frozen = viewport.FrozenPanes;
+        if (frozen is not { } frozenPanes || (frozenPanes.Rows == 0 && frozenPanes.Cols == 0))
+            return;
+
+        var headerWidth = showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0;
+        var headerHeight = showHeadings ? HeaderRowHeight * zoomFactor : 0;
+
+        if (frozenPanes.Rows > 0)
+        {
+            var dividerY = headerHeight;
+            var rowLimit = Math.Min((int)frozenPanes.Rows, viewport.RowMetrics.Count);
+            for (var i = 0; i < rowLimit; i++)
+                dividerY += GetDisplayedRowHeight(viewport.RowMetrics[i], zoomFactor);
+
+            var horizontalDivider = new Border
+            {
+                Background = FreezeDividerBrush,
+                Width = overlay.Width,
+                Height = FreezeDividerThickness,
+                IsHitTestVisible = false,
+            };
+            Canvas.SetLeft(horizontalDivider, 0);
+            Canvas.SetTop(horizontalDivider, dividerY - (FreezeDividerThickness / 2));
+            overlay.Children.Add(horizontalDivider);
+        }
+
+        if (frozenPanes.Cols > 0)
+        {
+            var dividerX = headerWidth;
+            var colLimit = Math.Min((int)frozenPanes.Cols, viewport.ColMetrics.Count);
+            for (var i = 0; i < colLimit; i++)
+                dividerX += GetDisplayedColumnWidth(viewport.ColMetrics[i], zoomFactor);
+
+            var verticalDivider = new Border
+            {
+                Background = FreezeDividerBrush,
+                Width = FreezeDividerThickness,
+                Height = overlay.Height,
+                IsHitTestVisible = false,
+            };
+            Canvas.SetLeft(verticalDivider, dividerX - (FreezeDividerThickness / 2));
+            Canvas.SetTop(verticalDivider, 0);
+            overlay.Children.Add(verticalDivider);
+        }
     }
 
     private void AddDataValidationDropdownOverlay(
@@ -5220,6 +5361,14 @@ public sealed partial class MainWindow : Window
     private bool IsSelectedCell(CellAddress address) =>
         _session.SelectedRanges.Any(range => range.Contains(address));
 
+    // Excel treats a merged region as a single selectable unit: if any selected range overlaps
+    // any part of the merge, the whole merge (and therefore its lone rendered anchor cell) reads
+    // as selected — matching the marching/selection highlight painting the full merged rectangle.
+    private bool IsSelectedCell(CellAddress address, GridRange? mergeRegion) =>
+        mergeRegion is { } merge
+            ? _session.SelectedRanges.Any(range => range.Overlaps(merge))
+            : IsSelectedCell(address);
+
     private Border CreateHeaderCell(string text, bool selected = false, double zoomFactor = 1) =>
         CreateCellBorder(
             text,
@@ -6114,11 +6263,11 @@ public sealed partial class MainWindow : Window
         return customAbs ?? groupAbs;
     }
 
-    private Border CreateCell(DisplayCell cell, uint row, uint col, double zoomFactor, double cellWidth, double cellHeight)
+    private Border CreateCell(DisplayCell cell, uint row, uint col, double zoomFactor, double cellWidth, double cellHeight, GridRange? mergeRegion = null)
     {
         var hasCell = cell.Row != 0 && cell.Col != 0;
         var address = new CellAddress(_session.ActiveSheet.Id, row, col);
-        var selected = IsSelectedCell(address);
+        var selected = IsSelectedCell(address, mergeRegion);
 
         // Resolve the sparkline layer early: sparkline cells are typically empty (no cell value),
         // so the lookup must happen before the hasCell early-return guard below.
@@ -6541,6 +6690,35 @@ public sealed partial class MainWindow : Window
             Math.Max(1, fontSize),
             Brushes.Black);
         return formatted.Width;
+    }
+
+    // Minimum font size (in DIPs) Shrink to fit will reduce to, mirroring WPF's
+    // GridView.Rendering.cs floor of ToDisplayFontSize(6) — 6pt converted to DIPs.
+    private const double ShrinkToFitMinimumFontSize = 6.0 * (96.0 / 72.0);
+
+    /// <summary>
+    /// Shrinks <paramref name="requestedFontSize"/> in whole-DIP steps until <paramref name="text"/>
+    /// fits within <paramref name="availableWidth"/>, floored at <see cref="ShrinkToFitMinimumFontSize"/>.
+    /// Mirrors WPF's GridView.cs ResolveShrinkFontSize so Shrink to fit behaves the same on both hosts.
+    /// </summary>
+    private static double ResolveShrinkToFitFontSize(
+        string text,
+        FontWeight fontWeight,
+        FontStyle fontStyle,
+        double requestedFontSize,
+        double availableWidth)
+    {
+        if (string.IsNullOrEmpty(text) || requestedFontSize <= ShrinkToFitMinimumFontSize || availableWidth <= 0)
+            return Math.Min(requestedFontSize, ShrinkToFitMinimumFontSize);
+
+        var fontSize = requestedFontSize;
+        while (fontSize > ShrinkToFitMinimumFontSize &&
+               MeasureInlineCellTextWidth(text, fontSize, fontWeight, fontStyle) > availableWidth)
+        {
+            fontSize = Math.Max(ShrinkToFitMinimumFontSize, fontSize - 1);
+        }
+
+        return fontSize;
     }
 
     private static void AddAutofillHandleAdorner(Border border, double zoomFactor)
@@ -7041,6 +7219,17 @@ public sealed partial class MainWindow : Window
         // Approximate char width as 0.6× font size to determine repetition count; always over-allocate
         // so the text reaches the cell edge regardless of proportional font widths.
         var isFillAlign = horizontalAlignment == CellHAlign.Fill;
+
+        // Format Cells > Alignment > Shrink to fit: reduce the font size until the text fits the
+        // cell's available width, matching Excel/WPF's GridView.Rendering.cs ResolveCachedShrinkFontSize.
+        // Only applies when WrapText is off (Excel disables Shrink to fit whenever Wrap text is on)
+        // and is skipped for Fill alignment / rich runs, which resolve sizing independently.
+        if (style?.ShrinkToFit == true && textWrapping != TextWrapping.Wrap && !isFillAlign && !CellRichTextInlinesBuilder.HasRuns(richRuns))
+        {
+            var availableWidth = Math.Max(1, cellWidth - (scaledHorizontalPadding * 2) - scaledIndentPadding);
+            adjustedFontSize = ResolveShrinkToFitFontSize(effectiveText, fontWeight, fontStyle, adjustedFontSize, availableWidth);
+        }
+
         if (isFillAlign && effectiveText.Length > 0 && cellWidth > 0)
         {
             var approxCharWidth = adjustedFontSize * 0.6 * zoomFactor;
@@ -16860,6 +17049,15 @@ public sealed partial class MainWindow : Window
         if (!TryCommitPendingFormulaEdit())
             return;
 
+        // Captured before the dialog runs so the "apply to all other cells with the same
+        // settings" sweep below can compare against the rule as it existed prior to editing —
+        // mirrors the WPF host's existingRule captured alongside the dialog invocation.
+        var existingRule = DataValidationPresetPlanner.CreateSelectionSummary(
+            _session.Workbook,
+            _session.ActiveSheet,
+            _session.ActiveCell,
+            _session.SelectedRange).ActiveCellRule;
+
         var selection = await ShowDataValidationInputDialogAsync();
         if (selection is null)
             return;
@@ -16882,6 +17080,21 @@ public sealed partial class MainWindow : Window
 
         if (selection.Rule is not { } rule)
             return;
+
+        if (selection.ApplyToSameSettings && existingRule is not null)
+        {
+            var sweepResult = _session.ApplyDataValidationToSelectedRangeAndMatchingRanges(rule, existingRule);
+            if (!sweepResult.Success)
+            {
+                ShowEditIssue(sweepResult.ErrorMessage ?? UiText.Get("MainLoc_DataValidationFailed"));
+                return;
+            }
+
+            RefreshShell(sweepResult.Mutated
+                ? $"Applied {DataValidationPresetPlanner.GetDisplayName(rule.Type)} data validation to {rangeReference} and matching cells"
+                : $"Data validation already matches {rangeReference}");
+            return;
+        }
 
         var result = _session.ApplyDataValidationToSelectedRange(rule);
         if (!result.Success)
@@ -17210,7 +17423,7 @@ public sealed partial class MainWindow : Window
                 ErrorMessage = errorMessageBox.Text
             });
 
-            result = new DataValidationDialogResult(DataValidationDialogAction.Apply, rule);
+            result = new DataValidationDialogResult(DataValidationDialogAction.Apply, rule, sameSettingsBox.IsChecked == true);
             dialog.Close();
         }
 

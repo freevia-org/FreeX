@@ -65,6 +65,8 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             if (IsSupportedFormulaErrorCode(errorCode))
                 workbook.DisabledFormulaErrorCodes.Add(errorCode);
         LoadPivotCaches(workbook, dto.PivotCaches);
+        LoadSlicers(workbook, dto.Slicers);
+        LoadTimelines(workbook, dto.Timelines);
 
         var loadedSheetsBySourceName = new Dictionary<string, Sheet>(StringComparer.OrdinalIgnoreCase);
         var pendingPivotTables = new List<(Sheet Sheet, SheetDto Dto)>();
@@ -285,7 +287,13 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             foreach (var commentDto in sDto.Comments ?? [])
             {
                 if (TryLoadComment(commentDto, sheet.Id) is { } comment)
+                {
                     sheet.Comments[comment.Address] = comment.Text;
+                    if (!string.IsNullOrEmpty(comment.Author))
+                        sheet.CommentAuthors[comment.Address] = comment.Author;
+                    if (comment.IsShown)
+                        sheet.ShownComments.Add(comment.Address);
+                }
             }
             foreach (var threadedCommentDto in sDto.ThreadedComments ?? [])
             {
@@ -329,6 +337,11 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             {
                 if (NativeJsonVisualDtoMapper.ToDrawingShape(shapeDto, sheet.Id) is { } shape)
                     sheet.DrawingShapes.Add(shape);
+            }
+            foreach (var formControlDto in sDto.FormControls ?? [])
+            {
+                if (ToFormControl(formControlDto, sheet.Id) is { } formControl)
+                    sheet.FormControls.Add(formControl);
             }
             LoadDrawingObjectZOrder(sheet, sDto.DrawingObjectZOrder);
             foreach (var sparklineDto in sDto.Sparklines ?? [])
@@ -428,8 +441,34 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
 
         foreach (var namedRangeDto in dto.NamedRanges ?? [])
         {
-            if (string.IsNullOrWhiteSpace(namedRangeDto?.Name) ||
-                string.IsNullOrWhiteSpace(namedRangeDto.SheetName) ||
+            if (string.IsNullOrWhiteSpace(namedRangeDto?.Name))
+                continue;
+
+            // Sheet-scoped resolution for the defined NAME itself (Excel localSheetId), distinct
+            // from SheetName (the sheet a plain range lives on). Absent/blank means workbook scope.
+            SheetId? scopeSheetId = null;
+            if (!string.IsNullOrWhiteSpace(namedRangeDto.ScopeSheetName))
+            {
+                var scopeSheet = ResolveLoadedSheet(workbook, loadedSheetsBySourceName, namedRangeDto.ScopeSheetName);
+                if (scopeSheet is null)
+                    continue;
+                scopeSheetId = scopeSheet.Id;
+            }
+
+            if (!string.IsNullOrWhiteSpace(namedRangeDto.Formula))
+            {
+                try
+                {
+                    if (scopeSheetId is { } formulaScopeSheetId)
+                        workbook.DefineNamedFormula(namedRangeDto.Name, namedRangeDto.Formula, formulaScopeSheetId);
+                    else
+                        workbook.NamedFormulas[namedRangeDto.Name] = namedRangeDto.Formula;
+                }
+                catch (ArgumentException) { /* skip invalid defined names */ }
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(namedRangeDto.SheetName) ||
                 string.IsNullOrWhiteSpace(namedRangeDto.Range))
             {
                 continue;
@@ -441,12 +480,14 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
 
             try
             {
-                workbook.DefineNamedRange(
-                    namedRangeDto.Name,
-                    GridRange.Parse(namedRangeDto.Range, sheet.Id),
-                    new NamedRangeMetadata(
-                        string.IsNullOrWhiteSpace(namedRangeDto.Scope) ? "Workbook" : namedRangeDto.Scope.Trim(),
-                        namedRangeDto.Comment?.Trim() ?? ""));
+                var metadata = new NamedRangeMetadata(
+                    string.IsNullOrWhiteSpace(namedRangeDto.Scope) ? "Workbook" : namedRangeDto.Scope.Trim(),
+                    namedRangeDto.Comment?.Trim() ?? "");
+                var range = GridRange.Parse(namedRangeDto.Range, sheet.Id);
+                if (scopeSheetId is { } rangeScopeSheetId)
+                    workbook.DefineNamedRange(namedRangeDto.Name, range, metadata, rangeScopeSheetId);
+                else
+                    workbook.DefineNamedRange(namedRangeDto.Name, range, metadata);
             }
             catch (ArgumentException) { /* skip invalid defined names */ }
             catch (FormatException) { /* skip unparseable named ranges */ }

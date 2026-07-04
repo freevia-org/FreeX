@@ -23,6 +23,13 @@ public sealed partial class MainWindow
         if (sheet.FormControls is not { Count: > 0 })
             return;
 
+        // Mirror WPF's per-viewport-refresh sync (MainWindow.Viewport.cs): re-derive each control's
+        // IsChecked/Value/SelectedIndex from its linked cell's current value (so a direct cell edit
+        // or formula recalc is reflected even without clicking the control), and populate DropDown/
+        // ListBox SelectedText from ListFillRange so the caption actually renders on Avalonia too.
+        FormControlInteractionService.SyncControlsFromLinkedCells(sheet, _session.Workbook);
+        FormControlListResolver.PopulateSelectedText(sheet, _session.Workbook);
+
         var showHeadings = sheet.ShowHeadings;
         var zoomFactor = GetActiveZoomFactor();
 

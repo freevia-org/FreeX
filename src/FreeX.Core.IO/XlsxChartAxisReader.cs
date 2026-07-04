@@ -405,6 +405,10 @@ internal static class XlsxChartAxisReader
             chart.XAxisMinorTimeUnit = FromXlsxDateAxisUnit(axisElement.Element(ChartNs + "minorTimeUnit")?.Attribute("val")?.Value);
         }
         ApplyXAxisLineProperties(chart, ReadAxisLine(axisElement.Element(ChartNs + "spPr")));
+
+        var crossing = ReadAxisCrossing(axisElement);
+        chart.XAxisCrosses = crossing.Crosses;
+        chart.XAxisCrossesAt = crossing.CrossesAt;
     }
 
     private static void ApplyXAxisGridlineProperties(

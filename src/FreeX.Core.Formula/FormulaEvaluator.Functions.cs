@@ -122,6 +122,29 @@ public sealed partial class FormulaEvaluator
         for (var argIndex = 0; argIndex < node.Arguments.Count; argIndex++)
         {
             var arg = node.Arguments[argIndex];
+
+            // A 3-D sheet-span reference (e.g. Sheet1:Sheet3!A1 or Sheet1:Sheet3!A1:B5) is only
+            // valid Excel syntax as a direct argument to an aggregate function (SUM, AVERAGE,
+            // COUNT, ...), where it expands across every sheet from the start to the end sheet
+            // inclusive, in workbook tab order. TryAsRangeRef deliberately refuses span-shaped
+            // RangeRefNodes (see its comment) so every other code path — structured functions,
+            // fast paths, plain evaluation — naturally treats a span as "not a plain range" and
+            // ultimately surfaces #VALUE!; this is the one place that actually expands it.
+            if (arg is RangeRefNode { EndSheetName: not null } spanRange)
+            {
+                if (isStructured || !isAggregate)
+                {
+                    expandedArgs.Add(ErrorValue.Value);
+                    continue;
+                }
+
+                var spanResult = TryExpandSheetSpanAggregateRange(spanRange, context, expandedArgs, preservesReferenceProvenance);
+                if (spanResult is not null)
+                    return spanResult;
+
+                continue;
+            }
+
             if (TryAsRangeRef(arg, out var range))
             {
                 if (range.SheetName is not null && !context.SheetExists(range.SheetName))
@@ -291,6 +314,58 @@ public sealed partial class FormulaEvaluator
         {
             return ErrorValue.Ref;
         }
+    }
+
+    /// <summary>
+    /// Expands a 3-D sheet-span aggregate argument (e.g. Sheet1:Sheet3!A1 or Sheet1:Sheet3!A1:B5)
+    /// into <paramref name="expandedArgs"/>: one value (or block of values, for the range form) per
+    /// sheet from <paramref name="spanRange"/>'s start sheet to its end sheet inclusive, in workbook
+    /// tab order. A reversed span (end sheet appears before start sheet in tab order) covers the
+    /// same sheets as the forward span, matching Excel's normalization. Returns null on success
+    /// (values were appended); returns a non-null ScalarValue when the whole function call must
+    /// short-circuit to that error (missing workbook/sheet -> #REF!).
+    /// </summary>
+    private static ScalarValue? TryExpandSheetSpanAggregateRange(
+        RangeRefNode spanRange,
+        IEvalContext context,
+        List<ScalarValue> expandedArgs,
+        bool preservesReferenceProvenance)
+    {
+        var workbook = context.CurrentWorkbook;
+        if (workbook is null)
+            return ErrorValue.Ref;
+
+        var startSheetIndex = FindSheetIndex(workbook, spanRange.SheetName!);
+        var endSheetIndex = FindSheetIndex(workbook, spanRange.EndSheetName!);
+        if (startSheetIndex < 0 || endSheetIndex < 0)
+            return ErrorValue.Ref;
+
+        var firstIndex = Math.Min(startSheetIndex, endSheetIndex);
+        var lastIndex = Math.Max(startSheetIndex, endSheetIndex);
+
+        for (var sheetIndex = firstIndex; sheetIndex <= lastIndex; sheetIndex++)
+        {
+            var sheetName = workbook.Sheets[sheetIndex].Name;
+            var values = context.GetRangeValues(
+                sheetName,
+                spanRange.Start.Row, spanRange.Start.ColumnNumber,
+                spanRange.End.Row, spanRange.End.ColumnNumber);
+            AddRangeValues(expandedArgs, values, preservesReferenceProvenance);
+        }
+
+        return null;
+    }
+
+    private static int FindSheetIndex(FreeX.Core.Model.Workbook workbook, string sheetName)
+    {
+        var sheets = workbook.Sheets;
+        for (var i = 0; i < sheets.Count; i++)
+        {
+            if (string.Equals(sheets[i].Name, sheetName, StringComparison.OrdinalIgnoreCase))
+                return i;
+        }
+
+        return -1;
     }
 
     private static bool TryExpandLiteralIndirectAggregateRange(

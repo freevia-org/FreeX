@@ -24,11 +24,53 @@ internal static class XlsxWorksheetAutoFilterMaterializer
         if (filters.Count != autoFilter.FilterColumns.Count)
             return;
 
+        // G2/G32: sheet.ActiveValueFilterColumns/ValueFilterHiddenRows form an ownership pair that
+        // FilterCommand.RecomputeHiddenRows relies on to know which rows it may safely un-hide later
+        // (see Sheet.ActiveValueFilterColumns/ValueFilterHiddenRows doc comments). Plain value-list
+        // filter columns parsed from the AutoFilter XML must be re-registered into
+        // ActiveValueFilterColumns here so that invariant holds after a load, exactly as
+        // FilterCommand.Apply itself would have registered them when the filter was first applied.
+        foreach (var filter in filters)
+        {
+            if (filter.AllowedValues is not null)
+                sheet.ActiveValueFilterColumns[filter.Column] = [.. filter.AllowedValues];
+        }
+
         for (var row = range.Start.Row + 1; row <= range.End.Row; row++)
         {
             if (!RowMatchesAllFilters(sheet, row, filters))
+            {
                 sheet.FilterHiddenRows.Add(row);
+                if (RowFailsOnlyValueListFilters(sheet, row, filters))
+                    sheet.ValueFilterHiddenRows.Add(row);
+            }
         }
+    }
+
+    /// <summary>
+    /// True if <paramref name="row"/> is hidden because it fails at least one plain value-list
+    /// filter column (the mechanism owning <see cref="Sheet.ValueFilterHiddenRows"/>), regardless of
+    /// whether it also fails a Top10/Average filter column. Mirrors FilterCommand.RecomputeHiddenRows,
+    /// which adds a row to ValueFilterHiddenRows whenever any active value-filter column excludes it.
+    /// </summary>
+    private static bool RowFailsOnlyValueListFilters(
+        Sheet sheet,
+        uint row,
+        IReadOnlyList<WorksheetAutoFilterState> filters)
+    {
+        foreach (var filter in filters)
+        {
+            if (filter.AllowedValues is null)
+                continue;
+
+            var text = XlsxFilterValueTextFormatter.ToFilterText(sheet.GetValue(row, filter.Column));
+            if (text.Length == 0 && filter.IncludeBlank)
+                continue;
+            if (!filter.AllowedValues.Contains(text))
+                return true;
+        }
+
+        return false;
     }
 
     private static IEnumerable<WorksheetAutoFilterState> BuildFilters(Sheet sheet, WorksheetAutoFilterModel autoFilter, GridRange range)

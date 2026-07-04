@@ -485,12 +485,14 @@ public static class WorkbookExportPrintPlanner
                 request.PrintRange,
                 request.Sheet.PrintTitleRows,
                 pageCapacity.RowsPerPage,
-                request.Sheet.RowPageBreaks);
+                request.Sheet.RowPageBreaks,
+                request.Sheet.IsRowEffectivelyHidden);
             var columnPlans = PrintLayoutPlanner.BuildColumnPlans(
                 request.PrintRange,
                 request.Sheet.PrintTitleColumns,
                 pageCapacity.ColumnsPerPage,
-                request.Sheet.ColumnPageBreaks);
+                request.Sheet.ColumnPageBreaks,
+                request.Sheet.IsColEffectivelyHidden);
 
             sheetPlans.Add(new WorkbookSheetExportPrintPlanSummary(
                 request.Sheet.Name,
@@ -524,12 +526,14 @@ public static class WorkbookExportPrintPlanner
                 request.PrintRange,
                 request.Sheet.PrintTitleRows,
                 pageCapacity.RowsPerPage,
-                request.Sheet.RowPageBreaks);
+                request.Sheet.RowPageBreaks,
+                request.Sheet.IsRowEffectivelyHidden);
             var columnPlans = PrintLayoutPlanner.BuildColumnPlans(
                 request.PrintRange,
                 request.Sheet.PrintTitleColumns,
                 pageCapacity.ColumnsPerPage,
-                request.Sheet.ColumnPageBreaks);
+                request.Sheet.ColumnPageBreaks,
+                request.Sheet.IsColEffectivelyHidden);
 
             sheetPlans.Add(new WorkbookSheetExportPrintPlanSummary(
                 request.Sheet.Name,

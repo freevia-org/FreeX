@@ -3290,6 +3290,9 @@
   <data name="InsertLoc_CfChangedRuleRange" xml:space="preserve">
     <value>Changed rule range to {0}</value>
   </data>
+  <data name="InsertLoc_CfManageRulesApplied" xml:space="preserve">
+    <value>Applied conditional formatting rule changes</value>
+  </data>
   <data name="InsertLoc_ClearedCommentsAndNotes" xml:space="preserve">
     <value>Cleared comments and notes.</value>
   </data>

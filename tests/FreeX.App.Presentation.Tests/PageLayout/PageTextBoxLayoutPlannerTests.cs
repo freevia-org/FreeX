@@ -31,8 +31,7 @@ public sealed class PageTextBoxLayoutPlannerTests
             pageColumns: [3, 4, 5],
             gridLeft: 40,
             gridTop: 20,
-            colWidth: 60,
-            rowHeight: 18);
+            measurement: UniformMeasurement(colWidth: 60, rowHeight: 18));
 
         var block = blocks.Should().ContainSingle().Subject;
         block.Id.Should().Be(textBox.Id);
@@ -74,8 +73,7 @@ public sealed class PageTextBoxLayoutPlannerTests
             pageColumns: [1, 2],
             gridLeft: 0,
             gridTop: 0,
-            colWidth: 50,
-            rowHeight: 20);
+            measurement: UniformMeasurement(colWidth: 50, rowHeight: 20));
 
         blocks.Should().ContainSingle().Which.Text.Should().Be("Visible");
     }
@@ -99,8 +97,7 @@ public sealed class PageTextBoxLayoutPlannerTests
             pageColumns: [1],
             gridLeft: 10,
             gridTop: 20,
-            colWidth: 50,
-            rowHeight: 20).Single();
+            measurement: UniformMeasurement(colWidth: 50, rowHeight: 20)).Single();
 
         block.Bounds.Width.Should().Be(PageTextBoxLayoutPlanner.MinimumWidth);
         block.Bounds.Height.Should().Be(PageTextBoxLayoutPlanner.MinimumHeight);
@@ -136,12 +133,17 @@ public sealed class PageTextBoxLayoutPlannerTests
             pageColumns: [1, 2],
             gridLeft: 100,
             gridTop: 200,
-            colWidth: 50,
-            rowHeight: 20);
+            measurement: UniformMeasurement(colWidth: 50, rowHeight: 20));
 
         blocks.Select(block => block.Text).Should().ContainInOrder("First", "Second");
         blocks[0].Bounds.Left.Should().Be(100);
         blocks[0].Bounds.Top.Should().Be(200);
         blocks[1].Bounds.Left.Should().Be(150);
     }
+
+    // Uniform-size PrintGridMeasurement stub: no per-row/per-column offsets, so ColumnOffset/RowOffset
+    // fall back to index * width/height, matching the old fixed-size colWidth/rowHeight parameters
+    // this test class used before PageTextBoxLayoutPlanner.Build started taking real sheet geometry.
+    private static PrintGridMeasurement UniformMeasurement(double colWidth, double rowHeight) =>
+        new(HeaderWidth: 0, HeaderHeight: 0, ColumnWidth: colWidth, RowHeight: rowHeight);
 }

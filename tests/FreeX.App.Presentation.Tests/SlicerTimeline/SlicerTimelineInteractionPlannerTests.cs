@@ -18,21 +18,39 @@ public sealed class SlicerTimelineInteractionPlannerTests
     // ── Slicer tile click → SetSlicerSelectionCommand ────────────────────────
 
     [Fact]
-    public void BuildSlicerToggleCommand_TileHit_TogglesItemOff()
+    public void BuildSlicerToggleCommand_PlainClick_ReplacesSelectionWithClickedTile()
     {
+        // H45: a plain click (additive: false, the default) replaces the whole selection with just
+        // the clicked item, matching Excel — it does not toggle membership against the old selection.
         var slicer = new SlicerModel { Name = "Region", SourceFieldName = "Region" };
         slicer.SelectedItems.AddRange(["North", "South"]);
         var bounds = new LayoutRect(0, 0, 120, 160);
         var layout = SlicerLayoutBuilder.Build(slicer, AvailableItems, bounds);
 
-        // Click the first selected tile (North) → toggling it off leaves {South}.
         var tile = layout.Tiles.First(t => !t.IsAllPreview && t.Caption == "North");
         var command = SlicerTimelineInteractionPlanner.BuildSlicerToggleCommand(slicer, AvailableItems, layout, tile.Rect.Center);
 
         command.Should().NotBeNull().And.BeOfType<SetSlicerSelectionCommand>();
 
-        // The carried selection is the portable toggle's result.
         var toggle = SlicerLayoutBuilder.Toggle(slicer, AvailableItems, "North");
+        toggle.SelectedItems.Should().BeEquivalentTo("North");
+    }
+
+    [Fact]
+    public void BuildSlicerToggleCommand_AdditiveClick_TogglesItemOff()
+    {
+        // Ctrl+click (additive: true) preserves the old toggle-membership behavior.
+        var slicer = new SlicerModel { Name = "Region", SourceFieldName = "Region" };
+        slicer.SelectedItems.AddRange(["North", "South"]);
+        var bounds = new LayoutRect(0, 0, 120, 160);
+        var layout = SlicerLayoutBuilder.Build(slicer, AvailableItems, bounds);
+
+        var tile = layout.Tiles.First(t => !t.IsAllPreview && t.Caption == "North");
+        var command = SlicerTimelineInteractionPlanner.BuildSlicerToggleCommand(slicer, AvailableItems, layout, tile.Rect.Center, additive: true);
+
+        command.Should().NotBeNull().And.BeOfType<SetSlicerSelectionCommand>();
+
+        var toggle = SlicerLayoutBuilder.Toggle(slicer, AvailableItems, "North", additive: true);
         toggle.SelectedItems.Should().BeEquivalentTo("South");
     }
 

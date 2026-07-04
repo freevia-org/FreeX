@@ -27,7 +27,9 @@ public static class SparklineSeriesReader
 
     /// <summary>
     /// Reads a single sparkline's data range into its numeric series. Hidden rows and columns are
-    /// skipped; non-numeric cells are ignored.
+    /// skipped unless <see cref="SparklineModel.DisplayHidden"/> is set (Excel's "Show data in
+    /// hidden rows and columns"), in which case hidden cells contribute to the series like any
+    /// other; non-numeric cells are ignored.
     /// </summary>
     public static IReadOnlyList<double> ReadSeries(Sheet sheet, SparklineModel sparkline)
     {
@@ -41,12 +43,12 @@ public static class SparklineSeriesReader
         var range = sparkline.DataRange;
         for (var row = range.Start.Row; row <= range.End.Row; row++)
         {
-            if (sheet.IsRowEffectivelyHidden(row))
+            if (!sparkline.DisplayHidden && sheet.IsRowEffectivelyHidden(row))
                 continue;
 
             for (var col = range.Start.Col; col <= range.End.Col; col++)
             {
-                if (sheet.IsColEffectivelyHidden(col))
+                if (!sparkline.DisplayHidden && sheet.IsColEffectivelyHidden(col))
                     continue;
 
                 switch (sheet.GetValue(row, col))

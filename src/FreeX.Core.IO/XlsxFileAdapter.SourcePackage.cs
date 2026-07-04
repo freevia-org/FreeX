@@ -69,7 +69,7 @@ public sealed partial class XlsxFileAdapter
         if (sourceParts.HasDrawings)
             XlsxWorksheetVmlReferencePreserver.Preserve(sourceArchive, generatedArchive, context, workbook);
         if (sourceParts.HasFormControls)
-            XlsxWorksheetFormControlPreserver.Preserve(sourceArchive, generatedArchive, context);
+            XlsxWorksheetFormControlPreserver.Preserve(sourceArchive, generatedArchive, context, workbook);
         if (sourceParts.HasLegacyComments)
             XlsxLegacyCommentPreserver.Preserve(sourceArchive, generatedArchive, workbook);
         if (sourceParts.HasSharedStrings)

@@ -337,18 +337,44 @@ public sealed class Parser
         return ParsePostfix();
     }
 
-    // Postfix → Primary ( '%' )*
+    // Postfix → Primary ( '%' | '#' )*
     private FormulaNode ParsePostfix()
     {
         var node = ParsePrimary();
 
-        while (Current.Type == TokenType.Percent)
+        while (true)
         {
-            Advance();
-            node = new UnaryOpNode(UnaryOperator.Percent, node);
+            if (Current.Type == TokenType.Percent)
+            {
+                Advance();
+                node = new UnaryOpNode(UnaryOperator.Percent, node);
+                continue;
+            }
+
+            if (Current.Type == TokenType.Hash)
+            {
+                var hashToken = Advance();
+                node = WrapSpillAnchor(node, hashToken);
+                continue;
+            }
+
+            break;
         }
 
         return node;
+    }
+
+    // The A1# spill-anchor operator: only meaningful directly after a reference to a single cell
+    // (the anchor of a dynamic-array spill). Represented internally as ANCHORARRAY(ref) — the same
+    // node the evaluator and dependency collector already know how to evaluate/track — so no other
+    // component needs to learn a new node type. Only a plain cell reference is accepted, matching
+    // ANCHORARRAY's own evaluation support; anything else is a parse error, same as before '#' was
+    // recognized at all.
+    private static FormulaNode WrapSpillAnchor(FormulaNode node, Token hashToken)
+    {
+        return node is CellRefNode
+            ? new FunctionCallNode("ANCHORARRAY", [node])
+            : throw new FormulaParseException($"Unexpected '#' at position {hashToken.Position}");
     }
 
     // Primary → Number | String | Boolean | FunctionCall | CellRef (potentially with ':' range) | '(' Expression ')'
@@ -396,6 +422,21 @@ public sealed class Parser
             case TokenType.SheetQualifier:
             {
                 var sheetToken = Advance();
+
+                // A quoted 3-D span (e.g. 'Sheet 1:Sheet 3'!A1) is lexed as a single SheetQualifier
+                // token whose value contains the whole "Start:End" text — quoting always wraps the
+                // entire span when either sheet name needs it, mirroring Excel's own serialization.
+                // ':' can never appear in a real (unquoted-content) sheet name (see
+                // Workbook.InvalidSheetNameChars), so any ':' found here is unambiguously the span
+                // separator, never part of either sheet's name.
+                var colonIndex = sheetToken.Value.IndexOf(':');
+                if (colonIndex >= 0)
+                {
+                    var startSheet = sheetToken.Value[..colonIndex];
+                    var endSheet = sheetToken.Value[(colonIndex + 1)..];
+                    return ParseSheetSpanBody(startSheet, endSheet);
+                }
+
                 return ParseSheetQualifiedReference(sheetToken.Value);
             }
 
@@ -423,6 +464,27 @@ public sealed class Parser
 
             case TokenType.NamedRange:
             {
+                // A 3-D sheet-span reference (e.g. Sheet1:Sheet3!A1) starts with a bare sheet-name
+                // token, followed by ':', followed by the end sheet's SheetQualifier token (the
+                // lexer already consumed the end sheet's trailing '!' into that token). This shape
+                // is unambiguous versus a full-column/full-row range: those only ever have a bare
+                // column/row token (never a SheetQualifier) as their second endpoint when the range
+                // itself is unqualified, so check for the span first.
+                //
+                // Known narrow limitation: this only fires when the start sheet name lexes as a
+                // NamedRange token. A sheet whose name happens to look exactly like a valid cell
+                // reference (e.g. a sheet literally named "AB12") instead lexes its bare name as a
+                // CellRef token (see Lexer.IsCellReference), so a span starting with such a sheet
+                // (unquoted) falls through to the CellRef primary case below and fails to parse
+                // (-> #VALUE!, not a crash) rather than being recognized as a span. Real Excel
+                // cannot produce this case: it refuses to let you name a sheet like a cell reference
+                // in the first place, unlike this codebase's own (looser) sheet-name validation.
+                if (Current.Type == TokenType.NamedRange &&
+                    Peek().Type == TokenType.Colon &&
+                    Peek(2).Type == TokenType.SheetQualifier &&
+                    TryParseSheetSpanReference(Current.Value, out var spanRange))
+                    return spanRange;
+
                 if (Peek().Type == TokenType.Colon && TryParseFullColumnRange(null, out var fullColumnRange))
                     return fullColumnRange;
 
@@ -573,6 +635,87 @@ public sealed class Parser
         }
 
         return startRef;
+    }
+
+    // ── 3-D sheet-span references (e.g. Sheet1:Sheet3!A1, Sheet1:Sheet3!A1:B5) ────────────────
+    //
+    // Excel's 3-D references name a start and end sheet separated by ':' before the usual '!'
+    // reference part; the reference covers every sheet from start to end inclusive, in workbook
+    // tab order (reversed spans are normalized the same way). They are only meaningful as
+    // arguments to the aggregate functions Excel allows (SUM, AVERAGE, COUNT, ...) — elsewhere
+    // they evaluate to #VALUE!, matching Excel. Represented here as a RangeRefNode with
+    // EndSheetName set (see FormulaNode.cs) rather than a new node kind, so the existing
+    // Start/End cell-ref machinery (including the range-vs-single-cell shape) is reused as-is.
+
+    /// <summary>
+    /// Attempts to parse a 3-D span whose start sheet is a bare (unquoted) identifier already
+    /// sitting in <c>Current</c> — i.e. the token shape "NamedRange Colon SheetQualifier ...".
+    /// Consumes the NamedRange and Colon tokens (the SheetQualifier is consumed by
+    /// <see cref="ParseSheetSpanBody"/>) only on success; leaves position unchanged on failure so
+    /// callers can fall back to other interpretations (full-column/row range, plain named range).
+    /// </summary>
+    private bool TryParseSheetSpanReference(string startSheetName, out FormulaNode range)
+    {
+        var saved = _pos;
+        Advance(); // the start-sheet NamedRange token
+        Advance(); // ':'
+
+        if (Current.Type != TokenType.SheetQualifier)
+        {
+            _pos = saved;
+            range = null!;
+            return false;
+        }
+
+        var endSheetToken = Advance();
+        range = ParseSheetSpanBody(startSheetName, endSheetToken.Value);
+        return true;
+    }
+
+    /// <summary>
+    /// Parses the reference part (after "Start:End!") of a 3-D sheet span, given the already-known
+    /// start/end sheet names. Shared by the unquoted-start path (<see cref="TryParseSheetSpanReference"/>)
+    /// and the fully-quoted path (a single SheetQualifier token like 'Sheet 1:Sheet 3' whose value
+    /// is split on ':' by the SheetQualifier case in ParsePrimary before reaching here).
+    /// </summary>
+    private FormulaNode ParseSheetSpanBody(string startSheetName, string endSheetName)
+    {
+        if (Current.Type != TokenType.CellRef)
+            throw new FormulaParseException(
+                $"Expected cell reference after '{startSheetName}:{endSheetName}!' at position {Current.Position}");
+
+        var startCellToken = Advance();
+        var startCell = ParseCellRef(startCellToken);
+        if (startCell is not CellRefNode startCellRef)
+            return startCell; // malformed cell ref -> #REF! (ParseCellRef already produced ErrorNode)
+
+        if (Current.Type == TokenType.Colon)
+        {
+            Advance();
+            // A span's range part is never itself sheet-qualified again (Sheet1:Sheet3!A1:Sheet1!B5
+            // is not valid Excel syntax) — same restriction the single-sheet path enforces via
+            // ExpectMatchingSheetQualifier, just rejected outright here since there is no sensible
+            // "matching" qualifier for a span's second endpoint.
+            if (Current.Type == TokenType.SheetQualifier)
+                throw new FormulaParseException(
+                    $"Unexpected sheet qualifier '{Current.Value}!' at position {Current.Position}");
+
+            if (Current.Type != TokenType.CellRef)
+                throw new FormulaParseException(
+                    $"Expected cell reference after ':' at position {Current.Position}");
+
+            var endCellToken = Advance();
+            var endCell = ParseCellRef(endCellToken);
+            if (endCell is not CellRefNode endCellRef)
+                return endCell;
+
+            return new RangeRefNode(startCellRef, endCellRef, startSheetName, endSheetName);
+        }
+
+        // Bare single-cell span (e.g. Sheet1:Sheet3!A1, no ':A1:B5' range part) — represent as
+        // Start == End with IsSingleCellSpan set so FormulaSerializer reprints just "A1", not a
+        // synthesized "A1:A1" that was never in the source text.
+        return new RangeRefNode(startCellRef, startCellRef, startSheetName, endSheetName, IsSingleCellSpan: true);
     }
 
     private bool TryParseFullColumnRange(string? sheetName, out FormulaNode range)

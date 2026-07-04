@@ -9,7 +9,11 @@ public static partial class PivotTableRefreshService
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers)
     {
-        var pageFields = pivotTable.PageFields.ToList();
+        // H10: a field added purely to carry a slicer/timeline's filter for a field the user never
+        // dragged into the Filters area must still filter rows (via MatchesFieldSelections, which
+        // reads pivotTable.PageFields directly) but must NOT render a Filters-area box — Excel doesn't
+        // show one for a slicer-only filter on an unplaced field. See PivotFieldModel.IsUnplacedFilterField.
+        var pageFields = pivotTable.PageFields.Where(field => !field.IsUnplacedFilterField).ToList();
         if (pageFields.Count == 0)
             return;
 

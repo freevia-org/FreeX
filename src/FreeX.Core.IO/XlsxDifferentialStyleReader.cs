@@ -7,7 +7,11 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxDifferentialStyleReader
 {
-    public static IReadOnlyList<CellStyle> ReadAll(ZipArchive archive, XNamespace workbookNs)
+    public static IReadOnlyList<CellStyle> ReadAll(
+        ZipArchive archive,
+        XNamespace workbookNs,
+        WorkbookTheme? theme = null,
+        WorkbookIndexedColorPalette? indexedColors = null)
     {
         var stylesEntry = archive.GetEntry("xl/styles.xml");
         if (stylesEntry is null)
@@ -16,7 +20,7 @@ internal static class XlsxDifferentialStyleReader
         try
         {
             var stylesXml = LoadXml(stylesEntry);
-            return ReadAll(stylesXml, workbookNs);
+            return ReadAll(stylesXml, workbookNs, theme, indexedColors);
         }
         catch
         {
@@ -24,14 +28,18 @@ internal static class XlsxDifferentialStyleReader
         }
     }
 
-    public static IReadOnlyList<CellStyle> ReadAll(XDocument? stylesXml, XNamespace workbookNs)
+    public static IReadOnlyList<CellStyle> ReadAll(
+        XDocument? stylesXml,
+        XNamespace workbookNs,
+        WorkbookTheme? theme = null,
+        WorkbookIndexedColorPalette? indexedColors = null)
     {
         try
         {
             return stylesXml?.Root?
                 .Element(workbookNs + "dxfs")?
                 .Elements(workbookNs + "dxf")
-                .Select(dxf => Read(dxf, workbookNs))
+                .Select(dxf => Read(dxf, workbookNs, theme, indexedColors))
                 .ToList()
                 ?? [];
         }
@@ -42,10 +50,21 @@ internal static class XlsxDifferentialStyleReader
     }
 
     // Reads a single <dxf> into its modeled CellStyle (including captured native metadata). Exposed so
-    // the stylesheet metadata preserver can compare two dxfs' visible styles before merging them.
-    internal static CellStyle ReadDifferentialStyle(XElement dxf, XNamespace workbookNs) => Read(dxf, workbookNs);
+    // the stylesheet metadata preserver can compare two dxfs' visible styles before merging them. Theme
+    // and indexed-color resolution is optional here: the preserver only compares two dxfs read the same
+    // way for equivalence, so a missing theme/palette does not affect that comparison.
+    internal static CellStyle ReadDifferentialStyle(
+        XElement dxf,
+        XNamespace workbookNs,
+        WorkbookTheme? theme = null,
+        WorkbookIndexedColorPalette? indexedColors = null) =>
+        Read(dxf, workbookNs, theme, indexedColors);
 
-    private static CellStyle Read(XElement dxf, XNamespace workbookNs)
+    private static CellStyle Read(
+        XElement dxf,
+        XNamespace workbookNs,
+        WorkbookTheme? theme,
+        WorkbookIndexedColorPalette? indexedColors)
     {
         var style = new CellStyle();
         var font = dxf.Element(workbookNs + "font");
@@ -68,7 +87,7 @@ internal static class XlsxDifferentialStyleReader
             if (!string.IsNullOrWhiteSpace(fontName))
                 style.FontName = fontName;
 
-            if (XlsxColorReader.TryReadCellColor(font.Element(workbookNs + "color"), out var fontColor))
+            if (TryReadColor(font.Element(workbookNs + "color"), theme, indexedColors, out var fontColor))
                 style.FontColor = fontColor;
         }
 
@@ -78,9 +97,9 @@ internal static class XlsxDifferentialStyleReader
         if (patternFill is not null)
         {
             style.FillPatternStyle = FromPatternType(patternFill.Attribute("patternType")?.Value);
-            if (XlsxColorReader.TryReadCellColor(patternFill.Element(workbookNs + "bgColor"), out var backgroundColor))
+            if (TryReadColor(patternFill.Element(workbookNs + "bgColor"), theme, indexedColors, out var backgroundColor))
                 style.FillColor = backgroundColor;
-            if (XlsxColorReader.TryReadCellColor(patternFill.Element(workbookNs + "fgColor"), out var foregroundColor))
+            if (TryReadColor(patternFill.Element(workbookNs + "fgColor"), theme, indexedColors, out var foregroundColor))
             {
                 if (style.FillPatternStyle is CellFillPatternStyle.None or CellFillPatternStyle.Solid)
                     style.FillColor = foregroundColor;
@@ -92,11 +111,11 @@ internal static class XlsxDifferentialStyleReader
         var border = dxf.Element(workbookNs + "border");
         if (border is not null)
         {
-            style.BorderTop = ReadBorder(border.Element(workbookNs + "top"), workbookNs);
-            style.BorderRight = ReadBorder(border.Element(workbookNs + "right"), workbookNs);
-            style.BorderBottom = ReadBorder(border.Element(workbookNs + "bottom"), workbookNs);
-            style.BorderLeft = ReadBorder(border.Element(workbookNs + "left"), workbookNs);
-            var diagBorder = ReadBorder(border.Element(workbookNs + "diagonal"), workbookNs);
+            style.BorderTop = ReadBorder(border.Element(workbookNs + "top"), workbookNs, theme, indexedColors);
+            style.BorderRight = ReadBorder(border.Element(workbookNs + "right"), workbookNs, theme, indexedColors);
+            style.BorderBottom = ReadBorder(border.Element(workbookNs + "bottom"), workbookNs, theme, indexedColors);
+            style.BorderLeft = ReadBorder(border.Element(workbookNs + "left"), workbookNs, theme, indexedColors);
+            var diagBorder = ReadBorder(border.Element(workbookNs + "diagonal"), workbookNs, theme, indexedColors);
             if (diagBorder.Style != BorderStyle.None)
             {
                 style.BorderDiagonalDown = border.Attribute("diagonalDown")?.Value is "1" or "true" ? diagBorder : default;
@@ -164,7 +183,11 @@ internal static class XlsxDifferentialStyleReader
         workbookNs + "protection"
     ];
 
-    private static CellBorder ReadBorder(XElement? edge, XNamespace workbookNs)
+    private static CellBorder ReadBorder(
+        XElement? edge,
+        XNamespace workbookNs,
+        WorkbookTheme? theme,
+        WorkbookIndexedColorPalette? indexedColors)
     {
         if (edge is null)
             return default;
@@ -191,8 +214,22 @@ internal static class XlsxDifferentialStyleReader
 
         return new CellBorder(
             style,
-            XlsxColorReader.TryReadCellColor(edge.Element(workbookNs + "color"), out var color) ? color : CellColor.Black);
+            TryReadColor(edge.Element(workbookNs + "color"), theme, indexedColors, out var color) ? color : CellColor.Black);
     }
+
+    // Resolves a dxf color element the same way the normal (non-conditional-format) style path does:
+    // literal rgb first, then theme (with tint) when a theme/indexedColors context is supplied, then the
+    // legacy indexed palette. Falls back to the rgb-only 2-arg reader when no theme context is available
+    // (e.g. the stylesheet metadata preserver's dxf-equivalence comparison, which doesn't need resolved
+    // colors — only that both sides are read identically).
+    private static bool TryReadColor(
+        XElement? element,
+        WorkbookTheme? theme,
+        WorkbookIndexedColorPalette? indexedColors,
+        out CellColor color) =>
+        theme is not null && indexedColors is not null
+            ? XlsxColorReader.TryReadCellColor(element, theme, indexedColors, out color)
+            : XlsxColorReader.TryReadCellColor(element, out color);
 
     private static bool IsSupportedFontSize(double fontSize) =>
         fontSize >= 1 && fontSize <= 409;

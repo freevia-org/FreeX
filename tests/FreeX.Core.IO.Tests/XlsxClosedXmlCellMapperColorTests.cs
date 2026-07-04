@@ -31,7 +31,11 @@ public sealed class XlsxClosedXmlCellMapperColorTests
     [Fact]
     public void MapColor_FallsBackToBlackForUnsupportedClosedXmlColors()
     {
+        // XLColor.NoColor carries no RGB, theme, or indexed information at all — this remains the one
+        // genuinely-unresolvable case that falls back to black.
         XlsxClosedXmlCellMapper.MapColor(XLColor.NoColor, WorkbookTheme.Office).Should().Be(CellColor.Black);
-        XlsxClosedXmlCellMapper.MapColor(XLColor.FromIndex(3), WorkbookTheme.Office).Should().Be(CellColor.Black);
     }
+
+    // Regression coverage for indexed-color resolution (previously collapsed to black — see
+    // XlsxClosedXmlCellMapperIndexedColorTests for the full regression suite) lives in its own file.
 }

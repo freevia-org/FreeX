@@ -1985,6 +1985,44 @@ public sealed class WorkbookSession
         return WorkbookDataValidationMutationResult.FromEditResult(result, mutated: true);
     }
 
+    /// <summary>
+    /// Applies <paramref name="rule"/> to the current selection AND to every other data-validation
+    /// range on the active sheet whose settings match <paramref name="existingRule"/> — the shared
+    /// session equivalent of the WPF host's data-validation sweep (CreateDataValidationCommand /
+    /// HasSameDataValidationSettings), so every shell can drive the "apply to all cells with the
+    /// same settings" checkbox through one undoable command instead of reimplementing it locally.
+    /// </summary>
+    public WorkbookDataValidationMutationResult ApplyDataValidationToSelectedRangeAndMatchingRanges(
+        DataValidation rule,
+        DataValidation existingRule)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+        ArgumentNullException.ThrowIfNull(existingRule);
+
+        var sheet = ActiveSheet;
+        var commands = sheet.DataValidations
+            .Where(candidate => HasSameDataValidationSettings(candidate, existingRule))
+            .Select(candidate => (IWorkbookCommand)new SetDataValidationCommand(
+                sheet.Id,
+                CloneDataValidationForRanges(rule, candidate.AppliesTo, candidate.AdditionalRanges)))
+            .ToList();
+
+        if (commands.Count == 0)
+        {
+            commands.Add(new SetDataValidationCommand(
+                sheet.Id,
+                CloneDataValidationForRanges(rule, SelectedRange, [])));
+        }
+
+        var command = ToCommand("Data Validation", commands);
+        var result = _cellEditService.ExecuteEditCommand(Workbook, command);
+        if (!result.Success)
+            return WorkbookDataValidationMutationResult.FromEditResult(result, mutated: false);
+
+        ApplySuccessfulWorkbookMetadataResult(sheet.Id);
+        return WorkbookDataValidationMutationResult.FromEditResult(result, mutated: true);
+    }
+
     public WorkbookCellEditResult PasteLinkFromClipboardAtActiveCell(
         string? text,
         bool transpose = false,
@@ -2910,7 +2948,20 @@ public sealed class WorkbookSession
 
         if (result.AffectedCells.Count > 0)
         {
-            ApplySuccessfulEditResult(result, ActiveCell);
+            // Excel restores the affected selection on Undo/Redo (e.g. undoing a Sort or Fill
+            // re-selects the whole sorted/filled range), not just a single cell. Compute the
+            // bounding range of every affected cell -- reported in row-major order by the
+            // command, so AffectedCells[0] is the range's top-left -- and select that, mirroring
+            // ApplySuccessfulRangeEditResult's forward-operation behavior.
+            var boundingRange = BoundingRangeOrDefault(result.AffectedCells, ActiveCell);
+            if (ActiveSheet.Id.Equals(boundingRange.Start.Sheet))
+            {
+                ApplySuccessfulRangeEditResult(result, boundingRange);
+            }
+            else
+            {
+                ApplySuccessfulEditResult(result, ActiveCell);
+            }
             return;
         }
 
@@ -3489,6 +3540,21 @@ public sealed class WorkbookSession
         return existing is null || !DataValidationRulesEqual(existing, rule);
     }
 
+    private static bool HasSameDataValidationSettings(DataValidation left, DataValidation right) =>
+        left.Type == right.Type &&
+        left.Operator == right.Operator &&
+        string.Equals(left.Formula1, right.Formula1, StringComparison.Ordinal) &&
+        string.Equals(left.Formula2, right.Formula2, StringComparison.Ordinal) &&
+        left.AllowBlank == right.AllowBlank &&
+        left.ShowDropdown == right.ShowDropdown &&
+        left.AlertStyle == right.AlertStyle &&
+        left.ShowInputMessage == right.ShowInputMessage &&
+        left.ShowErrorMessage == right.ShowErrorMessage &&
+        string.Equals(left.ErrorTitle, right.ErrorTitle, StringComparison.Ordinal) &&
+        string.Equals(left.ErrorMessage, right.ErrorMessage, StringComparison.Ordinal) &&
+        string.Equals(left.PromptTitle, right.PromptTitle, StringComparison.Ordinal) &&
+        string.Equals(left.PromptMessage, right.PromptMessage, StringComparison.Ordinal);
+
     private static DataValidation? FindMatchingDataValidationRule(Sheet sheet, DataValidation rule)
     {
         foreach (var candidate in sheet.DataValidations)
@@ -3764,6 +3830,40 @@ public sealed class WorkbookSession
         IReadOnlyList<CellAddress> affectedCells,
         CellAddress fallbackAddress) =>
         affectedCells.Count == 0 ? fallbackAddress : affectedCells[0];
+
+    /// <summary>
+    /// Computes the bounding <see cref="GridRange"/> covering every affected cell (all on the same
+    /// sheet, per <see cref="CommandOutcome.AffectedCells"/> contract), so Undo/Redo can restore the
+    /// full affected selection instead of collapsing to a single cell. Falls back to a degenerate
+    /// range at <paramref name="fallbackAddress"/> when there are no affected cells.
+    /// </summary>
+    private static GridRange BoundingRangeOrDefault(
+        IReadOnlyList<CellAddress> affectedCells,
+        CellAddress fallbackAddress)
+    {
+        if (affectedCells.Count == 0)
+            return new GridRange(fallbackAddress, fallbackAddress);
+
+        var sheet = affectedCells[0].Sheet;
+        var minRow = affectedCells[0].Row;
+        var maxRow = affectedCells[0].Row;
+        var minCol = affectedCells[0].Col;
+        var maxCol = affectedCells[0].Col;
+
+        for (var i = 1; i < affectedCells.Count; i++)
+        {
+            var cell = affectedCells[i];
+            if (!cell.Sheet.Equals(sheet))
+                continue;
+
+            if (cell.Row < minRow) minRow = cell.Row;
+            if (cell.Row > maxRow) maxRow = cell.Row;
+            if (cell.Col < minCol) minCol = cell.Col;
+            if (cell.Col > maxCol) maxCol = cell.Col;
+        }
+
+        return new GridRange(new CellAddress(sheet, minRow, minCol), new CellAddress(sheet, maxRow, maxCol));
+    }
 
     private void ApplySuccessfulEditResult(WorkbookCellEditResult result, CellAddress fallbackAddress)
     {

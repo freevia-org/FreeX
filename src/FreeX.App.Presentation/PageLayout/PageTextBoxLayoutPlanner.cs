@@ -31,13 +31,13 @@ public static class PageTextBoxLayoutPlanner
         IReadOnlyList<uint> pageColumns,
         double gridLeft,
         double gridTop,
-        double colWidth,
-        double rowHeight)
+        PrintGridMeasurement measurement)
     {
         ArgumentNullException.ThrowIfNull(textBoxes);
         ArgumentNullException.ThrowIfNull(workbookTheme);
         ArgumentNullException.ThrowIfNull(pageRows);
         ArgumentNullException.ThrowIfNull(pageColumns);
+        ArgumentNullException.ThrowIfNull(measurement);
 
         if (textBoxes.Count == 0 || pageRows.Count == 0 || pageColumns.Count == 0)
             return [];
@@ -55,8 +55,8 @@ public static class PageTextBoxLayoutPlanner
             }
 
             var layout = TextBoxFrameLayoutPlanner.CreateNormalized(new LayoutRect(
-                gridLeft + columnIndex * colWidth,
-                gridTop + rowIndex * rowHeight,
+                gridLeft + measurement.ColumnOffset(columnIndex),
+                gridTop + measurement.RowOffset(rowIndex),
                 textBox.Width,
                 textBox.Height));
             var fill = textBox.ResolveFillColor(workbookTheme, CellColor.White);

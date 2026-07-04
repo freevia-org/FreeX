@@ -21,6 +21,7 @@ public static partial class PrintRenderer
     }
 
     private static (DrawingVisual Visual, IReadOnlyList<PdfTextOverlay> TextOverlays, IReadOnlyList<PdfLinkOverlay> LinkOverlays, IReadOnlyList<PdfCellDestinationOverlay> CellDestinationOverlays) RenderPageVisual(
+        Sheet sheet,
         double pageW,
         double pageH,
         double marginLeft,
@@ -88,10 +89,8 @@ public static partial class PrintRenderer
             totalPages,
             draftQuality);
 
-        var rowHeight = measurement.RowHeight;
-        var colWidth = measurement.ColumnWidth;
-        var printedWidth = measurement.HeaderWidth + colWidth * pageColumns.Count;
-        var printedHeight = measurement.HeaderHeight + rowHeight * pageRows.Count;
+        var printedWidth = measurement.HeaderWidth + measurement.TotalColumnWidth(pageColumns.Count);
+        var printedHeight = measurement.HeaderHeight + measurement.TotalRowHeight(pageRows.Count);
         var xOffset = centerHorizontally ? Math.Max(0, (printableW - printedWidth) / 2) : 0;
         var yOffset = centerVertically ? Math.Max(0, (printableH - printedHeight) / 2) : 0;
         var contentLeft = marginLeft + xOffset;
@@ -103,7 +102,7 @@ public static partial class PrintRenderer
             DrawPrintHeadings(dc, contentLeft, contentTop, measurement, pageRows, pageColumns);
 
         dc.DrawRectangle(null, new Pen(Brushes.Black, 0.5),
-            new Rect(gridLeft, gridTop, colWidth * pageColumns.Count, rowHeight * pageRows.Count));
+            new Rect(gridLeft, gridTop, measurement.TotalColumnWidth(pageColumns.Count), measurement.TotalRowHeight(pageRows.Count)));
 
         DrawPrintedGridCells(
             dc,
@@ -128,6 +127,7 @@ public static partial class PrintRenderer
                 textOverlays,
                 viewport,
                 cellLookup,
+                sheet,
                 charts,
                 workbookTheme,
                 bodyRows,
@@ -136,8 +136,7 @@ public static partial class PrintRenderer
                 pageColumns.Count - bodyColumns.Count,
                 gridLeft,
                 gridTop,
-                colWidth,
-                rowHeight);
+                measurement);
         }
 
         var textBoxBlocks = PageTextBoxLayoutPlanner.Build(
@@ -147,8 +146,7 @@ public static partial class PrintRenderer
             pageColumns,
             gridLeft,
             gridTop,
-            colWidth,
-            rowHeight);
+            measurement);
         DrawPrintedTextBoxes(dc, textOverlays, textBoxBlocks);
 
         if (!draftQuality && printComments == WorksheetPrintComments.AsDisplayed)
@@ -162,8 +160,7 @@ public static partial class PrintRenderer
                 pageColumns,
                 gridLeft,
                 gridTop,
-                colWidth,
-                rowHeight,
+                measurement,
                 pageW,
                 pageH,
                 blackAndWhite);

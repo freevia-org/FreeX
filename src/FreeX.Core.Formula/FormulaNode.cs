@@ -31,8 +31,25 @@ public sealed record CellRefNode(
     public uint ColumnNumber { get; } = Model.CellAddress.ColumnNameToNumber(ColumnName);
 }
 
-/// <summary>A range reference (e.g. A1:C3, Sheet2!A1:A10).</summary>
-public sealed record RangeRefNode(CellRefNode Start, CellRefNode End, string? SheetName = null) : FormulaNode;
+/// <summary>
+/// A range reference (e.g. A1:C3, Sheet2!A1:A10). When <paramref name="EndSheetName"/> is
+/// non-null, this represents a 3-D sheet-span reference (e.g. Sheet1:Sheet3!A1 or
+/// Sheet1:Sheet3!A1:B5) — <see cref="SheetName"/> is the span's start sheet and
+/// <paramref name="EndSheetName"/> is its end sheet; the reference covers every sheet from
+/// start to end inclusive, in workbook tab order (a reversed span like Sheet3:Sheet1!A1 is
+/// normalized the same way Excel does). A bare single-cell 3-D reference (no ':A1:B5' range
+/// part, e.g. Sheet1:Sheet3!A1) is represented with Start == End and
+/// <paramref name="IsSingleCellSpan"/> = true, so FormulaSerializer can reprint it without a
+/// synthesized ":A1" that was never in the original text — every other consumer (evaluator,
+/// dependency collector, rewriter) only cares about Start/End/SheetName/EndSheetName and can
+/// ignore this flag.
+/// </summary>
+public sealed record RangeRefNode(
+    CellRefNode Start,
+    CellRefNode End,
+    string? SheetName = null,
+    string? EndSheetName = null,
+    bool IsSingleCellSpan = false) : FormulaNode;
 
 /// <summary>A whole-column range reference (e.g. A:A, Sheet2!A:B).</summary>
 public sealed record FullColumnRangeRefNode(

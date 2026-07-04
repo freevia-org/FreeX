@@ -258,8 +258,10 @@ public static class SparklineLayoutEngine
                 maxAbs = absolute;
         }
 
-        // Apply group-scale override (use the largest magnitude across the whole group).
-        if (overrideMaxAbs.HasValue && overrideMaxAbs.Value > maxAbs)
+        // Apply axis-bound override (group or custom scaling). The override replaces the
+        // data-derived max outright — including clamping/rescaling bars when it is smaller
+        // than the data's own magnitude — matching VisitLineLayout's unconditional override.
+        if (overrideMaxAbs.HasValue && double.IsFinite(overrideMaxAbs.Value) && overrideMaxAbs.Value > 0)
             maxAbs = overrideMaxAbs.Value;
 
         if (maxAbs < Epsilon)

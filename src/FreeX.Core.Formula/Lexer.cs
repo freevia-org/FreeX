@@ -360,8 +360,21 @@ public sealed class Lexer
         if (IsCellReference(valueSpan))
             return new Token(TokenType.CellRef, ToUpperInvariantIfNeeded(valueSpan), start);
 
-        // Named range (identifier that is not a cell reference, function, or boolean)
-        return new Token(TokenType.NamedRange, ToUpperInvariantIfNeeded(valueSpan), start);
+        // Named range (identifier that is not a cell reference, function, or boolean).
+        //
+        // Exception: when this identifier is immediately followed by ':', it may be the start
+        // sheet name of a 3-D sheet-span reference (e.g. Sheet1:Sheet3!A1 — see Parser's
+        // TryParseSheetSpanReference) rather than an actual named-range identifier. Sheet names
+        // have a canonical display case that must round-trip through FormulaSerializer (unlike a
+        // plain named-range lookup, which is case-insensitive both here and in Workbook.NamedRanges/
+        // TryParseColumnToken, so preserving case here cannot change any existing behaviour), so skip
+        // the uppercasing in that shape and let the original source casing flow through. This also
+        // covers the full-column/full-row-range start token (e.g. the "A" in A:A) for the same
+        // reason: TryParseColumnToken/TryParseRowToken already re-normalize case themselves.
+        var value = _pos < _text.Length && _text[_pos] == ':'
+            ? valueSpan.ToString()
+            : ToUpperInvariantIfNeeded(valueSpan);
+        return new Token(TokenType.NamedRange, value, start);
     }
 
     private Token ReadQuotedSheetQualifier()
@@ -410,6 +423,16 @@ public sealed class Lexer
                 _pos += error.Length;
                 return new Token(TokenType.Error, error, start);
             }
+        }
+
+        // A lone '#' that isn't the start of a known error literal is the A1# spill-anchor operator
+        // (e.g. =A1#, =SUM(A1#)) — Excel's syntax for "the current spill range of A1". The Parser
+        // only accepts this token immediately after a cell/range reference; anywhere else it's a
+        // parse error there, same as before this token type existed.
+        if (_pos + 1 >= _text.Length || !char.IsLetter(_text[_pos + 1]))
+        {
+            _pos++;
+            return new Token(TokenType.Hash, "#", start);
         }
 
         throw new FormulaParseException($"Unknown error literal at position {start}");

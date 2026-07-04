@@ -210,7 +210,9 @@ public static class PagePaginationPlanner
         double headerMarginInches,
         double footerMarginInches,
         IReadOnlyCollection<uint>? rowPageBreaks = null,
-        IReadOnlyCollection<uint>? columnPageBreaks = null)
+        IReadOnlyCollection<uint>? columnPageBreaks = null,
+        Func<uint, bool>? isRowHidden = null,
+        Func<uint, bool>? isColumnHidden = null)
     {
         var capacity = CalculatePageCapacity(
             printRange,
@@ -231,12 +233,14 @@ public static class PagePaginationPlanner
             printRange,
             printTitleRows,
             capacity.RowsPerPage,
-            rowPageBreaks);
+            rowPageBreaks,
+            isRowHidden);
         var columnPlans = PrintLayoutPlanner.BuildColumnPlans(
             printRange,
             printTitleColumns,
             capacity.ColumnsPerPage,
-            columnPageBreaks);
+            columnPageBreaks,
+            isColumnHidden);
 
         var effectiveScale = CalculateEffectiveScalePercent(scaleToFit, rowPlans.Count, columnPlans.Count);
         return new PagePaginationPlan(rowPlans, columnPlans, capacity, effectiveScale);

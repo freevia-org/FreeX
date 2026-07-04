@@ -357,6 +357,9 @@ public static class PasteCommandFactory
         PasteSpecialOptions options)
     {
         var sourceLookup = sourceCells.ToDictionary(c => c.Source, c => c.Cell);
+        var mergedRegionCommands = sourceSheet is not null && sourceSheet.MergedRegions.Any(region => region.Overlaps(sourceRange))
+            ? BuildTiledMergedRegionCommands(targetSheetId, sourceRange, destination, targetRows, targetCols, options.Transpose)
+            : null;
 
         if (mode == PasteCellsMode.Formats && options.Operation == PasteSpecialOperation.None)
         {
@@ -378,7 +381,10 @@ public static class PasteCommandFactory
                 formats.Add((destinationAddress, sourceCell.StyleId));
             }
 
-            return new PasteFormatsCommand(targetSheetId, formats);
+            var formatsCommand = new PasteFormatsCommand(targetSheetId, formats);
+            return mergedRegionCommands is null
+                ? formatsCommand
+                : new CompositeWorkbookCommand("Paste", [formatsCommand, .. mergedRegionCommands]);
         }
 
         if (options.Operation != PasteSpecialOperation.None)
@@ -399,7 +405,10 @@ public static class PasteCommandFactory
                 tiledPairs.Add((sourceAddress, destinationAddress));
             }
 
-            return new PasteSpecialCellsCommand(targetSheetId, sourceCells, tiledPairs, options);
+            var specialCommand = new PasteSpecialCellsCommand(targetSheetId, sourceCells, tiledPairs, options);
+            return mergedRegionCommands is null
+                ? specialCommand
+                : new CompositeWorkbookCommand("Paste Special", [specialCommand, .. mergedRegionCommands]);
         }
 
         var edits = new List<(CellAddress Address, Cell Cell)>((int)Math.Min(int.MaxValue, (long)targetRows * targetCols));
@@ -459,9 +468,47 @@ public static class PasteCommandFactory
             }
         }
 
-        return mode == PasteCellsMode.All
+        IWorkbookCommand tiledCommand = mode == PasteCellsMode.All
             ? new PasteCellsCommand(targetSheetId, edits, richTextRuns, hyperlinks, hyperlinkMetadata)
             : new EditCellsCommand(targetSheetId, edits);
+
+        return mergedRegionCommands is null
+            ? tiledCommand
+            : new CompositeWorkbookCommand(mode == PasteCellsMode.All ? "Paste" : "Paste Special", [tiledCommand, .. mergedRegionCommands]);
+    }
+
+    /// <summary>
+    /// Builds one <see cref="PasteMergedRegionsCommand"/> per repeated tile of the source range
+    /// within the tiled destination, so a merged region in the copied source is recreated at every
+    /// tile offset (mirroring the non-tiled paste path's single-offset merge recreation). Each
+    /// command uses the same source-range-relative mapping and destination-collision skip as the
+    /// non-tiled path; only the per-tile destination anchor differs.
+    /// </summary>
+    private static List<IWorkbookCommand> BuildTiledMergedRegionCommands(
+        SheetId targetSheetId,
+        GridRange sourceRange,
+        CellAddress destination,
+        uint targetRows,
+        uint targetCols,
+        bool transpose)
+    {
+        var rowPeriod = transpose ? sourceRange.ColCount : sourceRange.RowCount;
+        var colPeriod = transpose ? sourceRange.RowCount : sourceRange.ColCount;
+
+        var commands = new List<IWorkbookCommand>();
+        for (var rowOffset = 0U; rowOffset < targetRows; rowOffset += rowPeriod)
+        {
+            for (var colOffset = 0U; colOffset < targetCols; colOffset += colPeriod)
+            {
+                var tileDestination = new CellAddress(
+                    targetSheetId,
+                    destination.Row + rowOffset,
+                    destination.Col + colOffset);
+                commands.Add(new PasteMergedRegionsCommand(targetSheetId, sourceRange, tileDestination, transpose));
+            }
+        }
+
+        return commands;
     }
 
     private static IEnumerable<(CellAddress Source, CellAddress Destination)> EnumerateTiledAddresses(

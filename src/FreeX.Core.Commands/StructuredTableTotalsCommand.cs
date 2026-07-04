@@ -102,6 +102,11 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
         var aggregate = new NumberAggregate();
         for (var row = table.Range.Start.Row + 1; row <= lastDataRow; row++)
         {
+            // Excel's table totals row is backed by SUBTOTAL(10x, ...), whose 100-series function
+            // numbers skip every effectively-hidden row (manual, filter, and group-collapsed) — not
+            // just filter-hidden ones — so mirror that here rather than aggregating raw cell values.
+            if (sheet.IsRowEffectivelyHidden(row))
+                continue;
             if (TryGetNumber(sheet.GetValue(row, col)) is { } value)
                 aggregate.Add(value);
         }
@@ -116,6 +121,8 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
         var count = 0;
         for (var row = table.Range.Start.Row + 1; row <= lastDataRow; row++)
         {
+            if (sheet.IsRowEffectivelyHidden(row))
+                continue;
             if (sheet.GetValue(row, col) is not BlankValue)
                 count++;
         }

@@ -221,7 +221,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             sheetXmlLayout,
             sheetXmlLayoutHadWarnings,
             xlWorkbook.Worksheets.Count);
-        var workbook = new Workbook("Untitled", XlsxClosedXmlCellMapper.MapStyle(xlWorkbook.Style, workbookTheme));
+        var workbook = new Workbook("Untitled", XlsxClosedXmlCellMapper.MapStyle(xlWorkbook.Style, workbookTheme, indexedColors));
         workbook.Theme = workbookTheme;
         workbook.HasVbaProjectPackage = packageParts.HasVbaProjectPackage;
         workbook.Uses1904DateSystem = workbookMetadata.Uses1904DateSystem;
@@ -311,7 +311,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             sheet.IsHidden = xlSheet.Visibility != XLWorksheetVisibility.Visible;
             if (xlSheet.TabColor.HasValue)
             {
-                sheet.TabColor = XlsxClosedXmlCellMapper.MapColor(xlSheet.TabColor, workbook.Theme);
+                sheet.TabColor = XlsxClosedXmlCellMapper.MapColor(xlSheet.TabColor, workbook.Theme, indexedColors);
             }
 
             // Track declared array formula ref ranges (anchor address + bounding box).
@@ -455,6 +455,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                         xlCell,
                         workbook,
                         workbook.Theme,
+                        indexedColors,
                         styleIdsByXlsxStyleValue,
                         cellBorderStyles,
                         cellGradientFills,
@@ -507,6 +508,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     xlCell,
                     workbook,
                     workbook.Theme,
+                    indexedColors,
                     styleIdsByXlsxStyleValue,
                     cellBorderStyles,
                     cellGradientFills,
@@ -531,7 +533,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 if (!explicitStyleOnlyStyleIdsByXlsxStyleIndex.TryGetValue(styleIndex, out var styleId))
                 {
                     var xlCell = xlSheet.Cell((int)row, (int)col);
-                    var style = MapStyleWithNativeFills(xlCell.Style, workbook.Theme, cellBorderStyles, cellGradientFills, styleIndex);
+                    var style = MapStyleWithNativeFills(xlCell.Style, workbook.Theme, indexedColors, cellBorderStyles, cellGradientFills, styleIndex);
                     styleId = style.Equals(CellStyle.Default)
                         ? null
                         : workbook.RegisterStyle(style);
@@ -1088,6 +1090,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         IXLCell xlCell,
         Workbook workbook,
         WorkbookTheme theme,
+        WorkbookIndexedColorPalette indexedColors,
         Dictionary<object, StyleId?> styleIdsByStyleValue,
         XlsxCellBorderStyleTable cellBorderStyles,
         XlsxCellGradientFillTable cellGradientFills,
@@ -1107,7 +1110,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 {
                     if (styleIdsByNativeGradientStyleIndex.TryGetValue(styleIndex, out var cachedGradId))
                         return cachedGradId;
-                    var gradStyle = MapStyleWithNativeFills(xlCell.Style, theme, cellBorderStyles, cellGradientFills, styleIndex);
+                    var gradStyle = MapStyleWithNativeFills(xlCell.Style, theme, indexedColors, cellBorderStyles, cellGradientFills, styleIndex);
                     StyleId? gradStyleId = gradStyle.Equals(CellStyle.Default) ? null : workbook.RegisterStyle(gradStyle);
                     styleIdsByNativeGradientStyleIndex[styleIndex] = gradStyleId;
                     return gradStyleId;
@@ -1115,7 +1118,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
                 if (styleIdsByNativeBorderStyleIndex.TryGetValue(styleIndex, out var cachedNativeStyleId))
                     return cachedNativeStyleId;
-                var nativeStyle = MapStyleWithNativeFills(xlCell.Style, theme, cellBorderStyles, cellGradientFills, styleIndex);
+                var nativeStyle = MapStyleWithNativeFills(xlCell.Style, theme, indexedColors, cellBorderStyles, cellGradientFills, styleIndex);
                 StyleId? nativeStyleId = nativeStyle.Equals(CellStyle.Default) ? null : workbook.RegisterStyle(nativeStyle);
                 styleIdsByNativeBorderStyleIndex[styleIndex] = nativeStyleId;
                 return nativeStyleId;
@@ -1128,7 +1131,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         if (styleValue is not null && styleIdsByStyleValue.TryGetValue(styleValue, out var cachedStyleId))
             return cachedStyleId;
 
-        var style = XlsxClosedXmlCellMapper.MapStyle(xlCell.Style, theme);
+        var style = XlsxClosedXmlCellMapper.MapStyle(xlCell.Style, theme, indexedColors);
         StyleId? styleId = style.Equals(CellStyle.Default)
             ? null
             : workbook.RegisterStyle(style);
@@ -1140,11 +1143,12 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
     private static CellStyle MapStyleWithNativeFills(
         IXLStyle xlStyle,
         WorkbookTheme theme,
+        WorkbookIndexedColorPalette indexedColors,
         XlsxCellBorderStyleTable cellBorderStyles,
         XlsxCellGradientFillTable cellGradientFills,
         int? xlsxStyleIndex)
     {
-        var style = XlsxClosedXmlCellMapper.MapStyle(xlStyle, theme);
+        var style = XlsxClosedXmlCellMapper.MapStyle(xlStyle, theme, indexedColors);
         if (xlsxStyleIndex is { } styleIndex)
         {
             if (cellBorderStyles.TryGetVisibleBorders(styleIndex, out var nativeBorders))

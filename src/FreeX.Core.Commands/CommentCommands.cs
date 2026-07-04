@@ -229,9 +229,8 @@ public sealed class ConvertNotesToCommentsCommand : IWorkbookCommand
             if (sheet.ThreadedComments.ContainsKey(addr))
                 continue;
 
-            sheet.CommentAuthors.TryGetValue(addr, out var author);
-            if (string.IsNullOrEmpty(author))
-                author = "FreeX";
+            var hadAuthor = sheet.CommentAuthors.TryGetValue(addr, out var storedAuthor) && !string.IsNullOrEmpty(storedAuthor);
+            var author = hadAuthor ? storedAuthor! : "FreeX";
 
             var wasShown = sheet.ShownComments.Contains(addr);
 
@@ -244,7 +243,7 @@ public sealed class ConvertNotesToCommentsCommand : IWorkbookCommand
             var threaded = ThreadedCommentTimestamps.StampNew(new ThreadedComment(noteText, author), timestamp);
             sheet.ThreadedComments[addr] = threaded;
 
-            _converted.Add(new ConvertedNote(addr, noteText, author, wasShown));
+            _converted.Add(new ConvertedNote(addr, noteText, author, wasShown, hadAuthor));
         }
 
         if (_converted.Count == 0)
@@ -268,7 +267,7 @@ public sealed class ConvertNotesToCommentsCommand : IWorkbookCommand
 
             // Restore the legacy note.
             sheet.Comments[note.Address] = note.Text;
-            if (!string.IsNullOrEmpty(note.Author) && note.Author != "FreeX")
+            if (note.HadAuthor)
                 sheet.CommentAuthors[note.Address] = note.Author;
             if (note.WasShown)
                 sheet.ShownComments.Add(note.Address);
@@ -279,7 +278,8 @@ public sealed class ConvertNotesToCommentsCommand : IWorkbookCommand
         CellAddress Address,
         string Text,
         string Author,
-        bool WasShown);
+        bool WasShown,
+        bool HadAuthor);
 }
 
 /// <summary>Clear all comments in a range with undo support.</summary>

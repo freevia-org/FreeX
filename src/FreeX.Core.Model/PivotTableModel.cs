@@ -170,7 +170,15 @@ public sealed record PivotFieldModel(
     bool? DragToColumn = null,
     bool? DragToPage = null,
     bool? DragToData = null,
-    bool? ShowDropDowns = null);
+    bool? ShowDropDowns = null,
+    /// <summary>
+    /// True for a <see cref="PivotTableModel.PageFields"/> entry that exists ONLY to carry a
+    /// slicer/timeline's value filter for a field the user never dragged into the Filters area
+    /// (see H10). Excel filters the pivot in that case without showing a Filters-area box for the
+    /// field, so renderers must still honor this field in <c>MatchesFieldSelections</c> but must
+    /// exclude it from the visible page-field row span / header writing.
+    /// </summary>
+    bool IsUnplacedFilterField = false);
 
 public enum PivotFieldGrouping
 {

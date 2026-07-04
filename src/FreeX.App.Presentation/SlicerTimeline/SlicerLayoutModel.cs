@@ -246,19 +246,38 @@ public static class SlicerLayoutBuilder
     }
 
     /// <summary>
-    /// Computes the new selection set after toggling <paramref name="caption"/> against the slicer's
-    /// current selection. Mirrors the source toggle: an empty current selection is treated as
-    /// "everything selected"; toggling the item adds or removes it; and selecting every available item
-    /// collapses back to the cleared (unfiltered) state.
+    /// Computes the new selection set after clicking <paramref name="caption"/> against the slicer's
+    /// current selection, matching Excel's slicer click semantics.
+    /// <para>
+    /// A plain click (<paramref name="additive"/> = false, the default) REPLACES the whole selection
+    /// with just the clicked item — unless that item is already the sole selected item, in which case
+    /// clicking it again clears the filter back to "everything selected" (Excel deselects a lone active
+    /// tile on a second plain click).
+    /// </para>
+    /// <para>
+    /// A Ctrl+click (<paramref name="additive"/> = true) is additive: an empty current selection is
+    /// treated as "everything selected"; toggling the item adds or removes it from the existing
+    /// selection; and selecting every available item collapses back to the cleared (unfiltered) state.
+    /// </para>
     /// </summary>
     public static SlicerToggleResult Toggle(
         SlicerModel slicer,
         IEnumerable<string> availableItems,
-        string caption)
+        string caption,
+        bool additive = false)
     {
         ArgumentNullException.ThrowIfNull(slicer);
         ArgumentNullException.ThrowIfNull(availableItems);
         ArgumentNullException.ThrowIfNull(caption);
+
+        if (!additive)
+        {
+            // Plain click: replace the selection with just this item, unless it is already the lone
+            // selected item — in which case Excel treats a second plain click as clearing the filter.
+            var isSoleSelection = slicer.SelectedItems.Count == 1 &&
+                string.Equals(slicer.SelectedItems[0], caption, StringComparison.CurrentCultureIgnoreCase);
+            return new SlicerToggleResult(slicer.Name, isSoleSelection ? [] : [caption]);
+        }
 
         var allItems = OrderAvailableItems(slicer, availableItems);
         var selected = slicer.SelectedItems.Count == 0

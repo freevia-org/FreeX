@@ -66,26 +66,7 @@ public sealed partial class NativeJsonAdapter
                 .Where(IsSupportedFormulaErrorCode)
                 .OrderBy(code => code)
                 .ToList(),
-            NamedRanges = workbook.NamedRanges
-                .Select(pair =>
-                {
-                    var sheet = workbook.GetSheet(pair.Value.Start.Sheet);
-                    var metadata = workbook.TryGetNamedRangeMetadata(pair.Key, out var savedMetadata)
-                        ? savedMetadata
-                        : NamedRangeMetadata.WorkbookScope;
-                    return sheet is null || !IsValidRangeOnSheet(pair.Value, sheet.Id)
-                        ? null
-                        : new NamedRangeDto
-                        {
-                            Name = pair.Key,
-                            SheetName = sheet.Name,
-                            Range = pair.Value.ToString(),
-                            Scope = metadata.Scope,
-                            Comment = metadata.Comment
-                        };
-                })
-                .OfType<NamedRangeDto>()
-                .ToList(),
+            NamedRanges = ToNamedRangeDtos(workbook),
             CustomViews = workbook.CustomViews
                 .OfType<WorkbookCustomView>()
                 .Select(view => new CustomViewDto
@@ -109,6 +90,8 @@ public sealed partial class NativeJsonAdapter
                 .Where(cache => cache.CacheId > 0)
                 .Select(ToPivotCacheDto)
                 .ToList(),
+            Slicers = ToSlicerDtos(workbook),
+            Timelines = ToTimelineDtos(workbook),
             CellStyles = includeCellStyles ? ToCellStyleTable(workbook) : null,
             DefaultStyle = ToCustomizedDefaultStyleDto(workbook),
             Sheets = workbook.Sheets.Select(s => new SheetDto
@@ -272,7 +255,7 @@ public sealed partial class NativeJsonAdapter
                     .ToList(),
                 Comments = s.Comments
                     .Where(pair => IsValidAddressOnSheet(pair.Key, s.Id) && pair.Value is not null)
-                    .Select(ToCommentDto)
+                    .Select(pair => ToCommentDto(s, pair))
                     .ToList(),
                 ThreadedComments = s.ThreadedComments
                     .Where(pair => IsValidAddressOnSheet(pair.Key, s.Id) && pair.Value is not null)
@@ -303,6 +286,11 @@ public sealed partial class NativeJsonAdapter
                     .Where(shape => NativeJsonVisualDtoMapper.IsDrawingShapeOnSheet(shape, s.Id))
                     .Select(NativeJsonVisualDtoMapper.FromDrawingShape)
                     .ToList(),
+                FormControls = s.FormControls
+                    .OfType<FormControlModel>()
+                    .Where(control => IsFormControlOnSheet(control, s.Id))
+                    .Select(ToFormControlDto)
+                    .ToList(),
                 DrawingObjectZOrder = ToDrawingObjectZOrderDtos(s),
                 Sparklines = s.Sparklines
                     .OfType<SparklineModel>()
@@ -332,6 +320,86 @@ public sealed partial class NativeJsonAdapter
         PopulateCalculationOptions(workbook, dto);
 
         JsonSerializer.Serialize(stream, dto, SaveOptions);
+    }
+
+    private static List<NamedRangeDto> ToNamedRangeDtos(Workbook workbook)
+    {
+        var result = new List<NamedRangeDto>();
+
+        // Workbook-scoped plain named ranges.
+        foreach (var pair in workbook.NamedRanges)
+        {
+            var sheet = workbook.GetSheet(pair.Value.Start.Sheet);
+            if (sheet is null || !IsValidRangeOnSheet(pair.Value, sheet.Id))
+                continue;
+
+            var metadata = workbook.TryGetNamedRangeMetadata(pair.Key, out var savedMetadata)
+                ? savedMetadata
+                : NamedRangeMetadata.WorkbookScope;
+            result.Add(new NamedRangeDto
+            {
+                Name = pair.Key,
+                SheetName = sheet.Name,
+                Range = pair.Value.ToString(),
+                Scope = metadata.Scope,
+                Comment = metadata.Comment
+            });
+        }
+
+        // Sheet-scoped plain named ranges.
+        foreach (var (key, range) in workbook.ScopedNamedRanges)
+        {
+            var scopeSheet = workbook.GetSheet(key.Sheet);
+            var rangeSheet = workbook.GetSheet(range.Start.Sheet);
+            if (scopeSheet is null || rangeSheet is null || !IsValidRangeOnSheet(range, rangeSheet.Id))
+                continue;
+
+            var metadata = workbook.TryGetScopedNamedRangeMetadata(key.Name, key.Sheet, out var savedMetadata)
+                ? savedMetadata
+                : NamedRangeMetadata.WorkbookScope;
+            result.Add(new NamedRangeDto
+            {
+                Name = key.Name,
+                SheetName = rangeSheet.Name,
+                Range = range.ToString(),
+                ScopeSheetName = scopeSheet.Name,
+                Scope = metadata.Scope,
+                Comment = metadata.Comment
+            });
+        }
+
+        // Workbook-scoped named formulas.
+        foreach (var (name, formulaText) in workbook.NamedFormulas)
+        {
+            if (string.IsNullOrWhiteSpace(formulaText))
+                continue;
+
+            result.Add(new NamedRangeDto
+            {
+                Name = name,
+                Formula = formulaText
+            });
+        }
+
+        // Sheet-scoped named formulas.
+        foreach (var (key, formulaText) in workbook.ScopedNamedFormulas)
+        {
+            if (string.IsNullOrWhiteSpace(formulaText))
+                continue;
+
+            var scopeSheet = workbook.GetSheet(key.Sheet);
+            if (scopeSheet is null)
+                continue;
+
+            result.Add(new NamedRangeDto
+            {
+                Name = key.Name,
+                Formula = formulaText,
+                ScopeSheetName = scopeSheet.Name
+            });
+        }
+
+        return result;
     }
 
     private static List<WatchedCellDto> ToWatchedCellDtos(Workbook workbook)

@@ -46,6 +46,9 @@ public enum TokenType
     Semicolon,
     Colon,
 
+    // Spill-anchor operator (e.g. A1# — a trailing '#' that is not part of a known error literal).
+    Hash,
+
     // Special
     EndOfFormula
 }

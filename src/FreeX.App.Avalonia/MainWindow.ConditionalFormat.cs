@@ -605,7 +605,7 @@ public sealed partial class MainWindow
             var highlight = ConditionalFormatHighlightPreset.Presets[presetIndex];
             var build = ConditionalFormatRuleBuilder.TryBuildApplyCommand(
                 input, _session.ActiveSheet.Id, range, highlight, existingRule?.Id,
-                isCustomFormat ? customFormatStyle : null);
+                isCustomFormat ? customFormatStyle : null, existingRule);
             if (!build.IsValid)
             {
                 errorText.Text = string.Join("\n", build.Validation.Errors.Select(e => e.Message));
@@ -928,14 +928,22 @@ public sealed partial class MainWindow
     /// <summary>
     /// The Manage Rules dialog: lists the selection's overlapping rules (or every sheet rule when the
     /// selection is a single cell) with New, Edit, Delete, reorder (move up/down), and change applies-to.
-    /// Edit re-runs the editor and replaces the rule; New runs the editor and adds it. All edits commit
-    /// through the atomic replace-all / apply commands for a single undo step.
+    /// All edits (including toggling Stop If True) mutate an in-memory working copy of the sheet's
+    /// rules — nothing touches the live workbook until OK/Apply commits the whole working copy as one
+    /// atomic <see cref="ReplaceAllConditionalFormatsCommand"/> (a single undo step). Cancel/closing the
+    /// window without committing simply discards the working copy, so the workbook is untouched —
+    /// mirroring the Windows host's manager (which buffers edits in a private
+    /// <c>ObservableCollection&lt;ConditionalFormat&gt;</c>).
     /// </summary>
     private async Task ShowManageConditionalFormatsDialogAsync(
         Action<ManageConditionalFormatsDialogSmokeProbe>? launchSmokeProbe)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
+
+        // The working copy: a deep-cloned snapshot of the sheet's rules that every button below edits
+        // in place. Nothing here reaches the live sheet until Commit() runs on OK.
+        var workingRules = ConditionalFormatManageModel.CloneAll(_session.ActiveSheet.ConditionalFormats);
 
         var dialog = new Window
         {
@@ -961,9 +969,22 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(listBox, "ManageConditionalFormatsListBox");
         AutomationProperties.SetName(listBox, UiText.Get("ManageConditionalFormats_ConditionalFormattingRules"));
         // Render each rule as a #/Rule-type/Format-swatch/Applies-to/Stop-if row matching the header
-        // columns (the WPF GridView), instead of the default single-string row.
+        // columns (the WPF GridView), instead of the default single-string row. Toggling Stop If
+        // True mutates the matching rule directly in the working copy (mirroring the WPF grid's
+        // two-way-bound checkbox column) — it never touches the live sheet until Commit().
         listBox.ItemTemplate = new FuncDataTemplate<ConditionalFormatRuleListItem>(
-            (item, _) => BuildManageConditionalFormatRow(item), supportsRecycling: true);
+            (item, _) => BuildManageConditionalFormatRow(item, isChecked =>
+            {
+                foreach (var rule in workingRules)
+                {
+                    if (rule.Id == item.Id)
+                    {
+                        rule.StopIfTrue = isChecked;
+                        break;
+                    }
+                }
+            }),
+            supportsRecycling: true);
 
         var emptyText = new TextBlock
         {
@@ -998,7 +1019,7 @@ public sealed partial class MainWindow
         {
             var selection = _session.SelectedRange;
             GridRange? scope = scopeBox.SelectedIndex == 1 ? selection : null;
-            var items = ConditionalFormatManageModel.BuildList(_session.ActiveSheet.ConditionalFormats, scope);
+            var items = ConditionalFormatManageModel.BuildList(workingRules, scope);
             listBox.ItemsSource = items;
             emptyText.IsVisible = items.Count == 0;
             if (items.Count > 0)
@@ -1081,9 +1102,8 @@ public sealed partial class MainWindow
             if (built is null)
                 return;
 
-            RunConditionalFormatCommand(
-                ConditionalFormatRuleBuilder.ToApplyCommand(_session.ActiveSheet.Id, built),
-                UiText.Get("InsertLoc_CfAddedRule"));
+            // Append to the working copy only — nothing reaches the live sheet until Commit().
+            workingRules = ConditionalFormatManageModel.AddToWorkingCopy(workingRules, built);
             Reload(built.Id);
         };
 
@@ -1096,12 +1116,11 @@ public sealed partial class MainWindow
             if (edited is null)
                 return;
 
-            var command = ConditionalFormatManageModel.BuildEditCommand(
-                _session.ActiveSheet.Id, _session.ActiveSheet.ConditionalFormats, edited);
-            if (command is null)
+            var updated = ConditionalFormatManageModel.ReplaceInWorkingCopy(workingRules, edited);
+            if (updated is null)
                 return;
 
-            RunConditionalFormatCommand(command, UiText.Get("InsertLoc_CfEditedRule"));
+            workingRules = updated;
             Reload(edited.Id);
         };
 
@@ -1110,12 +1129,11 @@ public sealed partial class MainWindow
             if (listBox.SelectedItem is not ConditionalFormatRuleListItem item)
                 return;
 
-            var command = ConditionalFormatManageModel.BuildDeleteCommand(
-                _session.ActiveSheet.Id, _session.ActiveSheet.ConditionalFormats, item.Id);
-            if (command is null)
+            var remaining = ConditionalFormatManageModel.DeleteFromWorkingCopy(workingRules, item.Id);
+            if (remaining is null)
                 return;
 
-            RunConditionalFormatCommand(command, UiText.Get("InsertLoc_CfDeletedRule"));
+            workingRules = remaining;
             Reload();
         };
 
@@ -1125,15 +1143,11 @@ public sealed partial class MainWindow
                 return;
 
             var duplicateId = Guid.NewGuid();
-            var command = ConditionalFormatManageModel.BuildDuplicateCommand(
-                _session.ActiveSheet.Id,
-                _session.ActiveSheet.ConditionalFormats,
-                item.Id,
-                duplicateId);
-            if (command is null)
+            var updated = ConditionalFormatManageModel.DuplicateInWorkingCopy(workingRules, item.Id, duplicateId);
+            if (updated is null)
                 return;
 
-            RunConditionalFormatCommand(command, UiText.Get("InsertLoc_CfAddedRule"));
+            workingRules = updated;
             Reload(duplicateId);
         };
 
@@ -1142,12 +1156,11 @@ public sealed partial class MainWindow
             if (listBox.SelectedItem is not ConditionalFormatRuleListItem item)
                 return;
 
-            var command = ConditionalFormatManageModel.BuildMoveCommand(
-                _session.ActiveSheet.Id, _session.ActiveSheet.ConditionalFormats, item.Id, direction);
-            if (command is null)
+            var updated = ConditionalFormatManageModel.MoveInWorkingCopy(workingRules, item.Id, direction);
+            if (updated is null)
                 return;
 
-            RunConditionalFormatCommand(command, UiText.Get("InsertLoc_CfReorderedRules"));
+            workingRules = updated;
             Reload(item.Id);
         }
 
@@ -1167,16 +1180,30 @@ public sealed partial class MainWindow
                 return;
             }
 
-            var command = ConditionalFormatManageModel.BuildAppliesToCommand(
-                _session.ActiveSheet.Id, _session.ActiveSheet.ConditionalFormats, item.Id, range);
-            if (command is null)
+            var updated = ConditionalFormatManageModel.ApplyRangeInWorkingCopy(workingRules, item.Id, range);
+            if (updated is null)
                 return;
 
-            RunConditionalFormatCommand(command, UiText.Format("InsertLoc_CfChangedRuleRange", FormatRangeReference(range)));
+            workingRules = updated;
             Reload(item.Id);
         };
 
-        closeButton.Click += (_, _) => dialog.Close();
+        void Commit()
+        {
+            // A single atomic replace-all: one undo step for every New/Edit/Delete/Duplicate/Move/
+            // AppliesTo/Stop-If-True edit made in this dialog session.
+            RunConditionalFormatCommand(
+                new ReplaceAllConditionalFormatsCommand(_session.ActiveSheet.Id, workingRules),
+                UiText.Get("InsertLoc_CfManageRulesApplied"));
+        }
+
+        closeButton.Click += (_, _) =>
+        {
+            Commit();
+            dialog.Close();
+        };
+        // Cancel (and closing the window without clicking OK) simply discards the working copy —
+        // the workbook is never touched, matching Excel/WPF.
         cancelButton.Click += (_, _) => dialog.Close();
 
         var scopeRow = new StackPanel
@@ -1327,8 +1354,15 @@ public sealed partial class MainWindow
     // the star "Stop If True" column absorbs the remainder (and fits its full header text).
     private const string ManageCfRuleColumns = "32,170,92,128,*";
 
-    /// <summary>Builds one rules-manager row matching the column header (mirrors the WPF GridView rows).</summary>
-    private Control BuildManageConditionalFormatRow(ConditionalFormatRuleListItem item)
+    /// <summary>
+    /// Builds one rules-manager row matching the column header (mirrors the WPF GridView rows).
+    /// <paramref name="onStopIfTrueToggled"/> is invoked with the new checked state whenever the user
+    /// toggles the row's Stop-If-True checkbox, mirroring the WPF grid's two-way-bound column (which
+    /// edits the working-copy rule directly rather than requiring the rule editor).
+    /// </summary>
+    private Control BuildManageConditionalFormatRow(
+        ConditionalFormatRuleListItem item,
+        Action<bool> onStopIfTrueToggled)
     {
         var rule = item.Rule;
         var grid = new AvaloniaGrid
@@ -1357,15 +1391,17 @@ public sealed partial class MainWindow
         AddCell(RowText(item.Description), 1);
         AddCell(BuildConditionalFormatPreviewSwatch(rule), 2);
         AddCell(RowText(FormatRangeReference(rule.AppliesTo)), 3);
-        // Stop-If-True shown as a read-only checkbox (display only; editing is via the rule editor).
+        // Stop-If-True: an interactive checkbox that mutates the working-copy rule directly
+        // (mirroring the WPF grid's two-way-bound column), not just a display of the current value.
         var stopBox = new CheckBox
         {
             IsChecked = rule.StopIfTrue,
-            IsHitTestVisible = false,
             MinWidth = 0,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             Margin = new Thickness(8, 0),
         };
+        AutomationProperties.SetName(stopBox, UiText.Get("ManageConditionalFormats_StopIfTrueColumn"));
+        stopBox.IsCheckedChanged += (_, _) => onStopIfTrueToggled(stopBox.IsChecked == true);
         AddCell(stopBox, 4);
         return grid;
     }

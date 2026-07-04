@@ -191,7 +191,8 @@ public static class ConditionalFormatRuleBuilder
         GridRange range,
         ConditionalFormatHighlightPreset? highlight = null,
         Guid? id = null,
-        CellStyle? customFormat = null)
+        CellStyle? customFormat = null,
+        ConditionalFormat? existingRule = null)
     {
         ArgumentNullException.ThrowIfNull(input);
 
@@ -200,7 +201,9 @@ public static class ConditionalFormatRuleBuilder
         if (!validation.IsValid)
             return CfRuleCommandResult.Invalid(validation);
 
-        var rule = Build(input, range, highlight, id, customFormat);
+        // Forward the rule being edited (not just its Id) so Build clones it — preserving fields the
+        // editor doesn't surface (e.g. StopIfTrue) instead of silently resetting them to defaults.
+        var rule = Build(input, range, highlight, id, customFormat, existingRule);
         return CfRuleCommandResult.Ok(rule, ToApplyCommand(sheetId, rule));
     }
 }

@@ -155,7 +155,10 @@ public static partial class PivotTableRefreshService
 
     private static uint GetPageFieldRowSpan(PivotTableModel pivotTable)
     {
-        var count = pivotTable.PageFields.Count;
+        // H10: fields added only to carry a slicer/timeline filter for an unplaced field don't get a
+        // visible Filters-area row (see PivotFieldModel.IsUnplacedFilterField / WritePageFields), so
+        // they must not reserve rows for the pivot body either.
+        var count = pivotTable.PageFields.Count(field => !field.IsUnplacedFilterField);
         if (count == 0)
             return 0;
 

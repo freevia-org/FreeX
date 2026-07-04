@@ -93,6 +93,10 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
         timeline.SelectedStartDate = NormalizeSelectedDate(_selectedStartDate);
         timeline.SelectedEndDate = NormalizeSelectedDate(_selectedEndDate);
         var selectedItems = PivotTimelineSelectionPlanner.ReadSelectedItems(sourceSheet, pivotTable, sourceFieldIndex, startDate, endDate);
+        // H10: identical fix as SetSlicerSelectionCommand — a timeline can be connected to a date field
+        // that was never dragged into Row/Column/PageFields. Without ensuring it's in one of those
+        // lists, ReplaceSelectedItems below is a no-op and the range selection never filters anything.
+        PivotTableSlicerTimelineCommandHelpers.EnsureFieldInLayout(pivotTable.RowFields, pivotTable.ColumnFields, pivotTable.PageFields, sourceFieldIndex);
         PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.RowFields, sourceFieldIndex, selectedItems);
         PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.ColumnFields, sourceFieldIndex, selectedItems);
         PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.PageFields, sourceFieldIndex, selectedItems);
@@ -160,7 +164,10 @@ public sealed class SetTimelineGranularityCommand : IWorkbookCommand
     private const int MaxLevel = 3;
     private readonly string _timelineName;
     private readonly int _newLevel;
-    private int _previousLevel;
+    // H59: must be nullable and capture timeline.Level VERBATIM (including null/absent), not the
+    // ?? 2 fallback used for computing the new level — otherwise undo would turn an absent Level
+    // (no OOXML level attribute written) into an explicit Level=2, a spurious round-trip regression.
+    private int? _previousLevel;
 
     public SetTimelineGranularityCommand(string timelineName, int newLevel)
     {
@@ -183,7 +190,7 @@ public sealed class SetTimelineGranularityCommand : IWorkbookCommand
         if (timeline is null)
             return new CommandOutcome(false, "Timeline was not found.");
 
-        _previousLevel = timeline.Level ?? 2; // default to Month (2) when absent
+        _previousLevel = timeline.Level;
         timeline.Level = _newLevel;
 
         return new CommandOutcome(true);
