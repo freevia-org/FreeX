@@ -63,4 +63,42 @@ public sealed class ChartEditCommandTests
 
         ((Paragraph)doc.Blocks[0]).Runs[0].Chart.Should().BeNull();
     }
+
+    [Fact]
+    public void SetChartAxisTitlesCommand_AppliesNormalizesAndRevertsTitles()
+    {
+        var (_, bus, chart) = NewChartDoc(quickLayoutId: 9);
+        chart.CategoryAxisTitle = "Old Category";
+        chart.ValueAxisTitle = "Old Value";
+
+        bus.Execute(new SetChartAxisTitlesCommand(0, 0, "  Quarter  ", "  Revenue  "));
+
+        chart.CategoryAxisTitle.Should().Be("Quarter");
+        chart.ValueAxisTitle.Should().Be("Revenue");
+        chart.QuickLayoutId.Should().Be(0);
+
+        bus.Undo().Should().BeTrue();
+        chart.CategoryAxisTitle.Should().Be("Old Category");
+        chart.ValueAxisTitle.Should().Be("Old Value");
+        chart.QuickLayoutId.Should().Be(9);
+
+        bus.Redo().Should().BeTrue();
+        chart.CategoryAxisTitle.Should().Be("Quarter");
+        chart.ValueAxisTitle.Should().Be("Revenue");
+    }
+
+    [Fact]
+    public void SetChartAxisTitlesCommand_NoopsForAxislessCharts()
+    {
+        var (_, bus, chart) = NewChartDoc();
+        chart.Kind = ChartKind.Pie;
+
+        bus.Execute(new SetChartAxisTitlesCommand(0, 0, "Category", "Value"));
+
+        chart.CategoryAxisTitle.Should().BeNull();
+        chart.ValueAxisTitle.Should().BeNull();
+        bus.Undo().Should().BeTrue();
+        chart.CategoryAxisTitle.Should().BeNull();
+        chart.ValueAxisTitle.Should().BeNull();
+    }
 }

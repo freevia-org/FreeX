@@ -3088,6 +3088,54 @@ public sealed class SetChartLegendCommand(int paragraphIndex, int runIndex, bool
 }
 
 /// <summary>
+/// Set or clear the axis titles for the chart carried by the run at (paragraphIndex, runIndex).
+/// Snaps the prior axis titles and quick-layout id for undo. No-op for axis-less chart kinds.
+/// </summary>
+public sealed class SetChartAxisTitlesCommand(
+    int paragraphIndex,
+    int runIndex,
+    string? categoryAxisTitle,
+    string? valueAxisTitle) : IDocumentCommand
+{
+    private string? _previousCategoryAxisTitle;
+    private string? _previousValueAxisTitle;
+    private int _previousQuickLayoutId;
+    private bool _applied;
+
+    public string Label => "Set Chart Axis Titles";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart)
+            return;
+        if (chart.Kind is ChartKind.Pie or ChartKind.Doughnut)
+            return;
+
+        _previousCategoryAxisTitle = chart.CategoryAxisTitle;
+        _previousValueAxisTitle = chart.ValueAxisTitle;
+        _previousQuickLayoutId = chart.QuickLayoutId;
+        chart.CategoryAxisTitle = Normalize(categoryAxisTitle);
+        chart.ValueAxisTitle = Normalize(valueAxisTitle);
+        chart.QuickLayoutId = 0;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart)
+            return;
+
+        chart.CategoryAxisTitle = _previousCategoryAxisTitle;
+        chart.ValueAxisTitle = _previousValueAxisTitle;
+        chart.QuickLayoutId = _previousQuickLayoutId;
+        _applied = false;
+    }
+
+    private static string? Normalize(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}
+
+/// <summary>
 /// Set the <see cref="SmartArt.Kind"/> (layout family) of the SmartArt carried by the run at
 /// (paragraphIndex, runIndex). Snaps the prior kind for undo. No-op when the run carries no SmartArt.
 /// </summary>

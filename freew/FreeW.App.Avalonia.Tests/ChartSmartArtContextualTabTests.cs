@@ -98,9 +98,11 @@ public sealed class ChartSmartArtContextualTabTests
         cd.Context.Color.Should().Be(RibbonContextColor.Green);
         cd.Groups.Select(g => g.Id).Should().Contain("chart-elements");
         cd.Groups.Single(g => g.Id == "chart-elements").Controls
-            .OfType<RibbonToggleButton>()
-            .Single()
-            .CommandId.Value.Should().Be("freew.chart-toggle-legend");
+            .Select(GetCommandId)
+            .Where(id => id is not null)
+            .Select(id => id!.Value)
+            .Should()
+            .Equal("freew.chart-toggle-legend", "freew.chart-axis-titles");
 
         var cf = def.FindTab("chart-format")!;
         cf.Context!.ActivationKey.Should().Be(FloatingRibbonContextSource.ChartContextKey);
@@ -123,7 +125,7 @@ public sealed class ChartSmartArtContextualTabTests
             "freew.chart-type", "freew.chart-type-column", "freew.chart-type-bar", "freew.chart-type-line",
             "freew.chart-type-pie", "freew.chart-type-scatter", "freew.chart-type-area", "freew.chart-type-doughnut",
             "freew.chart-style", "freew.chart-style-1", "freew.chart-colors", "freew.chart-colors-colorful1",
-            "freew.chart-toggle-legend",
+            "freew.chart-toggle-legend", "freew.chart-axis-titles",
             // SmartArt Design
             "freew.smartart-layout", "freew.smartart-layout-list", "freew.smartart-layout-process",
             "freew.smartart-layout-cycle", "freew.smartart-layout-hierarchy",
@@ -347,6 +349,43 @@ public sealed class ChartSmartArtContextualTabTests
         quickLayoutAfter.Should().Be(0, "explicit chart element commands clear quick-layout overrides");
         visibleUndone.Should().BeTrue("undo restores the layout-driven legend");
         quickLayoutUndone.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task ToggleChartAxisTitles_command_sets_default_titles_and_reverts_on_undo()
+    {
+        string? categoryAfter = null, valueAfter = null, categoryUndone = "not observed", valueUndone = "not observed";
+        int? quickLayoutAfter = null, quickLayoutUndone = null;
+        var ran = await OnUi(() =>
+        {
+            var (doc, bi, ri) = DocWithFloatingChart();
+            var chart = ((Paragraph)doc.Blocks[0]).Runs[ri].Chart!;
+            chart.QuickLayoutId = 9;
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+            registry.TryGet(new RibbonCommandId("freew.chart-axis-titles"), out var cmd);
+            cmd!.Execute(RibbonCommandContext.Empty);
+            categoryAfter = chart.CategoryAxisTitle;
+            valueAfter = chart.ValueAxisTitle;
+            quickLayoutAfter = chart.QuickLayoutId;
+
+            view.Undo();
+            categoryUndone = chart.CategoryAxisTitle;
+            valueUndone = chart.ValueAxisTitle;
+            quickLayoutUndone = chart.QuickLayoutId;
+        });
+        if (!ran) return;
+        categoryAfter.Should().Be("Category Axis");
+        valueAfter.Should().Be("Value Axis");
+        quickLayoutAfter.Should().Be(0, "explicit chart element commands clear quick-layout overrides");
+        categoryUndone.Should().BeNull();
+        valueUndone.Should().BeNull();
+        quickLayoutUndone.Should().Be(9);
     }
 
     [Fact]

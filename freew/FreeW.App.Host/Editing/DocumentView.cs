@@ -2372,11 +2372,14 @@ public sealed class DocumentView : RichTextBox
     public void SetSelectedChartAxisTitles(string? categoryAxisTitle, string? valueAxisTitle)
     {
         CommitToModel();
-        var chart = SelectedChartLocation().Chart;
-        if (chart is null)
+        var location = SelectedChartLocation();
+        if (location.Chart is null)
             return;
-        chart.CategoryAxisTitle = string.IsNullOrWhiteSpace(categoryAxisTitle) ? null : categoryAxisTitle.Trim();
-        chart.ValueAxisTitle = string.IsNullOrWhiteSpace(valueAxisTitle) ? null : valueAxisTitle.Trim();
+        _commands.Execute(new SetChartAxisTitlesCommand(
+            location.BlockIndex,
+            location.RunIndex,
+            categoryAxisTitle,
+            valueAxisTitle));
         Render();
     }
 
