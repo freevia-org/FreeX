@@ -253,6 +253,9 @@ public sealed class SectionsCommentsTests : IDisposable
         comment.DateTime.Should().Be(new DateTime(2026, 7, 3, 10, 15, 30, DateTimeKind.Utc));
         comment.IsResolved.Should().BeTrue();
         comment.UsesModernCommentSchema.Should().BeTrue();
+        comment.ModernCommentId.Should().Be("{33333333-3333-3333-3333-333333333333}");
+        comment.ModernAuthorId.Should().Be("{11111111-1111-1111-1111-111111111111}");
+        comment.ModernAuthorUserId.Should().Be("alice@example.com::1");
         comment.ModernAnchorKind.Should().Be("unknownAnchor");
         comment.ModernAnchorXml.Should().Contain("unknownAnchor");
         comment.Xemu.Should().Be(1200);
@@ -260,6 +263,9 @@ public sealed class SectionsCommentsTests : IDisposable
         comment.Replies.Should().ContainSingle().Which.Should().Match<SlideCommentReply>(reply =>
             reply.Author == "Bob Reviewer" &&
             reply.Initials == "BR" &&
+            reply.ModernReplyId == "{44444444-4444-4444-4444-444444444444}" &&
+            reply.ModernAuthorId == "{22222222-2222-2222-2222-222222222222}" &&
+            reply.ModernAuthorUserId == "bob@example.com::2" &&
             reply.Text == "Reply retained." &&
             reply.DateTime == new DateTime(2026, 7, 3, 10, 20, 0, DateTimeKind.Utc));
 
@@ -267,9 +273,50 @@ public sealed class SectionsCommentsTests : IDisposable
         pane.SelectedComment.Should().NotBeNull();
         pane.SelectedComment!.ThreadStatus.Should().Be(PresentationCommentThreadStatus.Resolved);
         pane.SelectedComment.AuthorDisplayName.Should().Be("Alice Reviewer");
+        pane.SelectedComment.ModernCommentId.Should().Be("{33333333-3333-3333-3333-333333333333}");
+        pane.SelectedComment.ModernAuthorId.Should().Be("{11111111-1111-1111-1111-111111111111}");
+        pane.SelectedComment.ModernAuthorUserId.Should().Be("alice@example.com::1");
         pane.SelectedComment.ModernAnchorKind.Should().Be("unknownAnchor");
         pane.SelectedComment.AnchorSummary.Should().Be("unknown anchor at 1200,2400 EMU");
-        pane.SelectedComment.Replies.Should().ContainSingle().Which.AuthorDisplayName.Should().Be("Bob Reviewer");
+        pane.SelectedComment.Replies.Should().ContainSingle().Which.Should().Match<PresentationCommentReplyDescriptor>(reply =>
+            reply.AuthorDisplayName == "Bob Reviewer" &&
+            reply.ModernReplyId == "{44444444-4444-4444-4444-444444444444}" &&
+            reply.ModernAuthorId == "{22222222-2222-2222-2222-222222222222}" &&
+            reply.ModernAuthorUserId == "bob@example.com::2");
+    }
+
+    [Fact]
+    public void ModernComments_ReadWrite_PreservesImportedAuthorAndThreadIds()
+    {
+        using var ms = BuildModernCommentsPptx();
+        var pres = PptxPackageReader.Read(ms);
+
+        var path = WriteToPptx(pres);
+
+        using var zip = ZipFile.OpenRead(path);
+        var authorsXml = LoadXml(zip, "ppt/authors/author1.xml");
+        authorsXml.Descendants()
+            .Should().Contain(element =>
+                element.Name.LocalName == "author" &&
+                HasAttribute(element, "id", "{11111111-1111-1111-1111-111111111111}") &&
+                HasAttribute(element, "userId", "alice@example.com::1"));
+        authorsXml.Descendants()
+            .Should().Contain(element =>
+                element.Name.LocalName == "author" &&
+                HasAttribute(element, "id", "{22222222-2222-2222-2222-222222222222}") &&
+                HasAttribute(element, "userId", "bob@example.com::2"));
+
+        var commentXml = LoadXml(zip, "ppt/comments/comment1.xml");
+        commentXml.Descendants()
+            .Should().Contain(element =>
+                element.Name.LocalName == "cm" &&
+                HasAttribute(element, "id", "{33333333-3333-3333-3333-333333333333}") &&
+                HasAttribute(element, "authorId", "{11111111-1111-1111-1111-111111111111}"));
+        commentXml.Descendants()
+            .Should().Contain(element =>
+                element.Name.LocalName == "reply" &&
+                HasAttribute(element, "id", "{44444444-4444-4444-4444-444444444444}") &&
+                HasAttribute(element, "authorId", "{22222222-2222-2222-2222-222222222222}"));
     }
 
     [Fact]
@@ -281,6 +328,10 @@ public sealed class SectionsCommentsTests : IDisposable
         {
             Author = "Alice Reviewer",
             Initials = "AR",
+            ModernCommentId = "{aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa}",
+            ModernAuthorId = "{bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb}",
+            ModernAuthorUserId = "alice@example.com::powerpoint",
+            ModernAuthorProviderId = "aad",
             Text = "Resolve after chart update.",
             DateTime = new DateTime(2026, 7, 3, 11, 0, 0, DateTimeKind.Utc),
             IsResolved = true,
@@ -294,6 +345,10 @@ public sealed class SectionsCommentsTests : IDisposable
                 {
                     Author = "Bob Reviewer",
                     Initials = "BR",
+                    ModernReplyId = "{cccccccc-cccc-cccc-cccc-cccccccccccc}",
+                    ModernAuthorId = "{dddddddd-dddd-dddd-dddd-dddddddddddd}",
+                    ModernAuthorUserId = "bob@example.com::powerpoint",
+                    ModernAuthorProviderId = "aad",
                     Text = "Confirmed.",
                     DateTime = new DateTime(2026, 7, 3, 11, 5, 0, DateTimeKind.Utc)
                 }
@@ -311,11 +366,19 @@ public sealed class SectionsCommentsTests : IDisposable
         comment.DateTime.Should().Be(new DateTime(2026, 7, 3, 11, 0, 0, DateTimeKind.Utc));
         comment.IsResolved.Should().BeTrue();
         comment.UsesModernCommentSchema.Should().BeTrue();
+        comment.ModernCommentId.Should().Be("{aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa}");
+        comment.ModernAuthorId.Should().Be("{bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb}");
+        comment.ModernAuthorUserId.Should().Be("alice@example.com::powerpoint");
+        comment.ModernAuthorProviderId.Should().Be("aad");
         comment.ModernAnchorKind.Should().Be("unknownAnchor");
         comment.ModernAnchorXml.Should().Contain("unknownAnchor");
         comment.Replies.Should().ContainSingle().Which.Should().Match<SlideCommentReply>(reply =>
             reply.Author == "Bob Reviewer" &&
             reply.Initials == "BR" &&
+            reply.ModernReplyId == "{cccccccc-cccc-cccc-cccc-cccccccccccc}" &&
+            reply.ModernAuthorId == "{dddddddd-dddd-dddd-dddd-dddddddddddd}" &&
+            reply.ModernAuthorUserId == "bob@example.com::powerpoint" &&
+            reply.ModernAuthorProviderId == "aad" &&
             reply.Text == "Confirmed." &&
             reply.DateTime == new DateTime(2026, 7, 3, 11, 5, 0, DateTimeKind.Utc));
 
@@ -341,11 +404,34 @@ public sealed class SectionsCommentsTests : IDisposable
             .Should().Contain(element => element.Name.LocalName == "unknownAnchor");
         commentXml.Descendants()
             .Should().Contain(element =>
+                element.Name.LocalName == "cm" &&
+                HasAttribute(element, "id", "{aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa}") &&
+                HasAttribute(element, "authorId", "{bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb}"));
+        commentXml.Descendants()
+            .Should().Contain(element =>
+                element.Name.LocalName == "reply" &&
+                HasAttribute(element, "id", "{cccccccc-cccc-cccc-cccc-cccccccccccc}") &&
+                HasAttribute(element, "authorId", "{dddddddd-dddd-dddd-dddd-dddddddddddd}"));
+        commentXml.Descendants()
+            .Should().Contain(element =>
                 element.Name.LocalName == "pos" &&
                 element.Attribute("x") != null &&
                 element.Attribute("x")!.Value == "3600" &&
                 element.Attribute("y") != null &&
                 element.Attribute("y")!.Value == "7200");
+        var authorsXml = LoadXml(zip, "ppt/authors/author1.xml");
+        authorsXml.Descendants()
+            .Should().Contain(element =>
+                element.Name.LocalName == "author" &&
+                HasAttribute(element, "id", "{bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb}") &&
+                HasAttribute(element, "userId", "alice@example.com::powerpoint") &&
+                HasAttribute(element, "providerId", "aad"));
+        authorsXml.Descendants()
+            .Should().Contain(element =>
+                element.Name.LocalName == "author" &&
+                HasAttribute(element, "id", "{dddddddd-dddd-dddd-dddd-dddddddddddd}") &&
+                HasAttribute(element, "userId", "bob@example.com::powerpoint") &&
+                HasAttribute(element, "providerId", "aad"));
     }
 
     [Fact]
@@ -1123,6 +1209,9 @@ public sealed class SectionsCommentsTests : IDisposable
             o.Attribute("PartName")?.Value == partName &&
             o.Attribute("ContentType")?.Value == contentType);
     }
+
+    private static bool HasAttribute(XElement element, string name, string value)
+        => element.Attribute(name)?.Value == value;
 
     private static void WriteZipEntry(System.IO.Compression.ZipArchive zip, string path, string content)
     {

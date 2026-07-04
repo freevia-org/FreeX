@@ -234,6 +234,10 @@ public static class SlideCloner
             ResolvedDateTime = c.ResolvedDateTime,
             ResolvedBy       = c.ResolvedBy,
             UsesModernCommentSchema = c.UsesModernCommentSchema,
+            ModernCommentId = c.ModernCommentId,
+            ModernAuthorId = c.ModernAuthorId,
+            ModernAuthorUserId = c.ModernAuthorUserId,
+            ModernAuthorProviderId = c.ModernAuthorProviderId,
             ModernAnchorKind = c.ModernAnchorKind,
             ModernAnchorXml = c.ModernAnchorXml,
             Xemu     = c.Xemu,
@@ -246,6 +250,10 @@ public static class SlideCloner
             clone.Replies.Add(new SlideCommentReply
             {
                 AuthorId = reply.AuthorId,
+                ModernReplyId = reply.ModernReplyId,
+                ModernAuthorId = reply.ModernAuthorId,
+                ModernAuthorUserId = reply.ModernAuthorUserId,
+                ModernAuthorProviderId = reply.ModernAuthorProviderId,
                 Author = reply.Author,
                 Initials = reply.Initials,
                 Text = reply.Text,

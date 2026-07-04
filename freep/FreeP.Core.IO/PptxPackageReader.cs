@@ -14,6 +14,13 @@ namespace FreeP.Core.IO;
 /// </summary>
 public static class PptxPackageReader
 {
+    private sealed record ModernCommentAuthor(
+        string Id,
+        string Name,
+        string Initials,
+        string UserId,
+        string ProviderId);
+
     // ── OOXML namespaces ─────────────────────────────────────────────────────────
     private static readonly XNamespace P   = "http://schemas.openxmlformats.org/presentationml/2006/main";
     private static readonly XNamespace A   = PptxColorReader.A;
@@ -230,7 +237,7 @@ public static class PptxPackageReader
         }
 
         var modernAuthorsTarget = OpcRelationships.FirstTargetByType(presRels, ModernAuthorsRelType);
-        var modernAuthorMap = new Dictionary<string, (string name, string initials)>(StringComparer.OrdinalIgnoreCase);
+        var modernAuthorMap = new Dictionary<string, ModernCommentAuthor>(StringComparer.OrdinalIgnoreCase);
         if (modernAuthorsTarget is not null)
         {
             var modernAuthorsPath = ResolveRelativeZipPath(presDir, modernAuthorsTarget);
@@ -428,10 +435,10 @@ public static class PptxPackageReader
         return result;
     }
 
-    private static Dictionary<string, (string name, string initials)> ReadModernCommentAuthors(
+    private static Dictionary<string, ModernCommentAuthor> ReadModernCommentAuthors(
         ZipArchive archive, string path)
     {
-        var result = new Dictionary<string, (string name, string initials)>(StringComparer.OrdinalIgnoreCase);
+        var result = new Dictionary<string, ModernCommentAuthor>(StringComparer.OrdinalIgnoreCase);
         var xml = OpcXml.TryLoadXml(archive, path);
         if (xml?.Root is null) return result;
 
@@ -442,7 +449,9 @@ public static class PptxPackageReader
 
             var name = authorEl.Attribute("name")?.Value ?? string.Empty;
             var initials = authorEl.Attribute("initials")?.Value ?? string.Empty;
-            result[id] = (name, initials);
+            var userId = authorEl.Attribute("userId")?.Value ?? string.Empty;
+            var providerId = authorEl.Attribute("providerId")?.Value ?? string.Empty;
+            result[id] = new ModernCommentAuthor(id, name, initials, userId, providerId);
         }
 
         return result;
@@ -503,7 +512,7 @@ public static class PptxPackageReader
     private static void ReadModernSlideComments(
         ZipArchive archive,
         string path,
-        Dictionary<string, (string name, string initials)> authorMap,
+        Dictionary<string, ModernCommentAuthor> authorMap,
         List<SlideComment> comments)
     {
         var xml = OpcXml.TryLoadXml(archive, path);
@@ -518,8 +527,8 @@ public static class PptxPackageReader
             var posEl = cmEl.Element(P188 + "pos");
             var comment = new SlideComment
             {
-                Author = author.name,
-                Initials = author.initials,
+                Author = author.Name,
+                Initials = author.Initials,
                 Text = ReadModernCommentText(cmEl),
                 DateTime = created,
                 IsResolved = string.Equals(cmEl.Attribute("status")?.Value, "resolved", StringComparison.OrdinalIgnoreCase),
@@ -527,6 +536,10 @@ public static class PptxPackageReader
                 Yemu = ParseLong(posEl?.Attribute("y")?.Value),
                 Idx = comments.Count + 1,
                 UsesModernCommentSchema = true,
+                ModernCommentId = cmEl.Attribute("id")?.Value ?? string.Empty,
+                ModernAuthorId = author.Id,
+                ModernAuthorUserId = author.UserId,
+                ModernAuthorProviderId = author.ProviderId,
                 ModernAnchorKind = anchorEl?.Name.LocalName ?? string.Empty,
                 ModernAnchorXml = anchorEl?.ToString(SaveOptions.DisableFormatting) ?? string.Empty,
             };
@@ -537,8 +550,12 @@ public static class PptxPackageReader
                 var replyAuthor = ResolveModernAuthor(authorMap, replyAuthorId);
                 comment.Replies.Add(new SlideCommentReply
                 {
-                    Author = replyAuthor.name,
-                    Initials = replyAuthor.initials,
+                    ModernReplyId = replyEl.Attribute("id")?.Value ?? string.Empty,
+                    ModernAuthorId = replyAuthor.Id,
+                    ModernAuthorUserId = replyAuthor.UserId,
+                    ModernAuthorProviderId = replyAuthor.ProviderId,
+                    Author = replyAuthor.Name,
+                    Initials = replyAuthor.Initials,
                     Text = ReadModernCommentText(replyEl),
                     DateTime = ParseDateTime(replyEl.Attribute("created")?.Value),
                 });
@@ -559,15 +576,15 @@ public static class PptxPackageReader
             "deMkLst" or
             "txMkLst";
 
-    private static (string name, string initials) ResolveModernAuthor(
-        Dictionary<string, (string name, string initials)> authorMap,
+    private static ModernCommentAuthor ResolveModernAuthor(
+        Dictionary<string, ModernCommentAuthor> authorMap,
         string authorId)
     {
         if (!string.IsNullOrWhiteSpace(authorId) && authorMap.TryGetValue(authorId, out var author))
             return author;
 
         var suffix = string.IsNullOrWhiteSpace(authorId) ? "unknown" : authorId.Trim('{', '}');
-        return ($"Author {suffix}", "A");
+        return new ModernCommentAuthor(authorId, $"Author {suffix}", "A", string.Empty, string.Empty);
     }
 
     private static string ReadModernCommentText(XElement commentEl)

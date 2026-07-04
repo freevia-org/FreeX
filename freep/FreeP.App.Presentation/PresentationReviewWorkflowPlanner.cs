@@ -75,6 +75,14 @@ public sealed record PresentationCommentReplyDescriptor(
     DateTime? Timestamp,
     int MentionCount)
 {
+    public string ModernAuthorId { get; init; } = string.Empty;
+
+    public string ModernAuthorUserId { get; init; } = string.Empty;
+
+    public string ModernAuthorProviderId { get; init; } = string.Empty;
+
+    public string ModernReplyId { get; init; } = string.Empty;
+
     public string AuthorDisplayName => PresentationCommentMetadataPolicy.NormalizeAuthorDisplayName(Author);
 
     public string InitialsBadgeText => PresentationCommentMetadataPolicy.NormalizeInitialsBadge(Initials, AuthorDisplayName);
@@ -110,6 +118,14 @@ public sealed record PresentationCommentDescriptor(
     string ResolvedBy = "",
     DateTime? ResolvedTimestamp = null)
 {
+    public string ModernCommentId { get; init; } = string.Empty;
+
+    public string ModernAuthorId { get; init; } = string.Empty;
+
+    public string ModernAuthorUserId { get; init; } = string.Empty;
+
+    public string ModernAuthorProviderId { get; init; } = string.Empty;
+
     public string AuthorDisplayName => PresentationCommentMetadataPolicy.NormalizeAuthorDisplayName(Author);
 
     public string InitialsBadgeText => PresentationCommentMetadataPolicy.NormalizeInitialsBadge(Initials, AuthorDisplayName);
@@ -720,6 +736,11 @@ public static class PresentationReviewWorkflowPlanner
             IsResolved = current.IsResolved,
             ResolvedDateTime = current.ResolvedDateTime,
             ResolvedBy = current.ResolvedBy,
+            UsesModernCommentSchema = current.UsesModernCommentSchema,
+            ModernCommentId = current.ModernCommentId,
+            ModernAuthorId = current.ModernAuthorId,
+            ModernAuthorUserId = current.ModernAuthorUserId,
+            ModernAuthorProviderId = current.ModernAuthorProviderId,
             ModernAnchorKind = current.ModernAnchorKind,
             ModernAnchorXml = current.ModernAnchorXml,
             Xemu = current.Xemu,
@@ -2358,7 +2379,13 @@ public static class PresentationReviewWorkflowPlanner
             comment.IsResolved ? PresentationCommentThreadStatus.Resolved : PresentationCommentThreadStatus.Open,
             isSelected,
             comment.ResolvedBy,
-            comment.ResolvedDateTime);
+            comment.ResolvedDateTime)
+        {
+            ModernCommentId = comment.ModernCommentId,
+            ModernAuthorId = comment.ModernAuthorId,
+            ModernAuthorUserId = comment.ModernAuthorUserId,
+            ModernAuthorProviderId = comment.ModernAuthorProviderId,
+        };
     }
 
     private static PresentationCommentReplyDescriptor DescribeCommentReply(
@@ -2370,7 +2397,13 @@ public static class PresentationReviewWorkflowPlanner
             reply.Initials,
             BuildPreview(reply.Text),
             reply.DateTime,
-            CountMentions(reply.Text));
+            CountMentions(reply.Text))
+        {
+            ModernReplyId = reply.ModernReplyId,
+            ModernAuthorId = reply.ModernAuthorId,
+            ModernAuthorUserId = reply.ModernAuthorUserId,
+            ModernAuthorProviderId = reply.ModernAuthorProviderId,
+        };
 
     private static SlideComment CloneComment(SlideComment comment)
     {
@@ -2383,6 +2416,11 @@ public static class PresentationReviewWorkflowPlanner
             IsResolved = comment.IsResolved,
             ResolvedDateTime = comment.ResolvedDateTime,
             ResolvedBy = comment.ResolvedBy,
+            UsesModernCommentSchema = comment.UsesModernCommentSchema,
+            ModernCommentId = comment.ModernCommentId,
+            ModernAuthorId = comment.ModernAuthorId,
+            ModernAuthorUserId = comment.ModernAuthorUserId,
+            ModernAuthorProviderId = comment.ModernAuthorProviderId,
             ModernAnchorKind = comment.ModernAnchorKind,
             ModernAnchorXml = comment.ModernAnchorXml,
             Xemu = comment.Xemu,
@@ -2402,6 +2440,10 @@ public static class PresentationReviewWorkflowPlanner
             target.Replies.Add(new SlideCommentReply
             {
                 AuthorId = reply.AuthorId,
+                ModernReplyId = reply.ModernReplyId,
+                ModernAuthorId = reply.ModernAuthorId,
+                ModernAuthorUserId = reply.ModernAuthorUserId,
+                ModernAuthorProviderId = reply.ModernAuthorProviderId,
                 Author = reply.Author,
                 Initials = reply.Initials,
                 Text = reply.Text,
