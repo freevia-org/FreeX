@@ -1279,6 +1279,9 @@ public enum SourceType
 
     /// <summary>A web page (adds its URL and an accessed date).</summary>
     WebSite = 2,
+
+    /// <summary>A report (adds the responsible institution plus report publication fields).</summary>
+    Report = 3,
 }
 
 /// <summary>
@@ -1319,9 +1322,9 @@ public sealed record SourceAuthorPerson(string First, string Middle, string Last
 /// <summary>
 /// A bibliographic source the document can cite: a short <see cref="Tag"/> (a stable identifier used
 /// to reference the source, e.g. <c>"Knuth1997"</c>) plus author/title/year and common Word bibliography
-/// fields such as city, edition, standard number, short title and comments. A <see cref="SourceType"/>
+/// fields such as city, institution, edition, standard number, short title and comments. A <see cref="SourceType"/>
 /// selects type-specific formatting and carries the extra fields that type needs
-/// (journal/volume/issue/pages for an article, url/accessed for a web site). Kept deliberately
+/// (journal/volume/issue/pages for an article, url/accessed for a web site, institution for a report). Kept deliberately
 /// small and immutable-friendly (init-only properties) so it round-trips cleanly and the
 /// citation/bibliography formatting helpers (see <see cref="Citations"/>) can stay pure. Missing fields
 /// are represented as empty strings / null and handled gracefully by the formatters.
@@ -1354,6 +1357,9 @@ public sealed class Source
 
     /// <summary>The year of publication. Empty when unknown.</summary>
     public string Year { get; init; } = string.Empty;
+
+    /// <summary>The institution responsible for a report; null when unknown / not applicable.</summary>
+    public string? Institution { get; init; }
 
     /// <summary>The publisher of the work, or null when unknown / not applicable.</summary>
     public string? Publisher { get; init; }

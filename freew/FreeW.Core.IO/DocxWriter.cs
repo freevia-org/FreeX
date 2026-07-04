@@ -5398,6 +5398,7 @@ public static class DocxWriter
     {
         SourceType.JournalArticle => "JournalArticle",
         SourceType.WebSite => "DocumentFromInternetSite",
+        SourceType.Report => "Report",
         _ => "Book",
     };
 
@@ -5426,6 +5427,7 @@ public static class DocxWriter
 
             AddBibliographyField(element, "Title", source.Title);
             AddBibliographyField(element, "Year", source.Year);
+            AddBibliographyField(element, "Institution", source.Institution);
             AddBibliographyField(element, "Publisher", source.Publisher);
             AddBibliographyField(element, "City", source.City);
             AddBibliographyField(element, "Edition", source.Edition);

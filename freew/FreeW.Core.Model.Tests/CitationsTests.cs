@@ -444,6 +444,7 @@ public class CitationsTests
         {
             Author = "Ada Lovelace",
             Title = "Notes",
+            Institution = "Analytical Society",
             City = "London",
             Edition = "Annotated",
             StandardNumber = "ISBN-1",
@@ -454,6 +455,7 @@ public class CitationsTests
         {
             Author = "Ada Lovelace",
             Title = "Notes",
+            Institution = "Analytical Society",
             City = "London",
             Edition = "Annotated",
             StandardNumber = "ISBN-1",
@@ -464,17 +466,30 @@ public class CitationsTests
         {
             Author = "Ada Lovelace",
             Title = "Notes",
+            Institution = "Analytical Society",
             City = "London",
             Edition = "Annotated",
             StandardNumber = "ISBN-1",
             ShortTitle = "Notes",
             Comments = "Different note"
         };
+        var differentInstitution = new Source
+        {
+            Author = "Ada Lovelace",
+            Title = "Notes",
+            Institution = "Different Institute",
+            City = "London",
+            Edition = "Annotated",
+            StandardNumber = "ISBN-1",
+            ShortTitle = "Notes",
+            Comments = "Original note"
+        };
         var doc = new TextDocument();
         doc.Sources.Add(source);
 
         Citations.FormatInText(doc, clone, CitationStyle.Ieee).Should().Be("[1]");
         Citations.FormatInText(doc, differentComment, CitationStyle.Ieee).Should().Be("[Lovelace]");
+        Citations.FormatInText(doc, differentInstitution, CitationStyle.Ieee).Should().Be("[Lovelace]");
     }
 
     [Fact]
@@ -644,6 +659,31 @@ public class CitationsTests
         Citations.FormatBibliographyEntry(site, CitationStyle.Ieee).Should().Be(
             "Mozilla, \"CSS Grid Layout,\" " +
             "MDN Web Docs, https://developer.mozilla.org/grid, accessed 3 May 2024, 2023.");
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_Report_UsesInstitutionCityPublisherDetail()
+    {
+        var report = new Source
+        {
+            Type = SourceType.Report,
+            Author = "Doe, J.",
+            Title = "Annual Measurements",
+            Year = "2026",
+            Institution = "National Bureau of Standards",
+            City = "Washington",
+            Publisher = "Government Printing Office"
+        };
+
+        Citations.FormatBibliographyEntry(report, CitationStyle.Apa).Should().Be(
+            "Doe, J. (2026). Annual Measurements. " +
+            "National Bureau of Standards, Washington, Government Printing Office.");
+        Citations.FormatBibliographyEntry(report, CitationStyle.Mla).Should().Be(
+            "Doe, J. Annual Measurements. " +
+            "National Bureau of Standards, Washington, Government Printing Office, 2026.");
+        Citations.FormatBibliographyEntry(report, CitationStyle.Ieee).Should().Be(
+            "Doe, J., \"Annual Measurements,\" " +
+            "National Bureau of Standards, Washington, Government Printing Office, 2026.");
     }
 
     [Fact]
