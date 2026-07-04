@@ -229,6 +229,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         ValidateSectionGeometryRendererPairs(rows, failures);
         ValidateReviewRendererPairs(rows, failures);
         ValidateDrawingObjectRendererPairs(rows, failures);
+        ValidateChartSmartArtRendererPairs(rows, failures);
         var orderedRows = rows
             .OrderBy(r => r.HostId, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.ScenarioId, StringComparer.OrdinalIgnoreCase)
@@ -1409,6 +1410,50 @@ public static class FreeWVisualEvidenceManifestNormalizer
         }
     }
 
+    private static void ValidateChartSmartArtRendererPairs(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,
+        List<string> failures)
+    {
+        foreach (var scenarioId in ChartSmartArtRendererScenarioIds)
+        {
+            var wpfRows = TrustedRowsForHostScenario(rows, WpfHostId, scenarioId);
+            var avaloniaRows = TrustedRowsForHostScenario(rows, AvaloniaHostId, scenarioId);
+            if (wpfRows.Count == 0 || avaloniaRows.Count == 0)
+                continue;
+
+            ValidateUniquePages(scenarioId, WpfHostId, wpfRows, failures);
+            ValidateUniquePages(scenarioId, AvaloniaHostId, avaloniaRows, failures);
+
+            var wpfPages = wpfRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var avaloniaPages = avaloniaRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var requiredPages = RequiredScenarioPages(scenarioId);
+            var missingAvaloniaPages = requiredPages.Except(avaloniaPages).ToList();
+            var missingWpfPages = requiredPages.Except(wpfPages).ToList();
+            if (missingAvaloniaPages.Count > 0)
+            {
+                failures.Add(
+                    $"chart/SmartArt renderer pair '{scenarioId}' is missing Avalonia page(s): {FormatPages(missingAvaloniaPages)}");
+            }
+
+            if (missingWpfPages.Count > 0)
+            {
+                failures.Add(
+                    $"chart/SmartArt renderer pair '{scenarioId}' is missing WPF page(s): {FormatPages(missingWpfPages)}");
+            }
+
+            foreach (var pageNumber in wpfPages.Intersect(avaloniaPages))
+            {
+                var wpf = wpfRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                var avalonia = avaloniaRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                if (wpf is null || avalonia is null)
+                    continue;
+
+                ValidateRendererPairRow("chart/SmartArt renderer pair", scenarioId, pageNumber, wpf, avalonia, failures);
+                ValidateChartSmartArtPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+            }
+        }
+    }
+
     private static IReadOnlyList<int> RequiredScenarioPages(string scenarioId)
     {
         var minimumOutputs = Math.Max(1, FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
@@ -1516,6 +1561,105 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{pairName} rendered grouped child effect summaries differ: WPF '{FormatSummaries(wpfSummaries)}', Avalonia '{FormatSummaries(avaloniaSummaries)}'");
         }
     }
+
+    private static void ValidateChartSmartArtPairRow(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia,
+        List<string> failures)
+    {
+        var pairName = $"chart/SmartArt renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        var wpfPlan = wpf.ChartSmartArt;
+        var avaloniaPlan = avalonia.ChartSmartArt;
+
+        if (wpfPlan.ChartCount != avaloniaPlan.ChartCount)
+        {
+            failures.Add(
+                $"{pairName} chart counts differ: WPF {wpfPlan.ChartCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaPlan.ChartCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (wpfPlan.SmartArtCount != avaloniaPlan.SmartArtCount)
+        {
+            failures.Add(
+                $"{pairName} SmartArt counts differ: WPF {wpfPlan.SmartArtCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaPlan.SmartArtCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (wpfPlan.SmartArtNodeCount != avaloniaPlan.SmartArtNodeCount)
+        {
+            failures.Add(
+                $"{pairName} SmartArt node counts differ: WPF {wpfPlan.SmartArtNodeCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaPlan.SmartArtNodeCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        var wpfChartSignatures = BuildChartPlanSignatures(wpfPlan.Charts);
+        var avaloniaChartSignatures = BuildChartPlanSignatures(avaloniaPlan.Charts);
+        if (!wpfChartSignatures.SequenceEqual(avaloniaChartSignatures, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} chart plan signatures differ: WPF '{FormatSummaries(wpfChartSignatures)}', Avalonia '{FormatSummaries(avaloniaChartSignatures)}'");
+        }
+
+        var wpfSmartArtSignatures = BuildSmartArtPlanSignatures(wpfPlan.SmartArts);
+        var avaloniaSmartArtSignatures = BuildSmartArtPlanSignatures(avaloniaPlan.SmartArts);
+        if (!wpfSmartArtSignatures.SequenceEqual(avaloniaSmartArtSignatures, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} SmartArt plan signatures differ: WPF '{FormatSummaries(wpfSmartArtSignatures)}', Avalonia '{FormatSummaries(avaloniaSmartArtSignatures)}'");
+        }
+    }
+
+    private static List<string> BuildChartPlanSignatures(IEnumerable<ChartVisualPlan> charts) =>
+        charts
+            .Select(chart => string.Join(
+                "|",
+                chart.Kind,
+                chart.GeometryKind,
+                BoolFlag(chart.ShowTitle),
+                BoolFlag(chart.ShowLegend),
+                BoolFlag(chart.ShowGridlines),
+                BoolFlag(chart.PlotAreaFill),
+                BoolFlag(chart.ShowMarkers),
+                BoolFlag(chart.ShowDataLabels),
+                BoolFlag(chart.ShowAxisTitles),
+                chart.CategoryAxisTitle ?? string.Empty,
+                chart.ValueAxisTitle ?? string.Empty,
+                string.Join(",", chart.PaletteHex)))
+            .OrderBy(signature => signature, StringComparer.Ordinal)
+            .ToList();
+
+    private static List<string> BuildSmartArtPlanSignatures(IEnumerable<SmartArtVisualPlan> smartArts) =>
+        smartArts
+            .Select(smartArt => string.Join(
+                "|",
+                smartArt.Kind,
+                smartArt.LayoutId,
+                smartArt.Layout.Id,
+                smartArt.ColorScheme.Id,
+                smartArt.Style.Id,
+                string.Join(";", smartArt.Nodes.Select(BuildSmartArtNodeSignature))))
+            .OrderBy(signature => signature, StringComparer.Ordinal)
+            .ToList();
+
+    private static string BuildSmartArtNodeSignature(SmartArtNodeVisualPlan node) =>
+        string.Join(
+            ":",
+            node.Text,
+            node.Depth.ToString(CultureInfo.InvariantCulture),
+            node.ColorIndex.ToString(CultureInfo.InvariantCulture),
+            node.FillHex,
+            node.TextHex,
+            node.BorderHex,
+            FormatDouble(node.BorderThickness),
+            FormatDouble(node.CornerRadius),
+            FormatDouble(node.ShadowOpacity),
+            FormatDouble(node.ShadowBlur),
+            FormatDouble(node.ShadowDepth),
+            node.ConnectorHex);
+
+    private static string BoolFlag(bool value) => value ? "1" : "0";
+
+    private static string FormatDouble(double value) =>
+        value.ToString("0.###", CultureInfo.InvariantCulture);
 
     private static List<string> OrderedSummaries(IEnumerable<string> summaries) =>
         summaries
