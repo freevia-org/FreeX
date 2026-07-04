@@ -7407,6 +7407,41 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// Set or clear alt text on the selected floating image, shape, or WordArt.
+    /// Undoable through the shared model command bus. No-op for non-accessibility-bearing objects.
+    /// </summary>
+    public void SetSelectedFloatingAltText(string? altText)
+    {
+        if (_selectedFloating is not { } sel) return;
+        if (!TryGetRun(sel.BlockIndex, sel.RunIndex, out var run)) return;
+
+        var normalized = string.IsNullOrWhiteSpace(altText) ? null : altText.Trim();
+        IDocumentCommand? command = run switch
+        {
+            { Image: { IsFloating: true } } => new SetImageAltTextCommand(sel.BlockIndex, sel.RunIndex, normalized),
+            { Shape: { } } => new SetShapeAltTextCommand(sel.BlockIndex, sel.RunIndex, normalized),
+            { WordArt: { } } => new SetWordArtAltTextCommand(sel.BlockIndex, sel.RunIndex, normalized),
+            _ => null
+        };
+
+        if (command is null) return;
+        _bus.Execute(command);
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// Apply a Word-like Shape Styles gallery preset to the selected floating shape/text box.
+    /// </summary>
+    public void ApplySelectedShapeStyle(ShapeStylePreset preset)
+    {
+        if (SelectedFloatingShapeLocation() is not { } sel) return;
+        _bus.Execute(new ApplyShapeStyleCommand(sel.BlockIndex, sel.RunIndex, preset));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
     /// Set the solid fill color of the selected floating shape/text box. Pass null to remove fill.
     /// Undoable. No-op when the selected drawing object is not a shape.
     /// </summary>

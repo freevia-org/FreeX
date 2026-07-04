@@ -1135,6 +1135,37 @@ public sealed class SetImageSizeCommand(int paragraphIndex, int runIndex, double
 }
 
 /// <summary>
+/// Set the alt-text accessibility description on the inline image at the given paragraph/run indices,
+/// snapshotting the prior value for undo.
+/// </summary>
+public sealed class SetImageAltTextCommand(int paragraphIndex, int runIndex, string? altText) : IDocumentCommand
+{
+    private string? _previous;
+    private bool _applied;
+
+    public string Label => "Image Alt Text";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ImageAt(context) is not { } image) return;
+        _previous = image.AltText;
+        image.AltText = string.IsNullOrWhiteSpace(altText) ? null : altText.Trim();
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ImageAt(context) is not { } image) return;
+        image.AltText = _previous;
+        _applied = false;
+    }
+
+    private InlineImage? ImageAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Image : null;
+}
+
+/// <summary>
 /// Set the rotation angle and flip flags on the inline image at the given paragraph/run indices,
 /// snapshotting prior values for undo.
 /// </summary>

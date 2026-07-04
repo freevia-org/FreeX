@@ -4,6 +4,9 @@ public enum FloatingObjectArrangeKind
 {
     AlignToPage,
     AlignToMargin,
+    AlignLeft,
+    AlignCenter,
+    AlignRight,
     DistributeHorizontal,
     DistributeVertical
 }
@@ -33,6 +36,9 @@ public sealed class ArrangeFloatingObjectsCommand : IDocumentCommand
     {
         FloatingObjectArrangeKind.AlignToPage => "Align to Page",
         FloatingObjectArrangeKind.AlignToMargin => "Align to Margin",
+        FloatingObjectArrangeKind.AlignLeft => "Align Left",
+        FloatingObjectArrangeKind.AlignCenter => "Align Center",
+        FloatingObjectArrangeKind.AlignRight => "Align Right",
         FloatingObjectArrangeKind.DistributeHorizontal => "Distribute Horizontally",
         FloatingObjectArrangeKind.DistributeVertical => "Distribute Vertically",
         _ => "Arrange Floating Objects"
@@ -60,6 +66,15 @@ public sealed class ArrangeFloatingObjectsCommand : IDocumentCommand
                 break;
             case FloatingObjectArrangeKind.AlignToMargin:
                 Align(targets, context.Document.Page.MarginLeftPt, HorizontalAnchor.Margin);
+                break;
+            case FloatingObjectArrangeKind.AlignLeft:
+                AlignRelativeToMargins(targets, context.Document.Page, Alignment.Left);
+                break;
+            case FloatingObjectArrangeKind.AlignCenter:
+                AlignRelativeToMargins(targets, context.Document.Page, Alignment.Center);
+                break;
+            case FloatingObjectArrangeKind.AlignRight:
+                AlignRelativeToMargins(targets, context.Document.Page, Alignment.Right);
                 break;
             case FloatingObjectArrangeKind.DistributeHorizontal:
                 Distribute(targets, vertical: false);
@@ -131,6 +146,30 @@ public sealed class ArrangeFloatingObjectsCommand : IDocumentCommand
         }
     }
 
+    private static void AlignRelativeToMargins(
+        IReadOnlyList<FloatingTarget> targets,
+        PageSettings page,
+        Alignment alignment)
+    {
+        var contentLeft = page.MarginLeftPt;
+        var contentRight = Math.Max(contentLeft, page.WidthPt - page.MarginRightPt);
+        var contentWidth = Math.Max(0, contentRight - contentLeft);
+
+        foreach (var target in targets)
+        {
+            var offsetPt = alignment switch
+            {
+                Alignment.Left => contentLeft,
+                Alignment.Center => contentLeft + Math.Max(0, contentWidth - target.WidthPt) / 2,
+                Alignment.Right => contentRight - target.WidthPt,
+                _ => throw new ArgumentOutOfRangeException(nameof(alignment), alignment, null)
+            };
+
+            target.HorizontalOffsetPt = Math.Max(contentLeft, offsetPt);
+            target.HorizontalAnchor = HorizontalAnchor.Margin;
+        }
+    }
+
     private static void Distribute(IReadOnlyList<FloatingTarget> targets, bool vertical)
     {
         var sorted = vertical
@@ -188,37 +227,38 @@ public sealed class ArrangeFloatingObjectsCommand : IDocumentCommand
     {
         if (run.Image is { IsFloating: true } image)
         {
-            target = new FloatingTarget(image, null);
+            target = new FloatingTarget(image, null, image.WidthPt);
             return true;
         }
 
         if (run.Shape is { IsFloating: true, Placement: { } shapePlacement })
         {
-            target = new FloatingTarget(null, shapePlacement);
+            target = new FloatingTarget(null, shapePlacement, run.Shape.WidthPt);
             return true;
         }
 
         if (run.Chart is { IsFloating: true, Placement: { } chartPlacement })
         {
-            target = new FloatingTarget(null, chartPlacement);
+            target = new FloatingTarget(null, chartPlacement, run.Chart.WidthPt);
             return true;
         }
 
         if (run.SmartArt is { IsFloating: true, Placement: { } smartArtPlacement })
         {
-            target = new FloatingTarget(null, smartArtPlacement);
+            target = new FloatingTarget(null, smartArtPlacement, run.SmartArt.WidthPt);
             return true;
         }
 
         if (run.WordArt is { IsFloating: true, Placement: { } wordArtPlacement })
         {
-            target = new FloatingTarget(null, wordArtPlacement);
+            var widthPt = run.WordArt.FontSizePt * Math.Max(1, run.WordArt.Text.Length) * 0.62;
+            target = new FloatingTarget(null, wordArtPlacement, widthPt);
             return true;
         }
 
         if (run.DrawingGroup is { IsFloating: true } group)
         {
-            target = new FloatingTarget(null, group.Placement);
+            target = new FloatingTarget(null, group.Placement, group.WidthPt);
             return true;
         }
 
@@ -226,7 +266,7 @@ public sealed class ArrangeFloatingObjectsCommand : IDocumentCommand
         return false;
     }
 
-    private sealed record FloatingTarget(InlineImage? Image, FloatingPlacement? Placement)
+    private sealed record FloatingTarget(InlineImage? Image, FloatingPlacement? Placement, double WidthPt)
     {
         public int BlockIndex { get; init; }
         public int RunIndex { get; init; }
@@ -287,6 +327,14 @@ public sealed class ArrangeFloatingObjectsCommand : IDocumentCommand
                 VerticalOffsetPt,
                 HorizontalAnchor,
                 VerticalAnchor);
+
+    }
+
+    private enum Alignment
+    {
+        Left,
+        Center,
+        Right
     }
 
     private readonly record struct PlacementSnapshot(
