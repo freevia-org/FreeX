@@ -1099,6 +1099,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                     tab.Group("chart-elements", "Chart Elements", null, 80, g =>
                     {
                         g.Toggle("freew.chart-toggle-legend", "Legend");
+                        g.Button("freew.chart-axis-titles", "Axis Titles");
                     });
                 })
             // ── AV-CHARTTAB: Chart Format contextual tab — shared Arrange/Size (reuse shape commands) ──

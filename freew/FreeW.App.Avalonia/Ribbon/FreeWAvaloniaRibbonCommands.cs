@@ -1284,6 +1284,7 @@ internal static class FreeWAvaloniaRibbonCommands
         }
 
         r.Register("freew.chart-toggle-legend", new ActionRibbonCommand(editor.ToggleChartLegend));
+        r.Register("freew.chart-axis-titles", new ActionRibbonCommand(editor.ToggleChartAxisTitles));
 
         // ── SmartArt Design ───────────────────────────────────────────────────
         // Layouts — the four Word families. Cycle maps to the model's Process kind (closest flat sequence).

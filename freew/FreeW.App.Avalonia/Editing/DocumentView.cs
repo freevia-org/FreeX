@@ -7446,7 +7446,30 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
-    /// AV-CHARTTAB: Change the SmartArt layout family (List/Process/Hierarchy — Cycle maps to Process)
+    /// AV-CHARTTAB: Toggle default axis titles on the selected floating chart.
+    /// Undoable + re-renders. No-op when the selected float is not an axis-capable chart.
+    /// </summary>
+    public void ToggleChartAxisTitles()
+    {
+        if (_selectedFloating is not { Kind: "Chart" } sel) return;
+        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return;
+        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return;
+        if (para.Runs[sel.RunIndex].Chart is not { } chart) return;
+
+        var state = ChartSmartArtVisualPlanner.BuildChartElementCommandState(chart);
+        if (!state.CanEditAxisTitles) return;
+
+        var hasStoredAxisTitles = !string.IsNullOrWhiteSpace(chart.CategoryAxisTitle)
+                               || !string.IsNullOrWhiteSpace(chart.ValueAxisTitle);
+        var categoryTitle = hasStoredAxisTitles ? null : "Category Axis";
+        var valueTitle = hasStoredAxisTitles ? null : "Value Axis";
+        _bus.Execute(new SetChartAxisTitlesCommand(sel.BlockIndex, sel.RunIndex, categoryTitle, valueTitle));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// AV-CHARTTAB: Change the SmartArt layout family (List/Process/Hierarchy - Cycle maps to Process)
     /// of the selected floating SmartArt. Undoable + re-renders. No-op when the float is not SmartArt.
     /// </summary>
     public void SetSmartArtLayout(SmartArtKind kind)
