@@ -1310,6 +1310,17 @@ public sealed class EditingSession
             ActiveTableCell,
             selection);
 
+    public TableCellParagraphFormatPlan PlanActiveTableCellParagraphListPreset(
+        TableCellListPresetDescriptor preset,
+        (int Start, int End)? selection = null) =>
+        TableCellEditPlanner.PlanParagraphListPreset(
+            _currentSlideIndex,
+            CurrentSlide,
+            _selectedShapeIds,
+            ActiveTableCell,
+            preset,
+            selection);
+
     public TableCellParagraphFormatPlan PlanActiveTableCellParagraphIndent(
         (int Start, int End)? selection = null) =>
         TableCellEditPlanner.PlanParagraphIndent(
@@ -1348,6 +1359,28 @@ public sealed class EditingSession
 
         Bus.Execute(plan.Command);
         return true;
+    }
+
+    public bool TryApplyActiveTableCellParagraphListPreset(
+        TableCellListPresetDescriptor preset,
+        (int Start, int End)? selection = null)
+    {
+        var plan = PlanActiveTableCellParagraphListPreset(preset, selection);
+        if (plan.Command is null)
+            return false;
+
+        Bus.Execute(plan.Command);
+        return true;
+    }
+
+    public bool TryApplyActiveTableCellParagraphListPreset(
+        string? presetId,
+        (int Start, int End)? selection = null)
+    {
+        if (!TableCellListPresetCatalog.TryGet(presetId, out var preset) || preset is null)
+            return false;
+
+        return TryApplyActiveTableCellParagraphListPreset(preset, selection);
     }
 
     public bool TryApplyActiveTableCellParagraphIndent(
