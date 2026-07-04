@@ -175,6 +175,14 @@ internal static class FreeWCommandInventory
             "Sets or clears selected chart axis titles through the shared chart edit command, clears quick-layout overrides, and keeps the change undoable in both shells.",
             "FreeWRibbonParityTests.ChartDesign_AxisTitlesSetterMutatesSelectedChartAndUndoRestoresIt",
             "ChartSmartArtContextualTabTests.ToggleChartAxisTitles_command_sets_default_titles_and_reverts_on_undo"),
+        ["freew.chart-edit-data"] = ChartCommandEvidence(
+            "Replaces the selected chart's editable category and series data through the shared chart model route and keeps the change undoable in Avalonia.",
+            "FreeWRibbonParityTests.ChartDesign_ReplaceChartDataMutatesModel",
+            "ChartSmartArtContextualTabTests.EditChartData_command_replaces_chart_data_and_reverts_on_undo"),
+        ["freew.chart-size"] = ChartCommandEvidence(
+            "Resizes the selected chart through the shared floating-object size route and keeps the size change undoable in Avalonia.",
+            "FreeWRibbonParityTests.ChartDesign_SetSizeMutatesWidthAndHeight",
+            "ChartSmartArtContextualTabTests.ChartSize_command_resizes_selected_chart_and_reverts_on_undo"),
         ["freew.citation"] = ReferencesEvidence(
             "Inserts tagged Word-like CITATION complex-field runs and proves Update Fields renumbers source-order numeric citations in both shells.",
             "freew/FreeW.App.Host.Tests/CitationEditorTests.cs",

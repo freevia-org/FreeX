@@ -1103,6 +1103,14 @@ internal static class FreeWAvaloniaRibbonDefinition
                     {
                         g.Dropdown("freew.chart-type", "Change Chart Type", BuildChartTypeMenu());
                     });
+                    tab.Group("chart-data", "Data", null, 80, g =>
+                    {
+                        g.ComboBox("freew.chart-edit-data", "Edit Data", c => c with
+                        {
+                            Items = new[] { "Quarterly Sales", "Monthly Revenue" },
+                            Width = 132
+                        });
+                    });
                     tab.Group("chart-styles", "Chart Styles", null, 90, g =>
                     {
                         g.Dropdown("freew.chart-style",  "Chart Styles",  BuildChartStyleMenu());
@@ -1130,6 +1138,11 @@ internal static class FreeWAvaloniaRibbonDefinition
                     });
                     tab.Group("chart-size", "Size", null, 90, g =>
                     {
+                        g.ComboBox("freew.chart-size", "Size", c => c with
+                        {
+                            Items = new[] { "360 x 216", "400 x 300", "468 x 288" },
+                            Width = 90
+                        });
                         g.ComboBox("freew.shape-width",  "Width",  c => c with { Items = FloatSizes, Width = 72 });
                         g.ComboBox("freew.shape-height", "Height", c => c with { Items = FloatSizes, Width = 72 });
                     });

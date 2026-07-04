@@ -7665,6 +7665,28 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// AV-CHARTTAB: Replace the selected floating chart's editable data through the shared command bus.
+    /// Undoable + re-renders. No-op when the selected float is not a chart.
+    /// </summary>
+    public void ReplaceSelectedChartData(Chart replacement)
+    {
+        if (_selectedFloating is not { Kind: "Chart" } sel) return;
+        _bus.Execute(new ReplaceChartDataCommand(sel.BlockIndex, sel.RunIndex, replacement));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// AV-CHARTTAB: Resize the selected floating chart through the shared floating-object size command.
+    /// Undoable + re-renders. No-op when the selected float is not a chart.
+    /// </summary>
+    public void SetSelectedChartSize(double widthPt, double heightPt)
+    {
+        if (_selectedFloating is not { Kind: "Chart" } sel || widthPt <= 0 || heightPt <= 0) return;
+        SetFloatingSize(widthPt, heightPt);
+    }
+
+    /// <summary>
     /// AV-CHARTTAB: Change the SmartArt layout family (List/Process/Hierarchy - Cycle maps to Process)
     /// of the selected floating SmartArt. Undoable + re-renders. No-op when the float is not SmartArt.
     /// </summary>

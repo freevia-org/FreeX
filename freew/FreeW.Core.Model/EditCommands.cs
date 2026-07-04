@@ -3174,6 +3174,70 @@ public sealed class SetChartAxisTitlesCommand(
 }
 
 /// <summary>
+/// Replace the editable data on the chart carried by the run at (paragraphIndex, runIndex).
+/// Snaps the prior chart data for undo. No-op when the run carries no chart.
+/// </summary>
+public sealed class ReplaceChartDataCommand(int paragraphIndex, int runIndex, Chart replacement) : IDocumentCommand
+{
+    private Chart? _previous;
+    private bool _applied;
+
+    public string Label => "Edit Chart Data";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart) return;
+        _previous = Clone(chart);
+        Copy(replacement, chart);
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || _previous is null || ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart) return;
+        Copy(_previous, chart);
+        _applied = false;
+    }
+
+    private static Chart Clone(Chart source)
+    {
+        var clone = new Chart();
+        Copy(source, clone);
+        return clone;
+    }
+
+    private static void Copy(Chart source, Chart target)
+    {
+        target.Kind = source.Kind;
+        target.Title = source.Title;
+        target.ShowLegend = source.ShowLegend;
+        target.CategoryAxisTitle = source.CategoryAxisTitle;
+        target.ValueAxisTitle = source.ValueAxisTitle;
+        target.WidthPt = source.WidthPt;
+        target.HeightPt = source.HeightPt;
+        target.Placement = source.Placement is null
+            ? null
+            : new FloatingPlacement
+            {
+                Wrapping = source.Placement.Wrapping,
+                HorizontalOffsetPt = source.Placement.HorizontalOffsetPt,
+                VerticalOffsetPt = source.Placement.VerticalOffsetPt,
+                HorizontalAnchor = source.Placement.HorizontalAnchor,
+                VerticalAnchor = source.Placement.VerticalAnchor,
+                ZOrderIndex = source.Placement.ZOrderIndex,
+            };
+        target.StyleId = source.StyleId;
+        target.ColorSchemeId = source.ColorSchemeId;
+        target.QuickLayoutId = source.QuickLayoutId;
+        target.Categories.Clear();
+        target.Categories.AddRange(source.Categories);
+        target.Series.Clear();
+        foreach (var series in source.Series)
+            target.Series.Add(new ChartSeries(series.Name, series.Values));
+    }
+}
+
+/// <summary>
 /// Set the <see cref="SmartArt.Kind"/> (layout family) of the SmartArt carried by the run at
 /// (paragraphIndex, runIndex). Snaps the prior kind for undo. No-op when the run carries no SmartArt.
 /// </summary>
