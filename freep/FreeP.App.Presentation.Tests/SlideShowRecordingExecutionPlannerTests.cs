@@ -61,16 +61,25 @@ public sealed class SlideShowRecordingExecutionPlannerTests
 
         moved.CurrentSlideIndex.Should().Be(1);
         moved.Segments.Should().ContainSingle();
-        moved.Segments[0].Should().Be(new SlideShowRecordingSlideSegment(
-            0,
-            started,
-            started.AddMilliseconds(2600),
-            2600,
-            SlideShowRecordingMediaIntent.Narration,
-            NarrationRequested: true,
-            CameraRequested: false,
-            NarrationCaptured: true,
-            CameraCaptured: false));
+        moved.Segments[0].Should().Match<SlideShowRecordingSlideSegment>(segment =>
+            segment.SlideIndex == 0 &&
+            segment.StartedAtUtc == started &&
+            segment.EndedAtUtc == started.AddMilliseconds(2600) &&
+            segment.DurationMs == 2600 &&
+            segment.MediaIntent == SlideShowRecordingMediaIntent.Narration &&
+            segment.NarrationRequested &&
+            !segment.CameraRequested &&
+            segment.NarrationCaptured &&
+            !segment.CameraCaptured);
+        moved.Segments[0].MediaArtifacts.Should().Equal(
+            new SlideShowRecordingMediaArtifact(
+                SlideShowRecordingMediaArtifactKind.NarrationAudio,
+                SlideIndex: 0,
+                IsCaptured: true,
+                IsDeferred: false,
+                "slide-001-narration.m4a",
+                "audio/mp4",
+                "Narration audio captured for slide 1"));
         moved.LastActions.Select(action => action.Kind).Should().Equal(
             SlideShowRecordingExecutionActionKind.StopNarrationCapture,
             SlideShowRecordingExecutionActionKind.LeaveSlide,
@@ -154,5 +163,42 @@ public sealed class SlideShowRecordingExecutionPlannerTests
             SlideShowRecordingExecutionActionKind.StartSession,
             SlideShowRecordingExecutionActionKind.EnterSlide,
             SlideShowRecordingExecutionActionKind.CaptureUnavailable);
+    }
+
+    [Fact]
+    public void EndSession_EmitsDeferredMediaArtifactDescriptorsWhenCaptureAdaptersAreMissing()
+    {
+        var started = new DateTimeOffset(2026, 7, 4, 9, 0, 0, TimeSpan.Zero);
+        var plan = SlideShowPresenterToolPlanner.BuildPlan(
+            SlideShowTimingIntent.RecordTimings,
+            SlideShowRecordingMediaIntent.NarrationAndMedia);
+        var state = SlideShowRecordingExecutionPlanner.CreateState(
+            plan,
+            currentSlideIndex: 2,
+            started,
+            SlideShowRecordingHostCapabilities.Deferred("Avalonia slideshow"));
+
+        var ended = SlideShowRecordingExecutionPlanner.EndSession(
+            state,
+            started.AddMilliseconds(1500));
+
+        ended.Segments.Should().ContainSingle();
+        ended.Segments[0].MediaArtifacts.Should().Equal(
+            new SlideShowRecordingMediaArtifact(
+                SlideShowRecordingMediaArtifactKind.NarrationAudio,
+                SlideIndex: 2,
+                IsCaptured: false,
+                IsDeferred: true,
+                "slide-003-narration.m4a",
+                "audio/mp4",
+                "Avalonia slideshow: Recording capture adapter is not registered for this host."),
+            new SlideShowRecordingMediaArtifact(
+                SlideShowRecordingMediaArtifactKind.CameraVideo,
+                SlideIndex: 2,
+                IsCaptured: false,
+                IsDeferred: true,
+                "slide-003-camera.mp4",
+                "video/mp4",
+                "Avalonia slideshow: Recording capture adapter is not registered for this host."));
     }
 }
