@@ -683,6 +683,10 @@ public static class PresentationReviewWorkflowPlanner
         "Give this slide a unique title so screen-reader users can distinguish it in the deck outline.";
     public const string MissingAltTextActionSummary =
         "Select the object and add alt text that describes the informative content.";
+    public const string DuplicateAltTextActionSummary =
+        "Select the object and replace reused alt text with a description specific to this object.";
+    public const string FilenameLikeAltTextActionSummary =
+        "Select the object and replace filename-like alt text with a meaningful visual description.";
     public const string MissingChartTitleActionSummary =
         "Add a concise chart title so screen-reader users can understand the chart purpose.";
     public const string MissingVideoCaptionsActionSummary =
@@ -1266,6 +1270,17 @@ public static class PresentationReviewWorkflowPlanner
                 group => group.Key,
                 group => (DisplayTitle: group.Key, Count: group.Count()),
                 StringComparer.OrdinalIgnoreCase);
+        var duplicateAltTexts = presentation.Slides
+            .SelectMany(slide => EnumerateShapes(slide.Shapes))
+            .Where(shape => NeedsAltText(shape) && !shape.IsDecorative)
+            .Select(shape => NormalizeAltTextDiagnosticText(shape.AlternativeText))
+            .Where(text => text is not null)
+            .GroupBy(text => text!, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .ToDictionary(
+                group => group.Key,
+                group => (DisplayText: group.Key, Count: group.Count()),
+                StringComparer.OrdinalIgnoreCase);
         var issues = new List<PresentationAccessibilityIssueDescriptor>();
         int shapeCount = 0;
         int commentCount = 0;
@@ -1326,6 +1341,10 @@ public static class PresentationReviewWorkflowPlanner
                             MissingAltTextActionSummary,
                             AltTextCommandId,
                             true)));
+                }
+                else if (NeedsAltText(shape) && !shape.IsDecorative)
+                {
+                    AddAltTextQualityIssues(issues, slideIndex, shape, duplicateAltTexts);
                 }
 
                 if (shape.Hyperlink is not null && string.IsNullOrWhiteSpace(shape.Hyperlink.Tooltip))
@@ -3300,6 +3319,90 @@ public static class PresentationReviewWorkflowPlanner
             or SlideShapeKind.Model3d
             or SlideShapeKind.Zoom
             or SlideShapeKind.PreservedObject;
+
+    private static void AddAltTextQualityIssues(
+        List<PresentationAccessibilityIssueDescriptor> issues,
+        int slideIndex,
+        SlideShape shape,
+        IReadOnlyDictionary<string, (string DisplayText, int Count)> duplicateAltTexts)
+    {
+        var altText = NormalizeAltTextDiagnosticText(shape.AlternativeText);
+        if (altText is null)
+        {
+            return;
+        }
+
+        if (IsFilenameLikeAltText(altText))
+        {
+            issues.Add(new PresentationAccessibilityIssueDescriptor(
+                PresentationAccessibilityIssueSeverity.Warning,
+                slideIndex,
+                shape.Id,
+                "Filename-like alt text",
+                $"{DescribeShape(shape)} uses filename-like alt text \"{BuildPreview(altText)}\".",
+                new PresentationAccessibilityIssueActionSummary(
+                    FilenameLikeAltTextActionSummary,
+                    AltTextCommandId,
+                    true)));
+        }
+
+        if (duplicateAltTexts.TryGetValue(altText, out var duplicate))
+        {
+            issues.Add(new PresentationAccessibilityIssueDescriptor(
+                PresentationAccessibilityIssueSeverity.Warning,
+                slideIndex,
+                shape.Id,
+                "Duplicate alt text",
+                $"{DescribeShape(shape)} reuses alt text \"{BuildPreview(duplicate.DisplayText)}\" on {duplicate.Count} non-decorative objects.",
+                new PresentationAccessibilityIssueActionSummary(
+                    DuplicateAltTextActionSummary,
+                    AltTextCommandId,
+                    true)));
+        }
+    }
+
+    private static string? NormalizeAltTextDiagnosticText(string? value)
+    {
+        var normalized = NormalizeText(value);
+        return normalized is null
+            ? null
+            : string.Join(' ', normalized.Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private static bool IsFilenameLikeAltText(string altText)
+    {
+        var candidate = altText.Trim().Trim('"', '\'').TrimEnd('.', ',', ';', ':');
+        if (candidate.Length == 0 || candidate.Length > 120)
+        {
+            return false;
+        }
+
+        var lastSeparator = Math.Max(candidate.LastIndexOf('/'), candidate.LastIndexOf('\\'));
+        if (lastSeparator >= 0 && lastSeparator < candidate.Length - 1)
+        {
+            candidate = candidate[(lastSeparator + 1)..];
+        }
+
+        var extensionStart = candidate.LastIndexOf('.');
+        if (extensionStart <= 0 || extensionStart == candidate.Length - 1)
+        {
+            return false;
+        }
+
+        var extension = candidate[extensionStart..].ToLowerInvariant();
+        return extension is ".jpg"
+            or ".jpeg"
+            or ".png"
+            or ".gif"
+            or ".bmp"
+            or ".tif"
+            or ".tiff"
+            or ".webp"
+            or ".svg"
+            or ".emf"
+            or ".wmf"
+            or ".heic";
+    }
 
     private static void AddChartAccessibilityIssues(
         List<PresentationAccessibilityIssueDescriptor> issues,

@@ -2818,6 +2818,62 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Accessibility_checker_low_quality_alt_text_row_uses_shared_plan()
+    {
+        PresentationAccessibilityCheckerPanePlan? opened = null;
+        PresentationAccessibilityCheckerPanePlan? actioned = null;
+        PresentationAltTextRequestPlan? altTextRequest = null;
+        var paneVisible = false;
+        var heading = string.Empty;
+        var altTextPaneVisible = false;
+        uint[] selection = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = new SlideShape
+            {
+                Id = 911,
+                Name = "Hero product photo",
+                Kind = SlideShapeKind.Picture,
+                Picture = new ImagePart(),
+                AlternativeTextTitle = "Hero product photo",
+                AlternativeText = "IMG_2048.JPG"
+            };
+            window.Editor.CurrentSlide!.Title = "Intro";
+            window.Editor.CurrentSlide.Shapes.Add(shape);
+
+            opened = window.ShowAccessibilityCheckerPane();
+            paneVisible = window.IsAccessibilityCheckerPaneVisible;
+            heading = window.AccessibilityCheckerPaneHeading;
+
+            actioned = window.ApplyAccessibilityCheckerRowAction(0);
+            selection = window.Editor.SelectedShapeIds.ToArray();
+            altTextPaneVisible = window.IsAltTextPaneVisible;
+            altTextRequest = window.LastAltTextRequestPlan;
+        });
+
+        if (!ran) return;
+        paneVisible.Should().BeTrue();
+        heading.Should().Be("Accessibility - 1 issues");
+        opened.Should().NotBeNull();
+        opened!.Rows.Should().ContainSingle().Which.Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
+            row.Title == "Filename-like alt text" &&
+            row.Category == "Alt text" &&
+            row.ShapeId == 911 &&
+            row.ActionLabel == "Open Alt Text" &&
+            row.CommandHint == PresentationReviewWorkflowPlanner.AltTextCommandId &&
+            row.ShouldNavigateToSlide &&
+            row.ShouldSelectShape);
+        actioned.Should().NotBeNull();
+        actioned!.SelectedRow!.Title.Should().Be("Filename-like alt text");
+        selection.Should().Equal(911u);
+        altTextPaneVisible.Should().BeTrue();
+        altTextRequest.Should().NotBeNull();
+        altTextRequest!.CurrentDescription.Should().Be("IMG_2048.JPG");
+    }
+
+    [Fact]
     public async Task Accessibility_checker_table_header_action_uses_shared_mutation_and_refreshes_pane()
     {
         PresentationAccessibilityCheckerPanePlan? actioned = null;
