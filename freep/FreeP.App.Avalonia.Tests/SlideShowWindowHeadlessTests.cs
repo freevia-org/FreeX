@@ -333,6 +333,42 @@ public sealed class SlideShowWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlideShowWindow_presenter_session_summary_combines_recording_and_ink_evidence()
+    {
+        SlideShowPresenterSessionSummary? summary = null;
+        var started = new DateTimeOffset(2026, 7, 4, 9, 0, 0, TimeSpan.Zero);
+        var ran = await OnUiThread(() =>
+        {
+            var pres = MakePresentation(2);
+            var window = new SlideShowWindow(pres, 0);
+            window.ApplyPresenterToolIntent(
+                SlideShowTimingIntent.RecordTimings,
+                SlideShowRecordingMediaIntent.NarrationAndMedia,
+                SlideShowPresenterPointerMode.Highlighter,
+                "#ffee00",
+                8,
+                SlideShowInkRetentionDecision.KeepInk,
+                started);
+            window.BeginPresenterInkStroke(10, 20);
+            window.EndPresenterInkStroke(30, 40);
+            window.ExecuteAdvance(nowUtc: started.AddMilliseconds(1600));
+
+            summary = window.PresenterSessionSummary;
+        });
+
+        if (!ran) return;
+        summary.Should().NotBeNull();
+        summary!.HostName.Should().Be("Avalonia slideshow");
+        summary.Recording.CompletedSegmentCount.Should().Be(1);
+        summary.Recording.TotalRecordedDurationMs.Should().Be(1600);
+        summary.Recording.DeferredMediaArtifactCount.Should().Be(2);
+        summary.Ink.GeneratedInkSlideCount.Should().Be(1);
+        summary.Ink.GeneratedInkStrokeCount.Should().Be(1);
+        summary.Ink.WillPersistInkOnExit.Should().BeTrue();
+        summary.EvidenceLines.Should().Contain(line => line.Contains("Avalonia slideshow"));
+    }
+
+    [Fact]
     public async Task SlideShowWindow_InkClear_uses_shared_clear_plan()
     {
         SlideShowInkExecutionResult? clear = null;

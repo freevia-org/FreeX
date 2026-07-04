@@ -676,6 +676,44 @@ public sealed class SlideShowWindowTests
     }
 
     [StaFact]
+    public void SlideShowWindow_PresenterSessionSummary_CombinesRecordingAndInkEvidence()
+    {
+        var started = new DateTimeOffset(2026, 7, 4, 9, 0, 0, TimeSpan.Zero);
+        var pres = Presentation.CreateEmpty();
+        pres.Slides.Add(new Slide { Title = "Second" });
+        var window = new SlideShowWindow(pres, 0);
+        try
+        {
+            window.ApplyPresenterToolIntent(
+                SlideShowTimingIntent.RecordTimings,
+                SlideShowRecordingMediaIntent.NarrationAndMedia,
+                SlideShowPresenterPointerMode.Pen,
+                "#336699",
+                5,
+                SlideShowInkRetentionDecision.KeepInk,
+                started);
+            window.BeginPresenterInkStroke(10, 20);
+            window.EndPresenterInkStroke(30, 40);
+            window.ExecuteAdvance(nowUtc: started.AddMilliseconds(1600));
+
+            var summary = window.PresenterSessionSummary;
+
+            summary.HostName.Should().Be("WPF slideshow");
+            summary.Recording.CompletedSegmentCount.Should().Be(1);
+            summary.Recording.TotalRecordedDurationMs.Should().Be(1600);
+            summary.Recording.DeferredMediaArtifactCount.Should().Be(2);
+            summary.Ink.GeneratedInkSlideCount.Should().Be(1);
+            summary.Ink.GeneratedInkStrokeCount.Should().Be(1);
+            summary.Ink.WillPersistInkOnExit.Should().BeTrue();
+            summary.EvidenceLines.Should().Contain(line => line.Contains("WPF slideshow"));
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void SlideShowWindow_InkClear_UsesSharedClearPlan()
     {
         var pres = Presentation.CreateEmpty();

@@ -258,6 +258,13 @@ public sealed class SlideShowWindow : Window
     public bool IsPresenterSessionClosed => _isTornDown;
 
     public SlideShowInkExecutionState InkExecutionState => _inkExecutionState;
+    public SlideShowPresenterSessionSummary PresenterSessionSummary =>
+        SlideShowPresenterSessionSummaryPlanner.BuildSummary(
+            _recordingExecutionState,
+            _inkExecutionState,
+            _presentation,
+            _playbackRoute.GetSourceSlideIndex);
+
     internal int PresenterInkOverlayVisualCount => _inkOverlay.Children.Count;
     internal SlideShowPlaybackRoute PlaybackRoute => _playbackRoute;
     internal int CurrentPresentationSlideIndex => _playbackRoute.GetSourceSlideIndex(_controller.CurrentSlideIndex);
