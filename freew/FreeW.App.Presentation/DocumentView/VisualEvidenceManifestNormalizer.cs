@@ -59,6 +59,7 @@ public sealed record FreeWVisualEvidenceNormalizedSummary(
     IReadOnlyList<FreeWVisualEvidenceBackstagePrintReadiness> BackstagePrintEvidenceReadiness,
     IReadOnlyList<FreeWVisualBaselineComparison> BaselineComparisons,
     IReadOnlyList<FreeWVisualBaselineTriageItem> WordBaselineTriage,
+    IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> RemainingEvidenceBlockers,
     FreeWVisualEvidenceTrust Trust);
 
 public sealed record FreeWVisualEvidenceBackstagePrintReadiness(
@@ -86,10 +87,21 @@ public sealed record FreeWVisualBaselineTriageItem(
     string ToleranceSummary,
     string Note);
 
+public sealed record FreeWVisualRemainingEvidenceBlocker(
+    string BlockerId,
+    string ScenarioId,
+    string Area,
+    string Status,
+    string RequiredEvidence,
+    string Reason,
+    IReadOnlyList<string> RelatedBaselineStatuses,
+    IReadOnlyList<string> CandidateBaselinePaths,
+    FreeWVisualEvidenceTrust Trust);
+
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 15;
+    public const int SummarySchemaVersion = 16;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -236,6 +248,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             BuildBackstagePrintEvidenceReadinessRows(expected, orderedRows),
             [],
             [],
+            [],
             summaryTrust);
     }
 
@@ -339,6 +352,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
             }
         }
 
+        AppendRemainingEvidenceBlockers(sb, summary);
+
         return sb.ToString();
     }
 
@@ -364,6 +379,38 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{EscapeMarkdown(row.Notes)} |");
         }
     }
+
+    private static void AppendRemainingEvidenceBlockers(
+        StringBuilder sb,
+        FreeWVisualEvidenceNormalizedSummary summary)
+    {
+        if (summary.RemainingEvidenceBlockers.Count == 0)
+            return;
+
+        sb.AppendLine();
+        sb.AppendLine("## Remaining Evidence Blockers");
+        sb.AppendLine();
+        sb.AppendLine("| Blocker | Scenario | Area | Status | Required Evidence | Reason | Related Baseline Statuses | Candidate Baselines | Trust |");
+        sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+        foreach (var blocker in summary.RemainingEvidenceBlockers)
+        {
+            sb.AppendLine(
+                $"| {EscapeMarkdown(blocker.BlockerId)} | " +
+                $"{EscapeMarkdown(blocker.ScenarioId)} | " +
+                $"{EscapeMarkdown(blocker.Area)} | " +
+                $"{EscapeMarkdown(blocker.Status)} | " +
+                $"{EscapeMarkdown(blocker.RequiredEvidence)} | " +
+                $"{EscapeMarkdown(blocker.Reason)} | " +
+                $"{EscapeMarkdown(FormatBlockerList(blocker.RelatedBaselineStatuses))} | " +
+                $"{EscapeMarkdown(FormatBlockerList(blocker.CandidateBaselinePaths))} | " +
+                $"{(blocker.Trust.Passed ? "passed" : "failed")} |");
+        }
+    }
+
+    private static string FormatBlockerList(IReadOnlyList<string> values) =>
+        values.Count == 0
+            ? "-"
+            : string.Join(", ", values);
 
     private static IReadOnlyList<FreeWVisualEvidenceBackstagePrintReadiness> BuildBackstagePrintEvidenceReadinessRows(
         IReadOnlyList<FreeWVisualEvidenceExpectedScenario> expectedScenarios,
@@ -480,6 +527,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         {
             BaselineComparisons = ordered,
             WordBaselineTriage = BuildWordBaselineTriage(ordered),
+            RemainingEvidenceBlockers = BuildRemainingEvidenceBlockers(summary, ordered),
             Trust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures)
         };
     }
@@ -648,6 +696,115 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
         return expected;
     }
+
+    private static IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> BuildRemainingEvidenceBlockers(
+        FreeWVisualEvidenceNormalizedSummary summary,
+        IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
+    {
+        var rows = summary.Evidence
+            .Where(row => string.Equals(row.ScenarioId, "references-heavy-fields", StringComparison.OrdinalIgnoreCase))
+            .Where(row => row.Trust.Passed)
+            .ToList();
+        if (rows.Count == 0)
+            return [];
+
+        var related = baselineComparisons
+            .Where(comparison => string.Equals(comparison.ScenarioId, "references-heavy-fields", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (related.Count == 0)
+        {
+            return
+            [
+                BuildReferencesHeavyToaBlocker(
+                    "needs-word-baseline-run",
+                    "run a Word-baseline comparison for references-heavy-fields to prove TOA page-number fidelity",
+                    [],
+                    [])
+            ];
+        }
+
+        var statuses = related
+            .Select(comparison => comparison.Status)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(status => status, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var candidates = related
+            .SelectMany(comparison => comparison.CandidateBaselinePaths)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (related.Any(comparison =>
+            string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus, StringComparison.OrdinalIgnoreCase)))
+        {
+            var reasons = related
+                .Where(comparison => string.Equals(
+                    comparison.Status,
+                    FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                    StringComparison.OrdinalIgnoreCase))
+                .Select(FormatComparisonNotes)
+                .Where(reason => !string.IsNullOrWhiteSpace(reason) && reason != "-")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(reason => reason, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var reason = reasons.Count == 0
+                ? "MS Word baseline PNG generation was unavailable for references-heavy-fields"
+                : string.Join("; ", reasons);
+            return
+            [
+                BuildReferencesHeavyToaBlocker(
+                    FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                    reason,
+                    statuses,
+                    candidates)
+            ];
+        }
+
+        if (related.Any(comparison =>
+            string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus, StringComparison.OrdinalIgnoreCase)))
+        {
+            return
+            [
+                BuildReferencesHeavyToaBlocker(
+                    FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus,
+                    "references-heavy Word baseline PNGs are missing for TOA page-number comparison",
+                    statuses,
+                    candidates)
+            ];
+        }
+
+        if (related.All(comparison =>
+            string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.PassedStatus, StringComparison.OrdinalIgnoreCase)))
+        {
+            return [];
+        }
+
+        return
+        [
+            BuildReferencesHeavyToaBlocker(
+                "needs-render-review",
+                "references-heavy Word baseline comparison did not fully pass; inspect TOA page-number rendering differences",
+                statuses,
+                candidates)
+        ];
+    }
+
+    private static FreeWVisualRemainingEvidenceBlocker BuildReferencesHeavyToaBlocker(
+        string status,
+        string reason,
+        IReadOnlyList<string> relatedBaselineStatuses,
+        IReadOnlyList<string> candidateBaselinePaths) =>
+        new(
+            "references-heavy-toa-page-number-fidelity",
+            "references-heavy-fields",
+            "TOA page-number fidelity",
+            status,
+            "trusted WPF/Avalonia references-heavy rows plus real MS Word PNG comparisons for the generated Table of Authorities page numbers",
+            reason,
+            relatedBaselineStatuses,
+            candidateBaselinePaths,
+            new FreeWVisualEvidenceTrust(true, []));
 
     private static void ValidateManifestHeader(
         FreeWVisualEvidenceManifest manifest,
