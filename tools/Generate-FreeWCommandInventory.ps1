@@ -145,6 +145,14 @@ internal static class FreeWCommandInventory
             "Applies the selected chart style gallery item through the WPF and Avalonia ribbon command registries and keeps the style change undoable in both shells.",
             "FreeWRibbonParityTests.ChartDesign_StyleGalleryCommandMutatesSelectedChartAndUndoRestoresIt",
             "ChartSmartArtContextualTabTests.SetChartStyle_command_changes_style_id_and_reverts_on_undo"),
+        ["freew.chart-color-mono-blue"] = ChartCommandEvidence(
+            "Applies the monochromatic blue chart color palette through the WPF chart-color command and the Avalonia chart-colors alias, keeping the change undoable in both shells.",
+            "FreeWRibbonParityTests.ChartDesign_ColorSchemeRibbonCommandMutatesSelectedChartAndUndoRestoresIt",
+            "ChartSmartArtContextualTabTests.SetChartColorScheme_command_changes_scheme_and_reverts_on_undo"),
+        ["freew.chart-colors-mono-blue"] = ChartCommandEvidence(
+            "Applies the monochromatic blue chart color palette through the WPF chart-color command and the Avalonia chart-colors alias, keeping the change undoable in both shells.",
+            "FreeWRibbonParityTests.ChartDesign_ColorSchemeRibbonCommandMutatesSelectedChartAndUndoRestoresIt",
+            "ChartSmartArtContextualTabTests.SetChartColorScheme_command_changes_scheme_and_reverts_on_undo"),
         ["freew.chart-toggle-legend"] = ChartCommandEvidence(
             "Toggles the selected chart legend through the WPF and Avalonia ribbon command registries, clears layout overrides where applicable, and keeps the change undoable.",
             "FreeWRibbonParityTests.ChartDesign_ToggleLegendRibbonCommandMutatesSelectedChartAndUndoRestoresIt",
