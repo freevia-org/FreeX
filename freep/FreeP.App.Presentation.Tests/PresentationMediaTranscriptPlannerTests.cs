@@ -144,4 +144,187 @@ public sealed class PresentationMediaTranscriptPlannerTests
         plan.Tracks[2].StatusMessage.Should().Be("Caption track format is not supported for transcript planning.");
         plan.Tracks.Should().OnlyContain(track => !track.HasTranscript);
     }
+
+    [Fact]
+    public void CreateInternalCaptionTrack_FromTypedCues_AppendsWebVttBytesAndPreservesExternalTracks()
+    {
+        var media = new MediaInfo
+        {
+            IsVideo = true,
+            CaptionTracks =
+            {
+                new MediaCaptionTrackInfo
+                {
+                    Source = "https://cdn.example.com/demo.vtt",
+                    Label = "External captions",
+                    Language = "en-US",
+                    IsExternal = true
+                }
+            }
+        };
+
+        var result = PresentationMediaTranscriptPlanner.CreateInternalCaptionTrack(
+            media,
+            new PresentationMediaCaptionTrackAuthoringDescriptor(
+                Label: " Product demo captions ",
+                Language: " en-US ",
+                Source: "ppt/media/product-demo.vtt",
+                TranscriptText: null,
+                Cues:
+                [
+                    new PresentationMediaTranscriptCueDescriptor(
+                        TimeSpan.Zero,
+                        TimeSpan.FromMilliseconds(1500),
+                        "Revenue & margin <grew>")
+                ]));
+
+        result.Succeeded.Should().BeTrue();
+        result.TrackIndex.Should().Be(1);
+        media.CaptionTracks.Should().HaveCount(2);
+        media.CaptionTracks[0].Should().Match<MediaCaptionTrackInfo>(track =>
+            track.IsExternal &&
+            track.Source == "https://cdn.example.com/demo.vtt" &&
+            track.Label == "External captions");
+
+        var track = media.CaptionTracks[1];
+        track.Should().Match<MediaCaptionTrackInfo>(caption =>
+            !caption.IsExternal &&
+            caption.Source == "ppt/media/product-demo.vtt" &&
+            caption.ContentType == "text/vtt" &&
+            caption.Language == "en-US" &&
+            caption.Label == "Product demo captions");
+
+        var text = Encoding.UTF8.GetString(track.Bytes);
+        text.Should().StartWith("WEBVTT\r\n\r\n");
+        text.Should().Contain("00:00:00.000 --> 00:00:01.500");
+        text.Should().Contain("Revenue &amp; margin &lt;grew&gt;");
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 91,
+            Name = "Product demo",
+            Kind = SlideShapeKind.Media,
+            Media = media
+        });
+
+        var plan = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(presentation);
+
+        plan.TrackCount.Should().Be(2);
+        plan.CueCount.Should().Be(1);
+        plan.Tracks[0].Status.Should().Be(PresentationMediaTranscriptTrackStatus.External);
+        plan.Tracks[1].Should().Match<PresentationMediaTranscriptTrackDescriptor>(descriptor =>
+            descriptor.Status == PresentationMediaTranscriptTrackStatus.Available &&
+            descriptor.Label == "Product demo captions" &&
+            descriptor.Cues[0].Text == "Revenue & margin <grew>");
+    }
+
+    [Fact]
+    public void ReplaceInternalCaptionTrack_FromTranscriptText_NormalizesToPackageReadyWebVtt()
+    {
+        var media = new MediaInfo
+        {
+            IsVideo = true,
+            CaptionTracks =
+            {
+                new MediaCaptionTrackInfo
+                {
+                    Source = "ppt/media/legacy.srt",
+                    ContentType = "application/x-subrip",
+                    Label = "Legacy captions",
+                    Language = "es-ES",
+                    Bytes = Encoding.UTF8.GetBytes("""
+                        1
+                        00:00:00,000 --> 00:00:01,000
+                        Legacy cue
+                        """)
+                }
+            }
+        };
+
+        var result = PresentationMediaTranscriptPlanner.ReplaceInternalCaptionTrack(
+            media,
+            0,
+            new PresentationMediaCaptionTrackAuthoringDescriptor(
+                Label: null,
+                Language: "fr-FR",
+                Source: null,
+                TranscriptText: """
+                    1
+                    00:00:02,000 --> 00:00:03,250
+                    Bonjour <b>equipe</b>.
+                    """));
+
+        result.Succeeded.Should().BeTrue();
+        result.TrackIndex.Should().Be(0);
+
+        var track = media.CaptionTracks.Should().ContainSingle().Subject;
+        track.Source.Should().Be("ppt/media/authored-captions1.vtt");
+        track.ContentType.Should().Be("text/vtt");
+        track.Language.Should().Be("fr-FR");
+        track.Label.Should().Be("Legacy captions");
+        track.IsExternal.Should().BeFalse();
+
+        var text = Encoding.UTF8.GetString(track.Bytes);
+        text.Should().Contain("00:00:02.000 --> 00:00:03.250");
+        text.Should().Contain("Bonjour equipe.");
+    }
+
+    [Fact]
+    public void CaptionTrackAuthoring_RejectsInvalidCuesAndDoesNotMutateExternalTracks()
+    {
+        var media = new MediaInfo
+        {
+            IsVideo = true,
+            CaptionTracks =
+            {
+                new MediaCaptionTrackInfo
+                {
+                    Source = "https://cdn.example.com/captions.vtt",
+                    Label = "External captions",
+                    IsExternal = true
+                },
+                new MediaCaptionTrackInfo
+                {
+                    Source = "ppt/media/internal.vtt",
+                    ContentType = "text/vtt",
+                    Label = "Internal captions",
+                    Bytes = Encoding.UTF8.GetBytes("WEBVTT\r\n\r\n00:00:00.000 --> 00:00:01.000\r\nInternal cue\r\n")
+                }
+            }
+        };
+
+        var invalidCreate = PresentationMediaTranscriptPlanner.CreateInternalCaptionTrack(
+            media,
+            new PresentationMediaCaptionTrackAuthoringDescriptor(
+                Label: "Broken",
+                Language: "en-US",
+                Source: "ppt/media/broken.vtt",
+                TranscriptText: null,
+                Cues:
+                [
+                    new PresentationMediaTranscriptCueDescriptor(
+                        TimeSpan.FromSeconds(2),
+                        TimeSpan.FromSeconds(1),
+                        "Backwards cue")
+                ]));
+
+        invalidCreate.Succeeded.Should().BeFalse();
+        invalidCreate.ErrorMessage.Should().Be(PresentationMediaTranscriptPlanner.InvalidCaptionCueTimingMessage);
+        media.CaptionTracks.Should().HaveCount(2);
+
+        var externalDelete = PresentationMediaTranscriptPlanner.DeleteInternalCaptionTrack(media, 0);
+
+        externalDelete.Succeeded.Should().BeFalse();
+        externalDelete.ErrorMessage.Should().Be(PresentationMediaTranscriptPlanner.ExternalCaptionTrackMessage);
+        media.CaptionTracks.Should().HaveCount(2);
+        media.CaptionTracks[0].IsExternal.Should().BeTrue();
+
+        var internalDelete = PresentationMediaTranscriptPlanner.DeleteInternalCaptionTrack(media, 1);
+
+        internalDelete.Succeeded.Should().BeTrue();
+        internalDelete.TrackIndex.Should().Be(1);
+        media.CaptionTracks.Should().ContainSingle()
+            .Which.IsExternal.Should().BeTrue();
+    }
 }

@@ -115,10 +115,7 @@ public sealed class MediaFieldsTests
     {
         var pres = new Presentation();
         var slide = new Slide();
-        var captionBytes = Encoding.UTF8.GetBytes(
-            "WEBVTT\r\n\r\n00:00.000 --> 00:01.000\r\nAuthored caption\r\n");
-
-        slide.Shapes.Add(new SlideShape
+        var shape = new SlideShape
         {
             Id          = 1,
             Name        = "Captioned video",
@@ -133,19 +130,26 @@ public sealed class MediaFieldsTests
                 IsVideo = true,
                 Bytes = new byte[] { 0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70 },
                 ContentType = "video/mp4",
-                CaptionTracks =
-                {
-                    new MediaCaptionTrackInfo
-                    {
-                        Source = "ppt/media/authored-captions.vtt",
-                        Bytes = captionBytes,
-                        ContentType = "text/vtt",
-                        Language = "en-US",
-                        Label = "English captions"
-                    }
-                }
             }
-        });
+        };
+        var authoring = PresentationMediaTranscriptPlanner.CreateInternalCaptionTrack(
+            shape.Media,
+            new PresentationMediaCaptionTrackAuthoringDescriptor(
+                Label: "English captions",
+                Language: "en-US",
+                Source: "ppt/media/authored-captions.vtt",
+                TranscriptText: null,
+                Cues:
+                [
+                    new PresentationMediaTranscriptCueDescriptor(
+                        TimeSpan.Zero,
+                        TimeSpan.FromSeconds(1),
+                        "Authored caption")
+                ]));
+        authoring.Succeeded.Should().BeTrue();
+        var captionBytes = authoring.Track!.Bytes;
+
+        slide.Shapes.Add(shape);
         pres.Slides.Add(slide);
 
         using var ms = new MemoryStream();
