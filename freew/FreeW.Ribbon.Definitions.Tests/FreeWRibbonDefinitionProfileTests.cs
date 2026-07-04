@@ -361,10 +361,11 @@ public sealed class FreeWRibbonDefinitionProfileTests
         using var document = JsonDocument.Parse(ReadRepositoryFile("docs", "parity", "freew-command-inventory.json"));
         var root = document.RootElement;
 
-        root.GetProperty("schema").GetString().Should().Be("freew.command-inventory.v3");
+        root.GetProperty("schema").GetString().Should().Be("freew.command-inventory.v4");
         root.GetProperty("generatedBy").GetString().Should().Be("tools/Generate-FreeWCommandInventory.ps1");
         root.GetProperty("topologySource").GetString().Should().Contain("FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf/Avalonia)");
         root.GetProperty("sourceLiteralEvidenceNote").GetString().Should().Contain("not behavior proof");
+        root.GetProperty("behaviorEvidenceNote").GetString().Should().Contain("focused WPF and Avalonia tests");
         root.GetProperty("classificationNote").GetString().Should().Contain("profile-shape-only");
         root.GetProperty("classificationNote").GetString().Should().Contain("actionable-gap");
         root.GetProperty("classificationRules").EnumerateArray()
@@ -394,6 +395,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
         summary.GetProperty("platformOnly").GetInt32().Should().Be(CountGap(gapClassificationCounts, "platform-only"));
         summary.GetProperty("deferred").GetInt32().Should().Be(CountGap(gapClassificationCounts, "deferred"));
         summary.GetProperty("actionableGaps").GetInt32().Should().Be(CountGap(gapClassificationCounts, "actionable-gap"));
+        summary.GetProperty("behaviorEvidenceRows").GetInt32().Should().Be(commands.Count(command =>
+            command.TryGetProperty("behaviorEvidence", out _)));
         summary.GetProperty("actionableMissingWpf").GetInt32().Should().Be(commands.Count(command =>
             command.GetProperty("missingProfile").GetString() == "WPF" &&
             command.GetProperty("gapClassification").GetString() == "actionable-gap"));
@@ -433,6 +436,34 @@ public sealed class FreeWRibbonDefinitionProfileTests
         AssertGapClassification(commands, "freew.cc-combo", "shared-profile");
         AssertGapClassification(commands, "freew.add-to-dictionary", "shared-profile");
         AssertGapClassification(commands, "freew.split", "command-id-alias");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.delete-comment",
+            "freew/FreeW.App.Host.Tests/ThreadedCommentCommandTests.cs",
+            "ThreadedCommentCommandTests.DeleteCommentAtCaret_RemovesThreadRangeAndReference",
+            "freew/FreeW.App.Avalonia.Tests/DocumentViewReviewTests.cs",
+            "DocumentViewReviewTests.DeleteCommentAtCaret_removes_the_comment");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.previous-comment",
+            "freew/FreeW.App.Host.Tests/ThreadedCommentCommandTests.cs",
+            "ThreadedCommentCommandTests.CommentNavigation_WrapsAndNoOpsWithoutComments",
+            "freew/FreeW.App.Avalonia.Tests/DocumentViewCommentTests.cs",
+            "DocumentViewCommentTests.NextPreviousComment_moves_caret_in_document_order_and_wraps");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.next-comment",
+            "freew/FreeW.App.Host.Tests/ThreadedCommentCommandTests.cs",
+            "ThreadedCommentCommandTests.CommentNavigation_MovesBetweenThreadsInDocumentOrder",
+            "freew/FreeW.App.Avalonia.Tests/DocumentViewCommentTests.cs",
+            "DocumentViewCommentTests.NextPreviousComment_moves_caret_in_document_order_and_wraps");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.resolve-comment",
+            "freew/FreeW.App.Host.Tests/ThreadedCommentCommandTests.cs",
+            "ThreadedCommentCommandTests.ToggleResolveCommentAtCaret_TogglesResolved",
+            "freew/FreeW.App.Avalonia.Tests/DocumentViewReviewTests.cs",
+            "DocumentViewReviewTests.ResolveComment_registry_command_toggles_the_comment_at_the_caret");
 
         var markdown = ReadRepositoryFile("docs", "parity", "freew-command-inventory.md");
         markdown.Should().Contain($"| {commandIds.Length} | {both} | {wpfOnly} | {avaloniaOnly} | {avaloniaOnly} | {wpfOnly} |");
@@ -440,6 +471,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
         markdown.Should().Contain("profile-shape-only");
         markdown.Should().Contain("actionable-gap");
         markdown.Should().Contain("Source literal evidence columns show exact command-id text in source files only; they are not behavior proof and never create rows.");
+        markdown.Should().Contain("Behavior evidence rows");
+        markdown.Should().Contain("Review comments: ThreadedCommentCommandTests.DeleteCommentAtCaret_RemovesThreadRangeAndReference");
     }
 
     [Fact]
@@ -1200,6 +1233,36 @@ public sealed class FreeWRibbonDefinitionProfileTests
             candidate.GetProperty("commandId").GetString() == commandId);
 
         command.GetProperty("gapClassification").GetString().Should().Be(expectedClassification);
+    }
+
+    private static void AssertBehaviorEvidence(
+        IReadOnlyList<JsonElement> commands,
+        string commandId,
+        string expectedWpfPath,
+        string expectedWpfTest,
+        string expectedAvaloniaPath,
+        string expectedAvaloniaTest)
+    {
+        var command = commands.Single(candidate =>
+            candidate.GetProperty("commandId").GetString() == commandId);
+        command.GetProperty("gapClassification").GetString().Should().Be("shared-profile");
+
+        var evidence = command.GetProperty("behaviorEvidence");
+        evidence.GetProperty("evidenceId").GetString().Should().Be("freew.review-comments.shared-behavior");
+        evidence.GetProperty("slice").GetString().Should().Be("Review comments");
+        evidence.GetProperty("summary").GetString().Should().NotBeNullOrWhiteSpace();
+
+        AssertEvidenceLink(evidence.GetProperty("wpfEvidence"), expectedWpfPath, expectedWpfTest);
+        AssertEvidenceLink(evidence.GetProperty("avaloniaEvidence"), expectedAvaloniaPath, expectedAvaloniaTest);
+    }
+
+    private static void AssertEvidenceLink(JsonElement link, string expectedPath, string expectedTest)
+    {
+        link.GetProperty("path").GetString().Should().Be(expectedPath);
+        link.GetProperty("test").GetString().Should().Be(expectedTest);
+
+        var methodName = expectedTest[(expectedTest.IndexOf('.') + 1)..];
+        ReadRepositoryFile(expectedPath.Split('/')).Should().Contain(methodName);
     }
 
     private static string ReadRepositoryFile(params string[] relativeParts)
