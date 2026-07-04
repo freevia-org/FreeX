@@ -766,12 +766,16 @@ public sealed partial class MainWindow
 
     private async Task ShowScenarioManagerParityDialogAsync()
     {
+        var changingCellsRange = ScenarioManagerParityFixture.ChangingCellsRange(_session.ActiveSheet.Id);
         await ShowWithParitySelectionAsync(
-            new CellAddress(_session.ActiveSheet.Id, 2, 2),
-            new CellAddress(_session.ActiveSheet.Id, 3, 3),
+            changingCellsRange.Start,
+            changingCellsRange.End,
             async () =>
             {
-                var plan = ScenarioManagerPlanner.CreateDialogPlan(_session.Workbook);
+                ScenarioManagerParityFixture.Seed(_session.Workbook, _session.ActiveSheet.Id);
+                var plan = ScenarioManagerPlanner.CreateDialogPlan(
+                    _session.Workbook,
+                    ScenarioManagerParityFixture.ScenarioName);
                 if (plan.IsReady)
                     await ShowScenarioManagerCompactDialogAsync(plan);
             });
