@@ -212,7 +212,7 @@ public sealed class TableCellEditPlannerTests
     }
 
     [Fact]
-    public void PlanRichTextEdit_CollapsedSelection_UsesWholeCellFallbackStyle()
+    public void PlanRichTextEdit_CollapsedSelection_UsesCaretRunStyle()
     {
         var body = MakeBody("Hello");
         body.Paragraphs[0].Runs.Add(new Run
@@ -228,12 +228,67 @@ public sealed class TableCellEditPlannerTests
             body,
             new InCanvasEditorTextSelection(7, 7));
 
-        rich.InitialSelectionStyle.FontFamily.Should().BeNull("collapsed selections currently use the whole-cell style fallback");
-        rich.InitialSelectionStyle.FontSizePt.Should().BeNull();
-        rich.InitialSelectionStyle.Bold.Should().BeNull();
+        rich.InitialSelectionStyle.FontFamily.Should().Be("Consolas");
+        rich.InitialSelectionStyle.FontSizePt.Should().Be(18);
+        rich.InitialSelectionStyle.Bold.Should().BeTrue();
         rich.SuggestedEditorStyle.FontFamily.Should().Be("Aptos");
         rich.SuggestedEditorStyle.FontSizePt.Should().Be(14);
         rich.SuggestedEditorStyle.Bold.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PlanRichTextEdit_CollapsedSelectionAtRunBoundary_UsesPrecedingRunStyle()
+    {
+        var body = MakeBody("Left");
+        body.Paragraphs[0].Runs[0].FontFamily = "Aptos";
+        body.Paragraphs[0].Runs[0].FontSizePt = 14;
+        body.Paragraphs[0].Runs[0].Bold = true;
+        body.Paragraphs[0].Runs[0].BoldSet = true;
+        body.Paragraphs[0].Runs.Add(new Run
+        {
+            Text = "Right",
+            FontFamily = "Consolas",
+            FontSizePt = 18,
+            Italic = true,
+            ItalicSet = true,
+        });
+
+        var rich = TableCellEditPlanner.PlanRichTextEdit(
+            body,
+            new InCanvasEditorTextSelection(4, 4));
+
+        rich.InitialSelectionStyle.FontFamily.Should().Be("Aptos");
+        rich.InitialSelectionStyle.FontSizePt.Should().Be(14);
+        rich.InitialSelectionStyle.Bold.Should().BeTrue();
+        rich.InitialSelectionStyle.Italic.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PlanRichTextEdit_CollapsedSelectionAtParagraphSeparator_UsesPreviousParagraphStyle()
+    {
+        var body = MakeBody("Alpha");
+        body.Paragraphs[0].Runs[0].FontFamily = "Aptos";
+        body.Paragraphs[0].Runs[0].FontSizePt = 14;
+        body.Paragraphs[0].Runs[0].Underline = true;
+        var second = new Paragraph();
+        second.Runs.Add(new Run
+        {
+            Text = "Beta",
+            FontFamily = "Consolas",
+            FontSizePt = 18,
+            Bold = true,
+            BoldSet = true,
+        });
+        body.Paragraphs.Add(second);
+
+        var rich = TableCellEditPlanner.PlanRichTextEdit(
+            body,
+            new InCanvasEditorTextSelection(5, 5));
+
+        rich.InitialSelectionStyle.FontFamily.Should().Be("Aptos");
+        rich.InitialSelectionStyle.FontSizePt.Should().Be(14);
+        rich.InitialSelectionStyle.Underline.Should().BeTrue();
+        rich.InitialSelectionStyle.Bold.Should().BeFalse();
     }
 
     [Fact]
