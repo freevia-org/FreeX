@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using Free.Shared.Ribbon;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
@@ -526,7 +527,9 @@ public sealed class ReviewWorkflowAdapterTests
                             Source = "ppt/media/training.vtt",
                             ContentType = "text/vtt",
                             Language = "en-US",
-                            Label = "English captions"
+                            Label = "English captions",
+                            Bytes = Encoding.UTF8.GetBytes(
+                                "WEBVTT\r\n\r\n00:00.000 --> 00:01.000\r\nShared transcript cue\r\n")
                         }
                     }
                 },
@@ -548,6 +551,17 @@ public sealed class ReviewWorkflowAdapterTests
                     row.ShouldSelectShape);
             window.LastAccessibilitySummaryPlan!.Issues.Should().NotContain(issue =>
                 issue.ShapeId == captioned.Id && issue.Title == "Video captions missing");
+            window.LastMediaTranscriptPlan.Should().NotBeNull();
+            window.LastMediaTranscriptPlan!.Tracks.Should().ContainSingle()
+                .Which.Should().Match<PresentationMediaTranscriptTrackDescriptor>(track =>
+                    track.ShapeId == captioned.Id &&
+                    track.ShapeName == "Training video" &&
+                    track.Label == "English captions" &&
+                    track.Language == "en-US" &&
+                    track.Source == "ppt/media/training.vtt" &&
+                    track.Status == PresentationMediaTranscriptTrackStatus.Available &&
+                    track.CueCount == 1 &&
+                    track.Cues[0].Text == "Shared transcript cue");
         }
         finally
         {

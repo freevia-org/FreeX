@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.IO;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -2728,6 +2729,7 @@ public sealed class MainWindowHeadlessTests
     {
         PresentationAccessibilityCheckerPanePlan? opened = null;
         PresentationAccessibilitySummaryPlan? summary = null;
+        PresentationMediaTranscriptPlan? transcript = null;
 
         var ran = await OnUiThread(() =>
         {
@@ -2757,7 +2759,9 @@ public sealed class MainWindowHeadlessTests
                             Source = "ppt/media/training.vtt",
                             ContentType = "text/vtt",
                             Language = "en-US",
-                            Label = "English captions"
+                            Label = "English captions",
+                            Bytes = Encoding.UTF8.GetBytes(
+                                "WEBVTT\r\n\r\n00:00.000 --> 00:01.000\r\nShared transcript cue\r\n")
                         }
                     }
                 },
@@ -2768,6 +2772,7 @@ public sealed class MainWindowHeadlessTests
 
             opened = window.ShowAccessibilityCheckerPane();
             summary = window.LastAccessibilitySummaryPlan;
+            transcript = window.LastMediaTranscriptPlan;
         });
 
         if (!ran) return;
@@ -2784,6 +2789,17 @@ public sealed class MainWindowHeadlessTests
         summary.Should().NotBeNull();
         summary!.Issues.Should().NotContain(issue =>
             issue.ShapeId == 714 && issue.Title == "Video captions missing");
+        transcript.Should().NotBeNull();
+        transcript!.Tracks.Should().ContainSingle()
+            .Which.Should().Match<PresentationMediaTranscriptTrackDescriptor>(track =>
+                track.ShapeId == 714 &&
+                track.ShapeName == "Training video" &&
+                track.Label == "English captions" &&
+                track.Language == "en-US" &&
+                track.Source == "ppt/media/training.vtt" &&
+                track.Status == PresentationMediaTranscriptTrackStatus.Available &&
+                track.CueCount == 1 &&
+                track.Cues[0].Text == "Shared transcript cue");
     }
 
     [Fact]

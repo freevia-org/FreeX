@@ -258,6 +258,7 @@ public sealed class MainWindow : Window
     internal PresentationProofingRequestPlan? LastProofingRequestPlan { get; private set; }
     internal PresentationProofingExecutionPlan? LastProofingExecutionPlan { get; private set; }
     internal PresentationProofingPanePlan? LastProofingPanePlan { get; private set; }
+    internal PresentationMediaTranscriptPlan? LastMediaTranscriptPlan { get; private set; }
     internal AnimationPaneTimelinePlan? LastAnimationPaneTimelinePlan { get; private set; }
     internal AnimationPanePlaybackSessionPlan? LastAnimationPanePlaybackSessionPlan => _animationPanePlaybackSessionPlan;
     internal FindReplaceWorkflowPlan? LastFindReplaceWorkflowPlan { get; private set; }
@@ -3990,6 +3991,7 @@ public sealed class MainWindow : Window
 
     private void RefreshAccessibilitySummaryPlan()
     {
+        LastMediaTranscriptPlan = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(_presentation);
         LastAccessibilitySummaryPlan =
             PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(_presentation);
         LastAccessibilityCheckerPanePlan =

@@ -97,6 +97,17 @@ public sealed class MediaFieldsTests
         track.Label.Should().Be("English captions");
         track.IsExternal.Should().BeFalse();
         Encoding.UTF8.GetString(track.Bytes).Should().Contain("Demo caption");
+
+        var transcript = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(pres2);
+        transcript.Tracks.Should().ContainSingle()
+            .Which.Should().Match<PresentationMediaTranscriptTrackDescriptor>(descriptor =>
+                descriptor.ShapeId == 1 &&
+                descriptor.Label == "English captions" &&
+                descriptor.Language == "en-US" &&
+                descriptor.Source == "ppt/media/captions1.vtt" &&
+                descriptor.Status == PresentationMediaTranscriptTrackStatus.Available &&
+                descriptor.CueCount == 1 &&
+                descriptor.Cues[0].Text == "Demo caption");
     }
 
     [Fact]
