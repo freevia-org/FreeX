@@ -950,10 +950,7 @@ internal static class ParityCapture
         };
 
     private static IReadOnlyList<SelectionPaneItem> CreateSelectionPaneItems() =>
-    [
-        new SelectionPaneItem(SelectionPaneObjectKind.Chart, Guid.NewGuid(), "Revenue Chart", true, false, true),
-        new SelectionPaneItem(SelectionPaneObjectKind.Shape, Guid.NewGuid(), "Rectangle 1", true, true, false),
-    ];
+        SelectionPaneParityFixture.CreateDialogItems(Guid.NewGuid(), Guid.NewGuid());
 
     private static string[] CreatePivotHeaders() =>
         ["Region", "Product", "Date", "Units", "Revenue"];

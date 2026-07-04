@@ -2670,6 +2670,11 @@ public sealed class AvaloniaShellSourceTests
         autoFilterFixtureSource.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan(");
         autoFilterFixtureSource.Should().Contain("WorksheetAutoFilterModel(range.ToString(), null)");
 
+        avaloniaCaptureSource.Should().Contain("SelectionPaneParityFixture.CreateDialogItems(");
+        wpfCaptureSource.Should().Contain("SelectionPaneParityFixture.CreateDialogItems(");
+        avaloniaCaptureSource.Should().Contain("SelectionPaneParityFixture.ChartName");
+        avaloniaCaptureSource.Should().Contain("SelectionPaneParityFixture.ShapeName");
+
         // The multi-tab / multi-category dialogs declare an identical, position-ordered tab-name list in
         // each shell, so the comparison runner pairs `dialog.<Name>.<TabName>` one-for-one. The capture
         // builds each per-tab PNG name as $"{surfaceId}.{tabName}", so assert each tab name appears in the
