@@ -282,6 +282,62 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void Matrix_UsesMaxRowCellCount_ForRaggedRows()
+    {
+        var matrix = new MathNode.Matrix(new[]
+        {
+            new MathNode[] { Run("a") },
+            new MathNode[] { Run("b"), Run("c"), Run("ddd") }
+        });
+
+        var box = MathLayoutEngine.Layout(matrix, "Cambria Math", FontSizePt);
+        var container = (MathBox.Container)box.Children[0];
+        var glyphs = container.Children.Cast<MathBox.Glyph>().Select(g => g.Text).ToList();
+
+        glyphs.Should().Equal(new[] { "a", "b", "c", "ddd" },
+            "matrix layout must not size itself from only the first row and drop later cells");
+        container.Children[2].X.Should().BeGreaterThan(container.Children[1].X,
+            "the second cell in the wider later row must be assigned to its own column");
+        container.Children[3].X.Should().BeGreaterThan(container.Children[2].X,
+            "the third cell in the wider later row must be assigned to its own column");
+    }
+
+    [Fact]
+    public void Matrix_AppliesPerColumnAlignmentWithinColumnWidths()
+    {
+        var matrix = new MathNode.Matrix(
+            new[]
+            {
+                new MathNode[] { Run("wide"), Run("wide"), Run("wide") },
+                new MathNode[] { Run("x"), Run("y"), Run("z") }
+            },
+            new[]
+            {
+                MathNode.Matrix.MatrixColumnAlignment.Left,
+                MathNode.Matrix.MatrixColumnAlignment.Center,
+                MathNode.Matrix.MatrixColumnAlignment.Right
+            });
+
+        var box = MathLayoutEngine.Layout(matrix, "Cambria Math", FontSizePt);
+        var container = (MathBox.Container)box.Children[0];
+        var wideLeft = container.Children[0];
+        var wideCenter = container.Children[1];
+        var wideRight = container.Children[2];
+        var leftCell = container.Children[3];
+        var centerCell = container.Children[4];
+        var rightCell = container.Children[5];
+
+        leftCell.X.Should().BeApproximately(wideLeft.X, 0.01,
+            "left-aligned matrix cells start at their column origin");
+        (centerCell.X + centerCell.Metrics.Width / 2.0)
+            .Should().BeApproximately(wideCenter.X + wideCenter.Metrics.Width / 2.0, 0.01,
+                "center-aligned matrix cells remain centered in the column");
+        (rightCell.X + rightCell.Metrics.Width)
+            .Should().BeApproximately(wideRight.X + wideRight.Metrics.Width, 0.01,
+                "right-aligned matrix cells end at the column right edge");
+    }
+
+    [Fact]
     public void Frac_DefaultBarType_RendersHRule_Unchanged()
     {
         var frac = new MathNode.Frac(Run("1"), Run("2")); // default FracType.Bar

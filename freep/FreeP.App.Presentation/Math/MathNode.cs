@@ -260,9 +260,26 @@ public abstract class MathNode
     /// </summary>
     public sealed class Matrix : MathNode
     {
+        public enum MatrixColumnAlignment
+        {
+            Left,
+            Center,
+            Right
+        }
+
         /// <summary>Rows x Columns grid of nodes.</summary>
         public IReadOnlyList<IReadOnlyList<MathNode>> Rows { get; }
-        public Matrix(IReadOnlyList<IReadOnlyList<MathNode>> rows) { Rows = rows; }
+
+        /// <summary>Optional per-column alignment metadata; missing entries default to center.</summary>
+        public IReadOnlyList<MatrixColumnAlignment> ColumnAlignments { get; }
+
+        public Matrix(
+            IReadOnlyList<IReadOnlyList<MathNode>> rows,
+            IReadOnlyList<MatrixColumnAlignment>? columnAlignments = null)
+        {
+            Rows = rows;
+            ColumnAlignments = columnAlignments ?? System.Array.Empty<MatrixColumnAlignment>();
+        }
     }
 
     // ── Equation array ───────────────────────────────────────────────────────

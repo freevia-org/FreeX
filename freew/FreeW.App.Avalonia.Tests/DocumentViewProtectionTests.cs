@@ -269,6 +269,87 @@ public sealed class DocumentViewProtectionTests
     }
 
     [Fact]
+    public async Task CommentsOnly_allows_each_classified_comment_history_entry()
+    {
+        var canUndoInsert = false;
+        var commentsAfterInsertUndo = -1;
+        var canRedoInsert = false;
+        var commentsAfterInsertRedo = -1;
+        var canUndoReply = false;
+        var repliesAfterReplyUndo = -1;
+        var canRedoReply = false;
+        var repliesAfterReplyRedo = -1;
+        var canUndoResolve = false;
+        bool? resolvedAfterResolveUndo = null;
+        var canRedoResolve = false;
+        bool? resolvedAfterResolveRedo = null;
+        var canUndoDelete = false;
+        var commentsAfterDeleteUndo = -1;
+        var canRedoDelete = false;
+        var commentsAfterDeleteRedo = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var view = BuildView("Hello world");
+
+            view.SetSelectionRangePublic(0, 0, 0, 5);
+            view.SetProtection(ProtectionMode.CommentsOnly);
+            var id = view.NewComment("note")!.Value;
+
+            canUndoInsert = view.CanUndo;
+            view.Undo();
+            commentsAfterInsertUndo = view.Document.Comments.Count;
+            canRedoInsert = view.CanRedo;
+            view.Redo();
+            commentsAfterInsertRedo = view.Document.Comments.Count;
+
+            view.ReplyToComment(id, "reply").Should().BeTrue();
+            canUndoReply = view.CanUndo;
+            view.Undo();
+            repliesAfterReplyUndo = view.Document.Comments[id].Replies.Count;
+            canRedoReply = view.CanRedo;
+            view.Redo();
+            repliesAfterReplyRedo = view.Document.Comments[id].Replies.Count;
+
+            view.SetCommentResolved(id, resolved: true).Should().BeTrue();
+            canUndoResolve = view.CanUndo;
+            view.Undo();
+            resolvedAfterResolveUndo = view.Document.Comments[id].Resolved;
+            canRedoResolve = view.CanRedo;
+            view.Redo();
+            resolvedAfterResolveRedo = view.Document.Comments[id].Resolved;
+
+            view.DeleteComment(id).Should().BeTrue();
+            canUndoDelete = view.CanUndo;
+            view.Undo();
+            commentsAfterDeleteUndo = view.Document.Comments.Count;
+            canRedoDelete = view.CanRedo;
+            view.Redo();
+            commentsAfterDeleteRedo = view.Document.Comments.Count;
+        });
+
+        if (!ran)
+            return;
+
+        canUndoInsert.Should().BeTrue();
+        commentsAfterInsertUndo.Should().Be(0);
+        canRedoInsert.Should().BeTrue();
+        commentsAfterInsertRedo.Should().Be(1);
+        canUndoReply.Should().BeTrue();
+        repliesAfterReplyUndo.Should().Be(0);
+        canRedoReply.Should().BeTrue();
+        repliesAfterReplyRedo.Should().Be(1);
+        canUndoResolve.Should().BeTrue();
+        resolvedAfterResolveUndo.Should().BeFalse();
+        canRedoResolve.Should().BeTrue();
+        resolvedAfterResolveRedo.Should().BeTrue();
+        canUndoDelete.Should().BeTrue();
+        commentsAfterDeleteUndo.Should().Be(1);
+        canRedoDelete.Should().BeTrue();
+        commentsAfterDeleteRedo.Should().Be(0);
+    }
+
+    [Fact]
     public async Task FillingForms_blocks_body_edits_and_reports_form_only_policy()
     {
         var textAfterBlockedTyping = "";

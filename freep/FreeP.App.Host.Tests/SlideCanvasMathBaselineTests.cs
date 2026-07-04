@@ -85,4 +85,42 @@ public sealed class SlideCanvasMathBaselineTests
 
         act.Should().NotThrow();
     }
+
+    [StaFact]
+    public void RenderParaWithMath_Matrix_UsesSharedMathBoxPlan_DoesNotThrow()
+    {
+        var matrix = new MathNode.Matrix(
+            new[]
+            {
+                new MathNode[] { new MathNode.Run("wide"), new MathNode.Run("wide") },
+                new MathNode[] { new MathNode.Run("x"), new MathNode.Run("yy") }
+            },
+            new[]
+            {
+                MathNode.Matrix.MatrixColumnAlignment.Left,
+                MathNode.Matrix.MatrixColumnAlignment.Right
+            });
+        var mathBox = MathLayoutEngine.Layout(matrix, "Cambria Math", 18.0);
+        var ops = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math");
+        ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text).Should().Contain(new[] { "wide", "x", "yy" },
+            "matrix glyphs must come from the shared MathBox plan before WPF draws them");
+
+        var para = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "M = ", FontFamily = "Calibri", FontSizePt = 18.0, Color = SrgbColor.Black },
+                new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+            }
+        };
+
+        var visual = new DrawingVisual();
+        var act = () =>
+        {
+            using var dc = visual.RenderOpen();
+            SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+        };
+
+        act.Should().NotThrow();
+    }
 }
