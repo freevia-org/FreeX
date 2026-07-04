@@ -1105,6 +1105,47 @@ public sealed partial class SlideShowMainWindowCustomShowTests
             window.Close();
         }
     }
+
+    [StaFact]
+    public void MainWindow_CustomShowAuthoring_UsesSharedMutationRoute()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var presentation = window.Editor.Presentation;
+            presentation.Slides.Clear();
+            presentation.Slides.Add(new Slide { Title = "Intro" });
+            presentation.Slides.Add(new Slide { Title = "Deep dive" });
+            presentation.Slides.Add(new Slide { Title = "Appendix" });
+
+            var create = window.CreateCustomShow(
+                "  Executive review  ",
+                new[] { presentation.Slides[2].Id, "missing-slide", presentation.Slides[0].Id });
+            var rename = window.RenameCustomShow(create.CustomShowIndex, "Board review");
+            var updateSlides = window.UpdateCustomShowSlides(
+                create.CustomShowIndex,
+                new[] { presentation.Slides[1].Id, presentation.Slides[2].Id });
+            var plan = window.BuildCustomShowAuthoringPlan();
+
+            create.Succeeded.Should().BeTrue();
+            rename.Succeeded.Should().BeTrue();
+            updateSlides.Succeeded.Should().BeTrue();
+            presentation.CustomShows.Should().ContainSingle();
+            presentation.CustomShows[0].Name.Should().Be("Board review");
+            presentation.CustomShows[0].SlideIds.Should().Equal(presentation.Slides[1].Id, presentation.Slides[2].Id);
+            plan.CustomShows.Should().ContainSingle().Which.Name.Should().Be("Board review");
+            plan.AvailableSlides.Select(slide => slide.Title).Should().Equal("Intro", "Deep dive", "Appendix");
+
+            var delete = window.DeleteCustomShow(create.CustomShowIndex);
+
+            delete.Succeeded.Should().BeTrue();
+            presentation.CustomShows.Should().BeEmpty();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
 }
 
 // Wave 16C: SlideShowMediaController tests

@@ -5533,6 +5533,27 @@ public sealed class MainWindow : Window
     internal SlideShowLaunchPlan BuildSlideShowLaunchPlan() =>
         SlideShowCustomShowPlanner.BuildLaunchPlan(_presentation, Editor.CurrentSlideIndex);
 
+    internal SlideShowCustomShowAuthoringPlan BuildCustomShowAuthoringPlan() =>
+        SlideShowCustomShowPlanner.BuildAuthoringPlan(_presentation);
+
+    internal SlideShowCustomShowMutationResult CreateCustomShow(
+        string? name,
+        IEnumerable<string?> slideIds) =>
+        SlideShowCustomShowPlanner.CreateCustomShow(_presentation, name, slideIds);
+
+    internal SlideShowCustomShowMutationResult RenameCustomShow(
+        int customShowIndex,
+        string? name) =>
+        SlideShowCustomShowPlanner.RenameCustomShow(_presentation, customShowIndex, name);
+
+    internal SlideShowCustomShowMutationResult DeleteCustomShow(int customShowIndex) =>
+        SlideShowCustomShowPlanner.DeleteCustomShow(_presentation, customShowIndex);
+
+    internal SlideShowCustomShowMutationResult UpdateCustomShowSlides(
+        int customShowIndex,
+        IEnumerable<string?> slideIds) =>
+        SlideShowCustomShowPlanner.UpdateCustomShowSlides(_presentation, customShowIndex, slideIds);
+
     internal bool TryStartCustomSlideShow(string? customShowName, int startIndex = 0)
     {
         if (!TryBuildCustomSlideShowRoute(customShowName, startIndex, out var route) ||
