@@ -102,7 +102,8 @@ public static class FindReplaceDialogPlanner
                 matchEntireCell,
                 FindLookInForTarget(match.Target, lookIn),
                 replacementFormat,
-                out var command))
+                out var command,
+                workbook: workbook))
             return new ReplaceSingleMatchResult(false, null);
 
         var outcome = commandBus.Execute(workbook.Id, command);
