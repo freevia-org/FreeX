@@ -2949,6 +2949,21 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("ScenarioManagerParityFixture.ScenarioName");
         parityCaptureSource.Should().Contain("await ShowScenarioManagerCompactDialogAsync(plan);");
 
+        var paritySeedIndex = parityCaptureSource.IndexOf(
+            "ScenarioManagerParityFixture.Seed(_session.Workbook, _session.ActiveSheet.Id);",
+            StringComparison.Ordinal);
+        var parityPlanIndex = parityCaptureSource.IndexOf(
+            "ScenarioManagerPlanner.CreateDialogPlan(",
+            paritySeedIndex,
+            StringComparison.Ordinal);
+        var parityDialogIndex = parityCaptureSource.IndexOf(
+            "await ShowScenarioManagerCompactDialogAsync(plan);",
+            parityPlanIndex,
+            StringComparison.Ordinal);
+        paritySeedIndex.Should().BeGreaterThanOrEqualTo(0);
+        parityPlanIndex.Should().BeGreaterThan(paritySeedIndex, "the parity route must seed the scenario before creating the selected dialog plan");
+        parityDialogIndex.Should().BeGreaterThan(parityPlanIndex, "the parity route must open the compact dialog from the seeded plan");
+
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowScenarioManagerDialogAsync()", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);
         var nextMethodIndex = normalizedSource.IndexOf("\n    private async Task ShowDataTableDialogAsync()", handlerIndex, StringComparison.Ordinal);

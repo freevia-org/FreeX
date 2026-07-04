@@ -196,10 +196,10 @@ public sealed class DialogVisualEvidenceSummaryTests
                 "sharedOrPresentationBacked": 4
               },
               "rows": [
-                { "routeId": "dialog.ScenarioManager" },
+                { "routeId": "dialog.AutoFilter" },
                 { "routeId": "dialog.GoalSeekStatus" },
                 { "routeId": "dialog.FindReplace" },
-                { "routeId": "dialog.Generic" }
+                { "routeId": "dialog.ScenarioManager" }
               ]
             }
             """);
@@ -211,10 +211,10 @@ public sealed class DialogVisualEvidenceSummaryTests
               "platform": "windows",
               "shell": "wpf",
               "surfaces": [
-                { "id": "dialog.ScenarioManager", "kind": "dialog", "png": "dialog.ScenarioManager.png", "captured": true, "note": "" },
+                { "id": "dialog.AutoFilter", "kind": "dialog", "png": "dialog.AutoFilter.png", "captured": true, "note": "" },
                 { "id": "dialog.GoalSeekStatus", "kind": "dialog", "png": "dialog.GoalSeekStatus.png", "captured": true, "note": "" },
                 { "id": "dialog.FindReplace", "kind": "dialog", "png": "dialog.FindReplace.png", "captured": true, "note": "" },
-                { "id": "dialog.Generic", "kind": "dialog", "png": "dialog.Generic.png", "captured": true, "note": "" }
+                { "id": "dialog.ScenarioManager", "kind": "dialog", "png": "dialog.ScenarioManager.png", "captured": true, "note": "" }
               ]
             }
             """);
@@ -226,22 +226,22 @@ public sealed class DialogVisualEvidenceSummaryTests
               "platform": "windows",
               "shell": "avalonia",
               "surfaces": [
-                { "id": "dialog.ScenarioManager", "kind": "dialog", "png": "dialog.ScenarioManager.png", "captured": true, "note": "" },
+                { "id": "dialog.AutoFilter", "kind": "dialog", "png": "dialog.AutoFilter.png", "captured": true, "note": "" },
                 { "id": "dialog.GoalSeekStatus", "kind": "dialog", "png": "dialog.GoalSeekStatus.png", "captured": true, "note": "" },
                 { "id": "dialog.FindReplace", "kind": "dialog", "png": "dialog.FindReplace.png", "captured": true, "note": "" },
-                { "id": "dialog.Generic", "kind": "dialog", "png": "dialog.Generic.png", "captured": true, "note": "" }
+                { "id": "dialog.ScenarioManager", "kind": "dialog", "png": "dialog.ScenarioManager.png", "captured": true, "note": "" }
               ]
             }
             """);
 
-        WritePng(Path.Combine(wpfManifestDirectory, "dialog.ScenarioManager.png"), width: 3, height: 2, nonBlank: true);
-        WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.ScenarioManager.png"), width: 5, height: 4, nonBlank: true);
+        WritePng(Path.Combine(wpfManifestDirectory, "dialog.AutoFilter.png"), width: 3, height: 2, nonBlank: true);
+        WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.AutoFilter.png"), width: 5, height: 4, nonBlank: true);
         WritePng(Path.Combine(wpfManifestDirectory, "dialog.GoalSeekStatus.png"), width: 3, height: 2, nonBlank: true);
         WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.GoalSeekStatus.png"), width: 3, height: 4, nonBlank: true);
         WritePng(Path.Combine(wpfManifestDirectory, "dialog.FindReplace.png"), width: 4, height: 4, nonBlank: true);
         WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.FindReplace.png"), width: 4, height: 5, nonBlank: true);
-        WritePng(Path.Combine(wpfManifestDirectory, "dialog.Generic.png"), width: 3, height: 2, nonBlank: true);
-        WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.Generic.png"), width: 5, height: 2, nonBlank: true);
+        WritePng(Path.Combine(wpfManifestDirectory, "dialog.ScenarioManager.png"), width: 3, height: 2, nonBlank: true);
+        WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.ScenarioManager.png"), width: 5, height: 2, nonBlank: true);
 
         var result = PowerShellScriptRunner.RunToolScript(
             "Generate-DialogVisualEvidenceSummary.ps1",
@@ -255,11 +255,12 @@ public sealed class DialogVisualEvidenceSummaryTests
         result.Output.Should().Contain("Dimension mismatch bucket 'real logical-size mismatch': 1");
 
         var markdown = File.ReadAllText(markdownPath);
-        markdown.Should().Contain("| content/visual mismatch | 1 | dialog.ScenarioManager |");
+        markdown.Should().Contain("| content/visual mismatch | 1 | dialog.AutoFilter |");
         markdown.Should().Contain("| evidence limitation | 1 | dialog.GoalSeekStatus |");
         markdown.Should().Contain("| expected platform/native difference | 1 | dialog.FindReplace |");
-        markdown.Should().Contain("| real logical-size mismatch | 1 | dialog.Generic |");
-        markdown.Should().Contain("| dialog.ScenarioManager | content/visual mismatch |");
+        markdown.Should().Contain("| real logical-size mismatch | 1 | dialog.ScenarioManager |");
+        markdown.Should().Contain("| dialog.AutoFilter | content/visual mismatch |");
+        markdown.Should().Contain("| dialog.ScenarioManager | real logical-size mismatch |");
         markdown.Should().Contain("| dialog.GoalSeekStatus | evidence limitation |");
 
         using var json = JsonDocument.Parse(File.ReadAllText(jsonPath));

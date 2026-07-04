@@ -609,12 +609,6 @@ function Get-DimensionMismatchClassification {
     }
 
     switch ($SurfaceId) {
-        "dialog.ScenarioManager" {
-            return New-DimensionMismatchClassification `
-                -Bucket "content/visual mismatch" `
-                -Reason "The committed WPF PNG shows a selected seeded scenario while the Avalonia PNG shows an empty/no-scenario state." `
-                -NextAction "Align the seeded harness state before judging the remaining Scenario Manager dimensions."
-        }
         "dialog.SelectionPane" {
             return New-DimensionMismatchClassification `
                 -Bucket "content/visual mismatch" `
