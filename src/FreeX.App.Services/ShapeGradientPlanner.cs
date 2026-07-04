@@ -9,6 +9,12 @@ namespace FreeX.App.Services;
 /// </summary>
 public static class ShapeGradientPlanner
 {
+    /// <summary>Logical width used by parity capture for the compact shape gradient dialog.</summary>
+    public const int DialogWidth = 500;
+
+    /// <summary>Logical height used by parity capture for the compact shape gradient dialog.</summary>
+    public const int DialogHeight = 300;
+
     /// <summary>Seed start color when the shape has no fill to reuse.</summary>
     public static CellColor DefaultStartColor { get; } = DrawingShapeModel.DefaultFillColor;
 

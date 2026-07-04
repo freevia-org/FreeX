@@ -543,9 +543,9 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("ShapeGradient_Title"),
-            Width = 500,
-            Height = 300,
-            MinWidth = 500,
+            Width = ShapeGradientPlanner.DialogWidth,
+            Height = ShapeGradientPlanner.DialogHeight,
+            MinWidth = ShapeGradientPlanner.DialogWidth,
             Background = Brushes.White,
             FontFamily = FormulaBarFontFamily,
             FontSize = 12,

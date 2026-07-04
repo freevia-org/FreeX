@@ -87,8 +87,8 @@ public sealed class ShapeGradientDialog : Window
         var normalizedDirection = ShapeGradientDialogPlanner.NormalizeDirection(direction);
         Result = ShapeGradientDialogPlanner.CreateResult(_startColor, _endColor, normalizedDirection);
         Title = UiText.Get("ShapeGradient_Title");
-        Width = 500;
-        SizeToContent = SizeToContent.Height;
+        Width = ShapeGradientPlanner.DialogWidth;
+        Height = ShapeGradientPlanner.DialogHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;

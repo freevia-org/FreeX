@@ -349,7 +349,8 @@ public sealed partial class ObjectDialogTests
         source.Should().Contain("ShapeGradientPreviewSwatch");
         source.Should().Contain("_gradientPreview.SizeChanged += (_, _) => UpdateGradientPreview()");
         source.Should().Contain("CreateGradientBrush(");
-        source.Should().Contain("SizeToContent = SizeToContent.Height");
+        source.Should().Contain("Width = ShapeGradientPlanner.DialogWidth");
+        source.Should().Contain("Height = ShapeGradientPlanner.DialogHeight");
         source.Should().Contain("DialogButtonRowFactory.Create(Accept, 76, rowMargin");
         source.Should().NotContain("Height = 280");
         source.Should().NotContain("Content = UiText.Get(\"ShapeGradient_StartColorButton\")");
