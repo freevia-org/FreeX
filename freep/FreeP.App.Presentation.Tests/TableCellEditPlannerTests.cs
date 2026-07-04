@@ -974,6 +974,102 @@ public sealed class TableCellEditPlannerTests
     }
 
     [Fact]
+    public void BuiltInListPresets_ExposeStablePowerPointLikeTableCellDescriptors()
+    {
+        TableCellListPresetCatalog.BuiltIn.Select(preset => preset.Id)
+            .Should()
+            .Equal(
+                TableCellListPresetCatalog.BulletDiscId,
+                TableCellListPresetCatalog.NumberArabicPeriodId,
+                TableCellListPresetCatalog.NumberRomanUpperPeriodId,
+                TableCellListPresetCatalog.NumberRomanLowerPeriodId,
+                TableCellListPresetCatalog.NumberAlphaUpperPeriodId,
+                TableCellListPresetCatalog.NumberAlphaLowerPeriodId);
+
+        TableCellListPresetCatalog.NumberRomanUpperPeriod.AutoNumType.Should().Be(AutoNumType.RomanUcPeriod);
+        TableCellListPresetCatalog.NumberAlphaLowerPeriod.AutoNumType.Should().Be(AutoNumType.AlphaLcPeriod);
+    }
+
+    [Fact]
+    public void PlanParagraphListPreset_RomanUpperSelection_BuildsUndoableSharedCommand()
+    {
+        var shape = MakeMergedTableShape();
+        var body = shape.Table!.Rows[0].Cells[0].TextBody!;
+        var second = new Paragraph();
+        second.Runs.Add(new Run { Text = "Beta" });
+        body.Paragraphs.Add(second);
+        var third = new Paragraph { BulletKind = BulletKind.Char, BulletChar = "\u2022" };
+        third.Runs.Add(new Run { Text = "Gamma" });
+        body.Paragraphs.Add(third);
+        var slide = new Slide { Shapes = { shape } };
+
+        var plan = TableCellEditPlanner.PlanParagraphListPreset(
+            0,
+            slide,
+            [shape.Id],
+            (0, 0),
+            TableCellListPresetCatalog.NumberRomanUpperPeriod,
+            selection: (7, 11));
+
+        plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+        plan.Kind.Should().Be(TableCellParagraphFormatKind.ListPreset);
+        plan.ListPreset.Should().Be(TableCellListPresetCatalog.NumberRomanUpperPeriod);
+        plan.EffectiveSelection.Should().Be(new InCanvasEditorTextSelection(7, 11));
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(plan.Command!);
+
+        var paragraphs = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs;
+        paragraphs[0].BulletKind.Should().Be(BulletKind.None);
+        paragraphs[1].BulletKind.Should().Be(BulletKind.Auto);
+        paragraphs[1].AutoNumType.Should().Be(AutoNumType.RomanUcPeriod);
+        paragraphs[1].AutoNumStartAt.Should().Be(1);
+        paragraphs[1].BulletChar.Should().BeNull();
+        paragraphs[1].BulletSuppressed.Should().BeFalse();
+        paragraphs[2].BulletKind.Should().Be(BulletKind.Char);
+
+        bus.Undo();
+        paragraphs = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs;
+        paragraphs[1].BulletKind.Should().Be(BulletKind.None);
+        paragraphs[2].BulletKind.Should().Be(BulletKind.Char);
+    }
+
+    [Fact]
+    public void PlanParagraphListPreset_AlphaLowerWholeCell_AppliesToAllParagraphs()
+    {
+        var shape = MakeMergedTableShape();
+        var body = shape.Table!.Rows[0].Cells[0].TextBody!;
+        var second = new Paragraph();
+        second.Runs.Add(new Run { Text = "Beta" });
+        body.Paragraphs.Add(second);
+        var slide = new Slide { Shapes = { shape } };
+
+        var plan = TableCellEditPlanner.PlanParagraphListPreset(
+            0,
+            slide,
+            [shape.Id],
+            (0, 0),
+            TableCellListPresetCatalog.NumberAlphaLowerPeriod);
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(plan.Command!);
+
+        shape.Table!.Rows[0].Cells[0].TextBody!.Paragraphs
+            .Should()
+            .OnlyContain(paragraph =>
+                paragraph.BulletKind == BulletKind.Auto &&
+                paragraph.AutoNumType == AutoNumType.AlphaLcPeriod &&
+                paragraph.AutoNumStartAt == 1 &&
+                !paragraph.BulletSuppressed);
+    }
+
+    [Fact]
     public void PlanParagraphIndent_SubRangeSelection_IndentsOnlyTouchedParagraphs()
     {
         var shape = MakeMergedTableShape();

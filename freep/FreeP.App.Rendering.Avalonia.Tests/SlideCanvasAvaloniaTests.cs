@@ -737,6 +737,34 @@ public sealed class SlideCanvasAvaloniaTests
     }
 
     [Fact]
+    public void TableCellEditAdapter_PlanParagraphListPreset_DelegatesSharedMutation()
+    {
+        var presentation = MakePresentation(pres =>
+        {
+            pres.Slides[0].Shapes.Clear();
+            pres.Slides[0].Shapes.Add(MakeTableShape(23, "abc"));
+        });
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var shape = presentation.Slides[0].Shapes[0];
+        editor.Select(shape.Id);
+        editor.SetActiveTableCell(0, 0);
+
+        var plan = AvaloniaTableCellEditAdapter.PlanParagraphListPreset(
+            editor,
+            TableCellListPresetCatalog.NumberRomanLowerPeriod);
+
+        plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+        plan.ListPreset.Should().Be(TableCellListPresetCatalog.NumberRomanLowerPeriod);
+
+        editor.Bus.Execute(plan.Command!);
+
+        var paragraph = shape.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+        paragraph.BulletKind.Should().Be(BulletKind.Auto);
+        paragraph.AutoNumType.Should().Be(AutoNumType.RomanLcPeriod);
+        paragraph.AutoNumStartAt.Should().Be(1);
+    }
+
+    [Fact]
     public async Task TableCellTextEditor_Cancel_DiscardsChanges()
     {
         EditingSession? editor = null;
@@ -818,6 +846,7 @@ public sealed class SlideCanvasAvaloniaTests
         adapter.Should().Contain("TableCellEditPlanner.PlanFontFamily");
         adapter.Should().Contain("TableCellEditPlanner.PlanFontSize");
         adapter.Should().Contain("TableCellEditPlanner.PlanColor");
+        adapter.Should().Contain("TableCellEditPlanner.PlanParagraphListPreset");
         adapter.Should().Contain("ApplyFormatResult");
         adapter.Should().Contain("TableCellEditPlanner.PlanPreservedSelection");
     }
@@ -857,10 +886,12 @@ public sealed class SlideCanvasAvaloniaTests
         source.Should().Contain("AvaloniaTableCellEditAdapter.PlanFontFamily");
         source.Should().Contain("AvaloniaTableCellEditAdapter.PlanFontSize");
         source.Should().Contain("AvaloniaTableCellEditAdapter.PlanColor");
+        source.Should().Contain("AvaloniaTableCellEditAdapter.PlanParagraphListPreset");
         source.Should().Contain("AvaloniaTableCellEditAdapter.ApplyFormatResult");
         source.Should().Contain("ApplyInitialSelection(_cellTextBox, startPlan.InitialSelection)");
         source.Should().NotContain("_editor.PlanActiveTableCell");
         source.Should().Contain("TryApplyActiveTableCellTextFormat");
+        source.Should().Contain("TryApplyActiveTableCellParagraphListPreset");
     }
 
     // ── 1. Geometry factory round-trip ────────────────────────────────────────

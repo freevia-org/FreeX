@@ -846,6 +846,33 @@ public sealed class TableEditCommandTests
     }
 
     [Fact]
+    public void EditingSession_TableCellParagraphListPreset_UsesSharedPlanAndUndo()
+    {
+        var sess = MakeSession(out var shape);
+        shape.Table!.Rows[0].Cells[0].TextBody = MakeBody("Cell");
+        sess.SetActiveTableCell(0, 0);
+
+        var plan = sess.PlanActiveTableCellParagraphListPreset(
+            TableCellListPresetCatalog.NumberAlphaUpperPeriod);
+        plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+        plan.Kind.Should().Be(TableCellParagraphFormatKind.ListPreset);
+        plan.ListPreset.Should().Be(TableCellListPresetCatalog.NumberAlphaUpperPeriod);
+
+        sess.TryApplyActiveTableCellParagraphListPreset(
+            TableCellListPresetCatalog.NumberAlphaUpperPeriodId).Should().BeTrue();
+
+        var paragraph = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+        paragraph.BulletKind.Should().Be(BulletKind.Auto);
+        paragraph.AutoNumType.Should().Be(AutoNumType.AlphaUcPeriod);
+        paragraph.AutoNumStartAt.Should().Be(1);
+        paragraph.BulletSuppressed.Should().BeFalse();
+
+        sess.Undo();
+        paragraph = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+        paragraph.BulletKind.Should().Be(BulletKind.None);
+    }
+
+    [Fact]
     public void EditingSession_InsertRowBelow_GrowsGrid()
     {
         var sess = MakeSession(out var shape, 2, 2);

@@ -1327,6 +1327,46 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Ribbon_numbering_preset_context_routes_to_active_table_cell()
+    {
+        var foundNumbering = false;
+        BulletKind bulletKind = BulletKind.None;
+        AutoNumType autoNumType = AutoNumType.ArabicPeriod;
+        int autoNumStartAt = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            foundNumbering = registry.TryGet("freep.numbering", out var numberingCommand);
+            foundNumbering.Should().BeTrue("Numbering must be registered");
+
+            var shape = window.Editor.InsertTable(1, 1);
+            var body = new TextBody { Wrap = true };
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run { Text = "Cell" });
+            body.Paragraphs.Add(paragraph);
+            shape.Table!.Rows[0].Cells[0].TextBody = body;
+            window.Editor.Select(shape.Id);
+            window.Editor.SetActiveTableCell(0, 0);
+
+            numberingCommand!.Execute(RibbonCommandContext.ForSelectedValue(
+                TableCellListPresetCatalog.NumberAlphaLowerPeriodId));
+
+            var edited = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+            bulletKind = edited.BulletKind;
+            autoNumType = edited.AutoNumType;
+            autoNumStartAt = edited.AutoNumStartAt;
+        });
+
+        if (!ran) return;
+        foundNumbering.Should().BeTrue("Numbering must be registered");
+        bulletKind.Should().Be(BulletKind.Auto);
+        autoNumType.Should().Be(AutoNumType.AlphaLcPeriod);
+        autoNumStartAt.Should().Be(1);
+    }
+
+    [Fact]
     public async Task Ribbon_chart_edit_data_command_is_registered_and_noops_without_selected_chart()
     {
         var found = false;

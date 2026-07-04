@@ -32,6 +32,7 @@ public enum TableCellParagraphFormatKind
     Alignment,
     BulletToggle,
     NumberingToggle,
+    ListPreset,
     Indent,
     Outdent,
 }
@@ -190,9 +191,81 @@ public sealed record TableCellParagraphFormatPlan(
     InCanvasEditorTextSelection? EffectiveSelection = null,
     InCanvasTableCellRichTextEditPlan? ResultRichTextPlan = null,
     bool? BulletEnabled = null,
-    int LevelDelta = 0)
+    int LevelDelta = 0,
+    TableCellListPresetDescriptor? ListPreset = null)
 {
     public bool IsReady => Status == TableCellTextFormatStatus.Ready && Command is not null;
+}
+
+public sealed record TableCellListPresetDescriptor(
+    string Id,
+    string DisplayName,
+    BulletKind BulletKind,
+    string? BulletChar = null,
+    AutoNumType? AutoNumType = null,
+    int StartAt = 1);
+
+public static class TableCellListPresetCatalog
+{
+    public const string BulletDiscId = "bullet.disc";
+    public const string NumberArabicPeriodId = "number.arabic-period";
+    public const string NumberRomanUpperPeriodId = "number.roman-upper-period";
+    public const string NumberRomanLowerPeriodId = "number.roman-lower-period";
+    public const string NumberAlphaUpperPeriodId = "number.alpha-upper-period";
+    public const string NumberAlphaLowerPeriodId = "number.alpha-lower-period";
+
+    public static readonly TableCellListPresetDescriptor BulletDisc = new(
+        BulletDiscId,
+        "Disc Bullet",
+        BulletKind.Char,
+        BulletChar: "\u2022");
+
+    public static readonly TableCellListPresetDescriptor NumberArabicPeriod = new(
+        NumberArabicPeriodId,
+        "Arabic 1.",
+        BulletKind.Auto,
+        AutoNumType: FreeP.Core.Model.AutoNumType.ArabicPeriod);
+
+    public static readonly TableCellListPresetDescriptor NumberRomanUpperPeriod = new(
+        NumberRomanUpperPeriodId,
+        "Roman I.",
+        BulletKind.Auto,
+        AutoNumType: FreeP.Core.Model.AutoNumType.RomanUcPeriod);
+
+    public static readonly TableCellListPresetDescriptor NumberRomanLowerPeriod = new(
+        NumberRomanLowerPeriodId,
+        "Roman i.",
+        BulletKind.Auto,
+        AutoNumType: FreeP.Core.Model.AutoNumType.RomanLcPeriod);
+
+    public static readonly TableCellListPresetDescriptor NumberAlphaUpperPeriod = new(
+        NumberAlphaUpperPeriodId,
+        "Alpha A.",
+        BulletKind.Auto,
+        AutoNumType: FreeP.Core.Model.AutoNumType.AlphaUcPeriod);
+
+    public static readonly TableCellListPresetDescriptor NumberAlphaLowerPeriod = new(
+        NumberAlphaLowerPeriodId,
+        "Alpha a.",
+        BulletKind.Auto,
+        AutoNumType: FreeP.Core.Model.AutoNumType.AlphaLcPeriod);
+
+    public static IReadOnlyList<TableCellListPresetDescriptor> BuiltIn { get; } =
+    [
+        BulletDisc,
+        NumberArabicPeriod,
+        NumberRomanUpperPeriod,
+        NumberRomanLowerPeriod,
+        NumberAlphaUpperPeriod,
+        NumberAlphaLowerPeriod,
+    ];
+
+    public static bool TryGet(string? id, out TableCellListPresetDescriptor? preset)
+    {
+        preset = BuiltIn.FirstOrDefault(candidate =>
+            StringComparer.OrdinalIgnoreCase.Equals(candidate.Id, id));
+        return preset is not null;
+    }
 }
 
 public static class TableCellEditPlanner
@@ -549,6 +622,53 @@ public static class TableCellEditPlanner
             });
     }
 
+    public static TableCellParagraphFormatPlan PlanParagraphListPreset(
+        int slideIndex,
+        Slide? slide,
+        IReadOnlyList<uint> selectedShapeIds,
+        (int Row, int Col)? activeCell,
+        TableCellListPresetDescriptor preset,
+        (int Start, int End)? selection = null)
+    {
+        ArgumentNullException.ThrowIfNull(preset);
+
+        return PlanParagraphFormat(
+            slideIndex,
+            slide,
+            selectedShapeIds,
+            activeCell,
+            TableCellParagraphFormatKind.ListPreset,
+            null,
+            selection,
+            body => ApplyParagraphListPreset(body, selection, preset),
+            listPreset: preset);
+    }
+
+    public static TableCellParagraphFormatPlan PlanParagraphListPreset(
+        int slideIndex,
+        Slide? slide,
+        IReadOnlyList<uint> selectedShapeIds,
+        (int Row, int Col)? activeCell,
+        string presetId,
+        (int Start, int End)? selection = null)
+    {
+        if (!TableCellListPresetCatalog.TryGet(presetId, out var preset) || preset is null)
+        {
+            return DisabledParagraphFormat(
+                TableCellTextFormatStatus.NoTextRuns,
+                TableCellParagraphFormatKind.ListPreset,
+                null);
+        }
+
+        return PlanParagraphListPreset(
+            slideIndex,
+            slide,
+            selectedShapeIds,
+            activeCell,
+            preset,
+            selection);
+    }
+
     public static TableCellParagraphFormatPlan PlanParagraphIndent(
         int slideIndex,
         Slide? slide,
@@ -597,7 +717,8 @@ public static class TableCellEditPlanner
         (int Start, int End)? selection,
         Func<TextBody, TextBody> mutate,
         Func<TextBody, bool?>? bulletEnabledFactory = null,
-        int levelDelta = 0)
+        int levelDelta = 0,
+        TableCellListPresetDescriptor? listPreset = null)
     {
         ArgumentNullException.ThrowIfNull(selectedShapeIds);
         ArgumentNullException.ThrowIfNull(mutate);
@@ -641,7 +762,8 @@ public static class TableCellEditPlanner
             effectiveSelection,
             richTextPlan,
             bulletEnabled,
-            levelDelta);
+            levelDelta,
+            listPreset);
     }
 
     private static TableCellTextValueFormatPlan PlanTextValueFormat(
@@ -1117,6 +1239,48 @@ public static class TableCellEditPlanner
         }
 
         return editedBody;
+    }
+
+    private static TextBody ApplyParagraphListPreset(
+        TextBody source,
+        (int Start, int End)? selection,
+        TableCellListPresetDescriptor preset)
+    {
+        var editedBody = TextBodyModelCloner.CloneTextBody(source)!;
+        int textLength = InCanvasTextEditPlanner.ExtractPlainText(source).Length;
+        var range = NormalizeSelection(selection, textLength);
+
+        foreach (int paragraphIndex in ResolveParagraphIndexes(editedBody, range))
+            ApplyListPreset(editedBody.Paragraphs[paragraphIndex], preset);
+
+        return editedBody;
+    }
+
+    private static void ApplyListPreset(
+        Paragraph paragraph,
+        TableCellListPresetDescriptor preset)
+    {
+        paragraph.BulletKind = preset.BulletKind;
+        paragraph.BulletSuppressed = false;
+
+        if (preset.BulletKind == BulletKind.Auto)
+        {
+            paragraph.BulletChar = null;
+            paragraph.AutoNumType = preset.AutoNumType ?? AutoNumType.ArabicPeriod;
+            paragraph.AutoNumStartAt = Math.Max(1, preset.StartAt);
+            return;
+        }
+
+        if (preset.BulletKind == BulletKind.Char)
+        {
+            paragraph.BulletChar = string.IsNullOrEmpty(preset.BulletChar)
+                ? DefaultBulletChar
+                : preset.BulletChar;
+            return;
+        }
+
+        paragraph.BulletChar = null;
+        paragraph.BulletSuppressed = true;
     }
 
     private static TextBody ApplyParagraphIndent(

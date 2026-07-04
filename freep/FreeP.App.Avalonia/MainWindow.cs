@@ -1634,13 +1634,29 @@ public sealed class MainWindow : Window
             if (_textEditor?.TryApplyActiveTableCellParagraphAlignment(TextAlign.Justify) == true) return;
             Editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Justify);
         }));
-        r.Register("freep.bullets", new ActionRibbonCommand(() =>
+        r.Register("freep.bullets", new ContextRibbonCommand(ctx =>
         {
+            if (TableCellListPresetCatalog.TryGet(ctx.SelectedValue, out var bulletPreset) &&
+                bulletPreset is not null)
+            {
+                if (_textEditor?.TryApplyActiveTableCellParagraphListPreset(bulletPreset) == true) return;
+                Editor.TryApplyActiveTableCellParagraphListPreset(bulletPreset);
+                return;
+            }
+
             if (_textEditor?.TryApplyActiveTableCellParagraphBulletToggle() == true) return;
             Editor.TryApplyActiveTableCellParagraphBulletToggle();
         }));
-        r.Register("freep.numbering", new ActionRibbonCommand(() =>
+        r.Register("freep.numbering", new ContextRibbonCommand(ctx =>
         {
+            if (TableCellListPresetCatalog.TryGet(ctx.SelectedValue, out var numberingPreset) &&
+                numberingPreset is not null)
+            {
+                if (_textEditor?.TryApplyActiveTableCellParagraphListPreset(numberingPreset) == true) return;
+                Editor.TryApplyActiveTableCellParagraphListPreset(numberingPreset);
+                return;
+            }
+
             if (_textEditor?.TryApplyActiveTableCellParagraphNumberingToggle() == true) return;
             Editor.TryApplyActiveTableCellParagraphNumberingToggle();
         }));
