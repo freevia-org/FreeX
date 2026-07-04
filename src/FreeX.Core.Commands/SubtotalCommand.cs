@@ -199,6 +199,8 @@ public sealed class RemoveSubtotalRowsCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     private readonly List<DeleteRowsCommand> _deletes = [];
+    private Dictionary<uint, int>? _clearedRowOutlineLevels;
+    private List<uint>? _clearedGroupHiddenRows;
 
     public string Label => "Remove Subtotals";
 
@@ -215,6 +217,8 @@ public sealed class RemoveSubtotalRowsCommand : IWorkbookCommand
             return protectedOutcome;
 
         _deletes.Clear();
+        _clearedRowOutlineLevels = null;
+        _clearedGroupHiddenRows = null;
         var rows = SubtotalRowFinder.Find(sheet, _sheetId, _range);
         foreach (var row in rows.OrderByDescending(r => r))
         {
@@ -226,14 +230,51 @@ public sealed class RemoveSubtotalRowsCommand : IWorkbookCommand
             _deletes.Add(delete);
         }
 
+        if (_deletes.Count > 0)
+            ClearDetailRowOutline(sheet, (uint)_deletes.Count);
+
         return new CommandOutcome(true);
     }
 
     public void Revert(ICommandContext ctx)
     {
+        // Reverse of Apply: the outline entries were cleared at post-delete row
+        // indexes, so they must be restored before the deletes shift rows back down.
+        if (_clearedRowOutlineLevels is not null && _clearedGroupHiddenRows is not null)
+        {
+            var sheet = ctx.GetSheet(_sheetId);
+            foreach (var (row, level) in _clearedRowOutlineLevels)
+                sheet.RowOutlineLevels[row] = level;
+            foreach (var row in _clearedGroupHiddenRows)
+                sheet.GroupHiddenRows.Add(row);
+            _clearedRowOutlineLevels = null;
+            _clearedGroupHiddenRows = null;
+        }
+
         for (var i = _deletes.Count - 1; i >= 0; i--)
             _deletes[i].Revert(ctx);
         _deletes.Clear();
     }
 
+    // Excel's Remove All Subtotals also clears the outline that Data > Subtotal built
+    // for the detail rows; leaving it in place would strand the survivors at a group
+    // level with no subtotal rows to collapse to.
+    private void ClearDetailRowOutline(Sheet sheet, uint removedRowCount)
+    {
+        // The deletes shifted everything below each removed subtotal row up, so the
+        // subtotaled block now ends removedRowCount rows earlier. Only clear up to
+        // that boundary: rows shifted up from below the original range belong to
+        // whatever outline hierarchy they were part of and must keep it.
+        var detailRowCount = _range.RowCount - removedRowCount;
+        _clearedRowOutlineLevels = [];
+        _clearedGroupHiddenRows = [];
+        for (uint offset = 0; offset < detailRowCount; offset++)
+        {
+            var row = _range.Start.Row + offset;
+            if (sheet.RowOutlineLevels.Remove(row, out var level))
+                _clearedRowOutlineLevels[row] = level;
+            if (sheet.GroupHiddenRows.Remove(row))
+                _clearedGroupHiddenRows.Add(row);
+        }
+    }
 }
