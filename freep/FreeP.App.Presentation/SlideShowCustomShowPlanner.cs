@@ -32,6 +32,36 @@ public sealed record SlideShowLaunchPlan(
         Choices.FirstOrDefault(choice => choice.IsEnabled);
 }
 
+public sealed record SlideShowCustomShowSummary(
+    int Index,
+    uint Id,
+    string Name,
+    IReadOnlyList<string> SlideIds);
+
+public sealed record SlideShowCustomShowSlideOption(
+    int Index,
+    string SlideId,
+    string Title);
+
+public sealed record SlideShowCustomShowAuthoringPlan(
+    IReadOnlyList<SlideShowCustomShowSummary> CustomShows,
+    IReadOnlyList<SlideShowCustomShowSlideOption> AvailableSlides);
+
+public sealed record SlideShowCustomShowMutationResult(
+    bool Succeeded,
+    string? ErrorMessage,
+    int CustomShowIndex,
+    PresentationCustomShow? CustomShow)
+{
+    public static SlideShowCustomShowMutationResult Success(
+        int customShowIndex,
+        PresentationCustomShow? customShow) =>
+        new(true, null, customShowIndex, customShow);
+
+    public static SlideShowCustomShowMutationResult Failure(string errorMessage) =>
+        new(false, errorMessage, -1, null);
+}
+
 public sealed class SlideShowPlaybackRoute
 {
     public SlideShowPlaybackRoute(
@@ -83,6 +113,112 @@ public static class SlideShowCustomShowPlanner
     public const string CustomShowChoicePrefix = "custom-show:";
     public const string NoSlidesMessage = "No slides are available for slide show playback.";
     public const string EmptyCustomShowMessage = "Custom show has no available slides.";
+    public const string EmptyCustomShowNameMessage = "Custom show name is required.";
+    public const string DuplicateCustomShowNameMessage = "Custom show name must be unique.";
+    public const string MissingCustomShowMessage = "Custom show was not found.";
+
+    public static SlideShowCustomShowAuthoringPlan BuildAuthoringPlan(Presentation presentation)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        var customShows = presentation.CustomShows
+            .Select((show, index) => new SlideShowCustomShowSummary(
+                index,
+                show.Id,
+                NormalizeDisplayName(show.Name),
+                NormalizeSlideIds(presentation, show.SlideIds)))
+            .ToArray();
+
+        var availableSlides = presentation.Slides
+            .Select((slide, index) => new SlideShowCustomShowSlideOption(
+                index,
+                slide.Id,
+                string.IsNullOrWhiteSpace(slide.Title)
+                    ? $"Slide {index + 1}"
+                    : slide.Title.Trim()))
+            .ToArray();
+
+        return new SlideShowCustomShowAuthoringPlan(customShows, availableSlides);
+    }
+
+    public static SlideShowCustomShowMutationResult CreateCustomShow(
+        Presentation presentation,
+        string? name,
+        IEnumerable<string?> slideIds)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        ArgumentNullException.ThrowIfNull(slideIds);
+
+        if (!TryNormalizeCustomShowName(presentation, name, excludedCustomShowIndex: null, out var normalizedName, out var errorMessage))
+        {
+            return SlideShowCustomShowMutationResult.Failure(errorMessage);
+        }
+
+        var customShow = new PresentationCustomShow
+        {
+            Id = AllocateNextCustomShowId(presentation),
+            Name = normalizedName
+        };
+        customShow.SlideIds.AddRange(NormalizeSlideIds(presentation, slideIds));
+        presentation.CustomShows.Add(customShow);
+
+        return SlideShowCustomShowMutationResult.Success(presentation.CustomShows.Count - 1, customShow);
+    }
+
+    public static SlideShowCustomShowMutationResult RenameCustomShow(
+        Presentation presentation,
+        int customShowIndex,
+        string? name)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        if (!TryGetCustomShow(presentation, customShowIndex, out var customShow))
+        {
+            return SlideShowCustomShowMutationResult.Failure(MissingCustomShowMessage);
+        }
+
+        if (!TryNormalizeCustomShowName(presentation, name, customShowIndex, out var normalizedName, out var errorMessage))
+        {
+            return SlideShowCustomShowMutationResult.Failure(errorMessage);
+        }
+
+        customShow.Name = normalizedName;
+        NormalizeCustomShowSlides(presentation, customShow);
+        return SlideShowCustomShowMutationResult.Success(customShowIndex, customShow);
+    }
+
+    public static SlideShowCustomShowMutationResult DeleteCustomShow(
+        Presentation presentation,
+        int customShowIndex)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        if (!TryGetCustomShow(presentation, customShowIndex, out var customShow))
+        {
+            return SlideShowCustomShowMutationResult.Failure(MissingCustomShowMessage);
+        }
+
+        presentation.CustomShows.RemoveAt(customShowIndex);
+        return SlideShowCustomShowMutationResult.Success(customShowIndex, customShow);
+    }
+
+    public static SlideShowCustomShowMutationResult UpdateCustomShowSlides(
+        Presentation presentation,
+        int customShowIndex,
+        IEnumerable<string?> slideIds)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        ArgumentNullException.ThrowIfNull(slideIds);
+
+        if (!TryGetCustomShow(presentation, customShowIndex, out var customShow))
+        {
+            return SlideShowCustomShowMutationResult.Failure(MissingCustomShowMessage);
+        }
+
+        customShow.SlideIds.Clear();
+        customShow.SlideIds.AddRange(NormalizeSlideIds(presentation, slideIds));
+        return SlideShowCustomShowMutationResult.Success(customShowIndex, customShow);
+    }
 
     public static SlideShowLaunchPlan BuildLaunchPlan(
         Presentation presentation,
@@ -305,6 +441,103 @@ public static class SlideShowCustomShowPlanner
 
         return -1;
     }
+
+    private static bool TryGetCustomShow(
+        Presentation presentation,
+        int customShowIndex,
+        out PresentationCustomShow customShow)
+    {
+        if (customShowIndex >= 0 && customShowIndex < presentation.CustomShows.Count)
+        {
+            customShow = presentation.CustomShows[customShowIndex];
+            return true;
+        }
+
+        customShow = null!;
+        return false;
+    }
+
+    private static bool TryNormalizeCustomShowName(
+        Presentation presentation,
+        string? name,
+        int? excludedCustomShowIndex,
+        out string normalizedName,
+        out string errorMessage)
+    {
+        normalizedName = string.Empty;
+        errorMessage = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            errorMessage = EmptyCustomShowNameMessage;
+            return false;
+        }
+
+        normalizedName = name.Trim();
+        for (var index = 0; index < presentation.CustomShows.Count; index++)
+        {
+            if (excludedCustomShowIndex == index)
+            {
+                continue;
+            }
+
+            if (string.Equals(presentation.CustomShows[index].Name.Trim(), normalizedName, StringComparison.OrdinalIgnoreCase))
+            {
+                errorMessage = DuplicateCustomShowNameMessage;
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static uint AllocateNextCustomShowId(Presentation presentation)
+    {
+        var usedIds = presentation.CustomShows
+            .Select(show => show.Id)
+            .Where(id => id > 0)
+            .ToHashSet();
+
+        for (uint candidate = 1; candidate < uint.MaxValue; candidate++)
+        {
+            if (!usedIds.Contains(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return uint.MaxValue;
+    }
+
+    private static void NormalizeCustomShowSlides(
+        Presentation presentation,
+        PresentationCustomShow customShow)
+    {
+        var normalizedSlideIds = NormalizeSlideIds(presentation, customShow.SlideIds);
+        customShow.SlideIds.Clear();
+        customShow.SlideIds.AddRange(normalizedSlideIds);
+    }
+
+    private static IReadOnlyList<string> NormalizeSlideIds(
+        Presentation presentation,
+        IEnumerable<string?> slideIds)
+    {
+        var validSlideIds = presentation.Slides
+            .Select(slide => slide.Id)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .ToHashSet(StringComparer.Ordinal);
+
+        return slideIds
+            .Where(slideId => !string.IsNullOrWhiteSpace(slideId))
+            .Select(slideId => slideId!.Trim())
+            .Where(validSlideIds.Contains)
+            .ToArray();
+    }
+
+    private static string NormalizeDisplayName(string? name) =>
+        string.IsNullOrWhiteSpace(name)
+            ? string.Empty
+            : name.Trim();
 
     private static bool TryParseCustomShowIndex(string choiceId, out int index)
     {
