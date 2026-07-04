@@ -4900,6 +4900,7 @@ public sealed class MainWindow : Window
                     ContextMenu = BuildSlidePaneContextMenu(plan.SlideIndex),
                 };
                 ToolTip.SetTip(item, plan.ToolTipText);
+                item.KeyDown += OnSlidePaneItemKeyDown;
                 item.PointerEntered += (_, _) =>
                 {
                     if (item.Tag is int idx && idx != Editor.CurrentSlideIndex)
@@ -5258,6 +5259,47 @@ public sealed class MainWindow : Window
             targetInsertionIndex);
 
         return SlidePanePlanner.TryApplyAction(Editor, action);
+    }
+
+    internal bool TryApplySlidePaneKeyboardAction(SlidePaneKeyboardIntentKind intent)
+    {
+        var action = SlidePanePlanner.BuildKeyboardAction(
+            _presentation.Slides.Count,
+            Editor.CurrentSlideIndex,
+            intent);
+
+        return SlidePanePlanner.TryApplyAction(Editor, action);
+    }
+
+    private void OnSlidePaneItemKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (!TryMapSlidePaneKeyboardIntent(e, out var intent))
+            return;
+
+        if (TryApplySlidePaneKeyboardAction(intent))
+            e.Handled = true;
+    }
+
+    private static bool TryMapSlidePaneKeyboardIntent(
+        KeyEventArgs e,
+        out SlidePaneKeyboardIntentKind intent)
+    {
+        intent = e.Key switch
+        {
+            Key.Insert when e.KeyModifiers == KeyModifiers.None =>
+                SlidePaneKeyboardIntentKind.InsertAfterCurrentSlide,
+            Key.Delete when e.KeyModifiers == KeyModifiers.None =>
+                SlidePaneKeyboardIntentKind.DeleteCurrentSlide,
+            Key.D when e.KeyModifiers == KeyModifiers.Control =>
+                SlidePaneKeyboardIntentKind.DuplicateCurrentSlide,
+            Key.Up when e.KeyModifiers == KeyModifiers.Alt =>
+                SlidePaneKeyboardIntentKind.MoveCurrentSlideEarlier,
+            Key.Down when e.KeyModifiers == KeyModifiers.Alt =>
+                SlidePaneKeyboardIntentKind.MoveCurrentSlideLater,
+            _ => default,
+        };
+
+        return intent != SlidePaneKeyboardIntentKind.None;
     }
 
     internal bool ClickSlidePaneNewSlideAffordanceForTests()

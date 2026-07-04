@@ -1452,6 +1452,44 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlidePane_keyboard_actions_route_through_shared_planner()
+    {
+        var deletedSingleSlide = true;
+        var duplicated = false;
+        var movedEarlier = false;
+        var finalSlideIndex = -1;
+        string[] titles = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Title = "Intro";
+
+            deletedSingleSlide = window.TryApplySlidePaneKeyboardAction(
+                SlidePaneKeyboardIntentKind.DeleteCurrentSlide);
+
+            window.TryApplySlidePaneKeyboardAction(SlidePaneKeyboardIntentKind.InsertAfterCurrentSlide);
+            window.Editor.CurrentSlide!.Title = "Body";
+            window.Editor.SelectSlide(0);
+
+            duplicated = window.TryApplySlidePaneKeyboardAction(
+                SlidePaneKeyboardIntentKind.DuplicateCurrentSlide);
+            movedEarlier = window.TryApplySlidePaneKeyboardAction(
+                SlidePaneKeyboardIntentKind.MoveCurrentSlideEarlier);
+
+            titles = window.Editor.Presentation.Slides.Select(slide => slide.Title).ToArray();
+            finalSlideIndex = window.CurrentSlideIndex;
+        });
+
+        if (!ran) return;
+        deletedSingleSlide.Should().BeFalse("the shared planner keeps keyboard delete from removing the last slide");
+        duplicated.Should().BeTrue();
+        movedEarlier.Should().BeTrue();
+        titles.Should().Equal("Intro", "Intro", "Body");
+        finalSlideIndex.Should().Be(0, "moving the duplicated slide earlier should keep it selected");
+    }
+
+    [Fact]
     public async Task Print_command_records_shared_backstage_print_plan()
     {
         var found = false;

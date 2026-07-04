@@ -283,6 +283,7 @@ public sealed class SlidePane : Border
             Padding         = new Thickness(plan.ItemPadding),
             Child           = panel,
             Cursor          = Cursors.Hand,
+            Focusable       = true,
             ToolTip         = plan.ToolTipText
         };
 
@@ -314,6 +315,7 @@ public sealed class SlidePane : Border
         // Drag-to-reorder.
         item.MouseMove         += OnItemMouseMove;
         item.MouseLeftButtonUp += OnItemMouseLeftButtonUp;
+        item.KeyDown           += OnSlideItemKeyDown;
 
         // Context menu.
         item.ContextMenu = BuildContextMenu(plan.SlideIndex);
@@ -426,6 +428,48 @@ public sealed class SlidePane : Border
 
         ToggleSection(SlidePanePlanner.GetSectionIdentity(_editor.Presentation.Sections[sectionIndex], sectionIndex));
         return true;
+    }
+
+    internal bool TryApplySlidePaneKeyboardAction(SlidePaneKeyboardIntentKind intent)
+    {
+        var action = SlidePanePlanner.BuildKeyboardAction(
+            _editor.Presentation.Slides.Count,
+            _editor.CurrentSlideIndex,
+            intent);
+
+        return SlidePanePlanner.TryApplyAction(_editor, action);
+    }
+
+    private void OnSlideItemKeyDown(object sender, KeyEventArgs e)
+    {
+        if (!TryMapKeyboardIntent(e, out var intent))
+            return;
+
+        if (TryApplySlidePaneKeyboardAction(intent))
+            e.Handled = true;
+    }
+
+    private static bool TryMapKeyboardIntent(KeyEventArgs e, out SlidePaneKeyboardIntentKind intent)
+    {
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        var modifiers = Keyboard.Modifiers;
+
+        intent = key switch
+        {
+            Key.Insert when modifiers == ModifierKeys.None =>
+                SlidePaneKeyboardIntentKind.InsertAfterCurrentSlide,
+            Key.Delete when modifiers == ModifierKeys.None =>
+                SlidePaneKeyboardIntentKind.DeleteCurrentSlide,
+            Key.D when modifiers == ModifierKeys.Control =>
+                SlidePaneKeyboardIntentKind.DuplicateCurrentSlide,
+            Key.Up when modifiers == ModifierKeys.Alt =>
+                SlidePaneKeyboardIntentKind.MoveCurrentSlideEarlier,
+            Key.Down when modifiers == ModifierKeys.Alt =>
+                SlidePaneKeyboardIntentKind.MoveCurrentSlideLater,
+            _ => default,
+        };
+
+        return intent != SlidePaneKeyboardIntentKind.None;
     }
 
     private void ApplySectionAction(SlideSectionActionPlan action)
