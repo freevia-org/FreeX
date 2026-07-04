@@ -898,6 +898,44 @@ public sealed class SlideCanvasAvaloniaTests
     // ── 3. Background color pixel check ──────────────────────────────────────
 
     [Fact]
+    public async Task SlideCanvas_ComposeAndRender_StackedVerticalText_DoesNotThrow()
+    {
+        Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var p = MakePresentation(pres =>
+                {
+                    pres.Slides[0].Shapes.Clear();
+                    var shape = new SlideShape
+                    {
+                        Id = 1,
+                        OffsetXEmu = 914400,
+                        OffsetYEmu = 457200,
+                        ExtentCxEmu = 914400,
+                        ExtentCyEmu = 2743200,
+                        TextBody = new TextBody { VerticalType = TextVerticalType.WordArtVertical }
+                    };
+                    var paragraph = new Paragraph();
+                    paragraph.Runs.Add(new Run { Text = "Stacked" });
+                    shape.TextBody.Paragraphs.Add(paragraph);
+                    pres.Slides[0].Shapes.Add(shape);
+                });
+
+                var canvas = new SlideCanvas { Presentation = p, Slide = p.Slides[0] };
+                canvas.Measure(new Size(960, 540));
+                canvas.Arrange(new Rect(0, 0, 960, 540));
+
+                var rtb = new RenderTargetBitmap(new PixelSize(960, 540));
+                rtb.Render(canvas);
+            }
+            catch (Exception ex) { thrown = ex; }
+        });
+        thrown.Should().BeNull("stacked vertical text must render through the Avalonia consumer without throwing");
+    }
+
+    [Fact]
     public async Task SlideCanvas_SolidBackground_PaintsExpectedColor()
     {
         byte[]? pngBytes = null;
