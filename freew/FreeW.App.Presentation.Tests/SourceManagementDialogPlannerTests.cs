@@ -68,16 +68,19 @@ public sealed class SourceManagementDialogPlannerTests
             SourceType.JournalArticle,
             SourceType.WebSite,
             SourceType.Report,
-            SourceType.BookSection);
+            SourceType.BookSection,
+            SourceType.ConferenceProceedings);
         choices.Select(choice => choice.Label).Should().Equal(
             "Book",
             "Journal Article",
             "Web Site",
             "Report",
-            "Book Section");
+            "Book Section",
+            "Conference Proceedings");
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.JournalArticle).Should().Be(1);
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Report).Should().Be(3);
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.BookSection).Should().Be(4);
+        SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.ConferenceProceedings).Should().Be(5);
     }
 
     [Fact]
@@ -138,6 +141,22 @@ public sealed class SourceManagementDialogPlannerTests
             SourceManagementSourceField.StandardNumber,
             SourceManagementSourceField.ShortTitle,
             SourceManagementSourceField.Comments);
+
+        var conferencePlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.ConferenceProceedings);
+        conferencePlans.Select(plan => plan.Field).Should().Equal(
+            SourceManagementSourceField.Tag,
+            SourceManagementSourceField.Author,
+            SourceManagementSourceField.Title,
+            SourceManagementSourceField.ConferenceName,
+            SourceManagementSourceField.Year,
+            SourceManagementSourceField.Pages,
+            SourceManagementSourceField.City,
+            SourceManagementSourceField.Publisher,
+            SourceManagementSourceField.StandardNumber,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
+        conferencePlans.Single(plan => plan.Field == SourceManagementSourceField.ConferenceName)
+            .Label.Should().Be("Conference name:");
     }
 
     [Fact]
@@ -224,6 +243,33 @@ public sealed class SourceManagementDialogPlannerTests
             .Text.Should().Be("3");
         plans.Single(plan => plan.Field == SourceManagementSourceField.Pages)
             .Text.Should().Be("12-20");
+    }
+
+    [Fact]
+    public void ProjectEntry_SeedsConferenceProceedingsFields()
+    {
+        var source = new Source
+        {
+            Type = SourceType.ConferenceProceedings,
+            Tag = "Conf2026",
+            Author = "Paper Author",
+            Title = "Proceedings Paper",
+            ConferenceName = "Proceedings of the Example Conference",
+            Year = "2026",
+            Pages = "101-109",
+            City = "Berlin",
+            Publisher = "ACM",
+            StandardNumber = "ISBN-CP-1"
+        };
+
+        var entry = SourceManagementDialogPlanner.ProjectEntry(source);
+        var plans = SourceManagementDialogPlanner.BuildEntryFieldPlans(entry);
+
+        entry.ConferenceName.Should().Be("Proceedings of the Example Conference");
+        plans.Single(plan => plan.Field == SourceManagementSourceField.ConferenceName)
+            .Text.Should().Be("Proceedings of the Example Conference");
+        plans.Single(plan => plan.Field == SourceManagementSourceField.Pages)
+            .Text.Should().Be("101-109");
     }
 
     [Fact]
@@ -498,6 +544,7 @@ public sealed class SourceManagementDialogPlannerTests
         source.Type.Should().Be(SourceType.Book);
         source.Institution.Should().BeNull();
         source.BookTitle.Should().BeNull();
+        source.ConferenceName.Should().BeNull();
         source.ChapterNumber.Should().BeNull();
         source.Publisher.Should().Be("Publisher");
         source.City.Should().Be("Reading");
@@ -524,6 +571,7 @@ public sealed class SourceManagementDialogPlannerTests
         webSource.Type.Should().Be(SourceType.WebSite);
         webSource.Publisher.Should().Be("Site");
         webSource.BookTitle.Should().BeNull();
+        webSource.ConferenceName.Should().BeNull();
         webSource.ChapterNumber.Should().BeNull();
         webSource.City.Should().BeNull();
         webSource.Edition.Should().BeNull();
@@ -550,6 +598,7 @@ public sealed class SourceManagementDialogPlannerTests
         reportSource.Type.Should().Be(SourceType.Report);
         reportSource.Institution.Should().Be("Research Institute");
         reportSource.BookTitle.Should().BeNull();
+        reportSource.ConferenceName.Should().BeNull();
         reportSource.ChapterNumber.Should().BeNull();
         reportSource.City.Should().Be("Geneva");
         reportSource.Publisher.Should().Be("Reports Office");
@@ -606,6 +655,54 @@ public sealed class SourceManagementDialogPlannerTests
         source.Edition.Should().Be("2");
         source.StandardNumber.Should().Be("ISBN-1");
         source.Institution.Should().BeNull();
+        source.Journal.Should().BeNull();
+        source.Url.Should().BeNull();
+        source.Accessed.Should().BeNull();
+    }
+
+    [Fact]
+    public void BuildSource_ConferenceProceedingsPreservesConferenceNameAndPublicationFields()
+    {
+        var entry = SourceManagementDialogPlanner.CreateEntry(
+            SourceType.ConferenceProceedings,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Tag] = " Conf2026 ",
+                [SourceManagementSourceField.Author] = " Paper Author ",
+                [SourceManagementSourceField.Title] = " Proceedings Paper ",
+                [SourceManagementSourceField.BookTitle] = " Containing Book ",
+                [SourceManagementSourceField.ConferenceName] = " Proceedings of the Example Conference ",
+                [SourceManagementSourceField.Year] = " 2026 ",
+                [SourceManagementSourceField.ChapterNumber] = " 3 ",
+                [SourceManagementSourceField.Pages] = " 101-109 ",
+                [SourceManagementSourceField.City] = " Berlin ",
+                [SourceManagementSourceField.Publisher] = " ACM ",
+                [SourceManagementSourceField.Edition] = " 2 ",
+                [SourceManagementSourceField.StandardNumber] = " ISBN-CP-1 ",
+                [SourceManagementSourceField.Journal] = " Journal ",
+                [SourceManagementSourceField.Url] = " https://example.test ",
+                [SourceManagementSourceField.Accessed] = " 3 May 2024 "
+            })
+            with
+            {
+                Institution = "Research Institute"
+            };
+
+        var source = SourceManagementDialogPlanner.BuildSource(entry);
+
+        source.Type.Should().Be(SourceType.ConferenceProceedings);
+        source.Author.Should().Be("Paper Author");
+        source.Title.Should().Be("Proceedings Paper");
+        source.ConferenceName.Should().Be("Proceedings of the Example Conference");
+        source.Year.Should().Be("2026");
+        source.Pages.Should().Be("101-109");
+        source.City.Should().Be("Berlin");
+        source.Publisher.Should().Be("ACM");
+        source.StandardNumber.Should().Be("ISBN-CP-1");
+        source.BookTitle.Should().BeNull();
+        source.ChapterNumber.Should().BeNull();
+        source.Institution.Should().BeNull();
+        source.Edition.Should().BeNull();
         source.Journal.Should().BeNull();
         source.Url.Should().BeNull();
         source.Accessed.Should().BeNull();
