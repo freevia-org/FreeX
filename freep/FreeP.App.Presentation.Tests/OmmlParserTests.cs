@@ -296,4 +296,71 @@ public sealed class OmmlParserTests
         var frac = Assert.IsType<MathNode.Frac>(node);
         Assert.Equal(MathNode.FracType.Bar, frac.Type);
     }
+
+    [Fact]
+    public void Box_PreservesNestedFractionAndRadicalChild()
+    {
+        var node = Parse(
+            "<m:box><m:e>" +
+            "<m:f>" +
+            "<m:num><m:r><m:t>1</m:t></m:r></m:num>" +
+            "<m:den><m:rad><m:e><m:r><m:t>x</m:t></m:r></m:e></m:rad></m:den>" +
+            "</m:f>" +
+            "</m:e></m:box>");
+
+        var box = Assert.IsType<MathNode.Box>(node);
+        var frac = Assert.IsType<MathNode.Frac>(box.Base);
+        Assert.Equal("1", Assert.IsType<MathNode.Run>(frac.Numerator).Text);
+        var radical = Assert.IsType<MathNode.Rad>(frac.Denominator);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(radical.Radicand).Text);
+    }
+
+    [Fact]
+    public void BorderBox_ParsesHiddenSideFlags()
+    {
+        var node = Parse(
+            "<m:borderBox>" +
+            "<m:borderBoxPr>" +
+            "<m:hideTop/>" +
+            "<m:hideBot m:val=\"1\"/>" +
+            "<m:hideLeft m:val=\"0\"/>" +
+            "<m:hideRight m:val=\"off\"/>" +
+            "</m:borderBoxPr>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "</m:borderBox>");
+
+        var borderBox = Assert.IsType<MathNode.BorderBox>(node);
+        Assert.False(borderBox.ShowTop);
+        Assert.False(borderBox.ShowBottom);
+        Assert.True(borderBox.ShowLeft);
+        Assert.True(borderBox.ShowRight);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(borderBox.Base).Text);
+    }
+
+    [Fact]
+    public void BorderBox_DefaultsAllSidesVisible_AndExplicitFalseDoesNotHide()
+    {
+        var defaultNode = Parse("<m:borderBox><m:e><m:r><m:t>x</m:t></m:r></m:e></m:borderBox>");
+        var defaultBorderBox = Assert.IsType<MathNode.BorderBox>(defaultNode);
+        Assert.True(defaultBorderBox.ShowTop);
+        Assert.True(defaultBorderBox.ShowBottom);
+        Assert.True(defaultBorderBox.ShowLeft);
+        Assert.True(defaultBorderBox.ShowRight);
+
+        var explicitFalseNode = Parse(
+            "<m:borderBox>" +
+            "<m:borderBoxPr>" +
+            "<m:hideTop m:val=\"false\"/>" +
+            "<m:hideBot m:val=\"0\"/>" +
+            "<m:hideLeft m:val=\"off\"/>" +
+            "<m:hideRight m:val=\"false\"/>" +
+            "</m:borderBoxPr>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "</m:borderBox>");
+        var explicitFalseBorderBox = Assert.IsType<MathNode.BorderBox>(explicitFalseNode);
+        Assert.True(explicitFalseBorderBox.ShowTop);
+        Assert.True(explicitFalseBorderBox.ShowBottom);
+        Assert.True(explicitFalseBorderBox.ShowLeft);
+        Assert.True(explicitFalseBorderBox.ShowRight);
+    }
 }

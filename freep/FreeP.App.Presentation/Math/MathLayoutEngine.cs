@@ -58,6 +58,8 @@ public static class MathLayoutEngine
             MathNode.Delim   d  => LayoutDelim(d, fontFamily, fontSizePt),
             MathNode.Acc     a  => LayoutAcc(a, fontFamily, fontSizePt),
             MathNode.Bar     b  => LayoutBar(b, fontFamily, fontSizePt),
+            MathNode.Box     bx => LayoutBox(bx, fontFamily, fontSizePt),
+            MathNode.BorderBox bb => LayoutBorderBox(bb, fontFamily, fontSizePt),
             MathNode.GroupChr g => LayoutGroupChr(g, fontFamily, fontSizePt),
             MathNode.Matrix  m  => LayoutMatrix(m, fontFamily, fontSizePt),
             MathNode.EqArray e  => LayoutEqArray(e, fontFamily, fontSizePt),
@@ -820,6 +822,76 @@ public static class MathLayoutEngine
     }
 
     // ── GroupChr layout ───────────────────────────────────────────────────
+
+    private static MathBox LayoutBox(MathNode.Box box, string fontFamily, double fontSizePt)
+    {
+        var baseBox = LayoutNode(box.Base, fontFamily, fontSizePt);
+
+        var c = new MathBox.Container();
+        c.Metrics.Width = baseBox.Metrics.Width;
+        c.Metrics.Height = baseBox.Metrics.Height;
+        c.Metrics.Ascent = baseBox.Metrics.Ascent;
+
+        baseBox.X = 0;
+        baseBox.Y = 0;
+        c.Children.Add(baseBox);
+
+        return c;
+    }
+
+    private static MathBox LayoutBorderBox(MathNode.BorderBox borderBox, string fontFamily, double fontSizePt)
+    {
+        double em = Em(fontSizePt);
+        double thickness = Math.Max(1.0, em * 0.06);
+        double padding = em * 0.18;
+        double inset = thickness + padding;
+
+        var baseBox = LayoutNode(borderBox.Base, fontFamily, fontSizePt);
+        double totalW = baseBox.Metrics.Width + inset * 2.0;
+        double totalH = baseBox.Metrics.Height + inset * 2.0;
+
+        var c = new MathBox.Container();
+        c.Metrics.Width = totalW;
+        c.Metrics.Height = totalH;
+        c.Metrics.Ascent = inset + baseBox.Metrics.Ascent;
+
+        baseBox.X = inset;
+        baseBox.Y = inset;
+        c.Children.Add(baseBox);
+
+        if (borderBox.ShowTop)
+            AddLine(c, thickness / 2.0, thickness / 2.0, totalW - thickness / 2.0, thickness / 2.0, thickness);
+        if (borderBox.ShowBottom)
+            AddLine(c, thickness / 2.0, totalH - thickness / 2.0, totalW - thickness / 2.0, totalH - thickness / 2.0, thickness);
+        if (borderBox.ShowLeft)
+            AddLine(c, thickness / 2.0, thickness / 2.0, thickness / 2.0, totalH - thickness / 2.0, thickness);
+        if (borderBox.ShowRight)
+            AddLine(c, totalW - thickness / 2.0, thickness / 2.0, totalW - thickness / 2.0, totalH - thickness / 2.0, thickness);
+
+        return c;
+    }
+
+    private static void AddLine(
+        MathBox.Container container,
+        double x1,
+        double y1,
+        double x2,
+        double y2,
+        double thickness)
+    {
+        var line = new MathBox.Line
+        {
+            X = x1,
+            Y = y1,
+            X2 = x2 - x1,
+            Y2 = y2 - y1,
+            Thickness = thickness
+        };
+        line.Metrics.Width = Math.Abs(x2 - x1);
+        line.Metrics.Height = Math.Abs(y2 - y1);
+        line.Metrics.Ascent = 0;
+        container.Children.Add(line);
+    }
 
     private static MathBox LayoutGroupChr(MathNode.GroupChr gc, string fontFamily, double fontSizePt)
     {

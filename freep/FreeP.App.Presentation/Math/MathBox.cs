@@ -92,6 +92,19 @@ public abstract class MathBox
 
     // ── Bracket ─────────────────────────────────────────────────────────────
 
+    /// <summary>A straight line segment, used for renderer-neutral math borders.</summary>
+    public sealed class Line : MathBox
+    {
+        /// <summary>X endpoint in DIP relative to this box origin.</summary>
+        public double X2 { get; set; }
+
+        /// <summary>Y endpoint in DIP relative to this box origin.</summary>
+        public double Y2 { get; set; }
+
+        /// <summary>Line thickness in DIP.</summary>
+        public double Thickness { get; set; }
+    }
+
     /// <summary>
     /// An auto-sized bracket glyph (open or close delimiter): (, ), [, ], {, } etc.
     /// The glyph is scaled vertically to the content height.

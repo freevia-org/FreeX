@@ -1752,6 +1752,15 @@ public sealed class SlideCanvas : Control
                 break;
             }
 
+            case MathDrawOp.DrawLine line:
+            {
+                var pen = new Pen(
+                    new SolidColorBrush(Color.FromRgb(line.Color.R, line.Color.G, line.Color.B)),
+                    line.Thickness);
+                dc.DrawLine(pen, new Point(line.X1, line.Y1), new Point(line.X2, line.Y2));
+                break;
+            }
+
             case MathDrawOp.DrawBracket br:
             {
                 double naturalEm = br.ScaledHeight * 0.85;
