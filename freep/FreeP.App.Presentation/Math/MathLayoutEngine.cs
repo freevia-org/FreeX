@@ -96,9 +96,7 @@ public static class MathLayoutEngine
         return frac.Type switch
         {
             MathNode.FracType.Linear => LayoutFracLinear(frac, fontFamily, fontSizePt),
-            // HA6: a full skewed (diagonal) layout is not implemented; approximate
-            // "skw" as the linear a/b form rather than rendering it as a bar fraction.
-            MathNode.FracType.Skewed => LayoutFracLinear(frac, fontFamily, fontSizePt),
+            MathNode.FracType.Skewed => LayoutFracSkewed(frac, fontFamily, fontSizePt),
             MathNode.FracType.NoBar  => LayoutFracStacked(frac, fontFamily, fontSizePt, drawBar: false),
             _                        => LayoutFracStacked(frac, fontFamily, fontSizePt, drawBar: true),
         };
@@ -218,6 +216,70 @@ public static class MathLayoutEngine
         x += slashBox.Metrics.Width + gap;
 
         denBox.X = x; denBox.Y = ascent - denBox.Metrics.Ascent;
+        container.Children.Add(denBox);
+
+        return container;
+    }
+
+    /// <summary>
+    /// Skewed fraction layout ("skw"): numerator above-left, denominator
+    /// below-right, with a renderer-neutral diagonal line between them.
+    /// </summary>
+    private static MathBox LayoutFracSkewed(MathNode.Frac frac, string fontFamily, double fontSizePt)
+    {
+        double em = Em(fontSizePt);
+        double childSizePt = fontSizePt * 0.85;
+        double gapX = em * 0.10;
+        double gapY = em * 0.06;
+        double lineThickness = Math.Max(1.0, em * 0.06);
+
+        var numBox = LayoutNode(frac.Numerator, fontFamily, childSizePt);
+        var denBox = LayoutNode(frac.Denominator, fontFamily, childSizePt);
+
+        double diagonalW = Math.Max(em * 0.42, Math.Min(em * 0.72, Math.Max(numBox.Metrics.Width, denBox.Metrics.Width) * 0.55));
+        double denY = numBox.Metrics.Height * 0.62 + gapY;
+        double denX = numBox.Metrics.Width + gapX + diagonalW + gapX;
+        double totalW = denX + denBox.Metrics.Width;
+
+        double totalH = Math.Max(numBox.Metrics.Height, denY + denBox.Metrics.Height);
+        double lineTopY = Math.Max(lineThickness / 2.0, numBox.Metrics.Height * 0.18);
+        double lineBottomY = Math.Min(totalH - lineThickness / 2.0, denY + denBox.Metrics.Height * 0.82);
+
+        if (lineBottomY <= lineTopY + lineThickness)
+            lineBottomY = lineTopY + Math.Max(em * 0.70, lineThickness);
+
+        totalH = Math.Max(totalH, lineBottomY + lineThickness / 2.0);
+
+        double lineX = numBox.Metrics.Width + gapX;
+        double mathAxisAboveBaseline = em * 0.45;
+        double lineCenterY = (lineTopY + lineBottomY) / 2.0;
+        double ascent = lineCenterY + mathAxisAboveBaseline;
+        totalH = Math.Max(totalH, ascent + em * 0.25);
+
+        var container = new MathBox.Container();
+        container.Metrics.Width = totalW;
+        container.Metrics.Height = totalH;
+        container.Metrics.Ascent = ascent;
+
+        numBox.X = 0;
+        numBox.Y = 0;
+        container.Children.Add(numBox);
+
+        var slash = new MathBox.Line
+        {
+            X = lineX,
+            Y = lineBottomY,
+            X2 = diagonalW,
+            Y2 = lineTopY - lineBottomY,
+            Thickness = lineThickness
+        };
+        slash.Metrics.Width = diagonalW;
+        slash.Metrics.Height = Math.Abs(slash.Y2);
+        slash.Metrics.Ascent = 0;
+        container.Children.Add(slash);
+
+        denBox.X = denX;
+        denBox.Y = denY;
         container.Children.Add(denBox);
 
         return container;

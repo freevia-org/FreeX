@@ -614,6 +614,8 @@ public static class PresentationReviewWorkflowPlanner
         "Add a concise chart title so screen-reader users can understand the chart purpose.";
     public const string MissingHyperlinkScreenTipActionSummary =
         "Edit the hyperlink and add ScreenTip text that explains the destination.";
+    public const string UnclearHyperlinkTextActionSummary =
+        "Edit the hyperlink display text so it describes the destination.";
     public const string MissingTableHeaderRowActionSummary =
         "Select the table and enable the header row option so assistive technology can identify column headings.";
     public const string BlankTableHeaderCellsActionSummary =
@@ -3057,21 +3059,43 @@ public static class PresentationReviewWorkflowPlanner
         int slideIndex,
         SlideShape shape)
     {
-        if (!HasTextRunHyperlinkWithoutScreenTip(shape))
+        var hasMissingScreenTip = HasTextRunHyperlinkWithoutScreenTip(shape);
+        var unclearDisplayText = FindUnclearTextRunHyperlinkDisplayText(shape);
+        if (!hasMissingScreenTip && unclearDisplayText is null)
         {
             return;
         }
 
-        issues.Add(new PresentationAccessibilityIssueDescriptor(
-            PresentationAccessibilityIssueSeverity.Info,
-            slideIndex,
-            shape.Id,
-            "Hyperlink ScreenTip missing",
-            $"Text link in {DescribeShape(shape)} is missing hover/help text.",
-            new PresentationAccessibilityIssueActionSummary(
-                MissingHyperlinkScreenTipActionSummary,
-                InsertLinkCommandId,
-                true)));
+        if (hasMissingScreenTip)
+        {
+            issues.Add(new PresentationAccessibilityIssueDescriptor(
+                PresentationAccessibilityIssueSeverity.Info,
+                slideIndex,
+                shape.Id,
+                "Hyperlink ScreenTip missing",
+                $"Text link in {DescribeShape(shape)} is missing hover/help text.",
+                new PresentationAccessibilityIssueActionSummary(
+                    MissingHyperlinkScreenTipActionSummary,
+                    InsertLinkCommandId,
+                    true)));
+        }
+
+        if (unclearDisplayText is not null)
+        {
+            var reason = IsRawUrlDisplayText(unclearDisplayText)
+                ? "raw URL display text"
+                : "non-descriptive display text";
+            issues.Add(new PresentationAccessibilityIssueDescriptor(
+                PresentationAccessibilityIssueSeverity.Warning,
+                slideIndex,
+                shape.Id,
+                "Unclear hyperlink text",
+                $"Text link in {DescribeShape(shape)} uses {reason} \"{BuildPreview(unclearDisplayText)}\".",
+                new PresentationAccessibilityIssueActionSummary(
+                    UnclearHyperlinkTextActionSummary,
+                    InsertLinkCommandId,
+                    true)));
+        }
     }
 
     private static bool HasTextRunHyperlinkWithoutScreenTip(SlideShape shape)
@@ -3079,6 +3103,57 @@ public static class PresentationReviewWorkflowPlanner
             .SelectMany(body => body.Paragraphs)
             .SelectMany(paragraph => paragraph.Runs)
             .Any(run => run.Hyperlink is not null && string.IsNullOrWhiteSpace(run.Hyperlink.Tooltip));
+
+    private static string? FindUnclearTextRunHyperlinkDisplayText(SlideShape shape)
+    {
+        foreach (var run in EnumerateShapeTextBodies(shape)
+            .SelectMany(body => body.Paragraphs)
+            .SelectMany(paragraph => paragraph.Runs))
+        {
+            if (run.Hyperlink is null)
+            {
+                continue;
+            }
+
+            var displayText = NormalizeHyperlinkDisplayText(run.Text);
+            if (displayText is not null && IsUnclearHyperlinkDisplayText(displayText))
+            {
+                return displayText;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? NormalizeHyperlinkDisplayText(string? text)
+    {
+        var normalized = NormalizeText(text);
+        return normalized is null
+            ? null
+            : string.Join(' ', normalized.Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private static bool IsUnclearHyperlinkDisplayText(string displayText)
+        => displayText.ToLowerInvariant() switch
+        {
+            "click here" or "here" or "learn more" or "more" or "read more" => true,
+            _ => IsRawUrlDisplayText(displayText)
+        };
+
+    private static bool IsRawUrlDisplayText(string displayText)
+    {
+        var candidate = displayText.Trim().TrimEnd('.', ',', ';', ':', ')', ']');
+        if (Uri.TryCreate(candidate, UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttp
+                || uri.Scheme == Uri.UriSchemeHttps
+                || uri.Scheme == Uri.UriSchemeMailto))
+        {
+            return true;
+        }
+
+        return candidate.StartsWith("www.", StringComparison.OrdinalIgnoreCase)
+            && Uri.TryCreate($"https://{candidate}", UriKind.Absolute, out _);
+    }
 
     private static IEnumerable<TextBody> EnumerateShapeTextBodies(SlideShape shape)
     {

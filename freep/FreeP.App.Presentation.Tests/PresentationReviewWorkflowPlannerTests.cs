@@ -1170,6 +1170,94 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildAccessibilitySummaryPlan_FlagsUnclearTextRunHyperlinks()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Linked references";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 21,
+            Name = "Vague link",
+            TextBody = TextBody(" Click   Here ", new Hyperlink
+            {
+                Url = "https://example.test/notes",
+                Tooltip = "Open project notes"
+            })
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 22,
+            Name = "Comparison table",
+            Kind = SlideShapeKind.Table,
+            Table = new TableShape
+            {
+                Flags = { FirstRow = true },
+                ColumnWidthsEmu = { 100, 100 },
+                Rows =
+                {
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell
+                            {
+                                TextBody = TextBody("https://example.test/results", new Hyperlink
+                                {
+                                    Url = "https://example.test/results",
+                                    Tooltip = "Open published results"
+                                })
+                            },
+                            new TableCell { TextBody = TextBody("Status") }
+                        }
+                    }
+                }
+            },
+            AlternativeText = "Comparison table with published results."
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 23,
+            Name = "Descriptive link",
+            TextBody = TextBody("Project notes", new Hyperlink
+            {
+                Url = "https://example.test/notes",
+                Tooltip = "Open project notes"
+            })
+        });
+
+        var summary = PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation);
+        var pane = PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(presentation, summary);
+
+        var linkIssues = summary.Issues
+            .Where(issue => issue.Title == "Unclear hyperlink text")
+            .ToArray();
+        linkIssues.Select(issue => issue.ShapeId).Should().Equal(21u, 22u);
+        linkIssues.Select(issue => issue.Detail).Should().Equal(
+            "Text link in Vague link uses non-descriptive display text \"Click Here\".",
+            "Text link in Comparison table uses raw URL display text \"https://example.test/results\".");
+        linkIssues.Should().AllSatisfy(issue =>
+        {
+            issue.Severity.Should().Be(PresentationAccessibilityIssueSeverity.Warning);
+            issue.Action.Should().Be(new PresentationAccessibilityIssueActionSummary(
+                PresentationReviewWorkflowPlanner.UnclearHyperlinkTextActionSummary,
+                PresentationReviewWorkflowPlanner.InsertLinkCommandId,
+                true));
+        });
+        pane.Rows
+            .Where(row => row.Title == "Unclear hyperlink text")
+            .Should()
+            .AllSatisfy(row =>
+            {
+                row.Category.Should().Be("Hyperlink");
+                row.ActionLabel.Should().Be("Edit Hyperlink");
+                row.CommandHint.Should().Be(PresentationReviewWorkflowPlanner.InsertLinkCommandId);
+                row.ShouldSelectShape.Should().BeTrue();
+            });
+        summary.Issues.Should().NotContain(issue => issue.ShapeId == 23);
+    }
+
+    [Fact]
     public void SlideTitleMutationPlan_SuggestsPlaceholderTextAndAppliesThroughEditingSession()
     {
         var presentation = Presentation.CreateEmpty();
