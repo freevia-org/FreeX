@@ -137,6 +137,16 @@ internal static class FreeWCommandInventory
             "Toggles the resolved state for the comment thread at the caret through WPF editor behavior and Avalonia registry execution.",
             "ThreadedCommentCommandTests.ToggleResolveCommentAtCaret_TogglesResolved",
             "DocumentViewReviewTests.ResolveComment_registry_command_toggles_the_comment_at_the_caret"),
+        ["freew.new-comment"] = ProtectionHistoryEvidence(
+            "Creates a comment under comments-only protection and keeps the classified comment-history entry undoable and redoable in both shells."),
+        ["freew.reply-comment"] = ProtectionHistoryEvidence(
+            "Replies to an existing comment under comments-only protection and keeps the classified comment-history entry undoable and redoable in both shells."),
+        ["freew.restrict-editing"] = ProtectionHistoryEvidence(
+            "Applies comments-only Restrict Editing policy through shared enforcement so comment history remains available while body history is blocked in both shells."),
+        ["freew.undo"] = ProtectionHistoryEvidence(
+            "Allows Undo for classified comment mutations under comments-only protection while blocking body-history Undo in both shells."),
+        ["freew.redo"] = ProtectionHistoryEvidence(
+            "Allows Redo for classified comment mutations under comments-only protection while continuing to block body-history history replay in both shells."),
         ["freew.chart-type-bar"] = ChartCommandEvidence(
             "Changes the selected chart from column to bar through the WPF and Avalonia ribbon command registries and keeps the change undoable in both shells.",
             "FreeWRibbonParityTests.ChartDesign_ChangeTypeRibbonCommandMutatesSelectedChartAndUndoRestoresIt",
@@ -261,6 +271,18 @@ internal static class FreeWCommandInventory
                     ? "freew/FreeW.App.Avalonia.Tests/DocumentViewCommentTests.cs"
                     : "freew/FreeW.App.Avalonia.Tests/DocumentViewReviewTests.cs",
                 Test: avaloniaTest));
+
+    private static CommandBehaviorEvidence ProtectionHistoryEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.comments-only-protection-history.shared-behavior",
+            Slice: "Comments-only protection history",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Host.Tests/ProtectionEnforcementTests.cs",
+                Test: "ProtectionEnforcementTests.CommentsOnlyProtection_AllowsEachClassifiedCommentHistoryEntry"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Avalonia.Tests/DocumentViewProtectionTests.cs",
+                Test: "DocumentViewProtectionTests.CommentsOnly_allows_each_classified_comment_history_entry"));
 
     private static CommandBehaviorEvidence ChartCommandEvidence(
         string summary,

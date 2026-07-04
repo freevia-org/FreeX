@@ -188,6 +188,47 @@ public sealed class ProtectionEnforcementTests
     }
 
     [StaFact]
+    public void CommentsOnlyProtection_AllowsEachClassifiedCommentHistoryEntry()
+    {
+        var view = Load();
+
+        view.SetProtection(ProtectionMode.CommentsOnly);
+        view.InsertComment("note", "Ann", "A");
+        var id = view.Model.Comments.Keys.Single();
+
+        view.CanUndo.Should().BeTrue();
+        view.Undo();
+        view.Model.Comments.Should().BeEmpty();
+        view.CanRedo.Should().BeTrue();
+        view.Redo();
+        view.Model.Comments.Should().ContainKey(id);
+
+        view.ReplyToCommentAtCaret("reply", "Bob", "B").Should().BeTrue();
+        view.CanUndo.Should().BeTrue();
+        view.Undo();
+        view.Model.Comments[id].Replies.Should().BeEmpty();
+        view.CanRedo.Should().BeTrue();
+        view.Redo();
+        view.Model.Comments[id].Replies.Should().ContainSingle();
+
+        view.ToggleResolveCommentAtCaret().Should().BeTrue();
+        view.CanUndo.Should().BeTrue();
+        view.Undo();
+        view.Model.Comments[id].Resolved.Should().BeFalse();
+        view.CanRedo.Should().BeTrue();
+        view.Redo();
+        view.Model.Comments[id].Resolved.Should().BeTrue();
+
+        view.DeleteCommentAtCaret().Should().BeTrue();
+        view.CanUndo.Should().BeTrue();
+        view.Undo();
+        view.Model.Comments.Should().ContainKey(id);
+        view.CanRedo.Should().BeTrue();
+        view.Redo();
+        view.Model.Comments.Should().BeEmpty();
+    }
+
+    [StaFact]
     public void FillingFormsProtection_BlocksNormalBodyEdits_AndReportsFormOnlyPolicy()
     {
         var view = Load();
