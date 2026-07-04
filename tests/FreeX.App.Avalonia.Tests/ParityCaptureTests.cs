@@ -65,6 +65,21 @@ public sealed class ParityCaptureTests
     }
 
     [Fact]
+    public void ParityCaptureOptions_TryParse_AcceptsSingleSurfaceFilter()
+    {
+        var args = new[] { "--parity-capture", @"C:\out", "--parity-capture-surface", "dialog.ScenarioManager", "book.xlsx" };
+
+        var parsed = ParityCaptureOptions.TryParse(args, out var options, out var remaining, out var error);
+
+        parsed.Should().BeTrue();
+        error.Should().BeEmpty();
+        options.Should().NotBeNull();
+        options!.OutputDirectory.Should().Be(@"C:\out");
+        options.SurfaceId.Should().Be("dialog.ScenarioManager");
+        remaining.Should().Equal("book.xlsx");
+    }
+
+    [Fact]
     public async Task CaptureParitySurfaces_ProducesGridAndDialogPngs()
     {
         var outputDirectory = Path.Combine(
@@ -126,6 +141,42 @@ public sealed class ParityCaptureTests
                 backstageSurfaces.Should().OnlyContain(r => r.Captured, "File surfaces should render as full-window Backstage captures");
                 foreach (var backstage in backstageSurfaces)
                     AssertCapturedPng(outputDirectory, backstage);
+
+                window.Close();
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            TryDeleteDirectory(outputDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task CaptureParitySurfaces_CapturesOnlyRequestedScenarioManagerDialog()
+    {
+        var outputDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "freex-parity-capture-scenario-manager-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            await Session.Dispatch(async () =>
+            {
+                var window = new MainWindow([]);
+                window.Show();
+                window.Measure(new global::Avalonia.Size(1120, 720));
+                window.Arrange(new global::Avalonia.Rect(0, 0, 1120, 720));
+                window.UpdateLayout();
+
+                var results = await window.CaptureParitySurfacesAsync(
+                    outputDirectory,
+                    targetSurfaceId: "dialog.ScenarioManager");
+
+                results.Should().ContainSingle();
+                var scenarioManager = results.Single();
+                scenarioManager.Id.Should().Be("dialog.ScenarioManager");
+                scenarioManager.Captured.Should().BeTrue($"Scenario Manager should render headlessly (note: {scenarioManager.Note})");
+                AssertCapturedPng(outputDirectory, scenarioManager);
 
                 window.Close();
             }, CancellationToken.None);
