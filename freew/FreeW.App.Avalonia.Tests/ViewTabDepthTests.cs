@@ -375,6 +375,21 @@ public sealed class ViewTabDepthTests
     }
 
     [Fact]
+    public void Print_layout_command_invokes_host_callback()
+    {
+        var invoked = false;
+        var callbacks = NoopCallbacks() with { SetPrintLayout = () => invoked = true };
+        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+
+        registry.TryGet(new RibbonCommandId("freew.print-layout"), out var command)
+            .Should().BeTrue();
+
+        command!.Execute(RibbonCommandContext.Empty);
+
+        invoked.Should().BeTrue("freew.print-layout must route to the Avalonia host print-layout surface");
+    }
+
+    [Fact]
     public void Window_group_exists_on_view_tab()
     {
         var definition = FreeWRibbon.BuildDefinition();

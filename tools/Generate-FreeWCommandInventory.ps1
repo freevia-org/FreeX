@@ -175,6 +175,8 @@ internal static class FreeWCommandInventory
             "Sets or clears selected chart axis titles through the shared chart edit command, clears quick-layout overrides, and keeps the change undoable in both shells.",
             "FreeWRibbonParityTests.ChartDesign_AxisTitlesSetterMutatesSelectedChartAndUndoRestoresIt",
             "ChartSmartArtContextualTabTests.ToggleChartAxisTitles_command_sets_default_titles_and_reverts_on_undo"),
+        ["freew.print-layout"] = PrintFamilyViewEvidence(
+            "Routes the shared Print Layout command through WPF stateful view-mode commands and the Avalonia host callback so the Word-style page surface can be restored from print-family view changes."),
         ["freew.print-preview"] = BackstagePrintEvidence(
             "Routes the shared Print Preview command to host-backed WPF and Avalonia preview callbacks while the Backstage evidence contract retains paired fixed-layout renderer rows."),
     };
@@ -312,6 +314,18 @@ internal static class FreeWCommandInventory
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Avalonia.Tests/ViewTabDepthTests.cs",
                 Test: "ViewTabDepthTests.Print_preview_command_invokes_host_callback"));
+
+    private static CommandBehaviorEvidence PrintFamilyViewEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.print-family-view.shared-behavior",
+            Slice: "Print-family view behavior",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Host.Tests/WebLayoutDraftCommandTests.cs",
+                Test: "WebLayoutDraftCommandTests.ViewToggles_AreMutuallyExclusive_InCheckedState"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Avalonia.Tests/ViewTabDepthTests.cs",
+                Test: "ViewTabDepthTests.Print_layout_command_invokes_host_callback"));
 
     private static IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> Collect(RibbonDefinition definition, string profile)
     {
