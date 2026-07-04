@@ -286,6 +286,50 @@ public sealed class MasterSourceStoreTests
     }
 
     [Fact]
+    public void MasterStore_JsonRoundTrip_PreservesConferenceProceedingsFields()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"master-sources-conference-{Guid.NewGuid()}.json");
+        try
+        {
+            var store = new MasterSourceStore
+            {
+                Sources =
+                [
+                    SourceRecord.FromSource(new Source
+                    {
+                        Tag = "Conf2026",
+                        Type = SourceType.ConferenceProceedings,
+                        Author = "Doe, J.",
+                        Title = "Proceedings Paper",
+                        ConferenceName = "Proceedings of the Example Conference",
+                        Year = "2026",
+                        Pages = "101-109",
+                        City = "Berlin",
+                        Publisher = "ACM",
+                        StandardNumber = "ISBN-CP-1"
+                    })
+                ]
+            };
+            var settingsStore = JsonSettingsStore<MasterSourceStore>.ForPath(path);
+
+            settingsStore.Save(store);
+            var source = JsonSettingsStore<MasterSourceStore>.ForPath(path).Load().ToSources()
+                .Should().ContainSingle().Subject;
+
+            source.Type.Should().Be(SourceType.ConferenceProceedings);
+            source.ConferenceName.Should().Be("Proceedings of the Example Conference");
+            source.Pages.Should().Be("101-109");
+            source.City.Should().Be("Berlin");
+            source.Publisher.Should().Be("ACM");
+            source.StandardNumber.Should().Be("ISBN-CP-1");
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void MasterStore_AddOrUpdate_ReplacesExistingTag()
     {
         var store = new MasterSourceStore();
