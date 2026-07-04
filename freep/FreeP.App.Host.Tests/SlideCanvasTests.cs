@@ -1,4 +1,6 @@
 using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using FreeP.App.Host;
 using FreeP.App.Compositor;
 using FreeP.App.Rendering.Wpf;
@@ -100,6 +102,39 @@ public sealed class SlideCanvasTests
         var canvas = new SlideCanvas { Presentation = p, Slide = slide };
 
         var act = () => canvas.Measure(new Size(1280, 720));
+        act.Should().NotThrow();
+    }
+
+    [StaFact]
+    public void SlideCanvas_WithStackedVerticalTextShape_RendersWithoutThrow()
+    {
+        var p = Presentation.CreateEmpty();
+        var slide = p.Slides[0];
+        slide.Shapes.Clear();
+
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 457200,
+            OffsetYEmu = 274320,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 2743200,
+            TextBody = new TextBody { VerticalType = TextVerticalType.EastAsianVertical }
+        };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = "Stacked" });
+        shape.TextBody.Paragraphs.Add(paragraph);
+        slide.Shapes.Add(shape);
+
+        var canvas = new SlideCanvas { Presentation = p, Slide = slide };
+        canvas.Measure(new Size(1280, 720));
+        canvas.Arrange(new Rect(0, 0, 1280, 720));
+
+        var act = () =>
+        {
+            var rtb = new RenderTargetBitmap(1280, 720, 96, 96, PixelFormats.Pbgra32);
+            rtb.Render(canvas);
+        };
         act.Should().NotThrow();
     }
 

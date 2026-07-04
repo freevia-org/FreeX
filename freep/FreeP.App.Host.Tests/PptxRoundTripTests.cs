@@ -1656,6 +1656,37 @@ public sealed class PptxRoundTripTests : IDisposable
             "vert270 attribute must survive write→read");
     }
 
+    [Theory]
+    [InlineData(TextVerticalType.EastAsianVertical)]
+    [InlineData(TextVerticalType.WordArtVertical)]
+    [InlineData(TextVerticalType.WordArtVerticalRtl)]
+    public void W18B_StackedVerticalTextTypes_RoundTrip(TextVerticalType verticalType)
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        var shape = new SlideShape
+        {
+            Id = 1,
+            Name = $"Stacked-{verticalType}",
+            Kind = SlideShapeKind.AutoShape,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 2743200,
+            TextBody = new TextBody { VerticalType = verticalType }
+        };
+        var para = new Paragraph();
+        para.Runs.Add(new Run { Text = "Stacked" });
+        shape.TextBody.Paragraphs.Add(para);
+        slide.Shapes.Add(shape);
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+        var loaded = PptxPackageReader.Read(path);
+
+        var s = loaded.Slides[0].Shapes.First(x => x.Name == $"Stacked-{verticalType}");
+        s.TextBody!.VerticalType.Should().Be(verticalType,
+            "stacked vertical PowerPoint vert values must survive write/read");
+    }
+
     [Fact]
     public void W18B_VerticalText_Compositor_EmitsOrientation()
     {

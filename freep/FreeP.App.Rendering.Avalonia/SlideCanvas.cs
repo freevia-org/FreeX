@@ -1404,6 +1404,12 @@ public sealed class SlideCanvas : Control
     {
         // Wave 18B: vertical text — rotate the text block around the shape center.
         var orientation = TextLayoutPlanner.PlanTextOrientation(text, bounds);
+        if (orientation.RenderMode == TextVerticalRenderMode.StackedUpright)
+        {
+            RenderStackedVerticalText(dc, text, bounds);
+            return;
+        }
+
         if (orientation.IsRotated)
         {
             double rad = orientation.RotationAngleDegrees * Math.PI / 180.0;
@@ -1416,6 +1422,35 @@ public sealed class SlideCanvas : Control
         }
 
         RenderTextCore(dc, text, orientation.TextBounds);
+    }
+
+    private static void RenderStackedVerticalText(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
+    {
+        var initialPlan = TextLayoutPlanner.PlanStackedVerticalText(
+            text,
+            bounds,
+            MeasureStackedGlyphAvalonia);
+        var autoFitPlan = TextLayoutPlanner.PlanNormalAutoFitOverflow(
+            text,
+            initialPlan.Area.Height,
+            initialPlan.Paragraphs);
+        var renderText = TextLayoutPlanner.ApplyAutoFitPlan(text, autoFitPlan);
+        var plan = TextLayoutPlanner.PlanStackedVerticalText(
+            renderText,
+            bounds,
+            MeasureStackedGlyphAvalonia,
+            autoFitPlan);
+
+        foreach (var glyph in plan.Glyphs)
+        {
+            if ((uint)glyph.ParagraphIndex >= (uint)renderText.Paragraphs.Count)
+                continue;
+            var paragraph = renderText.Paragraphs[glyph.ParagraphIndex];
+            if ((uint)glyph.RunIndex >= (uint)paragraph.Runs.Count)
+                continue;
+
+            DrawStackedGlyphAvalonia(dc, renderText, bounds, paragraph.Runs[glyph.RunIndex], glyph);
+        }
     }
 
     // Wave 22B: multi-column text layout helper for Avalonia.
@@ -1778,6 +1813,53 @@ public sealed class SlideCanvas : Control
         if (run.Strikethrough) ft.SetTextDecorations(TextDecorations.Strikethrough, 0, txt.Length);
         return ft;
     }
+
+    private static TextGlyphMeasure MeasureStackedGlyphAvalonia(ResolvedRun run, string text)
+    {
+        var ft = BuildSingleRunFormattedTextAt(run, text);
+        return new TextGlyphMeasure(ft.Width, ft.Height);
+    }
+
+    private static void DrawStackedGlyphAvalonia(
+        DrawingContext dc,
+        ResolvedTextLayout text,
+        LayoutRect bounds,
+        ResolvedRun run,
+        TextStackedGlyphPlacement glyph)
+    {
+        var glyphRun = CopyRunWithText(run, glyph.Text);
+        var glyphParagraph = new ResolvedParagraph
+        {
+            Runs = new[] { glyphRun }
+        };
+
+        if (TextLayoutPlanner.PlanParagraphRenderRoute(glyphParagraph, text) == TextParagraphRenderRoute.Effects)
+        {
+            RenderParaWithEffects(dc, glyphParagraph, glyph.X, glyph.Y, bounds, text);
+            return;
+        }
+
+        dc.DrawText(BuildSingleRunFormattedTextAt(glyphRun, glyph.Text), new Point(glyph.X, glyph.Y));
+    }
+
+    private static ResolvedRun CopyRunWithText(ResolvedRun run, string text) =>
+        new()
+        {
+            Text = text,
+            FontFamily = run.FontFamily,
+            FontSizePt = run.FontSizePt,
+            Bold = run.Bold,
+            Italic = run.Italic,
+            Underline = run.Underline,
+            Strikethrough = run.Strikethrough,
+            Color = run.Color,
+            TextFill = run.TextFill,
+            TextOutline = run.TextOutline,
+            TextShadow = run.TextShadow,
+            TextReflection = run.TextReflection,
+            TextGlow = run.TextGlow,
+            TextSoftEdge = run.TextSoftEdge
+        };
 
     private static FormattedText BuildFormattedText(ResolvedParagraph para, double maxWidth, bool wrap)
     {

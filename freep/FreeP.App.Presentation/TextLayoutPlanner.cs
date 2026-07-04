@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Linq;
 using Free.Shared.Drawing;
 using FreeP.Core.Model;
@@ -61,11 +62,42 @@ public readonly record struct TextColumnLayout(
 public readonly record struct TextOrientationPlan(
     TextVerticalType VerticalType,
     LayoutRect TextBounds,
+    TextVerticalRenderMode RenderMode,
     double RotationAngleDegrees,
     double RotationCenterX,
     double RotationCenterY)
 {
     public bool IsRotated => Math.Abs(RotationAngleDegrees) > 0.001;
+}
+
+public enum TextVerticalRenderMode
+{
+    Horizontal,
+    Rotated,
+    StackedUpright
+}
+
+public readonly record struct TextGlyphMeasure(
+    double WidthDip,
+    double HeightDip);
+
+public readonly record struct TextStackedGlyphPlacement(
+    int ParagraphIndex,
+    int RunIndex,
+    string Text,
+    double X,
+    double Y,
+    double WidthDip,
+    double HeightDip);
+
+public sealed record TextStackedVerticalLayoutPlan(
+    TextLayoutArea Area,
+    TextVerticalType VerticalType,
+    TextVerticalRenderMode RenderMode,
+    IReadOnlyList<TextParagraphMeasure> Paragraphs,
+    IReadOnlyList<TextStackedGlyphPlacement> Glyphs)
+{
+    public double TotalHeightDip => Paragraphs.Sum(p => p.TotalHeightDip);
 }
 
 public enum TextAutoFitOverflowMode
@@ -122,13 +154,11 @@ public static class TextLayoutPlanner
     {
         ArgumentNullException.ThrowIfNull(text);
 
+        var renderMode = GetVerticalRenderMode(text.VerticalType);
         double angleDegrees = text.VerticalType switch
         {
             TextVerticalType.Vertical270 => -90.0,
-            TextVerticalType.Vertical
-                or TextVerticalType.EastAsianVertical
-                or TextVerticalType.WordArtVertical
-                or TextVerticalType.WordArtVerticalRtl => 90.0,
+            TextVerticalType.Vertical => 90.0,
             _ => 0.0
         };
 
@@ -143,10 +173,21 @@ public static class TextLayoutPlanner
         return new TextOrientationPlan(
             text.VerticalType,
             textBounds,
+            renderMode,
             angleDegrees,
             bounds.X + bounds.Width * 0.5,
             bounds.Y + bounds.Height * 0.5);
     }
+
+    public static TextVerticalRenderMode GetVerticalRenderMode(TextVerticalType verticalType) =>
+        verticalType switch
+        {
+            TextVerticalType.Vertical or TextVerticalType.Vertical270 => TextVerticalRenderMode.Rotated,
+            TextVerticalType.EastAsianVertical
+                or TextVerticalType.WordArtVertical
+                or TextVerticalType.WordArtVerticalRtl => TextVerticalRenderMode.StackedUpright,
+            _ => TextVerticalRenderMode.Horizontal
+        };
 
     public static TextLayoutArea GetTextArea(ResolvedTextLayout text, LayoutRect bounds)
     {
@@ -450,6 +491,93 @@ public static class TextLayoutPlanner
         return new TextBlockLayoutPlan(layout.Area, placements);
     }
 
+    public static TextStackedVerticalLayoutPlan PlanStackedVerticalText(
+        ResolvedTextLayout text,
+        LayoutRect bounds,
+        Func<ResolvedRun, string, TextGlyphMeasure> measureGlyph) =>
+        PlanStackedVerticalText(text, bounds, measureGlyph, default);
+
+    public static TextStackedVerticalLayoutPlan PlanStackedVerticalText(
+        ResolvedTextLayout text,
+        LayoutRect bounds,
+        Func<ResolvedRun, string, TextGlyphMeasure> measureGlyph,
+        TextAutoFitOverflowPlan autoFitPlan)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(measureGlyph);
+
+        var area = GetTextArea(text, bounds);
+        var renderMode = GetVerticalRenderMode(text.VerticalType);
+        if (renderMode != TextVerticalRenderMode.StackedUpright)
+        {
+            return new TextStackedVerticalLayoutPlan(
+                area,
+                text.VerticalType,
+                renderMode,
+                Array.Empty<TextParagraphMeasure>(),
+                Array.Empty<TextStackedGlyphPlacement>());
+        }
+
+        double lineSpacingScale = GetLineSpacingScale(text, autoFitPlan);
+        var paragraphPlans = new List<StackedParagraphPlan>();
+        var paragraphMeasures = new List<TextParagraphMeasure>();
+
+        for (int paragraphIndex = 0; paragraphIndex < text.Paragraphs.Count; paragraphIndex++)
+        {
+            var paragraph = text.Paragraphs[paragraphIndex];
+            var glyphs = CreateStackedGlyphMeasures(paragraph, measureGlyph);
+            double height = glyphs.Sum(g => g.AdvanceDip);
+            paragraphPlans.Add(new StackedParagraphPlan(paragraphIndex, glyphs, height));
+            paragraphMeasures.Add(TextLayoutPlanner.CreateParagraphMeasure(
+                paragraphIndex,
+                height,
+                paragraph.SpaceBeforePt,
+                paragraph.SpaceAfterPt,
+                lineSpacingScale));
+        }
+
+        double totalHeight = paragraphMeasures.Sum(p => p.TotalHeightDip);
+        double currentY = ComputeStartY(area, totalHeight, text.Anchor);
+        var placements = new List<TextStackedGlyphPlacement>();
+
+        for (int i = 0; i < paragraphPlans.Count; i++)
+        {
+            var paragraphPlan = paragraphPlans[i];
+            if ((uint)paragraphPlan.ParagraphIndex >= (uint)text.Paragraphs.Count)
+                continue;
+
+            var paragraph = text.Paragraphs[paragraphPlan.ParagraphIndex];
+            var paragraphMeasure = paragraphMeasures[i];
+            currentY += paragraphMeasure.SpaceBeforeDip;
+
+            double columnLeft = area.X + paragraph.IndentDip;
+            double columnWidth = Math.Max(1, area.Width - paragraph.IndentDip);
+
+            foreach (var glyph in paragraphPlan.Glyphs)
+            {
+                double x = columnLeft + Math.Max(0, (columnWidth - glyph.Measure.WidthDip) * 0.5);
+                placements.Add(new TextStackedGlyphPlacement(
+                    paragraphPlan.ParagraphIndex,
+                    glyph.RunIndex,
+                    glyph.Text,
+                    x,
+                    currentY,
+                    glyph.Measure.WidthDip,
+                    glyph.Measure.HeightDip));
+                currentY += glyph.AdvanceDip * lineSpacingScale;
+            }
+
+            currentY += paragraphMeasure.SpaceAfterDip;
+        }
+
+        return new TextStackedVerticalLayoutPlan(
+            area,
+            text.VerticalType,
+            renderMode,
+            paragraphMeasures,
+            placements);
+    }
+
     public static TextTabLayoutPlan PlanTabStops(
         ResolvedParagraph paragraph,
         double startX,
@@ -669,4 +797,46 @@ public static class TextLayoutPlanner
         int RunIndex,
         string Text,
         bool IsTab);
+
+    private static List<StackedGlyphMeasure> CreateStackedGlyphMeasures(
+        ResolvedParagraph paragraph,
+        Func<ResolvedRun, string, TextGlyphMeasure> measureGlyph)
+    {
+        var glyphs = new List<StackedGlyphMeasure>();
+        for (int runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
+        {
+            var run = paragraph.Runs[runIndex];
+            if (string.IsNullOrEmpty(run.Text))
+                continue;
+
+            var enumerator = StringInfo.GetTextElementEnumerator(run.Text);
+            while (enumerator.MoveNext())
+            {
+                string glyphText = enumerator.GetTextElement();
+                if (glyphText is "\r" or "\n")
+                    continue;
+
+                var measure = measureGlyph(run, glyphText);
+                double advance = Math.Max(measure.HeightDip, PointsToDip(run.FontSizePt));
+                glyphs.Add(new StackedGlyphMeasure(
+                    runIndex,
+                    glyphText,
+                    measure,
+                    advance));
+            }
+        }
+
+        return glyphs;
+    }
+
+    private sealed record StackedParagraphPlan(
+        int ParagraphIndex,
+        IReadOnlyList<StackedGlyphMeasure> Glyphs,
+        double HeightDip);
+
+    private readonly record struct StackedGlyphMeasure(
+        int RunIndex,
+        string Text,
+        TextGlyphMeasure Measure,
+        double AdvanceDip);
 }
