@@ -879,31 +879,19 @@ public sealed partial class MainWindow
     {
         var chart = EnsureParityChart();
         if (chart is not null)
-            chart.Name = "Revenue Chart";
+            chart.Name = SelectionPaneParityFixture.ChartName;
 
         var shape = EnsureParityShape();
         if (shape is not null)
-            shape.Name = "Rectangle 1";
+            shape.Name = SelectionPaneParityFixture.ShapeName;
 
         if (chart is not null && shape is not null)
         {
-            var items = new[]
-            {
-                new SelectionPaneItem(
-                    SelectionPaneObjectKind.Chart,
-                    chart.Id,
-                    chart.Name ?? "Revenue Chart",
-                    chart.IsVisible,
-                    CanMoveUp: false,
-                    CanMoveDown: false),
-                new SelectionPaneItem(
-                    SelectionPaneObjectKind.Shape,
-                    shape.Id,
-                    shape.Name ?? "Rectangle 1",
-                    shape.IsVisible,
-                    CanMoveUp: false,
-                    CanMoveDown: false),
-            };
+            var items = SelectionPaneParityFixture.CreateDialogItems(
+                chart.Id,
+                shape.Id,
+                chart.IsVisible,
+                shape.IsVisible);
 
             await OpenSelectionPaneDialogAsync(items);
             return;

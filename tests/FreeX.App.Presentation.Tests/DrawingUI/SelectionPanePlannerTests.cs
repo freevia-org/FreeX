@@ -8,6 +8,35 @@ namespace FreeX.App.Presentation.Tests.DrawingUI;
 public sealed class SelectionPanePlannerTests
 {
     [Fact]
+    public void ParityFixture_CreatesSharedDialogItemsForWpfAndAvaloniaCapture()
+    {
+        var chartId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var shapeId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+
+        var items = SelectionPaneParityFixture.CreateDialogItems(
+            chartId,
+            shapeId,
+            chartIsVisible: true,
+            shapeIsVisible: false);
+
+        items.Should().Equal(
+            new SelectionPaneItem(
+                SelectionPaneObjectKind.Chart,
+                chartId,
+                SelectionPaneParityFixture.ChartName,
+                IsVisible: true,
+                CanMoveUp: false,
+                CanMoveDown: false),
+            new SelectionPaneItem(
+                SelectionPaneObjectKind.Shape,
+                shapeId,
+                SelectionPaneParityFixture.ShapeName,
+                IsVisible: false,
+                CanMoveUp: false,
+                CanMoveDown: false));
+    }
+
+    [Fact]
     public void BuildItems_ListsVisibleObjectsTopToBottomWithDefaultNames()
     {
         var wb = new Workbook("test");

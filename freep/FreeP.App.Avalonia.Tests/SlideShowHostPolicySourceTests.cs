@@ -21,6 +21,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SlideShowHostPlanner.BuildDisplayPlan(");
         source.Should().Contain("SlideShowHostPlanner.BuildPresenterState(");
         source.Should().Contain("SlideShowPresenterToolPlanner.BuildPlan(");
+        source.Should().Contain("SlideShowPresenterSessionSummaryPlanner.BuildSummary(");
         source.Should().Contain("SlideShowInkExecutionPlanner.CreateState(");
         source.Should().Contain("SlideShowInkExecutionPlanner.SelectPointerInk(");
         source.Should().Contain("SlideShowInkExecutionPlanner.Begin(");
