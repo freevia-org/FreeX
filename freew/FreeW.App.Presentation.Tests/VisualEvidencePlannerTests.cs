@@ -2252,6 +2252,135 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void BuildNormalizedSummaryFromFiles_AllowsPairedWordArtWatermarkMetadata()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            const string scenarioId = "wordart-picture-watermark-layout";
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        pageNumber: 1,
+                        pageCount: 1)
+                ],
+                new DateTimeOffset(2026, 7, 4, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        pageNumber: 1,
+                        pageCount: 1)
+                ],
+                new DateTimeOffset(2026, 7, 4, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeTrue();
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RejectsCrossHostWordArtWatermarkMetadataDrift()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            const string scenarioId = "wordart-picture-watermark-layout";
+            var wpfRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var driftedAvaloniaRow = avaloniaRow with
+            {
+                PageExpectation = avaloniaRow.PageExpectation with
+                {
+                    Features = avaloniaRow.PageExpectation.Features with
+                    {
+                        Watermark = avaloniaRow.PageExpectation.Features.Watermark with
+                        {
+                            Text = "STALE WATERMARK"
+                        }
+                    }
+                }
+            };
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [wpfRow],
+                new DateTimeOffset(2026, 7, 4, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [driftedAvaloniaRow],
+                new DateTimeOffset(2026, 7, 4, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("WordArt watermark renderer pair 'wordart-picture-watermark-layout' page 1", StringComparison.Ordinal)
+                && f.Contains("page feature signatures differ", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void BuildNormalizedSummaryFromFiles_AllowsBackstageRendererExtraPagesAndDifferentCaptureDimensions()
     {
         var root = CreateTempRoot();
