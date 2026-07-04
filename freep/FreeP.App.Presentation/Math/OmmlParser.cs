@@ -360,6 +360,7 @@ public static class OmmlParser
 
     private static MathNode ParseMatrix(XElement el)
     {
+        var columnAlignments = ParseMatrixColumnAlignments(el.Element(M + "mPr"));
         var rows = new List<IReadOnlyList<MathNode>>();
         foreach (var mrEl in el.Elements(M + "mr"))
         {
@@ -368,8 +369,35 @@ public static class OmmlParser
                 cells.Add(ParseRow(eEl));
             rows.Add(cells);
         }
-        return new MathNode.Matrix(rows);
+        return new MathNode.Matrix(rows, columnAlignments);
     }
+
+    private static IReadOnlyList<MathNode.Matrix.MatrixColumnAlignment> ParseMatrixColumnAlignments(XElement? mPr)
+    {
+        var alignments = new List<MathNode.Matrix.MatrixColumnAlignment>();
+        var mcs = mPr?.Element(M + "mcs");
+        if (mcs is null)
+            return alignments;
+
+        foreach (var mc in mcs.Elements(M + "mc"))
+        {
+            var aln = mc.Element(M + "mcPr")?.Element(M + "aln");
+            var val = aln?.Attribute(M + "val")?.Value
+                   ?? aln?.Value;
+            alignments.Add(ParseMatrixColumnAlignment(val));
+        }
+
+        return alignments;
+    }
+
+    private static MathNode.Matrix.MatrixColumnAlignment ParseMatrixColumnAlignment(string? val) =>
+        val switch
+        {
+            "left"  => MathNode.Matrix.MatrixColumnAlignment.Left,
+            "right" => MathNode.Matrix.MatrixColumnAlignment.Right,
+            "ctr" or "center" => MathNode.Matrix.MatrixColumnAlignment.Center,
+            _       => MathNode.Matrix.MatrixColumnAlignment.Center
+        };
 
     // ── Unknown / fallback ────────────────────────────────────────────────
 

@@ -914,7 +914,9 @@ public static class MathLayoutEngine
             return MakeGlyph("", fontFamily, fontSizePt, false);
 
         int rowCount = matrix.Rows.Count;
-        int colCount = matrix.Rows[0].Count;
+        int colCount = 0;
+        for (int r = 0; r < rowCount; r++)
+            colCount = Math.Max(colCount, matrix.Rows[r].Count);
 
         // Layout all cells
         var cells = new MathBox[rowCount][];
@@ -968,7 +970,11 @@ public static class MathLayoutEngine
                 var cell = cells[r][c];
                 if (cell is not null)
                 {
-                    cell.X = colX + (colW[c] - cell.Metrics.Width) / 2;
+                    cell.X = AlignMatrixCellX(
+                        colX,
+                        colW[c],
+                        cell.Metrics.Width,
+                        GetMatrixColumnAlignment(matrix, c));
                     cell.Y = rowY + rowAsc[r] - cell.Metrics.Ascent;
                     container.Children.Add(cell);
                 }
@@ -979,6 +985,23 @@ public static class MathLayoutEngine
 
         return container;
     }
+
+    private static MathNode.Matrix.MatrixColumnAlignment GetMatrixColumnAlignment(MathNode.Matrix matrix, int column) =>
+        column >= 0 && column < matrix.ColumnAlignments.Count
+            ? matrix.ColumnAlignments[column]
+            : MathNode.Matrix.MatrixColumnAlignment.Center;
+
+    private static double AlignMatrixCellX(
+        double colX,
+        double colWidth,
+        double cellWidth,
+        MathNode.Matrix.MatrixColumnAlignment alignment) =>
+        alignment switch
+        {
+            MathNode.Matrix.MatrixColumnAlignment.Left => colX,
+            MathNode.Matrix.MatrixColumnAlignment.Right => colX + colWidth - cellWidth,
+            _ => colX + (colWidth - cellWidth) / 2.0
+        };
 
     // ── Row layout (horizontal sequence) ──────────────────────────────────
 

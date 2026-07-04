@@ -223,6 +223,50 @@ public sealed class OmmlParserTests
     }
 
     [Fact]
+    public void Parse_MatrixColumnAlignments_ReadsMcsAlnMetadata()
+    {
+        var node = Parse(
+            "<m:m>" +
+            "<m:mPr><m:mcs>" +
+            "<m:mc><m:mcPr><m:aln m:val=\"left\"/></m:mcPr></m:mc>" +
+            "<m:mc><m:mcPr><m:aln m:val=\"ctr\"/></m:mcPr></m:mc>" +
+            "<m:mc><m:mcPr><m:aln m:val=\"right\"/></m:mcPr></m:mc>" +
+            "<m:mc><m:mcPr><m:aln m:val=\"bogus\"/></m:mcPr></m:mc>" +
+            "</m:mcs></m:mPr>" +
+            "<m:mr><m:e><m:r><m:t>a</m:t></m:r></m:e><m:e><m:r><m:t>b</m:t></m:r></m:e></m:mr>" +
+            "</m:m>");
+
+        var matrix = Assert.IsType<MathNode.Matrix>(node);
+        Assert.Equal(
+            new[]
+            {
+                MathNode.Matrix.MatrixColumnAlignment.Left,
+                MathNode.Matrix.MatrixColumnAlignment.Center,
+                MathNode.Matrix.MatrixColumnAlignment.Right,
+                MathNode.Matrix.MatrixColumnAlignment.Center
+            },
+            matrix.ColumnAlignments);
+    }
+
+    [Fact]
+    public void Parse_MatrixWithRaggedRows_PreservesLaterExtraCells()
+    {
+        var node = Parse(
+            "<m:m>" +
+            "<m:mr><m:e><m:r><m:t>a</m:t></m:r></m:e></m:mr>" +
+            "<m:mr><m:e><m:r><m:t>b</m:t></m:r></m:e><m:e><m:r><m:t>c</m:t></m:r></m:e><m:e><m:r><m:t>d</m:t></m:r></m:e></m:mr>" +
+            "</m:m>");
+
+        var matrix = Assert.IsType<MathNode.Matrix>(node);
+        Assert.Equal(2, matrix.Rows.Count);
+        Assert.Single(matrix.Rows[0]);
+        Assert.Equal(3, matrix.Rows[1].Count);
+        Assert.Equal("c", Assert.IsType<MathNode.Run>(matrix.Rows[1][1]).Text);
+        Assert.Equal("d", Assert.IsType<MathNode.Run>(matrix.Rows[1][2]).Text);
+        Assert.Empty(matrix.ColumnAlignments);
+    }
+
+    [Fact]
     public void Frac_WithNoFPr_DefaultsToBar()
     {
         var node = Parse("<m:f><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>2</m:t></m:r></m:den></m:f>");
