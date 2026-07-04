@@ -216,6 +216,42 @@ public sealed class SlidePaneTests
         editor.Presentation.Slides[2].Title.Should().Be("Alpha");
     }
 
+    [StaFact]
+    public void SlidePane_KeyboardDelete_UsesSharedPlannerEnablement()
+    {
+        var (pane, editor) = MakePaneWithSlides(1);
+
+        pane.TryApplySlidePaneKeyboardAction(SlidePaneKeyboardIntentKind.DeleteCurrentSlide)
+            .Should().BeFalse("the shared planner blocks deleting the final slide");
+        editor.Presentation.Slides.Should().ContainSingle();
+
+        editor.InsertSlide();
+        editor.SelectSlide(1);
+        pane.TryApplySlidePaneKeyboardAction(SlidePaneKeyboardIntentKind.DeleteCurrentSlide)
+            .Should().BeTrue("keyboard delete should route through the same slide-pane action plan as the menu");
+
+        editor.Presentation.Slides.Should().ContainSingle();
+        editor.CurrentSlideIndex.Should().Be(0);
+    }
+
+    [StaFact]
+    public void SlidePane_KeyboardMoveLater_UsesSharedInsertionPlan()
+    {
+        var (pane, editor) = MakePaneWithSlides(3);
+        editor.Presentation.Slides[0].Title = "Alpha";
+        editor.Presentation.Slides[1].Title = "Beta";
+        editor.Presentation.Slides[2].Title = "Gamma";
+        editor.SelectSlide(1);
+
+        pane.TryApplySlidePaneKeyboardAction(SlidePaneKeyboardIntentKind.MoveCurrentSlideLater)
+            .Should().BeTrue();
+
+        editor.Presentation.Slides.Select(slide => slide.Title)
+            .Should().Equal("Alpha", "Gamma", "Beta");
+        editor.CurrentSlideIndex.Should().Be(2);
+        CountThumbnailItems(pane).Should().Be(3);
+    }
+
     // ── Undo ─────────────────────────────────────────────────────────────────────
 
     [StaFact]

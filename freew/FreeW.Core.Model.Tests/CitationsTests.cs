@@ -871,6 +871,86 @@ public class CitationsTests
             .Should().Be("Doe. (2010). Study. Nature, vol. 5.");
     }
 
+    [Fact]
+    public void SourceType_NewWordBreadthValues_AreAppendedAfterExistingValues()
+    {
+        ((int)SourceType.Book).Should().Be(0);
+        ((int)SourceType.JournalArticle).Should().Be(1);
+        ((int)SourceType.WebSite).Should().Be(2);
+        ((int)SourceType.Report).Should().Be(3);
+        ((int)SourceType.BookSection).Should().Be(4);
+        ((int)SourceType.ConferenceProceedings).Should().Be(5);
+        ((int)SourceType.ArticleInPeriodical).Should().Be(6);
+        ((int)SourceType.ElectronicSource).Should().Be(7);
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_ArticleInPeriodical_PerStyle()
+    {
+        var article = new Source
+        {
+            Type = SourceType.ArticleInPeriodical,
+            Author = "Roe",
+            Title = "City Desk",
+            Year = "2026",
+            Journal = "Daily Planet",
+            Volume = "12",
+            Issue = "4",
+            Pages = "5-7"
+        };
+
+        Citations.FormatBibliographyEntry(article, CitationStyle.Apa).Should().Be(
+            "Roe. (2026). City Desk. Daily Planet, vol. 12, no. 4, pp. 5-7.");
+        Citations.FormatBibliographyEntry(article, CitationStyle.Mla).Should().Be(
+            "Roe. City Desk. Daily Planet, vol. 12, no. 4, pp. 5-7, 2026.");
+        Citations.FormatBibliographyEntry(article, CitationStyle.Chicago).Should().Be(
+            "Roe. City Desk. Daily Planet, vol. 12, no. 4, pp. 5-7, 2026.");
+        Citations.FormatBibliographyEntry(article, CitationStyle.Ieee).Should().Be(
+            "Roe, \"City Desk,\" Daily Planet, vol. 12, no. 4, pp. 5-7, 2026.");
+        Citations.FormatBibliographyEntry(article, CitationStyle.Vancouver).Should().Be(
+            "Roe. City Desk. Daily Planet. 2026;12(4):5-7.");
+        Citations.FormatBibliographyEntry(article, CitationStyle.Harvard).Should().Be(
+            "Roe 2026, City Desk. Daily Planet, vol. 12, no. 4, pp. 5-7.");
+        Citations.FormatBibliographyEntry(article, CitationStyle.Gost).Should().Be(
+            "Roe. City Desk. Daily Planet 2026. Vol. 12. No. 4. Pp. 5-7.");
+        Citations.FormatBibliographyEntry(article, CitationStyle.Iso690).Should().Be(
+            "ROE, 2026. City Desk. Daily Planet, 12(4), 5-7.");
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_ElectronicSource_PerStyle()
+    {
+        var electronic = new Source
+        {
+            Type = SourceType.ElectronicSource,
+            Author = "Ada",
+            Title = "Online Notes",
+            Year = "2026",
+            Publisher = "Example Archive",
+            Url = "https://example.test/notes",
+            AccessedDay = "4",
+            AccessedMonth = "July",
+            AccessedYear = "2026"
+        };
+
+        Citations.FormatBibliographyEntry(electronic, CitationStyle.Apa).Should().Be(
+            "Ada. (2026). Online Notes. Example Archive, https://example.test/notes, accessed 4 July 2026.");
+        Citations.FormatBibliographyEntry(electronic, CitationStyle.Mla).Should().Be(
+            "Ada. Online Notes. Example Archive, https://example.test/notes, accessed 4 July 2026, 2026.");
+        Citations.FormatBibliographyEntry(electronic, CitationStyle.Chicago).Should().Be(
+            "Ada. Online Notes. Example Archive, https://example.test/notes, accessed 4 July 2026, 2026.");
+        Citations.FormatBibliographyEntry(electronic, CitationStyle.Ieee).Should().Be(
+            "Ada, \"Online Notes,\" Example Archive, https://example.test/notes, accessed 4 July 2026, 2026.");
+        Citations.FormatBibliographyEntry(electronic, CitationStyle.Vancouver).Should().Be(
+            "Ada. Online Notes. Example Archive; https://example.test/notes; accessed 4 July 2026; 2026.");
+        Citations.FormatBibliographyEntry(electronic, CitationStyle.Harvard).Should().Be(
+            "Ada 2026, Online Notes. Example Archive, https://example.test/notes, accessed 4 July 2026.");
+        Citations.FormatBibliographyEntry(electronic, CitationStyle.Gost).Should().Be(
+            "Ada. Online Notes. Example Archive, https://example.test/notes, accessed 4 July 2026. 2026.");
+        Citations.FormatBibliographyEntry(electronic, CitationStyle.Iso690).Should().Be(
+            "ADA, 2026. Online Notes. Example Archive, https://example.test/notes, accessed 4 July 2026.");
+    }
+
     // --- Turabian -------------------------------------------------------------------------------
 
     [Fact]

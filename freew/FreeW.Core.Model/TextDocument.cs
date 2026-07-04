@@ -1265,7 +1265,8 @@ public sealed class Comment(int id)
 
 /// <summary>
 /// The kind of work a <see cref="Source"/> describes, which selects how its bibliography entry is
-/// formatted (a journal article cites its journal/volume/pages, a web site its URL, etc.). The numeric
+/// formatted (a journal article/article in a periodical cites its journal/volume/pages, an electronic source
+/// or web site cites its URL, etc.). The numeric
 /// values are stable so a chosen type can be persisted, and <see cref="SourceType.Book"/> is the default
 /// (value 0). The names match Word's bibliography source types (<c>b:SourceType</c>).
 /// </summary>
@@ -1288,6 +1289,12 @@ public enum SourceType
 
     /// <summary>A paper in conference proceedings (adds the conference/proceedings name and page range).</summary>
     ConferenceProceedings = 5,
+
+    /// <summary>A Word article-in-a-periodical source (adds periodical name, volume, issue and page range).</summary>
+    ArticleInPeriodical = 6,
+
+    /// <summary>A Word electronic source (adds URL and accessed date fields).</summary>
+    ElectronicSource = 7,
 }
 
 /// <summary>
@@ -1395,27 +1402,40 @@ public sealed class Source
     /// <summary>Free-form source comments/notes; null when unknown.</summary>
     public string? Comments { get; init; }
 
-    /// <summary>The periodical name for a <see cref="SourceType.JournalArticle"/>; null otherwise / when unknown.</summary>
+    /// <summary>
+    /// The periodical name for a <see cref="SourceType.JournalArticle"/> or
+    /// <see cref="SourceType.ArticleInPeriodical"/>; null otherwise / when unknown.
+    /// </summary>
     public string? Journal { get; init; }
 
-    /// <summary>The volume number for a <see cref="SourceType.JournalArticle"/>; null when unknown.</summary>
+    /// <summary>
+    /// The volume number for a <see cref="SourceType.JournalArticle"/> or
+    /// <see cref="SourceType.ArticleInPeriodical"/>; null when unknown.
+    /// </summary>
     public string? Volume { get; init; }
 
-    /// <summary>The issue number for a <see cref="SourceType.JournalArticle"/>; null when unknown.</summary>
+    /// <summary>
+    /// The issue number for a <see cref="SourceType.JournalArticle"/> or
+    /// <see cref="SourceType.ArticleInPeriodical"/>; null when unknown.
+    /// </summary>
     public string? Issue { get; init; }
 
     /// <summary>
     /// The page (range) for a <see cref="SourceType.JournalArticle"/>, <see cref="SourceType.BookSection"/>,
-    /// or <see cref="SourceType.ConferenceProceedings"/>,
+    /// <see cref="SourceType.ConferenceProceedings"/>, or <see cref="SourceType.ArticleInPeriodical"/>,
     /// e.g. <c>"12-20"</c>; null when unknown.
     /// </summary>
     public string? Pages { get; init; }
 
-    /// <summary>The URL for a <see cref="SourceType.WebSite"/>; null otherwise / when unknown.</summary>
+    /// <summary>
+    /// The URL for a <see cref="SourceType.WebSite"/> or <see cref="SourceType.ElectronicSource"/>;
+    /// null otherwise / when unknown.
+    /// </summary>
     public string? Url { get; init; }
 
     /// <summary>
-    /// The accessed date for a <see cref="SourceType.WebSite"/>, free-text (e.g. <c>"3 May 2024"</c>);
+    /// The accessed date for a <see cref="SourceType.WebSite"/> or <see cref="SourceType.ElectronicSource"/>,
+    /// free-text (e.g. <c>"3 May 2024"</c>);
     /// retained as a compatibility/display fallback when structured accessed-date parts are absent.
     /// </summary>
     public string? Accessed { get; init; }

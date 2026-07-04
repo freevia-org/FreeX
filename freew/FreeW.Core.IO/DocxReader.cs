@@ -591,6 +591,8 @@ public static class DocxReader
         "Report" => SourceType.Report,
         "BookSection" => SourceType.BookSection,
         "ConferenceProceedings" => SourceType.ConferenceProceedings,
+        "ArticleInAPeriodical" => SourceType.ArticleInPeriodical,
+        "ElectronicSource" => SourceType.ElectronicSource,
         _ => SourceType.Book,
     };
 

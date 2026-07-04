@@ -102,7 +102,7 @@ public sealed class ChartSmartArtContextualTabTests
             .Where(id => id is not null)
             .Select(id => id!.Value)
             .Should()
-            .Equal("freew.chart-toggle-legend", "freew.chart-axis-titles");
+            .Equal("freew.chart-toggle-legend", "freew.chart-title", "freew.chart-axis-titles");
 
         var cf = def.FindTab("chart-format")!;
         cf.Context!.ActivationKey.Should().Be(FloatingRibbonContextSource.ChartContextKey);
@@ -125,7 +125,7 @@ public sealed class ChartSmartArtContextualTabTests
             "freew.chart-type", "freew.chart-type-column", "freew.chart-type-bar", "freew.chart-type-line",
             "freew.chart-type-pie", "freew.chart-type-scatter", "freew.chart-type-area", "freew.chart-type-doughnut",
             "freew.chart-style", "freew.chart-style-1", "freew.chart-colors", "freew.chart-colors-colorful1",
-            "freew.chart-toggle-legend", "freew.chart-axis-titles",
+            "freew.chart-toggle-legend", "freew.chart-title", "freew.chart-axis-titles",
             // SmartArt Design
             "freew.smartart-layout", "freew.smartart-layout-list", "freew.smartart-layout-process",
             "freew.smartart-layout-cycle", "freew.smartart-layout-hierarchy",
@@ -349,6 +349,40 @@ public sealed class ChartSmartArtContextualTabTests
         quickLayoutAfter.Should().Be(0, "explicit chart element commands clear quick-layout overrides");
         visibleUndone.Should().BeTrue("undo restores the layout-driven legend");
         quickLayoutUndone.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task ToggleChartTitle_command_sets_default_title_and_reverts_on_undo()
+    {
+        string? titleAfter = null, titleUndone = "not observed";
+        int? quickLayoutAfter = null, quickLayoutUndone = null;
+        var ran = await OnUi(() =>
+        {
+            var (doc, bi, ri) = DocWithFloatingChart();
+            var chart = ((Paragraph)doc.Blocks[0]).Runs[ri].Chart!;
+            chart.Title = null;
+            chart.QuickLayoutId = 2;
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+            registry.TryGet(new RibbonCommandId("freew.chart-title"), out var cmd);
+            cmd!.Execute(RibbonCommandContext.Empty);
+            titleAfter = chart.Title;
+            quickLayoutAfter = chart.QuickLayoutId;
+
+            view.Undo();
+            titleUndone = chart.Title;
+            quickLayoutUndone = chart.QuickLayoutId;
+        });
+        if (!ran) return;
+        titleAfter.Should().Be("Chart Title");
+        quickLayoutAfter.Should().Be(0, "explicit chart element commands clear quick-layout overrides");
+        titleUndone.Should().BeNull();
+        quickLayoutUndone.Should().Be(2);
     }
 
     [Fact]

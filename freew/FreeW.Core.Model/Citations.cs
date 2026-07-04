@@ -617,9 +617,9 @@ public static class Citations
     // The type-specific "source detail" common to several styles, comma-joined:
     //  - Book:           Publisher
     //  - BookSection:    BookTitle, ChapterNumber, Pages, City: Publisher
-    //  - JournalArticle: Journal, Volume, "no. Issue", "pp. Pages"
+    //  - JournalArticle / ArticleInPeriodical: Journal, Volume, "no. Issue", "pp. Pages"
     //  - ConferenceProceedings: ConferenceName, "pp. Pages", City: Publisher
-    //  - WebSite:        Publisher, Url, "accessed AccessedDate"
+    //  - WebSite / ElectronicSource: Publisher, Url, "accessed AccessedDate"
     //  - Report:         Institution, City, Publisher
     // Returns an empty list when nothing applies so callers can drop the segment entirely.
     private static List<string> SourceDetail(Source source)
@@ -628,6 +628,7 @@ public static class Citations
         switch (source.Type)
         {
             case SourceType.JournalArticle:
+            case SourceType.ArticleInPeriodical:
                 AddIfPresent(parts, source.Journal);
                 if (NonEmpty(source.Volume) is { } vol)
                     parts.Add($"vol. {vol}");
@@ -637,6 +638,7 @@ public static class Citations
                     parts.Add($"pp. {pages}");
                 break;
             case SourceType.WebSite:
+            case SourceType.ElectronicSource:
                 AddIfPresent(parts, source.Publisher);
                 AddIfPresent(parts, source.Url);
                 if (AccessedDateText(source) is { } accessed)
@@ -788,7 +790,7 @@ public static class Citations
 
         // Type-specific: journal uses condensed Vancouver citation string; book sections and conference papers
         // name their containing publication context.
-        if (source.Type == SourceType.JournalArticle)
+        if (IsPeriodicalSource(source.Type))
         {
             // Build: Journal. Year;Vol(Issue):Pages.
             var journalParts = new List<string>(2);
@@ -838,10 +840,12 @@ public static class Citations
         }
         else
         {
-            // Book / website: Publisher; Year. Books use City: Publisher when the Word place field is present.
-            var tail = new List<string>(2);
+            // Book / website / electronic source: Publisher; Year. Books use City: Publisher when present.
+            var tail = new List<string>(4);
             if (source.Type == SourceType.Book && PlacePublisher(source) is { } placePublisher)
                 tail.Add(placePublisher);
+            else if (IsElectronicSource(source.Type))
+                tail.AddRange(SourceDetail(source));
             else
                 AddIfPresent(tail, source.Publisher);
             AddIfPresent(tail, source.Year);
@@ -894,7 +898,7 @@ public static class Citations
         if (title.Length > 0)
             segments.Add(WithPeriod(title));
 
-        if (source.Type == SourceType.JournalArticle)
+        if (IsPeriodicalSource(source.Type))
         {
             // Journal. Year. Vol. Volume. Issue. Pages.
             AddIfPresent(segments, source.Journal);
@@ -924,11 +928,19 @@ public static class Citations
                 if (NonEmpty(source.Pages) is { } pages)
                     segments.Add($"Pp. {pages}.");
             }
+            else if (source.Type == SourceType.ElectronicSource)
+            {
+                var detail = string.Join(", ", SourceDetail(source));
+                if (detail.Length > 0)
+                    segments.Add(WithPeriod(detail));
+            }
 
             // City: Publisher, Year.
             var publisher = PlacePublisher(source) ?? (source.Publisher?.Trim() ?? string.Empty);
             var year = source.Year?.Trim() ?? string.Empty;
-            if (publisher.Length > 0 && year.Length > 0)
+            if (source.Type == SourceType.ElectronicSource && year.Length > 0)
+                segments.Add($"{year}.");
+            else if (publisher.Length > 0 && year.Length > 0)
                 segments.Add($"{publisher}, {year}.");
             else if (publisher.Length > 0)
                 segments.Add(WithPeriod(publisher));
@@ -961,7 +973,7 @@ public static class Citations
         if (title.Length > 0)
             segments.Add(WithPeriod(title));
 
-        if (source.Type == SourceType.JournalArticle)
+        if (IsPeriodicalSource(source.Type))
         {
             // Journal, Volume(Issue), Pages.
             var detailParts = new List<string>(3);
@@ -993,9 +1005,15 @@ public static class Citations
                 if (NonEmpty(source.Pages) is { } pages)
                     segments.Add($"pp. {pages}.");
             }
+            else if (source.Type == SourceType.ElectronicSource)
+            {
+                var detail = string.Join(", ", SourceDetail(source));
+                if (detail.Length > 0)
+                    segments.Add(WithPeriod(detail));
+            }
 
             var publisher = PlacePublisher(source) ?? (source.Publisher?.Trim() ?? string.Empty);
-            if (publisher.Length > 0)
+            if (source.Type != SourceType.ElectronicSource && publisher.Length > 0)
                 segments.Add(WithPeriod(publisher));
         }
 
@@ -1023,6 +1041,12 @@ public static class Citations
             _ => null,
         };
     }
+
+    private static bool IsPeriodicalSource(SourceType type) =>
+        type is SourceType.JournalArticle or SourceType.ArticleInPeriodical;
+
+    private static bool IsElectronicSource(SourceType type) =>
+        type is SourceType.WebSite or SourceType.ElectronicSource;
 
     private static void AddIfPresent(List<string> parts, string? value)
     {
