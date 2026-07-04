@@ -66,6 +66,40 @@ public sealed class OmmlParserTests
         Assert.Equal("∑", nary.OperatorChar); // ∑
     }
 
+    [Fact]
+    public void Nary_WithSubHideAndSupHide_DropsHiddenLimits()
+    {
+        var node = Parse(
+            "<m:nary>" +
+            "<m:naryPr><m:subHide/><m:supHide m:val=\"1\"/></m:naryPr>" +
+            "<m:sub><m:r><m:t>0</m:t></m:r></m:sub>" +
+            "<m:sup><m:r><m:t>n</m:t></m:r></m:sup>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "</m:nary>");
+
+        var nary = Assert.IsType<MathNode.Nary>(node);
+        Assert.Null(nary.SubLimit);
+        Assert.Null(nary.SupLimit);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(nary.Operand).Text);
+    }
+
+    [Fact]
+    public void Nary_WithSubHideAndSupHideExplicitlyOff_PreservesLimits()
+    {
+        var node = Parse(
+            "<m:nary>" +
+            "<m:naryPr><m:subHide m:val=\"false\"/><m:supHide m:val=\"0\"/></m:naryPr>" +
+            "<m:sub><m:r><m:t>0</m:t></m:r></m:sub>" +
+            "<m:sup><m:r><m:t>n</m:t></m:r></m:sup>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "</m:nary>");
+
+        var nary = Assert.IsType<MathNode.Nary>(node);
+        Assert.Equal("0", Assert.IsType<MathNode.Run>(nary.SubLimit).Text);
+        Assert.Equal("n", Assert.IsType<MathNode.Run>(nary.SupLimit).Text);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(nary.Operand).Text);
+    }
+
     // ── HA3: m:d begChr explicit-empty vs absent ──────────────────────────
 
     [Fact]
