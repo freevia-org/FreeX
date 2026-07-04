@@ -1119,6 +1119,67 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildAccessibilitySummaryPlan_FlagsVideosWithoutCaptions()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Demo";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 15,
+            Name = "Product demo video",
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo { IsVideo = true },
+            AlternativeText = "Product demo walkthrough."
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 16,
+            Name = "Narration audio",
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo { IsVideo = false },
+            AlternativeText = "Narration track."
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 17,
+            Name = "Decorative motion background",
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo { IsVideo = true },
+            IsDecorative = true
+        });
+
+        var summary = PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation);
+        var pane = PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(presentation, summary);
+
+        summary.Issues.Should().ContainSingle().Which.Should().Be(new PresentationAccessibilityIssueDescriptor(
+            PresentationAccessibilityIssueSeverity.Warning,
+            0,
+            15,
+            "Video captions missing",
+            "Product demo video does not expose closed captions or subtitles.",
+            new PresentationAccessibilityIssueActionSummary(
+                PresentationReviewWorkflowPlanner.MissingVideoCaptionsActionSummary,
+                null,
+                true)));
+        pane.Rows.Should().ContainSingle().Which.Should().Be(new PresentationAccessibilityCheckerRowPlan(
+            0,
+            PresentationAccessibilityIssueSeverity.Warning,
+            "Media",
+            0,
+            "Slide 1",
+            15,
+            "Product demo video",
+            "Video captions missing",
+            "Product demo video does not expose closed captions or subtitles.",
+            true,
+            "Select Media",
+            null,
+            true,
+            true));
+    }
+
+    [Fact]
     public void BuildAccessibilitySummaryPlan_FlagsDuplicateSlideTitles()
     {
         var presentation = Presentation.CreateEmpty();
