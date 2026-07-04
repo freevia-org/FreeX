@@ -100,7 +100,59 @@ public sealed class OmmlParserTests
         Assert.Equal("x", Assert.IsType<MathNode.Run>(nary.Operand).Text);
     }
 
-    // ── HA3: m:d begChr explicit-empty vs absent ──────────────────────────
+    // m:radPr/m:degHide CT_OnOff semantics.
+
+    [Fact]
+    public void Rad_WithBareDegHide_HidesDegree()
+    {
+        var node = Parse(
+            "<m:rad>" +
+            "<m:radPr><m:degHide/></m:radPr>" +
+            "<m:deg><m:r><m:t>3</m:t></m:r></m:deg>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "</m:rad>");
+
+        var radical = Assert.IsType<MathNode.Rad>(node);
+        Assert.Null(radical.Degree);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(radical.Radicand).Text);
+    }
+
+    [Theory]
+    [InlineData("1")]
+    [InlineData("on")]
+    [InlineData("true")]
+    public void Rad_WithDegHideOn_HidesDegree(string val)
+    {
+        var node = Parse(
+            $"<m:rad>" +
+            $"<m:radPr><m:degHide m:val=\"{val}\"/></m:radPr>" +
+            "<m:deg><m:r><m:t>3</m:t></m:r></m:deg>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "</m:rad>");
+
+        var radical = Assert.IsType<MathNode.Rad>(node);
+        Assert.Null(radical.Degree);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("off")]
+    [InlineData("false")]
+    public void Rad_WithDegHideOff_PreservesDegree(string val)
+    {
+        var node = Parse(
+            $"<m:rad>" +
+            $"<m:radPr><m:degHide m:val=\"{val}\"/></m:radPr>" +
+            "<m:deg><m:r><m:t>3</m:t></m:r></m:deg>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "</m:rad>");
+
+        var radical = Assert.IsType<MathNode.Rad>(node);
+        Assert.Equal("3", Assert.IsType<MathNode.Run>(radical.Degree).Text);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(radical.Radicand).Text);
+    }
+
+    // m:d begChr explicit-empty vs absent.
 
     [Fact]
     public void Delim_WithExplicitEmptyBegChr_HasNoLeftBracket()

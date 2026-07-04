@@ -277,6 +277,7 @@ internal static class PptxChartWriter
         return new XElement(C + "barChart",
             new XElement(C + "barDir", new XAttribute("val", isBar ? "bar" : "col")),
             new XElement(C + "grouping", new XAttribute("val", grouping)),
+            BuildVaryColorsEl(chart),
             seriesEls,
             new XElement(C + "axId", new XAttribute("val", catAxId)),
             new XElement(C + "axId", new XAttribute("val", valAxId)));
@@ -286,12 +287,14 @@ internal static class PptxChartWriter
         int catAxId = PrimaryCatAxId, int valAxId = PrimaryValAxId) =>
         new XElement(C + "lineChart",
             new XElement(C + "grouping", new XAttribute("val", "standard")),
+            BuildVaryColorsEl(chart),
             seriesEls,
             new XElement(C + "axId", new XAttribute("val", catAxId)),
             new XElement(C + "axId", new XAttribute("val", valAxId)));
 
     private static XElement BuildPieChartEl(ChartShape chart, List<XElement> seriesEls) =>
         new XElement(C + "pieChart",
+            BuildVaryColorsEl(chart),
             seriesEls);
 
     private static XElement BuildAreaChartEl(ChartShape chart, List<XElement> seriesEls,
@@ -299,6 +302,7 @@ internal static class PptxChartWriter
         new XElement(C + "areaChart",
             new XElement(C + "grouping",
                 new XAttribute("val", chart.ChartType == ChartType.AreaStacked ? "stacked" : "standard")),
+            BuildVaryColorsEl(chart),
             seriesEls,
             new XElement(C + "axId", new XAttribute("val", catAxId)),
             new XElement(C + "axId", new XAttribute("val", valAxId)));
@@ -315,12 +319,14 @@ internal static class PptxChartWriter
                     ScatterStyle.SmoothMarker => "smoothMarker",
                     _                         => "lineMarker"
                 })),
+            BuildVaryColorsEl(chart),
             seriesEls,
             new XElement(C + "axId", new XAttribute("val", catAxId)),
             new XElement(C + "axId", new XAttribute("val", valAxId)));
 
     private static XElement BuildDoughnutChartEl(ChartShape chart, List<XElement> seriesEls) =>
         new XElement(C + "doughnutChart",
+            BuildVaryColorsEl(chart),
             new XElement(C + "holeSize",
                 new XAttribute("val", chart.DoughnutHolePercent.ToString(CultureInfo.InvariantCulture))),
             seriesEls);
@@ -335,6 +341,7 @@ internal static class PptxChartWriter
                     RadarStyle.Filled => "filled",
                     _                 => "standard"
                 })),
+            BuildVaryColorsEl(chart),
             seriesEls,
             new XElement(C + "axId", new XAttribute("val", catAxId)),
             new XElement(C + "axId", new XAttribute("val", valAxId)));
@@ -342,9 +349,15 @@ internal static class PptxChartWriter
     private static XElement BuildBubbleChartEl(ChartShape chart, List<XElement> seriesEls,
         int catAxId = PrimaryCatAxId, int valAxId = PrimaryValAxId) =>
         new XElement(C + "bubbleChart",
+            BuildVaryColorsEl(chart),
             seriesEls,
             new XElement(C + "axId", new XAttribute("val", catAxId)),
             new XElement(C + "axId", new XAttribute("val", valAxId)));
+
+    private static XElement? BuildVaryColorsEl(ChartShape chart) =>
+        chart.VaryColors
+            ? new XElement(C + "varyColors", new XAttribute("val", "1"))
+            : null;
 
     // CA2+CA3: Build dLbls in CT_DLbls schema order and gate dLblPos by chart type.
     // CT_DLbls order: numFmt, spPr, txPr, dLblPos, showLegendKey, showVal,

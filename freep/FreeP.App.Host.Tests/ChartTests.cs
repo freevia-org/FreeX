@@ -42,6 +42,7 @@ public sealed class ChartTests : IDisposable
         chart.Categories.Should().BeEmpty();
         chart.Series.Should().BeEmpty();
         chart.Legend.Should().BeNull();
+        chart.VaryColors.Should().BeFalse();
     }
 
     [Fact]
@@ -171,6 +172,29 @@ public sealed class ChartTests : IDisposable
 
         var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
         rt.ChartType.Should().Be(ChartType.Pie);
+    }
+
+    [Fact]
+    public void RoundTrip_PieChart_VaryColorsPreservedInPackageAndModel()
+    {
+        var chart = BuildPieChart();
+        chart.VaryColors = true;
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            var varyColors = chartDoc
+                .Descendants(ChartNs + "pieChart")
+                .Single()
+                .Element(ChartNs + "varyColors");
+            varyColors.Should().NotBeNull("PowerPoint-authored pie charts use c:varyColors for per-slice fallback colors");
+            varyColors!.Attribute("val")!.Value.Should().Be("1");
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.VaryColors.Should().BeTrue();
     }
 
     [Fact]
@@ -944,6 +968,29 @@ public sealed class ChartTests : IDisposable
 
     // ── ID1/ID2 helpers ───────────────────────────────────────────────────────
 
+    [Theory]
+    [InlineData("06-charts.pptx")]
+    [InlineData("18-chart-types.pptx")]
+    [InlineData("19-chart-labels.pptx")]
+    public void RenderCompareChartCorpus_ImportsVaryColorsDecision(string deckName)
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), deckName);
+        var sourceVaryColors = ReadChartVaryColorsValues(deckPath);
+        var imported = PptxPackageReader.Read(deckPath)
+            .Slides
+            .SelectMany(slide => slide.Shapes)
+            .Where(shape => shape.Kind == SlideShapeKind.Chart)
+            .Select(shape => shape.Chart!.VaryColors)
+            .ToArray();
+
+        sourceVaryColors.Should().NotBeEmpty($"{deckName} should contain chart type varyColors decisions");
+        imported.Should().NotBeEmpty($"{deckName} should import chart shapes");
+        if (sourceVaryColors.Contains(true))
+            imported.Should().Contain(true, $"{deckName} should expose authored c:varyColors val=1");
+        if (sourceVaryColors.Contains(false))
+            imported.Should().Contain(false, $"{deckName} should expose authored c:varyColors val=0/default");
+    }
+
     private static readonly XNamespace ChartNs =
         "http://schemas.openxmlformats.org/drawingml/2006/chart";
     private static readonly XNamespace DrawingNs =
@@ -1018,6 +1065,23 @@ public sealed class ChartTests : IDisposable
     }
 
     // ── Helpers for new chart types ──────────────────────────────────────────
+
+    private static bool[] ReadChartVaryColorsValues(string deckPath)
+    {
+        using var archive = ZipFile.OpenRead(deckPath);
+        return archive.Entries
+            .Where(entry => entry.FullName.StartsWith("ppt/charts/chart", StringComparison.OrdinalIgnoreCase) &&
+                            entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(entry =>
+            {
+                using var stream = entry.Open();
+                return XDocument.Load(stream)
+                    .Descendants(ChartNs + "varyColors")
+                    .Select(element => element.Attribute("val")?.Value is "1" or "true")
+                    .ToArray();
+            })
+            .ToArray();
+    }
 
     private static ChartShape BuildDoughnutChart(int holeSize = 50)
     {

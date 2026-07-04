@@ -1171,6 +1171,35 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildPieSlicePrimitives_VaryColorsUsesPointFallbackPalette()
+    {
+        var series = new ChartSeries { Name = "Share" };
+        series.Values.AddRange(new double?[] { 1, 1, 1 });
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Pie,
+            VaryColors = true
+        };
+        chart.Series.Add(series);
+        var colors = new[]
+        {
+            new SrgbColor(0x10, 0x20, 0x30),
+            new SrgbColor(0x40, 0x50, 0x60),
+            new SrgbColor(0x70, 0x80, 0x90)
+        };
+
+        var slices = ChartRenderPlanner.BuildPieSlicePrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100),
+            colors);
+
+        slices.Should().HaveCount(3);
+        slices.Select(slice => slice.Fill!.Value.Color)
+            .Should()
+            .Equal(colors);
+    }
+
+    [Fact]
     public void BuildDoughnutSlicePrimitives_PlansSeriesZeroAsInnermostRing()
     {
         var chart = new ChartShape

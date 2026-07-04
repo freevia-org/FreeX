@@ -486,7 +486,8 @@ public static partial class ChartRenderPlanner
         int pointIndex,
         IReadOnlyList<SrgbColor>? seriesColors,
         byte alpha,
-        ChartFillPlanSet? fillPlans = null)
+        ChartFillPlanSet? fillPlans = null,
+        bool varyByPoint = false)
     {
         if (fillPlans?.TryGetPointFill(seriesIndex, pointIndex, alpha, out var pointFill) == true)
             return pointFill;
@@ -504,8 +505,16 @@ public static partial class ChartRenderPlanner
         if (pointColorOverride is not null)
             return new ChartFillPlan(pointColorOverride.Value, alpha);
 
+        if (varyByPoint && series.FillColor is null && series.Fill is null)
+            return new ChartFillPlan(ResolveSeriesColor(pointIndex, seriesColors), alpha);
+
         return ResolveSeriesFill(seriesIndex, seriesColors, alpha, fillPlans);
     }
+
+    private static bool ShouldVaryPointColors(ChartShape chart) =>
+        chart.VaryColors &&
+        (chart.ChartType is ChartType.Pie or ChartType.Doughnut or ChartType.Bubble ||
+         chart.Series.Count == 1);
 
     private static ChartStrokePlan? ResolveMarkerStroke(
         ChartSeries series,
@@ -1245,6 +1254,7 @@ public static partial class ChartRenderPlanner
         double halfGap = (categoryWidth - clusterWidth) / 2.0;
         int seriesCount = Math.Max(1, chart.Series.Count);
         double seriesWidth = stacked ? clusterWidth : clusterWidth / seriesCount;
+        bool varyByPoint = ShouldVaryPointColors(chart);
 
         var primitives = new List<ChartRectPrimitive>();
         for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
@@ -1284,7 +1294,7 @@ public static partial class ChartRenderPlanner
                         seriesIndex,
                         categoryIndex,
                         new ChartPlanRect(x, stackedY - height, drawWidth, height),
-                        ResolvePointFill(series, seriesIndex, categoryIndex, seriesColors, RectSeriesFillAlpha, fillPlans),
+                        ResolvePointFill(series, seriesIndex, categoryIndex, seriesColors, RectSeriesFillAlpha, fillPlans, varyByPoint),
                         Stroke: null));
                     stackedY -= height;
                 }
@@ -1296,7 +1306,7 @@ public static partial class ChartRenderPlanner
                         seriesIndex,
                         categoryIndex,
                         new ChartPlanRect(x, y, drawWidth, height),
-                        ResolvePointFill(series, seriesIndex, categoryIndex, seriesColors, RectSeriesFillAlpha, fillPlans),
+                        ResolvePointFill(series, seriesIndex, categoryIndex, seriesColors, RectSeriesFillAlpha, fillPlans, varyByPoint),
                         Stroke: null));
                 }
             }
@@ -1329,6 +1339,7 @@ public static partial class ChartRenderPlanner
         double halfGap = (categoryHeight - clusterHeight) / 2.0;
         int seriesCount = Math.Max(1, chart.Series.Count);
         double seriesHeight = stacked ? clusterHeight : clusterHeight / seriesCount;
+        bool varyByPoint = ShouldVaryPointColors(chart);
 
         var primitives = new List<ChartRectPrimitive>();
         for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
@@ -1361,7 +1372,7 @@ public static partial class ChartRenderPlanner
                     seriesIndex,
                     categoryIndex,
                     new ChartPlanRect(x, y, width, height),
-                    ResolvePointFill(series, seriesIndex, categoryIndex, seriesColors, RectSeriesFillAlpha, fillPlans),
+                    ResolvePointFill(series, seriesIndex, categoryIndex, seriesColors, RectSeriesFillAlpha, fillPlans, varyByPoint),
                     Stroke: null));
 
                 if (stacked)
@@ -1809,7 +1820,7 @@ public static partial class ChartRenderPlanner
                         plot.X + (xValue.Value - xMin) / xRange * plot.Width,
                         plot.Bottom - (yValue.Value - yMin) / yRange * plot.Height),
                     radius,
-                    ResolvePointFill(series, seriesIndex, pointIndex, seriesColors, BubbleFillAlpha, fillPlans),
+                    ResolvePointFill(series, seriesIndex, pointIndex, seriesColors, BubbleFillAlpha, fillPlans, ShouldVaryPointColors(chart)),
                     stroke));
             }
         }
@@ -1983,7 +1994,8 @@ public static partial class ChartRenderPlanner
             innerRadius: 0,
             outerRadius: Math.Min(plot.Width, plot.Height) / 2 * 0.85,
             seriesColors,
-            fillPlans);
+            fillPlans,
+            ShouldVaryPointColors(chart));
     }
 
     public static IReadOnlyList<ChartPieSlicePrimitive> BuildDoughnutSlicePrimitives(
@@ -2018,7 +2030,8 @@ public static partial class ChartRenderPlanner
                 innerRadius,
                 seriesOuterRadius,
                 seriesColors,
-                fillPlans));
+                fillPlans,
+                ShouldVaryPointColors(chart)));
         }
 
         return primitives;
@@ -2195,7 +2208,8 @@ public static partial class ChartRenderPlanner
         double innerRadius,
         double outerRadius,
         IReadOnlyList<SrgbColor>? seriesColors,
-        ChartFillPlanSet? fillPlans)
+        ChartFillPlanSet? fillPlans,
+        bool varyByPoint)
     {
         var values = series.Values
             .Where(value => value.HasValue && value.Value > 0)
@@ -2225,7 +2239,7 @@ public static partial class ChartRenderPlanner
                 outerRadius,
                 startAngle,
                 endAngle,
-                ResolvePointFill(series, seriesIndex, pointIndex, seriesColors, RectSeriesFillAlpha, fillPlans)));
+                ResolvePointFill(series, seriesIndex, pointIndex, seriesColors, RectSeriesFillAlpha, fillPlans, varyByPoint)));
             startAngle = endAngle;
         }
 
