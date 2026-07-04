@@ -614,7 +614,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("IActivatableLifetime");
         script.Should().Contain("OpenActivatedFilesAsync");
         script.Should().Contain("using FreeX.Core.Calc;");
-        script.Should().Contain("AddGridChild(grid, CreateCell(cell, row, col, zoomFactor, colWidth, rowHeight)");
+        script.Should().Contain("var cellControl = CreateCell(cell, row, col, zoomFactor, colWidth, rowHeight, mergeRegion)");
+        script.Should().Contain("AddGridChild(grid, cellControl, rowIndex + headerOffset, colIndex + headerOffset)");
         script.Should().Contain("CellTextOrientationLayoutPlanner.HasTextOrientation(textRotation)");
         script.Should().Contain("CellTextOrientationLayoutPlanner.CalculateLayout(");
         script.Should().Contain("CreateTextRotationTransform(layout.TransformAngle)");
@@ -695,11 +696,10 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("public StyleDiff? CreateFormatDiffFromActiveCell()");
         script.Should().Contain("public StyleDiff? CreateFormatDiffFromCell(CellAddress address)");
         script.Should().Contain("StyleDiff? replacementFormat = null");
-        script.Should().Contain("replacementFormat is not null");
-        script.Should().Contain("new GridRange(edit.Address, edit.Address)");
+        script.Should().Contain("FindReplaceService.TryCreateReplacementCommand(");
+        script.Should().Contain("workbook: Workbook))");
         script.Should().Contain("new GridRange(match.Address, match.Address)");
         script.Should().Contain("GetReplaceTargetIndex(matches, effectiveOptions.SearchOrder, sameSearch)");
-        script.Should().Contain("FindLookIn.Formulas => cell.FormulaText");
         script.Should().Contain("new SetCommentCommand(");
         script.Should().Contain("new UpdateThreadedCommentTextCommand(");
         script.Should().Contain("public enum FindResultTarget");
@@ -709,10 +709,6 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("public readonly record struct SearchText(");
         script.Should().Contain("comment.Replies[replyIndex].Text");
         script.Should().Contain("FindResultTarget.ThreadedCommentReply,");
-        script.Should().Contain("match.Target == FindResultTarget.ThreadedCommentReply");
-        script.Should().Contain("match.ReplyIndex is { } replyIndex");
-        script.Should().Contain("new UpdateThreadedCommentReplyCommand(");
-        script.Should().Contain("private static bool IsValidThreadedCommentReplyIndex(ThreadedComment comment, int replyIndex)");
         script.Should().Contain("_bordersButton.Flyout = CreateBorderPresetFlyout();");
         script.Should().Contain("_bordersMenuItem.Menu = CreateNativeBorderPresetMenu();");
         script.Should().Contain("PasteSpecialClipboardAtActiveCell(text, mode, options)");
@@ -2785,7 +2781,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     CalculateDisplayedGridHeight(viewport, showHeadings, zoomFactor);
                     fontSize * zoomFactor;
                     displayHeight / zoomFactor;
-                    AddGridChild(grid, CreateCell(cell, row, col, zoomFactor, colWidth, rowHeight));
+                    var cellControl = CreateCell(cell, row, col, zoomFactor, colWidth, rowHeight, mergeRegion);
+                    AddGridChild(grid, cellControl, rowIndex + headerOffset, colIndex + headerOffset);
                     CellTextOrientationLayoutPlanner.HasTextOrientation(textRotation);
                     CreateOrientedCellContent();
                     var layout = CellTextOrientationLayoutPlanner.CalculateLayout();
@@ -3984,29 +3981,16 @@ public sealed class MacOsAppReadinessPreflightTests
                 public WorkbookReplaceResult ReplaceNextValue(
                 FindOptions? options,
                 StyleDiff? replacementFormat = null
-                replacementFormat is not null
-                new GridRange(edit.Address, edit.Address)
-                private static bool TryCreateReplacementCommand(
+                FindReplaceService.TryCreateReplacementCommand(
+                workbook: Workbook))
                 new CompositeWorkbookCommand(
                 new ApplyStyleCommand(
                 new GridRange(match.Address, match.Address)
                 var effectiveOptions = ResolveFindOptions(options, FindLookIn.Values);
                 GetReplaceTargetIndex(matches, effectiveOptions.SearchOrder, sameSearch)
-                commands.Add(new EditCellsCommand(sheetId, edits));
-                var editCommand = new EditCellsCommand(sheet.Id, [(match.Address, newCell)]);
                 effectiveOptions.LookIn,
-                FindLookIn.Formulas => cell.FormulaText
-                FindLookIn.Values => cell.HasFormula ? null : GetReplaceableDisplayText(cell.Value)
-                newCell = cell.Clone();
-                FindLookIn.Notes when
-                match.Target == FindResultTarget.Note
-                sheet.Comments.TryGetValue(match.Address, out var note) => note
                 new SetCommentCommand(
                 new UpdateThreadedCommentTextCommand(
-                match.Target == FindResultTarget.ThreadedCommentReply
-                match.ReplyIndex is { } replyIndex
-                new UpdateThreadedCommentReplyCommand(
-                private static bool IsValidThreadedCommentReplyIndex(ThreadedComment comment, int replyIndex)
                 return WorkbookReplaceResult.Replaced(1, replacedRange, index + 1, matches.Count);
                 public WorkbookNavigationResult GoToReference(string reference)
                 public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
