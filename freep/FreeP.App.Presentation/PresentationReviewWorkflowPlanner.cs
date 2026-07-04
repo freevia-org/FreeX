@@ -43,6 +43,14 @@ public enum PresentationCommentThreadStatus
     Resolved
 }
 
+public enum PresentationCommentPaneFilterKind
+{
+    All,
+    Open,
+    Resolved,
+    Mentions
+}
+
 public enum PresentationProofingScopeKind
 {
     SlideTitle,
@@ -185,6 +193,9 @@ public sealed record PresentationCommentPanePlan(
     int ResolvedThreadCount,
     int TotalReplyCount,
     int TotalMentionCount,
+    PresentationCommentPaneFilterKind FilterKind,
+    int FilteredCommentCount,
+    IReadOnlyList<PresentationCommentPaneFilterPlan> Filters,
     int SelectedCommentIndex,
     IReadOnlyList<PresentationCommentDescriptor> Comments,
     IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions)
@@ -209,6 +220,22 @@ public sealed record PresentationCommentPanePlan(
 
     public string CurrentSlideSummaryLabel =>
         $"Slide {SlideIndex + 1}: {PresentationCommentMetadataPolicy.BuildCountSummary(SlideCommentCount, "thread")}";
+
+    public string FilterSummaryLabel =>
+        FilterKind == PresentationCommentPaneFilterKind.All
+            ? "Showing all threads"
+            : $"Showing {PresentationCommentMetadataPolicy.BuildCountSummary(FilteredCommentCount, "thread")}";
+}
+
+public sealed record PresentationCommentPaneFilterPlan(
+    PresentationCommentPaneFilterKind Kind,
+    string Label,
+    int Count,
+    bool IsSelected)
+{
+    public bool HasMatches => Count > 0;
+
+    public string Summary => $"{Label}: {PresentationCommentMetadataPolicy.BuildCountSummary(Count, "thread")}";
 }
 
 public sealed record PresentationCommentMutationPlan(
@@ -676,14 +703,22 @@ public static class PresentationReviewWorkflowPlanner
     public static PresentationCommentPanePlan BuildCommentPanePlan(
         IReadOnlyList<Slide> slides,
         int slideIndex,
-        int? selectedCommentIndex = null)
+        int? selectedCommentIndex = null,
+        PresentationCommentPaneFilterKind filterKind = PresentationCommentPaneFilterKind.All)
     {
         ArgumentNullException.ThrowIfNull(slides);
 
-        var selected = NormalizeSelectedCommentIndex(slides, slideIndex, selectedCommentIndex);
         var comments = GetSlide(slides, slideIndex)?.Comments ?? [];
-        var descriptors = comments
-            .Select((comment, index) => DescribeComment(slideIndex, index, comment, selected == index))
+        var filteredComments = comments
+            .Select((comment, index) => (Comment: comment, Index: index))
+            .Where(item => MatchesCommentPaneFilter(item.Comment, filterKind))
+            .ToArray();
+        var selected = NormalizeSelectedCommentIndex(
+            filteredComments.Select(item => item.Index).ToArray(),
+            selectedCommentIndex,
+            useFirstVisibleWhenInvalid: filterKind != PresentationCommentPaneFilterKind.All);
+        var descriptors = filteredComments
+            .Select(item => DescribeComment(slideIndex, item.Index, item.Comment, selected == item.Index))
             .ToArray();
         var deckComments = slides.SelectMany(slide => slide.Comments).ToArray();
         var total = deckComments.Length;
@@ -692,6 +727,8 @@ public static class PresentationReviewWorkflowPlanner
         var replies = deckComments.Sum(comment => comment.Replies.Count);
         var mentions = deckComments.Sum(comment =>
             CountMentions(comment.Text) + comment.Replies.Sum(reply => CountMentions(reply.Text)));
+        var filterPlans = BuildCommentPaneFilters(comments, filterKind);
+        var selectedDisplayIndex = Array.FindIndex(descriptors, descriptor => descriptor.IsSelected);
 
         return new PresentationCommentPanePlan(
             slideIndex,
@@ -702,7 +739,10 @@ public static class PresentationReviewWorkflowPlanner
             resolved,
             replies,
             mentions,
-            selected ?? -1,
+            filterKind,
+            descriptors.Length,
+            filterPlans,
+            selectedDisplayIndex,
             descriptors,
             BuildCommentActions(slides, slideIndex, selected, total));
     }
@@ -2703,6 +2743,63 @@ public static class PresentationReviewWorkflowPlanner
 
         return index >= 0 && index < comments.Count ? index : null;
     }
+
+    private static int? NormalizeSelectedCommentIndex(
+        IReadOnlyList<int> visibleCommentIndexes,
+        int? selectedCommentIndex,
+        bool useFirstVisibleWhenInvalid)
+    {
+        if (visibleCommentIndexes.Count == 0)
+        {
+            return null;
+        }
+
+        if (selectedCommentIndex is not { } index)
+        {
+            return visibleCommentIndexes[0];
+        }
+
+        return visibleCommentIndexes.Contains(index)
+            ? index
+            : useFirstVisibleWhenInvalid
+                ? visibleCommentIndexes[0]
+                : null;
+    }
+
+    private static IReadOnlyList<PresentationCommentPaneFilterPlan> BuildCommentPaneFilters(
+        IReadOnlyList<SlideComment> comments,
+        PresentationCommentPaneFilterKind selectedFilter)
+        =>
+        [
+            BuildCommentPaneFilter(comments, selectedFilter, PresentationCommentPaneFilterKind.All, "All"),
+            BuildCommentPaneFilter(comments, selectedFilter, PresentationCommentPaneFilterKind.Open, "Open"),
+            BuildCommentPaneFilter(comments, selectedFilter, PresentationCommentPaneFilterKind.Resolved, "Resolved"),
+            BuildCommentPaneFilter(comments, selectedFilter, PresentationCommentPaneFilterKind.Mentions, "Mentions"),
+        ];
+
+    private static PresentationCommentPaneFilterPlan BuildCommentPaneFilter(
+        IReadOnlyList<SlideComment> comments,
+        PresentationCommentPaneFilterKind selectedFilter,
+        PresentationCommentPaneFilterKind filterKind,
+        string label)
+        => new(
+            filterKind,
+            label,
+            comments.Count(comment => MatchesCommentPaneFilter(comment, filterKind)),
+            selectedFilter == filterKind);
+
+    private static bool MatchesCommentPaneFilter(
+        SlideComment comment,
+        PresentationCommentPaneFilterKind filterKind)
+        => filterKind switch
+        {
+            PresentationCommentPaneFilterKind.Open => !comment.IsResolved,
+            PresentationCommentPaneFilterKind.Resolved => comment.IsResolved,
+            PresentationCommentPaneFilterKind.Mentions =>
+                CountMentions(comment.Text) > 0 ||
+                comment.Replies.Any(reply => CountMentions(reply.Text) > 0),
+            _ => true
+        };
 
     private static bool TryGetAdjacentComment(
         IReadOnlyList<Slide> slides,

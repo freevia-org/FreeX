@@ -2300,6 +2300,7 @@ public sealed class MainWindowHeadlessTests
         var commentsPaneActionCount = 0;
         var commentsPaneSelectedCount = 0;
         var commentsPaneSummary = string.Empty;
+        string[] commentsPaneFilterStates = [];
         var accessibilityCheckerPaneVisible = false;
         var accessibilityCheckerPaneRowCount = 0;
         var readingOrderPaneVisible = false;
@@ -2383,6 +2384,7 @@ public sealed class MainWindowHeadlessTests
             commentsPaneActionCount = window.ReviewCommentsPaneActionButtonCount;
             commentsPaneSelectedCount = window.ReviewCommentsPaneSelectedCommentCount;
             commentsPaneSummary = window.ReviewCommentsPaneSummary;
+            commentsPaneFilterStates = window.ReviewCommentsPaneFilterStates.ToArray();
             accessibilityPlan = window.LastAccessibilitySummaryPlan;
             accessibilityCheckerPlan = window.LastAccessibilityCheckerPanePlan;
             accessibilityCheckerPaneVisible = window.IsAccessibilityCheckerPaneVisible;
@@ -2437,6 +2439,12 @@ public sealed class MainWindowHeadlessTests
         commentPlan.TotalReplyCount.Should().Be(1);
         commentPlan.TotalMentionCount.Should().Be(1);
         commentsPaneSummary.Should().Be("1 thread: 0 open threads, 1 resolved thread, 1 reply, 1 mention");
+        commentPlan.FilterSummaryLabel.Should().Be("Showing all threads");
+        commentsPaneFilterStates.Should().Equal(
+            "All|All|1|True|True",
+            "Open|Open|0|False|False",
+            "Resolved|Resolved|1|False|True",
+            "Mentions|Mentions|1|False|True");
         commentPlan.Comments.Single().Should().Match<PresentationCommentDescriptor>(comment =>
             comment.ThreadStatus == PresentationCommentThreadStatus.Resolved &&
             comment.ThreadStatusLabel == "Resolved" &&
