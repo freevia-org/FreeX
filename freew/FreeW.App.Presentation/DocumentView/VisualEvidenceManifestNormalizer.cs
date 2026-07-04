@@ -228,6 +228,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
         ValidateBackstageRendererPairs(rows, failures);
         ValidateSectionGeometryRendererPairs(rows, failures);
         ValidateReviewRendererPairs(rows, failures);
+        ValidateFieldRendererPairs(rows, failures);
+        ValidateTableRendererPairs(rows, failures);
         ValidateDrawingObjectRendererPairs(rows, failures);
         ValidateChartSmartArtRendererPairs(rows, failures);
         var orderedRows = rows
@@ -1366,6 +1368,94 @@ public static class FreeWVisualEvidenceManifestNormalizer
         }
     }
 
+    private static void ValidateFieldRendererPairs(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,
+        List<string> failures)
+    {
+        foreach (var scenarioId in FieldRendererScenarioIds)
+        {
+            var wpfRows = TrustedRowsForHostScenario(rows, WpfHostId, scenarioId);
+            var avaloniaRows = TrustedRowsForHostScenario(rows, AvaloniaHostId, scenarioId);
+            if (wpfRows.Count == 0 || avaloniaRows.Count == 0)
+                continue;
+
+            ValidateUniquePages(scenarioId, WpfHostId, wpfRows, failures);
+            ValidateUniquePages(scenarioId, AvaloniaHostId, avaloniaRows, failures);
+
+            var wpfPages = wpfRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var avaloniaPages = avaloniaRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var requiredPages = RequiredScenarioPages(scenarioId);
+            var missingAvaloniaPages = requiredPages.Except(avaloniaPages).ToList();
+            var missingWpfPages = requiredPages.Except(wpfPages).ToList();
+            if (missingAvaloniaPages.Count > 0)
+            {
+                failures.Add(
+                    $"field renderer pair '{scenarioId}' is missing Avalonia page(s): {FormatPages(missingAvaloniaPages)}");
+            }
+
+            if (missingWpfPages.Count > 0)
+            {
+                failures.Add(
+                    $"field renderer pair '{scenarioId}' is missing WPF page(s): {FormatPages(missingWpfPages)}");
+            }
+
+            foreach (var pageNumber in wpfPages.Intersect(avaloniaPages))
+            {
+                var wpf = wpfRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                var avalonia = avaloniaRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                if (wpf is null || avalonia is null)
+                    continue;
+
+                ValidateRendererPairRow("field renderer pair", scenarioId, pageNumber, wpf, avalonia, failures);
+                ValidateFieldPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+            }
+        }
+    }
+
+    private static void ValidateTableRendererPairs(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,
+        List<string> failures)
+    {
+        foreach (var scenarioId in TableRendererScenarioIds)
+        {
+            var wpfRows = TrustedRowsForHostScenario(rows, WpfHostId, scenarioId);
+            var avaloniaRows = TrustedRowsForHostScenario(rows, AvaloniaHostId, scenarioId);
+            if (wpfRows.Count == 0 || avaloniaRows.Count == 0)
+                continue;
+
+            ValidateUniquePages(scenarioId, WpfHostId, wpfRows, failures);
+            ValidateUniquePages(scenarioId, AvaloniaHostId, avaloniaRows, failures);
+
+            var wpfPages = wpfRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var avaloniaPages = avaloniaRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var requiredPages = RequiredScenarioPages(scenarioId);
+            var missingAvaloniaPages = requiredPages.Except(avaloniaPages).ToList();
+            var missingWpfPages = requiredPages.Except(wpfPages).ToList();
+            if (missingAvaloniaPages.Count > 0)
+            {
+                failures.Add(
+                    $"table renderer pair '{scenarioId}' is missing Avalonia page(s): {FormatPages(missingAvaloniaPages)}");
+            }
+
+            if (missingWpfPages.Count > 0)
+            {
+                failures.Add(
+                    $"table renderer pair '{scenarioId}' is missing WPF page(s): {FormatPages(missingWpfPages)}");
+            }
+
+            foreach (var pageNumber in wpfPages.Intersect(avaloniaPages))
+            {
+                var wpf = wpfRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                var avalonia = avaloniaRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                if (wpf is null || avalonia is null)
+                    continue;
+
+                ValidateRendererPairRow("table renderer pair", scenarioId, pageNumber, wpf, avalonia, failures);
+                ValidateTablePairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+            }
+        }
+    }
+
     private static void ValidateDrawingObjectRendererPairs(
         IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,
         List<string> failures)
@@ -1562,6 +1652,122 @@ public static class FreeWVisualEvidenceManifestNormalizer
         }
     }
 
+    private static void ValidateFieldPairRow(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia,
+        List<string> failures)
+    {
+        var pairName = $"field renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        var wpfFields = wpf.Fields;
+        var avaloniaFields = avalonia.Fields;
+        if (wpfFields.SimpleFieldCount != avaloniaFields.SimpleFieldCount)
+        {
+            failures.Add(
+                $"{pairName} simple field counts differ: WPF {wpfFields.SimpleFieldCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaFields.SimpleFieldCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (wpfFields.ComplexFieldCount != avaloniaFields.ComplexFieldCount)
+        {
+            failures.Add(
+                $"{pairName} complex field counts differ: WPF {wpfFields.ComplexFieldCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaFields.ComplexFieldCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (wpfFields.PageFieldCount != avaloniaFields.PageFieldCount)
+        {
+            failures.Add(
+                $"{pairName} PAGE field counts differ: WPF {wpfFields.PageFieldCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaFields.PageFieldCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (wpfFields.NumPagesFieldCount != avaloniaFields.NumPagesFieldCount)
+        {
+            failures.Add(
+                $"{pairName} NUMPAGES field counts differ: WPF {wpfFields.NumPagesFieldCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaFields.NumPagesFieldCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (wpfFields.DocumentPropertyFieldCount != avaloniaFields.DocumentPropertyFieldCount)
+        {
+            failures.Add(
+                $"{pairName} document-property field counts differ: WPF {wpfFields.DocumentPropertyFieldCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaFields.DocumentPropertyFieldCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        var wpfKinds = OrderedSummaries(wpfFields.FieldKinds);
+        var avaloniaKinds = OrderedSummaries(avaloniaFields.FieldKinds);
+        if (!wpfKinds.SequenceEqual(avaloniaKinds, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} field kinds differ: WPF '{FormatSummaries(wpfKinds)}', Avalonia '{FormatSummaries(avaloniaKinds)}'");
+        }
+
+        var wpfComplexKeywords = OrderedSummaries(wpfFields.ComplexFieldKeywords);
+        var avaloniaComplexKeywords = OrderedSummaries(avaloniaFields.ComplexFieldKeywords);
+        if (!wpfComplexKeywords.SequenceEqual(avaloniaComplexKeywords, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} complex field keywords differ: WPF '{FormatSummaries(wpfComplexKeywords)}', Avalonia '{FormatSummaries(avaloniaComplexKeywords)}'");
+        }
+
+        var wpfSlots = OrderedSummaries(wpfFields.HeaderFooterSlotNames);
+        var avaloniaSlots = OrderedSummaries(avaloniaFields.HeaderFooterSlotNames);
+        if (!wpfSlots.SequenceEqual(avaloniaSlots, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} header/footer field slots differ: WPF '{FormatSummaries(wpfSlots)}', Avalonia '{FormatSummaries(avaloniaSlots)}'");
+        }
+    }
+
+    private static void ValidateTablePairRow(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia,
+        List<string> failures)
+    {
+        var pairName = $"table renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        var wpfTables = wpf.Tables;
+        var avaloniaTables = avalonia.Tables;
+        if (wpfTables.TableCount != avaloniaTables.TableCount)
+        {
+            failures.Add(
+                $"{pairName} table counts differ: WPF {wpfTables.TableCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaTables.TableCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (wpfTables.TotalRows != avaloniaTables.TotalRows)
+        {
+            failures.Add(
+                $"{pairName} total row counts differ: WPF {wpfTables.TotalRows.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaTables.TotalRows.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (wpfTables.TotalCells != avaloniaTables.TotalCells)
+        {
+            failures.Add(
+                $"{pairName} total cell counts differ: WPF {wpfTables.TotalCells.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaTables.TotalCells.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (wpfTables.EstimatedPageCount != avaloniaTables.EstimatedPageCount)
+        {
+            failures.Add(
+                $"{pairName} estimated table page counts differ: WPF {wpfTables.EstimatedPageCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaTables.EstimatedPageCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        var wpfTableSignatures = BuildTablePlanSignatures(wpfTables.Tables);
+        var avaloniaTableSignatures = BuildTablePlanSignatures(avaloniaTables.Tables);
+        if (!wpfTableSignatures.SequenceEqual(avaloniaTableSignatures, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} table plan signatures differ: WPF '{FormatSummaries(wpfTableSignatures)}', Avalonia '{FormatSummaries(avaloniaTableSignatures)}'");
+        }
+
+        var wpfPaginationSignatures = BuildTablePaginationSignatures(wpfTables.PaginationPlans);
+        var avaloniaPaginationSignatures = BuildTablePaginationSignatures(avaloniaTables.PaginationPlans);
+        if (!wpfPaginationSignatures.SequenceEqual(avaloniaPaginationSignatures, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} table pagination signatures differ: WPF '{FormatSummaries(wpfPaginationSignatures)}', Avalonia '{FormatSummaries(avaloniaPaginationSignatures)}'");
+        }
+    }
+
     private static void ValidateChartSmartArtPairRow(
         string scenarioId,
         int pageNumber,
@@ -1607,6 +1813,89 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{pairName} SmartArt plan signatures differ: WPF '{FormatSummaries(wpfSmartArtSignatures)}', Avalonia '{FormatSummaries(avaloniaSmartArtSignatures)}'");
         }
     }
+
+    private static List<string> BuildTablePlanSignatures(IEnumerable<DocumentTableLayoutPlan> tables) =>
+        tables
+            .Select(table => string.Join(
+                "|",
+                table.TableIndex.ToString(CultureInfo.InvariantCulture),
+                table.RowCount.ToString(CultureInfo.InvariantCulture),
+                table.GridColumnCount.ToString(CultureInfo.InvariantCulture),
+                BoolFlag(table.HasHeaderRow),
+                BoolFlag(table.RepeatsHeaderRow),
+                BoolFlag(table.HasBandedRows),
+                BoolFlag(table.HasBandedColumns),
+                BoolFlag(table.HasMergedCells),
+                BoolFlag(table.HasVerticalMerges),
+                BoolFlag(table.HasCellShading),
+                BoolFlag(table.HasCustomCellBorders),
+                BoolFlag(table.HasCellMargins),
+                BoolFlag(table.HasCellSpacing),
+                BoolFlag(table.HasVerticalText),
+                BoolFlag(table.HasVerticalAlignment),
+                BoolFlag(table.HasPreferredWidths),
+                BoolFlag(table.HasNamedStyle),
+                table.Alignment,
+                table.AutoFit,
+                table.TableStyleId ?? string.Empty,
+                string.Join(",", table.ColumnWidthsDip.Select(FormatDouble)),
+                string.Join(";", table.Cells.Select(BuildTableCellSignature).OrderBy(signature => signature, StringComparer.Ordinal))))
+            .OrderBy(signature => signature, StringComparer.Ordinal)
+            .ToList();
+
+    private static string BuildTableCellSignature(DocumentTableCellLayoutPlan cell) =>
+        string.Join(
+            ":",
+            cell.RowIndex.ToString(CultureInfo.InvariantCulture),
+            cell.CellIndex.ToString(CultureInfo.InvariantCulture),
+            cell.GridColumnIndex.ToString(CultureInfo.InvariantCulture),
+            cell.GridSpan.ToString(CultureInfo.InvariantCulture),
+            cell.RowSpan.ToString(CultureInfo.InvariantCulture),
+            BoolFlag(cell.IsVerticalMergeContinuation),
+            cell.ShadingColorHex ?? string.Empty,
+            BoolFlag(cell.HasCustomBorders),
+            cell.TextDirection,
+            cell.VerticalAlignment,
+            cell.PreferredWidthDip.HasValue ? FormatDouble(cell.PreferredWidthDip.Value) : string.Empty,
+            cell.HeightDip.HasValue ? FormatDouble(cell.HeightDip.Value) : string.Empty);
+
+    private static List<string> BuildTablePaginationSignatures(IEnumerable<DocumentTablePaginationPlan> plans) =>
+        plans
+            .Select(plan => string.Join(
+                "|",
+                plan.TableIndex.ToString(CultureInfo.InvariantCulture),
+                plan.EstimatedPageCount.ToString(CultureInfo.InvariantCulture),
+                FormatDouble(plan.AvailableBodyHeightDip),
+                FormatDouble(plan.HeaderHeightDip),
+                BoolFlag(plan.RepeatsHeaderRows),
+                BoolFlag(plan.HasKeepTogetherRows),
+                BoolFlag(plan.SplitsRowsAllowed),
+                string.Join(",", plan.HeaderRowIndexes),
+                string.Join(";", plan.Pages.Select(BuildTablePaginationPageSignature))))
+            .OrderBy(signature => signature, StringComparer.Ordinal)
+            .ToList();
+
+    private static string BuildTablePaginationPageSignature(DocumentTablePaginationPagePlan page) =>
+        string.Join(
+            ":",
+            page.PageNumber.ToString(CultureInfo.InvariantCulture),
+            string.Join(",", page.SourceRowIndexes),
+            string.Join(",", page.RepeatedHeaderRowIndexes),
+            string.Join(",", page.KeepTogetherRowIndexes),
+            FormatDouble(page.UsedHeightDip),
+            FormatDouble(page.AvailableHeightDip),
+            string.Join(",", page.RenderRows.Select(BuildTablePaginationRenderRowSignature)));
+
+    private static string BuildTablePaginationRenderRowSignature(DocumentTablePaginationRenderRowPlan row) =>
+        string.Join(
+            "/",
+            row.SourceRowIndex.ToString(CultureInfo.InvariantCulture),
+            row.PageNumber.ToString(CultureInfo.InvariantCulture),
+            row.VisualRowIndexOnPage.ToString(CultureInfo.InvariantCulture),
+            BoolFlag(row.IsRepeatedHeader),
+            BoolFlag(row.StartsPlannedPage),
+            FormatDouble(row.PageOffsetYDip),
+            FormatDouble(row.EstimatedHeightDip));
 
     private static List<string> BuildChartPlanSignatures(IEnumerable<ChartVisualPlan> charts) =>
         charts
