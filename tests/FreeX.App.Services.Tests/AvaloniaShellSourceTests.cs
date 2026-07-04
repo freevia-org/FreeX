@@ -2676,6 +2676,9 @@ public sealed class AvaloniaShellSourceTests
         wpfCaptureSource.Should().Contain("SelectionPaneParityFixture.CreateDialogItems(");
         avaloniaCaptureSource.Should().Contain("SelectionPaneParityFixture.ChartName");
         avaloniaCaptureSource.Should().Contain("SelectionPaneParityFixture.ShapeName");
+        wpfCaptureSource.Should().Contain("CreateSelectionPaneItems()");
+        wpfCaptureSource.Should().NotContain("\"Text Box 1\"");
+        wpfCaptureSource.Should().NotContain("\"Picture 1\"");
 
         avaloniaCaptureSource.Should().Contain("ShowAccessibilityCheckerParityDialogAsync()");
         avaloniaCaptureSource.Should().Contain("AccessibilityCheckerParityFixture.CreateDialogIssues(");
