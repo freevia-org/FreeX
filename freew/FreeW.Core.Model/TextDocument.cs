@@ -1285,6 +1285,9 @@ public enum SourceType
 
     /// <summary>A chapter or section within a book (adds book title, chapter number and page range).</summary>
     BookSection = 4,
+
+    /// <summary>A paper in conference proceedings (adds the conference/proceedings name and page range).</summary>
+    ConferenceProceedings = 5,
 }
 
 /// <summary>
@@ -1328,7 +1331,7 @@ public sealed record SourceAuthorPerson(string First, string Middle, string Last
 /// fields such as city, institution, edition, standard number, short title and comments. A <see cref="SourceType"/>
 /// selects type-specific formatting and carries the extra fields that type needs
 /// (journal/volume/issue/pages for an article, url/accessed for a web site, institution for a report,
-/// book title/chapter/pages for a book section). Kept deliberately
+/// book title/chapter/pages for a book section, conference name/pages for proceedings). Kept deliberately
 /// small and immutable-friendly (init-only properties) so it round-trips cleanly and the
 /// citation/bibliography formatting helpers (see <see cref="Citations"/>) can stay pure. Missing fields
 /// are represented as empty strings / null and handled gracefully by the formatters.
@@ -1361,6 +1364,9 @@ public sealed class Source
 
     /// <summary>The containing book title for a <see cref="SourceType.BookSection"/>; null when unknown.</summary>
     public string? BookTitle { get; init; }
+
+    /// <summary>The conference or proceedings name for <see cref="SourceType.ConferenceProceedings"/>; null when unknown.</summary>
+    public string? ConferenceName { get; init; }
 
     /// <summary>The year of publication. Empty when unknown.</summary>
     public string Year { get; init; } = string.Empty;
@@ -1399,7 +1405,8 @@ public sealed class Source
     public string? Issue { get; init; }
 
     /// <summary>
-    /// The page (range) for a <see cref="SourceType.JournalArticle"/> or <see cref="SourceType.BookSection"/>,
+    /// The page (range) for a <see cref="SourceType.JournalArticle"/>, <see cref="SourceType.BookSection"/>,
+    /// or <see cref="SourceType.ConferenceProceedings"/>,
     /// e.g. <c>"12-20"</c>; null when unknown.
     /// </summary>
     public string? Pages { get; init; }
