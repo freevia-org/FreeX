@@ -97,6 +97,7 @@ public sealed class MainWindow : Window
     private readonly Button _slidePaneNewSlideButton;
     private readonly HashSet<string> _slidePaneCollapsedSectionIds = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<SlidePaneThumbnailVisualPlan> _slidePaneRenderedThumbnailPlans = new();
+    private readonly List<SlidePaneSectionHeaderVisualPlan> _slidePaneRenderedSectionHeaderPlans = new();
     private readonly TextBox _notesBox;
     private readonly TextBlock _statusText;
     private Border _layoutPickerHost = null!;
@@ -223,6 +224,7 @@ public sealed class MainWindow : Window
     internal bool IsSlidePaneNewSlideButtonVisible => _slidePaneNewSlideButton.IsVisible;
     internal string? SlidePaneNewSlideButtonText => _slidePaneNewSlideButton.Content?.ToString();
     internal IReadOnlyList<SlidePaneThumbnailVisualPlan> SlidePaneRenderedThumbnailPlans => _slidePaneRenderedThumbnailPlans;
+    internal IReadOnlyList<SlidePaneSectionHeaderVisualPlan> SlidePaneRenderedSectionHeaderPlans => _slidePaneRenderedSectionHeaderPlans;
 
     internal bool IsDirty => _fileWorkflow.IsDirty;
     internal PresentationViewShowState ViewShowStateForTests => _viewShowState;
@@ -4800,6 +4802,7 @@ public sealed class MainWindow : Window
         {
             _slidePaneList.Items.Clear();
             _slidePaneRenderedThumbnailPlans.Clear();
+            _slidePaneRenderedSectionHeaderPlans.Clear();
 
             var entries = SlidePanePlanner.BuildEntries(
                 _presentation.Slides,
@@ -4893,22 +4896,27 @@ public sealed class MainWindow : Window
 
     private ListBoxItem BuildSlidePaneSectionHeader(SlidePaneEntry entry)
     {
+        var plan = SlidePanePlanner.BuildSectionHeaderVisualPlan(entry);
+        _slidePaneRenderedSectionHeaderPlans.Add(plan);
+        var normalBackground = BrushFromHex(plan.BackgroundHex);
+        var hoverBackground = BrushFromHex(plan.HoverBackgroundHex);
+
         var disclosure = new TextBlock
         {
-            Text              = entry.IsSectionCollapsed ? ">" : "v",
-            FontSize          = 11,
+            Text              = plan.DisclosureText,
+            FontSize          = plan.FontSize,
             FontWeight        = FontWeight.Bold,
-            Foreground        = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
-            Width             = 14,
+            Foreground        = BrushFromHex(plan.ForegroundHex),
+            Width             = plan.DisclosureWidth,
             VerticalAlignment = VerticalAlignment.Center,
         };
 
         var label = new TextBlock
         {
-            Text              = entry.Text,
-            FontSize          = 11,
+            Text              = plan.LabelText,
+            FontSize          = plan.FontSize,
             FontWeight        = FontWeight.SemiBold,
-            Foreground        = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+            Foreground        = BrushFromHex(plan.ForegroundHex),
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming      = TextTrimming.CharacterEllipsis,
         };
@@ -4919,35 +4927,43 @@ public sealed class MainWindow : Window
             Children = { disclosure, label },
         };
 
+        var headerChrome = new Border
+        {
+            Background   = normalBackground,
+            Padding      = new Thickness(plan.HorizontalPadding, plan.VerticalPadding),
+            CornerRadius = new CornerRadius(plan.CornerRadius),
+            MinHeight    = plan.HeaderHeight,
+            Child        = row,
+        };
+
         var item = new ListBoxItem
         {
-            Content = new Border
-            {
-                Background = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
-                Padding    = new Thickness(10, 4),
-                Child      = row,
-            },
+            Content     = headerChrome,
             Padding     = new Thickness(0),
-            Margin      = new Thickness(0, 6, 0, 2),
+            Margin      = new Thickness(0, plan.TopMargin, 0, plan.BottomMargin),
+            MinHeight   = plan.HeaderHeight,
             Focusable   = true,
-            Tag         = new SlidePaneSectionHeaderTag(entry.SectionId, entry.SectionIndex),
+            Tag         = new SlidePaneSectionHeaderTag(plan.SectionId, plan.SectionIndex),
             Cursor      = new Cursor(StandardCursorType.Hand),
             ContextMenu = BuildSlidePaneSectionContextMenu(entry),
         };
+        ToolTip.SetTip(item, plan.ToolTipText);
+        item.PointerEntered += (_, _) => headerChrome.Background = hoverBackground;
+        item.PointerExited += (_, _) => headerChrome.Background = normalBackground;
         item.PointerPressed += (_, e) =>
         {
             var point = e.GetCurrentPoint(item);
             if (!point.Properties.IsLeftButtonPressed)
                 return;
 
-            ToggleSlidePaneSection(entry.SectionId);
+            ToggleSlidePaneSection(plan.SectionId);
             e.Handled = true;
         };
         item.KeyDown += (_, e) =>
         {
             if (e.Key is Key.Enter or Key.Space)
             {
-                ToggleSlidePaneSection(entry.SectionId);
+                ToggleSlidePaneSection(plan.SectionId);
                 e.Handled = true;
             }
         };

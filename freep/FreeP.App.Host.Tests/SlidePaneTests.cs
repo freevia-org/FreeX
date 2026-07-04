@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using FreeP.App.Compositor;
@@ -246,6 +247,44 @@ public sealed class SlidePaneTests
 
         pane.ToggleSectionForTests(1).Should().BeTrue();
         pane.SlidePaneSlideItemCount.Should().Be(3);
+    }
+
+    [StaFact]
+    public void SectionHeader_ChromeUsesSharedVisualPlanTokens()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide1", Title = "Slide 1" });
+        presentation.Slides.Add(new Slide { Id = "slide2", Title = "Slide 2" });
+        var section = new PresentationSection { Id = "intro-section", Name = "Intro" };
+        section.SlideIds.AddRange(new[] { "slide1", "slide2" });
+        presentation.Sections.Add(section);
+
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var pane = new SlidePane(editor);
+        var header = GetItem(pane, 0);
+        var plan = SlidePanePlanner.BuildSectionHeaderVisualPlan(
+            SlidePanePlanner.BuildEntries(presentation.Slides, presentation.Sections)
+                .Single(entry => entry.Kind == SlidePaneEntryKind.SectionHeader));
+
+        BrushColor(header.Background).Should().Be(ColorFromHex(plan.BackgroundHex));
+        header.MinHeight.Should().Be(plan.HeaderHeight);
+        header.Padding.Left.Should().Be(plan.HorizontalPadding);
+        header.Padding.Top.Should().Be(plan.VerticalPadding);
+        header.Margin.Top.Should().Be(plan.TopMargin);
+        header.Margin.Bottom.Should().Be(plan.BottomMargin);
+        header.CornerRadius.TopLeft.Should().Be(plan.CornerRadius);
+        header.ToolTip.Should().Be(plan.ToolTipText);
+        AutomationProperties.GetName(header).Should().Be(plan.AccessibleName);
+
+        var row = header.Child.Should().BeOfType<DockPanel>().Subject;
+        var disclosure = row.Children[0].Should().BeOfType<TextBlock>().Subject;
+        disclosure.Text.Should().Be(plan.DisclosureText);
+        disclosure.Width.Should().Be(plan.DisclosureWidth);
+        BrushColor(disclosure.Foreground).Should().Be(ColorFromHex(plan.ForegroundHex));
+
+        var label = row.Children[1].Should().BeOfType<TextBlock>().Subject;
+        label.Text.Should().Be(plan.LabelText);
+        BrushColor(label.Foreground).Should().Be(ColorFromHex(plan.ForegroundHex));
     }
 
     [StaFact]
