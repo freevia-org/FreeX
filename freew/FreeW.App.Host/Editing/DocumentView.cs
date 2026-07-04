@@ -2445,11 +2445,10 @@ public sealed class DocumentView : RichTextBox
     public void ApplySelectedChartStyle(ChartStyle style)
     {
         CommitToModel();
-        var chart = SelectedChartLocation().Chart;
-        if (chart is null)
+        var location = SelectedChartLocation();
+        if (location.Chart is null)
             return;
-        chart.StyleId = style.Id;
-        Render();
+        _commands.Execute(new SetChartStyleCommand(location.BlockIndex, location.RunIndex, style.Id));
     }
 
     /// <summary>
@@ -2459,11 +2458,10 @@ public sealed class DocumentView : RichTextBox
     public void ApplySelectedChartColorScheme(ChartColorScheme scheme)
     {
         CommitToModel();
-        var chart = SelectedChartLocation().Chart;
-        if (chart is null)
+        var location = SelectedChartLocation();
+        if (location.Chart is null)
             return;
-        chart.ColorSchemeId = scheme.Id;
-        Render();
+        _commands.Execute(new SetChartColorSchemeCommand(location.BlockIndex, location.RunIndex, scheme.Id));
     }
 
     /// <summary>

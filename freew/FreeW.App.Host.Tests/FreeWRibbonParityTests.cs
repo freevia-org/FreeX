@@ -1226,6 +1226,31 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
+    public void ChartDesign_StyleGalleryCommandMutatesSelectedChartAndUndoRestoresIt()
+    {
+        var editor = new DocumentView();
+        editor.Model.Blocks.Clear();
+        editor.Model.Blocks.Add(new Paragraph("Before"));
+        editor.InsertChart(Chart.Create(ChartKind.Column, ["A", "B"], [1.0, 2.0], seriesName: "S"));
+        var chart = editor.SelectedChart() ?? editor.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Select(r => r.Chart)
+            .FirstOrDefault(c => c is not null);
+
+        chart.Should().NotBeNull();
+        chart!.StyleId.Should().Be(0);
+
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+        registry.TryGet("freew.chart-style-5", out var command)
+            .Should().BeTrue("the WPF Chart Design style gallery command must be registered");
+        command!.Execute(RibbonCommandContext.Empty);
+
+        chart.StyleId.Should().Be(5);
+        editor.Commands.Undo().Should().BeTrue();
+        chart.StyleId.Should().Be(0);
+    }
+
+    [StaFact]
     public void ChartDesign_ToggleLegendMutatesSelectedChart()
     {
         var editor = new DocumentView();
