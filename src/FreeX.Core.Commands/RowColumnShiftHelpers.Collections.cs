@@ -88,6 +88,67 @@ internal static partial class RowColumnShiftHelpers
         }
     }
 
+    /// <summary>
+    /// Same shift-up semantics as <see cref="ShiftIndexesUp(Dictionary{uint, double}, uint, uint)"/>,
+    /// generalized to any value type. Used for column-keyed maps other than widths — e.g.
+    /// <c>Sheet.ActiveValueFilterColumns</c> (finding G1) — that must shift the same way ColumnWidths
+    /// does on column insert.
+    /// </summary>
+    internal static void ShiftIndexesUp<TValue>(Dictionary<uint, TValue> values, uint start, uint count)
+    {
+        if (values.Count == 0)
+            return;
+
+        List<KeyValuePair<uint, TValue>>? shifted = null;
+        foreach (var pair in values)
+        {
+            if (pair.Key >= start)
+                (shifted ??= new List<KeyValuePair<uint, TValue>>(values.Count)).Add(pair);
+        }
+
+        if (shifted is null)
+            return;
+
+        foreach (var (key, _) in shifted)
+            values.Remove(key);
+        foreach (var (key, value) in shifted)
+            values[key + count] = value;
+    }
+
+    /// <summary>
+    /// Same shift-down-with-deletion semantics as
+    /// <see cref="ShiftIndexesDown(Dictionary{uint, double}, uint, uint)"/>, generalized to any value
+    /// type. Keys within the deleted range [start, start+count-1] are removed (the column/row itself
+    /// was deleted); surviving keys above the range shift down by <paramref name="count"/>. Used for
+    /// column-keyed maps other than widths — e.g. <c>Sheet.ActiveValueFilterColumns</c> (finding G1).
+    /// </summary>
+    internal static void ShiftIndexesDown<TValue>(Dictionary<uint, TValue> values, uint start, uint count)
+    {
+        var end = start + count - 1;
+        List<KeyValuePair<uint, TValue>>? shifted = null;
+        List<uint>? removed = null;
+        foreach (var pair in values)
+        {
+            if (pair.Key > end)
+                (shifted ??= new List<KeyValuePair<uint, TValue>>(values.Count)).Add(pair);
+            else if (pair.Key >= start)
+                (removed ??= []).Add(pair.Key);
+        }
+
+        if (removed is not null)
+        {
+            foreach (var key in removed)
+                values.Remove(key);
+        }
+        if (shifted is not null)
+        {
+            foreach (var (key, _) in shifted)
+                values.Remove(key);
+            foreach (var (key, value) in shifted)
+                values[key - count] = value;
+        }
+    }
+
     internal static void ShiftSortedSetUp(SortedSet<uint> values, uint start, uint count)
     {
         if (values.Count == 0)

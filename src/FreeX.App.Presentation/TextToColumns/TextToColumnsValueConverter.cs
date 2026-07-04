@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.TextToColumns;
@@ -53,16 +54,8 @@ public static class TextToColumnsValueConverter
     {
         if (advancedOptions is null)
         {
-            return TryParseFiniteNumber(
-                text,
-                NumberStyles.Float | NumberStyles.AllowThousands,
-                CultureInfo.CurrentCulture,
-                out number) ||
-                TryParseFiniteNumber(
-                    text,
-                    NumberStyles.Float | NumberStyles.AllowThousands,
-                    CultureInfo.InvariantCulture,
-                    out number);
+            return TryParseFiniteNumberWithValidGrouping(text, CultureInfo.CurrentCulture, out number) ||
+                TryParseFiniteNumberWithValidGrouping(text, CultureInfo.InvariantCulture, out number);
         }
 
         var normalized = text.Trim();
@@ -96,6 +89,38 @@ public static class TextToColumnsValueConverter
 
         number = default;
         return false;
+    }
+
+    // Parses with the given culture's group/decimal separators, but only permits
+    // NumberStyles.AllowThousands when the text's group-separator placement is a
+    // structurally valid grouping (each group left of the decimal exactly 3 digits,
+    // leading group 1-3 digits). NumberStyles.AllowThousands alone does not validate
+    // grouping shape/position — it simply strips the group-separator character wherever
+    // it appears, so e.g. "1234,56" under en-US (group separator ",") would otherwise
+    // silently parse as 123456 instead of failing or being read as a decimal value.
+    private static bool TryParseFiniteNumberWithValidGrouping(string text, CultureInfo culture, out double number)
+    {
+        var groupSeparator = culture.NumberFormat.NumberGroupSeparator;
+        if (!string.IsNullOrEmpty(groupSeparator) && text.Contains(groupSeparator, StringComparison.Ordinal))
+        {
+            if (!HasValidGrouping(text, culture))
+            {
+                number = default;
+                return false;
+            }
+
+            return TryParseFiniteNumber(text, NumberStyles.Float | NumberStyles.AllowThousands, culture, out number);
+        }
+
+        return TryParseFiniteNumber(text, NumberStyles.Float, culture, out number);
+    }
+
+    private static bool HasValidGrouping(string text, CultureInfo culture)
+    {
+        var groupSeparator = Regex.Escape(culture.NumberFormat.NumberGroupSeparator);
+        var decimalSeparator = Regex.Escape(culture.NumberFormat.NumberDecimalSeparator);
+        var pattern = $@"^[+-]?\d{{1,3}}({groupSeparator}\d{{3}})*({decimalSeparator}\d*)?[+-]?$";
+        return Regex.IsMatch(text.Trim(), pattern);
     }
 
     private static bool TryParseDate(string text, DatePartOrder partOrder, out DateTime date)

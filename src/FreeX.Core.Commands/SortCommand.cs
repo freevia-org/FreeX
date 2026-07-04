@@ -219,6 +219,19 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         {
             foreach (var (index, ascending, sortOn, targetColor, customOrder) in keyRowIndexes)
             {
+                // Excel always places blank (and error) cells last regardless of sort direction.
+                // Guard this BEFORE the ascending/descending negation so the blank-last ordering
+                // is never inverted.
+                if (sortOn == SortOn.CellValues)
+                {
+                    bool aBlank = IsBlankOrError(a.Payloads[index].Cell);
+                    bool bBlank = IsBlankOrError(b.Payloads[index].Cell);
+                    if (aBlank != bBlank)
+                        return aBlank ? 1 : -1; // blank always goes last
+                    if (aBlank) // both blank — equal on this key, try next
+                        continue;
+                }
+
                 var cmp = CompareKey(workbook, a.Payloads[index].Cell, b.Payloads[index].Cell, sortOn, targetColor, customOrder, _options.CaseSensitive);
                 if (cmp != 0)
                     return ascending ? cmp : -cmp;

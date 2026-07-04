@@ -28,6 +28,7 @@ using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.PivotUI;
+using FreeX.App.Presentation.ScenarioManager;
 using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Presentation.SparklineUI;
@@ -11017,13 +11018,71 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetAutomationId(numberDecimalPlacesBox, "FormatCellsNumberDecimalPlacesBox");
         ApplyDialogTextBoxChrome(numberDecimalPlacesBox);
 
+        // Derives which entry in FormatCellsNumberFormatPlanner.NegativeOptions matches the
+        // negative (second) section of a Number/Currency format code, mirroring the encoding
+        // FormatCellsNumberFormatPlanner.ApplyNegativeFormat uses when building these codes:
+        // 0 = plain, 1 = "[Red]-", 2 = "(...)", 3 = "[Red](...)". Falls back to 0 (no negative
+        // section, or a format this dialog doesn't otherwise recognize as Number/Currency).
+        static int NegativeIndexForFormat(string? format)
+        {
+            if (string.IsNullOrWhiteSpace(format))
+                return 0;
+
+            var sections = format.Split(';');
+            if (sections.Length < 2)
+                return 0;
+
+            var negativeSection = sections[1];
+            var hasRed = negativeSection.Contains("[Red]", StringComparison.OrdinalIgnoreCase);
+            var hasParens = negativeSection.Contains('(', StringComparison.Ordinal)
+                && negativeSection.Contains(')', StringComparison.Ordinal);
+
+            return (hasRed, hasParens) switch
+            {
+                (false, false) => 0,
+                (true, false) => 1,
+                (false, true) => 2,
+                (true, true) => 3,
+            };
+        }
+
+        // Derives the currency symbol seed for the Symbol combo from a Currency/Accounting
+        // format's actual leading (or accounting-style embedded) symbol, so a no-edit OK
+        // round-trips e.g. a Euro/Pound/Yen cell instead of silently coercing it to "$". Only
+        // checks the plain single-symbol/code entries (e.g. "$", "€", "EUR") that
+        // FormatCellsNumberFormatPlanner.Symbols always includes verbatim (see
+        // BuildSymbolLabelMap) - those are exactly the raw symbols BuildCurrencyFormat /
+        // BuildAccountingFormat embed into the code, so they round-trip losslessly as both the
+        // seed and the resolved format's symbol.
+        static string? SymbolForFormat(string? format)
+        {
+            if (string.IsNullOrWhiteSpace(format))
+                return null;
+
+            foreach (var symbol in new[] { "$", "€", "£", "¥", "EUR", "GBP", "JPY" })
+            {
+                if (format.Contains(symbol, StringComparison.Ordinal)
+                    && FormatCellsNumberFormatPlanner.Symbols.Contains(symbol))
+                    return symbol;
+            }
+
+            return null;
+        }
+
+        // Seed the symbol/negative-style controls from the cell's ACTUAL current format code
+        // (same rationale as the Custom-code seeding above - see F10): a no-edit open+OK must
+        // round-trip the cell's real currency symbol and red/parentheses negative style instead
+        // of silently coercing them to "$" / the plain "-1234.10" default.
+        var currentNumberNegativeIndex = NegativeIndexForFormat(currentNumberFormat);
+        var currentNumberSymbol = SymbolForFormat(currentNumberFormat);
+
         var numberSymbols = FormatCellsNumberFormatPlanner.Symbols;
         var numberSymbolBox = new ComboBox
         {
             ItemsSource = numberSymbols,
-            SelectedItem = numberSymbols.Contains("$")
-                ? "$"
-                : (numberSymbols.Count > 0 ? numberSymbols[0] : null),
+            SelectedItem = currentNumberSymbol is { } seededSymbol && numberSymbols.Contains(seededSymbol)
+                ? seededSymbol
+                : (numberSymbols.Contains("$") ? "$" : (numberSymbols.Count > 0 ? numberSymbols[0] : null)),
             MinWidth = 220,
         };
         AutomationProperties.SetName(numberSymbolBox, "Symbol");
@@ -11033,7 +11092,7 @@ public sealed partial class MainWindow : Window
         var numberNegativeBox = new ListBox
         {
             ItemsSource = FormatCellsNumberFormatPlanner.NegativeOptions,
-            SelectedIndex = 0,
+            SelectedIndex = currentNumberNegativeIndex,
             MinWidth = 200,
             Height = 96,
         };
@@ -11118,9 +11177,30 @@ public sealed partial class MainWindow : Window
             syncingNumberControls = false;
         }
 
+        // Same round-trip rationale as RefreshNumberTypeChoices/SyncDecimalPlacesFromType above:
+        // re-derive the symbol/negative-style seeds from the cell's actual format only while the
+        // Category selection is still the cell's original category, so switching away and back
+        // restores the real seed instead of leaving behind a default picked for another category.
+        void SyncSymbolAndNegativeFromCategory()
+        {
+            var category = numberCategoryList.SelectedItem as string ?? currentNumberCategory;
+            var isOriginalCategory = string.Equals(category, currentNumberCategory, StringComparison.Ordinal);
+
+            var negativeIndex = isOriginalCategory ? currentNumberNegativeIndex : 0;
+            if (numberNegativeBox.SelectedIndex != negativeIndex)
+                numberNegativeBox.SelectedIndex = negativeIndex;
+
+            var symbol = isOriginalCategory && currentNumberSymbol is { } seededSymbol && numberSymbols.Contains(seededSymbol)
+                ? seededSymbol
+                : (numberSymbols.Contains("$") ? "$" : (numberSymbols.Count > 0 ? numberSymbols[0] : null));
+            if (!Equals(numberSymbolBox.SelectedItem, symbol))
+                numberSymbolBox.SelectedItem = symbol;
+        }
+
         numberCategoryList.SelectionChanged += (_, _) =>
         {
             RefreshNumberTypeChoices();
+            SyncSymbolAndNegativeFromCategory();
             ApplyNumberControlAvailability();
             RefreshNumberPreview();
         };
@@ -16029,10 +16109,23 @@ public sealed partial class MainWindow : Window
             showButton.IsEnabled = selected is not null;
             deleteButton.IsEnabled = selected is not null;
             editButton.IsEnabled = selected is not null;
-            if (selected is not null)
+
+            var selectedDialogItem = selected is null
+                ? null
+                : ScenarioManagerDialogPlanner.BuildItems(_session.Workbook)
+                    .FirstOrDefault(item => string.Equals(item.Name, selected.Name, StringComparison.OrdinalIgnoreCase));
+            var fields = ScenarioManagerDialogPlanner.ProjectSelectionFields(
+                selectedDialogItem,
+                nameBox.Text ?? "",
+                CreateScenarioManagerDefaultName(plan.Scenarios));
+            if (fields is not null)
             {
-                preventChangesBox.IsChecked = selected.Locked;
-                hideBox.IsChecked = selected.Hidden;
+                nameBox.Text = fields.ScenarioName;
+                changingCellsBox.Text = fields.ChangingCellsText;
+                resultCellsBox.Text = fields.ResultCellsText;
+                commentBox.Text = fields.CommentText;
+                preventChangesBox.IsChecked = fields.Locked;
+                hideBox.IsChecked = fields.Hidden;
             }
         }
 
@@ -16255,7 +16348,8 @@ public sealed partial class MainWindow : Window
         };
 
         RefreshDialogPlan(selectedScenarioName);
-        nameBox.Text = CreateScenarioManagerDefaultName(plan.Scenarios);
+        if (plan.SelectedScenario is null)
+            nameBox.Text = CreateScenarioManagerDefaultName(plan.Scenarios);
         dialog.Content = new ScrollViewer
         {
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,

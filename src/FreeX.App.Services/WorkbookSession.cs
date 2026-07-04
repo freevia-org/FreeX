@@ -4290,7 +4290,6 @@ public sealed class WorkbookSession
         if (!result.Success)
             return result;
 
-        ApplySuccessfulEditResult(result, destination);
         var pasteSize = GetPasteDimensions(clipboard.SourceRange, options.Transpose);
         if (expandPasteToSelectedRange)
         {
@@ -4299,7 +4298,17 @@ public sealed class WorkbookSession
                 Math.Max(pasteSize.ColCount, destinationRange.ColCount));
         }
 
-        SelectPastedRange(destination, pasteSize.RowCount, pasteSize.ColCount);
+        // Excel always lands the selection (and the Name Box/formula bar/viewport) on the
+        // pasted DESTINATION range, never on the source of a cut. MoveRangeCommand's
+        // AffectedCells lists the source cell before the destination, so anchoring on
+        // result.AffectedCells here (via ApplySuccessfulEditResult) would leave ActiveCell
+        // pointing at the now-blank source cell for cut+paste moves. Anchor explicitly on
+        // the destination range instead.
+        var pastedRange = TryGetRectangleEnd(destination, pasteSize.RowCount, pasteSize.ColCount, out var pastedEnd)
+            ? new GridRange(destination, pastedEnd)
+            : new GridRange(destination, destination);
+        ApplySuccessfulRangeEditResult(result, pastedRange);
+
         if (clipboard.IsCut)
             _internalClipboard = null;
         return result;

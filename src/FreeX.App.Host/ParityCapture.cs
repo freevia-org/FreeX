@@ -519,6 +519,7 @@ internal static class ParityCapture
         CaptureDialog(results, "dialog.DataTable", outDir, () =>
             new DataTableDialog(sheet.Id, range));
 
+        ScenarioManagerParityFixture.Seed(workbook, sheet.Id);
         CaptureDialog(results, "dialog.ScenarioManager", outDir, () =>
             new ScenarioManagerDialog(workbook, sheet.Id, ResolveSheetId(workbook)));
 

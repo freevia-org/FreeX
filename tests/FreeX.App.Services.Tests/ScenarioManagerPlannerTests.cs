@@ -118,6 +118,31 @@ public sealed class ScenarioManagerPlannerTests
     }
 
     [Fact]
+    public void ScenarioManagerParityFixture_SeedsStableSelectedVisualScenario()
+    {
+        var workbook = CreateWorkbook(out var sheet);
+        var firstCell = new CellAddress(sheet.Id, 2, 3);
+        var secondCell = new CellAddress(sheet.Id, 3, 3);
+        sheet.SetCell(firstCell, new NumberValue(10));
+        sheet.SetCell(secondCell, new NumberValue(20));
+
+        ScenarioManagerParityFixture.Seed(workbook, sheet.Id);
+        ScenarioManagerParityFixture.Seed(workbook, sheet.Id);
+
+        var scenario = workbook.Scenarios.Should().ContainSingle(s => s.Name == ScenarioManagerParityFixture.ScenarioName).Which;
+        scenario.Comment.Should().Be(ScenarioManagerParityFixture.ScenarioComment);
+        scenario.Locked.Should().BeTrue();
+        scenario.Hidden.Should().BeFalse();
+        scenario.ChangingCells.Should().Equal(
+            new ScenarioCellValue(firstCell, new NumberValue(10)),
+            new ScenarioCellValue(secondCell, new NumberValue(20)));
+
+        var range = ScenarioManagerParityFixture.ChangingCellsRange(sheet.Id);
+        range.Start.Should().Be(firstCell);
+        range.End.Should().Be(secondCell);
+    }
+
+    [Fact]
     public void CreateShowPlan_ReturnsAffectedCellsForExistingScenario()
     {
         var workbook = CreateWorkbook(out var sheet);

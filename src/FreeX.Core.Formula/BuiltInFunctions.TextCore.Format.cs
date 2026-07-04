@@ -11,36 +11,37 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue formatError) return formatError;
-        return MapBinaryMathArgs(args[0], args[1], TextScalarWithFormat);
+        var uses1904DateSystem = ctx.Uses1904DateSystem;
+        return MapBinaryMathArgs(args[0], args[1], (value, formatValue) => TextScalarWithFormat(value, formatValue, uses1904DateSystem));
     }
 
-    private static ScalarValue TextScalarWithFormat(ScalarValue value, ScalarValue formatValue)
+    private static ScalarValue TextScalarWithFormat(ScalarValue value, ScalarValue formatValue, bool uses1904DateSystem)
     {
         if (value is ErrorValue valueError) return valueError;
         if (formatValue is ErrorValue formatError) return formatError;
-        return TextFormatValue(value, ToText(formatValue));
+        return TextFormatValue(value, ToText(formatValue), uses1904DateSystem);
     }
 
-    private static RangeValue MapTextFuncRange(RangeValue range, string fmt)
+    private static RangeValue MapTextFuncRange(RangeValue range, string fmt, bool uses1904DateSystem)
     {
         var cells = new ScalarValue[range.RowCount, range.ColCount];
         for (int r = 0; r < range.RowCount; r++)
             for (int c = 0; c < range.ColCount; c++)
             {
                 var value = range.Cells[r, c];
-                cells[r, c] = value is ErrorValue e ? e : TextFormatValue(value, fmt);
+                cells[r, c] = value is ErrorValue e ? e : TextFormatValue(value, fmt, uses1904DateSystem);
             }
 
         return new RangeValue(cells);
     }
 
-    private static ScalarValue TextFormatValue(ScalarValue val, string fmt)
+    private static ScalarValue TextFormatValue(ScalarValue val, string fmt, bool uses1904DateSystem = false)
     {
         // Numbers and dates format through the same Excel number-format engine the grid uses, so TEXT() and
         // cell display stay consistent — including the '?' digit placeholder, grouping, and scaling that a
         // naive .NET ToString renders as literal characters. Other values pass through as text.
         if (val is NumberValue or DateTimeValue)
-            return TextResult(NumberFormatter.Format(val, fmt));
+            return TextResult(NumberFormatter.Format(val, fmt, uses1904DateSystem));
         return TextResult(ToText(val));
     }
 

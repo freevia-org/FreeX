@@ -6457,7 +6457,41 @@ public sealed partial class XlsxFileAdapter
         {
             var sheet = new Sheet(patch.SheetId, patch.WorksheetPath);
             patch.Current.ApplyTo(sheet);
+            // XlsxWorksheetViewBaseline only tracks ViewMode/ShowGridlines/ShowHeadings/
+            // ShowRulers/ZoomPercent/ShowFormulas, so the synthetic Sheet built above never
+            // carries the scroll position (topLeftCell). Seed it from the worksheet's own
+            // existing sheetView before rewriting, so patching an unrelated view attribute
+            // (e.g. zoom) doesn't silently strip the user's real scroll position.
+            var (existingTopRow, existingLeftCol) = ReadExistingTopLeftCell(worksheetXml);
+            sheet.ViewTopRow = existingTopRow;
+            sheet.ViewLeftCol = existingLeftCol;
             return XlsxWorksheetViewWriter.UpdateSheetView(worksheetXml, sheet);
+        }
+
+        private static (uint? Row, uint? Col) ReadExistingTopLeftCell(XDocument worksheetXml)
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var sheetViews = worksheetXml.Root?.Element(worksheetNs + "sheetViews");
+            if (sheetViews is null)
+                return (null, null);
+
+            XElement? sheetView = null;
+            foreach (var candidateView in sheetViews.Elements(worksheetNs + "sheetView"))
+            {
+                if (string.Equals(candidateView.Attribute("workbookViewId")?.Value ?? "0", "0", StringComparison.Ordinal))
+                {
+                    sheetView = candidateView;
+                    break;
+                }
+            }
+
+            var topLeftCell = sheetView?.Attribute("topLeftCell")?.Value;
+            if (string.IsNullOrWhiteSpace(topLeftCell))
+                return (null, null);
+
+            return CellAddress.TryParse(topLeftCell.Split(':')[0], SheetId.New(), out var address)
+                ? (address.Row, address.Col)
+                : (null, null);
         }
 
         public static bool ApplyCommentChanges(

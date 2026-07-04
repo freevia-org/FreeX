@@ -184,22 +184,38 @@ public partial class MainWindow
                         return moveCommand;
                     }
 
-                    var pasteCommand = PasteCommandFactory.CreateInternalPasteCommand(
-                        _workbook,
-                        _currentSheetId,
-                        clip.SourceRange,
-                        clip.Cells,
-                        destinationRange,
-                        ClipboardPastePlanner.ToCorePasteMode(mode),
-                        options);
-                    var command = keepColumnWidths
-                        ? new CompositeWorkbookCommand(
-                            "Paste Special",
-                            [
-                                pasteCommand,
-                                new PasteColumnWidthsCommand(_currentSheetId, clip.SourceRange, currentRange.Start.Col)
-                            ])
-                        : pasteCommand;
+                    var targetSheetIds = CurrentGroupedEditSheetIds();
+                    var pasteCommands = new List<IWorkbookCommand>(targetSheetIds.Count);
+                    foreach (var sheetId in targetSheetIds)
+                    {
+                        var sheetDestinationRange = GroupedSheetRangePlanner.RemapRangeToSheet(destinationRange, sheetId);
+                        var sheetPasteCommand = PasteCommandFactory.CreateInternalPasteCommand(
+                            _workbook,
+                            sheetId,
+                            clip.SourceRange,
+                            clip.Cells,
+                            sheetDestinationRange,
+                            ClipboardPastePlanner.ToCorePasteMode(mode),
+                            options);
+                        if (keepColumnWidths)
+                        {
+                            sheetPasteCommand = new CompositeWorkbookCommand(
+                                "Paste Special",
+                                [
+                                    sheetPasteCommand,
+                                    new PasteColumnWidthsCommand(sheetId, clip.SourceRange, sheetDestinationRange.Start.Col)
+                                ]);
+                        }
+
+                        pasteCommands.Add(sheetPasteCommand);
+                    }
+
+                    var pasteLabel = mode == PasteMode.All && options == default && !keepColumnWidths
+                        ? "Paste"
+                        : "Paste Special";
+                    var command = pasteCommands.Count == 1
+                        ? pasteCommands[0]
+                        : new CompositeWorkbookCommand(pasteLabel, pasteCommands);
 
                     if (ClipboardPastePlanner.ShouldClearCutSourceAfterPaste(
                             clip.IsCut,
@@ -408,7 +424,12 @@ public partial class MainWindow
         if (mode != PasteMode.All || options != default)
             return false;
 
-        // MoveRangeCommand only supports a same-sheet move.
+        // MoveRangeCommand only supports a same-sheet move; grouped multi-sheet editing cannot be
+        // expressed as a single move, so fall back to the grouped copy+clear path below.
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        if (targetSheetIds.Count != 1 || targetSheetIds[0] != clip.SourceRange.Start.Sheet)
+            return false;
+
         if (clip.SourceRange.Start.Sheet != _currentSheetId || destination.Sheet != _currentSheetId)
             return false;
 
@@ -669,24 +690,25 @@ public partial class MainWindow
             return;
 
         var sourceCells = clip.PictureCells;
-        IWorkbookCommand CreatePastePictureCommand()
-        {
-            var currentRange = SheetGrid.SelectedRange ?? range;
-            return new PasteRangeAsPictureCommand(
-                _currentSheetId,
-                clip.SourceRange,
-                sourceCells,
-                currentRange.Start,
-                isLinkedPicture,
-                sourceSheet?.Name);
-        }
-
-        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreatePastePictureCommand);
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Paste Picture");
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Paste Picture",
+                sheetId =>
+                {
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    var destination = GroupedSheetRangePlanner.RemapRangeToSheet(currentRange, sheetId).Start;
+                    return new PasteRangeAsPictureCommand(
+                        sheetId,
+                        clip.SourceRange,
+                        sourceCells,
+                        destination,
+                        isLinkedPicture,
+                        sourceSheet?.Name);
+                },
+                out var outcome))
             return;
-        }
+
+        if (!outcome.Success)
+            return;
 
         var preserveClipboardVisual = ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut);
         _repeatPostAction = _ => ApplyClipboardVisualStateAfterInternalPaste(clip.SourceRange, preserveClipboardVisual);

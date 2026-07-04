@@ -212,6 +212,16 @@ public sealed class DependencyGraph
         return _precedents.TryGetValue(cell, out var precs) ? precs : EmptySet;
     }
 
+    /// <summary>
+    /// True if this cell already has a precedents entry in the graph (exact or range), i.e. its
+    /// formula has actually been registered here — as opposed to merely holding a cached AST, which
+    /// can be true for a cell whose cached AST was copied by reference from another cell (e.g.
+    /// Cell.Clone(), as happens for a zero-delta paste) without RegisterFormulaDependencies ever
+    /// having been called for this specific address.
+    /// </summary>
+    public bool HasDependencies(CellAddress cell) =>
+        _precedents.ContainsKey(cell) || _rangePrecedents.ContainsKey(cell);
+
     /// <summary>Get all compact ranges that the given cell directly references.</summary>
     public IReadOnlyList<GridRange> GetDirectRangePrecedents(CellAddress cell)
     {

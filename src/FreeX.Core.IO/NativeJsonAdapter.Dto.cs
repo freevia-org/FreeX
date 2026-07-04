@@ -479,6 +479,13 @@ public sealed partial class NativeJsonAdapter
         public List<UIntDoubleDto> ColumnWidths { get; set; } = [];
         public List<uint> HiddenRows { get; set; } = [];
         public List<uint> FilterHiddenRows { get; set; } = [];
+        // G32: sheet.ActiveValueFilterColumns/ValueFilterHiddenRows are the per-column value-filter
+        // state and its FilterHiddenRows-ownership bookkeeping (see FreeX.Core.Commands.FilterCommand,
+        // findings F8/G7). Without persisting them, reloading a workbook with more than one active
+        // AutoFilter value-list column leaves FilterHiddenRows populated but the per-column state
+        // empty, so the next filter recompute treats it as "no active filters" and unhides everything.
+        public List<UIntStringListDto> ActiveValueFilterColumns { get; set; } = [];
+        public List<uint> ValueFilterHiddenRows { get; set; } = [];
         public List<uint> HiddenCols { get; set; } = [];
         public List<UIntIntDto> RowOutlineLevels { get; set; } = [];
         public List<UIntIntDto> ColOutlineLevels { get; set; } = [];
@@ -902,6 +909,12 @@ public sealed partial class NativeJsonAdapter
     {
         public uint Index { get; set; }
         public int Value { get; set; }
+    }
+
+    private class UIntStringListDto
+    {
+        public uint Index { get; set; }
+        public List<string> Values { get; set; } = [];
     }
 
     private class PageMarginsDto

@@ -136,6 +136,8 @@ public static partial class BuiltInFunctions
         ["SUMIFS"]      = (Sumifs, 3, 255),
         ["COUNTIFS"]    = (Countifs, 2, 255),
         ["AVERAGEIFS"]  = (Averageifs2, 3, 255),
+        ["MAXIFS"]      = (Maxifs, 3, 255),
+        ["MINIFS"]      = (Minifs, 3, 255),
         ["SUMSQ"]       = (SumSq, 1, 255),
         ["SUMX2MY2"]    = (SumX2My2, 2, 2),
         ["SUMX2PY2"]    = (SumX2Py2, 2, 2),

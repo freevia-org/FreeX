@@ -96,26 +96,31 @@ internal static class XlsxSourceDrawingGeometryRewriter
     /// Walks the drawing's anchors in the same document order the reader uses
     /// (<see cref="XlsxWorksheetDrawingPartReader"/>: all &lt;xdr:pic&gt; in order, then all &lt;xdr:sp&gt;
     /// in order classified into text boxes vs shapes exactly like the reader, then all &lt;xdr:cxnSp&gt;
-    /// appended to the shapes sequence) so the Nth matched element lines up with <c>sheet.Pictures[N]</c> /
-    /// <c>sheet.TextBoxes[N]</c> / <c>sheet.DrawingShapes[N]</c> the same way the load path populated them.
+    /// appended to the shapes sequence).
+    /// <para>
+    /// <see cref="XlsxWorksheetDrawingObjectWriter"/> only ever emits NEW (non-source-loaded) objects, and
+    /// always writes them BEFORE <see cref="XlsxWorksheetDrawingPartMerger"/> appends the untouched
+    /// source-loaded anchors after them (it only ever appends, never reorders/interleaves relative to the
+    /// writer's anchors). So within each element-kind stream (pic / classified-sp / cxnSp), the source-loaded
+    /// anchors are always the trailing block, in their original source document order — the same order
+    /// <see cref="Sheet.Pictures"/>/<see cref="Sheet.TextBoxes"/>/<see cref="Sheet.DrawingShapes"/> were
+    /// populated in for source-loaded objects. A NEW object appended to a model list after load has no
+    /// anchor of its own in that trailing block, so it must never be matched against one: doing so (matching
+    /// every model in list order, source-loaded or not, against every anchor in document order) is exactly
+    /// how geometry silently swapped between a new and a source-loaded object before this fix. Instead, only
+    /// source-loaded models are matched, only against that trailing block, in order.
+    /// </para>
     /// Returns true when at least one anchor was rewritten.
     /// </summary>
     private static bool RewriteDrawingGeometry(XElement drawingRoot, Sheet sheet)
     {
         var changed = false;
-        var pictureIndex = 0;
-        var textBoxIndex = 0;
-        var shapeIndex = 0;
 
-        foreach (var pictureElement in drawingRoot.Descendants(SpreadsheetDrawingNs + "pic"))
+        var sourcePictures = sheet.Pictures.Where(picture => picture.IsSourceLoaded).ToList();
+        var pictureElements = drawingRoot.Descendants(SpreadsheetDrawingNs + "pic").ToList();
+        var pictureAnchors = pictureElements.Skip(Math.Max(0, pictureElements.Count - sourcePictures.Count));
+        foreach (var (pictureElement, picture) in pictureAnchors.Zip(sourcePictures))
         {
-            if (pictureIndex >= sheet.Pictures.Count)
-                break;
-
-            var picture = sheet.Pictures[pictureIndex++];
-            if (!picture.IsSourceLoaded)
-                continue;
-
             var anchor = FindNearestAnchorElement(pictureElement);
             if (anchor is not null &&
                 RewriteAnchorGeometry(anchor, sheet, picture.Width, picture.Height, picture.AnchorOffsetX, picture.AnchorOffsetY))
@@ -124,6 +129,12 @@ internal static class XlsxSourceDrawingGeometryRewriter
             }
         }
 
+        var sourceTextBoxes = sheet.TextBoxes.Where(textBox => textBox.IsSourceLoaded).ToList();
+        var sourceShapes = sheet.DrawingShapes.Where(shape => shape.IsSourceLoaded).ToList();
+
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var textBoxElements = new List<XElement>();
+        var shapeElements = new List<XElement>();
         foreach (var shapeElement in drawingRoot.Descendants(SpreadsheetDrawingNs + "sp"))
         {
             if (shapeElement.Ancestors(MarkupCompatNs + "Fallback").Any())
@@ -134,25 +145,11 @@ internal static class XlsxSourceDrawingGeometryRewriter
                 .Element(SpreadsheetDrawingNs + "cNvSpPr")?
                 .Attribute("txBox")?.Value == "1";
             var txBodyElement = shapeElement.Element(SpreadsheetDrawingNs + "txBody");
-            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
             var text = string.Concat(txBodyElement?.Descendants(drawingNs + "t").Select(t => t.Value) ?? []);
 
             if (isTextBox && !string.IsNullOrEmpty(text))
             {
-                if (textBoxIndex >= sheet.TextBoxes.Count)
-                    continue;
-
-                var textBox = sheet.TextBoxes[textBoxIndex++];
-                if (!textBox.IsSourceLoaded)
-                    continue;
-
-                var anchor = FindNearestAnchorElement(shapeElement);
-                if (anchor is not null &&
-                    RewriteAnchorGeometry(anchor, sheet, textBox.Width, textBox.Height, textBox.AnchorOffsetX, textBox.AnchorOffsetY))
-                {
-                    changed = true;
-                }
-
+                textBoxElements.Add(shapeElement);
                 continue;
             }
 
@@ -161,22 +158,8 @@ internal static class XlsxSourceDrawingGeometryRewriter
                 .Element(drawingNs + "prstGeom")?
                 .Attribute("prst")?
                 .Value;
-            if (!DrawingMlPresetGeometryMap.TryGetShapeKind(preset, out _))
-                continue;
-
-            if (shapeIndex >= sheet.DrawingShapes.Count)
-                continue;
-
-            var shape = sheet.DrawingShapes[shapeIndex++];
-            if (!shape.IsSourceLoaded)
-                continue;
-
-            var shapeAnchor = FindNearestAnchorElement(shapeElement);
-            if (shapeAnchor is not null &&
-                RewriteAnchorGeometry(shapeAnchor, sheet, shape.Width, shape.Height, shape.AnchorOffsetX, shape.AnchorOffsetY))
-            {
-                changed = true;
-            }
+            if (DrawingMlPresetGeometryMap.TryGetShapeKind(preset, out _))
+                shapeElements.Add(shapeElement);
         }
 
         foreach (var connectorElement in drawingRoot.Descendants(SpreadsheetDrawingNs + "cxnSp"))
@@ -184,14 +167,24 @@ internal static class XlsxSourceDrawingGeometryRewriter
             if (connectorElement.Ancestors(MarkupCompatNs + "Fallback").Any())
                 continue;
 
-            if (shapeIndex >= sheet.DrawingShapes.Count)
-                break;
+            shapeElements.Add(connectorElement);
+        }
 
-            var shape = sheet.DrawingShapes[shapeIndex++];
-            if (!shape.IsSourceLoaded)
-                continue;
+        var textBoxAnchors = textBoxElements.Skip(Math.Max(0, textBoxElements.Count - sourceTextBoxes.Count));
+        foreach (var (textBoxElement, textBox) in textBoxAnchors.Zip(sourceTextBoxes))
+        {
+            var anchor = FindNearestAnchorElement(textBoxElement);
+            if (anchor is not null &&
+                RewriteAnchorGeometry(anchor, sheet, textBox.Width, textBox.Height, textBox.AnchorOffsetX, textBox.AnchorOffsetY))
+            {
+                changed = true;
+            }
+        }
 
-            var anchor = FindNearestAnchorElement(connectorElement);
+        var shapeAnchors = shapeElements.Skip(Math.Max(0, shapeElements.Count - sourceShapes.Count));
+        foreach (var (shapeElement, shape) in shapeAnchors.Zip(sourceShapes))
+        {
+            var anchor = FindNearestAnchorElement(shapeElement);
             if (anchor is not null &&
                 RewriteAnchorGeometry(anchor, sheet, shape.Width, shape.Height, shape.AnchorOffsetX, shape.AnchorOffsetY))
             {

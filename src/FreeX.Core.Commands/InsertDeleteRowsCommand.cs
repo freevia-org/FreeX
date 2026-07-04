@@ -63,6 +63,11 @@ public sealed class InsertRowsCommand : IWorkbookCommand
 
         RowColumnShiftHelpers.ShiftSetUpFrom(sheet.HiddenRows, _beforeRow, _count);
         RowColumnShiftHelpers.ShiftSetUpFrom(sheet.FilterHiddenRows, _beforeRow, _count);
+        // G2: sheet.ValueFilterHiddenRows must shift in lockstep with FilterHiddenRows — it records
+        // exactly which of those rows the value-filter mechanism (sheet.ActiveValueFilterColumns)
+        // currently owns, and FilterCommand.RecomputeHiddenRows uses it to decide which rows it may
+        // safely un-hide. Left unshifted, it would go stale the moment rows move.
+        RowColumnShiftHelpers.ShiftSetUpFrom(sheet.ValueFilterHiddenRows, _beforeRow, _count);
 
         _rowHeightSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RowHeights);
         RowColumnShiftHelpers.ShiftIndexesUp(sheet.RowHeights, _beforeRow, _count);
@@ -143,6 +148,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
 
         RowColumnShiftHelpers.ShiftSetDownFrom(sheet.HiddenRows, _beforeRow + _count, _count);
         RowColumnShiftHelpers.ShiftSetDownFrom(sheet.FilterHiddenRows, _beforeRow + _count, _count);
+        RowColumnShiftHelpers.ShiftSetDownFrom(sheet.ValueFilterHiddenRows, _beforeRow + _count, _count);
 
         if (_mergeSnapshot is not null)
             sheet.ReplaceMergedRegions(_mergeSnapshot);

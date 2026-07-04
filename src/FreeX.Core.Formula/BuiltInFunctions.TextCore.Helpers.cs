@@ -9,7 +9,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue TextResult(string text) =>
         ExceedsExcelTextLimit(text) ? ErrorValue.Value : new TextValue(text);
 
-    private static bool ExceedsExcelTextLimit(string text) =>
+    internal static bool ExceedsExcelTextLimit(string text) =>
         text.Length > 32767;
 
     private static RangeValue MapUnaryTextRange(RangeValue range, Func<ScalarValue, ScalarValue> map)

@@ -95,9 +95,12 @@ public class DependencyGraphTests
     public void RecalcEngine_LazilyAllocatesErrorAndCycleReportLists()
     {
         var source = CalcSourceTestSupport.ReadCalcSource("RecalcEngine.cs");
+        // Slice ends at the spill follow-up block: that block runs only when a spill target
+        // actually changed (guarded, cold path), so its own bounded allocations are fine — the
+        // lazy-allocation contract protects the per-recalc HOT path up to the report construction.
         var recalculate = source[
             source.IndexOf("public RecalcReport Recalculate", StringComparison.Ordinal)..
-            source.IndexOf("private IEnumerable<CellAddress> BuildChangedSetForTraversal", StringComparison.Ordinal)];
+            source.IndexOf("// Follow-up passes:", StringComparison.Ordinal)];
 
         recalculate.Should().Contain("List<(CellAddress Cell, string Error)>? errors = null;");
         recalculate.Should().Contain("HashSet<CellAddress>? seenCyclicCells = null;");

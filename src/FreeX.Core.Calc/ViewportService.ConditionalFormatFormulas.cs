@@ -126,6 +126,18 @@ public sealed partial class ViewportService
 
     private static int CompareSimpleValues(ScalarValue left, ScalarValue right)
     {
+        // Blank coercion: Excel coerces a blank operand to match the other operand's type class
+        // so that =A1=0, =A1="", and =A1=FALSE all return TRUE when A1 is empty. Mirrors
+        // FormulaEvaluator.Operators.cs CompareValues so the CF fast path agrees with the
+        // general evaluator's slow path for the same rule.
+        var leftIsBlank = left is BlankValue;
+        var rightIsBlank = right is BlankValue;
+        if (leftIsBlank && !rightIsBlank)
+            return CompareSimpleValues(CoerceSimpleBlankTo(right), right);
+        if (rightIsBlank && !leftIsBlank)
+            return CompareSimpleValues(left, CoerceSimpleBlankTo(left));
+        // blank vs blank falls through — both remain BlankValue and TypeOrder gives 0==0.
+
         var leftIsNumber = left is NumberValue or DateTimeValue;
         var rightIsNumber = right is NumberValue or DateTimeValue;
         if (leftIsNumber && rightIsNumber)
@@ -139,6 +151,19 @@ public sealed partial class ViewportService
 
         return SimpleValueTypeOrder(left).CompareTo(SimpleValueTypeOrder(right));
     }
+
+    /// <summary>
+    /// Returns the zero/empty/false value of the same type class as <paramref name="other"/>,
+    /// used to coerce a blank operand before a comparison. Mirrors
+    /// FormulaEvaluator.Operators.cs CoerceBlankTo.
+    /// </summary>
+    private static ScalarValue CoerceSimpleBlankTo(ScalarValue other) => other switch
+    {
+        NumberValue or DateTimeValue => new NumberValue(0),
+        TextValue => new TextValue(string.Empty),
+        BoolValue => new BoolValue(false),
+        _ => BlankValue.Instance
+    };
 
     private static double GetNumber(ScalarValue value) =>
         value is DateTimeValue date ? date.Value : ((NumberValue)value).Value;

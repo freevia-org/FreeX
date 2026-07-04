@@ -15,7 +15,12 @@ public sealed class FilterCommandPerformanceTests
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Status"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Drop"));
         sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Keep"));
+        // Register the seeded hides as VALUE-FILTER-owned: since the G7 fix, clearing a value
+        // filter only relinquishes rows the value-filter mechanism itself hid (an unattributed
+        // FilterHiddenRows entry is treated as another mechanism's hide — Top10/color/custom —
+        // and deliberately survives a value-filter clear).
         sheet.FilterHiddenRows.UnionWith([2u, 10u]);
+        sheet.ValueFilterHiddenRows.UnionWith([2u, 10u]);
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 3, 1));
@@ -24,6 +29,7 @@ public sealed class FilterCommandPerformanceTests
         var outcome = new FilterCommand(sheet.Id, range, 0, []).Apply(ctx);
 
         outcome.Success.Should().BeTrue();
+        // Row 2 (inside the filter range, owned) is un-hidden; row 10 (outside the range) stays.
         sheet.FilterHiddenRows.Should().BeEquivalentTo([10u]);
     }
 

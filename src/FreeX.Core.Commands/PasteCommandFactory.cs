@@ -128,7 +128,6 @@ public static class PasteCommandFactory
 
         var shouldTileDestinationRange =
             (targetRows > pasteRows || targetCols > pasteCols) &&
-            options.Operation == PasteSpecialOperation.None &&
             options.ContentKind != PasteSpecialContentKind.AllMergingConditionalFormats;
         if (shouldTileDestinationRange)
         {
@@ -230,18 +229,26 @@ public static class PasteCommandFactory
                 specialCells.Add((source, pastedCell));
             }
 
-            var specialRichTextRuns =
-                options.Operation == PasteSpecialOperation.None && ContentKindCarriesRichTextRuns(options.ContentKind)
-                    ? sourceSheet?.RichTextRuns
-                    : null;
+            var specialCarriesFormatting = options.Operation == PasteSpecialOperation.None && ContentKindCarriesRichTextRuns(options.ContentKind);
+            var specialRichTextRuns = specialCarriesFormatting ? sourceSheet?.RichTextRuns : null;
+            var specialHyperlinks = specialCarriesFormatting ? sourceSheet?.Hyperlinks : null;
+            var specialHyperlinkMetadata = specialCarriesFormatting ? sourceSheet?.HyperlinkMetadata : null;
 
-            return new PasteSpecialCellsCommand(
+            var pasteSpecialCommand = new PasteSpecialCellsCommand(
                 targetSheetId,
                 sourceRange,
                 specialCells,
                 destination,
                 options,
-                specialRichTextRuns);
+                specialRichTextRuns,
+                specialHyperlinks,
+                specialHyperlinkMetadata);
+
+            return specialCarriesFormatting && sourceSheet is not null && sourceSheet.MergedRegions.Any(region => region.Overlaps(sourceRange))
+                ? new CompositeWorkbookCommand(
+                    "Paste Special",
+                    [pasteSpecialCommand, new PasteMergedRegionsCommand(targetSheetId, sourceRange, destination, options.Transpose)])
+                : pasteSpecialCommand;
         }
 
         var rowDelta = (int)destination.Row - (int)sourceRange.Start.Row;
@@ -259,8 +266,10 @@ public static class PasteCommandFactory
         }
 
         var edits = new List<(CellAddress Address, Cell Cell)>(sourceCells.Count);
-        Dictionary<CellAddress, IReadOnlyList<CellTextRun>>? richTextRuns =
-            mode == PasteCellsMode.All && ContentKindCarriesRichTextRuns(options.ContentKind) ? [] : null;
+        var carriesFormatting = mode == PasteCellsMode.All && ContentKindCarriesRichTextRuns(options.ContentKind);
+        Dictionary<CellAddress, IReadOnlyList<CellTextRun>>? richTextRuns = carriesFormatting ? [] : null;
+        Dictionary<CellAddress, string>? hyperlinks = carriesFormatting ? [] : null;
+        Dictionary<CellAddress, HyperlinkMetadata>? hyperlinkMetadata = carriesFormatting ? [] : null;
         foreach (var (source, sourceCell) in sourceCells)
         {
             if (options.SkipBlanks && IsBlank(sourceCell))
@@ -286,11 +295,31 @@ public static class PasteCommandFactory
             {
                 richTextRuns[destinationAddress] = sourceRuns;
             }
+
+            if (hyperlinks is not null &&
+                sourceSheet is not null &&
+                sourceSheet.Hyperlinks.TryGetValue(source, out var sourceHyperlink))
+            {
+                hyperlinks[destinationAddress] = sourceHyperlink;
+            }
+
+            if (hyperlinkMetadata is not null &&
+                sourceSheet is not null &&
+                sourceSheet.HyperlinkMetadata.TryGetValue(source, out var sourceHyperlinkMetadata))
+            {
+                hyperlinkMetadata[destinationAddress] = sourceHyperlinkMetadata;
+            }
         }
 
-        return mode == PasteCellsMode.All
-            ? new PasteCellsCommand(targetSheetId, edits, richTextRuns)
-            : new EditCellsCommand(targetSheetId, edits);
+        if (mode != PasteCellsMode.All)
+            return new EditCellsCommand(targetSheetId, edits);
+
+        var pasteAllCommand = new PasteCellsCommand(targetSheetId, edits, richTextRuns, hyperlinks, hyperlinkMetadata);
+        return sourceSheet is not null && sourceSheet.MergedRegions.Any(region => region.Overlaps(sourceRange))
+            ? new CompositeWorkbookCommand(
+                "Paste",
+                [pasteAllCommand, new PasteMergedRegionsCommand(targetSheetId, sourceRange, destination, transpose: false)])
+            : pasteAllCommand;
     }
 
     private static bool IsBlank(Cell cell) =>
@@ -352,9 +381,32 @@ public static class PasteCommandFactory
             return new PasteFormatsCommand(targetSheetId, formats);
         }
 
+        if (options.Operation != PasteSpecialOperation.None)
+        {
+            var tiledPairs = new List<(CellAddress Source, CellAddress Destination)>(
+                (int)Math.Min(int.MaxValue, (long)targetRows * targetCols));
+            foreach (var (sourceAddress, destinationAddress) in EnumerateTiledAddresses(
+                sourceRange,
+                targetSheetId,
+                destination,
+                targetRows,
+                targetCols,
+                options.Transpose))
+            {
+                if (!sourceLookup.ContainsKey(sourceAddress))
+                    continue;
+
+                tiledPairs.Add((sourceAddress, destinationAddress));
+            }
+
+            return new PasteSpecialCellsCommand(targetSheetId, sourceCells, tiledPairs, options);
+        }
+
         var edits = new List<(CellAddress Address, Cell Cell)>((int)Math.Min(int.MaxValue, (long)targetRows * targetCols));
-        Dictionary<CellAddress, IReadOnlyList<CellTextRun>>? richTextRuns =
-            mode == PasteCellsMode.All && ContentKindCarriesRichTextRuns(options.ContentKind) ? [] : null;
+        var carriesFormatting = mode == PasteCellsMode.All && ContentKindCarriesRichTextRuns(options.ContentKind);
+        Dictionary<CellAddress, IReadOnlyList<CellTextRun>>? richTextRuns = carriesFormatting ? [] : null;
+        Dictionary<CellAddress, string>? hyperlinks = carriesFormatting ? [] : null;
+        Dictionary<CellAddress, HyperlinkMetadata>? hyperlinkMetadata = carriesFormatting ? [] : null;
         foreach (var (sourceAddress, destinationAddress) in EnumerateTiledAddresses(
             sourceRange,
             targetSheetId,
@@ -391,10 +443,24 @@ public static class PasteCommandFactory
             {
                 richTextRuns[destinationAddress] = sourceRuns;
             }
+
+            if (hyperlinks is not null &&
+                sourceSheet is not null &&
+                sourceSheet.Hyperlinks.TryGetValue(sourceAddress, out var sourceHyperlink))
+            {
+                hyperlinks[destinationAddress] = sourceHyperlink;
+            }
+
+            if (hyperlinkMetadata is not null &&
+                sourceSheet is not null &&
+                sourceSheet.HyperlinkMetadata.TryGetValue(sourceAddress, out var sourceHyperlinkMetadata))
+            {
+                hyperlinkMetadata[destinationAddress] = sourceHyperlinkMetadata;
+            }
         }
 
         return mode == PasteCellsMode.All
-            ? new PasteCellsCommand(targetSheetId, edits, richTextRuns)
+            ? new PasteCellsCommand(targetSheetId, edits, richTextRuns, hyperlinks, hyperlinkMetadata)
             : new EditCellsCommand(targetSheetId, edits);
     }
 

@@ -2910,6 +2910,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ScenarioManagerPlanner.CreateSummaryReportPlan(_session.Workbook);");
         source.Should().Contain("_session.ExecuteScenarioManagerSummaryReportPlan(summaryPlan);");
         source.Should().Contain("CaptureScenarioManagerChangingCells(_session.SelectedRange);");
+        source.Should().Contain("ScenarioManagerDialogPlanner.BuildItems(_session.Workbook)");
+        source.Should().Contain("ScenarioManagerDialogPlanner.ProjectSelectionFields(");
         source.Should().Contain("new ScenarioManagerSaveRequest(");
         source.Should().Contain("RefreshShell(status);");
         source.Should().Contain("ShowEditIssue(message);");
@@ -2925,6 +2927,9 @@ public sealed class AvaloniaShellSourceTests
         plannerSource.Should().Contain("public static ScenarioManagerPlan CreateSummaryReportPlan(");
         parityCaptureSource.Should().Contain("(\"dialog.ScenarioManager\", () => ShowScenarioManagerParityDialogAsync()),");
         parityCaptureSource.Should().Contain("private async Task ShowScenarioManagerParityDialogAsync()");
+        parityCaptureSource.Should().Contain("var changingCellsRange = ScenarioManagerParityFixture.ChangingCellsRange(_session.ActiveSheet.Id);");
+        parityCaptureSource.Should().Contain("ScenarioManagerParityFixture.Seed(_session.Workbook, _session.ActiveSheet.Id);");
+        parityCaptureSource.Should().Contain("ScenarioManagerParityFixture.ScenarioName");
         parityCaptureSource.Should().Contain("await ShowScenarioManagerCompactDialogAsync(plan);");
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowScenarioManagerDialogAsync()", StringComparison.Ordinal);
