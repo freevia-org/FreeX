@@ -466,6 +466,15 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "DocumentViewReviewTests.ResolveComment_registry_command_toggles_the_comment_at_the_caret");
         AssertBehaviorEvidence(
             commands,
+            "freew.chart-type-bar",
+            "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
+            "FreeWRibbonParityTests.ChartDesign_ChangeTypeRibbonCommandMutatesSelectedChartAndUndoRestoresIt",
+            "freew/FreeW.App.Avalonia.Tests/ChartSmartArtContextualTabTests.cs",
+            "ChartSmartArtContextualTabTests.SetChartType_command_changes_chart_kind_and_reverts_on_undo",
+            "freew.chart.shared-behavior",
+            "Chart command behavior");
+        AssertBehaviorEvidence(
+            commands,
             "freew.chart-toggle-legend",
             "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
             "FreeWRibbonParityTests.ChartDesign_ToggleLegendRibbonCommandMutatesSelectedChartAndUndoRestoresIt",

@@ -2327,10 +2327,10 @@ public sealed class DocumentView : RichTextBox
     public void SetSelectedChartKind(ChartKind kind)
     {
         CommitToModel();
-        var chart = SelectedChartLocation().Chart;
-        if (chart is null)
+        var location = SelectedChartLocation();
+        if (location.Chart is null)
             return;
-        chart.Kind = kind;
+        _commands.Execute(new SetChartKindCommand(location.BlockIndex, location.RunIndex, kind));
         Render();
     }
 

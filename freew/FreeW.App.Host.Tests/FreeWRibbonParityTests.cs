@@ -1201,7 +1201,7 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
-    public void ChartDesign_ChangeTypeMutatesSelectedChart()
+    public void ChartDesign_ChangeTypeRibbonCommandMutatesSelectedChartAndUndoRestoresIt()
     {
         var editor = new DocumentView();
         editor.Model.Blocks.Clear();
@@ -1215,9 +1215,14 @@ public sealed class FreeWRibbonParityTests
         chart.Should().NotBeNull();
         chart!.Kind.Should().Be(ChartKind.Column);
 
-        editor.SetSelectedChartKind(ChartKind.Bar);
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+        registry.TryGet("freew.chart-type-bar", out var command)
+            .Should().BeTrue("the WPF Chart Design type command must be registered");
+        command!.Execute(RibbonCommandContext.Empty);
 
         chart.Kind.Should().Be(ChartKind.Bar);
+        editor.Commands.Undo().Should().BeTrue();
+        chart.Kind.Should().Be(ChartKind.Column);
     }
 
     [StaFact]

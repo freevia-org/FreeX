@@ -137,6 +137,10 @@ internal static class FreeWCommandInventory
             "Toggles the resolved state for the comment thread at the caret through WPF editor behavior and Avalonia registry execution.",
             "ThreadedCommentCommandTests.ToggleResolveCommentAtCaret_TogglesResolved",
             "DocumentViewReviewTests.ResolveComment_registry_command_toggles_the_comment_at_the_caret"),
+        ["freew.chart-type-bar"] = ChartCommandEvidence(
+            "Changes the selected chart from column to bar through the WPF and Avalonia ribbon command registries and keeps the change undoable in both shells.",
+            "FreeWRibbonParityTests.ChartDesign_ChangeTypeRibbonCommandMutatesSelectedChartAndUndoRestoresIt",
+            "ChartSmartArtContextualTabTests.SetChartType_command_changes_chart_kind_and_reverts_on_undo"),
         ["freew.chart-toggle-legend"] = ChartCommandEvidence(
             "Toggles the selected chart legend through the WPF and Avalonia ribbon command registries, clears layout overrides where applicable, and keeps the change undoable.",
             "FreeWRibbonParityTests.ChartDesign_ToggleLegendRibbonCommandMutatesSelectedChartAndUndoRestoresIt",
