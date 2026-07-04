@@ -180,7 +180,9 @@ public static class SourceManagementDialogPlanner
         new(SourceType.WebSite, "Web Site"),
         new(SourceType.Report, "Report"),
         new(SourceType.BookSection, "Book Section"),
-        new(SourceType.ConferenceProceedings, "Conference Proceedings")
+        new(SourceType.ConferenceProceedings, "Conference Proceedings"),
+        new(SourceType.ArticleInPeriodical, "Article in a Periodical"),
+        new(SourceType.ElectronicSource, "Electronic Source")
     ];
 
     private static readonly IReadOnlyDictionary<SourceType, IReadOnlyList<SourceManagementSourceField>> SourceFieldOrders =
@@ -267,6 +269,34 @@ public static class SourceManagementDialogPlanner
                 SourceManagementSourceField.City,
                 SourceManagementSourceField.Publisher,
                 SourceManagementSourceField.StandardNumber,
+                SourceManagementSourceField.ShortTitle,
+                SourceManagementSourceField.Comments
+            ],
+            [SourceType.ArticleInPeriodical] =
+            [
+                SourceManagementSourceField.Tag,
+                SourceManagementSourceField.Author,
+                SourceManagementSourceField.Title,
+                SourceManagementSourceField.Year,
+                SourceManagementSourceField.Journal,
+                SourceManagementSourceField.Volume,
+                SourceManagementSourceField.Issue,
+                SourceManagementSourceField.Pages,
+                SourceManagementSourceField.StandardNumber,
+                SourceManagementSourceField.ShortTitle,
+                SourceManagementSourceField.Comments
+            ],
+            [SourceType.ElectronicSource] =
+            [
+                SourceManagementSourceField.Tag,
+                SourceManagementSourceField.Author,
+                SourceManagementSourceField.Title,
+                SourceManagementSourceField.Year,
+                SourceManagementSourceField.Publisher,
+                SourceManagementSourceField.Url,
+                SourceManagementSourceField.AccessedDay,
+                SourceManagementSourceField.AccessedMonth,
+                SourceManagementSourceField.AccessedYear,
                 SourceManagementSourceField.ShortTitle,
                 SourceManagementSourceField.Comments
             ]
@@ -504,26 +534,26 @@ public static class SourceManagementDialogPlanner
             ConferenceName = type == SourceType.ConferenceProceedings ? NullIfWhiteSpace(entry.ConferenceName) : null,
             Year = entry.Year.Trim(),
             Institution = type == SourceType.Report ? NullIfWhiteSpace(entry.Institution) : null,
-            Publisher = type is SourceType.Book or SourceType.WebSite or SourceType.Report or SourceType.BookSection or SourceType.ConferenceProceedings
+            Publisher = type is SourceType.Book or SourceType.WebSite or SourceType.Report or SourceType.BookSection or SourceType.ConferenceProceedings or SourceType.ElectronicSource
                 ? NullIfWhiteSpace(entry.Publisher)
                 : null,
             City = type is SourceType.Book or SourceType.Report or SourceType.BookSection or SourceType.ConferenceProceedings ? NullIfWhiteSpace(entry.City) : null,
             Edition = type is SourceType.Book or SourceType.BookSection ? NullIfWhiteSpace(entry.Edition) : null,
-            StandardNumber = type is SourceType.Book or SourceType.JournalArticle or SourceType.Report or SourceType.BookSection or SourceType.ConferenceProceedings
+            StandardNumber = type is SourceType.Book or SourceType.JournalArticle or SourceType.Report or SourceType.BookSection or SourceType.ConferenceProceedings or SourceType.ArticleInPeriodical
                 ? NullIfWhiteSpace(entry.StandardNumber)
                 : null,
             ChapterNumber = type == SourceType.BookSection ? NullIfWhiteSpace(entry.ChapterNumber) : null,
             ShortTitle = NullIfWhiteSpace(entry.ShortTitle),
             Comments = NullIfWhiteSpace(entry.Comments),
-            Journal = type == SourceType.JournalArticle ? NullIfWhiteSpace(entry.Journal) : null,
-            Volume = type == SourceType.JournalArticle ? NullIfWhiteSpace(entry.Volume) : null,
-            Issue = type == SourceType.JournalArticle ? NullIfWhiteSpace(entry.Issue) : null,
-            Pages = type is SourceType.JournalArticle or SourceType.BookSection or SourceType.ConferenceProceedings ? NullIfWhiteSpace(entry.Pages) : null,
-            Url = type == SourceType.WebSite ? NullIfWhiteSpace(entry.Url) : null,
-            Accessed = type == SourceType.WebSite ? NullIfWhiteSpace(entry.Accessed) : null,
-            AccessedDay = type == SourceType.WebSite ? NullIfWhiteSpace(entry.AccessedDay) : null,
-            AccessedMonth = type == SourceType.WebSite ? NullIfWhiteSpace(entry.AccessedMonth) : null,
-            AccessedYear = type == SourceType.WebSite ? NullIfWhiteSpace(entry.AccessedYear) : null
+            Journal = IsPeriodicalSource(type) ? NullIfWhiteSpace(entry.Journal) : null,
+            Volume = IsPeriodicalSource(type) ? NullIfWhiteSpace(entry.Volume) : null,
+            Issue = IsPeriodicalSource(type) ? NullIfWhiteSpace(entry.Issue) : null,
+            Pages = type is SourceType.JournalArticle or SourceType.BookSection or SourceType.ConferenceProceedings or SourceType.ArticleInPeriodical ? NullIfWhiteSpace(entry.Pages) : null,
+            Url = IsElectronicSource(type) ? NullIfWhiteSpace(entry.Url) : null,
+            Accessed = IsElectronicSource(type) ? NullIfWhiteSpace(entry.Accessed) : null,
+            AccessedDay = IsElectronicSource(type) ? NullIfWhiteSpace(entry.AccessedDay) : null,
+            AccessedMonth = IsElectronicSource(type) ? NullIfWhiteSpace(entry.AccessedMonth) : null,
+            AccessedYear = IsElectronicSource(type) ? NullIfWhiteSpace(entry.AccessedYear) : null
         };
     }
 
@@ -895,6 +925,12 @@ public static class SourceManagementDialogPlanner
 
     private static SourceType NormalizeSourceType(SourceType type) =>
         SourceFieldOrders.ContainsKey(type) ? type : SourceType.Book;
+
+    private static bool IsPeriodicalSource(SourceType type) =>
+        type is SourceType.JournalArticle or SourceType.ArticleInPeriodical;
+
+    private static bool IsElectronicSource(SourceType type) =>
+        type is SourceType.WebSite or SourceType.ElectronicSource;
 
     private static string? NullIfWhiteSpace(string value)
     {

@@ -69,18 +69,24 @@ public sealed class SourceManagementDialogPlannerTests
             SourceType.WebSite,
             SourceType.Report,
             SourceType.BookSection,
-            SourceType.ConferenceProceedings);
+            SourceType.ConferenceProceedings,
+            SourceType.ArticleInPeriodical,
+            SourceType.ElectronicSource);
         choices.Select(choice => choice.Label).Should().Equal(
             "Book",
             "Journal Article",
             "Web Site",
             "Report",
             "Book Section",
-            "Conference Proceedings");
+            "Conference Proceedings",
+            "Article in a Periodical",
+            "Electronic Source");
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.JournalArticle).Should().Be(1);
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Report).Should().Be(3);
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.BookSection).Should().Be(4);
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.ConferenceProceedings).Should().Be(5);
+        SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.ArticleInPeriodical).Should().Be(6);
+        SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.ElectronicSource).Should().Be(7);
     }
 
     [Fact]
@@ -159,6 +165,34 @@ public sealed class SourceManagementDialogPlannerTests
             SourceManagementSourceField.Comments);
         conferencePlans.Single(plan => plan.Field == SourceManagementSourceField.ConferenceName)
             .Label.Should().Be("Conference name:");
+
+        var periodicalPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.ArticleInPeriodical);
+        periodicalPlans.Select(plan => plan.Field).Should().Equal(
+            SourceManagementSourceField.Tag,
+            SourceManagementSourceField.Author,
+            SourceManagementSourceField.Title,
+            SourceManagementSourceField.Year,
+            SourceManagementSourceField.Journal,
+            SourceManagementSourceField.Volume,
+            SourceManagementSourceField.Issue,
+            SourceManagementSourceField.Pages,
+            SourceManagementSourceField.StandardNumber,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
+
+        var electronicPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.ElectronicSource);
+        electronicPlans.Select(plan => plan.Field).Should().Equal(
+            SourceManagementSourceField.Tag,
+            SourceManagementSourceField.Author,
+            SourceManagementSourceField.Title,
+            SourceManagementSourceField.Year,
+            SourceManagementSourceField.Publisher,
+            SourceManagementSourceField.Url,
+            SourceManagementSourceField.AccessedDay,
+            SourceManagementSourceField.AccessedMonth,
+            SourceManagementSourceField.AccessedYear,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
     }
 
     [Fact]
@@ -272,6 +306,48 @@ public sealed class SourceManagementDialogPlannerTests
             .Text.Should().Be("Proceedings of the Example Conference");
         plans.Single(plan => plan.Field == SourceManagementSourceField.Pages)
             .Text.Should().Be("101-109");
+    }
+
+    [Fact]
+    public void ProjectEntry_SeedsNewWordSourceTypeFields()
+    {
+        var periodical = SourceManagementDialogPlanner.ProjectEntry(new Source
+        {
+            Type = SourceType.ArticleInPeriodical,
+            Tag = "Periodical2026",
+            Title = "City Desk",
+            Journal = "Daily Planet",
+            Volume = "12",
+            Issue = "4",
+            Pages = "5-7",
+            StandardNumber = "ISSN 1234-5678"
+        });
+        var periodicalPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(periodical);
+
+        periodical.Journal.Should().Be("Daily Planet");
+        periodicalPlans.Single(plan => plan.Field == SourceManagementSourceField.Journal)
+            .Text.Should().Be("Daily Planet");
+        periodicalPlans.Single(plan => plan.Field == SourceManagementSourceField.Pages)
+            .Text.Should().Be("5-7");
+
+        var electronic = SourceManagementDialogPlanner.ProjectEntry(new Source
+        {
+            Type = SourceType.ElectronicSource,
+            Tag = "Electronic2026",
+            Title = "Online Notes",
+            Publisher = "Example Archive",
+            Url = "https://example.test/notes",
+            AccessedDay = "4",
+            AccessedMonth = "July",
+            AccessedYear = "2026"
+        });
+        var electronicPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(electronic);
+
+        electronic.Url.Should().Be("https://example.test/notes");
+        electronicPlans.Single(plan => plan.Field == SourceManagementSourceField.Url)
+            .Text.Should().Be("https://example.test/notes");
+        electronicPlans.Single(plan => plan.Field == SourceManagementSourceField.AccessedYear)
+            .Text.Should().Be("2026");
     }
 
     [Fact]
@@ -744,6 +820,68 @@ public sealed class SourceManagementDialogPlannerTests
         source.Journal.Should().BeNull();
         source.Url.Should().BeNull();
         source.Accessed.Should().BeNull();
+    }
+
+    [Fact]
+    public void BuildSource_NewWordSourceTypesPreserveOnlyApplicableFields()
+    {
+        var periodical = SourceManagementDialogPlanner.BuildSource(
+            SourceManagementDialogPlanner.CreateEntry(
+                SourceType.ArticleInPeriodical,
+                new Dictionary<SourceManagementSourceField, string?>
+                {
+                    [SourceManagementSourceField.Tag] = " Periodical2026 ",
+                    [SourceManagementSourceField.Author] = " Roe ",
+                    [SourceManagementSourceField.Title] = " City Desk ",
+                    [SourceManagementSourceField.Year] = " 2026 ",
+                    [SourceManagementSourceField.Journal] = " Daily Planet ",
+                    [SourceManagementSourceField.Volume] = " 12 ",
+                    [SourceManagementSourceField.Issue] = " 4 ",
+                    [SourceManagementSourceField.Pages] = " 5-7 ",
+                    [SourceManagementSourceField.StandardNumber] = " ISSN 1234-5678 ",
+                    [SourceManagementSourceField.Publisher] = " Not applicable ",
+                    [SourceManagementSourceField.Url] = " https://example.test "
+                }));
+
+        periodical.Type.Should().Be(SourceType.ArticleInPeriodical);
+        periodical.Author.Should().Be("Roe");
+        periodical.Title.Should().Be("City Desk");
+        periodical.Journal.Should().Be("Daily Planet");
+        periodical.Volume.Should().Be("12");
+        periodical.Issue.Should().Be("4");
+        periodical.Pages.Should().Be("5-7");
+        periodical.StandardNumber.Should().Be("ISSN 1234-5678");
+        periodical.Publisher.Should().BeNull();
+        periodical.Url.Should().BeNull();
+
+        var electronic = SourceManagementDialogPlanner.BuildSource(
+            SourceManagementDialogPlanner.CreateEntry(
+                SourceType.ElectronicSource,
+                new Dictionary<SourceManagementSourceField, string?>
+                {
+                    [SourceManagementSourceField.Tag] = " Electronic2026 ",
+                    [SourceManagementSourceField.Author] = " Ada ",
+                    [SourceManagementSourceField.Title] = " Online Notes ",
+                    [SourceManagementSourceField.Year] = " 2026 ",
+                    [SourceManagementSourceField.Publisher] = " Example Archive ",
+                    [SourceManagementSourceField.Url] = " https://example.test/notes ",
+                    [SourceManagementSourceField.AccessedDay] = " 4 ",
+                    [SourceManagementSourceField.AccessedMonth] = " July ",
+                    [SourceManagementSourceField.AccessedYear] = " 2026 ",
+                    [SourceManagementSourceField.Journal] = " Not applicable ",
+                    [SourceManagementSourceField.Pages] = " 5-7 "
+                }));
+
+        electronic.Type.Should().Be(SourceType.ElectronicSource);
+        electronic.Author.Should().Be("Ada");
+        electronic.Title.Should().Be("Online Notes");
+        electronic.Publisher.Should().Be("Example Archive");
+        electronic.Url.Should().Be("https://example.test/notes");
+        electronic.AccessedDay.Should().Be("4");
+        electronic.AccessedMonth.Should().Be("July");
+        electronic.AccessedYear.Should().Be("2026");
+        electronic.Journal.Should().BeNull();
+        electronic.Pages.Should().BeNull();
     }
 
     [Fact]

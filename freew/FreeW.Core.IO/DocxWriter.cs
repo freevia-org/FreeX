@@ -5401,6 +5401,8 @@ public static class DocxWriter
         SourceType.Report => "Report",
         SourceType.BookSection => "BookSection",
         SourceType.ConferenceProceedings => "ConferenceProceedings",
+        SourceType.ArticleInPeriodical => "ArticleInAPeriodical",
+        SourceType.ElectronicSource => "ElectronicSource",
         _ => "Book",
     };
 
