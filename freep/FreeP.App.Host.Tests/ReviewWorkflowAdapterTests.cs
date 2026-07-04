@@ -629,7 +629,7 @@ public sealed class ReviewWorkflowAdapterTests
             {
                 Id = 904,
                 Name = "Caption",
-                Text = "caption text"
+                Text = "Caption  text"
             });
             window.RefreshReviewWorkflowPlans();
             var scope = window.LastProofingExecutionPlan!.Scopes.Single(s =>
@@ -662,7 +662,7 @@ public sealed class ReviewWorkflowAdapterTests
                 selectedCaption.SelectedRow!.Scope,
                 selectedCaption.SelectedRow.Start,
                 selectedCaption.SelectedRow.Length,
-                "C",
+                " ",
                 "Caption text",
                 null));
             window.Editor.CurrentSlide.Title.Should().Be("Intro deck");
