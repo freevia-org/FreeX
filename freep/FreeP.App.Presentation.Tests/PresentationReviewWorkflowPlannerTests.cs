@@ -1666,6 +1666,106 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildAccessibilitySummaryPlan_FlagsMergedTableCellsOncePerTable()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Quarterly review";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 17,
+            Name = "Coverage table",
+            Kind = SlideShapeKind.Table,
+            Table = new TableShape
+            {
+                Flags = new TableStyleFlags { FirstRow = true },
+                Rows =
+                {
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("Region"), RowSpan = 2 },
+                            new TableCell { TextBody = TextBody("Owner") }
+                        }
+                    },
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { VMerge = true },
+                            new TableCell { TextBody = TextBody("Design") }
+                        }
+                    }
+                }
+            }
+        });
+
+        var summary = PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation);
+        var pane = PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(presentation, summary);
+
+        summary.Issues.Should().ContainSingle().Which.Should().Be(new PresentationAccessibilityIssueDescriptor(
+            PresentationAccessibilityIssueSeverity.Warning,
+            0,
+            17,
+            "Merged or split table cells",
+            "Coverage table contains merged or split cells that can make table reading order ambiguous.",
+            new PresentationAccessibilityIssueActionSummary(
+                PresentationReviewWorkflowPlanner.MergedTableCellsActionSummary,
+                null,
+                true)));
+        pane.Rows.Should().ContainSingle().Which.Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
+            row.Category == "Table" &&
+            row.ShapeId == 17 &&
+            row.ShapeName == "Coverage table" &&
+            row.ActionLabel == "Review Table Structure" &&
+            row.CommandHint == null &&
+            row.ShouldNavigateToSlide &&
+            row.ShouldSelectShape);
+    }
+
+    [Fact]
+    public void BuildAccessibilitySummaryPlan_DoesNotFlagNormalPopulatedTablesAsMerged()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Quarterly review";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 18,
+            Name = "Revenue table",
+            Kind = SlideShapeKind.Table,
+            Table = new TableShape
+            {
+                Flags = new TableStyleFlags { FirstRow = true },
+                Rows =
+                {
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("Region") },
+                            new TableCell { TextBody = TextBody("Revenue") }
+                        }
+                    },
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("North") },
+                            new TableCell { TextBody = TextBody("$42K") }
+                        }
+                    }
+                }
+            }
+        });
+
+        var summary = PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation);
+
+        summary.Issues.Should().BeEmpty();
+    }
+
+    [Fact]
     public void BuildAccessibilitySummaryPlan_FlagsBlankTableHeaderCells()
     {
         var presentation = Presentation.CreateEmpty();
@@ -1981,7 +2081,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
         });
         plan.Rows[0].ActionLabel.Should().Be("Set Header Row");
         plan.Rows[0].CommandHint.Should().Be(PresentationReviewWorkflowPlanner.SetTableHeaderRowCommandId);
-        plan.Rows[1].ActionLabel.Should().Be("Select Object");
+        plan.Rows[1].ActionLabel.Should().Be("Review Table Structure");
         plan.Rows[1].CommandHint.Should().BeNull();
         plan.SelectedRowIndex.Should().Be(1);
         plan.SelectedRow.Should().BeSameAs(plan.Rows[1]);
