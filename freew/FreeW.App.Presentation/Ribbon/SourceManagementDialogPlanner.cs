@@ -7,7 +7,9 @@ public enum SourceManagementSourceField
     Tag,
     Author,
     Title,
+    BookTitle,
     Year,
+    ChapterNumber,
     Institution,
     Publisher,
     City,
@@ -48,6 +50,10 @@ public sealed record SourceManagementSourceEntry(
     string Accessed)
 {
     public string Institution { get; init; } = string.Empty;
+
+    public string BookTitle { get; init; } = string.Empty;
+
+    public string ChapterNumber { get; init; } = string.Empty;
 
     public IReadOnlyList<SourceAuthorPerson> PersonalAuthors { get; init; } = [];
 
@@ -160,7 +166,8 @@ public static class SourceManagementDialogPlanner
         new(SourceType.Book, "Book"),
         new(SourceType.JournalArticle, "Journal Article"),
         new(SourceType.WebSite, "Web Site"),
-        new(SourceType.Report, "Report")
+        new(SourceType.Report, "Report"),
+        new(SourceType.BookSection, "Book Section")
     ];
 
     private static readonly IReadOnlyDictionary<SourceType, IReadOnlyList<SourceManagementSourceField>> SourceFieldOrders =
@@ -217,6 +224,22 @@ public static class SourceManagementDialogPlanner
                 SourceManagementSourceField.StandardNumber,
                 SourceManagementSourceField.ShortTitle,
                 SourceManagementSourceField.Comments
+            ],
+            [SourceType.BookSection] =
+            [
+                SourceManagementSourceField.Tag,
+                SourceManagementSourceField.Author,
+                SourceManagementSourceField.Title,
+                SourceManagementSourceField.BookTitle,
+                SourceManagementSourceField.Year,
+                SourceManagementSourceField.ChapterNumber,
+                SourceManagementSourceField.Pages,
+                SourceManagementSourceField.City,
+                SourceManagementSourceField.Publisher,
+                SourceManagementSourceField.Edition,
+                SourceManagementSourceField.StandardNumber,
+                SourceManagementSourceField.ShortTitle,
+                SourceManagementSourceField.Comments
             ]
         };
 
@@ -226,7 +249,9 @@ public static class SourceManagementDialogPlanner
             [SourceManagementSourceField.Tag] = "Tag (short id):",
             [SourceManagementSourceField.Author] = "Author:",
             [SourceManagementSourceField.Title] = "Title:",
+            [SourceManagementSourceField.BookTitle] = "Book title:",
             [SourceManagementSourceField.Year] = "Year:",
+            [SourceManagementSourceField.ChapterNumber] = "Chapter number:",
             [SourceManagementSourceField.Institution] = "Institution:",
             [SourceManagementSourceField.Publisher] = "Publisher / Site name (optional):",
             [SourceManagementSourceField.City] = "City:",
@@ -296,6 +321,8 @@ public static class SourceManagementDialogPlanner
             source?.Accessed ?? string.Empty)
         {
             Institution = source?.Institution ?? string.Empty,
+            BookTitle = source?.BookTitle ?? string.Empty,
+            ChapterNumber = source?.ChapterNumber ?? string.Empty,
             PersonalAuthors = ClonePersonalAuthors(source?.PersonalAuthors ?? []),
             CorporateAuthor = source?.CorporateAuthor
         };
@@ -342,6 +369,8 @@ public static class SourceManagementDialogPlanner
             TrimmedValue(values, SourceManagementSourceField.Accessed))
         {
             Institution = TrimmedValue(values, SourceManagementSourceField.Institution),
+            BookTitle = TrimmedValue(values, SourceManagementSourceField.BookTitle),
+            ChapterNumber = TrimmedValue(values, SourceManagementSourceField.ChapterNumber),
             PersonalAuthors = author.PersonalAuthors,
             CorporateAuthor = author.CorporateAuthor
         };
@@ -430,22 +459,24 @@ public static class SourceManagementDialogPlanner
             PersonalAuthors = author.PersonalAuthors,
             CorporateAuthor = author.CorporateAuthor,
             Title = entry.Title.Trim(),
+            BookTitle = type == SourceType.BookSection ? NullIfWhiteSpace(entry.BookTitle) : null,
             Year = entry.Year.Trim(),
             Institution = type == SourceType.Report ? NullIfWhiteSpace(entry.Institution) : null,
-            Publisher = type is SourceType.Book or SourceType.WebSite or SourceType.Report
+            Publisher = type is SourceType.Book or SourceType.WebSite or SourceType.Report or SourceType.BookSection
                 ? NullIfWhiteSpace(entry.Publisher)
                 : null,
-            City = type is SourceType.Book or SourceType.Report ? NullIfWhiteSpace(entry.City) : null,
-            Edition = type == SourceType.Book ? NullIfWhiteSpace(entry.Edition) : null,
-            StandardNumber = type is SourceType.Book or SourceType.JournalArticle or SourceType.Report
+            City = type is SourceType.Book or SourceType.Report or SourceType.BookSection ? NullIfWhiteSpace(entry.City) : null,
+            Edition = type is SourceType.Book or SourceType.BookSection ? NullIfWhiteSpace(entry.Edition) : null,
+            StandardNumber = type is SourceType.Book or SourceType.JournalArticle or SourceType.Report or SourceType.BookSection
                 ? NullIfWhiteSpace(entry.StandardNumber)
                 : null,
+            ChapterNumber = type == SourceType.BookSection ? NullIfWhiteSpace(entry.ChapterNumber) : null,
             ShortTitle = NullIfWhiteSpace(entry.ShortTitle),
             Comments = NullIfWhiteSpace(entry.Comments),
             Journal = type == SourceType.JournalArticle ? NullIfWhiteSpace(entry.Journal) : null,
             Volume = type == SourceType.JournalArticle ? NullIfWhiteSpace(entry.Volume) : null,
             Issue = type == SourceType.JournalArticle ? NullIfWhiteSpace(entry.Issue) : null,
-            Pages = type == SourceType.JournalArticle ? NullIfWhiteSpace(entry.Pages) : null,
+            Pages = type is SourceType.JournalArticle or SourceType.BookSection ? NullIfWhiteSpace(entry.Pages) : null,
             Url = type == SourceType.WebSite ? NullIfWhiteSpace(entry.Url) : null,
             Accessed = type == SourceType.WebSite ? NullIfWhiteSpace(entry.Accessed) : null
         };
@@ -463,12 +494,14 @@ public static class SourceManagementDialogPlanner
             PersonalAuthors = ClonePersonalAuthors(source.PersonalAuthors),
             CorporateAuthor = source.CorporateAuthor,
             Title = source.Title,
+            BookTitle = source.BookTitle,
             Year = source.Year,
             Institution = source.Institution,
             Publisher = source.Publisher,
             City = source.City,
             Edition = source.Edition,
             StandardNumber = source.StandardNumber,
+            ChapterNumber = source.ChapterNumber,
             ShortTitle = source.ShortTitle,
             Comments = source.Comments,
             Journal = source.Journal,
@@ -636,7 +669,9 @@ public static class SourceManagementDialogPlanner
     private static bool HasCitationSourceData(SourceManagementSourceEntry entry) =>
         entry.Author.Length > 0
         || entry.Title.Length > 0
+        || entry.BookTitle.Length > 0
         || entry.Year.Length > 0
+        || entry.ChapterNumber.Length > 0
         || entry.Institution.Length > 0
         || entry.Publisher.Length > 0
         || entry.City.Length > 0
@@ -660,7 +695,9 @@ public static class SourceManagementDialogPlanner
             SourceManagementSourceField.Tag => entry.Tag,
             SourceManagementSourceField.Author => entry.Author,
             SourceManagementSourceField.Title => entry.Title,
+            SourceManagementSourceField.BookTitle => entry.BookTitle,
             SourceManagementSourceField.Year => entry.Year,
+            SourceManagementSourceField.ChapterNumber => entry.ChapterNumber,
             SourceManagementSourceField.Institution => entry.Institution,
             SourceManagementSourceField.Publisher => entry.Publisher,
             SourceManagementSourceField.City => entry.City,

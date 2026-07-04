@@ -50,12 +50,14 @@ public sealed class SourceRecord
     public List<SourceAuthorPerson> PersonalAuthors { get; set; } = [];
     public string? CorporateAuthor { get; set; }
     public string Title { get; set; } = string.Empty;
+    public string? BookTitle { get; set; }
     public string Year { get; set; } = string.Empty;
     public string? Institution { get; set; }
     public string? Publisher { get; set; }
     public string? City { get; set; }
     public string? Edition { get; set; }
     public string? StandardNumber { get; set; }
+    public string? ChapterNumber { get; set; }
     public string? ShortTitle { get; set; }
     public string? Comments { get; set; }
     public string? Journal { get; set; }
@@ -76,12 +78,14 @@ public sealed class SourceRecord
             .ToArray(),
         CorporateAuthor = CorporateAuthor,
         Title = Title,
+        BookTitle = BookTitle,
         Year = Year,
         Institution = Institution,
         Publisher = Publisher,
         City = City,
         Edition = Edition,
         StandardNumber = StandardNumber,
+        ChapterNumber = ChapterNumber,
         ShortTitle = ShortTitle,
         Comments = Comments,
         Journal = Journal,
@@ -107,12 +111,14 @@ public sealed class SourceRecord
                 .ToList(),
             CorporateAuthor = source.CorporateAuthor,
             Title = source.Title,
+            BookTitle = source.BookTitle,
             Year = source.Year,
             Institution = source.Institution,
             Publisher = source.Publisher,
             City = source.City,
             Edition = source.Edition,
             StandardNumber = source.StandardNumber,
+            ChapterNumber = source.ChapterNumber,
             ShortTitle = source.ShortTitle,
             Comments = source.Comments,
             Journal = source.Journal,
