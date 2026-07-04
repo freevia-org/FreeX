@@ -97,4 +97,47 @@ public sealed class SlideCanvasMathBaselineTests
 
         thrown.Should().BeNull("rendering a mixed text+math paragraph must not throw");
     }
+
+    [Fact]
+    public async Task RenderParaWithMath_Matrix_UsesSharedMathBoxPlan_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var matrix = new MathNode.Matrix(
+                    new[]
+                    {
+                        new MathNode[] { new MathNode.Run("wide"), new MathNode.Run("wide") },
+                        new MathNode[] { new MathNode.Run("x"), new MathNode.Run("yy") }
+                    },
+                    new[]
+                    {
+                        MathNode.Matrix.MatrixColumnAlignment.Left,
+                        MathNode.Matrix.MatrixColumnAlignment.Right
+                    });
+                var mathBox = MathLayoutEngine.Layout(matrix, "Cambria Math", 18.0);
+                var ops = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math");
+                ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text).Should().Contain(new[] { "wide", "x", "yy" },
+                    "matrix glyphs must come from the shared MathBox plan before Avalonia draws them");
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "M = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+                    }
+                };
+
+                var rtb = new RenderTargetBitmap(new PixelSize(240, 120));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must render matrix math from the shared MathBox plan without host-specific layout branching");
+    }
 }
