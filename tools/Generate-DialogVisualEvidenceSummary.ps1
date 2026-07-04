@@ -512,6 +512,13 @@ function Get-ExpectedEvidenceSize {
                     source = "SortDialog.DialogDefaultWidth/DialogDefaultHeight"
                 }
             }
+            "dialog.WorkbookStatistics" {
+                return [pscustomobject]@{
+                    width = 500
+                    height = 560
+                    source = "WorkbookStatisticsDialogPlanner.Width/Height"
+                }
+            }
             "dialog.ProtectSheet" {
                 return [pscustomobject]@{
                     width = 430

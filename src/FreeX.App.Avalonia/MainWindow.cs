@@ -10510,10 +10510,10 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = "Workbook Statistics",
-            Width = 380,
-            Height = 320,
-            MinWidth = 340,
-            MinHeight = 280,
+            Width = WorkbookStatisticsDialogPlanner.Width,
+            Height = WorkbookStatisticsDialogPlanner.Height,
+            MinWidth = WorkbookStatisticsDialogPlanner.MinWidth,
+            MinHeight = WorkbookStatisticsDialogPlanner.MinHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -10604,15 +10604,7 @@ public sealed partial class MainWindow : Window
     }
 
     private static string FormatWorkbookStatistics(WorkbookStatistics statistics) =>
-        string.Join(Environment.NewLine,
-            $"Sheets: {statistics.WorksheetCount}",
-            $"Cells with data: {statistics.CellCount}",
-            $"Formulas: {statistics.FormulaCount}",
-            $"Comments: {statistics.CommentCount}",
-            $"Charts: {statistics.ChartCount}",
-            $"Pictures: {statistics.PictureCount}",
-            $"Shapes and text boxes: {statistics.ShapeCount}",
-            $"Named ranges: {statistics.NamedRangeCount}");
+        WorkbookStatisticsFormatter.Format(statistics);
 
     private async Task ShowReviewSummaryDialogAsync(bool focusAccessibility = false)
     {
