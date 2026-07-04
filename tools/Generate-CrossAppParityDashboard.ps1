@@ -247,7 +247,7 @@ try {
             platformOnly = [int]$freep.summary.platformOnly
             commandIdAliases = [int]$freep.summary.commandIdAliases
         }
-        nextSlice = "Layout picker, table picker, slide-pane reorder, and the bottom New Slide affordance now have WPF/Avalonia evidence. Continue workflow-depth slices in notes-page preview/rendering, rich inline table/text editing, modern comments/review, and presenter recording/ink execution."
+        nextSlice = "Layout picker, table picker, slide-pane reorder, bottom New Slide, and notes-page preview/PDF rendering now have WPF/Avalonia no-COM evidence paths. Continue workflow-depth slices in rich inline table/text editing, modern comments/review, and presenter recording/ink execution."
     }
 
     $dashboard = [ordered]@{
