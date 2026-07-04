@@ -38,7 +38,14 @@ public sealed record SmartArtNodeVisualPlan(
     int Depth,
     int ColorIndex,
     string FillHex,
-    string TextHex);
+    string TextHex,
+    string BorderHex,
+    double BorderThickness,
+    double CornerRadius,
+    double ShadowOpacity,
+    double ShadowBlur,
+    double ShadowDepth,
+    string ConnectorHex);
 
 public sealed record SmartArtVisualPlan(
     SmartArtKind Kind,
@@ -133,7 +140,7 @@ public static class ChartSmartArtVisualPlanner
             ?? SmartArtStyle.Default;
 
         var nodes = new List<SmartArtNodeVisualPlan>();
-        FlattenNodes(smartArt.Nodes, depth: 0, nodes, colorScheme);
+        FlattenNodes(smartArt.Nodes, depth: 0, nodes, colorScheme, style);
 
         return new SmartArtVisualPlan(
             smartArt.Kind,
@@ -170,20 +177,61 @@ public static class ChartSmartArtVisualPlanner
         IEnumerable<SmartArtNode> nodes,
         int depth,
         List<SmartArtNodeVisualPlan> into,
-        SmartArtColorScheme colorScheme)
+        SmartArtColorScheme colorScheme,
+        SmartArtStyle style)
     {
         foreach (var node in nodes)
         {
             var colorIndex = into.Count;
+            var fillHex = AdjustBrightness(NormalizeHex(colorScheme.FillHexAt(colorIndex)), style.BrightnessAdjust);
             into.Add(new SmartArtNodeVisualPlan(
                 node.Text,
                 depth,
                 colorIndex,
-                NormalizeHex(colorScheme.FillHexAt(colorIndex)),
-                NormalizeHex(colorScheme.TextHex)));
-            FlattenNodes(node.Children, depth + 1, into, colorScheme);
+                fillHex,
+                NormalizeHex(colorScheme.TextHex),
+                AdjustBrightness(fillHex, -0.18),
+                Math.Max(0, style.BorderThickness),
+                Math.Max(0, style.CornerRadius),
+                Math.Clamp(style.ShadowOpacity, 0, 1),
+                style.ShadowOpacity > 0 ? 4 + style.ShadowOpacity * 8 : 0,
+                style.ShadowOpacity > 0 ? 1.5 + style.ShadowOpacity * 2 : 0,
+                ConnectorContrast(fillHex)));
+            FlattenNodes(node.Children, depth + 1, into, colorScheme, style);
         }
     }
+
+    private static string ConnectorContrast(string fillHex)
+    {
+        var (r, g, b) = ParseRgb(fillHex);
+        var luminance = (r * 0.299 + g * 0.587 + b * 0.114) / 255.0;
+        return AdjustBrightness(fillHex, luminance < 0.25 ? 0.30 : -0.30);
+    }
+
+    private static string AdjustBrightness(string hex, double delta)
+    {
+        if (delta == 0)
+            return NormalizeHex(hex);
+
+        var (r, g, b) = ParseRgb(hex);
+        var offset = delta * 255;
+        return ToHex(Clamp(r + offset), Clamp(g + offset), Clamp(b + offset));
+    }
+
+    private static (byte R, byte G, byte B) ParseRgb(string hex)
+    {
+        var normalized = NormalizeHex(hex);
+        return (
+            Convert.ToByte(normalized.Substring(1, 2), 16),
+            Convert.ToByte(normalized.Substring(3, 2), 16),
+            Convert.ToByte(normalized.Substring(5, 2), 16));
+    }
+
+    private static byte Clamp(double value) =>
+        (byte)Math.Max(0, Math.Min(255, value));
+
+    private static string ToHex(byte r, byte g, byte b) =>
+        $"#{r:X2}{g:X2}{b:X2}";
 
     private static string NormalizeHex(string? value)
     {

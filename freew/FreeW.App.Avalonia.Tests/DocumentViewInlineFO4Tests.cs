@@ -93,7 +93,9 @@ public sealed class DocumentViewInlineFO4Tests
     private static TextDocument DocWithInlineSmartArt(
         SmartArtKind kind = SmartArtKind.Process,
         double widthPt  = 360,
-        double heightPt = 160)
+        double heightPt = 160,
+        string? colorSchemeId = null,
+        string? styleId = null)
     {
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
@@ -103,6 +105,8 @@ public sealed class DocumentViewInlineFO4Tests
         var sa = SmartArt.Create(kind, new[] { "Step A", "Step B", "Step C" });
         sa.WidthPt  = widthPt;
         sa.HeightPt = heightPt;
+        sa.ColorSchemeId = colorSchemeId;
+        sa.StyleId = styleId;
         // No Placement → inline.
         para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { SmartArt = sa });
 
@@ -472,6 +476,42 @@ public sealed class DocumentViewInlineFO4Tests
 
         if (!ran) return;
         nodeCount.Should().Be(3, "SmartArt with 3 nodes must expose node count 3");
+    }
+
+    [Fact]
+    public async Task Inline_smartart_carries_planned_style_values()
+    {
+        (string? Fill, string? Border, double BorderThickness, double CornerRadius,
+            double ShadowOpacity, double ShadowBlur, double ShadowDepth, string? Connector) values = default;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithInlineSmartArt(
+                colorSchemeId: "accent1",
+                styleId: "3d1");
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var rect = view.InlineSmartArtRects.Single();
+            values = (
+                rect.FirstFillHex,
+                rect.FirstBorderHex,
+                rect.BorderThickness,
+                rect.CornerRadius,
+                rect.ShadowOpacity,
+                rect.ShadowBlur,
+                rect.ShadowDepth,
+                rect.FirstConnectorHex);
+        });
+
+        if (!ran) return;
+        values.Fill.Should().Be("#526B97");
+        values.Border.Should().Be("#243D69");
+        values.BorderThickness.Should().Be(1.0);
+        values.CornerRadius.Should().Be(8);
+        values.ShadowOpacity.Should().Be(0.40);
+        values.ShadowBlur.Should().BeApproximately(7.2, 0.01);
+        values.ShadowDepth.Should().BeApproximately(2.3, 0.01);
+        values.Connector.Should().NotBe(values.Fill);
     }
 
     // ── Caret / selection step-over ───────────────────────────────────────────────────────────────

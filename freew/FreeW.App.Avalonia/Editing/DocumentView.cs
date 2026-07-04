@@ -2440,12 +2440,31 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>Snapshot of floating SmartArt rects for tests (rect, behind-text, z-order, kind, node count).</summary>
-    public IReadOnlyList<(Rect Rect, bool BehindText, int ZOrder, SmartArtKind Kind, int NodeCount)> FloatingSmartArtRects
+    public IReadOnlyList<(Rect Rect, bool BehindText, int ZOrder, SmartArtKind Kind, int NodeCount,
+        string? FirstFillHex, string? FirstBorderHex, double BorderThickness, double CornerRadius,
+        double ShadowOpacity, double ShadowBlur, double ShadowDepth, string? FirstConnectorHex)> FloatingSmartArtRects
     {
         get
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
-            return _floatingSmartArts.Select(s => (s.Rect, s.BehindText, s.ZOrder, s.Kind, s.NodeTexts.Count)).ToList();
+            return _floatingSmartArts.Select(s =>
+            {
+                var first = s.NodePlans.FirstOrDefault();
+                return (
+                    s.Rect,
+                    s.BehindText,
+                    s.ZOrder,
+                    s.Kind,
+                    s.NodeTexts.Count,
+                    first?.FillHex,
+                    first?.BorderHex,
+                    first?.BorderThickness ?? 0,
+                    first?.CornerRadius ?? 0,
+                    first?.ShadowOpacity ?? 0,
+                    first?.ShadowBlur ?? 0,
+                    first?.ShadowDepth ?? 0,
+                    first?.ConnectorHex);
+            }).ToList();
         }
     }
 
@@ -2506,12 +2525,29 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>Snapshot of inline SmartArt rects for tests (rect, kind, node count).</summary>
-    public IReadOnlyList<(Rect Rect, SmartArtKind Kind, int NodeCount)> InlineSmartArtRects
+    public IReadOnlyList<(Rect Rect, SmartArtKind Kind, int NodeCount,
+        string? FirstFillHex, string? FirstBorderHex, double BorderThickness, double CornerRadius,
+        double ShadowOpacity, double ShadowBlur, double ShadowDepth, string? FirstConnectorHex)> InlineSmartArtRects
     {
         get
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
-            return _inlineSmartArts.Select(s => (s.Rect, s.Kind, s.NodeTexts.Count)).ToList();
+            return _inlineSmartArts.Select(s =>
+            {
+                var first = s.NodePlans.FirstOrDefault();
+                return (
+                    s.Rect,
+                    s.Kind,
+                    s.NodeTexts.Count,
+                    first?.FillHex,
+                    first?.BorderHex,
+                    first?.BorderThickness ?? 0,
+                    first?.CornerRadius ?? 0,
+                    first?.ShadowOpacity ?? 0,
+                    first?.ShadowBlur ?? 0,
+                    first?.ShadowDepth ?? 0,
+                    first?.ConnectorHex);
+            }).ToList();
         }
     }
 
@@ -5022,22 +5058,13 @@ public sealed class DocumentView : Control
                 var x          = ColumnLeftFor(contentY) + AlignmentOffset(alignment, textWidth, width);
                 var rect       = new Rect(x, pageSpaceY, width, height);
 
-                // Flatten nodes depth-first for render.
-                var texts = new List<string>();
-                static void FlattenNodes(IEnumerable<SmartArtNode> nodes, List<string> into)
-                {
-                    foreach (var n in nodes) { into.Add(n.Text); FlattenNodes(n.Children, into); }
-                }
-                FlattenNodes(sa.Nodes, texts);
-
-                _inlineSmartArts.Add(new FloatingSmartArtData
-                {
-                    Rect      = rect,
-                    BehindText = false,
-                    ZOrder     = 0,
-                    Kind       = sa.Kind,
-                    NodeTexts  = texts,
-                });
+                _inlineSmartArts.Add(BuildFloatingSmartArtData(
+                    sa,
+                    rect,
+                    behindText: false,
+                    zOrder: 0,
+                    blockIndex,
+                    runIndex: -1));
 
                 // ZZ1 fix: full-height sentinel for correct hit-test reach (see chart site above).
                 _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
@@ -13408,6 +13435,7 @@ public sealed class DocumentView : Control
         public SmartArtStyle    Style = SmartArtStyle.Default;
         // Flattened node texts (first-level nodes + their children depth-first).
         public List<string>     NodeTexts = [];
+        public List<SmartArtNodeVisualPlan> NodePlans = [];
         public List<Color>      NodeFills = [];
         public Color            NodeTextColor = Colors.White;
     }
@@ -13479,8 +13507,11 @@ public sealed class DocumentView : Control
             LayoutId = plan.LayoutId,
             Style = plan.Style,
             NodeTexts = plan.Nodes.Select(n => n.Text).ToList(),
+            NodePlans = plan.Nodes.ToList(),
             NodeFills = plan.Nodes.Select(n => ToAvaloniaChartColor(n.FillHex)).ToList(),
-            NodeTextColor = ToAvaloniaChartColor(plan.ColorScheme.TextHex),
+            NodeTextColor = plan.Nodes.Count > 0
+                ? ToAvaloniaChartColor(plan.Nodes[0].TextHex)
+                : ToAvaloniaChartColor(plan.ColorScheme.TextHex),
         };
     }
 
@@ -13575,6 +13606,9 @@ public sealed class DocumentView : Control
 
     private static Color SmartArtFillAt(FloatingSmartArtData smartArt, int index) =>
         smartArt.NodeFills.Count > 0 ? smartArt.NodeFills[index % smartArt.NodeFills.Count] : ToAvaloniaChartColor("#4E81BD");
+
+    private static SmartArtNodeVisualPlan? SmartArtPlanAt(FloatingSmartArtData smartArt, int index) =>
+        index >= 0 && index < smartArt.NodePlans.Count ? smartArt.NodePlans[index] : null;
 
     /// <summary>
     /// Centralised factory for <see cref="FloatingChartData"/> — shared by the floating chart collector,
@@ -14383,9 +14417,6 @@ public sealed class DocumentView : Control
         }
     }
 
-    // SmartArt node colours per slot (reuses the chart palette for consistency).
-    private static readonly Pen SmartArtConnectPen = new Pen(new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)), 1.0);
-
     /// <summary>
     /// Renders a floating SmartArt diagram at its page-space rect.
     /// Rendered: node topology — boxes with text labels + connecting lines — at the correct placement.
@@ -14428,8 +14459,8 @@ public sealed class DocumentView : Control
             var rootX = rect.X + (rect.Width - rootW) / 2;
             var rootY = areaTop + nodePad;
             var rootRect = new Rect(rootX, rootY, rootW, nodeH);
-            context.FillRectangle(new SolidColorBrush(SmartArtFillAt(sd, 0)), rootRect);
-            DrawSmartArtNodeText(context, roots.Length > 0 ? roots[0] : string.Empty, rootRect, sd.NodeTextColor);
+            DrawSmartArtNodeBox(context, sd, 0, rootRect);
+            DrawSmartArtNodeText(context, roots.Length > 0 ? roots[0] : string.Empty, rootRect, SmartArtTextColorAt(sd, 0));
 
             if (children.Length > 0)
             {
@@ -14440,11 +14471,12 @@ public sealed class DocumentView : Control
 
                 // Vertical line from root to child row.
                 var midRootX = rootX + rootW / 2;
-                context.DrawLine(SmartArtConnectPen, new Point(midRootX, rootY + nodeH), new Point(midRootX, childY - connGap));
+                var connectorPen = SmartArtConnectorPenAt(sd, 0);
+                context.DrawLine(connectorPen, new Point(midRootX, rootY + nodeH), new Point(midRootX, childY - connGap));
                 // Horizontal line across child tops.
                 if (children.Length > 1)
                 {
-                    context.DrawLine(SmartArtConnectPen,
+                    context.DrawLine(connectorPen,
                         new Point(childStartX + childW / 2, childY - connGap),
                         new Point(childStartX + (children.Length - 1) * (childW + connGap) + childW / 2, childY - connGap));
                 }
@@ -14453,11 +14485,10 @@ public sealed class DocumentView : Control
                 {
                     var cx = childStartX + ci * (childW + connGap);
                     var childRect = new Rect(cx, childY, childW, nodeH);
-                    var fill = new SolidColorBrush(SmartArtFillAt(sd, ci + 1));
-                    context.FillRectangle(fill, childRect);
-                    DrawSmartArtNodeText(context, children[ci], childRect, sd.NodeTextColor);
+                    DrawSmartArtNodeBox(context, sd, ci + 1, childRect);
+                    DrawSmartArtNodeText(context, children[ci], childRect, SmartArtTextColorAt(sd, ci + 1));
                     // Vertical drop line from horizontal bus to child.
-                    context.DrawLine(SmartArtConnectPen,
+                    context.DrawLine(connectorPen,
                         new Point(cx + childW / 2, childY - connGap),
                         new Point(cx + childW / 2, childY));
                 }
@@ -14477,9 +14508,8 @@ public sealed class DocumentView : Control
             for (var ni = 0; ni < count; ni++)
             {
                 var nodeRect = new Rect(bx, boxY, boxW, nodeH);
-                var fill = new SolidColorBrush(SmartArtFillAt(sd, ni));
-                context.FillRectangle(fill, nodeRect);
-                DrawSmartArtNodeText(context, sd.NodeTexts[ni], nodeRect, sd.NodeTextColor);
+                DrawSmartArtNodeBox(context, sd, ni, nodeRect);
+                DrawSmartArtNodeText(context, sd.NodeTexts[ni], nodeRect, SmartArtTextColorAt(sd, ni));
                 bx += boxW;
 
                 // Arrow connector between process nodes.
@@ -14488,7 +14518,7 @@ public sealed class DocumentView : Control
                     var arrowMidY = boxY + nodeH / 2;
                     var arrowX1   = bx + 2;
                     var arrowX2   = arrowX1 + arrowW;
-                    var arrowPen  = new Pen(new SolidColorBrush(SmartArtFillAt(sd, ni)), 1.5);
+                    var arrowPen  = SmartArtConnectorPenAt(sd, ni, 1.5);
                     context.DrawLine(arrowPen, new Point(arrowX1, arrowMidY), new Point(arrowX2, arrowMidY));
                     // Arrow head.
                     context.DrawLine(arrowPen, new Point(arrowX2, arrowMidY), new Point(arrowX2 - 4, arrowMidY - 3));
@@ -14497,6 +14527,45 @@ public sealed class DocumentView : Control
                 }
             }
         }
+    }
+
+    private static void DrawSmartArtNodeBox(DrawingContext context, FloatingSmartArtData smartArt, int nodeIndex, Rect nodeRect)
+    {
+        var plan = SmartArtPlanAt(smartArt, nodeIndex);
+        var fill = new SolidColorBrush(plan is null ? SmartArtFillAt(smartArt, nodeIndex) : ToAvaloniaChartColor(plan.FillHex));
+        var borderPen = plan is { BorderThickness: > 0 }
+            ? new Pen(new SolidColorBrush(ToAvaloniaChartColor(plan.BorderHex)), plan.BorderThickness)
+            : null;
+        var radius = plan?.CornerRadius ?? 0;
+
+        if (plan is { ShadowOpacity: > 0 })
+        {
+            var blur = Math.Clamp(plan.ShadowBlur, 0, 12);
+            var depth = Math.Clamp(plan.ShadowDepth, 0, 5);
+            var softRect = OffsetAndInflate(nodeRect, depth, depth, blur * 0.12);
+            context.DrawRectangle(EffectBrush(Colors.Black, plan.ShadowOpacity * 0.24), null, new RoundedRect(softRect, radius + blur * 0.12));
+            var hardRect = OffsetAndInflate(nodeRect, depth * 0.6, depth * 0.6, 0);
+            context.DrawRectangle(EffectBrush(Colors.Black, plan.ShadowOpacity * 0.18), null, new RoundedRect(hardRect, radius));
+        }
+
+        context.DrawRectangle(fill, borderPen, new RoundedRect(nodeRect, radius));
+    }
+
+    private static Color SmartArtTextColorAt(FloatingSmartArtData smartArt, int index) =>
+        SmartArtPlanAt(smartArt, index) is { } plan
+            ? ToAvaloniaChartColor(plan.TextHex)
+            : smartArt.NodeTextColor;
+
+    private static Pen SmartArtConnectorPenAt(FloatingSmartArtData smartArt, int index, double minimumThickness = 1.0)
+    {
+        if (SmartArtPlanAt(smartArt, index) is { } plan)
+        {
+            return new Pen(
+                new SolidColorBrush(ToAvaloniaChartColor(plan.ConnectorHex)),
+                Math.Max(minimumThickness, plan.BorderThickness > 0 ? plan.BorderThickness : minimumThickness));
+        }
+
+        return new Pen(new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)), minimumThickness);
     }
 
     private void DrawSmartArtNodeText(DrawingContext context, string text, Rect nodeRect, Color textColor)

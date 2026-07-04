@@ -142,7 +142,9 @@ public sealed class DocumentViewFloatingFO3Tests
         ImageWrapping wrapping,
         double hOffsetPt,
         double vOffsetPt,
-        int zOrder = 0)
+        int zOrder = 0,
+        string? colorSchemeId = null,
+        string? styleId = null)
     {
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
@@ -150,6 +152,8 @@ public sealed class DocumentViewFloatingFO3Tests
         para.Runs.Add(new Run("Anchor text.", RunFormatting.Default));
 
         var sa = SmartArt.Create(kind, new[] { "Node A", "Node B", "Node C" });
+        sa.ColorSchemeId = colorSchemeId;
+        sa.StyleId = styleId;
         sa.Placement = new FloatingPlacement
         {
             Wrapping           = wrapping,
@@ -547,6 +551,46 @@ public sealed class DocumentViewFloatingFO3Tests
 
         if (!ran) return;
         zOrder.Should().Be(55, "ZOrderIndex must be preserved for SmartArt");
+    }
+
+    [Fact]
+    public async Task Floating_smartart_carries_planned_style_values()
+    {
+        (string? Fill, string? Border, double BorderThickness, double CornerRadius,
+            double ShadowOpacity, double ShadowBlur, double ShadowDepth, string? Connector) values = default;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingSmartArt(
+                SmartArtKind.Process,
+                ImageWrapping.Square,
+                0,
+                0,
+                colorSchemeId: "accent1",
+                styleId: "intense1");
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var rect = view.FloatingSmartArtRects.Single();
+            values = (
+                rect.FirstFillHex,
+                rect.FirstBorderHex,
+                rect.BorderThickness,
+                rect.CornerRadius,
+                rect.ShadowOpacity,
+                rect.ShadowBlur,
+                rect.ShadowDepth,
+                rect.FirstConnectorHex);
+        });
+
+        if (!ran) return;
+        values.Fill.Should().Be("#38517D");
+        values.Border.Should().Be("#0A234F");
+        values.BorderThickness.Should().Be(1.5);
+        values.CornerRadius.Should().Be(0);
+        values.ShadowOpacity.Should().Be(0.30);
+        values.ShadowBlur.Should().BeApproximately(6.4, 0.01);
+        values.ShadowDepth.Should().BeApproximately(2.1, 0.01);
+        values.Connector.Should().NotBe(values.Fill);
     }
 
     // ── DrawingGroup collection tests ─────────────────────────────────────────────────────────────
