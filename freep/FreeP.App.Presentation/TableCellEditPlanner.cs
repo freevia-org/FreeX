@@ -303,10 +303,11 @@ public static class TableCellEditPlanner
         var runs = BuildRunStyles(body);
         string plainText = InCanvasTextEditPlanner.ExtractPlainText(body);
         var suggestedStyle = BuildStyleState(runs.Count > 0 ? [runs[0]] : []);
-        var selectionRuns = runs
-            .Where(run => OverlapsSelection(run, initialSelection))
-            .ToList();
-        var selectionStyle = BuildStyleState(selectionRuns.Count > 0 ? selectionRuns : runs);
+        var selectionStyleRuns = ResolveInitialSelectionStyleRuns(
+            runs,
+            initialSelection,
+            plainText.Length);
+        var selectionStyle = BuildStyleState(selectionStyleRuns);
 
         return new InCanvasTableCellRichTextEditPlan(
             plainText,
@@ -653,6 +654,39 @@ public static class TableCellEditPlanner
         int start = Math.Min(selection.Start, selection.End);
         int end = Math.Max(selection.Start, selection.End);
         return run.End > start && run.Start < end;
+    }
+
+    private static IReadOnlyList<InCanvasEditorRunStyle> ResolveInitialSelectionStyleRuns(
+        IReadOnlyList<InCanvasEditorRunStyle> runs,
+        InCanvasEditorTextSelection selection,
+        int plainTextLength)
+    {
+        if (runs.Count == 0)
+            return [];
+
+        if (!selection.IsCollapsed)
+        {
+            var selectedRuns = runs
+                .Where(run => OverlapsSelection(run, selection))
+                .ToList();
+            return selectedRuns.Count > 0 ? selectedRuns : runs;
+        }
+
+        int caret = Math.Clamp(selection.Start, 0, plainTextLength);
+
+        var boundaryRun = runs.LastOrDefault(run => run.Start < caret && run.End == caret);
+        if (boundaryRun is not null)
+            return [boundaryRun];
+
+        var containingRun = runs.FirstOrDefault(run => run.Start <= caret && caret < run.End);
+        if (containingRun is not null)
+            return [containingRun];
+
+        var precedingRun = runs.LastOrDefault(run => run.End <= caret);
+        if (precedingRun is not null)
+            return [precedingRun];
+
+        return [runs[0]];
     }
 
     private static InCanvasEditorTextStyleState BuildStyleState(
