@@ -11,8 +11,9 @@ public sealed class SlidePanePolicySourceGuardTests
 
         source.Should().Contain("SlidePanePlanner.BuildEntries(");
         source.Should().Contain("SlidePanePlanner.BuildThumbnailVisualPlan(");
+        source.Should().Contain("SlidePanePlanner.BuildSectionHeaderVisualPlan(entry)");
         source.Should().Contain("_collapsedSectionIds");
-        source.Should().Contain("ToggleSection(entry.SectionId)");
+        source.Should().Contain("ToggleSection(plan.SectionId)");
         source.Should().Contain("SlidePanePlanner.HitTestInsertionPoint(");
         source.Should().Contain("SlidePanePlanner.BuildDropVisualPlan(");
         source.Should().Contain("SlidePanePlanner.DefaultDragStartThreshold");
@@ -25,6 +26,11 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("Width            = plan.ThumbnailWidth");
         source.Should().Contain("Height           = plan.ThumbnailHeight");
         source.Should().Contain("ToolTip         = plan.ToolTipText");
+        source.Should().Contain("Text              = plan.DisclosureText");
+        source.Should().Contain("Foreground        = BrushFromHex(plan.ForegroundHex)");
+        source.Should().Contain("Background      = normalBackground");
+        source.Should().Contain("MouseEnter += (_, _) => header.Background = hoverBackground");
+        source.Should().Contain("AutomationProperties.SetName(header, plan.AccessibleName)");
         source.Should().Contain("SlideSectionPlanner.BuildSlideContextActions(");
         source.Should().Contain("SlideSectionPlanner.BuildSectionHeaderActions(");
         source.Should().Contain("SlideSectionPlanner.BuildExecutionPlan(action)");
@@ -36,6 +42,8 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().NotContain("new Dictionary<int, PresentationSection>");
         source.Should().NotContain("sectionHeaderBefore");
         source.Should().NotContain("const double SectionHeaderHeight");
+        source.Should().NotContain("SectionHeaderBg");
+        source.Should().NotContain("SectionHeaderFg");
         source.Should().NotContain("runningY + ItemHeight * 0.5");
         source.Should().NotContain("Math.Abs(pos.Y - _dragStartPoint.Y) < 5");
         source.Should().NotContain("new Thickness(0, indicatorY - 1, 0, 0)");

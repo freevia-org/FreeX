@@ -198,6 +198,60 @@ public sealed class SlidePanePlannerTests
     }
 
     [Fact]
+    public void BuildSectionHeaderVisualPlan_ProjectsSharedChromeAndState()
+    {
+        var entry = new SlidePaneEntry(
+            SlidePaneEntryKind.SectionHeader,
+            SlideIndex: 2,
+            Text: "Body  (3)",
+            SectionSlideCount: 3,
+            SectionIndex: 1,
+            SectionId: "body-section",
+            IsSectionCollapsed: true);
+
+        var plan = SlidePanePlanner.BuildSectionHeaderVisualPlan(entry);
+
+        plan.SlideIndex.Should().Be(2);
+        plan.SectionIndex.Should().Be(1);
+        plan.SectionId.Should().Be("body-section");
+        plan.LabelText.Should().Be("Body  (3)");
+        plan.SlideCount.Should().Be(3);
+        plan.IsCollapsed.Should().BeTrue();
+        plan.HeaderHeight.Should().Be(SlidePanePlanner.DefaultSectionHeaderHeight);
+        plan.DisclosureWidth.Should().Be(SlidePanePlanner.DefaultSectionHeaderDisclosureWidth);
+        plan.FontSize.Should().Be(SlidePanePlanner.DefaultSectionHeaderFontSize);
+        plan.HorizontalPadding.Should().Be(SlidePanePlanner.DefaultSectionHeaderHorizontalPadding);
+        plan.VerticalPadding.Should().Be(SlidePanePlanner.DefaultSectionHeaderVerticalPadding);
+        plan.TopMargin.Should().Be(SlidePanePlanner.DefaultSectionHeaderTopMargin);
+        plan.BottomMargin.Should().Be(SlidePanePlanner.DefaultSectionHeaderBottomMargin);
+        plan.CornerRadius.Should().Be(SlidePanePlanner.DefaultSectionHeaderCornerRadius);
+        plan.DisclosureText.Should().Be(SlidePanePlanner.DefaultSectionHeaderCollapsedDisclosureText);
+        plan.BackgroundHex.Should().Be(SlidePanePlanner.DefaultSectionHeaderBackgroundHex);
+        plan.HoverBackgroundHex.Should().Be(SlidePanePlanner.DefaultSectionHeaderHoverBackgroundHex);
+        plan.ForegroundHex.Should().Be(SlidePanePlanner.DefaultSectionHeaderForegroundHex);
+        plan.AccessibleName.Should().Be("Section Body  (3), collapsed");
+        plan.ToolTipText.Should().Be("Expand section");
+    }
+
+    [Fact]
+    public void BuildSectionHeaderVisualPlan_ExpandedHeaderUsesCollapseHint()
+    {
+        var entry = new SlidePaneEntry(
+            SlidePaneEntryKind.SectionHeader,
+            SlideIndex: 0,
+            Text: "Intro  (1)",
+            SectionSlideCount: 1,
+            SectionIndex: 0,
+            SectionId: "intro-section");
+
+        var plan = SlidePanePlanner.BuildSectionHeaderVisualPlan(entry);
+
+        plan.DisclosureText.Should().Be(SlidePanePlanner.DefaultSectionHeaderExpandedDisclosureText);
+        plan.AccessibleName.Should().Be("Section Intro  (1), expanded");
+        plan.ToolTipText.Should().Be("Collapse section");
+    }
+
+    [Fact]
     public void HitTestInsertionPoint_SkipsNonSlideRows()
     {
         var layout = new[] { false, true, true, false };

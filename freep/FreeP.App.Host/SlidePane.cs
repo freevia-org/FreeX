@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -41,10 +42,6 @@ public sealed class SlidePane : Border
     private static readonly Brush ItemNormalBorder   = BrushFromHex(SlidePanePlanner.DefaultItemNormalBorderHex);
     private static readonly Brush LabelBrush         = BrushFromHex(SlidePanePlanner.DefaultLabelForegroundHex);
     private static readonly Brush InsertLineBrush    = BrushFromHex(SlidePanePlanner.DefaultDropIndicatorAccentHex);
-
-    // Section header row colors (Wave 11B)
-    private static readonly Brush SectionHeaderBg   = Freeze(new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)));
-    private static readonly Brush SectionHeaderFg   = Freeze(new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)));
 
     private const double ItemHeight = SlidePanePlanner.DefaultSlideItemHeight;
 
@@ -152,22 +149,26 @@ public sealed class SlidePane : Border
     /// </summary>
     private Border BuildSectionHeader(SlidePaneEntry entry)
     {
+        var plan = SlidePanePlanner.BuildSectionHeaderVisualPlan(entry);
+        var normalBackground = BrushFromHex(plan.BackgroundHex);
+        var hoverBackground = BrushFromHex(plan.HoverBackgroundHex);
+
         var disclosure = new TextBlock
         {
-            Text              = entry.IsSectionCollapsed ? ">" : "v",
-            FontSize          = 11,
+            Text              = plan.DisclosureText,
+            FontSize          = plan.FontSize,
             FontWeight        = FontWeights.Bold,
-            Foreground        = SectionHeaderFg,
-            Width             = 14,
+            Foreground        = BrushFromHex(plan.ForegroundHex),
+            Width             = plan.DisclosureWidth,
             VerticalAlignment = VerticalAlignment.Center,
         };
 
         var label = new TextBlock
         {
-            Text                = entry.Text,
-            FontSize            = 11,
+            Text                = plan.LabelText,
+            FontSize            = plan.FontSize,
             FontWeight          = FontWeights.SemiBold,
-            Foreground          = SectionHeaderFg,
+            Foreground          = BrushFromHex(plan.ForegroundHex),
             VerticalAlignment   = VerticalAlignment.Center,
             TextTrimming        = TextTrimming.CharacterEllipsis,
         };
@@ -179,29 +180,34 @@ public sealed class SlidePane : Border
 
         var header = new Border
         {
-            Background      = SectionHeaderBg,
-            Padding         = new Thickness(10, 4, 10, 4),
-            Margin          = new Thickness(0, 6, 0, 2),
-            Tag             = new SectionHeaderTag(entry.SectionId, entry.SectionIndex),
+            Background      = normalBackground,
+            Padding         = new Thickness(plan.HorizontalPadding, plan.VerticalPadding, plan.HorizontalPadding, plan.VerticalPadding),
+            Margin          = new Thickness(0, plan.TopMargin, 0, plan.BottomMargin),
+            MinHeight       = plan.HeaderHeight,
+            CornerRadius    = new CornerRadius(plan.CornerRadius),
+            Tag             = new SectionHeaderTag(plan.SectionId, plan.SectionIndex),
             ContextMenu     = BuildSectionContextMenu(entry),
             Child           = panel,
             Cursor          = Cursors.Hand,
             Focusable       = true,
-            ToolTip         = entry.IsSectionCollapsed ? "Expand section" : "Collapse section",
+            ToolTip         = plan.ToolTipText,
         };
+        header.MouseEnter += (_, _) => header.Background = hoverBackground;
+        header.MouseLeave += (_, _) => header.Background = normalBackground;
         header.MouseLeftButtonDown += (_, e) =>
         {
-            ToggleSection(entry.SectionId);
+            ToggleSection(plan.SectionId);
             e.Handled = true;
         };
         header.KeyDown += (_, e) =>
         {
             if (e.Key is Key.Enter or Key.Space)
             {
-                ToggleSection(entry.SectionId);
+                ToggleSection(plan.SectionId);
                 e.Handled = true;
             }
         };
+        AutomationProperties.SetName(header, plan.AccessibleName);
 
         return header;
     }

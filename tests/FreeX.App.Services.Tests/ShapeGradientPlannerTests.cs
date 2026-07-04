@@ -7,6 +7,13 @@ namespace FreeX.App.Services.Tests;
 public sealed class ShapeGradientPlannerTests
 {
     [Fact]
+    public void DialogSizeConstants_MatchVisualEvidenceCaptureContract()
+    {
+        ShapeGradientPlanner.DialogWidth.Should().Be(500);
+        ShapeGradientPlanner.DialogHeight.Should().Be(300);
+    }
+
+    [Fact]
     public void Capture_ReusesExistingFillAndGradientEnd()
     {
         var shape = new DrawingShapeModel

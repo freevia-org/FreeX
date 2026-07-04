@@ -498,6 +498,13 @@ function Get-ExpectedEvidenceSize {
                     source = "HyperlinkDialogPlanner.Width/Height"
                 }
             }
+            "dialog.ShapeGradient" {
+                return [pscustomobject]@{
+                    width = 500
+                    height = 300
+                    source = "ShapeGradientPlanner.DialogWidth/DialogHeight"
+                }
+            }
             "dialog.ProtectSheet" {
                 return [pscustomobject]@{
                     width = 430

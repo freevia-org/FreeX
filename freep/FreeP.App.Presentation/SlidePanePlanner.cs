@@ -43,6 +43,28 @@ public sealed record SlidePaneThumbnailVisualPlan(
     string AccessibleName,
     string ToolTipText);
 
+public sealed record SlidePaneSectionHeaderVisualPlan(
+    int SlideIndex,
+    int SectionIndex,
+    string SectionId,
+    string LabelText,
+    int SlideCount,
+    bool IsCollapsed,
+    double HeaderHeight,
+    double DisclosureWidth,
+    double FontSize,
+    double HorizontalPadding,
+    double VerticalPadding,
+    double TopMargin,
+    double BottomMargin,
+    double CornerRadius,
+    string DisclosureText,
+    string BackgroundHex,
+    string HoverBackgroundHex,
+    string ForegroundHex,
+    string AccessibleName,
+    string ToolTipText);
+
 public sealed record SlidePaneDropVisualPlan(
     int SourceSlideIndex,
     int TargetSlideIndex,
@@ -95,6 +117,18 @@ public static class SlidePanePlanner
     public const string DefaultItemSelectedBorderHex = "#B7472A";
     public const string DefaultThumbnailBorderHex = "#CCCCCC";
     public const string DefaultLabelForegroundHex = "#444444";
+    public const double DefaultSectionHeaderDisclosureWidth = 14.0;
+    public const double DefaultSectionHeaderFontSize = 11.0;
+    public const double DefaultSectionHeaderHorizontalPadding = 10.0;
+    public const double DefaultSectionHeaderVerticalPadding = 4.0;
+    public const double DefaultSectionHeaderTopMargin = 6.0;
+    public const double DefaultSectionHeaderBottomMargin = 2.0;
+    public const double DefaultSectionHeaderCornerRadius = 2.0;
+    public const string DefaultSectionHeaderBackgroundHex = "#C8C8C8";
+    public const string DefaultSectionHeaderHoverBackgroundHex = "#D6D6D6";
+    public const string DefaultSectionHeaderForegroundHex = "#333333";
+    public const string DefaultSectionHeaderExpandedDisclosureText = "v";
+    public const string DefaultSectionHeaderCollapsedDisclosureText = ">";
     public const double DefaultDropIndicatorThickness = 2.0;
     public const double DefaultDropIndicatorHorizontalInset = 0.0;
     public const string DefaultDropIndicatorAccentHex = "#B7472A";
@@ -170,6 +204,42 @@ public static class SlidePanePlanner
             DefaultLabelForegroundHex,
             accessibleName,
             accessibleName);
+    }
+
+    public static SlidePaneSectionHeaderVisualPlan BuildSectionHeaderVisualPlan(SlidePaneEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        if (entry.Kind != SlidePaneEntryKind.SectionHeader)
+            throw new ArgumentException("Only section-header entries can be projected as section-header visual plans.", nameof(entry));
+
+        var state = entry.IsSectionCollapsed ? "collapsed" : "expanded";
+        var action = entry.IsSectionCollapsed ? "Expand section" : "Collapse section";
+        var accessibleName = $"Section {entry.Text}, {state}";
+
+        return new SlidePaneSectionHeaderVisualPlan(
+            entry.SlideIndex,
+            entry.SectionIndex,
+            entry.SectionId,
+            entry.Text,
+            entry.SectionSlideCount,
+            entry.IsSectionCollapsed,
+            DefaultSectionHeaderHeight,
+            DefaultSectionHeaderDisclosureWidth,
+            DefaultSectionHeaderFontSize,
+            DefaultSectionHeaderHorizontalPadding,
+            DefaultSectionHeaderVerticalPadding,
+            DefaultSectionHeaderTopMargin,
+            DefaultSectionHeaderBottomMargin,
+            DefaultSectionHeaderCornerRadius,
+            entry.IsSectionCollapsed
+                ? DefaultSectionHeaderCollapsedDisclosureText
+                : DefaultSectionHeaderExpandedDisclosureText,
+            DefaultSectionHeaderBackgroundHex,
+            DefaultSectionHeaderHoverBackgroundHex,
+            DefaultSectionHeaderForegroundHex,
+            accessibleName,
+            action);
     }
 
     public static IReadOnlyList<SlidePaneActionPlan> BuildContextActions(

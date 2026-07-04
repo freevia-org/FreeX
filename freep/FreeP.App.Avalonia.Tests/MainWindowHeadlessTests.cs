@@ -592,6 +592,41 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlidePane_section_headers_render_shared_visual_plan_tokens()
+    {
+        SlidePaneSectionHeaderVisualPlan[] plans = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.InsertSlide();
+            window.Editor.AddSectionAtSlide(0, "Intro");
+            plans = window.SlidePaneRenderedSectionHeaderPlans.ToArray();
+        });
+
+        if (!ran) return;
+        plans.Should().ContainSingle();
+        var plan = plans[0];
+        plan.SectionId.Should().NotBeNullOrWhiteSpace();
+        plan.LabelText.Should().Be("Intro  (2)");
+        plan.IsCollapsed.Should().BeFalse();
+        plan.HeaderHeight.Should().Be(SlidePanePlanner.DefaultSectionHeaderHeight);
+        plan.DisclosureWidth.Should().Be(SlidePanePlanner.DefaultSectionHeaderDisclosureWidth);
+        plan.FontSize.Should().Be(SlidePanePlanner.DefaultSectionHeaderFontSize);
+        plan.HorizontalPadding.Should().Be(SlidePanePlanner.DefaultSectionHeaderHorizontalPadding);
+        plan.VerticalPadding.Should().Be(SlidePanePlanner.DefaultSectionHeaderVerticalPadding);
+        plan.TopMargin.Should().Be(SlidePanePlanner.DefaultSectionHeaderTopMargin);
+        plan.BottomMargin.Should().Be(SlidePanePlanner.DefaultSectionHeaderBottomMargin);
+        plan.CornerRadius.Should().Be(SlidePanePlanner.DefaultSectionHeaderCornerRadius);
+        plan.DisclosureText.Should().Be(SlidePanePlanner.DefaultSectionHeaderExpandedDisclosureText);
+        plan.BackgroundHex.Should().Be(SlidePanePlanner.DefaultSectionHeaderBackgroundHex);
+        plan.HoverBackgroundHex.Should().Be(SlidePanePlanner.DefaultSectionHeaderHoverBackgroundHex);
+        plan.ForegroundHex.Should().Be(SlidePanePlanner.DefaultSectionHeaderForegroundHex);
+        plan.AccessibleName.Should().Be("Section Intro  (2), expanded");
+        plan.ToolTipText.Should().Be("Collapse section");
+    }
+
+    [Fact]
     public async Task SlidePane_context_duplicate_routes_through_shared_planner()
     {
         var duplicated = false;
