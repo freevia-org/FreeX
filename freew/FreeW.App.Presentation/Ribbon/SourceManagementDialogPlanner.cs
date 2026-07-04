@@ -8,6 +8,7 @@ public enum SourceManagementSourceField
     Author,
     Title,
     Year,
+    Institution,
     Publisher,
     City,
     Edition,
@@ -46,6 +47,8 @@ public sealed record SourceManagementSourceEntry(
     string Url,
     string Accessed)
 {
+    public string Institution { get; init; } = string.Empty;
+
     public IReadOnlyList<SourceAuthorPerson> PersonalAuthors { get; init; } = [];
 
     public string? CorporateAuthor { get; init; }
@@ -156,7 +159,8 @@ public static class SourceManagementDialogPlanner
     [
         new(SourceType.Book, "Book"),
         new(SourceType.JournalArticle, "Journal Article"),
-        new(SourceType.WebSite, "Web Site")
+        new(SourceType.WebSite, "Web Site"),
+        new(SourceType.Report, "Report")
     ];
 
     private static readonly IReadOnlyDictionary<SourceType, IReadOnlyList<SourceManagementSourceField>> SourceFieldOrders =
@@ -200,6 +204,19 @@ public static class SourceManagementDialogPlanner
                 SourceManagementSourceField.Accessed,
                 SourceManagementSourceField.ShortTitle,
                 SourceManagementSourceField.Comments
+            ],
+            [SourceType.Report] =
+            [
+                SourceManagementSourceField.Tag,
+                SourceManagementSourceField.Author,
+                SourceManagementSourceField.Title,
+                SourceManagementSourceField.Year,
+                SourceManagementSourceField.Institution,
+                SourceManagementSourceField.City,
+                SourceManagementSourceField.Publisher,
+                SourceManagementSourceField.StandardNumber,
+                SourceManagementSourceField.ShortTitle,
+                SourceManagementSourceField.Comments
             ]
         };
 
@@ -210,6 +227,7 @@ public static class SourceManagementDialogPlanner
             [SourceManagementSourceField.Author] = "Author:",
             [SourceManagementSourceField.Title] = "Title:",
             [SourceManagementSourceField.Year] = "Year:",
+            [SourceManagementSourceField.Institution] = "Institution:",
             [SourceManagementSourceField.Publisher] = "Publisher / Site name (optional):",
             [SourceManagementSourceField.City] = "City:",
             [SourceManagementSourceField.Edition] = "Edition:",
@@ -277,6 +295,7 @@ public static class SourceManagementDialogPlanner
             source?.Url ?? string.Empty,
             source?.Accessed ?? string.Empty)
         {
+            Institution = source?.Institution ?? string.Empty,
             PersonalAuthors = ClonePersonalAuthors(source?.PersonalAuthors ?? []),
             CorporateAuthor = source?.CorporateAuthor
         };
@@ -322,6 +341,7 @@ public static class SourceManagementDialogPlanner
             TrimmedValue(values, SourceManagementSourceField.Url),
             TrimmedValue(values, SourceManagementSourceField.Accessed))
         {
+            Institution = TrimmedValue(values, SourceManagementSourceField.Institution),
             PersonalAuthors = author.PersonalAuthors,
             CorporateAuthor = author.CorporateAuthor
         };
@@ -411,12 +431,13 @@ public static class SourceManagementDialogPlanner
             CorporateAuthor = author.CorporateAuthor,
             Title = entry.Title.Trim(),
             Year = entry.Year.Trim(),
-            Publisher = type is SourceType.Book or SourceType.WebSite
+            Institution = type == SourceType.Report ? NullIfWhiteSpace(entry.Institution) : null,
+            Publisher = type is SourceType.Book or SourceType.WebSite or SourceType.Report
                 ? NullIfWhiteSpace(entry.Publisher)
                 : null,
-            City = type == SourceType.Book ? NullIfWhiteSpace(entry.City) : null,
+            City = type is SourceType.Book or SourceType.Report ? NullIfWhiteSpace(entry.City) : null,
             Edition = type == SourceType.Book ? NullIfWhiteSpace(entry.Edition) : null,
-            StandardNumber = type is SourceType.Book or SourceType.JournalArticle
+            StandardNumber = type is SourceType.Book or SourceType.JournalArticle or SourceType.Report
                 ? NullIfWhiteSpace(entry.StandardNumber)
                 : null,
             ShortTitle = NullIfWhiteSpace(entry.ShortTitle),
@@ -443,6 +464,7 @@ public static class SourceManagementDialogPlanner
             CorporateAuthor = source.CorporateAuthor,
             Title = source.Title,
             Year = source.Year,
+            Institution = source.Institution,
             Publisher = source.Publisher,
             City = source.City,
             Edition = source.Edition,
@@ -615,6 +637,7 @@ public static class SourceManagementDialogPlanner
         entry.Author.Length > 0
         || entry.Title.Length > 0
         || entry.Year.Length > 0
+        || entry.Institution.Length > 0
         || entry.Publisher.Length > 0
         || entry.City.Length > 0
         || entry.Edition.Length > 0
@@ -638,6 +661,7 @@ public static class SourceManagementDialogPlanner
             SourceManagementSourceField.Author => entry.Author,
             SourceManagementSourceField.Title => entry.Title,
             SourceManagementSourceField.Year => entry.Year,
+            SourceManagementSourceField.Institution => entry.Institution,
             SourceManagementSourceField.Publisher => entry.Publisher,
             SourceManagementSourceField.City => entry.City,
             SourceManagementSourceField.Edition => entry.Edition,

@@ -617,6 +617,7 @@ public static class Citations
     //  - Book:           Publisher
     //  - JournalArticle: Journal, Volume, "no. Issue", "pp. Pages"
     //  - WebSite:        Publisher, Url, "accessed Accessed"
+    //  - Report:         Institution, City, Publisher
     // Returns an empty list when nothing applies so callers can drop the segment entirely.
     private static List<string> SourceDetail(Source source)
     {
@@ -637,6 +638,11 @@ public static class Citations
                 AddIfPresent(parts, source.Url);
                 if (NonEmpty(source.Accessed) is { } accessed)
                     parts.Add($"accessed {accessed}");
+                break;
+            case SourceType.Report:
+                AddIfPresent(parts, source.Institution);
+                AddIfPresent(parts, source.City);
+                AddIfPresent(parts, source.Publisher);
                 break;
             default: // Book
                 AddIfPresent(parts, source.Publisher);
@@ -1002,6 +1008,7 @@ public static class Citations
         && Same(left.Author, right.Author)
         && Same(left.Title, right.Title)
         && Same(left.Year, right.Year)
+        && Same(left.Institution, right.Institution)
         && Same(left.Publisher, right.Publisher)
         && Same(left.City, right.City)
         && Same(left.Edition, right.Edition)

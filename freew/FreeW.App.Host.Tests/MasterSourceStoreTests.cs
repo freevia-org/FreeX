@@ -24,6 +24,7 @@ public sealed class MasterSourceStoreTests
                 Author    = "Smith, John",
                 Title     = "Test Book",
                 Year      = "2020",
+                Institution = "Test Institute",
                 Publisher = "Test Press",
                 City = "London",
                 Edition = "2",
@@ -39,6 +40,7 @@ public sealed class MasterSourceStoreTests
             store2.Sources.Should().HaveCount(1);
             store2.Sources[0].Tag.Should().Be("Smith2020");
             store2.Sources[0].Author.Should().Be("Smith, John");
+            store2.Sources[0].Institution.Should().Be("Test Institute");
             store2.Sources[0].City.Should().Be("London");
             store2.Sources[0].Edition.Should().Be("2");
             store2.Sources[0].StandardNumber.Should().Be("ISBN-1");
@@ -61,6 +63,7 @@ public sealed class MasterSourceStoreTests
             Author = "Alice",
             Title = "Alpha",
             Year = "2021",
+            Institution = "Alpha Institute",
             City = "Paris",
             Edition = "1",
             StandardNumber = "ISBN-A",
@@ -72,6 +75,7 @@ public sealed class MasterSourceStoreTests
         var sources = store.ToSources();
         sources.Should().HaveCount(2);
         sources.Select(s => s.Tag).Should().Equal("A1", "B2");
+        sources[0].Institution.Should().Be("Alpha Institute");
         sources[0].City.Should().Be("Paris");
         sources[0].Edition.Should().Be("1");
         sources[0].StandardNumber.Should().Be("ISBN-A");
@@ -146,6 +150,47 @@ public sealed class MasterSourceStoreTests
             reloaded[0].CorporateAuthor.Should().BeNull();
             reloaded[1].PersonalAuthors.Should().BeEmpty();
             reloaded[1].CorporateAuthor.Should().Be("World Health Organization");
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void MasterStore_JsonRoundTrip_PreservesReportInstitution()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"master-sources-report-{Guid.NewGuid()}.json");
+        try
+        {
+            var store = new MasterSourceStore
+            {
+                Sources =
+                [
+                    SourceRecord.FromSource(new Source
+                    {
+                        Tag = "Report1",
+                        Type = SourceType.Report,
+                        Title = "Annual Report",
+                        Year = "2026",
+                        Institution = "National Bureau of Standards",
+                        City = "Washington",
+                        Publisher = "Government Printing Office",
+                        StandardNumber = "NBS-2026-01"
+                    })
+                ]
+            };
+            var settingsStore = JsonSettingsStore<MasterSourceStore>.ForPath(path);
+
+            settingsStore.Save(store);
+            var source = JsonSettingsStore<MasterSourceStore>.ForPath(path).Load().ToSources()
+                .Should().ContainSingle().Subject;
+
+            source.Type.Should().Be(SourceType.Report);
+            source.Institution.Should().Be("National Bureau of Standards");
+            source.City.Should().Be("Washington");
+            source.Publisher.Should().Be("Government Printing Office");
+            source.StandardNumber.Should().Be("NBS-2026-01");
         }
         finally
         {
