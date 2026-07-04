@@ -270,10 +270,12 @@ public static class OmmlParser
         bool aboveBelow = limLoc == "undOvr";
 
         MathNode? subLimit = null, supLimit = null;
+        bool subHidden = IsOnOffOn(naryPr?.Element(M + "subHide"));
+        bool supHidden = IsOnOffOn(naryPr?.Element(M + "supHide"));
         var subEl = el.Element(M + "sub");
         var supEl = el.Element(M + "sup");
-        if (subEl is not null) subLimit = ParseRow(subEl);
-        if (supEl is not null) supLimit = ParseRow(supEl);
+        if (subEl is not null && !subHidden) subLimit = ParseRow(subEl);
+        if (supEl is not null && !supHidden) supLimit = ParseRow(supEl);
 
         var eEl = el.Element(M + "e") ?? el;
         return new MathNode.Nary(opChar, aboveBelow, subLimit, supLimit, ParseRow(eEl));
