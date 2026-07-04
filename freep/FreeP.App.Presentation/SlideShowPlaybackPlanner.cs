@@ -22,8 +22,11 @@ public enum SlideShowShapeAnimationEffectKind
     Fade,
     FlyIn,
     Wipe,
+    Split,
+    RandomBars,
     Zoom,
     Pulse,
+    GrowShrink,
     Spin,
     MotionPath
 }
@@ -120,7 +123,7 @@ public static class SlideShowPlaybackPlanner
             toOpacity,
             fromScale,
             toScale,
-            PeakScale: 1.2,
+            ResolvePeakScale(animation),
             RotationDegrees: 360,
             offsetX,
             offsetY,
@@ -156,8 +159,11 @@ public static class SlideShowPlaybackPlanner
             AnimationPreset.Fade => SlideShowShapeAnimationEffectKind.Fade,
             AnimationPreset.FlyIn => SlideShowShapeAnimationEffectKind.FlyIn,
             AnimationPreset.Wipe => SlideShowShapeAnimationEffectKind.Wipe,
+            AnimationPreset.Split => SlideShowShapeAnimationEffectKind.Split,
+            AnimationPreset.RandomBars => SlideShowShapeAnimationEffectKind.RandomBars,
             AnimationPreset.Zoom => SlideShowShapeAnimationEffectKind.Zoom,
-            AnimationPreset.Pulse or AnimationPreset.Grow => SlideShowShapeAnimationEffectKind.Pulse,
+            AnimationPreset.Pulse => SlideShowShapeAnimationEffectKind.Pulse,
+            AnimationPreset.Grow or AnimationPreset.Shrink => SlideShowShapeAnimationEffectKind.GrowShrink,
             AnimationPreset.Spin => SlideShowShapeAnimationEffectKind.Spin,
             _ => SlideShowShapeAnimationEffectKind.Appear
         };
@@ -181,10 +187,22 @@ public static class SlideShowPlaybackPlanner
             ? (1, 0)
             : (0, 1);
 
-    private static (double From, double To) ResolveScale(ShapeAnimation animation) =>
-        animation.Kind == AnimationKind.Exit
-            ? (1, 0)
+    private static (double From, double To) ResolveScale(ShapeAnimation animation)
+    {
+        if (animation.Kind == AnimationKind.Exit)
+        {
+            return (1, 0);
+        }
+
+        return animation.Preset is AnimationPreset.Grow or AnimationPreset.Shrink
+            ? (1, 1)
             : (0, 1);
+    }
+
+    private static double ResolvePeakScale(ShapeAnimation animation) =>
+        animation.Preset == AnimationPreset.Shrink
+            ? 0.8
+            : 1.2;
 
     private static (double X, double Y) ResolveFlyInOffset(AnimationDirection? direction) =>
         direction switch

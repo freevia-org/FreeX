@@ -130,6 +130,57 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void PlanShapeAnimation_MapsAdvancedImportedEffects()
+    {
+        var split = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 4,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Split,
+                Direction = AnimationDirection.Vertical,
+                DurationMs = 300
+            },
+            startDelayMs: 20);
+
+        split.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Split);
+        split.WipeHorizontal.Should().BeFalse();
+        split.DurationMs.Should().Be(300);
+        split.DelayMs.Should().Be(20);
+        split.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.OnComplete);
+
+        var randomBars = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 5,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.RandomBars,
+                Direction = AnimationDirection.Horizontal
+            },
+            startDelayMs: 0);
+
+        randomBars.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.RandomBars);
+        randomBars.WipeHorizontal.Should().BeTrue();
+        randomBars.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.OnComplete);
+
+        var growShrink = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 6,
+                Kind = AnimationKind.Emphasis,
+                Preset = AnimationPreset.Grow,
+                DurationMs = 450
+            },
+            startDelayMs: 10);
+
+        growShrink.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.GrowShrink);
+        growShrink.FromScale.Should().Be(1);
+        growShrink.ToScale.Should().Be(1);
+        growShrink.PeakScale.Should().BeGreaterThan(1);
+        growShrink.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
+    }
+
+    [Fact]
     public void PlanShapeAnimation_PreSamplesMotionPathKeyframes()
     {
         var path = new MotionPath();

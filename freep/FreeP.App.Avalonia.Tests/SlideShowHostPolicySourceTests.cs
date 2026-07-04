@@ -78,10 +78,16 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("FlyInEffect(element, plan, onReveal);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Wipe:");
         source.Should().Contain("WipeEffect(element, plan, onReveal);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Split:");
+        source.Should().Contain("SplitEffect(element, plan, onReveal);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.RandomBars:");
+        source.Should().Contain("RandomBarsEffect(element, plan, onReveal);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Zoom:");
         source.Should().Contain("ZoomEffect(element, plan, onReveal);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Pulse:");
         source.Should().Contain("PulseEffect(element, plan);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.GrowShrink:");
+        source.Should().Contain("GrowShrinkEffect(element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Spin:");
         source.Should().Contain("SpinEffect(element, plan);");
         source.Should().Contain("MotionPathEffect(element, plan, onReveal);");

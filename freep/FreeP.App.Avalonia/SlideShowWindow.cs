@@ -1085,6 +1085,14 @@ public sealed class SlideShowWindow : Window
                 WipeEffect(element, plan, onReveal);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Split:
+                SplitEffect(element, plan, onReveal);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.RandomBars:
+                RandomBarsEffect(element, plan, onReveal);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Zoom:
                 ZoomEffect(element, plan, onReveal);
                 break;
@@ -1092,6 +1100,11 @@ public sealed class SlideShowWindow : Window
             case SlideShowShapeAnimationEffectKind.Pulse:
                 InvokeRevealAtStart(plan, onReveal);
                 PulseEffect(element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.GrowShrink:
+                InvokeRevealAtStart(plan, onReveal);
+                GrowShrinkEffect(element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Spin:
@@ -1206,6 +1219,65 @@ public sealed class SlideShowWindow : Window
         }
     }
 
+    private void SplitEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
+    {
+        double w = el.Width  > 0 ? el.Width  : 960;
+        double h = el.Height > 0 ? el.Height : 540;
+
+        el.Opacity = 1;
+
+        Rect from;
+        Rect to;
+        if (plan.WipeHorizontal)
+        {
+            from = new Rect(w / 2, 0, 0, h);
+            to = new Rect(0, 0, w, h);
+        }
+        else
+        {
+            from = new Rect(0, h / 2, w, 0);
+            to = new Rect(0, 0, w, h);
+        }
+
+        var clipRect = new RectangleGeometry(from);
+        el.Clip = clipRect;
+        DelayedAction(plan.DelayMs, () =>
+            AnimateRectClip(
+                el,
+                clipRect,
+                from,
+                to,
+                plan.DurationMs,
+                onComplete: CompleteReveal(plan, onReveal)));
+    }
+
+    private void RandomBarsEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
+    {
+        double w = el.Width  > 0 ? el.Width  : 960;
+        double h = el.Height > 0 ? el.Height : 540;
+
+        var from = plan.WipeHorizontal ? new Rect(0, 0, 0, h) : new Rect(0, 0, w, 0);
+        var to = new Rect(0, 0, w, h);
+        var clipRect = new RectangleGeometry(from);
+        el.Clip = clipRect;
+        el.Opacity = 0;
+
+        DelayedAction(plan.DelayMs, () =>
+        {
+            AnimateRectClip(
+                el,
+                clipRect,
+                from,
+                to,
+                plan.DurationMs,
+                onComplete: CompleteReveal(plan, onReveal));
+            el.Opacity = 0.15;
+            DelayedAction(plan.DurationMs / 5, () => el.Opacity = 0.45);
+            DelayedAction(plan.DurationMs / 2, () => el.Opacity = 0.75);
+            DelayedAction(plan.DurationMs, () => el.Opacity = plan.ToOpacity);
+        });
+    }
+
     private void AnimateRectClip(Control target, RectangleGeometry clipRect,
         Rect from, Rect to, int durationMs, Action? onComplete = null)
     {
@@ -1293,6 +1365,21 @@ public sealed class SlideShowWindow : Window
             AnimateScale(el, scale, 1.0, plan.PeakScale, plan.DurationMs / 2);
             DelayedAction(plan.DurationMs / 2, () =>
                 AnimateScale(el, scale, plan.PeakScale, 1.0, plan.DurationMs / 2));
+        });
+    }
+
+    private void GrowShrinkEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+        el.RenderTransformOrigin = RelativePoint.Center;
+        var scale = new ScaleTransform(plan.FromScale, plan.FromScale);
+        el.RenderTransform = scale;
+
+        DelayedAction(plan.DelayMs, () =>
+        {
+            AnimateScale(el, scale, plan.FromScale, plan.PeakScale, plan.DurationMs / 2);
+            DelayedAction(plan.DurationMs / 2, () =>
+                AnimateScale(el, scale, plan.PeakScale, plan.ToScale, plan.DurationMs / 2));
         });
     }
 

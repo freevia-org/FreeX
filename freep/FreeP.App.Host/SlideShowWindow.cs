@@ -1091,12 +1091,24 @@ public sealed class SlideShowWindow : Window
                 WipeEffect(sb, element, plan);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Split:
+                SplitEffect(sb, element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.RandomBars:
+                RandomBarsEffect(sb, element, plan);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Zoom:
                 ZoomEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Pulse:
                 PulseEffect(sb, element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.GrowShrink:
+                GrowShrinkEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Spin:
@@ -1222,6 +1234,81 @@ public sealed class SlideShowWindow : Window
         }
     }
 
+    private static void SplitEffect(Storyboard sb, FrameworkElement el,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        double w = el.Width  > 0 ? el.Width  : 960;
+        double h = el.Height > 0 ? el.Height : 540;
+
+        var clip = new RectangleGeometry();
+        el.Clip = clip;
+        el.Opacity = 1;
+
+        var dur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
+        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+        Rect from;
+        Rect to;
+
+        if (plan.WipeHorizontal)
+        {
+            from = new Rect(w / 2, 0, 0, h);
+            to = new Rect(0, 0, w, h);
+        }
+        else
+        {
+            from = new Rect(0, h / 2, w, 0);
+            to = new Rect(0, 0, w, h);
+        }
+
+        clip.Rect = from;
+        var anim = new RectAnimation(from, to, dur)
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
+            EasingFunction = ease
+        };
+        Storyboard.SetTarget(anim, el);
+        Storyboard.SetTargetProperty(anim, new PropertyPath("Clip.Rect"));
+        sb.Children.Add(anim);
+    }
+
+    private static void RandomBarsEffect(Storyboard sb, FrameworkElement el,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        double w = el.Width  > 0 ? el.Width  : 960;
+        double h = el.Height > 0 ? el.Height : 540;
+
+        var clip = new RectangleGeometry();
+        el.Clip = clip;
+        el.Opacity = 0;
+
+        var dur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
+        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+        var from = plan.WipeHorizontal ? new Rect(0, 0, 0, h) : new Rect(0, 0, w, 0);
+        var to = new Rect(0, 0, w, h);
+
+        clip.Rect = from;
+        var clipAnim = new RectAnimation(from, to, dur)
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
+            EasingFunction = ease
+        };
+        Storyboard.SetTarget(clipAnim, el);
+        Storyboard.SetTargetProperty(clipAnim, new PropertyPath("Clip.Rect"));
+        sb.Children.Add(clipAnim);
+
+        var opacityAnim = new DoubleAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
+        };
+        opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromPercent(0)));
+        opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.35, KeyTime.FromPercent(0.2)));
+        opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.7, KeyTime.FromPercent(0.55)));
+        opacityAnim.KeyFrames.Add(new LinearDoubleKeyFrame(plan.ToOpacity, KeyTime.FromPercent(1)));
+        Storyboard.SetTarget(opacityAnim, el);
+        Storyboard.SetTargetProperty(opacityAnim, new PropertyPath(OpacityProperty));
+        sb.Children.Add(opacityAnim);
+    }
+
     private void ZoomEffect(Storyboard sb, FrameworkElement el,
         SlideShowShapeAnimationPlaybackPlan plan)
     {
@@ -1281,6 +1368,48 @@ public sealed class SlideShowWindow : Window
 
         sb.Children.Add(animSXUp);
         sb.Children.Add(animSYUp);
+    }
+
+    private static void GrowShrinkEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+
+        double cx = el.Width  / 2;
+        double cy = el.Height / 2;
+        var scale = new ScaleTransform(plan.FromScale, plan.FromScale, cx, cy);
+        el.RenderTransform = scale;
+
+        var animSX = BuildGrowShrinkScaleAnimation(plan);
+        Storyboard.SetTarget(animSX, el);
+        Storyboard.SetTargetProperty(animSX,
+            new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleX)"));
+
+        var animSY = BuildGrowShrinkScaleAnimation(plan);
+        Storyboard.SetTarget(animSY, el);
+        Storyboard.SetTargetProperty(animSY,
+            new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleY)"));
+
+        sb.Children.Add(animSX);
+        sb.Children.Add(animSY);
+    }
+
+    private static DoubleAnimationUsingKeyFrames BuildGrowShrinkScaleAnimation(
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        var anim = new DoubleAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
+        };
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(plan.FromScale, KeyTime.FromPercent(0)));
+        anim.KeyFrames.Add(new SplineDoubleKeyFrame(
+            plan.PeakScale,
+            KeyTime.FromPercent(0.5),
+            new KeySpline(0.2, 0, 0.2, 1)));
+        anim.KeyFrames.Add(new SplineDoubleKeyFrame(
+            plan.ToScale,
+            KeyTime.FromPercent(1),
+            new KeySpline(0.4, 0, 0.2, 1)));
+        return anim;
     }
 
     private static void SpinEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
