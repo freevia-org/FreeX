@@ -795,6 +795,7 @@ public sealed class TableCellEditPlannerTests
 
     [Theory]
     [InlineData(TableCellParagraphFormatKind.BulletToggle)]
+    [InlineData(TableCellParagraphFormatKind.NumberingToggle)]
     [InlineData(TableCellParagraphFormatKind.Indent)]
     [InlineData(TableCellParagraphFormatKind.Outdent)]
     public void PlanParagraphFormat_DisabledStates_MatchActiveTableCellRequirements(
@@ -871,6 +872,105 @@ public sealed class TableCellEditPlannerTests
         paragraph.BulletKind.Should().Be(BulletKind.None);
         paragraph.BulletChar.Should().BeNull();
         paragraph.BulletSuppressed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PlanParagraphNumberingToggle_WholeCell_BuildsUndoableCommand()
+    {
+        var shape = MakeMergedTableShape();
+        var body = shape.Table!.Rows[0].Cells[0].TextBody!;
+        var second = new Paragraph();
+        second.Runs.Add(new Run { Text = "Second" });
+        body.Paragraphs.Add(second);
+        var slide = new Slide { Shapes = { shape } };
+
+        var plan = TableCellEditPlanner.PlanParagraphNumberingToggle(0, slide, [shape.Id], (0, 1));
+
+        plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+        plan.Kind.Should().Be(TableCellParagraphFormatKind.NumberingToggle);
+        plan.BulletEnabled.Should().BeTrue();
+        plan.EffectiveSelection.Should().Be(new InCanvasEditorTextSelection(0, "Anchor\nSecond".Length));
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(plan.Command!);
+
+        var paragraphs = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs;
+        paragraphs.Should().OnlyContain(paragraph =>
+            paragraph.BulletKind == BulletKind.Auto &&
+            paragraph.AutoNumType == AutoNumType.ArabicPeriod &&
+            paragraph.AutoNumStartAt == 1 &&
+            paragraph.BulletChar == null &&
+            !paragraph.BulletSuppressed);
+
+        bus.Undo();
+        paragraphs = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs;
+        paragraphs.Should().OnlyContain(paragraph => paragraph.BulletKind == BulletKind.None);
+    }
+
+    [Fact]
+    public void PlanParagraphNumberingToggle_AllTargetParagraphsAutoNumbered_SuppressesNumbering()
+    {
+        var shape = MakeMergedTableShape();
+        var body = shape.Table!.Rows[0].Cells[0].TextBody!;
+        body.Paragraphs[0].BulletKind = BulletKind.Auto;
+        body.Paragraphs[0].AutoNumType = AutoNumType.RomanUcPeriod;
+        body.Paragraphs[0].AutoNumStartAt = 4;
+        var slide = new Slide { Shapes = { shape } };
+
+        var plan = TableCellEditPlanner.PlanParagraphNumberingToggle(0, slide, [shape.Id], (0, 0));
+
+        plan.BulletEnabled.Should().BeFalse();
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(plan.Command!);
+
+        var paragraph = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+        paragraph.BulletKind.Should().Be(BulletKind.None);
+        paragraph.BulletChar.Should().BeNull();
+        paragraph.BulletSuppressed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PlanParagraphNumberingToggle_SubRangeSelection_NumbersOnlyTouchedParagraphs()
+    {
+        var shape = MakeMergedTableShape();
+        var body = shape.Table!.Rows[0].Cells[0].TextBody!;
+        var second = new Paragraph();
+        second.Runs.Add(new Run { Text = "Beta" });
+        body.Paragraphs.Add(second);
+        var third = new Paragraph();
+        third.Runs.Add(new Run { Text = "Gamma" });
+        body.Paragraphs.Add(third);
+        var slide = new Slide { Shapes = { shape } };
+
+        var plan = TableCellEditPlanner.PlanParagraphNumberingToggle(
+            0,
+            slide,
+            [shape.Id],
+            (0, 0),
+            selection: (7, 11));
+
+        plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+        plan.EffectiveSelection.Should().Be(new InCanvasEditorTextSelection(7, 11));
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(plan.Command!);
+
+        var paragraphs = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs;
+        paragraphs[0].BulletKind.Should().Be(BulletKind.None);
+        paragraphs[1].BulletKind.Should().Be(BulletKind.Auto);
+        paragraphs[1].AutoNumType.Should().Be(AutoNumType.ArabicPeriod);
+        paragraphs[1].AutoNumStartAt.Should().Be(1);
+        paragraphs[2].BulletKind.Should().Be(BulletKind.None);
     }
 
     [Fact]
@@ -1018,6 +1118,8 @@ public sealed class TableCellEditPlannerTests
         {
             TableCellParagraphFormatKind.BulletToggle =>
                 TableCellEditPlanner.PlanParagraphBulletToggle(0, slide, selectedShapeIds, activeCell),
+            TableCellParagraphFormatKind.NumberingToggle =>
+                TableCellEditPlanner.PlanParagraphNumberingToggle(0, slide, selectedShapeIds, activeCell),
             TableCellParagraphFormatKind.Indent =>
                 TableCellEditPlanner.PlanParagraphIndent(0, slide, selectedShapeIds, activeCell),
             TableCellParagraphFormatKind.Outdent =>

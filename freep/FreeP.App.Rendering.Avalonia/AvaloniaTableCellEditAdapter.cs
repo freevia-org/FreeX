@@ -142,6 +142,20 @@ public static class AvaloniaTableCellEditAdapter
             selection);
     }
 
+    public static TableCellParagraphFormatPlan PlanParagraphNumberingToggle(
+        EditingSession editor,
+        (int Start, int End)? selection = null)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+
+        return TableCellEditPlanner.PlanParagraphNumberingToggle(
+            editor.CurrentSlideIndex,
+            editor.CurrentSlide,
+            editor.SelectedShapeIds,
+            editor.ActiveTableCell,
+            selection);
+    }
+
     public static TableCellParagraphFormatPlan PlanParagraphIndent(
         EditingSession editor,
         (int Start, int End)? selection = null)
