@@ -3,6 +3,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
@@ -131,6 +132,35 @@ public sealed class SmartArtRenderingTests
         // accent1 Color1 = #1F3864 → R=0x1F, G=0x38, B=0x64
         // If colorful1 default is used instead, node 0 = #4E81BD (R=0x4E)
         Assert.Equal(0x1F, nodeColors[0].R);
+    }
+
+    [StaFact]
+    public void VerticalList_IntenseStyle_UsesPlannedFillBorderCornerAndShadowValues()
+    {
+        var sa = SmartArt.Create(SmartArtKind.List, ["Styled"]);
+        sa.ColorSchemeId = "accent1";
+        sa.StyleId = "intense1";
+        var view = ViewWithSmartArt(sa);
+
+        var nodeBorder = LogicalDescendants<Border>(view.Document)
+            .Single(b => b.Child is TextBlock { Text: "Styled" });
+
+        var fill = Assert.IsType<SolidColorBrush>(nodeBorder.Background).Color;
+        Assert.Equal(0x38, fill.R);
+        Assert.Equal(0x51, fill.G);
+        Assert.Equal(0x7D, fill.B);
+
+        var border = Assert.IsType<SolidColorBrush>(nodeBorder.BorderBrush).Color;
+        Assert.Equal(0x0A, border.R);
+        Assert.Equal(0x23, border.G);
+        Assert.Equal(0x4F, border.B);
+        Assert.Equal(1.5, nodeBorder.BorderThickness.Left);
+        Assert.Equal(0, nodeBorder.CornerRadius.TopLeft);
+
+        var shadow = Assert.IsType<DropShadowEffect>(nodeBorder.Effect);
+        Assert.InRange(shadow.Opacity, 0.29, 0.31);
+        Assert.InRange(shadow.BlurRadius, 6.39, 6.41);
+        Assert.InRange(shadow.ShadowDepth, 2.09, 2.11);
     }
 
     // ── Bug #5: process arrow fill contrasts with box fill ───────────────────────────────────────

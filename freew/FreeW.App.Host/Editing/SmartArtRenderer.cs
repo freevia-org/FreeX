@@ -25,93 +25,76 @@ internal static class SmartArtRenderer
         SmartArt smartArt,
         SmartArtVisualPlan plan,
         double strokeThickness) =>
-        Build(smartArt.Nodes, plan.LayoutId, plan.ColorScheme, plan.Style, strokeThickness);
+        Build(smartArt.Nodes, plan, strokeThickness);
 
-    public static FrameworkElement Build(
+    private static FrameworkElement Build(
         IReadOnlyList<SmartArtNode> nodes,
-        string layoutId,
-        SmartArtColorScheme colorScheme,
-        SmartArtStyle style,
+        SmartArtVisualPlan plan,
         double strokeThickness)
     {
-        return layoutId switch
+        return plan.LayoutId switch
         {
             // ── List layouts ────────────────────────────────────────────────────────────────────────
-            "list1" or "vertbullet1" => BuildVerticalList(nodes, colorScheme, style, strokeThickness),
-            "horizbullet1"           => BuildHorizontalList(nodes, colorScheme, style, strokeThickness),
+            "list1" or "vertbullet1" => BuildVerticalList(plan.Nodes, strokeThickness),
+            "horizbullet1"           => BuildHorizontalList(plan.Nodes, strokeThickness),
 
             // ── Process layouts ─────────────────────────────────────────────────────────────────────
-            "process1"               => BuildProcess(nodes, colorScheme, style, strokeThickness),
-            "stepup1"                => BuildStepProcess(nodes, colorScheme, style, strokeThickness, ascending: true),
-            "stepdown1"              => BuildStepProcess(nodes, colorScheme, style, strokeThickness, ascending: false),
+            "process1"               => BuildProcess(plan.Nodes, strokeThickness),
+            "stepup1"                => BuildStepProcess(plan.Nodes, strokeThickness, ascending: true),
+            "stepdown1"              => BuildStepProcess(plan.Nodes, strokeThickness, ascending: false),
 
             // ── Cycle ────────────────────────────────────────────────────────────────────────────────
-            "cycle1"                 => BuildCycle(nodes, colorScheme, style, strokeThickness),
+            "cycle1"                 => BuildCycle(plan.Nodes, strokeThickness),
 
             // ── Hierarchy ───────────────────────────────────────────────────────────────────────────
-            "hierarchy1" or "orgchart1" => BuildHierarchy(nodes, colorScheme, style, strokeThickness),
+            "hierarchy1" or "orgchart1" => BuildHierarchy(nodes, plan.Nodes, strokeThickness),
 
             // ── Radial ──────────────────────────────────────────────────────────────────────────────
-            "radial1"                => BuildRadial(nodes, colorScheme, style, strokeThickness),
+            "radial1"                => BuildRadial(plan.Nodes, strokeThickness),
 
             // ── Matrix ──────────────────────────────────────────────────────────────────────────────
-            "matrix1"                => BuildMatrix(nodes, colorScheme, style, strokeThickness),
+            "matrix1"                => BuildMatrix(plan.Nodes, strokeThickness),
 
             // ── Fallback (unknown layout) ────────────────────────────────────────────────────────────
-            _                        => BuildVerticalList(nodes, colorScheme, style, strokeThickness)
+            _                        => BuildVerticalList(plan.Nodes, strokeThickness)
         };
     }
 
     // ── Shared node-box factory ──────────────────────────────────────────────────────────────────────
 
     private static Border MakeNodeBox(
-        string text,
-        int colorIndex,
-        SmartArtColorScheme colorScheme,
-        SmartArtStyle style,
+        SmartArtNodeVisualPlan node,
         double strokeThickness,
         Thickness margin,
         Thickness padding,
         double? width = null,
         double? minWidth = null)
     {
-        var fillHex = colorScheme.FillHexAt(colorIndex);
-        var fillColor = ParseHex(fillHex);
-
-        // Apply brightness adjustment for intense/3D styles.
-        if (style.BrightnessAdjust != 0.0)
-        {
-            fillColor = AdjustBrightness(fillColor, style.BrightnessAdjust);
-        }
-
-        // Derive a slightly darker border from the fill color.
-        var borderColor = AdjustBrightness(fillColor, -0.18);
-
         Effect? effect = null;
-        if (style.ShadowOpacity > 0)
+        if (node.ShadowOpacity > 0)
         {
             effect = new DropShadowEffect
             {
-                BlurRadius = 4 + style.ShadowOpacity * 8,
-                ShadowDepth = 1.5 + style.ShadowOpacity * 2,
-                Opacity = style.ShadowOpacity,
+                BlurRadius = node.ShadowBlur,
+                ShadowDepth = node.ShadowDepth,
+                Opacity = node.ShadowOpacity,
                 Color = Colors.Black
             };
         }
 
         var box = new Border
         {
-            Background = new SolidColorBrush(fillColor),
-            CornerRadius = new CornerRadius(style.CornerRadius),
+            Background = new SolidColorBrush(ParseHex(node.FillHex)),
+            CornerRadius = new CornerRadius(node.CornerRadius),
             Margin = margin,
             Padding = padding,
-            BorderBrush = new SolidColorBrush(borderColor),
-            BorderThickness = new Thickness(style.BorderThickness > 0 ? style.BorderThickness : strokeThickness),
+            BorderBrush = node.BorderThickness > 0 ? new SolidColorBrush(ParseHex(node.BorderHex)) : null,
+            BorderThickness = new Thickness(node.BorderThickness > 0 ? node.BorderThickness : 0),
             Effect = effect,
             Child = new TextBlock
             {
-                Text = text,
-                Foreground = new SolidColorBrush(ParseHex(colorScheme.TextHex)),
+                Text = node.Text,
+                Foreground = new SolidColorBrush(ParseHex(node.TextHex)),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 TextWrapping = TextWrapping.Wrap,
@@ -128,9 +111,7 @@ internal static class SmartArtRenderer
 
     // List layouts: vertical stack of labelled boxes.
     private static FrameworkElement BuildVerticalList(
-        IReadOnlyList<SmartArtNode> nodes,
-        SmartArtColorScheme colorScheme,
-        SmartArtStyle style,
+        IReadOnlyList<SmartArtNodeVisualPlan> nodes,
         double strokeThickness)
     {
         var panel = new StackPanel
@@ -141,7 +122,7 @@ internal static class SmartArtRenderer
             Margin = new Thickness(6)
         };
         for (var i = 0; i < nodes.Count; i++)
-            panel.Children.Add(MakeNodeBox(nodes[i].Text, i, colorScheme, style, strokeThickness,
+            panel.Children.Add(MakeNodeBox(nodes[i], strokeThickness,
                 margin: new Thickness(2),
                 padding: new Thickness(8, 4, 8, 4)));
         return panel;
@@ -149,9 +130,7 @@ internal static class SmartArtRenderer
 
     // Horizontal list (bullet list horizontal).
     private static FrameworkElement BuildHorizontalList(
-        IReadOnlyList<SmartArtNode> nodes,
-        SmartArtColorScheme colorScheme,
-        SmartArtStyle style,
+        IReadOnlyList<SmartArtNodeVisualPlan> nodes,
         double strokeThickness)
     {
         var panel = new StackPanel
@@ -162,7 +141,7 @@ internal static class SmartArtRenderer
             Margin = new Thickness(6)
         };
         for (var i = 0; i < nodes.Count; i++)
-            panel.Children.Add(MakeNodeBox(nodes[i].Text, i, colorScheme, style, strokeThickness,
+            panel.Children.Add(MakeNodeBox(nodes[i], strokeThickness,
                 margin: new Thickness(3, 2, 3, 2),
                 padding: new Thickness(8, 4, 8, 4)));
         return panel;
@@ -170,9 +149,7 @@ internal static class SmartArtRenderer
 
     // Process layout: horizontal boxes connected by chevron arrows.
     private static FrameworkElement BuildProcess(
-        IReadOnlyList<SmartArtNode> nodes,
-        SmartArtColorScheme colorScheme,
-        SmartArtStyle style,
+        IReadOnlyList<SmartArtNodeVisualPlan> nodes,
         double strokeThickness)
     {
         var panel = new StackPanel
@@ -184,7 +161,7 @@ internal static class SmartArtRenderer
         };
         for (var i = 0; i < nodes.Count; i++)
         {
-            panel.Children.Add(MakeNodeBox(nodes[i].Text, i, colorScheme, style, strokeThickness,
+            panel.Children.Add(MakeNodeBox(nodes[i], strokeThickness,
                 margin: new Thickness(2),
                 padding: new Thickness(8, 5, 8, 5),
                 minWidth: 50));
@@ -193,28 +170,10 @@ internal static class SmartArtRenderer
             // We darken the current node's fill color rather than repeating it verbatim.
             if (i < nodes.Count - 1)
             {
-                var boxFill = ParseHex(colorScheme.FillHexAt(i));
-                var arrowFill = ArrowContrastFill(boxFill);
-                panel.Children.Add(MakeArrow(arrowFill));
+                panel.Children.Add(MakeArrow(ParseHex(nodes[i].ConnectorHex)));
             }
         }
         return panel;
-    }
-
-    /// <summary>
-    /// Derives a visually distinct arrow fill from a box fill colour: darkens the fill by ~30% so the
-    /// triangle sits visibly between two boxes of the same or similar colour. Falls back to dark grey when
-    /// the fill is already very dark (luminance &lt; 0.25).
-    /// </summary>
-    private static Color ArrowContrastFill(Color boxFill)
-    {
-        // Approximate luminance (simplified sRGB, no gamma).
-        var lum = (boxFill.R * 0.299 + boxFill.G * 0.587 + boxFill.B * 0.114) / 255.0;
-        // Dark fill: lighten the arrow so it is still visible.
-        if (lum < 0.25)
-            return AdjustBrightness(boxFill, +0.30);
-        // Light-to-mid fill: darken significantly.
-        return AdjustBrightness(boxFill, -0.30);
     }
 
     private static FrameworkElement MakeArrow(Color fill)
@@ -235,9 +194,7 @@ internal static class SmartArtRenderer
 
     // Step-Up / Step-Down process: staircase ascending or descending.
     private static FrameworkElement BuildStepProcess(
-        IReadOnlyList<SmartArtNode> nodes,
-        SmartArtColorScheme colorScheme,
-        SmartArtStyle style,
+        IReadOnlyList<SmartArtNodeVisualPlan> nodes,
         double strokeThickness,
         bool ascending)
     {
@@ -254,7 +211,7 @@ internal static class SmartArtRenderer
         {
             var x = i * stepX;
             var y = ascending ? (n - 1 - i) * stepY : i * stepY;
-            var box = MakeNodeBox(nodes[i].Text, i, colorScheme, style, strokeThickness,
+            var box = MakeNodeBox(nodes[i], strokeThickness,
                 margin: new Thickness(0),
                 padding: new Thickness(4, 2, 4, 2),
                 width: boxW);
@@ -268,9 +225,7 @@ internal static class SmartArtRenderer
 
     // Cycle layout: nodes arranged in a circle.
     private static FrameworkElement BuildCycle(
-        IReadOnlyList<SmartArtNode> nodes,
-        SmartArtColorScheme colorScheme,
-        SmartArtStyle style,
+        IReadOnlyList<SmartArtNodeVisualPlan> nodes,
         double strokeThickness)
     {
         var canvas = new Canvas
@@ -295,7 +250,7 @@ internal static class SmartArtRenderer
             var angle = 2 * Math.PI * i / n - Math.PI / 2;
             var x = cx + rx * Math.Cos(angle) - boxW / 2;
             var y = cy + ry * Math.Sin(angle) - boxH / 2;
-            var box = MakeNodeBox(nodes[i].Text, i, colorScheme, style, strokeThickness,
+            var box = MakeNodeBox(nodes[i], strokeThickness,
                 margin: new Thickness(0),
                 padding: new Thickness(3, 2, 3, 2),
                 width: boxW);
@@ -310,8 +265,7 @@ internal static class SmartArtRenderer
     // Hierarchy layout: tree of parent + indented children.
     private static FrameworkElement BuildHierarchy(
         IReadOnlyList<SmartArtNode> nodes,
-        SmartArtColorScheme colorScheme,
-        SmartArtStyle style,
+        IReadOnlyList<SmartArtNodeVisualPlan> plannedNodes,
         double strokeThickness)
     {
         var root = new StackPanel
@@ -321,10 +275,10 @@ internal static class SmartArtRenderer
             VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(6)
         };
-        var colorIndex = 0;
+        var planIndex = 0;
         foreach (var node in nodes)
         {
-            root.Children.Add(MakeNodeBox(node.Text, colorIndex, colorScheme, style, strokeThickness,
+            root.Children.Add(MakeNodeBox(plannedNodes[planIndex++], strokeThickness,
                 margin: new Thickness(2),
                 padding: new Thickness(8, 4, 8, 4)));
 
@@ -337,26 +291,21 @@ internal static class SmartArtRenderer
                     HorizontalAlignment = HorizontalAlignment.Stretch,
                     Margin = new Thickness(20, 0, 2, 4)
                 };
-                var childColorIndex = 0;
                 foreach (var child in node.Children)
                 {
-                    childPanel.Children.Add(MakeNodeBox(child.Text, (colorIndex + 1 + childColorIndex) % 4, colorScheme, style, strokeThickness,
+                    childPanel.Children.Add(MakeNodeBox(plannedNodes[planIndex++], strokeThickness,
                         margin: new Thickness(2),
                         padding: new Thickness(6, 3, 6, 3)));
-                    childColorIndex++;
                 }
                 root.Children.Add(childPanel);
             }
-            colorIndex++;
         }
         return root;
     }
 
     // Radial layout: central hub + satellite nodes arranged around it.
     private static FrameworkElement BuildRadial(
-        IReadOnlyList<SmartArtNode> nodes,
-        SmartArtColorScheme colorScheme,
-        SmartArtStyle style,
+        IReadOnlyList<SmartArtNodeVisualPlan> nodes,
         double strokeThickness)
     {
         var canvas = new Canvas
@@ -373,7 +322,7 @@ internal static class SmartArtRenderer
         const double cy = 90;
         const double centW = 56;
         const double centH = 36;
-        var center = MakeNodeBox(nodes[0].Text, 0, colorScheme, style, strokeThickness,
+        var center = MakeNodeBox(nodes[0], strokeThickness,
             margin: new Thickness(0),
             padding: new Thickness(4, 3, 4, 3),
             width: centW);
@@ -402,13 +351,13 @@ internal static class SmartArtRenderer
                 Y1 = cy,
                 X2 = x + satW / 2,
                 Y2 = y + satH / 2,
-                Stroke = new SolidColorBrush(ParseHex(colorScheme.FillHexAt(i + 1))),
+                Stroke = new SolidColorBrush(ParseHex(nodes[i + 1].ConnectorHex)),
                 StrokeThickness = strokeThickness,
                 Opacity = 0.6
             };
             canvas.Children.Add(line);
 
-            var sat = MakeNodeBox(nodes[i + 1].Text, i + 1, colorScheme, style, strokeThickness,
+            var sat = MakeNodeBox(nodes[i + 1], strokeThickness,
                 margin: new Thickness(0),
                 padding: new Thickness(3, 2, 3, 2),
                 width: satW);
@@ -422,9 +371,7 @@ internal static class SmartArtRenderer
 
     // Matrix layout: 2×2 (or n-cell) grid.
     private static FrameworkElement BuildMatrix(
-        IReadOnlyList<SmartArtNode> nodes,
-        SmartArtColorScheme colorScheme,
-        SmartArtStyle style,
+        IReadOnlyList<SmartArtNodeVisualPlan> nodes,
         double strokeThickness)
     {
         var cols = nodes.Count <= 4 ? 2 : (int)Math.Ceiling(Math.Sqrt(nodes.Count));
@@ -436,7 +383,7 @@ internal static class SmartArtRenderer
             Margin = new Thickness(6)
         };
         for (var i = 0; i < nodes.Count; i++)
-            grid.Children.Add(MakeNodeBox(nodes[i].Text, i, colorScheme, style, strokeThickness,
+            grid.Children.Add(MakeNodeBox(nodes[i], strokeThickness,
                 margin: new Thickness(3),
                 padding: new Thickness(6, 4, 6, 4)));
         return grid;
@@ -454,12 +401,5 @@ internal static class SmartArtRenderer
         {
             return Color.FromRgb(0x4E, 0x81, 0xBD);
         }
-    }
-
-    private static Color AdjustBrightness(Color c, double delta)
-    {
-        static byte Clamp(double v) => (byte)Math.Max(0, Math.Min(255, v));
-        var d = delta * 255;
-        return Color.FromRgb(Clamp(c.R + d), Clamp(c.G + d), Clamp(c.B + d));
     }
 }

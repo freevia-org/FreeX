@@ -113,7 +113,36 @@ public sealed class ChartSmartArtVisualPlannerTests
         plan.Layout.Kind.Should().Be(SmartArtKind.Process);
         plan.ColorScheme.Id.Should().Be("accent1");
         plan.Style.Id.Should().Be("intense1");
-        plan.Nodes.Select(n => n.FillHex).Should().ContainInOrder("#1F3864", "#2F5496", "#4E81BD");
+        plan.Nodes.Select(n => n.FillHex).Should().ContainInOrder("#38517D", "#486DAF", "#679AD6");
+    }
+
+    [Theory]
+    [InlineData("subtle2", "#4E81BD", "#20538F", 0.5, 4, 0.15, 5.2, 1.8)]
+    [InlineData("intense1", "#679AD6", "#396CA8", 1.5, 0, 0.30, 6.4, 2.1)]
+    [InlineData("3d1", "#81B4F0", "#5386C2", 1.0, 8, 0.40, 7.2, 2.3)]
+    public void SmartArtPlan_ProjectsStyleAndEffectValuesIntoNodePlans(
+        string styleId,
+        string expectedFill,
+        string expectedBorder,
+        double expectedBorderThickness,
+        double expectedCornerRadius,
+        double expectedShadowOpacity,
+        double expectedShadowBlur,
+        double expectedShadowDepth)
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.Process, ["Plan", "Build"]);
+        smartArt.StyleId = styleId;
+
+        var node = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt).Nodes[0];
+
+        node.FillHex.Should().Be(expectedFill);
+        node.BorderHex.Should().Be(expectedBorder);
+        node.BorderThickness.Should().Be(expectedBorderThickness);
+        node.CornerRadius.Should().Be(expectedCornerRadius);
+        node.ShadowOpacity.Should().Be(expectedShadowOpacity);
+        node.ShadowBlur.Should().BeApproximately(expectedShadowBlur, 0.01);
+        node.ShadowDepth.Should().BeApproximately(expectedShadowDepth, 0.01);
+        node.ConnectorHex.Should().NotBe(node.FillHex);
     }
 
     [Fact]
