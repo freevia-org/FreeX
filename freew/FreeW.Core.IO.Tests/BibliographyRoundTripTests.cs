@@ -164,6 +164,38 @@ public class BibliographyRoundTripTests
     }
 
     [Fact]
+    public void ReportSource_AllFields_SurviveRoundTrip()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Sources.Add(new Source
+        {
+            Tag = "NBS2026",
+            Type = SourceType.Report,
+            Author = "Doe, J.",
+            Title = "Measurements Report",
+            Year = "2026",
+            Institution = "National Bureau of Standards",
+            City = "Washington",
+            Publisher = "Government Printing Office",
+            StandardNumber = "NBS-2026-01",
+            ShortTitle = "Measurements",
+            Comments = "Report note"
+        });
+
+        var source = RoundTrip(doc).Sources.Should().ContainSingle().Subject;
+        source.Type.Should().Be(SourceType.Report);
+        source.Author.Should().Be("Doe, J.");
+        source.Title.Should().Be("Measurements Report");
+        source.Year.Should().Be("2026");
+        source.Institution.Should().Be("National Bureau of Standards");
+        source.City.Should().Be("Washington");
+        source.Publisher.Should().Be("Government Printing Office");
+        source.StandardNumber.Should().Be("NBS-2026-01");
+        source.ShortTitle.Should().Be("Measurements");
+        source.Comments.Should().Be("Report note");
+    }
+
+    [Fact]
     public void MultipleSources_PreserveOrderAndCount()
     {
         var doc = TextDocument.CreateEmpty();
@@ -227,6 +259,28 @@ public class BibliographyRoundTripTests
     }
 
     [Fact]
+    public void BibliographyPart_WritesReportSourceTypeAndInstitution()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Sources.Add(new Source
+        {
+            Tag = "Report1",
+            Type = SourceType.Report,
+            Title = "Report Title",
+            Institution = "Research Institute"
+        });
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        using var zip = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
+        using var entry = zip.GetEntry("word/bibliography/sources.xml")!.Open();
+        var source = XDocument.Load(entry).Root!.Element(B + "Source")!;
+
+        source.Element(B + "SourceType")!.Value.Should().Be("Report");
+        source.Element(B + "Institution")!.Value.Should().Be("Research Institute");
+    }
+
+    [Fact]
     public void WordStylePersonAuthor_ReadsStructuredNameList()
     {
         var result = ReadDocxWithSourcesXml(
@@ -252,6 +306,7 @@ public class BibliographyRoundTripTests
                 </b:Author>
                 <b:Title>Word Authored Source</b:Title>
                 <b:Year>2024</b:Year>
+                <b:Institution>Institute for Word Tests</b:Institution>
                 <b:City>London</b:City>
                 <b:Edition>2</b:Edition>
                 <b:StandardNumber>ISBN-2</b:StandardNumber>
@@ -270,6 +325,7 @@ public class BibliographyRoundTripTests
         source.CorporateAuthor.Should().BeNull();
         source.Title.Should().Be("Word Authored Source");
         source.Year.Should().Be("2024");
+        source.Institution.Should().Be("Institute for Word Tests");
         source.City.Should().Be("London");
         source.Edition.Should().Be("2");
         source.StandardNumber.Should().Be("ISBN-2");

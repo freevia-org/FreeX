@@ -338,6 +338,36 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void EqArray_AlignsRowsOnInvisibleAlignmentPoints()
+    {
+        var eqArray = new MathNode.EqArray(
+            new MathNode[]
+            {
+                new MathNode.Row(new MathNode[] { Run("mmmm"), Run("=1") }),
+                new MathNode.Row(new MathNode[] { Run("x"), Run("=22") }),
+                Run("center")
+            },
+            new int?[] { 1, 1, null });
+
+        var box = MathLayoutEngine.Layout(eqArray, "Cambria Math", FontSizePt);
+        var container = (MathBox.Container)box.Children[0];
+
+        var firstRow = (MathBox.Container)container.Children[0];
+        var secondRow = (MathBox.Container)container.Children[1];
+        var thirdRow = container.Children[2];
+
+        double firstMarkerX = firstRow.X + firstRow.Children[1].X;
+        double secondMarkerX = secondRow.X + secondRow.Children[1].X;
+
+        firstMarkerX.Should().BeApproximately(secondMarkerX, 0.01,
+            "m:eqArr rows with m:aln markers should share the same marker x-coordinate");
+        firstRow.X.Should().BeLessThan(secondRow.X,
+            "the row with a wider expression before m:aln shifts left to keep the marker aligned");
+        thirdRow.X.Should().BeApproximately((container.Metrics.Width - thirdRow.Metrics.Width) / 2.0, 0.01,
+            "rows without m:aln keep the previous centered equation-array behavior");
+    }
+
+    [Fact]
     public void Matrix_UsesMaxRowCellCount_ForRaggedRows()
     {
         var matrix = new MathNode.Matrix(new[]
