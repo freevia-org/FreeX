@@ -916,6 +916,12 @@ public static class MathLayoutEngine
         var baseBox = LayoutNode(borderBox.Base, fontFamily, fontSizePt);
         double totalW = baseBox.Metrics.Width + inset * 2.0;
         double totalH = baseBox.Metrics.Height + inset * 2.0;
+        double left = thickness / 2.0;
+        double top = thickness / 2.0;
+        double right = totalW - thickness / 2.0;
+        double bottom = totalH - thickness / 2.0;
+        double centerX = totalW / 2.0;
+        double centerY = totalH / 2.0;
 
         var c = new MathBox.Container();
         c.Metrics.Width = totalW;
@@ -927,13 +933,21 @@ public static class MathLayoutEngine
         c.Children.Add(baseBox);
 
         if (borderBox.ShowTop)
-            AddLine(c, thickness / 2.0, thickness / 2.0, totalW - thickness / 2.0, thickness / 2.0, thickness);
+            AddLine(c, left, top, right, top, thickness);
         if (borderBox.ShowBottom)
-            AddLine(c, thickness / 2.0, totalH - thickness / 2.0, totalW - thickness / 2.0, totalH - thickness / 2.0, thickness);
+            AddLine(c, left, bottom, right, bottom, thickness);
         if (borderBox.ShowLeft)
-            AddLine(c, thickness / 2.0, thickness / 2.0, thickness / 2.0, totalH - thickness / 2.0, thickness);
+            AddLine(c, left, top, left, bottom, thickness);
         if (borderBox.ShowRight)
-            AddLine(c, totalW - thickness / 2.0, thickness / 2.0, totalW - thickness / 2.0, totalH - thickness / 2.0, thickness);
+            AddLine(c, right, top, right, bottom, thickness);
+        if (borderBox.StrikeHorizontal)
+            AddLine(c, left, centerY, right, centerY, thickness);
+        if (borderBox.StrikeVertical)
+            AddLine(c, centerX, top, centerX, bottom, thickness);
+        if (borderBox.StrikeBottomLeftToTopRight)
+            AddLine(c, left, bottom, right, top, thickness);
+        if (borderBox.StrikeTopLeftToBottomRight)
+            AddLine(c, left, top, right, bottom, thickness);
 
         return c;
     }
