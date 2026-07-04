@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -99,6 +100,43 @@ public sealed class DocumentViewFloatingSelectionTests
         return (doc, 0, 1);
     }
 
+    private static TextDocument MakeDocWithFloatingImageAndShape()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("Body text.", RunFormatting.Default));
+        para.Runs.Add(new Run(string.Empty, RunFormatting.Default)
+        {
+            Image = new InlineImage(SmallPng(), 60, 60)
+            {
+                Wrapping = ImageWrapping.Square,
+                HorizontalOffsetPt = 36,
+                VerticalOffsetPt = 18,
+                ZOrderIndex = 1,
+            },
+        });
+        para.Runs.Add(new Run(string.Empty, RunFormatting.Default)
+        {
+            Shape = new Shape
+            {
+                Kind = ShapeKind.Rectangle,
+                WidthPt = 72,
+                HeightPt = 36,
+                FillColorHex = "#FF0000",
+                Placement = new FloatingPlacement
+                {
+                    Wrapping = ImageWrapping.Square,
+                    HorizontalOffsetPt = 108,
+                    VerticalOffsetPt = 54,
+                    ZOrderIndex = 2,
+                },
+            },
+        });
+        doc.Blocks.Add(para);
+        return doc;
+    }
+
     // ── FLSEL-1: SelectFloating sets SelectedFloatingInfo ────────────────────────────────────────────
 
     [Fact]
@@ -147,6 +185,71 @@ public sealed class DocumentViewFloatingSelectionTests
     }
 
     // ── FLSEL-3: SetFloatingWrap changes wrapping + undoable ─────────────────────────────────────────
+
+    [Fact]
+    public async Task SelectFloating_multi_select_tracks_two_groupable_objects()
+    {
+        int selectedCount = 0;
+        bool canGroup = false;
+        string? activeKind = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = MakeDocWithFloatingImageAndShape();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+
+            view.SelectFloating(0, 1);
+            view.SelectFloating(0, 2, addToMultiSelect: true);
+
+            selectedCount = view.SelectedFloatingObjects.Count;
+            canGroup = view.HasMultipleFloatingObjectsSelected;
+            activeKind = view.SelectedFloatingInfo?.Kind;
+        });
+        if (!ran) return;
+
+        Assert.Equal(2, selectedCount);
+        Assert.True(canGroup, "image + shape multi-selection should enable the shared group command");
+        Assert.Equal("Shape", activeKind);
+    }
+
+    [Fact]
+    public async Task Group_and_ungroup_selected_floating_objects_use_shared_model_commands()
+    {
+        int groupedRunCount = 0, groupedChildCount = 0, ungroupedRunCount = 0;
+        bool hasImage = false, hasShape = false, groupSelection = false;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = MakeDocWithFloatingImageAndShape();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+
+            view.SelectFloating(0, 1);
+            view.SelectFloating(0, 2, addToMultiSelect: true);
+            view.GroupSelectedFloatingObjects();
+
+            var para = (Paragraph)doc.Blocks[0];
+            groupedRunCount = para.Runs.Count;
+            groupedChildCount = para.Runs[1].DrawingGroup?.Children.Count ?? 0;
+
+            view.SelectFloating(0, 1);
+            groupSelection = view.IsGroupSelected;
+            view.UngroupSelectedFloatingObject();
+
+            ungroupedRunCount = para.Runs.Count;
+            hasImage = para.Runs.Any(r => r.Image is not null);
+            hasShape = para.Runs.Any(r => r.Shape is not null);
+        });
+        if (!ran) return;
+
+        Assert.Equal(2, groupedRunCount);
+        Assert.Equal(2, groupedChildCount);
+        Assert.True(groupSelection, "the grouped run should be recognized as a selected drawing group");
+        Assert.Equal(3, ungroupedRunCount);
+        Assert.True(hasImage);
+        Assert.True(hasShape);
+    }
 
     [Fact]
     public async Task SetFloatingWrap_changes_model_wrapping_and_is_undoable()

@@ -97,6 +97,43 @@ public sealed class PictureDrawingContextualTabTests
         return (doc, 0, 1);
     }
 
+    private static TextDocument DocWithFloatingImageAndShape()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("Body text.", RunFormatting.Default));
+        para.Runs.Add(new Run(string.Empty, RunFormatting.Default)
+        {
+            Image = new InlineImage(SmallPng(), 60, 60)
+            {
+                Wrapping = ImageWrapping.Square,
+                HorizontalOffsetPt = 36,
+                VerticalOffsetPt = 18,
+                ZOrderIndex = 1,
+            },
+        });
+        para.Runs.Add(new Run(string.Empty, RunFormatting.Default)
+        {
+            Shape = new Shape
+            {
+                Kind = ShapeKind.Rectangle,
+                WidthPt = 72,
+                HeightPt = 36,
+                FillColorHex = "#FF0000",
+                Placement = new FloatingPlacement
+                {
+                    Wrapping = ImageWrapping.Square,
+                    HorizontalOffsetPt = 108,
+                    VerticalOffsetPt = 54,
+                    ZOrderIndex = 2,
+                },
+            },
+        });
+        doc.Blocks.Add(para);
+        return doc;
+    }
+
     // ── Ribbon definition shape ───────────────────────────────────────────────
 
     [Fact]
@@ -116,6 +153,17 @@ public sealed class PictureDrawingContextualTabTests
         draw.Context!.ActivationKey.Should().Be(FloatingRibbonContextSource.DrawingContextKey);
         draw.Context.Color.Should().Be(RibbonContextColor.Purple);
 
+        var pictureArrangeIds = pic.Groups.Single(g => g.Id == "picture-arrange").Controls
+            .Select(control => GetCommandId(control)?.Value)
+            .Where(id => id is not null)
+            .Select(id => id!)
+            .ToArray();
+        pictureArrangeIds.Should().Contain(new[]
+        {
+            "freew.object-group",
+            "freew.object-ungroup",
+        }, "Picture Format should expose Word's object Group/Ungroup arrange commands");
+
         var drawingArrangeIds = draw.Groups.Single(g => g.Id == "drawing-arrange").Controls
             .Select(control => GetCommandId(control)?.Value)
             .Where(id => id is not null)
@@ -127,7 +175,9 @@ public sealed class PictureDrawingContextualTabTests
             "freew.image-send-to-back",
             "freew.image-bring-forward",
             "freew.image-send-backward",
-        }, "Avalonia should use the same z-order command ids as WPF for drawing objects");
+            "freew.object-group",
+            "freew.object-ungroup",
+        }, "Avalonia should use the same shared arrange command ids as WPF for drawing objects");
         drawingArrangeIds.Should().NotContain(new[]
         {
             "freew.shape-bring-to-front",
@@ -150,7 +200,8 @@ public sealed class PictureDrawingContextualTabTests
             "freew.image-wrap-front", "freew.image-rotate", "freew.image-rotate-right90",
             "freew.image-rotate-left90", "freew.image-flip-vertical", "freew.image-flip-horizontal",
             "freew.image-bring-to-front", "freew.image-send-to-back", "freew.image-bring-forward",
-            "freew.image-send-backward", "freew.image-width", "freew.image-height",
+            "freew.image-send-backward", "freew.object-group", "freew.object-ungroup",
+            "freew.image-width", "freew.image-height",
             // Drawing
             "freew.shape-wrap", "freew.shape-wrap-inline", "freew.shape-wrap-square",
             "freew.shape-rotate", "freew.shape-rotate-right90", "freew.shape-flip-horizontal",
@@ -437,6 +488,73 @@ public sealed class PictureDrawingContextualTabTests
         image.Should().BeFalse("picture selections use the Picture Format tab, not shape fill/outline");
         shape.Should().BeTrue("plain shapes can be formatted");
         textBox.Should().BeTrue("text boxes share Word's Drawing Format fill/outline commands");
+    }
+
+    [Fact]
+    public async Task ObjectGroupCommands_enable_for_multi_select_and_group_selection()
+    {
+        bool? noneGroup = null, singleGroup = null, multiGroup = null, groupUngroup = null;
+        var ran = await OnUi(() =>
+        {
+            var doc = DocWithFloatingImageAndShape();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+
+            noneGroup = CommandIsEnabled(registry, "freew.object-group");
+            view.SelectFloating(0, 1);
+            singleGroup = CommandIsEnabled(registry, "freew.object-group");
+            view.SelectFloating(0, 2, addToMultiSelect: true);
+            multiGroup = CommandIsEnabled(registry, "freew.object-group");
+
+            ExecuteCommand(registry, "freew.object-group");
+            view.SelectFloating(0, 1);
+            groupUngroup = CommandIsEnabled(registry, "freew.object-ungroup");
+        });
+        if (!ran) return;
+
+        noneGroup.Should().BeFalse("Group needs at least two selected floating objects");
+        singleGroup.Should().BeFalse("single object selection cannot be grouped");
+        multiGroup.Should().BeTrue("image + shape multi-selection can be grouped by the shared model command");
+        groupUngroup.Should().BeTrue("Ungroup is available when the selected run is a drawing group");
+    }
+
+    [Fact]
+    public async Task ObjectGroupCommands_group_and_ungroup_through_registry()
+    {
+        int? groupedRunCount = null, groupedChildCount = null, ungroupedRunCount = null;
+        bool? ungroupedHasImage = null, ungroupedHasShape = null;
+        var ran = await OnUi(() =>
+        {
+            var doc = DocWithFloatingImageAndShape();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(0, 1);
+            view.SelectFloating(0, 2, addToMultiSelect: true);
+
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+            ExecuteCommand(registry, "freew.object-group");
+
+            var para = (Paragraph)doc.Blocks[0];
+            groupedRunCount = para.Runs.Count;
+            groupedChildCount = para.Runs[1].DrawingGroup?.Children.Count;
+
+            view.SelectFloating(0, 1);
+            ExecuteCommand(registry, "freew.object-ungroup");
+
+            ungroupedRunCount = para.Runs.Count;
+            ungroupedHasImage = para.Runs.Any(r => r.Image is not null);
+            ungroupedHasShape = para.Runs.Any(r => r.Shape is not null);
+        });
+        if (!ran) return;
+
+        groupedRunCount.Should().Be(2, "the two floating object runs should be replaced by one group run");
+        groupedChildCount.Should().Be(2);
+        ungroupedRunCount.Should().Be(3, "body text plus the restored image and shape runs should remain");
+        ungroupedHasImage.Should().BeTrue();
+        ungroupedHasShape.Should().BeTrue();
     }
 
     [Fact]

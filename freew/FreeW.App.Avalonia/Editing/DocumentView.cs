@@ -184,6 +184,9 @@ public sealed class DocumentView : Control
     // Selected floating object (null = no selection). Kind = "Image"|"Shape"|"Chart"|"WordArt"|"SmartArt"|"Group".
     // Rect is the page-space bounding rect as laid out in the last layout pass.
     private (int BlockIndex, int RunIndex, string Kind, Rect Rect)? _selectedFloating;
+    // Multi-select set for object arrange commands. DrawingGroup itself is single-select because the
+    // shared grouping command currently consumes only concrete floating object runs.
+    private readonly List<(int BlockIndex, int RunIndex, string Kind)> _selectedFloatingObjects = [];
     // AV-HANDLES: drag state — non-null while the user is dragging a selected float (move OR resize).
     // PointerDown : pointer page-space position when the drag started.
     // FloatRect   : the float's page-space Rect at drag start (used to revert on Esc + as the resize base).
@@ -431,6 +434,7 @@ public sealed class DocumentView : Control
         _cellAnchor = null;
         _hfCaret = null; // AV-HFEDIT: clear header/footer caret on document load
         _selectedFloating = null; // AV-PICTAB: clear float selection on document load
+        _selectedFloatingObjects.Clear();
         _floatDragState   = null;
         if (RestrictEditingPolicy.ShouldForceTrackChanges)
             TrackChangesEnabled = true;
@@ -941,6 +945,7 @@ public sealed class DocumentView : Control
         _cellBlockFocus = null;
         _selectionAnchor = null;
         _selectedFloating = null;
+        _selectedFloatingObjects.Clear();
         InvalidateVisual();
         CaretMoved?.Invoke();
     }
@@ -7139,7 +7144,11 @@ public sealed class DocumentView : Control
         if (found is not null)
             _selectedFloating = (blockIndex, runIndex, kind, ToAvaloniaRect(found.Rect));
         else
+        {
             _selectedFloating = null; // object was deleted / moved out of view
+            _selectedFloatingObjects.RemoveAll(item =>
+                item.BlockIndex == blockIndex && item.RunIndex == runIndex);
+        }
         RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateVisual();
     }
@@ -7154,6 +7163,21 @@ public sealed class DocumentView : Control
     public (int BlockIndex, int RunIndex, string Kind, Rect Rect)? SelectedFloatingInfo
         => _selectedFloating;
 
+    /// <summary>Current floating-object multi-selection as model coordinates.</summary>
+    public IReadOnlyList<(int BlockIndex, int RunIndex, string Kind)> SelectedFloatingObjects =>
+        _selectedFloatingObjects.AsReadOnly();
+
+    /// <summary>True when the selection contains at least two groupable floating object runs.</summary>
+    public bool HasMultipleFloatingObjectsSelected =>
+        SelectedGroupMemberLocations().Count >= 2;
+
+    /// <summary>True when exactly one valid drawing group run is selected.</summary>
+    public bool IsGroupSelected =>
+        _selectedFloatingObjects.Count == 1
+        && _selectedFloatingObjects[0].Kind == "Group"
+        && TryGetRun(_selectedFloatingObjects[0].BlockIndex, _selectedFloatingObjects[0].RunIndex, out var run)
+        && run.DrawingGroup is { IsValid: true };
+
     /// <summary>
     /// Returns the selected floating shape or text box, or null when the current drawing selection is
     /// a non-shape object such as WordArt or a group.
@@ -7164,8 +7188,9 @@ public sealed class DocumentView : Control
     /// <summary>Deselect any selected floating object. No-op when nothing is selected.</summary>
     public void DeselectFloating()
     {
-        if (_selectedFloating is null) return;
+        if (_selectedFloating is null && _selectedFloatingObjects.Count == 0) return;
         _selectedFloating = null;
+        _selectedFloatingObjects.Clear();
         _floatDragState   = null;
         RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateVisual();
@@ -7175,7 +7200,7 @@ public sealed class DocumentView : Control
     /// Programmatically select the floating object at (blockIndex, runIndex). Triggers a layout pass
     /// if needed and refreshes the selection rect. Used by tests and the host shell.
     /// </summary>
-    public void SelectFloating(int blockIndex, int runIndex)
+    public void SelectFloating(int blockIndex, int runIndex, bool addToMultiSelect = false)
     {
         if (_laidOutWidth < 0) Relayout(FallbackWidth);
         // Determine kind.
@@ -7192,9 +7217,85 @@ public sealed class DocumentView : Control
         else if (run.DrawingGroup is not null)         kind = "Group";
         else return;
 
+        SelectFloatingCore(blockIndex, runIndex, kind, addToMultiSelect);
+    }
+
+    private void SelectFloatingCore(int blockIndex, int runIndex, string kind, bool addToMultiSelect)
+    {
+        var item = (blockIndex, runIndex, kind);
+        if (addToMultiSelect && IsGroupableFloatingKind(kind))
+        {
+            var existing = _selectedFloatingObjects.FindIndex(existingItem =>
+                existingItem.BlockIndex == blockIndex && existingItem.RunIndex == runIndex);
+            if (existing >= 0)
+            {
+                _selectedFloatingObjects.RemoveAt(existing);
+                if (_selectedFloatingObjects.Count == 0)
+                {
+                    _selectedFloating = null;
+                    _floatDragState = null;
+                    RaiseFloatingSelectionChangedIfIdentityChanged();
+                    InvalidateVisual();
+                    return;
+                }
+
+                var fallback = _selectedFloatingObjects[^1];
+                _selectedFloating = (fallback.BlockIndex, fallback.RunIndex, fallback.Kind, default);
+                RefreshSelectedFloatingRect(fallback.BlockIndex, fallback.RunIndex, fallback.Kind);
+                return;
+            }
+
+            _selectedFloatingObjects.RemoveAll(existingItem => existingItem.Kind == "Group");
+            _selectedFloatingObjects.Add(item);
+        }
+        else
+        {
+            _selectedFloatingObjects.Clear();
+            _selectedFloatingObjects.Add(item);
+        }
+
         // Dummy rect; RefreshSelectedFloatingRect will update.
         _selectedFloating = (blockIndex, runIndex, kind, default);
         RefreshSelectedFloatingRect(blockIndex, runIndex, kind);
+    }
+
+    private static bool IsGroupableFloatingKind(string kind) =>
+        kind is "Image" or "Shape" or "Chart" or "WordArt" or "SmartArt";
+
+    private bool TryGetRun(int blockIndex, int runIndex, out Run run)
+    {
+        run = null!;
+        if (blockIndex < 0 || blockIndex >= _doc.Blocks.Count) return false;
+        if (_doc.Blocks[blockIndex] is not Paragraph para) return false;
+        if (runIndex < 0 || runIndex >= para.Runs.Count) return false;
+        run = para.Runs[runIndex];
+        return true;
+    }
+
+    private bool IsGroupableFloatingRun(int blockIndex, int runIndex)
+    {
+        if (!TryGetRun(blockIndex, runIndex, out var run)) return false;
+        return run.Image is { IsFloating: true }
+            || run.Shape is { IsFloating: true }
+            || run.Chart is { IsFloating: true }
+            || run.WordArt is { IsFloating: true }
+            || run.SmartArt is { IsFloating: true };
+    }
+
+    private List<(int Bi, int Ri)> SelectedGroupMemberLocations()
+    {
+        var members = new List<(int Bi, int Ri)>();
+        foreach (var selected in _selectedFloatingObjects)
+        {
+            if (!IsGroupableFloatingRun(selected.BlockIndex, selected.RunIndex))
+                continue;
+
+            var member = (selected.BlockIndex, selected.RunIndex);
+            if (!members.Contains(member))
+                members.Add(member);
+        }
+
+        return members;
     }
 
     private (int BlockIndex, int RunIndex, Shape Shape, string Kind)? SelectedFloatingShapeLocation()
@@ -7388,7 +7489,41 @@ public sealed class DocumentView : Control
         RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
     }
 
+    // ── AV-OBJGROUP: floating-object Group/Ungroup edit API ────────────────────────────────────────
+
+    /// <summary>
+    /// Groups the current multi-selected floating objects through the shared model command.
+    /// </summary>
+    public void GroupSelectedFloatingObjects()
+    {
+        var members = SelectedGroupMemberLocations();
+        if (members.Count < 2) return;
+
+        _bus.Execute(new GroupFloatingObjectsCommand(members));
+        _selectedFloating = null;
+        _selectedFloatingObjects.Clear();
+        _floatDragState = null;
+        RaiseFloatingSelectionChangedIfIdentityChanged();
+        InvalidateLayoutAndVisual();
+    }
+
     // ── AV-CHARTTAB: Chart + SmartArt contextual-tab edit API ──────────────────────────────────────
+
+    /// <summary>
+    /// Ungroups the selected drawing group through the shared model command.
+    /// </summary>
+    public void UngroupSelectedFloatingObject()
+    {
+        if (_selectedFloating is not { Kind: "Group" } sel) return;
+        if (!IsGroupSelected) return;
+
+        _bus.Execute(new UngroupFloatingObjectsCommand(sel.BlockIndex, sel.RunIndex));
+        _selectedFloating = null;
+        _selectedFloatingObjects.Clear();
+        _floatDragState = null;
+        RaiseFloatingSelectionChangedIfIdentityChanged();
+        InvalidateLayoutAndVisual();
+    }
 
     /// <summary>
     /// AV-CHARTTAB: Change the chart kind (column/bar/line/pie/scatter/area/doughnut) of the selected
@@ -7549,6 +7684,7 @@ public sealed class DocumentView : Control
         // Remove the run in-place via a command (undoable).
         _bus.Execute(new RemoveFloatingRunCommand(sel.BlockIndex, sel.RunIndex));
         _selectedFloating = null;
+        _selectedFloatingObjects.Clear();
         _floatDragState   = null;
         RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateLayoutAndVisual();
@@ -7731,7 +7867,9 @@ public sealed class DocumentView : Control
         // AV-HANDLES: when a float is already selected, a press on one of its 8 resize handles starts a
         // resize drag (checked BEFORE the float hit-test so the handle squares, which sit on/outside the
         // object's edge, win over whatever object lies under them).
-        if (!shift && _selectedFloating is { } curSel)
+        var extendFloatingSelection = shift || ctrlOrMeta;
+
+        if (!extendFloatingSelection && _selectedFloating is { } curSel)
         {
             var handle = HitTestHandle(point);
             if (handle is not FloatHandle.None and not FloatHandle.Body)
@@ -7746,21 +7884,22 @@ public sealed class DocumentView : Control
 
         // AV-FLSEL: check whether the click landed on a floating object BEFORE body text hit-test.
         // The topmost object (highest z-order, in-front preferred over behind) wins.
-        if (!shift && TryHitTestFloat(point, out var floatHit))
+        if (TryHitTestFloat(point, out var floatHit))
         {
-            if (!_selectedFloating.HasValue ||
-                _selectedFloating.Value.BlockIndex != floatHit.BlockIndex ||
-                _selectedFloating.Value.RunIndex   != floatHit.RunIndex)
+            SelectFloatingCore(floatHit.BlockIndex, floatHit.RunIndex, floatHit.Kind, extendFloatingSelection);
+            if (!extendFloatingSelection && _selectedFloating is { } selected)
             {
-                // New selection.
-                _selectedFloating = floatHit;
-                RaiseFloatingSelectionChangedIfIdentityChanged();
+                // AV-HANDLES: a press inside the selected float's body starts a drag-move. Whether it
+                // becomes a real move or stays a plain selecting click is decided on release by the 1px
+                // threshold in CommitFloatDrag.
+                _floatDragState = (point, selected.Rect, FloatHandle.Body);
+                Cursor = CursorForHandle(FloatHandle.Body);
             }
-            // AV-HANDLES: a press inside the (now-)selected float's body starts a drag-move. Whether it
-            // becomes a real move or stays a plain selecting click is decided on release by the 1px
-            // threshold in CommitFloatDrag.
-            _floatDragState = (point, _selectedFloating!.Value.Rect, FloatHandle.Body);
-            Cursor = CursorForHandle(FloatHandle.Body);
+            else
+            {
+                _floatDragState = null;
+                Cursor = Cursor.Default;
+            }
             InvalidateVisual();
             e.Handled = true;
             return;
@@ -7770,6 +7909,7 @@ public sealed class DocumentView : Control
         if (_selectedFloating is not null)
         {
             _selectedFloating = null;
+            _selectedFloatingObjects.Clear();
             _floatDragState   = null;
             Cursor = Cursor.Default;
             RaiseFloatingSelectionChangedIfIdentityChanged();
@@ -7953,6 +8093,7 @@ public sealed class DocumentView : Control
                         return;
                     }
                     _selectedFloating = null;
+                    _selectedFloatingObjects.Clear();
                     _floatDragState   = null;
                     Cursor = Cursor.Default;
                     RaiseFloatingSelectionChangedIfIdentityChanged();

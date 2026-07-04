@@ -1131,8 +1131,35 @@ internal static class FreeWAvaloniaRibbonCommands
             }
         }
 
+        r.Register("freew.object-group", new FloatingObjectGroupCommand(editor));
+        r.Register("freew.object-ungroup", new FloatingObjectUngroupCommand(editor));
+
         // Shape Styles fill/outline: top-level opener ids plus menu item commands.
         RegisterShapeFillOutlineCommands(r, editor);
+    }
+
+    private sealed class FloatingObjectGroupCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (editor.HasMultipleFloatingObjectsSelected)
+                editor.GroupSelectedFloatingObjects();
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: editor.HasMultipleFloatingObjectsSelected);
+    }
+
+    private sealed class FloatingObjectUngroupCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (editor.IsGroupSelected)
+                editor.UngroupSelectedFloatingObject();
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: editor.IsGroupSelected);
     }
 
     private static void RegisterShapeFillOutlineCommands(RibbonCommandRegistry r, DocumentView editor)

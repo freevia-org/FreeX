@@ -1048,6 +1048,8 @@ internal static class FreeWAvaloniaRibbonDefinition
                         g.Button("freew.image-send-to-back",   "Send to Back");
                         g.Button("freew.image-bring-forward",  "Bring Forward");
                         g.Button("freew.image-send-backward",  "Send Backward");
+                        g.Button("freew.object-group",         "Group");
+                        g.Button("freew.object-ungroup",       "Ungroup");
                     });
                     tab.Group("picture-size", "Size", null, 90, g =>
                     {
@@ -1075,6 +1077,8 @@ internal static class FreeWAvaloniaRibbonDefinition
                         g.Button("freew.image-send-to-back",   "Send to Back");
                         g.Button("freew.image-bring-forward",  "Bring Forward");
                         g.Button("freew.image-send-backward",  "Send Backward");
+                        g.Button("freew.object-group",         "Group");
+                        g.Button("freew.object-ungroup",       "Ungroup");
                     });
                     tab.Group("drawing-size", "Size", null, 80, g =>
                     {
