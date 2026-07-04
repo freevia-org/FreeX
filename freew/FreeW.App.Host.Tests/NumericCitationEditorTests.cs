@@ -87,4 +87,35 @@ public sealed class NumericCitationEditorTests
         bibliographyText.Should().Contain("New Author. (2024). Fresh Entry.");
         bibliographyText.Should().NotContain("Old. (1999). Entry.");
     }
+
+    [StaFact]
+    public void UpdateFields_CitationFieldAndBibliographyRefresh_DoNotOverwriteCitationFromStaleView()
+    {
+        var first = new Source { Tag = "Ada1843", Author = "Ada Lovelace", Title = "Notes", Year = "1843" };
+        var second = new Source { Tag = "Tur1936", Author = "Alan Turing", Title = "Computable Numbers", Year = "1936" };
+        var model = TextDocument.CreateEmpty();
+        model.Blocks.Clear();
+        model.Blocks.Add(new Paragraph { Runs = { Run.ComplexFieldRun(" CITATION Tur1936 ", "[2]") } });
+        model.Blocks.Add(new Paragraph(Citations.HeadingText) { StyleId = Citations.HeadingStyleId });
+        model.Blocks.Add(new Paragraph("[2] Old bibliography") { StyleId = Citations.EntryStyleId });
+        model.BibliographyStyle = CitationStyle.Ieee;
+        model.Sources.Add(second);
+        model.Sources.Add(first);
+
+        var view = new DocumentView();
+        view.LoadModel(model);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        var citationRun = view.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.ComplexField?.Keyword == "CITATION");
+        citationRun.Text.Should().Be("[1]");
+
+        view.Model.Blocks.Where(Citations.IsBibliographyParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain("[1] Alan Turing, \"Computable Numbers,\" 1936.");
+    }
 }

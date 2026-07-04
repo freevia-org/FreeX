@@ -1376,6 +1376,11 @@ public sealed class DocumentView : RichTextBox
     public void RefreshTableOfContents()
     {
         CommitToModel();
+        RefreshTableOfContentsFromModel();
+    }
+
+    private void RefreshTableOfContentsFromModel()
+    {
         TableOfContents.EnsureStyles(_model);
 
         // Find the contiguous run of existing TOC paragraphs (the marker region). They are inserted as
@@ -8811,13 +8816,13 @@ public sealed class DocumentView : RichTextBox
         var refreshedGeneratedRegion = false;
         if (_model.Blocks.Any(TableOfContents.IsTocParagraph))
         {
-            RefreshTableOfContents();
+            RefreshTableOfContentsFromModel();
             refreshedGeneratedRegion = true;
         }
 
         if (_model.Blocks.Any(Citations.IsBibliographyParagraph))
         {
-            RefreshBibliography();
+            RefreshBibliographyFromModel();
             refreshedGeneratedRegion = true;
         }
 
@@ -11323,9 +11328,12 @@ public sealed class DocumentView : RichTextBox
     public void RefreshBibliography()
     {
         CommitToModel();
-        ApplyBibliographyPlan(BibliographyRegionPlanner.BuildRefreshPlan(_model, ActiveCitationStyle));
+        RefreshBibliographyFromModel();
         Render();
     }
+
+    private void RefreshBibliographyFromModel() =>
+        ApplyBibliographyPlan(BibliographyRegionPlanner.BuildRefreshPlan(_model, ActiveCitationStyle));
 
     private void ApplyBibliographyPlan(BibliographyRegionPlan plan)
     {
