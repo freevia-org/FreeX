@@ -68,6 +68,7 @@ public enum SlideShowInkExecutionMutationKind
     MoveLaserOverlay,
     ClearLaserOverlay,
     EraseStroke,
+    UndoLastStroke,
     ClearInk
 }
 
@@ -394,6 +395,61 @@ public static class SlideShowInkExecutionPlanner
                 Point: null,
                 removed,
                 "Clear current slide ink"));
+    }
+
+    public static SlideShowInkExecutionResult UndoLastStroke(SlideShowInkExecutionState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        if (state.ActiveStroke?.SlideIndex == state.SlideIndex)
+        {
+            return Handled(
+                state with
+                {
+                    ActiveStroke = null,
+                    LaserOverlayPoint = null,
+                },
+                new(
+                    SlideShowInkExecutionMutationKind.UndoLastStroke,
+                    state.ActiveStroke.StrokeId,
+                    Point: null,
+                    AffectedStrokeCount: 1,
+                    "Undo active ink stroke"));
+        }
+
+        var strokes = state.CommittedStrokes.ToArray();
+        var undoIndex = Array.FindLastIndex(
+            strokes,
+            stroke => stroke.SlideIndex == state.SlideIndex);
+        if (undoIndex < 0)
+        {
+            return Handled(
+                state with { LaserOverlayPoint = null },
+                new(
+                    SlideShowInkExecutionMutationKind.UndoLastStroke,
+                    StrokeId: null,
+                    Point: null,
+                    AffectedStrokeCount: 0,
+                    "Undo ink stroke hit no strokes"));
+        }
+
+        var removed = strokes[undoIndex];
+        var kept = strokes
+            .Where((_, index) => index != undoIndex)
+            .ToArray();
+
+        return Handled(
+            state with
+            {
+                CommittedStrokes = kept,
+                LaserOverlayPoint = null,
+            },
+            new(
+                SlideShowInkExecutionMutationKind.UndoLastStroke,
+                removed.StrokeId,
+                Point: null,
+                AffectedStrokeCount: 1,
+                "Undo last ink stroke"));
     }
 
     public static SlideShowInkExecutionResult ClearAllInk(SlideShowInkExecutionState state)

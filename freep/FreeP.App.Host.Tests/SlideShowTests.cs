@@ -738,6 +738,35 @@ public sealed class SlideShowWindowTests
     }
 
     [StaFact]
+    public void SlideShowWindow_InkUndo_UsesSharedUndoPlan()
+    {
+        var pres = Presentation.CreateEmpty();
+        var window = new SlideShowWindow(pres, 0);
+        try
+        {
+            window.ApplyPresenterToolIntent(pointerMode: SlideShowPresenterPointerMode.Pen);
+            window.BeginPresenterInkStroke(10, 20);
+            window.EndPresenterInkStroke(30, 40);
+            window.BeginPresenterInkStroke(50, 60);
+            window.EndPresenterInkStroke(70, 80);
+
+            var undo = window.UndoLastPresenterInkStroke();
+
+            undo.Mutations.Single().Kind.Should().Be(SlideShowInkExecutionMutationKind.UndoLastStroke);
+            undo.Mutations.Single().AffectedStrokeCount.Should().Be(1);
+            window.InkExecutionState.CommittedStrokes.Should().ContainSingle();
+            window.InkExecutionState.CommittedStrokes.Single().Points.Should().Equal(
+                new SlideShowInkPoint(10, 20),
+                new SlideShowInkPoint(30, 40));
+            window.PresenterInkOverlayVisualCount.Should().Be(1);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void SlideShowWindow_NavigationCommitsActivePresenterInkThroughSharedPlanner()
     {
         var pres = Presentation.CreateEmpty();

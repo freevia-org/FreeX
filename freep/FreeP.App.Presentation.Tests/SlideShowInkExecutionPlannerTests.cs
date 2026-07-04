@@ -107,6 +107,49 @@ public sealed class SlideShowInkExecutionPlannerTests
     }
 
     [Fact]
+    public void UndoLastStroke_RemovesOnlyLatestCurrentSlideStroke()
+    {
+        var penState = CreateState(SlideShowPresenterPointerMode.Pen, "#AA0000", 4);
+        var first = CommitStroke(penState, new SlideShowInkPoint(10, 10), new SlideShowInkPoint(60, 10));
+        var second = CommitStroke(first, new SlideShowInkPoint(200, 200), new SlideShowInkPoint(220, 220));
+        var otherSlideStroke = second.CommittedStrokes[0] with { SlideIndex = 1, StrokeId = "other-slide" };
+        var state = second with
+        {
+            CommittedStrokes = second.CommittedStrokes.Concat(new[] { otherSlideStroke }).ToArray(),
+            LaserOverlayPoint = new SlideShowInkPoint(42, 42)
+        };
+
+        var result = SlideShowInkExecutionPlanner.UndoLastStroke(state);
+
+        result.IsHandled.Should().BeTrue();
+        result.Mutations.Single().Kind.Should().Be(SlideShowInkExecutionMutationKind.UndoLastStroke);
+        result.Mutations.Single().AffectedStrokeCount.Should().Be(1);
+        result.Mutations.Single().StrokeId.Should().Be(second.CommittedStrokes[1].StrokeId);
+        result.State.LaserOverlayPoint.Should().BeNull();
+        result.State.CommittedStrokes.Should().HaveCount(2);
+        result.State.CommittedStrokes.Should().Contain(stroke => stroke.StrokeId == second.CommittedStrokes[0].StrokeId);
+        result.State.CommittedStrokes.Should().Contain(stroke => stroke.StrokeId == "other-slide");
+    }
+
+    [Fact]
+    public void UndoLastStroke_CancelsActiveStrokeBeforeCommittedInk()
+    {
+        var committed = CommitStroke(
+            CreateState(SlideShowPresenterPointerMode.Pen, "#AA0000", 4),
+            new SlideShowInkPoint(10, 10),
+            new SlideShowInkPoint(60, 10));
+        var active = SlideShowInkExecutionPlanner.Begin(committed, new SlideShowInkPoint(70, 20)).State;
+
+        var result = SlideShowInkExecutionPlanner.UndoLastStroke(active);
+
+        result.Mutations.Single().Kind.Should().Be(SlideShowInkExecutionMutationKind.UndoLastStroke);
+        result.Mutations.Single().AffectedStrokeCount.Should().Be(1);
+        result.Mutations.Single().StrokeId.Should().Be(active.ActiveStroke!.StrokeId);
+        result.State.ActiveStroke.Should().BeNull();
+        result.State.CommittedStrokes.Should().ContainSingle();
+    }
+
+    [Fact]
     public void BuildOverlayPlan_ReturnsCurrentSlideCommittedActiveAndLaserInk()
     {
         var penState = CreateState(SlideShowPresenterPointerMode.Pen, "#AA0000", 4);
