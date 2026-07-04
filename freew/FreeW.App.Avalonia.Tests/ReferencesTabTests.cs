@@ -271,6 +271,35 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
+    public void InsertCitation_tagged_source_with_quoted_field_argument_renumbers_on_update_fields()
+    {
+        var view = ViewWith(new Paragraph("See here "));
+        var source = new Source
+        {
+            Tag = "Do \"AI\" 24",
+            Author = "Jane Q. Doe",
+            Title = "A Work",
+            Year = "2024"
+        };
+        view.Document.BibliographyStyle = CitationStyle.Vancouver;
+        view.Document.Sources.Add(new Source { Tag = "Other24", Author = "Other Author", Year = "2024" });
+        view.Document.Sources.Add(source);
+
+        view.InsertCitation(source);
+
+        var run = ((Paragraph)view.Document.Blocks[0]).Runs.Single(r => r.ComplexField is not null);
+        run.Text.Should().Be("[2]");
+        run.ComplexField!.Instruction.Should().Be(" CITATION \"Do \\\"AI\\\" 24\" ");
+
+        view.Document.Sources.Clear();
+        view.Document.Sources.Add(source);
+        view.UpdateFields();
+
+        ((Paragraph)view.Document.Blocks[0]).Runs.Single(r => r.ComplexField is not null)
+            .Text.Should().Be("[1]");
+    }
+
+    [Fact]
     public void InsertBibliography_builds_block_from_sources_and_undo_reverts()
     {
         var view = ViewWith();

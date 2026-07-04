@@ -556,6 +556,28 @@ public class CitationsTests
     }
 
     [Fact]
+    public void TryCreateCitationFieldRun_TagWithSpacesAndQuotes_UsesEscapedWordFieldArgument()
+    {
+        var source = new Source
+        {
+            Tag = "Tur \"AI\" 1936",
+            Author = "Alan Turing",
+            Title = "Computable Numbers",
+            Year = "1936"
+        };
+        var doc = new TextDocument { BibliographyStyle = CitationStyle.Ieee };
+        doc.Sources.Add(new Source { Tag = "Ada1843", Author = "Ada Lovelace", Title = "Notes", Year = "1843" });
+        doc.Sources.Add(source);
+
+        Citations.TryCreateCitationFieldRun(doc, source, doc.BibliographyStyle, out var run).Should().BeTrue();
+
+        run.Text.Should().Be("[2]");
+        run.ComplexField.Should().NotBeNull();
+        run.ComplexField!.Instruction.Should().Be(" CITATION \"Tur \\\"AI\\\" 1936\" ");
+        Citations.ResolveCitationField(doc, run.ComplexField, cached: "stale").Should().Be("[2]");
+    }
+
+    [Fact]
     public void TryCreateCitationFieldRun_UntaggedSource_ReturnsFalseForPlainTextFallback()
     {
         var source = new Source { Author = "Jane Q. Doe", Year = "2024" };

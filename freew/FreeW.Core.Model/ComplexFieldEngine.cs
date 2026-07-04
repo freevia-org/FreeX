@@ -228,11 +228,28 @@ public static class ComplexFieldEngine
             string token;
             if (text[i] == '"')
             {
-                var end = text.IndexOf('"', i + 1);
-                if (end < 0)
-                    end = text.Length;
-                token = text.Substring(i + 1, end - i - 1);
-                i = end + 1;
+                var value = new System.Text.StringBuilder();
+                i++;
+                while (i < text.Length)
+                {
+                    if (text[i] == '\\' && i + 1 < text.Length)
+                    {
+                        value.Append(text[i + 1]);
+                        i += 2;
+                        continue;
+                    }
+
+                    if (text[i] == '"')
+                    {
+                        i++;
+                        break;
+                    }
+
+                    value.Append(text[i]);
+                    i++;
+                }
+
+                token = value.ToString();
             }
             else
             {
