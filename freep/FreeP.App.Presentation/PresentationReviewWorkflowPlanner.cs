@@ -3095,7 +3095,8 @@ public static class PresentationReviewWorkflowPlanner
     {
         if (shape.Kind != SlideShapeKind.Media
             || shape.Media?.IsVideo != true
-            || shape.IsDecorative)
+            || shape.IsDecorative
+            || HasModeledCaptionTracks(shape.Media))
         {
             return;
         }
@@ -3111,6 +3112,12 @@ public static class PresentationReviewWorkflowPlanner
                 null,
                 true)));
     }
+
+    private static bool HasModeledCaptionTracks(MediaInfo? media)
+        => media?.CaptionTracks.Any(track =>
+            !string.IsNullOrWhiteSpace(track.Source)
+            || !string.IsNullOrWhiteSpace(track.RelationshipId)
+            || !string.IsNullOrWhiteSpace(track.ContentType)) == true;
 
     private static void AddTableAccessibilityIssues(
         List<PresentationAccessibilityIssueDescriptor> issues,

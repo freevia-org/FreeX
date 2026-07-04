@@ -6,6 +6,7 @@ using Free.Shared.Drawing;
 using FreeP.App.Compositor;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
+using FluentAssertions;
 using Xunit;
 
 namespace FreeP.App.Host.Tests;
@@ -54,6 +55,46 @@ public sealed class MediaFieldsTests
         Assert.True(shape2.Media!.IsVideo);
         Assert.Equal(videoBytes.Length, shape2.Media.Bytes.Length);
         Assert.Equal("video/mp4", shape2.Media.ContentType);
+    }
+
+    [Fact]
+    public void Media_ReadsCaptionTrackMetadataFromSlideRelationships()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 1,
+            Name        = "Captioned video",
+            Kind        = SlideShapeKind.Media,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Picture = new ImagePart { Bytes = CreateMinimal1x1Png(), ContentType = "image/png" },
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                Bytes = new byte[] { 0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70 },
+                ContentType = "video/mp4"
+            }
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        AddCaptionTrack(ms);
+
+        ms.Position = 0;
+        var pres2 = PptxPackageReader.Read(ms);
+
+        var track = pres2.Slides[0].Shapes[0].Media!.CaptionTracks.Should().ContainSingle().Subject;
+        track.RelationshipId.Should().Be("rIdCaption1");
+        track.Source.Should().Be("ppt/media/captions1.vtt");
+        track.ContentType.Should().Be("text/vtt");
+        track.Language.Should().Be("en-US");
+        track.Label.Should().Be("English captions");
+        track.IsExternal.Should().BeFalse();
     }
 
     [Fact]
@@ -478,4 +519,62 @@ public sealed class MediaFieldsTests
         Convert.FromBase64String(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8" +
             "z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==");
+
+    private static void AddCaptionTrack(MemoryStream package)
+    {
+        package.Position = 0;
+        using var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true);
+        var rels = ReadXml(archive, "ppt/slides/_rels/slide1.xml.rels");
+        var relNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships");
+        rels.Root!.Add(new XElement(
+            relNs + "Relationship",
+            new XAttribute("Id", "rIdCaption1"),
+            new XAttribute("Type", "http://schemas.microsoft.com/office/2011/relationships/mediaCaption"),
+            new XAttribute("Target", "../media/captions1.vtt")));
+        WriteXml(archive, "ppt/slides/_rels/slide1.xml.rels", rels);
+
+        var slide = ReadXml(archive, "ppt/slides/slide1.xml");
+        var p = XNamespace.Get("http://schemas.openxmlformats.org/presentationml/2006/main");
+        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var r = XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+        var c = XNamespace.Get("http://schemas.microsoft.com/office/powerpoint/2020/media");
+        var nvPr = slide.Descendants(p + "nvPr").First(element => element.Element(a + "videoFile") is not null);
+        var extLst = nvPr.Element(p + "extLst");
+        if (extLst is null)
+        {
+            extLst = new XElement(p + "extLst");
+            nvPr.Add(extLst);
+        }
+
+        extLst.Add(new XElement(
+            c + "caption",
+            new XAttribute(r + "embed", "rIdCaption1"),
+            new XAttribute("lang", "en-US"),
+            new XAttribute("label", "English captions")));
+        WriteXml(archive, "ppt/slides/slide1.xml", slide);
+
+        WriteText(archive, "ppt/media/captions1.vtt", "WEBVTT\r\n\r\n00:00.000 --> 00:01.000\r\nDemo caption\r\n");
+    }
+
+    private static XDocument ReadXml(ZipArchive archive, string path)
+    {
+        using var stream = archive.GetEntry(path)!.Open();
+        return XDocument.Load(stream);
+    }
+
+    private static void WriteXml(ZipArchive archive, string path, XDocument document)
+    {
+        archive.GetEntry(path)?.Delete();
+        var entry = archive.CreateEntry(path, CompressionLevel.Optimal);
+        using var stream = entry.Open();
+        document.Save(stream);
+    }
+
+    private static void WriteText(ZipArchive archive, string path, string text)
+    {
+        archive.GetEntry(path)?.Delete();
+        var entry = archive.CreateEntry(path, CompressionLevel.Optimal);
+        using var writer = new StreamWriter(entry.Open());
+        writer.Write(text);
+    }
 }

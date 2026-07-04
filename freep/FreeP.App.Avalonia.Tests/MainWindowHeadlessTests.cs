@@ -2684,6 +2684,69 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Accessibility_checker_media_caption_tracks_use_shared_plan()
+    {
+        PresentationAccessibilityCheckerPanePlan? opened = null;
+        PresentationAccessibilitySummaryPlan? summary = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Title = "Media accessibility";
+            var missingCaptions = new SlideShape
+            {
+                Id = 713,
+                Name = "Demo video",
+                Kind = SlideShapeKind.Media,
+                Media = new MediaInfo { IsVideo = true },
+                AlternativeText = "Demo walkthrough."
+            };
+            var captioned = new SlideShape
+            {
+                Id = 714,
+                Name = "Training video",
+                Kind = SlideShapeKind.Media,
+                Media = new MediaInfo
+                {
+                    IsVideo = true,
+                    CaptionTracks =
+                    {
+                        new MediaCaptionTrackInfo
+                        {
+                            RelationshipId = "rIdCaption1",
+                            Source = "ppt/media/training.vtt",
+                            ContentType = "text/vtt",
+                            Language = "en-US",
+                            Label = "English captions"
+                        }
+                    }
+                },
+                AlternativeText = "Training walkthrough."
+            };
+            window.Editor.CurrentSlide.Shapes.Add(missingCaptions);
+            window.Editor.CurrentSlide.Shapes.Add(captioned);
+
+            opened = window.ShowAccessibilityCheckerPane();
+            summary = window.LastAccessibilitySummaryPlan;
+        });
+
+        if (!ran) return;
+        opened.Should().NotBeNull();
+        opened!.Rows.Should().ContainSingle(row => row.Title == "Video captions missing")
+            .Which.Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
+                row.Category == "Media" &&
+                row.ShapeId == 713 &&
+                row.ShapeName == "Demo video" &&
+                row.ActionLabel == "Select Media" &&
+                row.CommandHint == null &&
+                row.ShouldNavigateToSlide &&
+                row.ShouldSelectShape);
+        summary.Should().NotBeNull();
+        summary!.Issues.Should().NotContain(issue =>
+            issue.ShapeId == 714 && issue.Title == "Video captions missing");
+    }
+
+    [Fact]
     public async Task Review_comment_add_edit_routes_through_shared_mutation_plan()
     {
         SlideComment? addedComment = null;

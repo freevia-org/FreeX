@@ -46,6 +46,7 @@ public static class PptxPackageReader
     private const string ModernAuthorsRelType = "http://schemas.microsoft.com/office/2018/10/relationships/authors";
     private const string VideoRelType         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/video";
     private const string AudioRelType         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio";
+    private const string CaptionRelType       = "http://schemas.microsoft.com/office/2011/relationships/mediaCaption";
     // Microsoft proprietary media rel type used by newer PowerPoint
     private const string MediaRelType         = "http://schemas.microsoft.com/office/2007/relationships/media";
 
@@ -2786,6 +2787,11 @@ public static class PptxPackageReader
                     }
                 }
 
+                foreach (var track in ReadMediaCaptionTracks(archive, partPath, nvPr, mediaRelId))
+                {
+                    mediaInfo.CaptionTracks.Add(track);
+                }
+
                 shape.Media = mediaInfo;
                 shape.Kind  = SlideShapeKind.Media;
             }
@@ -2795,6 +2801,180 @@ public static class PptxPackageReader
     }
 
     // ── p:cxnSp ──────────────────────────────────────────────────────────────────
+
+    private static IReadOnlyList<MediaCaptionTrackInfo> ReadMediaCaptionTracks(
+        ZipArchive archive,
+        string partPath,
+        XElement nvPr,
+        string? primaryMediaRelId)
+    {
+        var rels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
+        if (rels.Count == 0)
+        {
+            return [];
+        }
+
+        var relById = rels
+            .GroupBy(rel => rel.Id, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        var candidates = new List<(OpcRelationshipTarget Rel, XElement? Metadata)>();
+
+        foreach (var element in nvPr.DescendantsAndSelf())
+        {
+            foreach (var attribute in element.Attributes())
+            {
+                if (attribute.Name.Namespace != R
+                    || (attribute.Name.LocalName != "embed"
+                        && attribute.Name.LocalName != "link"
+                        && attribute.Name.LocalName != "id"))
+                {
+                    continue;
+                }
+
+                var relId = attribute.Value;
+                if (string.IsNullOrWhiteSpace(relId)
+                    || string.Equals(relId, primaryMediaRelId, StringComparison.Ordinal)
+                    || !relById.TryGetValue(relId, out var rel))
+                {
+                    continue;
+                }
+
+                if (IsCaptionTrackRelationship(rel)
+                    || IsCaptionTrackTarget(rel.Target)
+                    || IsCaptionTrackElement(element))
+                {
+                    candidates.Add((rel, element));
+                }
+            }
+        }
+
+        var tracks = new List<MediaCaptionTrackInfo>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (rel, metadata) in candidates)
+        {
+            var key = string.IsNullOrWhiteSpace(rel.Id) ? rel.Target : rel.Id;
+            if (string.IsNullOrWhiteSpace(key) || !seen.Add(key))
+            {
+                continue;
+            }
+
+            var target = rel.Target.Trim();
+            var isExternal = IsExternalCaptionTrackTarget(target);
+            var source = isExternal
+                ? target
+                : ResolveRelativeZipPath(GetDirectoryName(partPath), target);
+
+            tracks.Add(new MediaCaptionTrackInfo
+            {
+                RelationshipId = rel.Id,
+                Source = source,
+                ContentType = GetCaptionTrackContentType(source),
+                Language = ReadCaptionTrackLanguage(metadata),
+                Label = ReadCaptionTrackLabel(metadata, source),
+                IsExternal = isExternal
+            });
+        }
+
+        return tracks;
+    }
+
+    private static bool IsCaptionTrackRelationship(OpcRelationshipTarget rel)
+        => rel.Type.Contains("caption", StringComparison.OrdinalIgnoreCase)
+            || rel.Type.Contains("subtitle", StringComparison.OrdinalIgnoreCase)
+            || rel.Type.Contains("timedText", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(rel.Type, CaptionRelType, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsCaptionTrackElement(XElement element)
+    {
+        var localName = element.Name.LocalName;
+        return localName.Contains("caption", StringComparison.OrdinalIgnoreCase)
+            || localName.Contains("subtitle", StringComparison.OrdinalIgnoreCase)
+            || localName.Contains("timedText", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(localName, "track", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsCaptionTrackTarget(string? target)
+    {
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            return false;
+        }
+
+        var normalized = target.Replace('\\', '/');
+        if (normalized.Contains("caption", StringComparison.OrdinalIgnoreCase)
+            || normalized.Contains("subtitle", StringComparison.OrdinalIgnoreCase)
+            || normalized.Contains("timedtext", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return GetCaptionTrackExtension(normalized) is "vtt" or "ttml" or "dfxp" or "srt";
+    }
+
+    private static bool IsExternalCaptionTrackTarget(string target)
+        => Uri.TryCreate(target, UriKind.Absolute, out var uri)
+            && !string.IsNullOrWhiteSpace(uri.Scheme);
+
+    private static string GetCaptionTrackContentType(string source)
+        => GetCaptionTrackExtension(source) switch
+        {
+            "vtt" => "text/vtt",
+            "ttml" or "dfxp" => "application/ttml+xml",
+            "srt" => "application/x-subrip",
+            _ => string.Empty
+        };
+
+    private static string GetCaptionTrackExtension(string source)
+    {
+        var end = source.AsSpan();
+        var queryIndex = source.IndexOfAny(['?', '#']);
+        if (queryIndex >= 0)
+        {
+            end = source.AsSpan(0, queryIndex);
+        }
+
+        var slashIndex = end.LastIndexOf('/');
+        var fileName = slashIndex >= 0 ? end[(slashIndex + 1)..] : end;
+        var dotIndex = fileName.LastIndexOf('.');
+        return dotIndex >= 0 && dotIndex < fileName.Length - 1
+            ? fileName[(dotIndex + 1)..].ToString().ToLowerInvariant()
+            : string.Empty;
+    }
+
+    private static string ReadCaptionTrackLanguage(XElement? metadata)
+        => ReadAttributeByLocalName(metadata, "lang")
+            ?? ReadAttributeByLocalName(metadata, "language")
+            ?? ReadAttributeByLocalName(metadata, "srclang")
+            ?? string.Empty;
+
+    private static string ReadCaptionTrackLabel(XElement? metadata, string source)
+        => ReadAttributeByLocalName(metadata, "label")
+            ?? ReadAttributeByLocalName(metadata, "name")
+            ?? ReadAttributeByLocalName(metadata, "title")
+            ?? ReadCaptionTrackLabelFromSource(source);
+
+    private static string? ReadAttributeByLocalName(XElement? element, string localName)
+        => element?.Attributes()
+            .FirstOrDefault(attribute => string.Equals(
+                attribute.Name.LocalName,
+                localName,
+                StringComparison.OrdinalIgnoreCase))
+            ?.Value
+            .Trim();
+
+    private static string ReadCaptionTrackLabelFromSource(string source)
+    {
+        var normalized = source.Replace('\\', '/');
+        var queryIndex = normalized.IndexOfAny(['?', '#']);
+        if (queryIndex >= 0)
+        {
+            normalized = normalized[..queryIndex];
+        }
+
+        var slashIndex = normalized.LastIndexOf('/');
+        var fileName = slashIndex >= 0 ? normalized[(slashIndex + 1)..] : normalized;
+        return string.IsNullOrWhiteSpace(fileName) ? "Caption track" : fileName;
+    }
 
     private static SlideShape ReadCxnSp(XElement cxnSp, PresentationColorScheme scheme,
         IReadOnlyList<OpcRelationshipTarget>? slideRels = null,
