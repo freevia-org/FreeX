@@ -809,7 +809,12 @@ public sealed class ReviewWorkflowAdapterTests
                 reply.InitialsBadgeText == "FU" &&
                 reply.AuthorIdentityKey == "FREEP USER|FU" &&
                 reply.ReplyLabel == "Reply 1" &&
-                reply.MentionSummary == "1 mention");
+                reply.MentionSummary == "1 mention" &&
+                reply.MentionDetailSummary == "Mentions: @Reviewer");
+            window.LastCommentPanePlan.Comments.Single().Replies.Single().Mentions
+                .Should()
+                .ContainSingle()
+                .Which.Should().Be(new PresentationCommentMentionDescriptor(0, 0, 9, "Reviewer", "REVIEWER"));
         }
         finally
         {
