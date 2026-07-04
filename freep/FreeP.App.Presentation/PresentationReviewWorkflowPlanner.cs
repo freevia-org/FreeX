@@ -665,6 +665,8 @@ public static class PresentationReviewWorkflowPlanner
         "Remove the space before punctuation.";
     public const string ProofingMissingSpaceAfterSentencePunctuationMessage =
         "Add a space after sentence punctuation.";
+    public const string ProofingMissingSpaceAfterListPunctuationMessage =
+        "Add a space after list punctuation.";
     public const string SlideTitleMissingSlideMessage =
         "Slide title target slide was not found.";
     public const string SlideTitleEmptyMessage =
@@ -2123,6 +2125,20 @@ public static class PresentationReviewWorkflowPlanner
                 }
             }
 
+            if (IsListSpacingPunctuation(ch) &&
+                index + 1 < text.Length &&
+                !char.IsWhiteSpace(text[index + 1]) &&
+                !IsListSpacingPunctuationBoundary(text[index + 1]) &&
+                !HasWhitespaceBefore(text, index) &&
+                !IsGuardedProofingPunctuation(text, index))
+            {
+                yield return new PresentationProofingIssueMatch(
+                    index,
+                    1,
+                    text[index].ToString(),
+                    ProofingMissingSpaceAfterListPunctuationMessage);
+            }
+
             if (IsSentenceTerminator(ch) &&
                 index + 1 < text.Length &&
                 char.IsLetter(text[index + 1]) &&
@@ -2152,6 +2168,12 @@ public static class PresentationReviewWorkflowPlanner
             char.IsLetter(text[1]))
         {
             replacement = $"{text[0]} {text[1]}";
+            return true;
+        }
+
+        if (text.Length == 1 && IsListSpacingPunctuation(text[0]))
+        {
+            replacement = $"{text[0]} ";
             return true;
         }
 
@@ -2281,6 +2303,17 @@ public static class PresentationReviewWorkflowPlanner
     private static bool IsProofingPunctuation(char value)
         => value is ',' or '.' or ';' or ':' or '!' or '?';
 
+    private static bool IsListSpacingPunctuation(char value)
+        => value is ',' or ';' or ':';
+
+    private static bool IsListSpacingPunctuationBoundary(char value)
+        => IsProofingPunctuation(value) ||
+            IsSentenceOpeningPunctuation(value) ||
+            IsSentenceClosingPunctuation(value);
+
+    private static bool HasWhitespaceBefore(string text, int index)
+        => index > 0 && char.IsWhiteSpace(text[index - 1]);
+
     private static bool IsSentenceOpeningPunctuation(char value)
         => value is '"' or '\'' or '(' or '[' or '{';
 
@@ -2297,10 +2330,10 @@ public static class PresentationReviewWorkflowPlanner
     }
 
     private static bool IsGuardedProofingPunctuation(string text, int index)
-        => IsDecimalSeparator(text, index) || TryGetUrlOrEmailCoreEnd(text, index, out _);
+        => IsNumericPunctuation(text, index) || TryGetUrlOrEmailCoreEnd(text, index, out _);
 
-    private static bool IsDecimalSeparator(string text, int index)
-        => text[index] == '.' &&
+    private static bool IsNumericPunctuation(string text, int index)
+        => (text[index] == '.' || IsListSpacingPunctuation(text[index])) &&
             index > 0 &&
             index + 1 < text.Length &&
             char.IsDigit(text[index - 1]) &&

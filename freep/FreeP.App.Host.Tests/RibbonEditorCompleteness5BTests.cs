@@ -596,6 +596,24 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
+    public void Cmd_Numbering_WithActiveTableCell_UsesSharedTableCellPlan()
+    {
+        var (ed, pres) = MakeSession();
+        var shape = AddSingleCellTable(pres, 404, MakeTextBody("Cell"));
+        ed.Select(shape.Id);
+        ed.SetActiveTableCell(0, 0);
+
+        Exec(MakeRegistry(ed), "freep.numbering");
+
+        var paragraph = shape.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+        paragraph.BulletKind.Should().Be(BulletKind.Auto);
+        paragraph.AutoNumType.Should().Be(AutoNumType.ArabicPeriod);
+        paragraph.AutoNumStartAt.Should().Be(1);
+        paragraph.BulletChar.Should().BeNull();
+        paragraph.BulletSuppressed.Should().BeFalse();
+    }
+
+    [Fact]
     public void Cmd_IndentIncreaseDecrease_WithActiveTableCell_UsesSharedTableCellPlan()
     {
         var (ed, pres) = MakeSession();
@@ -685,6 +703,7 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.paragraph.align-right")]
     [InlineData("freep.paragraph.align-justify")]
     [InlineData("freep.bullets")]
+    [InlineData("freep.numbering")]
     [InlineData("freep.indent-increase")]
     [InlineData("freep.indent-decrease")]
     [InlineData("freep.increase-indent")]

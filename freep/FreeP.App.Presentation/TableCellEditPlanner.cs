@@ -31,6 +31,7 @@ public enum TableCellParagraphFormatKind
 {
     Alignment,
     BulletToggle,
+    NumberingToggle,
     Indent,
     Outdent,
 }
@@ -520,6 +521,31 @@ public static class TableCellEditPlanner
                 var range = NormalizeSelection(selection, textLength);
                 var indexes = ResolveParagraphIndexes(body, range);
                 return indexes.Count > 0 && !indexes.All(index => IsBulletEnabled(body.Paragraphs[index]));
+            });
+    }
+
+    public static TableCellParagraphFormatPlan PlanParagraphNumberingToggle(
+        int slideIndex,
+        Slide? slide,
+        IReadOnlyList<uint> selectedShapeIds,
+        (int Row, int Col)? activeCell,
+        (int Start, int End)? selection = null)
+    {
+        return PlanParagraphFormat(
+            slideIndex,
+            slide,
+            selectedShapeIds,
+            activeCell,
+            TableCellParagraphFormatKind.NumberingToggle,
+            null,
+            selection,
+            body => ApplyParagraphNumberingToggle(body, selection, out bool enabled),
+            bulletEnabledFactory: body =>
+            {
+                int textLength = InCanvasTextEditPlanner.ExtractPlainText(body).Length;
+                var range = NormalizeSelection(selection, textLength);
+                var indexes = ResolveParagraphIndexes(body, range);
+                return indexes.Count > 0 && !indexes.All(index => IsAutoNumberingEnabled(body.Paragraphs[index]));
             });
     }
 
@@ -1059,6 +1085,40 @@ public static class TableCellEditPlanner
         return editedBody;
     }
 
+    private static TextBody ApplyParagraphNumberingToggle(
+        TextBody source,
+        (int Start, int End)? selection,
+        out bool enabled)
+    {
+        var editedBody = TextBodyModelCloner.CloneTextBody(source)!;
+        int textLength = InCanvasTextEditPlanner.ExtractPlainText(source).Length;
+        var range = NormalizeSelection(selection, textLength);
+        var paragraphIndexes = ResolveParagraphIndexes(editedBody, range);
+        enabled = paragraphIndexes.Count > 0 &&
+            !paragraphIndexes.All(index => IsAutoNumberingEnabled(editedBody.Paragraphs[index]));
+
+        foreach (int paragraphIndex in paragraphIndexes)
+        {
+            var paragraph = editedBody.Paragraphs[paragraphIndex];
+            if (enabled)
+            {
+                paragraph.BulletKind = BulletKind.Auto;
+                paragraph.BulletChar = null;
+                paragraph.AutoNumType = AutoNumType.ArabicPeriod;
+                paragraph.AutoNumStartAt = 1;
+                paragraph.BulletSuppressed = false;
+            }
+            else
+            {
+                paragraph.BulletKind = BulletKind.None;
+                paragraph.BulletChar = null;
+                paragraph.BulletSuppressed = true;
+            }
+        }
+
+        return editedBody;
+    }
+
     private static TextBody ApplyParagraphIndent(
         TextBody source,
         bool increase,
@@ -1094,6 +1154,9 @@ public static class TableCellEditPlanner
 
     private static bool IsBulletEnabled(Paragraph paragraph) =>
         !paragraph.BulletSuppressed && paragraph.BulletKind != BulletKind.None;
+
+    private static bool IsAutoNumberingEnabled(Paragraph paragraph) =>
+        !paragraph.BulletSuppressed && paragraph.BulletKind == BulletKind.Auto;
 
     private static IReadOnlyList<int> ResolveParagraphIndexes(
         TextBody body,

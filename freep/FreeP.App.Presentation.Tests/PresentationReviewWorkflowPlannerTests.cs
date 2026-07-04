@@ -2754,7 +2754,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
         {
             Id = 4,
             Name = "Caption",
-            Text = "Revenue grew ,but margin fell.Next step wins"
+            Text = "Revenue grew , but margin fell.Next step wins"
         });
 
         var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
@@ -2789,7 +2789,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
             plan.Rows[0].Start,
             plan.Rows[0].Length,
             ",",
-            "Revenue grew,but margin fell.Next step wins",
+            "Revenue grew, but margin fell.Next step wins",
             null));
         addSpace.Should().Be(new PresentationProofingCorrectionMutationPlan(
             true,
@@ -2797,10 +2797,78 @@ public sealed class PresentationReviewWorkflowPlannerTests
             refreshed.Rows.Single().Start,
             refreshed.Rows.Single().Length,
             ". N",
-            "Revenue grew,but margin fell. Next step wins",
+            "Revenue grew, but margin fell. Next step wins",
             null));
         slide.Shapes.Single(shape => shape.Id == 4).Text
-            .Should().Be("Revenue grew,but margin fell. Next step wins");
+            .Should().Be("Revenue grew, but margin fell. Next step wins");
+    }
+
+    [Fact]
+    public void BuildProofingPanePlan_FlagsListPunctuationSpacingWithSharedCorrections()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 4,
+            Name = "Caption",
+            Text = "alpha,beta;gamma:delta"
+        });
+
+        var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+        var plan = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(execution);
+        var listRows = plan.Rows
+            .Where(row => row.Message == PresentationReviewWorkflowPlanner.ProofingMissingSpaceAfterListPunctuationMessage)
+            .ToArray();
+
+        listRows.Should().HaveCount(3);
+        listRows.Select(row => row.Text).Should().Equal(",", ";", ":");
+        listRows.Select(row => row.SuggestedReplacement).Should().Equal(", ", "; ", ": ");
+
+        while (true)
+        {
+            var refreshedExecution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+            var issueIndex = Array.FindIndex(
+                refreshedExecution.Issues.ToArray(),
+                issue => issue.Message == PresentationReviewWorkflowPlanner.ProofingMissingSpaceAfterListPunctuationMessage);
+            if (issueIndex < 0)
+            {
+                break;
+            }
+
+            var refreshed = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(refreshedExecution, issueIndex);
+            var currentRow = refreshed.SelectedRow!;
+            currentRow.CorrectionAction.IsEnabled.Should().BeTrue();
+            PresentationReviewWorkflowPlanner.TryApplyProofingCorrection(
+                    presentation,
+                    currentRow.Scope,
+                    currentRow.Start,
+                    currentRow.Length,
+                    currentRow.SuggestedReplacement)
+                .Should().Match<PresentationProofingCorrectionMutationPlan>(mutation =>
+                    mutation.ShouldApply &&
+                    mutation.Length == 1);
+        }
+
+        slide.Shapes.Single(shape => shape.Id == 4).Text
+            .Should().Be("alpha, beta; gamma: delta");
+    }
+
+    [Fact]
+    public void BuildProofingExecutionPlan_ListPunctuationSpacingAvoidsNumbersUrlsEmailsAndExistingSeparators()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 4,
+            Name = "Caption",
+            Text = "Numbers 1,000 and 10:30 stay. Visit https://example.com/a,b;c:d and www.example.com/a,b. Email user@example.com,a and mailto:user@example.com:a. Already ok, done; next: value. Punctuation:,;: stays."
+        });
+
+        var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+
+        execution.Issues.Should().BeEmpty();
     }
 
     [Fact]

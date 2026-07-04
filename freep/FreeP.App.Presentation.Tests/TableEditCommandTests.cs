@@ -816,6 +816,36 @@ public sealed class TableEditCommandTests
     }
 
     [Fact]
+    public void EditingSession_TableCellParagraphNumbering_UsesSharedPlanAndUndo()
+    {
+        var sess = MakeSession(out var shape);
+        shape.Table!.Rows[0].Cells[0].TextBody = MakeBody("Cell");
+        sess.SetActiveTableCell(0, 0);
+
+        var plan = sess.PlanActiveTableCellParagraphNumberingToggle();
+        plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+        plan.Kind.Should().Be(TableCellParagraphFormatKind.NumberingToggle);
+        plan.BulletEnabled.Should().BeTrue();
+
+        sess.TryApplyActiveTableCellParagraphNumberingToggle().Should().BeTrue();
+        var paragraph = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+        paragraph.BulletKind.Should().Be(BulletKind.Auto);
+        paragraph.AutoNumType.Should().Be(AutoNumType.ArabicPeriod);
+        paragraph.AutoNumStartAt.Should().Be(1);
+        paragraph.BulletSuppressed.Should().BeFalse();
+
+        sess.TryApplyActiveTableCellParagraphNumberingToggle().Should().BeTrue();
+        paragraph = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+        paragraph.BulletKind.Should().Be(BulletKind.None);
+        paragraph.BulletSuppressed.Should().BeTrue();
+
+        sess.Undo();
+        paragraph = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+        paragraph.BulletKind.Should().Be(BulletKind.Auto);
+        paragraph.AutoNumType.Should().Be(AutoNumType.ArabicPeriod);
+    }
+
+    [Fact]
     public void EditingSession_InsertRowBelow_GrowsGrid()
     {
         var sess = MakeSession(out var shape, 2, 2);

@@ -1249,10 +1249,14 @@ public sealed class MainWindowHeadlessTests
     public async Task Ribbon_bullet_and_indent_commands_route_to_active_table_cell()
     {
         var foundBullets = false;
+        var foundNumbering = false;
         var foundIndent = false;
         var foundOutdent = false;
         BulletKind bulletKind = BulletKind.None;
         string? bulletChar = null;
+        BulletKind numberingKind = BulletKind.None;
+        AutoNumType autoNumType = AutoNumType.RomanLcPeriod;
+        int autoNumStartAt = -1;
         int levelAfterIndent = -1;
         long? marginAfterIndent = null;
         int levelAfterOutdent = -1;
@@ -1263,9 +1267,11 @@ public sealed class MainWindowHeadlessTests
             var window = new MainWindow(Array.Empty<string>());
             var registry = window.BuildCommandRegistry();
             foundBullets = registry.TryGet("freep.bullets", out var bulletsCommand);
+            foundNumbering = registry.TryGet("freep.numbering", out var numberingCommand);
             foundIndent = registry.TryGet("freep.indent-increase", out var indentCommand);
             foundOutdent = registry.TryGet("freep.indent-decrease", out var outdentCommand);
             foundBullets.Should().BeTrue("Bullets must be registered");
+            foundNumbering.Should().BeTrue("Numbering must be registered");
             foundIndent.Should().BeTrue("Increase Indent must be registered");
             foundOutdent.Should().BeTrue("Decrease Indent must be registered");
 
@@ -1279,11 +1285,21 @@ public sealed class MainWindowHeadlessTests
             window.Editor.SetActiveTableCell(0, 0);
 
             bulletsCommand!.Execute(RibbonCommandContext.Empty);
-            indentCommand!.Execute(RibbonCommandContext.Empty);
 
             var edited = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0];
             bulletKind = edited.BulletKind;
             bulletChar = edited.BulletChar;
+
+            numberingCommand!.Execute(RibbonCommandContext.Empty);
+
+            edited = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+            numberingKind = edited.BulletKind;
+            autoNumType = edited.AutoNumType;
+            autoNumStartAt = edited.AutoNumStartAt;
+
+            indentCommand!.Execute(RibbonCommandContext.Empty);
+
+            edited = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0];
             levelAfterIndent = edited.Level;
             marginAfterIndent = edited.MarginLeftEmu;
 
@@ -1296,10 +1312,14 @@ public sealed class MainWindowHeadlessTests
 
         if (!ran) return;
         foundBullets.Should().BeTrue("Bullets must be registered");
+        foundNumbering.Should().BeTrue("Numbering must be registered");
         foundIndent.Should().BeTrue("Increase Indent must be registered");
         foundOutdent.Should().BeTrue("Decrease Indent must be registered");
         bulletKind.Should().Be(BulletKind.Char);
         bulletChar.Should().Be("\u2022");
+        numberingKind.Should().Be(BulletKind.Auto);
+        autoNumType.Should().Be(AutoNumType.ArabicPeriod);
+        autoNumStartAt.Should().Be(1);
         levelAfterIndent.Should().Be(1);
         marginAfterIndent.Should().Be(457200);
         levelAfterOutdent.Should().Be(0);
