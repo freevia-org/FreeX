@@ -331,7 +331,8 @@ public sealed class MainWindow : Window
             getViewShowState:   () => _viewShowState,
             applyViewShowState: ApplyPresentationViewShowState,
             getViewZoomState:   () => _viewZoomState,
-            applyViewZoomState: ApplyPresentationViewZoomState);
+            applyViewZoomState: ApplyPresentationViewZoomState,
+            onCustomShows:      () => OpenCustomShowDialog());
         var ribbon = BuildRibbon(FreePRibbon.Build(), commands, stateStore);
 
         // Body: slide pane + stage.
@@ -2504,6 +2505,14 @@ public sealed class MainWindow : Window
             window.Owner = this;
         window.Show();
         return true;
+    }
+
+    internal void OpenCustomShowDialog()
+    {
+        var dialog = new CustomShowDialog(this);
+        if (IsVisible)
+            dialog.Owner = this;
+        dialog.ShowDialog();
     }
 
     /// <summary>

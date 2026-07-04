@@ -908,6 +908,41 @@ public sealed class SlideShowWindowHeadlessTests
     }
 
     [Fact]
+    public async Task CustomShowDialog_renders_existing_shows_and_slide_rows()
+    {
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            CustomShowDialog? dialog = null;
+            try
+            {
+                var presentation = window.Editor.Presentation;
+                presentation.Slides.Clear();
+                presentation.Slides.Add(new Slide { Title = "Intro" });
+                presentation.Slides.Add(new Slide { Title = "Deep dive" });
+
+                var create = window.CreateCustomShow(
+                    "Executive review",
+                    new[] { presentation.Slides[0].Id, presentation.Slides[1].Id });
+                create.Succeeded.Should().BeTrue();
+
+                dialog = new CustomShowDialog(window);
+
+                dialog.RenderedCustomShowCount.Should().Be(1);
+                dialog.RenderedSlideOptionCount.Should().Be(2);
+                dialog.ValidationMessage.Should().BeEmpty();
+            }
+            finally
+            {
+                dialog?.Close();
+                window.Close();
+            }
+        });
+
+        if (!ran) return;
+    }
+
+    [Fact]
     public void RibbonDefinition_has_slideshow_group()
     {
         var definition = FreePRibbonAvalonia.Build();
@@ -925,6 +960,7 @@ public sealed class SlideShowWindowHeadlessTests
         var ids   = sg.Controls.Select(i => i.CommandId.Value).ToList();
         ids.Should().Contain("freep.slideshow.from-beginning");
         ids.Should().Contain("freep.slideshow.from-current-slide");
+        ids.Should().Contain("freep.slideshow.custom-shows");
     }
 
     // ── DA2 + DA3: timer tracking ─────────────────────────────────────────────

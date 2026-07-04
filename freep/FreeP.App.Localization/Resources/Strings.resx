@@ -328,6 +328,12 @@
   <data name="Ribbon_Command_SlideShowFromCurrentSlide_KeyTip" xml:space="preserve">
     <value>C</value>
   </data>
+  <data name="Ribbon_Command_SlideShowCustomShows_Label" xml:space="preserve">
+    <value>Custom Shows</value>
+  </data>
+  <data name="Ribbon_Command_SlideShowCustomShows_KeyTip" xml:space="preserve">
+    <value>U</value>
+  </data>
   <data name="Ribbon_Tab_Insert_Label" xml:space="preserve">
     <value>Insert</value>
   </data>

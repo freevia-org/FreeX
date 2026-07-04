@@ -73,6 +73,8 @@ internal static class FreePRibbonText
     public static string SlideShowFromBeginningKeyTip => Get("Ribbon_Command_SlideShowFromBeginning_KeyTip");
     public static string SlideShowFromCurrentSlideLabel => Get("Ribbon_Command_SlideShowFromCurrentSlide_Label");
     public static string SlideShowFromCurrentSlideKeyTip => Get("Ribbon_Command_SlideShowFromCurrentSlide_KeyTip");
+    public static string SlideShowCustomShowsLabel => Get("Ribbon_Command_SlideShowCustomShows_Label");
+    public static string SlideShowCustomShowsKeyTip => Get("Ribbon_Command_SlideShowCustomShows_KeyTip");
 
     public static string InsertTabLabel => Get("Ribbon_Tab_Insert_Label");
     public static string InsertTabKeyTip => Get("Ribbon_Tab_Insert_KeyTip");

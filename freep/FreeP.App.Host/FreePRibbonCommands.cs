@@ -94,7 +94,8 @@ internal static class FreePRibbonCommands
         Func<PresentationViewShowState>? getViewShowState = null,
         Action<PresentationViewShowState>? applyViewShowState = null,
         Func<PresentationViewZoomState>? getViewZoomState = null,
-        Action<PresentationViewZoomState>? applyViewZoomState = null)
+        Action<PresentationViewZoomState>? applyViewZoomState = null,
+        Action?             onCustomShows     = null)
     {
         var registry = new RibbonCommandRegistry();
 
@@ -244,6 +245,9 @@ internal static class FreePRibbonCommands
         // From Current Slide — delegates to MainWindow.StartSlideShow(false) via onStartFromCurrent.
         registry.Register("freep.slideshow.from-current-slide",
             new ActionRibbonCommand(() => onStartFromCurrent?.Invoke()));
+
+        registry.Register("freep.slideshow.custom-shows",
+            new ActionRibbonCommand(() => onCustomShows?.Invoke()));
 
         // ── Wave 4C: Animations tab ──────────────────────────────────────────────
 
