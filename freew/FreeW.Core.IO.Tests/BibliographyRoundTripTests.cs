@@ -80,7 +80,12 @@ public class BibliographyRoundTripTests
             Author = "Knuth, D.",
             Title = "The Art of Computer Programming",
             Year = "1997",
-            Publisher = "Addison-Wesley"
+            Publisher = "Addison-Wesley",
+            City = "Reading",
+            Edition = "3",
+            StandardNumber = "978-0201896831",
+            ShortTitle = "TAOCP",
+            Comments = "Classic reference"
         });
 
         var result = RoundTrip(doc);
@@ -93,6 +98,11 @@ public class BibliographyRoundTripTests
         source.Title.Should().Be("The Art of Computer Programming");
         source.Year.Should().Be("1997");
         source.Publisher.Should().Be("Addison-Wesley");
+        source.City.Should().Be("Reading");
+        source.Edition.Should().Be("3");
+        source.StandardNumber.Should().Be("978-0201896831");
+        source.ShortTitle.Should().Be("TAOCP");
+        source.Comments.Should().Be("Classic reference");
     }
 
     [Fact]
@@ -109,7 +119,10 @@ public class BibliographyRoundTripTests
             Journal = "Bell System Technical Journal",
             Volume = "27",
             Issue = "3",
-            Pages = "379-423"
+            Pages = "379-423",
+            StandardNumber = "ISSN 0005-8580",
+            ShortTitle = "Communication theory",
+            Comments = "Journal note"
         });
 
         var source = RoundTrip(doc).Sources.Should().ContainSingle().Subject;
@@ -118,6 +131,9 @@ public class BibliographyRoundTripTests
         source.Volume.Should().Be("27");
         source.Issue.Should().Be("3");
         source.Pages.Should().Be("379-423");
+        source.StandardNumber.Should().Be("ISSN 0005-8580");
+        source.ShortTitle.Should().Be("Communication theory");
+        source.Comments.Should().Be("Journal note");
     }
 
     [Fact]
@@ -133,7 +149,9 @@ public class BibliographyRoundTripTests
             Year = "2023",
             Publisher = "MDN Web Docs",
             Url = "https://developer.mozilla.org/grid",
-            Accessed = "3 May 2024"
+            Accessed = "3 May 2024",
+            ShortTitle = "CSS Grid",
+            Comments = "Web note"
         });
 
         var source = RoundTrip(doc).Sources.Should().ContainSingle().Subject;
@@ -141,6 +159,8 @@ public class BibliographyRoundTripTests
         source.Url.Should().Be("https://developer.mozilla.org/grid");
         source.Accessed.Should().Be("3 May 2024");
         source.Publisher.Should().Be("MDN Web Docs");
+        source.ShortTitle.Should().Be("CSS Grid");
+        source.Comments.Should().Be("Web note");
     }
 
     [Fact]
@@ -177,6 +197,36 @@ public class BibliographyRoundTripTests
     }
 
     [Fact]
+    public void BibliographyPart_WritesWordFieldDepthElements()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Sources.Add(new Source
+        {
+            Tag = "Depth",
+            Type = SourceType.Book,
+            Title = "Field Depth",
+            Publisher = "Test Press",
+            City = "London",
+            Edition = "2",
+            StandardNumber = "ISBN-1",
+            ShortTitle = "Depth",
+            Comments = "Source note"
+        });
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        using var zip = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
+        using var entry = zip.GetEntry("word/bibliography/sources.xml")!.Open();
+        var source = XDocument.Load(entry).Root!.Element(B + "Source")!;
+
+        source.Element(B + "City")!.Value.Should().Be("London");
+        source.Element(B + "Edition")!.Value.Should().Be("2");
+        source.Element(B + "StandardNumber")!.Value.Should().Be("ISBN-1");
+        source.Element(B + "ShortTitle")!.Value.Should().Be("Depth");
+        source.Element(B + "Comments")!.Value.Should().Be("Source note");
+    }
+
+    [Fact]
     public void WordStylePersonAuthor_ReadsStructuredNameList()
     {
         var result = ReadDocxWithSourcesXml(
@@ -202,6 +252,11 @@ public class BibliographyRoundTripTests
                 </b:Author>
                 <b:Title>Word Authored Source</b:Title>
                 <b:Year>2024</b:Year>
+                <b:City>London</b:City>
+                <b:Edition>2</b:Edition>
+                <b:StandardNumber>ISBN-2</b:StandardNumber>
+                <b:ShortTitle>Word Source</b:ShortTitle>
+                <b:Comments>Imported note</b:Comments>
               </b:Source>
             </b:Sources>
             """);
@@ -215,6 +270,11 @@ public class BibliographyRoundTripTests
         source.CorporateAuthor.Should().BeNull();
         source.Title.Should().Be("Word Authored Source");
         source.Year.Should().Be("2024");
+        source.City.Should().Be("London");
+        source.Edition.Should().Be("2");
+        source.StandardNumber.Should().Be("ISBN-2");
+        source.ShortTitle.Should().Be("Word Source");
+        source.Comments.Should().Be("Imported note");
     }
 
     [Fact]

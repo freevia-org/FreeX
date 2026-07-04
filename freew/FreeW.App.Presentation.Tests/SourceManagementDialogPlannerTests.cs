@@ -13,7 +13,12 @@ public sealed class SourceManagementDialogPlannerTests
             Author = "Knuth",
             Title = "TAOCP",
             Year = "1997",
-            Publisher = "AW"
+            Publisher = "AW",
+            City = "Reading",
+            Edition = "3",
+            StandardNumber = "978-0201896831",
+            ShortTitle = "TAOCP",
+            Comments = "Classic reference"
         };
 
         var plans = SourceManagementDialogPlanner.BuildEntryFieldPlans(source);
@@ -23,19 +28,34 @@ public sealed class SourceManagementDialogPlannerTests
             SourceManagementSourceField.Author,
             SourceManagementSourceField.Title,
             SourceManagementSourceField.Year,
-            SourceManagementSourceField.Publisher);
+            SourceManagementSourceField.City,
+            SourceManagementSourceField.Publisher,
+            SourceManagementSourceField.Edition,
+            SourceManagementSourceField.StandardNumber,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
         plans.Select(plan => plan.Label).Should().Equal(
             "Tag (short id):",
             "Author:",
             "Title:",
             "Year:",
-            "Publisher / Site name (optional):");
+            "City:",
+            "Publisher / Site name (optional):",
+            "Edition:",
+            "Standard number:",
+            "Short title:",
+            "Comments:");
         plans.Select(plan => plan.Text).Should().Equal(
             "Knuth1997",
             "Knuth",
             "TAOCP",
             "1997",
-            "AW");
+            "Reading",
+            "AW",
+            "3",
+            "978-0201896831",
+            "TAOCP",
+            "Classic reference");
     }
 
     [Fact]
@@ -66,7 +86,10 @@ public sealed class SourceManagementDialogPlannerTests
             SourceManagementSourceField.Journal,
             SourceManagementSourceField.Volume,
             SourceManagementSourceField.Issue,
-            SourceManagementSourceField.Pages);
+            SourceManagementSourceField.Pages,
+            SourceManagementSourceField.StandardNumber,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
 
         var webPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.WebSite);
         webPlans.Select(plan => plan.Field).Should().Equal(
@@ -76,7 +99,9 @@ public sealed class SourceManagementDialogPlannerTests
             SourceManagementSourceField.Year,
             SourceManagementSourceField.Publisher,
             SourceManagementSourceField.Url,
-            SourceManagementSourceField.Accessed);
+            SourceManagementSourceField.Accessed,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
     }
 
     [Fact]
@@ -90,25 +115,20 @@ public sealed class SourceManagementDialogPlannerTests
                 [SourceManagementSourceField.Author] = " Knuth ",
                 [SourceManagementSourceField.Title] = null,
                 [SourceManagementSourceField.Year] = " 1997 ",
-                [SourceManagementSourceField.Url] = " https://example.test "
+                [SourceManagementSourceField.Url] = " https://example.test ",
+                [SourceManagementSourceField.ShortTitle] = " TAOCP ",
+                [SourceManagementSourceField.Comments] = " Notes "
             });
 
-        entry.Should().Be(new SourceManagementSourceEntry(
-            SourceType.WebSite,
-            "K97",
-            "Knuth",
-            string.Empty,
-            "1997",
-            string.Empty,
-            string.Empty,
-            string.Empty,
-            string.Empty,
-            string.Empty,
-            "https://example.test",
-            string.Empty)
-        {
-            CorporateAuthor = "Knuth"
-        });
+        entry.Type.Should().Be(SourceType.WebSite);
+        entry.Tag.Should().Be("K97");
+        entry.Author.Should().Be("Knuth");
+        entry.Title.Should().BeEmpty();
+        entry.Year.Should().Be("1997");
+        entry.Url.Should().Be("https://example.test");
+        entry.ShortTitle.Should().Be("TAOCP");
+        entry.Comments.Should().Be("Notes");
+        entry.CorporateAuthor.Should().Be("Knuth");
     }
 
     [Fact]
@@ -339,6 +359,11 @@ public sealed class SourceManagementDialogPlannerTests
                 "Title",
                 "2026",
                 "Publisher",
+                "Reading",
+                "2",
+                "978-0000000000",
+                "Short",
+                "Notes",
                 "Journal",
                 "10",
                 "2",
@@ -348,12 +373,36 @@ public sealed class SourceManagementDialogPlannerTests
 
         source.Type.Should().Be(SourceType.Book);
         source.Publisher.Should().Be("Publisher");
+        source.City.Should().Be("Reading");
+        source.Edition.Should().Be("2");
+        source.StandardNumber.Should().Be("978-0000000000");
+        source.ShortTitle.Should().Be("Short");
+        source.Comments.Should().Be("Notes");
         source.Journal.Should().BeNull();
         source.Volume.Should().BeNull();
         source.Issue.Should().BeNull();
         source.Pages.Should().BeNull();
         source.Url.Should().BeNull();
         source.Accessed.Should().BeNull();
+
+        var webSource = SourceManagementDialogPlanner.BuildSource(
+            SourceManagementDialogPlanner.ProjectEntry(source) with
+            {
+                Type = SourceType.WebSite,
+                Publisher = "Site",
+                Url = "https://example.test",
+                Accessed = "3 May 2024"
+            });
+
+        webSource.Type.Should().Be(SourceType.WebSite);
+        webSource.Publisher.Should().Be("Site");
+        webSource.City.Should().BeNull();
+        webSource.Edition.Should().BeNull();
+        webSource.StandardNumber.Should().BeNull();
+        webSource.ShortTitle.Should().Be("Short");
+        webSource.Comments.Should().Be("Notes");
+        webSource.Url.Should().Be("https://example.test");
+        webSource.Accessed.Should().Be("3 May 2024");
     }
 
     [Fact]
@@ -401,7 +450,12 @@ public sealed class SourceManagementDialogPlannerTests
         {
             Tag = "Doc",
             Author = "Ada Lovelace",
-            PersonalAuthors = [SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace")]
+            PersonalAuthors = [SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace")],
+            City = "London",
+            Edition = "Annotated",
+            StandardNumber = "ISBN-1",
+            ShortTitle = "Notes",
+            Comments = "Master note"
         };
         var master = new Source { Tag = "Master", Author = "Master Author" };
 
@@ -410,6 +464,11 @@ public sealed class SourceManagementDialogPlannerTests
         state.CurrentSources.Should().ContainSingle().Which.Should().NotBeSameAs(current);
         state.CurrentSources[0].Tag.Should().Be("Doc");
         state.CurrentSources[0].PersonalAuthors.Should().BeEquivalentTo(current.PersonalAuthors);
+        state.CurrentSources[0].City.Should().Be("London");
+        state.CurrentSources[0].Edition.Should().Be("Annotated");
+        state.CurrentSources[0].StandardNumber.Should().Be("ISBN-1");
+        state.CurrentSources[0].ShortTitle.Should().Be("Notes");
+        state.CurrentSources[0].Comments.Should().Be("Master note");
         state.MasterSources.Should().ContainSingle().Which.Should().NotBeSameAs(master);
         state.MasterSources[0].Tag.Should().Be("Master");
     }

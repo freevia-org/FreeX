@@ -259,6 +259,37 @@ public abstract class MathNode
         public Box(MathNode @base) { Base = @base; }
     }
 
+    /// <summary><c>m:phant</c> -- optionally hidden expression that still reserves selected metrics.</summary>
+    public sealed class Phantom : MathNode
+    {
+        public MathNode Base { get; }
+        public bool Show { get; }
+        public bool ZeroWidth { get; }
+        public bool ZeroAscent { get; }
+        public bool ZeroDescent { get; }
+
+        /// <summary>
+        /// Parsed <c>m:transp</c> flag. Spacing-class behavior is deferred; layout currently preserves the flag only.
+        /// </summary>
+        public bool TransparentSpacing { get; }
+
+        public Phantom(
+            MathNode @base,
+            bool show = true,
+            bool zeroWidth = false,
+            bool zeroAscent = false,
+            bool zeroDescent = false,
+            bool transparentSpacing = false)
+        {
+            Base = @base;
+            Show = show;
+            ZeroWidth = zeroWidth;
+            ZeroAscent = zeroAscent;
+            ZeroDescent = zeroDescent;
+            TransparentSpacing = transparentSpacing;
+        }
+    }
+
     /// <summary><c>m:borderBox</c> -- a box with optional visible borders around a base expression.</summary>
     public sealed class BorderBox : MathNode
     {
