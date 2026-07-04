@@ -114,6 +114,15 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             foreach (var row in sDto.FilterHiddenRows ?? [])
                 if (NativeJsonValueSanitizer.IsValidRowIndex(row))
                     sheet.FilterHiddenRows.Add(row);
+            // G32: restore the per-column value-filter state (and which FilterHiddenRows entries it
+            // owns) so a reloaded workbook's next filter recompute has the same "AND across columns"
+            // picture it had before saving, instead of treating every column as unfiltered.
+            foreach (var entry in (sDto.ActiveValueFilterColumns ?? []).OfType<UIntStringListDto>())
+                if (NativeJsonValueSanitizer.IsValidColumnIndex(entry.Index))
+                    sheet.ActiveValueFilterColumns[entry.Index] = [.. entry.Values];
+            foreach (var row in sDto.ValueFilterHiddenRows ?? [])
+                if (NativeJsonValueSanitizer.IsValidRowIndex(row))
+                    sheet.ValueFilterHiddenRows.Add(row);
             foreach (var column in sDto.HiddenCols ?? [])
                 if (NativeJsonValueSanitizer.IsValidColumnIndex(column))
                     sheet.HiddenCols.Add(column);

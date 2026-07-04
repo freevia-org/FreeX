@@ -3040,8 +3040,15 @@ public partial class FileAdapterSmokeTests
         var loaded = adapter.Load(ms);
 
         var loadedSheet = loaded.GetSheetAt(0);
-        loadedSheet.SplitRow.Should().Be(8);
-        loadedSheet.SplitColumn.Should().Be(4);
+        // A real (non-frozen) <pane state="split"> stores xSplit/ySplit as OOXML
+        // twentieths-of-a-point pixel positions, not row/column counts (see
+        // XlsxAdapter_Load_GenuineExcelSplitPane_DoesNotMisreadTwipsAsRowColumnIndex).
+        // This FreeX-authored file writes the raw XML pane directly (never via ClosedXML's
+        // own freeze-pane API), so ClosedXML's SheetView.SplitRow/SplitColumn stay 0 on
+        // reload and the reader correctly reports no split rather than misreading the raw
+        // xSplit/ySplit value as a row/column index.
+        loadedSheet.SplitRow.Should().BeNull();
+        loadedSheet.SplitColumn.Should().BeNull();
         loadedSheet.FrozenRows.Should().Be(0);
         loadedSheet.FrozenCols.Should().Be(0);
     }
@@ -26822,9 +26829,12 @@ public partial class FileAdapterSmokeTests
         XDocument worksheetXml,
         XNamespace worksheetNs)
     {
-        var method = typeof(XlsxFileAdapter).GetMethod(
-            "ReadAdvancedConditionalFormats",
-            BindingFlags.NonPublic | BindingFlags.Static);
+        // Two overloads exist (a 5-arg convenience wrapper and the 6-arg one with the
+        // classic-rule-priority out param), so disambiguate by parameter count instead of
+        // using the single-match GetMethod overload.
+        var method = typeof(XlsxFileAdapter)
+            .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+            .FirstOrDefault(m => m.Name == "ReadAdvancedConditionalFormats" && m.GetParameters().Length == 5);
         method.Should().NotBeNull();
         return (IReadOnlyList<ConditionalFormat>)method!.Invoke(
             null,

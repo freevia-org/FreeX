@@ -104,7 +104,7 @@ public sealed partial class FormulaEvaluator
         }
 
         var text = builder.ToString();
-        result = ExceedsTextjoinTextLimit(text) ? ErrorValue.Value : new TextValue(text);
+        result = BuiltInFunctions.ExceedsExcelTextLimit(text) ? ErrorValue.Value : new TextValue(text);
         return true;
     }
 
@@ -225,30 +225,4 @@ public sealed partial class FormulaEvaluator
         var estimatedCharacters = Math.Min(32767, partCount + delimiterCharacters);
         return (int)estimatedCharacters;
     }
-
-    private static bool ExceedsTextjoinTextLimit(string text) =>
-        (ContainsTextjoinSurrogatePair(text) ? CountTextjoinTextElements(text) : text.Length) > 32767;
-
-    private static bool ContainsTextjoinSurrogatePair(string text)
-    {
-        for (var index = 0; index + 1 < text.Length; index++)
-        {
-            if (char.IsHighSurrogate(text[index]) && char.IsLowSurrogate(text[index + 1]))
-                return true;
-        }
-
-        return false;
-    }
-
-    private static int CountTextjoinTextElements(string text)
-    {
-        var count = 0;
-        for (var index = 0; index < text.Length; count++)
-            index += IsTextjoinSurrogatePairAt(text, index) ? 2 : 1;
-
-        return count;
-    }
-
-    private static bool IsTextjoinSurrogatePairAt(string text, int index) =>
-        index + 1 < text.Length && char.IsHighSurrogate(text[index]) && char.IsLowSurrogate(text[index + 1]);
 }

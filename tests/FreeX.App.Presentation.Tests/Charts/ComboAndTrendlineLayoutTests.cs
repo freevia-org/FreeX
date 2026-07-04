@@ -302,7 +302,10 @@ public sealed class ComboAndTrendlineLayoutTests
     public void F18_Bar_chart_trendline_annotation_anchor_uses_the_swapped_bar_axes()
     {
         // The annotation anchor for a Bar chart must be mapped through the same swapped axes as the
-        // trendline polyline (valueScale → X, categoryScale → Y), not the Column/Line convention.
+        // trendline polyline (valueScale → X, categoryScale → Y), matching the source (WPF)
+        // renderer's AddTrendlineIfRequested, which swaps each source point to (Y, X) before taking
+        // (Min(X), Max(Y)) when swapTrendlineAxes is set for ChartType.Bar -- i.e. the true anchor is
+        // (min VALUE, max INDEX), not (min index, max value). See G33 regression fix.
         var plot = new PlotRect(0, 0, 300, 200);
         var chart = Chart(ChartType.Bar, c =>
         {
@@ -317,9 +320,9 @@ public sealed class ComboAndTrendlineLayoutTests
 
         var categoryScale = layout.CategoryAxis!.Scale;
         var valueScale = layout.ValueAxis!.Scale;
-        // Source anchor is (min category index = 0, max value = 30).
-        trend.AnnotationAnchor.Y.Should().BeApproximately(categoryScale.Transform(0), 1e-6);
-        trend.AnnotationAnchor.X.Should().BeApproximately(valueScale.Transform(30), 1e-6);
+        // Source anchor is (min value = 10, max category index = 2), matching WPF.
+        trend.AnnotationAnchor.Y.Should().BeApproximately(categoryScale.Transform(2), 1e-6);
+        trend.AnnotationAnchor.X.Should().BeApproximately(valueScale.Transform(10), 1e-6);
     }
 
     // ---- Combo line/scatter overlay (F6) ---------------------------------------------------
@@ -363,10 +366,11 @@ public sealed class ComboAndTrendlineLayoutTests
 
         var catScale = layout.CategoryAxis!.Scale;
         var bar = layout.Series[0].Bars[0].Rect;
-        // Full default half-width (0.4), same as a lone clustered series — not narrowed to a
-        // 2-series sub-slot.
-        bar.Left.Should().BeApproximately(catScale.Transform(-0.4), 1e-6);
-        bar.Right.Should().BeApproximately(catScale.Transform(0.4), 1e-6);
+        // Full default half-width (0.35, matching the WPF renderer's ColumnBarHalfWidth default --
+        // see G18 regression fix), same as a lone clustered series — not narrowed to a 2-series
+        // sub-slot.
+        bar.Left.Should().BeApproximately(catScale.Transform(-0.35), 1e-6);
+        bar.Right.Should().BeApproximately(catScale.Transform(0.35), 1e-6);
     }
 
     [Fact]

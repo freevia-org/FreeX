@@ -9,9 +9,20 @@ internal static class XlsxConditionalFormatClosedXmlMapper
         IXLWorksheet xlSheet,
         Sheet sheet,
         WorkbookTheme theme,
-        Func<IXLStyle, WorkbookTheme, CellStyle> mapStyle)
+        Func<IXLStyle, WorkbookTheme, CellStyle> mapStyle,
+        IReadOnlyList<int>? classicRulePriorities = null)
     {
-        int priority = 1;
+        // Real per-rule priorities as read straight from the worksheet XML, in document order
+        // (see XlsxFileAdapter.ReadAdvancedConditionalFormats). Using these instead of a private
+        // 1..N counter keeps CellIs/Expression rules on the SAME priority sequence as the advanced
+        // (ColorScale/DataBar/IconSet/long-tail) rules the caller already added to sheet.ConditionalFormats,
+        // preserving the file's true relative evaluation order between the two rule families.
+        var priorityQueue = classicRulePriorities is { Count: > 0 }
+            ? new Queue<int>(classicRulePriorities)
+            : null;
+        int fallbackPriority = 1;
+        int NextPriority() => priorityQueue is { Count: > 0 } ? priorityQueue.Dequeue() : fallbackPriority++;
+
         foreach (var xlCf in xlSheet.ConditionalFormats)
         {
             var xlRange = xlCf.Range;
@@ -29,7 +40,7 @@ internal static class XlsxConditionalFormatClosedXmlMapper
                 var op = MapOperator(xlCf.Operator);
                 if (op is null)
                 {
-                    priority++;
+                    NextPriority();
                     continue;
                 }
 
@@ -40,7 +51,7 @@ internal static class XlsxConditionalFormatClosedXmlMapper
                 var fmt = new ConditionalFormat
                 {
                     AppliesTo = appliesTo,
-                    Priority = priority++,
+                    Priority = NextPriority(),
                     RuleType = CfRuleType.CellValue,
                     Operator = op.Value,
                     Value1 = v1,
@@ -56,7 +67,7 @@ internal static class XlsxConditionalFormatClosedXmlMapper
                 string? formula = values.TryGetValue(1, out var xvf) ? xvf.Value : null;
                 if (string.IsNullOrWhiteSpace(formula))
                 {
-                    priority++;
+                    NextPriority();
                     continue;
                 }
 
@@ -66,7 +77,7 @@ internal static class XlsxConditionalFormatClosedXmlMapper
                 var fmt = new ConditionalFormat
                 {
                     AppliesTo = appliesTo,
-                    Priority = priority++,
+                    Priority = NextPriority(),
                     RuleType = CfRuleType.Formula,
                     FormulaText = formula,
                     StopIfTrue = xlCf.StopIfTrue,

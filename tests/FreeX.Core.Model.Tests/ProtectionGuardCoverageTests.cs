@@ -443,6 +443,22 @@ public class ProtectionGuardCoverageTests
                     new PasteSpecialOptions());
             },
 
+            ["PasteMergedRegionsCommand"] = (wb, sheet) =>
+            {
+                // Recreating a copied merge at the destination is a FormatCells-gated edit,
+                // mirroring MergeCellsCommand.
+                sheet.IsProtected = false;
+                sheet.AddMergedRegion(new GridRange(
+                    new CellAddress(sheet.Id, 1, 1),
+                    new CellAddress(sheet.Id, 1, 2)));
+                sheet.IsProtected = true;
+                return new PasteMergedRegionsCommand(
+                    sheet.Id,
+                    new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 2)),
+                    new CellAddress(sheet.Id, 5, 5),
+                    transpose: false);
+            },
+
             // ---- Goal Seek ----
             ["GoalSeekCommand"] = (wb, sheet) =>
                 new GoalSeekCommand(new CellAddress(sheet.Id, 1, 1), 42.0),

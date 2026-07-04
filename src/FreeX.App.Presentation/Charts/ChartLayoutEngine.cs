@@ -19,9 +19,10 @@ namespace FreeX.App.Presentation.Charts;
 /// </summary>
 public static class ChartLayoutEngine
 {
-    // The source renderer centers single-series columns at index ± this half-width and stacked
-    // segments at ± 0.35; both are reproduced exactly here.
-    private const double DefaultColumnHalfWidth = 0.4;
+    // The source renderer centers both clustered and stacked columns/bars at index ± 0.35 by
+    // default (WPF's ColumnBarHalfWidth is a single shared function used by both paths); both are
+    // reproduced exactly here.
+    private const double DefaultColumnHalfWidth = 0.35;
     private const double StackedColumnHalfWidth = 0.35;
 
     /// <summary>
@@ -37,8 +38,8 @@ public static class ChartLayoutEngine
 
     /// <summary>
     /// Returns the half-width of a stacked column/bar segment, mirroring WPF's ColumnBarHalfWidth
-    /// (which — unlike the clustered path — defaults to 0.35 rather than 0.4, but applies the exact
-    /// same <see cref="ChartModel.BarGapWidth"/> formula when the user sets a gap width). Stacked
+    /// (the same shared default of 0.35 as the clustered path, applying the exact same
+    /// <see cref="ChartModel.BarGapWidth"/> formula when the user sets a gap width). Stacked
     /// types are included in <see cref="ChartTypeSupport.SupportsBarGapWidth"/>, so a stacked chart's
     /// Gap Width setting must narrow/widen the stack just like a clustered chart's.
     /// </summary>
@@ -1271,7 +1272,8 @@ public static class ChartLayoutEngine
         seriesLayouts[0] = seriesLayouts[0] with
         {
             Trendline = BuildTrendlineLayout(chart, sourcePoints, trend, pixelPoints,
-                point => new LayoutPoint(valueScale.Transform(point.Y), categoryScale.Transform(point.X))),
+                point => new LayoutPoint(valueScale.Transform(point.Y), categoryScale.Transform(point.X)),
+                swapAnnotationAxes: true),
         };
     }
 
@@ -1318,29 +1320,50 @@ public static class ChartLayoutEngine
     }
 
     // Builds the TrendlineLayout including the optional equation/R-squared annotation (F18): the
-    // annotation anchor mirrors the source renderer's TextAnnotation placement at the source data's
-    // (min X, max Y), mapped into pixel space through the same per-point mapping used for the
-    // trendline polyline itself (so it lands correctly whether axes are swapped, as for Bar charts).
+    // annotation anchor mirrors the source renderer's TextAnnotation placement. The source renderer
+    // (AddTrendlineIfRequested) swaps each source point to (Y, X) before taking (Min(X), Max(Y))
+    // whenever swapTrendlineAxes is set (Bar charts); for the non-swapped families it takes
+    // (Min(X), Max(Y)) of the source points directly. swapAnnotationAxes reproduces that exactly:
+    // when true, the anchor is (min value, max index) — the swapped corner — instead of
+    // (min index, max value), matching WPF's swapTrendlineAxes: true path for ChartType.Bar.
     private static TrendlineLayout BuildTrendlineLayout(
         ChartModel chart,
         IReadOnlyList<TrendPoint> sourcePoints,
         IReadOnlyList<TrendPoint> trend,
         IReadOnlyList<LayoutPoint> pixelPoints,
-        Func<TrendPoint, LayoutPoint> toPixel)
+        Func<TrendPoint, LayoutPoint> toPixel,
+        bool swapAnnotationAxes = false)
     {
         var annotationLines = TrendlineAnnotationFormatter.BuildAnnotationLines(chart, sourcePoints, trend);
         var anchor = default(LayoutPoint);
         if (annotationLines.Count > 0)
         {
-            var minX = sourcePoints[0].X;
-            var maxY = sourcePoints[0].Y;
-            foreach (var point in sourcePoints)
+            if (swapAnnotationAxes)
             {
-                minX = Math.Min(minX, point.X);
-                maxY = Math.Max(maxY, point.Y);
-            }
+                // Mirror WPF's displaySourcePoints = points.Select(p => (p.Y, p.X)) swap: anchor at
+                // (min value, max index) rather than (min index, max value).
+                var minValue = sourcePoints[0].Y;
+                var maxIndex = sourcePoints[0].X;
+                foreach (var point in sourcePoints)
+                {
+                    minValue = Math.Min(minValue, point.Y);
+                    maxIndex = Math.Max(maxIndex, point.X);
+                }
 
-            anchor = toPixel(new TrendPoint(minX, maxY));
+                anchor = toPixel(new TrendPoint(maxIndex, minValue));
+            }
+            else
+            {
+                var minX = sourcePoints[0].X;
+                var maxY = sourcePoints[0].Y;
+                foreach (var point in sourcePoints)
+                {
+                    minX = Math.Min(minX, point.X);
+                    maxY = Math.Max(maxY, point.Y);
+                }
+
+                anchor = toPixel(new TrendPoint(minX, maxY));
+            }
         }
 
         return new TrendlineLayout

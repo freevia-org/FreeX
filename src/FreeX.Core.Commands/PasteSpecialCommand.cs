@@ -34,9 +34,12 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
     private readonly GridRange _sourceRange;
     private readonly IReadOnlyList<(CellAddress Address, Cell Cell)> _sourceCells;
     private readonly CellAddress _destination;
+    private readonly IReadOnlyList<(CellAddress Source, CellAddress Destination)>? _tiledDestinations;
     private readonly PasteSpecialOptions _options;
     private readonly IReadOnlyDictionary<CellAddress, IReadOnlyList<CellTextRun>>? _sourceRichTextRuns;
-    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly, bool HadRichTextRuns, IReadOnlyList<CellTextRun>? OldRichTextRuns)>? _snapshot;
+    private readonly IReadOnlyDictionary<CellAddress, string>? _sourceHyperlinks;
+    private readonly IReadOnlyDictionary<CellAddress, HyperlinkMetadata>? _sourceHyperlinkMetadata;
+    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly, bool HadRichTextRuns, IReadOnlyList<CellTextRun>? OldRichTextRuns, bool HadHyperlink, string? OldHyperlink, bool HadHyperlinkMetadata, HyperlinkMetadata? OldHyperlinkMetadata)>? _snapshot;
 
     public string Label => "Paste Special";
 
@@ -46,7 +49,9 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
         IReadOnlyList<(CellAddress Address, Cell Cell)> sourceCells,
         CellAddress destination,
         PasteSpecialOptions options,
-        IReadOnlyDictionary<CellAddress, IReadOnlyList<CellTextRun>>? sourceRichTextRuns = null)
+        IReadOnlyDictionary<CellAddress, IReadOnlyList<CellTextRun>>? sourceRichTextRuns = null,
+        IReadOnlyDictionary<CellAddress, string>? sourceHyperlinks = null,
+        IReadOnlyDictionary<CellAddress, HyperlinkMetadata>? sourceHyperlinkMetadata = null)
     {
         _sheetId = sheetId;
         _sourceRange = sourceRange;
@@ -54,22 +59,46 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
         _destination = destination;
         _options = options;
         _sourceRichTextRuns = sourceRichTextRuns;
+        _sourceHyperlinks = sourceHyperlinks;
+        _sourceHyperlinkMetadata = sourceHyperlinkMetadata;
+    }
+
+    /// <summary>
+    /// Constructs a paste-special command that tiles an arithmetic operation across an explicit
+    /// set of source-to-destination pairs, mirroring how plain paste tiles a smaller copied block
+    /// across a larger selected destination (see PasteCommandFactory.CreateTiledInternalPasteCommand).
+    /// </summary>
+    public PasteSpecialCellsCommand(
+        SheetId sheetId,
+        IReadOnlyList<(CellAddress Address, Cell Cell)> sourceCells,
+        IReadOnlyList<(CellAddress Source, CellAddress Destination)> tiledDestinations,
+        PasteSpecialOptions options)
+    {
+        _sheetId = sheetId;
+        _sourceRange = default;
+        _sourceCells = sourceCells;
+        _destination = default;
+        _tiledDestinations = tiledDestinations;
+        _options = options;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
-        if (_destination.Sheet != _sheetId)
-            return new CommandOutcome(false, "Paste destination must be on the target sheet.");
         if (!Enum.IsDefined(_options.Operation))
             return new CommandOutcome(false, "Paste Special operation is not supported.");
-        if (PasteCommandValidator.ValidateInternalPaste(
-                _sheetId,
-                _sourceRange,
-                _sourceCells.Select(c => c.Address),
-                _destination,
-                _options.Transpose) is { } validationError)
+        if (_tiledDestinations is null)
         {
-            return new CommandOutcome(false, validationError);
+            if (_destination.Sheet != _sheetId)
+                return new CommandOutcome(false, "Paste destination must be on the target sheet.");
+            if (PasteCommandValidator.ValidateInternalPaste(
+                    _sheetId,
+                    _sourceRange,
+                    _sourceCells.Select(c => c.Address),
+                    _destination,
+                    _options.Transpose) is { } validationError)
+            {
+                return new CommandOutcome(false, validationError);
+            }
         }
 
         var sheet = ctx.GetSheet(_sheetId);
@@ -85,13 +114,34 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
         foreach (var (address, cell, sourceAddress) in cells)
         {
             var hadRichTextRuns = sheet.RichTextRuns.TryGetValue(address, out var oldRuns);
-            _snapshot.Add((address, sheet.GetCell(address)?.Clone(), sheet.GetStyleOnly(address.Row, address.Col), hadRichTextRuns, oldRuns));
+            var hadHyperlink = sheet.Hyperlinks.TryGetValue(address, out var oldHyperlink);
+            var hadHyperlinkMetadata = sheet.HyperlinkMetadata.TryGetValue(address, out var oldHyperlinkMetadata);
+            _snapshot.Add((
+                address,
+                sheet.GetCell(address)?.Clone(),
+                sheet.GetStyleOnly(address.Row, address.Col),
+                hadRichTextRuns,
+                oldRuns,
+                hadHyperlink,
+                oldHyperlink,
+                hadHyperlinkMetadata,
+                oldHyperlinkMetadata));
             sheet.SetCell(address, cell);
 
             if (_sourceRichTextRuns is not null && _sourceRichTextRuns.TryGetValue(sourceAddress, out var newRuns))
                 sheet.RichTextRuns[address] = newRuns;
             else
                 sheet.RichTextRuns.Remove(address);
+
+            if (_sourceHyperlinks is not null && _sourceHyperlinks.TryGetValue(sourceAddress, out var newHyperlink))
+                sheet.Hyperlinks[address] = newHyperlink;
+            else
+                sheet.Hyperlinks.Remove(address);
+
+            if (_sourceHyperlinkMetadata is not null && _sourceHyperlinkMetadata.TryGetValue(sourceAddress, out var newHyperlinkMetadata))
+                sheet.HyperlinkMetadata[address] = newHyperlinkMetadata;
+            else
+                sheet.HyperlinkMetadata.Remove(address);
         }
 
         return new CommandOutcome(true, AffectedCells: cells.Select(c => c.Address).ToList());
@@ -103,7 +153,7 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        foreach (var (address, oldCell, oldStyleOnly, hadRichTextRuns, oldRichTextRuns) in _snapshot)
+        foreach (var (address, oldCell, oldStyleOnly, hadRichTextRuns, oldRichTextRuns, hadHyperlink, oldHyperlink, hadHyperlinkMetadata, oldHyperlinkMetadata) in _snapshot)
         {
             if (oldCell is null)
             {
@@ -122,11 +172,38 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
                 sheet.RichTextRuns[address] = oldRichTextRuns;
             else
                 sheet.RichTextRuns.Remove(address);
+
+            if (hadHyperlink && oldHyperlink is not null)
+                sheet.Hyperlinks[address] = oldHyperlink;
+            else
+                sheet.Hyperlinks.Remove(address);
+
+            if (hadHyperlinkMetadata && oldHyperlinkMetadata is not null)
+                sheet.HyperlinkMetadata[address] = oldHyperlinkMetadata;
+            else
+                sheet.HyperlinkMetadata.Remove(address);
         }
     }
 
     private IEnumerable<(CellAddress Address, Cell Cell, CellAddress SourceAddress)> BuildDestinationCells(Workbook workbook, Sheet sheet)
     {
+        if (_tiledDestinations is not null)
+        {
+            var sourceLookup = _sourceCells.ToDictionary(c => c.Address, c => c.Cell);
+            foreach (var (sourceAddress, destination) in _tiledDestinations)
+            {
+                if (!sourceLookup.TryGetValue(sourceAddress, out var sourceCell) ||
+                    _options.SkipBlanks && IsBlank(sourceCell))
+                {
+                    continue;
+                }
+
+                yield return (destination, BuildCell(workbook, sheet, destination, sourceCell), sourceAddress);
+            }
+
+            yield break;
+        }
+
         foreach (var (sourceAddress, sourceCell) in _sourceCells)
         {
             if (_options.SkipBlanks && IsBlank(sourceCell))
@@ -140,20 +217,25 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
                     (int)_destination.Row - (int)_sourceRange.Start.Row,
                     (int)_destination.Col - (int)_sourceRange.Start.Col);
 
-            var cell = sourceCell.Clone();
-            if (_options.Operation != PasteSpecialOperation.None)
-            {
-                var existing = sheet.GetCell(destination)?.Clone() ?? Cell.FromValue(BlankValue.Instance);
-                existing.StyleId = sheet.GetStyleOnly(destination.Row, destination.Col) ?? existing.StyleId;
-                cell = existing;
-                cell.Value = ApplyOperation(existing.Value, sourceCell.Value, _options.Operation);
-                cell.FormulaText = null;
-                if (_options.ContentKind == PasteSpecialContentKind.ValuesAndNumberFormats)
-                    cell.StyleId = MergeNumberFormat(workbook, existing.StyleId, sourceCell.StyleId);
-            }
-
-            yield return (destination, cell, sourceAddress);
+            yield return (destination, BuildCell(workbook, sheet, destination, sourceCell), sourceAddress);
         }
+    }
+
+    private Cell BuildCell(Workbook workbook, Sheet sheet, CellAddress destination, Cell sourceCell)
+    {
+        var cell = sourceCell.Clone();
+        if (_options.Operation != PasteSpecialOperation.None)
+        {
+            var existing = sheet.GetCell(destination)?.Clone() ?? Cell.FromValue(BlankValue.Instance);
+            existing.StyleId = sheet.GetStyleOnly(destination.Row, destination.Col) ?? existing.StyleId;
+            cell = existing;
+            cell.Value = ApplyOperation(existing.Value, sourceCell.Value, _options.Operation);
+            cell.FormulaText = null;
+            if (_options.ContentKind == PasteSpecialContentKind.ValuesAndNumberFormats)
+                cell.StyleId = MergeNumberFormat(workbook, existing.StyleId, sourceCell.StyleId);
+        }
+
+        return cell;
     }
 
     private static StyleId MergeNumberFormat(Workbook workbook, StyleId destinationStyleId, StyleId sourceStyleId)

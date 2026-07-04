@@ -718,7 +718,8 @@ public static class PageContentRenderModelBuilder
                 cell.Value,
                 style.NumberFormat,
                 workbook.IndexedColors,
-                workbook.Theme).Text;
+                workbook.Theme,
+                workbook.Uses1904DateSystem).Text;
 
         return FormatPrintedCellText(raw, sheet.PrintErrorValue);
     }

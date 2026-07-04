@@ -133,8 +133,6 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=LOG10(0)")]
     [InlineData("=LOG10(-1)")]
     [InlineData("=MROUND(5,-2)")]
-    [InlineData("=PERMUT(0,0)")]
-    [InlineData("=PERMUT(0.9,0)")]
     [InlineData("=SEC(134217728)")]
     [InlineData("=SECH(134217728)")]
     [InlineData("=SIN(134217728)")]

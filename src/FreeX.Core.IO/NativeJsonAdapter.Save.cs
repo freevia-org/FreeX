@@ -147,6 +147,14 @@ public sealed partial class NativeJsonAdapter
                     .ToList(),
                 HiddenRows = s.HiddenRows.Where(NativeJsonValueSanitizer.IsValidRowIndex).OrderBy(row => row).ToList(),
                 FilterHiddenRows = s.FilterHiddenRows.Where(NativeJsonValueSanitizer.IsValidRowIndex).OrderBy(row => row).ToList(),
+                // G32: persist alongside FilterHiddenRows so a reload can reconstruct the same
+                // AND-across-columns picture (see FreeX.Core.Commands.FilterCommand, findings F8/G7).
+                ActiveValueFilterColumns = s.ActiveValueFilterColumns
+                    .Where(pair => NativeJsonValueSanitizer.IsValidColumnIndex(pair.Key))
+                    .OrderBy(pair => pair.Key)
+                    .Select(pair => new UIntStringListDto { Index = pair.Key, Values = [.. pair.Value] })
+                    .ToList(),
+                ValueFilterHiddenRows = s.ValueFilterHiddenRows.Where(NativeJsonValueSanitizer.IsValidRowIndex).OrderBy(row => row).ToList(),
                 HiddenCols = s.HiddenCols.Where(NativeJsonValueSanitizer.IsValidColumnIndex).OrderBy(column => column).ToList(),
                 RowOutlineLevels = s.RowOutlineLevels
                     .Where(pair => NativeJsonValueSanitizer.IsValidRowIndex(pair.Key) && NativeJsonValueSanitizer.IsValidOutlineLevel(pair.Value))

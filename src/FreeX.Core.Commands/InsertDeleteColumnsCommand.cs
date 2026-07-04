@@ -14,6 +14,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
     private List<CellStateSnapshot>? _movedSnapshot;
     private List<GridRange>? _mergeSnapshot;
     private List<KeyValuePair<uint, double>>? _columnWidthSnapshot;
+    private List<KeyValuePair<uint, IReadOnlyList<string>>>? _activeValueFilterColumnsSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _commentSnapshot;
     private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
@@ -65,6 +66,12 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
 
         _columnWidthSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ColumnWidths);
         RowColumnShiftHelpers.ShiftIndexesUp(sheet.ColumnWidths, _beforeCol, _count);
+
+        // G1: sheet.ActiveValueFilterColumns is keyed by absolute column index exactly like
+        // ColumnWidths, so it must shift the same way or a filtered column's criteria silently
+        // apply to whatever column ends up at its old (now stale) index.
+        _activeValueFilterColumnsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ActiveValueFilterColumns);
+        RowColumnShiftHelpers.ShiftIndexesUp(sheet.ActiveValueFilterColumns, _beforeCol, _count);
 
         _commentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
         RowColumnShiftHelpers.ShiftCommentColumnsUp(sheet.Comments, _beforeCol, _count);
@@ -138,6 +145,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
             sheet.ReplaceMergedRegions(_mergeSnapshot);
 
         RowColumnShiftHelpers.RestoreDictionary(sheet.ColumnWidths, _columnWidthSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.ActiveValueFilterColumns, _activeValueFilterColumnsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.Comments, _commentSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
@@ -251,6 +259,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
     private List<CellStateSnapshot>? _shiftedSnapshot;
     private List<GridRange>? _mergeSnapshot;
     private List<KeyValuePair<uint, double>>? _columnWidthSnapshot;
+    private List<KeyValuePair<uint, IReadOnlyList<string>>>? _activeValueFilterColumnsSnapshot;
     private List<uint>? _hiddenColsSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _commentSnapshot;
     private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
@@ -304,6 +313,11 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
 
         _columnWidthSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ColumnWidths);
         RowColumnShiftHelpers.ShiftIndexesDown(sheet.ColumnWidths, _startCol, _count);
+
+        // G1: same key-space as ColumnWidths — must shift/drop entries the same way, or a filter
+        // column that was deleted (or lies after the deletion point) leaves a stale/misaligned key.
+        _activeValueFilterColumnsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ActiveValueFilterColumns);
+        RowColumnShiftHelpers.ShiftIndexesDown(sheet.ActiveValueFilterColumns, _startCol, _count);
 
         _commentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
         RowColumnShiftHelpers.ShiftCommentColumnsDown(sheet.Comments, _startCol, _count);
@@ -378,6 +392,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
             sheet.ReplaceMergedRegions(_mergeSnapshot);
 
         RowColumnShiftHelpers.RestoreDictionary(sheet.ColumnWidths, _columnWidthSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.ActiveValueFilterColumns, _activeValueFilterColumnsSnapshot);
         RowColumnShiftHelpers.RestoreSet(sheet.HiddenCols, _hiddenColsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.Comments, _commentSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);

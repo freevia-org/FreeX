@@ -17,11 +17,17 @@ public static partial class NumberFormatter
     public static string Format(ScalarValue value, string formatString, int targetWidthCharacters)
         => FormatWithColor(value, formatString, targetWidthCharacters).Text;
 
+    public static string Format(ScalarValue value, string formatString, bool uses1904DateSystem)
+        => FormatWithColor(value, formatString, (int?)null, null, null, uses1904DateSystem).Text;
+
     public static FormatResult FormatWithColor(ScalarValue value, string formatString)
         => FormatWithColor(value, formatString, (int?)null);
 
     public static FormatResult FormatWithColor(ScalarValue value, string formatString, int targetWidthCharacters)
         => FormatWithColor(value, formatString, (int?)targetWidthCharacters);
+
+    public static FormatResult FormatWithColor(ScalarValue value, string formatString, bool uses1904DateSystem)
+        => FormatWithColor(value, formatString, (int?)null, null, null, uses1904DateSystem);
 
     public static FormatResult FormatWithColor(
         ScalarValue value,
@@ -46,20 +52,38 @@ public static partial class NumberFormatter
     public static FormatResult FormatWithColor(
         ScalarValue value,
         string formatString,
+        WorkbookIndexedColorPalette indexedColors,
+        WorkbookTheme theme,
+        bool uses1904DateSystem)
+        => FormatWithColor(value, formatString, (int?)null, indexedColors, theme, uses1904DateSystem);
+
+    public static FormatResult FormatWithColor(
+        ScalarValue value,
+        string formatString,
         int targetWidthCharacters,
         WorkbookIndexedColorPalette indexedColors,
         WorkbookTheme theme)
         => FormatWithColor(value, formatString, (int?)targetWidthCharacters, indexedColors, theme);
+
+    public static FormatResult FormatWithColor(
+        ScalarValue value,
+        string formatString,
+        int targetWidthCharacters,
+        WorkbookIndexedColorPalette indexedColors,
+        WorkbookTheme theme,
+        bool uses1904DateSystem)
+        => FormatWithColor(value, formatString, (int?)targetWidthCharacters, indexedColors, theme, uses1904DateSystem);
 
     private static FormatResult FormatWithColor(
         ScalarValue value,
         string formatString,
         int? targetWidthCharacters,
         WorkbookIndexedColorPalette? indexedColors = null,
-        WorkbookTheme? theme = null)
+        WorkbookTheme? theme = null,
+        bool uses1904DateSystem = false)
     {
         if (string.IsNullOrEmpty(formatString) || IsGeneralFormat(formatString))
-            return new FormatResult(FormatGeneral(value));
+            return new FormatResult(FormatGeneral(value, uses1904DateSystem));
 
         // Pure text format
         if (formatString == "@")
@@ -67,14 +91,14 @@ public static partial class NumberFormatter
             return value switch
             {
                 TextValue t   => new FormatResult(t.Value),
-                NumberValue n => new FormatResult(FormatGeneral(value)),
-                _             => new FormatResult(FormatGeneral(value))
+                NumberValue n => new FormatResult(FormatGeneral(value, uses1904DateSystem)),
+                _             => new FormatResult(FormatGeneral(value, uses1904DateSystem))
             };
         }
 
         if (value is DateTimeValue dateTimeValue &&
             ShouldAttemptSimpleDateTimeFormat(formatString) &&
-            TryFormatSimpleDateTime(dateTimeValue.Value, formatString, targetWidthCharacters, out var simpleDateTime))
+            TryFormatSimpleDateTime(dateTimeValue.Value, formatString, targetWidthCharacters, uses1904DateSystem, out var simpleDateTime))
         {
             return simpleDateTime;
         }
@@ -83,10 +107,10 @@ public static partial class NumberFormatter
 
         return value switch
         {
-            NumberValue n   => FormatNumber(n.Value, sections, targetWidthCharacters, indexedColors, theme),
+            NumberValue n   => FormatNumber(n.Value, sections, targetWidthCharacters, indexedColors, theme, uses1904DateSystem),
             DateTimeValue d => ShouldFormatDateTimeValue(sections)
-                ? FormatDateTimeWithColor(d.Value, sections, targetWidthCharacters, indexedColors, theme)
-                : FormatNumber(d.Value, sections, targetWidthCharacters, indexedColors, theme),
+                ? FormatDateTimeWithColor(d.Value, sections, targetWidthCharacters, indexedColors, theme, uses1904DateSystem)
+                : FormatNumber(d.Value, sections, targetWidthCharacters, indexedColors, theme, uses1904DateSystem),
             TextValue t     => FormatTextWithColor(t.Value, sections, indexedColors, theme),
             BoolValue b     => new FormatResult(b.Value ? "TRUE" : "FALSE"),
             ErrorValue e    => new FormatResult(e.Code),
@@ -105,6 +129,7 @@ public static partial class NumberFormatter
         double oaDate,
         string formatString,
         int? targetWidthCharacters,
+        bool uses1904DateSystem,
         out FormatResult result)
     {
         if (formatString.IndexOf(';') >= 0 ||
@@ -114,9 +139,9 @@ public static partial class NumberFormatter
             return false;
         }
 
-        var text = TryFormatCachedSimpleDateTime(oaDate, formatString, out var cachedText)
+        var text = TryFormatCachedSimpleDateTime(oaDate, formatString, uses1904DateSystem, out var cachedText)
             ? cachedText
-            : FormatDateTime(oaDate, formatString);
+            : FormatDateTime(oaDate, formatString, uses1904DateSystem);
         text = ApplyAccountingTargetWidth(text, formatString, targetWidthCharacters);
         result = new FormatResult(text);
         return true;
@@ -127,7 +152,8 @@ public static partial class NumberFormatter
         string[] sections,
         int? targetWidthCharacters,
         WorkbookIndexedColorPalette? indexedColors,
-        WorkbookTheme? theme)
+        WorkbookTheme? theme,
+        bool uses1904DateSystem = false)
     {
         if (sections.Length == 1 && (sections[0].Length == 0 || sections[0][0] != '['))
         {
@@ -146,7 +172,7 @@ public static partial class NumberFormatter
                 ? ""
                 : TryFormatPlainNumericSection(magnitude, sections[0], out var plainNumericText)
                     ? plainNumericText
-                    : ApplyNumericFormat(magnitude, sections[0]);
+                    : ApplyNumericFormat(magnitude, sections[0], uses1904DateSystem: uses1904DateSystem);
             singleSectionText = ApplyAccountingTargetWidth(singleSectionText, sections[0], targetWidthCharacters);
             // Excel never displays negative zero: if sign is "-" but the formatted text
             // is all zeros (after magnitude formatting), drop the sign.
@@ -181,7 +207,7 @@ public static partial class NumberFormatter
 
         string text = section.Format == ""
             ? ""
-            : ApplyNumericFormat(displayValue, section.Format);
+            : ApplyNumericFormat(displayValue, section.Format, uses1904DateSystem: uses1904DateSystem);
         text = ApplyAccountingTargetWidth(text, section.Format, targetWidthCharacters);
         return new FormatResult(text, section.ColorHex);
     }
@@ -245,7 +271,8 @@ public static partial class NumberFormatter
     private static string ApplyNumericFormat(
         double value,
         string format,
-        bool preserveAccountingZeroDashAlignment = false)
+        bool preserveAccountingZeroDashAlignment = false,
+        bool uses1904DateSystem = false)
     {
         if (TryFormatCjkNativeNumberText(value, format, out var cjkNativeNumberText))
             return cjkNativeNumberText;
@@ -263,8 +290,9 @@ public static partial class NumberFormatter
                 // Use DateTime.FromOADate for the special locale-token path so that the
                 // roundtrip DateTime→ToOADate→FromOADate is lossless for modern dates.
                 // ExcelDateSystem.SerialToDate is used for the regular date-format path
-                // (where the 1900 phantom-leap-day correction matters).
-                var dt = DateTime.FromOADate(value);
+                // (where the 1900 phantom-leap-day correction matters), and also here when
+                // the workbook uses the 1904 date system (where the epoch itself differs).
+                var dt = uses1904DateSystem ? ExcelDateSystem.SerialToDate(value, uses1904DateSystem) : DateTime.FromOADate(value);
                 return NativeDigits(FormatSpecialDateTimeLocaleValue(dt, specialDateTimeToken));
             }
             catch { return value.ToString(CultureInfo.InvariantCulture); }
@@ -312,7 +340,7 @@ public static partial class NumberFormatter
         {
             try
             {
-                var dt = ExcelDateSystem.SerialToDate(value);
+                var dt = ExcelDateSystem.SerialToDate(value, uses1904DateSystem);
                 return NativeDigits(FormatDateTimeValue(dt, format, dateTimeFormat));
             }
             catch { return value.ToString(CultureInfo.InvariantCulture); }
