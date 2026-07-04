@@ -667,6 +667,8 @@ public static class PresentationReviewWorkflowPlanner
         "Add a space after sentence punctuation.";
     public const string ProofingMissingSpaceAfterListPunctuationMessage =
         "Add a space after list punctuation.";
+    public const string ProofingExtraSpacesMessage =
+        "Remove extra spaces between words or sentences.";
     public const string SlideTitleMissingSlideMessage =
         "Slide title target slide was not found.";
     public const string SlideTitleEmptyMessage =
@@ -1792,7 +1794,7 @@ public static class PresentationReviewWorkflowPlanner
             {
                 var suggestion = SuggestProofingReplacement(issue.Text);
                 var canApply = normalizedSelection == index &&
-                    !string.IsNullOrWhiteSpace(suggestion) &&
+                    suggestion.Length > 0 &&
                     !string.Equals(issue.Text, suggestion, StringComparison.Ordinal);
                 var disabledReason = normalizedSelection == index
                     ? canApply ? null : ProofingNoSuggestionMessage
@@ -2096,6 +2098,9 @@ public static class PresentationReviewWorkflowPlanner
         foreach (var punctuationSpacing in ScanPunctuationSpacing(scope.Text))
             yield return punctuationSpacing;
 
+        foreach (var extraSpacing in ScanExtraInteriorSpaces(scope.Text))
+            yield return extraSpacing;
+
         foreach (var sentenceStart in ScanSentenceStartCapitalization(scope.Text))
             yield return sentenceStart;
     }
@@ -2111,9 +2116,54 @@ public static class PresentationReviewWorkflowPlanner
         if (TryBuildPunctuationSpacingReplacement(text, out var punctuationSpacingReplacement))
             return punctuationSpacingReplacement;
 
+        if (TryBuildExtraInteriorSpacesReplacement(text, out var extraSpacingReplacement))
+            return extraSpacingReplacement;
+
         return TryBuildRepeatedWordReplacement(text, out var repeatedWordReplacement)
             ? repeatedWordReplacement
             : string.Empty;
+    }
+
+    private static IEnumerable<PresentationProofingIssueMatch> ScanExtraInteriorSpaces(string text)
+    {
+        var index = 0;
+        while (index < text.Length)
+        {
+            if (!IsHorizontalProofingWhitespace(text[index]))
+            {
+                index++;
+                continue;
+            }
+
+            var start = index;
+            while (index < text.Length && IsHorizontalProofingWhitespace(text[index]))
+                index++;
+
+            if (index - start >= 2 &&
+                start > 0 &&
+                index < text.Length &&
+                !char.IsWhiteSpace(text[start - 1]) &&
+                !char.IsWhiteSpace(text[index]))
+            {
+                yield return new PresentationProofingIssueMatch(
+                    start,
+                    index - start,
+                    text.Substring(start, index - start),
+                    ProofingExtraSpacesMessage);
+            }
+        }
+    }
+
+    private static bool TryBuildExtraInteriorSpacesReplacement(string text, out string replacement)
+    {
+        if (text.Length >= 2 && text.All(IsHorizontalProofingWhitespace))
+        {
+            replacement = " ";
+            return true;
+        }
+
+        replacement = string.Empty;
+        return false;
     }
 
     private static IEnumerable<PresentationProofingIssueMatch> ScanPunctuationSpacing(string text)
@@ -2329,6 +2379,9 @@ public static class PresentationReviewWorkflowPlanner
         => IsProofingPunctuation(value) ||
             IsSentenceOpeningPunctuation(value) ||
             IsSentenceClosingPunctuation(value);
+
+    private static bool IsHorizontalProofingWhitespace(char value)
+        => value is ' ' or '\t';
 
     private static bool HasWhitespaceBefore(string text, int index)
         => index > 0 && char.IsWhiteSpace(text[index - 1]);
