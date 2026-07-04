@@ -126,11 +126,13 @@ internal static class FreePCommandInventory
                 AvaloniaLocations: avaloniaLocations ?? Array.Empty<CommandLocation>());
         }).ToArray();
 
+        var workflowEvidence = BuildWorkflowEvidence();
+
         return new InventoryDocument(
             SchemaVersion: 1,
             GeneratedBy: "tools/Generate-FreePCommandParityInventory.ps1",
             Source: "freep/FreeP.Ribbon.Definitions FreePRibbon.Build(FreePRibbonCapabilities.Wpf/Avalonia)",
-            Notes: "Raw missing counts preserve one-sided generated profile surface counts. Actionable missing counts exclude platform-only commands so Avalonia shell and backed profile commands are not reported as WPF or Avalonia implementation gaps.",
+            Notes: "Raw missing counts preserve one-sided generated profile surface counts. Actionable missing counts exclude platform-only commands so Avalonia shell and backed profile commands are not reported as WPF or Avalonia implementation gaps. Workflow evidence rows track bounded FreeP WPF/Avalonia parity-depth slices that are not command gaps.",
             Summary: new InventorySummary(
                 TotalCommands: commands.Length,
                 Both: commands.Count(command => command.Surface == "both"),
@@ -144,9 +146,66 @@ internal static class FreePCommandInventory
                 AvaloniaGaps: commands.Count(command => command.Classification == "avalonia-gap"),
                 KnownDeferred: commands.Count(command => command.Classification == "known-deferred"),
                 PlatformOnly: commands.Count(command => command.Classification == "platform-only"),
-                CommandIdAliases: commands.Count(command => command.Classification == "command-id-alias")),
+                CommandIdAliases: commands.Count(command => command.Classification == "command-id-alias"),
+                WorkflowEvidenceRows: workflowEvidence.Count),
+            WorkflowEvidence: workflowEvidence,
             Commands: commands);
     }
+
+    private static IReadOnlyList<WorkflowEvidenceEntry> BuildWorkflowEvidence() =>
+    [
+        new(
+            EvidenceId: "freep.presenter.recording.execution",
+            Area: "Presenter recording and media artifact execution",
+            Status: "shared-executable-evidence",
+            HostCoverage: "WPF/Avalonia shared planner plus thin slideshow-window adapters",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-presenter-recording-execution-2026-07-04.md",
+                "docs/parity/freep-presenter-recording-review-2026-07-04.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/SlideShowRecordingExecutionPlannerTests.cs",
+                "freep/FreeP.App.Presentation.Tests/SlideShowRecordingReviewPlannerTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideShowTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/SlideShowWindowHeadlessTests.cs"
+            ],
+            RemainingWork: "Real narration/audio capture, camera/media capture backends, captured media persistence, subtitles, and PowerPoint COM recording baselines remain deferred."),
+        new(
+            EvidenceId: "freep.presenter.ink.execution",
+            Area: "Presenter ink, laser, and persistence execution",
+            Status: "shared-executable-evidence",
+            HostCoverage: "WPF/Avalonia shared planner, overlay render primitives, and retention planning",
+            EvidenceDocs:
+            [
+                "docs/planning/freep-powerpoint-parity-status-2026-06-27.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/SlideShowInkExecutionPlannerTests.cs",
+                "freep/FreeP.App.Presentation.Tests/SlideShowInkPersistencePlannerTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideShowTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/SlideShowWindowHeadlessTests.cs"
+            ],
+            RemainingWork: "Deeper ink persistence workflows, authored PPTX ink package baselines, richer presenter UI, and PowerPoint visual baselines remain deferred."),
+        new(
+            EvidenceId: "freep.presenter.session.summary",
+            Area: "Presenter recording plus ink session summary",
+            Status: "shared-executable-evidence",
+            HostCoverage: "WPF/Avalonia slideshow-window summary state over shared recording and ink planners",
+            EvidenceDocs:
+            [
+                "docs/planning/freep-powerpoint-parity-status-2026-06-27.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/SlideShowPresenterSessionSummaryPlannerTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideShowTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/SlideShowWindowHeadlessTests.cs"
+            ],
+            RemainingWork: "PowerPoint-authoritative recording studio/session-summary baselines and capture-backed transcript evidence remain deferred.")
+    ];
 
     private static IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> Collect(RibbonDefinition definition, string profile)
     {
@@ -327,9 +386,20 @@ internal static class FreePCommandInventoryMarkdown
         builder.AppendLine();
         builder.AppendLine(inventory.Notes);
         builder.AppendLine();
-        builder.AppendLine("| Total | Both | WPF only | Avalonia only | Missing WPF raw | Missing Avalonia raw | Actionable missing WPF | Actionable missing Avalonia | Shared | Avalonia gaps | Known deferred | Platform-only | Command-id aliases |");
-        builder.AppendLine("|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
-        builder.AppendLine($"| {inventory.Summary.TotalCommands} | {inventory.Summary.Both} | {inventory.Summary.WpfOnly} | {inventory.Summary.AvaloniaOnly} | {inventory.Summary.MissingWpf} | {inventory.Summary.MissingAvalonia} | {inventory.Summary.ActionableMissingWpf} | {inventory.Summary.ActionableMissingAvalonia} | {inventory.Summary.Shared} | {inventory.Summary.AvaloniaGaps} | {inventory.Summary.KnownDeferred} | {inventory.Summary.PlatformOnly} | {inventory.Summary.CommandIdAliases} |");
+        builder.AppendLine("| Total | Both | WPF only | Avalonia only | Missing WPF raw | Missing Avalonia raw | Actionable missing WPF | Actionable missing Avalonia | Shared | Avalonia gaps | Known deferred | Platform-only | Command-id aliases | Workflow evidence rows |");
+        builder.AppendLine("|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
+        builder.AppendLine($"| {inventory.Summary.TotalCommands} | {inventory.Summary.Both} | {inventory.Summary.WpfOnly} | {inventory.Summary.AvaloniaOnly} | {inventory.Summary.MissingWpf} | {inventory.Summary.MissingAvalonia} | {inventory.Summary.ActionableMissingWpf} | {inventory.Summary.ActionableMissingAvalonia} | {inventory.Summary.Shared} | {inventory.Summary.AvaloniaGaps} | {inventory.Summary.KnownDeferred} | {inventory.Summary.PlatformOnly} | {inventory.Summary.CommandIdAliases} | {inventory.Summary.WorkflowEvidenceRows} |");
+        builder.AppendLine();
+        builder.AppendLine("## Workflow Evidence");
+        builder.AppendLine();
+        builder.AppendLine("| Evidence ID | Area | Status | Host coverage | Evidence docs | Verification | Remaining work |");
+        builder.AppendLine("|---|---|---|---|---|---|---|");
+        foreach (var evidence in inventory.WorkflowEvidence)
+        {
+            builder.AppendLine(
+                $"| `{Escape(evidence.EvidenceId)}` | {Escape(evidence.Area)} | {Escape(evidence.Status)} | {Escape(evidence.HostCoverage)} | {Escape(List(evidence.EvidenceDocs))} | {Escape(List(evidence.Verification))} | {Escape(evidence.RemainingWork)} |");
+        }
+
         builder.AppendLine();
         builder.AppendLine("## Matrix");
         builder.AppendLine();
@@ -350,6 +420,11 @@ internal static class FreePCommandInventoryMarkdown
             ? "-"
             : string.Join("<br>", locations.Select(location => $"{location.TabId}/{location.GroupId} ({location.ControlType})"));
 
+    private static string List(IReadOnlyList<string> values) =>
+        values.Count == 0
+            ? "-"
+            : string.Join("<br>", values.Select(value => $"`{value}`"));
+
     private static string YesNo(bool value) => value ? "Yes" : "No";
 
     private static string Escape(string value) =>
@@ -364,6 +439,7 @@ internal sealed record InventoryDocument(
     string Source,
     string Notes,
     InventorySummary Summary,
+    IReadOnlyList<WorkflowEvidenceEntry> WorkflowEvidence,
     IReadOnlyList<CommandEntry> Commands);
 
 internal sealed record InventorySummary(
@@ -379,7 +455,17 @@ internal sealed record InventorySummary(
     int AvaloniaGaps,
     int KnownDeferred,
     int PlatformOnly,
-    int CommandIdAliases);
+    int CommandIdAliases,
+    int WorkflowEvidenceRows);
+
+internal sealed record WorkflowEvidenceEntry(
+    string EvidenceId,
+    string Area,
+    string Status,
+    string HostCoverage,
+    IReadOnlyList<string> EvidenceDocs,
+    IReadOnlyList<string> Verification,
+    string RemainingWork);
 
 internal sealed record CommandEntry(
     string CommandId,

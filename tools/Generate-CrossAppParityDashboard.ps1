@@ -246,8 +246,9 @@ try {
             knownDeferred = [int]$freep.summary.knownDeferred
             platformOnly = [int]$freep.summary.platformOnly
             commandIdAliases = [int]$freep.summary.commandIdAliases
+            workflowEvidenceRows = [int](Get-JsonPropertyValue $freep.summary "workflowEvidenceRows")
         }
-        nextSlice = "Layout picker, table picker, slide-pane reorder, bottom New Slide, and notes-page preview/PDF rendering now have WPF/Avalonia no-COM evidence paths. Continue workflow-depth slices in rich inline table/text editing, modern comments/review, and presenter recording/ink execution."
+        nextSlice = "Layout picker, table picker, slide-pane reorder, bottom New Slide, notes-page preview/PDF rendering, and presenter recording/ink execution now have WPF/Avalonia no-COM evidence paths. Continue workflow-depth slices in rich inline table/text editing, modern comments/review, real narration/camera capture backends, deeper ink/custom-show persistence workflows, and PowerPoint baselines."
     }
 
     $dashboard = [ordered]@{
@@ -278,7 +279,7 @@ try {
         "|---|---|---|---|",
         "| FreeX | Functional matrix, classifier, dialog inventory, dialog visual evidence, command surface | $($freeX.functionalMatrix.totalCommands) functional commands; $($freeX.functionalMatrix.parity) parity; $($freeX.functionalMatrix.avaloniaMissing) Avalonia-missing; $($freeX.functionalMatrix.realBehaviorGaps) real classified binding gaps; $($freeX.functionalMatrix.pseudoCommandGalleryItems) catalog-backed pseudo-gallery rows ($($freeX.functionalMatrix.conditionalFormatPopupGalleryRows) conditional-format, $($freeX.functionalMatrix.fontBorderPopupGalleryRows) font/border, $($freeX.functionalMatrix.accountingSymbolPopupGalleryRows) accounting-symbol); $($freeX.dialogRoutes.totalRoutes)/$($freeX.dialogRoutes.totalRoutes) dialog routes captured on WPF and Avalonia; $($freeX.dialogVisualEvidence.pairedCapturedSurfaceIds) paired screenshot surface ids, $($freeX.dialogVisualEvidence.additionalAvaloniaCapturedSurfaceIds) Avalonia-only ids, $($freeX.dialogVisualEvidence.wpfManifestIdsWithoutAvaloniaPair) WPF-only ids; $($freeX.dialogVisualEvidence.pairedRawPixelDimensionMismatches) raw PNG pixel mismatches, $($freeX.dialogVisualEvidence.pairedCaptureScaleNormalizedDimensionMatches) DPI-normalized matches, $($freeX.dialogVisualEvidence.realLogicalSizeMismatches) real logical-size mismatches | $($freeX.nextSlice) |",
         "| FreeW | Generated command inventory | $($freeW.commandInventory.totalCommands) commands; $($freeW.commandInventory.bothProfiles) shared-profile; $($freeW.commandInventory.actionableMissingWpf) actionable WPF-missing; $($freeW.commandInventory.actionableMissingAvalonia) actionable Avalonia-missing; $($freeW.commandInventory.profileShapeOnly) profile-shape-only; $($freeW.commandInventory.commandIdAliases) command-id aliases; $($freeW.commandInventory.platformOnly) platform-only; $($freeW.commandInventory.deferred) deferred | $($freeW.nextSlice) |",
-        "| FreeP | Generated command inventory | $($freeP.commandInventory.totalCommands) commands; $($freeP.commandInventory.bothProfiles) shared-profile; $($freeP.commandInventory.actionableMissingWpf) actionable WPF-missing; $($freeP.commandInventory.actionableMissingAvalonia) actionable Avalonia-missing; $($freeP.commandInventory.platformOnly) platform-only | $($freeP.nextSlice) |",
+        "| FreeP | Generated command/evidence inventory | $($freeP.commandInventory.totalCommands) commands; $($freeP.commandInventory.bothProfiles) shared-profile; $($freeP.commandInventory.actionableMissingWpf) actionable WPF-missing; $($freeP.commandInventory.actionableMissingAvalonia) actionable Avalonia-missing; $($freeP.commandInventory.platformOnly) platform-only; $($freeP.commandInventory.workflowEvidenceRows) workflow evidence rows | $($freeP.nextSlice) |",
         "",
         "## Source Files",
         "",
