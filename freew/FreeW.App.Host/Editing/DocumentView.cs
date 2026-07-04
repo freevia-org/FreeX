@@ -11307,7 +11307,9 @@ public sealed class DocumentView : RichTextBox
         if (index < 0 || index > _model.Blocks.Count)
             index = _model.Blocks.Count;
 
-        ApplyBibliographyPlan(BibliographyRegionPlanner.BuildInsertPlan(_model, index, ActiveCitationStyle));
+        ApplyBibliographyPlan(
+            BibliographyRegionPlanner.BuildInsertPlan(_model, index, ActiveCitationStyle),
+            "Insert Bibliography");
     }
 
     /// <summary>
@@ -11322,16 +11324,29 @@ public sealed class DocumentView : RichTextBox
     }
 
     private void RefreshBibliographyFromModel() =>
-        ApplyBibliographyPlan(BibliographyRegionPlanner.BuildRefreshPlan(_model, ActiveCitationStyle));
+        ApplyBibliographyPlan(
+            BibliographyRegionPlanner.BuildRefreshPlan(_model, ActiveCitationStyle),
+            "Update Bibliography");
 
-    private void ApplyBibliographyPlan(BibliographyRegionPlan plan)
+    private void ApplyBibliographyPlan(BibliographyRegionPlan plan, string label)
     {
-        foreach (var deleteIndex in plan.DeleteIndicesDescending)
-            _commands.Execute(new DeleteParagraphCommand(deleteIndex));
+        _commands.BeginUndoGroup();
+        try
+        {
+            foreach (var deleteIndex in plan.DeleteIndicesDescending)
+                _commands.Execute(new DeleteParagraphCommand(deleteIndex));
 
-        var index = Math.Clamp(plan.InsertIndex, 0, _model.Blocks.Count);
-        foreach (var paragraph in plan.Paragraphs)
-            _commands.Execute(new InsertParagraphCommand(index++, paragraph));
+            var index = Math.Clamp(plan.InsertIndex, 0, _model.Blocks.Count);
+            foreach (var paragraph in plan.Paragraphs)
+                _commands.Execute(new InsertParagraphCommand(index++, paragraph));
+
+            _commands.CommitUndoGroup(label);
+        }
+        catch
+        {
+            _commands.AbortUndoGroup();
+            throw;
+        }
     }
 
     /// <summary>
