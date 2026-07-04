@@ -168,6 +168,17 @@ public sealed class SlidePanePlannerTests
         plan.ItemPadding.Should().Be(SlidePanePlanner.DefaultItemPadding);
         plan.LabelHeight.Should().Be(SlidePanePlanner.DefaultLabelHeight);
         plan.ItemHeight.Should().Be(SlidePanePlanner.DefaultSlideItemHeight);
+        plan.ItemCornerRadius.Should().Be(SlidePanePlanner.DefaultItemCornerRadius);
+        plan.NormalBorderThickness.Should().Be(SlidePanePlanner.DefaultNormalBorderThickness);
+        plan.SelectedBorderThickness.Should().Be(SlidePanePlanner.DefaultSelectedBorderThickness);
+        plan.PaneBackgroundHex.Should().Be(SlidePanePlanner.DefaultPaneBackgroundHex);
+        plan.ItemNormalBackgroundHex.Should().Be(SlidePanePlanner.DefaultItemNormalBackgroundHex);
+        plan.ItemSelectedBackgroundHex.Should().Be(SlidePanePlanner.DefaultItemSelectedBackgroundHex);
+        plan.ItemHoverBackgroundHex.Should().Be(SlidePanePlanner.DefaultItemHoverBackgroundHex);
+        plan.ItemNormalBorderHex.Should().Be(SlidePanePlanner.DefaultItemNormalBorderHex);
+        plan.ItemSelectedBorderHex.Should().Be(SlidePanePlanner.DefaultItemSelectedBorderHex);
+        plan.ThumbnailBorderHex.Should().Be(SlidePanePlanner.DefaultThumbnailBorderHex);
+        plan.LabelForegroundHex.Should().Be(SlidePanePlanner.DefaultLabelForegroundHex);
         plan.AccessibleName.Should().Be("Slide 2: Quarterly Plan, 2 objects");
         plan.ToolTipText.Should().Be(plan.AccessibleName);
     }

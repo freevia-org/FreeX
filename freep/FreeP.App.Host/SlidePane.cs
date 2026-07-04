@@ -33,15 +33,14 @@ public sealed class SlidePane : Border
 {
     // ── Colors ────────────────────────────────────────────────────────────────────
 
-    private static readonly Brush BackgroundBrush    = Freeze(new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)));
-    private static readonly Brush ItemNormalBg       = Freeze(new SolidColorBrush(Color.FromRgb(0xF5, 0xF5, 0xF5)));
-    private static readonly Brush ItemSelectedBg     = Freeze(new SolidColorBrush(Color.FromRgb(0xFF, 0xE0, 0xD6)));
-    private static readonly Brush ItemHoverBg        = Freeze(new SolidColorBrush(Color.FromRgb(0xEB, 0xEB, 0xEB)));
-    private static readonly Brush ItemSelectedBorder = Freeze(new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)));
-    private static readonly Brush ItemNormalBorder   = Freeze(new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)));
-    private static readonly Brush LabelBrush         = Freeze(new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)));
-    private static readonly Brush InsertLineBrush    = Freeze(new SolidColorBrush(
-        (Color)ColorConverter.ConvertFromString(SlidePanePlanner.DefaultDropIndicatorAccentHex)!));
+    private static readonly Brush BackgroundBrush    = BrushFromHex(SlidePanePlanner.DefaultPaneBackgroundHex);
+    private static readonly Brush ItemNormalBg       = BrushFromHex(SlidePanePlanner.DefaultItemNormalBackgroundHex);
+    private static readonly Brush ItemSelectedBg     = BrushFromHex(SlidePanePlanner.DefaultItemSelectedBackgroundHex);
+    private static readonly Brush ItemHoverBg        = BrushFromHex(SlidePanePlanner.DefaultItemHoverBackgroundHex);
+    private static readonly Brush ItemSelectedBorder = BrushFromHex(SlidePanePlanner.DefaultItemSelectedBorderHex);
+    private static readonly Brush ItemNormalBorder   = BrushFromHex(SlidePanePlanner.DefaultItemNormalBorderHex);
+    private static readonly Brush LabelBrush         = BrushFromHex(SlidePanePlanner.DefaultLabelForegroundHex);
+    private static readonly Brush InsertLineBrush    = BrushFromHex(SlidePanePlanner.DefaultDropIndicatorAccentHex);
 
     // Section header row colors (Wave 11B)
     private static readonly Brush SectionHeaderBg   = Freeze(new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)));
@@ -218,7 +217,9 @@ public sealed class SlidePane : Border
             if (item.Tag is not int itemIdx) continue;
             bool selected = itemIdx == idx;
             item.BorderBrush     = selected ? ItemSelectedBorder : ItemNormalBorder;
-            item.BorderThickness = selected ? new Thickness(2)   : new Thickness(1);
+            item.BorderThickness = selected
+                ? new Thickness(SlidePanePlanner.DefaultSelectedBorderThickness)
+                : new Thickness(SlidePanePlanner.DefaultNormalBorderThickness);
             item.Background      = selected ? ItemSelectedBg      : ItemNormalBg;
         }
     }
@@ -252,8 +253,8 @@ public sealed class SlidePane : Border
 
         var thumbBorder = new Border
         {
-            BorderBrush     = ItemNormalBorder,
-            BorderThickness = new Thickness(1),
+            BorderBrush     = BrushFromHex(plan.ThumbnailBorderHex),
+            BorderThickness = new Thickness(plan.NormalBorderThickness),
             Child           = thumb
         };
 
@@ -268,10 +269,10 @@ public sealed class SlidePane : Border
         var item = new Border
         {
             Tag             = plan.SlideIndex,
-            Background      = plan.IsSelected ? ItemSelectedBg     : ItemNormalBg,
-            BorderBrush     = plan.IsSelected ? ItemSelectedBorder : ItemNormalBorder,
-            BorderThickness = plan.IsSelected ? new Thickness(2)   : new Thickness(1),
-            CornerRadius    = new CornerRadius(3),
+            Background      = BrushFromHex(plan.IsSelected ? plan.ItemSelectedBackgroundHex : plan.ItemNormalBackgroundHex),
+            BorderBrush     = BrushFromHex(plan.IsSelected ? plan.ItemSelectedBorderHex : plan.ItemNormalBorderHex),
+            BorderThickness = new Thickness(plan.IsSelected ? plan.SelectedBorderThickness : plan.NormalBorderThickness),
+            CornerRadius    = new CornerRadius(plan.ItemCornerRadius),
             Margin          = new Thickness(6, 4, 6, 4),
             Padding         = new Thickness(plan.ItemPadding),
             Child           = panel,
@@ -294,12 +295,14 @@ public sealed class SlidePane : Border
         item.MouseEnter += (sender, e) =>
         {
             if (sender is Border b && b.Tag is int idx && idx != _editor.CurrentSlideIndex)
-                b.Background = ItemHoverBg;
+                b.Background = BrushFromHex(plan.ItemHoverBackgroundHex);
         };
         item.MouseLeave += (sender, e) =>
         {
             if (sender is Border b && b.Tag is int idx)
-                b.Background = idx == _editor.CurrentSlideIndex ? ItemSelectedBg : ItemNormalBg;
+                b.Background = BrushFromHex(idx == _editor.CurrentSlideIndex
+                    ? plan.ItemSelectedBackgroundHex
+                    : plan.ItemNormalBackgroundHex);
         };
 
         // Drag-to-reorder.
@@ -566,6 +569,7 @@ public sealed class SlidePane : Border
         }
 
         _insertIndicator.Height     = plan.IndicatorThickness;
+        _insertIndicator.Background = BrushFromHex(plan.AccentColorHex);
         _insertIndicator.Margin     = new Thickness(
             plan.HorizontalInset,
             plan.IndicatorTopMargin,
@@ -593,4 +597,7 @@ public sealed class SlidePane : Border
         if (freezable.CanFreeze) freezable.Freeze();
         return freezable;
     }
+
+    private static Brush BrushFromHex(string hex) =>
+        Freeze(new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)!));
 }
