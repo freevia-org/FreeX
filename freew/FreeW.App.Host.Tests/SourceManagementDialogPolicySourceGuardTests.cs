@@ -12,6 +12,7 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         source.Should().Contain("using FreeW.App.Presentation.Ribbon;");
         source.Should().Contain("SourceManagementDialogPlanner.TryBuildCitationSource(");
         source.Should().Contain("SourceManagementDialogPlanner.BuildPickerItems(");
+        source.Should().Contain("SourceManagementDialogPlanner.BuildSourceTypeChoices(");
         source.Should().Contain("SourceManagementDialogPlanner.BuildEntryFieldPlans(");
         source.Should().Contain("SourceManagementDialogPlanner.CreateEntry(");
         source.Should().Contain("fields.ToDictionary(pair => pair.Key, pair => (string?)pair.Value.Text),");
