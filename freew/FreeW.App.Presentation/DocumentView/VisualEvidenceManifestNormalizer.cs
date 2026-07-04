@@ -37,6 +37,7 @@ public sealed record FreeWVisualEvidenceNormalizedRow(
     long ByteLength,
     string Sha256,
     FreeWVisualPixelStats PixelStats,
+    IReadOnlyDictionary<string, string> HostMetadata,
     int PageNumber,
     int PageCount,
     string LayoutKind,
@@ -732,6 +733,9 @@ public static class FreeWVisualEvidenceManifestNormalizer
             fileLength > 0 ? fileLength : row.ByteLength,
             sha256,
             row.PixelStats,
+            row.HostMetadata
+                .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.OrdinalIgnoreCase),
             row.PageExpectation.PageNumber,
             row.PageExpectation.PageCount,
             row.PageExpectation.LayoutKind,

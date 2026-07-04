@@ -146,6 +146,7 @@ public sealed class VisualEvidenceBaselinePolicyTests
                 BackgroundColorHex: "#FFFFFF",
                 NonBackgroundSampledPixels: 200,
                 NonBackgroundRatio: 0.5),
+            HostMetadata: new Dictionary<string, string>(),
             PageNumber: pageNumber,
             PageCount: pageCount,
             LayoutKind: expectation.LayoutKind,
