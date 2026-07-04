@@ -2877,7 +2877,8 @@ public static class PresentationReviewWorkflowPlanner
             return;
         }
 
-        if (!table.Flags.FirstRow)
+        var hasDeclaredHeaderRow = HasDeclaredTableHeaderRow(table);
+        if (!hasDeclaredHeaderRow)
         {
             issues.Add(new PresentationAccessibilityIssueDescriptor(
                 PresentationAccessibilityIssueSeverity.Warning,
@@ -2938,6 +2939,9 @@ public static class PresentationReviewWorkflowPlanner
     private static bool HasTableCells(TableShape table)
         => table.Rows.Any(row => row.Cells.Count > 0);
 
+    private static bool HasDeclaredTableHeaderRow(TableShape table)
+        => table.Flags.FirstRow;
+
     private static int CountBlankHeaderCells(TableShape table)
     {
         if (table.Rows.Count == 0)
@@ -2953,7 +2957,7 @@ public static class PresentationReviewWorkflowPlanner
 
     private static int CountBlankBodyCells(TableShape table)
     {
-        var firstBodyRowIndex = table.Flags.FirstRow ? 1 : 0;
+        var firstBodyRowIndex = 1;
         if (table.Rows.Count <= firstBodyRowIndex)
         {
             return 0;
