@@ -208,7 +208,7 @@ public sealed partial class MainWindow
     private IReadOnlyList<(string SurfaceId, Func<Task> Opener, string[] TabNames)> ParityTabDialogOpeners() =>
     [
         ("dialog.FormatCells", () => ShowFormatCellsDialogAsync(),
-            ["Number", "Alignment", "Font", "Fill", "Border", "Protection"]),
+            ["Number", "Alignment", "Font", "Border", "Fill", "Protection"]),
         // Page Setup: both shells have the same 4 tabs in the same order (Page/Margins/Header-Footer/Sheet).
         ("dialog.PageSetup", () => ShowPageSetupDialogAsync(),
             ["Page", "Margins", "HeaderFooter", "Sheet"]),

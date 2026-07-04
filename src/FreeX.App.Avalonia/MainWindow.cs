@@ -12305,8 +12305,8 @@ public sealed partial class MainWindow : Window
                 numberTab,
                 alignmentTab,
                 fontTab,
-                fillTab,
                 borderTab,
+                fillTab,
                 protectionTab,
             },
         };
