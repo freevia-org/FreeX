@@ -25,12 +25,19 @@ public static class PptxPackageWriter
         string ProviderId,
         bool IsPreserved);
 
+    private sealed record MediaCaptionTrackRelationship(
+        string RelationshipId,
+        string Language,
+        string Label,
+        bool IsExternal);
+
     // ── Namespaces ────────────────────────────────────────────────────────────────
     private static readonly XNamespace P       = "http://schemas.openxmlformats.org/presentationml/2006/main";
     private static readonly XNamespace A       = PptxColorReader.A;
     private static readonly XNamespace R       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace Adec    = "http://schemas.microsoft.com/office/drawing/2017/decorative";
     private static readonly XNamespace P188    = "http://schemas.microsoft.com/office/powerpoint/2018/8/main";
+    private static readonly XNamespace P20Media = "http://schemas.microsoft.com/office/powerpoint/2020/media";
     private const string DecorativeExtUri = "{C183D7F6-B498-43B3-948B-1728B52AA6E4}";
 
     // ── Relationship types ────────────────────────────────────────────────────────
@@ -54,6 +61,7 @@ public static class PptxPackageWriter
     private const string ModernAuthorsRelType = "http://schemas.microsoft.com/office/2018/10/relationships/authors";
     private const string VideoRelType       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/video";
     private const string AudioRelType       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio";
+    private const string CaptionRelType     = "http://schemas.microsoft.com/office/2011/relationships/mediaCaption";
 
     // OLE relationship types (Theme 21)
     private const string OleObjectRelType =
@@ -199,6 +207,8 @@ public static class PptxPackageWriter
 
     private static void WriteArchive(ZipArchive archive, Presentation presentation)
     {
+        var packageSnapshot = presentation.PackageSnapshot;
+
         // Ensure there is at least one master and one layout.
         var masters = presentation.Masters.Count > 0
             ? presentation.Masters
@@ -244,6 +254,19 @@ public static class PptxPackageWriter
                 {
                     var mediaExt = OpcMediaTypes.GetAudioVideoExtension(shape.Media.ContentType);
                     mediaExtensions.Add(mediaExt);
+                }
+
+                // Register caption/subtitle tracks that will be materialized as package parts.
+                if (shape.Kind == SlideShapeKind.Media && shape.Media is not null)
+                {
+                    foreach (var track in shape.Media.CaptionTracks)
+                    {
+                        if (track.IsExternal)
+                            continue;
+
+                        if (TryGetCaptionTrackBytes(track, packageSnapshot, out _))
+                            mediaExtensions.Add(GetCaptionTrackExtension(track));
+                    }
                 }
 
                 // EA1: register the preserved-object fallback image extension so it gets a Default entry.
@@ -310,7 +333,6 @@ public static class PptxPackageWriter
         }
 
         // --- 1. [Content_Types].xml ---
-        var packageSnapshot = presentation.PackageSnapshot;
         var preservedChartWorkbookPaths = FindPreservedChartWorkbookPaths(packageSnapshot, presentation);
         var ctXml = BuildContentTypesXml(
             presentation,
@@ -473,6 +495,13 @@ public static class PptxPackageWriter
             foreach (var (_, fillBlipRelId, _) in fillBlipRelIds) usedRelIds.Add(fillBlipRelId);
             foreach (var (_, chartRelId, _) in chartRelIds)       usedRelIds.Add(chartRelId);
 
+            var captionTrackRels = WriteSlideMediaCaptionTracks(archive, slide, si + 1, usedRelIds, packageSnapshot);
+            var captionTracksByShape = captionTrackRels
+                .GroupBy(track => track.shapeId)
+                .ToDictionary(
+                    group => group.Key,
+                    group => (IReadOnlyList<MediaCaptionTrackRelationship>)group.Select(track => track.relationship).ToList());
+
             var (smartArtSlideRels, smartArtRelIdRemap) = WriteSlideSmartArt(archive, slide, usedRelIds);
 
             // Theme 21: Write OLE embedded object binaries + fallback images.
@@ -527,7 +556,7 @@ public static class PptxPackageWriter
             }
 
             // Slide xml — use the owning master's theme color scheme for scheme-color pre-resolution.
-            WriteEntry(archive, slidePath, BuildSlideXml(slide, slideColorScheme, mediaById, smartArtRelIdRemap, hlinkRelIds, presentation.Slides, fillBlipById, transSoundRelId, prvRelIdByShapeAndOldId));
+            WriteEntry(archive, slidePath, BuildSlideXml(slide, slideColorScheme, mediaById, smartArtRelIdRemap, hlinkRelIds, presentation.Slides, fillBlipById, transSoundRelId, prvRelIdByShapeAndOldId, captionTracksByShape));
 
             // Slide rels: rId1=layout, images (picture shapes + fill blips), charts, SmartArt, optional notesSlide
             var slideRels = new OpcRelationshipDocument();
@@ -536,6 +565,8 @@ public static class PptxPackageWriter
                 slideRels.Add(mediaRelId, ImageRelType, $"../media/{mediaPath.Split('/').Last()}");
             foreach (var (_, mediaFileRelId, mediaFilePath, isVideo) in mediaFileRelIds)
                 slideRels.Add(mediaFileRelId, isVideo ? VideoRelType : AudioRelType, $"../media/{mediaFilePath.Split('/').Last()}");
+            foreach (var (_, relationship, target, isExternal) in captionTrackRels)
+                slideRels.Add(relationship.RelationshipId, CaptionRelType, target, isExternal);
             foreach (var (_, fillBlipRelId, fillBlipPath) in fillBlipRelIds)
                 slideRels.Add(fillBlipRelId, ImageRelType, $"../media/{fillBlipPath.Split('/').Last()}");
             foreach (var (_, chartRelId, chartPath) in chartRelIds)
@@ -665,10 +696,10 @@ public static class PptxPackageWriter
         // Emit a Default entry for every media extension actually written (covers all paths correctly).
         foreach (var ext in mediaExtensions.OrderBy(e => e))
         {
-            if (OpcMediaTypes.TryGetDefaultContentType(ext, out var imgCt))
+            if (TryGetPackageDefaultContentType(ext, out var contentType))
                 defaults.Add(new XElement(CT + "Default",
                     new XAttribute("Extension", ext),
-                    new XAttribute("ContentType", imgCt)));
+                    new XAttribute("ContentType", contentType)));
         }
 
         var overrides = new List<XElement>
@@ -1014,7 +1045,8 @@ public static class PptxPackageWriter
         List<Slide>? allSlides = null,
         Dictionary<uint, string>? fillBlipById = null,
         string? transSoundRelId = null,
-        Dictionary<(uint shapeId, string oldRelId), string>? prvRelIdByShapeAndOldId = null)
+        Dictionary<(uint shapeId, string oldRelId), string>? prvRelIdByShapeAndOldId = null,
+        IReadOnlyDictionary<uint, IReadOnlyList<MediaCaptionTrackRelationship>>? captionTracksByShape = null)
     {
         return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
@@ -1030,7 +1062,7 @@ public static class PptxPackageWriter
                     new XElement(P + "spTree",
                         GrpSpHeader(),
                         slide.Shapes
-                            .Select(s => BuildShapeEl(s, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById, prvRelIdByShapeAndOldId))
+                            .Select(s => BuildShapeEl(s, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById, prvRelIdByShapeAndOldId, captionTracksByShape))
                             .OfType<XElement>())),
                 // II2: p:hf is NOT valid on p:sld (CT_Slide schema has no hf element);
                 // it is only valid on slideMaster/slideLayout/handoutMaster/notesMaster.
@@ -2272,12 +2304,13 @@ public static class PptxPackageWriter
         Dictionary<string, string>? hlinkRelIds = null,
         List<Slide>? allSlides = null,
         Dictionary<uint, string>? fillBlipById = null,
-        Dictionary<(uint shapeId, string oldRelId), string>? prvRelIdByShapeAndOldId = null) =>
+        Dictionary<(uint shapeId, string oldRelId), string>? prvRelIdByShapeAndOldId = null,
+        IReadOnlyDictionary<uint, IReadOnlyList<MediaCaptionTrackRelationship>>? captionTracksByShape = null) =>
         shape.Kind switch
         {
             SlideShapeKind.Picture => BuildPicEl(shape, mediaById),
-            SlideShapeKind.Media   => BuildMediaPicEl(shape, mediaById),
-            SlideShapeKind.Group => BuildGrpSpEl(shape, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById, prvRelIdByShapeAndOldId),
+            SlideShapeKind.Media   => BuildMediaPicEl(shape, mediaById, captionTracksByShape),
+            SlideShapeKind.Group => BuildGrpSpEl(shape, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById, prvRelIdByShapeAndOldId, captionTracksByShape),
             SlideShapeKind.Connector => BuildCxnSpEl(shape, scheme, hlinkRelIds, fillBlipById),
             SlideShapeKind.Table when shape.Table is not null => BuildGraphicFrameEl(shape, scheme),
             SlideShapeKind.Chart when shape.Chart is not null => BuildChartGraphicFrameEl(shape, mediaById),
@@ -2427,7 +2460,10 @@ public static class PptxPackageWriter
     private static string FormatSignedPercentFraction(double v) =>
         ((long)Math.Round(v * 100_000.0)).ToString(CultureInfo.InvariantCulture);
 
-    private static XElement BuildMediaPicEl(SlideShape shape, Dictionary<uint, string> mediaById)
+    private static XElement BuildMediaPicEl(
+        SlideShape shape,
+        Dictionary<uint, string> mediaById,
+        IReadOnlyDictionary<uint, IReadOnlyList<MediaCaptionTrackRelationship>>? captionTracksByShape = null)
     {
         // Poster image rel id (written by WriteSlideMedia with the shape's Id key)
         mediaById.TryGetValue(shape.Id, out var posterRelId);
@@ -2456,14 +2492,46 @@ public static class PptxPackageWriter
             : new XElement(P + "blipFill",
                 new XElement(A + "stretch", new XElement(A + "fillRect")));
 
+        var nvPrChildren = new List<object> { mediaFileEl };
+        if (captionTracksByShape is not null
+            && captionTracksByShape.TryGetValue(shape.Id, out var captionTracks)
+            && captionTracks.Count > 0)
+        {
+            nvPrChildren.Add(BuildMediaCaptionExtList(captionTracks));
+        }
+
         return new XElement(P + "pic",
             new XElement(P + "nvPicPr",
                 CnvPr(shape),
                 new XElement(P + "cNvPicPr"),
-                new XElement(P + "nvPr",
-                    mediaFileEl)),
+                new XElement(P + "nvPr", nvPrChildren)),
             blipFillEl,
             BuildSpPrEl(shape, PresentationColorScheme.CreateDefault(), forcePrst: "rect"));
+    }
+
+    private static XElement BuildMediaCaptionExtList(IReadOnlyList<MediaCaptionTrackRelationship> captionTracks)
+    {
+        var captionElements = captionTracks.Select(track =>
+        {
+            var attributes = new List<object>
+            {
+                new XAttribute(track.IsExternal ? R + "link" : R + "embed", track.RelationshipId)
+            };
+
+            if (!string.IsNullOrWhiteSpace(track.Language))
+                attributes.Add(new XAttribute("lang", track.Language));
+            if (!string.IsNullOrWhiteSpace(track.Label))
+                attributes.Add(new XAttribute("label", track.Label));
+
+            return new XElement(P20Media + "caption",
+                NsAttr("p20media", P20Media),
+                attributes);
+        });
+
+        return new XElement(P + "extLst",
+            new XElement(P + "ext",
+                new XAttribute("uri", "{DAA4B4D4-6D71-4841-9C94-3DE7FCFBFE68}"),
+                captionElements));
     }
 
     private static XElement BuildGrpSpEl(
@@ -2472,7 +2540,8 @@ public static class PptxPackageWriter
         Dictionary<string, string>? hlinkRelIds = null,
         List<Slide>? allSlides = null,
         Dictionary<uint, string>? fillBlipById = null,
-        Dictionary<(uint shapeId, string oldRelId), string>? prvRelIdByShapeAndOldId = null) =>
+        Dictionary<(uint shapeId, string oldRelId), string>? prvRelIdByShapeAndOldId = null,
+        IReadOnlyDictionary<uint, IReadOnlyList<MediaCaptionTrackRelationship>>? captionTracksByShape = null) =>
         new XElement(P + "grpSp",
             new XElement(P + "nvGrpSpPr",
                 CnvPr(shape),
@@ -2480,7 +2549,7 @@ public static class PptxPackageWriter
                 new XElement(P + "nvPr")),
             BuildGrpSpPrEl(shape),
             shape.Children
-                .Select(c => BuildShapeEl(c, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById, prvRelIdByShapeAndOldId))
+                .Select(c => BuildShapeEl(c, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById, prvRelIdByShapeAndOldId, captionTracksByShape))
                 .OfType<XElement>());
 
     /// <summary>
@@ -3681,6 +3750,150 @@ public static class PptxPackageWriter
         }
 
         return result;
+    }
+
+    private static List<(uint shapeId, MediaCaptionTrackRelationship relationship, string target, bool isExternal)> WriteSlideMediaCaptionTracks(
+        ZipArchive archive,
+        Slide slide,
+        int slideIndex,
+        HashSet<string> usedRelIds,
+        PptxPackageSnapshot? packageSnapshot)
+    {
+        var result = new List<(uint shapeId, MediaCaptionTrackRelationship relationship, string target, bool isExternal)>();
+        var captionIndex = 1;
+
+        foreach (var shape in AllShapes(slide.Shapes))
+        {
+            if (shape.Kind != SlideShapeKind.Media || shape.Media is null)
+                continue;
+
+            foreach (var track in shape.Media.CaptionTracks)
+            {
+                var isExternal = IsExternalCaptionTrack(track);
+                if (isExternal)
+                {
+                    if (string.IsNullOrWhiteSpace(track.Source))
+                        continue;
+
+                    var externalRelId = NextCaptionRelationshipId(usedRelIds, captionIndex++);
+                    var relationship = new MediaCaptionTrackRelationship(
+                        externalRelId,
+                        track.Language,
+                        track.Label,
+                        IsExternal: true);
+                    result.Add((shape.Id, relationship, track.Source, isExternal: true));
+                    continue;
+                }
+
+                if (!TryGetCaptionTrackBytes(track, packageSnapshot, out var bytes))
+                    continue;
+
+                var extension = GetCaptionTrackExtension(track);
+                var captionPath = $"ppt/media/slide{slideIndex}_caption{captionIndex}.{extension}";
+                var relId = NextCaptionRelationshipId(usedRelIds, captionIndex++);
+                WriteRawEntry(archive, captionPath, bytes);
+
+                var internalRelationship = new MediaCaptionTrackRelationship(
+                    relId,
+                    track.Language,
+                    track.Label,
+                    IsExternal: false);
+                result.Add((shape.Id, internalRelationship, $"../media/{captionPath.Split('/').Last()}", isExternal: false));
+            }
+        }
+
+        return result;
+    }
+
+    private static string NextCaptionRelationshipId(HashSet<string> usedRelIds, int preferredIndex)
+    {
+        var relId = $"rIdCaption{preferredIndex}";
+        var suffix = 1;
+        while (!usedRelIds.Add(relId))
+        {
+            relId = $"rIdCaption{preferredIndex}_{suffix++}";
+        }
+
+        return relId;
+    }
+
+    private static bool TryGetCaptionTrackBytes(
+        MediaCaptionTrackInfo track,
+        PptxPackageSnapshot? packageSnapshot,
+        out byte[] bytes)
+    {
+        if (track.Bytes.Length > 0)
+        {
+            bytes = track.Bytes;
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(track.Source)
+            && !IsExternalCaptionTrack(track)
+            && packageSnapshot is not null
+            && packageSnapshot.TryGetEntry(track.Source, out bytes))
+        {
+            return bytes.Length > 0;
+        }
+
+        bytes = Array.Empty<byte>();
+        return false;
+    }
+
+    private static bool IsExternalCaptionTrack(MediaCaptionTrackInfo track)
+        => track.IsExternal
+            || (!string.IsNullOrWhiteSpace(track.Source)
+                && Uri.TryCreate(track.Source, UriKind.Absolute, out var uri)
+                && !string.IsNullOrWhiteSpace(uri.Scheme));
+
+    private static string GetCaptionTrackExtension(MediaCaptionTrackInfo track)
+    {
+        var contentType = track.ContentType.Trim().ToLowerInvariant();
+        if (contentType is "text/vtt")
+            return "vtt";
+        if (contentType is "application/ttml+xml" or "application/ttaf+xml")
+            return "ttml";
+        if (contentType is "application/x-subrip" or "text/srt")
+            return "srt";
+
+        var extension = GetCaptionTrackExtension(track.Source);
+        return extension is "vtt" or "ttml" or "dfxp" or "srt"
+            ? extension
+            : "vtt";
+    }
+
+    private static string GetCaptionTrackExtension(string source)
+    {
+        if (string.IsNullOrWhiteSpace(source))
+            return string.Empty;
+
+        var end = source.AsSpan();
+        var queryIndex = source.IndexOfAny(['?', '#']);
+        if (queryIndex >= 0)
+            end = source.AsSpan(0, queryIndex);
+
+        var slashIndex = end.LastIndexOf('/');
+        var fileName = slashIndex >= 0 ? end[(slashIndex + 1)..] : end;
+        var dotIndex = fileName.LastIndexOf('.');
+        return dotIndex >= 0 && dotIndex < fileName.Length - 1
+            ? fileName[(dotIndex + 1)..].ToString().ToLowerInvariant()
+            : string.Empty;
+    }
+
+    private static bool TryGetPackageDefaultContentType(string extension, out string contentType)
+    {
+        if (OpcMediaTypes.TryGetDefaultContentType(extension, out contentType!))
+            return true;
+
+        contentType = extension.TrimStart('.').ToLowerInvariant() switch
+        {
+            "vtt" => "text/vtt",
+            "ttml" or "dfxp" => "application/ttml+xml",
+            "srt" => "application/x-subrip",
+            _ => string.Empty
+        };
+
+        return contentType.Length > 0;
     }
 
     private static void WriteRawEntry(ZipArchive archive, string path, byte[] bytes)
