@@ -8827,6 +8827,12 @@ public sealed class DocumentView : RichTextBox
             refreshedGeneratedRegion = true;
         }
 
+        if (TableOfAuthoritiesRegionPlanner.ContainsRegion(_model))
+        {
+            ApplyTableOfAuthoritiesPlan(TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(_model));
+            refreshedGeneratedRegion = true;
+        }
+
         if (refreshedGeneratedRegion)
         {
             Render();

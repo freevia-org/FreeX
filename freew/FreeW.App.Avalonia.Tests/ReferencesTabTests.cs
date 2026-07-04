@@ -171,6 +171,35 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
+    public void UpdateFields_refreshes_existing_table_of_authorities_with_explicit_break_page_references()
+    {
+        var oldRegion = TableOfAuthorities.Build(new[] { new Citation("Old Case", CitationCategory.Cases) });
+        var view = ViewWith(
+            new Paragraph("Before"),
+            CitationMarkParagraph("Case A", formatted: false),
+            DocumentOps.CreatePageBreak(),
+            CitationMarkParagraph("Case A", formatted: false),
+            oldRegion[0],
+            oldRegion[1],
+            oldRegion[2],
+            new Paragraph("After"));
+
+        view.UpdateFields();
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Table of Authorities", "Cases", "Case A\t1, 2");
+        view.Document.Blocks.OfType<Paragraph>().Select(paragraph => paragraph.PlainText)
+            .Should().NotContain("Old Case")
+            .And.EndWith("After");
+
+        var entry = view.Document.Blocks.OfType<Paragraph>()
+            .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
+        entry.Runs.Select(run => run.Text).Should().Equal("Case A", "\t", "1, 2");
+    }
+
+    [Fact]
     public void InsertCaption_inserts_autonumbered_paragraph_after_caret()
     {
         var view = ViewWith();
