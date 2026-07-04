@@ -8,6 +8,16 @@ namespace FreeX.App.Presentation.Tests.Consolidate;
 public sealed class ConsolidateDialogPlannerTests
 {
     [Fact]
+    public void SizeContract_MatchesCommittedWpfLogicalCapture()
+    {
+        ConsolidateDialogPlanner.WpfWindowWidth.Should().Be(420);
+        ConsolidateDialogPlanner.CaptureWidth.Should().Be(380);
+        ConsolidateDialogPlanner.CaptureHeight.Should().Be(420);
+        ConsolidateDialogPlanner.MinWidth.Should().Be(360);
+        ConsolidateDialogPlanner.ReferencesListHeight.Should().Be(72);
+    }
+
+    [Fact]
     public void TryAddReference_CanRejectDuplicateReferencesForShellsThatRequireUniqueListItems()
     {
         var sheetId = SheetId.New();

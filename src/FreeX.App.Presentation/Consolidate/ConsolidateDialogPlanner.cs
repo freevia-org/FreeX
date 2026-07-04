@@ -14,6 +14,12 @@ public delegate bool ConsolidateReferenceParser(string input, out GridRange rang
 
 public static class ConsolidateDialogPlanner
 {
+    public const double WpfWindowWidth = 420;
+    public const double CaptureWidth = 380;
+    public const double CaptureHeight = 420;
+    public const double MinWidth = 360;
+    public const double ReferencesListHeight = 72;
+
     private static readonly IReadOnlyList<(ConsolidateFunction Function, string Label)> FunctionChoiceValues =
         Array.AsReadOnly(
         [
