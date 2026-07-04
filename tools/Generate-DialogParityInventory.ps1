@@ -277,7 +277,7 @@ $routes = @(
     @{
         RouteId = "dialog.AddWatch"; DisplayName = "Add Watch"
         Wpf = @("screenshots\formula-diagnostics-tour\freex_formula_diagnostics_watch_add_dialog.png")
-        Shared = @("src\FreeX.App.Services\AddWatchDialogPlanner.cs", "src\FreeX.Core.Commands\WatchWindowService.cs")
+        Shared = @("src\FreeX.App.Services\AddWatchDialogPlanner.cs", "src\FreeX.App.Services\WatchWindowDialogPlanner.cs", "src\FreeX.Core.Commands\WatchWindowService.cs")
     },
     @{
         RouteId = "dialog.PageSetup"; DisplayName = "Page Setup"
