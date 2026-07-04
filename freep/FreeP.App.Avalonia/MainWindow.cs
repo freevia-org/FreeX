@@ -305,6 +305,9 @@ public sealed class MainWindow : Window
     internal int ReviewCommentsPaneActionButtonCount => LastCommentPanePlan?.Actions.Count ?? 0;
     internal int ReviewCommentsPaneSelectedCommentCount => LastCommentPanePlan?.Comments.Count(comment => comment.IsSelected) ?? 0;
     internal string ReviewCommentsPaneSummary => LastCommentPanePlan?.DeckSummaryLabel ?? string.Empty;
+    internal IReadOnlyList<string> ReviewCommentsPaneFilterStates =>
+        LastCommentPanePlan?.Filters.Select(filter =>
+            $"{filter.Kind}|{filter.Label}|{filter.Count}|{filter.IsSelected}|{filter.HasMatches}").ToArray() ?? [];
     internal IReadOnlyList<string> ReviewCommentsPaneRenderedActionStates =>
         EnumerateReviewPaneButtons(_reviewCommentsPanePanel)
             .Where(button => button.Tag is string commandId &&
@@ -3132,13 +3135,27 @@ public sealed class MainWindow : Window
     }
 
     private static Control BuildReviewCommentsPaneHeader(PresentationCommentPanePlan plan)
-        => new TextBlock
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            Spacing     = 2,
+            Margin      = new Thickness(12, 10, 12, 2),
+        };
+        panel.Children.Add(new TextBlock
         {
             Text       = $"Comments - {plan.CurrentSlideSummaryLabel} | {plan.DeckSummaryLabel}",
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(0x2D, 0x2D, 0x2D)),
-            Margin     = new Thickness(12, 10, 12, 2),
-        };
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text       = string.Join(" | ", plan.Filters.Select(filter => filter.Summary)),
+            FontSize   = 11,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+        });
+        return panel;
+    }
 
     private Control BuildReviewCommentActions(IReadOnlyList<PresentationReviewWorkflowActionPlan> actions)
     {

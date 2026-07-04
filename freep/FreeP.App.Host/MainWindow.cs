@@ -207,6 +207,9 @@ public sealed class MainWindow : Window
     internal bool IsDirty => _file.IsDirty;
     internal int ReviewCommentSelectedCount => LastCommentPanePlan?.Comments.Count(comment => comment.IsSelected) ?? 0;
     internal string ReviewCommentPaneSummary => LastCommentPanePlan?.DeckSummaryLabel ?? string.Empty;
+    internal IReadOnlyList<string> ReviewCommentPaneFilterStates =>
+        LastCommentPanePlan?.Filters.Select(filter =>
+            $"{filter.Kind}|{filter.Label}|{filter.Count}|{filter.IsSelected}|{filter.HasMatches}").ToArray() ?? [];
     internal bool IsReadingOrderPaneVisible => _readingOrderPaneHost?.Visibility == Visibility.Visible;
     internal int ReadingOrderPaneItemCount => LastReadingOrderPlan?.Items.Count ?? 0;
     internal string ReadingOrderPaneHeading => _readingOrderPaneHeading?.Text ?? string.Empty;
@@ -1090,6 +1093,13 @@ public sealed class MainWindow : Window
             FontSize = 11,
             FontWeight = FontWeights.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+            Margin = new Thickness(0, 0, 0, 6),
+        });
+        host.Children.Add(new TextBlock
+        {
+            Text = string.Join(" | ", plan.Filters.Select(filter => filter.Summary)),
+            FontSize = 10,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
             Margin = new Thickness(0, 0, 0, 6),
         });
     }

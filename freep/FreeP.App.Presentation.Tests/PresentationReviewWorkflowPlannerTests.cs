@@ -159,6 +159,95 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildCommentPanePlan_ProjectsThreadFiltersAndFilteredSelection()
+    {
+        var slides = new[] { new Slide { Title = "Review" }, new Slide { Title = "Wrap-up" } };
+        slides[0].Comments.Add(new SlideComment
+        {
+            Author = "Alice",
+            Initials = "AL",
+            Text = "Ask @Nora to verify the chart.",
+            Idx = 1
+        });
+        slides[0].Comments.Add(new SlideComment
+        {
+            Author = "Bob",
+            Initials = "BO",
+            Text = "Resolved note.",
+            Idx = 2,
+            IsResolved = true
+        });
+        slides[0].Comments.Add(new SlideComment
+        {
+            Author = "Nora",
+            Initials = "NO",
+            Text = "Follow-up without a mention.",
+            Idx = 3,
+            Replies =
+            {
+                new SlideCommentReply
+                {
+                    Author = "Alice",
+                    Initials = "AL",
+                    Text = "Looping @Bob in."
+                }
+            }
+        });
+        slides[1].Comments.Add(new SlideComment
+        {
+            Author = "Deck reviewer",
+            Text = "Other slide thread.",
+            Idx = 1
+        });
+
+        var all = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(slides, 0, selectedCommentIndex: 2);
+        var open = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
+            slides,
+            0,
+            selectedCommentIndex: 1,
+            PresentationCommentPaneFilterKind.Open);
+        var resolved = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
+            slides,
+            0,
+            selectedCommentIndex: 0,
+            PresentationCommentPaneFilterKind.Resolved);
+        var mentions = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
+            slides,
+            0,
+            selectedCommentIndex: 1,
+            PresentationCommentPaneFilterKind.Mentions);
+
+        all.FilterKind.Should().Be(PresentationCommentPaneFilterKind.All);
+        all.FilteredCommentCount.Should().Be(3);
+        all.Filters.Select(filter => filter.Summary).Should().Equal(
+            "All: 3 threads",
+            "Open: 2 threads",
+            "Resolved: 1 thread",
+            "Mentions: 2 threads");
+        all.Filters.Single(filter => filter.Kind == PresentationCommentPaneFilterKind.All).IsSelected.Should().BeTrue();
+        all.FilterSummaryLabel.Should().Be("Showing all threads");
+        all.SelectedComment!.CommentIndex.Should().Be(2);
+        all.DeckSummaryLabel.Should().Be("4 threads: 3 open threads, 1 resolved thread, 1 reply, 2 mentions");
+
+        open.FilteredCommentCount.Should().Be(2);
+        open.Comments.Select(comment => comment.CommentIndex).Should().Equal(0, 2);
+        open.SelectedComment!.CommentIndex.Should().Be(0);
+        open.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ResolveCommentCommandId)
+            .IsEnabled.Should().BeTrue();
+        open.FilterSummaryLabel.Should().Be("Showing 2 threads");
+
+        resolved.Comments.Should().ContainSingle().Which.CommentIndex.Should().Be(1);
+        resolved.SelectedCommentIndex.Should().Be(0);
+        resolved.SelectedComment!.ThreadStatus.Should().Be(PresentationCommentThreadStatus.Resolved);
+        resolved.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReopenCommentCommandId)
+            .IsEnabled.Should().BeTrue();
+
+        mentions.Comments.Select(comment => comment.CommentIndex).Should().Equal(0, 2);
+        mentions.SelectedComment!.CommentIndex.Should().Be(0);
+        mentions.Comments.Select(comment => comment.MentionCount).Should().Equal(1, 1);
+    }
+
+    [Fact]
     public void BuildCommentNavigationPlan_TargetsAdjacentThreadsAcrossSlides()
     {
         var slides = new[]

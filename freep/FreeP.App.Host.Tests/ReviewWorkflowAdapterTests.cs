@@ -67,6 +67,12 @@ public sealed class ReviewWorkflowAdapterTests
             window.LastCommentPanePlan.TotalMentionCount.Should().Be(0);
             window.ReviewCommentPaneSummary.Should()
                 .Be("1 thread: 0 open threads, 1 resolved thread, 0 replies, 0 mentions");
+            window.LastCommentPanePlan.FilterSummaryLabel.Should().Be("Showing all threads");
+            window.ReviewCommentPaneFilterStates.Should().Equal(
+                "All|All|1|True|True",
+                "Open|Open|0|False|False",
+                "Resolved|Resolved|1|False|True",
+                "Mentions|Mentions|0|False|False");
             window.LastCommentPanePlan.Comments.Single().Should().Match<PresentationCommentDescriptor>(comment =>
                 comment.ThreadStatus == PresentationCommentThreadStatus.Resolved &&
                 comment.ThreadStatusLabel == "Resolved" &&
