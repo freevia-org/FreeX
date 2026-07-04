@@ -2419,8 +2419,19 @@ public sealed class MainWindow : Window
     {
         if (_presentation.Slides.Count == 0) return;
 
-        int startIndex = fromStart ? 0 : Editor.CurrentSlideIndex;
-        var window = new SlideShowWindow(_presentation, startIndex);
+        var choiceId = fromStart
+            ? SlideShowCustomShowPlanner.FullPresentationChoiceId
+            : SlideShowCustomShowPlanner.FromCurrentSlideChoiceId;
+        if (!SlideShowCustomShowPlanner.TryBuildRouteForLaunchChoice(
+                _presentation,
+                choiceId,
+                Editor.CurrentSlideIndex,
+                out var route))
+        {
+            return;
+        }
+
+        var window = new SlideShowWindow(_presentation, route);
         // Owner can only be set when the main window is already shown (not during unit tests).
         if (IsVisible)
             window.Owner = this;
@@ -2441,6 +2452,9 @@ public sealed class MainWindow : Window
             customShowName,
             startIndex,
             out route);
+
+    internal SlideShowLaunchPlan BuildSlideShowLaunchPlan() =>
+        SlideShowCustomShowPlanner.BuildLaunchPlan(_presentation, Editor.CurrentSlideIndex);
 
     internal bool TryStartCustomSlideShow(string? customShowName, int startIndex = 0)
     {

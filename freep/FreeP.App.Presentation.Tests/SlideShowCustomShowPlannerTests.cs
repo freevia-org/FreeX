@@ -114,6 +114,117 @@ public sealed class SlideShowCustomShowPlannerTests
         route.StartIndex.Should().Be(2);
     }
 
+    [Fact]
+    public void BuildLaunchPlan_ListsFullCurrentAndCustomShowChoices()
+    {
+        var presentation = MakePresentation("Intro", "Deep dive", "Appendix");
+        var customShow = new PresentationCustomShow { Name = "Executive review" };
+        customShow.SlideIds.Add(presentation.Slides[2].Id);
+        customShow.SlideIds.Add("missing-slide");
+        customShow.SlideIds.Add(presentation.Slides[0].Id);
+        presentation.CustomShows.Add(customShow);
+        presentation.CustomShows.Add(new PresentationCustomShow { Name = "Empty show" });
+
+        var plan = SlideShowCustomShowPlanner.BuildLaunchPlan(presentation, currentSlideIndex: 1);
+
+        plan.TotalSlideCount.Should().Be(3);
+        plan.CurrentSlideIndex.Should().Be(1);
+        plan.DefaultChoice!.ChoiceId.Should().Be(SlideShowCustomShowPlanner.FullPresentationChoiceId);
+        plan.Choices.Should().HaveCount(4);
+        plan.Choices[0].Should().Be(new SlideShowLaunchChoice(
+            SlideShowCustomShowPlanner.FullPresentationChoiceId,
+            "From Beginning",
+            SlideShowLaunchChoiceKind.FullPresentation,
+            SlideCount: 3,
+            StartIndex: 0,
+            CustomShowName: null,
+            IsEnabled: true,
+            DisabledReason: null));
+        plan.Choices[1].Should().Be(new SlideShowLaunchChoice(
+            SlideShowCustomShowPlanner.FromCurrentSlideChoiceId,
+            "From Current Slide",
+            SlideShowLaunchChoiceKind.FromCurrentSlide,
+            SlideCount: 3,
+            StartIndex: 1,
+            CustomShowName: null,
+            IsEnabled: true,
+            DisabledReason: null));
+        plan.Choices[2].Should().Be(new SlideShowLaunchChoice(
+            SlideShowCustomShowPlanner.CustomShowChoicePrefix + "0",
+            "Executive review",
+            SlideShowLaunchChoiceKind.CustomShow,
+            SlideCount: 2,
+            StartIndex: 0,
+            CustomShowName: "Executive review",
+            IsEnabled: true,
+            DisabledReason: null));
+        plan.Choices[3].Should().Be(new SlideShowLaunchChoice(
+            SlideShowCustomShowPlanner.CustomShowChoicePrefix + "1",
+            "Empty show",
+            SlideShowLaunchChoiceKind.CustomShow,
+            SlideCount: 0,
+            StartIndex: 0,
+            CustomShowName: "Empty show",
+            IsEnabled: false,
+            DisabledReason: SlideShowCustomShowPlanner.EmptyCustomShowMessage));
+    }
+
+    [Fact]
+    public void TryBuildRouteForLaunchChoice_UsesSharedChoicesForFullCurrentAndCustomShows()
+    {
+        var presentation = MakePresentation("Intro", "Deep dive", "Appendix");
+        var customShow = new PresentationCustomShow { Name = "Board review" };
+        customShow.SlideIds.Add(presentation.Slides[2].Id);
+        customShow.SlideIds.Add(presentation.Slides[0].Id);
+        presentation.CustomShows.Add(customShow);
+
+        var foundFull = SlideShowCustomShowPlanner.TryBuildRouteForLaunchChoice(
+            presentation,
+            SlideShowCustomShowPlanner.FullPresentationChoiceId,
+            currentSlideIndex: 7,
+            out var fullRoute);
+        var foundCurrent = SlideShowCustomShowPlanner.TryBuildRouteForLaunchChoice(
+            presentation,
+            SlideShowCustomShowPlanner.FromCurrentSlideChoiceId,
+            currentSlideIndex: 7,
+            out var currentRoute);
+        var foundCustom = SlideShowCustomShowPlanner.TryBuildRouteForLaunchChoice(
+            presentation,
+            SlideShowCustomShowPlanner.CustomShowChoicePrefix + "0",
+            currentSlideIndex: 1,
+            out var customRoute);
+
+        foundFull.Should().BeTrue();
+        fullRoute.CustomShowName.Should().BeNull();
+        fullRoute.Slides.Select(slide => slide.Title).Should().Equal("Intro", "Deep dive", "Appendix");
+        fullRoute.StartIndex.Should().Be(0);
+
+        foundCurrent.Should().BeTrue();
+        currentRoute.CustomShowName.Should().BeNull();
+        currentRoute.StartIndex.Should().Be(2);
+
+        foundCustom.Should().BeTrue();
+        customRoute.CustomShowName.Should().Be("Board review");
+        customRoute.Slides.Select(slide => slide.Title).Should().Equal("Appendix", "Intro");
+        customRoute.SourceSlideIndices.Should().Equal(2, 0);
+    }
+
+    [Fact]
+    public void BuildLaunchPlan_DisablesAllChoicesWhenDeckIsEmpty()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+
+        var plan = SlideShowCustomShowPlanner.BuildLaunchPlan(presentation, currentSlideIndex: 0);
+
+        plan.TotalSlideCount.Should().Be(0);
+        plan.DefaultChoice.Should().BeNull();
+        plan.Choices.Should().HaveCount(2);
+        plan.Choices.Should().OnlyContain(choice =>
+            !choice.IsEnabled &&
+            choice.DisabledReason == SlideShowCustomShowPlanner.NoSlidesMessage);
+    }
+
     private static Presentation MakePresentation(params string[] titles)
     {
         var presentation = Presentation.CreateEmpty();
