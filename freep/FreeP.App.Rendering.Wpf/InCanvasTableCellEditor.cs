@@ -319,24 +319,26 @@ public sealed class InCanvasTableCellEditor
     public bool IsCellRichEditActive => _cellEditActive && _cellTextBox is not null;
 
     /// <summary>Toggles bold on the current cell RichTextBox selection.</summary>
-    public void ApplyBold()    { if (_cellTextBox is not null) EditingCommands.ToggleBold.Execute(null, _cellTextBox); }
+    public void ApplyBold() => ExecuteCellFormattingCommand(EditingCommands.ToggleBold);
     /// <summary>Toggles italic on the current cell RichTextBox selection.</summary>
-    public void ApplyItalic()  { if (_cellTextBox is not null) EditingCommands.ToggleItalic.Execute(null, _cellTextBox); }
+    public void ApplyItalic() => ExecuteCellFormattingCommand(EditingCommands.ToggleItalic);
     /// <summary>Toggles underline on the current cell RichTextBox selection.</summary>
-    public void ApplyUnderline() { if (_cellTextBox is not null) EditingCommands.ToggleUnderline.Execute(null, _cellTextBox); }
+    public void ApplyUnderline() => ExecuteCellFormattingCommand(EditingCommands.ToggleUnderline);
 
     /// <summary>Sets font family on the current cell RichTextBox selection.</summary>
     public void ApplyFont(string? fontFamily)
     {
         if (_cellTextBox is null || string.IsNullOrEmpty(fontFamily)) return;
-        _cellTextBox.Selection.ApplyPropertyValue(TextElement.FontFamilyProperty, new FontFamily(fontFamily));
+        ApplyWithPreservedSelection(() =>
+            _cellTextBox.Selection.ApplyPropertyValue(TextElement.FontFamilyProperty, new FontFamily(fontFamily)));
     }
 
     /// <summary>Sets font size (pt) on the current cell RichTextBox selection.</summary>
     public void ApplyFontSize(double? sizePt)
     {
         if (_cellTextBox is null || sizePt is null) return;
-        _cellTextBox.Selection.ApplyPropertyValue(TextElement.FontSizeProperty, sizePt.Value * (96.0 / 72.0));
+        ApplyWithPreservedSelection(() =>
+            _cellTextBox.Selection.ApplyPropertyValue(TextElement.FontSizeProperty, sizePt.Value * (96.0 / 72.0)));
     }
 
     /// <summary>Sets text color on the current cell RichTextBox selection.</summary>
@@ -345,10 +347,31 @@ public sealed class InCanvasTableCellEditor
         if (_cellTextBox is null || color is null) return;
         var wpfColor = TextBodyFlowDocumentConverter.ResolveModelColor(color);
         if (wpfColor is null) return;
-        _cellTextBox.Selection.ApplyPropertyValue(TextElement.ForegroundProperty, new SolidColorBrush(wpfColor.Value));
+        ApplyWithPreservedSelection(() =>
+            _cellTextBox.Selection.ApplyPropertyValue(TextElement.ForegroundProperty, new SolidColorBrush(wpfColor.Value)));
     }
 
     // ── Keyboard ──────────────────────────────────────────────────────────────
+
+    private void ExecuteCellFormattingCommand(RoutedCommand command)
+    {
+        if (_cellTextBox is null)
+            return;
+
+        ApplyWithPreservedSelection(() => command.Execute(null, _cellTextBox));
+    }
+
+    private void ApplyWithPreservedSelection(Action apply)
+    {
+        if (_cellTextBox is null)
+            return;
+
+        var selectionStart = _cellTextBox.Selection.Start;
+        var selectionEnd = _cellTextBox.Selection.End;
+        apply();
+        _cellTextBox.Selection.Select(selectionStart, selectionEnd);
+        _cellTextBox.Focus();
+    }
 
     private void OnCellTextBoxKeyDown(object sender, KeyEventArgs e)
     {

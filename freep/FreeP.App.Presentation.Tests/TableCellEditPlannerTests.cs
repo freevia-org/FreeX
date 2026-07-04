@@ -212,6 +212,43 @@ public sealed class TableCellEditPlannerTests
     }
 
     [Fact]
+    public void PlanRichTextEdit_SubRangeSelection_ReportsExplicitSelectedRunRanges()
+    {
+        var body = MakeBody("one ");
+        body.Paragraphs[0].Runs.Add(new Run
+        {
+            Text = "two",
+            FontFamily = "Consolas",
+            FontSizePt = 18,
+            Italic = true,
+            ItalicSet = true,
+        });
+        body.Paragraphs[0].Runs.Add(new Run
+        {
+            Text = " three",
+            FontFamily = "Aptos",
+            FontSizePt = 14,
+            Bold = true,
+            BoldSet = true,
+        });
+
+        var rich = TableCellEditPlanner.PlanRichTextEdit(
+            body,
+            new InCanvasEditorTextSelection(2, 9));
+
+        rich.Selection.Should().Be(new InCanvasEditorTextSelection(2, 9));
+        rich.SelectedRunRanges
+            .Select(range => (range.ParagraphIndex, range.RunIndex, range.SelectionStart, range.SelectionEnd, range.Text))
+            .Should()
+            .Equal(
+                (0, 0, 2, 4, "e "),
+                (0, 1, 4, 7, "two"),
+                (0, 2, 7, 9, " t"));
+        rich.InitialSelectionStyle.FontFamily.Should().BeNull();
+        rich.InitialSelectionStyle.Italic.Should().BeNull();
+    }
+
+    [Fact]
     public void PlanRichTextEdit_CollapsedSelection_UsesCaretRunStyle()
     {
         var body = MakeBody("Hello");
@@ -406,6 +443,11 @@ public sealed class TableCellEditPlannerTests
 
         plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
         plan.TargetValue.Should().BeTrue();
+        plan.EffectiveSelection.Should().Be(new InCanvasEditorTextSelection(4, 7));
+        plan.ResultRichTextPlan.Should().NotBeNull();
+        plan.ResultRichTextPlan!.Selection.Should().Be(new InCanvasEditorTextSelection(4, 7));
+        plan.ResultRichTextPlan.SelectedRunRanges.Should().ContainSingle(range => range.Text == "two");
+        plan.ResultRichTextPlan.InitialSelectionStyle.Bold.Should().BeTrue();
 
         var presentation = Presentation.CreateEmpty();
         presentation.Slides[0].Shapes.Clear();

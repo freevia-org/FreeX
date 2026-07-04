@@ -127,6 +127,21 @@ public static class AvaloniaTableCellEditAdapter
         ApplyEditorStyle(textBox, plan.SuggestedEditorStyle);
     }
 
+    public static void ApplyFormatResult(
+        TextBox textBox,
+        InCanvasTableCellRichTextEditPlan? plan)
+    {
+        ApplyRichTextEditorPlan(textBox, plan);
+
+        if (plan is null)
+            return;
+
+        int textLength = textBox.Text?.Length ?? 0;
+        var selection = TableCellEditPlanner.PlanPreservedSelection(plan.Selection, textLength);
+        textBox.SelectionStart = selection.Start;
+        textBox.SelectionEnd = selection.End;
+    }
+
     private static void ApplyEditorStyle(
         TextBox textBox,
         InCanvasEditorTextStyleState style)

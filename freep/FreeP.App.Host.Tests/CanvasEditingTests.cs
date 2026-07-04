@@ -101,6 +101,9 @@ public sealed class CanvasEditingTests
         source.Should().Contain("TableCellEditPlanner.CommitRichText");
         source.Should().Contain("ApplyInitialSelection(_cellTextBox, editStart.InitialSelection)");
         source.Should().Contain("RichTextBox");
+        source.Should().Contain("ExecuteCellFormattingCommand(EditingCommands.ToggleBold)");
+        source.Should().Contain("ApplyWithPreservedSelection");
+        source.Should().Contain("_cellTextBox.Selection.Select(selectionStart, selectionEnd)");
     }
 
     private static (Presentation pres, Slide slide, SlideShape shape1, SlideShape shape2) MakeTestSlide()
