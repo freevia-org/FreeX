@@ -15,11 +15,18 @@ public sealed class SlidePanePolicySourceGuardTests
 
         source.Should().Contain("SlidePanePlanner.BuildEntries(");
         source.Should().Contain("SlidePanePlanner.BuildThumbnailVisualPlan(");
+        source.Should().Contain("SlidePanePlanner.BuildSectionHeaderVisualPlan(entry)");
         source.Should().Contain("_slidePaneCollapsedSectionIds");
+        source.Should().Contain("_slidePaneRenderedSectionHeaderPlans.Add(plan)");
         source.Should().Contain("SlidePaneEntryKind.SectionHeader");
         source.Should().Contain("BuildSlidePaneSectionHeader(entry)");
-        source.Should().Contain("Text              = entry.Text");
-        source.Should().Contain("ToggleSlidePaneSection(entry.SectionId)");
+        source.Should().Contain("Text              = plan.LabelText");
+        source.Should().Contain("Text              = plan.DisclosureText");
+        source.Should().Contain("Foreground        = BrushFromHex(plan.ForegroundHex)");
+        source.Should().Contain("Background   = normalBackground");
+        source.Should().Contain("PointerEntered += (_, _) => headerChrome.Background = hoverBackground");
+        source.Should().Contain("ToolTip.SetTip(item, plan.ToolTipText)");
+        source.Should().Contain("ToggleSlidePaneSection(plan.SectionId)");
         source.Should().Contain("ContextMenu = BuildSlidePaneSectionContextMenu(entry)");
         source.Should().Contain("Background  = BrushFromHex(SlidePanePlanner.DefaultPaneBackgroundHex)");
         source.Should().Contain("_slidePaneRenderedThumbnailPlans.Add(plan)");
