@@ -23,11 +23,11 @@ public partial class GridView
         if (_resizeTarget == ResizeTarget.Column)
             dc.DrawLine(ResizeLinePen,
                 new Point(_resizeLinePos, 0),
-                new Point(_resizeLinePos, ActualHeight));
+                new Point(_resizeLinePos, GetLogicalViewportHeight()));
         else if (_resizeTarget == ResizeTarget.Row)
             dc.DrawLine(ResizeLinePen,
                 new Point(0, _resizeLinePos),
-                new Point(ActualWidth, _resizeLinePos));
+                new Point(GetLogicalViewportWidth(), _resizeLinePos));
     }
 
     private void RenderAutofillPreview(DrawingContext dc)

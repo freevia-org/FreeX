@@ -93,15 +93,40 @@ public static class FormulaSerializer
                 break;
 
             // ANCHORARRAY(ref) is the internal representation of the A1# spill-anchor operator
-            // (see Parser.WrapSpillAnchor, which only ever wraps a CellRefNode) — serialize it back
-            // to that literal syntax rather than the function-call form so a formula containing '#'
-            // round-trips unchanged through structural rewrites (insert/delete rows or columns).
-            // Guard on the argument actually being a CellRefNode so this only rewrites the shape the
-            // parser produces; anything else falls through to the ordinary function-call rendering.
+            // (see Parser.WrapSpillAnchor, which wraps a CellRefNode or a NamedRangeNode) —
+            // serialize it back to that literal syntax rather than the function-call form so a
+            // formula containing '#' round-trips unchanged through structural rewrites
+            // (insert/delete rows or columns). Guard on the argument actually being one of those
+            // two shapes so this only rewrites what the parser produces; anything else falls
+            // through to the ordinary function-call rendering.
             case FunctionCallNode f when f.FunctionName == "ANCHORARRAY" &&
                                          f.Arguments is [CellRefNode anchorRef]:
                 WriteCellRef(anchorRef, sb);
                 sb.Append('#');
+                break;
+
+            case FunctionCallNode f when f.FunctionName == "ANCHORARRAY" &&
+                                         f.Arguments is [NamedRangeNode anchorName]:
+                sb.Append(anchorName.Name);
+                sb.Append('#');
+                break;
+
+            // ANCHORARRAY(ref, end) is the internal representation of the A1#:B5 shape — a spill
+            // range used as the start endpoint of a larger range (see Parser.ParsePostfix). Print
+            // it back as "<ref>#:<end>" so it round-trips through rewrites the same way the plain
+            // spill-anchor shape above does.
+            case FunctionCallNode f when f.FunctionName == "ANCHORARRAY" &&
+                                         f.Arguments is [CellRefNode rangeAnchorRef, CellRefNode rangeEnd]:
+                WriteCellRef(rangeAnchorRef, sb);
+                sb.Append("#:");
+                WriteCellRef(rangeEnd, sb);
+                break;
+
+            case FunctionCallNode f when f.FunctionName == "ANCHORARRAY" &&
+                                         f.Arguments is [NamedRangeNode rangeAnchorName, CellRefNode namedRangeEnd]:
+                sb.Append(rangeAnchorName.Name);
+                sb.Append("#:");
+                WriteCellRef(namedRangeEnd, sb);
                 break;
 
             case FunctionCallNode f:

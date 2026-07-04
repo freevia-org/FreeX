@@ -154,6 +154,13 @@ public static class WorkbookSelectionStatsCalculator
                 Average: number.Value,
                 Min: number.Value,
                 Max: number.Value),
+            DateTimeValue dateTime => new WorkbookSelectionStats(
+                dateTime.Value,
+                Count: 1,
+                NumericalCount: 1,
+                Average: dateTime.Value,
+                Min: dateTime.Value,
+                Max: dateTime.Value),
             _ => new WorkbookSelectionStats(0, 1, 0, null, null, null)
         };
 
@@ -225,12 +232,19 @@ public static class WorkbookSelectionStatsCalculator
         if (value is not BlankValue)
             count++;
 
-        if (value is NumberValue nv)
+        double? numericValue = value switch
         {
-            sum += nv.Value;
+            NumberValue nv => nv.Value,
+            DateTimeValue dt => dt.Value,
+            _ => null
+        };
+
+        if (numericValue is { } number)
+        {
+            sum += number;
             numericalCount++;
-            min = min is null ? nv.Value : Math.Min(min.Value, nv.Value);
-            max = max is null ? nv.Value : Math.Max(max.Value, nv.Value);
+            min = min is null ? number : Math.Min(min.Value, number);
+            max = max is null ? number : Math.Max(max.Value, number);
         }
     }
 }

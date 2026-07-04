@@ -15,12 +15,12 @@ public partial class GridView
 
         if (layout.HorizontalY is { } horizontalY)
         {
-            dc.DrawLine(SplitPanePen, new Point(ActualRowHeaderWidth, horizontalY), new Point(ActualWidth, horizontalY));
+            dc.DrawLine(SplitPanePen, new Point(ActualRowHeaderWidth, horizontalY), new Point(GetLogicalViewportWidth(), horizontalY));
         }
 
         if (layout.VerticalX is { } verticalX)
         {
-            dc.DrawLine(SplitPanePen, new Point(verticalX, EffectiveColHeaderHeight), new Point(verticalX, ActualHeight));
+            dc.DrawLine(SplitPanePen, new Point(verticalX, EffectiveColHeaderHeight), new Point(verticalX, GetLogicalViewportHeight()));
         }
 
         RenderSplitDividerHandles(dc, layout);
@@ -46,7 +46,7 @@ public partial class GridView
         if (Viewport?.SplitPanes is null)
             return;
 
-        var chrome = CalculateSplitPaneScrollbarChrome(Viewport, ActualWidth, ActualHeight);
+        var chrome = CalculateSplitPaneScrollbarChrome(Viewport, GetLogicalViewportWidth(), GetLogicalViewportHeight());
         DrawSplitScrollbar(dc, chrome.HorizontalTopRight);
         DrawSplitScrollbar(dc, chrome.VerticalBottomLeft);
     }

@@ -705,6 +705,7 @@ public partial class GridView
         {
             grid.MarkSelectionVisualOnlyChange();
             grid.UpdateCommentPreviewForSelection();
+            grid.NotifySelectionAutomationChanged();
         }
     }
 

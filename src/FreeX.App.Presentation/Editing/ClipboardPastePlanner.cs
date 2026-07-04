@@ -4,6 +4,25 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Editing;
 
+/// <summary>
+/// The outcome of <see cref="ClipboardPastePlanner.PlanPaste"/>: which clipboard source (if any)
+/// a paste gesture should draw from.
+/// </summary>
+public enum ClipboardPastePlan
+{
+    /// <summary>Paste using the captured internal clipboard (formula-adjusted, styled, etc.).</summary>
+    UseInternalClipboard,
+
+    /// <summary>Paste using the freshly read external/OS clipboard text.</summary>
+    UseExternalClipboardText,
+
+    /// <summary>
+    /// The OS clipboard could not be read (transient failure). The caller must not guess — skip the
+    /// paste and surface a status message instead of falling back to a possibly-stale clipboard.
+    /// </summary>
+    ReadFailed
+}
+
 public static class ClipboardPastePlanner
 {
     public static PasteCellsMode ToCorePasteMode(PasteMode mode) =>
@@ -19,6 +38,44 @@ public static class ClipboardPastePlanner
     public static bool ShouldUseInternalClipboard(string internalClipboardText, string? currentClipboardText) =>
         currentClipboardText is null ||
         string.Equals(internalClipboardText, currentClipboardText, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Decides whether a paste gesture should fall back to the captured internal clipboard, a real
+    /// external clipboard read, or bail out entirely because the OS clipboard could not be read.
+    /// </summary>
+    /// <param name="internalClipboardText">The serialized text captured at internal-copy time.</param>
+    /// <param name="currentClipboardText">
+    /// The text just read from the OS clipboard, or <c>null</c> if the read produced no text
+    /// (clipboard empty/non-text, or the read failed).
+    /// </param>
+    /// <param name="clipboardReadFailed">
+    /// <c>true</c> when the OS clipboard read itself threw/failed (e.g. another process transiently
+    /// holds the clipboard open) rather than succeeding with no text. Callers that cannot distinguish
+    /// a failed read from a successful-but-empty one should treat the read as failed only when they
+    /// actually caught an exception — otherwise pass <c>false</c>, which reproduces the historical
+    /// "no text means unchanged" fallback via <see cref="ShouldUseInternalClipboard(string, string?)"/>.
+    /// </param>
+    public static ClipboardPastePlan PlanPaste(
+        string? internalClipboardText,
+        string? currentClipboardText,
+        bool clipboardReadFailed)
+    {
+        if (clipboardReadFailed)
+        {
+            // A transient read failure must never be silently reinterpreted as "clipboard unchanged" —
+            // that would risk pasting a stale internal copy over content the user just copied elsewhere.
+            // Surface the failure so the caller can skip the paste and tell the user, instead of guessing.
+            return ClipboardPastePlan.ReadFailed;
+        }
+
+        if (internalClipboardText is not null &&
+            ShouldUseInternalClipboard(internalClipboardText, currentClipboardText))
+        {
+            return ClipboardPastePlan.UseInternalClipboard;
+        }
+
+        return ClipboardPastePlan.UseExternalClipboardText;
+    }
 
     public static bool ShouldPasteClipboardImageForNormalPaste(PasteMode mode, string? clipboardText, bool hasImage) =>
         mode == PasteMode.All &&

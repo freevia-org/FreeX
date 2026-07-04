@@ -354,7 +354,17 @@ public sealed class PageContentRenderModelBuilderTests
         block.Id.Should().Be(chart.Id);
         block.Fill.Should().Be(new PresentationRgb(245, 250, 255));
         block.Outline.Should().Be(new PresentationRgb(20, 70, 120));
-        block.Bounds.Left.Should().BeApproximately(layout.GridBounds.Left + 24, 0.001);
+        // Bounds.Left is NOT gridLeft + the raw anchor-space chart.Left=24: chart anchors live in
+        // ChartAnchorGeometry's width-in-chars*8 space, while the printed grid uses
+        // ColumnWidthPixelMapper's width*7+5 space (see ChartAnchorGeometry.ConvertColumnOffsetToGridSpace).
+        // With the fixture's default column width of 8.43 chars, one column is 8.43*8 = 67.44px in
+        // anchor space and Math.Round(8.43*7+5) = 64px in grid space; the chart's anchor offset of 24
+        // anchor-space px is 24/67.44 = 35.5871...% of the way across column 1, which lands at the same
+        // 35.5871...% of column 1's 64px grid-space width = 22.7758...px. Rows use the identical
+        // convention in both spaces (ConvertRowOffsetToGridSpace is an identity aside from hidden-row
+        // skipping), so Top keeps the raw anchor-space offset of 24.
+        var expectedGridLeftOffset = 24 / (8.43 * 8) * Math.Round(8.43 * 7 + 5);
+        block.Bounds.Left.Should().BeApproximately(layout.GridBounds.Left + expectedGridLeftOffset, 0.001);
         block.Bounds.Top.Should().BeApproximately(layout.GridBounds.Top + 24, 0.001);
         block.TextOverlays.Select(overlay => overlay.Text).Should().Contain(
             ["Printable chart title", "Printable month axis", "Printable sales axis"]);

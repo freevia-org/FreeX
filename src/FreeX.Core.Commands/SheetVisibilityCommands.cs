@@ -10,6 +10,7 @@ public sealed class SetRowsHiddenCommand : IWorkbookCommand
     private readonly uint _endRow;
     private readonly bool _hidden;
     private HashSet<uint>? _previousHiddenRows;
+    private HashSet<uint>? _previousGroupHiddenRows;
 
     public string Label => _hidden ? "Hide Rows" : "Unhide Rows";
 
@@ -39,6 +40,16 @@ public sealed class SetRowsHiddenCommand : IWorkbookCommand
                 sheet.HiddenRows.Remove(row);
         }
 
+        // Excel's Unhide Rows reveals rows hidden by any mechanism, including a collapsed outline
+        // group — it doesn't just undo the plain Hide Rows command. Clear GroupHiddenRows for the
+        // selection too so IsRowEffectivelyHidden actually flips to visible (see GroupRowsCommand /
+        // ClearWorksheetOutlineCommand, which own the same flag for the group-collapse mechanism).
+        if (!_hidden)
+        {
+            _previousGroupHiddenRows = RangeSnapshot.Capture(sheet.GroupHiddenRows, _startRow, _endRow);
+            sheet.GroupHiddenRows.RemoveWhere(row => row >= _startRow && row <= _endRow);
+        }
+
         return new CommandOutcome(true);
     }
 
@@ -47,6 +58,8 @@ public sealed class SetRowsHiddenCommand : IWorkbookCommand
         if (_previousHiddenRows is null) return;
         var sheet = ctx.GetSheet(_sheetId);
         RangeSnapshot.Restore(sheet.HiddenRows, _startRow, _endRow, _previousHiddenRows);
+        if (_previousGroupHiddenRows is not null)
+            RangeSnapshot.Restore(sheet.GroupHiddenRows, _startRow, _endRow, _previousGroupHiddenRows);
     }
 
 }
@@ -59,6 +72,7 @@ public sealed class SetColumnsHiddenCommand : IWorkbookCommand
     private readonly uint _endCol;
     private readonly bool _hidden;
     private HashSet<uint>? _previousHiddenCols;
+    private HashSet<uint>? _previousGroupHiddenCols;
 
     public string Label => _hidden ? "Hide Columns" : "Unhide Columns";
 
@@ -88,6 +102,14 @@ public sealed class SetColumnsHiddenCommand : IWorkbookCommand
                 sheet.HiddenCols.Remove(col);
         }
 
+        // Mirrors SetRowsHiddenCommand: Excel's Unhide Columns also reveals columns hidden by a
+        // collapsed outline group, not just ones hidden by the plain Hide Columns command.
+        if (!_hidden)
+        {
+            _previousGroupHiddenCols = RangeSnapshot.Capture(sheet.GroupHiddenCols, _startCol, _endCol);
+            sheet.GroupHiddenCols.RemoveWhere(col => col >= _startCol && col <= _endCol);
+        }
+
         return new CommandOutcome(true);
     }
 
@@ -96,6 +118,8 @@ public sealed class SetColumnsHiddenCommand : IWorkbookCommand
         if (_previousHiddenCols is null) return;
         var sheet = ctx.GetSheet(_sheetId);
         RangeSnapshot.Restore(sheet.HiddenCols, _startCol, _endCol, _previousHiddenCols);
+        if (_previousGroupHiddenCols is not null)
+            RangeSnapshot.Restore(sheet.GroupHiddenCols, _startCol, _endCol, _previousGroupHiddenCols);
     }
 
 }

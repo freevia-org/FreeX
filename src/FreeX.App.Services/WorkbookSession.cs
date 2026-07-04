@@ -1328,6 +1328,7 @@ public sealed class WorkbookSession
     public WorkbookCellEditResult AutoFitSelectedRowHeight()
     {
         var plans = Ribbon.RowColumnSizingPlanner.PlanAutoFitRowHeights(
+            ActiveSheet,
             SelectedRange,
             ActiveSheet.GetUsedRange(),
             GetAutoFitDisplayText,
@@ -1343,6 +1344,7 @@ public sealed class WorkbookSession
     public WorkbookCellEditResult AutoFitSelectedColumnWidth()
     {
         var plans = Ribbon.RowColumnSizingPlanner.PlanAutoFitColumnWidths(
+            ActiveSheet,
             SelectedRange,
             ActiveSheet.GetUsedRange(),
             GetAutoFitDisplayText,
@@ -1367,16 +1369,17 @@ public sealed class WorkbookSession
         return result;
     }
 
-    private string? GetAutoFitDisplayText(uint row, uint col)
+    private AutoFitCellText? GetAutoFitDisplayText(uint row, uint col)
     {
         if (ActiveSheet.GetCell(row, col) is not { } cell)
             return null;
 
         if (ActiveSheet.ShowFormulas && cell.FormulaText is not null)
-            return "=" + cell.FormulaText;
+            return new AutoFitCellText("=" + cell.FormulaText);
 
         var style = Workbook.GetStyle(cell.StyleId);
-        return FreeX.Core.Formula.NumberFormatter.Format(cell.Value, style.NumberFormat);
+        var text = FreeX.Core.Formula.NumberFormatter.Format(cell.Value, style.NumberFormat);
+        return new AutoFitCellText(text, style.WrapText);
     }
 
     private static WorkbookCellEditResult SucceededWithoutEdit() =>
@@ -1955,10 +1958,14 @@ public sealed class WorkbookSession
 
     /// <summary>
     /// Applies <paramref name="rule"/> to the current selection AND to every other data-validation
-    /// range on the active sheet whose settings match <paramref name="existingRule"/> — the shared
-    /// session equivalent of the WPF host's data-validation sweep (CreateDataValidationCommand /
-    /// HasSameDataValidationSettings), so every shell can drive the "apply to all cells with the
-    /// same settings" checkbox through one undoable command instead of reimplementing it locally.
+    /// range whose settings match <paramref name="existingRule"/>, on the active sheet and — when
+    /// sheet tabs are grouped — on every other grouped visible sheet too (mirroring
+    /// <see cref="CurrentGroupedEditSheetIds"/>'s use by every other grouped-edit session API). This
+    /// is the shared session equivalent of the WPF host's data-validation sweep
+    /// (CreateDataValidationCommand / HasSameDataValidationSettings run per grouped sheet via
+    /// TryExecuteRepeatableGroupedSheetCommand), so every shell can drive the "apply to all cells
+    /// with the same settings" checkbox through one undoable composite command instead of
+    /// reimplementing it locally.
     /// </summary>
     public WorkbookDataValidationMutationResult ApplyDataValidationToSelectedRangeAndMatchingRanges(
         DataValidation rule,
@@ -1967,19 +1974,29 @@ public sealed class WorkbookSession
         ArgumentNullException.ThrowIfNull(rule);
         ArgumentNullException.ThrowIfNull(existingRule);
 
-        var sheet = ActiveSheet;
-        var commands = sheet.DataValidations
-            .Where(candidate => HasSameDataValidationSettings(candidate, existingRule))
-            .Select(candidate => (IWorkbookCommand)new SetDataValidationCommand(
-                sheet.Id,
-                CloneDataValidationForRanges(rule, candidate.AppliesTo, candidate.AdditionalRanges)))
-            .ToList();
-
-        if (commands.Count == 0)
+        var activeSheetId = ActiveSheet.Id;
+        var commands = new List<IWorkbookCommand>();
+        foreach (var sheetId in CurrentGroupedEditSheetIds())
         {
-            commands.Add(new SetDataValidationCommand(
-                sheet.Id,
-                CloneDataValidationForRanges(rule, SelectedRange, [])));
+            var sheet = Workbook.GetSheet(sheetId);
+            if (sheet is null)
+                continue;
+
+            var matches = sheet.DataValidations
+                .Where(candidate => HasSameDataValidationSettings(candidate, existingRule))
+                .Select(candidate => (IWorkbookCommand)new SetDataValidationCommand(
+                    sheetId,
+                    CloneDataValidationForRanges(rule, candidate.AppliesTo, candidate.AdditionalRanges)))
+                .ToList();
+
+            if (matches.Count == 0)
+            {
+                matches.Add(new SetDataValidationCommand(
+                    sheetId,
+                    CloneDataValidationForRanges(rule, RemapRangeToSheet(SelectedRange, sheetId), [])));
+            }
+
+            commands.AddRange(matches);
         }
 
         var command = ToCommand("Data Validation", commands);
@@ -1987,7 +2004,7 @@ public sealed class WorkbookSession
         if (!result.Success)
             return WorkbookDataValidationMutationResult.FromEditResult(result, mutated: false);
 
-        ApplySuccessfulWorkbookMetadataResult(sheet.Id);
+        ApplySuccessfulWorkbookMetadataResult(activeSheetId);
         return WorkbookDataValidationMutationResult.FromEditResult(result, mutated: true);
     }
 
@@ -2396,6 +2413,36 @@ public sealed class WorkbookSession
             return result;
 
         ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
+    /// <summary>
+    /// Fills <paramref name="fillRange"/> by continuing/repeating the series in
+    /// <paramref name="sourceRange"/> (numeric/date linear-fit trend, list series, or formula
+    /// offset), matching Excel's fill-handle drag behavior. Used by the fill-handle drag gesture,
+    /// which - unlike keyboard/menu Fill Down/Up/Left/Right (<see cref="FillSelectedRange"/>) -
+    /// must run full series detection (<see cref="AutofillCommand"/>) rather than a verbatim
+    /// edge-cell copy (<see cref="FillCellsCommand"/>), mirroring the WPF host's
+    /// <c>OnAutofillRequested</c>.
+    /// </summary>
+    public WorkbookCellEditResult AutofillDragRange(GridRange sourceRange, GridRange fillRange)
+    {
+        if (!sourceRange.Start.Sheet.Equals(ActiveSheet.Id) ||
+            !sourceRange.End.Sheet.Equals(ActiveSheet.Id) ||
+            !fillRange.Start.Sheet.Equals(ActiveSheet.Id) ||
+            !fillRange.End.Sheet.Equals(ActiveSheet.Id))
+        {
+            return new WorkbookCellEditResult(false, "Autofill source and fill range must be on the active sheet.", [], RecalcReport: null);
+        }
+
+        var completedSelection = FreeX.App.Presentation.GridInteraction.GridAutofillPlanner.CalculateCompletedSelectionRange(sourceRange, fillRange);
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new AutofillCommand(ActiveSheet.Id, sourceRange, fillRange));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, completedSelection);
         return result;
     }
 
@@ -2898,6 +2945,13 @@ public sealed class WorkbookSession
     public void RecalculateWorkbook()
     {
         _cellEditService.RecalculateAll(Workbook);
+        RefreshViewport();
+    }
+
+    /// <summary>Forces a recalculation of the active sheet's formulas (Shift+F9 / Calculate Sheet) and refreshes the view.</summary>
+    public void RecalculateActiveSheet()
+    {
+        _cellEditService.RecalculateSheet(Workbook, ActiveSheet.Id);
         RefreshViewport();
     }
 

@@ -170,7 +170,42 @@ public sealed class SubtotalCommand : IWorkbookCommand
         if (!_summaryBelowData)
             AddPlannedPageBreaks(sheet, plan);
 
+        ApplyGroupOutline(sheet, plan);
+
         return new CommandOutcome(true, AffectedCells: affected);
+    }
+
+    /// <summary>
+    /// Builds the row outline the same way Excel does for Data &gt; Subtotal: each group's detail
+    /// rows get outline level 1 (so the outline pane's 1/2/3 buttons can collapse to just the
+    /// subtotal/grand-total rows), while the subtotal and grand-total rows themselves stay at
+    /// level 0. This mirrors <see cref="GroupRowsCommand"/>'s ownership of
+    /// <see cref="Sheet.RowOutlineLevels"/>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="SubtotalInsertionPlan.FormulaStartRow"/>/<see cref="SubtotalInsertionPlan.FormulaEndRow"/>
+    /// are computed once, up front, against the pre-insertion row numbering (see
+    /// <see cref="SubtotalPlanBuilder"/>) — every insertion applied after the first one shifts rows
+    /// that were already written, including earlier subtotal rows and their formulas (that's why,
+    /// e.g., the last group's SUBTOTAL formula ends up referencing different row numbers than the
+    /// plan originally computed). So rather than re-deriving the cumulative shift here, this scans
+    /// the sheet's own final state — via the same <see cref="SubtotalRowFinder"/> used by
+    /// <see cref="RemoveSubtotalRowsCommand"/> — to find exactly which rows in the final range are
+    /// subtotal/grand-total rows, and marks every other row in that range as outline level 1.
+    /// </remarks>
+    private void ApplyGroupOutline(Sheet sheet, SubtotalPlan plan)
+    {
+        var insertedRowCount = (uint)plan.GroupRows.Count + 1;
+        var finalRange = new GridRange(
+            _range.Start,
+            new CellAddress(_range.Start.Sheet, _range.End.Row + insertedRowCount, _range.End.Col));
+        var totalRows = new HashSet<uint>(SubtotalRowFinder.Find(sheet, _sheetId, finalRange));
+
+        for (var row = finalRange.Start.Row + 1; row <= finalRange.End.Row; row++)
+        {
+            if (!totalRows.Contains(row))
+                sheet.RowOutlineLevels[row] = 1;
+        }
     }
 
     private bool ApplyInsertions(

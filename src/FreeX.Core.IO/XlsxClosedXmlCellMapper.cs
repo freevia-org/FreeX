@@ -130,6 +130,23 @@ internal static class XlsxClosedXmlCellMapper
         BoolValue b => b.Value,
         DateTimeValue dt when TryMapDateTimeValue(dt, uses1904DateSystem, out var dateTime) => dateTime,
         DateTimeValue dt => dt.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+        // #CIRCULAR! is a FreeX-only sentinel (RecalcEngine.AddCyclicCell), not a valid OOXML error
+        // code at all. Real Excel never writes "#CIRCULAR!" to disk: with iterative calculation off
+        // (FreeX's default, non-iterative path — the only path that ever stamps this value), Excel
+        // persists a plain 0 in the cell for a non-iterative circular reference. Map to 0 here to match
+        // what Excel itself would round-trip; the in-app grid/error-checking display of "#CIRCULAR!" is
+        // unaffected because that reads the live ScalarValue.Circular, not this xlsx-serialization path.
+        ErrorValue e when e.Code.Equals("#CIRCULAR!", StringComparison.OrdinalIgnoreCase) => 0d,
+        // #SPILL!/#CALC! ARE valid OOXML error codes (Excel round-trips them verbatim), but
+        // ClosedXML 0.105.0's XLError enum only defines the 7 "classic" codes (NullValue,
+        // DivisionByZero, IncompatibleValue, CellReference, NameNotRecognized, NumberInvalid,
+        // NoValueAvailable) — there is no XLError member that serializes as "#SPILL!" or "#CALC!", so
+        // MapErrorValueInverse cannot represent them as a true error cell. Silently downgrading to
+        // #N/A would swap in a different, wrong-but-valid error with no indication anything changed.
+        // Preserve the exact code as visible text instead: a saved cell reading literally "#SPILL!" or
+        // "#CALC!" is honest about what happened, unlike a cell that silently became "#N/A".
+        ErrorValue e when e.Code.Equals("#SPILL!", StringComparison.OrdinalIgnoreCase) ||
+                          e.Code.Equals("#CALC!", StringComparison.OrdinalIgnoreCase) => e.Code,
         ErrorValue e => MapErrorValueInverse(e),
         _ => Blank.Value
     };

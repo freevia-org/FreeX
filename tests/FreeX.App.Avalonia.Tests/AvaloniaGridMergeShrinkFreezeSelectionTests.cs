@@ -23,9 +23,14 @@ public sealed class AvaloniaGridMergeShrinkFreezeSelectionTests
 
         // The anchor/member distinction must be resolved via the sheet's real merge lookup.
         source.Should().Contain("_session.ActiveSheet.GetMergeRegion(address)");
+        // Updated for J4 (review4): the anchor/member check is no longer a plain merge.Start
+        // comparison — when the true anchor has scrolled out of the viewport, the topmost/leftmost
+        // still-visible member becomes a substitute anchor via ResolveVisibleMergeAnchor, so the
+        // merge keeps rendering instead of leaving a blank hole. See
+        // AvaloniaMainWindowGridRenderStage1Tests for full J4 coverage.
         source.Should().Contain(
-            "if (mergeRegion is { } merge && (merge.Start.Row != row || merge.Start.Col != col))",
-            "non-anchor member cells of a merge must be detected and skipped, not rendered as separate bordered cells");
+            "ResolveVisibleMergeAnchor(merge, rowIndexByRow, colIndexByCol) is { } visibleAnchor",
+            "non-anchor member cells of a merge must be detected via the visible-anchor resolver (which falls back past a scrolled-off true anchor), not a plain merge.Start comparison");
         source.Should().Contain(
             "continue;",
             "the loop must skip adding a separate grid child for non-anchor merge members");

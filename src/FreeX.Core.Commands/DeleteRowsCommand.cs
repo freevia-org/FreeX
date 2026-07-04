@@ -19,6 +19,8 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
     private List<uint>? _filterHiddenRowsSnapshot;
     private List<uint>? _valueFilterHiddenRowsSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _commentSnapshot;
+    private List<KeyValuePair<CellAddress, string>>? _commentAuthorsSnapshot;
+    private List<CellAddress>? _shownCommentsSnapshot;
     private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
@@ -83,6 +85,13 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
 
         _commentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
         RowColumnShiftHelpers.ShiftCommentRowsDown(sheet.Comments, _startRow, _count);
+        // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy note
+        // author + pinned/"Show Comment" state) and must shift/delete in lockstep with it, or a
+        // note's author/pinned box goes stale (or survives at a deleted address) after the delete.
+        _commentAuthorsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CommentAuthors);
+        RowColumnShiftHelpers.ShiftCommentRowsDown(sheet.CommentAuthors, _startRow, _count);
+        _shownCommentsSnapshot = RowColumnShiftHelpers.CaptureAddressSet(sheet.ShownComments);
+        RowColumnShiftHelpers.ShiftCommentSetRowsDown(sheet.ShownComments, _startRow, _count);
         _threadedCommentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ThreadedComments);
         RowColumnShiftHelpers.ShiftCommentRowsDown(sheet.ThreadedComments, _startRow, _count);
         _hyperlinkSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Hyperlinks);
@@ -192,6 +201,8 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreSet(sheet.FilterHiddenRows, _filterHiddenRowsSnapshot);
         RowColumnShiftHelpers.RestoreSet(sheet.ValueFilterHiddenRows, _valueFilterHiddenRowsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.Comments, _commentSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.CommentAuthors, _commentAuthorsSnapshot);
+        RowColumnShiftHelpers.RestoreAddressSet(sheet.ShownComments, _shownCommentsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);

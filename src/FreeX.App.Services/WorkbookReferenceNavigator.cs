@@ -115,6 +115,12 @@ public static class WorkbookReferenceNavigator
 
         try
         {
+            // Whole-column (A:A, C:E) and whole-row (5:5, 5:9) references, matching Excel's Name Box
+            // and Go To reference syntax: each side is a bare column-letter run or a bare row-digit
+            // run (never both mixed within the same reference).
+            if (parts.Length == 2 && TryParseFullColumnOrRowRange(sheetId, parts[0], parts[1], out range))
+                return true;
+
             if (!TryParseAddress(parts[0], sheetId, out var start))
                 return false;
 
@@ -129,6 +135,67 @@ public static class WorkbookReferenceNavigator
         {
             return false;
         }
+    }
+
+    private static bool TryParseFullColumnOrRowRange(SheetId sheetId, string left, string right, out GridRange range)
+    {
+        if (TryParseColumnLetters(left, out var startCol) && TryParseColumnLetters(right, out var endCol))
+        {
+            range = new GridRange(
+                new CellAddress(sheetId, 1, startCol),
+                new CellAddress(sheetId, CellAddress.MaxRow, endCol));
+            return true;
+        }
+
+        if (TryParseRowNumber(left, out var startRow) && TryParseRowNumber(right, out var endRow))
+        {
+            range = new GridRange(
+                new CellAddress(sheetId, startRow, 1),
+                new CellAddress(sheetId, endRow, CellAddress.MaxCol));
+            return true;
+        }
+
+        range = default;
+        return false;
+    }
+
+    private static bool TryParseColumnLetters(string text, out uint column)
+    {
+        column = 0;
+        var value = text.AsSpan().Trim();
+        if (value.Length > 0 && value[0] == '$')
+            value = value[1..];
+
+        if (value.IsEmpty)
+            return false;
+
+        foreach (var c in value)
+        {
+            if (!char.IsLetter(c))
+                return false;
+        }
+
+        column = CellAddress.ColumnNameToNumber(value.ToString());
+        return column is > 0 and <= CellAddress.MaxCol;
+    }
+
+    private static bool TryParseRowNumber(string text, out uint row)
+    {
+        row = 0;
+        var value = text.AsSpan().Trim();
+        if (value.Length > 0 && value[0] == '$')
+            value = value[1..];
+
+        if (value.IsEmpty)
+            return false;
+
+        foreach (var c in value)
+        {
+            if (!char.IsDigit(c))
+                return false;
+        }
+
+        return uint.TryParse(value, out row) && row is > 0 and <= CellAddress.MaxRow;
     }
 
     private static bool TryResolveReferenceSheet(

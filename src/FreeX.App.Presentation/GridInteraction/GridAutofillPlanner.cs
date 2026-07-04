@@ -56,6 +56,56 @@ public static class GridAutofillPlanner
         return null;
     }
 
+    /// <summary>
+    /// Computes the sub-range of <paramref name="source"/> that Excel clears when the fill
+    /// handle is dragged inward (toward the source) instead of extending outward: the portion of
+    /// the original selection strictly beyond the shrunk boundary implied by <paramref name="target"/>.
+    /// Returns null when the drag does not shrink the range on exactly one axis (i.e. when
+    /// <see cref="CalculateFillRange"/> would instead produce an outward extension, or the target
+    /// sits back on the source's own edge with no movement at all).
+    /// </summary>
+    public static GridRange? CalculateClearRange(GridRange source, CellAddress target)
+    {
+        if (source.RowCount >= 2 && source.ColCount == 1 &&
+            target.Row >= source.Start.Row && target.Row < source.End.Row)
+        {
+            return new GridRange(
+                new CellAddress(source.Start.Sheet, target.Row + 1, source.Start.Col),
+                new CellAddress(source.Start.Sheet, source.End.Row, source.End.Col));
+        }
+
+        if (source.ColCount >= 2 && source.RowCount == 1 &&
+            target.Col >= source.Start.Col && target.Col < source.End.Col)
+        {
+            return new GridRange(
+                new CellAddress(source.Start.Sheet, source.Start.Row, target.Col + 1),
+                new CellAddress(source.Start.Sheet, source.End.Row, source.End.Col));
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Computes the range Excel fills when the fill handle is double-clicked: the selection
+    /// extends straight down to match the populated data extent of the nearest non-blank adjacent
+    /// column (checked to the left first, then the right, matching Excel), stopping at the first
+    /// blank row. Returns null when there is no adjacent data to match (nothing to fill) or the
+    /// source spans more than one row (double-click fill-down only applies to a single header/seed
+    /// row selection).
+    /// </summary>
+    public static GridRange? CalculateDoubleClickFillRange(GridRange source, uint? adjacentColumnLastPopulatedRow)
+    {
+        if (source.RowCount != 1)
+            return null;
+
+        if (adjacentColumnLastPopulatedRow is not { } lastRow || lastRow <= source.Start.Row)
+            return null;
+
+        return new GridRange(
+            new CellAddress(source.Start.Sheet, source.Start.Row + 1, source.Start.Col),
+            new CellAddress(source.Start.Sheet, lastRow, source.End.Col));
+    }
+
     public static GridRange CalculateCompletedSelectionRange(GridRange source, GridRange fillRange)
     {
         return new GridRange(

@@ -837,10 +837,12 @@ public partial class MainWindow
         CellAddressBox.SelectAll();
     }
 
-    private static bool TryCycleFormulaReference(System.Windows.Controls.TextBox editor)
+    private bool TryCycleFormulaReference(System.Windows.Controls.TextBox editor)
     {
         var caretIndex = editor.SelectionLength > 0 ? editor.SelectionStart : editor.CaretIndex;
-        if (!ExcelTextEditorPlanner.TryCycleFormulaReference(editor.Text, caretIndex, out var edit))
+        var anchor = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
+        if (!ExcelTextEditorPlanner.TryCycleFormulaReference(
+                editor.Text, caretIndex, anchor, _options.UseR1C1ReferenceStyle, out var edit))
             return false;
 
         ApplyTextEdit(editor, edit);

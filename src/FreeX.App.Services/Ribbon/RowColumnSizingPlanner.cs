@@ -10,6 +10,11 @@ namespace FreeX.App.Services.Ribbon;
 /// Windows host), and — for AutoFit — sizes each row/column from its cell display text via the shared
 /// <see cref="AutoFitSizingService"/>. The measurement is a content-based character estimate (no true
 /// glyph metrics), which is the only faithful option that runs headlessly on every platform.
+///
+/// Matching Excel's AutoFit semantics, the content scan excludes: cells that are part of a merged
+/// region (Excel never lets a merged cell's content grow row/column sizing), and rows/columns that
+/// are effectively hidden (manual hide, AutoFilter, or group-collapse) — a hidden row's long content
+/// must not inflate a column's AutoFit width, and vice versa.
 /// </summary>
 public readonly record struct RowColumnSizePlan(uint Index, double Size);
 
@@ -58,9 +63,10 @@ public static class RowColumnSizingPlanner
     }
 
     public static IReadOnlyList<RowColumnSizePlan> PlanAutoFitRowHeights(
+        Sheet sheet,
         GridRange selection,
         GridRange? usedRange,
-        Func<uint, uint, string?> getDisplayText,
+        Func<uint, uint, AutoFitCellText?> getDisplayText,
         double defaultHeight)
     {
         var bounds = GetMeasurementBounds(selection, usedRange, AutoFitAxis.Rows);
@@ -70,7 +76,7 @@ public static class RowColumnSizingPlanner
         var plans = new List<RowColumnSizePlan>();
         for (var row = bounds.Value.Start.Row; row <= bounds.Value.End.Row; row++)
         {
-            var texts = CollectRowTexts(row, bounds.Value, getDisplayText);
+            var texts = CollectRowTexts(sheet, row, bounds.Value, getDisplayText);
             plans.Add(new RowColumnSizePlan(row, AutoFitSizingService.EstimateRowHeight(texts, defaultHeight)));
         }
 
@@ -78,9 +84,10 @@ public static class RowColumnSizingPlanner
     }
 
     public static IReadOnlyList<RowColumnSizePlan> PlanAutoFitColumnWidths(
+        Sheet sheet,
         GridRange selection,
         GridRange? usedRange,
-        Func<uint, uint, string?> getDisplayText,
+        Func<uint, uint, AutoFitCellText?> getDisplayText,
         double defaultWidth)
     {
         var bounds = GetMeasurementBounds(selection, usedRange, AutoFitAxis.Columns);
@@ -90,7 +97,7 @@ public static class RowColumnSizingPlanner
         var plans = new List<RowColumnSizePlan>();
         for (var col = bounds.Value.Start.Col; col <= bounds.Value.End.Col; col++)
         {
-            var texts = CollectColumnTexts(col, bounds.Value, getDisplayText);
+            var texts = CollectColumnTexts(sheet, col, bounds.Value, getDisplayText);
             plans.Add(new RowColumnSizePlan(col, AutoFitSizingService.EstimateColumnWidth(texts, defaultWidth)));
         }
 
@@ -151,25 +158,36 @@ public static class RowColumnSizingPlanner
         return selection;
     }
 
-    private static List<string> CollectRowTexts(uint row, GridRange bounds, Func<uint, uint, string?> getDisplayText)
+    private static List<AutoFitCellText> CollectRowTexts(Sheet sheet, uint row, GridRange bounds, Func<uint, uint, AutoFitCellText?> getDisplayText)
     {
-        var texts = new List<string>();
+        var texts = new List<AutoFitCellText>();
         for (var col = bounds.Start.Col; col <= bounds.End.Col; col++)
         {
-            if (getDisplayText(row, col) is { } text)
-                texts.Add(text);
+            if (sheet.IsColEffectivelyHidden(col))
+                continue;
+            if (sheet.IsMerged(new CellAddress(bounds.Start.Sheet, row, col)))
+                continue;
+            if (getDisplayText(row, col) is not { } cellText)
+                continue;
+
+            var columnWidth = sheet.ColumnWidths.TryGetValue(col, out var explicitWidth) ? explicitWidth : sheet.DefaultColumnWidth;
+            texts.Add(cellText with { ColumnWidth = columnWidth });
         }
 
         return texts;
     }
 
-    private static List<string> CollectColumnTexts(uint col, GridRange bounds, Func<uint, uint, string?> getDisplayText)
+    private static List<string> CollectColumnTexts(Sheet sheet, uint col, GridRange bounds, Func<uint, uint, AutoFitCellText?> getDisplayText)
     {
         var texts = new List<string>();
         for (var row = bounds.Start.Row; row <= bounds.End.Row; row++)
         {
-            if (getDisplayText(row, col) is { } text)
-                texts.Add(text);
+            if (sheet.IsRowEffectivelyHidden(row))
+                continue;
+            if (sheet.IsMerged(new CellAddress(bounds.Start.Sheet, row, col)))
+                continue;
+            if (getDisplayText(row, col) is { } cellText)
+                texts.Add(cellText.Text);
         }
 
         return texts;

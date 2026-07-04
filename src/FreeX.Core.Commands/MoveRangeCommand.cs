@@ -13,6 +13,11 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
     private List<CellSnapshot>? _snapshot;
     private Dictionary<CellAddress, string>? _formulaSnapshot;
     private Dictionary<CellAddress, string>? _commentSnapshot;
+    // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy note
+    // author + pinned/"Show Comment" state) and must move with a cell's comment, or a note's
+    // author/pinned box is left behind at the source address.
+    private Dictionary<CellAddress, string>? _commentAuthorsSnapshot;
+    private HashSet<CellAddress>? _shownCommentsSnapshot;
     private Dictionary<CellAddress, ThreadedComment>? _threadedCommentSnapshot;
     private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
     private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
@@ -92,6 +97,8 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
 
         _snapshot = CaptureCellSnapshots(sheet, affected);
         _commentSnapshot = CaptureDictionary(sheet.Comments, affected);
+        _commentAuthorsSnapshot = CaptureDictionary(sheet.CommentAuthors, affected);
+        _shownCommentsSnapshot = CaptureAddressSet(sheet.ShownComments, affected);
         _threadedCommentSnapshot = CaptureDictionary(sheet.ThreadedComments, affected);
         _hyperlinkSnapshot = CaptureDictionary(sheet.Hyperlinks, affected);
         _hyperlinkMetadataSnapshot = CaptureDictionary(sheet.HyperlinkMetadata, affected);
@@ -139,6 +146,8 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
             RestoreCellSnapshot(sheet, snapshot);
 
         RestoreDictionary(sheet.Comments, _commentSnapshot, _payloadAffectedCells);
+        RestoreDictionary(sheet.CommentAuthors, _commentAuthorsSnapshot, _payloadAffectedCells);
+        RestoreAddressSet(sheet.ShownComments, _shownCommentsSnapshot, _payloadAffectedCells);
         RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot, _payloadAffectedCells);
         RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot, _payloadAffectedCells);
         RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot, _payloadAffectedCells);
@@ -187,6 +196,8 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
                 cell,
                 sheet.GetStyleOnly(source.Row, source.Col),
                 sheet.Comments.TryGetValue(source, out var comment) ? comment : null,
+                sheet.CommentAuthors.TryGetValue(source, out var commentAuthor) ? commentAuthor : null,
+                sheet.ShownComments.Contains(source),
                 sheet.ThreadedComments.TryGetValue(source, out var threadedComment)
                     ? CloneThreadedComment(threadedComment)
                     : null,
@@ -261,11 +272,27 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         return snapshot;
     }
 
+    private static HashSet<CellAddress> CaptureAddressSet(
+        HashSet<CellAddress> source,
+        IReadOnlyList<CellAddress> addresses)
+    {
+        var snapshot = new HashSet<CellAddress>();
+        foreach (var address in addresses)
+        {
+            if (source.Contains(address))
+                snapshot.Add(address);
+        }
+
+        return snapshot;
+    }
+
     private static void ClearAddress(Sheet sheet, CellAddress address)
     {
         sheet.ClearCell(address);
         sheet.ClearStyleOnly(address.Row, address.Col);
         sheet.Comments.Remove(address);
+        sheet.CommentAuthors.Remove(address);
+        sheet.ShownComments.Remove(address);
         sheet.ThreadedComments.Remove(address);
         sheet.Hyperlinks.Remove(address);
         sheet.HyperlinkMetadata.Remove(address);
@@ -286,6 +313,10 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
 
         if (payload.Comment is not null)
             sheet.Comments[payload.Target] = payload.Comment;
+        if (payload.CommentAuthor is not null)
+            sheet.CommentAuthors[payload.Target] = payload.CommentAuthor;
+        if (payload.CommentShown)
+            sheet.ShownComments.Add(payload.Target);
         if (payload.ThreadedComment is not null)
             sheet.ThreadedComments[payload.Target] = CloneThreadedComment(payload.ThreadedComment);
         if (payload.Hyperlink is not null)
@@ -330,6 +361,21 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
 
         foreach (var (address, value) in snapshot)
             target[address] = value;
+    }
+
+    private static void RestoreAddressSet(
+        HashSet<CellAddress> target,
+        HashSet<CellAddress>? snapshot,
+        IReadOnlyList<CellAddress> affected)
+    {
+        foreach (var address in affected)
+            target.Remove(address);
+
+        if (snapshot is null)
+            return;
+
+        foreach (var address in snapshot)
+            target.Add(address);
     }
 
     private static bool HasComments(Sheet sheet, IReadOnlyList<CellAddress> addresses)
@@ -439,6 +485,8 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         Cell? Cell,
         StyleId? StyleOnly,
         string? Comment,
+        string? CommentAuthor,
+        bool CommentShown,
         ThreadedComment? ThreadedComment,
         string? Hyperlink,
         HyperlinkMetadata? HyperlinkMetadata,

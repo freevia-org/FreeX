@@ -712,6 +712,13 @@ public partial class GridView
 
         if (SelectedRange.HasValue && IsOnAutofillHandle(pos))
         {
+            if (e.ClickCount >= 2)
+            {
+                AutofillHandleDoubleClicked?.Invoke(SelectedRange.Value);
+                e.Handled = true;
+                return;
+            }
+
             _autofillDragging    = true;
             _autofillSourceRange = SelectedRange.Value;
             _autofillTarget      = SelectedRange.Value.End;
@@ -1015,9 +1022,11 @@ public partial class GridView
             if (_autofillSourceRange.HasValue && _autofillTarget.HasValue)
             {
                 var src = _autofillSourceRange.Value;
-                var fillRange = GridAutofillPlanner.CalculateFillRange(src, _autofillTarget.Value);
+                var fillRange = GridAutofillPlanner.CalculateFillRange(src, _autofillTarget.Value)
+                    ?? GridAutofillPlanner.CalculateClearRange(src, _autofillTarget.Value);
                 if (fillRange.HasValue)
                 {
+                    AutofillModifiersResolved?.Invoke(IsCtrlModifierDown());
                     AutofillRequested?.Invoke(src, fillRange.Value);
                 }
             }

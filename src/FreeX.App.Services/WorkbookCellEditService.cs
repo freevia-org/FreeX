@@ -61,6 +61,13 @@ public sealed class WorkbookCellEditService
         return _recalcEngine.RecalculateAllFormulas(workbook);
     }
 
+    /// <summary>Forces a recalculation of every formula on a single worksheet (Shift+F9 / Calculate Sheet).</summary>
+    public RecalcReport RecalculateSheet(Workbook workbook, SheetId sheetId)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        return _recalcEngine.RecalculateSheetFormulas(workbook, sheetId);
+    }
+
     public WorkbookGoalSeekResult ExecuteGoalSeek(Workbook workbook, GoalSeekRequest request)
     {
         ArgumentNullException.ThrowIfNull(workbook);

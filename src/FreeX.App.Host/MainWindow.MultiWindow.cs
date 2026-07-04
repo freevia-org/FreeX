@@ -3,7 +3,9 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Extensions.DependencyInjection;
+using Free.Shared.AppServices;
 using FreeX.App.Presentation.Shell;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -262,6 +264,18 @@ public partial class MainWindow
             _workbookRef,
             _workbookRef.Current,
             _documentState);
+
+        // Give the secondary window its own autosave timer + recovery snapshot (same wiring
+        // App.xaml.cs performs for the primary window and for crash-recovery windows). Autosave
+        // ownership is per-window, not per-workbook: as long as ANY window over the shared
+        // workbook stays open, its own timer keeps snapshotting the (shared) dirty state, so
+        // closing one window — even the one that opened first — can never leave the still-open
+        // shared workbook with zero crash-recovery coverage (J25).
+        var autosaveStore = AutosaveSnapshotStore.CreateDefault(
+            App.Services.GetRequiredService<IApplicationDataPathProvider>());
+        var autosaveService = new AutosaveService(autosaveStore);
+        newWindow.AttachAutosaveService(autosaveService, autosaveStore);
+
         newWindow.Show();
         newWindow.Activate();
         RefreshViewWindowCommandState();

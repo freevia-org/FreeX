@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.IO;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
@@ -15,9 +16,30 @@ public enum OptionsDialogInitialSection
     FormulaErrorChecking
 }
 
+/// <summary>
+/// Snapshot of the live workbook's calculation settings (calc mode + iterative-calculation
+/// enable/max-iterations/max-change), captured just before the Options dialog opens so the
+/// Formulas panel seeds from the workbook actually being edited, not the persisted app-wide
+/// <see cref="FreeXOptions.AutoCalculate"/> default. Excel's Options dialog reflects the active
+/// workbook's calculation state, not a saved app preference.
+/// </summary>
+public sealed record OptionsDialogCalculationSettings(
+    bool AutoCalculate,
+    bool IterativeCalculation,
+    int? MaxCalculationIterations,
+    double? MaxCalculationChange)
+{
+    public static OptionsDialogCalculationSettings FromWorkbook(Workbook workbook) => new(
+        workbook.CalculationMode == WorkbookCalculationMode.Automatic,
+        workbook.IterativeCalculation,
+        workbook.MaxCalculationIterations,
+        workbook.MaxCalculationChange);
+}
+
 public partial class OptionsDialog : Window
 {
     private readonly FreeXOptions _opts;
+    private readonly OptionsDialogCalculationSettings _calcSettings;
     private readonly HashSet<string> _disabledFormulaErrorCodes;
     private readonly Dictionary<string, CheckBox> _errorRuleBoxes = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<string> _quickAccessCommandIds = [];
@@ -27,6 +49,13 @@ public partial class OptionsDialog : Window
     private const string QuickAccessExportMenuHeader = "_Export customization file...";
     public FreeXOptions Result { get; private set; }
     public IReadOnlySet<string> DisabledFormulaErrorCodesResult { get; private set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The workbook calculation settings as edited in the dialog. Null when the user did not
+    /// change anything from <see cref="OptionsDialogCalculationSettings"/> passed in, so the
+    /// caller can apply the workbook-level change only when something actually changed.
+    /// </summary>
+    public OptionsDialogCalculationSettings? CalculationSettingsResult { get; private set; }
 
     private sealed record QuickAccessCommandChoice(string Id, string DisplayName);
 
@@ -39,9 +68,15 @@ public partial class OptionsDialog : Window
     public OptionsDialog(
         FreeXOptions opts,
         IEnumerable<string>? disabledFormulaErrorCodes = null,
-        OptionsDialogInitialSection initialSection = OptionsDialogInitialSection.General)
+        OptionsDialogInitialSection initialSection = OptionsDialogInitialSection.General,
+        OptionsDialogCalculationSettings? calcSettings = null)
     {
         _opts = opts;
+        // Falls back to the persisted app default only for callers that don't have a live workbook
+        // handy (parity-capture surfaces, source-pinning unit tests). The real host call site always
+        // passes the live workbook's calculation settings so the Formulas panel reflects the workbook
+        // actually open, matching Excel.
+        _calcSettings = calcSettings ?? new OptionsDialogCalculationSettings(opts.AutoCalculate, false, null, null);
         _disabledFormulaErrorCodes = new HashSet<string>(disabledFormulaErrorCodes ?? [], StringComparer.OrdinalIgnoreCase);
         DisabledFormulaErrorCodesResult = new HashSet<string>(_disabledFormulaErrorCodes, StringComparer.OrdinalIgnoreCase);
         _initialSection = initialSection;
@@ -71,9 +106,15 @@ public partial class OptionsDialog : Window
         OptCollapseRibbon.IsChecked = _opts.CollapseRibbonAutomatically;
         OptShowScreenTips.IsChecked = _opts.ShowScreenTips;
 
-        // Formulas
-        OptCalcAuto.IsChecked   =  _opts.AutoCalculate;
-        OptCalcManual.IsChecked = !_opts.AutoCalculate;
+        // Formulas — seeded from the live workbook's calculation settings, not the persisted
+        // app-wide default, so the dialog reflects whatever the ribbon's Calculation Options
+        // last set on this workbook (matching Excel).
+        OptCalcAuto.IsChecked   =  _calcSettings.AutoCalculate;
+        OptCalcManual.IsChecked = !_calcSettings.AutoCalculate;
+        OptIterativeEnabled.IsChecked = _calcSettings.IterativeCalculation;
+        OptMaxIterations.Text = (_calcSettings.MaxCalculationIterations ?? DefaultMaxCalculationIterations).ToString();
+        OptMaxChange.Text = (_calcSettings.MaxCalculationChange ?? DefaultMaxCalculationChange).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        UpdateIterativeCalculationFieldsState();
         OptR1C1.IsChecked = _opts.UseR1C1ReferenceStyle;
         OptFormulasAutocomplete.IsChecked = true;
         PopulateErrorCheckingRules();
@@ -193,6 +234,19 @@ public partial class OptionsDialog : Window
             return;
 
         OptFormulaBarExpanded.IsEnabled = OptShowFormulaBar.IsChecked == true;
+    }
+
+    private void IterativeEnabled_Changed(object sender, RoutedEventArgs e) =>
+        UpdateIterativeCalculationFieldsState();
+
+    private void UpdateIterativeCalculationFieldsState()
+    {
+        if (OptMaxIterations is null || OptMaxChange is null)
+            return;
+
+        var enabled = OptIterativeEnabled.IsChecked == true;
+        OptMaxIterations.IsEnabled = enabled;
+        OptMaxChange.IsEnabled = enabled;
     }
 
     private void PopulateQuickAccessToolbarOptions()
@@ -441,6 +495,19 @@ public partial class OptionsDialog : Window
             return;
         }
 
+        var iterativeEnabled = OptIterativeEnabled.IsChecked == true;
+        if (!TryParseMaxIterations(OptMaxIterations.Text, out var maxIterations))
+        {
+            ShowInvalidInputWarning(UiText.Get("Options_InvalidMaxIterationsMessage"), OptMaxIterations);
+            return;
+        }
+
+        if (!TryParseMaxChange(OptMaxChange.Text, out var maxChange))
+        {
+            ShowInvalidInputWarning(UiText.Get("Options_InvalidMaxChangeMessage"), OptMaxChange);
+            return;
+        }
+
         var opts = new FreeXOptions
         {
             DefaultFontName   = OptDefaultFont.SelectedItem as string ?? _opts.DefaultFontName,
@@ -486,10 +553,50 @@ public partial class OptionsDialog : Window
 
         Result = opts;
         DisabledFormulaErrorCodesResult = CollectDisabledFormulaErrorCodes();
+
+        var editedCalcSettings = new OptionsDialogCalculationSettings(
+            OptCalcAuto.IsChecked == true,
+            iterativeEnabled,
+            maxIterations,
+            maxChange);
+        // Only surface a workbook-level calculation change when the user actually changed
+        // something in this panel — an unrelated Options edit (e.g. UserName) must never force
+        // -apply stale/unseen calc settings back onto the live workbook.
+        CalculationSettingsResult = editedCalcSettings == _calcSettings ? null : editedCalcSettings;
+
         DialogResult = true;
     }
 
     private void CancelBtn_Click(object sender, RoutedEventArgs e) => DialogResult = false;
+
+    private const int DefaultMaxCalculationIterations = 100;
+    private const double DefaultMaxCalculationChange = 0.001;
+
+    private static bool TryParseMaxIterations(string? text, out int maxIterations)
+    {
+        maxIterations = 0;
+        if (!int.TryParse((text ?? string.Empty).Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+            || parsed <= 0)
+        {
+            return false;
+        }
+
+        maxIterations = parsed;
+        return true;
+    }
+
+    private static bool TryParseMaxChange(string? text, out double maxChange)
+    {
+        maxChange = 0;
+        if (!double.TryParse((text ?? string.Empty).Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+            || parsed < 0)
+        {
+            return false;
+        }
+
+        maxChange = parsed;
+        return true;
+    }
 
     private bool ShowInvalidInputWarning(string message, Control target)
     {

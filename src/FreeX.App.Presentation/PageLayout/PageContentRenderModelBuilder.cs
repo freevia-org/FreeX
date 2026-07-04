@@ -414,9 +414,15 @@ public static class PageContentRenderModelBuilder
             measurement.RowOffset(pageRows.Count) - measurement.RowOffset(titleRowCount));
 
         // Charts anchor at chart.Left/chart.Top, which are absolute pixel offsets from the sheet's
-        // real (non-uniform, hidden-row/column-skipping) origin — see XlsxDrawingAnchorApplier. To
-        // place a chart correctly on this page, translate its real-sheet coordinates into page-grid
-        // coordinates by subtracting the real-sheet pixel offset of the page's first body row/column.
+        // real (non-uniform, hidden-row/column-skipping) origin in XlsxDrawingAnchorApplier's
+        // width-in-chars*8 convention — see ChartAnchorGeometry. That is a DIFFERENT pixel-per-character
+        // convention than the print grid's own column/row measurement (measurement.ColumnOffset, built
+        // from ColumnWidthPixelMapper's width*7+5 convention), so chart.Left/pageGridLeft (both *8-space)
+        // must never be summed directly with bodyGridLeft/measurement (7x+5-space). ShouldPrintChart's
+        // intersection test stays in the anchor's own *8 space (pageGridRect below), but the chart's
+        // final on-page bounds are computed by first converting its anchor position into the grid's own
+        // pixel space via ChartAnchorGeometry.ConvertColumnOffsetToGridSpace/ConvertRowOffsetToGridSpace,
+        // then translating within that single, consistent space.
         var pageGridLeft = ChartAnchorGeometry.SumColumnPixels(sheet, 1, bodyColumns[0] - 1);
         var pageGridTop = ChartAnchorGeometry.SumRowPixels(sheet, 1, bodyRows[0] - 1);
         var pageGridRect = new LayoutRect(
@@ -424,6 +430,8 @@ public static class PageContentRenderModelBuilder
             pageGridTop,
             bodyGridRect.Width,
             bodyGridRect.Height);
+        var pageGridLeftInGridSpace = ChartAnchorGeometry.ConvertColumnOffsetToGridSpace(sheet, pageGridLeft);
+        var pageGridTopInGridSpace = ChartAnchorGeometry.ConvertRowOffsetToGridSpace(sheet, pageGridTop);
 
         var cellLookup = BuildChartCellLookup(workbook, sheet, pageRows, pageColumns);
         var blocks = new List<PageChartBlock>();
@@ -432,9 +440,11 @@ public static class PageContentRenderModelBuilder
             if (!ShouldPrintChart(chart, pageGridRect))
                 continue;
 
+            var chartGridLeft = ChartAnchorGeometry.ConvertColumnOffsetToGridSpace(sheet, chart.Left);
+            var chartGridTop = ChartAnchorGeometry.ConvertRowOffsetToGridSpace(sheet, chart.Top);
             var bounds = new LayoutRect(
-                bodyGridLeft + chart.Left - pageGridLeft,
-                bodyGridTop + chart.Top - pageGridTop,
+                bodyGridLeft + chartGridLeft - pageGridLeftInGridSpace,
+                bodyGridTop + chartGridTop - pageGridTopInGridSpace,
                 chart.Width,
                 chart.Height);
             var overlays = Contains(bodyGridRect, bounds)

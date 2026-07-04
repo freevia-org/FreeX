@@ -27,6 +27,11 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
     // Snapshot for undo: list of rows, each row is a list of cell+style+hyperlink+richtext tuples
     private List<List<(CellAddress Address, Cell? Cell, StyleId? StyleOnly, string? Hyperlink, HyperlinkMetadata? HyperlinkMetadata, IReadOnlyList<CellTextRun>? RichTextRuns)>>? _snapshot;
     private Dictionary<CellAddress, string>? _commentSnapshot;
+    // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy note
+    // author + pinned/"Show Comment" state) and must travel with a sorted row's comment, or a
+    // note's author/pinned box is left behind at the row's old position.
+    private Dictionary<CellAddress, string>? _commentAuthorsSnapshot;
+    private HashSet<CellAddress>? _shownCommentsSnapshot;
     private Dictionary<CellAddress, ThreadedComment>? _threadedCommentSnapshot;
     private Dictionary<uint, double>? _rowHeightSnapshot;
     private HashSet<uint>? _hiddenRowsSnapshot;
@@ -38,15 +43,19 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         SortCellPayload[][] Rows,
         List<List<(CellAddress Address, Cell? Cell, StyleId? StyleOnly, string? Hyperlink, HyperlinkMetadata? HyperlinkMetadata, IReadOnlyList<CellTextRun>? RichTextRuns)>> CellSnapshot,
         Dictionary<CellAddress, string> CommentSnapshot,
+        Dictionary<CellAddress, string> CommentAuthorsSnapshot,
+        HashSet<CellAddress> ShownCommentsSnapshot,
         Dictionary<CellAddress, ThreadedComment> ThreadedCommentSnapshot);
 
     private readonly struct SortCellPayload
     {
-        public SortCellPayload(Cell? cell, StyleId? styleOnly, string? comment, ThreadedComment? threadedComment, string? hyperlink, HyperlinkMetadata? hyperlinkMetadata, IReadOnlyList<CellTextRun>? richTextRuns = null)
+        public SortCellPayload(Cell? cell, StyleId? styleOnly, string? comment, string? commentAuthor, bool commentShown, ThreadedComment? threadedComment, string? hyperlink, HyperlinkMetadata? hyperlinkMetadata, IReadOnlyList<CellTextRun>? richTextRuns = null)
         {
             Cell = cell;
             StyleOnly = styleOnly;
             Comment = comment;
+            CommentAuthor = commentAuthor;
+            CommentShown = commentShown;
             ThreadedComment = threadedComment;
             Hyperlink = hyperlink;
             HyperlinkMetadata = hyperlinkMetadata;
@@ -56,6 +65,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         public Cell? Cell { get; }
         public StyleId? StyleOnly { get; }
         public string? Comment { get; }
+        public string? CommentAuthor { get; }
+        public bool CommentShown { get; }
         public ThreadedComment? ThreadedComment { get; }
         public string? Hyperlink { get; }
         public HyperlinkMetadata? HyperlinkMetadata { get; }
@@ -124,6 +135,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         var payloadCapture = CapturePayloads(sheet, _sheetId, startRow, startCol, rowCount, colCount);
         _snapshot = payloadCapture.CellSnapshot;
         _commentSnapshot = payloadCapture.CommentSnapshot;
+        _commentAuthorsSnapshot = payloadCapture.CommentAuthorsSnapshot;
+        _shownCommentsSnapshot = payloadCapture.ShownCommentsSnapshot;
         _threadedCommentSnapshot = payloadCapture.ThreadedCommentSnapshot;
 
         var rows = new List<(SortCellPayload[] Payloads, bool HasRowHeight, double RowHeight, bool IsHidden, bool IsFilterHidden, bool IsValueFilterHidden, int OriginalIndex)>(rowCount);
@@ -217,6 +230,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         var payloadCapture = CapturePayloads(sheet, _sheetId, startRow, startCol, rowCount, colCount);
         _snapshot = payloadCapture.CellSnapshot;
         _commentSnapshot = payloadCapture.CommentSnapshot;
+        _commentAuthorsSnapshot = payloadCapture.CommentAuthorsSnapshot;
+        _shownCommentsSnapshot = payloadCapture.ShownCommentsSnapshot;
         _threadedCommentSnapshot = payloadCapture.ThreadedCommentSnapshot;
 
         var columns = new List<(SortCellPayload[] Payloads, int OriginalIndex)>(colCount);
@@ -292,6 +307,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         var rows = new SortCellPayload[rowCount][];
         var cellSnapshot = new List<List<(CellAddress, Cell?, StyleId?, string?, HyperlinkMetadata?, IReadOnlyList<CellTextRun>?)>>(rowCount);
         var commentSnapshot = new Dictionary<CellAddress, string>();
+        var commentAuthorsSnapshot = new Dictionary<CellAddress, string>();
+        var shownCommentsSnapshot = new HashSet<CellAddress>();
         var threadedCommentSnapshot = new Dictionary<CellAddress, ThreadedComment>();
 
         for (int ri = 0; ri < rowCount; ri++)
@@ -309,6 +326,10 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
                 snapRow.Add((addr, snapshotCell, snapshotStyleOnly, snapshotHyperlink, snapshotHyperlinkMetadata, snapshotRichTextRuns));
                 if (payload.Comment is not null)
                     commentSnapshot[addr] = payload.Comment;
+                if (payload.CommentAuthor is not null)
+                    commentAuthorsSnapshot[addr] = payload.CommentAuthor;
+                if (payload.CommentShown)
+                    shownCommentsSnapshot.Add(addr);
                 if (payload.ThreadedComment is not null)
                     threadedCommentSnapshot[addr] = payload.ThreadedComment;
             }
@@ -317,7 +338,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
             cellSnapshot.Add(snapRow);
         }
 
-        return new SortPayloadCapture(rows, cellSnapshot, commentSnapshot, threadedCommentSnapshot);
+        return new SortPayloadCapture(rows, cellSnapshot, commentSnapshot, commentAuthorsSnapshot, shownCommentsSnapshot, threadedCommentSnapshot);
     }
 
     private static Dictionary<uint, double> CaptureRowHeights(Sheet sheet, uint startRow, int rowCount)
@@ -383,6 +404,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
     {
         var cell = sheet.GetCell(address);
         sheet.Comments.TryGetValue(address, out var comment);
+        sheet.CommentAuthors.TryGetValue(address, out var commentAuthor);
+        var commentShown = sheet.ShownComments.Contains(address);
         sheet.ThreadedComments.TryGetValue(address, out var threadedComment);
         sheet.Hyperlinks.TryGetValue(address, out var hyperlink);
         sheet.HyperlinkMetadata.TryGetValue(address, out var hyperlinkMetadata);
@@ -395,7 +418,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         snapshotHyperlink = hyperlink;
         snapshotHyperlinkMetadata = hyperlinkMetadata;
         snapshotRichTextRuns = richTextRuns;
-        return new SortCellPayload(cell?.Clone(), styleOnly, comment, threadedComment, hyperlink, hyperlinkMetadata, richTextRuns);
+        return new SortCellPayload(cell?.Clone(), styleOnly, comment, commentAuthor, commentShown, threadedComment, hyperlink, hyperlinkMetadata, richTextRuns);
     }
 
     private static SortCellPayload[] CopyColumnPayloads(SortCellPayload[][] rows, int columnIndex, int rowCount)
@@ -414,6 +437,14 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         sheet.Comments.Remove(address);
         if (payload.Comment is not null)
             sheet.Comments[address] = payload.Comment;
+
+        sheet.CommentAuthors.Remove(address);
+        if (payload.CommentAuthor is not null)
+            sheet.CommentAuthors[address] = payload.CommentAuthor;
+
+        sheet.ShownComments.Remove(address);
+        if (payload.CommentShown)
+            sheet.ShownComments.Add(address);
 
         sheet.ThreadedComments.Remove(address);
         if (payload.ThreadedComment is not null)
@@ -476,6 +507,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         foreach (var addr in _affectedCells)
         {
             sheet.Comments.Remove(addr);
+            sheet.CommentAuthors.Remove(addr);
+            sheet.ShownComments.Remove(addr);
             sheet.ThreadedComments.Remove(addr);
         }
 
@@ -483,6 +516,18 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         {
             foreach (var (addr, comment) in _commentSnapshot)
                 sheet.Comments[addr] = comment;
+        }
+
+        if (_commentAuthorsSnapshot is not null)
+        {
+            foreach (var (addr, author) in _commentAuthorsSnapshot)
+                sheet.CommentAuthors[addr] = author;
+        }
+
+        if (_shownCommentsSnapshot is not null)
+        {
+            foreach (var addr in _shownCommentsSnapshot)
+                sheet.ShownComments.Add(addr);
         }
 
         if (_threadedCommentSnapshot is not null)

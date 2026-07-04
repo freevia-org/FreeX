@@ -121,7 +121,7 @@ public static partial class NumberFormatter
 
         var prepared = PreserveLocaleCurrencyTokens(format, out _, out _);
         prepared = NativeDigitDirectiveRegex.Replace(prepared, "");
-        prepared = NumericBracketDirectiveRegex.Replace(prepared, "");
+        prepared = RemoveUnquotedBracketDirectives(prepared);
         prepared = PreserveAccountingFillSpace(prepared);
         prepared = RemoveSpacingAndFillDirectives(prepared);
 

@@ -362,16 +362,17 @@ public sealed class Lexer
 
         // Named range (identifier that is not a cell reference, function, or boolean).
         //
-        // Exception: when this identifier is immediately followed by ':', it may be the start
-        // sheet name of a 3-D sheet-span reference (e.g. Sheet1:Sheet3!A1 — see Parser's
-        // TryParseSheetSpanReference) rather than an actual named-range identifier. Sheet names
-        // have a canonical display case that must round-trip through FormulaSerializer (unlike a
-        // plain named-range lookup, which is case-insensitive both here and in Workbook.NamedRanges/
-        // TryParseColumnToken, so preserving case here cannot change any existing behaviour), so skip
-        // the uppercasing in that shape and let the original source casing flow through. This also
-        // covers the full-column/full-row-range start token (e.g. the "A" in A:A) for the same
-        // reason: TryParseColumnToken/TryParseRowToken already re-normalize case themselves.
-        var value = _pos < _text.Length && _text[_pos] == ':'
+        // Exception: when this identifier is immediately followed by ':' or '#', it may be the
+        // start sheet name of a 3-D sheet-span reference (e.g. Sheet1:Sheet3!A1 — see Parser's
+        // TryParseSheetSpanReference) or a named-range spill anchor (e.g. MyCell# — see Parser's
+        // WrapSpillAnchor) rather than a plain named-range identifier looked up case-insensitively.
+        // Named ranges preserve their defined display case (like sheet names) when round-tripping
+        // through FormulaSerializer for these shapes — e.g. FormulaSerializer prints the
+        // ANCHORARRAY(NamedRangeNode) case back as "<Name>#" verbatim — so skip the uppercasing
+        // here and let the original source casing flow through. This also covers the
+        // full-column/full-row-range start token (e.g. the "A" in A:A) for the same reason:
+        // TryParseColumnToken/TryParseRowToken already re-normalize case themselves.
+        var value = _pos < _text.Length && (_text[_pos] == ':' || _text[_pos] == '#')
             ? valueSpan.ToString()
             : ToUpperInvariantIfNeeded(valueSpan);
         return new Token(TokenType.NamedRange, value, start);

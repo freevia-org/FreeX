@@ -140,19 +140,24 @@ public sealed class AvaloniaGridInputSourceTests
     [Fact]
     public void ShiftArrowNavigation_ExtendsRangeInsteadOfMovingAnchor()
     {
+        // NOTE: this test previously pinned NavigateActiveCell's old plain-move-only switch
+        // (literal `MoveOrExtendActiveCell(-1, 0, extendSelection);` call sites with no Ctrl
+        // boundary-jump, End-mode, or merge-snap support - see J9/J34/J36 in the review corpus).
+        // NavigateActiveCell now routes through ExcelWorksheetNavigationPlanner and
+        // MoveOrExtendActiveCellTo(CellAddress, bool) so it can also handle Ctrl+Arrow/Home/End
+        // and End-mode; this test is updated to pin the new structure while still verifying the
+        // same externally-observable behavior (Shift+Arrow extends the range instead of moving
+        // the anchor, using a persisted extension anchor/cursor).
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
         source.Should().Contain("var extendSelection = e.KeyModifiers.HasFlag(KeyModifiers.Shift);");
-        source.Should().Contain("MoveOrExtendActiveCell(-1, 0, extendSelection);");
-        source.Should().Contain("MoveOrExtendActiveCell(1, 0, extendSelection);");
-        source.Should().Contain("MoveOrExtendActiveCell(0, -1, extendSelection);");
-        source.Should().Contain("MoveOrExtendActiveCell(0, 1, extendSelection);");
         source.Should().Contain("private CellAddress? _selectionExtensionAnchor;");
         source.Should().Contain("private CellAddress? _selectionExtensionCursor;");
         source.Should().Contain("var anchor = _selectionExtensionAnchor ?? _session.ActiveCell;");
-        source.Should().Contain("var cursor = _selectionExtensionCursor ?? _session.ActiveCell;");
+        source.Should().Contain("_selectionExtensionAnchor = anchor;");
         source.Should().Contain("_selectionExtensionCursor = target;");
         source.Should().Contain("_session.SelectRange(new GridRange(anchor, target));");
+        source.Should().Contain("private void MoveOrExtendActiveCellTo(CellAddress target, bool extendSelection)");
     }
 
     [Fact]

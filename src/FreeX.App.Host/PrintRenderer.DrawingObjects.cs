@@ -40,9 +40,15 @@ public static partial class PrintRenderer
             measurement.RowOffset(rowPlanTitleCount + bodyRows.Count) - measurement.RowOffset(rowPlanTitleCount));
 
         // chart.Left/chart.Top are absolute pixel offsets from the sheet's real (non-uniform,
-        // hidden-row/column-skipping) origin — see XlsxDrawingAnchorApplier. Translate them into this
-        // page's grid coordinates by subtracting the real-sheet pixel offset of the page's first body
-        // row/column, matching the coordinate space anchors were computed in.
+        // hidden-row/column-skipping) origin in XlsxDrawingAnchorApplier's width-in-chars*8 convention —
+        // see ChartAnchorGeometry. That is a DIFFERENT pixel-per-character convention than the print
+        // grid's own column/row measurement (measurement.ColumnOffset, built from ColumnWidthPixelMapper's
+        // width*7+5 convention), so chart.Left/pageGridLeft (both *8-space) must never be summed directly
+        // with bodyGridLeft/measurement (7x+5-space). ShouldPrintChart's intersection test stays in the
+        // anchor's own *8 space (pageGridRect below), but the chart's final on-page rect is computed by
+        // first converting its anchor position into the grid's own pixel space via
+        // ChartAnchorGeometry.ConvertColumnOffsetToGridSpace/ConvertRowOffsetToGridSpace, then
+        // translating within that single, consistent space.
         var firstBodyColumn = bodyColumns[0];
         var firstBodyRow = bodyRows[0];
         var pageGridLeft = ChartAnchorGeometry.SumColumnPixels(sheet, 1, firstBodyColumn - 1);
@@ -52,6 +58,8 @@ public static partial class PrintRenderer
             pageGridTop,
             bodyGridRect.Width,
             bodyGridRect.Height);
+        var pageGridLeftInGridSpace = ChartAnchorGeometry.ConvertColumnOffsetToGridSpace(sheet, pageGridLeft);
+        var pageGridTopInGridSpace = ChartAnchorGeometry.ConvertRowOffsetToGridSpace(sheet, pageGridTop);
 
         dc.PushClip(new RectangleGeometry(bodyGridRect));
         foreach (var chart in charts)
@@ -63,9 +71,11 @@ public static partial class PrintRenderer
             if (image is null)
                 continue;
 
+            var chartGridLeft = ChartAnchorGeometry.ConvertColumnOffsetToGridSpace(sheet, chart.Left);
+            var chartGridTop = ChartAnchorGeometry.ConvertRowOffsetToGridSpace(sheet, chart.Top);
             var chartRect = new Rect(
-                bodyGridLeft + chart.Left - pageGridLeft,
-                bodyGridTop + chart.Top - pageGridTop,
+                bodyGridLeft + chartGridLeft - pageGridLeftInGridSpace,
+                bodyGridTop + chartGridTop - pageGridTopInGridSpace,
                 chart.Width,
                 chart.Height);
             dc.DrawImage(image, chartRect);

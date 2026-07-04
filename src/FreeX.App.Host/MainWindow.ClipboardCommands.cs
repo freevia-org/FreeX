@@ -155,9 +155,20 @@ public partial class MainWindow
         // If we have an internal clipboard (copied from within this app), use it with formula adjustment
         if (_internalClipboard is { } clip)
         {
-            currentClipboardText = TryGetClipboardText();
+            currentClipboardText = TryGetClipboardText(out var clipboardReadFailed);
             currentClipboardTextRead = true;
-            if (!ClipboardPastePlanner.ShouldUseInternalClipboard(clip.Text, currentClipboardText))
+            var pastePlan = ClipboardPastePlanner.PlanPaste(clip.Text, currentClipboardText, clipboardReadFailed);
+            if (pastePlan == ClipboardPastePlan.ReadFailed)
+            {
+                // A transient OS-clipboard read failure must not silently fall back to a stale
+                // internal paste of the wrong content — skip the paste and tell the user.
+                ShowCommandError(
+                    new CommandOutcome(false, "The clipboard is busy. Try pasting again."),
+                    "Paste");
+                return;
+            }
+
+            if (pastePlan == ClipboardPastePlan.UseExternalClipboardText)
             {
                 _internalClipboard = null;
                 ClearClipboardVisualState();
@@ -317,10 +328,25 @@ public partial class MainWindow
         RefreshToolbar();
     }
 
-    private static string? TryGetClipboardText()
+    private static string? TryGetClipboardText() => TryGetClipboardText(out _);
+
+    /// <summary>
+    /// Reads the OS clipboard text, distinguishing "read failed" (clipboard locked by another
+    /// process) from "read succeeded but empty/non-text" — the paste planner must skip the paste
+    /// on failure instead of falling back to a stale internal-clipboard paste (review P1).
+    /// </summary>
+    private static string? TryGetClipboardText(out bool readFailed)
     {
-        try { return System.Windows.Clipboard.GetText(); }
-        catch { return null; }
+        try
+        {
+            readFailed = false;
+            return System.Windows.Clipboard.GetText();
+        }
+        catch
+        {
+            readFailed = true;
+            return null;
+        }
     }
 
     private static bool TryClipboardContainsImage()

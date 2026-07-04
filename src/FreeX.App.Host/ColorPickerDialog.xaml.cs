@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Automation;
+using System.Windows.Automation.Peers;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -176,6 +177,7 @@ public partial class ColorPickerDialog : Window
         };
         AutomationProperties.SetName(button, CreateSwatchAutomationName(swatch, groupName));
         AutomationProperties.SetHelpText(button, UiText.Get("ColorPicker_SwatchHelpText"));
+        AutomationProperties.SetItemStatus(button, NotSelectedItemStatus);
         button.Click += SwatchButton_Click;
         _initialFocusButton ??= button;
         if (SelectedColor == swatch.Color)
@@ -207,16 +209,15 @@ public partial class ColorPickerDialog : Window
         }
     }
 
+    private const string SelectedItemStatus = "Selected";
+    private const string NotSelectedItemStatus = "Not selected";
+
     private void MarkSelectedSwatch(Button button)
     {
         if (_selectedSwatchButton is not null)
-        {
-            _selectedSwatchButton.BorderBrush = Brushes.Gray;
-            _selectedSwatchButton.BorderThickness = new Thickness(1);
-        }
+            SetSwatchSelectionState(_selectedSwatchButton, isSelected: false);
 
-        button.BorderBrush = Brushes.Black;
-        button.BorderThickness = new Thickness(2);
+        SetSwatchSelectionState(button, isSelected: true);
         _selectedSwatchButton = button;
     }
 
@@ -225,9 +226,41 @@ public partial class ColorPickerDialog : Window
         if (_selectedSwatchButton is null)
             return;
 
-        _selectedSwatchButton.BorderBrush = Brushes.Gray;
-        _selectedSwatchButton.BorderThickness = new Thickness(1);
+        SetSwatchSelectionState(_selectedSwatchButton, isSelected: false);
         _selectedSwatchButton = null;
+    }
+
+    /// <summary>
+    /// Updates a swatch button's visual selection border and exposes the same selection
+    /// state through UI Automation (AutomationProperties.ItemStatus, plus a property-changed
+    /// notification), so screen readers can tell which color is currently selected. Mirrors
+    /// the ItemStatus selection convention used for gallery-style selection UI in the
+    /// Avalonia shell (see MainWindow.cs/MainWindow.Charts.cs AutomationProperties.SetItemStatus).
+    /// </summary>
+    private static void SetSwatchSelectionState(Button button, bool isSelected)
+    {
+        button.BorderBrush = isSelected ? Brushes.Black : Brushes.Gray;
+        button.BorderThickness = new Thickness(isSelected ? 2 : 1);
+
+        var status = isSelected ? SelectedItemStatus : NotSelectedItemStatus;
+        var previousStatus = AutomationProperties.GetItemStatus(button);
+        if (string.Equals(previousStatus, status, StringComparison.Ordinal))
+            return;
+
+        AutomationProperties.SetItemStatus(button, status);
+
+        if (!button.IsLoaded)
+            return;
+
+        try
+        {
+            var peer = UIElementAutomationPeer.FromElement(button) ??
+                       UIElementAutomationPeer.CreatePeerForElement(button);
+            peer?.RaisePropertyChangedEvent(AutomationElementIdentifiers.ItemStatusProperty, previousStatus, status);
+        }
+        catch (InvalidOperationException)
+        {
+        }
     }
 
     private void UpdateSwatchSelection(CellColor color)

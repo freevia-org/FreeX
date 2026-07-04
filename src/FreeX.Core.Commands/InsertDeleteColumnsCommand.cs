@@ -16,6 +16,8 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
     private List<KeyValuePair<uint, double>>? _columnWidthSnapshot;
     private List<KeyValuePair<uint, IReadOnlyList<string>>>? _activeValueFilterColumnsSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _commentSnapshot;
+    private List<KeyValuePair<CellAddress, string>>? _commentAuthorsSnapshot;
+    private List<CellAddress>? _shownCommentsSnapshot;
     private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
@@ -75,6 +77,13 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
 
         _commentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
         RowColumnShiftHelpers.ShiftCommentColumnsUp(sheet.Comments, _beforeCol, _count);
+        // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy note
+        // author + pinned/"Show Comment" state) and must shift in lockstep with it, or a note's
+        // author/pinned box goes stale at the note's old address after the insert.
+        _commentAuthorsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CommentAuthors);
+        RowColumnShiftHelpers.ShiftCommentColumnsUp(sheet.CommentAuthors, _beforeCol, _count);
+        _shownCommentsSnapshot = RowColumnShiftHelpers.CaptureAddressSet(sheet.ShownComments);
+        RowColumnShiftHelpers.ShiftCommentSetColumnsUp(sheet.ShownComments, _beforeCol, _count);
         _threadedCommentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ThreadedComments);
         RowColumnShiftHelpers.ShiftCommentColumnsUp(sheet.ThreadedComments, _beforeCol, _count);
         _hyperlinkSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Hyperlinks);
@@ -147,6 +156,8 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreDictionary(sheet.ColumnWidths, _columnWidthSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.ActiveValueFilterColumns, _activeValueFilterColumnsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.Comments, _commentSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.CommentAuthors, _commentAuthorsSnapshot);
+        RowColumnShiftHelpers.RestoreAddressSet(sheet.ShownComments, _shownCommentsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
@@ -262,6 +273,8 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
     private List<KeyValuePair<uint, IReadOnlyList<string>>>? _activeValueFilterColumnsSnapshot;
     private List<uint>? _hiddenColsSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _commentSnapshot;
+    private List<KeyValuePair<CellAddress, string>>? _commentAuthorsSnapshot;
+    private List<CellAddress>? _shownCommentsSnapshot;
     private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
@@ -321,6 +334,13 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
 
         _commentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
         RowColumnShiftHelpers.ShiftCommentColumnsDown(sheet.Comments, _startCol, _count);
+        // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy note
+        // author + pinned/"Show Comment" state) and must shift/delete in lockstep with it, or a
+        // note's author/pinned box goes stale (or survives at a deleted address) after the delete.
+        _commentAuthorsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CommentAuthors);
+        RowColumnShiftHelpers.ShiftCommentColumnsDown(sheet.CommentAuthors, _startCol, _count);
+        _shownCommentsSnapshot = RowColumnShiftHelpers.CaptureAddressSet(sheet.ShownComments);
+        RowColumnShiftHelpers.ShiftCommentSetColumnsDown(sheet.ShownComments, _startCol, _count);
         _threadedCommentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ThreadedComments);
         RowColumnShiftHelpers.ShiftCommentColumnsDown(sheet.ThreadedComments, _startCol, _count);
         _hyperlinkSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Hyperlinks);
@@ -395,6 +415,8 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreDictionary(sheet.ActiveValueFilterColumns, _activeValueFilterColumnsSnapshot);
         RowColumnShiftHelpers.RestoreSet(sheet.HiddenCols, _hiddenColsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.Comments, _commentSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.CommentAuthors, _commentAuthorsSnapshot);
+        RowColumnShiftHelpers.RestoreAddressSet(sheet.ShownComments, _shownCommentsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);

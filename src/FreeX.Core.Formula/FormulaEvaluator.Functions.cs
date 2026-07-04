@@ -470,36 +470,22 @@ public sealed partial class FormulaEvaluator
     }
 
     /// <summary>
-    /// ANCHORARRAY(ref) — the spill reference operator (#).
+    /// ANCHORARRAY(ref) — the spill reference operator (#) — and ANCHORARRAY(ref, end) — the
+    /// A1#:B5 shape, a spill range used as the start endpoint of a larger range.
     /// Given a reference to a cell that is a dynamic-array spill anchor, returns the full
-    /// spill range as a RangeValue.  If the argument is not a spill anchor, returns #REF!.
-    /// This is an AST-aware function because it needs the address of the cell, not its value.
+    /// spill range as a RangeValue. When a second (end-cell) argument is present, the result is
+    /// instead the union of the anchor's spill extent and the end cell — the smallest rectangle
+    /// covering both, matching Excel's A1#:B5 semantics. If the anchor argument is not a spill
+    /// anchor, returns #REF!. This is an AST-aware function because it needs the address of the
+    /// cell, not its value.
     /// </summary>
     private ScalarValue EvaluateAnchorArray(FunctionCallNode node, IEvalContext context)
     {
-        if (node.Arguments.Count != 1)
+        if (node.Arguments.Count is not (1 or 2))
             return ErrorValue.Value;
 
-        var arg = node.Arguments[0];
-
-        // Resolve to a single cell address; we need the address to look up the spill anchor.
-        uint anchorRow, anchorCol;
-        string? anchorSheet = null;
-
-        switch (arg)
-        {
-            case CellRefNode cellRef:
-                if (cellRef.SheetName is not null && !context.SheetExists(cellRef.SheetName))
-                    return ErrorValue.Ref;
-                anchorRow = cellRef.Row;
-                anchorCol = cellRef.ColumnNumber;
-                anchorSheet = cellRef.SheetName;
-                break;
-
-            default:
-                // ANCHORARRAY only accepts a cell reference argument.
-                return ErrorValue.Value;
-        }
+        if (!TryResolveAnchorAddress(node.Arguments[0], context, out var anchorRow, out var anchorCol, out var anchorSheet))
+            return ErrorValue.Value;
 
         // Resolve the sheet containing the anchor.
         FreeX.Core.Model.Sheet? sheet;
@@ -519,19 +505,79 @@ public sealed partial class FormulaEvaluator
         if (!sheet.TryGetSpillExtent(anchorAddr, out uint spillRows, out uint spillCols))
             return ErrorValue.Ref;  // not a spill anchor
 
-        // Read the spill range values (including the anchor cell at [0,0]).
-        var cells = new ScalarValue[(int)spillRows, (int)spillCols];
-        for (int r = 0; r < (int)spillRows; r++)
-            for (int c = 0; c < (int)spillCols; c++)
+        var startRow = anchorRow;
+        var startCol = anchorCol;
+        var endRow = anchorRow + spillRows - 1;
+        var endCol = anchorCol + spillCols - 1;
+
+        if (node.Arguments.Count == 2)
+        {
+            // A1#:B5 — union the anchor's spill extent with the given end cell so the result is
+            // the smallest rectangle covering both, matching Excel. The end cell must be a plain
+            // cell reference (no sheet-span or named-range endpoint is meaningful here); it is
+            // always parsed unqualified relative to the anchor's own sheet.
+            if (node.Arguments[1] is not CellRefNode endRef)
+                return ErrorValue.Value;
+
+            startRow = Math.Min(startRow, endRef.Row);
+            startCol = Math.Min(startCol, endRef.ColumnNumber);
+            endRow = Math.Max(endRow, endRef.Row);
+            endCol = Math.Max(endCol, endRef.ColumnNumber);
+        }
+
+        var rows = endRow - startRow + 1;
+        var cols = endCol - startCol + 1;
+
+        var cells = new ScalarValue[(int)rows, (int)cols];
+        for (int r = 0; r < (int)rows; r++)
+            for (int c = 0; c < (int)cols; c++)
             {
-                var row = anchorRow + (uint)r;
-                var col = anchorCol + (uint)c;
+                var row = startRow + (uint)r;
+                var col = startCol + (uint)c;
                 cells[r, c] = anchorSheet is not null
                     ? context.GetCellValue(anchorSheet, row, col)
                     : context.GetCellValue(row, col);
             }
 
-        return new RangeValue(cells, anchorRow, anchorCol) { SheetName = anchorSheet };
+        return new RangeValue(cells, startRow, startCol) { SheetName = anchorSheet };
+    }
+
+    /// <summary>
+    /// Resolves an ANCHORARRAY anchor argument (a plain cell reference, or a named range that
+    /// itself points at a single cell) to the concrete cell address Excel would treat as the
+    /// spill anchor. Returns false for any other shape (multi-cell named range, formula-valued
+    /// name, etc.) — ANCHORARRAY only ever accepts a reference to one cell.
+    /// </summary>
+    private static bool TryResolveAnchorAddress(
+        FormulaNode arg, IEvalContext context, out uint row, out uint col, out string? sheetName)
+    {
+        row = 0;
+        col = 0;
+        sheetName = null;
+
+        switch (arg)
+        {
+            case CellRefNode cellRef:
+                if (cellRef.SheetName is not null && !context.SheetExists(cellRef.SheetName))
+                    return false;
+                row = cellRef.Row;
+                col = cellRef.ColumnNumber;
+                sheetName = cellRef.SheetName;
+                return true;
+
+            case NamedRangeNode named:
+                var range = context.TryResolveNamedRange(named.Name);
+                if (range is not { } resolved || resolved.RowCount != 1 || resolved.ColCount != 1)
+                    return false;
+                row = resolved.Start.Row;
+                col = resolved.Start.Col;
+                sheetName = context.TryGetSheetName(resolved.Start.Sheet);
+                return true;
+
+            default:
+                // ANCHORARRAY only accepts a cell reference or single-cell named range argument.
+                return false;
+        }
     }
 
 }

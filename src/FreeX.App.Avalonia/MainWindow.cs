@@ -691,6 +691,16 @@ public sealed partial class MainWindow : Window
     /// directly. Not used by production code paths.
     /// </summary>
     internal WorkbookSession Session => _session;
+
+    /// <summary>
+    /// Test-only seam that rebuilds the worksheet grid (as <see cref="RefreshShell"/> does on every
+    /// scroll/edit/zoom) and returns the resulting visual, so headless regression tests can mutate
+    /// <see cref="Session"/> state (merges, freeze panes, selection, viewport origin) and then inspect
+    /// the actual rendered <see cref="Control"/> tree rather than only asserting on source text. Not
+    /// used by production code paths.
+    /// </summary>
+    internal Control RebuildSheetGridForTest() => BuildSheetGrid();
+
     private readonly RecentColorsStore _recentColors = new();
     private MacOsLaunchSmokeDialogSnapshot _launchSmokeDialogEvidence = MacOsLaunchSmokeDialogSnapshot.Empty;
     private ComboBox? _activeDataValidationDropdown;
@@ -702,6 +712,7 @@ public sealed partial class MainWindow : Window
     private HeaderResizeDrag? _headerResizeDrag;
     private CellAddress? _selectionExtensionAnchor;
     private CellAddress? _selectionExtensionCursor;
+    private bool _endMode;
     private bool _autofillDragging;
     private GridRange? _autofillSourceRange;
     private CellAddress? _autofillTarget;
@@ -709,6 +720,16 @@ public sealed partial class MainWindow : Window
     private GridRange? _selectionMoveSourceRange;
     private GridRange? _selectionMovePreviewRange;
     private CellAddress _selectionMoveStartCell;
+
+    /// <summary>
+    /// Test-only override for the border-drag-move overwrite confirmation
+    /// (<see cref="ConfirmSelectionMoveOverwriteAsync"/>), which otherwise shows a real modal
+    /// <see cref="Window"/> that headless tests cannot answer. Null (the production default) uses
+    /// the real dialog; tests set this to a canned Yes/No so
+    /// <see cref="CommitSelectionMoveDragAsync"/> can be exercised deterministically. Not used by
+    /// production code paths.
+    /// </summary>
+    internal Func<Task<bool>>? ConfirmSelectionMoveOverwriteOverrideForTest;
     private IReadOnlyDictionary<(uint Row, uint Col), SparklineCellEntry> _sparklinesByCell =
         new Dictionary<(uint Row, uint Col), SparklineCellEntry>();
     // Pivot overlay adornments rebuilt on each sheet-grid refresh.
@@ -4063,15 +4084,43 @@ public sealed partial class MainWindow : Window
                 var col = colMetric.Col;
                 var address = new CellAddress(_session.ActiveSheet.Id, row, col);
                 var mergeRegion = _session.ActiveSheet.GetMergeRegion(address);
-                if (mergeRegion is { } merge && (merge.Start.Row != row || merge.Start.Col != col))
+                if (mergeRegion is { } merge)
                 {
-                    // Non-anchor member of a merge: the anchor's spanned Border (added when we
-                    // reach merge.Start below) covers this slot, so skip rendering a separate cell.
-                    continue;
+                    // The merge's true anchor (top-left cell) is normally what renders the spanned
+                    // Border, with every other member cell skipped below it. But when the anchor's
+                    // own row/col has scrolled out of the viewport (e.g. a tall B5:B10 merge scrolled
+                    // so ViewTopRow lands on row 7), the anchor is never iterated at all, so nothing
+                    // would ever render for this merge — a blank hole where Excel instead keeps
+                    // showing the merge's content/fill in whatever portion remains visible. Resolve
+                    // the topmost/leftmost *visible* member as a substitute anchor in that case, so
+                    // the merge still paints (and still carries the true anchor's content/style).
+                    var isVisibleAnchor = ResolveVisibleMergeAnchor(merge, rowIndexByRow, colIndexByCol) is { } visibleAnchor
+                        && visibleAnchor.Row == row && visibleAnchor.Col == col;
+                    if (!isVisibleAnchor)
+                    {
+                        // Non-anchor member of a merge: the (possibly substitute) anchor's spanned
+                        // Border covers this slot, so skip rendering a separate cell.
+                        continue;
+                    }
                 }
 
                 var colWidth = GetDisplayedColumnWidth(colMetric, zoomFactor);
-                cellsByAddress.TryGetValue((row, col), out var cell);
+                var contentAddress = mergeRegion is { } contentMerge
+                    ? new CellAddress(_session.ActiveSheet.Id, contentMerge.Start.Row, contentMerge.Start.Col)
+                    : address;
+                if (!cellsByAddress.TryGetValue((contentAddress.Row, contentAddress.Col), out var cell) &&
+                    contentAddress != address &&
+                    ResolveOffViewportCell(contentAddress) is { } offViewportCell)
+                {
+                    // The true anchor is off-viewport (see the substitute-anchor comment above), so
+                    // its DisplayCell was never produced by the engine's viewport scan (which only
+                    // covers rows/cols within RowMetrics/ColMetrics) — cellsByAddress has no entry for
+                    // it. Resolve a minimal DisplayCell straight from the live Sheet/Workbook so the
+                    // substitute anchor still shows the true anchor's content and style rather than
+                    // rendering blank, matching Excel's behavior of keeping a scrolled merge's content
+                    // visible in whatever portion of the merge remains on screen.
+                    cell = offViewportCell;
+                }
 
                 var rowSpan = 1;
                 var colSpan = 1;
@@ -4114,13 +4163,17 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Computes how far a merge's anchor cell should span in grid rows/columns, clipped to the
+    /// Computes how far a merge's rendered anchor cell (the true top-left anchor, or — when that
+    /// anchor has scrolled out of the viewport — the topmost/leftmost visible substitute resolved
+    /// by <see cref="ResolveVisibleMergeAnchor"/>) should span in grid rows/columns, clipped to the
     /// portion of the merge that is actually contiguous and visible in the current viewport (a
     /// merge can be partially scrolled off, or straddle the frozen/scrollable boundary where row
     /// indices are not contiguous — in either case we only span as far as metrics are present and
-    /// consecutive). Returns the resolved span plus the summed height/width across that span so
-    /// the anchor's content (text alignment, ShrinkToFit measurement) lays out against the full
-    /// merged rectangle rather than just its own single row/column.
+    /// consecutive). Spanning always starts from the rendered row/col (not necessarily the merge's
+    /// true Start), since a substitute anchor renders at its own row/col but must still span the
+    /// remaining visible extent of the merge. Returns the resolved span plus the summed
+    /// height/width across that span so the anchor's content (text alignment, ShrinkToFit
+    /// measurement) lays out against the full visible rectangle rather than just one row/column.
     /// </summary>
     private static (int RowSpan, int ColSpan, double Height, double Width) ResolveVisibleMergeSpan(
         GridRange merge,
@@ -4133,9 +4186,12 @@ public sealed partial class MainWindow : Window
         double anchorHeight,
         double anchorWidth)
     {
+        var renderedRow = viewport.RowMetrics[rowIndex].Row;
+        var renderedCol = viewport.ColMetrics[colIndex].Col;
+
         var rowSpan = 1;
         var height = anchorHeight;
-        for (var r = merge.Start.Row + 1; r <= merge.End.Row; r++)
+        for (var r = renderedRow + 1; r <= merge.End.Row; r++)
         {
             if (!rowIndexByRow.TryGetValue(r, out var nextRowIndex) || nextRowIndex != rowIndex + rowSpan)
                 break;
@@ -4145,7 +4201,7 @@ public sealed partial class MainWindow : Window
 
         var colSpan = 1;
         var width = anchorWidth;
-        for (var c = merge.Start.Col + 1; c <= merge.End.Col; c++)
+        for (var c = renderedCol + 1; c <= merge.End.Col; c++)
         {
             if (!colIndexByCol.TryGetValue(c, out var nextColIndex) || nextColIndex != colIndex + colSpan)
                 break;
@@ -4154,6 +4210,72 @@ public sealed partial class MainWindow : Window
         }
 
         return (rowSpan, colSpan, height, width);
+    }
+
+    /// <summary>
+    /// Resolves the cell that should render a merged region's spanned Border in the current
+    /// viewport: the merge's true anchor (top-left cell) when it is visible, or — when the anchor's
+    /// own row/col has scrolled out of view — the topmost/leftmost row/col of the merge that IS
+    /// present in the viewport metrics. This mirrors Excel, which keeps showing a merged cell's
+    /// content/fill in whatever portion of the merge remains visible rather than leaving a blank
+    /// gap once the anchor itself scrolls past the top/left edge. Returns null only if no part of
+    /// the merge is present in the viewport at all (shouldn't happen for a merge we were asked to
+    /// resolve an anchor for, since the caller only calls this for a cell known to be in the merge).
+    /// </summary>
+    private static CellAddress? ResolveVisibleMergeAnchor(
+        GridRange merge,
+        Dictionary<uint, int> rowIndexByRow,
+        Dictionary<uint, int> colIndexByCol)
+    {
+        uint? visibleRow = null;
+        for (var r = merge.Start.Row; r <= merge.End.Row; r++)
+        {
+            if (!rowIndexByRow.ContainsKey(r))
+                continue;
+            visibleRow = r;
+            break;
+        }
+
+        uint? visibleCol = null;
+        for (var c = merge.Start.Col; c <= merge.End.Col; c++)
+        {
+            if (!colIndexByCol.ContainsKey(c))
+                continue;
+            visibleCol = c;
+            break;
+        }
+
+        if (visibleRow is not { } r2 || visibleCol is not { } c2)
+            return null;
+
+        return new CellAddress(merge.Start.Sheet, r2, c2);
+    }
+
+    /// <summary>
+    /// Builds a minimal <see cref="DisplayCell"/> straight from the live <see cref="Sheet"/>/
+    /// <see cref="Workbook"/> for an address the engine's viewport scan never produced a DisplayCell
+    /// for — specifically a merge's true anchor that has scrolled outside RowMetrics/ColMetrics (see
+    /// BuildSheetGrid's substitute-anchor handling). This intentionally shows the literal value/raw
+    /// formula text rather than a fully engine-evaluated/number-formatted result (no formula
+    /// evaluation happens here) — sufficient to avoid the blank-hole regression while the anchor is
+    /// scrolled off; the instant the anchor scrolls back into view the normal viewport-scanned
+    /// DisplayCell (with full formatting) takes over again. Known limitation: because CreateCell's
+    /// own per-cell lookups (rich-text runs, pivot label padding) key off the RENDERED row/col rather
+    /// than this content address, those specific adornments won't apply to the substitute anchor
+    /// while it stands in for an off-viewport true anchor — background/border/gridlines/text content
+    /// (the reported defect) are unaffected.
+    /// </summary>
+    private DisplayCell? ResolveOffViewportCell(CellAddress address)
+    {
+        var cell = _session.ActiveSheet.GetCell(address);
+        if (cell is null)
+            return null;
+
+        var displayText = cell.HasFormula && cell.FormulaText is not null
+            ? "=" + cell.FormulaText
+            : FormatScalarValue(cell.Value);
+        var style = _session.Workbook.GetStyle(cell.StyleId);
+        return new DisplayCell(address.Row, address.Col, cell.Value, displayText, cell.FormulaText, cell.StyleId, Error: null, Style: style);
     }
 
     private Canvas BuildDrawingObjectOverlay(ViewportModel viewport)
@@ -4249,9 +4371,13 @@ public sealed partial class MainWindow : Window
 
         if (frozenPanes.Rows > 0)
         {
+            // Count pinned entries by row NUMBER membership (row <= frozenPanes.Rows), not by
+            // taking the first frozenPanes.Rows entries of RowMetrics — a hidden/collapsed row
+            // inside the frozen range is dropped from RowMetrics entirely (BuildFrozenAwareRowMetrics
+            // skips hidden rows), so the pinned block can have FEWER entries than frozenPanes.Rows.
+            // Summing by raw index would then walk one entry too far into the scrollable body.
             var dividerY = headerHeight;
-            var rowLimit = Math.Min((int)frozenPanes.Rows, viewport.RowMetrics.Count);
-            for (var i = 0; i < rowLimit; i++)
+            for (var i = 0; i < viewport.RowMetrics.Count && viewport.RowMetrics[i].Row <= frozenPanes.Rows; i++)
                 dividerY += GetDisplayedRowHeight(viewport.RowMetrics[i], zoomFactor);
 
             var horizontalDivider = new Border
@@ -4268,9 +4394,11 @@ public sealed partial class MainWindow : Window
 
         if (frozenPanes.Cols > 0)
         {
+            // Same hidden-column-immune counting as the row divider above: sum pinned entries by
+            // col NUMBER membership rather than assuming the first frozenPanes.Cols entries of
+            // ColMetrics are the pinned block.
             var dividerX = headerWidth;
-            var colLimit = Math.Min((int)frozenPanes.Cols, viewport.ColMetrics.Count);
-            for (var i = 0; i < colLimit; i++)
+            for (var i = 0; i < viewport.ColMetrics.Count && viewport.ColMetrics[i].Col <= frozenPanes.Cols; i++)
                 dividerX += GetDisplayedColumnWidth(viewport.ColMetrics[i], zoomFactor);
 
             var verticalDivider = new Border
@@ -5509,8 +5637,8 @@ public sealed partial class MainWindow : Window
     private void CellSelectionCapturePointerMoved(object? sender, PointerEventArgs args) =>
         ContinueCellSelectionDrag(args, _cellDragSelectionAnchor ?? default);
 
-    private void CellSelectionCapturePointerReleased(object? sender, PointerReleasedEventArgs args) =>
-        EndCellSelectionDrag(args);
+    private async void CellSelectionCapturePointerReleased(object? sender, PointerReleasedEventArgs args) =>
+        await EndCellSelectionDragAsync(args);
 
     // If the OS revokes pointer capture mid-drag (grid rebuild, alt-tab, focus loss, a context menu),
     // abort the drag and clear all drag state without committing any fill/move — mirrors the
@@ -5576,12 +5704,12 @@ public sealed partial class MainWindow : Window
         args.Handled = true;
     }
 
-    private void EndCellSelectionDrag(PointerReleasedEventArgs args)
+    private async Task EndCellSelectionDragAsync(PointerReleasedEventArgs args)
     {
         if (_autofillDragging)
             CommitAutofillDrag();
         else if (_selectionMoveDragging)
-            CommitSelectionMoveDrag();
+            await CommitSelectionMoveDragAsync();
 
         DetachCellSelectionDragHandlers();
         _cellDragSelectionPointer?.Capture(null);
@@ -6081,11 +6209,27 @@ public sealed partial class MainWindow : Window
         var completedSelection = GridAutofillPlanner.CalculateCompletedSelectionRange(source, fillRange);
         var direction = ResolveAutofillDirection(source, fillRange);
         ClearSelectedDrawingObject();
+        // Unlike keyboard/menu Fill Down/Up/Left/Right (FillSelectedRange, which verbatim-copies
+        // the source edge cell), the fill-handle drag gesture runs Excel-style series detection
+        // (numeric/date linear-fit trend, list series) via AutofillCommand - mirroring the WPF
+        // host's OnAutofillRequested.
+        var result = _session.AutofillDragRange(source, fillRange);
         _session.SelectRange(completedSelection);
-        var result = _session.FillSelectedRange(direction);
         RefreshShell(result.Success
             ? $"{FormatFillCellsAction(direction)} in {FormatRangeReference(completedSelection)}"
             : result.ErrorMessage ?? $"{FormatFillCellsAction(direction)} failed.");
+    }
+
+    /// <summary>
+    /// Test-only seam that drives the real fill-handle drag commit path (source/target set directly
+    /// instead of via pointer capture), so headless tests can assert on the resulting cell
+    /// values/formulas without simulating pointer input. Not used by production code paths.
+    /// </summary>
+    internal void RaiseAutofillDragForTest(GridRange source, CellAddress target)
+    {
+        _autofillSourceRange = source;
+        _autofillTarget = target;
+        CommitAutofillDrag();
     }
 
     private static FillCellsDirection ResolveAutofillDirection(GridRange source, GridRange fillRange)
@@ -6143,11 +6287,32 @@ public sealed partial class MainWindow : Window
         args.Handled = true;
     }
 
-    private void CommitSelectionMoveDrag()
+    /// <summary>
+    /// Test-only seam that drives the real border-drag-move commit path (source/target range set
+    /// directly instead of via pointer capture), so headless tests can assert on the resulting cell
+    /// values and on whether the overwrite confirmation was consulted. Not used by production code
+    /// paths.
+    /// </summary>
+    internal Task RaiseSelectionMoveDragForTest(GridRange source, GridRange target)
+    {
+        _selectionMoveSourceRange = source;
+        _selectionMovePreviewRange = target;
+        return CommitSelectionMoveDragAsync();
+    }
+
+    private async Task CommitSelectionMoveDragAsync()
     {
         if (_selectionMoveSourceRange is not { } source ||
             _selectionMovePreviewRange is not { } target ||
             source == target)
+        {
+            return;
+        }
+
+        // Mirrors the WPF host's OnSelectionMoveRequested: dropping a border-dragged range onto
+        // cells that already have content must prompt before overwriting them, matching Excel.
+        if (SelectionMoveOverwritePlanner.HasOverwriteTargets(_session.ActiveSheet, source, target) &&
+            !await (ConfirmSelectionMoveOverwriteOverrideForTest?.Invoke() ?? ConfirmSelectionMoveOverwriteAsync()))
         {
             return;
         }
@@ -6157,6 +6322,76 @@ public sealed partial class MainWindow : Window
         RefreshShell(result.Success
             ? UiText.Format("MainLoc_SelectedX", FormatRangeReference(target))
             : result.ErrorMessage ?? "Move Cells failed.");
+    }
+
+    /// <summary>
+    /// Yes/No confirmation shown before a border-drag range move would overwrite existing
+    /// destination cell contents (mirrors WPF's <c>_messageService.AskYesNo</c> prompt using the
+    /// shared "There's already data here. Do you want to replace it?" string).
+    /// </summary>
+    private async Task<bool> ConfirmSelectionMoveOverwriteAsync()
+    {
+        var dialog = new Window
+        {
+            Title = "Confirm",
+            Width = 420,
+            Height = 180,
+            MinWidth = 380,
+            MinHeight = 170,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+
+        var detailText = new TextBlock
+        {
+            Text = UiText.Get("MainWindowMessage_TextToColumnsReplaceDataPrompt"),
+            TextWrapping = TextWrapping.Wrap,
+        };
+
+        var yesButton = new Button { Content = "Yes", MinWidth = 92, Padding = new Thickness(10, 4), IsDefault = true };
+        AutomationProperties.SetAutomationId(yesButton, "SelectionMoveOverwriteYesButton");
+        AutomationProperties.SetName(yesButton, "Yes");
+
+        var noButton = new Button { Content = "No", MinWidth = 92, Padding = new Thickness(10, 4), IsCancel = true };
+        AutomationProperties.SetAutomationId(noButton, "SelectionMoveOverwriteNoButton");
+        AutomationProperties.SetName(noButton, "No");
+
+        var confirmed = false;
+        void Finish(bool value)
+        {
+            confirmed = value;
+            dialog.Close();
+        }
+
+        yesButton.Click += (_, _) => Finish(true);
+        noButton.Click += (_, _) => Finish(false);
+        dialog.Opened += (_, _) => noButton.Focus();
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape)
+            {
+                Finish(false);
+                e.Handled = true;
+            }
+        };
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Children = { noButton, yesButton },
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(18),
+            Spacing = 12,
+            Children = { detailText, new Border { Height = 10 }, buttonRow },
+        };
+
+        await dialog.ShowDialog(this);
+        return confirmed;
     }
 
     /// <summary>
@@ -6297,7 +6532,8 @@ public sealed partial class MainWindow : Window
                 zoomFactor: zoomFactor,
                 cellWidth: cellWidth,
                 cellHeight: cellHeight,
-                sparklineLayer: sparklineLayer);
+                sparklineLayer: sparklineLayer,
+                mergeRegion: mergeRegion);
 
         var style = cell.Style;
         IBrush background;
@@ -6369,7 +6605,8 @@ public sealed partial class MainWindow : Window
             icon,
             sparklineLayer,
             patternBrush: patternBrush,
-            richRuns: richRuns);
+            richRuns: richRuns,
+            mergeRegion: mergeRegion);
     }
 
     private Border CreateInteractiveCellBorder(
@@ -6398,7 +6635,8 @@ public sealed partial class MainWindow : Window
         CfIconRenderInstruction? conditionalIcon = null,
         Control? sparklineLayer = null,
         IBrush? patternBrush = null,
-        IReadOnlyList<ResolvedCellTextRun>? richRuns = null)
+        IReadOnlyList<ResolvedCellTextRun>? richRuns = null,
+        GridRange? mergeRegion = null)
     {
         var border = CreateCellBorder(
             text,
@@ -6427,7 +6665,15 @@ public sealed partial class MainWindow : Window
             sparklineLayer,
             patternBrush: patternBrush,
             richRuns: richRuns);
-        if (address == _session.SelectedRange.End)
+        // Excel treats a merged region as a single unit for the fill handle: if the selection's
+        // bottom-right corner lands anywhere inside this cell's merge (not just on the merge's own
+        // anchor), the handle belongs on the merge's rendered Border — otherwise a selection whose
+        // corner resolves to a non-anchor member (which never gets its own Border; see BuildSheetGrid)
+        // would lose the fill-handle affordance entirely.
+        var isAutofillCorner = mergeRegion is { } handleMerge
+            ? handleMerge.Contains(_session.SelectedRange.End)
+            : address == _session.SelectedRange.End;
+        if (isAutofillCorner)
             AddAutofillHandleAdorner(border, zoomFactor);
 
         border.Cursor = _borderDrawModeActive
@@ -6680,8 +6926,36 @@ public sealed partial class MainWindow : Window
         return closestIndex;
     }
 
+    // Caches for inline text-width measurement and Shrink-to-fit font resolution — mirrors WPF's
+    // GridView.TextLayoutCache.cs (_textWidthLayoutCache / _shrinkTextLayoutCache): both are hot
+    // paths invoked per visible cell on every BuildSheetGrid rebuild (scroll/zoom/edit refresh), and
+    // an uncached ResolveShrinkToFitFontSize can construct hundreds of fresh FormattedText objects
+    // for a single large-font Shrink-to-fit cell (Excel allows fonts up to 409pt, and the loop steps
+    // down in whole-DIP increments). Capped + clear-on-overflow like the WPF caches, since these are
+    // static/UI-thread-only exactly like their WPF counterparts.
+    private const int TextWidthMeasurementCacheLimit = 32768;
+    private const int ShrinkToFitFontSizeCacheLimit = 32768;
+    private static readonly Dictionary<TextWidthMeasurementKey, double> TextWidthMeasurementCache = new();
+    private static readonly Dictionary<ShrinkToFitFontSizeKey, double> ShrinkToFitFontSizeCache = new();
+
+    private readonly record struct TextWidthMeasurementKey(string Text, double FontSize, FontWeight FontWeight, FontStyle FontStyle);
+
+    private readonly record struct ShrinkToFitFontSizeKey(
+        string Text,
+        FontWeight FontWeight,
+        FontStyle FontStyle,
+        double RequestedFontSize,
+        double AvailableWidth);
+
     private static double MeasureInlineCellTextWidth(string text, double fontSize, FontWeight fontWeight, FontStyle fontStyle)
     {
+        var key = new TextWidthMeasurementKey(text, fontSize, fontWeight, fontStyle);
+        if (TextWidthMeasurementCache.TryGetValue(key, out var cachedWidth))
+            return cachedWidth;
+
+        if (TextWidthMeasurementCache.Count >= TextWidthMeasurementCacheLimit)
+            TextWidthMeasurementCache.Clear();
+
         var formatted = new FormattedText(
             text,
             CultureInfo.InvariantCulture,
@@ -6689,6 +6963,7 @@ public sealed partial class MainWindow : Window
             new Typeface("Calibri", fontStyle, fontWeight),
             Math.Max(1, fontSize),
             Brushes.Black);
+        TextWidthMeasurementCache.Add(key, formatted.Width);
         return formatted.Width;
     }
 
@@ -6700,6 +6975,9 @@ public sealed partial class MainWindow : Window
     /// Shrinks <paramref name="requestedFontSize"/> in whole-DIP steps until <paramref name="text"/>
     /// fits within <paramref name="availableWidth"/>, floored at <see cref="ShrinkToFitMinimumFontSize"/>.
     /// Mirrors WPF's GridView.cs ResolveShrinkFontSize so Shrink to fit behaves the same on both hosts.
+    /// The resolved size is memoized per (text, font, requested size, available width) — see
+    /// <see cref="ShrinkToFitFontSizeCache"/> — so repeated BuildSheetGrid rebuilds (scroll/zoom/edit)
+    /// don't re-run the whole-DIP search loop from scratch for every visible Shrink-to-fit cell.
     /// </summary>
     private static double ResolveShrinkToFitFontSize(
         string text,
@@ -6711,6 +6989,13 @@ public sealed partial class MainWindow : Window
         if (string.IsNullOrEmpty(text) || requestedFontSize <= ShrinkToFitMinimumFontSize || availableWidth <= 0)
             return Math.Min(requestedFontSize, ShrinkToFitMinimumFontSize);
 
+        var key = new ShrinkToFitFontSizeKey(text, fontWeight, fontStyle, requestedFontSize, availableWidth);
+        if (ShrinkToFitFontSizeCache.TryGetValue(key, out var cachedFontSize))
+            return cachedFontSize;
+
+        if (ShrinkToFitFontSizeCache.Count >= ShrinkToFitFontSizeCacheLimit)
+            ShrinkToFitFontSizeCache.Clear();
+
         var fontSize = requestedFontSize;
         while (fontSize > ShrinkToFitMinimumFontSize &&
                MeasureInlineCellTextWidth(text, fontSize, fontWeight, fontStyle) > availableWidth)
@@ -6718,6 +7003,7 @@ public sealed partial class MainWindow : Window
             fontSize = Math.Max(ShrinkToFitMinimumFontSize, fontSize - 1);
         }
 
+        ShrinkToFitFontSizeCache.Add(key, fontSize);
         return fontSize;
     }
 
@@ -17924,6 +18210,42 @@ public sealed partial class MainWindow : Window
         RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(range)));
     }
 
+    /// <summary>
+    /// Handler for Ctrl+Space ("Select whole columns"). Expands the current selection to cover
+    /// every column it touches, mirroring the WPF host's <c>SelectWholeColumnsFromSelection</c>.
+    /// </summary>
+    private void SelectWholeColumnsFromSelection()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        ClearSelectedDrawingObject();
+        var range = SelectionRangeService.GetWholeColumns(_session.SelectedRange);
+        _session.SelectRange(range);
+        RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(range)));
+    }
+
+    /// <summary>
+    /// Handler for Shift+Space ("Select whole rows"). Expands the current selection to cover
+    /// every row it touches, mirroring the WPF host's <c>SelectWholeRowsFromSelection</c>.
+    /// </summary>
+    private void SelectWholeRowsFromSelection()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        ClearSelectedDrawingObject();
+        var range = SelectionRangeService.GetWholeRows(_session.SelectedRange);
+        _session.SelectRange(range);
+        RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(range)));
+    }
+
     private async Task PasteClipboardTextAsync()
     {
         if (_isOpening || _isSaving)
@@ -20136,7 +20458,35 @@ public sealed partial class MainWindow : Window
     private static bool IsOpenActiveDropdownShortcut(KeyEventArgs args) =>
         args.Key == Key.Down && args.KeyModifiers == KeyModifiers.Alt;
 
-    private async void MainWindow_KeyDown(object? sender, KeyEventArgs e)
+    /// <summary>
+    /// True for Ctrl/Cmd(+Shift)+Arrow, Ctrl/Cmd+Home, and Ctrl/Cmd(+Shift)+End - the Excel
+    /// used-range navigation/extend shortcuts that must still reach <see cref="NavigateActiveCell"/>
+    /// even though the command modifier is held (mirrors the WPF host's
+    /// <see cref="ExcelWorksheetNavigationPlanner.ShouldHandleWorksheetNavigationKey"/> gate).
+    /// </summary>
+    private static bool IsWorksheetNavigationKeyWithCommandModifier(KeyEventArgs args)
+    {
+        if (args.Key is not (Key.Up or Key.Down or Key.Left or Key.Right or Key.Home or Key.End))
+            return false;
+
+        const KeyModifiers commandModifiers = KeyModifiers.Control | KeyModifiers.Meta;
+        return (args.KeyModifiers & commandModifiers) != 0 &&
+            (args.KeyModifiers & ~(commandModifiers | KeyModifiers.Shift)) == 0;
+    }
+
+    private async void MainWindow_KeyDown(object? sender, KeyEventArgs e) =>
+        await MainWindow_KeyDownAsync(e);
+
+    /// <summary>
+    /// Test-only seam that drives the real worksheet-grid key-handling logic (F9/Ctrl+Space/
+    /// Ctrl+Arrow/etc.) with a caller-supplied <see cref="KeyEventArgs"/>, awaiting completion so
+    /// assertions can run against the resulting <see cref="Session"/> state. Not used by production
+    /// code paths (the real <c>KeyDown</c> subscription goes through the <c>async void</c> wrapper
+    /// above, as Avalonia event handlers require).
+    /// </summary>
+    internal Task RaiseKeyDownForTest(KeyEventArgs e) => MainWindow_KeyDownAsync(e);
+
+    private async Task MainWindow_KeyDownAsync(KeyEventArgs e)
     {
         if (IsShellFocusCycleKey(e))
         {
@@ -20172,8 +20522,57 @@ public sealed partial class MainWindow : Window
         if (TryHandleRowColumnVisibilityShortcut(e))
             return;
 
-        if (!e.KeyModifiers.HasFlag(KeyModifiers.Control) &&
-            !e.KeyModifiers.HasFlag(KeyModifiers.Meta))
+        if (e.Key == Key.F9 && !_formulaBox.IsFocused && !IsTextEditingEventSource(e))
+        {
+            if (e.KeyModifiers == KeyModifiers.None)
+            {
+                e.Handled = true;
+                CalculateNow();
+                return;
+            }
+
+            if (e.KeyModifiers == KeyModifiers.Shift)
+            {
+                e.Handled = true;
+                CalculateActiveSheet();
+                return;
+            }
+
+            if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Alt))
+            {
+                e.Handled = true;
+                CalculateNow();
+                return;
+            }
+        }
+
+        if (e.Key == Key.Space && !_formulaBox.IsFocused && !IsTextEditingEventSource(e))
+        {
+            if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))
+            {
+                e.Handled = true;
+                SelectAllCells();
+                return;
+            }
+
+            if (e.KeyModifiers == KeyModifiers.Control)
+            {
+                e.Handled = true;
+                SelectWholeColumnsFromSelection();
+                return;
+            }
+
+            if (e.KeyModifiers == KeyModifiers.Shift)
+            {
+                e.Handled = true;
+                SelectWholeRowsFromSelection();
+                return;
+            }
+        }
+
+        if ((!e.KeyModifiers.HasFlag(KeyModifiers.Control) &&
+                !e.KeyModifiers.HasFlag(KeyModifiers.Meta)) ||
+            IsWorksheetNavigationKeyWithCommandModifier(e))
         {
             if (e.Key == Key.F5)
             {
@@ -20656,64 +21055,125 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var pageRows = Math.Max(1, _session.Viewport.RowMetrics.Count - 1);
-        var pageCols = Math.Max(1, _session.Viewport.ColMetrics.Count - 1);
-        var handled = true;
-        var extendSelection = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
-        switch (e.Key)
+        var navigationKey = ToWorksheetNavigationKey(e.Key);
+        var navigationModifiers = ToWorksheetNavigationModifiers(e.KeyModifiers);
+
+        // Plain End (no modifiers) toggles Excel's sticky "End Mode" instead of moving the
+        // active cell; the next arrow key then jumps to the data boundary in that direction
+        // (mirrors the WPF host's MainWindow.Selection.cs / ExcelWorksheetNavigationPlanner).
+        if (ExcelWorksheetNavigationPlanner.TryToggleEndMode(navigationKey, navigationModifiers, _endMode, out var nextEndMode))
         {
-            case Key.Up:
-                MoveOrExtendActiveCell(-1, 0, extendSelection);
-                break;
-            case Key.Down:
-                MoveOrExtendActiveCell(1, 0, extendSelection);
-                break;
-            case Key.Left:
-                MoveOrExtendActiveCell(0, -1, extendSelection);
-                break;
-            case Key.Right:
-                MoveOrExtendActiveCell(0, 1, extendSelection);
-                break;
-            case Key.PageUp:
-                MoveOrExtendActiveCell(-pageRows, 0, extendSelection);
-                break;
-            case Key.PageDown:
-                MoveOrExtendActiveCell(pageRows, 0, extendSelection);
-                break;
-            case Key.Home:
-                MoveOrExtendActiveCell(0, 1 - checked((int)_session.ActiveCell.Col), extendSelection);
-                break;
-            case Key.End:
-                MoveOrExtendActiveCell(0, pageCols, extendSelection);
-                break;
-            default:
-                handled = false;
-                break;
+            _endMode = nextEndMode;
+            e.Handled = true;
+            RefreshShell("Ready");
+            return;
         }
 
-        if (!handled)
+        if (!ExcelWorksheetNavigationPlanner.ShouldHandleWorksheetNavigationKey(navigationKey, navigationKey, navigationModifiers, _endMode))
             return;
 
+        var pageRows = Math.Max(1, _session.Viewport.RowMetrics.Count - 1);
+        var extendSelection = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        var useDataBoundary = ExcelWorksheetNavigationPlanner.ShouldUseDataBoundary(navigationKey, navigationModifiers, _endMode);
+        var ctrlHeld = e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta);
+        var sheet = _session.Workbook.GetSheet(_session.ActiveSheet.Id);
+        var current = extendSelection && _selectionExtensionCursor is { } cursor ? cursor : _session.ActiveCell;
+
+        if (_endMode)
+            _endMode = false;
+
+        CellAddress? target = navigationKey switch
+        {
+            ExcelWorksheetNavigationKey.Up => useDataBoundary
+                ? ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(sheet, current, -1)
+                : OffsetAddress(current, -1, 0),
+            ExcelWorksheetNavigationKey.Down => useDataBoundary
+                ? ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(sheet, current, +1)
+                : OffsetAddress(current, 1, 0),
+            ExcelWorksheetNavigationKey.Left => useDataBoundary
+                ? ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(sheet, current, -1)
+                : OffsetAddress(current, 0, -1),
+            ExcelWorksheetNavigationKey.Right => useDataBoundary
+                ? ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(sheet, current, +1)
+                : OffsetAddress(current, 0, 1),
+            ExcelWorksheetNavigationKey.PageUp => OffsetAddress(current, -pageRows, 0),
+            ExcelWorksheetNavigationKey.PageDown => OffsetAddress(current, pageRows, 0),
+            ExcelWorksheetNavigationKey.Home => new CellAddress(
+                _session.ActiveSheet.Id,
+                ctrlHeld ? 1u : current.Row,
+                1u),
+            // ShouldHandleWorksheetNavigationKey only lets End through when Ctrl is held (plain End
+            // is consumed by TryToggleEndMode above), so this always resolves via GetCtrlEndCell.
+            ExcelWorksheetNavigationKey.End => ExcelWorksheetNavigationPlanner.GetCtrlEndCell(sheet, _session.ActiveSheet.Id),
+            _ => null
+        };
+
+        if (target is not { } resolvedTarget)
+            return;
+
+        MoveOrExtendActiveCellTo(resolvedTarget, extendSelection);
         ClearSelectedDrawingObject();
         e.Handled = true;
         RefreshShell("Ready");
     }
 
-    private void MoveOrExtendActiveCell(int rowDelta, int colDelta, bool extendSelection)
+    private CellAddress OffsetAddress(CellAddress current, int rowDelta, int colDelta) =>
+        new(
+            _session.ActiveSheet.Id,
+            OffsetCellIndex(current.Row, rowDelta, CellAddress.MaxRow),
+            OffsetCellIndex(current.Col, colDelta, CellAddress.MaxCol));
+
+    private static ExcelWorksheetNavigationKey ToWorksheetNavigationKey(Key key) =>
+        key switch
+        {
+            Key.Up => ExcelWorksheetNavigationKey.Up,
+            Key.Down => ExcelWorksheetNavigationKey.Down,
+            Key.Left => ExcelWorksheetNavigationKey.Left,
+            Key.Right => ExcelWorksheetNavigationKey.Right,
+            Key.Home => ExcelWorksheetNavigationKey.Home,
+            Key.End => ExcelWorksheetNavigationKey.End,
+            Key.PageUp => ExcelWorksheetNavigationKey.PageUp,
+            Key.PageDown => ExcelWorksheetNavigationKey.PageDown,
+            Key.Enter => ExcelWorksheetNavigationKey.Enter,
+            Key.Tab => ExcelWorksheetNavigationKey.Tab,
+            _ => ExcelWorksheetNavigationKey.Other
+        };
+
+    private static ExcelWorksheetNavigationModifiers ToWorksheetNavigationModifiers(KeyModifiers modifiers)
+    {
+        var result = ExcelWorksheetNavigationModifiers.None;
+        if (modifiers.HasFlag(KeyModifiers.Shift))
+            result |= ExcelWorksheetNavigationModifiers.Shift;
+        if (modifiers.HasFlag(KeyModifiers.Control) || modifiers.HasFlag(KeyModifiers.Meta))
+            result |= ExcelWorksheetNavigationModifiers.Control;
+        if (modifiers.HasFlag(KeyModifiers.Alt))
+            result |= ExcelWorksheetNavigationModifiers.Alt;
+        return result;
+    }
+
+    /// <summary>
+    /// Moves the active cell to <paramref name="target"/> (or extends the current selection to
+    /// it). When not extending, snaps to the full merged region if <paramref name="target"/> lands
+    /// on a non-anchor merge member - mirroring the WPF host's <c>SetActiveCell</c>, which selects
+    /// the whole merged rectangle rather than a single cell inside it.
+    /// </summary>
+    private void MoveOrExtendActiveCellTo(CellAddress target, bool extendSelection)
     {
         if (!extendSelection)
         {
             ClearSelectionExtensionState();
-            _session.MoveActiveCell(rowDelta, colDelta);
+            var sheet = _session.ActiveSheet;
+            if (sheet.MergedRegions.Count > 0 && sheet.GetMergeRegion(target) is { } merge)
+            {
+                _session.SelectRange(merge);
+                return;
+            }
+
+            _session.SelectCell(target);
             return;
         }
 
         var anchor = _selectionExtensionAnchor ?? _session.ActiveCell;
-        var cursor = _selectionExtensionCursor ?? _session.ActiveCell;
-        var target = new CellAddress(
-            _session.ActiveSheet.Id,
-            OffsetCellIndex(cursor.Row, rowDelta, CellAddress.MaxRow),
-            OffsetCellIndex(cursor.Col, colDelta, CellAddress.MaxCol));
         _selectionExtensionAnchor = anchor;
         _selectionExtensionCursor = target;
         _session.SelectRange(new GridRange(anchor, target));

@@ -140,7 +140,8 @@
             </DataGrid.Columns>
         </DataGrid>
 
-        <TextBlock x:Name="StatusLabel" Grid.Row="3" Foreground="#555" FontSize="11" MinHeight="18" Margin="0,0,0,8"/>
+        <TextBlock x:Name="StatusLabel" Grid.Row="3" Foreground="#555" FontSize="11" MinHeight="18" Margin="0,0,0,8"
+                   AutomationProperties.LiveSetting="Polite"/>
 
         <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button x:Name="FindAllBtn" Content="{local:Loc Key=FindReplace_FindAll}" Width="76" Margin="0,0,8,0" Click="FindAll_Click"/>

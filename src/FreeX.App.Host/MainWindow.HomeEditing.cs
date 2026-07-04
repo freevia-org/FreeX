@@ -228,7 +228,9 @@ public partial class MainWindow
     private void FindReplaceMenuItem_Click(object sender, RoutedEventArgs e)    => ReplaceButton_Click(sender, e);
     private void FindGoToMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        var defaultAddress = SheetGrid.SelectedRange?.Start.ToA1() ?? "A1";
+        var defaultAddress = SheetGrid.SelectedRange is { } selectionForDefault
+            ? FormatCellReference(selectionForDefault.Start)
+            : FormatCellReference(new CellAddress(_currentSheetId, 1, 1));
         var dialog = new GoToDialog(_currentSheetId, defaultAddress, _workbook.NamedRanges) { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
@@ -262,8 +264,7 @@ public partial class MainWindow
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
-        var range = SheetGrid.SelectedRange ?? sheet.GetUsedRange() ??
-            new GridRange(new CellAddress(_currentSheetId, 1, 1), new CellAddress(_currentSheetId, 1, 1));
+        var range = ResolveGoToSpecialSearchRange(sheet);
         var dialog = new GoToSpecialDialog { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
@@ -298,10 +299,25 @@ public partial class MainWindow
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
-        var range = SheetGrid.SelectedRange ?? sheet.GetUsedRange() ??
-            new GridRange(new CellAddress(_currentSheetId, 1, 1), new CellAddress(_currentSheetId, 1, 1));
+        var range = ResolveGoToSpecialSearchRange(sheet);
 
         SelectGoToSpecialMatches(kind, options, showEmptyMessage, sheet, range);
+    }
+
+    /// <summary>
+    /// Determines the range that Go To Special / the Find-family shortcuts (Formulas, Notes,
+    /// Conditional Formatting, Constants, Data Validation, Objects) should search. Matching Excel,
+    /// a single active cell (the ordinary result of clicking one cell) searches the whole used
+    /// range of the sheet; an explicit multi-cell selection is honored as-is.
+    /// </summary>
+    private GridRange ResolveGoToSpecialSearchRange(Sheet sheet)
+    {
+        var selected = SheetGrid.SelectedRange;
+        if (selected is { } range && range.Start != range.End)
+            return range;
+
+        return sheet.GetUsedRange() ??
+            new GridRange(new CellAddress(_currentSheetId, 1, 1), new CellAddress(_currentSheetId, 1, 1));
     }
 
     private void SelectGoToSpecialMatches(GoToSpecialKind kind, bool showEmptyMessage, Sheet sheet, GridRange range)

@@ -315,11 +315,18 @@ public static class PasteCommandFactory
             return new EditCellsCommand(targetSheetId, edits);
 
         var pasteAllCommand = new PasteCellsCommand(targetSheetId, edits, richTextRuns, hyperlinks, hyperlinkMetadata);
-        return sourceSheet is not null && sourceSheet.MergedRegions.Any(region => region.Overlaps(sourceRange))
-            ? new CompositeWorkbookCommand(
-                "Paste",
-                [pasteAllCommand, new PasteMergedRegionsCommand(targetSheetId, sourceRange, destination, transpose: false)])
-            : pasteAllCommand;
+        var pasteFootprint = new GridRange(
+            destination,
+            new CellAddress(targetSheetId, destination.Row + pasteRows - 1, destination.Col + pasteCols - 1));
+        var extraCommands = new List<IWorkbookCommand>(2);
+        if (sourceSheet is not null && sourceSheet.MergedRegions.Any(region => region.Overlaps(sourceRange)))
+            extraCommands.Add(new PasteMergedRegionsCommand(targetSheetId, sourceRange, destination, transpose: false));
+        if (carriesFormatting && ShouldCarryComments(sourceSheet, sourceRange, targetSheet, pasteFootprint))
+            extraCommands.AddRange(BuildCommentCarryCommands(targetSheetId, sourceRange, destination, pasteFootprint, transpose: false));
+
+        return extraCommands.Count == 0
+            ? pasteAllCommand
+            : new CompositeWorkbookCommand("Paste", [pasteAllCommand, .. extraCommands]);
     }
 
     private static bool IsBlank(Cell cell) =>
@@ -472,9 +479,31 @@ public static class PasteCommandFactory
             ? new PasteCellsCommand(targetSheetId, edits, richTextRuns, hyperlinks, hyperlinkMetadata)
             : new EditCellsCommand(targetSheetId, edits);
 
-        return mergedRegionCommands is null
+        var tiledExtraCommands = new List<IWorkbookCommand>();
+        if (mergedRegionCommands is not null)
+            tiledExtraCommands.AddRange(mergedRegionCommands);
+
+        if (carriesFormatting)
+        {
+            var tiledFootprint = new GridRange(
+                destination,
+                new CellAddress(targetSheetId, destination.Row + targetRows - 1, destination.Col + targetCols - 1));
+            if (ShouldCarryComments(sourceSheet, sourceRange, targetSheet, tiledFootprint))
+            {
+                tiledExtraCommands.AddRange(BuildTiledCommentCarryCommands(
+                    targetSheetId,
+                    sourceRange,
+                    destination,
+                    targetRows,
+                    targetCols,
+                    tiledFootprint,
+                    options.Transpose));
+            }
+        }
+
+        return tiledExtraCommands.Count == 0
             ? tiledCommand
-            : new CompositeWorkbookCommand(mode == PasteCellsMode.All ? "Paste" : "Paste Special", [tiledCommand, .. mergedRegionCommands]);
+            : new CompositeWorkbookCommand(mode == PasteCellsMode.All ? "Paste" : "Paste Special", [tiledCommand, .. tiledExtraCommands]);
     }
 
     /// <summary>
@@ -511,6 +540,89 @@ public static class PasteCommandFactory
         return commands;
     }
 
+    /// <summary>
+    /// Whether a plain (mode All, default-options) paste should carry legacy notes/threaded comments
+    /// along with the pasted cells, matching Excel: an ordinary Ctrl+V paste brings a copied cell's
+    /// comment along and overwrites/clears whatever comment previously sat at the destination, and
+    /// comments are only excluded when the user explicitly invokes Paste Special without picking the
+    /// dedicated "Comments" option (that path never reaches this code — see the tiled/non-tiled
+    /// Paste Special branches earlier in this file).
+    /// </summary>
+    private static bool ShouldCarryComments(
+        Sheet? sourceSheet,
+        GridRange sourceRange,
+        Sheet? targetSheet,
+        GridRange destinationFootprint)
+    {
+        // Fast path: skip the per-cell range scan entirely when neither sheet has any comments at
+        // all, which is the overwhelmingly common case and avoids walking a huge (e.g. full-column)
+        // paste footprint just to learn there is nothing to carry or clear.
+        if (HasAnyComments(sourceSheet) &&
+            sourceRange.AllCells().Any(address =>
+                sourceSheet!.Comments.ContainsKey(address) || sourceSheet!.ThreadedComments.ContainsKey(address)))
+        {
+            return true;
+        }
+
+        // Even when the source has no comments, a stale comment left over at the destination must
+        // still be cleared so the destination ends up matching the source exactly, like Excel.
+        return HasAnyComments(targetSheet) &&
+            destinationFootprint.AllCells().Any(address =>
+                targetSheet!.Comments.ContainsKey(address) || targetSheet!.ThreadedComments.ContainsKey(address));
+    }
+
+    private static bool HasAnyComments(Sheet? sheet) =>
+        sheet is not null && (sheet.Comments.Count > 0 || sheet.ThreadedComments.Count > 0);
+
+    /// <summary>
+    /// Builds the command pair that makes a plain paste's destination comment/note state exactly
+    /// mirror the source: first clear every legacy note/threaded comment in the pasted footprint,
+    /// then re-apply the source's comments at their mapped destinations. Clearing first (rather than
+    /// only overwriting cells that have a source comment) is what makes a destination cell's stale
+    /// comment disappear when the corresponding source cell has none, matching Excel's default paste.
+    /// </summary>
+    private static IEnumerable<IWorkbookCommand> BuildCommentCarryCommands(
+        SheetId targetSheetId,
+        GridRange sourceRange,
+        CellAddress destination,
+        GridRange destinationFootprint,
+        bool transpose)
+    {
+        yield return new ClearCommentsCommand(targetSheetId, destinationFootprint);
+        yield return new PasteCommentsCommand(targetSheetId, sourceRange, destination, transpose);
+    }
+
+    /// <summary>
+    /// Tiled-paste counterpart of <see cref="BuildCommentCarryCommands"/>: clears the whole tiled
+    /// destination footprint once, then recreates the source's comments at every repeated tile
+    /// offset (mirroring <see cref="BuildTiledMergedRegionCommands"/>'s per-tile recreation).
+    /// </summary>
+    private static IEnumerable<IWorkbookCommand> BuildTiledCommentCarryCommands(
+        SheetId targetSheetId,
+        GridRange sourceRange,
+        CellAddress destination,
+        uint targetRows,
+        uint targetCols,
+        GridRange destinationFootprint,
+        bool transpose)
+    {
+        yield return new ClearCommentsCommand(targetSheetId, destinationFootprint);
+
+        var rowPeriod = transpose ? sourceRange.ColCount : sourceRange.RowCount;
+        var colPeriod = transpose ? sourceRange.RowCount : sourceRange.ColCount;
+        for (var rowOffset = 0U; rowOffset < targetRows; rowOffset += rowPeriod)
+        {
+            for (var colOffset = 0U; colOffset < targetCols; colOffset += colPeriod)
+            {
+                var tileDestination = new CellAddress(
+                    targetSheetId,
+                    destination.Row + rowOffset,
+                    destination.Col + colOffset);
+                yield return new PasteCommentsCommand(targetSheetId, sourceRange, tileDestination, transpose);
+            }
+        }
+    }
+
     private static IEnumerable<(CellAddress Source, CellAddress Destination)> EnumerateTiledAddresses(
         GridRange sourceRange,
         SheetId targetSheetId,
@@ -543,18 +655,96 @@ public static class PasteCommandFactory
         }
     }
 
+    // Matches a number whose comma grouping is correct: each group to the left of the decimal (or
+    // end) is exactly 3 digits, except the first group which may be 1-3 digits. Optional leading
+    // sign, optional leading/trailing currency symbol, optional decimal fraction, and optional
+    // wrapping parentheses (Excel/accounting negative, e.g. "(1,234.56)"). Based on
+    // ExcelTextNumberParser.ValidGroupingRegex (the formula engine's established Excel-parity
+    // text-to-number grouping check), extended with parenthesis support so a thousands-grouped
+    // accounting negative round-trips correctly instead of being rejected as malformed grouping.
+    // Examples that pass: 1,234  $1,234.50  -1,234,567  1,234,567.5  (1,234.56)
+    // Examples that fail: 1,2  12,34  1,2345  1,234,5
+    private static readonly System.Text.RegularExpressions.Regex ValidGroupingRegex = new(
+        @"^\(?[+-]?\$?\d{1,3}(,\d{3})*(\.\d*)?\$?[+-]?\)?$",
+        System.Text.RegularExpressions.RegexOptions.None);
+
+    private static readonly System.Globalization.CultureInfo UsCulture =
+        System.Globalization.CultureInfo.GetCultureInfo("en-US");
+
+    // NumberStyles without AllowThousands — used for the first Excel-parity parse attempt so that
+    // comma-separated inputs with bad grouping do not silently succeed.
+    private const System.Globalization.NumberStyles StylesWithoutThousands =
+        System.Globalization.NumberStyles.AllowLeadingSign |
+        System.Globalization.NumberStyles.AllowTrailingSign |
+        System.Globalization.NumberStyles.AllowParentheses |
+        System.Globalization.NumberStyles.AllowDecimalPoint |
+        System.Globalization.NumberStyles.AllowExponent |
+        System.Globalization.NumberStyles.AllowCurrencySymbol;
+
     private static ScalarValue ParseClipboardValue(string text)
     {
+        // Excel's text-escape convention: a leading apostrophe forces the pasted field to be kept
+        // as text (apostrophe stripped), exactly like typing '123 into a cell. This must be checked
+        // before any numeric/boolean coercion below.
+        if (text.StartsWith('\''))
+            return new TextValue(text[1..]);
+
+        // Culture-safe plain decimal, matching the same first pass CellEntryParser uses for typed
+        // entry (NumberStyles.Float against the current culture) so a user whose locale writes
+        // decimals with a comma (e.g. "1,5") still gets a number both when typed and when pasted,
+        // and thousands-grouped/parenthesized input isn't misread before the dedicated checks below.
         if (double.TryParse(
                 text,
-                System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out var number) &&
-            double.IsFinite(number))
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.CurrentCulture,
+                out var cultureNumber) &&
+            double.IsFinite(cultureNumber))
         {
-            return new NumberValue(number);
+            return new NumberValue(cultureNumber);
+        }
+
+        // Excel-parity coercion for the accounting/thousands/parenthesized forms Excel recognizes on
+        // paste (e.g. "(1,234.56)" -> -1234.56, "1,234" -> 1234, "5-" -> -5), gated by the same
+        // grouping-validation shape used elsewhere for Excel text-to-number parity so malformed
+        // groupings like "1,2345" are correctly rejected as text rather than silently misparsed.
+        if (TryParseExcelPasteNumber(text, out var excelNumber) && double.IsFinite(excelNumber))
+        {
+            return new NumberValue(excelNumber);
+        }
+
+        if (text.Equals("TRUE", StringComparison.OrdinalIgnoreCase) ||
+            text.Equals("FALSE", StringComparison.OrdinalIgnoreCase))
+        {
+            return new BoolValue(text.Equals("TRUE", StringComparison.OrdinalIgnoreCase));
         }
 
         return new TextValue(text);
+    }
+
+    /// <summary>
+    /// Parses accounting/thousands/parenthesized numeric text the way Excel does, mirroring
+    /// ExcelTextNumberParser.TryParseNumericStrict's two-phase structure (try without thousands
+    /// grouping first, then validate comma-grouping shape before allowing it) without that parser's
+    /// date-fallback behavior, which is out of scope for typed/pasted scalar coercion here.
+    /// </summary>
+    private static bool TryParseExcelPasteNumber(string text, out double number)
+    {
+        // Fast path: no comma -> no grouping issue, parse without AllowThousands.
+        if (!text.Contains(','))
+            return double.TryParse(text, StylesWithoutThousands, UsCulture, out number);
+
+        // Has commas: first try without AllowThousands (rejects commas in en-US).
+        if (double.TryParse(text, StylesWithoutThousands, UsCulture, out number))
+            return true;
+
+        // Commas present and didn't parse without AllowThousands. Validate grouping shape before
+        // allowing thousands parsing, so malformed groupings like "1,2345" are rejected as text.
+        if (!ValidGroupingRegex.IsMatch(text))
+        {
+            number = 0;
+            return false;
+        }
+
+        return double.TryParse(text, System.Globalization.NumberStyles.Any, UsCulture, out number);
     }
 }

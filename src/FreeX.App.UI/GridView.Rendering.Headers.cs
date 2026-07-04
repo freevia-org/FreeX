@@ -65,7 +65,7 @@ public partial class GridView
             if (lastFrozenRow != null)
             {
                 double y = lastFrozenRow.TopOffset + lastFrozenRow.Height + columnHeaderHeight;
-                dc.DrawLine(FreezePen, new Point(0, y), new Point(ActualWidth, y));
+                dc.DrawLine(FreezePen, new Point(0, y), new Point(GetLogicalViewportWidth(), y));
             }
         }
 
@@ -75,7 +75,7 @@ public partial class GridView
             if (lastFrozenCol != null)
             {
                 double x = lastFrozenCol.LeftOffset + lastFrozenCol.Width + rowHeaderWidth;
-                dc.DrawLine(FreezePen, new Point(x, 0), new Point(x, ActualHeight));
+                dc.DrawLine(FreezePen, new Point(x, 0), new Point(x, GetLogicalViewportHeight()));
             }
         }
     }

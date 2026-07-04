@@ -192,9 +192,10 @@ public partial class MainWindow
             return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_SheetNotFound"));
 
         var plans = RowColumnSizingPlanner.PlanAutoFitRowHeights(
+            sheet,
             range,
             sheet.GetUsedRange(),
-            (row, col) => GetAutoFitDisplayText(sheet, row, col),
+            (row, col) => GetAutoFitCellText(sheet, row, col),
             sheet.DefaultRowHeight);
 
         return RowColumnSizingPlanner.CreateAutoFitRowHeightCommand(sheetId, plans)
@@ -208,19 +209,20 @@ public partial class MainWindow
             return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_SheetNotFound"));
 
         var plans = RowColumnSizingPlanner.PlanAutoFitColumnWidths(
+            sheet,
             range,
             sheet.GetUsedRange(),
-            (row, col) => GetAutoFitDisplayText(sheet, row, col),
+            (row, col) => GetAutoFitCellText(sheet, row, col),
             sheet.DefaultColumnWidth);
 
         return RowColumnSizingPlanner.CreateAutoFitColumnWidthCommand(sheetId, plans)
             ?? new CompositeWorkbookCommand("Auto Column Width", []);
     }
 
-    private string? GetAutoFitDisplayText(Sheet sheet, uint row, uint col)
+    private AutoFitCellText? GetAutoFitCellText(Sheet sheet, uint row, uint col)
     {
         return sheet.GetCell(row, col) is { } cell
-            ? GetAutoFitDisplayText(sheet, cell)
+            ? new AutoFitCellText(GetAutoFitDisplayText(sheet, cell), _workbook.GetStyle(cell.StyleId).WrapText)
             : null;
     }
 

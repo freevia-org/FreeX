@@ -7,6 +7,7 @@ using Avalonia.Media;
 
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Services;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
@@ -100,12 +101,48 @@ public sealed partial class MainWindow
             OptionsLabeled(OptionsText("Options_UserName"), userNameBox, stretchField: true));
 
         // ── Formulas ────────────────────────────────────────────────────────────
-        var calcAutoButton = new RadioButton { Content = UiText.Get("Options_CalcAutomatic"), GroupName = "OptionsCalcMode", IsChecked = current.AutoCalculate };
+        // Calc mode and iterative-calculation settings are workbook-level state (Workbook.
+        // CalculationMode / IterativeCalculation / MaxCalculationIterations / MaxCalculationChange),
+        // not a persisted app-wide default — seed them from the live session's workbook so the
+        // dialog reflects whatever the ribbon's Calculation Options last set on this workbook
+        // (matching Excel), not the stale on-disk AppOptions.AutoCalculate.
+        var workbookAutoCalculate = !CalculationModeIsManual;
+        var calcAutoButton = new RadioButton { Content = UiText.Get("Options_CalcAutomatic"), GroupName = "OptionsCalcMode", IsChecked = workbookAutoCalculate };
         ApplyOptionsRadioButtonChrome(calcAutoButton);
         AutomationProperties.SetAutomationId(calcAutoButton, "OptionsCalcAutomaticButton");
-        var calcManualButton = new RadioButton { Content = UiText.Get("Options_CalcManual"), GroupName = "OptionsCalcMode", IsChecked = !current.AutoCalculate };
+        var calcManualButton = new RadioButton { Content = UiText.Get("Options_CalcManual"), GroupName = "OptionsCalcMode", IsChecked = !workbookAutoCalculate };
         ApplyOptionsRadioButtonChrome(calcManualButton);
         AutomationProperties.SetAutomationId(calcManualButton, "OptionsCalcManualButton");
+
+        var workbook = _session.Workbook;
+        var iterativeBox = new CheckBox { Content = OptionsText("Options_EnableIterativeCalculation"), IsChecked = workbook.IterativeCalculation };
+        ApplyOptionsCheckBoxChrome(iterativeBox);
+        AutomationProperties.SetAutomationId(iterativeBox, "OptionsIterativeCalculationCheckBox");
+
+        var maxIterationsBox = new TextBox
+        {
+            MinWidth = 80,
+            Text = (workbook.MaxCalculationIterations ?? DefaultMaxCalculationIterations).ToString(),
+            IsEnabled = workbook.IterativeCalculation,
+        };
+        ApplyOptionsTextBoxChrome(maxIterationsBox);
+        AutomationProperties.SetAutomationId(maxIterationsBox, "OptionsMaxIterationsBox");
+
+        var maxChangeBox = new TextBox
+        {
+            MinWidth = 90,
+            Text = (workbook.MaxCalculationChange ?? DefaultMaxCalculationChange).ToString(System.Globalization.CultureInfo.InvariantCulture),
+            IsEnabled = workbook.IterativeCalculation,
+        };
+        ApplyOptionsTextBoxChrome(maxChangeBox);
+        AutomationProperties.SetAutomationId(maxChangeBox, "OptionsMaxChangeBox");
+
+        iterativeBox.IsCheckedChanged += (_, _) =>
+        {
+            var enabled = iterativeBox.IsChecked == true;
+            maxIterationsBox.IsEnabled = enabled;
+            maxChangeBox.IsEnabled = enabled;
+        };
 
         var r1c1Box = new CheckBox { Content = UiText.Get("Options_R1C1ReferenceStyle"), IsChecked = current.UseR1C1ReferenceStyle };
         ApplyOptionsCheckBoxChrome(r1c1Box);
@@ -121,6 +158,20 @@ public sealed partial class MainWindow
             calcAutoButton,
             calcManualButton,
             OptionsDescription(OptionsText("Options_InManualModePressF9ToRecalculateTheWorkbook"), leftMargin: 18),
+            iterativeBox,
+            new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+                Margin = new Thickness(18, 0, 0, 0),
+                Children =
+                {
+                    new TextBlock { Text = OptionsText("Options_MaximumIterations"), VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12 },
+                    maxIterationsBox,
+                    new TextBlock { Text = OptionsText("Options_MaximumChange"), VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12 },
+                    maxChangeBox,
+                },
+            },
             OptionsSectionHeader(OptionsText("Options_WorkingWithFormulas")),
             r1c1Box,
             OptionsCheckBox(OptionsText("Options_EnableAutoCompleteForCellValues"), isChecked: true, isEnabled: false),
@@ -392,6 +443,21 @@ public sealed partial class MainWindow
                 return false;
             }
 
+            var iterativeEnabled = iterativeBox.IsChecked == true;
+            if (!TryParseMaxIterations(maxIterationsBox.Text, out var maxIterations))
+            {
+                warningText.Text = UiText.Get("Options_InvalidMaxIterationsMessage");
+                warningText.IsVisible = true;
+                return false;
+            }
+
+            if (!TryParseMaxChange(maxChangeBox.Text, out var maxChange))
+            {
+                warningText.Text = UiText.Get("Options_InvalidMaxChangeMessage");
+                warningText.IsVisible = true;
+                return false;
+            }
+
             var projected = OptionsDialogPlanner.Project(current, input);
             if (!AppOptionsStore.Save(projected))
             {
@@ -402,6 +468,7 @@ public sealed partial class MainWindow
 
             current = projected;
             ApplyLiveOptions(input);
+            ApplyLiveIterativeCalculationOptions(iterativeEnabled, maxIterations, maxChange);
             return true;
         }
 
@@ -484,6 +551,56 @@ public sealed partial class MainWindow
             SetCalculationMode(wantManual ? WorkbookCalculationMode.Manual : WorkbookCalculationMode.Automatic);
 
         RefreshShell(UiText.Get("Options_Saved"));
+    }
+
+    private const int DefaultMaxCalculationIterations = 100;
+    private const double DefaultMaxCalculationChange = 0.001;
+
+    /// <summary>
+    /// Applies the dialog's iterative-calculation fields to the live workbook via the undoable
+    /// <see cref="SetIterativeCalculationOptionsCommand"/>, but only when the values actually
+    /// differ from the workbook's current settings — the fields were seeded from the live
+    /// workbook, so this only fires on a genuine user edit.
+    /// </summary>
+    private void ApplyLiveIterativeCalculationOptions(bool enabled, int maxIterations, double maxChange)
+    {
+        var workbook = _session.Workbook;
+        if (workbook.IterativeCalculation == enabled &&
+            (workbook.MaxCalculationIterations ?? DefaultMaxCalculationIterations) == maxIterations &&
+            (workbook.MaxCalculationChange ?? DefaultMaxCalculationChange) == maxChange)
+        {
+            return;
+        }
+
+        var result = _session.ExecuteReviewCommand(new SetIterativeCalculationOptionsCommand(enabled, maxIterations, maxChange));
+        if (!result.Success)
+            RefreshShell(result.ErrorMessage ?? UiText.Get("ShellLoc_CouldNotChangeCalcMode"));
+    }
+
+    private static bool TryParseMaxIterations(string? text, out int maxIterations)
+    {
+        maxIterations = 0;
+        if (!int.TryParse((text ?? string.Empty).Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+            || parsed <= 0)
+        {
+            return false;
+        }
+
+        maxIterations = parsed;
+        return true;
+    }
+
+    private static bool TryParseMaxChange(string? text, out double maxChange)
+    {
+        maxChange = 0;
+        if (!double.TryParse((text ?? string.Empty).Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+            || parsed < 0)
+        {
+            return false;
+        }
+
+        maxChange = parsed;
+        return true;
     }
 
     private static void ApplyOptionsButtonChrome(Button button, double minWidth, bool isDefault = false)
@@ -570,6 +687,9 @@ public sealed partial class MainWindow
                 "Options_CalculationOptions" => "Calculation options",
                 "Options_WorkbookCalculation" => "Workbook Calculation",
                 "Options_InManualModePressF9ToRecalculateTheWorkbook" => "In Manual mode, press F9 to recalculate the workbook.",
+                "Options_EnableIterativeCalculation" => "Enable iterative calculation",
+                "Options_MaximumIterations" => "Maximum Iterations",
+                "Options_MaximumChange" => "Maximum Change",
                 "Options_WorkingWithFormulas" => "Working with formulas",
                 "Options_EnableAutoCompleteForCellValues" => "Enable AutoComplete for cell values",
                 "Options_ErrorCheckingRules" => "Error Checking Rules",

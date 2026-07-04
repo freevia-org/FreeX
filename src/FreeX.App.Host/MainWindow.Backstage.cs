@@ -925,7 +925,11 @@ public partial class MainWindow
     private void ShowOptionsDialog(OptionsDialogInitialSection initialSection = OptionsDialogInitialSection.General)
     {
         var previousAppLanguage = AppLanguageCatalog.NormalizeCultureName(_options.AppLanguage);
-        var dlg = new OptionsDialog(_options, _workbook.DisabledFormulaErrorCodes, initialSection);
+        var dlg = new OptionsDialog(
+            _options,
+            _workbook.DisabledFormulaErrorCodes,
+            initialSection,
+            OptionsDialogCalculationSettings.FromWorkbook(_workbook));
         if (ShowOwnedDialog(dlg) == true)
         {
             _options = dlg.Result;
@@ -936,6 +940,7 @@ public partial class MainWindow
                 AppLocalization.ApplyAppLanguage(_options.AppLanguage);
 
             ApplyFormulaErrorCheckingOptions(dlg.DisabledFormulaErrorCodesResult);
+            ApplyOptionsCalculationSettings(dlg.CalculationSettingsResult);
             RebuildQuickAccessToolbar();
             ApplyOptionsWorksheetViewSettings();
             ApplyOptionsToView();
@@ -949,6 +954,38 @@ public partial class MainWindow
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
             }
+        }
+    }
+
+    /// <summary>
+    /// Applies the Options dialog's Formulas panel calc-mode/iterative-calculation edits to the
+    /// live workbook. <paramref name="calcSettings"/> is null when the dialog detected no change
+    /// from what it seeded (see <see cref="OptionsDialog.CalculationSettingsResult"/>), so an
+    /// unrelated Options edit never silently flips the workbook's calculation state.
+    /// </summary>
+    private void ApplyOptionsCalculationSettings(OptionsDialogCalculationSettings? calcSettings)
+    {
+        if (calcSettings is null)
+            return;
+
+        var wantMode = calcSettings.AutoCalculate ? WorkbookCalculationMode.Automatic : WorkbookCalculationMode.Manual;
+        if (_workbook.CalculationMode != wantMode &&
+            TryExecuteCommand(new SetCalculationModeCommand(wantMode), "Calculation Options") &&
+            wantMode == WorkbookCalculationMode.Automatic)
+        {
+            RecalculateWorkbook();
+        }
+
+        if (_workbook.IterativeCalculation != calcSettings.IterativeCalculation ||
+            _workbook.MaxCalculationIterations != calcSettings.MaxCalculationIterations ||
+            _workbook.MaxCalculationChange != calcSettings.MaxCalculationChange)
+        {
+            TryExecuteCommand(
+                new SetIterativeCalculationOptionsCommand(
+                    calcSettings.IterativeCalculation,
+                    calcSettings.MaxCalculationIterations,
+                    calcSettings.MaxCalculationChange),
+                "Calculation Options");
         }
     }
 

@@ -21,15 +21,12 @@ namespace FreeX.App.Avalonia;
 /// </para>
 ///
 /// <para>
-/// Forcing a recalculation (the real behaviour of "Calculate Now") needs
-/// <c>RecalcEngine.RecalculateAllFormulas</c>, which lives in <c>FreeX.Core.Calc</c> and is
-/// only reachable by the Windows host because it holds the <c>RecalcEngine</c> directly.
-/// <c>WorkbookSession</c> does NOT currently expose the engine or a force-recalc method
-/// (its <c>ExecuteReviewCommand</c> / <c>ExecuteEditCommand</c> path does not recalc, and
-/// <c>WorkbookCellEditService.RecalculateIfAutomatic</c> is private to that service). Until a
-/// recalc method is added to <c>WorkbookSession</c>, "Calculate Now" reports that a recalc
-/// is unavailable in this build rather than silently doing nothing. See the handler note for
-/// the exact method that needs adding.
+/// Forcing a recalculation ("Calculate Now" / F9, and "Calculate Sheet" / Shift+F9) is exposed
+/// by <c>WorkbookSession.RecalculateWorkbook()</c> and <c>WorkbookSession.RecalculateActiveSheet()</c>,
+/// which drive <c>RecalcEngine.RecalculateAllFormulas</c> / <c>RecalcEngine.RecalculateSheetFormulas</c>
+/// (via <c>WorkbookCellEditService</c>) the same way the WPF host's <c>CalcNowBtn_Click</c> /
+/// <c>CalcSheetBtn_Click</c> do. Both keyboard shortcuts are wired in <c>MainWindow.cs</c>'s
+/// <c>MainWindow_KeyDownAsync</c>.
 /// </para>
 /// </summary>
 public sealed partial class MainWindow
@@ -101,6 +98,16 @@ public sealed partial class MainWindow
     private void CalculateNow()
     {
         _session.RecalculateWorkbook();
+        RefreshShell(UiText.Get("ShellLoc_RecalculatedAllFormulas"));
+    }
+
+    /// <summary>
+    /// Handler for Shift+F9 ("Calculate Sheet"). Recalculates only the active worksheet's
+    /// formulas, mirroring the WPF host's <c>CalcSheetBtn_Click</c>.
+    /// </summary>
+    private void CalculateActiveSheet()
+    {
+        _session.RecalculateActiveSheet();
         RefreshShell(UiText.Get("ShellLoc_RecalculatedAllFormulas"));
     }
 

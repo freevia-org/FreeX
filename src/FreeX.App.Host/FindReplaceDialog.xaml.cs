@@ -1,4 +1,6 @@
 using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Automation.Peers;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FreeX.App.Services;
@@ -155,14 +157,14 @@ public sealed partial class FindReplaceDialog : Window
 
         if (_results.Count == 0)
         {
-            StatusLabel.Text = UiText.Get("FindReplace_NoMatchesFound");
+            SetStatusText(UiText.Get("FindReplace_NoMatchesFound"));
             _currentIndex = -1;
             return;
         }
 
         _currentIndex = (_currentIndex + 1) % _results.Count;
         var result = _results[_currentIndex];
-        StatusLabel.Text = UiText.Format("FindReplace_MatchStatus", _currentIndex + 1, _results.Count);
+        SetStatusText(UiText.Format("FindReplace_MatchStatus", _currentIndex + 1, _results.Count));
         _navigateTo(result.Address);
     }
 
@@ -180,9 +182,9 @@ public sealed partial class FindReplaceDialog : Window
             matchEntireCell: MatchEntireBox.IsChecked == true);
 
         UpdateResultsGrid();
-        StatusLabel.Text = _results.Count == 0
+        SetStatusText(_results.Count == 0
             ? UiText.Get("FindReplace_NoMatchesFound")
-            : UiText.Format("FindReplace_CellsFoundStatus", _results.Count);
+            : UiText.Format("FindReplace_CellsFoundStatus", _results.Count));
     }
 
     private void ReplaceAll_Click(object sender, RoutedEventArgs e)
@@ -203,9 +205,9 @@ public sealed partial class FindReplaceDialog : Window
         if (result.ReplacedCount > 0)
             _onWorkbookChanged();
 
-        StatusLabel.Text = result.ReplacedCount == 0
+        SetStatusText(result.ReplacedCount == 0
             ? UiText.Get("FindReplace_NoMatchesFound")
-            : UiText.Format("FindReplace_ReplacedCellsStatus", result.ReplacedCount);
+            : UiText.Format("FindReplace_ReplacedCellsStatus", result.ReplacedCount));
         _results = FindReplaceService.Find(
             _getWorkbook(), search,
             CreateFindOptions(),
@@ -244,11 +246,11 @@ public sealed partial class FindReplaceDialog : Window
 
         if (!result.Replaced)
         {
-            StatusLabel.Text = UiText.Get("FindReplace_NoReplaceableMatchFound");
+            SetStatusText(UiText.Get("FindReplace_NoReplaceableMatchFound"));
             return;
         }
 
-        StatusLabel.Text = UiText.Get("FindReplace_ReplacedOneCell");
+        SetStatusText(UiText.Get("FindReplace_ReplacedOneCell"));
         _onWorkbookChanged();
         _results = FindReplaceService.Find(
             _getWorkbook(), search,
@@ -261,7 +263,7 @@ public sealed partial class FindReplaceDialog : Window
         {
             _currentIndex = 0;
             _navigateTo(_results[_currentIndex].Address);
-            StatusLabel.Text = UiText.Format("FindReplace_MatchStatus", 1, _results.Count);
+            SetStatusText(UiText.Format("FindReplace_MatchStatus", 1, _results.Count));
         }
     }
 
@@ -317,21 +319,21 @@ public sealed partial class FindReplaceDialog : Window
             : _getActiveSelectionCell();
         if (address is null)
         {
-            StatusLabel.Text = UiText.Get("FindReplace_SelectFormatSourceStatus");
+            SetStatusText(UiText.Get("FindReplace_SelectFormatSourceStatus"));
             return;
         }
 
         var diff = FindReplaceDialogPlanner.CreateFormatDiffFromCell(_getWorkbook(), address.Value);
         if (diff is null)
         {
-            StatusLabel.Text = UiText.Get("FindReplace_NoCellFormatFoundStatus");
+            SetStatusText(UiText.Get("FindReplace_NoCellFormatFoundStatus"));
             return;
         }
 
         target = diff;
-        StatusLabel.Text = FindResultsGrid.SelectedItem is FindResultRow
+        SetStatusText(FindResultsGrid.SelectedItem is FindResultRow
             ? UiText.Get("FindReplace_FormatChosenFromResultStatus")
-            : UiText.Get("FindReplace_FormatChosenFromWorksheetStatus");
+            : UiText.Get("FindReplace_FormatChosenFromWorksheetStatus"));
         UpdateFormatStateButtons();
     }
 
@@ -352,5 +354,37 @@ public sealed partial class FindReplaceDialog : Window
     private void UpdateResultsGrid()
     {
         FindResultsGrid.ItemsSource = FindReplaceDialogPlanner.BuildFindResultRows(_getWorkbook(), _results);
+    }
+
+    /// <summary>
+    /// Sets the Find/Replace status text and, since <see cref="StatusLabel"/> is declared as a
+    /// polite UIA live region, raises the automation notifications needed for screen readers to
+    /// actually announce it (WPF live regions are not announced purely by a Text change; the
+    /// AutomationPeer's Name must change and a LiveRegionChanged event must be raised). Mirrors
+    /// the status-bar convention in MainWindow.GridStatus.cs's NotifyStatusStatisticAutomationChanged.
+    /// </summary>
+    private void SetStatusText(string text)
+    {
+        if (StatusLabel.Text == text)
+            return;
+
+        StatusLabel.Text = text;
+
+        var previousName = AutomationProperties.GetName(StatusLabel);
+        AutomationProperties.SetName(StatusLabel, text);
+
+        if (!StatusLabel.IsLoaded)
+            return;
+
+        try
+        {
+            var peer = UIElementAutomationPeer.FromElement(StatusLabel) ??
+                       UIElementAutomationPeer.CreatePeerForElement(StatusLabel);
+            peer?.RaisePropertyChangedEvent(AutomationElementIdentifiers.NameProperty, previousName, text);
+            peer?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+        }
+        catch (InvalidOperationException)
+        {
+        }
     }
 }

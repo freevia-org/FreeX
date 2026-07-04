@@ -219,9 +219,20 @@ public sealed class RecalcEngine
             catch (FormulaParseException)
             {
                 cell.CachedAst = null;
+                ClearFormulaDependencies(addr);
+
+                // Excel keeps an external-workbook reference's last-known cached value until the
+                // user explicitly updates links — it never blanks it out just from a recalc. Our
+                // lexer/parser have no concept of the '[Book.xlsx]Sheet!A1' external-reference
+                // syntax (see Lexer's structured-reference handling), so such a formula always
+                // fails to parse here even though XlsxFileAdapter loaded a perfectly good cached
+                // value for it. Leave that cached value (and any existing spill) alone instead of
+                // clobbering it with #VALUE! on every ordinary recalc/Calculate Now.
+                if (IsLikelyExternalWorkbookReferenceFormula(cell.FormulaText))
+                    continue;
+
                 sheet.ClearSpillRange(addr);
                 if (hadSpill) spillTargetsMayHaveChanged = true;
-                ClearFormulaDependencies(addr);
                 cell.Value = ErrorValue.Value;
                 AddError(ref errors, addr, "#VALUE!");
             }
@@ -449,6 +460,19 @@ public sealed class RecalcEngine
     }
 
     /// <summary>
+    /// Heuristic match for a formula that references another workbook, e.g. <c>[Book1.xlsx]Sheet1!A1</c>
+    /// or a defined-name form like <c>[1]Sheet1!A1</c>. The Lexer/Parser have no concept of this OOXML
+    /// external-reference syntax (a bracketed workbook token immediately followed by a sheet-qualified
+    /// cell/range reference), so parsing such a formula always throws <see cref="FormulaParseException"/>
+    /// — even though the file's Excel-computed cached value was loaded correctly and is still perfectly
+    /// valid. This mirrors the same bracket heuristic <c>XlsxClosedXmlCellMapper.ShouldUseCachedExternalFormulaValue</c>
+    /// uses to decide whether to trust ClosedXML's cached value at load time, so recalc and load agree
+    /// on which formulas are "external" for this purpose.
+    /// </summary>
+    private static bool IsLikelyExternalWorkbookReferenceFormula(string? formulaText) =>
+        formulaText is not null && formulaText.Contains('[', StringComparison.Ordinal);
+
+    /// <summary>
     /// Run a bounded fixed-point iteration over a set of cyclic cells when
     /// <see cref="Workbook.IterativeCalculation"/> is enabled.  Each pass re-evaluates every cell
     /// in <paramref name="cyclicAddresses"/> in the order the dependency graph reported them, using
@@ -525,7 +549,12 @@ public sealed class RecalcEngine
                 {
                     cell.CachedAst = null;
                     ClearFormulaDependencies(addr);
-                    cell.Value = ErrorValue.Value;
+
+                    // See the matching guard in the main evaluation loop above: an unparseable
+                    // external-workbook reference must keep its last-known cached value, not be
+                    // blanked to #VALUE! just because it was swept up in an iterative-calc pass.
+                    if (!IsLikelyExternalWorkbookReferenceFormula(cell.FormulaText))
+                        cell.Value = ErrorValue.Value;
                 }
                 catch (FormulaEvalException ex)
                 {

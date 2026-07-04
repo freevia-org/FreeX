@@ -15008,6 +15008,21 @@ Saved XPS file:&#xD;
   <data name="Options_Manual" xml:space="preserve">
     <value>_Manual</value>
   </data>
+  <data name="Options_EnableIterativeCalculation" xml:space="preserve">
+    <value>Enable iterative _calculation</value>
+  </data>
+  <data name="Options_MaximumIterations" xml:space="preserve">
+    <value>Maximum Iterations</value>
+  </data>
+  <data name="Options_MaximumChange" xml:space="preserve">
+    <value>Maximum Change</value>
+  </data>
+  <data name="Options_InvalidMaxIterationsMessage" xml:space="preserve">
+    <value>Maximum Iterations must be a whole number greater than zero.</value>
+  </data>
+  <data name="Options_InvalidMaxChangeMessage" xml:space="preserve">
+    <value>Maximum Change must be a number that is zero or greater.</value>
+  </data>
   <data name="MainWindow_Header_Formulas" xml:space="preserve">
     <value>Formulas</value>
   </data>

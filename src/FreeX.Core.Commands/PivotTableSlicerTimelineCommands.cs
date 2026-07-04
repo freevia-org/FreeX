@@ -75,7 +75,10 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
             return PivotTableSlicerTimelineCommandGuards.ConnectedPivotTableNotFound();
 
         var (sheet, pivotTable) = target.Value;
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)
+        // Check protection of BOTH the pivot table's own sheet AND the sheet the timeline widget
+        // itself is anchored on (timeline.SourceSheetName) — they can differ when the timeline is
+        // placed on a dashboard sheet that filters a pivot living elsewhere.
+        if (PivotTableSlicerTimelineCommandGuards.RejectIfEitherSheetProtected(ctx.Workbook, sheet, timeline.SourceSheetName) is { } protectedOutcome)
             return protectedOutcome;
 
         var sourceSheet = ctx.Workbook.GetSheet(pivotTable.SourceRange.Start.Sheet) ?? sheet;
@@ -189,6 +192,22 @@ public sealed class SetTimelineGranularityCommand : IWorkbookCommand
         var timeline = PivotTableTimelineCommandLookups.FindTimeline(ctx.Workbook, _timelineName);
         if (timeline is null)
             return new CommandOutcome(false, "Timeline was not found.");
+
+        // Same guard as every sibling slicer/timeline command: granularity is persisted workbook
+        // state (round-tripped as the OOXML `level` attribute), not ephemeral UI state, so it must
+        // be blocked on a protected sheet without UsePivotTableReports permission just like
+        // SetTimelineRangeCommand/AddTimelineCommand/AddSlicerCommand/SetSlicerSelectionCommand.
+        // Checks BOTH the connected pivot table's sheet AND the sheet the timeline widget itself
+        // is anchored on (timeline.SourceSheetName), since they can differ.
+        if (!string.IsNullOrWhiteSpace(timeline.SourcePivotTableName))
+        {
+            var target = PivotTableSlicerTimelineCommandHelpers.FindConnectedPivotTable(ctx.Workbook, timeline.SourcePivotTableName);
+            if (target is { } connected &&
+                PivotTableSlicerTimelineCommandGuards.RejectIfEitherSheetProtected(ctx.Workbook, connected.Sheet, timeline.SourceSheetName) is { } protectedOutcome)
+            {
+                return protectedOutcome;
+            }
+        }
 
         _previousLevel = timeline.Level;
         timeline.Level = _newLevel;

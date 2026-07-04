@@ -137,7 +137,19 @@ public sealed partial class FormulaEvaluator
         if (startName == range.StartColumnName && endName == range.EndColumnName)
             return range;
 
-        return range with { StartColumnName = startName, EndColumnName = endName };
+        // Must construct a fresh FullColumnRangeRefNode via its constructor rather than
+        // `range with { StartColumnName = ..., EndColumnName = ... }`. StartColumnNumber/
+        // EndColumnNumber are properties with field initializers computed from
+        // StartColumnName/EndColumnName — under a `with` expression the compiler-generated
+        // copy constructor copies the already-computed backing fields verbatim and does NOT
+        // re-run the initializers, so a `with` that changes the column names would silently
+        // leave StartColumnNumber/EndColumnNumber stale at the old, unshifted values.
+        return new FullColumnRangeRefNode(
+            startName,
+            endName,
+            range.IsStartAbsolute,
+            range.IsEndAbsolute,
+            range.SheetName);
     }
 
     private static FormulaNode ShiftFullRowRangeRef(FullRowRangeRefNode range, int dr)
@@ -172,7 +184,18 @@ public sealed partial class FormulaEvaluator
         if (newRow.Value == cr.Row && newColName == cr.ColumnName)
             return cr;
 
-        return cr with { Row = newRow.Value, ColumnName = newColName };
+        // Must construct a fresh CellRefNode via its constructor rather than `cr with { ... }`.
+        // CellRefNode.ColumnNumber is a property with a field initializer computed from
+        // ColumnName — under a `with` expression the compiler-generated copy constructor
+        // copies the already-computed backing field verbatim and does NOT re-run the
+        // initializer, so a `with` that changes ColumnName (as a relative-column shift does)
+        // would silently leave ColumnNumber stale at the old, unshifted value.
+        return new CellRefNode(
+            newColName,
+            newRow.Value,
+            cr.IsColAbsolute,
+            cr.IsRowAbsolute,
+            cr.SheetName);
     }
 
     private static uint? ShiftRow(uint row, bool isAbsolute, int dr)

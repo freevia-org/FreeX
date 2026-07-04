@@ -332,7 +332,23 @@ public sealed partial class MainWindow
         var status = session.Kind == ObjectDragKind.Move
             ? UiText.Get("DrawingInteract_Moved")
             : UiText.Get("DrawingInteract_Resized");
-        RunDrawingObjectCommand(command, status, "Chart Bounds");
+        var result = _session.ExecuteReviewCommand(command);
+        if (!result.Success)
+        {
+            // The live drag preview already mutated the container's Canvas.Left/Top/Width/Height
+            // directly (see WireChartDragMoveRelease's PointerMoved handler) without touching the
+            // model. When the model rejects the resulting bounds (e.g. a protected sheet without
+            // the "Allow users to edit objects" permission), the ordinary drawing-command failure
+            // path (RunDrawingObjectCommand) only sets the status-bar text via ShowEditIssue and
+            // never rebuilds the sheet grid, so the chart would otherwise stay visually stuck at
+            // the rejected drop position. Call RefreshShell here (not just ShowEditIssue) so the
+            // overlay snaps back to the committed model geometry, matching the WPF shell's
+            // unconditional repaint-from-model on every chart drag release.
+            RefreshShell(result.ErrorMessage ?? UiText.Format("InsertLoc_DrawingCommandFailed", "Chart Bounds"));
+            return;
+        }
+
+        RefreshShell(status);
     }
 
     // Per-handle position factors (0 = left/top edge, 0.5 = center, 1 = right/bottom edge), in the

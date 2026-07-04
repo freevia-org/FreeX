@@ -16,6 +16,11 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
     // Snapshot of every in-range cell before Apply, used by Revert.
     private List<CellSnapshot>? _snapshot;
     private Dictionary<CellAddress, string>? _commentSnapshot;
+    // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy note
+    // author + pinned/"Show Comment" state) and must be captured/compacted/restored in lockstep
+    // with it, or a surviving row's note author/pinned box is left behind at its old row.
+    private Dictionary<CellAddress, string>? _commentAuthorsSnapshot;
+    private HashSet<CellAddress>? _shownCommentsSnapshot;
     private Dictionary<CellAddress, ThreadedComment>? _threadedCommentSnapshot;
     private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
     private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
@@ -63,6 +68,8 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
             // Nothing to do — take an empty snapshot so Revert is a no-op.
             _snapshot = [];
             _commentSnapshot = [];
+            _commentAuthorsSnapshot = [];
+            _shownCommentsSnapshot = [];
             _threadedCommentSnapshot = [];
             _hyperlinkSnapshot = [];
             _hyperlinkMetadataSnapshot = [];
@@ -76,6 +83,8 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
         var allInRangeAddresses = _range.AllCells().ToList();
         _snapshot = CaptureCellSnapshots(sheet, allInRangeAddresses);
         _commentSnapshot = CaptureDictionary(sheet.Comments, allInRangeAddresses);
+        _commentAuthorsSnapshot = CaptureDictionary(sheet.CommentAuthors, allInRangeAddresses);
+        _shownCommentsSnapshot = CaptureAddressSet(sheet.ShownComments, allInRangeAddresses);
         _threadedCommentSnapshot = CaptureDictionary(sheet.ThreadedComments, allInRangeAddresses);
         _hyperlinkSnapshot = CaptureDictionary(sheet.Hyperlinks, allInRangeAddresses);
         _hyperlinkMetadataSnapshot = CaptureDictionary(sheet.HyperlinkMetadata, allInRangeAddresses);
@@ -131,6 +140,12 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
                 if (_commentSnapshot.TryGetValue(source, out var comment))
                     sheet.Comments[target] = comment;
 
+                if (_commentAuthorsSnapshot.TryGetValue(source, out var commentAuthor))
+                    sheet.CommentAuthors[target] = commentAuthor;
+
+                if (_shownCommentsSnapshot.Contains(source))
+                    sheet.ShownComments.Add(target);
+
                 if (_threadedCommentSnapshot.TryGetValue(source, out var threadedComment))
                     sheet.ThreadedComments[target] = CloneThreadedComment(threadedComment);
 
@@ -173,6 +188,8 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
         // Restore metadata dictionaries.
         var allInRangeAddresses = _snapshot.Select(s => s.Address).ToList();
         RestoreDictionary(sheet.Comments, _commentSnapshot, allInRangeAddresses);
+        RestoreDictionary(sheet.CommentAuthors, _commentAuthorsSnapshot, allInRangeAddresses);
+        RestoreAddressSet(sheet.ShownComments, _shownCommentsSnapshot, allInRangeAddresses);
         RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot, allInRangeAddresses);
         RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot, allInRangeAddresses);
         RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot, allInRangeAddresses);
@@ -273,11 +290,27 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
         return snapshot;
     }
 
+    private static HashSet<CellAddress> CaptureAddressSet(
+        HashSet<CellAddress> source,
+        IReadOnlyList<CellAddress> addresses)
+    {
+        var snapshot = new HashSet<CellAddress>();
+        foreach (var address in addresses)
+        {
+            if (source.Contains(address))
+                snapshot.Add(address);
+        }
+
+        return snapshot;
+    }
+
     private static void ClearAddress(Sheet sheet, CellAddress address)
     {
         sheet.ClearCell(address);
         sheet.ClearStyleOnly(address.Row, address.Col);
         sheet.Comments.Remove(address);
+        sheet.CommentAuthors.Remove(address);
+        sheet.ShownComments.Remove(address);
         sheet.ThreadedComments.Remove(address);
         sheet.Hyperlinks.Remove(address);
         sheet.HyperlinkMetadata.Remove(address);
@@ -310,6 +343,21 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
 
         foreach (var (address, value) in snapshot)
             target[address] = value;
+    }
+
+    private static void RestoreAddressSet(
+        HashSet<CellAddress> target,
+        HashSet<CellAddress>? snapshot,
+        IReadOnlyList<CellAddress> affected)
+    {
+        foreach (var address in affected)
+            target.Remove(address);
+
+        if (snapshot is null)
+            return;
+
+        foreach (var address in snapshot)
+            target.Add(address);
     }
 
     private static ThreadedComment CloneThreadedComment(ThreadedComment comment) =>

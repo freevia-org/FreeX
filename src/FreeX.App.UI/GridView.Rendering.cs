@@ -201,7 +201,7 @@ public partial class GridView
     {
         if (Viewport?.SplitPanes?.Cells is not { Count: > 0 }) return;
 
-        var clips = CalculateSplitPaneClipRects(Viewport, ActualWidth, ActualHeight);
+        var clips = CalculateSplitPaneClipRects(Viewport, GetLogicalViewportWidth(), GetLogicalViewportHeight());
         var topLeftClip = FrozenClipGeometry(clips.TopLeft);
         var topRightClip = FrozenClipGeometry(clips.TopRight);
         var bottomLeftClip = FrozenClipGeometry(clips.BottomLeft);

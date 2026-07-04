@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Automation.Peers;
 using System.Windows.Automation.Provider;
 using System.Windows.Media;
@@ -40,12 +41,31 @@ public partial class GridView : FrameworkElement
     /// </summary>
     protected override AutomationPeer OnCreateAutomationPeer() => new GridViewAutomationPeer(this);
 
+    /// <summary>
+    /// Raises UI Automation selection/focus notifications whenever the active cell or
+    /// selected range changes (e.g. via arrow-key/Tab/Enter navigation), so screen readers
+    /// announce the new active cell's address and value. Mirrors the pattern used by the
+    /// status bar (see MainWindow.GridStatus.cs NotifyStatusStatisticAutomationChanged), except
+    /// it does not gate on IsLoaded: unlike a status-bar TextBlock, GridView's automation peer
+    /// (and the per-cell peers it tracks) can legitimately be queried and kept in sync before the
+    /// control is attached to a visual tree (e.g. hosted in an offscreen/print preview surface).
+    /// </summary>
+    private void NotifySelectionAutomationChanged()
+    {
+        if (UIElementAutomationPeer.FromElement(this) is not GridViewAutomationPeer peer)
+            return;
+
+        peer.NotifySelectionChanged(SelectedRange?.Start);
+    }
+
     private sealed class GridViewAutomationPeer(GridView owner) :
         FrameworkElementAutomationPeer(owner),
         IGridProvider,
         ISelectionProvider
     {
         private readonly Dictionary<(uint Row, uint Col), GridViewCellAutomationPeer> _cellPeers = [];
+
+        private CellAddress? _lastNotifiedActiveCell = owner.SelectedRange?.Start;
 
         private GridView OwnerGrid => (GridView)Owner;
 
@@ -101,6 +121,9 @@ public partial class GridView : FrameworkElement
             return OwnerGrid.SelectedRange is { } range && ContainsCell(range, row, column);
         }
 
+        internal bool IsActiveCell(uint row, uint column) =>
+            _lastNotifiedActiveCell is { } active && active.Row == row && active.Col == column;
+
         internal string GetCellDisplayText(uint row, uint column) =>
             TryGetDisplayCell(row, column, out var cell)
                 ? cell.DisplayText
@@ -138,6 +161,38 @@ public partial class GridView : FrameworkElement
                 PatternInterface.Selection => this,
                 _ => base.GetPattern(patternInterface)
             };
+
+        /// <summary>
+        /// Raises UIA selection/focus notifications for the new active cell (the top-left
+        /// corner of the current selection). Called whenever SelectedRange/SelectedRanges
+        /// changes so screen readers announce cell navigation with the cell's address and
+        /// current value, matching Excel's behavior on arrow-key/Tab/Enter movement.
+        /// </summary>
+        internal void NotifySelectionChanged(CellAddress? activeCell)
+        {
+            var previousActiveCell = _lastNotifiedActiveCell;
+            _lastNotifiedActiveCell = activeCell;
+
+            if (activeCell == previousActiveCell)
+                return;
+
+            RaiseAutomationEvent(AutomationEvents.SelectionItemPatternOnElementSelected);
+
+            if (activeCell is not { } address)
+                return;
+
+            var cellPeer = GetOrCreateCellPeer(address.Row, address.Col);
+
+            if (previousActiveCell is { } previousAddress &&
+                _cellPeers.TryGetValue((previousAddress.Row, previousAddress.Col), out var previousPeer))
+            {
+                previousPeer.RaiseAutomationEvent(AutomationEvents.AutomationFocusChanged);
+            }
+
+            cellPeer.RaiseAutomationEvent(AutomationEvents.AutomationFocusChanged);
+            cellPeer.RaiseAutomationEvent(AutomationEvents.SelectionItemPatternOnElementSelected);
+            cellPeer.NotifyNameChanged();
+        }
 
         protected override List<AutomationPeer> GetChildrenCore()
         {
@@ -397,11 +452,21 @@ public partial class GridView : FrameworkElement
 
         protected override AutomationOrientation GetOrientationCore() => AutomationOrientation.None;
 
-        protected override bool HasKeyboardFocusCore() => false;
+        protected override bool HasKeyboardFocusCore() => parent.IsActiveCell(row, column);
 
         protected override bool IsEnabledCore() => true;
 
-        protected override bool IsKeyboardFocusableCore() => false;
+        protected override bool IsKeyboardFocusableCore() => true;
+
+        /// <summary>
+        /// Raises a UIA Name-property-changed notification for this cell so screen readers
+        /// re-announce its address and current value when it becomes the active cell.
+        /// </summary>
+        internal void NotifyNameChanged()
+        {
+            var name = GetNameCore();
+            RaisePropertyChangedEvent(AutomationElementIdentifiers.NameProperty, null, name);
+        }
 
         protected override bool IsOffscreenCore() =>
             GetBoundingRectangleCore().IsEmpty;

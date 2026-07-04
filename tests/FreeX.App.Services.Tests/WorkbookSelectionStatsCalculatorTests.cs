@@ -9,12 +9,17 @@ public sealed class WorkbookSelectionStatsCalculatorTests
     [Fact]
     public void Calculate_SeparatesNonblankCountFromNumericalCount()
     {
+        // Note: a DateTimeValue cell contributes its underlying serial value to
+        // Sum/Average/Min/Max/NumericalCount, matching Excel's own SUM/AVERAGE
+        // treatment of dates. This test previously asserted the date was excluded
+        // from numeric aggregation (NumericalCount=2, Sum=4) — that was finding J18.
         var sheet = new Sheet(SheetId.New(), "Sheet1");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(1)));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new TextValue("counted")));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 3), Cell.FromValue(BlankValue.Instance));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 4), Cell.FromValue(new NumberValue(3)));
-        sheet.SetCell(new CellAddress(sheet.Id, 1, 5), Cell.FromValue(DateTimeValue.FromDateTime(new DateTime(2026, 6, 6))));
+        var dateValue = DateTimeValue.FromDateTime(new DateTime(2026, 6, 6));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 5), Cell.FromValue(dateValue));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 6), Cell.FromValue(new BoolValue(true)));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 7), Cell.FromValue(ErrorValue.DivByZero));
 
@@ -25,11 +30,11 @@ public sealed class WorkbookSelectionStatsCalculatorTests
                 new CellAddress(sheet.Id, 1, 7)));
 
         stats.Count.Should().Be(6);
-        stats.NumericalCount.Should().Be(2);
-        stats.Sum.Should().Be(4);
-        stats.Average.Should().Be(2);
+        stats.NumericalCount.Should().Be(3);
+        stats.Sum.Should().Be(4 + dateValue.Value);
+        stats.Average.Should().Be((4 + dateValue.Value) / 3);
         stats.Min.Should().Be(1);
-        stats.Max.Should().Be(3);
+        stats.Max.Should().Be(dateValue.Value);
     }
 
     [Fact]
@@ -119,12 +124,18 @@ public sealed class WorkbookSelectionStatsCalculatorTests
                 new CellAddress(sheet.Id, 1, 1),
                 new CellAddress(sheet.Id, 1, 7)));
 
+        // A4's cached formula result is a DateTimeValue (TODAY() -> serial 46179 for
+        // 2026-06-06). Excel's SUM/AVERAGE/COUNT/MIN/MAX all include date-valued cells
+        // in their numeric aggregation, so NumericalCount/Sum/Average/Min/Max here must
+        // account for it alongside the two plain-number cells (A1=5, A7=7). This test
+        // previously expected the date to be excluded (NumericalCount=2, Sum=12) — that
+        // encoded the pre-fix bug.
         stats.Count.Should().Be(6);
-        stats.NumericalCount.Should().Be(2);
-        stats.Sum.Should().Be(12);
-        stats.Average.Should().Be(6);
+        stats.NumericalCount.Should().Be(3);
+        stats.Sum.Should().Be(5 + 46179 + 7);
+        stats.Average.Should().Be((5 + 46179 + 7) / 3.0);
         stats.Min.Should().Be(5);
-        stats.Max.Should().Be(7);
+        stats.Max.Should().Be(46179);
     }
 
     [Fact]

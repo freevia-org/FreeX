@@ -89,7 +89,10 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
             return PivotTableSlicerTimelineCommandGuards.ConnectedPivotTableNotFound();
 
         var (sheet, pivotTable) = target.Value;
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)
+        // Check protection of BOTH the pivot table's own sheet AND the sheet the slicer widget
+        // itself is anchored on (slicer.SourceSheetName) — they can differ when the slicer is
+        // placed on a dashboard sheet that filters a pivot living elsewhere.
+        if (PivotTableSlicerTimelineCommandGuards.RejectIfEitherSheetProtected(ctx.Workbook, sheet, slicer.SourceSheetName) is { } protectedOutcome)
             return protectedOutcome;
 
         var sourceSheet = ctx.Workbook.GetSheet(pivotTable.SourceRange.Start.Sheet) ?? sheet;

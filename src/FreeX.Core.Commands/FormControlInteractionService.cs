@@ -102,20 +102,38 @@ public static class FormControlInteractionService
     /// Toggles the <see cref="FormControlModel.IsChecked"/> state of a checkbox, then writes
     /// <c>TRUE</c> / <c>FALSE</c> into <see cref="FormControlModel.LinkedCell"/> via an
     /// undoable command.  Returns <see langword="null"/> when there is nothing to do (no linked
-    /// cell, or the control has no sheet context).
+    /// cell, the control has no sheet context, or the linked cell's sheet is protected against
+    /// the write — in the protected case the control's visible state is left untouched, matching
+    /// Excel: a rejected write never flips the checkbox).
     /// </summary>
     public static IWorkbookCommand? CreateToggleCheckBoxCommand(
         FormControlModel control,
         SheetId sheetId,
         Workbook workbook)
     {
+        // Resolve the linked cell and verify the write is actually allowed BEFORE mutating any
+        // in-model control state — otherwise a protection rejection (a normal, non-throwing
+        // CommandOutcome failure that CommandBus never reverts) would leave the checkbox flipped
+        // with no repair path even though the linked cell never changed.
+        //
+        // A control with NO linked cell at all has nothing to protect: Excel still flips the
+        // checkbox's visible state on click even when it isn't wired to a cell, so that case must
+        // fall through to the model mutation below (no command is returned since there's nothing
+        // to write). Only an actually-BLOCKED write to a resolvable linked cell must leave the
+        // model untouched.
+        var hasLinkedCell = TryResolveLinkedCell(control.LinkedCell, sheetId, workbook, out var address);
+        if (hasLinkedCell && !CanWriteLinkedCell(workbook, address))
+            return null;
+
         // Snapshot prior state before any mutation so undo can restore it.
         var priorIsChecked = control.IsChecked;
 
         // Flip the in-model state immediately so re-renders during the current frame look correct.
         control.IsChecked = !control.IsChecked;
 
-        if (!TryResolveLinkedCell(control.LinkedCell, sheetId, workbook, out var address))
+        // No linked cell → nothing to write; the model flip above is the whole of Excel's
+        // behaviour here, so no undoable command is produced.
+        if (!hasLinkedCell)
             return null;
 
         var value = control.IsChecked ? new BoolValue(true) : new BoolValue(false);
@@ -158,6 +176,12 @@ public static class FormControlInteractionService
 
             return null;
         }
+
+        // Verify the write is actually allowed BEFORE mutating any group member's IsChecked —
+        // otherwise a protection rejection would leave the whole group's visible selection changed
+        // with no repair path even though the linked cell never changed.
+        if (!CanWriteLinkedCell(workbook, linkedAddress))
+            return null;
 
         // Collect the sibling group: all OptionButtons that share this linked cell address.
         var group = CollectOptionButtonGroup(linkedAddress, allSheetControls, sheetId, workbook);
@@ -225,11 +249,23 @@ public static class FormControlInteractionService
                 current = (int)Math.Round(nv.Value);
         }
 
+        var hasLinkedCell = TryResolveLinkedCell(control.LinkedCell, sheetId, workbook, out address);
+
+        // Verify the write is actually allowed BEFORE mutating control.Value — otherwise a
+        // protection rejection would leave the spinner/scroll-bar showing the stepped value with
+        // no repair path even though the linked cell never changed. A control with NO linked cell
+        // has nothing to protect (nothing is written), so it must still step below — only an
+        // actually-BLOCKED write to a resolvable linked cell skips the mutation entirely.
+        if (hasLinkedCell && !CanWriteLinkedCell(workbook, address))
+            return null;
+
         var priorValue = control.Value;
         var newValue = Math.Clamp(current + delta * increment, min, max);
         control.Value = newValue;
 
-        if (!TryResolveLinkedCell(control.LinkedCell, sheetId, workbook, out address))
+        // No linked cell → nothing to write; the model step above is the whole of Excel's
+        // behaviour here, so no undoable command is produced.
+        if (!hasLinkedCell)
             return null;
 
         var cellEdit = EditCellsCommand.ForValue(address.Sheet, address, new NumberValue(newValue));
@@ -260,11 +296,17 @@ public static class FormControlInteractionService
         if (oneBasedIndex < 1)
             return null;
 
-        var priorSelectedIndex = control.SelectedIndex;
-        control.SelectedIndex = oneBasedIndex;
-
         if (!TryResolveLinkedCell(control.LinkedCell, sheetId, workbook, out var address))
             return null;
+
+        // Verify the write is actually allowed BEFORE mutating control.SelectedIndex — otherwise a
+        // protection rejection would leave the list/drop-down showing the new selection with no
+        // repair path even though the linked cell never changed.
+        if (!CanWriteLinkedCell(workbook, address))
+            return null;
+
+        var priorSelectedIndex = control.SelectedIndex;
+        control.SelectedIndex = oneBasedIndex;
 
         var cellEdit = EditCellsCommand.ForValue(address.Sheet, address, new NumberValue(oneBasedIndex));
         return FormControlInteractionCommand.Wrap(
@@ -315,6 +357,20 @@ public static class FormControlInteractionService
     }
 
     // ── Linked-cell resolution ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Checks — WITHOUT mutating anything — whether a write to <paramref name="address"/> would be
+    /// accepted by <see cref="EditCellsCommand.Apply"/>, i.e. mirrors its own protection guard
+    /// (<see cref="CommandGuards.CanEditCell"/>). Callers must run this BEFORE flipping any
+    /// form-control in-model state, so a protected/locked linked cell never lets the control's
+    /// visible state (checked/value/selected index) drift from the cell it supposedly reflects —
+    /// matching Excel, where a rejected write never changes the control's appearance.
+    /// </summary>
+    private static bool CanWriteLinkedCell(Workbook workbook, CellAddress address)
+    {
+        var sheet = workbook.GetSheet(address.Sheet);
+        return sheet is not null && CommandGuards.CanEditCell(workbook, sheet, address);
+    }
 
     /// <summary>
     /// Resolves a <c>LinkedCell</c> reference string into a <see cref="CellAddress"/>.

@@ -354,7 +354,40 @@ public sealed class Parser
             if (Current.Type == TokenType.Hash)
             {
                 var hashToken = Advance();
-                node = WrapSpillAnchor(node, hashToken);
+
+                // A1#:B5 — the spill range used as the start endpoint of a larger range, e.g.
+                // =SUM(A1#:B5). Excel expands this to the union of A1's current spill extent and
+                // B5 (i.e. the smallest rectangle covering both). Only meaningful directly after a
+                // spill anchor, so this check only fires here, never for a bare ':' range that
+                // ParsePrimary's CellRef case already consumed on its own. The anchor argument
+                // must stay the raw CellRefNode/NamedRangeNode (not first wrapped in its own
+                // ANCHORARRAY(ref) via WrapSpillAnchor below) — EvaluateAnchorArray's
+                // TryResolveAnchorAddress only understands those two shapes directly, so a
+                // double-wrapped ANCHORARRAY(ANCHORARRAY(ref), end) would fail to resolve.
+                if (Current.Type == TokenType.Colon)
+                {
+                    // Validate the anchor shape up front (same check WrapSpillAnchor performs)
+                    // so A1#:B5 with an invalid anchor still reports the same parse error as A1#.
+                    if (node is not (CellRefNode or NamedRangeNode))
+                        throw new FormulaParseException($"Unexpected '#' at position {hashToken.Position}");
+
+                    Advance();
+                    if (Current.Type != TokenType.CellRef)
+                        throw new FormulaParseException(
+                            $"Expected cell reference after ':' at position {Current.Position}");
+                    var endRef = ParseCellRef(Advance());
+                    // A malformed end token (e.g. row 0 or out of range) parses to an ErrorNode
+                    // rather than a CellRefNode — surface that #REF! directly, same as the plain
+                    // A1:B5 range case (ParsePrimary's CellRef case) does for its end token.
+                    node = endRef is CellRefNode endCellRef
+                        ? new FunctionCallNode("ANCHORARRAY", [node, endCellRef])
+                        : endRef;
+                }
+                else
+                {
+                    node = WrapSpillAnchor(node, hashToken);
+                }
+
                 continue;
             }
 
@@ -365,14 +398,14 @@ public sealed class Parser
     }
 
     // The A1# spill-anchor operator: only meaningful directly after a reference to a single cell
-    // (the anchor of a dynamic-array spill). Represented internally as ANCHORARRAY(ref) — the same
-    // node the evaluator and dependency collector already know how to evaluate/track — so no other
-    // component needs to learn a new node type. Only a plain cell reference is accepted, matching
-    // ANCHORARRAY's own evaluation support; anything else is a parse error, same as before '#' was
-    // recognized at all.
+    // (the anchor of a dynamic-array spill) — either a plain cell reference (A1#) or a named range
+    // that itself resolves to a single cell (MyCell#). Represented internally as ANCHORARRAY(ref) —
+    // the same node the evaluator and dependency collector already know how to evaluate/track — so
+    // no other component needs to learn a new node type. Anything else is a parse error, same as
+    // before '#' was recognized at all.
     private static FormulaNode WrapSpillAnchor(FormulaNode node, Token hashToken)
     {
-        return node is CellRefNode
+        return node is CellRefNode or NamedRangeNode
             ? new FunctionCallNode("ANCHORARRAY", [node])
             : throw new FormulaParseException($"Unexpected '#' at position {hashToken.Position}");
     }

@@ -23,6 +23,8 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     private readonly InsertCellsShiftDirection _direction;
     private CellShiftSnapshot? _snapshot;
     private List<KeyValuePair<CellAddress, string>>? _commentSnapshot;
+    private List<KeyValuePair<CellAddress, string>>? _commentAuthorsSnapshot;
+    private List<CellAddress>? _shownCommentsSnapshot;
     private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
@@ -87,6 +89,13 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             // Snapshot and shift annotations (comments, hyperlinks, style-only) in the band
             _commentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
             ShiftAnnotationsInBandRight(sheet.Comments, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
+            // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy
+            // note author + pinned/"Show Comment" state) and must shift in lockstep with it within
+            // the same band, or a note's author/pinned box goes stale at its old address.
+            _commentAuthorsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CommentAuthors);
+            ShiftAnnotationsInBandRight(sheet.CommentAuthors, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
+            _shownCommentsSnapshot = RowColumnShiftHelpers.CaptureAddressSet(sheet.ShownComments);
+            ShiftAnnotationsSetInBandRight(sheet.ShownComments, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
             _threadedCommentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ThreadedComments);
             ShiftAnnotationsInBandRight(sheet.ThreadedComments, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
             _hyperlinkSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Hyperlinks);
@@ -147,6 +156,13 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             // Snapshot and shift annotations in the band
             _commentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
             ShiftAnnotationsInBandDown(sheet.Comments, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
+            // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy
+            // note author + pinned/"Show Comment" state) and must shift in lockstep with it within
+            // the same band, or a note's author/pinned box goes stale at its old address.
+            _commentAuthorsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CommentAuthors);
+            ShiftAnnotationsInBandDown(sheet.CommentAuthors, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
+            _shownCommentsSnapshot = RowColumnShiftHelpers.CaptureAddressSet(sheet.ShownComments);
+            ShiftAnnotationsSetInBandDown(sheet.ShownComments, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
             _threadedCommentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ThreadedComments);
             ShiftAnnotationsInBandDown(sheet.ThreadedComments, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
             _hyperlinkSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Hyperlinks);
@@ -220,6 +236,8 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreRuleRangesInPlace(sheet, _dvRuleSnapshot, _cfRuleSnapshot);
 
         RowColumnShiftHelpers.RestoreDictionary(sheet.Comments, _commentSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.CommentAuthors, _commentAuthorsSnapshot);
+        RowColumnShiftHelpers.RestoreAddressSet(sheet.ShownComments, _shownCommentsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
@@ -519,6 +537,52 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             dict[new CellAddress(addr.Sheet, addr.Row + count, addr.Col)] = value;
     }
 
+    // J17: HashSet<CellAddress> counterparts of ShiftAnnotationsInBandRight/Down above, used for
+    // Sheet.ShownComments (the address-keyed "pinned note" set), which must shift within the same
+    // band as Comments/CommentAuthors or a pinned note's box would render at a stale address.
+
+    /// <summary>Shift-right: move set entries in rows [bandStartRow..bandEndRow] at col >= fromCol rightward by count.</summary>
+    private static void ShiftAnnotationsSetInBandRight(
+        HashSet<CellAddress> addresses,
+        uint bandStartRow, uint bandEndRow,
+        uint fromCol, uint count)
+    {
+        List<CellAddress>? shifted = null;
+        foreach (var addr in addresses)
+        {
+            if (addr.Row >= bandStartRow && addr.Row <= bandEndRow && addr.Col >= fromCol)
+                (shifted ??= []).Add(addr);
+        }
+
+        if (shifted is null) return;
+
+        foreach (var addr in shifted)
+            addresses.Remove(addr);
+        foreach (var addr in shifted)
+            addresses.Add(new CellAddress(addr.Sheet, addr.Row, addr.Col + count));
+    }
+
+    /// <summary>Shift-down: move set entries in cols [bandStartCol..bandEndCol] at row >= fromRow downward by count.</summary>
+    private static void ShiftAnnotationsSetInBandDown(
+        HashSet<CellAddress> addresses,
+        uint bandStartCol, uint bandEndCol,
+        uint fromRow, uint count)
+    {
+        List<CellAddress>? shifted = null;
+        foreach (var addr in addresses)
+        {
+            if (addr.Col >= bandStartCol && addr.Col <= bandEndCol && addr.Row >= fromRow)
+                (shifted ??= []).Add(addr);
+        }
+
+        if (shifted is null) return;
+
+        foreach (var addr in shifted)
+            addresses.Remove(addr);
+        foreach (var addr in shifted)
+            addresses.Add(new CellAddress(addr.Sheet, addr.Row + count, addr.Col));
+    }
+
     // ── AutoFilter / structured-table guard (finding G3) ───────────────────────
 
     /// <summary>
@@ -561,6 +625,8 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
     private readonly DeleteCellsShiftDirection _direction;
     private CellShiftSnapshot? _snapshot;
     private List<KeyValuePair<CellAddress, string>>? _commentSnapshot;
+    private List<KeyValuePair<CellAddress, string>>? _commentAuthorsSnapshot;
+    private List<CellAddress>? _shownCommentsSnapshot;
     private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
@@ -618,6 +684,13 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             // Snapshot and shift annotations
             _commentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
             DeleteAnnotationsInBandLeft(sheet.Comments, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
+            // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy
+            // note author + pinned/"Show Comment" state) and must delete/shift in lockstep with it
+            // within the same band, or a note's author/pinned box goes stale.
+            _commentAuthorsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CommentAuthors);
+            DeleteAnnotationsInBandLeft(sheet.CommentAuthors, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
+            _shownCommentsSnapshot = RowColumnShiftHelpers.CaptureAddressSet(sheet.ShownComments);
+            DeleteAnnotationsSetInBandLeft(sheet.ShownComments, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
             _threadedCommentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ThreadedComments);
             DeleteAnnotationsInBandLeft(sheet.ThreadedComments, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
             _hyperlinkSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Hyperlinks);
@@ -676,6 +749,13 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             // Snapshot and shift annotations
             _commentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
             DeleteAnnotationsInBandUp(sheet.Comments, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
+            // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy
+            // note author + pinned/"Show Comment" state) and must delete/shift in lockstep with it
+            // within the same band, or a note's author/pinned box goes stale.
+            _commentAuthorsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CommentAuthors);
+            DeleteAnnotationsInBandUp(sheet.CommentAuthors, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
+            _shownCommentsSnapshot = RowColumnShiftHelpers.CaptureAddressSet(sheet.ShownComments);
+            DeleteAnnotationsSetInBandUp(sheet.ShownComments, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
             _threadedCommentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ThreadedComments);
             DeleteAnnotationsInBandUp(sheet.ThreadedComments, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
             _hyperlinkSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Hyperlinks);
@@ -740,6 +820,8 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreRuleRanges(sheet, _dvRuleSnapshot, _cfRuleSnapshot);
 
         RowColumnShiftHelpers.RestoreDictionary(sheet.Comments, _commentSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.CommentAuthors, _commentAuthorsSnapshot);
+        RowColumnShiftHelpers.RestoreAddressSet(sheet.ShownComments, _shownCommentsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
@@ -998,6 +1080,78 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
                 dict.Remove(addr);
             foreach (var (addr, value) in shifted)
                 dict[new CellAddress(addr.Sheet, addr.Row - count, addr.Col)] = value;
+        }
+    }
+
+    // J17: HashSet<CellAddress> counterparts of DeleteAnnotationsInBandLeft/Up above, used for
+    // Sheet.ShownComments (the address-keyed "pinned note" set), which must delete/shift within the
+    // same band as Comments/CommentAuthors or a pinned note's box would render at a stale address.
+
+    /// <summary>Delete-left: remove set entries at deleted cols, shift set entries at cols > deletedEndCol leftward.</summary>
+    private static void DeleteAnnotationsSetInBandLeft(
+        HashSet<CellAddress> addresses,
+        uint bandStartRow, uint bandEndRow,
+        uint deletedStartCol, uint deletedEndCol, uint count)
+    {
+        List<CellAddress>? removed = null;
+        List<CellAddress>? shifted = null;
+
+        foreach (var addr in addresses)
+        {
+            if (addr.Row < bandStartRow || addr.Row > bandEndRow) continue;
+
+            if (addr.Col >= deletedStartCol && addr.Col <= deletedEndCol)
+                (removed ??= []).Add(addr);
+            else if (addr.Col > deletedEndCol)
+                (shifted ??= []).Add(addr);
+        }
+
+        if (removed is not null)
+        {
+            foreach (var addr in removed)
+                addresses.Remove(addr);
+        }
+
+        if (shifted is not null)
+        {
+            foreach (var addr in shifted)
+                addresses.Remove(addr);
+            foreach (var addr in shifted)
+                addresses.Add(new CellAddress(addr.Sheet, addr.Row, addr.Col - count));
+        }
+    }
+
+    /// <summary>Delete-up: remove set entries at deleted rows, shift set entries at rows > deletedEndRow upward.</summary>
+    private static void DeleteAnnotationsSetInBandUp(
+        HashSet<CellAddress> addresses,
+        uint bandStartCol, uint bandEndCol,
+        uint deletedStartRow, uint deletedEndRow, uint count)
+    {
+        List<CellAddress>? removed = null;
+        List<CellAddress>? shifted = null;
+
+        foreach (var addr in addresses)
+        {
+            if (addr.Col < bandStartCol || addr.Col > bandEndCol) continue;
+
+            if (addr.Row >= deletedStartRow && addr.Row <= deletedEndRow)
+                (removed ??= []).Add(addr);
+            else if (addr.Row > deletedEndRow)
+                (shifted ??= []).Add(addr);
+        }
+
+        if (removed is not null)
+        {
+            foreach (var addr in removed)
+                addresses.Remove(addr);
+        }
+
+        if (shifted is not null)
+        {
+            foreach (var addr in shifted)
+                addresses.Remove(addr);
+            foreach (var addr in shifted)
+                addresses.Add(new CellAddress(addr.Sheet, addr.Row - count, addr.Col));
         }
     }
 }

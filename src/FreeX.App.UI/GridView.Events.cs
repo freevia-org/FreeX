@@ -82,8 +82,29 @@ public partial class GridView
     /// <summary>Fired when the user drags the autofill handle and releases.</summary>
     public event Action<GridRange, GridRange>? AutofillRequested;
 
+    /// <summary>
+    /// Fired immediately before <see cref="AutofillRequested"/> with the Ctrl-key state at
+    /// release. Excel uses Ctrl at drop time to flip the fill handle's default behavior between
+    /// copy and series continuation. Hosts that want Ctrl-flip support should read this value
+    /// (e.g. into a field) in a handler for this event and pass it into
+    /// <c>new AutofillCommand(sheetId, sourceRange, fillRange, ctrlHeld)</c> when handling the
+    /// paired <see cref="AutofillRequested"/> call.
+    /// </summary>
+    public event Action<bool>? AutofillModifiersResolved;
+
     /// <summary>Fired while the user drags the autofill handle near a viewport edge.</summary>
     public event Action<GridAutoScrollRequest>? AutofillEdgeScrollRequested;
+
+    /// <summary>
+    /// Fired when the user double-clicks the fill handle instead of dragging it. Excel fills
+    /// straight down to match the populated data extent of the nearest adjacent column. GridView
+    /// has no access to cell data, so the host must resolve that extent (e.g. scanning the
+    /// nearest non-blank neighbor column) and pass it to
+    /// <see cref="FreeX.App.Presentation.GridInteraction.GridAutofillPlanner.CalculateDoubleClickFillRange"/>
+    /// to compute the resulting fill range, then execute the fill the same way as
+    /// <see cref="AutofillRequested"/>.
+    /// </summary>
+    public event Action<GridRange>? AutofillHandleDoubleClicked;
 
     /// <summary>Fired when the user drags a selected range border and releases on a new range.</summary>
     public event Action<GridRange, GridRange>? SelectionMoveRequested;

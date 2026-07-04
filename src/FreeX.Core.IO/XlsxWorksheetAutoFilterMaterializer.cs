@@ -30,10 +30,22 @@ internal static class XlsxWorksheetAutoFilterMaterializer
         // filter columns parsed from the AutoFilter XML must be re-registered into
         // ActiveValueFilterColumns here so that invariant holds after a load, exactly as
         // FilterCommand.Apply itself would have registered them when the filter was first applied.
+        // J30: ActiveValueFilterColumns has no separate "include blank" flag — the interactive
+        // checklist path (MainWindow.DataFilterCommands.cs) represents an allowed blank as a literal
+        // "" entry in the allowed-values list, since FilterValueFormatter.ToText/
+        // XlsxFilterValueTextFormatter.ToFilterText both format a blank cell as "". A blank="1"
+        // filter loaded from XML must register that same "" sentinel here, or a later
+        // FilterCommand.RecomputeHiddenRows on any OTHER column (which rebuilds every active column's
+        // matcher from ActiveValueFilterColumns with zero blank-awareness) will re-hide blank rows
+        // this filter meant to keep visible.
         foreach (var filter in filters)
         {
-            if (filter.AllowedValues is not null)
-                sheet.ActiveValueFilterColumns[filter.Column] = [.. filter.AllowedValues];
+            if (filter.AllowedValues is null)
+                continue;
+
+            sheet.ActiveValueFilterColumns[filter.Column] = filter.IncludeBlank && !filter.AllowedValues.Contains("")
+                ? [.. filter.AllowedValues, ""]
+                : [.. filter.AllowedValues];
         }
 
         for (var row = range.Start.Row + 1; row <= range.End.Row; row++)

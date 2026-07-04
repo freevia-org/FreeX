@@ -102,16 +102,19 @@ public sealed class RowColumnSizingPlannerTests
     [Fact]
     public void PlanRowHeights_MeasuresEachSelectedRowIndependently()
     {
-        var sheetId = SheetId.New();
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var sheetId = sheet.Id;
         var selection = Range(sheetId, row1: 2, col1: 3, row2: 3, col2: 4);
 
         var plan = RowColumnSizingPlanner.PlanAutoFitRowHeights(
+            sheet,
             selection,
             usedRange: selection,
             (row, col) => (row, col) switch
             {
-                (2, 3) => "short",
-                (3, 4) => "first\nsecond\nthird",
+                (2, 3) => new AutoFitCellText("short"),
+                (3, 4) => new AutoFitCellText("first\nsecond\nthird"),
                 _ => null
             },
             defaultHeight: 20);
@@ -124,16 +127,19 @@ public sealed class RowColumnSizingPlannerTests
     [Fact]
     public void PlanColumnWidths_MeasuresEachSelectedColumnIndependently()
     {
-        var sheetId = SheetId.New();
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var sheetId = sheet.Id;
         var selection = Range(sheetId, row1: 2, col1: 3, row2: 3, col2: 4);
 
         var plan = RowColumnSizingPlanner.PlanAutoFitColumnWidths(
+            sheet,
             selection,
             usedRange: selection,
             (row, col) => (row, col) switch
             {
-                (2, 3) => "short",
-                (3, 4) => "a much longer display value",
+                (2, 3) => new AutoFitCellText("short"),
+                (3, 4) => new AutoFitCellText("a much longer display value"),
                 _ => null
             },
             defaultWidth: 8.43);
@@ -146,18 +152,21 @@ public sealed class RowColumnSizingPlannerTests
     [Fact]
     public void PlanColumnWidths_ForWholeColumnSelection_BoundsMeasurementsToUsedRows()
     {
-        var sheetId = SheetId.New();
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var sheetId = sheet.Id;
         var wholeColumns = Range(sheetId, row1: 1, col1: 2, row2: CellAddress.MaxRow, col2: 3);
         var usedRange = Range(sheetId, row1: 10, col1: 1, row2: 12, col2: 5);
         var visited = new List<(uint Row, uint Col)>();
 
         RowColumnSizingPlanner.PlanAutoFitColumnWidths(
+            sheet,
             wholeColumns,
             usedRange,
             (row, col) =>
             {
                 visited.Add((row, col));
-                return row == 11 && col == 3 ? "wide text" : null;
+                return row == 11 && col == 3 ? new AutoFitCellText("wide text") : null;
             },
             defaultWidth: 8.43);
 
@@ -170,18 +179,21 @@ public sealed class RowColumnSizingPlannerTests
     [Fact]
     public void PlanRowHeights_ForWholeRowSelection_BoundsMeasurementsToUsedColumns()
     {
-        var sheetId = SheetId.New();
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var sheetId = sheet.Id;
         var wholeRows = Range(sheetId, row1: 4, col1: 1, row2: 5, col2: CellAddress.MaxCol);
         var usedRange = Range(sheetId, row1: 1, col1: 7, row2: 20, col2: 9);
         var visited = new List<(uint Row, uint Col)>();
 
         RowColumnSizingPlanner.PlanAutoFitRowHeights(
+            sheet,
             wholeRows,
             usedRange,
             (row, col) =>
             {
                 visited.Add((row, col));
-                return row == 5 && col == 8 ? "first\nsecond" : null;
+                return row == 5 && col == 8 ? new AutoFitCellText("first\nsecond") : null;
             },
             defaultHeight: 20);
 
@@ -194,27 +206,31 @@ public sealed class RowColumnSizingPlannerTests
     [Fact]
     public void PlanAutoFit_ForEmptyWholeAxisSelection_NoOps()
     {
-        var sheetId = SheetId.New();
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var sheetId = sheet.Id;
         var wholeColumns = Range(sheetId, row1: 1, col1: 2, row2: CellAddress.MaxRow, col2: 3);
         var wholeRows = Range(sheetId, row1: 4, col1: 1, row2: 5, col2: CellAddress.MaxCol);
 
-        RowColumnSizingPlanner.PlanAutoFitColumnWidths(wholeColumns, usedRange: null, (_, _) => "", defaultWidth: 8.43)
+        RowColumnSizingPlanner.PlanAutoFitColumnWidths(sheet, wholeColumns, usedRange: null, (_, _) => new AutoFitCellText(""), defaultWidth: 8.43)
             .Should().BeEmpty();
-        RowColumnSizingPlanner.PlanAutoFitRowHeights(wholeRows, usedRange: null, (_, _) => "", defaultHeight: 20)
+        RowColumnSizingPlanner.PlanAutoFitRowHeights(sheet, wholeRows, usedRange: null, (_, _) => new AutoFitCellText(""), defaultHeight: 20)
             .Should().BeEmpty();
     }
 
     [Fact]
     public void PlanAutoFit_ForOppositeWholeAxisSelection_NoOps()
     {
-        var sheetId = SheetId.New();
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var sheetId = sheet.Id;
         var wholeColumns = Range(sheetId, row1: 1, col1: 2, row2: CellAddress.MaxRow, col2: 3);
         var wholeRows = Range(sheetId, row1: 4, col1: 1, row2: 5, col2: CellAddress.MaxCol);
         var usedRange = Range(sheetId, row1: 10, col1: 7, row2: 12, col2: 9);
 
-        RowColumnSizingPlanner.PlanAutoFitRowHeights(wholeColumns, usedRange, (_, _) => "", defaultHeight: 20)
+        RowColumnSizingPlanner.PlanAutoFitRowHeights(sheet, wholeColumns, usedRange, (_, _) => new AutoFitCellText(""), defaultHeight: 20)
             .Should().BeEmpty();
-        RowColumnSizingPlanner.PlanAutoFitColumnWidths(wholeRows, usedRange, (_, _) => "", defaultWidth: 8.43)
+        RowColumnSizingPlanner.PlanAutoFitColumnWidths(sheet, wholeRows, usedRange, (_, _) => new AutoFitCellText(""), defaultWidth: 8.43)
             .Should().BeEmpty();
     }
 

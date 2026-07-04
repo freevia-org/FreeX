@@ -10,9 +10,15 @@ namespace FreeX.App.Presentation.Tests.PageLayout;
 /// with non-default row heights/column widths must land at the same position the real (non-uniform)
 /// sheet geometry implies — not at a position derived from a fixed 20px row / evenly divided column
 /// grid. <see cref="ChartModel.Left"/>/<see cref="ChartModel.Top"/> are absolute pixel offsets computed
-/// from the sheet's real, non-uniform column widths/row heights (mirroring <c>XlsxDrawingAnchorApplier</c>'s
+/// from the sheet's real, non-uniform column widths/row heights in <c>XlsxDrawingAnchorApplier</c>'s
 /// <c>SumColumnPixels</c>/<c>SumRowPixels</c> convention: <c>width-in-chars * 8</c> per column, real
-/// per-row height, both skipping hidden rows/columns) — see <see cref="ChartAnchorGeometry"/>.
+/// per-row height, both skipping hidden rows/columns — see <see cref="ChartAnchorGeometry"/>. That is a
+/// DIFFERENT column pixel-per-character convention than the printed grid itself uses
+/// (<c>ColumnWidthPixelMapper</c>'s <c>width*7+5</c>), so expected chart X positions below are computed
+/// via <see cref="ChartAnchorGeometry.ConvertColumnOffsetToGridSpace"/>, matching what the builder now
+/// does internally (see J1 regression coverage in <c>PageContentRenderModelBuilderChartPageTwoGeometryTests</c>
+/// for the multi-page-axis unit-mixing bug this guards against). Row/height convention is identical
+/// between the two spaces, so Y assertions use the raw anchor-space sum unchanged.
 /// </summary>
 public sealed class PageContentRenderModelBuilderChartGeometryTests
 {
@@ -52,10 +58,11 @@ public sealed class PageContentRenderModelBuilderChartGeometryTests
 
         // The print area starts at A1 with no repeat titles, so the page's body starts at column 1/row
         // 1 and the chart's real-sheet anchor origin coincides with the page's body-grid origin: the
-        // chart must land at gridLeft/gridTop + chart.Left/chart.Top, unperturbed by any uniform-grid
-        // assumption about column/row size.
+        // chart must land at gridLeft/gridTop + chart.Left/chart.Top translated into the grid's own
+        // pixel space (columns only — row height uses the same convention in both spaces).
+        var expectedGridLeft = ChartAnchorGeometry.ConvertColumnOffsetToGridSpace(sheet, expectedLeft);
         var block = layout.Charts.Should().ContainSingle().Subject;
-        block.Bounds.Left.Should().BeApproximately(layout.GridBounds.Left + expectedLeft, 0.01);
+        block.Bounds.Left.Should().BeApproximately(layout.GridBounds.Left + expectedGridLeft, 0.01);
         block.Bounds.Top.Should().BeApproximately(layout.GridBounds.Top + expectedTop, 0.01);
     }
 
@@ -89,9 +96,11 @@ public sealed class PageContentRenderModelBuilderChartGeometryTests
         var layout = BuildFirstPage(workbook, sheet)!;
 
         var block = layout.Charts.Should().ContainSingle().Subject;
-        // Chart anchored right after the narrow (2-char) column 1 must land at gridLeft + realLeft,
-        // not at gridLeft + (uniform full-width column) which would place it much further right.
-        block.Bounds.Left.Should().BeApproximately(layout.GridBounds.Left + realLeft, 0.01);
+        // Chart anchored right after the narrow (2-char) column 1 must land at gridLeft + (realLeft
+        // translated into the grid's own pixel space), not at gridLeft + (uniform full-width column)
+        // which would place it much further right.
+        var expectedGridLeft = ChartAnchorGeometry.ConvertColumnOffsetToGridSpace(sheet, realLeft);
+        block.Bounds.Left.Should().BeApproximately(layout.GridBounds.Left + expectedGridLeft, 0.01);
         var uniformColumnWidth = (layout.GridBounds.Right - layout.GridBounds.Left) / 8;
         block.Bounds.Left.Should().BeLessThan(layout.GridBounds.Left + uniformColumnWidth,
             "the narrow real column-1 width must place the chart well left of where a uniform column grid would");
