@@ -6,6 +6,9 @@ namespace FreeW.App.Host.Tests;
 
 public sealed class NumericCitationEditorTests
 {
+    private static Paragraph Heading(string text, int level = 1) =>
+        new(text) { StyleId = "Heading" + level.ToString(System.Globalization.CultureInfo.InvariantCulture) };
+
     [StaFact]
     public void InsertCitation_IeeeUsesSharedSourceOrderNumber()
     {
@@ -50,5 +53,38 @@ public sealed class NumericCitationEditorTests
         view.CommitToModel();
 
         view.Model.Blocks.OfType<Paragraph>().Single().PlainText.Should().Be("[1]");
+    }
+
+    [StaFact]
+    public void UpdateFields_RefreshesTocAndBibliographyInSamePass()
+    {
+        var model = TextDocument.CreateEmpty();
+        model.Blocks.Clear();
+        model.Blocks.Add(new Paragraph(TableOfContents.HeadingText) { StyleId = TableOfContents.HeadingStyleId });
+        model.Blocks.Add(new Paragraph("Old Heading") { StyleId = TableOfContents.EntryStyleId(1) });
+        model.Blocks.Add(Heading("New Heading"));
+        model.Blocks.Add(new Paragraph(Citations.HeadingText) { StyleId = Citations.HeadingStyleId });
+        model.Blocks.Add(new Paragraph("Old. (1999). Entry.") { StyleId = Citations.EntryStyleId });
+        model.Sources.Add(new Source { Tag = "New2024", Author = "New Author", Title = "Fresh Entry", Year = "2024" });
+
+        var view = new DocumentView();
+        view.LoadModel(model);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        var tocText = view.Model.Blocks.Where(TableOfContents.IsTocParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .ToList();
+        tocText.Should().Contain("New Heading");
+        tocText.Should().NotContain("Old Heading");
+
+        var bibliographyText = view.Model.Blocks.Where(Citations.IsBibliographyParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .ToList();
+        bibliographyText.Should().Contain("New Author. (2024). Fresh Entry.");
+        bibliographyText.Should().NotContain("Old. (1999). Entry.");
     }
 }

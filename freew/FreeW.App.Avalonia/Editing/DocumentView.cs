@@ -11076,15 +11076,23 @@ public sealed class DocumentView : Control
             }
         }
 
+        var refreshedGeneratedRegion = false;
         if (_doc.Blocks.Any(TableOfContents.IsTocParagraph))
         {
             UpdateTableOfContents();
-            return;
+            refreshedGeneratedRegion = true;
         }
 
         if (_doc.Blocks.Any(Citations.IsBibliographyParagraph))
         {
             RefreshBibliography();
+            refreshedGeneratedRegion = true;
+        }
+
+        if (refreshedGeneratedRegion)
+        {
+            InvalidateVisual();
+            Focus();
             return;
         }
 

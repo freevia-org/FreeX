@@ -8805,18 +8805,25 @@ public sealed class DocumentView : RichTextBox
             }
         }
 
-        // "Update entire table": regenerate any inserted TOC from the current heading outline. Only when a
-        // TOC region is present, so F9 on a TOC-less document is unaffected. RefreshTableOfContents commits
-        // and re-renders itself, so return afterwards rather than double-rendering.
+        // "Update entire table": regenerate inserted generated-reference regions from current document
+        // state. Keep TOC and bibliography independent so a document containing both updates both in one
+        // F9 pass instead of short-circuiting after the first region.
+        var refreshedGeneratedRegion = false;
         if (_model.Blocks.Any(TableOfContents.IsTocParagraph))
         {
             RefreshTableOfContents();
-            return;
+            refreshedGeneratedRegion = true;
         }
 
         if (_model.Blocks.Any(Citations.IsBibliographyParagraph))
         {
             RefreshBibliography();
+            refreshedGeneratedRegion = true;
+        }
+
+        if (refreshedGeneratedRegion)
+        {
+            Render();
             return;
         }
 

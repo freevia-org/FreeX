@@ -143,6 +143,34 @@ public sealed class ReferencesTabTests
     // ── Caption ─────────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void UpdateFields_refreshes_toc_and_bibliography_in_same_pass()
+    {
+        var view = ViewWith(
+            new Paragraph(TableOfContents.HeadingText) { StyleId = TableOfContents.HeadingStyleId },
+            new Paragraph("Old Heading") { StyleId = TableOfContents.EntryStyleId(1) },
+            Heading("New Heading", 1),
+            new Paragraph(Citations.HeadingText) { StyleId = Citations.HeadingStyleId },
+            new Paragraph("Old. (1999). Entry.") { StyleId = Citations.EntryStyleId });
+        view.Document.Sources.Add(new Source { Tag = "New2024", Author = "New Author", Title = "Fresh Entry", Year = "2024" });
+
+        view.UpdateFields();
+
+        var tocText = view.Document.Blocks.Where(TableOfContents.IsTocParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .ToList();
+        tocText.Should().Contain("New Heading");
+        tocText.Should().NotContain("Old Heading");
+
+        var bibliographyText = view.Document.Blocks.Where(Citations.IsBibliographyParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .ToList();
+        bibliographyText.Should().Contain("New Author. (2024). Fresh Entry.");
+        bibliographyText.Should().NotContain("Old. (1999). Entry.");
+    }
+
+    [Fact]
     public void InsertCaption_inserts_autonumbered_paragraph_after_caret()
     {
         var view = ViewWith();
