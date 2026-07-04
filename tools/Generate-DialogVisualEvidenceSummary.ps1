@@ -505,6 +505,13 @@ function Get-ExpectedEvidenceSize {
                     source = "ShapeGradientPlanner.DialogWidth/DialogHeight"
                 }
             }
+            "dialog.Sort" {
+                return [pscustomobject]@{
+                    width = 760
+                    height = 500
+                    source = "SortDialog.DialogDefaultWidth/DialogDefaultHeight"
+                }
+            }
             "dialog.ProtectSheet" {
                 return [pscustomobject]@{
                     width = 430
