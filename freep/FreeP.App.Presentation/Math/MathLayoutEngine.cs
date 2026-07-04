@@ -1023,18 +1023,36 @@ public static class MathLayoutEngine
             return MakeGlyph("", fontFamily, fontSizePt, false);
 
         var rows = new List<MathBox>(eqArray.Rows.Count);
-        double totalW = 0;
+        var alignmentOffsets = new List<double?>(eqArray.Rows.Count);
+        double maxRowW = 0;
+        double maxLeft = 0;
+        double maxRight = 0;
+        bool hasAlignmentPoint = false;
         double totalH = 0;
 
-        foreach (var row in eqArray.Rows)
+        for (int i = 0; i < eqArray.Rows.Count; i++)
         {
+            var row = eqArray.Rows[i];
             var rowBox = LayoutNode(row, fontFamily, fontSizePt);
+            var alignmentOffset = GetEqArrayAlignmentOffset(row, rowBox, eqArray.GetAlignmentPointIndex(i));
             rows.Add(rowBox);
-            totalW = Math.Max(totalW, rowBox.Metrics.Width);
+            alignmentOffsets.Add(alignmentOffset);
+            maxRowW = Math.Max(maxRowW, rowBox.Metrics.Width);
+            if (alignmentOffset.HasValue)
+            {
+                hasAlignmentPoint = true;
+                maxLeft = Math.Max(maxLeft, alignmentOffset.Value);
+                maxRight = Math.Max(maxRight, rowBox.Metrics.Width - alignmentOffset.Value);
+            }
+
             totalH += rowBox.Metrics.Height;
         }
 
         totalH += rowGap * Math.Max(0, rows.Count - 1);
+        double alignedWidth = hasAlignmentPoint ? maxLeft + maxRight : maxRowW;
+        double totalW = Math.Max(maxRowW, alignedWidth);
+        double alignmentOriginX = (totalW - alignedWidth) / 2.0;
+        double sharedAlignmentX = alignmentOriginX + maxLeft;
 
         // Like matrices, equation arrays are centered on the math axis. Clamp the
         // ascent to the container height so descent remains non-negative for short arrays.
@@ -1046,15 +1064,39 @@ public static class MathLayoutEngine
         container.Metrics.Ascent = ascent;
 
         double y = 0;
-        foreach (var rowBox in rows)
+        for (int i = 0; i < rows.Count; i++)
         {
-            rowBox.X = (totalW - rowBox.Metrics.Width) / 2.0;
+            var rowBox = rows[i];
+            var alignmentOffset = alignmentOffsets[i];
+            rowBox.X = alignmentOffset.HasValue
+                ? sharedAlignmentX - alignmentOffset.Value
+                : (totalW - rowBox.Metrics.Width) / 2.0;
             rowBox.Y = y;
             container.Children.Add(rowBox);
             y += rowBox.Metrics.Height + rowGap;
         }
 
         return container;
+    }
+
+    private static double? GetEqArrayAlignmentOffset(MathNode row, MathBox rowBox, int? alignmentPointIndex)
+    {
+        if (!alignmentPointIndex.HasValue)
+            return null;
+
+        int index = Math.Max(0, alignmentPointIndex.Value);
+        if (index == 0)
+            return 0;
+
+        if (row is MathNode.Row && rowBox is MathBox.Container rowContainer)
+        {
+            if (index < rowContainer.Children.Count)
+                return rowContainer.Children[index].X;
+
+            return rowBox.Metrics.Width;
+        }
+
+        return index > 0 ? rowBox.Metrics.Width : 0;
     }
 
     private static MathBox LayoutMatrix(MathNode.Matrix matrix, string fontFamily, double fontSizePt)

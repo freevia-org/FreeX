@@ -124,6 +124,7 @@ public static class OmmlParser
             "groupChr" => ParseGroupChr(el),
             "m"        => ParseMatrix(el),
             "eqArr"    => ParseEqArray(el),
+            "aln"      => null,
             "oMathPara"=> ParseRow(el),
             _          => ParseUnknown(el)
         };
@@ -488,10 +489,40 @@ public static class OmmlParser
     private static MathNode ParseEqArray(XElement el)
     {
         var rows = new List<MathNode>();
+        var alignmentPointIndices = new List<int?>();
         foreach (var eEl in el.Elements(M + "e"))
-            rows.Add(ParseRow(eEl));
+        {
+            var (row, alignmentPointIndex) = ParseEqArrayRow(eEl);
+            rows.Add(row);
+            alignmentPointIndices.Add(alignmentPointIndex);
+        }
 
-        return new MathNode.EqArray(rows);
+        return new MathNode.EqArray(rows, alignmentPointIndices);
+    }
+
+    private static (MathNode Row, int? AlignmentPointIndex) ParseEqArrayRow(XElement eEl)
+    {
+        var children = new List<MathNode>();
+        int? alignmentPointIndex = null;
+
+        foreach (var child in eEl.Elements())
+        {
+            if (child.Name == M + "aln")
+            {
+                alignmentPointIndex ??= children.Count;
+                continue;
+            }
+
+            var node = ParseElement(child);
+            if (node is not null)
+                children.Add(node);
+        }
+
+        var row = children.Count == 1
+            ? children[0]
+            : new MathNode.Row(children);
+
+        return (row, alignmentPointIndex);
     }
 
     private static MathNode ParseUnknown(XElement el)
