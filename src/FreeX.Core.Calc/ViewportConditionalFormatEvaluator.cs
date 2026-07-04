@@ -23,6 +23,7 @@ internal sealed record CfEvaluationContext(
     Dictionary<ConditionalFormat, CfColorScaleThresholdCache> ColorScaleThresholds,
     Dictionary<ConditionalFormat, CfIconSetThresholdCache> IconSetThresholds,
     Dictionary<ConditionalFormat, CellStyle> DefaultMergedFormatStyles,
+    IReadOnlyList<GridRange> StyleRuleRanges,
     CfColorScaleStyleCache? ColorScaleStyles,
     CfStackedStyleCache? StackedStyles);
 
@@ -142,6 +143,7 @@ internal static partial class ViewportConditionalFormatEvaluator
     private static readonly Dictionary<ConditionalFormat, CfColorScaleThresholdCache> EmptyColorScaleThresholds = new(ReferenceEqualityComparer.Instance);
     private static readonly Dictionary<ConditionalFormat, CfIconSetThresholdCache> EmptyIconSetThresholds = new(ReferenceEqualityComparer.Instance);
     private static readonly Dictionary<ConditionalFormat, CellStyle> EmptyDefaultMergedFormatStyles = new(ReferenceEqualityComparer.Instance);
+    private static readonly GridRange[] EmptyStyleRuleRanges = [];
     private static readonly FormulaEvaluator ThresholdFormulaEvaluator = new();
     private static readonly CfEvaluationContext EmptyContext = new(
         EmptyRules,
@@ -153,6 +155,7 @@ internal static partial class ViewportConditionalFormatEvaluator
         EmptyColorScaleThresholds,
         EmptyIconSetThresholds,
         EmptyDefaultMergedFormatStyles,
+        EmptyStyleRuleRanges,
         null,
         null);
 
@@ -177,8 +180,33 @@ internal static partial class ViewportConditionalFormatEvaluator
             PrecomputeColorScaleThresholdCaches(sheet, aggregates, staticThresholdFormulaValues),
             PrecomputeIconSetThresholdCaches(sheet, aggregates, staticThresholdFormulaValues),
             PrecomputeDefaultMergedFormatStyles(rulesByPriority),
+            PrecomputeStyleRuleRanges(rulesByPriority),
             CreateColorScaleStyleCache(rulesByPriority),
             CreateStackedStyleCache(rulesByPriority));
+    }
+
+    // Flattened ranges of every rule that can produce a conditional style. Blank viewport slots
+    // consult these to decide whether conditional formatting must run for them at all; icon-set
+    // and data-bar rules are excluded because they require numeric values and never fire on blanks.
+    private static GridRange[] PrecomputeStyleRuleRanges(IReadOnlyList<ConditionalFormat> rulesByPriority)
+    {
+        List<GridRange>? ranges = null;
+        for (var i = 0; i < rulesByPriority.Count; i++)
+        {
+            var rule = rulesByPriority[i];
+            if (!CanProduceConditionalStyle(rule))
+                continue;
+
+            ranges ??= [];
+            ranges.Add(rule.AppliesTo);
+            if (rule.AdditionalRanges is { } additionalRanges)
+            {
+                for (var rangeIndex = 0; rangeIndex < additionalRanges.Count; rangeIndex++)
+                    ranges.Add(additionalRanges[rangeIndex]);
+            }
+        }
+
+        return ranges is null ? EmptyStyleRuleRanges : [.. ranges];
     }
 
     private static CfColorScaleStyleCache? CreateColorScaleStyleCache(IReadOnlyList<ConditionalFormat> rulesByPriority)

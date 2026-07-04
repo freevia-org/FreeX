@@ -53,7 +53,11 @@ public sealed partial class ViewportService : IViewportService
             visibleCellSlots,
             sheet,
             hasAnyCellComments,
-            hasAnyStyleOnlyCells);
+            hasAnyStyleOnlyCells,
+            hasConditionalStyles,
+            cfContext,
+            rowMetrics,
+            colMetrics);
         var occupiedScanUsedRangeOverlapsViewport = scanOccupiedViewportCells &&
             UsedRangeOverlapsVisibleMetrics(sheet, rowMetrics, colMetrics);
         if (!scanOccupiedViewportCells || occupiedScanUsedRangeOverlapsViewport)
@@ -244,11 +248,44 @@ public sealed partial class ViewportService : IViewportService
         int visibleCellSlots,
         Sheet sheet,
         bool hasAnyCellComments,
-        bool hasAnyStyleOnlyCells) =>
+        bool hasAnyStyleOnlyCells,
+        bool hasConditionalStyles,
+        CfEvaluationContext cfContext,
+        IReadOnlyList<RowMetric> rowMetrics,
+        IReadOnlyList<ColMetric> colMetrics) =>
         visibleCellSlots > 0 &&
         (long)sheet.CellCount * 4 < visibleCellSlots &&
         !hasAnyCellComments &&
-        !hasAnyStyleOnlyCells;
+        !hasAnyStyleOnlyCells &&
+        // The occupied-cell scan never visits blank slots, so it cannot be used when a
+        // style-producing conditional format could fill blank cells inside the viewport.
+        (!hasConditionalStyles || !StyleRuleRangesOverlapVisibleMetrics(cfContext, rowMetrics, colMetrics));
+
+    private static bool StyleRuleRangesOverlapVisibleMetrics(
+        CfEvaluationContext cfContext,
+        IReadOnlyList<RowMetric> rowMetrics,
+        IReadOnlyList<ColMetric> colMetrics)
+    {
+        var ranges = cfContext.StyleRuleRanges;
+        if (ranges.Count == 0 || rowMetrics.Count == 0 || colMetrics.Count == 0)
+            return false;
+
+        var firstRow = rowMetrics[0].Row;
+        var lastRow = rowMetrics[^1].Row;
+        var firstCol = colMetrics[0].Col;
+        var lastCol = colMetrics[^1].Col;
+        for (var i = 0; i < ranges.Count; i++)
+        {
+            var range = ranges[i];
+            if (RangesOverlap(range.Start.Row, range.End.Row, firstRow, lastRow) &&
+                RangesOverlap(range.Start.Col, range.End.Col, firstCol, lastCol))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private static int EstimateOccupiedScanDisplayCellCapacity(
         IReadOnlyList<RowMetric> rowMetrics,
@@ -690,13 +727,28 @@ public sealed partial class ViewportService : IViewportService
         var cell = sheet.GetCell(row, col);
         if (cell is null)
         {
-            if (!hasAnyStyleOnlyCells && !hasAnyCellComments)
+            if (!hasAnyStyleOnlyCells && !hasAnyCellComments && !hasConditionalStyles)
                 return;
 
-            var styleOnlyId = sheet.GetStyleOnly(row, col);
+            var styleOnlyId = hasAnyStyleOnlyCells ? sheet.GetStyleOnly(row, col) : null;
             if (!styleOnlyId.HasValue)
             {
                 var address = new CellAddress(sheetId, row, col);
+                if (hasConditionalStyles && IsWithinStyleRuleRanges(cfContext, address))
+                {
+                    AddBlankConditionalDisplayCell(
+                        cells,
+                        workbook,
+                        sheet,
+                        sheetId,
+                        row,
+                        col,
+                        cfContext,
+                        hasAnyCellComments,
+                        ref styleCache);
+                    return;
+                }
+
                 if (hasAnyCellComments &&
                     HasCellComment(sheet, address, hasAnyCellComments))
                 {
@@ -778,6 +830,73 @@ public sealed partial class ViewportService : IViewportService
             hasConditionalDataBars,
             hasAnyCellComments,
             ref styleCache);
+    }
+
+    private static bool IsWithinStyleRuleRanges(CfEvaluationContext cfContext, CellAddress address)
+    {
+        var ranges = cfContext.StyleRuleRanges;
+        for (var i = 0; i < ranges.Count; i++)
+        {
+            if (ranges[i].Contains(address))
+                return true;
+        }
+
+        return false;
+    }
+
+    // A fully blank slot (no cell, no style-only entry) inside a conditional-format range still
+    // renders CF fills in Excel (e.g. highlight-blanks rules, =$A1="" formula rules), so evaluate
+    // the style rules for a blank value and materialize a DisplayCell only when one matches.
+    private static void AddBlankConditionalDisplayCell(
+        List<DisplayCell> cells,
+        Workbook workbook,
+        Sheet sheet,
+        SheetId sheetId,
+        uint row,
+        uint col,
+        CfEvaluationContext cfContext,
+        bool hasAnyCellComments,
+        ref ViewportStyleCache styleCache)
+    {
+        var defaultStyle = styleCache.Get(workbook, StyleId.Default);
+        var style = defaultStyle;
+        ApplyConditionalVisualsAndComments(
+            sheet,
+            sheetId,
+            row,
+            col,
+            BlankValue.Instance,
+            workbook,
+            cfContext,
+            baseStyleIsDefault: true,
+            hasConditionalStyles: true,
+            hasConditionalIcons: false,
+            hasConditionalDataBars: false,
+            hasAnyCellComments,
+            ref style,
+            out _,
+            out _,
+            out var hasComment);
+
+        var commentDisplay = hasComment
+            ? CreateCellCommentDisplay(sheet, new CellAddress(sheetId, row, col))
+            : null;
+        if (ReferenceEquals(style, defaultStyle) && commentDisplay is null)
+            return;
+
+        cells.Add(new DisplayCell(
+            row,
+            col,
+            BlankValue.Instance,
+            "",
+            null,
+            StyleId.Default,
+            null,
+            style,
+            null,
+            commentDisplay is not null,
+            null,
+            commentDisplay));
     }
 
     private static bool AddSeenCell(ref HashSet<(uint Row, uint Col)>? seen, uint row, uint col)
