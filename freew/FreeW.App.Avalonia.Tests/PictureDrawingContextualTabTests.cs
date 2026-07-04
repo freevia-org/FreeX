@@ -115,6 +115,26 @@ public sealed class PictureDrawingContextualTabTests
         var draw = def.FindTab("drawing-format")!;
         draw.Context!.ActivationKey.Should().Be(FloatingRibbonContextSource.DrawingContextKey);
         draw.Context.Color.Should().Be(RibbonContextColor.Purple);
+
+        var drawingArrangeIds = draw.Groups.Single(g => g.Id == "drawing-arrange").Controls
+            .Select(control => GetCommandId(control)?.Value)
+            .Where(id => id is not null)
+            .Select(id => id!)
+            .ToArray();
+        drawingArrangeIds.Should().Contain(new[]
+        {
+            "freew.image-bring-to-front",
+            "freew.image-send-to-back",
+            "freew.image-bring-forward",
+            "freew.image-send-backward",
+        }, "Avalonia should use the same z-order command ids as WPF for drawing objects");
+        drawingArrangeIds.Should().NotContain(new[]
+        {
+            "freew.shape-bring-to-front",
+            "freew.shape-send-to-back",
+            "freew.shape-bring-forward",
+            "freew.shape-send-backward",
+        }, "shape-prefixed z-order ids duplicate the shared WPF/Avalonia object-format commands");
     }
 
     [Fact]

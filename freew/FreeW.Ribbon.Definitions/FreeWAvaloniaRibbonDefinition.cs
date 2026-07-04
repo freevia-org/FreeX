@@ -1071,10 +1071,10 @@ internal static class FreeWAvaloniaRibbonDefinition
                     {
                         g.Dropdown("freew.shape-wrap", "Wrap Text", BuildWrapMenu("shape"));
                         g.Dropdown("freew.shape-rotate", "Rotate", BuildRotateMenu("shape"));
-                        g.Button("freew.shape-bring-to-front", "Bring to Front");
-                        g.Button("freew.shape-send-to-back",   "Send to Back");
-                        g.Button("freew.shape-bring-forward",  "Bring Forward");
-                        g.Button("freew.shape-send-backward",  "Send Backward");
+                        g.Button("freew.image-bring-to-front", "Bring to Front");
+                        g.Button("freew.image-send-to-back",   "Send to Back");
+                        g.Button("freew.image-bring-forward",  "Bring Forward");
+                        g.Button("freew.image-send-backward",  "Send Backward");
                     });
                     tab.Group("drawing-size", "Size", null, 80, g =>
                     {
@@ -1109,10 +1109,10 @@ internal static class FreeWAvaloniaRibbonDefinition
                     tab.Group("chart-arrange", "Arrange", null, 100, g =>
                     {
                         g.Dropdown("freew.shape-wrap", "Wrap Text", BuildWrapMenu("shape"));
-                        g.Button("freew.shape-bring-to-front", "Bring to Front");
-                        g.Button("freew.shape-send-to-back",   "Send to Back");
-                        g.Button("freew.shape-bring-forward",  "Bring Forward");
-                        g.Button("freew.shape-send-backward",  "Send Backward");
+                        g.Button("freew.image-bring-to-front", "Bring to Front");
+                        g.Button("freew.image-send-to-back",   "Send to Back");
+                        g.Button("freew.image-bring-forward",  "Bring Forward");
+                        g.Button("freew.image-send-backward",  "Send Backward");
                     });
                     tab.Group("chart-size", "Size", null, 90, g =>
                     {
@@ -1136,8 +1136,8 @@ internal static class FreeWAvaloniaRibbonDefinition
                     tab.Group("smartart-arrange", "Arrange", null, 80, g =>
                     {
                         g.Dropdown("freew.shape-wrap", "Wrap Text", BuildWrapMenu("shape"));
-                        g.Button("freew.shape-bring-to-front", "Bring to Front");
-                        g.Button("freew.shape-send-to-back",   "Send to Back");
+                        g.Button("freew.image-bring-to-front", "Bring to Front");
+                        g.Button("freew.image-send-to-back",   "Send to Back");
                     });
                     tab.Group("smartart-size", "Size", null, 70, g =>
                     {
