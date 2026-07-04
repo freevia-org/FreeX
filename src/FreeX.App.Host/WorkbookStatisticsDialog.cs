@@ -11,10 +11,10 @@ public sealed class WorkbookStatisticsDialog : Window
     public WorkbookStatisticsDialog(WorkbookStatistics statistics)
     {
         Title = UiText.Get("WorkbookStatistics_WorkbookStatistics");
-        Width = 500;
-        Height = 560;
-        MinWidth = 420;
-        MinHeight = 420;
+        Width = WorkbookStatisticsDialogPlanner.Width;
+        Height = WorkbookStatisticsDialogPlanner.Height;
+        MinWidth = WorkbookStatisticsDialogPlanner.MinWidth;
+        MinHeight = WorkbookStatisticsDialogPlanner.MinHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.CanResizeWithGrip;
         ShowInTaskbar = false;

@@ -5137,7 +5137,7 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
-    public void MainWindow_WiresWorkbookStatisticsToCompactNativeMenuDialog()
+    public void MainWindow_WiresWorkbookStatisticsToSharedSizeNativeMenuDialog()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
@@ -5159,24 +5159,17 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private async Task ShowWorkbookStatisticsDialogAsync()");
         source.Should().Contain("WorkbookStatisticsService.GetStatistics(_session.Workbook)");
         source.Should().Contain("Title = \"Workbook Statistics\"");
-        source.Should().Contain("Width = 380");
-        source.Should().Contain("Height = 320");
-        source.Should().Contain("MinWidth = 340");
-        source.Should().Contain("MinHeight = 280");
+        source.Should().Contain("Width = WorkbookStatisticsDialogPlanner.Width");
+        source.Should().Contain("Height = WorkbookStatisticsDialogPlanner.Height");
+        source.Should().Contain("MinWidth = WorkbookStatisticsDialogPlanner.MinWidth");
+        source.Should().Contain("MinHeight = WorkbookStatisticsDialogPlanner.MinHeight");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"WorkbookStatisticsDialog\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"WorkbookStatisticsOkButton\");");
         source.Should().Contain("CreateWorkbookStatisticsDialogContent(statistics, okButton, copyToClipboardButton)");
         source.Should().Contain("AutomationProperties.SetAutomationId(statisticsBlock, \"WorkbookStatisticsSummary\");");
         source.Should().Contain("Summarizes sheet, cell, formula, comment, and object counts for the workbook.");
         source.Should().Contain("private static string FormatWorkbookStatistics(WorkbookStatistics statistics)");
-        source.Should().Contain("$\"Sheets: {statistics.WorksheetCount}\"");
-        source.Should().Contain("$\"Cells with data: {statistics.CellCount}\"");
-        source.Should().Contain("$\"Formulas: {statistics.FormulaCount}\"");
-        source.Should().Contain("$\"Comments: {statistics.CommentCount}\"");
-        source.Should().Contain("$\"Charts: {statistics.ChartCount}\"");
-        source.Should().Contain("$\"Pictures: {statistics.PictureCount}\"");
-        source.Should().Contain("$\"Shapes and text boxes: {statistics.ShapeCount}\"");
-        source.Should().Contain("$\"Named ranges: {statistics.NamedRangeCount}\"");
+        source.Should().Contain("WorkbookStatisticsFormatter.Format(statistics);");
     }
 
     [Fact]

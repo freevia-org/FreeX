@@ -1,3 +1,4 @@
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FluentAssertions;
 
@@ -56,6 +57,23 @@ public sealed partial class RemainingDialogTests
         source.Should().Contain("Content = UiText.Ok");
         source.Should().Contain("IsDefault = true");
         source.Should().Contain("IsCancel = true");
+    }
+
+    [Fact]
+    public void WorkbookStatisticsDialog_UsesSharedDialogSizePlanner()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("WorkbookStatisticsDialog.cs");
+        var plannerSource = DialogSourceTestSupport.ReadAppServicesSource("WorkbookStatisticsDialogPlanner.cs");
+
+        source.Should().Contain("Width = WorkbookStatisticsDialogPlanner.Width;");
+        source.Should().Contain("Height = WorkbookStatisticsDialogPlanner.Height;");
+        source.Should().Contain("MinWidth = WorkbookStatisticsDialogPlanner.MinWidth;");
+        source.Should().Contain("MinHeight = WorkbookStatisticsDialogPlanner.MinHeight;");
+        WorkbookStatisticsDialogPlanner.Width.Should().Be(500);
+        WorkbookStatisticsDialogPlanner.Height.Should().Be(560);
+        WorkbookStatisticsDialogPlanner.MinWidth.Should().Be(420);
+        WorkbookStatisticsDialogPlanner.MinHeight.Should().Be(420);
+        plannerSource.Should().Contain("public static class WorkbookStatisticsDialogPlanner");
     }
 
     [Fact]
