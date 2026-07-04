@@ -8113,6 +8113,83 @@ public sealed class DocumentView : Control
         _selectionAnchor = _caret;
     }
 
+    /// <summary>
+    /// Inserts a plain-text content control at the body caret. A selected body range becomes the control
+    /// content; an empty caret gets Word's default prompt text.
+    /// </summary>
+    public void InsertPlainTextControl(string? tag = null, string? alias = null)
+    {
+        var text = SelectedText;
+        if (string.IsNullOrEmpty(text))
+            text = "Click to enter text";
+
+        InsertBodyContentControlRun(Run.PlainTextControl(text, tag, alias));
+    }
+
+    /// <summary>Inserts an unchecked checkbox content control at the body caret.</summary>
+    public void InsertCheckBoxControl(string? tag = null, string? alias = null) =>
+        InsertBodyContentControlRun(Run.CheckBoxControl(@checked: false, tag, alias));
+
+    /// <summary>
+    /// Inserts a rich-text content control at the body caret. A selected body range becomes the control
+    /// content; an empty caret gets Word's default prompt text.
+    /// </summary>
+    public void InsertRichTextControl(string? tag = null, string? alias = null)
+    {
+        var text = SelectedText;
+        if (string.IsNullOrEmpty(text))
+            text = "Click to enter text";
+
+        InsertBodyContentControlRun(Run.RichTextControl(text, tag, alias));
+    }
+
+    /// <summary>Inserts a date-picker content control at the body caret.</summary>
+    public void InsertDatePickerControl(string? tag = null, string? alias = null, string? dateFormat = null)
+    {
+        var format = string.IsNullOrEmpty(dateFormat) ? FreeW.Core.Model.ContentControl.DefaultDateFormat : dateFormat!;
+        var today = DateTime.Today.ToString(format, CultureInfo.CurrentCulture);
+        InsertBodyContentControlRun(Run.DatePickerControl(today, tag, alias, format));
+    }
+
+    /// <summary>Inserts a drop-down-list content control at the body caret.</summary>
+    public void InsertDropDownListControl(
+        IReadOnlyList<ContentControlListItem>? items = null,
+        string? tag = null,
+        string? alias = null) =>
+        InsertBodyContentControlRun(Run.DropDownListControl(items ?? DefaultContentControlItems, tag: tag, alias: alias));
+
+    /// <summary>Inserts a combo-box content control at the body caret.</summary>
+    public void InsertComboBoxControl(
+        IReadOnlyList<ContentControlListItem>? items = null,
+        string? tag = null,
+        string? alias = null) =>
+        InsertBodyContentControlRun(Run.ComboBoxControl(items ?? DefaultContentControlItems, tag: tag, alias: alias));
+
+    private static readonly IReadOnlyList<ContentControlListItem> DefaultContentControlItems =
+    [
+        new ContentControlListItem("Choose an item"),
+        new ContentControlListItem("Item 1"),
+        new ContentControlListItem("Item 2"),
+        new ContentControlListItem("Item 3")
+    ];
+
+    private void InsertBodyContentControlRun(Run run)
+    {
+        if (IsEditingLocked || _hfCaret is not null || _cellCaret is not null)
+            return;
+
+        if (NormalizedSelection() is not null)
+            DeleteSelection();
+        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            return;
+
+        var block = _caret.Block;
+        var offset = _caret.Offset;
+        _bus.Execute(new ReplaceParagraphRunsCommand(block, p => InsertRunAtOffset(p, offset, run)));
+        _caret = new DocPosition(block, offset + run.Text.Length);
+        _selectionAnchor = _caret;
+    }
+
     private void Backspace()
     {
         if (IsEditingLocked)

@@ -153,6 +153,65 @@ public sealed class CommandRegistryTests
     }
 
     [Fact]
+    public void Developer_controls_profile_commands_are_registered()
+    {
+        var definition = FreeWRibbon.BuildDefinition();
+        var developer = definition.Tabs.SingleOrDefault(tab => tab.Id == "developer");
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
+
+        developer.Should().NotBeNull();
+        developer!.Groups.Select(group => group.Id).Should().Equal("controls");
+
+        var commands = developer.Groups
+            .SelectMany(group => group.Controls)
+            .Select(GetCommandId)
+            .Where(id => id is not null)
+            .Select(id => id!.Value.Value)
+            .ToArray();
+
+        commands.Should().Equal(
+            "freew.cc-text",
+            "freew.cc-richtext",
+            "freew.cc-checkbox",
+            "freew.cc-date",
+            "freew.cc-dropdown",
+            "freew.cc-combo");
+
+        foreach (var id in commands)
+            registry.TryGet(new RibbonCommandId(id), out _)
+                .Should().BeTrue($"{id} should execute from the Avalonia Developer controls group");
+    }
+
+    public static TheoryData<string, ContentControlKind> DeveloperControlCommands =>
+        new()
+        {
+            { "freew.cc-text", ContentControlKind.PlainText },
+            { "freew.cc-richtext", ContentControlKind.RichText },
+            { "freew.cc-checkbox", ContentControlKind.CheckBox },
+            { "freew.cc-date", ContentControlKind.DatePicker },
+            { "freew.cc-dropdown", ContentControlKind.DropDownList },
+            { "freew.cc-combo", ContentControlKind.ComboBox },
+        };
+
+    [Theory]
+    [MemberData(nameof(DeveloperControlCommands))]
+    public void Developer_control_commands_insert_shared_content_control_runs(
+        string commandId,
+        ContentControlKind kind)
+    {
+        var view = new DocumentView();
+        view.LoadDocument(MakeDoc(string.Empty));
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+
+        Execute(registry, commandId);
+
+        var paragraph = view.Document.Blocks.OfType<Paragraph>().Single();
+        paragraph.Runs.Should().ContainSingle();
+        paragraph.Runs[0].Control.Should().NotBeNull();
+        paragraph.Runs[0].Control!.Kind.Should().Be(kind);
+    }
+
+    [Fact]
     public void Home_definition_uses_wpf_command_ids_for_editing_and_paragraph_slice()
     {
         var home = FreeWRibbon.BuildDefinition().FindTab("home");

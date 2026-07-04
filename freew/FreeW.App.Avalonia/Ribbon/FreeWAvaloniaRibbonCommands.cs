@@ -243,6 +243,9 @@ internal static class FreeWAvaloniaRibbonCommands
         // ── Insert depth 2 (AV-INSERT2) ──────────────────────────────────────
         RegisterInsertDepth2Commands(r, editor, callbacks);
 
+        // ── Developer ────────────────────────────────────────────────────────
+        RegisterDeveloperControls(r, editor);
+
         // ── Table Design contextual tab ───────────────────────────────────────
         // Table Style Options toggles — DocumentView guards no-op when outside a table.
         r.Register("freew.table-header-row",  new ActionRibbonCommand(editor.ToggleTableHeaderRow));
@@ -588,6 +591,16 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.hf-insert-page-number-footer", new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)));
         r.Register("freew.hf-insert-datetime", new ActionRibbonCommand(editor.InsertHeaderFooterDateTime));
         r.Register("freew.hf-insert-field", new ActionRibbonCommand(editor.InsertHeaderFooterDocumentInfo));
+    }
+
+    private static void RegisterDeveloperControls(RibbonCommandRegistry r, DocumentView editor)
+    {
+        r.Register("freew.cc-text", new ActionRibbonCommand(() => editor.InsertPlainTextControl()));
+        r.Register("freew.cc-richtext", new ActionRibbonCommand(() => editor.InsertRichTextControl()));
+        r.Register("freew.cc-checkbox", new ActionRibbonCommand(() => editor.InsertCheckBoxControl()));
+        r.Register("freew.cc-date", new ActionRibbonCommand(() => editor.InsertDatePickerControl()));
+        r.Register("freew.cc-dropdown", new ActionRibbonCommand(() => editor.InsertDropDownListControl()));
+        r.Register("freew.cc-combo", new ActionRibbonCommand(() => editor.InsertComboBoxControl()));
     }
 
     private static void SetHeaderFooterDistance(string? value, Action<double> apply)
