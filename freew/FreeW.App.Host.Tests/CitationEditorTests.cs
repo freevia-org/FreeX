@@ -83,4 +83,37 @@ public sealed class CitationEditorTests
             .Single(r => r.ComplexField is not null)
             .Text.Should().Be("[1]");
     }
+
+    [StaFact]
+    public void InsertBibliography_BuildsBlockFromSourcesAndUndoReverts()
+    {
+        var model = TextDocument.CreateEmpty();
+        model.Blocks.Clear();
+        model.Blocks.Add(new Paragraph("Body"));
+        model.Sources.Add(new Source
+        {
+            Tag = "Sm24",
+            Author = "Smith",
+            Title = "A Work",
+            Year = "2024"
+        });
+        var view = new DocumentView();
+        view.LoadModel(model);
+        var before = view.Model.Blocks.Count;
+
+        view.InsertBibliography();
+        view.CommitToModel();
+
+        view.Model.Blocks.Count.Should().BeGreaterThan(before);
+        view.Model.Blocks.OfType<Paragraph>()
+            .Where(Citations.IsBibliographyParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain("Smith. (2024). A Work.");
+
+        view.Commands.Undo().Should().BeTrue();
+        view.Model.Blocks.OfType<Paragraph>()
+            .Where(Citations.IsBibliographyParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should().NotContain("Smith. (2024). A Work.");
+    }
 }

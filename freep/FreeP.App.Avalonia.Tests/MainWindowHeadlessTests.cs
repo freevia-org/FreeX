@@ -2397,7 +2397,7 @@ public sealed class MainWindowHeadlessTests
                 Id = 329,
                 Name = "Caption",
                 Kind = SlideShapeKind.AutoShape,
-                Text = "caption text",
+                Text = "Caption  text",
             };
             window.Editor.CurrentSlide.Shapes.Clear();
             window.Editor.CurrentSlide.Shapes.Add(shape);
@@ -2579,7 +2579,7 @@ public sealed class MainWindowHeadlessTests
             PresentationProofingScopeKind.Comment,
             PresentationProofingScopeKind.CommentReply);
         proofingExecutionPlan.Scopes.Select(scope => scope.Text).Should().Equal(
-            "caption text",
+            "Caption  text",
             "Use shared review state.",
             "@Reviewer confirmed.");
         proofingPanePlan.Should().NotBeNull();
@@ -2588,13 +2588,13 @@ public sealed class MainWindowHeadlessTests
         proofingPaneSelectedCount.Should().Be(1);
         proofingPaneCorrectionEnabled.Should().BeTrue();
         proofingPaneHeading.Should().Be("Spelling - 1 issues");
-        proofingPanePlan!.SelectedRow!.SuggestedReplacement.Should().Be("C");
+        proofingPanePlan!.SelectedRow!.SuggestedReplacement.Should().Be(" ");
         proofingMutation.Should().Be(new PresentationProofingCorrectionMutationPlan(
             true,
             proofingExecutionPlan.Scopes.Single(scope => scope.Kind == PresentationProofingScopeKind.ShapeText),
-            0,
-            1,
-            "C",
+            7,
+            2,
+            " ",
             "Caption text",
             null));
         correctedShapeText.Should().Be("Caption text");
