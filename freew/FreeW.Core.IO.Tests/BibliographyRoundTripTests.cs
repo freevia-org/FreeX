@@ -234,6 +234,40 @@ public class BibliographyRoundTripTests
     }
 
     [Fact]
+    public void ConferenceProceedingsSource_AllFields_SurviveRoundTrip()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Sources.Add(new Source
+        {
+            Tag = "Conf2026",
+            Type = SourceType.ConferenceProceedings,
+            Author = "Doe, J.",
+            Title = "Proceedings Paper",
+            ConferenceName = "Proceedings of the Example Conference",
+            Year = "2026",
+            Pages = "101-109",
+            City = "Berlin",
+            Publisher = "ACM",
+            StandardNumber = "ISBN-CP-1",
+            ShortTitle = "Proceedings Paper",
+            Comments = "Conference note"
+        });
+
+        var source = RoundTrip(doc).Sources.Should().ContainSingle().Subject;
+        source.Type.Should().Be(SourceType.ConferenceProceedings);
+        source.Author.Should().Be("Doe, J.");
+        source.Title.Should().Be("Proceedings Paper");
+        source.ConferenceName.Should().Be("Proceedings of the Example Conference");
+        source.Year.Should().Be("2026");
+        source.Pages.Should().Be("101-109");
+        source.City.Should().Be("Berlin");
+        source.Publisher.Should().Be("ACM");
+        source.StandardNumber.Should().Be("ISBN-CP-1");
+        source.ShortTitle.Should().Be("Proceedings Paper");
+        source.Comments.Should().Be("Conference note");
+    }
+
+    [Fact]
     public void MultipleSources_PreserveOrderAndCount()
     {
         var doc = TextDocument.CreateEmpty();
@@ -342,6 +376,30 @@ public class BibliographyRoundTripTests
         source.Element(B + "BookTitle")!.Value.Should().Be("Containing Book");
         source.Element(B + "ChapterNumber")!.Value.Should().Be("3");
         source.Element(B + "Pages")!.Value.Should().Be("12-20");
+    }
+
+    [Fact]
+    public void BibliographyPart_WritesConferenceProceedingsSourceTypeAndFields()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Sources.Add(new Source
+        {
+            Tag = "Conf2026",
+            Type = SourceType.ConferenceProceedings,
+            Title = "Proceedings Paper",
+            ConferenceName = "Proceedings of the Example Conference",
+            Pages = "101-109"
+        });
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        using var zip = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
+        using var entry = zip.GetEntry("word/bibliography/sources.xml")!.Open();
+        var source = XDocument.Load(entry).Root!.Element(B + "Source")!;
+
+        source.Element(B + "SourceType")!.Value.Should().Be("ConferenceProceedings");
+        source.Element(B + "ConferenceName")!.Value.Should().Be("Proceedings of the Example Conference");
+        source.Element(B + "Pages")!.Value.Should().Be("101-109");
     }
 
     [Fact]

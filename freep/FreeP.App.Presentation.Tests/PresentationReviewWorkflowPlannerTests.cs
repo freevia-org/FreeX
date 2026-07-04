@@ -2416,6 +2416,64 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildProofingPanePlan_FlagsPunctuationSpacingWithSharedCorrections()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 4,
+            Name = "Caption",
+            Text = "Revenue grew ,but margin fell.Next step wins"
+        });
+
+        var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+        var plan = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(execution);
+
+        execution.Issues.Should().HaveCount(2);
+        execution.Issues.Select(issue => issue.Text).Should().Equal(" ,", ".N");
+        execution.Issues.Select(issue => issue.Message).Should().Equal(
+            PresentationReviewWorkflowPlanner.ProofingWhitespaceBeforePunctuationMessage,
+            PresentationReviewWorkflowPlanner.ProofingMissingSpaceAfterSentencePunctuationMessage);
+        plan.Rows.Select(row => row.SuggestedReplacement).Should().Equal(",", ". N");
+        plan.Rows[0].CorrectionAction.IsEnabled.Should().BeTrue();
+
+        var removeWhitespace = PresentationReviewWorkflowPlanner.TryApplyProofingCorrection(
+            presentation,
+            plan.Rows[0].Scope,
+            plan.Rows[0].Start,
+            plan.Rows[0].Length,
+            plan.Rows[0].SuggestedReplacement);
+        var refreshed = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
+            PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation));
+        var addSpace = PresentationReviewWorkflowPlanner.TryApplyProofingCorrection(
+            presentation,
+            refreshed.Rows.Single().Scope,
+            refreshed.Rows.Single().Start,
+            refreshed.Rows.Single().Length,
+            refreshed.Rows.Single().SuggestedReplacement);
+
+        removeWhitespace.Should().Be(new PresentationProofingCorrectionMutationPlan(
+            true,
+            plan.Rows[0].Scope,
+            plan.Rows[0].Start,
+            plan.Rows[0].Length,
+            ",",
+            "Revenue grew,but margin fell.Next step wins",
+            null));
+        addSpace.Should().Be(new PresentationProofingCorrectionMutationPlan(
+            true,
+            refreshed.Rows.Single().Scope,
+            refreshed.Rows.Single().Start,
+            refreshed.Rows.Single().Length,
+            ". N",
+            "Revenue grew,but margin fell. Next step wins",
+            null));
+        slide.Shapes.Single(shape => shape.Id == 4).Text
+            .Should().Be("Revenue grew,but margin fell. Next step wins");
+    }
+
+    [Fact]
     public void BuildProofingExecutionPlan_SentenceStartCapitalizationAvoidsExistingCapsDecimalsUrlsAndEmails()
     {
         var presentation = Presentation.CreateEmpty();
@@ -2424,13 +2482,13 @@ public sealed class PresentationReviewWorkflowPlannerTests
         {
             Id = 4,
             Name = "Caption",
-            Text = "Already capped. 3.14 stays. Visit https://example.com/path. www.example.com works. Email user@example.com now."
+            Text = "Already capped. 3.14 stays. Visit https://example.com/path.Next. www.example.com.Next works. Email user@example.com.Next now."
         });
         slide.Shapes.Add(new SlideShape
         {
             Id = 5,
             Name = "Link",
-            Text = "https://example.com/path. Next stays capped."
+            Text = "https://example.com/path.Next stays capped. Email mailto:user@example.com.Next."
         });
 
         var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);

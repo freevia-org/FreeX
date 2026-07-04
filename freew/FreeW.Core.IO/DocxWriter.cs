@@ -5400,6 +5400,7 @@ public static class DocxWriter
         SourceType.WebSite => "DocumentFromInternetSite",
         SourceType.Report => "Report",
         SourceType.BookSection => "BookSection",
+        SourceType.ConferenceProceedings => "ConferenceProceedings",
         _ => "Book",
     };
 
@@ -5428,6 +5429,7 @@ public static class DocxWriter
 
             AddBibliographyField(element, "Title", source.Title);
             AddBibliographyField(element, "BookTitle", source.BookTitle);
+            AddBibliographyField(element, "ConferenceName", source.ConferenceName);
             AddBibliographyField(element, "Year", source.Year);
             AddBibliographyField(element, "Institution", source.Institution);
             AddBibliographyField(element, "Publisher", source.Publisher);

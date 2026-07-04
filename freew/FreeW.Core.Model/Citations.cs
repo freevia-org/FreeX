@@ -570,8 +570,9 @@ public static class Citations
     /// <summary>
     /// Formats a source as a bibliography entry in the given <paramref name="style"/>, taking the source's
     /// <see cref="Source.Type"/> into account (a <see cref="SourceType.JournalArticle"/> cites its
-    /// journal/volume/issue/pages, a <see cref="SourceType.WebSite"/> its URL/accessed date, a
-    /// <see cref="SourceType.Book"/> its publisher):
+    /// journal/volume/issue/pages, a <see cref="SourceType.ConferenceProceedings"/> its conference
+    /// name/pages, a <see cref="SourceType.WebSite"/> its URL/accessed date, a <see cref="SourceType.Book"/>
+    /// its publisher):
     /// <list type="bullet">
     /// <item><b>APA</b>: author–date — <c>Author. (Year). Title. &lt;type-specific&gt;.</c></item>
     /// <item><b>MLA</b> / <b>Chicago</b>: author-first with the year last — <c>Author. Title. &lt;type-specific&gt;, Year.</c></item>
@@ -617,6 +618,7 @@ public static class Citations
     //  - Book:           Publisher
     //  - BookSection:    BookTitle, ChapterNumber, Pages, City: Publisher
     //  - JournalArticle: Journal, Volume, "no. Issue", "pp. Pages"
+    //  - ConferenceProceedings: ConferenceName, "pp. Pages", City: Publisher
     //  - WebSite:        Publisher, Url, "accessed Accessed"
     //  - Report:         Institution, City, Publisher
     // Returns an empty list when nothing applies so callers can drop the segment entirely.
@@ -653,6 +655,13 @@ public static class Citations
                     parts.Add($"pp. {bookPages}");
                 if (PlacePublisher(source) is { } placePublisher)
                     parts.Add(placePublisher);
+                break;
+            case SourceType.ConferenceProceedings:
+                AddIfPresent(parts, source.ConferenceName);
+                if (NonEmpty(source.Pages) is { } proceedingsPages)
+                    parts.Add($"pp. {proceedingsPages}");
+                if (PlacePublisher(source) is { } proceedingsPlacePublisher)
+                    parts.Add(proceedingsPlacePublisher);
                 break;
             default: // Book
                 AddIfPresent(parts, source.Publisher);
@@ -763,7 +772,8 @@ public static class Citations
         if (title.Length > 0)
             segments.Add(WithPeriod(title));
 
-        // Type-specific: journal uses condensed Vancouver citation string; book sections name the containing book.
+        // Type-specific: journal uses condensed Vancouver citation string; book sections and conference papers
+        // name their containing publication context.
         if (source.Type == SourceType.JournalArticle)
         {
             // Build: Journal. Year;Vol(Issue):Pages.
@@ -789,6 +799,19 @@ public static class Citations
             AddIfPresent(segments, source.BookTitle);
             if (NonEmpty(source.ChapterNumber) is { } chapterNumber)
                 segments.Add($"chap. {chapterNumber}.");
+            if (NonEmpty(source.Pages) is { } pages)
+                segments.Add($"pp. {pages}.");
+
+            var tail = new List<string>(2);
+            if (PlacePublisher(source) is { } placePublisher)
+                tail.Add(placePublisher);
+            AddIfPresent(tail, source.Year);
+            if (tail.Count > 0)
+                segments.Add(WithPeriod(string.Join("; ", tail)));
+        }
+        else if (source.Type == SourceType.ConferenceProceedings)
+        {
+            AddIfPresent(segments, source.ConferenceName);
             if (NonEmpty(source.Pages) is { } pages)
                 segments.Add($"pp. {pages}.");
 
@@ -881,6 +904,12 @@ public static class Citations
                 if (NonEmpty(source.Pages) is { } pages)
                     segments.Add($"Pp. {pages}.");
             }
+            else if (source.Type == SourceType.ConferenceProceedings)
+            {
+                AddIfPresent(segments, source.ConferenceName);
+                if (NonEmpty(source.Pages) is { } pages)
+                    segments.Add($"Pp. {pages}.");
+            }
 
             // City: Publisher, Year.
             var publisher = PlacePublisher(source) ?? (source.Publisher?.Trim() ?? string.Empty);
@@ -944,6 +973,12 @@ public static class Citations
                 if (NonEmpty(source.Pages) is { } pages)
                     segments.Add($"pp. {pages}.");
             }
+            else if (source.Type == SourceType.ConferenceProceedings)
+            {
+                AddIfPresent(segments, source.ConferenceName);
+                if (NonEmpty(source.Pages) is { } pages)
+                    segments.Add($"pp. {pages}.");
+            }
 
             var publisher = PlacePublisher(source) ?? (source.Publisher?.Trim() ?? string.Empty);
             if (publisher.Length > 0)
@@ -961,7 +996,7 @@ public static class Citations
 
     private static string? PlacePublisher(Source source)
     {
-        if (source.Type is not (SourceType.Book or SourceType.BookSection))
+        if (source.Type is not (SourceType.Book or SourceType.BookSection or SourceType.ConferenceProceedings))
             return null;
 
         var city = NonEmpty(source.City);
@@ -1051,6 +1086,7 @@ public static class Citations
         && Same(left.Author, right.Author)
         && Same(left.Title, right.Title)
         && Same(left.BookTitle, right.BookTitle)
+        && Same(left.ConferenceName, right.ConferenceName)
         && Same(left.Year, right.Year)
         && Same(left.Institution, right.Institution)
         && Same(left.Publisher, right.Publisher)

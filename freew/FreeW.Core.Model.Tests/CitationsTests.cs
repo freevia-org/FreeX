@@ -752,6 +752,32 @@ public class CitationsTests
     }
 
     [Fact]
+    public void FormatBibliographyEntry_ConferenceProceedings_UsesConferenceNameAndPages()
+    {
+        var paper = new Source
+        {
+            Type = SourceType.ConferenceProceedings,
+            Author = "Doe, J.",
+            Title = "Proceedings Paper",
+            ConferenceName = "Proceedings of the Example Conference",
+            Year = "2026",
+            Pages = "101-109",
+            City = "Berlin",
+            Publisher = "ACM"
+        };
+
+        Citations.FormatBibliographyEntry(paper, CitationStyle.Apa).Should().Be(
+            "Doe, J. (2026). Proceedings Paper. " +
+            "Proceedings of the Example Conference, pp. 101-109, Berlin: ACM.");
+        Citations.FormatBibliographyEntry(paper, CitationStyle.Mla).Should().Be(
+            "Doe, J. Proceedings Paper. " +
+            "Proceedings of the Example Conference, pp. 101-109, Berlin: ACM, 2026.");
+        Citations.FormatBibliographyEntry(paper, CitationStyle.Ieee).Should().Be(
+            "Doe, J., \"Proceedings Paper,\" " +
+            "Proceedings of the Example Conference, pp. 101-109, Berlin: ACM, 2026.");
+    }
+
+    [Fact]
     public void FormatBibliographyEntry_Book_AllStyles_UsePublisherAsDetail()
     {
         var book = new Source
