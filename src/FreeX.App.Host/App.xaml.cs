@@ -122,7 +122,10 @@ public partial class App : Application
         {
             try
             {
-                ParityCapture.Run(parityOutDir, () => Services.GetRequiredService<MainWindow>());
+                ParityCapture.Run(
+                    parityOutDir,
+                    () => Services.GetRequiredService<MainWindow>(),
+                    ParityCapture.TryGetTargetSurfaceId(startupArgs));
             }
             catch (Exception ex)
             {

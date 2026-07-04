@@ -92,6 +92,34 @@ public sealed partial class RemainingDialogTests
     }
 
     [Fact]
+    public void AccessibilityCheckerParityCapture_RendersDirectEvidenceAtDialogSize()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var issues = AccessibilityCheckerParityFixture.CreateDialogIssues(sheetId);
+
+            var bitmap = ParityCapture.RenderAccessibilityCheckerDialogForTest(issues);
+
+            bitmap.PixelWidth.Should().Be(360);
+            bitmap.PixelHeight.Should().Be(520);
+            ParityCapture.HasVisiblePixelsForTest(bitmap).Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public void ParityCaptureTargetSurfaceId_ParsesSeparateAndEqualsForms()
+    {
+        ParityCapture.TryGetTargetSurfaceId(["--parity-capture", "out", "--parity-capture-target", "dialog.AccessibilityChecker"])
+            .Should()
+            .Be("dialog.AccessibilityChecker");
+
+        ParityCapture.TryGetTargetSurfaceId(["--parity-capture-target=dialog.AccessibilityChecker"])
+            .Should()
+            .Be("dialog.AccessibilityChecker");
+    }
+
+    [Fact]
     public void AccessibilityCheckerDialogPlanner_GetNavigationTarget_UsesFirstCellInIssueLocation()
     {
         var sheetId = SheetId.New();

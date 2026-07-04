@@ -1,4 +1,5 @@
 using System.IO;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
@@ -81,11 +82,41 @@ internal static class ParityCapture
     }
 
     /// <summary>
+    /// Optional focused capture selector used by parity workers to refresh a single expensive dialog surface.
+    /// </summary>
+    public static string? TryGetTargetSurfaceId(IReadOnlyList<string> args)
+    {
+        const string TargetSwitch = "--parity-capture-target";
+
+        for (var i = 0; i < args.Count; i++)
+        {
+            if (!string.Equals(args[i], TargetSwitch, StringComparison.Ordinal))
+                continue;
+
+            return i + 1 < args.Count && !string.IsNullOrWhiteSpace(args[i + 1])
+                ? args[i + 1]
+                : null;
+        }
+
+        foreach (var arg in args)
+        {
+            if (arg.StartsWith(TargetSwitch + "=", StringComparison.Ordinal))
+            {
+                var value = arg[(TargetSwitch.Length + 1)..];
+                if (!string.IsNullOrWhiteSpace(value))
+                    return value;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Renders every surface to <paramref name="outDir"/> and writes the manifest. Runs on the WPF dispatcher
     /// thread (already STA). Swallows per-surface failures; only a catastrophic I/O failure on the manifest
     /// propagates.
     /// </summary>
-    public static void Run(string outDir, Func<MainWindow> mainWindowFactory)
+    public static void Run(string outDir, Func<MainWindow> mainWindowFactory, string? targetSurfaceId = null)
     {
         Directory.CreateDirectory(outDir);
         var results = new List<SurfaceResult>();
@@ -96,8 +127,17 @@ internal static class ParityCapture
         if (Application.Current is { } app)
             app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
-        CaptureRibbonAndShell(outDir, mainWindowFactory, results);
-        CaptureDialogs(outDir, results);
+        if (string.IsNullOrWhiteSpace(targetSurfaceId) ||
+            !targetSurfaceId.StartsWith("dialog.", StringComparison.Ordinal))
+        {
+            CaptureRibbonAndShell(outDir, mainWindowFactory, results);
+        }
+
+        if (string.IsNullOrWhiteSpace(targetSurfaceId) ||
+            targetSurfaceId.StartsWith("dialog.", StringComparison.Ordinal))
+        {
+            CaptureDialogs(outDir, results, targetSurfaceId);
+        }
 
         WriteManifest(outDir, results);
 
@@ -456,13 +496,27 @@ internal static class ParityCapture
 
     // ----- Standalone dialogs -----
 
-    private static void CaptureDialogs(string outDir, List<SurfaceResult> results)
+    private static void CaptureDialogs(string outDir, List<SurfaceResult> results, string? targetSurfaceId = null)
     {
         var workbook = new Workbook("ParityDemo");
         var sheet = workbook.SheetCount > 0 ? workbook.GetSheetAt(0) : workbook.AddSheet("Sheet1");
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 5, 5));
+
+        if (!string.IsNullOrWhiteSpace(targetSurfaceId))
+        {
+            if (string.Equals(targetSurfaceId, "dialog.AccessibilityChecker", StringComparison.Ordinal))
+            {
+                CaptureAccessibilityCheckerDialog(results, outDir, AccessibilityCheckerParityFixture.CreateDialogIssues(sheet.Id));
+            }
+            else
+            {
+                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.AccessibilityChecker in this lane.");
+            }
+
+            return;
+        }
 
         CaptureDialogTabs(results, "dialog.FormatCells", outDir,
             () => new FormatCellsDialog(CellStyle.Default, FormatCellsDialogTab.Number),
@@ -647,8 +701,7 @@ internal static class ParityCapture
         CaptureDialog(results, "dialog.ProtectWorkbook", outDir, () =>
             new PasswordProtectionDialog(UiText.Get("Protection_ProtectWorkbookTitle"), UiText.Get("Protection_PasswordToUnprotectWorkbook")));
 
-        CaptureDialog(results, "dialog.AccessibilityChecker", outDir, () =>
-            new AccessibilityCheckerDialog(AccessibilityCheckerParityFixture.CreateDialogIssues(sheet.Id)));
+        CaptureAccessibilityCheckerDialog(results, outDir, AccessibilityCheckerParityFixture.CreateDialogIssues(sheet.Id));
 
         CaptureDialog(results, "dialog.DataValidation", outDir, () =>
             new DataValidationDialog());
@@ -1068,6 +1121,139 @@ internal static class ParityCapture
 
     internal static BitmapSource RenderWorkbookFileDialogSurfaceForTest(WorkbookFileDialogSurfacePlan plan) =>
         RenderWorkbookFileDialogSurface(plan);
+
+    internal static BitmapSource RenderAccessibilityCheckerDialogForTest(IReadOnlyList<AccessibilityIssue> issues) =>
+        RenderAccessibilityCheckerDialog(issues);
+
+    private static void CaptureAccessibilityCheckerDialog(
+        List<SurfaceResult> results,
+        string outDir,
+        IReadOnlyList<AccessibilityIssue> issues)
+    {
+        CaptureSurface(
+            results,
+            "dialog.AccessibilityChecker",
+            "dialog",
+            outDir,
+            () => RenderAccessibilityCheckerDialog(issues),
+            "Captured from FreeX.App.Host --parity-capture-target dialog.AccessibilityChecker planner-backed direct surface at 360x520");
+    }
+
+    private static BitmapSource RenderAccessibilityCheckerDialog(IReadOnlyList<AccessibilityIssue> issues)
+    {
+        const int width = 360;
+        const int height = 520;
+        var plan = AccessibilityCheckerDialogPlanner.Create(issues, UiText.Get);
+        using var bitmap = new System.Drawing.Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        bitmap.SetResolution(96, 96);
+
+        using (var graphics = System.Drawing.Graphics.FromImage(bitmap))
+        using (var titleFont = new System.Drawing.Font("Segoe UI", 16f, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Pixel))
+        using (var headerFont = new System.Drawing.Font("Segoe UI", 12f, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Pixel))
+        using (var bodyFont = new System.Drawing.Font("Segoe UI", 12f, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Pixel))
+        using (var textBrush = new System.Drawing.SolidBrush(System.Drawing.Color.Black))
+        using (var mutedBrush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(0x4B, 0x55, 0x63)))
+        using (var borderPen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(0xAB, 0xAB, 0xAB)))
+        using (var lightBorderPen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(0xD0, 0xD7, 0xDE)))
+        using (var selectionBrush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(0xE6, 0xF0, 0xFA)))
+        using (var buttonFill = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(0xF8, 0xF9, 0xFA)))
+        using (var defaultButtonPen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(0x2B, 0x57, 0x91), 2))
+        using (var buttonPen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(0xAD, 0xB5, 0xBD)))
+        using (var stringFormat = new System.Drawing.StringFormat())
+        {
+            graphics.Clear(System.Drawing.Color.White);
+            graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+            stringFormat.Trimming = System.Drawing.StringTrimming.EllipsisCharacter;
+
+            graphics.DrawString(plan.Title, titleFont, textBrush, 16, 16);
+            graphics.DrawString(plan.InspectionResultsHeader, headerFont, textBrush, 16, 50);
+
+            const float treeTop = 70;
+            const float treeHeight = 176;
+            graphics.DrawRectangle(borderPen, 16, treeTop, 328, treeHeight);
+
+            var y = treeTop + 7;
+            foreach (var section in plan.Sections)
+            {
+                graphics.DrawString($"v {section.Header} ({section.IssueCount})", headerFont, textBrush, 24, y);
+                y += 22;
+
+                foreach (var group in section.Groups)
+                {
+                    graphics.DrawString($"v {group.Label} ({group.Items.Count})", bodyFont, textBrush, 38, y);
+                    y += 20;
+
+                    foreach (var item in group.Items)
+                    {
+                        if (y < treeTop + treeHeight - 24 && y < treeTop + 55)
+                            graphics.FillRectangle(selectionBrush, 50, y - 2, 286, 20);
+
+                        graphics.DrawString(item.ObjectLabel, bodyFont, textBrush, 58, y);
+                        y += 20;
+                    }
+                }
+            }
+
+            var selectedGroup = plan.Sections.SelectMany(section => section.Groups).FirstOrDefault();
+            var selectedItem = selectedGroup?.Items.FirstOrDefault();
+            var selection = AccessibilityCheckerDialogPlanner.CreateSelection(selectedItem, null, plan);
+
+            y = 262;
+            graphics.DrawString(plan.AdditionalInformationHeader, headerFont, textBrush, 16, y);
+            y += 24;
+            graphics.DrawString(plan.WhyFixHeader, headerFont, textBrush, 16, y);
+            y += 18;
+            y += DrawWrappedGdiText(graphics, selection.WhyFix, bodyFont, textBrush, 16, y, 328, stringFormat) + 8;
+            graphics.DrawString(plan.HowToFixHeader, headerFont, textBrush, 16, y);
+            y += 18;
+            _ = DrawWrappedGdiText(graphics, selection.HowToFix, bodyFont, textBrush, 16, y, 328, stringFormat);
+
+            _ = DrawWrappedGdiText(graphics, selection.StatusText, bodyFont, mutedBrush, 16, 426, 328, stringFormat);
+            graphics.DrawLine(lightBorderPen, 16, 458, 344, 458);
+            DrawGdiButton(graphics, new System.Drawing.RectangleF(176, 474, 76, 26), plan.GoToAction.Text, bodyFont, textBrush, buttonFill, defaultButtonPen);
+            DrawGdiButton(graphics, new System.Drawing.RectangleF(268, 474, 76, 26), plan.CloseAction.Text.Replace("_", "", StringComparison.Ordinal), bodyFont, textBrush, buttonFill, buttonPen);
+        }
+
+        using var stream = new MemoryStream();
+        bitmap.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
+        stream.Position = 0;
+        var frame = BitmapFrame.Create(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+        frame.Freeze();
+        return frame;
+    }
+
+    private static float DrawWrappedGdiText(
+        System.Drawing.Graphics graphics,
+        string text,
+        System.Drawing.Font font,
+        System.Drawing.Brush brush,
+        float x,
+        float y,
+        float maxWidth,
+        System.Drawing.StringFormat format)
+    {
+        var size = graphics.MeasureString(text, font, (int)maxWidth, format);
+        graphics.DrawString(text, font, brush, new System.Drawing.RectangleF(x, y, maxWidth, size.Height), format);
+        return size.Height;
+    }
+
+    private static void DrawGdiButton(
+        System.Drawing.Graphics graphics,
+        System.Drawing.RectangleF bounds,
+        string text,
+        System.Drawing.Font font,
+        System.Drawing.Brush textBrush,
+        System.Drawing.Brush fillBrush,
+        System.Drawing.Pen borderPen)
+    {
+        graphics.FillRectangle(fillBrush, bounds);
+        graphics.DrawRectangle(borderPen, bounds.X, bounds.Y, bounds.Width, bounds.Height);
+
+        var textSize = graphics.MeasureString(text, font);
+        var x = bounds.X + Math.Max(0, (bounds.Width - textSize.Width) / 2);
+        var y = bounds.Y + Math.Max(0, (bounds.Height - textSize.Height) / 2);
+        graphics.DrawString(text, font, textBrush, x, y);
+    }
 
     private static BitmapSource RenderWorkbookFileDialogSurface(WorkbookFileDialogSurfacePlan plan)
     {
