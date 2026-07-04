@@ -67,6 +67,16 @@ public sealed record PresentationReviewWorkflowActionPlan(
     PresentationWorkflowCapabilityStatus Status,
     string? DisabledReason = null);
 
+public sealed record PresentationCommentMentionDescriptor(
+    int MentionIndex,
+    int Start,
+    int Length,
+    string DisplayText,
+    string IdentityKey)
+{
+    public string Label => $"@{DisplayText}";
+}
+
 public sealed record PresentationCommentReplyDescriptor(
     int ReplyIndex,
     string Author,
@@ -92,6 +102,10 @@ public sealed record PresentationCommentReplyDescriptor(
     public string ReplyLabel => $"Reply {ReplyIndex + 1}";
 
     public string MentionSummary => PresentationCommentMetadataPolicy.BuildCountSummary(MentionCount, "mention");
+
+    public IReadOnlyList<PresentationCommentMentionDescriptor> Mentions { get; init; } = [];
+
+    public string MentionDetailSummary => PresentationCommentMetadataPolicy.BuildMentionDetailSummary(Mentions);
 }
 
 public sealed record PresentationCommentDescriptor(
@@ -142,6 +156,10 @@ public sealed record PresentationCommentDescriptor(
     public string ReplySummary => PresentationCommentMetadataPolicy.BuildCountSummary(ReplyCount, "reply");
 
     public string MentionSummary => PresentationCommentMetadataPolicy.BuildCountSummary(MentionCount, "mention");
+
+    public IReadOnlyList<PresentationCommentMentionDescriptor> Mentions { get; init; } = [];
+
+    public string MentionDetailSummary => PresentationCommentMetadataPolicy.BuildMentionDetailSummary(Mentions);
 
     public string AnchorSummary =>
         string.IsNullOrWhiteSpace(ModernAnchorKind)
@@ -503,6 +521,28 @@ internal static class PresentationCommentMetadataPolicy
                 index > 0 && char.IsUpper(ch)
                     ? new[] { ' ', char.ToLowerInvariant(ch) }
                     : new[] { char.ToLowerInvariant(ch) })) + " anchor";
+    }
+
+    public static string BuildMentionIdentityKey(string displayText)
+        => NormalizeText(displayText)?.ToUpperInvariant() ?? string.Empty;
+
+    public static string BuildMentionDetailSummary(IReadOnlyList<PresentationCommentMentionDescriptor> mentions)
+    {
+        if (mentions.Count == 0)
+        {
+            return "No mentions";
+        }
+
+        var labels = mentions
+            .Take(3)
+            .Select(mention => mention.Label)
+            .ToArray();
+        if (mentions.Count <= labels.Length)
+        {
+            return $"Mentions: {string.Join(", ", labels)}";
+        }
+
+        return $"Mentions: {string.Join(", ", labels)}, +{mentions.Count - labels.Length} more";
     }
 
     private static string? NormalizeText(string? value)
@@ -2457,6 +2497,7 @@ public static class PresentationReviewWorkflowPlanner
         SlideComment comment,
         bool isSelected)
     {
+        var mentions = ExtractMentions(comment.Text);
         var replies = comment.Replies
             .Select((reply, index) => DescribeCommentReply(index, reply))
             .ToArray();
@@ -2477,7 +2518,7 @@ public static class PresentationReviewWorkflowPlanner
             !comment.IsResolved,
             comment.IsResolved,
             replies.Length,
-            CountMentions(comment.Text) + replies.Sum(reply => reply.MentionCount),
+            mentions.Count + replies.Sum(reply => reply.MentionCount),
             replies,
             comment.IsResolved ? PresentationCommentThreadStatus.Resolved : PresentationCommentThreadStatus.Open,
             isSelected,
@@ -2488,25 +2529,30 @@ public static class PresentationReviewWorkflowPlanner
             ModernAuthorId = comment.ModernAuthorId,
             ModernAuthorUserId = comment.ModernAuthorUserId,
             ModernAuthorProviderId = comment.ModernAuthorProviderId,
+            Mentions = mentions,
         };
     }
 
     private static PresentationCommentReplyDescriptor DescribeCommentReply(
         int replyIndex,
         SlideCommentReply reply)
-        => new(
+    {
+        var mentions = ExtractMentions(reply.Text);
+        return new(
             replyIndex,
             reply.Author,
             reply.Initials,
             BuildPreview(reply.Text),
             reply.DateTime,
-            CountMentions(reply.Text))
+            mentions.Count)
         {
             ModernReplyId = reply.ModernReplyId,
             ModernAuthorId = reply.ModernAuthorId,
             ModernAuthorUserId = reply.ModernAuthorUserId,
             ModernAuthorProviderId = reply.ModernAuthorProviderId,
+            Mentions = mentions,
         };
+    }
 
     private static SlideComment CloneComment(SlideComment comment)
     {
@@ -2723,10 +2769,70 @@ public static class PresentationReviewWorkflowPlanner
     }
 
     private static int CountMentions(string? text)
-        => string.IsNullOrWhiteSpace(text)
-            ? 0
-            : text.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                .Count(part => part.Length > 1 && part[0] == '@');
+        => ExtractMentions(text).Count;
+
+    private static IReadOnlyList<PresentationCommentMentionDescriptor> ExtractMentions(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return [];
+        }
+
+        List<PresentationCommentMentionDescriptor>? mentions = null;
+        for (var index = 0; index < text.Length; index++)
+        {
+            if (text[index] != '@' || !HasMentionBoundaryBefore(text, index))
+            {
+                continue;
+            }
+
+            var start = index + 1;
+            var end = start;
+            while (end < text.Length && IsMentionCharacter(text[end]))
+            {
+                end++;
+            }
+
+            while (end > start && IsTrailingMentionPunctuation(text[end - 1]))
+            {
+                end--;
+            }
+
+            if (end <= start)
+            {
+                continue;
+            }
+
+            var displayText = text[start..end];
+            mentions ??= [];
+            mentions.Add(new PresentationCommentMentionDescriptor(
+                mentions.Count,
+                index,
+                end - index,
+                displayText,
+                PresentationCommentMetadataPolicy.BuildMentionIdentityKey(displayText)));
+            index = end - 1;
+        }
+
+        return mentions ?? [];
+    }
+
+    private static bool HasMentionBoundaryBefore(string text, int atIndex)
+    {
+        if (atIndex == 0)
+        {
+            return true;
+        }
+
+        var previous = text[atIndex - 1];
+        return !char.IsLetterOrDigit(previous) && previous != '_' && previous != '.';
+    }
+
+    private static bool IsMentionCharacter(char ch)
+        => char.IsLetterOrDigit(ch) || ch is '_' or '-' or '.';
+
+    private static bool IsTrailingMentionPunctuation(char ch)
+        => ch is '.' or '-' or '_';
 
     private static string BuildAltTextSuggestedTitle(SlideShape shape)
     {
