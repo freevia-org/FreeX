@@ -237,14 +237,15 @@ public sealed class TextLayoutPlannerTests
     }
 
     [Theory]
-    [InlineData(TextVerticalType.Horizontal, 0.0, false)]
-    [InlineData(TextVerticalType.Vertical, 90.0, true)]
-    [InlineData(TextVerticalType.Vertical270, -90.0, true)]
-    [InlineData(TextVerticalType.EastAsianVertical, 90.0, true)]
-    [InlineData(TextVerticalType.WordArtVertical, 90.0, true)]
-    [InlineData(TextVerticalType.WordArtVerticalRtl, 90.0, true)]
+    [InlineData(TextVerticalType.Horizontal, TextVerticalRenderMode.Horizontal, 0.0, false)]
+    [InlineData(TextVerticalType.Vertical, TextVerticalRenderMode.Rotated, 90.0, true)]
+    [InlineData(TextVerticalType.Vertical270, TextVerticalRenderMode.Rotated, -90.0, true)]
+    [InlineData(TextVerticalType.EastAsianVertical, TextVerticalRenderMode.StackedUpright, 0.0, false)]
+    [InlineData(TextVerticalType.WordArtVertical, TextVerticalRenderMode.StackedUpright, 0.0, false)]
+    [InlineData(TextVerticalType.WordArtVerticalRtl, TextVerticalRenderMode.StackedUpright, 0.0, false)]
     public void PlanTextOrientation_MapsPowerPointVerticalTypesToSharedBoundsAndAngle(
         TextVerticalType verticalType,
+        TextVerticalRenderMode expectedMode,
         double expectedAngle,
         bool isRotated)
     {
@@ -254,6 +255,7 @@ public sealed class TextLayoutPlannerTests
         var plan = TextLayoutPlanner.PlanTextOrientation(text, bounds);
 
         plan.VerticalType.Should().Be(verticalType);
+        plan.RenderMode.Should().Be(expectedMode);
         plan.RotationAngleDegrees.Should().Be(expectedAngle);
         plan.RotationCenterX.Should().Be(110);
         plan.RotationCenterY.Should().Be(70);
@@ -261,6 +263,59 @@ public sealed class TextLayoutPlannerTests
         plan.TextBounds.Should().Be(isRotated
             ? new LayoutRect(60, -30, 100, 200)
             : bounds);
+    }
+
+    [Fact]
+    public void PlanStackedVerticalText_EastAsianVertical_PlansUprightGlyphsTopToBottom()
+    {
+        var text = new ResolvedTextLayout
+        {
+            VerticalType = TextVerticalType.EastAsianVertical,
+            Anchor = VerticalAnchor.Middle,
+            InsetLeftDip = 0,
+            InsetTopDip = 0,
+            InsetRightDip = 0,
+            InsetBottomDip = 0,
+            Paragraphs = new[]
+            {
+                ParagraphWithRuns("AB")
+            }
+        };
+
+        var plan = TextLayoutPlanner.PlanStackedVerticalText(
+            text,
+            new LayoutRect(0, 0, 100, 100),
+            MeasureStackedGlyph);
+
+        plan.RenderMode.Should().Be(TextVerticalRenderMode.StackedUpright);
+        plan.Glyphs.Should().Equal(
+            new TextStackedGlyphPlacement(0, 0, "A", 45, 26, 10, 8),
+            new TextStackedGlyphPlacement(0, 0, "B", 40, 50, 20, 8));
+    }
+
+    [Fact]
+    public void PlanStackedVerticalText_WordArtVerticalRtl_UsesLogicalTopToBottomOrder()
+    {
+        var text = new ResolvedTextLayout
+        {
+            VerticalType = TextVerticalType.WordArtVerticalRtl,
+            InsetLeftDip = 0,
+            InsetTopDip = 0,
+            InsetRightDip = 0,
+            InsetBottomDip = 0,
+            Paragraphs = new[]
+            {
+                ParagraphWithRuns("AB")
+            }
+        };
+
+        var plan = TextLayoutPlanner.PlanStackedVerticalText(
+            text,
+            new LayoutRect(0, 0, 100, 100),
+            MeasureStackedGlyph);
+
+        plan.Glyphs.Select(g => g.Text).Should().Equal(new[] { "A", "B" },
+            "without PowerPoint COM baselines this slice keeps single-column RTL WordArt in logical run order");
     }
 
     [Fact]
@@ -624,6 +679,7 @@ public sealed class TextLayoutPlannerTests
         wpf.Should().Contain("TextLayoutPlanner.GetAutoFitCapacityHeight");
         wpf.Should().Contain("TextLayoutPlanner.PlanTabStops");
         wpf.Should().Contain("TextLayoutPlanner.PlanTextOrientation");
+        wpf.Should().Contain("TextLayoutPlanner.PlanStackedVerticalText");
         wpf.Should().Contain("placement.Bullet");
         wpf.Should().NotContain("bool isVertical = text.VerticalType");
         wpf.Should().NotContain("bool isVert270");
@@ -645,6 +701,7 @@ public sealed class TextLayoutPlannerTests
         avalonia.Should().Contain("TextLayoutPlanner.GetAutoFitCapacityHeight");
         avalonia.Should().Contain("TextLayoutPlanner.PlanTabStops");
         avalonia.Should().Contain("TextLayoutPlanner.PlanTextOrientation");
+        avalonia.Should().Contain("TextLayoutPlanner.PlanStackedVerticalText");
         avalonia.Should().Contain("placement.Bullet");
         avalonia.Should().NotContain("bool isVertical = text.VerticalType");
         avalonia.Should().NotContain("bool isVert270");
@@ -720,6 +777,9 @@ public sealed class TextLayoutPlannerTests
 
     private static double MeasureTenDipPerCharacter(ResolvedRun run, string text) =>
         text.Length * 10;
+
+    private static TextGlyphMeasure MeasureStackedGlyph(ResolvedRun run, string text) =>
+        new(text == "B" ? 20 : 10, 8);
 
     private static string ReadWorkspaceFile(params string[] relativeParts)
     {

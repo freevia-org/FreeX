@@ -1358,6 +1358,12 @@ public sealed class SlideCanvas : FrameworkElement
         // Wave 18B: vertical text — rotate the text block around the shape center and swap
         // the effective text-area dimensions so layout uses the rotated extent.
         var orientation = TextLayoutPlanner.PlanTextOrientation(text, bounds);
+        if (orientation.RenderMode == TextVerticalRenderMode.StackedUpright)
+        {
+            RenderStackedVerticalText(dc, text, bounds);
+            return;
+        }
+
         if (orientation.IsRotated)
         {
             dc.PushTransform(new RotateTransform(
@@ -1370,6 +1376,35 @@ public sealed class SlideCanvas : FrameworkElement
         }
 
         RenderTextCore(dc, text, orientation.TextBounds);
+    }
+
+    private static void RenderStackedVerticalText(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
+    {
+        var initialPlan = TextLayoutPlanner.PlanStackedVerticalText(
+            text,
+            bounds,
+            MeasureStackedGlyphWpf);
+        var autoFitPlan = TextLayoutPlanner.PlanNormalAutoFitOverflow(
+            text,
+            initialPlan.Area.Height,
+            initialPlan.Paragraphs);
+        var renderText = TextLayoutPlanner.ApplyAutoFitPlan(text, autoFitPlan);
+        var plan = TextLayoutPlanner.PlanStackedVerticalText(
+            renderText,
+            bounds,
+            MeasureStackedGlyphWpf,
+            autoFitPlan);
+
+        foreach (var glyph in plan.Glyphs)
+        {
+            if ((uint)glyph.ParagraphIndex >= (uint)renderText.Paragraphs.Count)
+                continue;
+            var paragraph = renderText.Paragraphs[glyph.ParagraphIndex];
+            if ((uint)glyph.RunIndex >= (uint)paragraph.Runs.Count)
+                continue;
+
+            DrawStackedGlyphWpf(dc, renderText, bounds, paragraph.Runs[glyph.RunIndex], glyph);
+        }
     }
 
     // Wave 22B: multi-column text layout helper.
@@ -1779,6 +1814,61 @@ public sealed class SlideCanvas : FrameworkElement
         if (run.Strikethrough) ft.SetTextDecorations(TextDecorations.Strikethrough, 0, ft.Text.Length);
         return ft;
     }
+
+    private static TextGlyphMeasure MeasureStackedGlyphWpf(ResolvedRun run, string text)
+    {
+        var ft = BuildSingleRunFormattedTextAt(run, text);
+        return new TextGlyphMeasure(ft.Width, ft.Height);
+    }
+
+    private static void DrawStackedGlyphWpf(
+        DrawingContext dc,
+        ResolvedTextLayout text,
+        LayoutRect bounds,
+        ResolvedRun run,
+        TextStackedGlyphPlacement glyph)
+    {
+        var glyphRun = CopyRunWithText(run, glyph.Text);
+        var glyphParagraph = new ResolvedParagraph
+        {
+            Runs = new[] { glyphRun }
+        };
+
+        if (TextLayoutPlanner.PlanParagraphRenderRoute(glyphParagraph, text) == TextParagraphRenderRoute.Effects)
+        {
+            RenderParaWithEffects(
+                dc,
+                glyphParagraph,
+                glyph.X,
+                glyph.Y,
+                Math.Max(1, glyph.WidthDip),
+                wrap: false,
+                text,
+                bounds);
+            return;
+        }
+
+        dc.DrawText(BuildSingleRunFormattedTextAt(glyphRun, glyph.Text), new Point(glyph.X, glyph.Y));
+    }
+
+    private static ResolvedRun CopyRunWithText(ResolvedRun run, string text) =>
+        new()
+        {
+            Text = text,
+            FontFamily = run.FontFamily,
+            FontSizePt = run.FontSizePt,
+            Bold = run.Bold,
+            Italic = run.Italic,
+            Underline = run.Underline,
+            Strikethrough = run.Strikethrough,
+            Color = run.Color,
+            TextFill = run.TextFill,
+            TextOutline = run.TextOutline,
+            TextShadow = run.TextShadow,
+            TextReflection = run.TextReflection,
+            TextGlow = run.TextGlow,
+            TextSoftEdge = run.TextSoftEdge
+        };
 
     private static FormattedText BuildFormattedText(ResolvedParagraph para, double maxWidth, bool wrap)
     {
