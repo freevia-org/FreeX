@@ -29,6 +29,10 @@ public sealed class ChartCommandSourceTests
         source.Should().Contain("resolveSheetId: ResolveSheetIdByName");
         source.Should().Contain("ChartInputParser.TryParseDataRange(dialog.Result.SourceRangeText, _currentSheetId, ResolveSheetIdByName, out var dataRange)");
         source.Should().Contain("new ChangeChartSourceCommand(");
+        // The dialog's Switch Row/Column checkbox must reach the command (and reflect the
+        // chart's current orientation when the dialog opens) — not be a silent no-op.
+        source.Should().Contain("switchRowColumn: chart.SeriesInRows");
+        source.Should().Contain("seriesInRows: dialog.Result.SwitchRowColumn");
         source.Should().Contain("private void MoveChartBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("new MoveChartDialog(currentSheet.Name)");
         source.Should().Contain("private void ResizeSelectedChartObject()");

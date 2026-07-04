@@ -138,7 +138,8 @@ public partial class MainWindow
             chart.FirstColIsCategories,
             request => ApplySelectDataSourceRangeSelection(dialog, request),
             sheetId: _currentSheetId,
-            resolveSheetId: ResolveSheetIdByName)
+            resolveSheetId: ResolveSheetIdByName,
+            switchRowColumn: chart.SeriesInRows)
         {
             Owner = this
         };
@@ -159,7 +160,8 @@ public partial class MainWindow
                     chart.Id,
                     dataRange,
                     firstRowIsHeader: chart.FirstRowIsHeader,
-                    firstColIsCategories: dialog.Result.FirstColumnIsCategories),
+                    firstColIsCategories: dialog.Result.FirstColumnIsCategories,
+                    seriesInRows: dialog.Result.SwitchRowColumn),
                 command.Label))
             return;
 

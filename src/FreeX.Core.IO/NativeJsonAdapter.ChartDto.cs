@@ -49,6 +49,7 @@ public sealed partial class NativeJsonAdapter
         public bool ShowPivotChartValueFieldButtons { get; set; } = true;
         public bool FirstRowIsHeader { get; set; } = true;
         public bool FirstColIsCategories { get; set; } = true;
+        public bool SeriesInRows { get; set; }
         public string? Title { get; set; }
         public ChartManualLayoutModel? TitleLayout { get; set; }
         public bool TitleOverlay { get; set; }

@@ -187,10 +187,47 @@ public static partial class XlsxChartPartReader
         result.DataRange = XlsxChartSeriesRangeReader.UnionRanges(ranges);
         result.FirstRowIsHeader = hasTitleRange;
         result.FirstColIsCategories = hasCategoryRange;
+        result.SeriesInRows = DetectDeferredSeriesInRows(chartXml, seriesElements, sheetId, sheetNameResolver);
         XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
         XlsxChartSanitizer.SanitizeLoadedChart(result);
         chart = result;
         return true;
+    }
+
+    /// <summary>
+    /// Detects Excel's "Switch Row/Column" orientation for deferred/chartEx charts from their
+    /// value-dimension formulas (<c>cx:numDim/cx:f</c> for chartEx series, <c>c:val</c> for classic
+    /// <c>ser</c> elements). Same single-row-strip rule as
+    /// <see cref="XlsxChartSeriesRangeReader.DetectSeriesInRows"/>.
+    /// </summary>
+    private static bool DetectDeferredSeriesInRows(
+        XDocument chartXml,
+        IEnumerable<XElement> seriesElements,
+        SheetId sheetId,
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver)
+    {
+        var anyMultiColumn = false;
+        foreach (var series in seriesElements)
+        {
+            var formula = series.Name.LocalName == "series"
+                ? FindChartExData(chartXml, series)?.Elements()
+                    .Where(element => element.Name.LocalName == "numDim")
+                    .SelectMany(element => element.Elements())
+                    .FirstOrDefault(child => child.Name.LocalName == "f" && !string.IsNullOrWhiteSpace(child.Value))?
+                    .Value
+                : XlsxChartSeriesRangeReader.ReadFirstFormula(series, "val");
+            if (string.IsNullOrWhiteSpace(formula))
+                continue;
+            if (!XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, sheetNameResolver, out var range))
+                continue;
+
+            if (range.Start.Row != range.End.Row)
+                return false;
+            if (range.End.Col > range.Start.Col)
+                anyMultiColumn = true;
+        }
+
+        return anyMultiColumn;
     }
 
     private static bool HasExcelInternalChartExDataReference(XDocument chartXml) =>

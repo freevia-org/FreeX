@@ -28,12 +28,13 @@ public sealed partial class SelectDataSourceDialog : Window
         bool firstColumnIsCategories = true,
         Action<SelectDataSourceRangeSelectionRequest>? requestRangeSelection = null,
         SheetId sheetId = default,
-        Func<string, SheetId?>? resolveSheetId = null)
+        Func<string, SheetId?>? resolveSheetId = null,
+        bool switchRowColumn = false)
     {
         _sheetId = sheetId;
         _requestRangeSelection = requestRangeSelection;
         _resolveSheetId = resolveSheetId ?? (_ => null);
-        Result = CreateResult(sourceRangeText, firstColumnIsCategories);
+        Result = CreateResult(sourceRangeText, firstColumnIsCategories, switchRowColumn);
         Title = UiText.Get(SelectDataSourcePlanner.DialogTitleResourceKey);
         Width = 620;
         Height = 500;
@@ -49,6 +50,7 @@ public sealed partial class SelectDataSourceDialog : Window
         AutomationProperties.SetAutomationId(_rangeBox, rangeField.AutomationId);
         stack.Children.Add(CreateReferenceEditor(_rangeBox, UiText.Get(SelectDataSourcePlanner.SelectRangeAutomationNameResourceKey)));
         _switchRowColumnBox.Margin = new Thickness(0, 10, 0, 8);
+        _switchRowColumnBox.IsChecked = switchRowColumn;
         AutomationProperties.SetAutomationId(_switchRowColumnBox, SelectDataSourcePlanner.GetSwitchRowColumnField().AutomationId);
         stack.Children.Add(_switchRowColumnBox);
         _seriesList.MouseDoubleClick += EditSeriesButton_Click;

@@ -42,6 +42,7 @@ public sealed partial class NativeJsonAdapter
         ShowPivotChartValueFieldButtons = chart.ShowPivotChartValueFieldButtons,
         FirstRowIsHeader = chart.FirstRowIsHeader,
         FirstColIsCategories = chart.FirstColIsCategories,
+        SeriesInRows = chart.SeriesInRows,
         Title = chart.Title,
         TitleLayout = chart.TitleLayout,
         TitleOverlay = chart.TitleOverlay,

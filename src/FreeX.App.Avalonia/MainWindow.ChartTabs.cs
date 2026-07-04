@@ -340,7 +340,8 @@ public sealed partial class MainWindow
 
         var result = await ShowSelectDataSourceDialogAsync(
             FormatRangeReference(chart.DataRange),
-            chart.FirstColIsCategories);
+            chart.FirstColIsCategories,
+            chart.SeriesInRows);
         if (result is not { } choice)
             return;
 
@@ -359,7 +360,8 @@ public sealed partial class MainWindow
             chart.Id,
             dataRange,
             firstRowIsHeader: chart.FirstRowIsHeader,
-            firstColIsCategories: choice.FirstColumnIsCategories));
+            firstColIsCategories: choice.FirstColumnIsCategories,
+            seriesInRows: choice.SwitchRowColumn));
         RefreshShell(commandResult.Success
             ? UiText.Format("ChartLoc_ChartDataSourceSetTo", FormatRangeReference(dataRange))
             : commandResult.ErrorMessage ?? UiText.Get("ChartLoc_SelectDataFailed"));
@@ -372,7 +374,8 @@ public sealed partial class MainWindow
     /// </summary>
     private async Task<SelectDataSourceResult?> ShowSelectDataSourceDialogAsync(
         string initialRange,
-        bool firstColumnIsCategories)
+        bool firstColumnIsCategories,
+        bool switchRowColumn = false)
     {
         var rangeField = SelectDataSourcePlanner.GetChartDataRangeField();
         var switchField = SelectDataSourcePlanner.GetSwitchRowColumnField();
@@ -402,7 +405,7 @@ public sealed partial class MainWindow
         };
 
         // ---- Switch Row/Column checkbox -------------------------------------------------------
-        var switchRowColumnCheck = CreateChartCheckBox(UiText.Get(switchField.LabelResourceKey), false);
+        var switchRowColumnCheck = CreateChartCheckBox(UiText.Get(switchField.LabelResourceKey), switchRowColumn);
         switchRowColumnCheck.Margin = new Thickness(0, 4, 0, 0);
         AutomationProperties.SetAutomationId(switchRowColumnCheck, switchField.AutomationId);
 

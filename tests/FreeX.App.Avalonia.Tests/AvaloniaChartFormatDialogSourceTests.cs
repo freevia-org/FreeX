@@ -57,6 +57,20 @@ public sealed class AvaloniaChartFormatDialogSourceTests
     }
 
     [Fact]
+    public void SelectDataSourceDialog_WiresSwitchRowColumnThroughToCommand()
+    {
+        var chartTabsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTabs.cs"));
+
+        // The Switch Row/Column checkbox must reflect the chart's current orientation when the
+        // dialog opens and reach ChangeChartSourceCommand on confirm — not be a silent no-op.
+        chartTabsSource.Should().Contain("chart.SeriesInRows);");
+        chartTabsSource.Should().Contain("bool switchRowColumn = false)");
+        chartTabsSource.Should().Contain("CreateChartCheckBox(UiText.Get(switchField.LabelResourceKey), switchRowColumn)");
+        chartTabsSource.Should().Contain("switchRowColumnCheck.IsChecked == true));");
+        chartTabsSource.Should().Contain("seriesInRows: choice.SwitchRowColumn));");
+    }
+
+    [Fact]
     public void FormatChartAreaDialog_UsesSharedDescriptorAndPlannerParser()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartRemainingDialogs.cs"));

@@ -46,6 +46,20 @@ public static class ChartLayoutRequestBuilder
         if (endRow < startRow || endCol < startCol)
             return null;
 
+        if (chart.SeriesInRows)
+        {
+            // Excel's "Switch Row/Column": present the transposed range to the extraction below.
+            // Virtual (row, col) reads actual (startRow + (col - startCol), startCol + (row - startRow));
+            // the start corner is shared so only the end extents swap, and each ROW of the actual
+            // range becomes one series (names from the first column, categories from the first row).
+            var actual = cellAccessor;
+            var baseRow = startRow;
+            var baseCol = startCol;
+            cellAccessor = (uint row, uint col, out double value, out string displayText) =>
+                actual(baseRow + (col - baseCol), baseCol + (row - baseRow), out value, out displayText);
+            (endRow, endCol) = (startRow + (endCol - startCol), startCol + (endRow - startRow));
+        }
+
         var dataStartRow = chart.FirstRowIsHeader ? startRow + 1 : startRow;
         var dataStartCol = chart.FirstColIsCategories ? startCol + 1 : startCol;
         if (dataStartRow > endRow || dataStartCol > endCol)

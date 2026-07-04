@@ -79,6 +79,54 @@ public sealed partial class ChartRendererTests
     }
 
     [Fact]
+    public void ColumnRenderer_SwitchRowColumnReadsRowsAsSeries()
+    {
+        var sheetId = SheetId.New();
+        // 3 rows x 4 cols:  (blank) Q1 Q2 Q3 / Sales 10 20 30 / Costs 5 8 13.
+        // Switched: series names come from the first COLUMN (Sales, Costs) and the
+        // categories from the first ROW (Q1..Q3) — Excel's "Switch Row/Column".
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            SeriesInRows = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 4))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [],
+            [],
+            [],
+            ChartDataCells:
+            [
+                ChartCell(sheetId, 1, 2, "Q1"),
+                ChartCell(sheetId, 1, 3, "Q2"),
+                ChartCell(sheetId, 1, 4, "Q3"),
+                ChartCell(sheetId, 2, 1, "Sales"),
+                ChartCell(sheetId, 2, 2, "10"),
+                ChartCell(sheetId, 2, 3, "20"),
+                ChartCell(sheetId, 2, 4, "30"),
+                ChartCell(sheetId, 3, 1, "Costs"),
+                ChartCell(sheetId, 3, 2, "5"),
+                ChartCell(sheetId, 3, 3, "8"),
+                ChartCell(sheetId, 3, 4, "13")
+            ]));
+
+        model.Series.Should().HaveCount(2);
+        var sales = model.Series[0].Should().BeOfType<RectangleBarSeries>().Subject;
+        var costs = model.Series[1].Should().BeOfType<RectangleBarSeries>().Subject;
+        sales.Title.Should().Be("Sales");
+        costs.Title.Should().Be("Costs");
+        sales.Items.Should().HaveCount(3);
+        Math.Max(sales.Items[0].Y0, sales.Items[0].Y1).Should().BeApproximately(10, 0.001);
+        Math.Max(sales.Items[2].Y0, sales.Items[2].Y1).Should().BeApproximately(30, 0.001);
+        costs.Items.Should().HaveCount(3);
+        Math.Max(costs.Items[1].Y0, costs.Items[1].Y1).Should().BeApproximately(8, 0.001);
+        var bottomAxis = model.Axes.Single(axis => axis.Position == AxisPosition.Bottom);
+        bottomAxis.FormatValue(0).Should().Be("Q1");
+        bottomAxis.FormatValue(2).Should().Be("Q3");
+    }
+
+    [Fact]
     public void Render_ExportsAtRequestedRenderScale()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("ChartRenderer.cs");
