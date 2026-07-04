@@ -137,7 +137,9 @@ internal static class PptxChartWriter
                             && !isScatterLike
                             && chart.Series.Any(s => s.OnSecondaryAxis);
 
-        var primarySeries   = chart.Series.Where(s => !s.OnSecondaryAxis).ToList();
+        var primarySeries = hasSecondary
+            ? chart.Series.Where(s => !s.OnSecondaryAxis).ToList()
+            : chart.Series.ToList();
         var secondarySeries = hasSecondary
             ? chart.Series.Where(s => s.OnSecondaryAxis).ToList()
             : new List<ChartSeries>();

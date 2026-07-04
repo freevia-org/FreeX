@@ -1113,6 +1113,126 @@ public sealed class PptxPackageRetentionTests
     }
 
     [Fact]
+    public void ReadWriteRead_ScatterBubbleAuthoredFormulas_PreservesUneditedAndRegeneratesOnlyEditedBubbleRanges()
+    {
+        using var source = BuildPptxWithScatterBubbleFormulaWorkbooks();
+        var sourceBytes = source.ToArray();
+        byte[] sourceScatterWorkbook;
+        byte[] sourceBubbleWorkbook;
+        using (var sourceArchive = new ZipArchive(new MemoryStream(sourceBytes), ZipArchiveMode.Read))
+        {
+            sourceScatterWorkbook = ReadBytes(sourceArchive, "ppt/embeddings/scatterAuthoredWorkbook.xlsx");
+            sourceBubbleWorkbook = ReadBytes(sourceArchive, "ppt/embeddings/bubbleAuthoredWorkbook.xlsx");
+        }
+
+        var loaded = PptxPackageReader.Read(new MemoryStream(sourceBytes));
+        loaded.PackageSnapshot.Should().NotBeNull();
+        var chartShapes = loaded.Slides[0].Shapes.Where(shape => shape.Kind == SlideShapeKind.Chart).ToArray();
+        chartShapes.Should().HaveCount(2);
+
+        var scatterChart = chartShapes[0].Chart!;
+        scatterChart.ChartType.Should().Be(ChartType.Scatter);
+        scatterChart.RegenerateWorkbookOnSave.Should().BeFalse();
+        scatterChart.Series.Should().HaveCount(1);
+        scatterChart.Series[0].FormulaReferences.SeriesName.Should().Be("'Scatter Source'!$B$1");
+        scatterChart.Series[0].FormulaReferences.XValues.Should().Be("'Scatter Source'!$A$2:$A$4");
+        scatterChart.Series[0].FormulaReferences.YValues.Should().Be("'Scatter Source'!Scatter_Y");
+
+        var bubbleChart = chartShapes[1].Chart!;
+        bubbleChart.ChartType.Should().Be(ChartType.Bubble);
+        bubbleChart.RegenerateWorkbookOnSave.Should().BeFalse();
+        bubbleChart.Series.Should().HaveCount(1);
+        bubbleChart.Series[0].FormulaReferences.SeriesName.Should().Be("'Bubble Source'!$B$1");
+        bubbleChart.Series[0].FormulaReferences.XValues.Should().Be("'Bubble Source'!$A$2:$A$4");
+        bubbleChart.Series[0].FormulaReferences.YValues.Should().Be("'Bubble Source'!Bubble_Y");
+        bubbleChart.Series[0].FormulaReferences.BubbleSizes.Should().Be("'Bubble Source'!$D$2:$D$4");
+
+        new SetChartCellValueCommand(
+            slideIndex: 0,
+            shapeId: chartShapes[1].Id,
+            seriesIndex: 0,
+            categoryIndex: 1,
+            value: 2222).Apply(loaded);
+
+        scatterChart.RegenerateWorkbookOnSave.Should().BeFalse();
+        bubbleChart.RegenerateWorkbookOnSave.Should().BeTrue();
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        var savedBytes = saved.ToArray();
+
+        using (var archive = new ZipArchive(new MemoryStream(savedBytes), ZipArchiveMode.Read))
+        {
+            ReadBytes(archive, "ppt/embeddings/scatterAuthoredWorkbook.xlsx")
+                .Should()
+                .Equal(sourceScatterWorkbook, "the unedited scatter chart should keep its authored workbook byte-for-byte");
+            archive.GetEntry("ppt/embeddings/bubbleAuthoredWorkbook.xlsx").Should().BeNull(
+                "the edited bubble chart should drop its stale authored workbook sidecar");
+            sourceBubbleWorkbook.Should().NotBeEmpty("the source bubble chart should carry an authored workbook");
+            archive.GetEntry("ppt/embeddings/chartWorkbook2.xlsx").Should().NotBeNull(
+                "the edited bubble chart should receive a regenerated workbook at its chart index");
+
+            var scatterXml = LoadXml(archive, "ppt/charts/chart1.xml");
+            var scatterText = scatterXml.ToString(SaveOptions.DisableFormatting);
+            scatterText.Should().Contain("'Scatter Source'!$B$1");
+            scatterText.Should().Contain("'Scatter Source'!$A$2:$A$4");
+            scatterText.Should().Contain("'Scatter Source'!Scatter_Y");
+            scatterXml.Root!.Element(ChartNs + "externalData")!.Attribute(RelsDocNs + "id")!.Value
+                .Should().Be("rIdScatterWorkbook");
+            var scatterRels = LoadXml(archive, "ppt/charts/_rels/chart1.xml.rels");
+            Relationship(scatterRels, PackageRelType, "../embeddings/scatterAuthoredWorkbook.xlsx").Should().NotBeNull();
+
+            var bubbleXml = LoadXml(archive, "ppt/charts/chart2.xml");
+            var bubbleText = bubbleXml.ToString(SaveOptions.DisableFormatting);
+            bubbleText.Should().Contain("ChartData!$B$1");
+            bubbleText.Should().Contain("ChartData!$A$2:$A$4");
+            bubbleText.Should().Contain("ChartData!$B$2:$B$4");
+            bubbleText.Should().Contain("ChartData!$C$2:$C$4");
+            bubbleText.Should().NotContain("'Bubble Source'!Bubble_Y",
+                "edited bubble formulas should point at regenerated ChartData ranges");
+            bubbleText.Should().NotContain("'Bubble Source'!$D$2:$D$4",
+                "edited bubble-size formulas should point at regenerated ChartData ranges");
+            bubbleXml.Root!.Element(ChartNs + "externalData")!.Attribute(RelsDocNs + "id")!.Value
+                .Should().Be("rIdWorkbook1");
+            var bubbleRels = LoadXml(archive, "ppt/charts/_rels/chart2.xml.rels");
+            Relationship(bubbleRels, PackageRelType, "../embeddings/chartWorkbook2.xlsx").Should().NotBeNull();
+
+            var contentTypes = LoadXml(archive, "[Content_Types].xml");
+            Override(contentTypes, "/ppt/embeddings/scatterAuthoredWorkbook.xlsx", SpreadsheetWorkbookContentType)
+                .Should().NotBeNull();
+            Override(contentTypes, "/ppt/embeddings/bubbleAuthoredWorkbook.xlsx", SpreadsheetWorkbookContentType)
+                .Should().BeNull("the stale bubble workbook override should not survive the edit");
+            Override(contentTypes, "/ppt/embeddings/chartWorkbook2.xlsx", SpreadsheetWorkbookContentType)
+                .Should().NotBeNull();
+
+            using var regeneratedWorkbook = new ZipArchive(
+                new MemoryStream(ReadBytes(archive, "ppt/embeddings/chartWorkbook2.xlsx")),
+                ZipArchiveMode.Read);
+            var regeneratedSheet = LoadXml(regeneratedWorkbook, "xl/worksheets/sheet1.xml")
+                .ToString(SaveOptions.DisableFormatting);
+            regeneratedSheet.Should().Contain("Bubble Growth");
+            regeneratedSheet.Should().Contain("1.5");
+            regeneratedSheet.Should().Contain("2222");
+            regeneratedSheet.Should().Contain("9");
+        }
+
+        var reloaded = PptxPackageReader.Read(new MemoryStream(savedBytes));
+        var reloadedCharts = reloaded.Slides[0].Shapes
+            .Where(shape => shape.Kind == SlideShapeKind.Chart)
+            .Select(shape => shape.Chart!)
+            .ToArray();
+        reloadedCharts[0].Series[0].FormulaReferences.SeriesName.Should().Be("'Scatter Source'!$B$1");
+        reloadedCharts[0].Series[0].FormulaReferences.XValues.Should().Be("'Scatter Source'!$A$2:$A$4");
+        reloadedCharts[0].Series[0].FormulaReferences.YValues.Should().Be("'Scatter Source'!Scatter_Y");
+        reloadedCharts[1].Series[0].FormulaReferences.SeriesName.Should().Be("ChartData!$B$1");
+        reloadedCharts[1].Series[0].FormulaReferences.XValues.Should().Be("ChartData!$A$2:$A$4");
+        reloadedCharts[1].Series[0].FormulaReferences.YValues.Should().Be("ChartData!$B$2:$B$4");
+        reloadedCharts[1].Series[0].FormulaReferences.BubbleSizes.Should().Be("ChartData!$C$2:$C$4");
+        reloadedCharts[1].Series[0].Values.Should().Equal(12, 2222, 36);
+        reloadedCharts[1].Series[0].BubbleSizes.Should().Equal(9, 10, 11);
+    }
+
+    [Fact]
     public void ReadWriteRead_ChartDataTableSettings_RetainsModeledChartPackageSemantics()
     {
         using var source = BuildPptxWithChartWorkbookAndUnrelatedPackageData();
@@ -1850,6 +1970,119 @@ public sealed class PptxPackageRetentionTests
         return package;
     }
 
+    private static MemoryStream BuildPptxWithScatterBubbleFormulaWorkbooks()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(CreateScatterFormulaChartShape(401, 914400));
+        slide.Shapes.Add(CreateBubbleFormulaChartShape(402, 4572000));
+        presentation.Slides.Add(slide);
+
+        using var basePackage = new MemoryStream();
+        PptxPackageWriter.Write(presentation, basePackage);
+
+        var package = new MemoryStream();
+        package.Write(basePackage.ToArray());
+        package.Position = 0;
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            AddSourceWorkbookSidecar(
+                archive,
+                chartIndex: 1,
+                workbookName: "scatterAuthoredWorkbook.xlsx",
+                relId: "rIdScatterWorkbook",
+                workbookBytes: BuildRichWorkbookBytes(
+                    "Scatter Source",
+                    "scatter-formula-workbook",
+                    "Scatter_Y",
+                    "Scatter_Local_Y",
+                    "Scatter Growth",
+                    "Scatter Projection",
+                    "A2*10",
+                    "A3*10",
+                    "A4*10",
+                    "C2+1",
+                    "C3+1",
+                    "C4+1"));
+            SetScatterFormulaReferences(
+                archive,
+                "ppt/charts/chart1.xml",
+                seriesIndex: 0,
+                seriesNameFormula: "'Scatter Source'!$B$1",
+                xValuesFormula: "'Scatter Source'!$A$2:$A$4",
+                yValuesFormula: "'Scatter Source'!Scatter_Y");
+
+            AddSourceWorkbookSidecar(
+                archive,
+                chartIndex: 2,
+                workbookName: "bubbleAuthoredWorkbook.xlsx",
+                relId: "rIdBubbleWorkbook",
+                workbookBytes: BuildRichWorkbookBytes(
+                    "Bubble Source",
+                    "bubble-formula-workbook",
+                    "Bubble_Y",
+                    "Bubble_Size",
+                    "Bubble Growth",
+                    "Bubble Size",
+                    "A2*8",
+                    "A3*8",
+                    "A4*8",
+                    "B2/2",
+                    "B3/2",
+                    "B4/2"));
+            SetBubbleFormulaReferences(
+                archive,
+                "ppt/charts/chart2.xml",
+                seriesIndex: 0,
+                seriesNameFormula: "'Bubble Source'!$B$1",
+                xValuesFormula: "'Bubble Source'!$A$2:$A$4",
+                yValuesFormula: "'Bubble Source'!Bubble_Y",
+                bubbleSizeFormula: "'Bubble Source'!$D$2:$D$4");
+
+            var contentTypes = LoadXml(archive, "[Content_Types].xml");
+            AddOverride(contentTypes, "/ppt/embeddings/scatterAuthoredWorkbook.xlsx", SpreadsheetWorkbookContentType);
+            AddOverride(contentTypes, "/ppt/embeddings/bubbleAuthoredWorkbook.xlsx", SpreadsheetWorkbookContentType);
+            WriteXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
+    private static SlideShape CreateScatterFormulaChartShape(uint shapeId, long offsetXEmu)
+    {
+        var chart = new ChartShape { ChartType = ChartType.Scatter, ScatterStyle = ScatterStyle.Marker };
+        var series = new ChartSeries { Name = "Scatter Growth" };
+        series.XValues.AddRange([1.5, 2.5, 3.5]);
+        series.Values.AddRange([15, 25, 35]);
+        chart.Series.Add(series);
+        return CreateChartShape(shapeId, "Scatter formula chart", chart, offsetXEmu);
+    }
+
+    private static SlideShape CreateBubbleFormulaChartShape(uint shapeId, long offsetXEmu)
+    {
+        var chart = new ChartShape { ChartType = ChartType.Bubble };
+        var series = new ChartSeries { Name = "Bubble Growth" };
+        series.XValues.AddRange([1.5, 2.5, 3.5]);
+        series.Values.AddRange([12, 24, 36]);
+        series.BubbleSizes.AddRange([9, 10, 11]);
+        chart.Series.Add(series);
+        return CreateChartShape(shapeId, "Bubble formula chart", chart, offsetXEmu);
+    }
+
+    private static SlideShape CreateChartShape(uint shapeId, string name, ChartShape chart, long offsetXEmu) =>
+        new()
+        {
+            Id = shapeId,
+            Name = name,
+            Kind = SlideShapeKind.Chart,
+            OffsetXEmu = offsetXEmu,
+            OffsetYEmu = 914400,
+            ExtentCxEmu = 3200400,
+            ExtentCyEmu = 2743200,
+            Chart = chart,
+        };
+
     private static SlideShape CreateWorkbookChartShape(
         uint shapeId,
         string name,
@@ -1956,6 +2189,40 @@ public sealed class PptxPackageRetentionTests
         SetFormula(series.Element(ChartNs + "tx")!.Element(ChartNs + "strRef")!, seriesNameFormula);
         SetFormula(series.Element(ChartNs + "cat")!.Element(ChartNs + "strRef")!, categoryFormula);
         SetFormula(series.Element(ChartNs + "val")!.Element(ChartNs + "numRef")!, valuesFormula);
+        WriteXml(archive, chartPath, chartXml);
+    }
+
+    private static void SetScatterFormulaReferences(
+        ZipArchive archive,
+        string chartPath,
+        int seriesIndex,
+        string seriesNameFormula,
+        string xValuesFormula,
+        string yValuesFormula)
+    {
+        var chartXml = LoadXml(archive, chartPath);
+        var series = chartXml.Descendants(ChartNs + "ser").ElementAt(seriesIndex);
+        SetFormula(series.Element(ChartNs + "tx")!.Element(ChartNs + "strRef")!, seriesNameFormula);
+        SetFormula(series.Element(ChartNs + "xVal")!.Element(ChartNs + "numRef")!, xValuesFormula);
+        SetFormula(series.Element(ChartNs + "yVal")!.Element(ChartNs + "numRef")!, yValuesFormula);
+        WriteXml(archive, chartPath, chartXml);
+    }
+
+    private static void SetBubbleFormulaReferences(
+        ZipArchive archive,
+        string chartPath,
+        int seriesIndex,
+        string seriesNameFormula,
+        string xValuesFormula,
+        string yValuesFormula,
+        string bubbleSizeFormula)
+    {
+        var chartXml = LoadXml(archive, chartPath);
+        var series = chartXml.Descendants(ChartNs + "ser").ElementAt(seriesIndex);
+        SetFormula(series.Element(ChartNs + "tx")!.Element(ChartNs + "strRef")!, seriesNameFormula);
+        SetFormula(series.Element(ChartNs + "xVal")!.Element(ChartNs + "numRef")!, xValuesFormula);
+        SetFormula(series.Element(ChartNs + "yVal")!.Element(ChartNs + "numRef")!, yValuesFormula);
+        SetFormula(series.Element(ChartNs + "bubbleSize")!.Element(ChartNs + "numRef")!, bubbleSizeFormula);
         WriteXml(archive, chartPath, chartXml);
     }
 

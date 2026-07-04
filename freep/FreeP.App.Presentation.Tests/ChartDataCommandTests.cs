@@ -78,6 +78,29 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void SetChartCellValue_Apply_MarksOnlyTargetChartWorkbookForRegeneration()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var neighborChart = new ChartShape { ChartType = ChartType.Scatter };
+        var neighborSeries = new ChartSeries { Name = "Neighbor" };
+        neighborSeries.XValues.AddRange(new double?[] { 1, 2, 3 });
+        neighborSeries.Values.AddRange(new double?[] { 10, 20, 30 });
+        neighborChart.Series.Add(neighborSeries);
+        p.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 2,
+            Name = "NeighborChart",
+            Kind = SlideShapeKind.Chart,
+            Chart = neighborChart
+        });
+
+        bus.Execute(new SetChartCellValueCommand(0, id, seriesIndex: 0, categoryIndex: 1, value: 999.0));
+
+        p.Slides[0].Shapes[0].Chart!.RegenerateWorkbookOnSave.Should().BeTrue();
+        p.Slides[0].Shapes[1].Chart!.RegenerateWorkbookOnSave.Should().BeFalse();
+    }
+
+    [Fact]
     public void SetChartCellValue_Revert_RestoresOldValue()
     {
         var (p, bus, id) = MakeChartPresentation();
