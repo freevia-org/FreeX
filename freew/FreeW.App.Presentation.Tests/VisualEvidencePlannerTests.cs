@@ -396,6 +396,22 @@ public sealed class VisualEvidencePlannerTests
         fields.HasComplexResultFields.Should().BeTrue();
         fields.ComplexFieldKeywords.Should().BeEquivalentTo(["BIBLIOGRAPHY", "CITATION", "TOA"]);
         fields.FieldKinds.Should().Contain(["Complex:BIBLIOGRAPHY", "Complex:CITATION", "Complex:TOA"]);
+        var toa = FreeWVisualEvidencePlanner.BuildTableOfAuthoritiesExpectation(document);
+        toa.EntryCount.Should().Be(2);
+        toa.EntryWithPageReferenceCount.Should().Be(2);
+        toa.HasGeneratedTable.Should().BeTrue();
+        toa.HasPageReferences.Should().BeTrue();
+        toa.HasExplicitPageNumbers.Should().BeTrue();
+        var caseToa = toa.PageReferences.Should().ContainSingle(reference =>
+            reference.Category == "Cases"
+            && reference.EntryText == "Example v. FreeW, 123 F.4th 456 (2026)"
+            && reference.PageReferenceText == "1, 2").Subject;
+        caseToa.PageNumbers.Should().Equal(1, 2);
+        var statuteToa = toa.PageReferences.Should().ContainSingle(reference =>
+            reference.Category == "Statutes"
+            && reference.EntryText == "Free Software Evidence Act, 42 U.S.C. 2026"
+            && reference.PageReferenceText == "1").Subject;
+        statuteToa.PageNumbers.Should().Equal(1);
 
         var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
             "references-heavy-fields",
@@ -406,6 +422,8 @@ public sealed class VisualEvidencePlannerTests
             document: document);
         expectation.ExpectedOutputName.Should().Be("references-heavy-fields_p2.png");
         expectation.Fields.ComplexFieldKeywords.Should().Contain(["CITATION", "BIBLIOGRAPHY", "TOA"]);
+        expectation.TableOfAuthorities.PageReferences.Select(reference => reference.PageReferenceText)
+            .Should().BeEquivalentTo(["1, 2", "1"]);
     }
 
     [Fact]
@@ -1196,7 +1214,7 @@ public sealed class VisualEvidencePlannerTests
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
         root.GetProperty("schemaId").GetString().Should().Be("freew.visual-evidence.v1");
-        root.GetProperty("schemaVersion").GetInt32().Should().Be(9);
+        root.GetProperty("schemaVersion").GetInt32().Should().Be(FreeWVisualEvidencePlanner.SchemaVersion);
         root.GetProperty("product").GetString().Should().Be("FreeW");
         root.GetProperty("scenarios").GetArrayLength().Should().Be(1);
         var evidence = root.GetProperty("evidence")[0];
@@ -1207,6 +1225,8 @@ public sealed class VisualEvidencePlannerTests
         evidence.GetProperty("pageExpectation").GetProperty("drawingObjects").GetProperty("floatingObjectCount")
             .GetInt32().Should().Be(0);
         evidence.GetProperty("pageExpectation").GetProperty("fields").GetProperty("simpleFieldCount")
+            .GetInt32().Should().Be(0);
+        evidence.GetProperty("pageExpectation").GetProperty("tableOfAuthorities").GetProperty("entryCount")
             .GetInt32().Should().Be(0);
     }
 
@@ -2691,6 +2711,11 @@ public sealed class VisualEvidencePlannerTests
             blocker.Status.Should().Be(FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus);
             blocker.RequiredEvidence.Should().Contain("real MS Word PNG comparisons");
             blocker.Reason.Should().Contain("Word.Application");
+            blocker.SemanticEvidence.Should().Contain(evidence =>
+                evidence.Contains("Example v. FreeW, 123 F.4th 456 (2026) -> 1, 2", StringComparison.Ordinal));
+            blocker.SemanticEvidence.Should().Contain(evidence =>
+                evidence.Contains("Free Software Evidence Act, 42 U.S.C. 2026 -> 1", StringComparison.Ordinal));
+            blocker.RequiresWordBaseline.Should().BeTrue();
             blocker.RelatedBaselineStatuses.Should().Contain(
                 FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus);
             blocker.CandidateBaselinePaths.Should().Contain("references-heavy-fields/references-heavy-fields_p1.png");
@@ -2703,6 +2728,8 @@ public sealed class VisualEvidencePlannerTests
                 .Should().Be("references-heavy-toa-page-number-fidelity");
             jsonBlocker.GetProperty("status").GetString()
                 .Should().Be("word-baseline-unavailable");
+            jsonBlocker.GetProperty("semanticEvidence").GetArrayLength().Should().Be(2);
+            jsonBlocker.GetProperty("requiresWordBaseline").GetBoolean().Should().BeTrue();
             jsonBlocker.GetProperty("trust").GetProperty("passed").GetBoolean()
                 .Should().BeTrue();
 
@@ -2710,6 +2737,8 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("## Remaining Evidence Blockers");
             markdown.Should().Contain("references-heavy-toa-page-number-fidelity");
             markdown.Should().Contain("TOA page-number fidelity");
+            markdown.Should().Contain("Example v. FreeW, 123 F.4th 456 (2026) -> 1, 2");
+            markdown.Should().Contain("yes");
             markdown.Should().Contain("COM ProgID 'Word.Application' is not registered");
         }
         finally

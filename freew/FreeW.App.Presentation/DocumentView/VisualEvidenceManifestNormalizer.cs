@@ -47,6 +47,7 @@ public sealed record FreeWVisualEvidenceNormalizedRow(
     FreeWVisualDrawingObjectExpectation DrawingObjects,
     FreeWVisualChartSmartArtExpectation ChartSmartArt,
     FreeWVisualFieldExpectation Fields,
+    FreeWVisualTableOfAuthoritiesExpectation TableOfAuthorities,
     FreeWVisualEvidenceTrust Trust);
 
 public sealed record FreeWVisualEvidenceNormalizedSummary(
@@ -96,12 +97,14 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
     string Reason,
     IReadOnlyList<string> RelatedBaselineStatuses,
     IReadOnlyList<string> CandidateBaselinePaths,
+    IReadOnlyList<string> SemanticEvidence,
+    bool RequiresWordBaseline,
     FreeWVisualEvidenceTrust Trust);
 
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 16;
+    public const int SummarySchemaVersion = 17;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -394,8 +397,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
         sb.AppendLine();
         sb.AppendLine("## Remaining Evidence Blockers");
         sb.AppendLine();
-        sb.AppendLine("| Blocker | Scenario | Area | Status | Required Evidence | Reason | Related Baseline Statuses | Candidate Baselines | Trust |");
-        sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+        sb.AppendLine("| Blocker | Scenario | Area | Status | Required Evidence | Reason | Semantic Evidence | Word Baseline Required | Related Baseline Statuses | Candidate Baselines | Trust |");
+        sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
         foreach (var blocker in summary.RemainingEvidenceBlockers)
         {
             sb.AppendLine(
@@ -405,6 +408,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{EscapeMarkdown(blocker.Status)} | " +
                 $"{EscapeMarkdown(blocker.RequiredEvidence)} | " +
                 $"{EscapeMarkdown(blocker.Reason)} | " +
+                $"{EscapeMarkdown(FormatBlockerList(blocker.SemanticEvidence))} | " +
+                $"{(blocker.RequiresWordBaseline ? "yes" : "no")} | " +
                 $"{EscapeMarkdown(FormatBlockerList(blocker.RelatedBaselineStatuses))} | " +
                 $"{EscapeMarkdown(FormatBlockerList(blocker.CandidateBaselinePaths))} | " +
                 $"{(blocker.Trust.Passed ? "passed" : "failed")} |");
@@ -712,6 +717,22 @@ public static class FreeWVisualEvidenceManifestNormalizer
         if (rows.Count == 0)
             return [];
 
+        var semanticEvidence = BuildReferencesHeavyToaSemanticEvidence(rows);
+        if (semanticEvidence.Count == 0)
+        {
+            return
+            [
+                BuildReferencesHeavyToaBlocker(
+                    "semantic-toa-page-references-missing",
+                    "trusted references-heavy rows with generated Table of Authorities page-reference metadata",
+                    "trusted references-heavy evidence did not record generated TOA page references; regenerate v17 evidence or fix shared TOA generation before treating this as a Word-baseline-only gap",
+                    [],
+                    [],
+                    semanticEvidence,
+                    requiresWordBaseline: false)
+            ];
+        }
+
         var related = baselineComparisons
             .Where(comparison => string.Equals(comparison.ScenarioId, "references-heavy-fields", StringComparison.OrdinalIgnoreCase))
             .ToList();
@@ -721,9 +742,12 @@ public static class FreeWVisualEvidenceManifestNormalizer
             [
                 BuildReferencesHeavyToaBlocker(
                     "needs-word-baseline-run",
-                    "run a Word-baseline comparison for references-heavy-fields to prove TOA page-number fidelity",
+                    "real MS Word PNG comparisons for references-heavy Table of Authorities page numbers",
+                    "semantic generated TOA page references are present in trusted FreeW evidence; run a Word-baseline comparison for references-heavy-fields to prove Word visual parity",
                     [],
-                    [])
+                    [],
+                    semanticEvidence,
+                    requiresWordBaseline: true)
             ];
         }
 
@@ -759,9 +783,12 @@ public static class FreeWVisualEvidenceManifestNormalizer
             [
                 BuildReferencesHeavyToaBlocker(
                     FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                    "real MS Word PNG comparisons for references-heavy Table of Authorities page numbers",
                     reason,
                     statuses,
-                    candidates)
+                    candidates,
+                    semanticEvidence,
+                    requiresWordBaseline: true)
             ];
         }
 
@@ -772,9 +799,12 @@ public static class FreeWVisualEvidenceManifestNormalizer
             [
                 BuildReferencesHeavyToaBlocker(
                     FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus,
-                    "references-heavy Word baseline PNGs are missing for TOA page-number comparison",
+                    "real MS Word PNG comparisons for references-heavy Table of Authorities page numbers",
+                    "semantic generated TOA page references are present in trusted FreeW evidence, but references-heavy Word baseline PNGs are missing for TOA page-number comparison",
                     statuses,
-                    candidates)
+                    candidates,
+                    semanticEvidence,
+                    requiresWordBaseline: true)
             ];
         }
 
@@ -788,27 +818,54 @@ public static class FreeWVisualEvidenceManifestNormalizer
         [
             BuildReferencesHeavyToaBlocker(
                 "needs-render-review",
+                "render-review resolution for failed references-heavy Word PNG comparisons",
                 "references-heavy Word baseline comparison did not fully pass; inspect TOA page-number rendering differences",
                 statuses,
-                candidates)
+                candidates,
+                semanticEvidence,
+                requiresWordBaseline: false)
         ];
     }
 
     private static FreeWVisualRemainingEvidenceBlocker BuildReferencesHeavyToaBlocker(
         string status,
+        string requiredEvidence,
         string reason,
         IReadOnlyList<string> relatedBaselineStatuses,
-        IReadOnlyList<string> candidateBaselinePaths) =>
+        IReadOnlyList<string> candidateBaselinePaths,
+        IReadOnlyList<string> semanticEvidence,
+        bool requiresWordBaseline) =>
         new(
             "references-heavy-toa-page-number-fidelity",
             "references-heavy-fields",
             "TOA page-number fidelity",
             status,
-            "trusted WPF/Avalonia references-heavy rows plus real MS Word PNG comparisons for the generated Table of Authorities page numbers",
+            requiredEvidence,
             reason,
             relatedBaselineStatuses,
             candidateBaselinePaths,
+            semanticEvidence,
+            requiresWordBaseline,
             new FreeWVisualEvidenceTrust(true, []));
+
+    private static IReadOnlyList<string> BuildReferencesHeavyToaSemanticEvidence(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows) =>
+        rows
+            .Where(row => row.TableOfAuthorities.HasPageReferences)
+            .SelectMany(row => row.TableOfAuthorities.PageReferences.Select(reference =>
+                string.Concat(
+                    row.HostId,
+                    "/p",
+                    row.PageNumber.ToString(CultureInfo.InvariantCulture),
+                    ": ",
+                    reference.Category,
+                    ": ",
+                    reference.EntryText,
+                    " -> ",
+                    reference.PageReferenceText)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
     private static void ValidateManifestHeader(
         FreeWVisualEvidenceManifest manifest,
@@ -907,6 +964,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             row.PageExpectation.DrawingObjects,
             row.PageExpectation.ChartSmartArt,
             row.PageExpectation.Fields,
+            row.PageExpectation.TableOfAuthorities,
             trust);
     }
 
@@ -922,6 +980,12 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("scenario expects a page border but the page expectation records none");
         if (composition.ExpectsWatermark && !features.Watermark.Present)
             rowFailures.Add("scenario expects a watermark but the page expectation records none");
+        if (row.ExpectedFeatureTags.Contains("generated-toa-page-references", StringComparer.OrdinalIgnoreCase)
+            && !row.PageExpectation.TableOfAuthorities.HasPageReferences)
+        {
+            rowFailures.Add(
+                "scenario expects generated Table of Authorities page references but the page expectation records none");
+        }
         if (composition.ExpectsTables && row.PageExpectation.Tables.TableCount <= 0)
             rowFailures.Add("scenario expects table layout but the page expectation records no tables");
         if (composition.ExpectsFloatingObjects && row.PageExpectation.DrawingObjects.FloatingObjectCount <= 0)
