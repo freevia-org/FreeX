@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -94,9 +96,7 @@ public static class FindReplaceService
                 workbook: workbook,
                 skipNumberValues: skipNumbers))
             {
-                bool isMatch = matchEntireCell
-                    ? candidate.Text.Equals(searchText, comparison)
-                    : candidate.Text.Contains(searchText, comparison);
+                bool isMatch = IsTextMatch(candidate.Text, searchText, comparison, matchEntireCell);
 
                 if (isMatch && FindReplaceSearchPlanner.MatchesRequiredFormat(workbook, sheet, candidate.Address, options.RequiredFormat))
                 {
@@ -205,7 +205,8 @@ public static class FindReplaceService
                     comparison,
                     matchEntireCell,
                     options.LookIn,
-                    out var newCell))
+                    out var newCell,
+                    workbook))
             {
                 if (!editsBySheet.TryGetValue(result.Address.Sheet, out var list))
                 {
@@ -255,6 +256,12 @@ public static class FindReplaceService
         return new ReplaceAllResult(replacedCount, null);
     }
 
+    /// <param name="workbook">
+    /// Optional owning workbook. Supply it so Values-mode matching against a formatted
+    /// number/date cell (e.g. a currency or percent cell) uses the same number-format-aware
+    /// display text that <see cref="Find"/> matched — see <see cref="TryCreateReplacementCell"/>.
+    /// When omitted, formatted-number matches are skipped (unchanged legacy behavior).
+    /// </param>
     public static bool TryCreateReplacementCommand(
         Sheet sheet,
         FindResult match,
@@ -264,7 +271,8 @@ public static class FindReplaceService
         bool matchEntireCell,
         FindLookIn lookIn,
         StyleDiff? replacementFormat,
-        out IWorkbookCommand command)
+        out IWorkbookCommand command,
+        Workbook? workbook = null)
     {
         command = null!;
         if (string.IsNullOrEmpty(searchText))
@@ -279,7 +287,8 @@ public static class FindReplaceService
                 comparison,
                 matchEntireCell,
                 lookIn,
-                out var newCell))
+                out var newCell,
+                workbook))
         {
             var editCommand = new EditCellsCommand(sheet.Id, [(match.Address, newCell)]);
             command = replacementFormat is null
@@ -307,6 +316,22 @@ public static class FindReplaceService
             out command);
     }
 
+    /// <summary>
+    /// Builds the replacement cell for a Values/Formulas-mode match.
+    /// </summary>
+    /// <remarks>
+    /// Excel semantics: Replace must operate on the very same text Find matched, so that a match
+    /// only visible in the formatted display text (e.g. a currency cell showing "$1,000.00") is
+    /// still replaceable, not silently skipped. When <paramref name="workbook"/> is supplied,
+    /// Values-mode matching uses the cell's number-format-aware display text — identical to what
+    /// <see cref="FindReplaceSearchPlanner.EnumerateSearchTexts"/> used to find it. The resulting
+    /// replacement text is then re-parsed the same way Excel re-parses typed-in cell text
+    /// (accepting "$", thousands separators, "%", and dates) so the new stored value round-trips
+    /// through the same representation the user was editing; if it does not parse as a number or
+    /// date, Excel stores the literal replacement text, so we do too. A match that exists only in
+    /// the formatted rendering with no corresponding text in the stored value (not reachable via
+    /// this round-trip) is therefore never silently applied — it is skipped, matching Excel.
+    /// </remarks>
     private static bool TryCreateReplacementCell(
         Sheet sheet,
         CellAddress address,
@@ -315,7 +340,8 @@ public static class FindReplaceService
         StringComparison comparison,
         bool matchEntireCell,
         FindLookIn lookIn,
-        out Cell newCell)
+        out Cell newCell,
+        Workbook? workbook = null)
     {
         newCell = null!;
         var cell = sheet.GetCell(address);
@@ -325,7 +351,11 @@ public static class FindReplaceService
         var currentText = lookIn switch
         {
             FindLookIn.Formulas => cell.FormulaText,
-            FindLookIn.Values => cell.HasFormula ? null : GetDisplayText(cell.Value),
+            FindLookIn.Values => cell.HasFormula
+                ? null
+                : workbook is not null
+                    ? GetDisplayTextFormatted(cell, workbook)
+                    : GetDisplayText(cell.Value),
             _ => null
         };
         if (currentText is null ||
@@ -342,7 +372,10 @@ public static class FindReplaceService
             return true;
         }
 
-        ScalarValue newValue = double.TryParse(newText, NumberStyles.Any, CultureInfo.InvariantCulture, out var number)
+        // Re-parse the replacement text the same way Excel re-parses text typed into a cell
+        // (accepts "$", thousands separators, "%", and dates) so a formatted numeric match
+        // round-trips back into a NumberValue rather than becoming literal text.
+        ScalarValue newValue = ExcelTextNumberParser.TryParse(newText, out var number)
             ? new NumberValue(number)
             : new TextValue(newText);
 
@@ -408,6 +441,24 @@ public static class FindReplaceService
         out string newText)
     {
         newText = "";
+
+        if (HasWildcard(searchText))
+        {
+            var regex = GetOrCreateSearchRegex(searchText, comparison, matchEntireCell);
+            if (!regex.IsMatch(currentText))
+                return false;
+
+            // Match Entire Cell replaces the whole cell text with the literal replacement.
+            // Otherwise every non-overlapping wildcard match is replaced with the literal
+            // replacement text — Excel does not expand wildcards in the replacement string, so a
+            // MatchEvaluator is used instead of the string overload (which would otherwise treat
+            // "$1"-style sequences in replaceText as regex backreferences).
+            newText = matchEntireCell
+                ? replaceText
+                : regex.Replace(currentText, _ => replaceText);
+            return true;
+        }
+
         var isMatch = matchEntireCell
             ? currentText.Equals(searchText, comparison)
             : currentText.Contains(searchText, comparison);
@@ -418,6 +469,54 @@ public static class FindReplaceService
             ? replaceText
             : currentText.Replace(searchText, replaceText, comparison);
         return true;
+    }
+
+    /// <summary>
+    /// Text-match test shared by <see cref="Find"/> and the Replace path. Excel-style wildcards
+    /// (<c>*</c> = any run of characters, <c>?</c> = exactly one character, <c>~</c> escapes the
+    /// next wildcard character) are honored whenever <paramref name="searchText"/> contains one;
+    /// otherwise a plain literal Equals/Contains is used, preserving the previous fast path so
+    /// ordinary literal searches (the overwhelming majority) do not pay for regex construction.
+    /// </summary>
+    private static bool IsTextMatch(string text, string searchText, StringComparison comparison, bool matchEntireCell)
+    {
+        if (HasWildcard(searchText))
+        {
+            var regex = GetOrCreateSearchRegex(searchText, comparison, matchEntireCell);
+            return regex.IsMatch(text);
+        }
+
+        return matchEntireCell
+            ? text.Equals(searchText, comparison)
+            : text.Contains(searchText, comparison);
+    }
+
+    private static Regex GetOrCreateSearchRegex(string searchText, StringComparison comparison, bool anchored) =>
+        FormulaWildcardHelper.GetOrCreateRegex(
+            searchText,
+            ignoreCase: comparison == StringComparison.OrdinalIgnoreCase,
+            anchored: anchored);
+
+    /// <summary>
+    /// Returns <c>true</c> when <paramref name="pattern"/> needs the wildcard/regex match path:
+    /// it contains an unescaped <c>*</c> or <c>?</c> wildcard, or a <c>~</c> escape sequence
+    /// (<c>~*</c>, <c>~?</c>, <c>~~</c>). The escape sequence case also requires the regex path
+    /// even though it matches a single literal character, because the <c>~</c> prefix itself
+    /// must be stripped — the plain literal Equals/Contains fast path would otherwise compare
+    /// against the raw pattern text including the escaping <c>~</c>, which the cell text never
+    /// contains. Matches <see cref="FormulaWildcardHelper"/>'s escaping rules exactly so
+    /// detection and pattern-building never disagree.
+    /// </summary>
+    private static bool HasWildcard(string pattern)
+    {
+        for (var i = 0; i < pattern.Length; i++)
+        {
+            var ch = pattern[i];
+            if (ch is '*' or '?' or '~')
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -467,4 +566,22 @@ public static class FindReplaceService
         ErrorValue err => err.Code,
         _ => null
     };
+
+    /// <summary>
+    /// Number-format-aware display text for Values-mode replace, mirroring
+    /// <c>FindReplaceSearchPlanner.GetDisplayTextFormatted</c> so Replace matches the exact text
+    /// Find produced (e.g. "50%", "$1,000.00") instead of the unformatted invariant rendering.
+    /// </summary>
+    private static string? GetDisplayTextFormatted(Cell cell, Workbook workbook)
+    {
+        var value = cell.Value;
+
+        if (value is BlankValue) return null;
+        if (value is TextValue t) return t.Value;
+        if (value is BoolValue b) return b.Value ? "TRUE" : "FALSE";
+        if (value is ErrorValue e) return e.Code;
+
+        var style = workbook.GetStyle(cell.StyleId);
+        return NumberFormatter.Format(value, style.NumberFormat, workbook.Uses1904DateSystem);
+    }
 }
