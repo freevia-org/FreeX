@@ -47,6 +47,11 @@ internal sealed class FileCommands
             "WPF print host",
             "Native printer handoff adapter is not wired in this host path yet.");
 
+    private static readonly PresentationVideoExportHandoffHostCapabilities VideoExportHostCapabilities =
+        PresentationVideoExportHandoffHostCapabilities.Deferred(
+            "WPF video export host",
+            "MP4 encoder, narration capture, and camera/media capture adapters are not wired in this host path yet.");
+
     private static readonly FileOpenDialogPlan OpenDialogPlan =
         PresentationFileDialogPlanner.BuildOpenDialogPlan();
 
@@ -91,6 +96,8 @@ internal sealed class FileCommands
     public PresentationNativePrintHandoffPlan? LastNativePrintHandoffPlan { get; private set; }
 
     public PresentationVideoFramePackage? LastVideoFramePackage { get; private set; }
+
+    public PresentationVideoExportHandoffPlan? LastVideoExportHandoffPlan { get; private set; }
 
     public void MarkDirty()
     {
@@ -327,7 +334,18 @@ internal sealed class FileCommands
             _getModel(),
             request,
             WpfPresentationSlideImageRenderer.RenderSlideToPng);
+        LastVideoExportHandoffPlan = BuildVideoExportHandoffPlan(LastVideoFramePackage.Plan);
         return LastVideoFramePackage;
+    }
+
+    public PresentationVideoExportHandoffPlan BuildVideoExportHandoffPlan(
+        PresentationVideoFramePackagePlan packagePlan,
+        PresentationVideoExportHandoffHostCapabilities? hostCapabilities = null)
+    {
+        LastVideoExportHandoffPlan = PresentationVideoFramePackageExecutor.BuildHandoffPlan(
+            packagePlan,
+            hostCapabilities ?? VideoExportHostCapabilities);
+        return LastVideoExportHandoffPlan;
     }
 
     /// <summary>

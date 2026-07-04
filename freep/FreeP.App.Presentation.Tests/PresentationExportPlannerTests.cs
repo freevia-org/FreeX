@@ -1474,6 +1474,40 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void VideoExportHandoffPlan_ReportsHostDeferredEncoderOverFramePackage()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var package = PresentationVideoFramePackageExecutor.BuildPackage(
+            presentation,
+            request: null,
+            (_, _, _, _) => TinyPng.ToArray());
+        var host = PresentationVideoExportHandoffHostCapabilities.Deferred(
+            "Unit test video host",
+            "Unit test host has no MP4 encoder adapter.");
+
+        var handoff = PresentationVideoFramePackageExecutor.BuildHandoffPlan(package.Plan, host);
+
+        handoff.PackagePlan.Should().BeSameAs(package.Plan);
+        handoff.HostCapabilities.Should().Be(host);
+        handoff.Status.Should().Be(PresentationVideoExportHandoffStatus.EncoderInputPackageReadyHostDeferred);
+        handoff.IsFramePackageReady.Should().BeTrue();
+        handoff.RequiresHostEncoder.Should().BeTrue();
+        handoff.CanOpenHostEncoder.Should().BeFalse();
+        handoff.Mp4EncoderDeferredByHost.Should().BeTrue();
+        handoff.StatusText.Should().Be("Unit test video host: MP4 encoder deferred; frame package ready");
+        handoff.Reason.Should().Be("Unit test host has no MP4 encoder adapter.");
+        handoff.Capabilities.Should().Contain(capability =>
+            capability.Name == "Frame package" &&
+            capability.IsAvailable &&
+            !capability.IsDeferred);
+        handoff.Capabilities.Should().Contain(capability =>
+            capability.Name == "MP4 encoder" &&
+            !capability.IsAvailable &&
+            capability.IsDeferred &&
+            capability.StatusText == "Unit test host has no MP4 encoder adapter.");
+    }
+
+    [Fact]
     public void VideoFramePackageExecutor_EmptyDeckBuildsNoFrames()
     {
         var presentation = Presentation.CreateEmpty();
@@ -1489,6 +1523,16 @@ public sealed class PresentationExportPlannerTests
         package.Plan.ExportPlan.DisabledReason.Should().Be("Video export requires at least one slide.");
         package.Frames.Should().BeEmpty();
         package.Bytes.Should().BeEmpty();
+
+        var handoff = PresentationVideoFramePackageExecutor.BuildHandoffPlan(
+            package.Plan,
+            PresentationVideoExportHandoffHostCapabilities.Deferred("Unit test video host", "No encoder."));
+        handoff.Status.Should().Be(PresentationVideoExportHandoffStatus.NoSlides);
+        handoff.IsFramePackageReady.Should().BeFalse();
+        handoff.RequiresHostEncoder.Should().BeFalse();
+        handoff.CanOpenHostEncoder.Should().BeFalse();
+        handoff.Mp4EncoderDeferredByHost.Should().BeFalse();
+        handoff.StatusText.Should().Be("Video export requires at least one slide.");
     }
 
     [Fact]

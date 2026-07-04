@@ -13,6 +13,42 @@ public sealed record PresentationVideoFramePackagePlan(
     IReadOnlyList<string> DeferredCapabilities,
     string? DisabledReason);
 
+public enum PresentationVideoExportHandoffStatus
+{
+    EncoderInputPackageReadyHostDeferred,
+    HostEncoderReady,
+    NoSlides,
+}
+
+public sealed record PresentationVideoExportHandoffHostCapabilities(
+    string HostName,
+    bool CanEncodeMp4,
+    bool CanCaptureNarration,
+    bool CanCaptureCameraAndMedia,
+    string UnavailableReason)
+{
+    public static PresentationVideoExportHandoffHostCapabilities Deferred(string hostName, string unavailableReason) =>
+        new(hostName, CanEncodeMp4: false, CanCaptureNarration: false, CanCaptureCameraAndMedia: false, unavailableReason);
+}
+
+public sealed record PresentationVideoExportCapabilityPlan(
+    string Name,
+    bool IsAvailable,
+    bool IsDeferred,
+    string StatusText);
+
+public sealed record PresentationVideoExportHandoffPlan(
+    PresentationVideoFramePackagePlan PackagePlan,
+    PresentationVideoExportHandoffHostCapabilities HostCapabilities,
+    PresentationVideoExportHandoffStatus Status,
+    bool IsFramePackageReady,
+    bool RequiresHostEncoder,
+    bool CanOpenHostEncoder,
+    bool Mp4EncoderDeferredByHost,
+    string StatusText,
+    string Reason,
+    IReadOnlyList<PresentationVideoExportCapabilityPlan> Capabilities);
+
 public sealed record PresentationVideoFramePackageFrame(
     int SegmentIndex,
     int SlideIndex,
@@ -46,6 +82,10 @@ public static class PresentationVideoFramePackageExecutor
     public const string MediaCaptureDeferred = nameof(MediaCaptureDeferred);
     public const string EncoderDeferredReason =
         "Video frame package execution is available; MP4 encoding, narration, camera, and media capture execution are deferred.";
+    public const string HostEncoderDeferredReason =
+        "Video frame package is ready for host handoff; MP4 encoder integration is deferred by this host.";
+    public const string HostEncoderReadyStatus =
+        "Video frame package is ready for host MP4 encoder handoff.";
 
     private static readonly DateTimeOffset DeterministicZipTimestamp = new(1980, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
@@ -124,6 +164,43 @@ public static class PresentationVideoFramePackageExecutor
         return new PresentationVideoFramePackage(plan, frames, packageBytes);
     }
 
+    public static PresentationVideoExportHandoffPlan BuildHandoffPlan(
+        PresentationVideoFramePackagePlan packagePlan,
+        PresentationVideoExportHandoffHostCapabilities hostCapabilities)
+    {
+        ArgumentNullException.ThrowIfNull(packagePlan);
+        ArgumentNullException.ThrowIfNull(hostCapabilities);
+
+        var noSlides = !packagePlan.CanBuildPackage;
+        var canOpenHostEncoder = packagePlan.CanBuildPackage && hostCapabilities.CanEncodeMp4;
+        var status = noSlides
+            ? PresentationVideoExportHandoffStatus.NoSlides
+            : canOpenHostEncoder
+                ? PresentationVideoExportHandoffStatus.HostEncoderReady
+                : PresentationVideoExportHandoffStatus.EncoderInputPackageReadyHostDeferred;
+        var reason = status switch
+        {
+            PresentationVideoExportHandoffStatus.NoSlides =>
+                packagePlan.DisabledReason ?? "Video export requires at least one slide.",
+            PresentationVideoExportHandoffStatus.HostEncoderReady => HostEncoderReadyStatus,
+            _ => string.IsNullOrWhiteSpace(hostCapabilities.UnavailableReason)
+                ? HostEncoderDeferredReason
+                : hostCapabilities.UnavailableReason,
+        };
+
+        return new PresentationVideoExportHandoffPlan(
+            packagePlan,
+            hostCapabilities,
+            status,
+            IsFramePackageReady: packagePlan.CanBuildPackage,
+            RequiresHostEncoder: packagePlan.CanBuildPackage,
+            CanOpenHostEncoder: canOpenHostEncoder,
+            Mp4EncoderDeferredByHost: packagePlan.CanBuildPackage && !hostCapabilities.CanEncodeMp4,
+            FormatHandoffStatusText(status, hostCapabilities.HostName),
+            reason,
+            BuildCapabilityPlans(packagePlan, hostCapabilities));
+    }
+
     private static PresentationVideoFramePackagePlan BuildPackagePlan(PresentationVideoExportPlan exportPlan)
     {
         var canBuild = exportPlan.Storyboard.Segments.Count > 0;
@@ -141,6 +218,42 @@ public static class PresentationVideoFramePackageExecutor
             ],
             canBuild ? null : "Video frame package requires at least one slide.");
     }
+
+    private static IReadOnlyList<PresentationVideoExportCapabilityPlan> BuildCapabilityPlans(
+        PresentationVideoFramePackagePlan packagePlan,
+        PresentationVideoExportHandoffHostCapabilities hostCapabilities)
+    {
+        var framePackageStatus = packagePlan.CanBuildPackage
+            ? "Encoder input frame package can be built."
+            : packagePlan.DisabledReason ?? "Video frame package requires at least one slide.";
+        return
+        [
+            new("Frame package", packagePlan.CanBuildPackage, IsDeferred: false, framePackageStatus),
+            BuildHostCapability("MP4 encoder", hostCapabilities.CanEncodeMp4, hostCapabilities.UnavailableReason),
+            BuildHostCapability("Narration capture", hostCapabilities.CanCaptureNarration, hostCapabilities.UnavailableReason),
+            BuildHostCapability("Camera and media capture", hostCapabilities.CanCaptureCameraAndMedia, hostCapabilities.UnavailableReason),
+        ];
+    }
+
+    private static PresentationVideoExportCapabilityPlan BuildHostCapability(
+        string name,
+        bool isAvailable,
+        string unavailableReason) =>
+        new(
+            name,
+            isAvailable,
+            IsDeferred: !isAvailable,
+            isAvailable ? $"{name} available through host adapter." : unavailableReason);
+
+    private static string FormatHandoffStatusText(
+        PresentationVideoExportHandoffStatus status,
+        string hostName) =>
+        status switch
+        {
+            PresentationVideoExportHandoffStatus.NoSlides => "Video export requires at least one slide.",
+            PresentationVideoExportHandoffStatus.HostEncoderReady => $"{hostName}: host MP4 encoder ready",
+            _ => $"{hostName}: MP4 encoder deferred; frame package ready",
+        };
 
     private static byte[] BuildZipPackage(
         PresentationVideoFramePackagePlan plan,
