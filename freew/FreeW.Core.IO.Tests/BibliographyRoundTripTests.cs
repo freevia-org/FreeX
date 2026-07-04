@@ -343,6 +343,75 @@ public class BibliographyRoundTripTests
     }
 
     [Fact]
+    public void ArticleInPeriodicalSource_AllFields_SurviveRoundTrip()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Sources.Add(new Source
+        {
+            Tag = "Periodical2026",
+            Type = SourceType.ArticleInPeriodical,
+            Author = "Roe",
+            Title = "City Desk",
+            Year = "2026",
+            Journal = "Daily Planet",
+            Volume = "12",
+            Issue = "4",
+            Pages = "5-7",
+            StandardNumber = "ISSN 1234-5678",
+            ShortTitle = "City Desk",
+            Comments = "Periodical note"
+        });
+
+        var source = RoundTrip(doc).Sources.Should().ContainSingle().Subject;
+        source.Type.Should().Be(SourceType.ArticleInPeriodical);
+        source.Author.Should().Be("Roe");
+        source.Title.Should().Be("City Desk");
+        source.Year.Should().Be("2026");
+        source.Journal.Should().Be("Daily Planet");
+        source.Volume.Should().Be("12");
+        source.Issue.Should().Be("4");
+        source.Pages.Should().Be("5-7");
+        source.StandardNumber.Should().Be("ISSN 1234-5678");
+        source.ShortTitle.Should().Be("City Desk");
+        source.Comments.Should().Be("Periodical note");
+    }
+
+    [Fact]
+    public void ElectronicSource_AllFields_SurviveRoundTrip()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Sources.Add(new Source
+        {
+            Tag = "Electronic2026",
+            Type = SourceType.ElectronicSource,
+            Author = "Ada",
+            Title = "Online Notes",
+            Year = "2026",
+            Publisher = "Example Archive",
+            Url = "https://example.test/notes",
+            AccessedDay = "4",
+            AccessedMonth = "July",
+            AccessedYear = "2026",
+            ShortTitle = "Notes",
+            Comments = "Electronic note"
+        });
+
+        var source = RoundTrip(doc).Sources.Should().ContainSingle().Subject;
+        source.Type.Should().Be(SourceType.ElectronicSource);
+        source.Author.Should().Be("Ada");
+        source.Title.Should().Be("Online Notes");
+        source.Year.Should().Be("2026");
+        source.Publisher.Should().Be("Example Archive");
+        source.Url.Should().Be("https://example.test/notes");
+        source.Accessed.Should().BeNull();
+        source.AccessedDay.Should().Be("4");
+        source.AccessedMonth.Should().Be("July");
+        source.AccessedYear.Should().Be("2026");
+        source.ShortTitle.Should().Be("Notes");
+        source.Comments.Should().Be("Electronic note");
+    }
+
+    [Fact]
     public void MultipleSources_PreserveOrderAndCount()
     {
         var doc = TextDocument.CreateEmpty();
@@ -475,6 +544,75 @@ public class BibliographyRoundTripTests
         source.Element(B + "SourceType")!.Value.Should().Be("ConferenceProceedings");
         source.Element(B + "ConferenceName")!.Value.Should().Be("Proceedings of the Example Conference");
         source.Element(B + "Pages")!.Value.Should().Be("101-109");
+    }
+
+    [Fact]
+    public void BibliographyPart_WritesNewWordSourceTypeTokens()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Sources.Add(new Source
+        {
+            Tag = "Periodical2026",
+            Type = SourceType.ArticleInPeriodical,
+            Title = "City Desk",
+            Journal = "Daily Planet",
+            Pages = "5-7"
+        });
+        doc.Sources.Add(new Source
+        {
+            Tag = "Electronic2026",
+            Type = SourceType.ElectronicSource,
+            Title = "Online Notes",
+            Url = "https://example.test/notes"
+        });
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        using var zip = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
+        using var entry = zip.GetEntry("word/bibliography/sources.xml")!.Open();
+        var sources = XDocument.Load(entry).Root!.Elements(B + "Source").ToList();
+
+        sources[0].Element(B + "SourceType")!.Value.Should().Be("ArticleInAPeriodical");
+        sources[0].Element(B + "JournalName")!.Value.Should().Be("Daily Planet");
+        sources[0].Element(B + "Pages")!.Value.Should().Be("5-7");
+        sources[1].Element(B + "SourceType")!.Value.Should().Be("ElectronicSource");
+        sources[1].Element(B + "URL")!.Value.Should().Be("https://example.test/notes");
+    }
+
+    [Fact]
+    public void WordStyleNewSourceTypeTokens_ReadBackToModeledTypes()
+    {
+        var result = ReadDocxWithSourcesXml(
+            """
+            <b:Sources xmlns:b="http://schemas.openxmlformats.org/officeDocument/2006/bibliography">
+              <b:Source>
+                <b:Tag>Periodical2026</b:Tag>
+                <b:SourceType>ArticleInAPeriodical</b:SourceType>
+                <b:Title>City Desk</b:Title>
+                <b:JournalName>Daily Planet</b:JournalName>
+                <b:Pages>5-7</b:Pages>
+              </b:Source>
+              <b:Source>
+                <b:Tag>Electronic2026</b:Tag>
+                <b:SourceType>ElectronicSource</b:SourceType>
+                <b:Title>Online Notes</b:Title>
+                <b:URL>https://example.test/notes</b:URL>
+                <b:DayAccessed>4</b:DayAccessed>
+                <b:MonthAccessed>July</b:MonthAccessed>
+                <b:YearAccessed>2026</b:YearAccessed>
+              </b:Source>
+            </b:Sources>
+            """);
+
+        result.Sources.Should().HaveCount(2);
+        result.Sources[0].Type.Should().Be(SourceType.ArticleInPeriodical);
+        result.Sources[0].Journal.Should().Be("Daily Planet");
+        result.Sources[0].Pages.Should().Be("5-7");
+        result.Sources[1].Type.Should().Be(SourceType.ElectronicSource);
+        result.Sources[1].Url.Should().Be("https://example.test/notes");
+        result.Sources[1].AccessedDay.Should().Be("4");
+        result.Sources[1].AccessedMonth.Should().Be("July");
+        result.Sources[1].AccessedYear.Should().Be("2026");
     }
 
     [Fact]
