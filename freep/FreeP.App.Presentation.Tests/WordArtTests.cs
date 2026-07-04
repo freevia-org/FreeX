@@ -183,6 +183,49 @@ public sealed class WordArtTests : IDisposable
     }
 
     [Fact]
+    public void RoundTrip_TextGlowAndSoftEdge_PreservedThroughWriteRead()
+    {
+        var pres = BuildPres(slide =>
+        {
+            var shape = TextShape(tb =>
+            {
+                var run = tb.Paragraphs[0].Runs[0];
+                run.TextGlow = new RunTextGlow
+                {
+                    Color = new ThemeAwareColor(new SrgbColor(0x22, 0x88, 0xFF)),
+                    Alpha = 96,
+                    RadiusPt = 4.5
+                };
+                run.TextSoftEdge = new RunTextSoftEdge
+                {
+                    RadiusPt = 2.25
+                };
+            });
+            slide.Shapes.Add(shape);
+        });
+
+        var path = WriteToPptx(pres);
+        var reloaded = PptxPackageReader.Read(path);
+        var run = reloaded.Slides[0].Shapes[0].TextBody!.Paragraphs[0].Runs[0];
+
+        run.TextGlow.Should().NotBeNull("glow was set");
+        run.TextGlow!.Color.Resolved.R.Should().Be(0x22);
+        run.TextGlow.Color.Resolved.G.Should().Be(0x88);
+        run.TextGlow.Color.Resolved.B.Should().Be(0xFF);
+        run.TextGlow.Alpha.Should().BeInRange(94, 97);
+        run.TextGlow.RadiusPt.Should().BeApproximately(4.5, 0.5, "EMU round-trip tolerance");
+        run.TextSoftEdge.Should().NotBeNull("soft-edge was set");
+        run.TextSoftEdge!.RadiusPt.Should().BeApproximately(2.25, 0.5, "EMU round-trip tolerance");
+
+        var rPr = GetFirstRunRPr(File.ReadAllBytes(path));
+        XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var effectLst = rPr!.Element(a + "effectLst");
+        effectLst.Should().NotBeNull("run effects must be written under a:rPr/a:effectLst");
+        effectLst!.Element(a + "glow").Should().NotBeNull();
+        effectLst.Element(a + "softEdge").Should().NotBeNull();
+    }
+
+    [Fact]
     public void RoundTrip_WarpPreset_PreservedThroughWriteRead()
     {
         var pres = BuildPres(slide =>
@@ -314,6 +357,58 @@ public sealed class WordArtTests : IDisposable
         resolvedRun.TextReflection.DistDip.Should().BeApproximately(3.0 * 96.0 / 72.0, 0.1);
         resolvedRun.TextReflection.DirDeg.Should().Be(90.0);
         resolvedRun.TextReflection.ScaleY.Should().Be(-1.0);
+    }
+
+    [Fact]
+    public void Compositor_TextGlowAndSoftEdge_ResolvedOntoResolvedRun()
+    {
+        var p = MakePres();
+        p.Slides[0].Shapes.Clear();
+
+        var tb = new TextBody();
+        tb.Paragraphs.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run
+                {
+                    Text = "Glow",
+                    TextGlow = new RunTextGlow
+                    {
+                        Color = new ThemeAwareColor(new SrgbColor(0x10, 0x80, 0xF0)),
+                        Alpha = 144,
+                        RadiusPt = 3.0,
+                    },
+                    TextSoftEdge = new RunTextSoftEdge
+                    {
+                        RadiusPt = 1.5,
+                    }
+                }
+            }
+        });
+
+        p.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 7,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 4000000,
+            ExtentCyEmu = 1000000,
+            TextBody = tb
+        });
+
+        var ops = SlideCompositor.Compose(p, p.Slides[0]).ToList();
+        var resolvedRun = ops.OfType<DrawOp.Shape>()
+            .Single(s => s.Text is not null)
+            .Text!.Paragraphs.Single().Runs.Single();
+
+        resolvedRun.TextGlow.Should().NotBeNull();
+        resolvedRun.TextGlow!.Color.G.Should().Be(0x80);
+        resolvedRun.TextGlow.Alpha.Should().Be(144);
+        resolvedRun.TextGlow.RadiusDip.Should().BeApproximately(3.0 * 96.0 / 72.0, 0.1);
+        resolvedRun.TextSoftEdge.Should().NotBeNull();
+        resolvedRun.TextSoftEdge!.RadiusDip.Should().BeApproximately(1.5 * 96.0 / 72.0, 0.1);
     }
 
     [Fact]
@@ -483,6 +578,44 @@ public sealed class WordArtTests : IDisposable
     }
 
     [Fact]
+    public void TextRunEffectRenderPlanner_EmitsGlowAndSoftEdgePassesBeforeFill()
+    {
+        var run = new ResolvedRun
+        {
+            Text = "Glow",
+            Color = new SrgbColor(10, 20, 30),
+            TextGlow = new ResolvedRunGlow
+            {
+                Color = new SrgbColor(0x20, 0x80, 0xFF),
+                Alpha = 120,
+                RadiusDip = 4,
+            },
+            TextSoftEdge = new ResolvedRunSoftEdge
+            {
+                RadiusDip = 3,
+            }
+        };
+
+        var plan = TextRunEffectRenderPlanner.Plan(
+            run,
+            new LayoutRect(10, 20, 80, 20),
+            horizontalProgress: 0.25,
+            new LayoutRect(0, 0, 200, 100),
+            new ResolvedTextLayout());
+
+        var glowPasses = plan.Passes.OfType<TextRunEffectPass.Glow>().ToArray();
+        var softEdgePasses = plan.Passes.OfType<TextRunEffectPass.SoftEdge>().ToArray();
+        glowPasses.Should().HaveCount(2);
+        glowPasses[0].Color.B.Should().Be(0xFF);
+        glowPasses[0].StrokeWidthDip.Should().BeApproximately(8, 0.001);
+        softEdgePasses.Should().HaveCount(16);
+        softEdgePasses.Should().OnlyContain(pass => pass.IsBlurPass);
+        plan.Passes.Last().Should().BeOfType<TextRunEffectPass.Fill>();
+        var passes = plan.Passes.ToList();
+        passes.IndexOf(glowPasses[0]).Should().BeLessThan(passes.IndexOf(softEdgePasses[0]));
+    }
+
+    [Fact]
     public void TextRunEffectRenderPlanner_WarpAdjustUsesRunCenterForYOffset()
     {
         var run = new ResolvedRun { Text = "Warp", Color = SrgbColor.Black };
@@ -549,7 +682,11 @@ public sealed class WordArtTests : IDisposable
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("TextRunEffectRenderPlanner.Plan(");
+            source.Should().Contain("case TextRunEffectPass.Glow");
+            source.Should().Contain("case TextRunEffectPass.SoftEdge");
             source.Should().NotContain("TextShadow is { } ts");
+            source.Should().NotContain("TextGlow is { }");
+            source.Should().NotContain("TextSoftEdge is { }");
             source.Should().NotContain("DirDeg * Math.PI");
             source.Should().NotContain("BlurDip / 1.5");
             source.Should().NotContain("WordArtWarpPlanner.ComputeYOffset(warpPreset");

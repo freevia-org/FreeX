@@ -24,6 +24,20 @@ public abstract record TextRunEffectPass
         double BlurDip,
         ResolvedFill FillBrush) : TextRunEffectPass;
 
+    public sealed record Glow(
+        double StrokeWidthDip,
+        SrgbColor Color,
+        byte Alpha,
+        double RadiusDip) : TextRunEffectPass;
+
+    public sealed record SoftEdge(
+        ResolvedFill FillBrush,
+        double OffsetX,
+        double OffsetY,
+        byte Alpha,
+        double RadiusDip,
+        bool IsBlurPass) : TextRunEffectPass;
+
     public sealed record Fill(ResolvedFill FillBrush) : TextRunEffectPass;
 
     public sealed record Outline(ResolvedOutline OutlinePen) : TextRunEffectPass;
@@ -68,8 +82,14 @@ public static class TextRunEffectRenderPlanner
             AddShadowPasses(passes, shadow);
 
         var fillBrush = run.TextFill ?? new ResolvedFill.Solid(run.Color);
+        if (run.TextGlow is { } glow)
+            AddGlowPasses(passes, glow);
+
         if (run.TextReflection is { } reflection)
             AddReflectionPass(passes, reflection, fillBrush);
+
+        if (run.TextSoftEdge is { } softEdge)
+            AddSoftEdgePasses(passes, softEdge, fillBrush);
 
         passes.Add(new TextRunEffectPass.Fill(fillBrush));
 
@@ -154,6 +174,54 @@ public static class TextRunEffectRenderPlanner
             reflection.Alpha,
             reflection.BlurDip,
             fillBrush));
+    }
+
+    private static void AddGlowPasses(List<TextRunEffectPass> passes, ResolvedRunGlow glow)
+    {
+        int glowPasses = Math.Min(5, (int)Math.Ceiling(glow.RadiusDip / 2));
+        if (glowPasses <= 0)
+            return;
+
+        byte passAlpha = (byte)(glow.Alpha / (glowPasses + 1));
+        for (int i = glowPasses; i >= 1; i--)
+        {
+            double radius = glow.RadiusDip * i / glowPasses;
+            passes.Add(new TextRunEffectPass.Glow(
+                radius * 2,
+                glow.Color,
+                passAlpha,
+                radius));
+        }
+    }
+
+    private static void AddSoftEdgePasses(
+        List<TextRunEffectPass> passes,
+        ResolvedRunSoftEdge softEdge,
+        ResolvedFill fillBrush)
+    {
+        int blurPasses = Math.Min(3, (int)Math.Ceiling(softEdge.RadiusDip / 2));
+        if (blurPasses <= 0)
+            return;
+
+        byte passAlpha = (byte)Math.Max(8, 64 / (blurPasses + 1));
+        for (int pi = blurPasses; pi >= 1; pi--)
+        {
+            double spread = softEdge.RadiusDip * pi / blurPasses;
+            for (int ox = -1; ox <= 1; ox++)
+            for (int oy = -1; oy <= 1; oy++)
+            {
+                if (ox == 0 && oy == 0)
+                    continue;
+
+                passes.Add(new TextRunEffectPass.SoftEdge(
+                    fillBrush,
+                    ox * spread,
+                    oy * spread,
+                    passAlpha,
+                    spread,
+                    IsBlurPass: true));
+            }
+        }
     }
 
 }

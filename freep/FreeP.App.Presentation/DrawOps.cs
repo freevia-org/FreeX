@@ -34,6 +34,24 @@ public sealed class ResolvedRunReflection
 }
 
 /// <summary>
+/// Resolved glyph glow for the renderer (concrete DIP values).
+/// </summary>
+public sealed class ResolvedRunGlow
+{
+    public SrgbColor Color { get; init; }
+    public byte Alpha { get; init; }
+    public double RadiusDip { get; init; }
+}
+
+/// <summary>
+/// Resolved glyph soft-edge for the renderer (concrete DIP values).
+/// </summary>
+public sealed class ResolvedRunSoftEdge
+{
+    public double RadiusDip { get; init; }
+}
+
+/// <summary>
 /// A fully-resolved text run ready for the renderer: all inherited properties have been applied
 /// so the renderer sees concrete values without any nulls.
 /// </summary>
@@ -63,6 +81,12 @@ public sealed class ResolvedRun
 
     /// <summary>Resolved glyph reflection - null means no reflection.</summary>
     public ResolvedRunReflection? TextReflection { get; init; }
+
+    /// <summary>Resolved glyph glow - null means no glow.</summary>
+    public ResolvedRunGlow? TextGlow { get; init; }
+
+    /// <summary>Resolved glyph soft-edge - null means no soft edge.</summary>
+    public ResolvedRunSoftEdge? TextSoftEdge { get; init; }
 
     // ── Theme 27: OMML math ────────────────────────────────────────────────
 
