@@ -200,7 +200,11 @@ public sealed class ReviewWorkflowAdapterTests
             {
                 Id = 809,
                 Name = "Reference text",
-                TextBody = MakeLinkedTextBody("Project notes", new Hyperlink { Url = "https://example.test/notes" })
+                TextBody = MakeLinkedTextBody("Click here", new Hyperlink
+                {
+                    Url = "https://example.test/notes",
+                    Tooltip = "Open project notes"
+                })
             };
             var chart = new SlideShape
             {
@@ -225,7 +229,7 @@ public sealed class ReviewWorkflowAdapterTests
             window.AccessibilityCheckerPaneHeading.Should().Be("Accessibility - 4 issues");
             opened.Rows.Select(row => row.Title).Should().Equal(
                 "Alt text missing",
-                "Hyperlink ScreenTip missing",
+                "Unclear hyperlink text",
                 "Chart title missing",
                 "Missing slide title");
             opened.Rows[0].CommandHint.Should().Be(PresentationReviewWorkflowPlanner.AltTextCommandId);
@@ -276,7 +280,7 @@ public sealed class ReviewWorkflowAdapterTests
                 null));
             actionedTitle.Rows.Select(row => row.Title).Should().Equal(
                 "Alt text missing",
-                "Hyperlink ScreenTip missing",
+                "Unclear hyperlink text",
                 "Chart title missing");
             window.LastAccessibilitySummaryPlan!.Issues.Should().NotContain(issue =>
                 issue.Title == "Missing slide title");
