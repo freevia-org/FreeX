@@ -31,6 +31,11 @@ namespace FreeP.RenderCompare;
 ///       With --allow-missing-powerpoint, COM-unavailable PowerPoint baselines
 ///       remain n/a but do not fail the run when WPF/Avalonia rendering succeeds.
 ///
+///   --notes-page-preview-evidence &lt;deck.pptx&gt; &lt;outDir&gt;
+///       Build the shared notes-page PDF render plan, write a portable PDF plus
+///       CSV evidence rows, and report WPF/Avalonia parity without requiring
+///       PowerPoint COM.
+///
 ///   --generate-corpus &lt;outDir&gt;
 ///       Author four deterministic test decks via PowerPoint COM and save them to
 ///       outDir as *.pptx.  Also exports PowerPoint's own PNGs next to each deck.
@@ -65,6 +70,7 @@ internal static class Program
                 "--compare"           => RunCompare(args[1..]),
                 "--avalonia-compare"  => RunAvaloniaCompare(args[1..]),
                 "--slide-pane-thumbnail-compare" => RunSlidePaneThumbnailCompare(args[1..]),
+                "--notes-page-preview-evidence" => RunNotesPagePreviewEvidence(args[1..]),
                 "--corpus-summary"    => RunCorpusSummary(args[1..]),
                 "--generate-corpus"           => RunGenerateCorpus(args[1..]),
                 "--patch-chart-labels-19"     => RunPatchChartLabels19(args[1..]),
@@ -432,6 +438,20 @@ internal static class Program
     }
 
     // -----------------------------------------------------------------------
+    // Mode: --notes-page-preview-evidence
+    // -----------------------------------------------------------------------
+    private static int RunNotesPagePreviewEvidence(string[] args)
+    {
+        if (args.Length < 2)
+        {
+            Console.Error.WriteLine("usage: --notes-page-preview-evidence <deck.pptx> <outDir>");
+            return 2;
+        }
+
+        return NotesPagePreviewEvidence.Run(args[0], args[1]);
+    }
+
+    // -----------------------------------------------------------------------
     // Mode: --generate-corpus
     // -----------------------------------------------------------------------
     private static int RunGenerateCorpus(string[] args)
@@ -565,6 +585,9 @@ internal static class Program
         Console.WriteLine("  --slide-pane-thumbnail-compare <deck.pptx> <outDir> [--width W] [--height H] [--allow-missing-powerpoint]");
         Console.WriteLine("      WPF + Avalonia + PowerPoint slide-pane thumbnail renders + per-slide diff table.");
         Console.WriteLine("      --allow-missing-powerpoint treats COM-unavailable PowerPoint baselines as n/a while preserving WPF/Avalonia failures.");
+        Console.WriteLine();
+        Console.WriteLine("  --notes-page-preview-evidence <deck.pptx> <outDir>");
+        Console.WriteLine("      Shared notes-page PDF render plan + portable PDF/CSV evidence; no PowerPoint COM required.");
         Console.WriteLine();
         Console.WriteLine("  --corpus-summary <corpusDir> [--refs <refsDir>]");
         Console.WriteLine("      Print compact per-deck status and PowerPoint reference PNG availability.");

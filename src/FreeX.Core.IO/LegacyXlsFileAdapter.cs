@@ -30,6 +30,15 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
     private const short LegacyPaperSizeLegal = 5;
     private const short LegacyPaperSizeA4 = 9;
 
+    // OADate (1900-epoch) serial for 1904-01-01 — the day-count offset between Excel's two date
+    // systems. NPOI's HSSFCell.DateCellValue already resolves the workbook's 1904 windowing and
+    // hands us a true calendar DateTime, but our formula layer's 1904-aware functions
+    // (YEAR/MONTH/DAY/EDATE/DATEDIF/... — see BuiltInFunctions.DateTime.cs / ExcelDateSystem)
+    // interpret a stored serial as day-count-since-1904-01-01 when Workbook.Uses1904DateSystem is
+    // true. So for a 1904-system workbook the stored serial must be 1904-epoch-relative (not the
+    // default 1900-epoch OADate), matching how XlsxClosedXmlCellMapper handles xlsx.
+    private const double Date1904EpochOADate = 1462;
+
     private static readonly FieldInfo? LbsSelectedIndexField =
         typeof(LbsDataSubRecord).GetField("_iSel", BindingFlags.Instance | BindingFlags.NonPublic);
 
@@ -1947,6 +1956,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         Sheet sheet,
         Dictionary<short, StyleId> styleCache)
     {
+        var uses1904DateSystem = workbook.Uses1904DateSystem;
         for (var rowIndex = sourceSheet.FirstRowNum; rowIndex <= sourceSheet.LastRowNum; rowIndex++)
         {
             var sourceRow = sourceSheet.GetRow(rowIndex);
@@ -1956,7 +1966,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             foreach (var sourceCell in sourceRow.Cells)
             {
                 var address = new ModelCellAddress(sheet.Id, ToModelIndex(sourceCell.RowIndex), ToModelIndex(sourceCell.ColumnIndex));
-                var cell = MapCell(sourceCell);
+                var cell = MapCell(sourceCell, uses1904DateSystem);
                 var styleId = GetStyleId(sourceWorkbook, workbook, sourceCell.CellStyle, styleCache);
                 LoadCellAnnotations(sourceCell, address, sheet);
 
@@ -2383,27 +2393,27 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
                string.Equals(trimmedName, "_xlnm." + builtInName, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static Cell MapCell(NPOICell sourceCell)
+    private static Cell MapCell(NPOICell sourceCell, bool uses1904DateSystem)
     {
         if (sourceCell.CellType == CellType.Formula)
         {
             var formulaText = NormalizeFormula(sourceCell.CellFormula);
             var cell = Cell.FromFormula(formulaText);
             cell.ArrayMode = FormulaArrayMode.Implicit;
-            cell.Value = MapCachedFormulaValue(sourceCell);
+            cell.Value = MapCachedFormulaValue(sourceCell, uses1904DateSystem);
             return cell;
         }
 
-        return Cell.FromValue(MapNpoiValue(sourceCell, sourceCell.CellType));
+        return Cell.FromValue(MapNpoiValue(sourceCell, sourceCell.CellType, uses1904DateSystem));
     }
 
-    private static ScalarValue MapCachedFormulaValue(NPOICell sourceCell) =>
-        MapNpoiValue(sourceCell, sourceCell.CachedFormulaResultType);
+    private static ScalarValue MapCachedFormulaValue(NPOICell sourceCell, bool uses1904DateSystem) =>
+        MapNpoiValue(sourceCell, sourceCell.CachedFormulaResultType, uses1904DateSystem);
 
-    private static ScalarValue MapNpoiValue(NPOICell sourceCell, CellType cellType) =>
+    private static ScalarValue MapNpoiValue(NPOICell sourceCell, CellType cellType, bool uses1904DateSystem) =>
         cellType switch
         {
-            CellType.Numeric when DateUtil.IsCellDateFormatted(sourceCell) && sourceCell.DateCellValue is { } date => DateTimeValue.FromDateTime(date),
+            CellType.Numeric when DateUtil.IsCellDateFormatted(sourceCell) && sourceCell.DateCellValue is { } date => MapDateTimeValue(date, uses1904DateSystem),
             CellType.Numeric => new NumberValue(sourceCell.NumericCellValue),
             CellType.Boolean => new BoolValue(sourceCell.BooleanCellValue),
             CellType.String => string.IsNullOrEmpty(sourceCell.StringCellValue)
@@ -2412,6 +2422,14 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             CellType.Error => MapErrorValue(sourceCell.ErrorCellValue),
             _ => BlankValue.Instance
         };
+
+    // Converts the true calendar DateTime NPOI surfaces (it has already resolved the workbook's 1904
+    // windowing) into the internal ScalarValue serial. The internal convention must match how the
+    // 1904-aware date functions interpret a stored serial: 1900-epoch OADate when the workbook is not
+    // 1904, 1904-epoch-relative (day-count since 1904-01-01) when it is. This is the read-side mirror of
+    // XlsxClosedXmlCellMapper.MapDateTimeValue for the legacy .xls (NPOI) path.
+    private static DateTimeValue MapDateTimeValue(DateTime date, bool uses1904DateSystem) =>
+        new(uses1904DateSystem ? date.ToOADate() - Date1904EpochOADate : date.ToOADate());
 
     private static StyleId GetStyleId(
         NPOIWorkbook sourceWorkbook,
@@ -2677,6 +2695,10 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             _ => rotation
         };
 
+    // ExcelDataReader fallback path (used only when NPOI cannot parse the workbook). It surfaces true
+    // calendar DateTimes and this path never sets Workbook.Uses1904DateSystem, so a 1900-epoch OADate
+    // serial is self-consistent here (no 1904 conversion needed — unlike the NPOI path above, which
+    // does propagate the workbook's 1904 flag via MapDateTimeValue).
     private static ScalarValue MapValue(object? value) =>
         value switch
         {

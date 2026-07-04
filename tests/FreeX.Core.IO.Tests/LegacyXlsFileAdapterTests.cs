@@ -1,5 +1,7 @@
 using FluentAssertions;
 using ExcelDataReader;
+using FreeX.Core.Calc;
+using FreeX.Core.Formula;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 using NPOI.HSSF.Model;
@@ -89,6 +91,104 @@ public sealed class LegacyXlsFileAdapterTests
             .Any(cell => cell.Cell.Value is TextValue or NumberValue or BoolValue)
             .Should()
             .BeTrue();
+    }
+
+    [Fact]
+    public void Load_DateCellFrom1904Workbook_FeedsCorrectCalendarValuesToDateFunctions()
+    {
+        // Regression for the 1904-date-system storage/interpretation mismatch (review finding F4) in the
+        // legacy .xls (NPOI) path: a date cell loaded from a 1904-system workbook was stored as a
+        // 1900-epoch OADate serial, while the 1904-aware date functions (YEAR/MONTH/DAY/...) reinterpret
+        // that same serial as day-count-since-1904-01-01 when Workbook.Uses1904DateSystem is true — so
+        // every date formula was off by the 1462-day (~4-year) epoch difference. The fix stores the
+        // 1904-epoch-relative serial on load (LegacyXlsFileAdapter.MapDateTimeValue) so storage and
+        // function interpretation agree.
+        var knownDate = new DateTime(2024, 6, 15);
+        using var stream = BuildHssfWorkbookWithDateCell(knownDate, uses1904DateSystem: true);
+
+        var workbook = new LegacyXlsFileAdapter().Load(stream);
+        workbook.Uses1904DateSystem.Should().BeTrue();
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.GetValue(1, 1).Should().BeOfType<DateTimeValue>()
+            .Which.Value.Should().BeApproximately((knownDate - new DateTime(1904, 1, 1)).TotalDays, 1e-6,
+                "the stored serial must be the 1904-epoch-relative serial the date functions expect, not the 1462-day-larger 1900 OADate");
+
+        sheet.SetFormula(new ModelCellAddress(sheet.Id, 2, 1), "YEAR(A1)");
+        sheet.SetFormula(new ModelCellAddress(sheet.Id, 3, 1), "MONTH(A1)");
+        sheet.SetFormula(new ModelCellAddress(sheet.Id, 4, 1), "DAY(A1)");
+
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+        engine.RecalculateAllFormulas(workbook);
+
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(2024), "YEAR() must not be off by the ~4-year 1904 epoch shift");
+        sheet.GetValue(3, 1).Should().Be(new NumberValue(6));
+        sheet.GetValue(4, 1).Should().Be(new NumberValue(15));
+    }
+
+    [Fact]
+    public void Load_DateCellFromDefault1900Workbook_StoresUnshiftedOADateSerial()
+    {
+        // Control for the conditional in LegacyXlsFileAdapter.MapDateTimeValue: a non-1904 workbook must
+        // still store the plain 1900-epoch OADate serial (no 1462-day shift) so the common case keeps its
+        // correct calendar value — i.e. the 1904 fix does not regress ordinary .xls files.
+        var knownDate = new DateTime(2024, 6, 15);
+        using var stream = BuildHssfWorkbookWithDateCell(knownDate, uses1904DateSystem: false);
+
+        var workbook = new LegacyXlsFileAdapter().Load(stream);
+        workbook.Uses1904DateSystem.Should().BeFalse();
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.GetValue(1, 1).Should().BeOfType<DateTimeValue>()
+            .Which.Value.Should().BeApproximately(knownDate.ToOADate(), 1e-6);
+
+        sheet.SetFormula(new ModelCellAddress(sheet.Id, 2, 1), "YEAR(A1)");
+        sheet.SetFormula(new ModelCellAddress(sheet.Id, 3, 1), "MONTH(A1)");
+        sheet.SetFormula(new ModelCellAddress(sheet.Id, 4, 1), "DAY(A1)");
+
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+        engine.RecalculateAllFormulas(workbook);
+
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(2024));
+        sheet.GetValue(3, 1).Should().Be(new NumberValue(6));
+        sheet.GetValue(4, 1).Should().Be(new NumberValue(15));
+    }
+
+    // Note: the legacy .xls adapter is open-only (Save throws NotSupportedException), so there is no NPOI
+    // write path to carry the mirror-image 1904 conversion — the fix is load-side only. A 1904 workbook is
+    // reproduced here the way a genuine Excel-authored file exists on disk: the BIFF DateWindow1904 record
+    // is flipped (NPOI serializes it, and the re-read workbook reports IsDate1904() == true and resolves
+    // HSSFCell.DateCellValue against the 1904 epoch) and the cell holds the RAW on-disk serial for that date
+    // system. SetCellValue(DateTime) cannot be used for the 1904 case because NPOI's in-memory 1904 flag is
+    // not refreshed from the mutated record until the file is re-read, so it would emit a 1900-epoch serial.
+    private static MemoryStream BuildHssfWorkbookWithDateCell(DateTime date, bool uses1904DateSystem)
+    {
+        var hssf = new HSSFWorkbook();
+
+        if (uses1904DateSystem)
+        {
+            var dateWindow = hssf.Workbook.FindFirstRecordBySid(DateWindow1904Record.sid) as DateWindow1904Record ??
+                throw new InvalidOperationException("Expected a BIFF DateWindow1904 record in the HSSF fixture.");
+            dateWindow.Windowing = 1;
+        }
+
+        var sheet = hssf.CreateSheet("Data");
+        var row = sheet.CreateRow(0);
+        var dateStyle = hssf.CreateCellStyle();
+        dateStyle.DataFormat = hssf.CreateDataFormat().GetFormat("yyyy-mm-dd");
+
+        var cell = row.CreateCell(0);
+        cell.CellStyle = dateStyle;
+        // Raw on-disk serial for the workbook's date system: day-count since 1904-01-01 for a 1904 workbook,
+        // otherwise the 1900-epoch OADate. Both equal what MapDateTimeValue must produce on load.
+        cell.SetCellValue(uses1904DateSystem
+            ? (date - new DateTime(1904, 1, 1)).TotalDays
+            : date.ToOADate());
+
+        var stream = new MemoryStream();
+        hssf.Write(stream, leaveOpen: true);
+        stream.Position = 0;
+        return stream;
     }
 
     [Fact]
