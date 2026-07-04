@@ -3378,10 +3378,24 @@ public static class PptxPackageWriter
             rPr.Add(new XElement(A + "solidFill", BuildColorEl(run.Color)));
         }
 
-        // Wave 16A: text shadow — a:effectLst AFTER fill group
-        if (run.TextShadow is not null || run.TextReflection is not null)
+        // Wave 16A: text effects — a:effectLst AFTER fill group
+        if (run.TextShadow is not null ||
+            run.TextReflection is not null ||
+            run.TextGlow is not null ||
+            run.TextSoftEdge is not null)
         {
             var effectLst = new XElement(A + "effectLst");
+
+            if (run.TextGlow is not null)
+            {
+                var glow = run.TextGlow;
+                var glowColorEl = BuildColorEl(glow.Color);
+                glowColorEl.Add(new XElement(A + "alpha",
+                    new XAttribute("val", (long)Math.Round(glow.Alpha / 255.0 * 100000))));
+                effectLst.Add(new XElement(A + "glow",
+                    new XAttribute("rad", DrawingMlUnits.PointsToEmu(glow.RadiusPt)),
+                    glowColorEl));
+            }
 
             if (run.TextShadow is not null)
             {
@@ -3408,6 +3422,12 @@ public static class PptxPackageWriter
                     new XAttribute("dist", DrawingMlUnits.PointsToEmu(reflection.DistPt)),
                     new XAttribute("dir", (long)Math.Round(reflection.DirDeg * 60000)),
                     new XAttribute("sy", (long)Math.Round(reflection.ScaleY * 100000))));
+            }
+
+            if (run.TextSoftEdge is not null)
+            {
+                effectLst.Add(new XElement(A + "softEdge",
+                    new XAttribute("rad", DrawingMlUnits.PointsToEmu(run.TextSoftEdge.RadiusPt))));
             }
 
             rPr.Add(effectLst);

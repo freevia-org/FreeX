@@ -1136,6 +1136,63 @@ public sealed class SlideCanvasAvaloniaTests
         thrown.Should().BeNull("mixed plain+gradient runs must render without double-draw exception");
     }
 
+    [Fact]
+    public async Task SlideCanvas_GlowAndSoftEdgeRuns_DoesNotThrow()
+    {
+        Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var tb   = new TextBody();
+                var para = new FreeP.Core.Model.Paragraph();
+                para.Runs.Add(new FreeP.Core.Model.Run
+                {
+                    Text = "Glow ",
+                    TextGlow = new RunTextGlow
+                    {
+                        Color = new ThemeAwareColor(new SrgbColor(0x20, 0x80, 0xFF)),
+                        Alpha = 128,
+                        RadiusPt = 4.0
+                    }
+                });
+                para.Runs.Add(new FreeP.Core.Model.Run
+                {
+                    Text = "Soft",
+                    TextSoftEdge = new RunTextSoftEdge
+                    {
+                        RadiusPt = 2.5
+                    }
+                });
+                tb.Paragraphs.Add(para);
+
+                var p = MakePresentation(pres =>
+                {
+                    pres.Slides[0].Shapes.Clear();
+                    pres.Slides[0].Shapes.Add(new SlideShape
+                    {
+                        Id            = 3,
+                        Kind          = SlideShapeKind.AutoShape,
+                        AutoShapeKind = DrawingShapeKind.Rectangle,
+                        OffsetXEmu    = 457200,
+                        OffsetYEmu    = 274320,
+                        ExtentCxEmu   = 8229600,
+                        ExtentCyEmu   = 1143000,
+                        TextBody      = tb
+                    });
+                });
+
+                var canvas = new SlideCanvas { Presentation = p, Slide = p.Slides[0] };
+                canvas.Measure(new Size(960, 540));
+                canvas.Arrange(new Rect(0, 0, 960, 540));
+                var rtb = new RenderTargetBitmap(new PixelSize(960, 540));
+                rtb.Render(canvas);
+            }
+            catch (Exception ex) { thrown = ex; }
+        });
+        thrown.Should().BeNull("glow and soft-edge text runs must render through shared planner cases");
+    }
+
     // ── 7. SlideCanvas aspect-ratio MeasureOverride ───────────────────────────
 
     [Fact]
