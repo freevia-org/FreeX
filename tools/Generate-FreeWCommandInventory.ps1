@@ -141,6 +141,10 @@ internal static class FreeWCommandInventory
             "Changes the selected chart from column to bar through the WPF and Avalonia ribbon command registries and keeps the change undoable in both shells.",
             "FreeWRibbonParityTests.ChartDesign_ChangeTypeRibbonCommandMutatesSelectedChartAndUndoRestoresIt",
             "ChartSmartArtContextualTabTests.SetChartType_command_changes_chart_kind_and_reverts_on_undo"),
+        ["freew.chart-style-5"] = ChartCommandEvidence(
+            "Applies the selected chart style gallery item through the WPF and Avalonia ribbon command registries and keeps the style change undoable in both shells.",
+            "FreeWRibbonParityTests.ChartDesign_StyleGalleryCommandMutatesSelectedChartAndUndoRestoresIt",
+            "ChartSmartArtContextualTabTests.SetChartStyle_command_changes_style_id_and_reverts_on_undo"),
         ["freew.chart-toggle-legend"] = ChartCommandEvidence(
             "Toggles the selected chart legend through the WPF and Avalonia ribbon command registries, clears layout overrides where applicable, and keeps the change undoable.",
             "FreeWRibbonParityTests.ChartDesign_ToggleLegendRibbonCommandMutatesSelectedChartAndUndoRestoresIt",

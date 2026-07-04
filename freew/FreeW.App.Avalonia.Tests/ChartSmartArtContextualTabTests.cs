@@ -260,9 +260,9 @@ public sealed class ChartSmartArtContextualTabTests
     }
 
     [Fact]
-    public async Task SetChartStyle_command_changes_style_id()
+    public async Task SetChartStyle_command_changes_style_id_and_reverts_on_undo()
     {
-        int? after = null;
+        int? before = null, after = null, undone = null;
         var ran = await OnUi(() =>
         {
             var (doc, bi, ri) = DocWithFloatingChart();
@@ -270,14 +270,20 @@ public sealed class ChartSmartArtContextualTabTests
             view.LoadDocument(doc);
             view.Measure(new Size(800, 2000));
             view.SelectFloating(bi, ri);
+            before = ((Paragraph)doc.Blocks[0]).Runs[ri].Chart!.StyleId;
 
             var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
             registry.TryGet(new RibbonCommandId("freew.chart-style-5"), out var cmd);
             cmd!.Execute(RibbonCommandContext.Empty);
             after = ((Paragraph)doc.Blocks[0]).Runs[ri].Chart!.StyleId;
+
+            view.Undo();
+            undone = ((Paragraph)doc.Blocks[0]).Runs[ri].Chart!.StyleId;
         });
         if (!ran) return;
+        before.Should().Be(0);
         after.Should().Be(5, "chart-style-5 must set StyleId = 5");
+        undone.Should().Be(0, "undo must revert the chart style");
     }
 
     [Fact]
