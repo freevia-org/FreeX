@@ -77,9 +77,13 @@ public sealed class PresentationPrintBackstagePlannerTests
                 page.SlideNumbers.SequenceEqual(new[] { 2, 4 }) &&
                 page.Detail == "Handout with slides 2, 4");
         plan.CanBuildPackage.Should().BeTrue();
-        plan.NativePrinterDialogDeferred.Should().BeTrue();
+        plan.NativePrinterDialogDeferred.Should().BeFalse();
+        plan.NativePrintHandoff.Status.Should().Be(PresentationNativePrintHandoffStatus.PackageReadyHostHandoffRequired);
+        plan.NativePrintHandoff.StatusText.Should().Be("Ready for host handoff");
+        plan.NativePrintHandoff.SuggestedTempFileName.Should().Be("Presentation-print.pdf");
+        plan.NativePrintHandoff.OptionsSummary.Should().Be(plan.Options.DisplaySummary);
         plan.NativePrinterDialogDeferredMessage.Should().Be(
-            PresentationPrintOutputPackageExecutor.NativePrinterDialogDeferredReason);
+            PresentationPrintOutputPackageExecutor.NativePrintPackageReadyReason);
         plan.DisabledReason.Should().BeNull();
         plan.PackagePlan.Route.Should().Be(PresentationPrintOutputPackageRoute.HandoutPdf);
         plan.PackagePlan.Options.Should().BeSameAs(plan.Options);
@@ -116,6 +120,28 @@ public sealed class PresentationPrintBackstagePlannerTests
     }
 
     [Fact]
+    public void Build_WithDeferredHostCapabilitiesKeepsPackageReadyButDefersNativeDialog()
+    {
+        var plan = PresentationPrintBackstagePlanner.Build(
+            request: null,
+            slideCount: 2,
+            hostCapabilities: PresentationNativePrintHandoffHostCapabilities.Deferred(
+                "Unit test host",
+                "No native print dialog in unit tests."),
+            suggestedBaseFileName: "Deck.pptx");
+
+        plan.CanBuildPackage.Should().BeTrue();
+        plan.NativePrinterDialogDeferred.Should().BeTrue();
+        plan.NativePrintHandoff.Status.Should().Be(PresentationNativePrintHandoffStatus.HostPrinterUnavailableDeferredByHost);
+        plan.NativePrintHandoff.IsPackageReady.Should().BeTrue();
+        plan.NativePrintHandoff.RequiresHostHandoff.Should().BeTrue();
+        plan.NativePrintHandoff.CanOpenNativePrintDialog.Should().BeFalse();
+        plan.NativePrintHandoff.SuggestedTempFileName.Should().Be("Deck-print.pdf");
+        plan.NativePrintHandoff.Reason.Should().Contain("No native print dialog in unit tests.");
+        plan.DisabledReason.Should().BeNull();
+    }
+
+    [Fact]
     public void Build_OmitsSelectedSlidesWhenHostDoesNotProvideThemAndDisablesEmptyDeckPackage()
     {
         var plan = PresentationPrintBackstagePlanner.Build(
@@ -135,6 +161,8 @@ public sealed class PresentationPrintBackstagePlannerTests
         plan.PreviewPlan.Pages.Should().BeEmpty();
         plan.CanBuildPackage.Should().BeFalse();
         plan.DisabledReason.Should().Be("Print output requires at least one slide.");
+        plan.NativePrintHandoff.Status.Should().Be(PresentationNativePrintHandoffStatus.NoSlides);
+        plan.NativePrintHandoff.DisabledReason.Should().Be("Print output requires at least one slide.");
         plan.LayoutChoices.Should().OnlyContain(choice => !choice.PackagePlan.CanBuildPackage);
     }
 }

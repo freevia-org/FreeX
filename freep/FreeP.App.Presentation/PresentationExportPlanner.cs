@@ -296,9 +296,9 @@ public static class PresentationExportPlanner
             PresentationExportFormat.Print,
             PrintCommandId,
             "Print",
-            "PowerPoint-shaped slide, notes-page, and handout print layouts.",
+            "PowerPoint-shaped slide, notes-page, and handout print layouts with native host handoff.",
             DefaultExtensionWithDot: null,
-            IsImplemented: false),
+            IsImplemented: true),
     ];
 
     public static IReadOnlyList<PresentationPrintLayoutDescriptor> BuildPrintLayoutDescriptors()
@@ -343,7 +343,7 @@ public static class PresentationExportPlanner
             layout,
             range,
             request.PrintHiddenSlides,
-            IsImplemented: false,
+            IsImplemented: true,
             BuildPrintOptionsPlan(request));
     }
 

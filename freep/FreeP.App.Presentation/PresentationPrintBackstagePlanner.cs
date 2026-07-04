@@ -39,12 +39,13 @@ public sealed record PresentationPrintBackstagePlan(
     bool CanBuildPackage,
     bool NativePrinterDialogDeferred,
     string NativePrinterDialogDeferredMessage,
+    PresentationNativePrintHandoffPlan NativePrintHandoff,
     string? DisabledReason,
     PresentationPrintOutputPackagePlan PackagePlan);
 
 /// <summary>
 /// Shared PowerPoint-shaped Backstage Print pane policy. Hosts project this model to WPF/Avalonia UI
-/// and keep native printer-dialog handoff deferred.
+/// and keep native printer-dialog execution behind the host handoff plan.
 /// </summary>
 public static class PresentationPrintBackstagePlanner
 {
@@ -52,22 +53,39 @@ public static class PresentationPrintBackstagePlanner
         PresentationPrintRequest? request,
         int slideCount,
         int? currentSlideNumber = null,
-        IReadOnlyList<int>? selectedSlideNumbers = null)
+        IReadOnlyList<int>? selectedSlideNumbers = null,
+        PresentationNativePrintHandoffHostCapabilities? hostCapabilities = null,
+        string? suggestedBaseFileName = null)
     {
         var packagePlan = PresentationPrintOutputPackageExecutor.BuildPackagePlan(request, slideCount);
-        return Build(slideCount, packagePlan, currentSlideNumber, selectedSlideNumbers);
+        return Build(
+            slideCount,
+            packagePlan,
+            currentSlideNumber,
+            selectedSlideNumbers,
+            hostCapabilities,
+            suggestedBaseFileName);
     }
 
     public static PresentationPrintBackstagePlan Build(
         PresentationPrintRequest? request,
         Presentation presentation,
         int? currentSlideNumber = null,
-        IReadOnlyList<int>? selectedSlideNumbers = null)
+        IReadOnlyList<int>? selectedSlideNumbers = null,
+        PresentationNativePrintHandoffHostCapabilities? hostCapabilities = null,
+        string? suggestedBaseFileName = null)
     {
         ArgumentNullException.ThrowIfNull(presentation);
 
         var packagePlan = PresentationPrintOutputPackageExecutor.BuildPackagePlan(request, presentation);
-        return Build(presentation.Slides.Count, packagePlan, currentSlideNumber, selectedSlideNumbers, presentation);
+        return Build(
+            presentation.Slides.Count,
+            packagePlan,
+            currentSlideNumber,
+            selectedSlideNumbers,
+            hostCapabilities,
+            suggestedBaseFileName,
+            presentation: presentation);
     }
 
     private static PresentationPrintBackstagePlan Build(
@@ -75,9 +93,15 @@ public static class PresentationPrintBackstagePlanner
         PresentationPrintOutputPackagePlan packagePlan,
         int? currentSlideNumber,
         IReadOnlyList<int>? selectedSlideNumbers,
+        PresentationNativePrintHandoffHostCapabilities? hostCapabilities = null,
+        string? suggestedBaseFileName = null,
         Presentation? presentation = null)
     {
         var printPlan = packagePlan.PrintPlan;
+        var nativePrintHandoff = PresentationPrintOutputPackageExecutor.BuildNativePrintHandoffPlan(
+            packagePlan,
+            hostCapabilities,
+            suggestedBaseFileName);
         var normalizedRequest = ToRequest(printPlan);
         var layouts = PresentationExportPlanner.BuildPrintLayoutDescriptors()
             .Select(layout => BuildLayoutChoice(layout, normalizedRequest, slideCount, printPlan, presentation))
@@ -108,8 +132,9 @@ public static class PresentationPrintBackstagePlanner
             packagePlan.SlideRangeSummary,
             packagePlan.PreviewPlan,
             packagePlan.CanBuildPackage,
-            packagePlan.NativePrinterDialogDeferred,
-            PresentationPrintOutputPackageExecutor.NativePrinterDialogDeferredReason,
+            nativePrintHandoff.Status == PresentationNativePrintHandoffStatus.HostPrinterUnavailableDeferredByHost,
+            nativePrintHandoff.Reason,
+            nativePrintHandoff,
             packagePlan.DisabledReason,
             packagePlan);
     }

@@ -42,6 +42,11 @@ internal sealed class FileCommands
     private readonly Func<int?> _getPrintCurrentSlideNumber;
     private readonly Func<IReadOnlyList<int>?> _getPrintSelectedSlideNumbers;
 
+    private static readonly PresentationNativePrintHandoffHostCapabilities NativePrintHostCapabilities =
+        PresentationNativePrintHandoffHostCapabilities.Deferred(
+            "WPF print host",
+            "Native printer handoff adapter is not wired in this host path yet.");
+
     private static readonly FileOpenDialogPlan OpenDialogPlan =
         PresentationFileDialogPlanner.BuildOpenDialogPlan();
 
@@ -82,6 +87,8 @@ internal sealed class FileCommands
     public PresentationPrintOutputPackage? LastPrintOutputPackage { get; private set; }
 
     public PresentationPrintBackstagePlan? LastPrintBackstagePlan { get; private set; }
+
+    public PresentationNativePrintHandoffPlan? LastNativePrintHandoffPlan { get; private set; }
 
     public PresentationVideoFramePackage? LastVideoFramePackage { get; private set; }
 
@@ -267,7 +274,31 @@ internal sealed class FileCommands
             request,
             WpfPresentationSlideImageRenderer.RenderSlideToPng,
             WpfRasterPdfWriter.WriteToBytes);
+        LastNativePrintHandoffPlan = BuildNativePrintHandoffPlan(LastPrintOutputPackage.Plan);
         return LastPrintOutputPackage;
+    }
+
+    /// <summary>
+    /// Builds the shared native print handoff state over an already planned/created printable package.
+    /// </summary>
+    public PresentationNativePrintHandoffPlan BuildNativePrintHandoffPlan(
+        PresentationPrintOutputPackagePlan packagePlan,
+        PresentationNativePrintHandoffHostCapabilities? hostCapabilities = null)
+    {
+        LastNativePrintHandoffPlan = PresentationPrintOutputPackageExecutor.BuildNativePrintHandoffPlan(
+            packagePlan,
+            hostCapabilities ?? NativePrintHostCapabilities,
+            _workflow.CurrentFileName);
+        return LastNativePrintHandoffPlan;
+    }
+
+    /// <summary>
+    /// Produces the shared printable package and records the native host handoff state without opening a print dialog.
+    /// </summary>
+    public PresentationNativePrintHandoffPlan ExecuteNativePrintHandoff(PresentationPrintRequest? request = null)
+    {
+        var package = BuildPrintOutputPackage(request);
+        return BuildNativePrintHandoffPlan(package.Plan);
     }
 
     /// <summary>
@@ -280,7 +311,9 @@ internal sealed class FileCommands
             request,
             presentation,
             _getPrintCurrentSlideNumber(),
-            _getPrintSelectedSlideNumbers());
+            _getPrintSelectedSlideNumbers(),
+            NativePrintHostCapabilities,
+            _workflow.CurrentFileName);
         return LastPrintBackstagePlan;
     }
 

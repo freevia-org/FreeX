@@ -1456,6 +1456,7 @@ public sealed class MainWindowHeadlessTests
     {
         var found = false;
         PresentationPrintBackstagePlan? printPlan = null;
+        PresentationPrintOutputPackage? printPackage = null;
         var isPaneVisible = false;
 
         var ran = await OnUiThread(() =>
@@ -1470,6 +1471,7 @@ public sealed class MainWindowHeadlessTests
 
             print!.Execute(RibbonCommandContext.Empty);
             printPlan = window.LastPrintBackstagePlan;
+            printPackage = window.LastPrintOutputPackage;
             isPaneVisible = window.IsPrintOptionsPaneVisible;
         });
 
@@ -1477,6 +1479,7 @@ public sealed class MainWindowHeadlessTests
         found.Should().BeTrue("the Avalonia registry should expose the shared Backstage print planner seam");
         isPaneVisible.Should().BeTrue("the Print command should expose the Avalonia Backstage print projection");
         printPlan.Should().NotBeNull();
+        printPackage.Should().BeNull("Backstage Print planning must not execute package handoff or open a native dialog");
         printPlan!.PackagePlan.PrintPlan.CommandId.Should().Be(PresentationExportPlanner.PrintCommandId);
         printPlan.SelectedLayout.Layout.Layout.Should().Be(PresentationPrintLayoutKind.FullPageSlides);
         printPlan.PackagePlan.Route.Should().Be(PresentationPrintOutputPackageRoute.FullPageSlidesRasterPdf);
@@ -1484,6 +1487,11 @@ public sealed class MainWindowHeadlessTests
             .Should()
             .Equal("Slide 1", "Slide 2", "Slide 3", "Slide 4");
         printPlan.NativePrinterDialogDeferred.Should().BeTrue();
+        printPlan.NativePrintHandoff.Status.Should().Be(PresentationNativePrintHandoffStatus.HostPrinterUnavailableDeferredByHost);
+        printPlan.NativePrintHandoff.IsPackageReady.Should().BeTrue();
+        printPlan.NativePrintHandoff.RequiresHostHandoff.Should().BeTrue();
+        printPlan.NativePrintHandoff.CanOpenNativePrintDialog.Should().BeFalse();
+        printPlan.NativePrintHandoff.Reason.Should().Contain("Native printer handoff adapter is not wired");
         printPlan.LayoutChoices.Select(choice => choice.Layout.SlidesPerPage).Should().Equal(1, 1, 1, 2, 3, 4, 6, 9);
         printPlan.RangeChoices.Select(choice => choice.Kind).Should().Contain(PresentationSlideRangeKind.CurrentSlide);
     }
@@ -1551,6 +1559,9 @@ public sealed class MainWindowHeadlessTests
         renderedRangeRows.Should().Contain(row => row.Contains("Custom Range", StringComparison.Ordinal));
         renderedRowCount.Should().BeGreaterThan(renderedOptionLines.Count);
         printPlan.NativePrinterDialogDeferred.Should().BeTrue();
+        printPlan.NativePrintHandoff.StatusText.Should().Be("Deferred by host");
+        printPlan.NativePrintHandoff.IsPackageReady.Should().BeTrue();
+        printPlan.NativePrintHandoff.CanOpenNativePrintDialog.Should().BeFalse();
     }
 
     [Fact]
