@@ -51,6 +51,7 @@ public sealed class SourceRecord
     public string? CorporateAuthor { get; set; }
     public string Title { get; set; } = string.Empty;
     public string Year { get; set; } = string.Empty;
+    public string? Institution { get; set; }
     public string? Publisher { get; set; }
     public string? City { get; set; }
     public string? Edition { get; set; }
@@ -76,6 +77,7 @@ public sealed class SourceRecord
         CorporateAuthor = CorporateAuthor,
         Title = Title,
         Year = Year,
+        Institution = Institution,
         Publisher = Publisher,
         City = City,
         Edition = Edition,
@@ -106,6 +108,7 @@ public sealed class SourceRecord
             CorporateAuthor = source.CorporateAuthor,
             Title = source.Title,
             Year = source.Year,
+            Institution = source.Institution,
             Publisher = source.Publisher,
             City = source.City,
             Edition = source.Edition,
