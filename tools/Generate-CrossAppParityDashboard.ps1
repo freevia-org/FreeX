@@ -76,7 +76,8 @@ function Get-FreeXNextSlice {
     param(
         [Parameter(Mandatory = $true)]$FunctionalMatrix,
         [Parameter(Mandatory = $true)]$FunctionalClassificationSummary,
-        [Parameter(Mandatory = $true)]$DialogRoutes
+        [Parameter(Mandatory = $true)]$DialogRoutes,
+        [Parameter(Mandatory = $true)]$DialogVisualEvidence
     )
 
     $realBehaviorGaps = [int](Get-JsonPropertyValue $FunctionalClassificationSummary "real-behavior-gap")
@@ -91,16 +92,19 @@ function Get-FreeXNextSlice {
     $catalogBackedPseudoGalleryRows = $conditionalFormatPopupGalleryRows + $accountingSymbolPopupGalleryRows + $fontBorderPopupGalleryRows
     $allDialogRoutesCaptured = $DialogRoutes.totalRoutes -eq $DialogRoutes.wpfCaptures -and
         $DialogRoutes.totalRoutes -eq $DialogRoutes.avaloniaCaptures
+    $allDialogManifestSurfacesPaired = $DialogVisualEvidence.additionalAvaloniaCapturedSurfaceIds -eq 0 -and
+        $DialogVisualEvidence.wpfManifestIdsWithoutAvaloniaPair -eq 0
 
     if ($FunctionalMatrix.avaloniaMissing -eq 0 -and
         $realBehaviorGaps -eq 0 -and
         $allDialogRoutesCaptured -and
+        $allDialogManifestSurfacesPaired -and
         $catalogBackedPseudoGalleryRows -eq $pseudoGalleryItems) {
-        return "Command/dialog parity is green; all $pseudoGalleryItems pseudo-gallery rows are catalog-backed in classifier evidence ($conditionalFormatPopupGalleryRows conditional-format rows over $conditionalFormatPopupCatalogItems runtime catalog items, $fontBorderPopupGalleryRows font/border rows, and $accountingSymbolPopupGalleryRows accounting-symbol rows). The remaining classifier-noise bucket is $nonClickControlRows non-click inventory rows now split into $handlerQualifiedHelpRoutes handler-qualified Help routes and $sharedRibbonComboBoxControls shared ribbon ComboBox controls; AutoFilter opened-state foreground capture is exposed through the paired filtering UX suite, and grid pointer mechanics now have a COM-independent FreeX foreground suite for row/column resize and wheel-scroll evidence."
+        return "Command/dialog route coverage is green; all $pseudoGalleryItems pseudo-gallery rows are catalog-backed in classifier evidence ($conditionalFormatPopupGalleryRows conditional-format rows over $conditionalFormatPopupCatalogItems runtime catalog items, $fontBorderPopupGalleryRows font/border rows, and $accountingSymbolPopupGalleryRows accounting-symbol rows), and dialog screenshot evidence has $($DialogVisualEvidence.pairedCapturedSurfaceIds) paired WPF/Avalonia manifest surface ids with $($DialogVisualEvidence.additionalAvaloniaCapturedSurfaceIds) Avalonia-only ids. Keep the $($DialogVisualEvidence.pairedRawPixelDimensionMismatches) raw PNG pixel mismatches separate from missing-pair status: $($DialogVisualEvidence.pairedCaptureScaleNormalizedDimensionMatches) normalize away by capture DPI, while $($DialogVisualEvidence.pairedDimensionMismatches) scale-aware paired mismatches remain for visual review, including $($DialogVisualEvidence.realLogicalSizeMismatches) real logical-size mismatches and $($DialogVisualEvidence.stalePromotedExpectedSizeEvidence) stale promoted expected-size evidence rows."
     }
 
     if ($FunctionalMatrix.avaloniaMissing -eq 0 -and $realBehaviorGaps -eq 0 -and $allDialogRoutesCaptured) {
-        return "Command/dialog parity is green; $catalogBackedPseudoGalleryRows of $pseudoGalleryItems pseudo-gallery rows are catalog-backed in classifier evidence. Continue converting residual pseudo-gallery rows to catalog-backed evidence, then revisit foreground opened-state captures when the environment blocker clears."
+        return "Command/dialog route coverage is green; $catalogBackedPseudoGalleryRows of $pseudoGalleryItems pseudo-gallery rows are catalog-backed in classifier evidence, and dialog screenshot evidence currently has $($DialogVisualEvidence.additionalAvaloniaCapturedSurfaceIds) Avalonia-only manifest ids plus $($DialogVisualEvidence.wpfManifestIdsWithoutAvaloniaPair) WPF-only manifest ids. Continue catalog/evidence cleanup before claiming full visual parity."
     }
 
     if ($FunctionalMatrix.avaloniaMissing -gt 0 -or $realBehaviorGaps -gt 0) {
@@ -141,6 +145,7 @@ try {
     $functional = Read-GeneratedJson "docs\parity\functional-parity.json"
     $functionalClassification = Read-GeneratedJson "docs\parity\functional-parity-classification.json"
     $dialogInventory = Read-GeneratedJson "docs\parity\dialog-parity-inventory.json"
+    $dialogVisualEvidence = Read-GeneratedJson "docs\parity\dialog-visual-evidence-summary.json"
     $freew = Read-GeneratedJson "docs\parity\freew-command-inventory.json"
     $freep = Read-GeneratedJson "docs\parity\freep-command-parity-inventory.json"
 
@@ -171,6 +176,23 @@ try {
         avaloniaHarnessRoutes = [int]$dialogInventory.summary.avaloniaHarnessRoutes
         sharedOrPresentationBacked = [int]$dialogInventory.summary.sharedOrPresentationBacked
     }
+    $dimensionMismatchBuckets = $dialogVisualEvidence.summary.dimensionMismatchBuckets
+    $freeXDialogVisualEvidence = [ordered]@{
+        wpfCapturedManifestSurfaces = [int]$dialogVisualEvidence.summary.wpfCapturedManifestSurfaces
+        avaloniaCapturedManifestSurfaces = [int]$dialogVisualEvidence.summary.avaloniaCapturedManifestSurfaces
+        pairedCapturedSurfaceIds = [int]$dialogVisualEvidence.summary.pairedCapturedSurfaceIds
+        wpfManifestIdsWithoutAvaloniaPair = [int]$dialogVisualEvidence.summary.wpfManifestIdsWithoutAvaloniaPair
+        additionalAvaloniaCapturedSurfaceIds = [int]$dialogVisualEvidence.summary.additionalAvaloniaCapturedSurfaceIds
+        pairedDimensionMismatches = [int]$dialogVisualEvidence.summary.pairedDimensionMismatches
+        pairedRawPixelDimensionMismatches = [int]$dialogVisualEvidence.summary.pairedRawPixelDimensionMismatches
+        pairedCaptureScaleNormalizedDimensionMatches = [int]$dialogVisualEvidence.summary.pairedCaptureScaleNormalizedDimensionMatches
+        pairedExpectedSizeMismatches = [int]$dialogVisualEvidence.summary.pairedExpectedSizeMismatches
+        stalePromotedExpectedSizeEvidence = [int]$dialogVisualEvidence.summary.stalePromotedExpectedSizeEvidence
+        contentVisualMismatches = [int](Get-JsonPropertyValue $dimensionMismatchBuckets "content/visual mismatch")
+        evidenceLimitations = [int](Get-JsonPropertyValue $dimensionMismatchBuckets "evidence limitation")
+        expectedPlatformNativeDifferences = [int](Get-JsonPropertyValue $dimensionMismatchBuckets "expected platform/native difference")
+        realLogicalSizeMismatches = [int](Get-JsonPropertyValue $dimensionMismatchBuckets "real logical-size mismatch")
+    }
     $freeX = [ordered]@{
         app = "FreeX"
         commandSurface = [ordered]@{
@@ -182,10 +204,12 @@ try {
         }
         functionalMatrix = $freeXFunctionalMatrix
         dialogRoutes = $freeXDialogRoutes
+        dialogVisualEvidence = $freeXDialogVisualEvidence
         nextSlice = Get-FreeXNextSlice `
             -FunctionalMatrix $freeXFunctionalMatrix `
             -FunctionalClassificationSummary $functionalClassification.summary `
-            -DialogRoutes $freeXDialogRoutes
+            -DialogRoutes $freeXDialogRoutes `
+            -DialogVisualEvidence $freeXDialogVisualEvidence
     }
 
     $freeW = [ordered]@{
@@ -233,6 +257,7 @@ try {
             "docs/parity/functional-parity.json",
             "docs/parity/functional-parity-classification.json",
             "docs/parity/dialog-parity-inventory.json",
+            "docs/parity/dialog-visual-evidence-summary.json",
             "docs/parity/freew-command-inventory.json",
             "docs/parity/freep-command-parity-inventory.json"
         )
@@ -251,7 +276,7 @@ try {
         "",
         "| App | Primary evidence | Current generated state | Next slice |",
         "|---|---|---|---|",
-        "| FreeX | Functional matrix, classifier, dialog inventory, command surface | $($freeX.functionalMatrix.totalCommands) functional commands; $($freeX.functionalMatrix.parity) parity; $($freeX.functionalMatrix.avaloniaMissing) Avalonia-missing; $($freeX.functionalMatrix.realBehaviorGaps) real classified binding gaps; $($freeX.functionalMatrix.pseudoCommandGalleryItems) catalog-backed pseudo-gallery rows ($($freeX.functionalMatrix.conditionalFormatPopupGalleryRows) conditional-format, $($freeX.functionalMatrix.fontBorderPopupGalleryRows) font/border, $($freeX.functionalMatrix.accountingSymbolPopupGalleryRows) accounting-symbol); $($freeX.dialogRoutes.totalRoutes)/$($freeX.dialogRoutes.totalRoutes) dialog routes captured on WPF and Avalonia | $($freeX.nextSlice) |",
+        "| FreeX | Functional matrix, classifier, dialog inventory, dialog visual evidence, command surface | $($freeX.functionalMatrix.totalCommands) functional commands; $($freeX.functionalMatrix.parity) parity; $($freeX.functionalMatrix.avaloniaMissing) Avalonia-missing; $($freeX.functionalMatrix.realBehaviorGaps) real classified binding gaps; $($freeX.functionalMatrix.pseudoCommandGalleryItems) catalog-backed pseudo-gallery rows ($($freeX.functionalMatrix.conditionalFormatPopupGalleryRows) conditional-format, $($freeX.functionalMatrix.fontBorderPopupGalleryRows) font/border, $($freeX.functionalMatrix.accountingSymbolPopupGalleryRows) accounting-symbol); $($freeX.dialogRoutes.totalRoutes)/$($freeX.dialogRoutes.totalRoutes) dialog routes captured on WPF and Avalonia; $($freeX.dialogVisualEvidence.pairedCapturedSurfaceIds) paired screenshot surface ids, $($freeX.dialogVisualEvidence.additionalAvaloniaCapturedSurfaceIds) Avalonia-only ids, $($freeX.dialogVisualEvidence.wpfManifestIdsWithoutAvaloniaPair) WPF-only ids; $($freeX.dialogVisualEvidence.pairedRawPixelDimensionMismatches) raw PNG pixel mismatches, $($freeX.dialogVisualEvidence.pairedCaptureScaleNormalizedDimensionMatches) DPI-normalized matches, $($freeX.dialogVisualEvidence.realLogicalSizeMismatches) real logical-size mismatches | $($freeX.nextSlice) |",
         "| FreeW | Generated command inventory | $($freeW.commandInventory.totalCommands) commands; $($freeW.commandInventory.bothProfiles) shared-profile; $($freeW.commandInventory.actionableMissingWpf) actionable WPF-missing; $($freeW.commandInventory.actionableMissingAvalonia) actionable Avalonia-missing; $($freeW.commandInventory.profileShapeOnly) profile-shape-only; $($freeW.commandInventory.commandIdAliases) command-id aliases; $($freeW.commandInventory.platformOnly) platform-only; $($freeW.commandInventory.deferred) deferred | $($freeW.nextSlice) |",
         "| FreeP | Generated command inventory | $($freeP.commandInventory.totalCommands) commands; $($freeP.commandInventory.bothProfiles) shared-profile; $($freeP.commandInventory.actionableMissingWpf) actionable WPF-missing; $($freeP.commandInventory.actionableMissingAvalonia) actionable Avalonia-missing; $($freeP.commandInventory.platformOnly) platform-only | $($freeP.nextSlice) |",
         "",
@@ -261,6 +286,7 @@ try {
         '- `docs/parity/functional-parity.json`',
         '- `docs/parity/functional-parity-classification.json`',
         '- `docs/parity/dialog-parity-inventory.json`',
+        '- `docs/parity/dialog-visual-evidence-summary.json`',
         '- `docs/parity/freew-command-inventory.json`',
         '- `docs/parity/freep-command-parity-inventory.json`'
     ) -join "`n"
