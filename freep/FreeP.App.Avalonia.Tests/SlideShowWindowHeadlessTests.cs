@@ -369,6 +369,49 @@ public sealed class SlideShowWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlideShowWindow_recording_review_plan_projects_shared_source_slide_evidence()
+    {
+        SlideShowRecordingReviewPlan? review = null;
+        var started = new DateTimeOffset(2026, 7, 4, 11, 0, 0, TimeSpan.Zero);
+        var ran = await OnUiThread(() =>
+        {
+            var pres = MakePresentation(3);
+            pres.Slides[0].Title = "Intro";
+            pres.Slides[1].Title = "Deep dive";
+            pres.Slides[2].Title = "Appendix";
+            var route = SlideShowCustomShowPlanner.BuildCustomShowRoute(
+                pres,
+                new SlideShowCustomSlideSequence(
+                    "Executive review",
+                    new[] { pres.Slides[2].Id, pres.Slides[0].Id }),
+                startIndex: 0);
+            var window = new SlideShowWindow(pres, route);
+            window.ApplyPresenterToolIntent(
+                SlideShowTimingIntent.RecordTimings,
+                SlideShowRecordingMediaIntent.NarrationAndMedia,
+                nowUtc: started);
+
+            window.ExecuteAdvance(started.AddMilliseconds(2400));
+
+            review = window.RecordingReviewPlan;
+        });
+
+        if (!ran) return;
+        review.Should().NotBeNull();
+        review!.HostName.Should().Be("Avalonia slideshow");
+        review.CompletedSegmentCount.Should().Be(1);
+        review.DeferredMediaArtifactCount.Should().Be(2);
+        review.CanApplyRecordedTimings.Should().BeFalse("the host already applied the recorded timing");
+        review.Rows.Should().ContainSingle().Which.Should().Match<SlideShowRecordingReviewRow>(row =>
+            row.SlideIndex == 2 &&
+            row.SlideTitle == "Appendix" &&
+            row.DurationMs == 2400 &&
+            row.TimingStatus == SlideShowRecordingReviewTimingStatus.AlreadyApplied);
+        review.Rows.Single().MediaArtifacts.Select(artifact => artifact.SuggestedFileName)
+            .Should().Equal("slide-003-narration.m4a", "slide-003-camera.mp4");
+    }
+
+    [Fact]
     public async Task SlideShowWindow_InkClear_uses_shared_clear_plan()
     {
         SlideShowInkExecutionResult? clear = null;
