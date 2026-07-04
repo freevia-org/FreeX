@@ -1131,11 +1131,33 @@ internal static class FreeWAvaloniaRibbonCommands
             }
         }
 
+        r.Register("freew.image-align-to-page", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignToPage));
+        r.Register("freew.image-align-to-margin", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignToMargin));
+        r.Register("freew.image-distribute-h", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.DistributeHorizontal));
+        r.Register("freew.image-distribute-v", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.DistributeVertical));
+        r.Register("freew.shape-align-to-page", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignToPage));
+        r.Register("freew.shape-align-to-margin", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignToMargin));
+        r.Register("freew.shape-distribute-h", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.DistributeHorizontal));
+        r.Register("freew.shape-distribute-v", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.DistributeVertical));
         r.Register("freew.object-group", new FloatingObjectGroupCommand(editor));
         r.Register("freew.object-ungroup", new FloatingObjectUngroupCommand(editor));
 
         // Shape Styles fill/outline: top-level opener ids plus menu item commands.
         RegisterShapeFillOutlineCommands(r, editor);
+    }
+
+    private sealed class FloatingObjectArrangeCommand(
+        DocumentView editor,
+        FloatingObjectArrangeKind kind) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (editor.CanArrangeSelectedFloatingObjects(kind))
+                editor.ArrangeSelectedFloatingObjects(kind);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: editor.CanArrangeSelectedFloatingObjects(kind));
     }
 
     private sealed class FloatingObjectGroupCommand(DocumentView editor) : IRibbonStatefulCommand

@@ -5706,6 +5706,55 @@ public sealed class DocumentView : RichTextBox
         SyncFloatingObjectsCanvas();
     }
 
+    /// <summary>
+    /// Aligns/distributes floating objects through the shared model command. WPF keeps its historic
+    /// document-wide behavior unless the user has an explicit multi-selection.
+    /// </summary>
+    public bool ArrangeFloatingObjects(FloatingObjectArrangeKind kind)
+    {
+        CommitToModel();
+
+        var members = FloatingArrangeLocations();
+        if (ArrangeFloatingObjectsCommand.CountApplicableObjects(_model, members) < RequiredArrangeObjectCount(kind))
+            return false;
+
+        _commands.Execute(new ArrangeFloatingObjectsCommand(kind, members));
+        SyncFloatingObjectsCanvas();
+        return true;
+    }
+
+    private IReadOnlyList<(int BlockIndex, int RunIndex)> FloatingArrangeLocations()
+    {
+        var selected = SelectedFloatingArrangeLocations();
+        if (selected.Count >= 2)
+            return selected;
+
+        return ArrangeFloatingObjectsCommand.CollectFloatingObjectLocations(_model);
+    }
+
+    private List<(int BlockIndex, int RunIndex)> SelectedFloatingArrangeLocations()
+    {
+        var members = new List<(int BlockIndex, int RunIndex)>();
+        foreach (var obj in _selectedFloatingObjects)
+        {
+            (int BlockIndex, int RunIndex) location = obj is InlineImage image
+                ? SelectedImageLocationForObject(image) is var imageLocation && imageLocation.BlockIndex >= 0
+                    ? (imageLocation.BlockIndex, imageLocation.RunIndex)
+                    : (-1, -1)
+                : FindFloatingObjectLocation(obj);
+
+            if (location.BlockIndex >= 0 && !members.Contains(location))
+                members.Add(location);
+        }
+
+        return members;
+    }
+
+    private static int RequiredArrangeObjectCount(FloatingObjectArrangeKind kind) =>
+        kind is FloatingObjectArrangeKind.DistributeHorizontal or FloatingObjectArrangeKind.DistributeVertical
+            ? 2
+            : 1;
+
     private (int BlockIndex, int RunIndex, InlineImage? Image) SelectedImageLocationForObject(InlineImage target)
     {
         for (var b = 0; b < _model.Blocks.Count; b++)

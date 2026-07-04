@@ -7526,6 +7526,49 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// Aligns/distributes the selected floating objects through the shared model command.
+    /// </summary>
+    public bool ArrangeSelectedFloatingObjects(FloatingObjectArrangeKind kind)
+    {
+        var members = SelectedFloatingArrangeLocations();
+        if (ArrangeFloatingObjectsCommand.CountApplicableObjects(_doc, members) < RequiredArrangeObjectCount(kind))
+            return false;
+
+        _bus.Execute(new ArrangeFloatingObjectsCommand(kind, members));
+        _floatDragState = null;
+
+        if (_selectedFloating is { } selected)
+            RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+        else
+            RaiseFloatingSelectionChangedIfIdentityChanged();
+
+        InvalidateLayoutAndVisual();
+        return true;
+    }
+
+    public bool CanArrangeSelectedFloatingObjects(FloatingObjectArrangeKind kind) =>
+        ArrangeFloatingObjectsCommand.CountApplicableObjects(_doc, SelectedFloatingArrangeLocations())
+            >= RequiredArrangeObjectCount(kind);
+
+    private List<(int BlockIndex, int RunIndex)> SelectedFloatingArrangeLocations()
+    {
+        var members = new List<(int BlockIndex, int RunIndex)>();
+        foreach (var selected in _selectedFloatingObjects)
+        {
+            var member = (selected.BlockIndex, selected.RunIndex);
+            if (!members.Contains(member))
+                members.Add(member);
+        }
+
+        return members;
+    }
+
+    private static int RequiredArrangeObjectCount(FloatingObjectArrangeKind kind) =>
+        kind is FloatingObjectArrangeKind.DistributeHorizontal or FloatingObjectArrangeKind.DistributeVertical
+            ? 2
+            : 1;
+
+    /// <summary>
     /// AV-CHARTTAB: Change the chart kind (column/bar/line/pie/scatter/area/doughnut) of the selected
     /// floating chart. Undoable + re-renders. No-op when the selected float is not a chart.
     /// </summary>
