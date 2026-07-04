@@ -413,6 +413,103 @@ public sealed class SubtotalCommandTests
     }
 
     [Fact]
+    public void RemoveSubtotalRowsCommand_ClearsOutlineForSubtotaledRange()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var context = new TestCommandContext(workbook);
+        SeedRemovableSubtotalRows(sheet);
+        // Outline as Data > Subtotal leaves it: detail rows at level 1 (subtotal and
+        // grand-total rows stay at level 0), with the East group collapsed.
+        sheet.RowOutlineLevels[2] = 1;
+        sheet.RowOutlineLevels[4] = 1;
+        sheet.GroupHiddenRows.Add(2);
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 2));
+
+        var command = new RemoveSubtotalRowsCommand(sheet.Id, range);
+
+        command.Apply(context).Success.Should().BeTrue();
+
+        sheet.RowOutlineLevels.Should().BeEmpty();
+        sheet.GroupHiddenRows.Should().BeEmpty();
+        sheet.GetValue(2, 1).Should().Be(new TextValue("East"));
+        sheet.GetValue(3, 1).Should().Be(new TextValue("West"));
+    }
+
+    [Fact]
+    public void RemoveSubtotalRowsCommand_PreservesOutlineGroupsOutsideSubtotaledRange()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var context = new TestCommandContext(workbook);
+        SeedRemovableSubtotalRows(sheet);
+        sheet.RowOutlineLevels[2] = 1;
+        sheet.RowOutlineLevels[4] = 1;
+        // Unrelated manual group below the subtotaled range, partially collapsed.
+        sheet.RowOutlineLevels[10] = 1;
+        sheet.RowOutlineLevels[11] = 1;
+        sheet.RowOutlineLevels[12] = 1;
+        sheet.GroupHiddenRows.Add(11);
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 2));
+
+        var command = new RemoveSubtotalRowsCommand(sheet.Id, range);
+
+        command.Apply(context).Success.Should().BeTrue();
+
+        // The two deleted subtotal rows shift the manual group up from rows 10-12 to
+        // rows 8-10, but its levels and collapsed state must survive intact.
+        sheet.RowOutlineLevels.Should().BeEquivalentTo(new Dictionary<uint, int>
+        {
+            [8] = 1,
+            [9] = 1,
+            [10] = 1
+        });
+        sheet.GroupHiddenRows.Should().BeEquivalentTo([9u]);
+    }
+
+    [Fact]
+    public void RemoveSubtotalRowsCommand_UndoRestoresClearedOutline()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var context = new TestCommandContext(workbook);
+        SeedRemovableSubtotalRows(sheet);
+        sheet.RowOutlineLevels[2] = 1;
+        sheet.RowOutlineLevels[4] = 1;
+        sheet.GroupHiddenRows.Add(2);
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 2));
+
+        var command = new RemoveSubtotalRowsCommand(sheet.Id, range);
+        command.Apply(context).Success.Should().BeTrue();
+
+        command.Revert(context);
+
+        sheet.RowOutlineLevels.Should().BeEquivalentTo(new Dictionary<uint, int>
+        {
+            [2] = 1,
+            [4] = 1
+        });
+        sheet.GroupHiddenRows.Should().BeEquivalentTo([2u]);
+        sheet.GetValue(3, 1).Should().Be(new TextValue("East Total"));
+        sheet.GetCell(3, 2)!.FormulaText.Should().Be("SUBTOTAL(9,B2:B2)");
+        sheet.GetValue(5, 1).Should().Be(new TextValue("Grand Total"));
+    }
+
+    private static void SeedRemovableSubtotalRows(Sheet sheet)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("East Total"));
+        sheet.SetFormula(new CellAddress(sheet.Id, 3, 2), "SUBTOTAL(9,B2:B2)");
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new TextValue("Grand Total"));
+        sheet.SetFormula(new CellAddress(sheet.Id, 5, 2), "SUBTOTAL(9,B2:B4)");
+    }
+
+    [Fact]
     public void RemoveSubtotalRowsCommand_RejectsProtectedSheet()
     {
         var workbook = new Workbook("test");
