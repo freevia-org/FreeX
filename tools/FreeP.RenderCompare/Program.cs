@@ -25,6 +25,10 @@ namespace FreeP.RenderCompare;
 ///       Convenience: runs both --powerpoint-export and --freep-render, then
 ///       diffs every paired slide, prints a table, and writes diff heatmaps.
 ///
+///   --slide-pane-thumbnail-compare &lt;deck.pptx&gt; &lt;outDir&gt; [--width W] [--height H]
+///       Render WPF/Avalonia slide-pane thumbnail bitmaps, try PowerPoint COM
+///       thumbnail references, and diff every available paired slide.
+///
 ///   --generate-corpus &lt;outDir&gt;
 ///       Author four deterministic test decks via PowerPoint COM and save them to
 ///       outDir as *.pptx.  Also exports PowerPoint's own PNGs next to each deck.
@@ -58,6 +62,7 @@ internal static class Program
                 "--diff"              => RunDiff(args[1..]),
                 "--compare"           => RunCompare(args[1..]),
                 "--avalonia-compare"  => RunAvaloniaCompare(args[1..]),
+                "--slide-pane-thumbnail-compare" => RunSlidePaneThumbnailCompare(args[1..]),
                 "--corpus-summary"    => RunCorpusSummary(args[1..]),
                 "--generate-corpus"           => RunGenerateCorpus(args[1..]),
                 "--patch-chart-labels-19"     => RunPatchChartLabels19(args[1..]),
@@ -402,6 +407,28 @@ internal static class Program
     }
 
     // -----------------------------------------------------------------------
+    // Mode: --slide-pane-thumbnail-compare
+    // -----------------------------------------------------------------------
+    private static int RunSlidePaneThumbnailCompare(string[] args)
+    {
+        if (args.Length < 2)
+        {
+            Console.Error.WriteLine("usage: --slide-pane-thumbnail-compare <deck.pptx> <outDir> [--width W] [--height H]");
+            return 2;
+        }
+
+        var pptxPath = Path.GetFullPath(args[0]);
+        var outDir = Path.GetFullPath(args[1]);
+
+        (int width, int height) = ParseWidthHeight(
+            args[2..],
+            SlidePaneThumbnailEvidence.DefaultRenderWidth,
+            SlidePaneThumbnailEvidence.DefaultRenderHeight);
+
+        return SlidePaneThumbnailEvidence.Run(pptxPath, outDir, width, height);
+    }
+
+    // -----------------------------------------------------------------------
     // Mode: --generate-corpus
     // -----------------------------------------------------------------------
     private static int RunGenerateCorpus(string[] args)
@@ -528,6 +555,9 @@ internal static class Program
         Console.WriteLine();
         Console.WriteLine("  --avalonia-compare <deck.pptx> <outDir> [--width W] [--height H]");
         Console.WriteLine("      WPF + Avalonia + PowerPoint renders + per-slide diff table.");
+        Console.WriteLine();
+        Console.WriteLine("  --slide-pane-thumbnail-compare <deck.pptx> <outDir> [--width W] [--height H]");
+        Console.WriteLine("      WPF + Avalonia + PowerPoint slide-pane thumbnail renders + per-slide diff table.");
         Console.WriteLine();
         Console.WriteLine("  --corpus-summary <corpusDir> [--refs <refsDir>]");
         Console.WriteLine("      Print compact per-deck status and PowerPoint reference PNG availability.");
