@@ -72,6 +72,7 @@ public sealed class VisualEvidencePlannerTests
             "citation-fields",
             "bibliography-fields",
             "toa-fields",
+            "cached-toa-page-number-sentinel",
             "legal-authorities"]);
         referencesScenario.ExpectedOutputNamePattern.Should().Be("references-heavy-fields_p{page}.png");
         referencesScenario.MinimumExpectedOutputs.Should().Be(2);
@@ -2279,6 +2280,76 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("Status counts: word-baseline-unavailable=1");
             markdown.Should().Contain("COM ProgID 'Word.Application' is not registered");
             markdown.Should().Contain("f2-hf-basic/f2-hf-basic_p1.png");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ReferencesHeavyNoWordSummary_ReportsToaPageNumberEvidenceBlocker()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var row = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                "references-heavy-fields",
+                pageNumber: 1,
+                pageCount: 2);
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [row],
+                new DateTimeOffset(2026, 7, 4, 12, 0, 0, TimeSpan.Zero));
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName)],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "references-heavy-fields",
+                        1)
+                ]);
+
+            var comparison = FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
+                summary.Evidence.Single(),
+                FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+                "COM ProgID 'Word.Application' is not registered");
+            var withBaseline = FreeWVisualEvidenceManifestNormalizer.WithBaselineComparisons(
+                summary,
+                [comparison]);
+
+            withBaseline.Trust.Passed.Should().BeTrue();
+            var blocker = withBaseline.RemainingEvidenceBlockers.Should().ContainSingle().Subject;
+            blocker.BlockerId.Should().Be("references-heavy-toa-page-number-fidelity");
+            blocker.ScenarioId.Should().Be("references-heavy-fields");
+            blocker.Area.Should().Be("TOA page-number fidelity");
+            blocker.Status.Should().Be(FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus);
+            blocker.RequiredEvidence.Should().Contain("real MS Word PNG comparisons");
+            blocker.Reason.Should().Contain("Word.Application");
+            blocker.RelatedBaselineStatuses.Should().Contain(
+                FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus);
+            blocker.CandidateBaselinePaths.Should().Contain("references-heavy-fields/references-heavy-fields_p1.png");
+            blocker.Trust.Passed.Should().BeTrue();
+
+            var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
+            using var doc = JsonDocument.Parse(json);
+            var jsonBlocker = doc.RootElement.GetProperty("remainingEvidenceBlockers")[0];
+            jsonBlocker.GetProperty("blockerId").GetString()
+                .Should().Be("references-heavy-toa-page-number-fidelity");
+            jsonBlocker.GetProperty("status").GetString()
+                .Should().Be("word-baseline-unavailable");
+            jsonBlocker.GetProperty("trust").GetProperty("passed").GetBoolean()
+                .Should().BeTrue();
+
+            var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
+            markdown.Should().Contain("## Remaining Evidence Blockers");
+            markdown.Should().Contain("references-heavy-toa-page-number-fidelity");
+            markdown.Should().Contain("TOA page-number fidelity");
+            markdown.Should().Contain("COM ProgID 'Word.Application' is not registered");
         }
         finally
         {

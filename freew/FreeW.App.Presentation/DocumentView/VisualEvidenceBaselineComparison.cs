@@ -99,6 +99,7 @@ public static class FreeWVisualBaselineComparisonPlanner
             "wordart-watermark-stress",
             "wordart-picture-watermark-layout",
             "field-page-number-variants",
+            "references-heavy-fields",
             "backstage-print-preview-fidelity",
             "backstage-pdf-export-fidelity"
         };

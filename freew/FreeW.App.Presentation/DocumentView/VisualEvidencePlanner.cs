@@ -385,6 +385,7 @@ public static class FreeWVisualEvidencePlanner
                 "citation-fields",
                 "bibliography-fields",
                 "toa-fields",
+                "cached-toa-page-number-sentinel",
                 "complex-fields",
                 "legal-authorities",
                 "generated-bibliography",

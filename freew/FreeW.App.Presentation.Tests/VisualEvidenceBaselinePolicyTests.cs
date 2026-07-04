@@ -86,6 +86,28 @@ public sealed class VisualEvidenceBaselinePolicyTests
     }
 
     [Fact]
+    public void WordBaselinePolicy_KeepsReferencesHeavyFieldsDirectlyComparable()
+    {
+        var row = BuildRow(
+            "references-heavy-fields",
+            FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+            "references-heavy-fields_p1.png",
+            pageNumber: 1,
+            pageCount: 2);
+
+        var policy = FreeWVisualBaselineComparisonPlanner.ResolveWordBaselinePolicy(row);
+        var candidates = FreeWVisualBaselineComparisonPlanner.BuildBaselineCandidateRelativePaths(row);
+
+        policy.IsComparable.Should().BeTrue();
+        policy.BaselineScenarioId.Should().Be("references-heavy-fields");
+        FreeWVisualBaselineComparisonPlanner.BuildBaselineMatchKey(row)
+            .Should().Be("references-heavy-fields/p1/references-heavy-fields_p1.png");
+        candidates.Should().Contain([
+            "references-heavy-fields/references-heavy-fields_p1.png",
+            "references-heavy-fields_p1.png"]);
+    }
+
+    [Fact]
     public void WordBaselineUnavailableComparison_ReportsCandidatesAndReasonWithoutFailingTrust()
     {
         var row = BuildRow(
