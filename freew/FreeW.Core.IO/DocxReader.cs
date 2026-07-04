@@ -511,12 +511,14 @@ public static class DocxReader
                 PersonalAuthors = author.PersonalAuthors,
                 CorporateAuthor = author.CorporateAuthor,
                 Title = Field(element, "Title") ?? string.Empty,
+                BookTitle = Field(element, "BookTitle"),
                 Year = Field(element, "Year") ?? string.Empty,
                 Institution = Field(element, "Institution"),
                 Publisher = Field(element, "Publisher"),
                 City = Field(element, "City"),
                 Edition = Field(element, "Edition"),
                 StandardNumber = Field(element, "StandardNumber"),
+                ChapterNumber = Field(element, "ChapterNumber"),
                 ShortTitle = Field(element, "ShortTitle"),
                 Comments = Field(element, "Comments"),
                 Journal = Field(element, "JournalName"),
@@ -578,6 +580,7 @@ public static class DocxReader
         "JournalArticle" => SourceType.JournalArticle,
         "DocumentFromInternetSite" => SourceType.WebSite,
         "Report" => SourceType.Report,
+        "BookSection" => SourceType.BookSection,
         _ => SourceType.Book,
     };
 

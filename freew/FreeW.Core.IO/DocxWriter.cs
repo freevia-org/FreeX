@@ -5399,6 +5399,7 @@ public static class DocxWriter
         SourceType.JournalArticle => "JournalArticle",
         SourceType.WebSite => "DocumentFromInternetSite",
         SourceType.Report => "Report",
+        SourceType.BookSection => "BookSection",
         _ => "Book",
     };
 
@@ -5426,12 +5427,14 @@ public static class DocxWriter
                 element.Add(authorElement);
 
             AddBibliographyField(element, "Title", source.Title);
+            AddBibliographyField(element, "BookTitle", source.BookTitle);
             AddBibliographyField(element, "Year", source.Year);
             AddBibliographyField(element, "Institution", source.Institution);
             AddBibliographyField(element, "Publisher", source.Publisher);
             AddBibliographyField(element, "City", source.City);
             AddBibliographyField(element, "Edition", source.Edition);
             AddBibliographyField(element, "StandardNumber", source.StandardNumber);
+            AddBibliographyField(element, "ChapterNumber", source.ChapterNumber);
             AddBibliographyField(element, "ShortTitle", source.ShortTitle);
             AddBibliographyField(element, "Comments", source.Comments);
             AddBibliographyField(element, "JournalName", source.Journal);

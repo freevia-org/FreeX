@@ -444,10 +444,12 @@ public class CitationsTests
         {
             Author = "Ada Lovelace",
             Title = "Notes",
+            BookTitle = "Collected Notes",
             Institution = "Analytical Society",
             City = "London",
             Edition = "Annotated",
             StandardNumber = "ISBN-1",
+            ChapterNumber = "4",
             ShortTitle = "Notes",
             Comments = "Original note"
         };
@@ -455,10 +457,12 @@ public class CitationsTests
         {
             Author = "Ada Lovelace",
             Title = "Notes",
+            BookTitle = "Collected Notes",
             Institution = "Analytical Society",
             City = "London",
             Edition = "Annotated",
             StandardNumber = "ISBN-1",
+            ChapterNumber = "4",
             ShortTitle = "Notes",
             Comments = "Original note"
         };
@@ -466,21 +470,51 @@ public class CitationsTests
         {
             Author = "Ada Lovelace",
             Title = "Notes",
+            BookTitle = "Collected Notes",
             Institution = "Analytical Society",
             City = "London",
             Edition = "Annotated",
             StandardNumber = "ISBN-1",
+            ChapterNumber = "4",
             ShortTitle = "Notes",
             Comments = "Different note"
+        };
+        var differentBookTitle = new Source
+        {
+            Author = "Ada Lovelace",
+            Title = "Notes",
+            BookTitle = "Different Collection",
+            Institution = "Analytical Society",
+            City = "London",
+            Edition = "Annotated",
+            StandardNumber = "ISBN-1",
+            ChapterNumber = "4",
+            ShortTitle = "Notes",
+            Comments = "Original note"
+        };
+        var differentChapterNumber = new Source
+        {
+            Author = "Ada Lovelace",
+            Title = "Notes",
+            BookTitle = "Collected Notes",
+            Institution = "Analytical Society",
+            City = "London",
+            Edition = "Annotated",
+            StandardNumber = "ISBN-1",
+            ChapterNumber = "5",
+            ShortTitle = "Notes",
+            Comments = "Original note"
         };
         var differentInstitution = new Source
         {
             Author = "Ada Lovelace",
             Title = "Notes",
+            BookTitle = "Collected Notes",
             Institution = "Different Institute",
             City = "London",
             Edition = "Annotated",
             StandardNumber = "ISBN-1",
+            ChapterNumber = "4",
             ShortTitle = "Notes",
             Comments = "Original note"
         };
@@ -489,6 +523,8 @@ public class CitationsTests
 
         Citations.FormatInText(doc, clone, CitationStyle.Ieee).Should().Be("[1]");
         Citations.FormatInText(doc, differentComment, CitationStyle.Ieee).Should().Be("[Lovelace]");
+        Citations.FormatInText(doc, differentBookTitle, CitationStyle.Ieee).Should().Be("[Lovelace]");
+        Citations.FormatInText(doc, differentChapterNumber, CitationStyle.Ieee).Should().Be("[Lovelace]");
         Citations.FormatInText(doc, differentInstitution, CitationStyle.Ieee).Should().Be("[Lovelace]");
     }
 
@@ -684,6 +720,35 @@ public class CitationsTests
         Citations.FormatBibliographyEntry(report, CitationStyle.Ieee).Should().Be(
             "Doe, J., \"Annual Measurements,\" " +
             "National Bureau of Standards, Washington, Government Printing Office, 2026.");
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_BookSection_UsesChapterTitleContainingBookAndPages()
+    {
+        var bookSection = new Source
+        {
+            Type = SourceType.BookSection,
+            Author = "Doe, J.",
+            Title = "Chapter Title",
+            BookTitle = "Containing Book",
+            Year = "2026",
+            ChapterNumber = "3",
+            Pages = "12-20",
+            City = "London",
+            Publisher = "Test Press"
+        };
+
+        // Contributor roles are not modeled in this bounded slice; Author remains the chapter author.
+        bookSection.Author.Should().Be("Doe, J.");
+        Citations.FormatBibliographyEntry(bookSection, CitationStyle.Apa).Should().Be(
+            "Doe, J. (2026). Chapter Title. " +
+            "Containing Book, chap. 3, pp. 12-20, London: Test Press.");
+        Citations.FormatBibliographyEntry(bookSection, CitationStyle.Mla).Should().Be(
+            "Doe, J. Chapter Title. " +
+            "Containing Book, chap. 3, pp. 12-20, London: Test Press, 2026.");
+        Citations.FormatBibliographyEntry(bookSection, CitationStyle.Ieee).Should().Be(
+            "Doe, J., \"Chapter Title,\" " +
+            "Containing Book, chap. 3, pp. 12-20, London: Test Press, 2026.");
     }
 
     [Fact]
