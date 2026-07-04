@@ -455,22 +455,73 @@ public sealed class MathLayoutEngineTests
         var container = (MathBox.Container)box.Children[0];
         container.Children.Should().NotContain(b => b is MathBox.HRule,
             "linear fractions render inline with a slash, not a bar");
+        container.Children.Should().NotContain(b => b is MathBox.Line,
+            "linear fractions keep the slash glyph path instead of the skewed line primitive");
 
         var glyphs = AllGlyphs(container).Cast<MathBox.Glyph>().ToList();
         glyphs.Should().Contain(g => g.Text == "/", "the linear form must include a slash glyph");
     }
 
     [Fact]
-    public void Frac_SkewedType_DoesNotRenderAsBarFraction()
+    public void Frac_SkewedType_RendersDiagonalLineWithOffsetNumeratorAndDenominator()
     {
-        // HA6: full skew layout isn't implemented; at minimum it must not fall back
-        // to the bar-fraction rendering (approximated as the linear a/b form instead).
         var frac = new MathNode.Frac(Run("a"), Run("b"), MathNode.FracType.Skewed);
         var box = MathLayoutEngine.Layout(frac, "Cambria Math", FontSizePt);
 
         var container = (MathBox.Container)box.Children[0];
         container.Children.Should().NotContain(b => b is MathBox.HRule,
             "skw must never render as a bar fraction");
+        container.Children.Should().HaveCount(3, "skw emits numerator, diagonal line, and denominator");
+
+        var numBox = container.Children[0];
+        var line = Assert.IsType<MathBox.Line>(container.Children[1]);
+        var denBox = container.Children[2];
+
+        line.X2.Should().BeGreaterThan(0, "the shared line primitive should advance left-to-right");
+        line.Y2.Should().BeLessThan(0, "the diagonal should rise from denominator side to numerator side");
+        line.Thickness.Should().BeGreaterThan(0);
+        denBox.X.Should().BeGreaterThan(numBox.X + numBox.Metrics.Width,
+            "the denominator should be offset to the right of the numerator");
+        denBox.Y.Should().BeGreaterThan(numBox.Y,
+            "the denominator should be offset below the numerator");
+
+        var glyphs = AllGlyphs(container).Cast<MathBox.Glyph>().Select(g => g.Text).ToList();
+        glyphs.Should().Equal(new[] { "a", "b" },
+            "skw uses a drawn diagonal line, not a literal slash glyph");
+
+        var ops = MathBoxRenderPlanner.Plan(box, 10, 20, SrgbColor.Black, "Cambria Math");
+        ops.OfType<MathDrawOp.DrawLine>().Should().ContainSingle(drawLine =>
+            drawLine.X2 > drawLine.X1 && drawLine.Y2 < drawLine.Y1,
+            "WPF and Avalonia both consume the shared diagonal as DrawLine");
+        ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text).Should().Equal(new[] { "a", "b" });
+    }
+
+    [Fact]
+    public void Row_WithSkewedFraction_AlignsAdjacentRunsOnCommonBaseline()
+    {
+        var row = new MathNode.Row(new MathNode[]
+        {
+            Run("x"),
+            new MathNode.Frac(Run("a"), Run("b"), MathNode.FracType.Skewed),
+            Run("y")
+        });
+
+        var box = MathLayoutEngine.Layout(row, "Cambria Math", FontSizePt);
+        var container = (MathBox.Container)box.Children[0];
+
+        container.Children.Should().HaveCount(3);
+        foreach (var child in container.Children)
+        {
+            (child.Y + child.Metrics.Ascent).Should().BeApproximately(
+                container.Metrics.Ascent,
+                0.01,
+                "row layout must preserve one shared baseline for text and skewed fractions");
+        }
+
+        var skewed = Assert.IsType<MathBox.Container>(container.Children[1]);
+        skewed.Metrics.Height.Should().BeGreaterThan(0);
+        skewed.Metrics.Ascent.Should().BeGreaterThan(0);
+        skewed.Metrics.Descent.Should().BeGreaterThan(0);
     }
 
     [Fact]
