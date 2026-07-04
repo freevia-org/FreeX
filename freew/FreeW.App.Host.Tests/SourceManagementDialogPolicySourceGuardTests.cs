@@ -14,6 +14,8 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         source.Should().Contain("SourceManagementDialogPlanner.BuildPickerItems(");
         source.Should().Contain("SourceManagementDialogPlanner.BuildEntryFieldPlans(");
         source.Should().Contain("SourceManagementDialogPlanner.CreateEntry(");
+        source.Should().Contain("fields.ToDictionary(pair => pair.Key, pair => (string?)pair.Value.Text),");
+        source.Should().Contain("entry);");
         source.Should().Contain("SourceManagementDialogPlanner.BuildInitialState(");
         source.Should().Contain("SourceManagementDialogPlanner.AddMasterSource(");
         source.Should().Contain("SourceManagementDialogPlanner.DeleteMasterSource(");
@@ -35,6 +37,8 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         source.Should().NotContain("private static Source BuildSource(");
         source.Should().NotContain("private static Source CloneSource(");
         source.Should().NotContain("private static string DescribeSource(Source");
+        source.Should().NotContain(".Split(';')");
+        source.Should().NotContain("PersonalAuthors =");
         source.Should().NotContain("workingDoc");
         source.Should().NotContain("workingMaster");
         source.Should().NotContain("new SourceRecord");

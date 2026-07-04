@@ -209,7 +209,67 @@ public class BibliographyRoundTripTests
         var source = result.Sources.Should().ContainSingle().Subject;
         source.Tag.Should().Be("Doe2024");
         source.Author.Should().Be("Jane Q. Doe; Alex Smith");
+        source.PersonalAuthors.Should().Equal(
+            SourceAuthorPerson.Create("Jane", "Q.", "Doe"),
+            SourceAuthorPerson.Create("Alex", string.Empty, "Smith"));
+        source.CorporateAuthor.Should().BeNull();
         source.Title.Should().Be("Word Authored Source");
         source.Year.Should().Be("2024");
+    }
+
+    [Fact]
+    public void StructuredPersonAuthors_WriteNameListInsteadOfCorporate()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Sources.Add(new Source
+        {
+            Tag = "Doe2024",
+            Type = SourceType.Book,
+            Author = "Jane Q. Doe; Alex Smith",
+            PersonalAuthors =
+            [
+                SourceAuthorPerson.Create("Jane", "Q.", "Doe"),
+                SourceAuthorPerson.Create("Alex", string.Empty, "Smith")
+            ],
+            Title = "Word Authored Source",
+            Year = "2024"
+        });
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        using var zip = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
+        using var entry = zip.GetEntry("word/bibliography/sources.xml")!.Open();
+        var root = XDocument.Load(entry).Root!;
+        var author = root.Element(B + "Source")!.Element(B + "Author")!.Element(B + "Author")!;
+
+        author.Element(B + "Corporate").Should().BeNull();
+        var people = author.Element(B + "NameList")!.Elements(B + "Person").ToList();
+        people.Should().HaveCount(2);
+        people[0].Element(B + "First")!.Value.Should().Be("Jane");
+        people[0].Element(B + "Middle")!.Value.Should().Be("Q.");
+        people[0].Element(B + "Last")!.Value.Should().Be("Doe");
+        people[1].Element(B + "First")!.Value.Should().Be("Alex");
+        people[1].Element(B + "Last")!.Value.Should().Be("Smith");
+    }
+
+    [Fact]
+    public void StructuredPersonAuthors_RoundTripThroughDocx()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Sources.Add(new Source
+        {
+            Tag = "Ada1843",
+            Author = "Ada Lovelace",
+            PersonalAuthors = [SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace")],
+            Title = "Notes",
+            Year = "1843"
+        });
+
+        var source = RoundTrip(doc).Sources.Should().ContainSingle().Subject;
+
+        source.Author.Should().Be("Ada Lovelace");
+        source.PersonalAuthors.Should().ContainSingle()
+            .Which.Should().Be(SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace"));
+        source.CorporateAuthor.Should().BeNull();
     }
 }

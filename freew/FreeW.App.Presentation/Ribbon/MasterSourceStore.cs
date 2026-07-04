@@ -47,6 +47,8 @@ public sealed class SourceRecord
     public string Tag { get; set; } = string.Empty;
     public string Type { get; set; } = "Book";
     public string Author { get; set; } = string.Empty;
+    public List<SourceAuthorPerson> PersonalAuthors { get; set; } = [];
+    public string? CorporateAuthor { get; set; }
     public string Title { get; set; } = string.Empty;
     public string Year { get; set; } = string.Empty;
     public string? Publisher { get; set; }
@@ -62,6 +64,11 @@ public sealed class SourceRecord
         Tag = Tag,
         Type = Enum.TryParse<SourceType>(Type, out var sourceType) ? sourceType : SourceType.Book,
         Author = Author,
+        PersonalAuthors = PersonalAuthors
+            .Where(person => person is not null && !person.IsEmpty)
+            .Select(person => SourceAuthorPerson.Create(person.First, person.Middle, person.Last))
+            .ToArray(),
+        CorporateAuthor = CorporateAuthor,
         Title = Title,
         Year = Year,
         Publisher = Publisher,
@@ -82,6 +89,11 @@ public sealed class SourceRecord
             Tag = source.Tag,
             Type = source.Type.ToString(),
             Author = source.Author,
+            PersonalAuthors = source.PersonalAuthors
+                .Where(person => person is not null && !person.IsEmpty)
+                .Select(person => SourceAuthorPerson.Create(person.First, person.Middle, person.Last))
+                .ToList(),
+            CorporateAuthor = source.CorporateAuthor,
             Title = source.Title,
             Year = source.Year,
             Publisher = source.Publisher,

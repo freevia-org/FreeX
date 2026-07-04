@@ -358,6 +358,7 @@ internal sealed class SourceEntryDialog : Window
     private readonly ComboBox _typeBox = new() { MinWidth = 260 };
     private readonly Grid _grid = new() { Margin = new Thickness(16, 12, 16, 0) };
     private readonly Dictionary<SourceManagementSourceField, TextBox> _fields;
+    private readonly SourceManagementSourceEntry _initialEntry;
 
     public SourceManagementSourceEntry? Entry { get; private set; }
 
@@ -374,6 +375,7 @@ internal sealed class SourceEntryDialog : Window
 
         _typeChoices = SourceManagementDialogPlanner.BuildSourceTypeChoices();
         var entry = SourceManagementDialogPlanner.ProjectEntry(source);
+        _initialEntry = entry;
         _fields = SourceManagementDialogPlanner.BuildEntryFieldPlans(entry).ToDictionary(plan => plan.Field, plan =>
         {
             var box = new TextBox
@@ -419,7 +421,8 @@ internal sealed class SourceEntryDialog : Window
     private SourceManagementSourceEntry CurrentEntry() =>
         SourceManagementDialogPlanner.CreateEntry(
             SelectedType,
-            _fields.ToDictionary(pair => pair.Key, pair => (string?)pair.Value.Text));
+            _fields.ToDictionary(pair => pair.Key, pair => (string?)pair.Value.Text),
+            _initialEntry);
 
     private void RefreshFields()
     {

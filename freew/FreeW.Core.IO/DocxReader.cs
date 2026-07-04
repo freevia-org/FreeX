@@ -502,11 +502,14 @@ public static class DocxReader
 
         foreach (var element in root.Elements(B + "Source"))
         {
+            var author = ReadBibliographyAuthor(element);
             document.Sources.Add(new Source
             {
                 Tag = Field(element, "Tag") ?? string.Empty,
                 Type = ParseSourceType(Field(element, "SourceType")),
-                Author = ReadBibliographyAuthor(element),
+                Author = author.DisplayText,
+                PersonalAuthors = author.PersonalAuthors,
+                CorporateAuthor = author.CorporateAuthor,
                 Title = Field(element, "Title") ?? string.Empty,
                 Year = Field(element, "Year") ?? string.Empty,
                 Publisher = Field(element, "Publisher"),
@@ -526,32 +529,41 @@ public static class DocxReader
         }
     }
 
-    private static string ReadBibliographyAuthor(XElement source)
+    private static BibliographyAuthorInfo ReadBibliographyAuthor(XElement source)
     {
         var author = source.Element(B + "Author");
         if (author is null)
-            return string.Empty;
+            return BibliographyAuthorInfo.Empty;
 
         var corporate = author.Element(B + "Author")?.Element(B + "Corporate")?.Value;
         if (!string.IsNullOrWhiteSpace(corporate))
-            return corporate.Trim();
+        {
+            var trimmed = corporate.Trim();
+            return new BibliographyAuthorInfo(trimmed, [], trimmed);
+        }
 
         var people = author.Descendants(B + "Person")
-            .Select(PersonName)
-            .Where(name => name.Length > 0)
+            .Select(Person)
+            .Where(person => !person.IsEmpty)
             .ToList();
         if (people.Count > 0)
-            return string.Join("; ", people);
+            return new BibliographyAuthorInfo(SourceAuthorPerson.FormatDisplayText(people), people, CorporateAuthor: null);
 
-        return (author.Value ?? string.Empty).Trim();
+        return new BibliographyAuthorInfo((author.Value ?? string.Empty).Trim(), [], CorporateAuthor: null);
 
-        static string PersonName(XElement person)
-        {
-            var first = person.Element(B + "First")?.Value?.Trim();
-            var middle = person.Element(B + "Middle")?.Value?.Trim();
-            var last = person.Element(B + "Last")?.Value?.Trim();
-            return string.Join(" ", new[] { first, middle, last }.Where(part => !string.IsNullOrWhiteSpace(part)));
-        }
+        static SourceAuthorPerson Person(XElement person) =>
+            SourceAuthorPerson.Create(
+                person.Element(B + "First")?.Value,
+                person.Element(B + "Middle")?.Value,
+                person.Element(B + "Last")?.Value);
+    }
+
+    private sealed record BibliographyAuthorInfo(
+        string DisplayText,
+        IReadOnlyList<SourceAuthorPerson> PersonalAuthors,
+        string? CorporateAuthor)
+    {
+        public static readonly BibliographyAuthorInfo Empty = new(string.Empty, [], null);
     }
 
     // Maps Word's b:SourceType token back to a FreeW SourceType; unknown / missing -> Book.

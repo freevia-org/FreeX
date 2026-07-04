@@ -105,7 +105,97 @@ public sealed class SourceManagementDialogPlannerTests
             string.Empty,
             string.Empty,
             "https://example.test",
-            string.Empty));
+            string.Empty)
+        {
+            CorporateAuthor = "Knuth"
+        });
+    }
+
+    [Fact]
+    public void CreateEntry_ImportsSemicolonSeparatedPersonalAuthors()
+    {
+        var entry = SourceManagementDialogPlanner.CreateEntry(
+            SourceType.Book,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Author] = " Jane Q. Doe ; ; Smith, Alex "
+            });
+
+        entry.Author.Should().Be("Jane Q. Doe; Alex Smith");
+        entry.PersonalAuthors.Should().Equal(
+            SourceAuthorPerson.Create("Jane", "Q.", "Doe"),
+            SourceAuthorPerson.Create("Alex", string.Empty, "Smith"));
+        entry.CorporateAuthor.Should().BeNull();
+    }
+
+    [Fact]
+    public void CreateEntry_KeepsCorporateAndAmbiguousAuthorsAsCorporate()
+    {
+        var entry = SourceManagementDialogPlanner.CreateEntry(
+            SourceType.Book,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Author] = "World Health Organization"
+            });
+
+        entry.Author.Should().Be("World Health Organization");
+        entry.PersonalAuthors.Should().BeEmpty();
+        entry.CorporateAuthor.Should().Be("World Health Organization");
+
+        var ambiguous = SourceManagementDialogPlanner.CreateEntry(
+            SourceType.Book,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Author] = "NASA; ESA"
+            });
+
+        ambiguous.PersonalAuthors.Should().BeEmpty();
+        ambiguous.CorporateAuthor.Should().Be("NASA; ESA");
+    }
+
+    [Fact]
+    public void CreateEntry_PreservesExistingSinglePersonRowsWhenDisplayIsUnchanged()
+    {
+        var previous = SourceManagementDialogPlanner.ProjectEntry(new Source
+        {
+            Author = "Ada Lovelace",
+            PersonalAuthors = [SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace")]
+        });
+
+        var entry = SourceManagementDialogPlanner.CreateEntry(
+            SourceType.Book,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Author] = "Ada Lovelace"
+            },
+            previous);
+
+        entry.PersonalAuthors.Should().ContainSingle()
+            .Which.Should().Be(SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace"));
+        entry.CorporateAuthor.Should().BeNull();
+    }
+
+    [Fact]
+    public void CreateEntry_PreservesExistingSinglePersonRowsWhenEdited()
+    {
+        var previous = SourceManagementDialogPlanner.ProjectEntry(new Source
+        {
+            Author = "Ada Lovelace",
+            PersonalAuthors = [SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace")]
+        });
+
+        var entry = SourceManagementDialogPlanner.CreateEntry(
+            SourceType.Book,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Author] = "Augusta Ada King"
+            },
+            previous);
+
+        entry.Author.Should().Be("Augusta Ada King");
+        entry.PersonalAuthors.Should().ContainSingle()
+            .Which.Should().Be(SourceAuthorPerson.Create("Augusta", "Ada", "King"));
+        entry.CorporateAuthor.Should().BeNull();
     }
 
     [Fact]
@@ -203,6 +293,42 @@ public sealed class SourceManagementDialogPlannerTests
     }
 
     [Fact]
+    public void TryBuildManagedSource_PreservesExistingStructuredAuthorsWhenPlainEntryTextIsUnchanged()
+    {
+        var existing = new Source
+        {
+            Tag = "Ada1843",
+            Author = "Ada Lovelace",
+            PersonalAuthors = [SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace")],
+            Title = "Notes"
+        };
+        var entry = new SourceManagementSourceEntry(
+            SourceType.Book,
+            "Ada1843",
+            "Ada Lovelace",
+            "Notes revised",
+            "1843",
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty);
+
+        SourceManagementDialogPlanner.TryBuildManagedSource(entry, existing, out var source, out var validation)
+            .Should().BeTrue();
+
+        validation.Should().BeNull();
+        source.Should().NotBeNull();
+        source!.Author.Should().Be("Ada Lovelace");
+        source.PersonalAuthors.Should().ContainSingle()
+            .Which.Should().Be(SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace"));
+        source.CorporateAuthor.Should().BeNull();
+        source.Title.Should().Be("Notes revised");
+    }
+
+    [Fact]
     public void BuildSource_ClearsFieldsThatDoNotApplyToSelectedType()
     {
         var source = SourceManagementDialogPlanner.BuildSource(
@@ -231,6 +357,28 @@ public sealed class SourceManagementDialogPlannerTests
     }
 
     [Fact]
+    public void BuildSource_ProjectsStructuredAndCorporateAuthors()
+    {
+        var personal = SourceManagementDialogPlanner.BuildSource(
+            SourceManagementDialogPlanner.CreateEntry(
+                SourceType.Book,
+                new Dictionary<SourceManagementSourceField, string?>
+                {
+                    [SourceManagementSourceField.Author] = "Jane Q. Doe; Alex Smith"
+                }));
+
+        personal.Author.Should().Be("Jane Q. Doe; Alex Smith");
+        personal.PersonalAuthors.Should().HaveCount(2);
+        personal.CorporateAuthor.Should().BeNull();
+
+        var corporate = SourceManagementDialogPlanner.BuildSource(
+            new SourceManagementSourceEntry("Org", "World Health Organization", string.Empty, string.Empty, string.Empty));
+
+        corporate.PersonalAuthors.Should().BeEmpty();
+        corporate.CorporateAuthor.Should().Be("World Health Organization");
+    }
+
+    [Fact]
     public void TryBuildManagedSource_RejectsBlankEntriesWithPlannerValidation()
     {
         SourceManagementDialogPlanner.TryBuildManagedSource(
@@ -249,13 +397,19 @@ public sealed class SourceManagementDialogPlannerTests
     [Fact]
     public void BuildInitialState_ClonesCurrentAndMasterSources()
     {
-        var current = new Source { Tag = "Doc", Author = "Doc Author" };
+        var current = new Source
+        {
+            Tag = "Doc",
+            Author = "Ada Lovelace",
+            PersonalAuthors = [SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace")]
+        };
         var master = new Source { Tag = "Master", Author = "Master Author" };
 
         var state = SourceManagementDialogPlanner.BuildInitialState([current], [master]);
 
         state.CurrentSources.Should().ContainSingle().Which.Should().NotBeSameAs(current);
         state.CurrentSources[0].Tag.Should().Be("Doc");
+        state.CurrentSources[0].PersonalAuthors.Should().BeEquivalentTo(current.PersonalAuthors);
         state.MasterSources.Should().ContainSingle().Which.Should().NotBeSameAs(master);
         state.MasterSources[0].Tag.Should().Be("Master");
     }
