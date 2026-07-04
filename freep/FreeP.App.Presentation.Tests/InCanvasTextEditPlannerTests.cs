@@ -36,8 +36,14 @@ public sealed class InCanvasTextEditPlannerTests
         plan.Status.Should().Be(InCanvasTextEditStartStatus.Ready);
         plan.Kind.Should().Be(InCanvasTextEditKind.RichText);
         plan.Placement.Should().Be(new InCanvasEditorPlacement(10, 20, 192, 96));
+        plan.InitialSelection.Should().Be(new InCanvasEditorTextSelection(0, "Hello".Length));
         plan.OriginalPlainText.Should().Be("Hello");
         plan.OriginalBody.Should().NotBeSameAs(body);
+        plan.RichTextPlan.Should().NotBeNull();
+        plan.RichTextPlan!.PlainText.Should().Be("Hello");
+        plan.RichTextPlan.Runs.Should().ContainSingle();
+        plan.RichTextPlan.SuggestedEditorStyle.FontFamily.Should().Be("Aptos");
+        plan.RichTextPlan.SuggestedEditorStyle.Bold.Should().BeTrue();
         plan.EditPlanner.Should().NotBeNull();
 
         body.Paragraphs[0].Runs[0].Text = "Mutated after plan";
@@ -69,8 +75,61 @@ public sealed class InCanvasTextEditPlannerTests
         plan.Status.Should().Be(InCanvasTextEditStartStatus.MissingTextBody);
         plan.IsReady.Should().BeFalse();
         plan.Placement.Should().BeNull();
+        plan.InitialSelection.Should().Be(new InCanvasEditorTextSelection(0, 0));
+        plan.RichTextPlan.Should().BeNull();
         plan.EditPlanner.Should().BeNull();
         plan.OriginalPlainText.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void BeginShapeEdit_MixedRuns_ReturnsRendererNeutralRichTextPlan()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var body = MakeBody("Hello");
+        body.Paragraphs[0].Runs.Add(new Run
+        {
+            Text = "World",
+            FontFamily = "Consolas",
+            FontSizePt = 22,
+            Italic = true,
+            ItalicSet = true,
+        });
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 914400L,
+            ExtentCyEmu = 457200L,
+            TextBody = body,
+        };
+        slide.Shapes.Add(shape);
+
+        var plan = InCanvasTextEditPlanner.BeginShapeEdit(
+            0,
+            presentation,
+            slide,
+            shape.Id,
+            SlideTransformCore.Identity,
+            minimumWidth: 40,
+            minimumHeight: 20,
+            InCanvasTextEditKind.PlainText);
+
+        plan.IsReady.Should().BeTrue();
+        plan.InitialSelection.Should().Be(new InCanvasEditorTextSelection(0, "HelloWorld".Length));
+        plan.RichTextPlan.Should().NotBeNull();
+        plan.RichTextPlan!.PlainText.Should().Be("HelloWorld");
+        plan.RichTextPlan.Runs.Should().HaveCount(2);
+        plan.RichTextPlan.Runs[0].Text.Should().Be("Hello");
+        plan.RichTextPlan.Runs[1].Text.Should().Be("World");
+        plan.RichTextPlan.HasRichFormatting.Should().BeTrue();
+        plan.RichTextPlan.HasMixedFormatting.Should().BeTrue();
+        plan.RichTextPlan.SuggestedEditorStyle.FontFamily.Should().Be("Aptos");
+        plan.RichTextPlan.SuggestedEditorStyle.Bold.Should().BeTrue();
+        plan.RichTextPlan.InitialSelectionStyle.FontFamily.Should().BeNull();
+        plan.RichTextPlan.InitialSelectionStyle.Italic.Should().BeNull();
     }
 
     [Fact]

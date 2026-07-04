@@ -243,6 +243,73 @@ public sealed class SlideCanvasAvaloniaTests
     }
 
     [Fact]
+    public async Task InCanvasTextEditor_OpenMixedRuns_ProjectsSharedRichPlanOntoShapeOverlay()
+    {
+        SlideShape? shape = null;
+        InCanvasTableCellRichTextEditPlan? startPlan = null;
+        InCanvasTableCellRichTextEditPlan? selectedPlan = null;
+        var projectedFontFamily = string.Empty;
+        var projectedFontSize = 0.0;
+        var projectedBold = false;
+        var richClass = false;
+        var mixedClass = false;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = new SlideShape
+                {
+                    Id = 26,
+                    OffsetXEmu = 0,
+                    OffsetYEmu = 0,
+                    ExtentCxEmu = 2743200L,
+                    ExtentCyEmu = 1371600L,
+                    TextBody = MakeMixedRunTextBody(),
+                };
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            var bus = new PresentationCommandBus(presentation);
+            var editor = new EditingSession(presentation, bus);
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            textEditor.Activate(shape!.Id);
+            var box = overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single();
+            startPlan = box.Tag.Should().BeOfType<InCanvasTableCellRichTextEditPlan>().Subject;
+            projectedFontFamily = box.FontFamily.ToString();
+            projectedFontSize = box.FontSize;
+            projectedBold = box.FontWeight == FontWeight.Bold;
+            richClass = box.Classes.Contains("freep-shape-rich-editor");
+            mixedClass = box.Classes.Contains("freep-shape-mixed-formatting");
+
+            box.SelectionStart = 5;
+            box.SelectionEnd = 11;
+            textEditor.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Bold).Should().BeTrue();
+            selectedPlan = box.Tag.Should().BeOfType<InCanvasTableCellRichTextEditPlan>().Subject;
+        });
+
+        startPlan!.PlainText.Should().Be("Hello world");
+        startPlan.Runs.Should().HaveCount(2);
+        startPlan.Runs[0].Text.Should().Be("Hello");
+        startPlan.Runs[1].Text.Should().Be(" world");
+        startPlan.HasRichFormatting.Should().BeTrue();
+        startPlan.HasMixedFormatting.Should().BeTrue();
+        projectedFontFamily.Should().Contain("Aptos");
+        projectedFontSize.Should().Be(18);
+        projectedBold.Should().BeFalse("the Avalonia shape editor starts from the first rich run's shared style");
+        richClass.Should().BeTrue();
+        mixedClass.Should().BeTrue();
+
+        selectedPlan!.InitialSelectionStyle.Bold.Should().BeTrue("the refreshed shared plan describes the selected subrange");
+        selectedPlan.InitialSelectionStyle.Italic.Should().BeTrue("existing selected-run style stays visible in the shared selection state");
+        shape!.TextBody!.Paragraphs[0].Runs[1].Bold.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task TableCellEditAdapter_UsesSharedPlannerForStateStartAndCommit()
     {
         EditingSession? editor = null;
@@ -759,6 +826,8 @@ public sealed class SlideCanvasAvaloniaTests
         adapter.Should().Contain("InCanvasTextEditPlanner.PlanFontFamily");
         adapter.Should().Contain("InCanvasTextEditPlanner.PlanFontSize");
         adapter.Should().Contain("InCanvasTextEditPlanner.PlanColor");
+        adapter.Should().Contain("ApplyRichTextEditorPlan");
+        adapter.Should().Contain("freep-shape-rich-editor");
     }
 
     [Fact]
@@ -799,6 +868,9 @@ public sealed class SlideCanvasAvaloniaTests
         source.Should().Contain("AvaloniaInCanvasTextEditAdapter.PlanFontFamily");
         source.Should().Contain("AvaloniaInCanvasTextEditAdapter.PlanFontSize");
         source.Should().Contain("AvaloniaInCanvasTextEditAdapter.PlanColor");
+        source.Should().Contain("AvaloniaInCanvasTextEditAdapter.ApplyRichTextEditorPlan(_textBox, startPlan.RichTextPlan)");
+        source.Should().Contain("ApplyInitialSelection(_textBox, startPlan.InitialSelection)");
+        source.Should().Contain("RefreshShapeOverlayRichTextPlan");
         source.Should().Contain("TryApplyActiveShapeTextFormat");
     }
 
