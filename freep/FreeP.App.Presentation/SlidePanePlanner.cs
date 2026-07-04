@@ -29,6 +29,17 @@ public sealed record SlidePaneThumbnailVisualPlan(
     double LabelHeight,
     double ItemPadding,
     double ItemHeight,
+    double ItemCornerRadius,
+    double NormalBorderThickness,
+    double SelectedBorderThickness,
+    string PaneBackgroundHex,
+    string ItemNormalBackgroundHex,
+    string ItemSelectedBackgroundHex,
+    string ItemHoverBackgroundHex,
+    string ItemNormalBorderHex,
+    string ItemSelectedBorderHex,
+    string ThumbnailBorderHex,
+    string LabelForegroundHex,
     string AccessibleName,
     string ToolTipText);
 
@@ -73,6 +84,17 @@ public static class SlidePanePlanner
     public const double DefaultSlideItemHeight = 4 + DefaultItemPadding + DefaultLabelHeight + 4 + DefaultThumbnailHeight + DefaultItemPadding + 4;
     public const double DefaultSectionHeaderHeight = 30.0;
     public const double DefaultDragStartThreshold = 5.0;
+    public const double DefaultItemCornerRadius = 3.0;
+    public const double DefaultNormalBorderThickness = 1.0;
+    public const double DefaultSelectedBorderThickness = 2.0;
+    public const string DefaultPaneBackgroundHex = "#E0E0E0";
+    public const string DefaultItemNormalBackgroundHex = "#F5F5F5";
+    public const string DefaultItemSelectedBackgroundHex = "#FFE0D6";
+    public const string DefaultItemHoverBackgroundHex = "#EBEBEB";
+    public const string DefaultItemNormalBorderHex = "#CCCCCC";
+    public const string DefaultItemSelectedBorderHex = "#B7472A";
+    public const string DefaultThumbnailBorderHex = "#CCCCCC";
+    public const string DefaultLabelForegroundHex = "#444444";
     public const double DefaultDropIndicatorThickness = 2.0;
     public const double DefaultDropIndicatorHorizontalInset = 0.0;
     public const string DefaultDropIndicatorAccentHex = "#B7472A";
@@ -135,6 +157,17 @@ public static class SlidePanePlanner
             DefaultLabelHeight,
             DefaultItemPadding,
             DefaultSlideItemHeight,
+            DefaultItemCornerRadius,
+            DefaultNormalBorderThickness,
+            DefaultSelectedBorderThickness,
+            DefaultPaneBackgroundHex,
+            DefaultItemNormalBackgroundHex,
+            DefaultItemSelectedBackgroundHex,
+            DefaultItemHoverBackgroundHex,
+            DefaultItemNormalBorderHex,
+            DefaultItemSelectedBorderHex,
+            DefaultThumbnailBorderHex,
+            DefaultLabelForegroundHex,
             accessibleName,
             accessibleName);
     }

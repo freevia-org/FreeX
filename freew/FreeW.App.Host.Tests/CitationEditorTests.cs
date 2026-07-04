@@ -23,4 +23,25 @@ public sealed class CitationEditorTests
             .PlainText
             .Should().Contain("(Doe, 2020)");
     }
+
+    [StaFact]
+    public void InsertCitation_TaggedSource_InsertsCitationComplexField()
+    {
+        var source = new Source { Tag = "Doe2020", Author = "Jane Q. Doe", Year = "2020" };
+        var model = TextDocument.CreateEmpty();
+        model.Blocks.Clear();
+        model.Blocks.Add(new Paragraph("See "));
+        model.Sources.Add(source);
+        var view = new DocumentView();
+        view.LoadModel(model);
+
+        view.InsertCitation(source);
+        view.CommitToModel();
+
+        var run = view.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(r => r.ComplexField is not null);
+        run.Text.Should().Be("(Doe, 2020)");
+        run.ComplexField!.Instruction.Should().Be(" CITATION Doe2020 ");
+    }
 }
