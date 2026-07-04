@@ -594,6 +594,10 @@ public static class PresentationReviewWorkflowPlanner
         "Select a proofing issue before applying a correction.";
     public const string ProofingNoSuggestionMessage =
         "No replacement suggestion is available for the selected proofing issue.";
+    public const string ProofingWhitespaceBeforePunctuationMessage =
+        "Remove the space before punctuation.";
+    public const string ProofingMissingSpaceAfterSentencePunctuationMessage =
+        "Add a space after sentence punctuation.";
     public const string SlideTitleMissingSlideMessage =
         "Slide title target slide was not found.";
     public const string SlideTitleEmptyMessage =
@@ -1973,6 +1977,9 @@ public static class PresentationReviewWorkflowPlanner
         foreach (var repeatedWord in ScanRepeatedWords(scope.Text))
             yield return repeatedWord;
 
+        foreach (var punctuationSpacing in ScanPunctuationSpacing(scope.Text))
+            yield return punctuationSpacing;
+
         foreach (var sentenceStart in ScanSentenceStartCapitalization(scope.Text))
             yield return sentenceStart;
     }
@@ -1985,9 +1992,76 @@ public static class PresentationReviewWorkflowPlanner
         if (text.Length == 1 && char.IsLower(text[0]))
             return char.ToUpperInvariant(text[0]).ToString();
 
+        if (TryBuildPunctuationSpacingReplacement(text, out var punctuationSpacingReplacement))
+            return punctuationSpacingReplacement;
+
         return TryBuildRepeatedWordReplacement(text, out var repeatedWordReplacement)
             ? repeatedWordReplacement
             : string.Empty;
+    }
+
+    private static IEnumerable<PresentationProofingIssueMatch> ScanPunctuationSpacing(string text)
+    {
+        for (var index = 0; index < text.Length; index++)
+        {
+            var ch = text[index];
+            if (IsProofingPunctuation(ch) &&
+                !IsGuardedProofingPunctuation(text, index))
+            {
+                var whitespaceStart = index;
+                while (whitespaceStart > 0 &&
+                    char.IsWhiteSpace(text[whitespaceStart - 1]) &&
+                    text[whitespaceStart - 1] != '\n' &&
+                    text[whitespaceStart - 1] != '\r')
+                {
+                    whitespaceStart--;
+                }
+
+                if (whitespaceStart < index)
+                {
+                    var length = index - whitespaceStart + 1;
+                    yield return new PresentationProofingIssueMatch(
+                        whitespaceStart,
+                        length,
+                        text.Substring(whitespaceStart, length),
+                        ProofingWhitespaceBeforePunctuationMessage);
+                }
+            }
+
+            if (IsSentenceTerminator(ch) &&
+                index + 1 < text.Length &&
+                char.IsLetter(text[index + 1]) &&
+                !IsGuardedProofingPunctuation(text, index))
+            {
+                yield return new PresentationProofingIssueMatch(
+                    index,
+                    2,
+                    text.Substring(index, 2),
+                    ProofingMissingSpaceAfterSentencePunctuationMessage);
+            }
+        }
+    }
+
+    private static bool TryBuildPunctuationSpacingReplacement(string text, out string replacement)
+    {
+        if (text.Length >= 2 &&
+            IsProofingPunctuation(text[^1]) &&
+            text[..^1].All(char.IsWhiteSpace))
+        {
+            replacement = text[^1].ToString();
+            return true;
+        }
+
+        if (text.Length == 2 &&
+            IsSentenceTerminator(text[0]) &&
+            char.IsLetter(text[1]))
+        {
+            replacement = $"{text[0]} {text[1]}";
+            return true;
+        }
+
+        replacement = string.Empty;
+        return false;
     }
 
     private static IEnumerable<PresentationProofingIssueMatch> ScanSentenceStartCapitalization(string text)
@@ -2109,6 +2183,9 @@ public static class PresentationReviewWorkflowPlanner
     private static bool IsSentenceTerminator(char value)
         => value is '.' or '!' or '?';
 
+    private static bool IsProofingPunctuation(char value)
+        => value is ',' or '.' or ';' or ':' or '!' or '?';
+
     private static bool IsSentenceOpeningPunctuation(char value)
         => value is '"' or '\'' or '(' or '[' or '{';
 
@@ -2123,6 +2200,16 @@ public static class PresentationReviewWorkflowPlanner
 
         return index >= text.Length || char.IsWhiteSpace(text[index]);
     }
+
+    private static bool IsGuardedProofingPunctuation(string text, int index)
+        => IsDecimalSeparator(text, index) || TryGetUrlOrEmailCoreEnd(text, index, out _);
+
+    private static bool IsDecimalSeparator(string text, int index)
+        => text[index] == '.' &&
+            index > 0 &&
+            index + 1 < text.Length &&
+            char.IsDigit(text[index - 1]) &&
+            char.IsDigit(text[index + 1]);
 
     private static bool TryGetUrlOrEmailCoreEnd(string text, int index, out int coreEnd)
     {
