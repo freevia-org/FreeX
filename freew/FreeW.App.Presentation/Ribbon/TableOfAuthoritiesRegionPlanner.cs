@@ -9,6 +9,17 @@ public sealed record TableOfAuthoritiesRegionPlan(
 
 public static class TableOfAuthoritiesRegionPlanner
 {
+    public static bool ContainsRegion(TextDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        foreach (var block in document.Blocks)
+            if (TableOfAuthorities.IsTableOfAuthoritiesParagraph(block))
+                return true;
+
+        return false;
+    }
+
     public static TableOfAuthoritiesRegionPlan BuildInsertPlan(
         TextDocument document,
         int insertAt,

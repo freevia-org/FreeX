@@ -61,6 +61,21 @@ public sealed class TableOfAuthoritiesRegionPlannerTests
     }
 
     [Fact]
+    public void ContainsRegion_ReturnsTrueForExistingGeneratedTableOfAuthoritiesParagraphs()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Body"));
+
+        TableOfAuthoritiesRegionPlanner.ContainsRegion(document).Should().BeFalse();
+
+        document.Blocks.AddRange(TableOfAuthorities.Build(
+            new[] { new Citation("Old Case", CitationCategory.Cases) }));
+
+        TableOfAuthoritiesRegionPlanner.ContainsRegion(document).Should().BeTrue();
+    }
+
+    [Fact]
     public void BuildRefreshPlan_ReplacesExistingRegionWithSharedPageReferencesAtSameLocation()
     {
         var document = TextDocument.CreateEmpty();

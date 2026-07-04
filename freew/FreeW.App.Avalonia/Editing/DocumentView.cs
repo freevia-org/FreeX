@@ -11265,6 +11265,13 @@ public sealed class DocumentView : Control
             refreshedGeneratedRegion = true;
         }
 
+        if (TableOfAuthoritiesRegionPlanner.ContainsRegion(_doc))
+        {
+            var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(_doc);
+            ApplyGeneratedReferencePlan(plan, "Update Table of Authorities", adjustCaretForInsert: false);
+            refreshedGeneratedRegion = true;
+        }
+
         if (refreshedGeneratedRegion)
         {
             InvalidateVisual();

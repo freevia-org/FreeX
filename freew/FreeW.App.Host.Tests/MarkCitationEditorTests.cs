@@ -126,6 +126,37 @@ public sealed class MarkCitationEditorTests
     }
 
     [StaFact]
+    public void UpdateFields_RefreshesExistingTableOfAuthoritiesWithExplicitBreakPageReferences()
+    {
+        var model = TextDocument.CreateEmpty();
+        model.Blocks.Clear();
+        model.Blocks.Add(new Paragraph("Before"));
+        model.Blocks.Add(CitationMarkParagraph("Case A", formatted: false));
+        model.Blocks.Add(DocumentOps.CreatePageBreak());
+        model.Blocks.Add(CitationMarkParagraph("Case A", formatted: false));
+        model.Blocks.AddRange(TableOfAuthorities.Build(
+            new[] { new Citation("Old Case", CitationCategory.Cases) }));
+        model.Blocks.Add(new Paragraph("After"));
+        var view = new DocumentView();
+        view.LoadModel(model);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        view.Model.Blocks.OfType<Paragraph>()
+            .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Table of Authorities", "Cases", "Case A\t1, 2");
+        view.Model.Blocks.OfType<Paragraph>().Select(paragraph => paragraph.PlainText)
+            .Should().NotContain("Old Case")
+            .And.EndWith("After");
+
+        var entry = view.Model.Blocks.OfType<Paragraph>()
+            .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
+        entry.Runs.Select(run => run.Text).Should().Equal("Case A", "\t", "1, 2");
+    }
+
+    [StaFact]
     public void RefreshTableOfAuthorities_ConsumesSharedRenderPlanInWpfHost()
     {
         var model = TextDocument.CreateEmpty();
