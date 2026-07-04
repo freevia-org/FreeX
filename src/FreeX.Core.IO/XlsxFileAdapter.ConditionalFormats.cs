@@ -12,8 +12,26 @@ public sealed partial class XlsxFileAdapter
         IReadOnlyList<CellStyle> differentialStyles,
         WorkbookTheme workbookTheme,
         WorkbookIndexedColorPalette indexedColors)
+        => ReadAdvancedConditionalFormats(worksheetXml, worksheetNs, differentialStyles, workbookTheme, indexedColors, out _);
+
+    /// <summary>
+    /// Reads every non-classic (colorScale/dataBar/iconSet/long-tail) conditional format rule from the
+    /// raw worksheet XML, preserving each rule's real <c>priority</c> attribute. Also captures the real
+    /// priorities of the classic CellIs/Expression rules it skips (those are mapped separately via
+    /// ClosedXML in <see cref="XlsxConditionalFormatClosedXmlMapper"/>) in true document order, so both
+    /// rule families can be renumbered from one shared, file-order-preserving priority sequence instead
+    /// of two independent counters that would corrupt relative evaluation order between them.
+    /// </summary>
+    private static IReadOnlyList<ConditionalFormat> ReadAdvancedConditionalFormats(
+        XDocument worksheetXml,
+        XNamespace worksheetNs,
+        IReadOnlyList<CellStyle> differentialStyles,
+        WorkbookTheme workbookTheme,
+        WorkbookIndexedColorPalette indexedColors,
+        out IReadOnlyList<int> classicRulePriorities)
     {
         var result = new List<ConditionalFormat>();
+        var classicPriorities = new List<int>();
         var dataBarGuids = new Dictionary<string, ConditionalFormat>(StringComparer.OrdinalIgnoreCase);
         var tempSheet = SheetId.New();
         foreach (var conditionalFormatting in worksheetXml.Root?.Elements(worksheetNs + "conditionalFormatting") ?? [])
@@ -116,11 +134,20 @@ public sealed partial class XlsxFileAdapter
                     ApplyNativeConditionalFormattingContainerMetadata(format, conditionalFormatting, worksheetNs);
                     result.Add(format);
                 }
+                else if (string.Equals(type, "cellIs", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(type, "expression", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Mapped separately by XlsxConditionalFormatClosedXmlMapper (via ClosedXML's object
+                    // model), but capture the real file priority here, in true document order, so both
+                    // rule families can share one priority sequence instead of two independent counters.
+                    classicPriorities.Add(priority);
+                }
             }
         }
 
         ApplyX14DataBarProperties(dataBarGuids, worksheetXml);
         ReadX14IconSetConditionalFormats(result, worksheetXml, tempSheet);
+        classicRulePriorities = classicPriorities;
         return result;
     }
 

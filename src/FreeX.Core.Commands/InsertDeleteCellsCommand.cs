@@ -67,6 +67,17 @@ public sealed class InsertCellsCommand : IWorkbookCommand
                 return new CommandOutcome(false,
                     "This operation will cause some merged cells to unmerge. To do this, first unmerge the affected cells.");
 
+            // G3: unlike whole-row/whole-column insert (which shifts AutoFilter.Reference,
+            // FilterHiddenRows, form controls, pivot tables, sparklines, and watched cells via
+            // RowColumnShiftHelpers.CaptureAddressBearingState), this band-scoped shift only moves
+            // cells within a bounded row/column range — silently shifting an axis-wide reference like
+            // AutoFilter.Reference here would corrupt rows/columns outside the shifted band. Excel's
+            // own behavior is to refuse the operation outright when it would partially disrupt a
+            // table/AutoFilter range, so mirror that instead of silently leaving stale state behind.
+            if (AutoFilterOverlapsBand(sheet, shiftRegion))
+                return new CommandOutcome(false,
+                    "This operation is not allowed. The operation is attempting to shift cells in a table or AutoFilter range on your worksheet.");
+
             var capture = CaptureCellsForMove(sheet, shiftRegion);
             if (capture.MaxCol > 0 && capture.MaxCol + width > CellAddress.MaxCol)
                 return new CommandOutcome(false, $"Cannot insert cells: data would be pushed past the last column ({CellAddress.MaxCol}).");
@@ -120,6 +131,12 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             if (MergeWouldBeTorn(sheet, shiftRegion, shiftDirection: ShiftAxis.Row))
                 return new CommandOutcome(false,
                     "This operation will cause some merged cells to unmerge. To do this, first unmerge the affected cells.");
+
+            // G3: see the Shift-Right branch above for why this band-scoped operation must refuse
+            // rather than silently shift AutoFilter/table state it cannot safely relocate.
+            if (AutoFilterOverlapsBand(sheet, shiftRegion))
+                return new CommandOutcome(false,
+                    "This operation is not allowed. The operation is attempting to shift cells in a table or AutoFilter range on your worksheet.");
 
             var capture = CaptureCellsForMove(sheet, shiftRegion);
             if (capture.MaxRow > 0 && capture.MaxRow + height > CellAddress.MaxRow)
@@ -501,6 +518,40 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         foreach (var (addr, value) in shifted)
             dict[new CellAddress(addr.Sheet, addr.Row + count, addr.Col)] = value;
     }
+
+    // ── AutoFilter / structured-table guard (finding G3) ───────────────────────
+
+    /// <summary>
+    /// Returns true if the worksheet AutoFilter range, or any structured table's range, overlaps the
+    /// band-scoped Insert/Delete Cells shift region at all. Band-scoped cell shifts (unlike whole-row
+    /// or whole-column insert/delete, which call RowColumnShiftHelpers.CaptureAddressBearingState /
+    /// ShiftAddressBearingRows*Up/Down) cannot safely relocate axis-wide state such as
+    /// <c>Sheet.AutoFilter.Reference</c> or <c>Sheet.FilterHiddenRows</c> — either the whole
+    /// table/filter range would need to move (which this command has no way to express, since it only
+    /// shifts a bounded row/column band, not a whole row or column) or that state goes stale. Excel
+    /// itself refuses "Insert/Delete Cells" when it would disturb a table, so mirror that instead of
+    /// silently corrupting filter state.
+    /// </summary>
+    internal static bool AutoFilterOverlapsBand(Sheet sheet, CellShiftRegion band)
+    {
+        if (AutoFilterRangeResolver.TryGetWorksheetAutoFilterRange(sheet, out var autoFilterRange) &&
+            RangeIntersectsBand(autoFilterRange, band))
+        {
+            return true;
+        }
+
+        foreach (var table in sheet.StructuredTables)
+        {
+            if (RangeIntersectsBand(table.Range, band))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool RangeIntersectsBand(GridRange range, CellShiftRegion band) =>
+        range.Start.Row <= band.EndRow && range.End.Row >= band.StartRow &&
+        range.Start.Col <= band.EndCol && range.End.Col >= band.StartCol;
 }
 
 public sealed class DeleteCellsCommand : IWorkbookCommand
@@ -553,6 +604,12 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
                 return new CommandOutcome(false,
                     "This operation will cause some merged cells to unmerge. To do this, first unmerge the affected cells.");
 
+            // G3: see InsertCellsCommand.AutoFilterOverlapsBand — this band-scoped shift cannot
+            // safely relocate AutoFilter.Reference/FilterHiddenRows, so refuse rather than corrupt.
+            if (InsertCellsCommand.AutoFilterOverlapsBand(sheet, shiftRegion))
+                return new CommandOutcome(false,
+                    "This operation is not allowed. The operation is attempting to shift cells in a table or AutoFilter range on your worksheet.");
+
             var capture = InsertCellsCommand.CaptureCellsForDelete(sheet, shiftRegion);
             _snapshot = capture.Snapshot;
 
@@ -604,6 +661,12 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             if (DeleteMergeWouldBeTorn(sheet, shiftRegion, _range, ShiftAxis.Row))
                 return new CommandOutcome(false,
                     "This operation will cause some merged cells to unmerge. To do this, first unmerge the affected cells.");
+
+            // G3: see InsertCellsCommand.AutoFilterOverlapsBand — this band-scoped shift cannot
+            // safely relocate AutoFilter.Reference/FilterHiddenRows, so refuse rather than corrupt.
+            if (InsertCellsCommand.AutoFilterOverlapsBand(sheet, shiftRegion))
+                return new CommandOutcome(false,
+                    "This operation is not allowed. The operation is attempting to shift cells in a table or AutoFilter range on your worksheet.");
 
             var capture = InsertCellsCommand.CaptureCellsForDelete(sheet, shiftRegion);
             _snapshot = capture.Snapshot;

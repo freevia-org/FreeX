@@ -918,7 +918,8 @@ public sealed partial class ViewportService : IViewportService
             style.NumberFormat,
             targetWidthCharacters,
             workbook.IndexedColors,
-            workbook.Theme);
+            workbook.Theme,
+            workbook.Uses1904DateSystem);
         if (TryParseHexColor(result.ColorHex, out var color))
         {
             if (style.FontColor != color)

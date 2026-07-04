@@ -321,6 +321,26 @@ public sealed class WorkbookWindowRegistry
     }
 
     /// <summary>
+    /// Stops side-by-side mode only if <paramref name="requester"/> is actually one of the paired
+    /// windows (or no pair is active, in which case there is nothing to stop). Guards against an
+    /// unrelated third window silently un-pairing and desyncing a pair it was never part of -- e.g.
+    /// clicking "View Side by Side" on window C while A and B are already tiled together must not
+    /// turn off A/B's pairing (and synchronous scrolling) out from under them.
+    /// Returns true if side-by-side was active and owned by <paramref name="requester"/> and was
+    /// turned off; false if there was no active pair, or the active pair belongs to other windows
+    /// and was left untouched.
+    /// </summary>
+    public bool DisableSideBySideFor(IWorkbookWindow requester)
+    {
+        ArgumentNullException.ThrowIfNull(requester);
+        if (!IsSideBySideActive || !IsSideBySideEndpoint(requester))
+            return false;
+
+        DisableSideBySide();
+        return true;
+    }
+
+    /// <summary>
     /// Enables or disables synchronous scrolling. Synchronous scrolling is only meaningful while
     /// side-by-side is active; enabling it without an active pair is refused.
     /// </summary>

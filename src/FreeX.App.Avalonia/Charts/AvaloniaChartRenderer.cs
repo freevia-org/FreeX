@@ -329,8 +329,9 @@ public sealed class AvaloniaChartRenderer
         var stroke = SeriesStroke(series.SeriesIndex);
         // Fix 6: Line dash style.
         var dashStyle = format?.DashStyle;
-        // Fix 5: Marker shapes.
-        var markerStyle = format?.MarkerStyle ?? ChartMarkerStyle.Circle;
+        // Fix 5: Marker shapes. Line series show no markers by default (matches WPF/OxyPlot's
+        // MarkerType.None default and Excel's plain Line chart), only when explicitly requested.
+        var markerStyle = format?.MarkerStyle ?? ChartMarkerStyle.None;
         // F19: honor the series' persisted StrokeThickness, falling back to 2 only when unset.
         var strokeThickness = format?.StrokeThickness ?? DefaultSeriesStrokeThickness;
         AddPolyline(canvas, series.Points, stroke, dashStyle, strokeThickness);
@@ -346,8 +347,9 @@ public sealed class AvaloniaChartRenderer
         var fill = SeriesFill(series.SeriesIndex, alpha: 0xA0);
         var stroke = SeriesStroke(series.SeriesIndex);
         var dashStyle = format?.DashStyle;
-        // F19: honor the series' persisted StrokeThickness, falling back to the existing default (1) when unset.
-        var strokeThickness = format?.StrokeThickness ?? 1;
+        // F19: honor the series' persisted StrokeThickness, falling back to DefaultSeriesStrokeThickness
+        // (2) to match WPF/OxyPlot's AreaSeries default when unset.
+        var strokeThickness = format?.StrokeThickness ?? DefaultSeriesStrokeThickness;
 
         var polygon = new AvaloniaPolygon
         {
@@ -357,7 +359,8 @@ public sealed class AvaloniaChartRenderer
             Points = BuildAreaPoints(series),
         };
         canvas.Children.Add(polygon);
-        AddMarkers(canvas, series.Points, fill, stroke, format?.MarkerStyle ?? ChartMarkerStyle.Circle);
+        // Area series show no markers by default (matches WPF/OxyPlot's AreaSeries default and Excel).
+        AddMarkers(canvas, series.Points, fill, stroke, format?.MarkerStyle ?? ChartMarkerStyle.None);
     }
 
     private void RenderScatter(Canvas canvas, SeriesLayout series)

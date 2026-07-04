@@ -9,6 +9,12 @@ public sealed class ToggleWorksheetAutoFilterCommand : IWorkbookCommand, IEstima
 
     private WorksheetAutoFilterModel? _previousAutoFilter;
     private uint[]? _previousFilterHiddenRows;
+    // G6: sheet.ActiveValueFilterColumns/ValueFilterHiddenRows must roll back alongside AutoFilter/
+    // FilterHiddenRows too, otherwise a stale per-column value-filter entry survives turning
+    // AutoFilter off and silently resurrects on the next unrelated column's filter (see FilterCommand,
+    // finding F8/G7, for why this state exists).
+    private Dictionary<uint, IReadOnlyList<string>>? _previousActiveValueFilterColumns;
+    private uint[]? _previousValueFilterHiddenRows;
 
     public ToggleWorksheetAutoFilterCommand(SheetId sheetId, GridRange range)
     {
@@ -33,6 +39,12 @@ public sealed class ToggleWorksheetAutoFilterCommand : IWorkbookCommand, IEstima
 
         _previousAutoFilter = CloneAutoFilter(sheet.AutoFilter);
         _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
+        _previousActiveValueFilterColumns = sheet.ActiveValueFilterColumns.Count == 0
+            ? null
+            : sheet.ActiveValueFilterColumns.ToDictionary(
+                kvp => kvp.Key,
+                IReadOnlyList<string> (kvp) => [.. kvp.Value]);
+        _previousValueFilterHiddenRows = [.. sheet.ValueFilterHiddenRows];
 
         if (sheet.AutoFilter is null)
         {
@@ -45,6 +57,8 @@ public sealed class ToggleWorksheetAutoFilterCommand : IWorkbookCommand, IEstima
         else
             FilterHiddenRowUpdater.ClearRange(sheet.FilterHiddenRows, _range);
         sheet.AutoFilter = null;
+        sheet.ActiveValueFilterColumns.Clear();
+        sheet.ValueFilterHiddenRows.Clear();
         return new CommandOutcome(true);
     }
 
@@ -55,6 +69,17 @@ public sealed class ToggleWorksheetAutoFilterCommand : IWorkbookCommand, IEstima
         sheet.FilterHiddenRows.Clear();
         if (_previousFilterHiddenRows is not null)
             sheet.FilterHiddenRows.UnionWith(_previousFilterHiddenRows);
+
+        sheet.ActiveValueFilterColumns.Clear();
+        if (_previousActiveValueFilterColumns is not null)
+        {
+            foreach (var (col, allowedValues) in _previousActiveValueFilterColumns)
+                sheet.ActiveValueFilterColumns[col] = allowedValues;
+        }
+
+        sheet.ValueFilterHiddenRows.Clear();
+        if (_previousValueFilterHiddenRows is not null)
+            sheet.ValueFilterHiddenRows.UnionWith(_previousValueFilterHiddenRows);
     }
 
     private static WorksheetAutoFilterModel? CloneAutoFilter(WorksheetAutoFilterModel? autoFilter)

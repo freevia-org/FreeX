@@ -759,7 +759,7 @@ public static partial class ChartRenderer
 
         try
         {
-            var formatted = FreeX.Core.Formula.NumberFormatter.Format(numericValue, formatCode);
+            var formatted = FreeX.Core.Formula.NumberFormatter.Format(numericValue, formatCode, chart.Uses1904DateSystem);
             return string.IsNullOrEmpty(formatted) ? cell.DisplayText : formatted;
         }
         catch

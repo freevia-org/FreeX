@@ -14,7 +14,7 @@ public sealed partial class ViewportService
         for (var i = 0; i < cfContext.IconRulesByPriority.Count; i++)
         {
             var rule = cfContext.IconRulesByPriority[i];
-            if (!rule.AppliesTo.Contains(addr))
+            if (!rule.AllRanges.Any(r => r.Contains(addr)))
                 continue;
             if (!TryGetDouble(value, out var cellValue))
                 return null;

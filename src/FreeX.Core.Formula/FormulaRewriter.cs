@@ -221,7 +221,9 @@ public static class FormulaRewriter
         if (!Matches(rr.SheetName, op, hostSheetName))
             return rr;
 
-        uint s = rr.Start.Row, e = endRef.Row;
+        // Excel treats A5:A1 identically to A1:A5 — normalize endpoint order before any band math
+        // so a reversed range shrinks/collapses exactly like its normalized equivalent.
+        uint s = Math.Min(rr.Start.Row, endRef.Row), e = Math.Max(rr.Start.Row, endRef.Row);
         uint bandStart = op.StartRow, bandEnd = op.StartRow + op.Count - 1;
 
         // Whole range inside the deleted band → the reference is gone.
@@ -237,11 +239,10 @@ public static class FormulaRewriter
             return rr; // band entirely below the range: no change
 
         changed = true;
-        return rr with
-        {
-            Start = rr.Start with { Row = newStart },
-            End = endRef with { Row = newEnd },
-        };
+        var (newStartRef, newEndRef) = rr.Start.Row <= endRef.Row
+            ? (rr.Start with { Row = newStart }, endRef with { Row = newEnd })
+            : (rr.Start with { Row = newEnd }, endRef with { Row = newStart });
+        return rr with { Start = newStartRef, End = newEndRef };
     }
 
     private static FormulaNode RewriteRangeDeleteCols(
@@ -250,7 +251,11 @@ public static class FormulaRewriter
         if (!Matches(rr.SheetName, op, hostSheetName))
             return rr;
 
-        uint s = rr.Start.ColumnNumber, e = endRef.ColumnNumber;
+        // Excel treats B3:A1 (columns reversed) identically to A1:B3 — normalize endpoint order
+        // before any band math so a reversed range shrinks/collapses exactly like its normalized
+        // equivalent.
+        uint s = Math.Min(rr.Start.ColumnNumber, endRef.ColumnNumber);
+        uint e = Math.Max(rr.Start.ColumnNumber, endRef.ColumnNumber);
         uint bandStart = op.StartCol, bandEnd = op.StartCol + op.Count - 1;
 
         if (bandStart <= s && e <= bandEnd)
@@ -265,10 +270,13 @@ public static class FormulaRewriter
             return rr;
 
         changed = true;
+        var (startCol, endCol) = rr.Start.ColumnNumber <= endRef.ColumnNumber
+            ? (newStart, newEnd)
+            : (newEnd, newStart);
         return rr with
         {
-            Start = rr.Start with { ColumnName = CellAddress.NumberToColumnName(newStart) },
-            End = endRef with { ColumnName = CellAddress.NumberToColumnName(newEnd) },
+            Start = rr.Start with { ColumnName = CellAddress.NumberToColumnName(startCol) },
+            End = endRef with { ColumnName = CellAddress.NumberToColumnName(endCol) },
         };
     }
 
@@ -286,7 +294,10 @@ public static class FormulaRewriter
         if (!Matches(rr.SheetName, op, hostSheetName))
             return rr;
 
-        uint colStart = rr.Start.ColumnNumber, colEnd = endRef.ColumnNumber;
+        // Excel treats B3:A1 (columns reversed) the same as A1:B3 — normalize the perpendicular
+        // (column) axis before checking whether it's fully inside the band's column scope.
+        uint colStart = Math.Min(rr.Start.ColumnNumber, endRef.ColumnNumber);
+        uint colEnd = Math.Max(rr.Start.ColumnNumber, endRef.ColumnNumber);
         if (colStart < op.RangeStartCol || colStart > op.RangeEndCol ||
             colEnd < op.RangeStartCol || colEnd > op.RangeEndCol)
         {
@@ -295,7 +306,8 @@ public static class FormulaRewriter
             return RewriteRangeGenericEndpoints(rr, endRef, op, hostSheetName, ref changed);
         }
 
-        uint s = rr.Start.Row, e = endRef.Row;
+        // Likewise normalize the row endpoints (e.g. A5:A1) before the band/shrink math.
+        uint s = Math.Min(rr.Start.Row, endRef.Row), e = Math.Max(rr.Start.Row, endRef.Row);
         uint bandStart = op.DeletedStartRow, bandEnd = op.DeletedEndRow;
 
         // Whole range inside the deleted band → the reference is gone.
@@ -311,11 +323,10 @@ public static class FormulaRewriter
             return rr; // band entirely below the range: no change
 
         changed = true;
-        return rr with
-        {
-            Start = rr.Start with { Row = newStart },
-            End = endRef with { Row = newEnd },
-        };
+        var (newStartRef, newEndRef) = rr.Start.Row <= endRef.Row
+            ? (rr.Start with { Row = newStart }, endRef with { Row = newEnd })
+            : (rr.Start with { Row = newEnd }, endRef with { Row = newStart });
+        return rr with { Start = newStartRef, End = newEndRef };
     }
 
     /// <summary>
@@ -332,7 +343,9 @@ public static class FormulaRewriter
         if (!Matches(rr.SheetName, op, hostSheetName))
             return rr;
 
-        uint rowStart = rr.Start.Row, rowEnd = endRef.Row;
+        // Excel treats A3:A1 (rows reversed) the same as A1:A3 — normalize the perpendicular
+        // (row) axis before checking whether it's fully inside the band's row scope.
+        uint rowStart = Math.Min(rr.Start.Row, endRef.Row), rowEnd = Math.Max(rr.Start.Row, endRef.Row);
         if (rowStart < op.BandStartRow || rowStart > op.BandEndRow ||
             rowEnd < op.BandStartRow || rowEnd > op.BandEndRow)
         {
@@ -341,7 +354,9 @@ public static class FormulaRewriter
             return RewriteRangeGenericEndpoints(rr, endRef, op, hostSheetName, ref changed);
         }
 
-        uint s = rr.Start.ColumnNumber, e = endRef.ColumnNumber;
+        // Likewise normalize the column endpoints (e.g. B3:A1) before the band/shrink math.
+        uint s = Math.Min(rr.Start.ColumnNumber, endRef.ColumnNumber);
+        uint e = Math.Max(rr.Start.ColumnNumber, endRef.ColumnNumber);
         uint bandStart = op.DeletedStartCol, bandEnd = op.DeletedEndCol;
 
         if (bandStart <= s && e <= bandEnd)
@@ -356,10 +371,13 @@ public static class FormulaRewriter
             return rr;
 
         changed = true;
+        var (startCol, endCol) = rr.Start.ColumnNumber <= endRef.ColumnNumber
+            ? (newStart, newEnd)
+            : (newEnd, newStart);
         return rr with
         {
-            Start = rr.Start with { ColumnName = CellAddress.NumberToColumnName(newStart) },
-            End = endRef with { ColumnName = CellAddress.NumberToColumnName(newEnd) },
+            Start = rr.Start with { ColumnName = CellAddress.NumberToColumnName(startCol) },
+            End = endRef with { ColumnName = CellAddress.NumberToColumnName(endCol) },
         };
     }
 

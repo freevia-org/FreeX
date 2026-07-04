@@ -712,7 +712,8 @@ public static class PageSetupDialogModel
         if (trimmed.Length == 0)
             return true;
 
-        if (double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value >= 0)
+        if (NumericInputParser.TryParseFiniteDouble(trimmed, CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out var value) &&
+            value >= 0)
         {
             margin = value;
             return true;

@@ -17,6 +17,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
     private List<KeyValuePair<uint, double>>? _rowHeightSnapshot;
     private List<uint>? _hiddenRowsSnapshot;
     private List<uint>? _filterHiddenRowsSnapshot;
+    private List<uint>? _valueFilterHiddenRowsSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _commentSnapshot;
     private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
@@ -69,6 +70,13 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
 
         _filterHiddenRowsSnapshot = RowColumnShiftHelpers.CaptureSet(sheet.FilterHiddenRows);
         RowColumnShiftHelpers.DeleteSetRangeAndShiftDown(sheet.FilterHiddenRows, _startRow, _count);
+
+        // G2: sheet.ValueFilterHiddenRows must shift/delete in lockstep with FilterHiddenRows — it
+        // records which of those rows the value-filter mechanism (sheet.ActiveValueFilterColumns)
+        // currently owns, and FilterCommand.RecomputeHiddenRows relies on it to decide which rows it
+        // may safely un-hide on the next recompute.
+        _valueFilterHiddenRowsSnapshot = RowColumnShiftHelpers.CaptureSet(sheet.ValueFilterHiddenRows);
+        RowColumnShiftHelpers.DeleteSetRangeAndShiftDown(sheet.ValueFilterHiddenRows, _startRow, _count);
 
         _rowHeightSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RowHeights);
         RowColumnShiftHelpers.ShiftIndexesDown(sheet.RowHeights, _startRow, _count);
@@ -182,6 +190,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreDictionary(sheet.RowHeights, _rowHeightSnapshot);
         RowColumnShiftHelpers.RestoreSet(sheet.HiddenRows, _hiddenRowsSnapshot);
         RowColumnShiftHelpers.RestoreSet(sheet.FilterHiddenRows, _filterHiddenRowsSnapshot);
+        RowColumnShiftHelpers.RestoreSet(sheet.ValueFilterHiddenRows, _valueFilterHiddenRowsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.Comments, _commentSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);

@@ -9,7 +9,7 @@ internal static class DuplicateSheetDrawingCloner
     {
         var zOrderIdMap = new Dictionary<DrawingObjectZOrderEntry, DrawingObjectZOrderEntry>();
         foreach (var chart in source.Charts)
-            copy.Charts.Add(CloneChart(chart, copyId));
+            copy.Charts.Add(CloneChart(chart, source.Id, copyId));
         foreach (var textBox in source.TextBoxes)
         {
             var cloned = CloneTextBox(textBox, copyId);
@@ -141,12 +141,18 @@ internal static class DuplicateSheetDrawingCloner
         return copiedPicture;
     }
 
-    private static ChartModel CloneChart(ChartModel chart, SheetId copyId) =>
+    private static ChartModel CloneChart(ChartModel chart, SheetId sourceSheetId, SheetId copyId) =>
         new()
         {
             Name = chart.Name,
             Type = chart.Type,
-            DataRange = RemapRange(chart.DataRange, copyId),
+            // Only remap the DataRange onto the copy when it actually points at the sheet being
+            // duplicated — a cross-sheet DataRange (e.g. a Dashboard chart plotting Data!A1:B10)
+            // must keep pointing at the original source sheet, matching Excel's Duplicate Sheet
+            // behavior (only same-sheet references travel with the copy).
+            DataRange = chart.DataRange.Start.Sheet == sourceSheetId
+                ? RemapRange(chart.DataRange, copyId)
+                : chart.DataRange,
             IsVisible = chart.IsVisible,
             FirstRowIsHeader = chart.FirstRowIsHeader,
             FirstColIsCategories = chart.FirstColIsCategories,
@@ -195,6 +201,9 @@ internal static class DuplicateSheetDrawingCloner
             LegendBorderThickness = chart.LegendBorderThickness,
             LegendFontSize = chart.LegendFontSize,
             LegendEntries = chart.LegendEntries.ToList(),
+            SeriesRangeDataLabels = chart.SeriesRangeDataLabels.ToList(),
+            VerbatimSeriesFormulas = chart.VerbatimSeriesFormulas?.ToList(),
+            EmbeddedSeriesData = chart.EmbeddedSeriesData?.ToList(),
             DoughnutHoleSize = chart.DoughnutHoleSize,
             FirstSliceAngle = chart.FirstSliceAngle,
             ExplodedSliceIndex = chart.ExplodedSliceIndex,

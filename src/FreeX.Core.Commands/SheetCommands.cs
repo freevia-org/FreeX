@@ -248,6 +248,12 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
     // Charts (on surviving sheets) whose DataRange pointed at the deleted sheet — remapped onto
     // their own host sheet so no dangling deleted-sheet reference remains.
     private List<(ChartModel Chart, GridRange OldValue)>? _chartDataRangeDeleteSnapshot;
+    // String sheet-name refs on model objects that named the deleted sheet — cleared so no
+    // dangling deleted-sheet reference remains (mirrors RenameSheetCommand's T6 block, but the
+    // sheet has no new name to rewrite onto, so these are nulled instead of renamed).
+    private List<(PivotCacheModel Cache, string OldValue)>? _pivotCacheNameDeleteSnapshot;
+    private List<(SlicerModel Slicer, string OldValue)>? _slicerNameDeleteSnapshot;
+    private List<(PictureModel Picture, string OldValue)>? _pictureNameDeleteSnapshot;
 
     public string Label => "Delete Sheet";
 
@@ -346,6 +352,46 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
             }
         }
 
+        // String sheet-name refs (PivotCacheModel.SourceSheetName / SlicerModel.SourceSheetName /
+        // PictureModel.LinkedSourceSheetName) that named the deleted sheet: clear them so they can
+        // never silently reattach to an unrelated sheet later re-created/renamed with the same name
+        // — mirrors RenameSheetCommand's T6 block, which uses the same three fields.
+        _pivotCacheNameDeleteSnapshot = [];
+        foreach (var cache in ctx.Workbook.PivotCaches)
+        {
+            if (cache.SourceSheetName is not null &&
+                string.Equals(cache.SourceSheetName, deletedSheetName, StringComparison.OrdinalIgnoreCase))
+            {
+                _pivotCacheNameDeleteSnapshot.Add((cache, cache.SourceSheetName));
+                cache.SourceSheetName = null;
+            }
+        }
+
+        _slicerNameDeleteSnapshot = [];
+        foreach (var slicer in ctx.Workbook.Slicers)
+        {
+            if (slicer.SourceSheetName is not null &&
+                string.Equals(slicer.SourceSheetName, deletedSheetName, StringComparison.OrdinalIgnoreCase))
+            {
+                _slicerNameDeleteSnapshot.Add((slicer, slicer.SourceSheetName));
+                slicer.SourceSheetName = null;
+            }
+        }
+
+        _pictureNameDeleteSnapshot = [];
+        foreach (var s in ctx.Workbook.Sheets)
+        {
+            foreach (var pic in s.Pictures)
+            {
+                if (pic.LinkedSourceSheetName is not null &&
+                    string.Equals(pic.LinkedSourceSheetName, deletedSheetName, StringComparison.OrdinalIgnoreCase))
+                {
+                    _pictureNameDeleteSnapshot.Add((pic, pic.LinkedSourceSheetName));
+                    pic.LinkedSourceSheetName = null;
+                }
+            }
+        }
+
         return new CommandOutcome(true);
     }
 
@@ -390,6 +436,18 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
             if (_chartDataRangeDeleteSnapshot is not null)
                 foreach (var (chart, oldValue) in _chartDataRangeDeleteSnapshot)
                     chart.DataRange = oldValue;
+
+            if (_pivotCacheNameDeleteSnapshot is not null)
+                foreach (var (cache, oldValue) in _pivotCacheNameDeleteSnapshot)
+                    cache.SourceSheetName = oldValue;
+
+            if (_slicerNameDeleteSnapshot is not null)
+                foreach (var (slicer, oldValue) in _slicerNameDeleteSnapshot)
+                    slicer.SourceSheetName = oldValue;
+
+            if (_pictureNameDeleteSnapshot is not null)
+                foreach (var (pic, oldValue) in _pictureNameDeleteSnapshot)
+                    pic.LinkedSourceSheetName = oldValue;
         }
     }
 

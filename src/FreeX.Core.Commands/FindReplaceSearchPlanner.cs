@@ -197,7 +197,7 @@ internal static class FindReplaceSearchPlanner
         // For numbers and dates, apply the cell's number format so the displayed text
         // matches the grid rendering (same as NumberFormatter.Format used in the grid).
         var style = workbook.GetStyle(cell.StyleId);
-        return NumberFormatter.Format(value, style.NumberFormat);
+        return NumberFormatter.Format(value, style.NumberFormat, workbook.Uses1904DateSystem);
     }
 
 }

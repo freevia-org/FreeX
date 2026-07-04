@@ -67,9 +67,15 @@ public sealed class FilterCommand : IWorkbookCommand
         uint startRow = range.Start.Row;
         uint endRow   = range.End.Row;
 
+        // G7: Top10/Average/color/custom-criterion filters hide rows by mutating FilterHiddenRows
+        // directly, without registering anything in ActiveValueFilterColumns. This recompute must
+        // only ever decide the hidden state of rows it "owns" (sheet.ValueFilterHiddenRows, the
+        // rows this very mechanism hid last time it ran) — any other row currently hidden was put
+        // there by one of those other mechanisms and must survive this recompute untouched.
         if (sheet.ActiveValueFilterColumns.Count == 0)
         {
-            FilterHiddenRowUpdater.ClearRange(sheet.FilterHiddenRows, range);
+            FilterHiddenRowUpdater.ClearOwnedRows(sheet.FilterHiddenRows, range, sheet.ValueFilterHiddenRows);
+            sheet.ValueFilterHiddenRows.Clear();
             return;
         }
 
@@ -80,6 +86,12 @@ public sealed class FilterCommand : IWorkbookCommand
         {
             matchers[i++] = (col, FilterAllowedValueMatcher.Create(allowedValues));
         }
+
+        // Rows this mechanism owned BEFORE this recompute — only these may be un-hidden below.
+        var previouslyOwnedRows = sheet.ValueFilterHiddenRows.Count == 0
+            ? null
+            : new HashSet<uint>(sheet.ValueFilterHiddenRows);
+        sheet.ValueFilterHiddenRows.Clear();
 
         for (uint row = startRow + 1; row <= endRow; row++)
         {
@@ -95,7 +107,17 @@ public sealed class FilterCommand : IWorkbookCommand
                 }
             }
 
-            FilterHiddenRowUpdater.SetHidden(sheet.FilterHiddenRows, row, shouldHide);
+            if (shouldHide)
+            {
+                sheet.ValueFilterHiddenRows.Add(row);
+                sheet.FilterHiddenRows.Add(row);
+            }
+            else if (previouslyOwnedRows is not null && previouslyOwnedRows.Contains(row))
+            {
+                // Only relinquish rows THIS mechanism previously hid. A row hidden by some other
+                // filter (Top10/Average/color/custom-criterion on another column) is left alone.
+                sheet.FilterHiddenRows.Remove(row);
+            }
         }
     }
 
@@ -277,6 +299,11 @@ internal struct FilterUndoSnapshot
     // FilterHiddenRows, otherwise undoing a FilterCommand would leave a stale column entry behind
     // that corrupts the next recompute's AND-across-columns union.
     private Dictionary<uint, IReadOnlyList<string>>? _activeValueFilterColumns;
+    // G7: sheet.ValueFilterHiddenRows (which rows the value-filter mechanism itself currently owns)
+    // must roll back in lockstep with ActiveValueFilterColumns/FilterHiddenRows too, otherwise an
+    // undo could leave it out of sync with the restored FilterHiddenRows and corrupt the next
+    // recompute's "preserve rows I don't own" logic.
+    private uint[]? _valueFilterHiddenRows;
 
     public bool HasSnapshot => _hiddenRows is not null;
 
@@ -285,6 +312,7 @@ internal struct FilterUndoSnapshot
         _hiddenRows = null;
         _filterHiddenRows = null;
         _activeValueFilterColumns = null;
+        _valueFilterHiddenRows = null;
     }
 
     public void Capture(Sheet sheet)
@@ -296,6 +324,7 @@ internal struct FilterUndoSnapshot
             : sheet.ActiveValueFilterColumns.ToDictionary(
                 kvp => kvp.Key,
                 IReadOnlyList<string> (kvp) => [.. kvp.Value]);
+        _valueFilterHiddenRows = [.. sheet.ValueFilterHiddenRows];
     }
 
     public void CaptureIfNeeded(Sheet sheet)
@@ -323,6 +352,10 @@ internal struct FilterUndoSnapshot
             foreach (var (col, allowedValues) in _activeValueFilterColumns)
                 sheet.ActiveValueFilterColumns[col] = allowedValues;
         }
+
+        sheet.ValueFilterHiddenRows.Clear();
+        if (_valueFilterHiddenRows is not null)
+            sheet.ValueFilterHiddenRows.UnionWith(_valueFilterHiddenRows);
     }
 }
 
@@ -385,6 +418,29 @@ internal static class FilterHiddenRowUpdater
 
         for (var row = firstDataRow; row <= lastDataRow; row++)
             filterHiddenRows.Remove(row);
+    }
+
+    /// <summary>
+    /// Like <see cref="ClearRange"/>, but only un-hides rows in <paramref name="ownedRows"/> — rows
+    /// hidden for some other reason (e.g. a Top10/Average/color/custom-criterion filter on another
+    /// column) are left hidden. Used when the value-filter mechanism has no active columns left and
+    /// must relinquish only the rows it previously owned (see finding G7).
+    /// </summary>
+    public static void ClearOwnedRows(HashSet<uint> filterHiddenRows, GridRange range, IReadOnlyCollection<uint> ownedRows)
+    {
+        if (ownedRows.Count == 0)
+            return;
+
+        var firstDataRow = range.Start.Row + 1;
+        var lastDataRow = range.End.Row;
+        if (filterHiddenRows.Count == 0 || firstDataRow > lastDataRow)
+            return;
+
+        foreach (var row in ownedRows)
+        {
+            if (row >= firstDataRow && row <= lastDataRow)
+                filterHiddenRows.Remove(row);
+        }
     }
 
     public static bool ContainsAnyInRange(HashSet<uint> filterHiddenRows, GridRange range)
