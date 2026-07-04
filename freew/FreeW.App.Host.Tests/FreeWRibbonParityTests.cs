@@ -1251,6 +1251,31 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
+    public void ChartDesign_ColorSchemeRibbonCommandMutatesSelectedChartAndUndoRestoresIt()
+    {
+        var editor = new DocumentView();
+        editor.Model.Blocks.Clear();
+        editor.Model.Blocks.Add(new Paragraph("Before"));
+        editor.InsertChart(Chart.Create(ChartKind.Column, ["A", "B"], [1.0, 2.0], seriesName: "S"));
+        var chart = editor.SelectedChart() ?? editor.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Select(r => r.Chart)
+            .FirstOrDefault(c => c is not null);
+
+        chart.Should().NotBeNull();
+        chart!.ColorSchemeId.Should().BeNull();
+
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+        registry.TryGet("freew.chart-color-mono-blue", out var command)
+            .Should().BeTrue("the WPF Chart Design color scheme command must be registered");
+        command!.Execute(RibbonCommandContext.Empty);
+
+        chart.ColorSchemeId.Should().Be("mono-blue");
+        editor.Commands.Undo().Should().BeTrue();
+        chart.ColorSchemeId.Should().BeNull();
+    }
+
+    [StaFact]
     public void ChartDesign_ToggleLegendMutatesSelectedChart()
     {
         var editor = new DocumentView();
