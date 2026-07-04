@@ -36,6 +36,16 @@ public sealed partial class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsParityCapture_UsesSameTabOrderAsDialog()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("ParityCapture.cs");
+
+        source.Should().Contain("\"dialog.FormatCells\"");
+        source.Should().Contain("[\"Number\", \"Alignment\", \"Font\", \"Border\", \"Fill\", \"Protection\"]");
+        source.Should().NotContain("[\"Number\", \"Alignment\", \"Font\", \"Fill\", \"Border\", \"Protection\"]");
+    }
+
+    [Fact]
     public void FormatCellsDialog_ExposesKeyboardAccessKeysForTabsAndButtons()
     {
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
