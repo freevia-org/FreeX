@@ -351,6 +351,76 @@ public sealed class OmmlParserTests
     }
 
     [Fact]
+    public void Phantom_PreservesNestedFractionAndRadicalChild()
+    {
+        var node = Parse(
+            "<m:phant><m:e>" +
+            "<m:f>" +
+            "<m:num><m:r><m:t>1</m:t></m:r></m:num>" +
+            "<m:den><m:rad><m:e><m:r><m:t>x</m:t></m:r></m:e></m:rad></m:den>" +
+            "</m:f>" +
+            "</m:e></m:phant>");
+
+        var phantom = Assert.IsType<MathNode.Phantom>(node);
+        Assert.True(phantom.Show);
+        Assert.False(phantom.ZeroWidth);
+        Assert.False(phantom.ZeroAscent);
+        Assert.False(phantom.ZeroDescent);
+        Assert.False(phantom.TransparentSpacing);
+
+        var frac = Assert.IsType<MathNode.Frac>(phantom.Base);
+        Assert.Equal("1", Assert.IsType<MathNode.Run>(frac.Numerator).Text);
+        var radical = Assert.IsType<MathNode.Rad>(frac.Denominator);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(radical.Radicand).Text);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("off")]
+    [InlineData("false")]
+    public void Phantom_WithShowOff_IsHidden(string val)
+    {
+        var node = Parse(
+            $"<m:phant><m:phantPr><m:show m:val=\"{val}\"/></m:phantPr>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e></m:phant>");
+
+        var phantom = Assert.IsType<MathNode.Phantom>(node);
+        Assert.False(phantom.Show);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(phantom.Base).Text);
+    }
+
+    [Fact]
+    public void Phantom_ParsesZeroAndTransparentSpacingFlags()
+    {
+        var node = Parse(
+            "<m:phant>" +
+            "<m:phantPr>" +
+            "<m:zeroWid/>" +
+            "<m:zeroAsc m:val=\"1\"/>" +
+            "<m:zeroDesc m:val=\"on\"/>" +
+            "<m:transp m:val=\"true\"/>" +
+            "</m:phantPr>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "</m:phant>");
+
+        var phantom = Assert.IsType<MathNode.Phantom>(node);
+        Assert.True(phantom.Show);
+        Assert.True(phantom.ZeroWidth);
+        Assert.True(phantom.ZeroAscent);
+        Assert.True(phantom.ZeroDescent);
+        Assert.True(phantom.TransparentSpacing);
+    }
+
+    [Fact]
+    public void Phantom_WithMissingExpression_UsesFlattenedUnknownFallback()
+    {
+        var node = Parse("<m:phant><m:r><m:t>x</m:t></m:r></m:phant>");
+
+        var phantom = Assert.IsType<MathNode.Phantom>(node);
+        Assert.Equal("x", Assert.IsType<MathNode.Unknown>(phantom.Base).FallbackText);
+    }
+
+    [Fact]
     public void BorderBox_ParsesHiddenSideFlags()
     {
         var node = Parse(
