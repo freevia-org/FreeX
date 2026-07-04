@@ -765,6 +765,49 @@ public sealed class DocumentViewReviewTests
     }
 
     [Fact]
+    public async Task Proofing_commands_fallback_to_editor_and_selected_language_value()
+    {
+        bool spellEnabled = true;
+        bool stateBefore = false;
+        bool stateAfter = true;
+        bool inDictionary = false;
+        string? language = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("teh example"));
+            var view = Build(doc);
+            view.MoveCaretToBlock(0, 2);
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+
+            registry.TryGet(new RibbonCommandId("freew.spellcheck-toggle"), out var spellCommand)
+                .Should().BeTrue();
+            var spellState = spellCommand.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
+
+            stateBefore = spellState.GetState().IsChecked;
+            Execute(registry, "freew.add-to-dictionary");
+            Execute(registry, "freew.spellcheck-toggle");
+            stateAfter = spellState.GetState().IsChecked;
+
+            view.SetSelectionRangePublic(0, 0, 0, "teh example".Length);
+            Execute(registry, "freew.set-proofing-language", RibbonCommandContext.ForSelectedValue("fr-FR"));
+
+            spellEnabled = view.SpellCheckEnabled;
+            inDictionary = view.IsInCustomDictionary("teh");
+            language = ((Paragraph)view.Document.Blocks[0]).Runs.Single().Formatting.LanguageTag;
+        });
+        if (!ran) return;
+
+        stateBefore.Should().BeTrue();
+        spellEnabled.Should().BeFalse();
+        stateAfter.Should().BeFalse();
+        inDictionary.Should().BeTrue();
+        language.Should().Be("fr-FR");
+    }
+
+    [Fact]
     public async Task Thesaurus_replace_current_proofing_word_replaces_caret_word()
     {
         bool replaced = false;
@@ -1198,9 +1241,14 @@ public sealed class DocumentViewReviewTests
 
     private static void Execute(RibbonCommandRegistry registry, string id)
     {
+        Execute(registry, id, RibbonCommandContext.Empty);
+    }
+
+    private static void Execute(RibbonCommandRegistry registry, string id, RibbonCommandContext context)
+    {
         registry.TryGet(new RibbonCommandId(id), out var command)
             .Should().BeTrue($"command '{id}' must be registered");
-        command!.Execute(RibbonCommandContext.Empty);
+        command!.Execute(context);
     }
 
     private static RibbonCommandId? GetCommandId(RibbonControl control) => control switch

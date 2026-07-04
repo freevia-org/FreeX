@@ -188,15 +188,15 @@ internal sealed record RibbonHostCallbacks(
     Action? ReplyComment = null,
     /// <summary>AV-REVIEW: Review &gt; Comments &gt; Show Comments. Optional; registry no-ops when null.</summary>
     Action<IReadOnlyList<CommentListItem>>? ShowComments = null,
-    /// <summary>AV-REVIEW: Review &gt; Proofing &gt; Spelling &amp; Grammar. Optional; registry no-ops when null.</summary>
+    /// <summary>AV-REVIEW: Review &gt; Proofing &gt; Spelling &amp; Grammar. Optional; registry toggles the editor when null.</summary>
     Action? ToggleSpellcheck = null,
-    /// <summary>AV-REVIEW: Whether the spelling proofing overlay is active.</summary>
+    /// <summary>AV-REVIEW: Whether the spelling proofing overlay is active. Optional; registry reads the editor when null.</summary>
     Func<bool>? IsSpellcheckActive = null,
-    /// <summary>AV-REVIEW: Review &gt; Proofing &gt; Add to Dictionary. Optional; registry no-ops when null.</summary>
+    /// <summary>AV-REVIEW: Review &gt; Proofing &gt; Add to Dictionary. Optional; registry adds via the editor when null.</summary>
     Action? AddToDictionary = null,
     /// <summary>AV-REVIEW: Review &gt; Proofing &gt; Thesaurus. Optional; registry no-ops when null.</summary>
     Action? OpenThesaurus = null,
-    /// <summary>AV-REVIEW: Review &gt; Proofing &gt; Set Proofing Language. Optional; registry no-ops when null.</summary>
+    /// <summary>AV-REVIEW: Review &gt; Proofing &gt; Set Proofing Language dialog. Optional; selected values still apply through the editor.</summary>
     Action? SetProofingLanguage = null,
     /// <summary>AV-REVIEW: Review &gt; Speech &gt; Read Aloud. Optional; registry no-ops when null.</summary>
     Action? ToggleReadAloud = null,

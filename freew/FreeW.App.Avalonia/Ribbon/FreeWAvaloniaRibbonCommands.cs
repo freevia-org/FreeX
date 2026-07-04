@@ -474,11 +474,12 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.statistics", statisticsCommand);
         r.Register("freew.word-count", statisticsCommand);
         r.Register("freew.spellcheck-toggle", new ToggleActionCommand(
-            callbacks.ToggleSpellcheck ?? (() => { }),
-            callbacks.IsSpellcheckActive ?? (() => false)));
-        r.Register("freew.add-to-dictionary", new ActionRibbonCommand(callbacks.AddToDictionary ?? (() => { })));
+            callbacks.ToggleSpellcheck ?? (() => editor.ToggleSpellCheck()),
+            callbacks.IsSpellcheckActive ?? (() => editor.SpellCheckEnabled)));
+        r.Register("freew.add-to-dictionary", new ActionRibbonCommand(
+            callbacks.AddToDictionary ?? (() => editor.AddCurrentWordToDictionary())));
         r.Register("freew.thesaurus", new ActionRibbonCommand(callbacks.OpenThesaurus ?? (() => { })));
-        r.Register("freew.set-proofing-language", new ActionRibbonCommand(callbacks.SetProofingLanguage ?? (() => { })));
+        r.Register("freew.set-proofing-language", new ProofingLanguageCommand(editor, callbacks));
         r.Register("freew.read-aloud", new ToggleActionCommand(
             callbacks.ToggleReadAloud ?? (() => { }),
             callbacks.IsReadAloudActive ?? (() => false)));
@@ -670,6 +671,21 @@ internal static class FreeWAvaloniaRibbonCommands
         public void Execute(RibbonCommandContext context) => toggle();
 
         public RibbonCommandState GetState() => new(IsChecked: isChecked());
+    }
+
+    private sealed class ProofingLanguageCommand(DocumentView editor, RibbonHostCallbacks callbacks) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (context.SelectedValue is { } selected)
+            {
+                editor.SetProofingLanguage(selected);
+                editor.Focus();
+                return;
+            }
+
+            callbacks.SetProofingLanguage?.Invoke();
+        }
     }
 
     private sealed class FormatPainterCommand(DocumentView editor) : IRibbonCommand
