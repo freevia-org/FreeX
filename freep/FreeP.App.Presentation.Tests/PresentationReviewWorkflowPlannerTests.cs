@@ -1144,6 +1144,78 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildAccessibilitySummaryPlan_FlagsFilenameLikeAndDuplicateAltText()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Intro";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 20,
+            Name = "Hero photo",
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart(),
+            AlternativeText = "IMG_2048.JPG"
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 21,
+            Name = "North product photo",
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart(),
+            AlternativeText = "Product packaging on a shelf."
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 22,
+            Name = "South product photo",
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart(),
+            AlternativeText = "  Product packaging   on a shelf.  "
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 23,
+            Name = "Decorative duplicate",
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart(),
+            IsDecorative = true,
+            AlternativeText = "Product packaging on a shelf."
+        });
+
+        var summary = PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation);
+        var pane = PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(presentation, summary);
+
+        summary.Issues.Select(issue => issue.Title).Should().Equal(
+            "Filename-like alt text",
+            "Duplicate alt text",
+            "Duplicate alt text");
+        summary.Issues.Select(issue => issue.ShapeId).Should().Equal(20u, 21u, 22u);
+        summary.Issues[0].Should().Be(new PresentationAccessibilityIssueDescriptor(
+            PresentationAccessibilityIssueSeverity.Warning,
+            0,
+            20,
+            "Filename-like alt text",
+            "Hero photo uses filename-like alt text \"IMG_2048.JPG\".",
+            new PresentationAccessibilityIssueActionSummary(
+                PresentationReviewWorkflowPlanner.FilenameLikeAltTextActionSummary,
+                PresentationReviewWorkflowPlanner.AltTextCommandId,
+                true)));
+        summary.Issues[1].Should().Be(new PresentationAccessibilityIssueDescriptor(
+            PresentationAccessibilityIssueSeverity.Warning,
+            0,
+            21,
+            "Duplicate alt text",
+            "North product photo reuses alt text \"Product packaging on a shelf.\" on 2 non-decorative objects.",
+            new PresentationAccessibilityIssueActionSummary(
+                PresentationReviewWorkflowPlanner.DuplicateAltTextActionSummary,
+                PresentationReviewWorkflowPlanner.AltTextCommandId,
+                true)));
+        pane.Rows.Select(row => row.Category).Should().Equal("Alt text", "Alt text", "Alt text");
+        pane.Rows.Select(row => row.ActionLabel).Should().Equal("Open Alt Text", "Open Alt Text", "Open Alt Text");
+    }
+
+    [Fact]
     public void BuildAccessibilitySummaryPlan_FlagsChartsWithoutChartTitles()
     {
         var presentation = Presentation.CreateEmpty();
