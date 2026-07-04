@@ -204,7 +204,46 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/SlideShowTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/SlideShowWindowHeadlessTests.cs"
             ],
-            RemainingWork: "PowerPoint-authoritative recording studio/session-summary baselines and capture-backed transcript evidence remain deferred.")
+            RemainingWork: "PowerPoint-authoritative recording studio/session-summary baselines and capture-backed transcript evidence remain deferred."),
+        new(
+            EvidenceId: "freep.review.comments.thread-depth",
+            Area: "Modern comments mention, reply, filter, navigation, and action-state depth",
+            Status: "shared-planner-and-host-evidence",
+            HostCoverage: "WPF/Avalonia shared review planner plus thin WPF adapter and Avalonia headless consumers",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-comments-review-navigation-2026-07-03.md",
+                "docs/parity/freep-modern-comments-anchor-fidelity-2026-07-03.md",
+                "docs/parity/freep-modern-comment-author-identity-2026-07-04.md",
+                "docs/parity/freep-comment-mention-detail-2026-07-04.md",
+                "docs/parity/freep-comment-thread-filter-depth-2026-07-04.md",
+                "docs/parity/freep-comments-review-accessibility-evidence-inventory-2026-07-05.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/PresentationReviewWorkflowPlannerTests.cs",
+                "freep/FreeP.App.Host.Tests/ReviewWorkflowAdapterTests.cs",
+                "freep/FreeP.App.Host.Tests/SectionsCommentsTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
+            ],
+            RemainingWork: "PowerPoint-authoritative review-pane visual baselines, people-picker mention insertion, coauthor presence, and notification routing remain deferred."),
+        new(
+            EvidenceId: "freep.review.accessibility.proofing-depth",
+            Area: "Accessibility checker remediation, reading order, and proofing action depth",
+            Status: "shared-planner-and-host-evidence",
+            HostCoverage: "WPF/Avalonia shared review planner with host row-action, reading-order, and proofing adapters",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-accessibility-table-header-depth-2026-07-03.md",
+                "docs/parity/freep-comments-review-accessibility-evidence-inventory-2026-07-05.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/PresentationReviewWorkflowPlannerTests.cs",
+                "freep/FreeP.App.Host.Tests/ReviewWorkflowAdapterTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
+            ],
+            RemainingWork: "PowerPoint-authoritative accessibility checker baselines, grammar-scale proofing, richer remediation panes, and full reading-order visual parity remain deferred.")
     ];
 
     private static IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> Collect(RibbonDefinition definition, string profile)
