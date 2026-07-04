@@ -2927,6 +2927,80 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildProofingPanePlan_FlagsExtraInteriorSpacesWithSharedCorrections()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 4,
+            Name = "Caption",
+            Text = "Revenue  grew"
+        });
+        slide.Notes = TextBody("Speaker.\t\tNext");
+        slide.Comments.Add(new SlideComment
+        {
+            Text = "Comment   text",
+            Replies =
+            {
+                new SlideCommentReply { Text = "Reply \t text" }
+            }
+        });
+
+        var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+        var plan = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(execution);
+
+        execution.Issues.Should().HaveCount(4);
+        execution.Issues.Select(issue => issue.Scope.Kind).Should().Equal(
+            PresentationProofingScopeKind.ShapeText,
+            PresentationProofingScopeKind.SpeakerNotes,
+            PresentationProofingScopeKind.Comment,
+            PresentationProofingScopeKind.CommentReply);
+        execution.Issues.Select(issue => issue.Text).Should().Equal("  ", "\t\t", "   ", " \t ");
+        execution.Issues.Select(issue => issue.Message).Should().OnlyContain(message =>
+            message == PresentationReviewWorkflowPlanner.ProofingExtraSpacesMessage);
+        plan.Rows.Select(row => row.SuggestedReplacement).Should().OnlyContain(replacement => replacement == " ");
+        plan.SelectedRow!.CorrectionAction.IsEnabled.Should().BeTrue();
+
+        var mutation = PresentationReviewWorkflowPlanner.TryApplyProofingCorrection(
+            presentation,
+            plan.SelectedRow.Scope,
+            plan.SelectedRow.Start,
+            plan.SelectedRow.Length,
+            plan.SelectedRow.SuggestedReplacement);
+
+        mutation.Should().Be(new PresentationProofingCorrectionMutationPlan(
+            true,
+            plan.SelectedRow.Scope,
+            plan.SelectedRow.Start,
+            plan.SelectedRow.Length,
+            " ",
+            "Revenue grew",
+            null));
+        slide.Shapes.Single(shape => shape.Id == 4).Text.Should().Be("Revenue grew");
+    }
+
+    [Fact]
+    public void BuildProofingExecutionPlan_ExtraSpacesPreservesLineStartsAndNewlineBoundaries()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 4,
+            Name = "Caption",
+            Text = "  Indented line\nNext  \n\tTabbed line\nLeft\t\tRight\nTrailing  "
+        });
+
+        var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+
+        execution.Issues.Should().ContainSingle().Which.Should().Match<PresentationProofingIssueDescriptor>(issue =>
+            issue.Message == PresentationReviewWorkflowPlanner.ProofingExtraSpacesMessage &&
+            issue.Text == "\t\t" &&
+            issue.Scope.Text.Contains("\nLeft\t\tRight\n", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void BuildProofingExecutionPlan_ListPunctuationSpacingAvoidsNumbersUrlsEmailsAndExistingSeparators()
     {
         var presentation = Presentation.CreateEmpty();

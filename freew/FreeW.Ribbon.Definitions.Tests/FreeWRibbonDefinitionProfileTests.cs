@@ -482,6 +482,69 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "ChartSmartArtContextualTabTests.ToggleChartLegend_command_clears_layout_override_and_reverts_on_undo",
             "freew.chart.shared-behavior",
             "Chart command behavior");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.citation",
+            "freew/FreeW.App.Host.Tests/CitationEditorTests.cs",
+            "CitationEditorTests.InsertCitation_TaggedSourceWithQuotedFieldArgument_RenumbersOnUpdateFields",
+            "freew/FreeW.App.Avalonia.Tests/ReferencesTabTests.cs",
+            "ReferencesTabTests.InsertCitation_tagged_source_with_quoted_field_argument_renumbers_on_update_fields",
+            "freew.references-fields.shared-behavior",
+            "References fields and generated regions");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.manage-sources",
+            "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
+            "FreeWRibbonParityTests.ReferencesCitations_ExposesBackedWordStyleManageSources",
+            "freew/FreeW.App.Avalonia.Tests/ReferencesTabTests.cs",
+            "ReferencesTabTests.ReplaceSources_replaces_source_list_and_undo_reverts",
+            "freew.references-fields.shared-behavior",
+            "References fields and generated regions");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.bibliography",
+            "freew/FreeW.App.Host.Tests/CitationEditorTests.cs",
+            "CitationEditorTests.InsertBibliography_BuildsBlockFromSourcesAndUndoReverts",
+            "freew/FreeW.App.Avalonia.Tests/ReferencesTabTests.cs",
+            "ReferencesTabTests.InsertBibliography_builds_block_from_sources_and_undo_reverts",
+            "freew.references-fields.shared-behavior",
+            "References fields and generated regions");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.mark-citation",
+            "freew/FreeW.App.Host.Tests/MarkCitationEditorTests.cs",
+            "MarkCitationEditorTests.MarkCitation_DropsAHiddenCitationMarkThatSurvivesCommit",
+            "freew/FreeW.App.Avalonia.Tests/ReferencesTabTests.cs",
+            "ReferencesTabTests.MarkCitation_accepts_full_citation_dialog_result",
+            "freew.references-fields.shared-behavior",
+            "References fields and generated regions");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.table-of-authorities",
+            "freew/FreeW.App.Host.Tests/MarkCitationEditorTests.cs",
+            "MarkCitationEditorTests.InsertTableOfAuthorities_BuildsAGroupedTableFromTheMarks",
+            "freew/FreeW.App.Avalonia.Tests/ReferencesTabTests.cs",
+            "ReferencesTabTests.MarkCitation_body_mark_builds_table_and_survives_docx_roundtrip",
+            "freew.references-fields.shared-behavior",
+            "References fields and generated regions");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.table-of-authorities-refresh",
+            "freew/FreeW.App.Host.Tests/MarkCitationEditorTests.cs",
+            "MarkCitationEditorTests.RefreshTableOfAuthorities_ReplacesThePriorRegionInPlaceWithoutDuplicating",
+            "freew/FreeW.App.Avalonia.Tests/ReferencesTabTests.cs",
+            "ReferencesTabTests.UpdateFields_refreshes_existing_table_of_authorities_with_explicit_break_page_references",
+            "freew.references-fields.shared-behavior",
+            "References fields and generated regions");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.update-fields",
+            "freew/FreeW.App.Host.Tests/NumericCitationEditorTests.cs",
+            "NumericCitationEditorTests.UpdateFields_CitationFieldAndBibliographyRefresh_DoNotOverwriteCitationFromStaleView",
+            "freew/FreeW.App.Avalonia.Tests/ReferencesTabTests.cs",
+            "ReferencesTabTests.UpdateFields_refreshes_toc_and_bibliography_in_same_pass",
+            "freew.references-fields.shared-behavior",
+            "References fields and generated regions");
 
         var markdown = ReadRepositoryFile("docs", "parity", "freew-command-inventory.md");
         markdown.Should().Contain($"| {commandIds.Length} | {both} | {wpfOnly} | {avaloniaOnly} | {avaloniaOnly} | {wpfOnly} |");
@@ -491,6 +554,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
         markdown.Should().Contain("Source literal evidence columns show exact command-id text in source files only; they are not behavior proof and never create rows.");
         markdown.Should().Contain("Behavior evidence rows");
         markdown.Should().Contain("Review comments: ThreadedCommentCommandTests.DeleteCommentAtCaret_RemovesThreadRangeAndReference");
+        markdown.Should().Contain("References fields and generated regions: CitationEditorTests.InsertCitation_TaggedSourceWithQuotedFieldArgument_RenumbersOnUpdateFields");
     }
 
     [Fact]
