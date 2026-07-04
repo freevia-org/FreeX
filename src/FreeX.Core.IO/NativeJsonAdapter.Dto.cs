@@ -759,6 +759,8 @@ public sealed partial class NativeJsonAdapter
         public RgbColor? DataBarNegativeFillColor { get; set; }
         public RgbColor? DataBarNegativeBorderColor { get; set; }
         public bool AboveAverage { get; set; } = true;
+        public bool EqualAverage { get; set; }
+        public int? StdDevCount { get; set; }
         public string? FormulaText { get; set; }
         public string? IconSetStyle { get; set; }
         public bool IconSetShowValue { get; set; } = true;
