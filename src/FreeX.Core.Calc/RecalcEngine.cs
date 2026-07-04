@@ -262,11 +262,28 @@ public sealed class RecalcEngine
         // (bounded by MaxSpillDependentPasses as a sane guard against runaway chains).
         if (resolveSpillDependents && spillTargetsMayHaveChanged)
         {
-            var seenSpillDependents = new HashSet<CellAddress>();
+            // Track, per dependent cell, how many distinct spill-target precedents it read the
+            // last time it was scheduled. A cell must only be skipped as "already handled" if its
+            // spill-target input count has not grown since — otherwise a cell that depends on two
+            // spill targets from different "generations" (one resolved this pass, another that only
+            // materializes in a later pass) would be permanently skipped after its first, incomplete
+            // evaluation, keeping a stale value forever. See finding H3.
+            var seenSpillDependentInputCounts = new Dictionary<CellAddress, int>();
             for (var pass = 0; pass < MaxSpillDependentPasses; pass++)
             {
-                var spillDependents = CollectSpillTargetDependentFormulaCells(workbook);
-                spillDependents.RemoveAll(addr => !seenSpillDependents.Add(addr));
+                var spillDependents = CollectSpillTargetDependentFormulaCells(workbook, out var inputCounts);
+                spillDependents.RemoveAll(addr =>
+                {
+                    var currentCount = inputCounts[addr];
+                    if (seenSpillDependentInputCounts.TryGetValue(addr, out var previousCount) &&
+                        currentCount <= previousCount)
+                    {
+                        return true;
+                    }
+
+                    seenSpillDependentInputCounts[addr] = currentCount;
+                    return false;
+                });
                 if (spillDependents.Count == 0)
                     break;
 
@@ -701,11 +718,17 @@ public sealed class RecalcEngine
     /// Collect the set of formula cells that directly reference at least one spill-target cell
     /// (a cell whose value comes from another formula's spill, not from its own formula).
     /// These are the cells that may have received an incorrect blank in the first recalc pass.
+    /// Also reports, per dependent cell, the number of distinct spill-target cells it currently
+    /// reads — callers use this to detect a dependent that has gained a new spill-target input
+    /// since it was last scheduled (e.g. a chained spill that materializes on a later pass), which
+    /// must not be treated as "already handled" even though its address was seen before.
     /// </summary>
-    private List<CellAddress> CollectSpillTargetDependentFormulaCells(Workbook workbook)
+    private List<CellAddress> CollectSpillTargetDependentFormulaCells(
+        Workbook workbook,
+        out Dictionary<CellAddress, int> inputCounts)
     {
         List<CellAddress>? result = null;
-        HashSet<CellAddress>? seen = null;
+        var counts = new Dictionary<CellAddress, int>();
 
         foreach (var sheet in workbook.Sheets)
         {
@@ -721,16 +744,20 @@ public sealed class RecalcEngine
                     if (depSheet?.GetCell(dep)?.HasFormula != true)
                         continue;
 
-                    seen ??= [];
-                    if (!seen.Add(dep))
+                    if (counts.TryGetValue(dep, out var count))
+                    {
+                        counts[dep] = count + 1;
                         continue;
+                    }
 
+                    counts[dep] = 1;
                     result ??= [];
                     result.Add(dep);
                 }
             }
         }
 
+        inputCounts = counts;
         return result ?? [];
     }
 
@@ -882,6 +909,31 @@ public sealed class RecalcEngine
             case CellRefNode cellRef:
                 refs.Add(new CellAddress(defaultSheetId, cellRef.Row, cellRef.ColumnNumber));
                 return false;
+
+            // A 3-D sheet-span reference (e.g. Sheet1:Sheet3!A1) must register a dependency edge on
+            // the referenced cell/range on EVERY sheet the span covers — start, end, and every sheet
+            // between them in workbook tab order — so editing any spanned sheet's cell recalculates
+            // the formula that references the span (matching normal Excel dependency behaviour).
+            // This must be checked before the plain-SheetName case below, since a span also has
+            // SheetName set (to its start sheet).
+            case RangeRefNode range when range.EndSheetName is not null:
+            {
+                cacheableForDependencyPlan = false;
+                if (workbook is null)
+                    return false;
+
+                var startIndex = FindSheetIndex(workbook, range.SheetName!);
+                var endIndex = FindSheetIndex(workbook, range.EndSheetName);
+                if (startIndex < 0 || endIndex < 0)
+                    return false;
+
+                var firstIndex = Math.Min(startIndex, endIndex);
+                var lastIndex = Math.Max(startIndex, endIndex);
+                for (var sheetIndex = firstIndex; sheetIndex <= lastIndex; sheetIndex++)
+                    refs.AddRange(CreateGridRange(workbook.Sheets[sheetIndex].Id, range));
+
+                return false;
+            }
 
             case RangeRefNode range when range.SheetName is not null:
             {
@@ -1037,6 +1089,19 @@ public sealed class RecalcEngine
         var start = new CellAddress(sheetId, range.Start.Row, range.Start.ColumnNumber);
         var end = new CellAddress(sheetId, range.End.Row, range.End.ColumnNumber);
         return new GridRange(start, end);
+    }
+
+    /// <summary>Case-insensitive tab-order lookup of a sheet by name, or -1 if not found.</summary>
+    private static int FindSheetIndex(FreeX.Core.Model.Workbook workbook, string sheetName)
+    {
+        var sheets = workbook.Sheets;
+        for (var i = 0; i < sheets.Count; i++)
+        {
+            if (string.Equals(sheets[i].Name, sheetName, StringComparison.OrdinalIgnoreCase))
+                return i;
+        }
+
+        return -1;
     }
 
     private static GridRange CreateGridRange(SheetId sheetId, FullColumnRangeRefNode range)

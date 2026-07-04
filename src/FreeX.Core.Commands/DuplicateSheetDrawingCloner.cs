@@ -44,13 +44,40 @@ internal static class DuplicateSheetDrawingCloner
         }
 
         foreach (var sparkline in source.Sparklines)
-            copy.Sparklines.Add(new SparklineModel
-            {
-                DataRange = RemapRange(sparkline.DataRange, copyId),
-                Location = RemapAddress(sparkline.Location, copyId),
-                Kind = sparkline.Kind
-            });
+            copy.Sparklines.Add(CloneSparkline(sparkline, copyId));
     }
+
+    private static SparklineModel CloneSparkline(SparklineModel sparkline, SheetId copyId) =>
+        new()
+        {
+            DataRange = RemapRange(sparkline.DataRange, copyId),
+            Location = RemapAddress(sparkline.Location, copyId),
+            Kind = sparkline.Kind,
+            GroupId = sparkline.GroupId,
+            ShowMarkers = sparkline.ShowMarkers,
+            ShowHighPoint = sparkline.ShowHighPoint,
+            ShowLowPoint = sparkline.ShowLowPoint,
+            ShowFirstPoint = sparkline.ShowFirstPoint,
+            ShowLastPoint = sparkline.ShowLastPoint,
+            ShowNegativePoints = sparkline.ShowNegativePoints,
+            ShowAxis = sparkline.ShowAxis,
+            DisplayHidden = sparkline.DisplayHidden,
+            RightToLeft = sparkline.RightToLeft,
+            SeriesColor = sparkline.SeriesColor,
+            NegativeColor = sparkline.NegativeColor,
+            AxisColor = sparkline.AxisColor,
+            MarkersColor = sparkline.MarkersColor,
+            HighPointColor = sparkline.HighPointColor,
+            LowPointColor = sparkline.LowPointColor,
+            FirstPointColor = sparkline.FirstPointColor,
+            LastPointColor = sparkline.LastPointColor,
+            LineWeight = sparkline.LineWeight,
+            MinAxisType = sparkline.MinAxisType,
+            MaxAxisType = sparkline.MaxAxisType,
+            ManualMin = sparkline.ManualMin,
+            ManualMax = sparkline.ManualMax,
+            DisplayEmptyCellsAs = sparkline.DisplayEmptyCellsAs
+        };
 
     private static TextBoxModel CloneTextBox(TextBoxModel textBox, SheetId copyId) =>
         new()

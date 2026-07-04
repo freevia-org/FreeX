@@ -4126,7 +4126,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("RefreshShell($\"{successAction} {rangeReference}\");");
         source.Should().Contain("var textRotation = style?.TextRotation ?? CellStyle.Default.TextRotation;");
         source.Should().Contain("using FreeX.Core.Calc;");
-        source.Should().Contain("AddGridChild(grid, CreateCell(cell, row, col, zoomFactor, colWidth, rowHeight)");
+        // The grid builder now resolves merge spans before creating the cell control (H29):
+        // CreateCell carries the merge region and the control is added after span assignment.
+        source.Should().Contain("var cellControl = CreateCell(cell, row, col, zoomFactor, colWidth, rowHeight, mergeRegion);");
+        source.Should().Contain("AddGridChild(grid, cellControl, rowIndex + headerOffset, colIndex + headerOffset);");
         source.Should().Contain("CellTextOrientationLayoutPlanner.HasTextOrientation(textRotation)");
         source.Should().Contain("CreateOrientedCellContent(");
         source.Should().Contain("CellTextOrientationLayoutPlanner.CalculateLayout(");
@@ -5343,8 +5346,12 @@ public sealed class AvaloniaShellSourceTests
         cfSource.Should().Contain("AutomationProperties.SetAutomationId(moveDownButton, \"ManageConditionalFormatsMoveDownButton\");");
         cfSource.Should().Contain("AutomationProperties.SetAutomationId(appliesToBox, \"ManageConditionalFormatsAppliesToBox\");");
         cfSource.Should().Contain("AutomationProperties.SetAutomationId(applyAppliesToButton, \"ManageConditionalFormatsApplyAppliesToButton\");");
-        cfSource.Should().Contain("ConditionalFormatManageModel.BuildMoveCommand(");
-        cfSource.Should().Contain("ConditionalFormatManageModel.BuildAppliesToCommand(");
+        // The Manage dialog now stages edits against a working copy and commits on OK (H32):
+        // moves/applies-to mutate the working copy via the shared model, and OK replaces the
+        // sheet's rules in one undoable command.
+        cfSource.Should().Contain("ConditionalFormatManageModel.MoveInWorkingCopy(");
+        cfSource.Should().Contain("ConditionalFormatManageModel.ApplyRangeInWorkingCopy(");
+        cfSource.Should().Contain("new ReplaceAllConditionalFormatsCommand(_session.ActiveSheet.Id, workingRules),");
         cfSource.Should().Contain("_session.TryResolveReferenceRange(reference, out var range)");
 
         // Launch-smoke probe wiring for both dialogs.

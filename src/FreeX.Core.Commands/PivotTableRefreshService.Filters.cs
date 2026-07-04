@@ -279,9 +279,10 @@ public static partial class PivotTableRefreshService
         var fieldIndex = IndexOfSourceField(fields, sort.FieldIndex);
         if (sort.Target == PivotSortTarget.Label && fieldIndex >= 0)
         {
+            var labelComparer = Comparer<string>.Create(PivotKeyComparer.CompareKeyText);
             return sort.Direction == PivotSortDirection.Descending
-                ? keys.OrderByDescending(key => key.Values[fieldIndex], StringComparer.CurrentCultureIgnoreCase).ThenBy(key => key, PivotKeyComparer.Instance).ToList()
-                : keys.OrderBy(key => key.Values[fieldIndex], StringComparer.CurrentCultureIgnoreCase).ThenBy(key => key, PivotKeyComparer.Instance).ToList();
+                ? keys.OrderByDescending(key => key.Values[fieldIndex], labelComparer).ThenBy(key => key, PivotKeyComparer.Instance).ToList()
+                : keys.OrderBy(key => key.Values[fieldIndex], labelComparer).ThenBy(key => key, PivotKeyComparer.Instance).ToList();
         }
 
         if (sort.Target == PivotSortTarget.Value &&
@@ -397,6 +398,12 @@ public static partial class PivotTableRefreshService
 
     private static string NumberRangeKeyText(ScalarValue value, double start, double interval)
     {
+        // Blank/non-numeric source values (e.g. an empty cell or text mixed into a
+        // numeric column) don't belong to any numeric bucket - Excel puts them in a
+        // distinct "(blank)" group instead of silently coercing them to 0.
+        if (value is not (NumberValue or DateTimeValue or BoolValue))
+            return "(blank)";
+
         if (interval <= 0)
             interval = 1;
         var number = Number(value);
@@ -465,12 +472,33 @@ public static partial class PivotTableRefreshService
             var count = Math.Min(x.Values.Count, y.Values.Count);
             for (var index = 0; index < count; index++)
             {
-                var comparison = StringComparer.CurrentCultureIgnoreCase.Compare(x.Values[index], y.Values[index]);
+                var comparison = CompareKeyText(x.Values[index], y.Values[index]);
                 if (comparison != 0)
                     return comparison;
             }
 
             return x.Values.Count.CompareTo(y.Values.Count);
+        }
+
+        /// <summary>
+        /// Compares two pivot label strings the way Excel orders row/column items: numeric
+        /// labels sort by their numeric value (ascending), and numbers always sort before
+        /// text labels. Falls back to a plain culture-aware text comparison when either side
+        /// isn't purely numeric.
+        /// </summary>
+        internal static int CompareKeyText(string left, string right)
+        {
+            var leftIsNumber = double.TryParse(left, NumberStyles.Float, CultureInfo.CurrentCulture, out var leftNumber);
+            var rightIsNumber = double.TryParse(right, NumberStyles.Float, CultureInfo.CurrentCulture, out var rightNumber);
+
+            if (leftIsNumber && rightIsNumber)
+                return leftNumber.CompareTo(rightNumber);
+            if (leftIsNumber)
+                return -1;
+            if (rightIsNumber)
+                return 1;
+
+            return StringComparer.CurrentCultureIgnoreCase.Compare(left, right);
         }
     }
 

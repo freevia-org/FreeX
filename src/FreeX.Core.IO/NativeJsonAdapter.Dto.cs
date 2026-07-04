@@ -47,6 +47,8 @@ public sealed partial class NativeJsonAdapter
         public List<WatchedCellDto> WatchedCells { get; set; } = [];
         public List<ScenarioDto> Scenarios { get; set; } = [];
         public List<PivotCacheDto> PivotCaches { get; set; } = [];
+        public List<SlicerDto> Slicers { get; set; } = [];
+        public List<TimelineDto> Timelines { get; set; } = [];
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<CellStyleDto>? CellStyles { get; set; }
 
@@ -227,6 +229,21 @@ public sealed partial class NativeJsonAdapter
         public string? Range { get; set; }
         public string? Scope { get; set; }
         public string? Comment { get; set; }
+
+        /// <summary>
+        /// The raw refers-to formula text (without the leading '=') when this defined name is a
+        /// named FORMULA (e.g. <c>MyRate = 0.08*Sheet1!$B$1</c>) rather than a plain cell/range
+        /// reference. Null for plain named ranges; when set, <see cref="Range"/> is ignored on load.
+        /// </summary>
+        public string? Formula { get; set; }
+
+        /// <summary>
+        /// Name of the sheet this defined NAME itself is scoped to (Excel's <c>localSheetId</c>),
+        /// distinct from <see cref="SheetName"/> (which for plain ranges identifies the sheet the
+        /// range lives on). Null means workbook scope. Absent on files written before this field
+        /// existed, which always meant workbook scope.
+        /// </summary>
+        public string? ScopeSheetName { get; set; }
     }
 
     private class WatchedCellDto
@@ -588,6 +605,7 @@ public sealed partial class NativeJsonAdapter
         public List<PictureDto> Pictures { get; set; } = [];
         public List<TextBoxDto> TextBoxes { get; set; } = [];
         public List<DrawingShapeDto> DrawingShapes { get; set; } = [];
+        public List<FormControlDto> FormControls { get; set; } = [];
         public List<DrawingObjectZOrderEntryDto> DrawingObjectZOrder { get; set; } = [];
         public List<SparklineDto> Sparklines { get; set; } = [];
         public List<ChartDto> Charts { get; set; } = [];
@@ -793,6 +811,58 @@ public sealed partial class NativeJsonAdapter
         public Guid Id { get; set; }
     }
 
+    private class DrawingAnchorRangeDto
+    {
+        public DrawingAnchorPointDto From { get; set; } = new();
+        public DrawingAnchorPointDto To { get; set; } = new();
+    }
+
+    private class DrawingAnchorPointDto
+    {
+        public uint Column { get; set; }
+        public long ColumnOffsetEmu { get; set; }
+        public uint Row { get; set; }
+        public long RowOffsetEmu { get; set; }
+    }
+
+    private class SlicerDto
+    {
+        public string Name { get; set; } = "";
+        public string? Caption { get; set; }
+        public string CacheName { get; set; } = "";
+        public string? SourcePivotTableName { get; set; }
+        public string? SourceFieldName { get; set; }
+        public string? StyleName { get; set; }
+        public List<string> SelectedItems { get; set; } = [];
+        public DrawingAnchorRangeDto? DrawingAnchor { get; set; }
+        public string? DrawingShapeName { get; set; }
+        public int ColumnCount { get; set; } = 1;
+        public bool ShowCaption { get; set; } = true;
+        public string? SourceSheetName { get; set; }
+        public int? SourceTableId { get; set; }
+        public int? SourceTableColumnId { get; set; }
+    }
+
+    private class TimelineDto
+    {
+        public string Name { get; set; } = "";
+        public string? Caption { get; set; }
+        public string CacheName { get; set; } = "";
+        public string? SourcePivotTableName { get; set; }
+        public string? SourceFieldName { get; set; }
+        public string? StyleName { get; set; }
+        public string? StartDate { get; set; }
+        public string? EndDate { get; set; }
+        public string? SelectedStartDate { get; set; }
+        public string? SelectedEndDate { get; set; }
+        public DrawingAnchorRangeDto? DrawingAnchor { get; set; }
+        public string? DrawingShapeName { get; set; }
+        public string? SourceSheetName { get; set; }
+        public int? Level { get; set; }
+        public int? SelectionLevel { get; set; }
+        public string? ScrollPosition { get; set; }
+    }
+
     private class CellStyleDto
     {
         public string FontName { get; set; } = "Calibri";
@@ -865,6 +935,15 @@ public sealed partial class NativeJsonAdapter
     {
         public string? Address { get; set; }
         public string? Text { get; set; }
+
+        /// <summary>Legacy note author (Sheet.CommentAuthors). Null/absent means no recorded author.</summary>
+        public string? Author { get; set; }
+
+        /// <summary>
+        /// Whether this legacy note's comment box is pinned "always shown" (Sheet.ShownComments).
+        /// Absent on files written before this field existed, which always meant not pinned.
+        /// </summary>
+        public bool IsShown { get; set; }
     }
 
     private class ThreadedCommentDto

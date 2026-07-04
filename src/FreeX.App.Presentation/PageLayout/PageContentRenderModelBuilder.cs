@@ -2,6 +2,7 @@ using System.Globalization;
 using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.Text;
+using FreeX.Core.Calc;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
@@ -91,24 +92,29 @@ public static class PageContentRenderModelBuilder
         var printableW = pageW - marginLeft - marginRight;
         var printableH = pageH - marginTop - marginBottom;
 
+        var columnWidthsPixels = BuildColumnWidthsPixels(sheet);
         var measurement = PrintLayoutPlanner.MeasurePrintableGrid(
             printableW,
             printableH,
-            (uint)pageRows.Count,
-            (uint)pageColumns.Count,
+            pageRows,
+            pageColumns,
+            sheet.RowHeights,
+            columnWidthsPixels,
             sheet.PrintHeadings);
 
-        var rowHeight = measurement.RowHeight;
-        var colWidth = measurement.ColumnWidth;
-        var printedWidth = measurement.HeaderWidth + colWidth * pageColumns.Count;
-        var printedHeight = measurement.HeaderHeight + rowHeight * pageRows.Count;
+        var printedWidth = measurement.HeaderWidth + measurement.TotalColumnWidth(pageColumns.Count);
+        var printedHeight = measurement.HeaderHeight + measurement.TotalRowHeight(pageRows.Count);
         var xOffset = sheet.CenterHorizontallyOnPage ? Math.Max(0, (printableW - printedWidth) / 2) : 0;
         var yOffset = sheet.CenterVerticallyOnPage ? Math.Max(0, (printableH - printedHeight) / 2) : 0;
         var contentLeft = marginLeft + xOffset;
         var contentTop = marginTop + yOffset;
         var gridLeft = contentLeft + measurement.HeaderWidth;
         var gridTop = contentTop + measurement.HeaderHeight;
-        var gridBounds = new LayoutRect(gridLeft, gridTop, colWidth * pageColumns.Count, rowHeight * pageRows.Count);
+        var gridBounds = new LayoutRect(
+            gridLeft,
+            gridTop,
+            measurement.TotalColumnWidth(pageColumns.Count),
+            measurement.TotalRowHeight(pageRows.Count));
 
         var pageNumber = (sheet.FirstPageNumber ?? 1) + pageIndex;
         var totalPages = pagePlan.PageCount;
@@ -120,16 +126,15 @@ public static class PageContentRenderModelBuilder
             pageColumns,
             gridLeft,
             gridTop,
-            colWidth,
-            rowHeight,
+            measurement,
             textMeasurer);
 
         var gridLines = sheet.PrintGridlines
-            ? BuildGridLines(gridBounds, pageRows.Count, pageColumns.Count, colWidth, rowHeight)
+            ? BuildGridLines(gridBounds, pageRows.Count, pageColumns.Count, measurement)
             : [];
 
         var (columnHeadings, rowHeadings) = sheet.PrintHeadings
-            ? BuildHeadings(measurement, pageRows, pageColumns, contentLeft, contentTop, colWidth, rowHeight, textMeasurer)
+            ? BuildHeadings(measurement, pageRows, pageColumns, contentLeft, contentTop, textMeasurer)
             : ([], []);
 
         var textBoxes = PageTextBoxLayoutPlanner.Build(
@@ -139,8 +144,7 @@ public static class PageContentRenderModelBuilder
             pageColumns,
             gridLeft,
             gridTop,
-            colWidth,
-            rowHeight);
+            measurement);
 
         var charts = BuildCharts(
             workbook,
@@ -151,8 +155,7 @@ public static class PageContentRenderModelBuilder
             pageColumns,
             gridLeft,
             gridTop,
-            colWidth,
-            rowHeight,
+            measurement,
             textMeasurer);
 
         var (header, footer) = ResolveHeaderFooterForPage(sheet, pageNumber);
@@ -230,8 +233,7 @@ public static class PageContentRenderModelBuilder
         IReadOnlyList<uint> pageColumns,
         double gridLeft,
         double gridTop,
-        double colWidth,
-        double rowHeight,
+        PrintGridMeasurement measurement,
         ITextMeasurer textMeasurer)
     {
         var rowIndexes = BuildPositionLookup(pageRows);
@@ -257,10 +259,10 @@ public static class PageContentRenderModelBuilder
                 var styleId = cell?.StyleId ?? sheet.GetStyleOnly(row, col) ?? StyleId.Default;
                 var style = workbook.GetStyle(styleId);
 
-                var x = gridLeft + colIndex * colWidth;
-                var y = gridTop + rowIndex * rowHeight;
-                var width = colWidth;
-                var height = rowHeight;
+                var x = gridLeft + measurement.ColumnOffset(colIndex);
+                var y = gridTop + measurement.RowOffset(rowIndex);
+                var width = measurement.ColumnWidthAt(colIndex);
+                var height = measurement.RowHeightAt(rowIndex);
                 if (merge is { } mergedRegion)
                 {
                     (width, height) = MeasureMergedExtent(
@@ -269,8 +271,7 @@ public static class PageContentRenderModelBuilder
                         columnIndexes,
                         colIndex,
                         rowIndex,
-                        colWidth,
-                        rowHeight);
+                        measurement);
                 }
 
                 var fill = ResolveFill(style, theme);
@@ -306,8 +307,7 @@ public static class PageContentRenderModelBuilder
         IReadOnlyDictionary<uint, int> columnIndexes,
         int anchorColIndex,
         int anchorRowIndex,
-        double colWidth,
-        double rowHeight)
+        PrintGridMeasurement measurement)
     {
         var lastColIndex = anchorColIndex;
         for (var col = region.Start.Col; col <= region.End.Col; col++)
@@ -324,27 +324,26 @@ public static class PageContentRenderModelBuilder
         }
 
         return (
-            (lastColIndex - anchorColIndex + 1) * colWidth,
-            (lastRowIndex - anchorRowIndex + 1) * rowHeight);
+            measurement.ColumnOffset(lastColIndex + 1) - measurement.ColumnOffset(anchorColIndex),
+            measurement.RowOffset(lastRowIndex + 1) - measurement.RowOffset(anchorRowIndex));
     }
 
     private static IReadOnlyList<PageGridLine> BuildGridLines(
         LayoutRect gridBounds,
         int rowCount,
         int columnCount,
-        double colWidth,
-        double rowHeight)
+        PrintGridMeasurement measurement)
     {
         var lines = new List<PageGridLine>(rowCount + columnCount + 2);
         for (var colIndex = 0; colIndex <= columnCount; colIndex++)
         {
-            var x = gridBounds.Left + colIndex * colWidth;
+            var x = gridBounds.Left + measurement.ColumnOffset(colIndex);
             lines.Add(new PageGridLine(new LayoutPoint(x, gridBounds.Top), new LayoutPoint(x, gridBounds.Bottom)));
         }
 
         for (var rowIndex = 0; rowIndex <= rowCount; rowIndex++)
         {
-            var y = gridBounds.Top + rowIndex * rowHeight;
+            var y = gridBounds.Top + measurement.RowOffset(rowIndex);
             lines.Add(new PageGridLine(new LayoutPoint(gridBounds.Left, y), new LayoutPoint(gridBounds.Right, y)));
         }
 
@@ -357,17 +356,15 @@ public static class PageContentRenderModelBuilder
         IReadOnlyList<uint> pageColumns,
         double contentLeft,
         double contentTop,
-        double colWidth,
-        double rowHeight,
         ITextMeasurer textMeasurer)
     {
         var columnHeadings = new List<PageHeadingCell>(pageColumns.Count);
         for (var colIndex = 0; colIndex < pageColumns.Count; colIndex++)
         {
             var rect = new LayoutRect(
-                contentLeft + measurement.HeaderWidth + colIndex * colWidth,
+                contentLeft + measurement.HeaderWidth + measurement.ColumnOffset(colIndex),
                 contentTop,
-                colWidth,
+                measurement.ColumnWidthAt(colIndex),
                 measurement.HeaderHeight);
             columnHeadings.Add(BuildHeadingCell(rect, CellAddress.NumberToColumnName(pageColumns[colIndex]), textMeasurer));
         }
@@ -377,9 +374,9 @@ public static class PageContentRenderModelBuilder
         {
             var rect = new LayoutRect(
                 contentLeft,
-                contentTop + measurement.HeaderHeight + rowIndex * rowHeight,
+                contentTop + measurement.HeaderHeight + measurement.RowOffset(rowIndex),
                 measurement.HeaderWidth,
-                rowHeight);
+                measurement.RowHeightAt(rowIndex));
             rowHeadings.Add(BuildHeadingCell(rect, pageRows[rowIndex].ToString(CultureInfo.InvariantCulture), textMeasurer));
         }
 
@@ -395,8 +392,7 @@ public static class PageContentRenderModelBuilder
         IReadOnlyList<uint> pageColumns,
         double gridLeft,
         double gridTop,
-        double colWidth,
-        double rowHeight,
+        PrintGridMeasurement measurement,
         ITextMeasurer textMeasurer)
     {
         if (sheet.Charts.Count == 0 || rowSegment.End < rowSegment.Start || colSegment.End < colSegment.Start)
@@ -409,16 +405,20 @@ public static class PageContentRenderModelBuilder
 
         var titleRowCount = Math.Max(0, pageRows.Count - bodyRows.Count);
         var titleColumnCount = Math.Max(0, pageColumns.Count - bodyColumns.Count);
-        var bodyGridLeft = gridLeft + titleColumnCount * colWidth;
-        var bodyGridTop = gridTop + titleRowCount * rowHeight;
+        var bodyGridLeft = gridLeft + measurement.ColumnOffset(titleColumnCount);
+        var bodyGridTop = gridTop + measurement.RowOffset(titleRowCount);
         var bodyGridRect = new LayoutRect(
             bodyGridLeft,
             bodyGridTop,
-            bodyColumns.Count * colWidth,
-            bodyRows.Count * rowHeight);
+            measurement.ColumnOffset(pageColumns.Count) - measurement.ColumnOffset(titleColumnCount),
+            measurement.RowOffset(pageRows.Count) - measurement.RowOffset(titleRowCount));
 
-        var pageGridLeft = (bodyColumns[0] - 1) * colWidth;
-        var pageGridTop = (bodyRows[0] - 1) * rowHeight;
+        // Charts anchor at chart.Left/chart.Top, which are absolute pixel offsets from the sheet's
+        // real (non-uniform, hidden-row/column-skipping) origin — see XlsxDrawingAnchorApplier. To
+        // place a chart correctly on this page, translate its real-sheet coordinates into page-grid
+        // coordinates by subtracting the real-sheet pixel offset of the page's first body row/column.
+        var pageGridLeft = ChartAnchorGeometry.SumColumnPixels(sheet, 1, bodyColumns[0] - 1);
+        var pageGridTop = ChartAnchorGeometry.SumRowPixels(sheet, 1, bodyRows[0] - 1);
         var pageGridRect = new LayoutRect(
             pageGridLeft,
             pageGridTop,
@@ -788,5 +788,20 @@ public static class PageContentRenderModelBuilder
             lookup[indexes[i]] = i;
 
         return lookup;
+    }
+
+    /// <summary>
+    /// Converts the sheet's character-unit column widths to pixels (matching
+    /// <see cref="PagePaginationPlanner.AverageColumnWidthPixels"/>'s per-column conversion), so
+    /// <see cref="PrintLayoutPlanner.MeasurePrintableGrid(double, double, IReadOnlyList{uint}, IReadOnlyList{uint}, IReadOnlyDictionary{uint, double}, IReadOnlyDictionary{uint, double}, bool)"/>
+    /// can measure the page grid from real per-column pixel sizes.
+    /// </summary>
+    private static IReadOnlyDictionary<uint, double> BuildColumnWidthsPixels(Sheet sheet)
+    {
+        var pixels = new Dictionary<uint, double>(sheet.ColumnWidths.Count);
+        foreach (var (col, width) in sheet.ColumnWidths)
+            pixels[col] = ColumnWidthPixelMapper.ColumnWidthToPixels(width);
+
+        return pixels;
     }
 }

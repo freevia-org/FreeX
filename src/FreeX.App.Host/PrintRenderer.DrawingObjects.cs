@@ -17,6 +17,7 @@ public static partial class PrintRenderer
         ICollection<PdfTextOverlay> textOverlays,
         ViewportModel viewport,
         IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> pageCellLookup,
+        Sheet sheet,
         IReadOnlyList<ChartModel> charts,
         WorkbookTheme workbookTheme,
         IReadOnlyList<uint> bodyRows,
@@ -25,23 +26,27 @@ public static partial class PrintRenderer
         int columnPlanTitleCount,
         double gridLeft,
         double gridTop,
-        double colWidth,
-        double rowHeight)
+        PrintGridMeasurement measurement)
     {
         if (charts.Count == 0 || bodyRows.Count == 0 || bodyColumns.Count == 0)
             return;
 
-        var bodyGridLeft = gridLeft + columnPlanTitleCount * colWidth;
-        var bodyGridTop = gridTop + rowPlanTitleCount * rowHeight;
+        var bodyGridLeft = gridLeft + measurement.ColumnOffset(columnPlanTitleCount);
+        var bodyGridTop = gridTop + measurement.RowOffset(rowPlanTitleCount);
         var bodyGridRect = new Rect(
             bodyGridLeft,
             bodyGridTop,
-            bodyColumns.Count * colWidth,
-            bodyRows.Count * rowHeight);
+            measurement.ColumnOffset(columnPlanTitleCount + bodyColumns.Count) - measurement.ColumnOffset(columnPlanTitleCount),
+            measurement.RowOffset(rowPlanTitleCount + bodyRows.Count) - measurement.RowOffset(rowPlanTitleCount));
+
+        // chart.Left/chart.Top are absolute pixel offsets from the sheet's real (non-uniform,
+        // hidden-row/column-skipping) origin — see XlsxDrawingAnchorApplier. Translate them into this
+        // page's grid coordinates by subtracting the real-sheet pixel offset of the page's first body
+        // row/column, matching the coordinate space anchors were computed in.
         var firstBodyColumn = bodyColumns[0];
         var firstBodyRow = bodyRows[0];
-        var pageGridLeft = (firstBodyColumn - 1) * colWidth;
-        var pageGridTop = (firstBodyRow - 1) * rowHeight;
+        var pageGridLeft = ChartAnchorGeometry.SumColumnPixels(sheet, 1, firstBodyColumn - 1);
+        var pageGridTop = ChartAnchorGeometry.SumRowPixels(sheet, 1, firstBodyRow - 1);
         var pageGridRect = new Rect(
             pageGridLeft,
             pageGridTop,

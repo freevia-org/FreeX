@@ -20,6 +20,7 @@ public sealed record MoveRangeOp(
     int ColDelta)                                                               : RewriteOperation;
 public sealed record RenameSheetOp(string OldSheetName, string NewSheetName)    : RewriteOperation;
 public sealed record DeleteSheetOp(string SheetName)                            : RewriteOperation;
+public sealed record RenameTableOp(string OldTableName, string NewTableName)    : RewriteOperation;
 
 // ── Partial-range (Insert/Delete Cells) operations ────────────────────────────
 // These shift only cells whose address falls inside the constrained band
@@ -133,8 +134,46 @@ public static class FormulaRewriter
                 Operand = RewriteNode(u.Operand, op, hostSheetName, ref changed)
             },
             FunctionCallNode f => RewriteFunctionArgs(f, op, hostSheetName, ref changed),
+            StructuredReferenceNode sr => RewriteStructuredReference(sr, op, ref changed),
+            StructuredCurrentRowReferenceNode scr => RewriteStructuredCurrentRowReference(scr, op, ref changed),
             _ => node   // NumberNode, StringNode, BooleanNode, NamedRangeNode, ErrorNode
         };
+    }
+
+    // ── Table rename ──────────────────────────────────────────────────────────
+    // Structured references carry the table name as a bare literal (no table-ID indirection),
+    // so renaming a table must rewrite every TableName[...] / TableName[@Column] occurrence
+    // across every formula, mirroring how RenameSheetOp rewrites sheet-qualified refs above.
+    // An unqualified reference (TableName empty, e.g. bare [@Column] inside the table's own
+    // formulas) resolves against whichever table the host cell belongs to, so it never carries
+    // the old name and needs no rewrite.
+
+    private static FormulaNode RewriteStructuredReference(
+        StructuredReferenceNode sr, RewriteOperation op, ref bool changed)
+    {
+        if (op is not RenameTableOp rename ||
+            string.IsNullOrEmpty(sr.TableName) ||
+            !string.Equals(sr.TableName, rename.OldTableName, StringComparison.OrdinalIgnoreCase))
+        {
+            return sr;
+        }
+
+        changed = true;
+        return sr with { TableName = rename.NewTableName };
+    }
+
+    private static FormulaNode RewriteStructuredCurrentRowReference(
+        StructuredCurrentRowReferenceNode scr, RewriteOperation op, ref bool changed)
+    {
+        if (op is not RenameTableOp rename ||
+            string.IsNullOrEmpty(scr.TableName) ||
+            !string.Equals(scr.TableName, rename.OldTableName, StringComparison.OrdinalIgnoreCase))
+        {
+            return scr;
+        }
+
+        changed = true;
+        return scr with { TableName = rename.NewTableName };
     }
 
     private static FunctionCallNode RewriteFunctionArgs(
@@ -173,6 +212,21 @@ public static class FormulaRewriter
     private static FormulaNode RewriteRange(
         RangeRefNode rr, RewriteOperation op, string hostSheetName, ref bool changed)
     {
+        // TODO(H28 3-D sheet-span refs): a span (EndSheetName set, e.g. Sheet1:Sheet3!A1) is passed
+        // through untouched for every structural op — insert/delete rows or columns, cell moves,
+        // sheet rename/delete. None of the row/col shift or delete-shrink math below understands
+        // "this reference spans multiple sheets", and RenameSheetOp/DeleteSheetOp only ever look at
+        // rr.SheetName (the span's start sheet), so blindly reusing that logic here would silently
+        // mis-rewrite (or wrongly #REF!) references to the *other* spanned sheets. Leaving the span
+        // untouched is conservative: the formula text is unchanged, so it still means exactly what it
+        // said before the structural edit (correct for edits on sheets outside the span; potentially
+        // stale — same as Excel would need to fully re-resolve — for edits on a spanned sheet whose
+        // row/col shift should have shown up in this reference). Full span-aware rewriting (per-sheet
+        // shift math, and #REF!-ing only the sheets actually removed) is intentionally out of scope
+        // for this change.
+        if (rr.EndSheetName is not null)
+            return rr;
+
         // For sheet-qualified ranges, the sheet is on rr.SheetName and Start has SheetName set.
         // End may have SheetName = null; use the range's SheetName as its effective sheet.
         var endRef = rr.End.SheetName is null && rr.SheetName is not null

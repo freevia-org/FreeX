@@ -3,15 +3,18 @@ using FreeX.Core.Model;
 namespace FreeX.Core.Commands;
 
 /// <summary>
-/// Command to define (or replace) a named range in the workbook.
-/// Supports undo: if the name previously existed, its old range is restored on Revert;
-/// if it was newly created, it is removed on Revert.
+/// Command to define (or replace) a named range in the workbook, either workbook-global or
+/// scoped to a single sheet (Excel "localSheetId"). Supports undo: if the name previously
+/// existed in the target scope, its old range is restored on Revert; if it was newly created,
+/// it is removed on Revert.
 /// </summary>
 public sealed class DefineNamedRangeCommand : IWorkbookCommand
 {
     private readonly string _name;
     private readonly GridRange _range;
     private readonly NamedRangeMetadata? _metadata;
+    private readonly SheetId? _scopeSheetId;
+    private readonly bool _allowRedefine;
 
     // Snapshot captured during Apply for undo
     private bool _existed;
@@ -20,11 +23,34 @@ public sealed class DefineNamedRangeCommand : IWorkbookCommand
 
     public string Label => $"Define Named Range '{_name}'";
 
-    public DefineNamedRangeCommand(string name, GridRange range, NamedRangeMetadata? metadata = null)
+    /// <param name="name">The defined name.</param>
+    /// <param name="range">The range the name refers to.</param>
+    /// <param name="metadata">Optional Excel-style metadata (scope label, comment).</param>
+    /// <param name="scopeSheetId">
+    ///   When set, the name is defined with sheet scope (Excel "localSheetId") on this sheet
+    ///   instead of workbook-global. Sheet-scoped names take resolution precedence over a
+    ///   same-named workbook-global name when evaluated on the scoped sheet.
+    /// </param>
+    /// <param name="allowRedefine">
+    ///   When false (the default for new-name creation), defining a name that already exists in
+    ///   the exact target scope is rejected with a clear error, matching Excel's New Name dialog.
+    ///   Pass true when intentionally replacing an existing name of the same scope (e.g. editing
+    ///   it via Name Manager), or when the target scope key is known to be new (e.g. import).
+    ///   A same-named entry in a *different* scope never conflicts — Excel allows a workbook name
+    ///   and a sheet-scoped name with identical text to coexist, resolved by scope precedence.
+    /// </param>
+    public DefineNamedRangeCommand(
+        string name,
+        GridRange range,
+        NamedRangeMetadata? metadata = null,
+        SheetId? scopeSheetId = null,
+        bool allowRedefine = true)
     {
         _name = name;
         _range = range;
         _metadata = metadata;
+        _scopeSheetId = scopeSheetId;
+        _allowRedefine = allowRedefine;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -36,7 +62,22 @@ public sealed class DefineNamedRangeCommand : IWorkbookCommand
         if (validationError is not null)
             return new CommandOutcome(false, validationError);
 
+        if (_scopeSheetId is { } scopeSheetId)
+        {
+            _existed = ctx.Workbook.ScopedNamedRanges.TryGetValue((_name, scopeSheetId), out _previousRange);
+            if (!_allowRedefine && _existed)
+                return new CommandOutcome(false, $"The name '{_name}' already exists in this scope.");
+
+            if (_existed)
+                ctx.Workbook.TryGetScopedNamedRangeMetadata(_name, scopeSheetId, out _previousMetadata);
+            ctx.Workbook.DefineNamedRange(_name, _range, _metadata, scopeSheetId);
+            return new CommandOutcome(true);
+        }
+
         _existed = ctx.Workbook.TryGetNamedRange(_name, out _previousRange);
+        if (!_allowRedefine && _existed)
+            return new CommandOutcome(false, $"The name '{_name}' already exists in this scope.");
+
         if (_existed && ctx.Workbook.TryGetNamedRangeMetadata(_name, out var metadata))
             _previousMetadata = metadata;
         ctx.Workbook.DefineNamedRange(_name, _range, _metadata);
@@ -45,6 +86,15 @@ public sealed class DefineNamedRangeCommand : IWorkbookCommand
 
     public void Revert(ICommandContext ctx)
     {
+        if (_scopeSheetId is { } scopeSheetId)
+        {
+            if (_existed)
+                ctx.Workbook.DefineNamedRange(_name, _previousRange, _previousMetadata, scopeSheetId);
+            else
+                ctx.Workbook.RemoveScopedNamedRange(_name, scopeSheetId);
+            return;
+        }
+
         if (_existed)
             ctx.Workbook.DefineNamedRange(_name, _previousRange, _previousMetadata);
         else
@@ -53,27 +103,40 @@ public sealed class DefineNamedRangeCommand : IWorkbookCommand
 }
 
 /// <summary>
-/// Command to remove a named range from the workbook.
-/// Supports undo: restores the range on Revert.
+/// Command to remove a named range from the workbook, either workbook-global or scoped to a
+/// single sheet. Supports undo: restores the range (in its original scope) on Revert.
 /// </summary>
 public sealed class RemoveNamedRangeCommand : IWorkbookCommand
 {
     private readonly string _name;
+    private readonly SheetId? _scopeSheetId;
     private GridRange _previousRange;
     private NamedRangeMetadata? _previousMetadata;
     private bool _existed;
 
     public string Label => $"Remove Named Range '{_name}'";
 
-    public RemoveNamedRangeCommand(string name)
+    public RemoveNamedRangeCommand(string name, SheetId? scopeSheetId = null)
     {
         _name = name;
+        _scopeSheetId = scopeSheetId;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (CommandGuards.RejectIfWorkbookStructureProtected(ctx.Workbook) is { } protectedOutcome)
             return protectedOutcome;
+
+        if (_scopeSheetId is { } scopeSheetId)
+        {
+            _existed = ctx.Workbook.ScopedNamedRanges.TryGetValue((_name, scopeSheetId), out _previousRange);
+            if (!_existed)
+                return new CommandOutcome(false, $"Named range '{_name}' does not exist.");
+
+            ctx.Workbook.TryGetScopedNamedRangeMetadata(_name, scopeSheetId, out _previousMetadata);
+            ctx.Workbook.RemoveScopedNamedRange(_name, scopeSheetId);
+            return new CommandOutcome(true);
+        }
 
         _existed = ctx.Workbook.TryGetNamedRange(_name, out _previousRange);
         if (!_existed)
@@ -87,7 +150,12 @@ public sealed class RemoveNamedRangeCommand : IWorkbookCommand
 
     public void Revert(ICommandContext ctx)
     {
-        if (_existed)
+        if (!_existed)
+            return;
+
+        if (_scopeSheetId is { } scopeSheetId)
+            ctx.Workbook.DefineNamedRange(_name, _previousRange, _previousMetadata, scopeSheetId);
+        else
             ctx.Workbook.DefineNamedRange(_name, _previousRange, _previousMetadata);
     }
 }

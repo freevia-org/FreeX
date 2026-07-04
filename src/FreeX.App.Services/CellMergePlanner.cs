@@ -22,6 +22,15 @@ public static class CellMergePlanner
     public static bool IsSelectionMerged(Sheet sheet, GridRange range) =>
         sheet.MergedRegions.Any(region => region.Overlaps(range));
 
+    /// <summary>
+    /// True if any cell in <paramref name="range"/> currently holds a live dynamic-array spill value
+    /// (i.e. a non-anchor cell written by another formula's <c>SetSpillRange</c>). Excel blocks merging
+    /// over a spilled array outright rather than silently absorbing the spilled values, so callers use
+    /// this to reject the merge instead of treating it as ordinary "would lose content".
+    /// </summary>
+    public static bool HasLiveSpillTarget(Sheet sheet, GridRange range) =>
+        sheet.EnumerateSpillTargetCells().Any(range.Contains);
+
     public static IReadOnlyList<IWorkbookCommand> CreateMergeAndCenterCommands(SheetId sheetId, GridRange range)
         => CreateMergeAndCenterCommands(null, sheetId, range, MergeCellContentResolution.KeepFirstCell);
 
@@ -31,6 +40,9 @@ public static class CellMergePlanner
         GridRange range,
         MergeCellContentResolution contentResolution)
     {
+        if (sheet is not null && HasLiveSpillTarget(sheet, range))
+            return [RejectSpillOverlapCommand.Instance];
+
         var commands = new List<IWorkbookCommand>();
         if (contentResolution == MergeCellContentResolution.ConcatenateAllCells && sheet is not null)
         {
@@ -53,7 +65,12 @@ public static class CellMergePlanner
         bool mergeCells)
     {
         if (mergeCells)
+        {
+            if (HasLiveSpillTarget(sheet, range))
+                return [RejectSpillOverlapCommand.Instance];
+
             return range.CellCount <= 1 ? [] : [new MergeCellsCommand(sheetId, range)];
+        }
 
         return CreateUnmergeCommands(sheet, sheetId, range);
     }
@@ -67,6 +84,9 @@ public static class CellMergePlanner
     {
         if (mergeCells)
         {
+            if (HasLiveSpillTarget(sheet, range))
+                return [RejectSpillOverlapCommand.Instance];
+
             return contentResolution == MergeCellContentResolution.ConcatenateAllCells
                 ? CreateMergeAndCenterCommands(sheet, sheetId, range, contentResolution)
                     .Where(command => command is not ApplyStyleCommand)
@@ -88,16 +108,31 @@ public static class CellMergePlanner
         if (range.CellCount <= 1)
             return new MergeCellContentPlan(false, [], "");
 
+        // GetCell only looks at authored cells (_cells) — a cell that is merely the target of a
+        // neighboring formula's dynamic-array spill (Sheet._spillValues) has no entry there, so it
+        // would otherwise be invisible to the loss-of-content check below even though it holds a live
+        // value. Collect the spill-target addresses inside the range up front so they're surfaced too
+        // (display their current spilled value), same as any other cell with content.
+        var spillTargetsInRange = new HashSet<CellAddress>(
+            sheet.EnumerateSpillTargetCells().Where(range.Contains));
+
         var entries = new List<MergeCellContentEntry>();
         foreach (var address in range.AllCells())
         {
-            if (sheet.GetCell(address) is not { } cell || !HasContent(cell))
-                continue;
-
-            entries.Add(new MergeCellContentEntry(
-                address,
-                FormatDisplayText(cell),
-                address == range.Start));
+            if (sheet.GetCell(address) is { } cell && HasContent(cell))
+            {
+                entries.Add(new MergeCellContentEntry(
+                    address,
+                    FormatDisplayText(cell),
+                    address == range.Start));
+            }
+            else if (spillTargetsInRange.Contains(address))
+            {
+                entries.Add(new MergeCellContentEntry(
+                    address,
+                    FormatScalarValue(sheet.GetValue(address)),
+                    address == range.Start));
+            }
         }
 
         var wouldLoseContent = entries.Any(entry => !entry.IsTopLeft);
@@ -130,4 +165,25 @@ public static class CellMergePlanner
         ErrorValue error => error.Code,
         _ => value.ToString() ?? ""
     };
+}
+
+/// <summary>
+/// A no-op command that always fails with a clear error message. Returned in place of the real merge
+/// command(s) when the requested merge range overlaps a live dynamic-array spill range — Excel rejects
+/// merging over a spilled array outright ("You can't merge cells that contain part of another merged
+/// cell" / spill equivalent) rather than silently absorbing the spilled values. Implementing this as its
+/// own command (instead of throwing from a factory method) lets it flow through the normal
+/// CommandBus/CompositeWorkbookCommand.Apply failure path, so the caller gets the same
+/// CommandOutcome(false, ErrorMessage) shape as any other rejected command and nothing is left applied.
+/// </summary>
+public sealed class RejectSpillOverlapCommand : IWorkbookCommand
+{
+    public static readonly RejectSpillOverlapCommand Instance = new();
+
+    public string Label => "Merge Cells";
+
+    public CommandOutcome Apply(ICommandContext ctx) =>
+        new(false, "Can't merge cells that overlap a dynamic array's spill range.");
+
+    public void Revert(ICommandContext ctx) { }
 }

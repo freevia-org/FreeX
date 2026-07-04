@@ -143,7 +143,7 @@ public sealed partial class XlsxFileAdapter
                 packageRelNs,
                 XlsxPackagePath.NormalizeWorkbookTarget);
 
-            var differentialStyles = XlsxDifferentialStyleReader.ReadAll(stylesXml, workbookNs);
+            var differentialStyles = XlsxDifferentialStyleReader.ReadAll(stylesXml, workbookNs, workbookTheme, indexedColors);
             Dictionary<string, string>? worksheetPathsBySheetName = loadStructuredTableMetadata
                 ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 : null;

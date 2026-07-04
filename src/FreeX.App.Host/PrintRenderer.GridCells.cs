@@ -28,16 +28,16 @@ public static partial class PrintRenderer
         double gridLeft,
         double gridTop)
     {
-        var rowHeight = measurement.RowHeight;
-        var colWidth = measurement.ColumnWidth;
         for (var rowIndex = 0; rowIndex < pageRows.Count; rowIndex++)
         {
             var row = pageRows[rowIndex];
+            var rowHeight = measurement.RowHeightAt(rowIndex);
+            var y = gridTop + measurement.RowOffset(rowIndex);
             for (var colIndex = 0; colIndex < pageColumns.Count; colIndex++)
             {
                 var col = pageColumns[colIndex];
-                double x = gridLeft + colIndex * colWidth;
-                double y = gridTop + rowIndex * rowHeight;
+                var colWidth = measurement.ColumnWidthAt(colIndex);
+                var x = gridLeft + measurement.ColumnOffset(colIndex);
 
                 if (printGridlines)
                 {

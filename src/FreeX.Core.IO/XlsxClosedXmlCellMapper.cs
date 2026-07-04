@@ -158,7 +158,10 @@ internal static class XlsxClosedXmlCellMapper
         }
     }
 
-    public static CellStyle MapStyle(IXLStyle xlStyle, WorkbookTheme theme)
+    public static CellStyle MapStyle(IXLStyle xlStyle, WorkbookTheme theme) =>
+        MapStyle(xlStyle, theme, DefaultIndexedColors);
+
+    public static CellStyle MapStyle(IXLStyle xlStyle, WorkbookTheme theme, WorkbookIndexedColorPalette indexedColors)
     {
         return new CellStyle
         {
@@ -172,7 +175,8 @@ internal static class XlsxClosedXmlCellMapper
             Strikethrough = xlStyle.Font.Strikethrough,
             Superscript = xlStyle.Font.VerticalAlignment == XLFontVerticalTextAlignmentValues.Superscript,
             Subscript   = xlStyle.Font.VerticalAlignment == XLFontVerticalTextAlignmentValues.Subscript,
-            FontColor = MapColor(xlStyle.Font.FontColor, theme),
+            FontColor = MapColor(xlStyle.Font.FontColor, theme, indexedColors),
+            DoubleUnderline = xlStyle.Font.Underline is XLFontUnderlineValues.Double or XLFontUnderlineValues.DoubleAccounting,
             FontScheme = xlStyle.Font.FontScheme switch
             {
                 XLFontScheme.Minor => CellFontScheme.Minor,
@@ -180,21 +184,21 @@ internal static class XlsxClosedXmlCellMapper
                 _ => CellFontScheme.None,
             },
             FillColor = xlStyle.Fill.PatternType != XLFillPatternValues.None
-                ? (CellColor?)MapColor(xlStyle.Fill.BackgroundColor, theme)
+                ? (CellColor?)MapColor(xlStyle.Fill.BackgroundColor, theme, indexedColors)
                 : null,
             FillPatternStyle = MapFillPatternStyle(xlStyle.Fill.PatternType),
             FillPatternColor = xlStyle.Fill.PatternType is XLFillPatternValues.None or XLFillPatternValues.Solid
                 ? null
-                : MapColor(xlStyle.Fill.PatternColor, theme),
-            BorderTop = MapBorder(xlStyle.Border.TopBorder, xlStyle.Border.TopBorderColor, theme),
-            BorderRight = MapBorder(xlStyle.Border.RightBorder, xlStyle.Border.RightBorderColor, theme),
-            BorderBottom = MapBorder(xlStyle.Border.BottomBorder, xlStyle.Border.BottomBorderColor, theme),
-            BorderLeft = MapBorder(xlStyle.Border.LeftBorder, xlStyle.Border.LeftBorderColor, theme),
+                : MapColor(xlStyle.Fill.PatternColor, theme, indexedColors),
+            BorderTop = MapBorder(xlStyle.Border.TopBorder, xlStyle.Border.TopBorderColor, theme, indexedColors),
+            BorderRight = MapBorder(xlStyle.Border.RightBorder, xlStyle.Border.RightBorderColor, theme, indexedColors),
+            BorderBottom = MapBorder(xlStyle.Border.BottomBorder, xlStyle.Border.BottomBorderColor, theme, indexedColors),
+            BorderLeft = MapBorder(xlStyle.Border.LeftBorder, xlStyle.Border.LeftBorderColor, theme, indexedColors),
             BorderDiagonalDown = xlStyle.Border.DiagonalDown
-                ? MapBorder(xlStyle.Border.DiagonalBorder, xlStyle.Border.DiagonalBorderColor, theme)
+                ? MapBorder(xlStyle.Border.DiagonalBorder, xlStyle.Border.DiagonalBorderColor, theme, indexedColors)
                 : default,
             BorderDiagonalUp = xlStyle.Border.DiagonalUp
-                ? MapBorder(xlStyle.Border.DiagonalBorder, xlStyle.Border.DiagonalBorderColor, theme)
+                ? MapBorder(xlStyle.Border.DiagonalBorder, xlStyle.Border.DiagonalBorderColor, theme, indexedColors)
                 : default,
             NumberFormat = MapNumberFormat(xlStyle.NumberFormat),
             HorizontalAlignment = xlStyle.Alignment.Horizontal switch
@@ -216,6 +220,12 @@ internal static class XlsxClosedXmlCellMapper
                 XLAlignmentVerticalValues.Justify => VerticalAlignment.Justify,
                 XLAlignmentVerticalValues.Distributed => VerticalAlignment.Distributed,
                 _ => VerticalAlignment.Bottom,
+            },
+            ReadingOrder = xlStyle.Alignment.ReadingOrder switch
+            {
+                XLAlignmentReadingOrderValues.LeftToRight => CellReadingOrder.LeftToRight,
+                XLAlignmentReadingOrderValues.RightToLeft => CellReadingOrder.RightToLeft,
+                _ => CellReadingOrder.Context,
             },
             WrapText = xlStyle.Alignment.WrapText,
             ShrinkToFit = xlStyle.Alignment.ShrinkToFit,
@@ -255,8 +265,12 @@ internal static class XlsxClosedXmlCellMapper
 
         if (style.Bold != def.Bold) xlStyle.Font.Bold = style.Bold;
         if (style.Italic != def.Italic) xlStyle.Font.Italic = style.Italic;
-        if (style.Underline != def.Underline)
-            xlStyle.Font.Underline = style.Underline ? XLFontUnderlineValues.Single : XLFontUnderlineValues.None;
+        if (style.Underline != def.Underline || style.DoubleUnderline != def.DoubleUnderline)
+            xlStyle.Font.Underline = style.DoubleUnderline
+                ? XLFontUnderlineValues.Double
+                : style.Underline
+                    ? XLFontUnderlineValues.Single
+                    : XLFontUnderlineValues.None;
         if (style.Strikethrough != def.Strikethrough)
             xlStyle.Font.Strikethrough = style.Strikethrough;
         if (style.Superscript != def.Superscript || style.Subscript != def.Subscript)
@@ -344,6 +358,14 @@ internal static class XlsxClosedXmlCellMapper
                 _ => XLAlignmentVerticalValues.Bottom,
             };
 
+        if (style.ReadingOrder != def.ReadingOrder)
+            xlStyle.Alignment.ReadingOrder = style.ReadingOrder switch
+            {
+                CellReadingOrder.LeftToRight => XLAlignmentReadingOrderValues.LeftToRight,
+                CellReadingOrder.RightToLeft => XLAlignmentReadingOrderValues.RightToLeft,
+                _ => XLAlignmentReadingOrderValues.ContextDependent,
+            };
+
         if (style.WrapText != def.WrapText)
             xlStyle.Alignment.WrapText = style.WrapText;
 
@@ -416,10 +438,20 @@ internal static class XlsxClosedXmlCellMapper
         _ => XLError.NoValueAvailable
     };
 
-    public static CellColor MapColor(XLColor xlColor, WorkbookTheme theme)
+    // Default Excel indexed-color palette (no workbook-authored overrides), used by call sites that
+    // don't have a resolved WorkbookIndexedColorPalette in scope.
+    private static readonly WorkbookIndexedColorPalette DefaultIndexedColors = new();
+
+    public static CellColor MapColor(XLColor xlColor, WorkbookTheme theme) =>
+        MapColor(xlColor, theme, DefaultIndexedColors);
+
+    public static CellColor MapColor(XLColor xlColor, WorkbookTheme theme, WorkbookIndexedColorPalette indexedColors)
     {
         if (xlColor.ColorType == XLColorType.Theme)
             return theme.ResolveColor(ToWorkbookThemeColorSlot(xlColor.ThemeColor), xlColor.ThemeTint);
+
+        if (xlColor.ColorType == XLColorType.Indexed && indexedColors.TryResolveColor(xlColor.Indexed + 1, out var indexedColor))
+            return indexedColor;
 
         if (!TryMapConcreteColor(xlColor, out var color))
             return CellColor.Black;
@@ -467,7 +499,7 @@ internal static class XlsxClosedXmlCellMapper
         _ => WorkbookThemeColorSlot.Dark1
     };
 
-    private static CellBorder MapBorder(XLBorderStyleValues style, XLColor color, WorkbookTheme theme)
+    private static CellBorder MapBorder(XLBorderStyleValues style, XLColor color, WorkbookTheme theme, WorkbookIndexedColorPalette indexedColors)
     {
         var mapped = style switch
         {
@@ -487,7 +519,7 @@ internal static class XlsxClosedXmlCellMapper
             XLBorderStyleValues.MediumDashDotDot => BorderStyle.MediumDashDotDot,
             _ => BorderStyle.None,
         };
-        return new CellBorder(mapped, MapColor(color, theme));
+        return new CellBorder(mapped, MapColor(color, theme, indexedColors));
     }
 
     private static XLBorderStyleValues MapBorderStyleInverse(BorderStyle style) => style switch

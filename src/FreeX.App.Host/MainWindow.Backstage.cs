@@ -431,14 +431,28 @@ public partial class MainWindow
 
     private void UpdateSsRecentList(string filter = "")
     {
+        // Reload from disk rather than reading the constructor-time _recentFiles snapshot: with
+        // multiple windows sharing this process (View > New Window), a sibling window may have
+        // registered/pinned/removed an entry since this window loaded, and this window's cached
+        // instance would never observe it otherwise.
         var plan = BackstageRecentFileListPlanner.Build(
-            _recentFiles.Snapshot(),
+            ReloadRecentFilesStore().Snapshot(),
             filter,
             System.IO.File.Exists);
         _allRecentItems = plan.AllItems.ToList();
         SsRecentList.ItemsSource = plan.RecentItems;
         SsPinnedList.ItemsSource = plan.PinnedItems;
     }
+
+    /// <summary>
+    /// Reloads the recent-files store fresh from disk. Every window in the process constructs its
+    /// own <see cref="RecentFilesStore"/> instance at startup (see MainWindow.xaml.cs), so with
+    /// multiple windows open (Excel-style "New Window") each window's cached instance goes stale
+    /// the moment a sibling window writes to recent.json. Reloading immediately before every read
+    /// or mutation — rather than trusting the long-lived <c>_recentFiles</c> field — avoids both
+    /// showing a stale list and clobbering a sibling's write with a stale one (lost update).
+    /// </summary>
+    private RecentFilesStore ReloadRecentFilesStore() => RecentFilesStore.Load();
 
     private void SsRecentTab_Click(object sender, RoutedEventArgs e)
     {
@@ -624,7 +638,11 @@ public partial class MainWindow
             // resolves the new one — their mutations would target the wrong workbook.
             NotifyOtherWindowsOfWorkbookChange();
 
-            RecentFileRegistrationService.RegisterIfNeeded(_recentFiles, plan.RecentFileRegistration);
+            // Reload from disk immediately before writing: with multiple windows sharing this
+            // process (View > New Window), each window's cached _recentFiles snapshot goes stale
+            // the moment a sibling window registers/pins/removes an entry. Writing through the
+            // stale cache would silently clobber the sibling's write (last-writer-wins data loss).
+            RecentFileRegistrationService.RegisterIfNeeded(ReloadRecentFilesStore, plan.RecentFileRegistration);
             ShowOpenProgress(CreateOpenProgress("preparing view", TimeSpan.Zero, null));
             operationCancellation.Token.ThrowIfCancellationRequested();
             ApplyOpenedWorksheetViewState();
@@ -966,7 +984,9 @@ public partial class MainWindow
     {
         if (GetContextMenuViewModel(sender) is { } vm)
         {
-            _recentFiles.Pin(vm.Path);
+            // Reload-then-mutate: see ReloadRecentFilesStore for why the cached _recentFiles
+            // instance is unsafe to write through when multiple windows share this process.
+            ReloadRecentFilesStore().Pin(vm.Path);
             UpdateSsRecentList(SsSearchBox.Text);
         }
         e.Handled = true;
@@ -976,7 +996,7 @@ public partial class MainWindow
     {
         if (GetContextMenuViewModel(sender) is { } vm)
         {
-            _recentFiles.Unpin(vm.Path);
+            ReloadRecentFilesStore().Unpin(vm.Path);
             UpdateSsRecentList(SsSearchBox.Text);
         }
         e.Handled = true;
@@ -986,7 +1006,7 @@ public partial class MainWindow
     {
         if (GetContextMenuViewModel(sender) is { } vm)
         {
-            _recentFiles.Remove(vm.Path);
+            ReloadRecentFilesStore().Remove(vm.Path);
             _allRecentItems.RemoveAll(x => x.Path == vm.Path);
             UpdateSsRecentList(SsSearchBox.Text);
         }
@@ -1119,7 +1139,7 @@ public partial class MainWindow
             {
                 _currentFilePath = fileContext.Path;
                 _workbook.Name = fileContext.DisplayName;
-                RecentFileRegistrationService.RegisterIfNeeded(_recentFiles, fileContext.RecentFileRegistration);
+                RecentFileRegistrationService.RegisterIfNeeded(ReloadRecentFilesStore, fileContext.RecentFileRegistration);
             }
 
             if (plan.MarkSaved)

@@ -35,9 +35,32 @@ public sealed partial class NativeJsonAdapter
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public double? FontSize { get; set; }
 
-        /// <summary>RRGGBB hex string, or null = inherit cell style color.</summary>
+        /// <summary>
+        /// RRGGBB hex string when <see cref="FontColorKind"/> is <see cref="CellRunColorKind.Rgb"/>
+        /// (or absent, for files written before <see cref="FontColorKind"/> existed), or null =
+        /// inherit cell style color.
+        /// </summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? FontColor { get; set; }
+
+        /// <summary>
+        /// Discriminator for how <see cref="FontColor"/> is expressed. Absent/default (Rgb) on files
+        /// written before this field existed, which always meant a plain RGB (or no) color.
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public CellRunColorKind FontColorKind { get; set; } = CellRunColorKind.Rgb;
+
+        /// <summary>For <see cref="CellRunColorKind.Theme"/>: the zero-based theme-color index.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public int FontColorThemeIndex { get; set; }
+
+        /// <summary>For <see cref="CellRunColorKind.Theme"/>: luminance tint in [-1, 1].</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public double? FontColorTint { get; set; }
+
+        /// <summary>For <see cref="CellRunColorKind.Indexed"/>: the zero-based OOXML indexed-color value.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public int FontColorIndexedIndex { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public CellTextRunVertAlign VertAlign { get; set; } = CellTextRunVertAlign.None;
@@ -69,22 +92,42 @@ public sealed partial class NativeJsonAdapter
         return result;
     }
 
-    private static CellTextRunDto ToCellTextRunDto(CellTextRun run) => new()
+    private static CellTextRunDto ToCellTextRunDto(CellTextRun run)
     {
-        Text         = run.Text,
-        Bold         = run.Bold,
-        Italic       = run.Italic,
-        Underline    = run.Underline,
-        Strikethrough = run.Strikethrough,
-        FontName     = run.FontName,
-        FontSize     = run.FontSize,
-        // Native JSON stores run colors as plain RGB hex (theme/indexed refs cannot round-trip
-        // through JSON without workbook context; use XLSX for lossless theme-color round-trips).
-        FontColor    = run.FontColor is { } rc && rc.Kind == CellRunColorKind.Rgb
-                           ? FormatDtoColor(rc.Rgb)
-                           : null,
-        VertAlign    = run.VertAlign,
-    };
+        var dto = new CellTextRunDto
+        {
+            Text         = run.Text,
+            Bold         = run.Bold,
+            Italic       = run.Italic,
+            Underline    = run.Underline,
+            Strikethrough = run.Strikethrough,
+            FontName     = run.FontName,
+            FontSize     = run.FontSize,
+            VertAlign    = run.VertAlign,
+        };
+
+        if (run.FontColor is { } rc)
+        {
+            dto.FontColorKind = rc.Kind;
+            switch (rc.Kind)
+            {
+                case CellRunColorKind.Rgb:
+                    dto.FontColor = FormatDtoColor(rc.Rgb);
+                    break;
+                case CellRunColorKind.Theme:
+                    dto.FontColorThemeIndex = rc.ThemeIndex;
+                    dto.FontColorTint = rc.Tint;
+                    break;
+                case CellRunColorKind.Indexed:
+                    dto.FontColorIndexedIndex = rc.IndexedIndex;
+                    break;
+                case CellRunColorKind.Auto:
+                    break;
+            }
+        }
+
+        return dto;
+    }
 
     // ── Load ─────────────────────────────────────────────────────────────────
 
@@ -121,8 +164,20 @@ public sealed partial class NativeJsonAdapter
         dto.Strikethrough,
         dto.FontName,
         dto.FontSize,
-        ParseDtoColor(dto.FontColor) is { } c ? CellRunColor.FromRgb(c) : (CellRunColor?)null,
+        ToCellRunColor(dto),
         Enum.IsDefined(dto.VertAlign) ? dto.VertAlign : CellTextRunVertAlign.None);
+
+    private static CellRunColor? ToCellRunColor(CellTextRunDto dto)
+    {
+        var kind = Enum.IsDefined(dto.FontColorKind) ? dto.FontColorKind : CellRunColorKind.Rgb;
+        return kind switch
+        {
+            CellRunColorKind.Theme => CellRunColor.FromTheme(dto.FontColorThemeIndex, dto.FontColorTint ?? 0),
+            CellRunColorKind.Indexed => CellRunColor.FromIndexed(dto.FontColorIndexedIndex),
+            CellRunColorKind.Auto => CellRunColor.Auto(),
+            _ => ParseDtoColor(dto.FontColor) is { } c ? CellRunColor.FromRgb(c) : (CellRunColor?)null,
+        };
+    }
 
     // FormatDtoColor / ParseDtoColor are shared helpers defined in NativeJsonAdapter.Sparkline.cs.
 }

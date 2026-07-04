@@ -25,6 +25,30 @@ file static class PivotTableSlicerCommandLookups
 
         return -1;
     }
+
+    /// <summary>Finds the sheet + table for a table-connected slicer's <see cref="SlicerModel.SourceTableId"/>.</summary>
+    public static (Sheet Sheet, StructuredTableModel Table)? FindSourceTable(Workbook workbook, int tableId)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (CommandGuards.TryFindStructuredTable(sheet, tableId, out var table))
+                return (sheet, table);
+        }
+
+        return null;
+    }
+
+    /// <summary>Maps a table-slicer's <see cref="SlicerModel.SourceTableColumnId"/> to the table column's 0-based offset.</summary>
+    public static int FindTableColumnOffset(StructuredTableModel table, int columnId)
+    {
+        for (var index = 0; index < table.Columns.Count; index++)
+        {
+            if (table.Columns[index].Id == columnId)
+                return index;
+        }
+
+        return -1;
+    }
 }
 
 public sealed class SetSlicerSelectionCommand : IWorkbookCommand
@@ -33,6 +57,7 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
     private readonly IReadOnlyList<string> _selectedItems;
     private SlicerSelectionSnapshot? _snapshot;
     private List<(CellAddress Address, Cell? Cell)>? _targetSnapshot;
+    private TableSlicerSelectionSnapshot? _tableSnapshot;
 
     public SetSlicerSelectionCommand(string slicerName, IReadOnlyList<string> selectedItems)
     {
@@ -47,6 +72,12 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
         var slicer = PivotTableSlicerCommandLookups.FindSlicer(ctx.Workbook, _slicerName);
         if (slicer is null)
             return new CommandOutcome(false, "Slicer was not found.");
+
+        // H11: a Table slicer (SourceTableId/SourceTableColumnId set, no connected PivotTable) filters
+        // its referenced structured table directly instead of a pivot field.
+        if (slicer.SourceTableId is { } tableId && slicer.SourceTableColumnId is { } columnId)
+            return ApplyTableSlicer(ctx, slicer, tableId, columnId);
+
         if (string.IsNullOrWhiteSpace(slicer.SourcePivotTableName) ||
             string.IsNullOrWhiteSpace(slicer.SourceFieldName))
         {
@@ -75,6 +106,11 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
 
         slicer.SelectedItems.Clear();
         slicer.SelectedItems.AddRange(_selectedItems.Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(StringComparer.CurrentCultureIgnoreCase));
+        // H10: a slicer can be connected to a field that was never dragged into Row/Column/PageFields.
+        // Excel still filters the pivot in that case (the field acts as a page/report filter); without
+        // this, ReplaceSelectedItems below would be a no-op against all three lists and the command
+        // would report success while leaving the pivot completely unfiltered.
+        PivotTableSlicerTimelineCommandHelpers.EnsureFieldInLayout(pivotTable.RowFields, pivotTable.ColumnFields, pivotTable.PageFields, sourceFieldIndex);
         PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.RowFields, sourceFieldIndex, slicer.SelectedItems);
         PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.ColumnFields, sourceFieldIndex, slicer.SelectedItems);
         PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.PageFields, sourceFieldIndex, slicer.SelectedItems);
@@ -83,9 +119,56 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
         return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
     }
 
+    private CommandOutcome ApplyTableSlicer(ICommandContext ctx, SlicerModel slicer, int tableId, int columnId)
+    {
+        var source = PivotTableSlicerCommandLookups.FindSourceTable(ctx.Workbook, tableId);
+        if (source is null)
+            return CommandGuards.RejectStructuredTableNotFound();
+
+        var (sheet, table) = source.Value;
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UseAutoFilter) is { } protectedOutcome)
+            return protectedOutcome;
+
+        var columnOffset = PivotTableSlicerCommandLookups.FindTableColumnOffset(table, columnId);
+        if (columnOffset < 0)
+            return PivotTableSlicerTimelineCommandGuards.ConnectedPivotTableFieldNotFound();
+
+        var normalizedSelection = _selectedItems
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .Distinct(StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        _tableSnapshot = TableSlicerSelectionSnapshot.Capture(slicer, table, columnOffset);
+
+        slicer.SelectedItems.Clear();
+        slicer.SelectedItems.AddRange(normalizedSelection);
+
+        // Applying a value filter on the referenced table column is the Excel-equivalent of a table
+        // slicer selection: it hides every row whose value in that column isn't selected, mirroring
+        // FilterCommand/ApplyStructuredTableFiltersCommand's own "hide rows" mechanism instead of
+        // inventing a parallel one.
+        table.FilterColumns.RemoveAll(filter => filter.ColumnId == columnOffset);
+        if (normalizedSelection.Count > 0)
+            table.FilterColumns.Add(new StructuredTableFilterColumnModel(columnOffset, normalizedSelection));
+
+        new ApplyStructuredTableFiltersCommand(sheet.Id, tableId).Apply(ctx);
+
+        return new CommandOutcome(true, AffectedCells: [table.Range.Start]);
+    }
+
     public void Revert(ICommandContext ctx)
     {
         var slicer = PivotTableSlicerCommandLookups.FindSlicer(ctx.Workbook, _slicerName);
+
+        if (_tableSnapshot is { } tableSnapshot)
+        {
+            if (slicer is not null)
+                tableSnapshot.Restore(ctx, slicer);
+
+            _tableSnapshot = null;
+            return;
+        }
+
         var target = slicer?.SourcePivotTableName is null ? null : PivotTableSlicerTimelineCommandHelpers.FindConnectedPivotTable(ctx.Workbook, slicer.SourcePivotTableName);
         if (slicer is not null && target is { } connected && _snapshot is not null)
         {
@@ -96,6 +179,36 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
 
         _snapshot = null;
         _targetSnapshot = null;
+    }
+
+    private sealed record TableSlicerSelectionSnapshot(
+        IReadOnlyList<string> SelectedItems,
+        int TableId,
+        int ColumnOffset,
+        StructuredTableFilterColumnModel? PreviousFilterColumn)
+    {
+        public static TableSlicerSelectionSnapshot Capture(SlicerModel slicer, StructuredTableModel table, int columnOffset) =>
+            new(
+                slicer.SelectedItems.ToList(),
+                table.Id,
+                columnOffset,
+                table.FilterColumns.FirstOrDefault(filter => filter.ColumnId == columnOffset));
+
+        public void Restore(ICommandContext ctx, SlicerModel slicer)
+        {
+            slicer.SelectedItems.Clear();
+            slicer.SelectedItems.AddRange(SelectedItems);
+
+            if (PivotTableSlicerCommandLookups.FindSourceTable(ctx.Workbook, TableId) is not { } source)
+                return;
+
+            var (sheet, table) = source;
+            table.FilterColumns.RemoveAll(filter => filter.ColumnId == ColumnOffset);
+            if (PreviousFilterColumn is not null)
+                table.FilterColumns.Add(PreviousFilterColumn);
+
+            new ApplyStructuredTableFiltersCommand(sheet.Id, table.Id).Apply(ctx);
+        }
     }
 
     private sealed record SlicerSelectionSnapshot(

@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -9,6 +10,8 @@ public sealed class RenameStructuredTableCommand : IWorkbookCommand
     private readonly int _tableId;
     private readonly string _newName;
     private StructuredTableModel? _previousTable;
+    private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
+    private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
 
     public string Label => "Table Name";
 
@@ -39,7 +42,19 @@ public sealed class RenameStructuredTableCommand : IWorkbookCommand
             name: normalizedName,
             displayName: normalizedName);
 
-        return new CommandOutcome(true, AffectedCells: [_previousTable.Range.Start]);
+        // Structured references carry the table name as a bare literal (TableName[Column]) with no
+        // table-ID indirection, so every formula referencing the old name must be rewritten across the
+        // whole workbook or it would evaluate to #NAME? — mirrors RenameSheetCommand's sheet-qualified
+        // reference rewrite via the same FormulaRewriter/RewriteOperation mechanism.
+        _formulaSnapshot.Clear();
+        _namedFormulaSnapshot.Clear();
+        var renameOp = new RenameTableOp(_previousTable.Name, normalizedName);
+        RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, renameOp, _formulaSnapshot);
+        RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, renameOp, _namedFormulaSnapshot);
+
+        var affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
+            [_previousTable.Range.Start], _formulaSnapshot);
+        return new CommandOutcome(true, AffectedCells: affectedCells);
     }
 
     public void Revert(ICommandContext ctx)
@@ -48,6 +63,8 @@ public sealed class RenameStructuredTableCommand : IWorkbookCommand
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
+        RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
+        RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot);
         if (CommandGuards.TryFindStructuredTableIndex(sheet, _tableId, out var tableIndex))
             sheet.StructuredTables[tableIndex] = _previousTable;
         _previousTable = null;
@@ -60,6 +77,7 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
     private readonly int _tableId;
     private readonly GridRange _newRange;
     private StructuredTableModel? _previousTable;
+    private readonly Dictionary<CellAddress, Cell?> _previousCells = [];
 
     public string Label => "Resize Table";
 
@@ -73,6 +91,7 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         _previousTable = null;
+        _previousCells.Clear();
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
@@ -93,11 +112,16 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
             .Where(filter => filter.ColumnId >= 0 && filter.ColumnId < columns.Count)
             .ToList();
 
-        sheet.StructuredTables[tableIndex] = StructuredTableDesignCommandHelpers.CopyTable(
+        var resizedTable = StructuredTableDesignCommandHelpers.CopyTable(
             table,
             range: _newRange,
             columns: columns,
             filterColumns: filterColumns);
+        sheet.StructuredTables[tableIndex] = resizedTable;
+
+        // Excel auto-fills a calculated column's formula into every newly added row when a table
+        // grows — mirror that here so new rows aren't left blank in that column.
+        FillGrownCalculatedColumns(sheet, table, resizedTable);
 
         return new CommandOutcome(true, AffectedCells: [_newRange.Start]);
     }
@@ -108,9 +132,64 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
+        foreach (var (address, cell) in _previousCells)
+        {
+            if (cell is null)
+                sheet.ClearCell(address);
+            else
+                sheet.SetCell(address, cell);
+        }
+        _previousCells.Clear();
+
         if (CommandGuards.TryFindStructuredTableIndex(sheet, _tableId, out var tableIndex))
             sheet.StructuredTables[tableIndex] = _previousTable;
         _previousTable = null;
+    }
+
+    /// <summary>
+    /// Fills each calculated column's formula into rows that are newly part of the data body after a
+    /// resize — matching Excel's auto-fill-on-resize behavior for structured tables, where growing a
+    /// table downward extends every calculated column's formula into the new rows instead of leaving
+    /// them blank. The totals row itself needs no separate handling here: it already tracks the
+    /// table's new last row via <see cref="StructuredTableModel.Range"/>, and its content is populated
+    /// on demand by <see cref="RefreshStructuredTableTotalsCommand"/>, same as after any other
+    /// structural change. Existing data cells are never touched; only cells the resize newly brought
+    /// into the table's data body are written, and every overwritten cell is snapshotted so Revert can
+    /// restore it exactly.
+    /// </summary>
+    private void FillGrownCalculatedColumns(Sheet sheet, StructuredTableModel previousTable, StructuredTableModel resizedTable)
+    {
+        var previousLastDataRow = previousTable.TotalsRowShown && previousTable.Range.End.Row > previousTable.Range.Start.Row
+            ? previousTable.Range.End.Row - 1
+            : previousTable.Range.End.Row;
+        var newLastDataRow = resizedTable.TotalsRowShown && resizedTable.Range.End.Row > resizedTable.Range.Start.Row
+            ? resizedTable.Range.End.Row - 1
+            : resizedTable.Range.End.Row;
+
+        if (newLastDataRow <= previousLastDataRow)
+            return;
+
+        var firstNewRow = Math.Max(previousLastDataRow + 1, resizedTable.Range.Start.Row + 1);
+        for (var columnIndex = 0; columnIndex < resizedTable.Columns.Count; columnIndex++)
+        {
+            var formula = resizedTable.Columns[columnIndex].CalculatedColumnFormula;
+            if (string.IsNullOrWhiteSpace(formula))
+                continue;
+
+            var col = resizedTable.Range.Start.Col + (uint)columnIndex;
+            for (var row = firstNewRow; row <= newLastDataRow; row++)
+            {
+                var address = new CellAddress(_sheetId, row, col);
+                SnapshotAndSetCell(sheet, address, Cell.FromFormula(formula));
+            }
+        }
+    }
+
+    private void SnapshotAndSetCell(Sheet sheet, CellAddress address, Cell cell)
+    {
+        if (!_previousCells.ContainsKey(address))
+            _previousCells[address] = sheet.GetCell(address)?.Clone();
+        sheet.SetCell(address, cell);
     }
 
     private static string? ValidateResizeRange(StructuredTableModel table, GridRange range)
@@ -195,6 +274,9 @@ public sealed class ConvertStructuredTableToRangeCommand : IWorkbookCommand
     private readonly int _tableId;
     private StructuredTableModel? _removedTable;
     private int _removedIndex = -1;
+    private HashSet<uint>? _previousFilterHiddenRows;
+    private HashSet<uint>? _previousValueFilterHiddenRows;
+    private Dictionary<uint, IReadOnlyList<string>>? _previousActiveValueFilterColumns;
 
     public string Label => "Convert to Range";
 
@@ -208,6 +290,9 @@ public sealed class ConvertStructuredTableToRangeCommand : IWorkbookCommand
     {
         _removedTable = null;
         _removedIndex = -1;
+        _previousFilterHiddenRows = null;
+        _previousValueFilterHiddenRows = null;
+        _previousActiveValueFilterColumns = null;
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
@@ -218,6 +303,22 @@ public sealed class ConvertStructuredTableToRangeCommand : IWorkbookCommand
         _removedIndex = tableIndex;
         _removedTable = sheet.StructuredTables[tableIndex];
         sheet.StructuredTables.RemoveAt(tableIndex);
+
+        // Excel's real Convert-to-Range clears the table's filter state so every row reappears —
+        // the table's per-column dropdown UI (and its filter bookkeeping) is gone once the table
+        // model is removed above, so any rows it hid would otherwise stay stranded hidden forever.
+        _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
+        FilterHiddenRowUpdater.ClearRange(sheet.FilterHiddenRows, _removedTable.Range);
+
+        _previousValueFilterHiddenRows = [.. sheet.ValueFilterHiddenRows];
+        sheet.ValueFilterHiddenRows.RemoveWhere(row =>
+            row > _removedTable.Range.Start.Row && row <= _removedTable.Range.End.Row);
+
+        _previousActiveValueFilterColumns = sheet.ActiveValueFilterColumns.Count == 0
+            ? null
+            : sheet.ActiveValueFilterColumns.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+        for (var col = _removedTable.Range.Start.Col; col <= _removedTable.Range.End.Col; col++)
+            sheet.ActiveValueFilterColumns.Remove(col);
 
         return new CommandOutcome(true, AffectedCells: [_removedTable.Range.Start]);
     }
@@ -232,8 +333,32 @@ public sealed class ConvertStructuredTableToRangeCommand : IWorkbookCommand
             ? _removedIndex
             : sheet.StructuredTables.Count;
         sheet.StructuredTables.Insert(insertIndex, _removedTable);
+
+        if (_previousFilterHiddenRows is not null)
+        {
+            sheet.FilterHiddenRows.Clear();
+            sheet.FilterHiddenRows.UnionWith(_previousFilterHiddenRows);
+        }
+
+        if (_previousValueFilterHiddenRows is not null)
+        {
+            sheet.ValueFilterHiddenRows.Clear();
+            sheet.ValueFilterHiddenRows.UnionWith(_previousValueFilterHiddenRows);
+        }
+
+        for (var col = _removedTable.Range.Start.Col; col <= _removedTable.Range.End.Col; col++)
+            sheet.ActiveValueFilterColumns.Remove(col);
+        if (_previousActiveValueFilterColumns is not null)
+        {
+            foreach (var (col, values) in _previousActiveValueFilterColumns)
+                sheet.ActiveValueFilterColumns[col] = values;
+        }
+
         _removedTable = null;
         _removedIndex = -1;
+        _previousFilterHiddenRows = null;
+        _previousValueFilterHiddenRows = null;
+        _previousActiveValueFilterColumns = null;
     }
 }
 

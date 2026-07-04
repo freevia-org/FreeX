@@ -176,12 +176,16 @@ internal static class XlsxSparklineMapper
                 .ToList();
 
             // Build the new sparklineGroups element.
-            // IO3: group by GroupId (preserves per-group settings); within each group
-            // further sub-group by Kind so the type attribute is consistent.
+            // IO3: group by GroupId (preserves per-group settings). GroupId == 0 means the
+            // sparkline was created independently in-app (never assigned a shared group id at
+            // XLSX read time), so each such sparkline is its own singleton group keyed by its
+            // unique model Id — grouping them by Kind instead would silently merge unrelated
+            // same-kind sparklines (and their distinct colors/markers/axis settings) into one
+            // shared x14:sparklineGroup, which is not what independently-inserted sparklines are.
             var sparklineGroupsXml = new XElement(
                 x14Ns + "sparklineGroups",
                 validSparklines
-                    .GroupBy(s => s.GroupId == 0 ? (object)s.Kind : (object)s.GroupId)
+                    .GroupBy(s => s.GroupId == 0 ? (object)s.Id : (object)s.GroupId)
                     .Select(group =>
                     {
                         var representative = group.First();

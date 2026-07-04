@@ -14,13 +14,25 @@ public sealed record ConditionalFormatRuleListItem(ConditionalFormat Rule, strin
 }
 
 /// <summary>
-/// Non-UI glue backing the Avalonia "Manage Rules" dialog. Filters the sheet's rules to a scope
-/// (whole sheet or the current selection), describes them for the list, and maps edit/delete actions
-/// onto the Core atomic <see cref="ReplaceAllConditionalFormatsCommand"/> so the whole edit is a
-/// single undo step (mirroring the Windows host's manager). Pure (no UI), so it is unit testable.
+/// Non-UI glue backing the Avalonia "Manage Rules" dialog. Filters a rule list to a scope (whole
+/// sheet or the current selection), describes them for the list, and edits a working copy in
+/// memory. The dialog seeds the working copy from the live sheet with <see cref="CloneAll"/> at
+/// open time and only commits it back via a single atomic
+/// <see cref="ReplaceAllConditionalFormatsCommand"/> when OK/Apply is clicked — Cancel simply
+/// discards the working copy, mirroring the Windows host's manager (which edits a private
+/// <c>ObservableCollection&lt;ConditionalFormat&gt;</c> and only pushes it to the real workbook on
+/// commit). Pure (no UI), so it is unit testable.
 /// </summary>
 public static class ConditionalFormatManageModel
 {
+    /// <summary>Deep-clones every rule, in priority order, to seed the dialog's working copy.</summary>
+    public static List<ConditionalFormat> CloneAll(IReadOnlyList<ConditionalFormat> sheetRules)
+    {
+        ArgumentNullException.ThrowIfNull(sheetRules);
+
+        return sheetRules.OrderBy(rule => rule.Priority).Select(rule => rule.Clone()).ToList();
+    }
+
     /// <summary>
     /// The rules to show, in priority order. When <paramref name="selection"/> is supplied, only the
     /// rules whose range overlaps the selection are listed; otherwise every rule on the sheet shows.
@@ -39,22 +51,72 @@ public static class ConditionalFormatManageModel
     }
 
     /// <summary>
+    /// Appends a newly built rule to a rule list (e.g. the Manage Rules dialog's working copy),
+    /// returning the reprioritized result.
+    /// </summary>
+    public static List<ConditionalFormat> AddToWorkingCopy(
+        IReadOnlyList<ConditionalFormat> rules,
+        ConditionalFormat newRule)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+        ArgumentNullException.ThrowIfNull(newRule);
+
+        var updated = rules.ToList();
+        updated.Add(newRule);
+        Reprioritize(updated);
+        return updated;
+    }
+
+    /// <summary>
+    /// Deletes a single rule by id from a rule list (e.g. the Manage Rules dialog's working copy),
+    /// returning the reprioritized remainder. Returns <c>null</c> when the id is not present
+    /// (nothing to do).
+    /// </summary>
+    public static List<ConditionalFormat>? DeleteFromWorkingCopy(
+        IReadOnlyList<ConditionalFormat> rules,
+        Guid ruleId)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+
+        if (rules.All(rule => rule.Id != ruleId))
+            return null;
+
+        var remaining = rules.Where(rule => rule.Id != ruleId).ToList();
+        Reprioritize(remaining);
+        return remaining;
+    }
+
+    /// <summary>
     /// The command that deletes a single rule by id: rebuilds the sheet's rule list without it and
     /// replaces all rules atomically. Returns <c>null</c> when the id is not present (nothing to do).
     /// </summary>
     public static ReplaceAllConditionalFormatsCommand? BuildDeleteCommand(
         SheetId sheetId,
         IReadOnlyList<ConditionalFormat> sheetRules,
-        Guid ruleId)
-    {
-        ArgumentNullException.ThrowIfNull(sheetRules);
+        Guid ruleId) =>
+        DeleteFromWorkingCopy(sheetRules, ruleId) is { } remaining
+            ? new ReplaceAllConditionalFormatsCommand(sheetId, remaining)
+            : null;
 
-        if (sheetRules.All(rule => rule.Id != ruleId))
+    /// <summary>
+    /// Replaces an edited rule (matched by id) in place within a rule list, returning the
+    /// reprioritized result. Returns <c>null</c> when the edited rule's id is not present.
+    /// </summary>
+    public static List<ConditionalFormat>? ReplaceInWorkingCopy(
+        IReadOnlyList<ConditionalFormat> rules,
+        ConditionalFormat editedRule)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+        ArgumentNullException.ThrowIfNull(editedRule);
+
+        var index = IndexOf(rules, editedRule.Id);
+        if (index < 0)
             return null;
 
-        var remaining = sheetRules.Where(rule => rule.Id != ruleId).ToList();
-        Reprioritize(remaining);
-        return new ReplaceAllConditionalFormatsCommand(sheetId, remaining);
+        var updated = rules.ToList();
+        updated[index] = editedRule;
+        Reprioritize(updated);
+        return updated;
     }
 
     /// <summary>
@@ -64,19 +126,30 @@ public static class ConditionalFormatManageModel
     public static ReplaceAllConditionalFormatsCommand? BuildEditCommand(
         SheetId sheetId,
         IReadOnlyList<ConditionalFormat> sheetRules,
-        ConditionalFormat editedRule)
-    {
-        ArgumentNullException.ThrowIfNull(sheetRules);
-        ArgumentNullException.ThrowIfNull(editedRule);
+        ConditionalFormat editedRule) =>
+        ReplaceInWorkingCopy(sheetRules, editedRule) is { } updated
+            ? new ReplaceAllConditionalFormatsCommand(sheetId, updated)
+            : null;
 
-        var index = IndexOf(sheetRules, editedRule.Id);
+    /// <summary>
+    /// Duplicates a rule immediately below the original within a rule list, returning the
+    /// reprioritized result. Returns <c>null</c> when the rule id is absent.
+    /// </summary>
+    public static List<ConditionalFormat>? DuplicateInWorkingCopy(
+        IReadOnlyList<ConditionalFormat> rules,
+        Guid ruleId,
+        Guid newId)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+
+        var ordered = rules.OrderBy(rule => rule.Priority).ToList();
+        var index = IndexOf(ordered, ruleId);
         if (index < 0)
             return null;
 
-        var updated = sheetRules.ToList();
-        updated[index] = editedRule;
-        Reprioritize(updated);
-        return new ReplaceAllConditionalFormatsCommand(sheetId, updated);
+        ordered.Insert(index + 1, CloneRule(ordered[index], newId));
+        Reprioritize(ordered);
+        return ordered;
     }
 
     /// <summary>
@@ -87,18 +160,35 @@ public static class ConditionalFormatManageModel
         SheetId sheetId,
         IReadOnlyList<ConditionalFormat> sheetRules,
         Guid ruleId,
-        Guid newId)
-    {
-        ArgumentNullException.ThrowIfNull(sheetRules);
+        Guid newId) =>
+        DuplicateInWorkingCopy(sheetRules, ruleId, newId) is { } ordered
+            ? new ReplaceAllConditionalFormatsCommand(sheetId, ordered)
+            : null;
 
-        var ordered = sheetRules.OrderBy(rule => rule.Priority).ToList();
+    /// <summary>
+    /// Moves a rule up or down in priority order (swapping it with its neighbour) within a rule
+    /// list, returning the reprioritized result. Returns <c>null</c> when the move is a no-op (rule
+    /// absent, or already at the boundary in the requested direction).
+    /// </summary>
+    public static List<ConditionalFormat>? MoveInWorkingCopy(
+        IReadOnlyList<ConditionalFormat> rules,
+        Guid ruleId,
+        ConditionalFormatRuleMoveDirection direction)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+
+        var ordered = rules.OrderBy(rule => rule.Priority).ToList();
         var index = IndexOf(ordered, ruleId);
         if (index < 0)
             return null;
 
-        ordered.Insert(index + 1, CloneRule(ordered[index], newId));
+        var target = direction == ConditionalFormatRuleMoveDirection.Up ? index - 1 : index + 1;
+        if (target < 0 || target >= ordered.Count)
+            return null;
+
+        (ordered[index], ordered[target]) = (ordered[target], ordered[index]);
         Reprioritize(ordered);
-        return new ReplaceAllConditionalFormatsCommand(sheetId, ordered);
+        return ordered;
     }
 
     /// <summary>
@@ -110,22 +200,34 @@ public static class ConditionalFormatManageModel
         SheetId sheetId,
         IReadOnlyList<ConditionalFormat> sheetRules,
         Guid ruleId,
-        ConditionalFormatRuleMoveDirection direction)
-    {
-        ArgumentNullException.ThrowIfNull(sheetRules);
+        ConditionalFormatRuleMoveDirection direction) =>
+        MoveInWorkingCopy(sheetRules, ruleId, direction) is { } ordered
+            ? new ReplaceAllConditionalFormatsCommand(sheetId, ordered)
+            : null;
 
-        var ordered = sheetRules.OrderBy(rule => rule.Priority).ToList();
-        var index = IndexOf(ordered, ruleId);
+    /// <summary>
+    /// Changes a rule's applies-to range within a rule list, returning the reprioritized result. The
+    /// changed rule is cloned rather than mutated in place, so the rule instance the caller passed in
+    /// (e.g. still referenced by a stale list-item snapshot) is left untouched. Returns <c>null</c>
+    /// when the rule id is not present (nothing to do).
+    /// </summary>
+    public static List<ConditionalFormat>? ApplyRangeInWorkingCopy(
+        IReadOnlyList<ConditionalFormat> rules,
+        Guid ruleId,
+        GridRange range)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+
+        var index = IndexOf(rules, ruleId);
         if (index < 0)
             return null;
 
-        var target = direction == ConditionalFormatRuleMoveDirection.Up ? index - 1 : index + 1;
-        if (target < 0 || target >= ordered.Count)
-            return null;
-
-        (ordered[index], ordered[target]) = (ordered[target], ordered[index]);
-        Reprioritize(ordered);
-        return new ReplaceAllConditionalFormatsCommand(sheetId, ordered);
+        var updated = rules.ToList();
+        var changed = updated[index].Clone();
+        changed.AppliesTo = range;
+        updated[index] = changed;
+        Reprioritize(updated);
+        return updated;
     }
 
     /// <summary>
@@ -136,19 +238,10 @@ public static class ConditionalFormatManageModel
         SheetId sheetId,
         IReadOnlyList<ConditionalFormat> sheetRules,
         Guid ruleId,
-        GridRange range)
-    {
-        ArgumentNullException.ThrowIfNull(sheetRules);
-
-        var index = IndexOf(sheetRules, ruleId);
-        if (index < 0)
-            return null;
-
-        var updated = sheetRules.ToList();
-        updated[index].AppliesTo = range;
-        Reprioritize(updated);
-        return new ReplaceAllConditionalFormatsCommand(sheetId, updated);
-    }
+        GridRange range) =>
+        ApplyRangeInWorkingCopy(sheetRules, ruleId, range) is { } updated
+            ? new ReplaceAllConditionalFormatsCommand(sheetId, updated)
+            : null;
 
     /// <summary>A concise one-line description of a rule for the manage list.</summary>
     public static string Describe(ConditionalFormat rule)

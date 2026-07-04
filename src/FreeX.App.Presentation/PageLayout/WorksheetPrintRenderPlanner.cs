@@ -114,7 +114,9 @@ public static class WorksheetPrintRenderPlanner
                 sheet.HeaderMargin,
                 sheet.FooterMargin,
                 sheet.RowPageBreaks,
-                sheet.ColumnPageBreaks);
+                sheet.ColumnPageBreaks,
+                sheet.IsRowEffectivelyHidden,
+                sheet.IsColEffectivelyHidden);
 
             var areaPages = new List<WorksheetPrintPagePlan>(pagination.PageCount);
             foreach (var gridPage in PrintPageGridPlanner.Build(pagination.RowPlans, pagination.ColumnPlans, sheet.PageOrder))

@@ -33,7 +33,9 @@ public static partial class BuiltInFunctions
                 rangeReference.StartRow,
                 rangeReference.StartCol,
                 rangeReference.EndRow,
-                rangeReference.EndCol);
+                rangeReference.EndCol,
+                rangeReference.IsFullColumnRange,
+                rangeReference.IsFullRowRange);
 
         if (error is not null)
             return error;
@@ -162,7 +164,7 @@ public static partial class BuiltInFunctions
 
         refText = ToText(args[0]).Trim();
         useA1 = args.Count < 2 || args[1] is BlankValue || ToBool(args[1]);
-        int bangIdx = refText.IndexOf('!');
+        int bangIdx = FindSheetQualifierBangIndex(refText);
         if (bangIdx >= 0)
         {
             var sheetPart = refText[..bangIdx];
@@ -185,13 +187,50 @@ public static partial class BuiltInFunctions
         return true;
     }
 
+    // Finds the index of the '!' that separates the sheet qualifier from the reference text,
+    // matching Lexer.ReadQuotedSheetQualifier's rule that a quoted sheet name may itself contain
+    // '!' (or any other character) and only the '!' immediately after the closing, non-escaped
+    // quote counts as the delimiter. For an unquoted qualifier, Excel sheet names may still
+    // legally contain '!' (Workbook.InvalidSheetNameChars does not exclude it), so the LAST '!'
+    // in the text is the delimiter — mirroring how a direct formula reference like
+    // 'Sheet1!A1!B2'!A1 would only ever treat the trailing '!' as the sheet/cell separator.
+    private static int FindSheetQualifierBangIndex(string refText)
+    {
+        if (refText.Length > 0 && refText[0] == '\'')
+        {
+            var i = 1;
+            while (i < refText.Length)
+            {
+                if (refText[i] == '\'')
+                {
+                    if (i + 1 < refText.Length && refText[i + 1] == '\'')
+                    {
+                        i += 2; // escaped '' inside the quoted name
+                        continue;
+                    }
+
+                    // Closing quote: the delimiter (if any) is the very next character.
+                    return i + 1 < refText.Length && refText[i + 1] == '!' ? i + 1 : -1;
+                }
+
+                i++;
+            }
+
+            return -1; // unterminated quote — no valid delimiter
+        }
+
+        return refText.LastIndexOf('!');
+    }
+
     private static ScalarValue BuildIndirectRange(
         IEvalContext ctx,
         string? sheetName,
         uint startRow,
         uint startCol,
         uint endRow,
-        uint endCol)
+        uint endCol,
+        bool isFullColumnRange = false,
+        bool isFullRowRange = false)
     {
         if (sheetName is not null && !ctx.SheetExists(sheetName)) return ErrorValue.Ref;
 
@@ -199,6 +238,31 @@ public static partial class BuiltInFunctions
         uint r1 = Math.Max(startRow, endRow);
         uint c0 = Math.Min(startCol, endCol);
         uint c1 = Math.Max(startCol, endCol);
+
+        // A full-column (A:A) / full-row (1:1) text reference nominally spans the whole grid,
+        // which would exceed the materialization cap below and always return #REF! — even on an
+        // otherwise-empty sheet. Excel only ever materializes the populated extent, so clamp the
+        // open end down to the target sheet's used range, mirroring ClampOpenEndedRangeToUsed's
+        // treatment of direct full-column/full-row references (FormulaEvaluator.References.cs).
+        if (isFullColumnRange || isFullRowRange)
+        {
+            var targetSheet = sheetName is not null ? ctx.CurrentWorkbook?.GetSheet(sheetName) : ctx.CurrentSheet;
+            if (targetSheet is not null)
+            {
+                if (targetSheet.GetUsedRange() is { } used)
+                {
+                    if (isFullColumnRange) r1 = Math.Min(r1, Math.Max(used.End.Row, r0));
+                    if (isFullRowRange) c1 = Math.Min(c1, Math.Max(used.End.Col, c0));
+                }
+                else
+                {
+                    // Empty sheet: collapse the open dimension to its start (a single blank line).
+                    if (isFullColumnRange) r1 = r0;
+                    if (isFullRowRange) c1 = c0;
+                }
+            }
+        }
+
         if (FormulaSafetyLimits.GetRangeCellCount(r0, c0, r1, c1) > FormulaSafetyLimits.MaxMaterializedRangeCells)
             return ErrorValue.Ref;
 

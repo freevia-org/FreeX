@@ -18,14 +18,46 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
-    /// <summary>The per-column format choices the dialog offers, in dropdown order.</summary>
-    private static IReadOnlyList<(TextToColumnsColumnFormat Format, string Label)> TextToColumnsFormatChoices =>
+    /// <summary>
+    /// The date-order variants, in the same MDY/DMY/YMD/MYD/DYM/YDM order the WPF host's date-format
+    /// combo lists them (<see cref="TextToColumnsDialogPlanner.DateColumnFormatLabel"/>), so a European
+    /// "day first" column (e.g. "03/04/2024" meaning 3 April) can be parsed correctly instead of always
+    /// being forced through Month/Day/Year.
+    /// </summary>
+    private static readonly IReadOnlyList<TextToColumnsColumnFormat> TextToColumnsDateFormatChoices =
     [
-        (TextToColumnsColumnFormat.General, UiText.Get("TableLoc_TtcFormatGeneral")),
-        (TextToColumnsColumnFormat.Text, UiText.Get("TableLoc_TtcFormatText")),
-        (TextToColumnsColumnFormat.DateMDY, UiText.Get("TableLoc_TtcFormatDate")),
-        (TextToColumnsColumnFormat.Skip, UiText.Get("TableLoc_TtcFormatSkip")),
+        TextToColumnsColumnFormat.DateMDY,
+        TextToColumnsColumnFormat.DateDMY,
+        TextToColumnsColumnFormat.DateYMD,
+        TextToColumnsColumnFormat.DateMYD,
+        TextToColumnsColumnFormat.DateDYM,
+        TextToColumnsColumnFormat.DateYDM,
     ];
+
+    /// <summary>
+    /// The per-column format choices the dialog offers, in dropdown order. One entry per date order
+    /// (not just MDY) so every DMY/YMD/MYD/DYM/YDM layout Excel's Text Import Wizard supports is
+    /// reachable here too.
+    /// </summary>
+    private static IReadOnlyList<(TextToColumnsColumnFormat Format, string Label)> TextToColumnsFormatChoices
+    {
+        get
+        {
+            var choices = new List<(TextToColumnsColumnFormat Format, string Label)>
+            {
+                (TextToColumnsColumnFormat.General, UiText.Get("TableLoc_TtcFormatGeneral")),
+                (TextToColumnsColumnFormat.Text, UiText.Get("TableLoc_TtcFormatText")),
+            };
+            foreach (var format in TextToColumnsDateFormatChoices)
+            {
+                var order = TextToColumnsDialogPlanner.DateColumnFormatLabel(format);
+                choices.Add((format, $"{UiText.Get("TableLoc_TtcFormatDate")} ({order})"));
+            }
+
+            choices.Add((TextToColumnsColumnFormat.Skip, UiText.Get("TableLoc_TtcFormatSkip")));
+            return choices;
+        }
+    }
 
     /// <summary>Opens the Text-to-Columns dialog (invoked from the Data menu and the Data-tab ribbon button).</summary>
     private void TextToColumns() => _ = ShowTextToColumnsDialogAsync();
@@ -120,7 +152,7 @@ public sealed partial class MainWindow
         {
             ItemsSource = TextToColumnsFormatChoices.Select(c => c.Label).ToList(),
             SelectedIndex = 0,
-            MinWidth = 110,
+            MinWidth = 140,
         };
         ApplyDataOpsComboBoxChrome(formatBox);
         AutomationProperties.SetAutomationId(formatBox, "TextToColumnsFormatBox");

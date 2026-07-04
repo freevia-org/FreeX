@@ -119,6 +119,19 @@ public enum VerticalAlignment
 }
 
 /// <summary>
+/// Per-cell text reading direction override, as specified by OOXML alignment <c>readingOrder</c>.
+/// </summary>
+public enum CellReadingOrder
+{
+    /// <summary>Follows the current UI/locale direction (OOXML readingOrder="0", the default).</summary>
+    Context,
+    /// <summary>Forces left-to-right reading order (OOXML readingOrder="1").</summary>
+    LeftToRight,
+    /// <summary>Forces right-to-left reading order (OOXML readingOrder="2").</summary>
+    RightToLeft,
+}
+
+/// <summary>
 /// The type of a gradient cell fill.
 /// </summary>
 public enum CellGradientFillType
@@ -300,6 +313,9 @@ public sealed class CellStyle : IEquatable<CellStyle>
     /// <summary>Vertical alignment.</summary>
     public VerticalAlignment VerticalAlignment { get; set; } = VerticalAlignment.Bottom;
 
+    /// <summary>Per-cell reading-order override (OOXML alignment <c>readingOrder</c>).</summary>
+    public CellReadingOrder ReadingOrder { get; set; } = CellReadingOrder.Context;
+
     /// <summary>Whether text wraps within the cell.</summary>
     public bool WrapText { get; set; }
 
@@ -367,6 +383,7 @@ public sealed class CellStyle : IEquatable<CellStyle>
         NumberFormat = NumberFormat,
         HorizontalAlignment = HorizontalAlignment,
         VerticalAlignment = VerticalAlignment,
+        ReadingOrder = ReadingOrder,
         WrapText = WrapText,
         ShrinkToFit = ShrinkToFit,
         DoubleUnderline = DoubleUnderline,
@@ -413,6 +430,7 @@ public sealed class CellStyle : IEquatable<CellStyle>
             && NumberFormat == other.NumberFormat
             && HorizontalAlignment == other.HorizontalAlignment
             && VerticalAlignment == other.VerticalAlignment
+            && ReadingOrder == other.ReadingOrder
             && WrapText == other.WrapText
             && ShrinkToFit == other.ShrinkToFit
             && DoubleUnderline == other.DoubleUnderline
@@ -487,6 +505,7 @@ public sealed class CellStyle : IEquatable<CellStyle>
         h.Add(NumberFormat);
         h.Add(HorizontalAlignment);
         h.Add(VerticalAlignment);
+        h.Add(ReadingOrder);
         h.Add(WrapText);
         h.Add(ShrinkToFit);
         h.Add(DoubleUnderline);

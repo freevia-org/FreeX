@@ -444,8 +444,13 @@ public static partial class BuiltInFunctions
         null or BlankValue => "",
         TextValue text => text.Value,
         DirectTextLiteralValue text => text.Value,
-        NumberValue number => number.Value.ToString(CultureInfo.InvariantCulture),
-        DateTimeValue date => date.Value.ToString(CultureInfo.InvariantCulture),
+        // Numeric/date item arguments must render with the same convention the pivot
+        // layout itself uses for row/column labels (PivotTableRefreshService.Filters.cs's
+        // KeyText, which formats with CurrentCulture) so a GETPIVOTDATA item argument
+        // like 1000.5 matches the rendered label text in non-"."-decimal cultures instead
+        // of comparing an invariant-formatted string against a culture-formatted one.
+        NumberValue number => number.Value.ToString(CultureInfo.CurrentCulture),
+        DateTimeValue date => date.ToDateTime().ToShortDateString(),
         BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
         ErrorValue error => error.Code,
         ReferencedScalarValue referenced => PivotText(referenced.Value),

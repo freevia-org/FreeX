@@ -266,7 +266,7 @@ internal static partial class XlsxChartXmlWriter
             ToAxisLineShapeProperties(chart.XAxisLineColor, chart.XAxisLineThickness, chartNs, drawingNs),
             ToAxisLabelTextProperties(chart.XAxisLabelTextThemeColor, chart.XAxisLabelTextColor, chart.XAxisLabelFontSize, chart.XAxisLabelAngle, chartNs, drawingNs),
             new XElement(chartNs + "crossAx", new XAttribute("val", ValueAxisId)),
-            new XElement(chartNs + "crosses", new XAttribute("val", "autoZero")),
+            ToAxisCrossesXml(chart.XAxisCrosses, chart.XAxisCrossesAt, chartNs),
             isDateAxis ? null : ToAxisLabelAlignmentXml(chart.XAxisLabelAlignment, chartNs),
             ToUnsignedAxisValueXml("lblOffset", chart.XAxisLabelOffset, chartNs),
             isDateAxis ? ToDateAxisUnitXml("baseTimeUnit", chart.XAxisBaseTimeUnit, chartNs) : null,

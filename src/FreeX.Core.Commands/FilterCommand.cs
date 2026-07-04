@@ -17,6 +17,12 @@ public sealed class FilterCommand : IWorkbookCommand
     private readonly IReadOnlyList<string> _allowedValues;
 
     private FilterUndoSnapshot _undoSnapshot;
+    // H18: when _range is a structured table's range, table.FilterColumns (the model
+    // XlsxStructuredTableWriter actually serializes into the table's <autoFilter>/<filterColumn> XML)
+    // must be kept in sync with the interactive filter, otherwise the filter is visibly applied but
+    // silently lost the moment the workbook is saved and reopened. -1 = no table matched this range.
+    private int _tableId = -1;
+    private List<StructuredTableFilterColumnModel>? _previousTableFilterColumns;
 
     public string Label => _allowedValues.Count == 0 ? "Clear Filter" : "Apply Filter";
 
@@ -59,7 +65,38 @@ public sealed class FilterCommand : IWorkbookCommand
 
         RecomputeHiddenRows(sheet, _range);
 
+        ApplyToStructuredTableIfMatched(sheet);
+
         return new CommandOutcome(true);
+    }
+
+    /// <summary>
+    /// If <see cref="_range"/> is exactly a structured table's range (the shape
+    /// AutoFilterRangeResolver.TryGetEffectiveAutoFilterRange hands back for a table's header-cell
+    /// filter dropdown), mirror the applied/cleared filter into that table's FilterColumns model so
+    /// it round-trips through XlsxStructuredTableWriter instead of being silently dropped on save.
+    /// </summary>
+    private void ApplyToStructuredTableIfMatched(Sheet sheet)
+    {
+        for (var i = 0; i < sheet.StructuredTables.Count; i++)
+        {
+            var table = sheet.StructuredTables[i];
+            if (!table.Range.Equals(_range))
+                continue;
+
+            _tableId = table.Id;
+            _previousTableFilterColumns = [.. table.FilterColumns];
+
+            var filterColumns = table.FilterColumns
+                .Where(fc => fc.ColumnId != (int)_filterColOffset)
+                .ToList();
+            if (_allowedValues.Count > 0)
+                filterColumns.Add(new StructuredTableFilterColumnModel((int)_filterColOffset, _allowedValues));
+            filterColumns.Sort(static (a, b) => a.ColumnId.CompareTo(b.ColumnId));
+
+            sheet.StructuredTables[i] = StructuredTableDesignCommandHelpers.CopyTable(table, filterColumns: filterColumns);
+            return;
+        }
     }
 
     private static void RecomputeHiddenRows(Sheet sheet, GridRange range)
@@ -126,6 +163,14 @@ public sealed class FilterCommand : IWorkbookCommand
         if (!_undoSnapshot.HasSnapshot) return;
         var sheet = ctx.GetSheet(_sheetId);
         _undoSnapshot.Restore(sheet);
+
+        if (_tableId != -1 && _previousTableFilterColumns is not null &&
+            CommandGuards.TryFindStructuredTableIndex(sheet, _tableId, out var tableIndex))
+        {
+            var table = sheet.StructuredTables[tableIndex];
+            sheet.StructuredTables[tableIndex] = StructuredTableDesignCommandHelpers.CopyTable(
+                table, filterColumns: _previousTableFilterColumns);
+        }
     }
 }
 

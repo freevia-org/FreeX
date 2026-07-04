@@ -398,12 +398,65 @@ public partial class FunctionLibraryTests
     }
 
     [Theory]
-    [InlineData("=INDIRECT(\"A:A\")")]
-    [InlineData("=INDIRECT(\"A:XFD\")")]
-    [InlineData("=INDIRECT(\"1:1048576\")")]
-    public void Indirect_HostileLargeRanges_ReturnRefWithoutMaterializing(string formula)
+    [InlineData("=SUM(INDEX(INDIRECT(\"A:A\"),1))")]
+    [InlineData("=SUM(INDEX(INDIRECT(\"A:XFD\"),1))")]
+    public void Indirect_FullColumnTextRefs_ClampToUsedRangeInsteadOfRef(string formula)
     {
-        _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.Ref);
+        // INDIRECT("A:A") etc. must clamp its open row extent to the sheet's used range exactly
+        // like a direct =A:A reference does (ClampOpenEndedRangeToUsed), rather than unconditionally
+        // materializing the nominal 1,048,576-row grid extent and refusing with #REF! even on an
+        // otherwise-empty sheet. INDEX (not an aggregate function) forces evaluation through the
+        // generic BuildIndirectRange path rather than the SUM/COUNTA/CONCAT literal-argument fast
+        // path (TryExpandLiteralIndirectAggregateRange), which already clamped correctly before this
+        // fix. On an empty sheet the used range is empty, so INDEX(...,1) reads a single blank cell.
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new NumberValue(0));
+    }
+
+    [Fact]
+    public void Indirect_FullRowTextRefSpanningEntireGrid_StillReturnsRefWhenRowCountAloneExceedsCap()
+    {
+        // "1:1048576" is a full-ROW reference (every row, all columns) whose explicit row bounds
+        // already span the entire 1,048,576-row grid — that dimension is fixed by the literal text,
+        // not an "open" dimension clamping can shrink. Only the column span is open-ended here, and
+        // clamping it down to the (empty) used range still leaves 1,048,576 rows x >=1 column, which
+        // exceeds FormulaSafetyLimits.MaxMaterializedRangeCells (1,000,000) regardless of the used
+        // range. This case is expected to keep returning #REF!, unlike the full-column cases above.
+        _eval.Evaluate("=SUM(INDEX(INDIRECT(\"1:1048576\"),1))", MakeSheet()).Should().Be(ErrorValue.Ref);
+    }
+
+    [Fact]
+    public void Indirect_BareFullColumnTextRef_ClampsToUsedRangeInsteadOfRef()
+    {
+        // A bare (top-level, non-aggregate-wrapped) INDIRECT("A:A") call goes straight to
+        // BuiltInFunctions.Indirect -> BuildIndirectRange without ever passing through the
+        // SUM/COUNTA/CONCAT literal-argument fast path (that path only special-cases INDIRECT when
+        // it is nested as an argument of an aggregate function). Verify it clamps to the used range
+        // and returns the real data instead of #REF!.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(2)),
+            (3, 1, new NumberValue(4)));
+
+        var result = _eval.Evaluate("=INDIRECT(\"A:A\")", sheet);
+
+        var range = result.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(3);
+        range.ColCount.Should().Be(1);
+        range.Cells[0, 0].Should().Be(new NumberValue(2));
+        range.Cells[2, 0].Should().Be(new NumberValue(4));
+    }
+
+    [Fact]
+    public void Indirect_ComputedFullColumnArgument_ClampsToUsedRangeInsteadOfRef()
+    {
+        // INDIRECT's argument coming from a cell reference (not a literal string) bypasses
+        // TryBuildLiteralIndirectArguments's fast path entirely, so this exercises
+        // BuildIndirectRange's own clamping directly.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(2)),
+            (3, 1, new NumberValue(4)),
+            (1, 2, new TextValue("A:A")));
+
+        _eval.Evaluate("=SUM(INDIRECT(B1))", sheet).Should().Be(new NumberValue(6));
     }
 
     [Fact]

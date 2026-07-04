@@ -17,8 +17,7 @@ public static partial class PrintRenderer
         IReadOnlyList<uint> pageColumns,
         double gridLeft,
         double gridTop,
-        double colWidth,
-        double rowHeight,
+        PrintGridMeasurement measurement,
         double pageW,
         double pageH,
         bool blackAndWhite)
@@ -40,8 +39,9 @@ public static partial class PrintRenderer
 
         foreach (var overlay in overlays)
         {
-            var cellLeft = gridLeft + overlay.ColumnIndex * colWidth;
-            var cellTop = gridTop + overlay.RowIndex * rowHeight;
+            var colWidth = measurement.ColumnWidthAt(overlay.ColumnIndex);
+            var cellLeft = gridLeft + measurement.ColumnOffset(overlay.ColumnIndex);
+            var cellTop = gridTop + measurement.RowOffset(overlay.RowIndex);
             var triangle = new StreamGeometry();
             using (var ctx = triangle.Open())
             {
