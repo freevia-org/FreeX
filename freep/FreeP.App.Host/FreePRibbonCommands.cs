@@ -151,9 +151,17 @@ internal static class FreePRibbonCommands
         registry.Register("freep.paragraph.align-justify",
             new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Justify)));
         registry.Register("freep.bullets",
-            new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphBulletToggle()));
+            new ContextRibbonCommand(ctx =>
+            {
+                if (ApplyTableCellListPreset(editor, ctx.SelectedValue)) return;
+                editor.TryApplyActiveTableCellParagraphBulletToggle();
+            }));
         registry.Register("freep.numbering",
-            new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphNumberingToggle()));
+            new ContextRibbonCommand(ctx =>
+            {
+                if (ApplyTableCellListPreset(editor, ctx.SelectedValue)) return;
+                editor.TryApplyActiveTableCellParagraphNumberingToggle();
+            }));
         registry.Register("freep.indent-increase",
             new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphIndent()));
         registry.Register("freep.indent-decrease",
@@ -349,6 +357,10 @@ internal static class FreePRibbonCommands
 
         return registry;
     }
+
+    private static bool ApplyTableCellListPreset(EditingSession editor, string? presetId) =>
+        !string.IsNullOrWhiteSpace(presetId) &&
+        editor.TryApplyActiveTableCellParagraphListPreset(presetId);
 
     internal static void RegisterSlideObjectInsertionCommands(
         RibbonCommandRegistry registry,

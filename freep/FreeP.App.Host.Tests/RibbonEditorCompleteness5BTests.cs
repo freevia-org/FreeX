@@ -614,6 +614,27 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
+    public void Cmd_Numbering_WithPresetContext_AppliesSharedTableCellListPreset()
+    {
+        var (ed, pres) = MakeSession();
+        var shape = AddSingleCellTable(pres, 405, MakeTextBody("Cell"));
+        ed.Select(shape.Id);
+        ed.SetActiveTableCell(0, 0);
+
+        Exec(
+            MakeRegistry(ed),
+            "freep.numbering",
+            RibbonCommandContext.ForSelectedValue(TableCellListPresetCatalog.NumberRomanUpperPeriodId));
+
+        var paragraph = shape.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+        paragraph.BulletKind.Should().Be(BulletKind.Auto);
+        paragraph.AutoNumType.Should().Be(AutoNumType.RomanUcPeriod);
+        paragraph.AutoNumStartAt.Should().Be(1);
+        paragraph.BulletChar.Should().BeNull();
+        paragraph.BulletSuppressed.Should().BeFalse();
+    }
+
+    [Fact]
     public void Cmd_IndentIncreaseDecrease_WithActiveTableCell_UsesSharedTableCellPlan()
     {
         var (ed, pres) = MakeSession();

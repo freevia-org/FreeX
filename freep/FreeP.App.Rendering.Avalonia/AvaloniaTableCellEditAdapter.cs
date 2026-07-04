@@ -156,6 +156,23 @@ public static class AvaloniaTableCellEditAdapter
             selection);
     }
 
+    public static TableCellParagraphFormatPlan PlanParagraphListPreset(
+        EditingSession editor,
+        TableCellListPresetDescriptor preset,
+        (int Start, int End)? selection = null)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        ArgumentNullException.ThrowIfNull(preset);
+
+        return TableCellEditPlanner.PlanParagraphListPreset(
+            editor.CurrentSlideIndex,
+            editor.CurrentSlide,
+            editor.SelectedShapeIds,
+            editor.ActiveTableCell,
+            preset,
+            selection);
+    }
+
     public static TableCellParagraphFormatPlan PlanParagraphIndent(
         EditingSession editor,
         (int Start, int End)? selection = null)
