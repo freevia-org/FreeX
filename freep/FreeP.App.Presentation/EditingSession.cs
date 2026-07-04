@@ -1301,6 +1301,15 @@ public sealed class EditingSession
             ActiveTableCell,
             selection);
 
+    public TableCellParagraphFormatPlan PlanActiveTableCellParagraphNumberingToggle(
+        (int Start, int End)? selection = null) =>
+        TableCellEditPlanner.PlanParagraphNumberingToggle(
+            _currentSlideIndex,
+            CurrentSlide,
+            _selectedShapeIds,
+            ActiveTableCell,
+            selection);
+
     public TableCellParagraphFormatPlan PlanActiveTableCellParagraphIndent(
         (int Start, int End)? selection = null) =>
         TableCellEditPlanner.PlanParagraphIndent(
@@ -1323,6 +1332,17 @@ public sealed class EditingSession
         (int Start, int End)? selection = null)
     {
         var plan = PlanActiveTableCellParagraphBulletToggle(selection);
+        if (plan.Command is null)
+            return false;
+
+        Bus.Execute(plan.Command);
+        return true;
+    }
+
+    public bool TryApplyActiveTableCellParagraphNumberingToggle(
+        (int Start, int End)? selection = null)
+    {
+        var plan = PlanActiveTableCellParagraphNumberingToggle(selection);
         if (plan.Command is null)
             return false;
 

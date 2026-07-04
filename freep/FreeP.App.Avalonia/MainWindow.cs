@@ -1636,6 +1636,11 @@ public sealed class MainWindow : Window
             if (_textEditor?.TryApplyActiveTableCellParagraphBulletToggle() == true) return;
             Editor.TryApplyActiveTableCellParagraphBulletToggle();
         }));
+        r.Register("freep.numbering", new ActionRibbonCommand(() =>
+        {
+            if (_textEditor?.TryApplyActiveTableCellParagraphNumberingToggle() == true) return;
+            Editor.TryApplyActiveTableCellParagraphNumberingToggle();
+        }));
         r.Register("freep.indent-increase", new ActionRibbonCommand(() =>
         {
             if (_textEditor?.TryApplyActiveTableCellParagraphIndent() == true) return;

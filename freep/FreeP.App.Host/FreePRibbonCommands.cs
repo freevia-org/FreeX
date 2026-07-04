@@ -152,6 +152,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Justify)));
         registry.Register("freep.bullets",
             new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphBulletToggle()));
+        registry.Register("freep.numbering",
+            new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphNumberingToggle()));
         registry.Register("freep.indent-increase",
             new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphIndent()));
         registry.Register("freep.indent-decrease",
