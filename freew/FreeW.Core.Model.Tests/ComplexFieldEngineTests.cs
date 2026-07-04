@@ -33,6 +33,8 @@ public class ComplexFieldEngineTests
     [InlineData(" PAGEREF mark \\h ", "mark")]
     [InlineData(" SEQ Figure \\* ARABIC ", "Figure")]
     [InlineData(" REF \"My Mark\" ", "My Mark")]
+    [InlineData(" CITATION \"Doe 2024\" ", "Doe 2024")]
+    [InlineData(" CITATION \"Doe \\\"AI\\\" 2024\" \\l 1033 ", "Doe \"AI\" 2024")]
     public void Argument_ExtractsFirstNonSwitchToken(string instruction, string expected)
     {
         ComplexFieldEngine.Argument(instruction).Should().Be(expected);
@@ -168,6 +170,22 @@ public class ComplexFieldEngineTests
         var doc = new TextDocument { BibliographyStyle = CitationStyle.Apa };
         doc.Sources.Add(new Source { Tag = "Doe2024", Author = "Jane Q. Doe", Title = "A Work", Year = "2024" });
         AddField(doc, " CITATION Doe2024 ", cached: "stale");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("(Doe, 2024)");
+    }
+
+    [Fact]
+    public void Citation_ResolvesQuotedTaggedSourceWithEscapedQuotes()
+    {
+        var doc = new TextDocument { BibliographyStyle = CitationStyle.Apa };
+        doc.Sources.Add(new Source
+        {
+            Tag = "Doe \"AI\" 2024",
+            Author = "Jane Q. Doe",
+            Title = "Quoted Tags",
+            Year = "2024"
+        });
+        AddField(doc, " CITATION \"Doe \\\"AI\\\" 2024\" ", cached: "stale");
 
         ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("(Doe, 2024)");
     }
