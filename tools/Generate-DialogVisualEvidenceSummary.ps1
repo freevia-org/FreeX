@@ -547,6 +547,13 @@ function Get-ExpectedEvidenceSize {
                     source = "WatchWindowDialogPlanner.Width/Height"
                 }
             }
+            { $_ -eq "dialog.PivotTableOptions" -or $_ -eq "dialog.PivotTableOptions.LayoutAndFormat" } {
+                return [pscustomobject]@{
+                    width = 520
+                    height = 676
+                    source = "PivotOptionsPlanner.DialogWidth/LayoutAndFormatCaptureHeight"
+                }
+            }
             "dialog.ProtectSheet" {
                 return [pscustomobject]@{
                     width = 430

@@ -8119,11 +8119,10 @@ public sealed class DocumentView : Control
     /// </summary>
     public void InsertPlainTextControl(string? tag = null, string? alias = null)
     {
-        var text = SelectedText;
-        if (string.IsNullOrEmpty(text))
-            text = "Click to enter text";
-
-        InsertBodyContentControlRun(Run.PlainTextControl(text, tag, alias));
+        InsertBodyContentControlRun(Run.PlainTextControl(
+            ContentControlInteractionPlanner.PromptText(SelectedText),
+            tag,
+            alias));
     }
 
     /// <summary>Inserts an unchecked checkbox content control at the body caret.</summary>
@@ -8136,18 +8135,17 @@ public sealed class DocumentView : Control
     /// </summary>
     public void InsertRichTextControl(string? tag = null, string? alias = null)
     {
-        var text = SelectedText;
-        if (string.IsNullOrEmpty(text))
-            text = "Click to enter text";
-
-        InsertBodyContentControlRun(Run.RichTextControl(text, tag, alias));
+        InsertBodyContentControlRun(Run.RichTextControl(
+            ContentControlInteractionPlanner.PromptText(SelectedText),
+            tag,
+            alias));
     }
 
     /// <summary>Inserts a date-picker content control at the body caret.</summary>
     public void InsertDatePickerControl(string? tag = null, string? alias = null, string? dateFormat = null)
     {
-        var format = string.IsNullOrEmpty(dateFormat) ? FreeW.Core.Model.ContentControl.DefaultDateFormat : dateFormat!;
-        var today = DateTime.Today.ToString(format, CultureInfo.CurrentCulture);
+        var format = ContentControlInteractionPlanner.DateFormatOrDefault(dateFormat);
+        var today = ContentControlInteractionPlanner.FormatDate(format, DateTime.Today);
         InsertBodyContentControlRun(Run.DatePickerControl(today, tag, alias, format));
     }
 
@@ -8156,22 +8154,55 @@ public sealed class DocumentView : Control
         IReadOnlyList<ContentControlListItem>? items = null,
         string? tag = null,
         string? alias = null) =>
-        InsertBodyContentControlRun(Run.DropDownListControl(items ?? DefaultContentControlItems, tag: tag, alias: alias));
+        InsertBodyContentControlRun(Run.DropDownListControl(
+            ContentControlInteractionPlanner.ListItemsOrDefault(items),
+            tag: tag,
+            alias: alias));
 
     /// <summary>Inserts a combo-box content control at the body caret.</summary>
     public void InsertComboBoxControl(
         IReadOnlyList<ContentControlListItem>? items = null,
         string? tag = null,
         string? alias = null) =>
-        InsertBodyContentControlRun(Run.ComboBoxControl(items ?? DefaultContentControlItems, tag: tag, alias: alias));
+        InsertBodyContentControlRun(Run.ComboBoxControl(
+            ContentControlInteractionPlanner.ListItemsOrDefault(items),
+            tag: tag,
+            alias: alias));
 
-    private static readonly IReadOnlyList<ContentControlListItem> DefaultContentControlItems =
-    [
-        new ContentControlListItem("Choose an item"),
-        new ContentControlListItem("Item 1"),
-        new ContentControlListItem("Item 2"),
-        new ContentControlListItem("Item 3")
-    ];
+    public bool ToggleContentControl(int blockIndex, int runIndex) =>
+        ApplyContentControlInteraction(blockIndex, runIndex, ContentControlInteractionPlanner.ToggleCheckBox);
+
+    public bool SelectContentControlItem(int blockIndex, int runIndex, int itemIndex) =>
+        ApplyContentControlInteraction(blockIndex, runIndex, run =>
+            ContentControlInteractionPlanner.SelectItem(run, itemIndex));
+
+    public bool SelectContentControlRelativeDate(int blockIndex, int runIndex, int choiceIndex) =>
+        ApplyContentControlInteraction(blockIndex, runIndex, run =>
+            ContentControlInteractionPlanner.SelectRelativeDate(run, choiceIndex));
+
+    private bool ApplyContentControlInteraction(int blockIndex, int runIndex, Func<Run, Run?> planner)
+    {
+        if (IsEditingLocked
+            || blockIndex < 0
+            || blockIndex >= _doc.Blocks.Count
+            || _doc.Blocks[blockIndex] is not Paragraph paragraph
+            || runIndex < 0
+            || runIndex >= paragraph.Runs.Count)
+        {
+            return false;
+        }
+
+        var updated = planner(paragraph.Runs[runIndex]);
+        if (updated is null)
+            return false;
+
+        _bus.Execute(new ReplaceParagraphRunsCommand(blockIndex, p =>
+        {
+            if (runIndex >= 0 && runIndex < p.Runs.Count)
+                p.Runs[runIndex] = updated;
+        }));
+        return true;
+    }
 
     private void InsertBodyContentControlRun(Run run)
     {

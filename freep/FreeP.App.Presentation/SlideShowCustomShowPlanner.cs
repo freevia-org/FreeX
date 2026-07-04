@@ -6,6 +6,32 @@ public sealed record SlideShowCustomSlideSequence(
     string Name,
     IReadOnlyList<string> SlideIds);
 
+public enum SlideShowLaunchChoiceKind
+{
+    FullPresentation,
+    FromCurrentSlide,
+    CustomShow
+}
+
+public sealed record SlideShowLaunchChoice(
+    string ChoiceId,
+    string Label,
+    SlideShowLaunchChoiceKind Kind,
+    int SlideCount,
+    int StartIndex,
+    string? CustomShowName,
+    bool IsEnabled,
+    string? DisabledReason);
+
+public sealed record SlideShowLaunchPlan(
+    int TotalSlideCount,
+    int CurrentSlideIndex,
+    IReadOnlyList<SlideShowLaunchChoice> Choices)
+{
+    public SlideShowLaunchChoice? DefaultChoice =>
+        Choices.FirstOrDefault(choice => choice.IsEnabled);
+}
+
 public sealed class SlideShowPlaybackRoute
 {
     public SlideShowPlaybackRoute(
@@ -52,6 +78,107 @@ public sealed class SlideShowPlaybackRoute
 
 public static class SlideShowCustomShowPlanner
 {
+    public const string FullPresentationChoiceId = "full-presentation";
+    public const string FromCurrentSlideChoiceId = "from-current-slide";
+    public const string CustomShowChoicePrefix = "custom-show:";
+    public const string NoSlidesMessage = "No slides are available for slide show playback.";
+    public const string EmptyCustomShowMessage = "Custom show has no available slides.";
+
+    public static SlideShowLaunchPlan BuildLaunchPlan(
+        Presentation presentation,
+        int currentSlideIndex)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        var hasSlides = presentation.Slides.Count > 0;
+        var startIndex = hasSlides
+            ? Math.Clamp(currentSlideIndex, 0, presentation.Slides.Count - 1)
+            : 0;
+
+        var choices = new List<SlideShowLaunchChoice>
+        {
+            new(
+                FullPresentationChoiceId,
+                "From Beginning",
+                SlideShowLaunchChoiceKind.FullPresentation,
+                presentation.Slides.Count,
+                0,
+                CustomShowName: null,
+                IsEnabled: hasSlides,
+                DisabledReason: hasSlides ? null : NoSlidesMessage),
+            new(
+                FromCurrentSlideChoiceId,
+                "From Current Slide",
+                SlideShowLaunchChoiceKind.FromCurrentSlide,
+                presentation.Slides.Count,
+                startIndex,
+                CustomShowName: null,
+                IsEnabled: hasSlides,
+                DisabledReason: hasSlides ? null : NoSlidesMessage)
+        };
+
+        for (var index = 0; index < presentation.CustomShows.Count; index++)
+        {
+            var customShow = presentation.CustomShows[index];
+            var route = BuildCustomShowRoute(presentation, customShow);
+            choices.Add(new SlideShowLaunchChoice(
+                CustomShowChoicePrefix + index.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                string.IsNullOrWhiteSpace(customShow.Name)
+                    ? $"Custom Show {index + 1}"
+                    : customShow.Name.Trim(),
+                SlideShowLaunchChoiceKind.CustomShow,
+                route.SlideCount,
+                route.StartIndex,
+                route.CustomShowName,
+                IsEnabled: route.SlideCount > 0,
+                DisabledReason: route.SlideCount > 0 ? null : EmptyCustomShowMessage));
+        }
+
+        return new SlideShowLaunchPlan(
+            presentation.Slides.Count,
+            startIndex,
+            choices);
+    }
+
+    public static bool TryBuildRouteForLaunchChoice(
+        Presentation presentation,
+        string? choiceId,
+        int currentSlideIndex,
+        out SlideShowPlaybackRoute route)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        route = BuildFullPresentationRoute(presentation);
+        if (string.IsNullOrWhiteSpace(choiceId))
+        {
+            return false;
+        }
+
+        var normalizedChoiceId = choiceId.Trim();
+        var plan = BuildLaunchPlan(presentation, currentSlideIndex);
+        var choice = plan.Choices.FirstOrDefault(candidate =>
+            string.Equals(candidate.ChoiceId, normalizedChoiceId, StringComparison.Ordinal));
+        if (choice is null || !choice.IsEnabled)
+        {
+            return false;
+        }
+
+        route = choice.Kind switch
+        {
+            SlideShowLaunchChoiceKind.FullPresentation =>
+                BuildFullPresentationRoute(presentation, 0),
+            SlideShowLaunchChoiceKind.FromCurrentSlide =>
+                BuildFullPresentationRoute(presentation, plan.CurrentSlideIndex),
+            SlideShowLaunchChoiceKind.CustomShow when TryParseCustomShowIndex(choice.ChoiceId, out var customShowIndex) &&
+                customShowIndex >= 0 &&
+                customShowIndex < presentation.CustomShows.Count =>
+                BuildCustomShowRoute(presentation, presentation.CustomShows[customShowIndex]),
+            _ => route
+        };
+
+        return route.SlideCount > 0;
+    }
+
     public static SlideShowPlaybackRoute BuildFullPresentationRoute(
         Presentation presentation,
         int startIndex = 0)
@@ -177,5 +304,20 @@ public static class SlideShowCustomShowPlanner
         }
 
         return -1;
+    }
+
+    private static bool TryParseCustomShowIndex(string choiceId, out int index)
+    {
+        index = -1;
+        if (!choiceId.StartsWith(CustomShowChoicePrefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return int.TryParse(
+            choiceId.AsSpan(CustomShowChoicePrefix.Length),
+            System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out index);
     }
 }

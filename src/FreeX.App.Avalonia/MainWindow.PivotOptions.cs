@@ -167,8 +167,8 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("PivotTableOptions_PivotTableOptions"),
-            Width = 520,
-            MinHeight = 500,
+            Width = PivotOptionsPlanner.DialogWidth,
+            MinHeight = PivotOptionsPlanner.DialogMinHeight,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
@@ -219,6 +219,7 @@ public sealed partial class MainWindow
         var layoutTab = new StackPanel { Spacing = 10, Margin = new Thickness(10) };
         layoutTab.Children.Add(MakeSectionGroupBox(UiText.Get("PivotTableOptions_LayoutSectionGroup"), layoutSection));
         layoutTab.Children.Add(MakeSectionGroupBox(UiText.Get("PivotTableOptions_FormatSectionGroup"), formatSection));
+        layoutTab.Children.Add(new Border { Height = PivotOptionsPlanner.LayoutAndFormatAvaloniaSpacerHeight });
 
         // ── Tab: Totals & Filters ──────────────────────────────────────────────
         var grandTotalsSection = new StackPanel { Spacing = 4 };
