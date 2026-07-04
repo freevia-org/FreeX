@@ -464,6 +464,15 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "ThreadedCommentCommandTests.ToggleResolveCommentAtCaret_TogglesResolved",
             "freew/FreeW.App.Avalonia.Tests/DocumentViewReviewTests.cs",
             "DocumentViewReviewTests.ResolveComment_registry_command_toggles_the_comment_at_the_caret");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.chart-toggle-legend",
+            "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
+            "FreeWRibbonParityTests.ChartDesign_ToggleLegendRibbonCommandMutatesSelectedChartAndUndoRestoresIt",
+            "freew/FreeW.App.Avalonia.Tests/ChartSmartArtContextualTabTests.cs",
+            "ChartSmartArtContextualTabTests.ToggleChartLegend_command_clears_layout_override_and_reverts_on_undo",
+            "freew.chart.shared-behavior",
+            "Chart command behavior");
 
         var markdown = ReadRepositoryFile("docs", "parity", "freew-command-inventory.md");
         markdown.Should().Contain($"| {commandIds.Length} | {both} | {wpfOnly} | {avaloniaOnly} | {avaloniaOnly} | {wpfOnly} |");
@@ -1241,15 +1250,17 @@ public sealed class FreeWRibbonDefinitionProfileTests
         string expectedWpfPath,
         string expectedWpfTest,
         string expectedAvaloniaPath,
-        string expectedAvaloniaTest)
+        string expectedAvaloniaTest,
+        string expectedEvidenceId = "freew.review-comments.shared-behavior",
+        string expectedSlice = "Review comments")
     {
         var command = commands.Single(candidate =>
             candidate.GetProperty("commandId").GetString() == commandId);
         command.GetProperty("gapClassification").GetString().Should().Be("shared-profile");
 
         var evidence = command.GetProperty("behaviorEvidence");
-        evidence.GetProperty("evidenceId").GetString().Should().Be("freew.review-comments.shared-behavior");
-        evidence.GetProperty("slice").GetString().Should().Be("Review comments");
+        evidence.GetProperty("evidenceId").GetString().Should().Be(expectedEvidenceId);
+        evidence.GetProperty("slice").GetString().Should().Be(expectedSlice);
         evidence.GetProperty("summary").GetString().Should().NotBeNullOrWhiteSpace();
 
         AssertEvidenceLink(evidence.GetProperty("wpfEvidence"), expectedWpfPath, expectedWpfTest);

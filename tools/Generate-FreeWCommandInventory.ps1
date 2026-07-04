@@ -137,6 +137,10 @@ internal static class FreeWCommandInventory
             "Toggles the resolved state for the comment thread at the caret through WPF editor behavior and Avalonia registry execution.",
             "ThreadedCommentCommandTests.ToggleResolveCommentAtCaret_TogglesResolved",
             "DocumentViewReviewTests.ResolveComment_registry_command_toggles_the_comment_at_the_caret"),
+        ["freew.chart-toggle-legend"] = ChartCommandEvidence(
+            "Toggles the selected chart legend through the WPF and Avalonia ribbon command registries, clears layout overrides where applicable, and keeps the change undoable.",
+            "FreeWRibbonParityTests.ChartDesign_ToggleLegendRibbonCommandMutatesSelectedChartAndUndoRestoresIt",
+            "ChartSmartArtContextualTabTests.ToggleChartLegend_command_clears_layout_override_and_reverts_on_undo"),
     };
 
     public static InventoryDocument Build(string repoRoot)
@@ -232,6 +236,21 @@ internal static class FreeWCommandInventory
                 Path: avaloniaTest.StartsWith("DocumentViewCommentTests.", StringComparison.Ordinal)
                     ? "freew/FreeW.App.Avalonia.Tests/DocumentViewCommentTests.cs"
                     : "freew/FreeW.App.Avalonia.Tests/DocumentViewReviewTests.cs",
+                Test: avaloniaTest));
+
+    private static CommandBehaviorEvidence ChartCommandEvidence(
+        string summary,
+        string wpfTest,
+        string avaloniaTest) =>
+        new(
+            EvidenceId: "freew.chart.shared-behavior",
+            Slice: "Chart command behavior",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
+                Test: wpfTest),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Avalonia.Tests/ChartSmartArtContextualTabTests.cs",
                 Test: avaloniaTest));
 
     private static IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> Collect(RibbonDefinition definition, string profile)

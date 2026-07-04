@@ -1243,6 +1243,31 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
+    public void ChartDesign_ToggleLegendRibbonCommandMutatesSelectedChartAndUndoRestoresIt()
+    {
+        var editor = new DocumentView();
+        editor.Model.Blocks.Clear();
+        editor.Model.Blocks.Add(new Paragraph("Before"));
+        editor.InsertChart(Chart.Create(ChartKind.Line, ["X", "Y"], [3.0, 4.0]));
+        var chart = editor.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Select(r => r.Chart)
+            .FirstOrDefault(c => c is not null);
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        chart.Should().NotBeNull();
+        chart!.ShowLegend.Should().BeFalse();
+
+        registry.TryGet("freew.chart-toggle-legend", out var command)
+            .Should().BeTrue("the WPF Chart Design legend command must be registered");
+        command!.Execute(RibbonCommandContext.Empty);
+
+        chart.ShowLegend.Should().BeTrue();
+        editor.Commands.Undo().Should().BeTrue();
+        chart.ShowLegend.Should().BeFalse();
+    }
+
+    [StaFact]
     public void ChartDesign_SetSizeMutatesWidthAndHeight()
     {
         var editor = new DocumentView();
