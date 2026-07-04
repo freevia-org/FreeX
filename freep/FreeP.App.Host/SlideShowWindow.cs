@@ -265,6 +265,9 @@ public sealed class SlideShowWindow : Window
             _presentation,
             _playbackRoute.GetSourceSlideIndex);
 
+    public SlideShowRecordingReviewPlan RecordingReviewPlan =>
+        SlideShowRecordingReviewPlanner.BuildPlan(_presentation, _recordingExecutionState);
+
     internal int PresenterInkOverlayVisualCount => _inkOverlay.Children.Count;
     internal SlideShowPlaybackRoute PlaybackRoute => _playbackRoute;
     internal int CurrentPresentationSlideIndex => _playbackRoute.GetSourceSlideIndex(_controller.CurrentSlideIndex);

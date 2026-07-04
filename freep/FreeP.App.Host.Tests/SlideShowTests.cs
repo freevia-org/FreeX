@@ -434,6 +434,51 @@ public sealed class SlideShowWindowTests
     }
 
     [StaFact]
+    public void SlideShowWindow_RecordingReviewPlan_ProjectsSharedSourceSlideEvidence()
+    {
+        var pres = MakePresentation("Intro", "Deep dive", "Appendix");
+        var route = SlideShowCustomShowPlanner.BuildCustomShowRoute(
+            pres,
+            new SlideShowCustomSlideSequence(
+                "Executive review",
+                new[] { pres.Slides[2].Id, pres.Slides[0].Id }),
+            startIndex: 0);
+        var started = new DateTimeOffset(2026, 7, 4, 11, 0, 0, TimeSpan.Zero);
+
+        var window = new SlideShowWindow(pres, route);
+        try
+        {
+            window.ApplyPresenterToolIntent(
+                SlideShowTimingIntent.RecordTimings,
+                SlideShowRecordingMediaIntent.NarrationAndMedia,
+                nowUtc: started);
+
+            window.ExecuteAdvance(started.AddMilliseconds(2400));
+
+            var review = window.RecordingReviewPlan;
+
+            review.HostName.Should().Be("WPF slideshow");
+            review.CompletedSegmentCount.Should().Be(1);
+            review.DeferredMediaArtifactCount.Should().Be(2);
+            review.CanApplyRecordedTimings.Should().BeFalse("the host already applied the recorded timing");
+            review.Rows.Should().ContainSingle().Which.Should().Match<SlideShowRecordingReviewRow>(row =>
+                row.SlideIndex == 2 &&
+                row.SlideTitle == "Appendix" &&
+                row.DurationMs == 2400 &&
+                row.TimingStatus == SlideShowRecordingReviewTimingStatus.AlreadyApplied);
+            review.Rows.Single().MediaArtifacts.Select(artifact => artifact.SuggestedFileName)
+                .Should().Equal("slide-003-narration.m4a", "slide-003-camera.mp4");
+        }
+        finally
+        {
+            if (!window.IsPresenterSessionClosed)
+            {
+                window.Close();
+            }
+        }
+    }
+
+    [StaFact]
     public void SlideShowWindow_Advance_PastLastSlide_DoesNotThrow()
     {
         var pres = Presentation.CreateEmpty();
