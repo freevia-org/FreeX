@@ -194,6 +194,8 @@ internal static class PresentationModelCloneHelper
         TextOutline = source.TextOutline,
         TextShadow = CloneRunShadow(source.TextShadow),
         TextReflection = CloneRunReflection(source.TextReflection),
+        TextGlow = CloneRunGlow(source.TextGlow),
+        TextSoftEdge = CloneRunSoftEdge(source.TextSoftEdge),
         Math = CloneMath(source.Math),
     };
 
@@ -242,6 +244,24 @@ internal static class PresentationModelCloneHelper
                 DistPt = source.DistPt,
                 DirDeg = source.DirDeg,
                 ScaleY = source.ScaleY,
+            };
+
+    private static RunTextGlow? CloneRunGlow(RunTextGlow? source) =>
+        source is null
+            ? null
+            : new RunTextGlow
+            {
+                Color = source.Color,
+                Alpha = source.Alpha,
+                RadiusPt = source.RadiusPt,
+            };
+
+    private static RunTextSoftEdge? CloneRunSoftEdge(RunTextSoftEdge? source) =>
+        source is null
+            ? null
+            : new RunTextSoftEdge
+            {
+                RadiusPt = source.RadiusPt,
             };
 
     private static TableCellBorders? CloneTableCellBorders(TableCellBorders? source) =>

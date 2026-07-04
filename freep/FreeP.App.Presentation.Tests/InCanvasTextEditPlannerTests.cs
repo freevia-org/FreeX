@@ -153,6 +153,70 @@ public sealed class InCanvasTextEditPlannerTests
     }
 
     [Fact]
+    public void PlanTextFormat_ShapeSubRangeSelection_PreservesRunGlowAndSoftEdge()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var body = MakeBody("one two three");
+        var glow = new RunTextGlow
+        {
+            Color = new ThemeAwareColor(new SrgbColor(0x22, 0x88, 0xFF)),
+            Alpha = 144,
+            RadiusPt = 4.5,
+        };
+        var softEdge = new RunTextSoftEdge { RadiusPt = 2.25 };
+        body.Paragraphs[0].Runs[0].TextGlow = glow;
+        body.Paragraphs[0].Runs[0].TextSoftEdge = softEdge;
+        body.Paragraphs[0].Runs[0].Bold = false;
+        body.Paragraphs[0].Runs[0].BoldSet = false;
+        var shape = new SlideShape
+        {
+            Id = 1,
+            TextBody = body,
+        };
+        slide.Shapes.Add(shape);
+
+        var plan = InCanvasTextEditPlanner.PlanTextFormat(
+            0,
+            slide,
+            shape.Id,
+            TableCellTextFormatKind.Bold,
+            selection: (4, 7));
+
+        plan.Status.Should().Be(InCanvasShapeTextFormatStatus.Ready);
+        plan.Command.Should().NotBeNull();
+
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(plan.Command!);
+
+        var runs = shape.TextBody!.Paragraphs[0].Runs;
+        runs.Should().HaveCount(3);
+        foreach (var run in runs)
+        {
+            run.TextGlow.Should().NotBeNull();
+            run.TextGlow.Should().NotBeSameAs(glow);
+            run.TextGlow!.RadiusPt.Should().Be(4.5);
+            run.TextSoftEdge.Should().NotBeNull();
+            run.TextSoftEdge.Should().NotBeSameAs(softEdge);
+            run.TextSoftEdge!.RadiusPt.Should().Be(2.25);
+        }
+
+        runs.Should().ContainSingle(r => r.Text == "two" && r.Bold && r.BoldSet);
+
+        bus.Undo();
+
+        var restoredRun = shape.TextBody!.Paragraphs[0].Runs[0];
+        restoredRun.Text.Should().Be("one two three");
+        restoredRun.TextGlow.Should().NotBeNull();
+        restoredRun.TextGlow.Should().NotBeSameAs(glow);
+        restoredRun.TextGlow!.RadiusPt.Should().Be(4.5);
+        restoredRun.TextSoftEdge.Should().NotBeNull();
+        restoredRun.TextSoftEdge.Should().NotBeSameAs(softEdge);
+        restoredRun.TextSoftEdge!.RadiusPt.Should().Be(2.25);
+    }
+
+    [Fact]
     public void CommitRichText_ColorOnlyChange_ReturnsCommand()
     {
         var original = MakeBody("Hello", new ThemeAwareColor(new SrgbColor(0xFF, 0x00, 0x00)));

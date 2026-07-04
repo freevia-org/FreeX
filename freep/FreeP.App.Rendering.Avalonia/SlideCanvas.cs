@@ -1946,6 +1946,21 @@ public sealed class SlideCanvas : Control
                         dc.DrawGeometry(MakeFillBrushForText(reflection.FillBrush), null, geo);
                         break;
                     }
+                    case TextRunEffectPass.Glow glow:
+                    {
+                        var glowBrush = new SolidColorBrush(
+                            Color.FromArgb(glow.Alpha, glow.Color.R, glow.Color.G, glow.Color.B));
+                        var glowPen = new Pen(glowBrush, glow.StrokeWidthDip);
+                        dc.DrawGeometry(null, glowPen, geo);
+                        break;
+                    }
+                    case TextRunEffectPass.SoftEdge softEdge:
+                    {
+                        using var opacityScope = dc.PushOpacity(softEdge.Alpha / 255.0);
+                        using var transformScope = dc.PushTransform(Matrix.CreateTranslation(softEdge.OffsetX, softEdge.OffsetY));
+                        dc.DrawGeometry(MakeFillBrushForText(softEdge.FillBrush), null, geo);
+                        break;
+                    }
                     case TextRunEffectPass.Fill fill:
                         dc.DrawGeometry(MakeFillBrushForText(fill.FillBrush), null, geo);
                         break;

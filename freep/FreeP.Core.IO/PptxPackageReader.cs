@@ -3559,8 +3559,10 @@ public static class PptxPackageReader
             if (lnEl is not null)
                 run.TextOutline = PptxColorReader.TryReadOutline(lnEl, scheme);
 
+            var runEffectLst = rPr.Element(A + "effectLst");
+
             // Wave 16A: text shadow (a:effectLst/a:outerShdw inside a:rPr)
-            var outerShdw = rPr.Element(A + "effectLst")?.Element(A + "outerShdw");
+            var outerShdw = runEffectLst?.Element(A + "outerShdw");
             if (outerShdw is not null)
             {
                 var shdwColor = PptxColorReader.TryReadColor(outerShdw, scheme);
@@ -3593,7 +3595,7 @@ public static class PptxPackageReader
             }
 
             // WordArt text reflection (a:effectLst/a:reflection inside a:rPr).
-            var reflection = rPr.Element(A + "effectLst")?.Element(A + "reflection");
+            var reflection = runEffectLst?.Element(A + "reflection");
             if (reflection is not null)
             {
                 byte alpha = 128;
@@ -3617,6 +3619,42 @@ public static class PptxPackageReader
                     DistPt = distPt,
                     DirDeg = dirDeg,
                     ScaleY = scaleY,
+                };
+            }
+
+            // WordArt text glow (a:effectLst/a:glow inside a:rPr).
+            var glow = runEffectLst?.Element(A + "glow");
+            if (glow is not null)
+            {
+                double radiusPt = 0;
+                if (long.TryParse(glow.Attribute("rad")?.Value, out var radEmu))
+                    radiusPt = DrawingMlUnits.EmuToPoints(radEmu);
+
+                byte alpha = 0xA0;
+                var glowColorEl = glow.Elements().FirstOrDefault();
+                if (glowColorEl is not null)
+                    alpha = ReadAlphaFromColorEl(glowColorEl);
+
+                run.TextGlow = new RunTextGlow
+                {
+                    Color = PptxColorReader.TryReadColor(glow, scheme)
+                        ?? new ThemeAwareColor(new SrgbColor(0, 0, 0)),
+                    Alpha = alpha,
+                    RadiusPt = radiusPt,
+                };
+            }
+
+            // WordArt text soft edge (a:effectLst/a:softEdge inside a:rPr).
+            var softEdge = runEffectLst?.Element(A + "softEdge");
+            if (softEdge is not null)
+            {
+                double radiusPt = 0;
+                if (long.TryParse(softEdge.Attribute("rad")?.Value, out var radEmu))
+                    radiusPt = DrawingMlUnits.EmuToPoints(radEmu);
+
+                run.TextSoftEdge = new RunTextSoftEdge
+                {
+                    RadiusPt = radiusPt,
                 };
             }
 

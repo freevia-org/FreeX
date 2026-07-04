@@ -1983,6 +1983,26 @@ public sealed class SlideCanvas : FrameworkElement
                             dc.Pop();
                             break;
                         }
+                        case TextRunEffectPass.Glow glow:
+                        {
+                            var glowBrush = new SolidColorBrush(Color.FromArgb(glow.Alpha, glow.Color.R, glow.Color.G, glow.Color.B));
+                            if (glowBrush.CanFreeze) glowBrush.Freeze();
+                            var glowPen = new Pen(glowBrush, glow.StrokeWidthDip);
+                            if (glowPen.CanFreeze) glowPen.Freeze();
+                            dc.DrawGeometry(null, glowPen, geo);
+                            break;
+                        }
+                        case TextRunEffectPass.SoftEdge softEdge:
+                        {
+                            var geoRect = geo.Bounds;
+                            var r2 = new Rect(geoRect.X, geoRect.Y, Math.Max(1, geoRect.Width), Math.Max(1, geoRect.Height));
+                            dc.PushOpacity(softEdge.Alpha / 255.0);
+                            dc.PushTransform(new TranslateTransform(softEdge.OffsetX, softEdge.OffsetY));
+                            dc.DrawGeometry(MakeFillBrushForText(softEdge.FillBrush, r2), null, geo);
+                            dc.Pop();
+                            dc.Pop();
+                            break;
+                        }
                         case TextRunEffectPass.Fill fill:
                         {
                             var geoRect = geo.Bounds;

@@ -211,6 +211,30 @@ public sealed class RunTextReflection
 }
 
 /// <summary>
+/// Per-run text glow descriptor (from <c>a:rPr/a:effectLst/a:glow</c>).
+/// </summary>
+public sealed class RunTextGlow
+{
+    /// <summary>Glow color (resolved or theme-aware).</summary>
+    public ThemeAwareColor Color { get; set; } = new ThemeAwareColor(new SrgbColor(0, 0, 0));
+
+    /// <summary>Alpha (0-255).</summary>
+    public byte Alpha { get; set; } = 0xA0;
+
+    /// <summary>Glow radius in points (from a:glow @rad in EMU / 12700).</summary>
+    public double RadiusPt { get; set; }
+}
+
+/// <summary>
+/// Per-run text soft-edge descriptor (from <c>a:rPr/a:effectLst/a:softEdge</c>).
+/// </summary>
+public sealed class RunTextSoftEdge
+{
+    /// <summary>Soft-edge radius in points (from a:softEdge @rad in EMU / 12700).</summary>
+    public double RadiusPt { get; set; }
+}
+
+/// <summary>
 /// A single text run: a span of text with uniform character properties.
 /// </summary>
 public sealed class Run
@@ -283,6 +307,18 @@ public sealed class Run
     /// <c>a:rPr/a:effectLst/a:reflection</c>. Null = no reflection.
     /// </summary>
     public RunTextReflection? TextReflection { get; set; }
+
+    /// <summary>
+    /// Glow around glyphs. Corresponds to <c>a:rPr/a:effectLst/a:glow</c>.
+    /// Null = no glow.
+    /// </summary>
+    public RunTextGlow? TextGlow { get; set; }
+
+    /// <summary>
+    /// Softened glyph edge. Corresponds to <c>a:rPr/a:effectLst/a:softEdge</c>.
+    /// Null = no soft edge.
+    /// </summary>
+    public RunTextSoftEdge? TextSoftEdge { get; set; }
 
     // ── OMML Math (Theme 21) ───────────────────────────────────────────────────
 

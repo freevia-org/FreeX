@@ -1299,6 +1299,8 @@ public static class SlideCompositor
                 ResolvedOutline? resolvedTextOutline = null;
                 ResolvedRunShadow? resolvedTextShadow = null;
                 ResolvedRunReflection? resolvedTextReflection = null;
+                ResolvedRunGlow? resolvedTextGlow = null;
+                ResolvedRunSoftEdge? resolvedTextSoftEdge = null;
 
                 if (run.TextFill is not null)
                     resolvedTextFill = ResolveFill(run.TextFill, theme, effectiveClrMap);
@@ -1333,6 +1335,25 @@ public static class SlideCompositor
                     };
                 }
 
+                if (run.TextGlow is not null)
+                {
+                    var glow = run.TextGlow;
+                    resolvedTextGlow = new ResolvedRunGlow
+                    {
+                        Color = ThemeColorResolver.Resolve(glow.Color, theme, effectiveClrMap),
+                        Alpha = glow.Alpha,
+                        RadiusDip = PointsToDip(glow.RadiusPt),
+                    };
+                }
+
+                if (run.TextSoftEdge is not null)
+                {
+                    resolvedTextSoftEdge = new ResolvedRunSoftEdge
+                    {
+                        RadiusDip = PointsToDip(run.TextSoftEdge.RadiusPt),
+                    };
+                }
+
                 // Theme 27: OMML math — call the shared MathLayoutEngine to produce the box tree.
                 // The engine is framework-free; WPF + Avalonia renderers walk the resulting box tree.
                 FreeP.App.Compositor.MathLayout.MathBox.Container? mathLayout = null;
@@ -1356,6 +1377,8 @@ public static class SlideCompositor
                     TextOutline   = resolvedTextOutline,
                     TextShadow    = resolvedTextShadow,
                     TextReflection = resolvedTextReflection,
+                    TextGlow      = resolvedTextGlow,
+                    TextSoftEdge  = resolvedTextSoftEdge,
                     MathLayout    = mathLayout,
                 });
             }

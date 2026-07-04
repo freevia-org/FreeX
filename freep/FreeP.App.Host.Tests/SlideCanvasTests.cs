@@ -397,6 +397,51 @@ public sealed class SlideCanvasTests
         act.Should().NotThrow("warp+shadow text must not throw");
     }
 
+    [StaFact]
+    public void SlideCanvas_GlowAndSoftEdgeRuns_DoesNotThrow()
+    {
+        var p     = Presentation.CreateEmpty();
+        var slide = p.Slides[0];
+        slide.Shapes.Clear();
+
+        var tb   = new TextBody();
+        var para = new Paragraph();
+        para.Runs.Add(new Run
+        {
+            Text = "Glow ",
+            TextGlow = new RunTextGlow
+            {
+                Color = new ThemeAwareColor(new SrgbColor(0x20, 0x80, 0xFF)),
+                Alpha = 128,
+                RadiusPt = 4.0
+            }
+        });
+        para.Runs.Add(new Run
+        {
+            Text = "Soft",
+            TextSoftEdge = new RunTextSoftEdge
+            {
+                RadiusPt = 2.5
+            }
+        });
+        tb.Paragraphs.Add(para);
+
+        slide.Shapes.Add(new SlideShape
+        {
+            Id            = 1,
+            AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+            OffsetXEmu    = 457200,
+            OffsetYEmu    = 274320,
+            ExtentCxEmu   = 8229600,
+            ExtentCyEmu   = 1143000,
+            TextBody      = tb
+        });
+
+        var canvas = new SlideCanvas { Presentation = p, Slide = slide };
+        var act    = () => canvas.Measure(new Size(1280, 720));
+        act.Should().NotThrow("glow and soft-edge text runs must render through shared planner cases");
+    }
+
     // ── BO2: default tab stops (no explicit tabLst) — WPF ───────────────────────
 
     /// <summary>
