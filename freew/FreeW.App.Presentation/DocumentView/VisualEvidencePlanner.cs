@@ -216,6 +216,21 @@ public sealed record FreeWVisualFieldExpectation(
     IReadOnlyList<string> ComplexFieldKeywords,
     IReadOnlyList<string> HeaderFooterSlotNames);
 
+public sealed record FreeWVisualTableOfAuthoritiesPageReference(
+    string Category,
+    string EntryText,
+    string PageReferenceText,
+    IReadOnlyList<int> PageNumbers);
+
+public sealed record FreeWVisualTableOfAuthoritiesExpectation(
+    int EntryCount,
+    int EntryWithPageReferenceCount,
+    bool HasGeneratedTable,
+    bool HasPageReferences,
+    bool HasExplicitPageNumbers,
+    bool HasPassimReferences,
+    IReadOnlyList<FreeWVisualTableOfAuthoritiesPageReference> PageReferences);
+
 public sealed record FreeWVisualPageExpectation(
     int PageNumber,
     int PageCount,
@@ -228,6 +243,7 @@ public sealed record FreeWVisualPageExpectation(
     FreeWVisualDrawingObjectExpectation DrawingObjects,
     FreeWVisualChartSmartArtExpectation ChartSmartArt,
     FreeWVisualFieldExpectation Fields,
+    FreeWVisualTableOfAuthoritiesExpectation TableOfAuthorities,
     string? HeaderSlotName,
     string? FooterSlotName,
     bool HasFootnotes,
@@ -301,7 +317,7 @@ public static class FreeWVisualEvidencePlanner
 {
     public const string ManifestFileName = "freew_visual_evidence_manifest.json";
     public const string SchemaId = "freew.visual-evidence.v1";
-    public const int SchemaVersion = 9;
+    public const int SchemaVersion = 10;
     public const string SectionGeometryPageSurfaceRenderStatus = "section-page-surface";
 
     private const int MaxTrackedColorCount = 4096;
@@ -768,6 +784,7 @@ public static class FreeWVisualEvidencePlanner
         var drawingObjects = BuildDrawingObjectExpectation(document, surface, features.Columns.Count);
         var chartSmartArt = BuildChartSmartArtExpectation(document);
         var fields = BuildFieldExpectation(document);
+        var tableOfAuthorities = BuildTableOfAuthoritiesExpectation(document);
 
         var expectedOutputName = ExpectedOutputName(scenario.ScenarioId, pageNumber, outputName);
         return new FreeWVisualPageExpectation(
@@ -782,6 +799,7 @@ public static class FreeWVisualEvidencePlanner
             drawingObjects,
             chartSmartArt,
             fields,
+            tableOfAuthorities,
             headerSlotName,
             footerSlotName,
             hasFootnotes,
@@ -1473,6 +1491,49 @@ public static class FreeWVisualEvidencePlanner
                 .ToList());
     }
 
+    public static FreeWVisualTableOfAuthoritiesExpectation BuildTableOfAuthoritiesExpectation(TextDocument? document)
+    {
+        if (document is null)
+            return EmptyTableOfAuthoritiesExpectation;
+
+        var entryCount = 0;
+        var pageReferences = new List<FreeWVisualTableOfAuthoritiesPageReference>();
+        var currentCategory = string.Empty;
+        foreach (var paragraph in document.Blocks.OfType<Paragraph>())
+        {
+            if (string.Equals(paragraph.StyleId, TableOfAuthorities.CategoryStyleId, StringComparison.Ordinal))
+            {
+                currentCategory = paragraph.PlainText.Trim();
+                continue;
+            }
+
+            if (!string.Equals(paragraph.StyleId, TableOfAuthorities.EntryStyleId, StringComparison.Ordinal))
+                continue;
+
+            entryCount++;
+            var extracted = ExtractTableOfAuthoritiesPageReference(paragraph);
+            if (extracted is null)
+                continue;
+
+            var pageNumbers = ParsePageNumbers(extracted.Value.PageReferenceText);
+            pageReferences.Add(new FreeWVisualTableOfAuthoritiesPageReference(
+                string.IsNullOrWhiteSpace(currentCategory) ? "Uncategorized" : currentCategory,
+                extracted.Value.EntryText,
+                extracted.Value.PageReferenceText,
+                pageNumbers));
+        }
+
+        return new FreeWVisualTableOfAuthoritiesExpectation(
+            EntryCount: entryCount,
+            EntryWithPageReferenceCount: pageReferences.Count,
+            HasGeneratedTable: entryCount > 0,
+            HasPageReferences: pageReferences.Count > 0,
+            HasExplicitPageNumbers: pageReferences.Any(reference => reference.PageNumbers.Count > 0),
+            HasPassimReferences: pageReferences.Any(reference =>
+                string.Equals(reference.PageReferenceText, "passim", StringComparison.OrdinalIgnoreCase)),
+            PageReferences: pageReferences);
+    }
+
     public static void EnsureTrusted(FreeWVisualEvidenceRow row)
     {
         ArgumentNullException.ThrowIfNull(row);
@@ -1732,6 +1793,15 @@ public static class FreeWVisualEvidencePlanner
         ComplexFieldKeywords: [],
         HeaderFooterSlotNames: []);
 
+    private static FreeWVisualTableOfAuthoritiesExpectation EmptyTableOfAuthoritiesExpectation { get; } = new(
+        EntryCount: 0,
+        EntryWithPageReferenceCount: 0,
+        HasGeneratedTable: false,
+        HasPageReferences: false,
+        HasExplicitPageNumbers: false,
+        HasPassimReferences: false,
+        PageReferences: []);
+
     private static IEnumerable<(Run Run, bool HeaderFooter, string? HeaderFooterSlotName)> EnumerateFieldRunSnapshots(
         TextDocument document)
     {
@@ -1860,6 +1930,62 @@ public static class FreeWVisualEvidencePlanner
 
     private static string ToHex(int rgb) =>
         "#" + (rgb & 0xFFFFFF).ToString("X6", CultureInfo.InvariantCulture);
+
+    private static (string EntryText, string PageReferenceText)? ExtractTableOfAuthoritiesPageReference(
+        Paragraph paragraph)
+    {
+        if (paragraph.Runs.Count > 0)
+        {
+            var before = new List<string>();
+            for (var i = 0; i < paragraph.Runs.Count; i++)
+            {
+                var text = paragraph.Runs[i].Text ?? string.Empty;
+                var tabIndex = text.IndexOf('\t', StringComparison.Ordinal);
+                if (tabIndex < 0)
+                {
+                    before.Add(text);
+                    continue;
+                }
+
+                var entryText = string.Concat(before) + text[..tabIndex];
+                var pageReferenceText = text[(tabIndex + 1)..] + string.Concat(
+                    paragraph.Runs
+                        .Skip(i + 1)
+                        .Select(run => run.Text ?? string.Empty));
+                return NormalizeTableOfAuthoritiesPageReference(entryText, pageReferenceText);
+            }
+        }
+
+        var plainText = paragraph.PlainText;
+        var plainTabIndex = plainText.LastIndexOf('\t');
+        return plainTabIndex < 0
+            ? null
+            : NormalizeTableOfAuthoritiesPageReference(
+                plainText[..plainTabIndex],
+                plainText[(plainTabIndex + 1)..]);
+    }
+
+    private static (string EntryText, string PageReferenceText)? NormalizeTableOfAuthoritiesPageReference(
+        string entryText,
+        string pageReferenceText)
+    {
+        var entry = entryText.Trim();
+        var reference = pageReferenceText.Trim();
+        return string.IsNullOrWhiteSpace(entry) || string.IsNullOrWhiteSpace(reference)
+            ? null
+            : (entry, reference);
+    }
+
+    private static IReadOnlyList<int> ParsePageNumbers(string pageReferenceText) =>
+        pageReferenceText
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Select(segment => int.TryParse(segment, NumberStyles.Integer, CultureInfo.InvariantCulture, out var page)
+                ? Math.Max(1, page)
+                : 0)
+            .Where(page => page > 0)
+            .Distinct()
+            .OrderBy(page => page)
+            .ToList();
 
     private static TextDocument BuildSectionGeometrySurfaceDocument(
         TextDocument source,
