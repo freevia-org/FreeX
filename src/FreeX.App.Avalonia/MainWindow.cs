@@ -28,6 +28,7 @@ using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.PivotUI;
+using FreeX.App.Presentation.ScenarioManager;
 using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Presentation.SparklineUI;
@@ -16108,10 +16109,23 @@ public sealed partial class MainWindow : Window
             showButton.IsEnabled = selected is not null;
             deleteButton.IsEnabled = selected is not null;
             editButton.IsEnabled = selected is not null;
-            if (selected is not null)
+
+            var selectedDialogItem = selected is null
+                ? null
+                : ScenarioManagerDialogPlanner.BuildItems(_session.Workbook)
+                    .FirstOrDefault(item => string.Equals(item.Name, selected.Name, StringComparison.OrdinalIgnoreCase));
+            var fields = ScenarioManagerDialogPlanner.ProjectSelectionFields(
+                selectedDialogItem,
+                nameBox.Text ?? "",
+                CreateScenarioManagerDefaultName(plan.Scenarios));
+            if (fields is not null)
             {
-                preventChangesBox.IsChecked = selected.Locked;
-                hideBox.IsChecked = selected.Hidden;
+                nameBox.Text = fields.ScenarioName;
+                changingCellsBox.Text = fields.ChangingCellsText;
+                resultCellsBox.Text = fields.ResultCellsText;
+                commentBox.Text = fields.CommentText;
+                preventChangesBox.IsChecked = fields.Locked;
+                hideBox.IsChecked = fields.Hidden;
             }
         }
 
@@ -16334,7 +16348,8 @@ public sealed partial class MainWindow : Window
         };
 
         RefreshDialogPlan(selectedScenarioName);
-        nameBox.Text = CreateScenarioManagerDefaultName(plan.Scenarios);
+        if (plan.SelectedScenario is null)
+            nameBox.Text = CreateScenarioManagerDefaultName(plan.Scenarios);
         dialog.Content = new ScrollViewer
         {
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
