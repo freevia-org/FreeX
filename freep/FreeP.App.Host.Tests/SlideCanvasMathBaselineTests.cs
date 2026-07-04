@@ -161,11 +161,15 @@ public sealed class SlideCanvasMathBaselineTests
         var mathNode = new MathNode.BorderBox(
             new MathNode.Frac(
                 new MathNode.Run("1"),
-                new MathNode.Rad(null, new MathNode.Run("x"))));
+                new MathNode.Rad(null, new MathNode.Run("x"))),
+            strikeHorizontal: true,
+            strikeVertical: true,
+            strikeBottomLeftToTopRight: true,
+            strikeTopLeftToBottomRight: true);
         var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
         var ops = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math");
-        ops.OfType<MathDrawOp.DrawLine>().Should().HaveCount(4,
-            "borderBox side selection must be resolved in the shared math plan before WPF draws it");
+        ops.OfType<MathDrawOp.DrawLine>().Should().HaveCount(8,
+            "borderBox side and strike selection must be resolved in the shared math plan before WPF draws it");
 
         var para = new ResolvedParagraph
         {

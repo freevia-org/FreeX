@@ -569,6 +569,44 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void BorderBox_EmitsStrikeAndDiagonalLinesThroughBoxCenter()
+    {
+        var node = new MathNode.BorderBox(
+            Run("x"),
+            showTop: false,
+            showBottom: false,
+            showLeft: false,
+            showRight: false,
+            strikeHorizontal: true,
+            strikeVertical: true,
+            strikeBottomLeftToTopRight: true,
+            strikeTopLeftToBottomRight: true);
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var container = Assert.IsType<MathBox.Container>(layout.Children[0]);
+        var strikeLines = container.Children.OfType<MathBox.Line>().ToList();
+        double centerX = container.Metrics.Width / 2.0;
+        double centerY = container.Metrics.Height / 2.0;
+
+        strikeLines.Should().HaveCount(4, "each borderBox strike flag should produce one renderer-neutral line");
+        strikeLines.Should().ContainSingle(line =>
+                Math.Abs(line.Y - centerY) < 0.01 && Math.Abs(line.Y2) < 0.01 && line.X2 > 0,
+            "m:strikeH spans left-right through the box center");
+        strikeLines.Should().ContainSingle(line =>
+                Math.Abs(line.X - centerX) < 0.01 && Math.Abs(line.X2) < 0.01 && line.Y2 > 0,
+            "m:strikeV spans top-bottom through the box center");
+        strikeLines.Should().ContainSingle(line =>
+                line.X2 > 0 && line.Y2 < 0,
+            "m:strikeBLTR runs from bottom-left to top-right");
+        strikeLines.Should().ContainSingle(line =>
+                line.X2 > 0 && line.Y2 > 0,
+            "m:strikeTLBR runs from top-left to bottom-right");
+
+        var ops = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math");
+        ops.OfType<MathDrawOp.DrawLine>().Should().HaveCount(4);
+    }
+
+    [Fact]
     public void LimitLow_CentersLimitBelowBase_AndGrowsDescent()
     {
         var node = new MathNode.Limit(Run("lim"), Run("0"), isUpper: false);

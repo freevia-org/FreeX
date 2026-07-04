@@ -440,6 +440,10 @@ public sealed class OmmlParserTests
         Assert.True(borderBox.ShowLeft);
         Assert.True(borderBox.ShowRight);
         Assert.Equal("x", Assert.IsType<MathNode.Run>(borderBox.Base).Text);
+        Assert.False(borderBox.StrikeHorizontal);
+        Assert.False(borderBox.StrikeVertical);
+        Assert.False(borderBox.StrikeBottomLeftToTopRight);
+        Assert.False(borderBox.StrikeTopLeftToBottomRight);
     }
 
     [Fact]
@@ -451,6 +455,10 @@ public sealed class OmmlParserTests
         Assert.True(defaultBorderBox.ShowBottom);
         Assert.True(defaultBorderBox.ShowLeft);
         Assert.True(defaultBorderBox.ShowRight);
+        Assert.False(defaultBorderBox.StrikeHorizontal);
+        Assert.False(defaultBorderBox.StrikeVertical);
+        Assert.False(defaultBorderBox.StrikeBottomLeftToTopRight);
+        Assert.False(defaultBorderBox.StrikeTopLeftToBottomRight);
 
         var explicitFalseNode = Parse(
             "<m:borderBox>" +
@@ -467,5 +475,26 @@ public sealed class OmmlParserTests
         Assert.True(explicitFalseBorderBox.ShowBottom);
         Assert.True(explicitFalseBorderBox.ShowLeft);
         Assert.True(explicitFalseBorderBox.ShowRight);
+    }
+
+    [Fact]
+    public void BorderBox_ParsesStrikeAndDiagonalFlags()
+    {
+        var node = Parse(
+            "<m:borderBox>" +
+            "<m:borderBoxPr>" +
+            "<m:strikeH/>" +
+            "<m:strikeV m:val=\"true\"/>" +
+            "<m:strikeBLTR m:val=\"1\"/>" +
+            "<m:strikeTLBR m:val=\"off\"/>" +
+            "</m:borderBoxPr>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "</m:borderBox>");
+
+        var borderBox = Assert.IsType<MathNode.BorderBox>(node);
+        Assert.True(borderBox.StrikeHorizontal);
+        Assert.True(borderBox.StrikeVertical);
+        Assert.True(borderBox.StrikeBottomLeftToTopRight);
+        Assert.False(borderBox.StrikeTopLeftToBottomRight);
     }
 }

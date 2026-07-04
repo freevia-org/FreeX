@@ -298,19 +298,31 @@ public abstract class MathNode
         public bool ShowBottom { get; }
         public bool ShowLeft { get; }
         public bool ShowRight { get; }
+        public bool StrikeHorizontal { get; }
+        public bool StrikeVertical { get; }
+        public bool StrikeBottomLeftToTopRight { get; }
+        public bool StrikeTopLeftToBottomRight { get; }
 
         public BorderBox(
             MathNode @base,
             bool showTop = true,
             bool showBottom = true,
             bool showLeft = true,
-            bool showRight = true)
+            bool showRight = true,
+            bool strikeHorizontal = false,
+            bool strikeVertical = false,
+            bool strikeBottomLeftToTopRight = false,
+            bool strikeTopLeftToBottomRight = false)
         {
             Base = @base;
             ShowTop = showTop;
             ShowBottom = showBottom;
             ShowLeft = showLeft;
             ShowRight = showRight;
+            StrikeHorizontal = strikeHorizontal;
+            StrikeVertical = strikeVertical;
+            StrikeBottomLeftToTopRight = strikeBottomLeftToTopRight;
+            StrikeTopLeftToBottomRight = strikeTopLeftToBottomRight;
         }
     }
 
