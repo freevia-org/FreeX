@@ -5427,6 +5427,11 @@ public static class DocxWriter
             AddBibliographyField(element, "Title", source.Title);
             AddBibliographyField(element, "Year", source.Year);
             AddBibliographyField(element, "Publisher", source.Publisher);
+            AddBibliographyField(element, "City", source.City);
+            AddBibliographyField(element, "Edition", source.Edition);
+            AddBibliographyField(element, "StandardNumber", source.StandardNumber);
+            AddBibliographyField(element, "ShortTitle", source.ShortTitle);
+            AddBibliographyField(element, "Comments", source.Comments);
             AddBibliographyField(element, "JournalName", source.Journal);
             AddBibliographyField(element, "Volume", source.Volume);
             AddBibliographyField(element, "Issue", source.Issue);
