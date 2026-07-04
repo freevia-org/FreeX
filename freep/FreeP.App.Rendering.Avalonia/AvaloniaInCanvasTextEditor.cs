@@ -235,6 +235,42 @@ public sealed class AvaloniaInCanvasTextEditor
         return true;
     }
 
+    public bool TryApplyActiveTableCellParagraphBulletToggle()
+    {
+        var overlaySelection = GetActiveCellOverlaySelection();
+        var plan = AvaloniaTableCellEditAdapter.PlanParagraphBulletToggle(_editor, overlaySelection.Selection);
+        if (plan.Command is null)
+            return false;
+
+        _editor.Bus.Execute(plan.Command);
+        ApplyCellOverlayFormatResult(plan.ResultRichTextPlan);
+        return true;
+    }
+
+    public bool TryApplyActiveTableCellParagraphIndent()
+    {
+        var overlaySelection = GetActiveCellOverlaySelection();
+        var plan = AvaloniaTableCellEditAdapter.PlanParagraphIndent(_editor, overlaySelection.Selection);
+        if (plan.Command is null)
+            return false;
+
+        _editor.Bus.Execute(plan.Command);
+        ApplyCellOverlayFormatResult(plan.ResultRichTextPlan);
+        return true;
+    }
+
+    public bool TryApplyActiveTableCellParagraphOutdent()
+    {
+        var overlaySelection = GetActiveCellOverlaySelection();
+        var plan = AvaloniaTableCellEditAdapter.PlanParagraphOutdent(_editor, overlaySelection.Selection);
+        if (plan.Command is null)
+            return false;
+
+        _editor.Bus.Execute(plan.Command);
+        ApplyCellOverlayFormatResult(plan.ResultRichTextPlan);
+        return true;
+    }
+
     public AvaloniaInCanvasTextEditor(SlideCanvas canvas, EditingSession editor, Panel overlay)
     {
         _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));

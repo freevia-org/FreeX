@@ -580,6 +580,43 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
+    public void Cmd_Bullets_WithActiveTableCell_UsesSharedTableCellPlan()
+    {
+        var (ed, pres) = MakeSession();
+        var shape = AddSingleCellTable(pres, 402, MakeTextBody("Cell"));
+        ed.Select(shape.Id);
+        ed.SetActiveTableCell(0, 0);
+
+        Exec(MakeRegistry(ed), "freep.bullets");
+
+        var paragraph = shape.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+        paragraph.BulletKind.Should().Be(BulletKind.Char);
+        paragraph.BulletChar.Should().Be("\u2022");
+        paragraph.BulletSuppressed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Cmd_IndentIncreaseDecrease_WithActiveTableCell_UsesSharedTableCellPlan()
+    {
+        var (ed, pres) = MakeSession();
+        var shape = AddSingleCellTable(pres, 403, MakeTextBody("Cell"));
+        ed.Select(shape.Id);
+        ed.SetActiveTableCell(0, 0);
+
+        Exec(MakeRegistry(ed), "freep.indent-increase");
+
+        var paragraph = shape.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+        paragraph.Level.Should().Be(1);
+        paragraph.MarginLeftEmu.Should().Be(457200);
+
+        Exec(MakeRegistry(ed), "freep.indent-decrease");
+
+        paragraph = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+        paragraph.Level.Should().Be(0);
+        paragraph.MarginLeftEmu.Should().BeNull();
+    }
+
+    [Fact]
     public void Cmd_FormatPainter_CopiesFillFromFirstSelectedToOthers()
     {
         var (ed, pres) = MakeSession();
@@ -647,6 +684,11 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.paragraph.align-center")]
     [InlineData("freep.paragraph.align-right")]
     [InlineData("freep.paragraph.align-justify")]
+    [InlineData("freep.bullets")]
+    [InlineData("freep.indent-increase")]
+    [InlineData("freep.indent-decrease")]
+    [InlineData("freep.increase-indent")]
+    [InlineData("freep.decrease-indent")]
     [InlineData("freep.view.zoom")]
     [InlineData("freep.view.fit-to-window")]
     public void AllWave5BCommandIds_AreRegistered(string commandId)
@@ -655,5 +697,33 @@ public class RibbonEditorCompleteness5BTests
         var reg = MakeRegistry(ed);
         bool found = reg.TryGet(commandId, out _);
         Assert.True(found, $"Command '{commandId}' was not registered.");
+    }
+
+    private static TextBody MakeTextBody(string text)
+    {
+        var body = new TextBody();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = text });
+        body.Paragraphs.Add(paragraph);
+        return body;
+    }
+
+    private static SlideShape AddSingleCellTable(Presentation presentation, uint id, TextBody body)
+    {
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(DrawingMlCoordinateUnits.EmuPerInch);
+        var row = new TableRow { HeightEmu = DrawingMlCoordinateUnits.EmuPerInch / 2 };
+        row.Cells.Add(new TableCell { TextBody = body });
+        table.Rows.Add(row);
+        var shape = new SlideShape
+        {
+            Id = id,
+            Kind = SlideShapeKind.Table,
+            Table = table,
+            ExtentCxEmu = DrawingMlCoordinateUnits.EmuPerInch,
+            ExtentCyEmu = DrawingMlCoordinateUnits.EmuPerInch / 2,
+        };
+        presentation.Slides[0].Shapes.Add(shape);
+        return shape;
     }
 }

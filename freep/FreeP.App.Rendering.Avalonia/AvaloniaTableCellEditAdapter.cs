@@ -128,6 +128,48 @@ public static class AvaloniaTableCellEditAdapter
             selection);
     }
 
+    public static TableCellParagraphFormatPlan PlanParagraphBulletToggle(
+        EditingSession editor,
+        (int Start, int End)? selection = null)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+
+        return TableCellEditPlanner.PlanParagraphBulletToggle(
+            editor.CurrentSlideIndex,
+            editor.CurrentSlide,
+            editor.SelectedShapeIds,
+            editor.ActiveTableCell,
+            selection);
+    }
+
+    public static TableCellParagraphFormatPlan PlanParagraphIndent(
+        EditingSession editor,
+        (int Start, int End)? selection = null)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+
+        return TableCellEditPlanner.PlanParagraphIndent(
+            editor.CurrentSlideIndex,
+            editor.CurrentSlide,
+            editor.SelectedShapeIds,
+            editor.ActiveTableCell,
+            selection);
+    }
+
+    public static TableCellParagraphFormatPlan PlanParagraphOutdent(
+        EditingSession editor,
+        (int Start, int End)? selection = null)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+
+        return TableCellEditPlanner.PlanParagraphOutdent(
+            editor.CurrentSlideIndex,
+            editor.CurrentSlide,
+            editor.SelectedShapeIds,
+            editor.ActiveTableCell,
+            selection);
+    }
+
     public static void ApplyRichTextEditorPlan(
         TextBox textBox,
         InCanvasTableCellRichTextEditPlan? plan)

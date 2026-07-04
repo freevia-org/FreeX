@@ -150,6 +150,16 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Right)));
         registry.Register("freep.paragraph.align-justify",
             new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Justify)));
+        registry.Register("freep.bullets",
+            new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphBulletToggle()));
+        registry.Register("freep.indent-increase",
+            new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphIndent()));
+        registry.Register("freep.indent-decrease",
+            new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphOutdent()));
+        registry.Register("freep.increase-indent",
+            new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphIndent()));
+        registry.Register("freep.decrease-indent",
+            new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphOutdent()));
 
         // ── Clipboard — Wave 5B / 10B ─────────────────────────────────────────────
         // When osClipboard is provided (MainWindow injects it), Copy and Cut also push
