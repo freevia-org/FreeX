@@ -352,6 +352,9 @@ public sealed class ChartShape
     /// <summary>Legend position, or null if no legend is displayed.</summary>
     public LegendPosition? Legend { get; set; }
 
+    /// <summary>True when OOXML <c>c:varyColors</c> asks chart points to use independent fallback colors.</summary>
+    public bool VaryColors { get; set; }
+
     // ── Type-specific auxiliary fields ───────────────────────────────────────────
 
     /// <summary>
