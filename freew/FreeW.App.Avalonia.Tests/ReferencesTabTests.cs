@@ -285,6 +285,28 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
+    public void UpdateFields_refreshes_stale_styleref_cached_text()
+    {
+        var view = ViewWith(
+            Heading("Chapter Two", 1),
+            new Paragraph
+            {
+                Runs =
+                {
+                    new Run("See "),
+                    Run.ComplexFieldRun(" STYLEREF 1 ", "Chapter One")
+                }
+            });
+
+        view.UpdateFields();
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Single(r => r.ComplexField?.Keyword == "STYLEREF")
+            .Text.Should().Be("Chapter Two");
+    }
+
+    [Fact]
     public void InsertCitation_inserts_intext_citation_at_caret()
     {
         var view = ViewWith(new Paragraph("See here "));
