@@ -300,6 +300,8 @@ internal static class PptxChartReader
     private static void ReadBarChart(XElement el, ChartShape shape, PresentationColorScheme scheme,
         Dictionary<int, ChartSeries> idxMap)
     {
+        ReadVaryColors(el, shape);
+
         var barDir   = el.Element(C + "barDir")?.Attribute("val")?.Value   ?? "col";
         var grouping = el.Element(C + "grouping")?.Attribute("val")?.Value ?? "clustered";
 
@@ -320,6 +322,8 @@ internal static class PptxChartReader
     private static void ReadLineChart(XElement el, ChartShape shape, PresentationColorScheme scheme,
         Dictionary<int, ChartSeries> idxMap)
     {
+        ReadVaryColors(el, shape);
+
         // A line chart "has markers" when any series has an explicit marker that is not "none",
         // or has no marker element at all (OOXML default for lineChart is to show markers).
         bool hasMarkers = el.Elements(C + "ser").Any(s =>
@@ -335,6 +339,7 @@ internal static class PptxChartReader
     private static void ReadPieChart(XElement el, ChartShape shape, PresentationColorScheme scheme,
         Dictionary<int, ChartSeries> idxMap)
     {
+        ReadVaryColors(el, shape);
         shape.ChartType = ChartType.Pie;
         ReadSeriesFromChart(el, shape, scheme, idxMap);
     }
@@ -342,6 +347,8 @@ internal static class PptxChartReader
     private static void ReadAreaChart(XElement el, ChartShape shape, PresentationColorScheme scheme,
         Dictionary<int, ChartSeries> idxMap)
     {
+        ReadVaryColors(el, shape);
+
         var grouping = el.Element(C + "grouping")?.Attribute("val")?.Value ?? "standard";
         shape.ChartType = grouping == "stacked" ? ChartType.AreaStacked : ChartType.Area;
         ReadSeriesFromChart(el, shape, scheme, idxMap);
@@ -350,6 +357,7 @@ internal static class PptxChartReader
     private static void ReadScatterChart(XElement el, ChartShape shape, PresentationColorScheme scheme,
         Dictionary<int, ChartSeries> idxMap)
     {
+        ReadVaryColors(el, shape);
         shape.ChartType = ChartType.Scatter;
         ReadSeriesFromChart(el, shape, scheme, idxMap);
     }
@@ -357,6 +365,7 @@ internal static class PptxChartReader
     private static void ReadDoughnutChart(XElement el, ChartShape shape, PresentationColorScheme scheme,
         Dictionary<int, ChartSeries> idxMap)
     {
+        ReadVaryColors(el, shape);
         shape.ChartType = ChartType.Doughnut;
 
         // c:holeSize val= gives the inner radius as a percentage (default 50).
@@ -372,6 +381,7 @@ internal static class PptxChartReader
     private static void ReadScatterChartDistinct(XElement el, ChartShape shape, PresentationColorScheme scheme,
         Dictionary<int, ChartSeries> idxMap)
     {
+        ReadVaryColors(el, shape);
         shape.ChartType = ChartType.Scatter;
 
         // c:scatterStyle val= → marker/line/lineMarker/smooth/smoothMarker
@@ -392,6 +402,7 @@ internal static class PptxChartReader
     private static void ReadRadarChart(XElement el, ChartShape shape, PresentationColorScheme scheme,
         Dictionary<int, ChartSeries> idxMap)
     {
+        ReadVaryColors(el, shape);
         shape.ChartType = ChartType.Radar;
 
         var styleStr = el.Element(C + "radarStyle")?.Attribute("val")?.Value ?? "standard";
@@ -408,6 +419,7 @@ internal static class PptxChartReader
     private static void ReadBubbleChart(XElement el, ChartShape shape, PresentationColorScheme scheme,
         Dictionary<int, ChartSeries> idxMap)
     {
+        ReadVaryColors(el, shape);
         shape.ChartType = ChartType.Bubble;
 
         // Bubble charts also have a scatterStyle-like attribute (c:bubble3D is irrelevant for us).
@@ -416,6 +428,9 @@ internal static class PptxChartReader
 
         ReadBubbleSeriesFromChart(el, shape, scheme, idxMap);
     }
+
+    private static void ReadVaryColors(XElement chartTypeEl, ChartShape shape) =>
+        shape.VaryColors = ParseBoolAttr(chartTypeEl.Element(C + "varyColors"));
 
     // ── Scatter series (x:xVal / c:yVal, no categories axis) ─────────────────
 
