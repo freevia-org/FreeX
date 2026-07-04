@@ -196,6 +196,44 @@ public class BibliographyRoundTripTests
     }
 
     [Fact]
+    public void BookSectionSource_AllFields_SurviveRoundTrip()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Sources.Add(new Source
+        {
+            Tag = "Chapter2026",
+            Type = SourceType.BookSection,
+            Author = "Doe, J.",
+            Title = "Chapter Title",
+            BookTitle = "Containing Book",
+            Year = "2026",
+            ChapterNumber = "3",
+            Pages = "12-20",
+            City = "London",
+            Publisher = "Test Press",
+            Edition = "2",
+            StandardNumber = "ISBN-1",
+            ShortTitle = "Chapter",
+            Comments = "Book section note"
+        });
+
+        var source = RoundTrip(doc).Sources.Should().ContainSingle().Subject;
+        source.Type.Should().Be(SourceType.BookSection);
+        source.Author.Should().Be("Doe, J.");
+        source.Title.Should().Be("Chapter Title");
+        source.BookTitle.Should().Be("Containing Book");
+        source.Year.Should().Be("2026");
+        source.ChapterNumber.Should().Be("3");
+        source.Pages.Should().Be("12-20");
+        source.City.Should().Be("London");
+        source.Publisher.Should().Be("Test Press");
+        source.Edition.Should().Be("2");
+        source.StandardNumber.Should().Be("ISBN-1");
+        source.ShortTitle.Should().Be("Chapter");
+        source.Comments.Should().Be("Book section note");
+    }
+
+    [Fact]
     public void MultipleSources_PreserveOrderAndCount()
     {
         var doc = TextDocument.CreateEmpty();
@@ -278,6 +316,32 @@ public class BibliographyRoundTripTests
 
         source.Element(B + "SourceType")!.Value.Should().Be("Report");
         source.Element(B + "Institution")!.Value.Should().Be("Research Institute");
+    }
+
+    [Fact]
+    public void BibliographyPart_WritesBookSectionSourceTypeAndFields()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Sources.Add(new Source
+        {
+            Tag = "Chapter2026",
+            Type = SourceType.BookSection,
+            Title = "Chapter Title",
+            BookTitle = "Containing Book",
+            ChapterNumber = "3",
+            Pages = "12-20"
+        });
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        using var zip = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
+        using var entry = zip.GetEntry("word/bibliography/sources.xml")!.Open();
+        var source = XDocument.Load(entry).Root!.Element(B + "Source")!;
+
+        source.Element(B + "SourceType")!.Value.Should().Be("BookSection");
+        source.Element(B + "BookTitle")!.Value.Should().Be("Containing Book");
+        source.Element(B + "ChapterNumber")!.Value.Should().Be("3");
+        source.Element(B + "Pages")!.Value.Should().Be("12-20");
     }
 
     [Fact]
