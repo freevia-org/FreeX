@@ -66,12 +66,15 @@ public sealed class SourceManagementDialogPlannerTests
         choices.Select(choice => choice.Type).Should().Equal(
             SourceType.Book,
             SourceType.JournalArticle,
-            SourceType.WebSite);
+            SourceType.WebSite,
+            SourceType.Report);
         choices.Select(choice => choice.Label).Should().Equal(
             "Book",
             "Journal Article",
-            "Web Site");
+            "Web Site",
+            "Report");
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.JournalArticle).Should().Be(1);
+        SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Report).Should().Be(3);
     }
 
     [Fact]
@@ -102,6 +105,20 @@ public sealed class SourceManagementDialogPlannerTests
             SourceManagementSourceField.Accessed,
             SourceManagementSourceField.ShortTitle,
             SourceManagementSourceField.Comments);
+
+        var reportPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.Report);
+        reportPlans.Select(plan => plan.Field).Should().Equal(
+            SourceManagementSourceField.Tag,
+            SourceManagementSourceField.Author,
+            SourceManagementSourceField.Title,
+            SourceManagementSourceField.Year,
+            SourceManagementSourceField.Institution,
+            SourceManagementSourceField.City,
+            SourceManagementSourceField.Publisher,
+            SourceManagementSourceField.StandardNumber,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
+        reportPlans.Should().NotContain(plan => plan.Field == SourceManagementSourceField.Pages);
     }
 
     [Fact]
@@ -115,6 +132,7 @@ public sealed class SourceManagementDialogPlannerTests
                 [SourceManagementSourceField.Author] = " Knuth ",
                 [SourceManagementSourceField.Title] = null,
                 [SourceManagementSourceField.Year] = " 1997 ",
+                [SourceManagementSourceField.Institution] = " Example Institute ",
                 [SourceManagementSourceField.Url] = " https://example.test ",
                 [SourceManagementSourceField.ShortTitle] = " TAOCP ",
                 [SourceManagementSourceField.Comments] = " Notes "
@@ -125,10 +143,32 @@ public sealed class SourceManagementDialogPlannerTests
         entry.Author.Should().Be("Knuth");
         entry.Title.Should().BeEmpty();
         entry.Year.Should().Be("1997");
+        entry.Institution.Should().Be("Example Institute");
         entry.Url.Should().Be("https://example.test");
         entry.ShortTitle.Should().Be("TAOCP");
         entry.Comments.Should().Be("Notes");
         entry.CorporateAuthor.Should().Be("Knuth");
+    }
+
+    [Fact]
+    public void ProjectEntry_SeedsReportInstitutionFieldPlan()
+    {
+        var source = new Source
+        {
+            Type = SourceType.Report,
+            Tag = "R1",
+            Institution = "National Bureau of Standards",
+            City = "Washington",
+            Publisher = "Government Printing Office",
+            StandardNumber = "NBS-1"
+        };
+
+        var entry = SourceManagementDialogPlanner.ProjectEntry(source);
+        var plans = SourceManagementDialogPlanner.BuildEntryFieldPlans(entry);
+
+        entry.Institution.Should().Be("National Bureau of Standards");
+        plans.Single(plan => plan.Field == SourceManagementSourceField.Institution)
+            .Text.Should().Be("National Bureau of Standards");
     }
 
     [Fact]
@@ -275,6 +315,32 @@ public sealed class SourceManagementDialogPlannerTests
         source.Publisher.Should().Be("Site");
         source.Url.Should().Be("https://example.test");
         source.Accessed.Should().Be("3 May 2024");
+
+        SourceManagementDialogPlanner.TryBuildCitationSource(
+                new SourceManagementSourceEntry(
+                    SourceType.Report,
+                    string.Empty,
+                    string.Empty,
+                    string.Empty,
+                    string.Empty,
+                    string.Empty,
+                    string.Empty,
+                    string.Empty,
+                    string.Empty,
+                    string.Empty,
+                    string.Empty,
+                    string.Empty)
+                {
+                    Institution = "National Bureau of Standards"
+                },
+                out source,
+                out validation)
+            .Should().BeTrue();
+
+        validation.Should().BeNull();
+        source.Should().NotBeNull();
+        source!.Type.Should().Be(SourceType.Report);
+        source.Institution.Should().Be("National Bureau of Standards");
     }
 
     [Fact]
@@ -369,9 +435,13 @@ public sealed class SourceManagementDialogPlannerTests
                 "2",
                 "12-20",
                 "https://example.test",
-                "3 May 2024"));
+                "3 May 2024")
+            {
+                Institution = "Research Institute"
+            });
 
         source.Type.Should().Be(SourceType.Book);
+        source.Institution.Should().BeNull();
         source.Publisher.Should().Be("Publisher");
         source.City.Should().Be("Reading");
         source.Edition.Should().Be("2");
@@ -403,6 +473,35 @@ public sealed class SourceManagementDialogPlannerTests
         webSource.Comments.Should().Be("Notes");
         webSource.Url.Should().Be("https://example.test");
         webSource.Accessed.Should().Be("3 May 2024");
+
+        var reportSource = SourceManagementDialogPlanner.BuildSource(
+            SourceManagementDialogPlanner.ProjectEntry(source) with
+            {
+                Type = SourceType.Report,
+                Institution = "Research Institute",
+                City = "Geneva",
+                Publisher = "Reports Office",
+                StandardNumber = "R-2026-01",
+                Journal = "Journal",
+                Pages = "12-20",
+                Url = "https://example.test",
+                Accessed = "3 May 2024"
+            });
+
+        reportSource.Type.Should().Be(SourceType.Report);
+        reportSource.Institution.Should().Be("Research Institute");
+        reportSource.City.Should().Be("Geneva");
+        reportSource.Publisher.Should().Be("Reports Office");
+        reportSource.StandardNumber.Should().Be("R-2026-01");
+        reportSource.ShortTitle.Should().Be("Short");
+        reportSource.Comments.Should().Be("Notes");
+        reportSource.Edition.Should().BeNull();
+        reportSource.Journal.Should().BeNull();
+        reportSource.Volume.Should().BeNull();
+        reportSource.Issue.Should().BeNull();
+        reportSource.Pages.Should().BeNull();
+        reportSource.Url.Should().BeNull();
+        reportSource.Accessed.Should().BeNull();
     }
 
     [Fact]
@@ -451,6 +550,8 @@ public sealed class SourceManagementDialogPlannerTests
             Tag = "Doc",
             Author = "Ada Lovelace",
             PersonalAuthors = [SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace")],
+            Type = SourceType.Report,
+            Institution = "Analytical Society",
             City = "London",
             Edition = "Annotated",
             StandardNumber = "ISBN-1",
@@ -463,7 +564,9 @@ public sealed class SourceManagementDialogPlannerTests
 
         state.CurrentSources.Should().ContainSingle().Which.Should().NotBeSameAs(current);
         state.CurrentSources[0].Tag.Should().Be("Doc");
+        state.CurrentSources[0].Type.Should().Be(SourceType.Report);
         state.CurrentSources[0].PersonalAuthors.Should().BeEquivalentTo(current.PersonalAuthors);
+        state.CurrentSources[0].Institution.Should().Be("Analytical Society");
         state.CurrentSources[0].City.Should().Be("London");
         state.CurrentSources[0].Edition.Should().Be("Annotated");
         state.CurrentSources[0].StandardNumber.Should().Be("ISBN-1");
