@@ -1042,12 +1042,16 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     tab.Group("picture-arrange", "Arrange", null, 100, g =>
                     {
+                        g.Button("freew.image-position", "Position");
                         g.Dropdown("freew.image-wrap", "Wrap Text", BuildWrapMenu("image"));
                         g.Dropdown("freew.image-rotate", "Rotate", BuildRotateMenu("image"));
                         g.Button("freew.image-bring-to-front", "Bring to Front");
                         g.Button("freew.image-send-to-back",   "Send to Back");
                         g.Button("freew.image-bring-forward",  "Bring Forward");
                         g.Button("freew.image-send-backward",  "Send Backward");
+                        g.Button("freew.image-align-left", "Align Left");
+                        g.Button("freew.image-align-center", "Align Center");
+                        g.Button("freew.image-align-right", "Align Right");
                         g.Button("freew.image-align-to-page",  "Align to Page");
                         g.Button("freew.image-align-to-margin", "Align to Margin");
                         g.Button("freew.image-distribute-h",   "Distribute Horizontally");
@@ -1066,21 +1070,25 @@ internal static class FreeWAvaloniaRibbonDefinition
                 new RibbonTabContext(capabilities.DrawingContextKey, "Drawing Tools", RibbonContextColor.Purple),
                 tab =>
                 {
-                    // Shape Styles — fill/outline editing has no DocumentView setter yet (deferred);
-                    // the opener buttons are wired as safe no-ops so the registry stays complete.
+                    // Shape Styles — gallery/fill/outline use the shared object-format model commands.
                     tab.Group("drawing-styles", "Shape Styles", null, 100, g =>
                     {
+                        g.Button("freew.shape-styles-gallery", "Shape Styles");
                         g.Button("freew.shape-fill",    "Shape Fill");
                         g.Button("freew.shape-outline", "Shape Outline");
                     });
                     tab.Group("drawing-arrange", "Arrange", null, 90, g =>
                     {
+                        g.Button("freew.shape-position", "Position");
                         g.Dropdown("freew.shape-wrap", "Wrap Text", BuildWrapMenu("shape"));
                         g.Dropdown("freew.shape-rotate", "Rotate", BuildRotateMenu("shape"));
                         g.Button("freew.image-bring-to-front", "Bring to Front");
                         g.Button("freew.image-send-to-back",   "Send to Back");
                         g.Button("freew.image-bring-forward",  "Bring Forward");
                         g.Button("freew.image-send-backward",  "Send Backward");
+                        g.Button("freew.shape-align-left", "Align Left");
+                        g.Button("freew.shape-align-center", "Align Center");
+                        g.Button("freew.shape-align-right", "Align Right");
                         g.Button("freew.shape-align-to-page",  "Align to Page");
                         g.Button("freew.shape-align-to-margin", "Align to Margin");
                         g.Button("freew.shape-distribute-h",   "Distribute Horizontally");
@@ -1092,6 +1100,8 @@ internal static class FreeWAvaloniaRibbonDefinition
                     {
                         g.ComboBox("freew.shape-width",  "Width",  c => c with { Items = FloatSizes, Width = 72 });
                         g.ComboBox("freew.shape-height", "Height", c => c with { Items = FloatSizes, Width = 72 });
+                        g.Button("freew.shape-size", "Size");
+                        g.Button("freew.shape-alt-text", "Alt Text");
                     });
                 })
             // ── AV-CHARTTAB: Chart Design contextual tab (shown when a floating CHART is selected) ──

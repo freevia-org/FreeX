@@ -160,6 +160,10 @@ public sealed class PictureDrawingContextualTabTests
             .ToArray();
         pictureArrangeIds.Should().Contain(new[]
         {
+            "freew.image-position",
+            "freew.image-align-left",
+            "freew.image-align-center",
+            "freew.image-align-right",
             "freew.image-align-to-page",
             "freew.image-align-to-margin",
             "freew.image-distribute-h",
@@ -168,6 +172,13 @@ public sealed class PictureDrawingContextualTabTests
             "freew.object-ungroup",
         }, "Picture Format should expose Word's object arrange commands");
 
+        var drawingStyleIds = draw.Groups.Single(g => g.Id == "drawing-styles").Controls
+            .Select(control => GetCommandId(control)?.Value)
+            .Where(id => id is not null)
+            .Select(id => id!)
+            .ToArray();
+        drawingStyleIds.Should().Contain("freew.shape-styles-gallery");
+
         var drawingArrangeIds = draw.Groups.Single(g => g.Id == "drawing-arrange").Controls
             .Select(control => GetCommandId(control)?.Value)
             .Where(id => id is not null)
@@ -175,10 +186,14 @@ public sealed class PictureDrawingContextualTabTests
             .ToArray();
         drawingArrangeIds.Should().Contain(new[]
         {
+            "freew.shape-position",
             "freew.image-bring-to-front",
             "freew.image-send-to-back",
             "freew.image-bring-forward",
             "freew.image-send-backward",
+            "freew.shape-align-left",
+            "freew.shape-align-center",
+            "freew.shape-align-right",
             "freew.shape-align-to-page",
             "freew.shape-align-to-margin",
             "freew.shape-distribute-h",
@@ -209,6 +224,7 @@ public sealed class PictureDrawingContextualTabTests
             "freew.image-rotate-left90", "freew.image-flip-vertical", "freew.image-flip-horizontal",
             "freew.image-bring-to-front", "freew.image-send-to-back", "freew.image-bring-forward",
             "freew.image-send-backward", "freew.object-group", "freew.object-ungroup",
+            "freew.image-position", "freew.image-align-left", "freew.image-align-center", "freew.image-align-right",
             "freew.image-align-to-page", "freew.image-align-to-margin",
             "freew.image-distribute-h", "freew.image-distribute-v",
             "freew.image-width", "freew.image-height",
@@ -217,8 +233,10 @@ public sealed class PictureDrawingContextualTabTests
             "freew.shape-rotate", "freew.shape-rotate-right90", "freew.shape-flip-horizontal",
             "freew.shape-bring-to-front", "freew.shape-send-to-back", "freew.shape-bring-forward",
             "freew.shape-send-backward", "freew.shape-width", "freew.shape-height",
+            "freew.shape-position", "freew.shape-align-left", "freew.shape-align-center", "freew.shape-align-right",
             "freew.shape-align-to-page", "freew.shape-align-to-margin",
             "freew.shape-distribute-h", "freew.shape-distribute-v",
+            "freew.shape-size", "freew.shape-alt-text", "freew.shape-styles-gallery",
             "freew.shape-fill", "freew.shape-fill-no-fill", "freew.shape-fill-gradient-blue",
             "freew.shape-fill-gradient-orange", "freew.shape-fill-pattern-diag",
             "freew.shape-outline", "freew.shape-outline-no-outline", "freew.shape-outline-solid",
@@ -602,6 +620,46 @@ public sealed class PictureDrawingContextualTabTests
     }
 
     [Fact]
+    public async Task ObjectAlignCommands_align_left_center_right_through_shared_model_command()
+    {
+        double? centeredImageX = null, centeredShapeX = null, rightImageX = null, rightShapeX = null;
+        HorizontalAnchor? centeredImageAnchor = null, centeredShapeAnchor = null;
+        var ran = await OnUi(() =>
+        {
+            var doc = DocWithFloatingImageAndShape();
+            doc.Page.WidthPt = 600;
+            doc.Page.MarginLeftPt = 72;
+            doc.Page.MarginRightPt = 72;
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(0, 1);
+            view.SelectFloating(0, 2, addToMultiSelect: true);
+
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+            ExecuteCommand(registry, "freew.image-align-center");
+
+            var para = (Paragraph)doc.Blocks[0];
+            centeredImageX = para.Runs[1].Image!.HorizontalOffsetPt;
+            centeredShapeX = para.Runs[2].Shape!.Placement!.HorizontalOffsetPt;
+            centeredImageAnchor = para.Runs[1].Image!.HorizontalAnchor;
+            centeredShapeAnchor = para.Runs[2].Shape!.Placement!.HorizontalAnchor;
+
+            ExecuteCommand(registry, "freew.shape-align-right");
+            rightImageX = para.Runs[1].Image!.HorizontalOffsetPt;
+            rightShapeX = para.Runs[2].Shape!.Placement!.HorizontalOffsetPt;
+        });
+        if (!ran) return;
+
+        centeredImageX.Should().Be(270);
+        centeredShapeX.Should().Be(264);
+        centeredImageAnchor.Should().Be(HorizontalAnchor.Margin);
+        centeredShapeAnchor.Should().Be(HorizontalAnchor.Margin);
+        rightImageX.Should().Be(468);
+        rightShapeX.Should().Be(456);
+    }
+
+    [Fact]
     public async Task ObjectGroupCommands_group_and_ungroup_through_registry()
     {
         int? groupedRunCount = null, groupedChildCount = null, ungroupedRunCount = null;
@@ -636,6 +694,42 @@ public sealed class PictureDrawingContextualTabTests
         ungroupedRunCount.Should().Be(3, "body text plus the restored image and shape runs should remain");
         ungroupedHasImage.Should().BeTrue();
         ungroupedHasShape.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ShapeFormatValueCommands_update_position_size_alt_text_and_style()
+    {
+        Shape? shape = null;
+        HorizontalAnchor? anchor = null;
+        var ran = await OnUi(() =>
+        {
+            var (doc, bi, ri) = DocWithFloatingShape();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+            ExecuteCommand(registry, "freew.shape-size", RibbonCommandContext.ForSelectedValue("144,72"));
+            ExecuteCommand(registry, "freew.shape-position", RibbonCommandContext.ForSelectedValue("24,48,Page,Paragraph"));
+            ExecuteCommand(registry, "freew.shape-alt-text", RibbonCommandContext.ForSelectedValue("  Sales process  "));
+            ExecuteCommand(registry, "freew.shape-styles-gallery", RibbonCommandContext.ForSelectedValue("shape-style-1"));
+
+            shape = ((Paragraph)doc.Blocks[0]).Runs[ri].Shape!;
+            anchor = shape.Placement!.HorizontalAnchor;
+        });
+        if (!ran) return;
+
+        shape.Should().NotBeNull();
+        shape!.WidthPt.Should().Be(144);
+        shape.HeightPt.Should().Be(72);
+        shape.Placement!.HorizontalOffsetPt.Should().Be(24);
+        shape.Placement.VerticalOffsetPt.Should().Be(48);
+        anchor.Should().Be(HorizontalAnchor.Page);
+        shape.AltText.Should().Be("Sales process");
+        shape.ExtendedFill.Should().NotBeNull();
+        shape.ExtendedFill!.Kind.Should().Be(ShapeFillKind.NoFill);
+        shape.OutlineColorHex.Should().Be("#4472C4");
     }
 
     [Fact]
@@ -719,6 +813,13 @@ public sealed class PictureDrawingContextualTabTests
         registry.TryGet(new RibbonCommandId(id), out var command)
             .Should().BeTrue($"command '{id}' must be registered");
         command!.Execute(RibbonCommandContext.Empty);
+    }
+
+    private static void ExecuteCommand(RibbonCommandRegistry registry, string id, RibbonCommandContext context)
+    {
+        registry.TryGet(new RibbonCommandId(id), out var command)
+            .Should().BeTrue($"command '{id}' must be registered");
+        command!.Execute(context);
     }
 
     private static RibbonCommandId? GetCommandId(RibbonControl control) => control switch

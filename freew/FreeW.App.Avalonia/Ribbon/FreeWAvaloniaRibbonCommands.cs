@@ -1131,14 +1131,24 @@ internal static class FreeWAvaloniaRibbonCommands
             }
         }
 
+        r.Register("freew.image-position", new FloatingObjectPositionCommand(editor));
+        r.Register("freew.image-align-left", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignLeft));
+        r.Register("freew.image-align-center", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignCenter));
+        r.Register("freew.image-align-right", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignRight));
         r.Register("freew.image-align-to-page", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignToPage));
         r.Register("freew.image-align-to-margin", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignToMargin));
         r.Register("freew.image-distribute-h", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.DistributeHorizontal));
         r.Register("freew.image-distribute-v", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.DistributeVertical));
+        r.Register("freew.shape-position", new FloatingObjectPositionCommand(editor));
+        r.Register("freew.shape-align-left", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignLeft));
+        r.Register("freew.shape-align-center", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignCenter));
+        r.Register("freew.shape-align-right", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignRight));
         r.Register("freew.shape-align-to-page", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignToPage));
         r.Register("freew.shape-align-to-margin", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignToMargin));
         r.Register("freew.shape-distribute-h", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.DistributeHorizontal));
         r.Register("freew.shape-distribute-v", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.DistributeVertical));
+        r.Register("freew.shape-size", new FloatingObjectSizeCommand(editor));
+        r.Register("freew.shape-alt-text", new FloatingObjectAltTextCommand(editor));
         r.Register("freew.object-group", new FloatingObjectGroupCommand(editor));
         r.Register("freew.object-ungroup", new FloatingObjectUngroupCommand(editor));
 
@@ -1158,6 +1168,97 @@ internal static class FreeWAvaloniaRibbonCommands
 
         public RibbonCommandState GetState() =>
             new(IsEnabled: editor.CanArrangeSelectedFloatingObjects(kind));
+    }
+
+    private sealed class FloatingObjectPositionCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (editor.SelectedFloatingInfo is null
+                || !TryParsePosition(context.SelectedValue, out var hOffset, out var vOffset, out var hAnchor, out var vAnchor))
+                return;
+
+            editor.SetFloatingPosition(hOffset, vOffset, hAnchor, vAnchor);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: editor.SelectedFloatingInfo is not null);
+
+        private static bool TryParsePosition(
+            string? value,
+            out double hOffset,
+            out double vOffset,
+            out HorizontalAnchor hAnchor,
+            out VerticalAnchor vAnchor)
+        {
+            hOffset = 0;
+            vOffset = 0;
+            hAnchor = HorizontalAnchor.Column;
+            vAnchor = VerticalAnchor.Paragraph;
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            var parts = value.Split(',', StringSplitOptions.TrimEntries);
+            if (parts.Length < 2
+                || !double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out hOffset)
+                || !double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out vOffset))
+            {
+                return false;
+            }
+
+            if (parts.Length >= 3)
+                Enum.TryParse(parts[2], ignoreCase: true, out hAnchor);
+            if (parts.Length >= 4)
+                Enum.TryParse(parts[3], ignoreCase: true, out vAnchor);
+            return true;
+        }
+    }
+
+    private sealed class FloatingObjectSizeCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (editor.GetSelectedFloatingSize() is null
+                || !TryParseSize(context.SelectedValue, out var widthPt, out var heightPt))
+                return;
+
+            editor.SetFloatingSize(widthPt, heightPt);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: editor.GetSelectedFloatingSize() is not null);
+
+        private static bool TryParseSize(string? value, out double widthPt, out double heightPt)
+        {
+            widthPt = 0;
+            heightPt = 0;
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            var parts = value.Split(',', StringSplitOptions.TrimEntries);
+            return parts.Length >= 2
+                && double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out widthPt)
+                && double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out heightPt)
+                && widthPt > 0
+                && heightPt > 0;
+        }
+    }
+
+    private sealed class FloatingObjectAltTextCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!CanEditAltText() || context.SelectedValue is null)
+                return;
+
+            editor.SetSelectedFloatingAltText(context.SelectedValue);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: CanEditAltText());
+
+        private bool CanEditAltText() =>
+            editor.SelectedFloatingInfo?.Kind is "Shape" or "WordArt";
     }
 
     private sealed class FloatingObjectGroupCommand(DocumentView editor) : IRibbonStatefulCommand
@@ -1197,6 +1298,8 @@ internal static class FreeWAvaloniaRibbonCommands
             new ShapeStyleCommand(editor, () => { /* opener command */ }));
         foreach (var command in ObjectFormatCommandPlanner.ShapeOutlineCommands())
             r.Register(command.CommandId, new ShapeOutlineCommand(editor, command));
+
+        r.Register("freew.shape-styles-gallery", new ShapeStylesGalleryCommand(editor));
     }
 
     private sealed class ShapeStyleCommand(DocumentView editor, Action execute) : IRibbonStatefulCommand
@@ -1248,6 +1351,26 @@ internal static class FreeWAvaloniaRibbonCommands
                 shape.OutlineColorHex,
                 shape.OutlineWidthPt);
             editor.SetSelectedShapeOutline(plan.ColorHex, plan.WidthPt, plan.Dash);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: ObjectFormatCommandPlanner.CanFormatShapeFillOutline(editor.SelectedFloatingShape()?.Kind));
+    }
+
+    private sealed class ShapeStylesGalleryCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!ObjectFormatCommandPlanner.CanFormatShapeFillOutline(editor.SelectedFloatingShape()?.Kind)
+                || string.IsNullOrWhiteSpace(context.SelectedValue))
+            {
+                return;
+            }
+
+            var preset = ShapeStylePreset.Catalog
+                .FirstOrDefault(item => string.Equals(item.Id, context.SelectedValue, StringComparison.OrdinalIgnoreCase));
+            if (preset is not null)
+                editor.ApplySelectedShapeStyle(preset);
         }
 
         public RibbonCommandState GetState() =>
