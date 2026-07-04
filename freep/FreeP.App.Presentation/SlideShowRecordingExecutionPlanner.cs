@@ -33,6 +33,21 @@ public sealed record SlideShowRecordingExecutionAction(
     bool IsDeferred,
     string StatusText);
 
+public enum SlideShowRecordingMediaArtifactKind
+{
+    NarrationAudio,
+    CameraVideo
+}
+
+public sealed record SlideShowRecordingMediaArtifact(
+    SlideShowRecordingMediaArtifactKind Kind,
+    int SlideIndex,
+    bool IsCaptured,
+    bool IsDeferred,
+    string SuggestedFileName,
+    string ContentType,
+    string StatusText);
+
 public sealed record SlideShowRecordingSlideSegment(
     int SlideIndex,
     DateTimeOffset StartedAtUtc,
@@ -42,7 +57,8 @@ public sealed record SlideShowRecordingSlideSegment(
     bool NarrationRequested,
     bool CameraRequested,
     bool NarrationCaptured,
-    bool CameraCaptured);
+    bool CameraCaptured,
+    IReadOnlyList<SlideShowRecordingMediaArtifact> MediaArtifacts);
 
 public sealed record SlideShowRecordingExecutionState(
     bool IsSessionActive,
@@ -250,7 +266,72 @@ public static class SlideShowRecordingExecutionPlanner
             state.RecordingPlan.IsNarrationRequested,
             state.RecordingPlan.IsMediaCaptureRequested,
             state.RecordingPlan.IsNarrationRequested && state.HostCapabilities.CanCaptureNarration,
-            state.RecordingPlan.IsMediaCaptureRequested && state.HostCapabilities.CanCaptureCamera);
+            state.RecordingPlan.IsMediaCaptureRequested && state.HostCapabilities.CanCaptureCamera,
+            BuildMediaArtifacts(state, slideIndex));
+
+    private static IReadOnlyList<SlideShowRecordingMediaArtifact> BuildMediaArtifacts(
+        SlideShowRecordingExecutionState state,
+        int slideIndex)
+    {
+        var artifacts = new List<SlideShowRecordingMediaArtifact>();
+        if (state.RecordingPlan.IsNarrationRequested)
+        {
+            artifacts.Add(BuildMediaArtifact(
+                state,
+                slideIndex,
+                SlideShowRecordingMediaArtifactKind.NarrationAudio,
+                state.HostCapabilities.CanCaptureNarration,
+                "narration",
+                "m4a",
+                "audio/mp4",
+                "Narration audio"));
+        }
+
+        if (state.RecordingPlan.IsMediaCaptureRequested)
+        {
+            artifacts.Add(BuildMediaArtifact(
+                state,
+                slideIndex,
+                SlideShowRecordingMediaArtifactKind.CameraVideo,
+                state.HostCapabilities.CanCaptureCamera,
+                "camera",
+                "mp4",
+                "video/mp4",
+                "Camera video"));
+        }
+
+        return artifacts;
+    }
+
+    private static SlideShowRecordingMediaArtifact BuildMediaArtifact(
+        SlideShowRecordingExecutionState state,
+        int slideIndex,
+        SlideShowRecordingMediaArtifactKind kind,
+        bool isCaptured,
+        string fileStem,
+        string extension,
+        string contentType,
+        string label)
+    {
+        var suggestedFileName = $"slide-{slideIndex + 1:000}-{fileStem}.{extension}";
+        return isCaptured
+            ? new(
+                kind,
+                slideIndex,
+                IsCaptured: true,
+                IsDeferred: false,
+                suggestedFileName,
+                contentType,
+                $"{label} captured for slide {slideIndex + 1}")
+            : new(
+                kind,
+                slideIndex,
+                IsCaptured: false,
+                IsDeferred: true,
+                suggestedFileName,
+                contentType,
+                $"{state.HostCapabilities.HostName}: {state.HostCapabilities.UnavailableReason}");
+    }
 
     private static IReadOnlyList<SlideShowRecordingExecutionAction> EnterSlideActions(
         SlideShowRecordingExecutionState state,
