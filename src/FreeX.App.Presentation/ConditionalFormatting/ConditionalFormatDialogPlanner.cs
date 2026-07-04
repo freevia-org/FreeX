@@ -42,6 +42,12 @@ public sealed record ConditionalFormatDialogAxisPositionOption(string LabelKey, 
 /// </summary>
 public static class ConditionalFormatDialogCatalog
 {
+    public const double RuleEditorWpfWindowWidth = 650;
+    public const double RuleEditorCaptureWidth = 634;
+    public const double RuleEditorCaptureHeight = 334;
+    public const double RuleEditorMinWidth = 600;
+    public const double RuleEditorMinHeight = 320;
+
     public const string FormulaRule = "Formula";
     public const string UseFormulaRule = "Use a Formula";
     public const string DataBarRule = "Data Bar";
