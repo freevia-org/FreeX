@@ -39,7 +39,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
         plan.CurrentSlideSummaryLabel.Should().Be("Slide 1: 1 thread");
         plan.DeckSummaryLabel.Should().Be("2 threads: 2 open threads, 0 resolved threads, 0 replies, 0 mentions");
         plan.SelectedCommentIndex.Should().Be(0);
-        plan.Comments.Should().ContainSingle().Which.Should().Be(new PresentationCommentDescriptor(
+        plan.Comments.Should().ContainSingle().Which.Should().BeEquivalentTo(new PresentationCommentDescriptor(
             0,
             0,
             1,
@@ -492,18 +492,26 @@ public sealed class PresentationReviewWorkflowPlannerTests
         comment.ThreadStatusSummary.Should().Be("Open - 2 replies");
         comment.ReplySummary.Should().Be("2 replies");
         comment.MentionSummary.Should().Be("2 mentions");
-        comment.Replies[0].Should().Be(new PresentationCommentReplyDescriptor(
+        comment.Mentions.Should().ContainSingle().Which.Should().Be(
+            new PresentationCommentMentionDescriptor(0, 11, 5, "Nora", "NORA"));
+        comment.MentionDetailSummary.Should().Be("Mentions: @Nora");
+        comment.Replies[0].Should().BeEquivalentTo(new PresentationCommentReplyDescriptor(
             0,
             "Nora",
             "NO",
             "@Alice looks good after the chart update.",
             new DateTime(2026, 7, 2, 10, 0, 0, DateTimeKind.Utc),
-            1));
+            1)
+        {
+            Mentions = [new PresentationCommentMentionDescriptor(0, 0, 6, "Alice", "ALICE")]
+        });
         comment.Replies[0].AuthorDisplayName.Should().Be("Nora");
         comment.Replies[0].InitialsBadgeText.Should().Be("NO");
         comment.Replies[0].AuthorIdentityKey.Should().Be("NORA|NO");
         comment.Replies[0].ReplyLabel.Should().Be("Reply 1");
         comment.Replies[0].MentionSummary.Should().Be("1 mention");
+        comment.Replies[0].MentionDetailSummary.Should().Be("Mentions: @Alice");
+        comment.Replies[1].MentionDetailSummary.Should().Be("No mentions");
         plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReplyCommentCommandId)
             .Should().Be(new PresentationReviewWorkflowActionPlan(
                 PresentationReviewWorkflowPlanner.ReplyCommentCommandId,
