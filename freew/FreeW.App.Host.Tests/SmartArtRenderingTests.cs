@@ -163,6 +163,40 @@ public sealed class SmartArtRenderingTests
         Assert.InRange(shadow.ShadowDepth, 2.09, 2.11);
     }
 
+    [StaFact]
+    public void HierarchyWithGrandchild_DoesNotShiftPlanValuesOntoNextRoot()
+    {
+        var root = new SmartArtNode("Root");
+        var child = root.AddChild("Child");
+        child.AddChild("Grandchild");
+
+        var sa = new SmartArt { Kind = SmartArtKind.Hierarchy };
+        sa.ColorSchemeId = "accent1";
+        sa.StyleId = "intense1";
+        sa.Nodes.Add(root);
+        sa.Nodes.Add(new SmartArtNode("SecondRoot"));
+
+        var view = ViewWithSmartArt(sa);
+
+        var renderedNodeTexts = LogicalDescendants<Border>(view.Document)
+            .Select(b => b.Child as TextBlock)
+            .Where(tb => tb is not null && tb.Text is "Root" or "Child" or "Grandchild" or "SecondRoot")
+            .Select(tb => tb!.Text)
+            .ToList();
+
+        Assert.Equal(new[] { "Root", "Child", "SecondRoot" }, renderedNodeTexts);
+
+        var secondRootBorder = LogicalDescendants<Border>(view.Document)
+            .Single(b => b.Child is TextBlock { Text: "SecondRoot" });
+        var secondRootFill = Assert.IsType<SolidColorBrush>(secondRootBorder.Background).Color;
+        Assert.Equal(0xB6, secondRootFill.R);
+        Assert.Equal(0xDC, secondRootFill.G);
+        Assert.Equal(0xFF, secondRootFill.B);
+
+        var secondRootShadow = Assert.IsType<DropShadowEffect>(secondRootBorder.Effect);
+        Assert.InRange(secondRootShadow.Opacity, 0.29, 0.31);
+    }
+
     // ── Bug #5: process arrow fill contrasts with box fill ───────────────────────────────────────
 
     /// <summary>

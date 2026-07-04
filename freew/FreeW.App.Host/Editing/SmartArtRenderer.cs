@@ -275,10 +275,10 @@ internal static class SmartArtRenderer
             VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(6)
         };
-        var planIndex = 0;
+        var nodePlans = BuildNodePlanMap(nodes, plannedNodes);
         foreach (var node in nodes)
         {
-            root.Children.Add(MakeNodeBox(plannedNodes[planIndex++], strokeThickness,
+            root.Children.Add(MakeNodeBox(PlanFor(node, nodePlans, plannedNodes), strokeThickness,
                 margin: new Thickness(2),
                 padding: new Thickness(8, 4, 8, 4)));
 
@@ -293,7 +293,7 @@ internal static class SmartArtRenderer
                 };
                 foreach (var child in node.Children)
                 {
-                    childPanel.Children.Add(MakeNodeBox(plannedNodes[planIndex++], strokeThickness,
+                    childPanel.Children.Add(MakeNodeBox(PlanFor(child, nodePlans, plannedNodes), strokeThickness,
                         margin: new Thickness(2),
                         padding: new Thickness(6, 3, 6, 3)));
                 }
@@ -301,6 +301,40 @@ internal static class SmartArtRenderer
             }
         }
         return root;
+    }
+
+    private static Dictionary<SmartArtNode, SmartArtNodeVisualPlan> BuildNodePlanMap(
+        IEnumerable<SmartArtNode> nodes,
+        IReadOnlyList<SmartArtNodeVisualPlan> plannedNodes)
+    {
+        var map = new Dictionary<SmartArtNode, SmartArtNodeVisualPlan>();
+        var planIndex = 0;
+
+        void Visit(IEnumerable<SmartArtNode> source)
+        {
+            foreach (var node in source)
+            {
+                if (planIndex < plannedNodes.Count)
+                    map[node] = plannedNodes[planIndex++];
+                Visit(node.Children);
+            }
+        }
+
+        Visit(nodes);
+        return map;
+    }
+
+    private static SmartArtNodeVisualPlan PlanFor(
+        SmartArtNode node,
+        IReadOnlyDictionary<SmartArtNode, SmartArtNodeVisualPlan> nodePlans,
+        IReadOnlyList<SmartArtNodeVisualPlan> plannedNodes)
+    {
+        if (nodePlans.TryGetValue(node, out var plan))
+            return plan;
+
+        return plannedNodes.Count > 0
+            ? plannedNodes[0] with { Text = node.Text }
+            : new SmartArtNodeVisualPlan(node.Text, 0, 0, "#4E81BD", "#FFFFFF", "#20538F", 1, 0, 0, 0, 0, "#365986");
     }
 
     // Radial layout: central hub + satellite nodes arranged around it.
