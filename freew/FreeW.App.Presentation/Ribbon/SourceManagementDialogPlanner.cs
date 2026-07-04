@@ -36,6 +36,10 @@ public sealed record SourceManagementSourceEntry(
     string Url,
     string Accessed)
 {
+    public IReadOnlyList<SourceAuthorPerson> PersonalAuthors { get; init; } = [];
+
+    public string? CorporateAuthor { get; init; }
+
     public SourceManagementSourceEntry(
         string Tag,
         string Author,
@@ -202,7 +206,11 @@ public static class SourceManagementDialogPlanner
             source?.Issue ?? string.Empty,
             source?.Pages ?? string.Empty,
             source?.Url ?? string.Empty,
-            source?.Accessed ?? string.Empty);
+            source?.Accessed ?? string.Empty)
+        {
+            PersonalAuthors = ClonePersonalAuthors(source?.PersonalAuthors ?? []),
+            CorporateAuthor = source?.CorporateAuthor
+        };
 
     public static SourceManagementSourceEntry CreateEntry(
         IReadOnlyDictionary<SourceManagementSourceField, string?> values) =>
@@ -212,12 +220,24 @@ public static class SourceManagementDialogPlanner
         SourceType type,
         IReadOnlyDictionary<SourceManagementSourceField, string?> values)
     {
+        return CreateEntry(type, values, previousEntry: null);
+    }
+
+    public static SourceManagementSourceEntry CreateEntry(
+        SourceType type,
+        IReadOnlyDictionary<SourceManagementSourceField, string?> values,
+        SourceManagementSourceEntry? previousEntry)
+    {
         ArgumentNullException.ThrowIfNull(values);
+
+        var author = NormalizeAuthor(
+            TrimmedValue(values, SourceManagementSourceField.Author),
+            previousEntry);
 
         return new SourceManagementSourceEntry(
             NormalizeSourceType(type),
             TrimmedValue(values, SourceManagementSourceField.Tag),
-            TrimmedValue(values, SourceManagementSourceField.Author),
+            author.DisplayText,
             TrimmedValue(values, SourceManagementSourceField.Title),
             TrimmedValue(values, SourceManagementSourceField.Year),
             TrimmedValue(values, SourceManagementSourceField.Publisher),
@@ -226,7 +246,11 @@ public static class SourceManagementDialogPlanner
             TrimmedValue(values, SourceManagementSourceField.Issue),
             TrimmedValue(values, SourceManagementSourceField.Pages),
             TrimmedValue(values, SourceManagementSourceField.Url),
-            TrimmedValue(values, SourceManagementSourceField.Accessed));
+            TrimmedValue(values, SourceManagementSourceField.Accessed))
+        {
+            PersonalAuthors = author.PersonalAuthors,
+            CorporateAuthor = author.CorporateAuthor
+        };
     }
 
     public static IReadOnlyList<string> BuildPickerItems(IReadOnlyList<Source> sources)
@@ -303,11 +327,14 @@ public static class SourceManagementDialogPlanner
         ArgumentNullException.ThrowIfNull(entry);
 
         var type = NormalizeSourceType(entry.Type);
+        var author = NormalizeAuthor(entry.Author, AuthorPreservationEntry(entry, existing));
         return new Source
         {
             Tag = entry.Tag.Trim(),
             Type = type,
-            Author = entry.Author.Trim(),
+            Author = author.DisplayText,
+            PersonalAuthors = author.PersonalAuthors,
+            CorporateAuthor = author.CorporateAuthor,
             Title = entry.Title.Trim(),
             Year = entry.Year.Trim(),
             Publisher = type is SourceType.Book or SourceType.WebSite
@@ -331,6 +358,8 @@ public static class SourceManagementDialogPlanner
             Tag = source.Tag,
             Type = source.Type,
             Author = source.Author,
+            PersonalAuthors = ClonePersonalAuthors(source.PersonalAuthors),
+            CorporateAuthor = source.CorporateAuthor,
             Title = source.Title,
             Year = source.Year,
             Publisher = source.Publisher,
@@ -532,6 +561,123 @@ public static class SourceManagementDialogPlanner
         IReadOnlyDictionary<SourceManagementSourceField, string?> values,
         SourceManagementSourceField field) =>
         values.TryGetValue(field, out var value) ? (value ?? string.Empty).Trim() : string.Empty;
+
+    private static SourceManagementSourceEntry AuthorPreservationEntry(
+        SourceManagementSourceEntry entry,
+        Source? existing)
+    {
+        if (HasStructuredAuthorMetadata(entry) || existing is null)
+            return entry;
+
+        return string.Equals(entry.Author.Trim(), existing.Author.Trim(), StringComparison.Ordinal)
+            ? ProjectEntry(existing)
+            : entry;
+    }
+
+    private static bool HasStructuredAuthorMetadata(SourceManagementSourceEntry entry) =>
+        entry.PersonalAuthors.Count > 0 || !string.IsNullOrWhiteSpace(entry.CorporateAuthor);
+
+    private static SourceManagementAuthorProjection NormalizeAuthor(
+        string authorText,
+        SourceManagementSourceEntry? previousEntry)
+    {
+        var trimmed = authorText.Trim();
+        if (trimmed.Length == 0)
+            return SourceManagementAuthorProjection.Empty;
+
+        if (previousEntry is not null
+            && string.Equals(trimmed, previousEntry.Author.Trim(), StringComparison.Ordinal))
+        {
+            var previousPeople = ClonePersonalAuthors(previousEntry.PersonalAuthors);
+            if (previousPeople.Count > 0)
+                return new SourceManagementAuthorProjection(trimmed, previousPeople, CorporateAuthor: null);
+            if (!string.IsNullOrWhiteSpace(previousEntry.CorporateAuthor))
+                return new SourceManagementAuthorProjection(trimmed, [], previousEntry.CorporateAuthor!.Trim());
+        }
+
+        if (previousEntry?.PersonalAuthors.Count > 0
+            && TryParsePersonalAuthorRow(trimmed, out var updatedPerson))
+        {
+            return new SourceManagementAuthorProjection(
+                SourceAuthorPerson.FormatDisplayText([updatedPerson]),
+                [updatedPerson],
+                CorporateAuthor: null);
+        }
+
+        var rows = trimmed
+            .Split(';')
+            .Select(row => row.Trim())
+            .Where(row => row.Length > 0)
+            .ToList();
+
+        if (rows.Count > 1)
+        {
+            var people = new List<SourceAuthorPerson>(rows.Count);
+            foreach (var row in rows)
+            {
+                if (!TryParsePersonalAuthorRow(row, out var person))
+                    return new SourceManagementAuthorProjection(trimmed, [], trimmed);
+                people.Add(person);
+            }
+
+            return new SourceManagementAuthorProjection(
+                SourceAuthorPerson.FormatDisplayText(people),
+                people,
+                CorporateAuthor: null);
+        }
+
+        return new SourceManagementAuthorProjection(trimmed, [], trimmed);
+    }
+
+    private static bool TryParsePersonalAuthorRow(string row, out SourceAuthorPerson person)
+    {
+        person = SourceAuthorPerson.Create(null, null, null);
+
+        if (row.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length == 1
+            && !row.Contains(',', StringComparison.Ordinal))
+            return false;
+
+        if (row.Contains(',', StringComparison.Ordinal))
+        {
+            var parts = row
+                .Split(',', 2)
+                .Select(part => part.Trim())
+                .ToArray();
+            if (parts[0].Length == 0 || parts[1].Length == 0)
+                return false;
+
+            var given = parts[1].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            person = SourceAuthorPerson.Create(
+                given.FirstOrDefault(),
+                string.Join(" ", given.Skip(1)),
+                parts[0]);
+            return !person.IsEmpty;
+        }
+
+        var tokens = row.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length < 2)
+            return false;
+
+        person = SourceAuthorPerson.Create(
+            tokens[0],
+            string.Join(" ", tokens.Skip(1).Take(tokens.Length - 2)),
+            tokens[^1]);
+        return !person.IsEmpty;
+    }
+
+    private static IReadOnlyList<SourceAuthorPerson> ClonePersonalAuthors(IEnumerable<SourceAuthorPerson> people) =>
+        people
+            .Where(person => person is not null && !person.IsEmpty)
+            .Select(person => SourceAuthorPerson.Create(person.First, person.Middle, person.Last))
+            .ToArray();
+
+    private sealed record SourceManagementAuthorProjection(
+        string DisplayText,
+        IReadOnlyList<SourceAuthorPerson> PersonalAuthors,
+        string? CorporateAuthor)
+    {
+        public static readonly SourceManagementAuthorProjection Empty = new(string.Empty, [], null);
+    }
 
     private static SourceType NormalizeSourceType(SourceType type) =>
         SourceFieldOrders.ContainsKey(type) ? type : SourceType.Book;

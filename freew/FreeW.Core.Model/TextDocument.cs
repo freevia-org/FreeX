@@ -1282,6 +1282,41 @@ public enum SourceType
 }
 
 /// <summary>
+/// A Word bibliography personal-author row (<c>b:NameList/b:Person</c>).
+/// </summary>
+public sealed record SourceAuthorPerson(string First, string Middle, string Last)
+{
+    public string DisplayName => FormatDisplayName(this);
+
+    public bool IsEmpty =>
+        string.IsNullOrWhiteSpace(First)
+        && string.IsNullOrWhiteSpace(Middle)
+        && string.IsNullOrWhiteSpace(Last);
+
+    public static SourceAuthorPerson Create(string? first, string? middle, string? last) =>
+        new((first ?? string.Empty).Trim(), (middle ?? string.Empty).Trim(), (last ?? string.Empty).Trim());
+
+    public static string FormatDisplayName(SourceAuthorPerson person)
+    {
+        ArgumentNullException.ThrowIfNull(person);
+
+        return string.Join(
+            " ",
+            new[] { person.First, person.Middle, person.Last }
+                .Where(part => !string.IsNullOrWhiteSpace(part))
+                .Select(part => part.Trim()));
+    }
+
+    public static string FormatDisplayText(IEnumerable<SourceAuthorPerson> people) =>
+        string.Join(
+            "; ",
+            people
+                .Where(person => person is not null && !person.IsEmpty)
+                .Select(FormatDisplayName)
+                .Where(name => name.Length > 0));
+}
+
+/// <summary>
 /// A bibliographic source the document can cite: a short <see cref="Tag"/> (a stable identifier used
 /// to reference the source, e.g. <c>"Knuth1997"</c>) plus author/title/year and an optional publisher.
 /// A <see cref="SourceType"/> selects type-specific formatting and carries the extra fields that type
@@ -1300,6 +1335,18 @@ public sealed class Source
 
     /// <summary>The author (or authors) of the work. Empty when unknown.</summary>
     public string Author { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Structured personal authors parsed from or written to Word <c>b:NameList/b:Person</c> rows.
+    /// <see cref="Author"/> remains the display/compatibility string for citation formatting.
+    /// </summary>
+    public IReadOnlyList<SourceAuthorPerson> PersonalAuthors { get; init; } = [];
+
+    /// <summary>
+    /// Structured corporate author text parsed from or written to Word <c>b:Corporate</c>. Legacy sources
+    /// without structured data continue to use <see cref="Author"/> as their corporate/ambiguous value.
+    /// </summary>
+    public string? CorporateAuthor { get; init; }
 
     /// <summary>The title of the work. Empty when unknown.</summary>
     public string Title { get; init; } = string.Empty;
