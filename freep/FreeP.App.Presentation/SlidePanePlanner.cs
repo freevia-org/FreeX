@@ -86,6 +86,16 @@ public enum SlidePaneActionKind
     MoveSlide,
 }
 
+public enum SlidePaneKeyboardIntentKind
+{
+    None,
+    InsertAfterCurrentSlide,
+    DuplicateCurrentSlide,
+    DeleteCurrentSlide,
+    MoveCurrentSlideEarlier,
+    MoveCurrentSlideLater,
+}
+
 public sealed record SlidePaneActionPlan(
     SlidePaneActionKind Kind,
     string Text,
@@ -287,6 +297,37 @@ public static class SlidePanePlanner
             sourceSlideIndex,
             targetInsertionIndex,
             canMove);
+    }
+
+    public static SlidePaneActionPlan BuildKeyboardAction(
+        int slideCount,
+        int currentSlideIndex,
+        SlidePaneKeyboardIntentKind intent)
+    {
+        var contextActions = BuildContextActions(slideCount, currentSlideIndex);
+        return intent switch
+        {
+            SlidePaneKeyboardIntentKind.InsertAfterCurrentSlide => contextActions
+                .First(action => action.Kind == SlidePaneActionKind.InsertAfterSlide),
+            SlidePaneKeyboardIntentKind.DuplicateCurrentSlide => contextActions
+                .First(action => action.Kind == SlidePaneActionKind.DuplicateSlide),
+            SlidePaneKeyboardIntentKind.DeleteCurrentSlide => contextActions
+                .First(action => action.Kind == SlidePaneActionKind.DeleteSlide),
+            SlidePaneKeyboardIntentKind.MoveCurrentSlideEarlier => PlanMoveAction(
+                slideCount,
+                currentSlideIndex,
+                currentSlideIndex - 1),
+            SlidePaneKeyboardIntentKind.MoveCurrentSlideLater => PlanMoveAction(
+                slideCount,
+                currentSlideIndex,
+                currentSlideIndex + 2),
+            _ => new SlidePaneActionPlan(
+                SlidePaneActionKind.MoveSlide,
+                "Move Slide",
+                currentSlideIndex,
+                currentSlideIndex,
+                false),
+        };
     }
 
     public static bool TryApplyAction(EditingSession editor, SlidePaneActionPlan action)

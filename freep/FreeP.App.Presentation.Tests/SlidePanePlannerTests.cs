@@ -363,6 +363,62 @@ public sealed class SlidePanePlannerTests
     }
 
     [Fact]
+    public void BuildKeyboardAction_MapsSlidePaneKeysToSharedActions()
+    {
+        SlidePanePlanner.BuildKeyboardAction(
+                slideCount: 3,
+                currentSlideIndex: 1,
+                SlidePaneKeyboardIntentKind.InsertAfterCurrentSlide)
+            .Should().Be(new SlidePaneActionPlan(
+                SlidePaneActionKind.InsertAfterSlide,
+                SlidePanePlanner.NewSlideMenuText,
+                1,
+                2,
+                true));
+
+        SlidePanePlanner.BuildKeyboardAction(
+                slideCount: 3,
+                currentSlideIndex: 1,
+                SlidePaneKeyboardIntentKind.DuplicateCurrentSlide)
+            .Should().Be(new SlidePaneActionPlan(
+                SlidePaneActionKind.DuplicateSlide,
+                SlidePanePlanner.DuplicateSlideMenuText,
+                1,
+                2,
+                true));
+
+        SlidePanePlanner.BuildKeyboardAction(
+                slideCount: 3,
+                currentSlideIndex: 1,
+                SlidePaneKeyboardIntentKind.DeleteCurrentSlide)
+            .Should().Be(new SlidePaneActionPlan(
+                SlidePaneActionKind.DeleteSlide,
+                SlidePanePlanner.DeleteSlideMenuText,
+                1,
+                1,
+                true));
+    }
+
+    [Theory]
+    [InlineData(0, SlidePaneKeyboardIntentKind.MoveCurrentSlideEarlier, -1, false)]
+    [InlineData(1, SlidePaneKeyboardIntentKind.MoveCurrentSlideEarlier, 0, true)]
+    [InlineData(1, SlidePaneKeyboardIntentKind.MoveCurrentSlideLater, 3, true)]
+    [InlineData(2, SlidePaneKeyboardIntentKind.MoveCurrentSlideLater, 4, false)]
+    public void BuildKeyboardAction_MapsMoveIntentsToInsertionTargets(
+        int currentSlideIndex,
+        SlidePaneKeyboardIntentKind intent,
+        int expectedTargetIndex,
+        bool expectedEnabled)
+    {
+        var action = SlidePanePlanner.BuildKeyboardAction(3, currentSlideIndex, intent);
+
+        action.Kind.Should().Be(SlidePaneActionKind.MoveSlide);
+        action.SourceSlideIndex.Should().Be(currentSlideIndex);
+        action.TargetSlideIndex.Should().Be(expectedTargetIndex);
+        action.IsEnabled.Should().Be(expectedEnabled);
+    }
+
+    [Fact]
     public void TryApplyAction_Duplicate_UsesSharedSelectionAndCommandRouting()
     {
         var editor = CreateEditingSession(2);
@@ -399,6 +455,23 @@ public sealed class SlidePanePlannerTests
 
         editor.Presentation.Slides.Should().HaveCount(1);
         editor.CurrentSlideIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public void TryApplyAction_KeyboardMoveLater_UsesSharedInsertionTarget()
+    {
+        var editor = CreateEditingSession(3);
+        editor.SelectSlide(1);
+        var action = SlidePanePlanner.BuildKeyboardAction(
+            editor.Presentation.Slides.Count,
+            editor.CurrentSlideIndex,
+            SlidePaneKeyboardIntentKind.MoveCurrentSlideLater);
+
+        SlidePanePlanner.TryApplyAction(editor, action).Should().BeTrue();
+
+        editor.Presentation.Slides.Select(slide => slide.Title)
+            .Should().Equal("Slide 1", "Slide 3", "Slide 2");
+        editor.CurrentSlideIndex.Should().Be(2);
     }
 
     [Fact]
