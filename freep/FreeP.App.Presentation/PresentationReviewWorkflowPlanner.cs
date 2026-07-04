@@ -610,6 +610,8 @@ public static class PresentationReviewWorkflowPlanner
         "Give this slide a unique title so screen-reader users can distinguish it in the deck outline.";
     public const string MissingAltTextActionSummary =
         "Select the object and add alt text that describes the informative content.";
+    public const string MissingChartTitleActionSummary =
+        "Add a concise chart title so screen-reader users can understand the chart purpose.";
     public const string MissingHyperlinkScreenTipActionSummary =
         "Edit the hyperlink and add ScreenTip text that explains the destination.";
     public const string MissingTableHeaderRowActionSummary =
@@ -1245,6 +1247,7 @@ public static class PresentationReviewWorkflowPlanner
                             true)));
                 }
 
+                AddChartAccessibilityIssues(issues, slideIndex, shape);
                 AddTextHyperlinkAccessibilityIssues(issues, slideIndex, shape);
                 AddTableAccessibilityIssues(issues, slideIndex, shape);
             }
@@ -1894,6 +1897,11 @@ public static class PresentationReviewWorkflowPlanner
             return "Hyperlink";
         }
 
+        if (issue.Title == "Chart title missing")
+        {
+            return "Chart";
+        }
+
         if (issue.Title == "Table header row missing"
             || issue.Title == "Blank table header cells"
             || issue.Title == "Blank table body cells"
@@ -1912,6 +1920,7 @@ public static class PresentationReviewWorkflowPlanner
             InsertLinkCommandId => "Edit Hyperlink",
             SetSlideTitleCommandId => "Set Slide Title",
             SetTableHeaderRowCommandId => "Set Header Row",
+            _ when issue.Title == "Chart title missing" => "Add Chart Title",
             _ when issue.ShapeId is null => "Go to Slide",
             _ => "Select Object"
         };
@@ -2908,6 +2917,30 @@ public static class PresentationReviewWorkflowPlanner
             or SlideShapeKind.Model3d
             or SlideShapeKind.Zoom
             or SlideShapeKind.PreservedObject;
+
+    private static void AddChartAccessibilityIssues(
+        List<PresentationAccessibilityIssueDescriptor> issues,
+        int slideIndex,
+        SlideShape shape)
+    {
+        if (shape.Kind != SlideShapeKind.Chart
+            || shape.Chart is not { } chart
+            || NormalizeText(chart.Title) is not null)
+        {
+            return;
+        }
+
+        issues.Add(new PresentationAccessibilityIssueDescriptor(
+            PresentationAccessibilityIssueSeverity.Warning,
+            slideIndex,
+            shape.Id,
+            "Chart title missing",
+            $"{DescribeShape(shape)} does not have a chart title.",
+            new PresentationAccessibilityIssueActionSummary(
+                MissingChartTitleActionSummary,
+                null,
+                true)));
+    }
 
     private static void AddTableAccessibilityIssues(
         List<PresentationAccessibilityIssueDescriptor> issues,

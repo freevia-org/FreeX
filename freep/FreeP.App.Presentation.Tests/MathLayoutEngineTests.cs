@@ -564,6 +564,93 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void Row_TransparentHiddenZeroWidthPhantomBinaryOperator_AddsSpacingAdvanceWithoutGlyph()
+    {
+        var transparentRow = new MathNode.Row(new MathNode[]
+        {
+            Run("x"),
+            new MathNode.Phantom(Run("+"), show: false, zeroWidth: true, transparentSpacing: true),
+            Run("y")
+        });
+        var packedRow = new MathNode.Row(new MathNode[]
+        {
+            Run("x"),
+            new MathNode.Phantom(Run("+"), show: false, zeroWidth: true),
+            Run("y")
+        });
+
+        var transparentLayout = MathLayoutEngine.Layout(transparentRow, "Cambria Math", FontSizePt);
+        var packedLayout = MathLayoutEngine.Layout(packedRow, "Cambria Math", FontSizePt);
+
+        var transparentContainer = Assert.IsType<MathBox.Container>(transparentLayout.Children[0]);
+        var packedContainer = Assert.IsType<MathBox.Container>(packedLayout.Children[0]);
+        var transparentY = transparentContainer.Children[2];
+        var packedY = packedContainer.Children[2];
+
+        transparentLayout.Metrics.Width.Should().BeGreaterThan(packedLayout.Metrics.Width,
+            "m:phantPr/m:transp should let a hidden zero-width operator contribute operator-class row spacing");
+        transparentY.X.Should().BeGreaterThan(packedY.X,
+            "the following sibling should advance past the transparent phantom operator spacing");
+
+        var ops = MathBoxRenderPlanner.Plan(transparentLayout, 10, 20, SrgbColor.Black, "Cambria Math");
+        ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text)
+            .Should().Equal(new[] { "x", "y" },
+                "transparent phantom spacing affects advance only and must not reintroduce hidden glyph draw ops");
+    }
+
+    [Fact]
+    public void Row_TransparentZeroWidthRelationPhantom_UsesWiderRelationSpacing()
+    {
+        var binaryLayout = MathLayoutEngine.Layout(
+            new MathNode.Row(new MathNode[]
+            {
+                Run("a"),
+                new MathNode.Phantom(Run("+"), show: false, zeroWidth: true, transparentSpacing: true),
+                Run("b")
+            }),
+            "Cambria Math",
+            FontSizePt);
+        var relationLayout = MathLayoutEngine.Layout(
+            new MathNode.Row(new MathNode[]
+            {
+                Run("a"),
+                new MathNode.Phantom(Run("="), show: false, zeroWidth: true, transparentSpacing: true),
+                Run("b")
+            }),
+            "Cambria Math",
+            FontSizePt);
+
+        relationLayout.Metrics.Width.Should().BeGreaterThan(binaryLayout.Metrics.Width,
+            "simple relation operators such as = should use a distinct deterministic spacing class");
+    }
+
+    [Fact]
+    public void Row_TransparentZeroWidthPhantomNonOperator_DoesNotAddOperatorSpacing()
+    {
+        var transparentLayout = MathLayoutEngine.Layout(
+            new MathNode.Row(new MathNode[]
+            {
+                Run("x"),
+                new MathNode.Phantom(Run("hidden"), show: false, zeroWidth: true, transparentSpacing: true),
+                Run("y")
+            }),
+            "Cambria Math",
+            FontSizePt);
+        var packedLayout = MathLayoutEngine.Layout(
+            new MathNode.Row(new MathNode[]
+            {
+                Run("x"),
+                new MathNode.Phantom(Run("hidden"), show: false, zeroWidth: true),
+                Run("y")
+            }),
+            "Cambria Math",
+            FontSizePt);
+
+        transparentLayout.Metrics.Width.Should().BeApproximately(packedLayout.Metrics.Width, 0.01,
+            "m:transp is consumed only for simple operator-class phantom runs in this bounded slice");
+    }
+
+    [Fact]
     public void BorderBox_EmitsVisibleSideLinesAndPadsNestedChild()
     {
         var child = new MathNode.Frac(Run("1"), new MathNode.Rad(null, Run("x")));

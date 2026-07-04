@@ -997,6 +997,78 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildAccessibilitySummaryPlan_FlagsChartsWithoutChartTitles()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Intro";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 11,
+            Name = "Sales chart",
+            Kind = SlideShapeKind.Chart,
+            Chart = new ChartShape(),
+            AlternativeText = "Quarterly sales by region."
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 12,
+            Name = "Margin chart",
+            Kind = SlideShapeKind.Chart,
+            Chart = new ChartShape { Title = "   " },
+            AlternativeText = "Margin trend by quarter."
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 13,
+            Name = "Revenue chart",
+            Kind = SlideShapeKind.Chart,
+            Chart = new ChartShape { Title = "Revenue by region" },
+            AlternativeText = "Revenue by region."
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 14,
+            Name = "Chart placeholder",
+            Kind = SlideShapeKind.Chart,
+            AlternativeText = "Chart placeholder."
+        });
+
+        var summary = PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation);
+        var pane = PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(presentation, summary);
+
+        summary.Issues.Select(issue => issue.Title).Should().Equal(
+            "Chart title missing",
+            "Chart title missing");
+        summary.Issues.Select(issue => issue.ShapeId).Should().Equal(11u, 12u);
+        summary.Issues[0].Should().Be(new PresentationAccessibilityIssueDescriptor(
+            PresentationAccessibilityIssueSeverity.Warning,
+            0,
+            11,
+            "Chart title missing",
+            "Sales chart does not have a chart title.",
+            new PresentationAccessibilityIssueActionSummary(
+                PresentationReviewWorkflowPlanner.MissingChartTitleActionSummary,
+                null,
+                true)));
+        pane.Rows[0].Should().Be(new PresentationAccessibilityCheckerRowPlan(
+            0,
+            PresentationAccessibilityIssueSeverity.Warning,
+            "Chart",
+            0,
+            "Slide 1",
+            11,
+            "Sales chart",
+            "Chart title missing",
+            "Sales chart does not have a chart title.",
+            true,
+            "Add Chart Title",
+            null,
+            true,
+            true));
+    }
+
+    [Fact]
     public void BuildAccessibilitySummaryPlan_FlagsDuplicateSlideTitles()
     {
         var presentation = Presentation.CreateEmpty();

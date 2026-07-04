@@ -202,8 +202,17 @@ public sealed class ReviewWorkflowAdapterTests
                 Name = "Reference text",
                 TextBody = MakeLinkedTextBody("Project notes", new Hyperlink { Url = "https://example.test/notes" })
             };
+            var chart = new SlideShape
+            {
+                Id = 810,
+                Name = "Sales chart",
+                Kind = SlideShapeKind.Chart,
+                Chart = new ChartShape(),
+                AlternativeText = "Quarterly sales by region."
+            };
             firstSlide.Shapes.Add(shape);
             firstSlide.Shapes.Add(linkedText);
+            firstSlide.Shapes.Add(chart);
             window.Editor.InsertSlide();
             window.Editor.CurrentSlide!.Title = string.Empty;
             window.Editor.SelectSlide(0);
@@ -211,12 +220,13 @@ public sealed class ReviewWorkflowAdapterTests
             var opened = window.ShowAccessibilityCheckerPane();
 
             window.IsAccessibilityCheckerPaneVisible.Should().BeTrue();
-            window.AccessibilityCheckerPaneRowCount.Should().Be(3);
+            window.AccessibilityCheckerPaneRowCount.Should().Be(4);
             window.AccessibilityCheckerPaneSelectedRowCount.Should().Be(1);
-            window.AccessibilityCheckerPaneHeading.Should().Be("Accessibility - 3 issues");
+            window.AccessibilityCheckerPaneHeading.Should().Be("Accessibility - 4 issues");
             opened.Rows.Select(row => row.Title).Should().Equal(
                 "Alt text missing",
                 "Hyperlink ScreenTip missing",
+                "Chart title missing",
                 "Missing slide title");
             opened.Rows[0].CommandHint.Should().Be(PresentationReviewWorkflowPlanner.AltTextCommandId);
             opened.Rows[1].Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
@@ -227,20 +237,34 @@ public sealed class ReviewWorkflowAdapterTests
                 row.ShouldNavigateToSlide &&
                 row.ShouldSelectShape);
             opened.Rows[2].Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
+                row.Category == "Chart" &&
+                row.ShapeId == chart.Id &&
+                row.ActionLabel == "Add Chart Title" &&
+                row.CommandHint == null &&
+                row.ShouldNavigateToSlide &&
+                row.ShouldSelectShape);
+            opened.Rows[3].Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
                 row.Category == "Slide title" &&
                 row.ActionLabel == "Set Slide Title" &&
                 row.CommandHint == PresentationReviewWorkflowPlanner.SetSlideTitleCommandId &&
                 row.ShouldNavigateToSlide &&
                 !row.ShouldSelectShape);
 
-            var selectedTitle = window.SelectAccessibilityCheckerRow(2);
+            var selectedChart = window.SelectAccessibilityCheckerRow(2);
+
+            window.Editor.CurrentSlideIndex.Should().Be(0);
+            window.Editor.SelectedShapeIds.Should().Equal(chart.Id);
+            selectedChart.SelectedRow.Should().NotBeNull();
+            selectedChart.SelectedRow!.Title.Should().Be("Chart title missing");
+
+            var selectedTitle = window.SelectAccessibilityCheckerRow(3);
 
             window.Editor.CurrentSlideIndex.Should().Be(1);
             window.Editor.SelectedShapeIds.Should().BeEmpty();
             selectedTitle.SelectedRow.Should().NotBeNull();
             selectedTitle.SelectedRow!.Title.Should().Be("Missing slide title");
 
-            var actionedTitle = window.ApplyAccessibilityCheckerRowAction(2);
+            var actionedTitle = window.ApplyAccessibilityCheckerRowAction(3);
 
             window.Editor.CurrentSlideIndex.Should().Be(1);
             window.Editor.CurrentSlide!.Title.Should().Be("Slide 2");
@@ -252,7 +276,8 @@ public sealed class ReviewWorkflowAdapterTests
                 null));
             actionedTitle.Rows.Select(row => row.Title).Should().Equal(
                 "Alt text missing",
-                "Hyperlink ScreenTip missing");
+                "Hyperlink ScreenTip missing",
+                "Chart title missing");
             window.LastAccessibilitySummaryPlan!.Issues.Should().NotContain(issue =>
                 issue.Title == "Missing slide title");
             window.IsDirty.Should().BeTrue();
