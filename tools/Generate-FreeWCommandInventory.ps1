@@ -119,6 +119,26 @@ internal static class FreeWCommandInventory
         new("actionable-gap", "Shared Word behavior appears in one compiled profile only and needs product follow-up."),
     ];
 
+    private static readonly Dictionary<string, CommandBehaviorEvidence> BehaviorEvidenceCatalog = new(StringComparer.Ordinal)
+    {
+        ["freew.delete-comment"] = ReviewCommentEvidence(
+            "Deletes the comment thread at the caret, clears anchor/reference runs, and keeps the operation undoable in both shells.",
+            "ThreadedCommentCommandTests.DeleteCommentAtCaret_RemovesThreadRangeAndReference",
+            "DocumentViewReviewTests.DeleteCommentAtCaret_removes_the_comment"),
+        ["freew.previous-comment"] = ReviewCommentEvidence(
+            "Moves to the previous comment thread in document order, including wraparound behavior in both shells.",
+            "ThreadedCommentCommandTests.CommentNavigation_WrapsAndNoOpsWithoutComments",
+            "DocumentViewCommentTests.NextPreviousComment_moves_caret_in_document_order_and_wraps"),
+        ["freew.next-comment"] = ReviewCommentEvidence(
+            "Moves to the next comment thread in document order, including wraparound and table-cell comment anchors in both shells.",
+            "ThreadedCommentCommandTests.CommentNavigation_MovesBetweenThreadsInDocumentOrder",
+            "DocumentViewCommentTests.NextPreviousComment_moves_caret_in_document_order_and_wraps"),
+        ["freew.resolve-comment"] = ReviewCommentEvidence(
+            "Toggles the resolved state for the comment thread at the caret through WPF editor behavior and Avalonia registry execution.",
+            "ThreadedCommentCommandTests.ToggleResolveCommentAtCaret_TogglesResolved",
+            "DocumentViewReviewTests.ResolveComment_registry_command_toggles_the_comment_at_the_caret"),
+    };
+
     public static InventoryDocument Build(string repoRoot)
     {
         var wpf = Collect(FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf), WpfProfile);
@@ -164,15 +184,17 @@ internal static class FreeWCommandInventory
                 Notes: gapClassification.Notes,
                 WpfLocations: wpfLocations ?? Array.Empty<CommandLocation>(),
                 AvaloniaLocations: avaloniaLocations ?? Array.Empty<CommandLocation>(),
-                SourceLiteralEvidence: sourceLiteralEvidence);
+                SourceLiteralEvidence: sourceLiteralEvidence,
+                BehaviorEvidence: BehaviorEvidenceCatalog.GetValueOrDefault(commandId));
         }).ToArray();
 
         return new InventoryDocument(
-            Schema: "freew.command-inventory.v3",
-            SchemaVersion: 3,
+            Schema: "freew.command-inventory.v4",
+            SchemaVersion: 4,
             GeneratedBy: "tools/Generate-FreeWCommandInventory.ps1",
             TopologySource: "freew/FreeW.Ribbon.Definitions FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf/Avalonia)",
             SourceLiteralEvidenceNote: "Source literal evidence records exact command-id text in source files only; it is not behavior proof and never creates inventory rows.",
+            BehaviorEvidenceNote: "Behavior evidence links a bounded command row to focused WPF and Avalonia tests; it strengthens parity confidence but does not create inventory rows or change gap classification.",
             ClassificationNote: "Gap classifications are generated from explicit rule order: shared-profile, profile-shape-only, command-id-alias, platform-only, deferred, then actionable-gap.",
             ClassificationRules: GapClassificationRules,
             SourceLiteralFiles: SourceFiles.Select(file => new SourceLiteralFileEntry(file.Id, file.Label, file.RelativePath)).ToArray(),
@@ -190,9 +212,27 @@ internal static class FreeWCommandInventory
                 CommandIdAliases: commands.Count(command => command.GapClassification == "command-id-alias"),
                 PlatformOnly: commands.Count(command => command.GapClassification == "platform-only"),
                 Deferred: commands.Count(command => command.GapClassification == "deferred"),
-                ActionableGaps: commands.Count(command => command.GapClassification == "actionable-gap")),
+                ActionableGaps: commands.Count(command => command.GapClassification == "actionable-gap"),
+                BehaviorEvidenceRows: commands.Count(command => command.BehaviorEvidence is not null)),
             Commands: commands);
     }
+
+    private static CommandBehaviorEvidence ReviewCommentEvidence(
+        string summary,
+        string wpfTest,
+        string avaloniaTest) =>
+        new(
+            EvidenceId: "freew.review-comments.shared-behavior",
+            Slice: "Review comments",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Host.Tests/ThreadedCommentCommandTests.cs",
+                Test: wpfTest),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: avaloniaTest.StartsWith("DocumentViewCommentTests.", StringComparison.Ordinal)
+                    ? "freew/FreeW.App.Avalonia.Tests/DocumentViewCommentTests.cs"
+                    : "freew/FreeW.App.Avalonia.Tests/DocumentViewReviewTests.cs",
+                Test: avaloniaTest));
 
     private static IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> Collect(RibbonDefinition definition, string profile)
     {
@@ -469,7 +509,7 @@ internal static class FreeWCommandInventoryMarkdown
         builder.AppendLine();
         builder.AppendLine("Generated by `tools/Generate-FreeWCommandInventory.ps1` from compiled `FreeW.Ribbon.Definitions` profiles. Do not edit by hand.");
         builder.AppendLine();
-        builder.AppendLine("Rows are created only from `FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf)` and `FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia)`, including menu children. Source literal evidence columns show exact command-id text in source files only; they are not behavior proof and never create rows.");
+        builder.AppendLine("Rows are created only from `FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf)` and `FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia)`, including menu children. Source literal evidence columns show exact command-id text in source files only; they are not behavior proof and never create rows. Behavior evidence links a bounded command row to focused WPF and Avalonia tests; it strengthens parity confidence but does not create rows or change gap classification.");
         builder.AppendLine();
         builder.AppendLine(inventory.ClassificationNote);
         builder.AppendLine();
@@ -481,9 +521,9 @@ internal static class FreeWCommandInventoryMarkdown
         builder.AppendLine();
         builder.AppendLine("## Classification Counts");
         builder.AppendLine();
-        builder.AppendLine("| Shared profile | Profile-shape only | Command-id aliases | Platform-only | Deferred | Actionable gaps |");
-        builder.AppendLine("|---:|---:|---:|---:|---:|---:|");
-        builder.AppendLine($"| {inventory.Summary.SharedProfile} | {inventory.Summary.ProfileShapeOnly} | {inventory.Summary.CommandIdAliases} | {inventory.Summary.PlatformOnly} | {inventory.Summary.Deferred} | {inventory.Summary.ActionableGaps} |");
+        builder.AppendLine("| Shared profile | Profile-shape only | Command-id aliases | Platform-only | Deferred | Actionable gaps | Behavior evidence rows |");
+        builder.AppendLine("|---:|---:|---:|---:|---:|---:|---:|");
+        builder.AppendLine($"| {inventory.Summary.SharedProfile} | {inventory.Summary.ProfileShapeOnly} | {inventory.Summary.CommandIdAliases} | {inventory.Summary.PlatformOnly} | {inventory.Summary.Deferred} | {inventory.Summary.ActionableGaps} | {inventory.Summary.BehaviorEvidenceRows} |");
         builder.AppendLine();
         builder.AppendLine("## Classification Rules");
         builder.AppendLine();
@@ -494,13 +534,13 @@ internal static class FreeWCommandInventoryMarkdown
         builder.AppendLine();
         builder.AppendLine("## Matrix");
         builder.AppendLine();
-        builder.AppendLine("| Command ID | Label | WPF profile | Avalonia profile | Missing profile | Profile classification | Gap classification | Rule | WPF locations | Avalonia locations | Source literal evidence | Notes |");
-        builder.AppendLine("|---|---|---:|---:|---|---|---|---|---|---|---|---|");
+        builder.AppendLine("| Command ID | Label | WPF profile | Avalonia profile | Missing profile | Profile classification | Gap classification | Rule | WPF locations | Avalonia locations | Source literal evidence | Behavior evidence | Notes |");
+        builder.AppendLine("|---|---|---:|---:|---|---|---|---|---|---|---|---|---|");
 
         foreach (var command in inventory.Commands)
         {
             builder.AppendLine(
-                $"| `{Escape(command.CommandId)}` | {Escape(command.Label)} | {YesNo(command.WpfPresent)} | {YesNo(command.AvaloniaPresent)} | {Escape(command.MissingProfile)} | {Escape(command.Classification)} | {Escape(command.GapClassification)} | {Escape(command.GapClassificationRule)} | {Escape(Locations(command.WpfLocations))} | {Escape(Locations(command.AvaloniaLocations))} | {Escape(SourceEvidence(command.SourceLiteralEvidence))} | {Escape(command.Notes)} |");
+                $"| `{Escape(command.CommandId)}` | {Escape(command.Label)} | {YesNo(command.WpfPresent)} | {YesNo(command.AvaloniaPresent)} | {Escape(command.MissingProfile)} | {Escape(command.Classification)} | {Escape(command.GapClassification)} | {Escape(command.GapClassificationRule)} | {Escape(Locations(command.WpfLocations))} | {Escape(Locations(command.AvaloniaLocations))} | {Escape(SourceEvidence(command.SourceLiteralEvidence))} | {Escape(BehaviorEvidence(command.BehaviorEvidence))} | {Escape(command.Notes)} |");
         }
 
         return builder.ToString();
@@ -526,6 +566,11 @@ internal static class FreeWCommandInventoryMarkdown
         return hits.Count == 0 ? "-" : string.Join("<br>", hits);
     }
 
+    private static string BehaviorEvidence(CommandBehaviorEvidence? evidence) =>
+        evidence is null
+            ? "-"
+            : $"{evidence.Slice}: {evidence.WpfEvidence.Test}<br>{evidence.AvaloniaEvidence.Test}";
+
     private static string YesNo(bool value) => value ? "Yes" : "No";
 
     private static string Escape(string value) =>
@@ -540,6 +585,7 @@ internal sealed record InventoryDocument(
     string GeneratedBy,
     string TopologySource,
     string SourceLiteralEvidenceNote,
+    string BehaviorEvidenceNote,
     string ClassificationNote,
     IReadOnlyList<ClassificationRule> ClassificationRules,
     IReadOnlyList<SourceLiteralFileEntry> SourceLiteralFiles,
@@ -565,7 +611,8 @@ internal sealed record InventorySummary(
     int CommandIdAliases,
     int PlatformOnly,
     int Deferred,
-    int ActionableGaps);
+    int ActionableGaps,
+    int BehaviorEvidenceRows);
 
 internal sealed record CommandEntry(
     string CommandId,
@@ -580,7 +627,8 @@ internal sealed record CommandEntry(
     string Notes,
     IReadOnlyList<CommandLocation> WpfLocations,
     IReadOnlyList<CommandLocation> AvaloniaLocations,
-    SourceLiteralEvidence SourceLiteralEvidence);
+    SourceLiteralEvidence SourceLiteralEvidence,
+    CommandBehaviorEvidence? BehaviorEvidence);
 
 internal sealed record CommandLocation(
     string Profile,
@@ -597,6 +645,17 @@ internal sealed record SourceLiteralEvidence(
     bool AvaloniaDefinitionSource,
     bool WpfRegistrySource,
     bool AvaloniaRegistrySource);
+
+internal sealed record CommandBehaviorEvidence(
+    string EvidenceId,
+    string Slice,
+    string Summary,
+    BehaviorEvidenceLink WpfEvidence,
+    BehaviorEvidenceLink AvaloniaEvidence);
+
+internal sealed record BehaviorEvidenceLink(
+    string Path,
+    string Test);
 
 internal sealed record Classification(string Name, string Notes);
 
