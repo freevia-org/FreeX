@@ -66,6 +66,9 @@ public sealed class SourceRecord
     public string? Pages { get; set; }
     public string? Url { get; set; }
     public string? Accessed { get; set; }
+    public string? AccessedDay { get; set; }
+    public string? AccessedMonth { get; set; }
+    public string? AccessedYear { get; set; }
 
     public Source ToSource() => new()
     {
@@ -94,6 +97,9 @@ public sealed class SourceRecord
         Pages = Pages,
         Url = Url,
         Accessed = Accessed,
+        AccessedDay = AccessedDay,
+        AccessedMonth = AccessedMonth,
+        AccessedYear = AccessedYear,
     };
 
     public static SourceRecord FromSource(Source source)
@@ -127,6 +133,9 @@ public sealed class SourceRecord
             Pages = source.Pages,
             Url = source.Url,
             Accessed = source.Accessed,
+            AccessedDay = source.AccessedDay,
+            AccessedMonth = source.AccessedMonth,
+            AccessedYear = source.AccessedYear,
         };
     }
 }

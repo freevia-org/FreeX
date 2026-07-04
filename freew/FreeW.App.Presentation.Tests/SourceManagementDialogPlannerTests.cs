@@ -108,7 +108,9 @@ public sealed class SourceManagementDialogPlannerTests
             SourceManagementSourceField.Year,
             SourceManagementSourceField.Publisher,
             SourceManagementSourceField.Url,
-            SourceManagementSourceField.Accessed,
+            SourceManagementSourceField.AccessedDay,
+            SourceManagementSourceField.AccessedMonth,
+            SourceManagementSourceField.AccessedYear,
             SourceManagementSourceField.ShortTitle,
             SourceManagementSourceField.Comments);
 
@@ -418,6 +420,27 @@ public sealed class SourceManagementDialogPlannerTests
         source.Accessed.Should().Be("3 May 2024");
 
         SourceManagementDialogPlanner.TryBuildCitationSource(
+                SourceManagementDialogPlanner.CreateEntry(
+                    SourceType.WebSite,
+                    new Dictionary<SourceManagementSourceField, string?>
+                    {
+                        [SourceManagementSourceField.Title] = " Structured web source ",
+                        [SourceManagementSourceField.AccessedDay] = " 3 ",
+                        [SourceManagementSourceField.AccessedMonth] = " May ",
+                        [SourceManagementSourceField.AccessedYear] = " 2024 "
+                    }),
+                out source,
+                out validation)
+            .Should().BeTrue();
+
+        validation.Should().BeNull();
+        source.Should().NotBeNull();
+        source!.Accessed.Should().BeNull();
+        source.AccessedDay.Should().Be("3");
+        source.AccessedMonth.Should().Be("May");
+        source.AccessedYear.Should().Be("2024");
+
+        SourceManagementDialogPlanner.TryBuildCitationSource(
                 new SourceManagementSourceEntry(
                     SourceType.Report,
                     string.Empty,
@@ -558,6 +581,9 @@ public sealed class SourceManagementDialogPlannerTests
         source.Pages.Should().BeNull();
         source.Url.Should().BeNull();
         source.Accessed.Should().BeNull();
+        source.AccessedDay.Should().BeNull();
+        source.AccessedMonth.Should().BeNull();
+        source.AccessedYear.Should().BeNull();
 
         var webSource = SourceManagementDialogPlanner.BuildSource(
             SourceManagementDialogPlanner.ProjectEntry(source) with
@@ -565,7 +591,10 @@ public sealed class SourceManagementDialogPlannerTests
                 Type = SourceType.WebSite,
                 Publisher = "Site",
                 Url = "https://example.test",
-                Accessed = "3 May 2024"
+                Accessed = "3 May 2024",
+                AccessedDay = "3",
+                AccessedMonth = "May",
+                AccessedYear = "2024"
             });
 
         webSource.Type.Should().Be(SourceType.WebSite);
@@ -580,6 +609,9 @@ public sealed class SourceManagementDialogPlannerTests
         webSource.Comments.Should().Be("Notes");
         webSource.Url.Should().Be("https://example.test");
         webSource.Accessed.Should().Be("3 May 2024");
+        webSource.AccessedDay.Should().Be("3");
+        webSource.AccessedMonth.Should().Be("May");
+        webSource.AccessedYear.Should().Be("2024");
 
         var reportSource = SourceManagementDialogPlanner.BuildSource(
             SourceManagementDialogPlanner.ProjectEntry(source) with
@@ -592,7 +624,10 @@ public sealed class SourceManagementDialogPlannerTests
                 Journal = "Journal",
                 Pages = "12-20",
                 Url = "https://example.test",
-                Accessed = "3 May 2024"
+                Accessed = "3 May 2024",
+                AccessedDay = "3",
+                AccessedMonth = "May",
+                AccessedYear = "2024"
             });
 
         reportSource.Type.Should().Be(SourceType.Report);
@@ -612,6 +647,9 @@ public sealed class SourceManagementDialogPlannerTests
         reportSource.Pages.Should().BeNull();
         reportSource.Url.Should().BeNull();
         reportSource.Accessed.Should().BeNull();
+        reportSource.AccessedDay.Should().BeNull();
+        reportSource.AccessedMonth.Should().BeNull();
+        reportSource.AccessedYear.Should().BeNull();
     }
 
     [Fact]

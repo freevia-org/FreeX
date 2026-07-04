@@ -5444,7 +5444,16 @@ public static class DocxWriter
             AddBibliographyField(element, "Issue", source.Issue);
             AddBibliographyField(element, "Pages", source.Pages);
             AddBibliographyField(element, "URL", source.Url);
-            AddBibliographyField(element, "YearAccessed", source.Accessed);
+            if (HasStructuredAccessedDate(source))
+            {
+                AddBibliographyField(element, "DayAccessed", source.AccessedDay);
+                AddBibliographyField(element, "MonthAccessed", source.AccessedMonth);
+                AddBibliographyField(element, "YearAccessed", source.AccessedYear);
+            }
+            else
+            {
+                AddBibliographyField(element, "YearAccessed", source.Accessed);
+            }
 
             sources.Add(element);
         }
@@ -5456,6 +5465,11 @@ public static class DocxWriter
             if (!string.IsNullOrEmpty(value))
                 parent.Add(new XElement(B + localName, value));
         }
+
+        static bool HasStructuredAccessedDate(Source source) =>
+            !string.IsNullOrEmpty(source.AccessedDay)
+            || !string.IsNullOrEmpty(source.AccessedMonth)
+            || !string.IsNullOrEmpty(source.AccessedYear);
     }
 
     private static XElement? BuildBibliographyAuthor(Source source)

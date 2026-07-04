@@ -23,7 +23,10 @@ public enum SourceManagementSourceField
     Issue,
     Pages,
     Url,
-    Accessed
+    Accessed,
+    AccessedDay,
+    AccessedMonth,
+    AccessedYear
 }
 
 public enum SourceManagementValidationTarget
@@ -50,6 +53,12 @@ public sealed record SourceManagementSourceEntry(
     string Url,
     string Accessed)
 {
+    public string AccessedDay { get; init; } = string.Empty;
+
+    public string AccessedMonth { get; init; } = string.Empty;
+
+    public string AccessedYear { get; init; } = string.Empty;
+
     public string Institution { get; init; } = string.Empty;
 
     public string BookTitle { get; init; } = string.Empty;
@@ -212,7 +221,9 @@ public static class SourceManagementDialogPlanner
                 SourceManagementSourceField.Year,
                 SourceManagementSourceField.Publisher,
                 SourceManagementSourceField.Url,
-                SourceManagementSourceField.Accessed,
+                SourceManagementSourceField.AccessedDay,
+                SourceManagementSourceField.AccessedMonth,
+                SourceManagementSourceField.AccessedYear,
                 SourceManagementSourceField.ShortTitle,
                 SourceManagementSourceField.Comments
             ],
@@ -283,7 +294,10 @@ public static class SourceManagementDialogPlanner
             [SourceManagementSourceField.Issue] = "Issue:",
             [SourceManagementSourceField.Pages] = "Pages:",
             [SourceManagementSourceField.Url] = "URL:",
-            [SourceManagementSourceField.Accessed] = "Accessed:"
+            [SourceManagementSourceField.Accessed] = "Accessed:",
+            [SourceManagementSourceField.AccessedDay] = "Day accessed:",
+            [SourceManagementSourceField.AccessedMonth] = "Month accessed:",
+            [SourceManagementSourceField.AccessedYear] = "Year accessed:"
         };
 
     public static IReadOnlyList<SourceManagementSourceTypeChoice> BuildSourceTypeChoices() =>
@@ -339,6 +353,9 @@ public static class SourceManagementDialogPlanner
             source?.Url ?? string.Empty,
             source?.Accessed ?? string.Empty)
         {
+            AccessedDay = source?.AccessedDay ?? string.Empty,
+            AccessedMonth = source?.AccessedMonth ?? string.Empty,
+            AccessedYear = source?.AccessedYear ?? string.Empty,
             Institution = source?.Institution ?? string.Empty,
             BookTitle = source?.BookTitle ?? string.Empty,
             ConferenceName = source?.ConferenceName ?? string.Empty,
@@ -388,6 +405,9 @@ public static class SourceManagementDialogPlanner
             TrimmedValue(values, SourceManagementSourceField.Url),
             TrimmedValue(values, SourceManagementSourceField.Accessed))
         {
+            AccessedDay = TrimmedValue(values, SourceManagementSourceField.AccessedDay),
+            AccessedMonth = TrimmedValue(values, SourceManagementSourceField.AccessedMonth),
+            AccessedYear = TrimmedValue(values, SourceManagementSourceField.AccessedYear),
             Institution = TrimmedValue(values, SourceManagementSourceField.Institution),
             BookTitle = TrimmedValue(values, SourceManagementSourceField.BookTitle),
             ConferenceName = TrimmedValue(values, SourceManagementSourceField.ConferenceName),
@@ -500,7 +520,10 @@ public static class SourceManagementDialogPlanner
             Issue = type == SourceType.JournalArticle ? NullIfWhiteSpace(entry.Issue) : null,
             Pages = type is SourceType.JournalArticle or SourceType.BookSection or SourceType.ConferenceProceedings ? NullIfWhiteSpace(entry.Pages) : null,
             Url = type == SourceType.WebSite ? NullIfWhiteSpace(entry.Url) : null,
-            Accessed = type == SourceType.WebSite ? NullIfWhiteSpace(entry.Accessed) : null
+            Accessed = type == SourceType.WebSite ? NullIfWhiteSpace(entry.Accessed) : null,
+            AccessedDay = type == SourceType.WebSite ? NullIfWhiteSpace(entry.AccessedDay) : null,
+            AccessedMonth = type == SourceType.WebSite ? NullIfWhiteSpace(entry.AccessedMonth) : null,
+            AccessedYear = type == SourceType.WebSite ? NullIfWhiteSpace(entry.AccessedYear) : null
         };
     }
 
@@ -532,7 +555,10 @@ public static class SourceManagementDialogPlanner
             Issue = source.Issue,
             Pages = source.Pages,
             Url = source.Url,
-            Accessed = source.Accessed
+            Accessed = source.Accessed,
+            AccessedDay = source.AccessedDay,
+            AccessedMonth = source.AccessedMonth,
+            AccessedYear = source.AccessedYear
         };
     }
 
@@ -708,7 +734,10 @@ public static class SourceManagementDialogPlanner
         || entry.Issue.Length > 0
         || entry.Pages.Length > 0
         || entry.Url.Length > 0
-        || entry.Accessed.Length > 0;
+        || entry.Accessed.Length > 0
+        || entry.AccessedDay.Length > 0
+        || entry.AccessedMonth.Length > 0
+        || entry.AccessedYear.Length > 0;
 
     private static bool HasManagedSourceData(SourceManagementSourceEntry entry) =>
         entry.Tag.Length > 0 || HasCitationSourceData(entry);
@@ -736,6 +765,9 @@ public static class SourceManagementDialogPlanner
             SourceManagementSourceField.Pages => entry.Pages,
             SourceManagementSourceField.Url => entry.Url,
             SourceManagementSourceField.Accessed => entry.Accessed,
+            SourceManagementSourceField.AccessedDay => entry.AccessedDay,
+            SourceManagementSourceField.AccessedMonth => entry.AccessedMonth,
+            SourceManagementSourceField.AccessedYear => entry.AccessedYear,
             _ => string.Empty
         };
 

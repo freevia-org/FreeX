@@ -720,6 +720,27 @@ public class CitationsTests
     }
 
     [Fact]
+    public void FormatBibliographyEntry_WebSite_UsesStructuredAccessedDateBeforeLegacyFallback()
+    {
+        var site = new Source
+        {
+            Type = SourceType.WebSite,
+            Author = "Mozilla",
+            Title = "CSS Grid Layout",
+            Year = "2023",
+            Url = "https://developer.mozilla.org/grid",
+            Accessed = "legacy fallback",
+            AccessedDay = "3",
+            AccessedMonth = "May",
+            AccessedYear = "2024"
+        };
+
+        Citations.FormatBibliographyEntry(site, CitationStyle.Apa).Should().Be(
+            "Mozilla. (2023). CSS Grid Layout. " +
+            "https://developer.mozilla.org/grid, accessed 3 May 2024.");
+    }
+
+    [Fact]
     public void FormatBibliographyEntry_Report_UsesInstitutionCityPublisherDetail()
     {
         var report = new Source

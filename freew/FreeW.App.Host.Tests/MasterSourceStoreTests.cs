@@ -199,6 +199,45 @@ public sealed class MasterSourceStoreTests
     }
 
     [Fact]
+    public void MasterStore_JsonRoundTrip_PreservesStructuredAccessedDate()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"master-sources-accessed-{Guid.NewGuid()}.json");
+        try
+        {
+            var store = new MasterSourceStore
+            {
+                Sources =
+                [
+                    SourceRecord.FromSource(new Source
+                    {
+                        Tag = "Web2024",
+                        Type = SourceType.WebSite,
+                        Title = "Web Source",
+                        Url = "https://example.test",
+                        AccessedDay = "3",
+                        AccessedMonth = "May",
+                        AccessedYear = "2024"
+                    })
+                ]
+            };
+            var settingsStore = JsonSettingsStore<MasterSourceStore>.ForPath(path);
+
+            settingsStore.Save(store);
+            var source = JsonSettingsStore<MasterSourceStore>.ForPath(path).Load().ToSources()
+                .Should().ContainSingle().Subject;
+
+            source.Type.Should().Be(SourceType.WebSite);
+            source.AccessedDay.Should().Be("3");
+            source.AccessedMonth.Should().Be("May");
+            source.AccessedYear.Should().Be("2024");
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void MasterStore_JsonRoundTrip_PreservesBookSectionFields()
     {
         var path = Path.Combine(Path.GetTempPath(), $"master-sources-book-section-{Guid.NewGuid()}.json");

@@ -164,6 +164,81 @@ public class BibliographyRoundTripTests
     }
 
     [Fact]
+    public void WebSiteSource_StructuredAccessedDate_SurvivesRoundTrip()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Sources.Add(new Source
+        {
+            Tag = "MDNGrid",
+            Type = SourceType.WebSite,
+            Title = "CSS Grid Layout",
+            Url = "https://developer.mozilla.org/grid",
+            AccessedDay = "3",
+            AccessedMonth = "May",
+            AccessedYear = "2024"
+        });
+
+        var source = RoundTrip(doc).Sources.Should().ContainSingle().Subject;
+
+        source.Accessed.Should().BeNull();
+        source.AccessedDay.Should().Be("3");
+        source.AccessedMonth.Should().Be("May");
+        source.AccessedYear.Should().Be("2024");
+    }
+
+    [Fact]
+    public void BibliographyPart_WritesStructuredAccessedDateFields()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Sources.Add(new Source
+        {
+            Tag = "MDNGrid",
+            Type = SourceType.WebSite,
+            Title = "CSS Grid Layout",
+            Accessed = "legacy fallback",
+            AccessedDay = "3",
+            AccessedMonth = "May",
+            AccessedYear = "2024"
+        });
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        using var zip = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
+        using var entry = zip.GetEntry("word/bibliography/sources.xml")!.Open();
+        var source = XDocument.Load(entry).Root!.Element(B + "Source")!;
+
+        source.Element(B + "DayAccessed")!.Value.Should().Be("3");
+        source.Element(B + "MonthAccessed")!.Value.Should().Be("May");
+        source.Element(B + "YearAccessed")!.Value.Should().Be("2024");
+        source.Element(B + "YearAccessed")!.Value.Should().NotBe("legacy fallback");
+    }
+
+    [Fact]
+    public void WordStyleStructuredAccessedDate_ReadsDateParts()
+    {
+        var result = ReadDocxWithSourcesXml(
+            """
+            <b:Sources xmlns:b="http://schemas.openxmlformats.org/officeDocument/2006/bibliography">
+              <b:Source>
+                <b:Tag>Web2024</b:Tag>
+                <b:SourceType>DocumentFromInternetSite</b:SourceType>
+                <b:Title>Word Web Source</b:Title>
+                <b:DayAccessed>3</b:DayAccessed>
+                <b:MonthAccessed>May</b:MonthAccessed>
+                <b:YearAccessed>2024</b:YearAccessed>
+              </b:Source>
+            </b:Sources>
+            """);
+
+        var source = result.Sources.Should().ContainSingle().Subject;
+        source.Type.Should().Be(SourceType.WebSite);
+        source.Accessed.Should().BeNull();
+        source.AccessedDay.Should().Be("3");
+        source.AccessedMonth.Should().Be("May");
+        source.AccessedYear.Should().Be("2024");
+    }
+
+    [Fact]
     public void ReportSource_AllFields_SurviveRoundTrip()
     {
         var doc = TextDocument.CreateEmpty();

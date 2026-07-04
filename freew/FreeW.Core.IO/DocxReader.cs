@@ -503,6 +503,11 @@ public static class DocxReader
         foreach (var element in root.Elements(B + "Source"))
         {
             var author = ReadBibliographyAuthor(element);
+            var dayAccessed = Field(element, "DayAccessed");
+            var monthAccessed = Field(element, "MonthAccessed");
+            var yearAccessed = Field(element, "YearAccessed");
+            var hasStructuredAccessedDate = dayAccessed is not null || monthAccessed is not null;
+
             document.Sources.Add(new Source
             {
                 Tag = Field(element, "Tag") ?? string.Empty,
@@ -527,7 +532,10 @@ public static class DocxReader
                 Issue = Field(element, "Issue"),
                 Pages = Field(element, "Pages"),
                 Url = Field(element, "URL"),
-                Accessed = Field(element, "YearAccessed"),
+                Accessed = hasStructuredAccessedDate ? null : yearAccessed,
+                AccessedDay = dayAccessed,
+                AccessedMonth = monthAccessed,
+                AccessedYear = yearAccessed,
             });
         }
 

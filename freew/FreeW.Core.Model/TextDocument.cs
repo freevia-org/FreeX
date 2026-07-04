@@ -1330,7 +1330,7 @@ public sealed record SourceAuthorPerson(string First, string Middle, string Last
 /// to reference the source, e.g. <c>"Knuth1997"</c>) plus author/title/year and common Word bibliography
 /// fields such as city, institution, edition, standard number, short title and comments. A <see cref="SourceType"/>
 /// selects type-specific formatting and carries the extra fields that type needs
-/// (journal/volume/issue/pages for an article, url/accessed for a web site, institution for a report,
+/// (journal/volume/issue/pages for an article, url/accessed date for a web site, institution for a report,
 /// book title/chapter/pages for a book section, conference name/pages for proceedings). Kept deliberately
 /// small and immutable-friendly (init-only properties) so it round-trips cleanly and the
 /// citation/bibliography formatting helpers (see <see cref="Citations"/>) can stay pure. Missing fields
@@ -1414,8 +1414,20 @@ public sealed class Source
     /// <summary>The URL for a <see cref="SourceType.WebSite"/>; null otherwise / when unknown.</summary>
     public string? Url { get; init; }
 
-    /// <summary>The accessed date for a <see cref="SourceType.WebSite"/>, free-text (e.g. <c>"3 May 2024"</c>); null when unknown.</summary>
+    /// <summary>
+    /// The accessed date for a <see cref="SourceType.WebSite"/>, free-text (e.g. <c>"3 May 2024"</c>);
+    /// retained as a compatibility/display fallback when structured accessed-date parts are absent.
+    /// </summary>
     public string? Accessed { get; init; }
+
+    /// <summary>The Word bibliography <c>b:DayAccessed</c> value for a web site; null when unknown.</summary>
+    public string? AccessedDay { get; init; }
+
+    /// <summary>The Word bibliography <c>b:MonthAccessed</c> value for a web site; null when unknown.</summary>
+    public string? AccessedMonth { get; init; }
+
+    /// <summary>The Word bibliography <c>b:YearAccessed</c> value for a web site; null when unknown.</summary>
+    public string? AccessedYear { get; init; }
 }
 
 /// <summary>

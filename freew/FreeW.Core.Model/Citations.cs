@@ -619,7 +619,7 @@ public static class Citations
     //  - BookSection:    BookTitle, ChapterNumber, Pages, City: Publisher
     //  - JournalArticle: Journal, Volume, "no. Issue", "pp. Pages"
     //  - ConferenceProceedings: ConferenceName, "pp. Pages", City: Publisher
-    //  - WebSite:        Publisher, Url, "accessed Accessed"
+    //  - WebSite:        Publisher, Url, "accessed AccessedDate"
     //  - Report:         Institution, City, Publisher
     // Returns an empty list when nothing applies so callers can drop the segment entirely.
     private static List<string> SourceDetail(Source source)
@@ -639,7 +639,7 @@ public static class Citations
             case SourceType.WebSite:
                 AddIfPresent(parts, source.Publisher);
                 AddIfPresent(parts, source.Url);
-                if (NonEmpty(source.Accessed) is { } accessed)
+                if (AccessedDateText(source) is { } accessed)
                     parts.Add($"accessed {accessed}");
                 break;
             case SourceType.Report:
@@ -669,6 +669,20 @@ public static class Citations
         }
 
         return parts;
+    }
+
+    private static string? AccessedDateText(Source source)
+    {
+        var structured = new[]
+            {
+                NonEmpty(source.AccessedDay),
+                NonEmpty(source.AccessedMonth),
+                NonEmpty(source.AccessedYear)
+            }
+            .Where(part => part is not null)
+            .ToArray();
+
+        return structured.Length > 0 ? string.Join(" ", structured) : NonEmpty(source.Accessed);
     }
 
     // APA: Author. (Year). Title. <detail>.
@@ -1101,7 +1115,10 @@ public static class Citations
         && Same(left.Issue, right.Issue)
         && Same(left.Pages, right.Pages)
         && Same(left.Url, right.Url)
-        && Same(left.Accessed, right.Accessed);
+        && Same(left.Accessed, right.Accessed)
+        && Same(left.AccessedDay, right.AccessedDay)
+        && Same(left.AccessedMonth, right.AccessedMonth)
+        && Same(left.AccessedYear, right.AccessedYear);
 
     private static bool Same(string? left, string? right) =>
         string.Equals(left?.Trim() ?? string.Empty, right?.Trim() ?? string.Empty, StringComparison.Ordinal);
