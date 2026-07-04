@@ -5073,25 +5073,22 @@ public sealed class AvaloniaShellSourceTests
         sessionSource.Should().Contain("StyleDiff? replacementFormat = null");
         sessionSource.Should().Contain("var effectiveOptions = ResolveFindOptions(options, FindLookIn.Values);");
         sessionSource.Should().Contain("GetReplaceTargetIndex(matches, effectiveOptions.SearchOrder, sameSearch)");
-        sessionSource.Should().Contain("commands.Add(new EditCellsCommand(sheetId, edits));");
-        sessionSource.Should().Contain("replacementFormat is not null");
-        sessionSource.Should().Contain("new GridRange(edit.Address, edit.Address)");
         sessionSource.Should().Contain("new ApplyStyleCommand(");
-        sessionSource.Should().Contain("command = replacementFormat is null");
         sessionSource.Should().Contain("effectiveOptions.LookIn,");
-        sessionSource.Should().Contain("FindLookIn.Formulas => cell.FormulaText");
-        sessionSource.Should().Contain("FindLookIn.Values => cell.HasFormula ? null : GetReplaceableDisplayText(cell.Value)");
-        sessionSource.Should().Contain("newCell = cell.Clone();");
-        sessionSource.Should().Contain("FindLookIn.Notes when");
-        sessionSource.Should().Contain("match.Target == FindResultTarget.Note");
-        sessionSource.Should().Contain("sheet.Comments.TryGetValue(match.Address, out var note) => note");
-        sessionSource.Should().Contain("new SetCommentCommand(");
-        sessionSource.Should().Contain("new UpdateThreadedCommentTextCommand(");
-        sessionSource.Should().Contain("match.Target == FindResultTarget.ThreadedCommentReply");
-        sessionSource.Should().Contain("match.ReplyIndex is { } replyIndex");
-        sessionSource.Should().Contain("new UpdateThreadedCommentReplyCommand(");
-        sessionSource.Should().Contain("private static bool IsValidThreadedCommentReplyIndex(ThreadedComment comment, int replyIndex)");
+        // Replacement-command construction (formatted-value matching, wildcard support, and the
+        // note/threaded-comment targets) is delegated to the shared FindReplaceService rather than
+        // duplicated in the session, so the session pins the delegation and the service pins the
+        // replacement machinery itself.
+        sessionSource.Should().Contain("FindReplaceService.TryCreateReplacementCommand(");
+        sessionSource.Should().Contain("workbook: Workbook))");
         sessionSource.Should().Contain("return WorkbookReplaceResult.Replaced(1, replacedRange, index + 1, matches.Count);");
+        findReplaceServiceSource.Should().Contain("FindLookIn.Notes when");
+        findReplaceServiceSource.Should().Contain("match.Target == FindResultTarget.Note");
+        findReplaceServiceSource.Should().Contain("new SetCommentCommand(");
+        findReplaceServiceSource.Should().Contain("new UpdateThreadedCommentTextCommand(");
+        findReplaceServiceSource.Should().Contain("match.Target == FindResultTarget.ThreadedCommentReply");
+        findReplaceServiceSource.Should().Contain("match.ReplyIndex is { } replyIndex");
+        findReplaceServiceSource.Should().Contain("new UpdateThreadedCommentReplyCommand(");
         sessionSource.Should().Contain("public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)");
         sessionSource.Should().Contain("GoToSpecialService.Find(Workbook, ActiveSheet, SelectedRange, kind, ActiveCell, options)");
         sessionSource.Should().Contain("SelectionRangeService.CompressAddresses(matches)");
