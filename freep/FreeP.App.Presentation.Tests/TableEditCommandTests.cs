@@ -778,6 +778,44 @@ public sealed class TableEditCommandTests
     }
 
     [Fact]
+    public void EditingSession_TableCellParagraphBulletAndIndent_UseSharedPlansAndUndo()
+    {
+        var sess = MakeSession(out var shape);
+        shape.Table!.Rows[0].Cells[0].TextBody = MakeBody("Cell");
+        sess.SetActiveTableCell(0, 0);
+
+        var bulletPlan = sess.PlanActiveTableCellParagraphBulletToggle();
+        bulletPlan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+        bulletPlan.Kind.Should().Be(TableCellParagraphFormatKind.BulletToggle);
+        bulletPlan.BulletEnabled.Should().BeTrue();
+
+        sess.TryApplyActiveTableCellParagraphBulletToggle().Should().BeTrue();
+        var paragraph = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+        paragraph.BulletKind.Should().Be(BulletKind.Char);
+        paragraph.BulletChar.Should().Be("\u2022");
+
+        var indentPlan = sess.PlanActiveTableCellParagraphIndent();
+        indentPlan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+        indentPlan.LevelDelta.Should().Be(1);
+
+        sess.TryApplyActiveTableCellParagraphIndent().Should().BeTrue();
+        paragraph = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+        paragraph.Level.Should().Be(1);
+        paragraph.MarginLeftEmu.Should().Be(457200);
+        paragraph.IndentEmu.Should().Be(-228600);
+
+        sess.TryApplyActiveTableCellParagraphOutdent().Should().BeTrue();
+        paragraph = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+        paragraph.Level.Should().Be(0);
+        paragraph.MarginLeftEmu.Should().BeNull();
+
+        sess.Undo();
+        paragraph = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+        paragraph.Level.Should().Be(1);
+        paragraph.MarginLeftEmu.Should().Be(457200);
+    }
+
+    [Fact]
     public void EditingSession_InsertRowBelow_GrowsGrid()
     {
         var sess = MakeSession(out var shape, 2, 2);

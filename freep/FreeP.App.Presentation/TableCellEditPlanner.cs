@@ -30,6 +30,9 @@ public enum TableCellTextValueFormatKind
 public enum TableCellParagraphFormatKind
 {
     Alignment,
+    BulletToggle,
+    Indent,
+    Outdent,
 }
 
 public enum TableCellTextFormatStatus
@@ -184,13 +187,20 @@ public sealed record TableCellParagraphFormatPlan(
     TextAlign? Value,
     IPresentationCommand? Command,
     InCanvasEditorTextSelection? EffectiveSelection = null,
-    InCanvasTableCellRichTextEditPlan? ResultRichTextPlan = null)
+    InCanvasTableCellRichTextEditPlan? ResultRichTextPlan = null,
+    bool? BulletEnabled = null,
+    int LevelDelta = 0)
 {
     public bool IsReady => Status == TableCellTextFormatStatus.Ready && Command is not null;
 }
 
 public static class TableCellEditPlanner
 {
+    private const int MaxParagraphLevel = 8;
+    private const long ParagraphIndentStepEmu = DrawingMlCoordinateUnits.EmuPerInch / 2;
+    private const long ParagraphHangingIndentEmu = -DrawingMlCoordinateUnits.EmuPerInch / 4;
+    private const string DefaultBulletChar = "\u2022";
+
     public static TableCellEditState PlanSelectedCell(
         Slide? slide,
         IReadOnlyList<uint> selectedShapeIds,
@@ -477,32 +487,120 @@ public static class TableCellEditPlanner
         TextAlign alignment,
         (int Start, int End)? selection = null)
     {
+        return PlanParagraphFormat(
+            slideIndex,
+            slide,
+            selectedShapeIds,
+            activeCell,
+            TableCellParagraphFormatKind.Alignment,
+            alignment,
+            selection,
+            body => ApplyParagraphAlignment(body, alignment, selection));
+    }
+
+    public static TableCellParagraphFormatPlan PlanParagraphBulletToggle(
+        int slideIndex,
+        Slide? slide,
+        IReadOnlyList<uint> selectedShapeIds,
+        (int Row, int Col)? activeCell,
+        (int Start, int End)? selection = null)
+    {
+        return PlanParagraphFormat(
+            slideIndex,
+            slide,
+            selectedShapeIds,
+            activeCell,
+            TableCellParagraphFormatKind.BulletToggle,
+            null,
+            selection,
+            body => ApplyParagraphBulletToggle(body, selection, out bool enabled),
+            bulletEnabledFactory: body =>
+            {
+                int textLength = InCanvasTextEditPlanner.ExtractPlainText(body).Length;
+                var range = NormalizeSelection(selection, textLength);
+                var indexes = ResolveParagraphIndexes(body, range);
+                return indexes.Count > 0 && !indexes.All(index => IsBulletEnabled(body.Paragraphs[index]));
+            });
+    }
+
+    public static TableCellParagraphFormatPlan PlanParagraphIndent(
+        int slideIndex,
+        Slide? slide,
+        IReadOnlyList<uint> selectedShapeIds,
+        (int Row, int Col)? activeCell,
+        (int Start, int End)? selection = null)
+    {
+        return PlanParagraphFormat(
+            slideIndex,
+            slide,
+            selectedShapeIds,
+            activeCell,
+            TableCellParagraphFormatKind.Indent,
+            null,
+            selection,
+            body => ApplyParagraphIndent(body, increase: true, selection),
+            levelDelta: 1);
+    }
+
+    public static TableCellParagraphFormatPlan PlanParagraphOutdent(
+        int slideIndex,
+        Slide? slide,
+        IReadOnlyList<uint> selectedShapeIds,
+        (int Row, int Col)? activeCell,
+        (int Start, int End)? selection = null)
+    {
+        return PlanParagraphFormat(
+            slideIndex,
+            slide,
+            selectedShapeIds,
+            activeCell,
+            TableCellParagraphFormatKind.Outdent,
+            null,
+            selection,
+            body => ApplyParagraphIndent(body, increase: false, selection),
+            levelDelta: -1);
+    }
+
+    private static TableCellParagraphFormatPlan PlanParagraphFormat(
+        int slideIndex,
+        Slide? slide,
+        IReadOnlyList<uint> selectedShapeIds,
+        (int Row, int Col)? activeCell,
+        TableCellParagraphFormatKind kind,
+        TextAlign? value,
+        (int Start, int End)? selection,
+        Func<TextBody, TextBody> mutate,
+        Func<TextBody, bool?>? bulletEnabledFactory = null,
+        int levelDelta = 0)
+    {
         ArgumentNullException.ThrowIfNull(selectedShapeIds);
+        ArgumentNullException.ThrowIfNull(mutate);
 
         if (slide is null)
-            return DisabledParagraphFormat(TableCellTextFormatStatus.MissingSlide, alignment);
+            return DisabledParagraphFormat(TableCellTextFormatStatus.MissingSlide, kind, value);
         if (selectedShapeIds.Count == 0)
-            return DisabledParagraphFormat(TableCellTextFormatStatus.ShapeNotFound, alignment);
+            return DisabledParagraphFormat(TableCellTextFormatStatus.ShapeNotFound, kind, value);
 
         var shape = slide.Shapes.FirstOrDefault(s => s.Id == selectedShapeIds[0]);
         if (shape is null)
-            return DisabledParagraphFormat(TableCellTextFormatStatus.ShapeNotFound, alignment);
+            return DisabledParagraphFormat(TableCellTextFormatStatus.ShapeNotFound, kind, value);
         if (shape.Kind != SlideShapeKind.Table || shape.Table is null)
-            return DisabledParagraphFormat(TableCellTextFormatStatus.NotTable, alignment, shape.Id);
+            return DisabledParagraphFormat(TableCellTextFormatStatus.NotTable, kind, value, shape.Id);
         if (activeCell is not { } requested)
-            return DisabledParagraphFormat(TableCellTextFormatStatus.MissingActiveCell, alignment, shape.Id);
+            return DisabledParagraphFormat(TableCellTextFormatStatus.MissingActiveCell, kind, value, shape.Id);
 
         var normalized = NormalizeCell(shape.Table, requested.Row, requested.Col);
         if (normalized is null)
-            return DisabledParagraphFormat(TableCellTextFormatStatus.CellOutOfRange, alignment, shape.Id);
+            return DisabledParagraphFormat(TableCellTextFormatStatus.CellOutOfRange, kind, value, shape.Id);
 
         var (row, col, cell) = normalized.Value;
         if (cell.TextBody is null)
-            return DisabledParagraphFormat(TableCellTextFormatStatus.MissingTextBody, alignment, shape.Id, row, col);
+            return DisabledParagraphFormat(TableCellTextFormatStatus.MissingTextBody, kind, value, shape.Id, row, col);
         if (cell.TextBody.Paragraphs.Count == 0)
-            return DisabledParagraphFormat(TableCellTextFormatStatus.NoTextRuns, alignment, shape.Id, row, col);
+            return DisabledParagraphFormat(TableCellTextFormatStatus.NoTextRuns, kind, value, shape.Id, row, col);
 
-        var editedBody = ApplyParagraphAlignment(cell.TextBody, alignment, selection);
+        bool? bulletEnabled = bulletEnabledFactory?.Invoke(cell.TextBody);
+        var editedBody = mutate(cell.TextBody);
         var effectiveSelection = PlanFormatResultSelection(editedBody, selection);
         var richTextPlan = PlanRichTextEdit(editedBody, effectiveSelection);
 
@@ -511,11 +609,13 @@ public static class TableCellEditPlanner
             shape.Id,
             row,
             col,
-            TableCellParagraphFormatKind.Alignment,
-            alignment,
+            kind,
+            value,
             new SetTableCellTextCommand(slideIndex, shape.Id, row, col, editedBody),
             effectiveSelection,
-            richTextPlan);
+            richTextPlan,
+            bulletEnabled,
+            levelDelta);
     }
 
     private static TableCellTextValueFormatPlan PlanTextValueFormat(
@@ -903,11 +1003,12 @@ public static class TableCellEditPlanner
 
     private static TableCellParagraphFormatPlan DisabledParagraphFormat(
         TableCellTextFormatStatus status,
-        TextAlign value,
+        TableCellParagraphFormatKind kind,
+        TextAlign? value,
         uint? shapeId = null,
         int? row = null,
         int? col = null) =>
-        new(status, shapeId, row, col, TableCellParagraphFormatKind.Alignment, value, null);
+        new(status, shapeId, row, col, kind, value, null);
 
     private static TextBody ApplyParagraphAlignment(
         TextBody source,
@@ -923,6 +1024,76 @@ public static class TableCellEditPlanner
 
         return editedBody;
     }
+
+    private static TextBody ApplyParagraphBulletToggle(
+        TextBody source,
+        (int Start, int End)? selection,
+        out bool enabled)
+    {
+        var editedBody = TextBodyModelCloner.CloneTextBody(source)!;
+        int textLength = InCanvasTextEditPlanner.ExtractPlainText(source).Length;
+        var range = NormalizeSelection(selection, textLength);
+        var paragraphIndexes = ResolveParagraphIndexes(editedBody, range);
+        enabled = paragraphIndexes.Count > 0 &&
+            !paragraphIndexes.All(index => IsBulletEnabled(editedBody.Paragraphs[index]));
+
+        foreach (int paragraphIndex in paragraphIndexes)
+        {
+            var paragraph = editedBody.Paragraphs[paragraphIndex];
+            if (enabled)
+            {
+                paragraph.BulletKind = BulletKind.Char;
+                paragraph.BulletChar = string.IsNullOrEmpty(paragraph.BulletChar)
+                    ? DefaultBulletChar
+                    : paragraph.BulletChar;
+                paragraph.BulletSuppressed = false;
+            }
+            else
+            {
+                paragraph.BulletKind = BulletKind.None;
+                paragraph.BulletChar = null;
+                paragraph.BulletSuppressed = true;
+            }
+        }
+
+        return editedBody;
+    }
+
+    private static TextBody ApplyParagraphIndent(
+        TextBody source,
+        bool increase,
+        (int Start, int End)? selection)
+    {
+        var editedBody = TextBodyModelCloner.CloneTextBody(source)!;
+        int textLength = InCanvasTextEditPlanner.ExtractPlainText(source).Length;
+        var range = NormalizeSelection(selection, textLength);
+
+        foreach (int paragraphIndex in ResolveParagraphIndexes(editedBody, range))
+        {
+            var paragraph = editedBody.Paragraphs[paragraphIndex];
+            int oldLevel = Math.Clamp(paragraph.Level, 0, MaxParagraphLevel);
+            int newLevel = increase
+                ? Math.Min(MaxParagraphLevel, oldLevel + 1)
+                : Math.Max(0, oldLevel - 1);
+            long currentMargin = Math.Max(0, paragraph.MarginLeftEmu ?? oldLevel * ParagraphIndentStepEmu);
+            long nextMargin = increase
+                ? Math.Max(currentMargin + ParagraphIndentStepEmu, newLevel * ParagraphIndentStepEmu)
+                : Math.Max(0, currentMargin - ParagraphIndentStepEmu);
+
+            paragraph.Level = newLevel;
+            paragraph.MarginLeftEmu = nextMargin > 0 ? nextMargin : null;
+
+            if (nextMargin > 0 && IsBulletEnabled(paragraph) && paragraph.IndentEmu is null)
+                paragraph.IndentEmu = ParagraphHangingIndentEmu;
+            else if (nextMargin == 0 && paragraph.IndentEmu == ParagraphHangingIndentEmu)
+                paragraph.IndentEmu = null;
+        }
+
+        return editedBody;
+    }
+
+    private static bool IsBulletEnabled(Paragraph paragraph) =>
+        !paragraph.BulletSuppressed && paragraph.BulletKind != BulletKind.None;
 
     private static IReadOnlyList<int> ResolveParagraphIndexes(
         TextBody body,

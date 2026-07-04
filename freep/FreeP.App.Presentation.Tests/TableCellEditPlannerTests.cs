@@ -793,6 +793,159 @@ public sealed class TableCellEditPlannerTests
         paragraphs[2].Align.Should().Be(TextAlign.Left);
     }
 
+    [Theory]
+    [InlineData(TableCellParagraphFormatKind.BulletToggle)]
+    [InlineData(TableCellParagraphFormatKind.Indent)]
+    [InlineData(TableCellParagraphFormatKind.Outdent)]
+    public void PlanParagraphFormat_DisabledStates_MatchActiveTableCellRequirements(
+        TableCellParagraphFormatKind kind)
+    {
+        var shape = MakeMergedTableShape();
+        var notTable = new SlideShape { Id = 77, Kind = SlideShapeKind.AutoShape };
+
+        Plan(kind, null, [shape.Id], (0, 0)).Status.Should().Be(TableCellTextFormatStatus.MissingSlide);
+        Plan(kind, new Slide { Shapes = { shape } }, [], (0, 0)).Status.Should().Be(TableCellTextFormatStatus.ShapeNotFound);
+        Plan(kind, new Slide { Shapes = { shape } }, [999], (0, 0)).Status.Should().Be(TableCellTextFormatStatus.ShapeNotFound);
+        Plan(kind, new Slide { Shapes = { notTable } }, [notTable.Id], (0, 0)).Status.Should().Be(TableCellTextFormatStatus.NotTable);
+        Plan(kind, new Slide { Shapes = { shape } }, [shape.Id], null).Status.Should().Be(TableCellTextFormatStatus.MissingActiveCell);
+        Plan(kind, new Slide { Shapes = { shape } }, [shape.Id], (99, 0)).Status.Should().Be(TableCellTextFormatStatus.CellOutOfRange);
+
+        shape.Table!.Rows[0].Cells[0].TextBody = null;
+        Plan(kind, new Slide { Shapes = { shape } }, [shape.Id], (0, 0)).Status.Should().Be(TableCellTextFormatStatus.MissingTextBody);
+    }
+
+    [Fact]
+    public void PlanParagraphBulletToggle_WholeCell_BuildsUndoableCommand()
+    {
+        var shape = MakeMergedTableShape();
+        var body = shape.Table!.Rows[0].Cells[0].TextBody!;
+        var second = new Paragraph();
+        second.Runs.Add(new Run { Text = "Second" });
+        body.Paragraphs.Add(second);
+        var slide = new Slide { Shapes = { shape } };
+
+        var plan = TableCellEditPlanner.PlanParagraphBulletToggle(0, slide, [shape.Id], (0, 1));
+
+        plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+        plan.Kind.Should().Be(TableCellParagraphFormatKind.BulletToggle);
+        plan.BulletEnabled.Should().BeTrue();
+        plan.EffectiveSelection.Should().Be(new InCanvasEditorTextSelection(0, "Anchor\nSecond".Length));
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(plan.Command!);
+
+        var paragraphs = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs;
+        paragraphs.Should().OnlyContain(paragraph =>
+            paragraph.BulletKind == BulletKind.Char &&
+            paragraph.BulletChar == "\u2022" &&
+            !paragraph.BulletSuppressed);
+
+        bus.Undo();
+        paragraphs = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs;
+        paragraphs.Should().OnlyContain(paragraph => paragraph.BulletKind == BulletKind.None);
+    }
+
+    [Fact]
+    public void PlanParagraphBulletToggle_AllTargetParagraphsBulleted_SuppressesBullets()
+    {
+        var shape = MakeMergedTableShape();
+        var body = shape.Table!.Rows[0].Cells[0].TextBody!;
+        body.Paragraphs[0].BulletKind = BulletKind.Char;
+        body.Paragraphs[0].BulletChar = "\u2022";
+        var slide = new Slide { Shapes = { shape } };
+
+        var plan = TableCellEditPlanner.PlanParagraphBulletToggle(0, slide, [shape.Id], (0, 0));
+
+        plan.BulletEnabled.Should().BeFalse();
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(plan.Command!);
+
+        var paragraph = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+        paragraph.BulletKind.Should().Be(BulletKind.None);
+        paragraph.BulletChar.Should().BeNull();
+        paragraph.BulletSuppressed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PlanParagraphIndent_SubRangeSelection_IndentsOnlyTouchedParagraphs()
+    {
+        var shape = MakeMergedTableShape();
+        var body = shape.Table!.Rows[0].Cells[0].TextBody!;
+        var second = new Paragraph { BulletKind = BulletKind.Char, BulletChar = "\u2022" };
+        second.Runs.Add(new Run { Text = "Beta" });
+        body.Paragraphs.Add(second);
+        var third = new Paragraph();
+        third.Runs.Add(new Run { Text = "Gamma" });
+        body.Paragraphs.Add(third);
+        var slide = new Slide { Shapes = { shape } };
+
+        var plan = TableCellEditPlanner.PlanParagraphIndent(
+            0,
+            slide,
+            [shape.Id],
+            (0, 0),
+            selection: (7, 11));
+
+        plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+        plan.Kind.Should().Be(TableCellParagraphFormatKind.Indent);
+        plan.LevelDelta.Should().Be(1);
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(plan.Command!);
+
+        var paragraphs = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs;
+        paragraphs[0].Level.Should().Be(0);
+        paragraphs[0].MarginLeftEmu.Should().BeNull();
+        paragraphs[1].Level.Should().Be(1);
+        paragraphs[1].MarginLeftEmu.Should().Be(457200);
+        paragraphs[1].IndentEmu.Should().Be(-228600);
+        paragraphs[2].Level.Should().Be(0);
+    }
+
+    [Fact]
+    public void PlanParagraphOutdent_WholeCell_ClampsAtZeroAndPreservesUndo()
+    {
+        var shape = MakeMergedTableShape();
+        var body = shape.Table!.Rows[0].Cells[0].TextBody!;
+        body.Paragraphs[0].Level = 2;
+        body.Paragraphs[0].MarginLeftEmu = 914400;
+        body.Paragraphs[0].IndentEmu = -228600;
+        var slide = new Slide { Shapes = { shape } };
+
+        var plan = TableCellEditPlanner.PlanParagraphOutdent(0, slide, [shape.Id], (0, 0));
+
+        plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+        plan.Kind.Should().Be(TableCellParagraphFormatKind.Outdent);
+        plan.LevelDelta.Should().Be(-1);
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(plan.Command!);
+
+        var paragraph = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+        paragraph.Level.Should().Be(1);
+        paragraph.MarginLeftEmu.Should().Be(457200);
+        paragraph.IndentEmu.Should().Be(-228600);
+
+        bus.Undo();
+        paragraph = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+        paragraph.Level.Should().Be(2);
+        paragraph.MarginLeftEmu.Should().Be(914400);
+        paragraph.IndentEmu.Should().Be(-228600);
+    }
+
     [Fact]
     public void BeginEdit_OutOfRangeCell_ReturnsDisabledPlan()
     {
@@ -855,4 +1008,20 @@ public sealed class TableCellEditPlannerTests
         TableCellTextFormatKind.Underline => run.Underline,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
     };
+
+    private static TableCellParagraphFormatPlan Plan(
+        TableCellParagraphFormatKind kind,
+        Slide? slide,
+        IReadOnlyList<uint> selectedShapeIds,
+        (int Row, int Col)? activeCell) =>
+        kind switch
+        {
+            TableCellParagraphFormatKind.BulletToggle =>
+                TableCellEditPlanner.PlanParagraphBulletToggle(0, slide, selectedShapeIds, activeCell),
+            TableCellParagraphFormatKind.Indent =>
+                TableCellEditPlanner.PlanParagraphIndent(0, slide, selectedShapeIds, activeCell),
+            TableCellParagraphFormatKind.Outdent =>
+                TableCellEditPlanner.PlanParagraphOutdent(0, slide, selectedShapeIds, activeCell),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+        };
 }

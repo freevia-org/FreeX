@@ -1246,6 +1246,67 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Ribbon_bullet_and_indent_commands_route_to_active_table_cell()
+    {
+        var foundBullets = false;
+        var foundIndent = false;
+        var foundOutdent = false;
+        BulletKind bulletKind = BulletKind.None;
+        string? bulletChar = null;
+        int levelAfterIndent = -1;
+        long? marginAfterIndent = null;
+        int levelAfterOutdent = -1;
+        long? marginAfterOutdent = 1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            foundBullets = registry.TryGet("freep.bullets", out var bulletsCommand);
+            foundIndent = registry.TryGet("freep.indent-increase", out var indentCommand);
+            foundOutdent = registry.TryGet("freep.indent-decrease", out var outdentCommand);
+            foundBullets.Should().BeTrue("Bullets must be registered");
+            foundIndent.Should().BeTrue("Increase Indent must be registered");
+            foundOutdent.Should().BeTrue("Decrease Indent must be registered");
+
+            var shape = window.Editor.InsertTable(1, 1);
+            var body = new TextBody { Wrap = true };
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run { Text = "Cell" });
+            body.Paragraphs.Add(paragraph);
+            shape.Table!.Rows[0].Cells[0].TextBody = body;
+            window.Editor.Select(shape.Id);
+            window.Editor.SetActiveTableCell(0, 0);
+
+            bulletsCommand!.Execute(RibbonCommandContext.Empty);
+            indentCommand!.Execute(RibbonCommandContext.Empty);
+
+            var edited = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+            bulletKind = edited.BulletKind;
+            bulletChar = edited.BulletChar;
+            levelAfterIndent = edited.Level;
+            marginAfterIndent = edited.MarginLeftEmu;
+
+            outdentCommand!.Execute(RibbonCommandContext.Empty);
+
+            edited = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+            levelAfterOutdent = edited.Level;
+            marginAfterOutdent = edited.MarginLeftEmu;
+        });
+
+        if (!ran) return;
+        foundBullets.Should().BeTrue("Bullets must be registered");
+        foundIndent.Should().BeTrue("Increase Indent must be registered");
+        foundOutdent.Should().BeTrue("Decrease Indent must be registered");
+        bulletKind.Should().Be(BulletKind.Char);
+        bulletChar.Should().Be("\u2022");
+        levelAfterIndent.Should().Be(1);
+        marginAfterIndent.Should().Be(457200);
+        levelAfterOutdent.Should().Be(0);
+        marginAfterOutdent.Should().BeNull();
+    }
+
+    [Fact]
     public async Task Ribbon_chart_edit_data_command_is_registered_and_noops_without_selected_chart()
     {
         var found = false;
