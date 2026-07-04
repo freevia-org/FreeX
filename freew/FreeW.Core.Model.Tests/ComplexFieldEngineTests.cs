@@ -23,6 +23,7 @@ public class ComplexFieldEngineTests
         new ComplexField(" REF mark ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" PAGEREF mark ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" SEQ Figure ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" CITATION Ada1843 ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" PAGE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
         new ComplexField(" DATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
     }
@@ -159,6 +160,42 @@ public class ComplexFieldEngineTests
         AddField(doc, " MERGEFIELD FirstName ", cached: "John");
 
         ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("John");
+    }
+
+    [Fact]
+    public void Citation_ResolvesTaggedSourceUsingCurrentStyle()
+    {
+        var doc = new TextDocument { BibliographyStyle = CitationStyle.Apa };
+        doc.Sources.Add(new Source { Tag = "Doe2024", Author = "Jane Q. Doe", Title = "A Work", Year = "2024" });
+        AddField(doc, " CITATION Doe2024 ", cached: "stale");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("(Doe, 2024)");
+    }
+
+    [Fact]
+    public void Citation_NumericStyleRenumbersAfterSourceOrderChanges()
+    {
+        var ada = new Source { Tag = "Ada1843", Author = "Ada Lovelace", Title = "Notes", Year = "1843" };
+        var turing = new Source { Tag = "Tur1936", Author = "Alan Turing", Title = "Computable Numbers", Year = "1936" };
+        var doc = new TextDocument { BibliographyStyle = CitationStyle.Ieee };
+        doc.Sources.Add(ada);
+        doc.Sources.Add(turing);
+        AddField(doc, " CITATION Tur1936 ", cached: "[2]");
+
+        doc.Sources.Clear();
+        doc.Sources.Add(turing);
+        doc.Sources.Add(ada);
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("[1]");
+    }
+
+    [Fact]
+    public void Citation_MissingSourceKeepsCachedText()
+    {
+        var doc = new TextDocument { BibliographyStyle = CitationStyle.Vancouver };
+        AddField(doc, " CITATION Ghost1900 ", cached: "[4]");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("[4]");
     }
 }
 

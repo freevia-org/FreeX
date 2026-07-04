@@ -172,6 +172,59 @@ public static class Citations
     }
 
     /// <summary>
+    /// Builds a Word-like <c>CITATION tag</c> complex-field run for a tagged source. The run's cached text is
+    /// the current in-text citation display, so it remains readable before a later Update Fields pass.
+    /// Untagged sources cannot be addressed by Word's CITATION field and should keep the plain-text fallback.
+    /// </summary>
+    public static bool TryCreateCitationFieldRun(
+        TextDocument document,
+        Source source,
+        CitationStyle style,
+        out Run run,
+        RunFormatting? formatting = null)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(source);
+
+        var tag = source.Tag?.Trim() ?? string.Empty;
+        if (tag.Length == 0)
+        {
+            run = new Run(string.Empty);
+            return false;
+        }
+
+        var instruction = $" CITATION {QuoteFieldArgument(tag)} ";
+        var cached = FormatInText(document, source, style);
+        run = Run.ComplexFieldRun(instruction, cached, showCode: false, formatting);
+        return true;
+    }
+
+    /// <summary>
+    /// Resolves a <c>CITATION tag</c> field against the document's current source list and active style.
+    /// Missing/deleted sources keep their cached display text, matching Word's dangling reference behavior.
+    /// </summary>
+    public static string ResolveCitationField(TextDocument document, ComplexField field, string cached)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(field);
+
+        var tag = ComplexFieldEngine.Argument(field.Instruction).Trim();
+        if (tag.Length == 0)
+            return cached;
+
+        var source = document.Sources.FirstOrDefault(s =>
+            string.Equals(s.Tag?.Trim() ?? string.Empty, tag, StringComparison.Ordinal));
+        return source is null
+            ? cached
+            : FormatInText(document, source, document.BibliographyStyle);
+    }
+
+    private static string QuoteFieldArgument(string value) =>
+        value.Any(char.IsWhiteSpace) || value.Contains('"', StringComparison.Ordinal)
+            ? "\"" + value.Replace("\"", "\\\"", StringComparison.Ordinal) + "\""
+            : value;
+
+    /// <summary>
     /// Formats a source as an in-text citation in the given <paramref name="style"/>:
     /// <list type="bullet">
     /// <item><b>APA</b>: <c>(Author, Year)</c> (author and year separated by a comma).</item>
