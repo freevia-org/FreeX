@@ -1734,6 +1734,12 @@ static void GenerateF2FlowCorpus(string outDir)
         Console.WriteLine("  wrote field-page-number-variants.docx");
     }
 
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildReferencesHeavyFieldDocument();
+        DocxWriter.Write(doc, Path.Combine(outDir, "references-heavy-fields.docx"));
+        Console.WriteLine("  wrote references-heavy-fields.docx");
+    }
+
     // ─── 4. Footnotes ────────────────────────────────────────────────────────────────────────────
     {
         var doc = FreeWVisualEvidenceDocumentFactory.BuildFootnotePlacementDocument();

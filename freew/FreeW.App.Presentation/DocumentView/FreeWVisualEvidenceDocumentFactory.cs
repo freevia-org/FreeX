@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
 using FreeW.Core.Model;
+using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Presentation.DocumentView;
 
@@ -147,6 +148,98 @@ public static class FreeWVisualEvidenceDocumentFactory
                 $"Field evidence body paragraph {i}: enough text to force multiple pages while " +
                 "keeping the same PAGE and NUMPAGES header/footer variants visible."));
         }
+
+        return doc;
+    }
+
+    public static TextDocument BuildReferencesHeavyFieldDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Properties.Title = "References Heavy Evidence";
+        doc.Properties.Author = "FreeW Visual Evidence";
+        doc.Properties.Subject = "Citation, bibliography, and table of authorities visual parity";
+        doc.Properties.Keywords = "CITATION, BIBLIOGRAPHY, TOA";
+        doc.Properties.Comments = "Exercises visible references fields without claiming live Word TOA page-number recomputation.";
+        doc.BibliographyStyle = CitationStyle.Ieee;
+
+        var book = new Source
+        {
+            Tag = "Knuth1997",
+            Type = SourceType.Book,
+            Author = "Knuth, Donald",
+            Title = "The Art of Computer Programming",
+            Publisher = "Addison-Wesley",
+            Year = "1997"
+        };
+        var article = new Source
+        {
+            Tag = "Doe2024",
+            Type = SourceType.JournalArticle,
+            Author = "Jane Q. Doe; Alex Smith",
+            Title = "Evidence-first document rendering",
+            Journal = "Journal of Document Systems",
+            Volume = "42",
+            Issue = "2",
+            Pages = "12-20",
+            Year = "2024"
+        };
+        var web = new Source
+        {
+            Tag = "W3C2025",
+            Type = SourceType.WebSite,
+            Author = "World Wide Web Consortium",
+            Title = "Digital publishing accessibility notes",
+            Url = "https://www.w3.org/",
+            Accessed = "2026-07-04",
+            Year = "2025"
+        };
+        doc.Sources.AddRange([book, article, web]);
+
+        doc.Blocks.Add(StyledParagraph("References Heavy Evidence", "Heading1"));
+        doc.Blocks.Add(new Paragraph(
+            "This shared fixture exercises Word-style references output across visible CITATION fields, " +
+            "a bibliography field, structured source types, hidden legal-authority marks, and a cached TOA field."));
+
+        doc.Blocks.Add(CitationParagraph(
+            doc,
+            "Numeric citations should preserve source-order markers: ",
+            [book, article, web]));
+        doc.Blocks.Add(CitationParagraph(
+            doc,
+            "Repeated citations should reuse the same marker: ",
+            [article, book]));
+
+        var caseCitation = new Citation("Example v. FreeW, 123 F.4th 456 (2026)", CitationCategory.Cases, "Example");
+        var statuteCitation = new Citation("Free Software Evidence Act, 42 U.S.C. 2026", CitationCategory.Statutes, "FSEA");
+        doc.Blocks.Add(AuthorityParagraph(
+            "Marked authorities: Example v. FreeW and Free Software Evidence Act should be collected into the generated TOA region.",
+            caseCitation,
+            statuteCitation));
+
+        for (var i = 1; i <= 16; i++)
+        {
+            doc.Blocks.Add(new Paragraph(
+                $"References body paragraph {i}: filler text keeps the bibliography and table of authorities " +
+                "near a later page while preserving citation-field metadata in the visual evidence manifest."));
+        }
+
+        doc.Blocks.Add(FieldParagraph(
+            "Bibliography field cache: ",
+            Run.ComplexFieldRun(" BIBLIOGRAPHY \\l 1033 ", "References")));
+        doc.Blocks.AddRange(BibliographyRegionPlanner
+            .BuildInsertPlan(doc, doc.Blocks.Count, CitationStyle.Ieee)
+            .Paragraphs);
+
+        doc.Blocks.Add(FieldParagraph(
+            "TOA field cache with page-number placeholder: ",
+            Run.ComplexFieldRun(" TOA \\c 1 \\p ", "Cases\t1, 2")));
+        doc.Blocks.AddRange(TableOfAuthoritiesRegionPlanner
+            .BuildInsertPlan(doc, doc.Blocks.Count, new ToaOptions { TabLeader = ToaTabLeader.Dots })
+            .Paragraphs);
+
+        for (var i = 1; i <= 10; i++)
+            doc.Blocks.Add(new Paragraph($"Closing references paragraph {i}: confirms late-page evidence remains nonblank."));
 
         return doc;
     }
@@ -801,6 +894,41 @@ public static class FreeWVisualEvidenceDocumentFactory
             VerticalOffsetPt = yPt,
             ZOrderIndex = zOrder
         };
+
+    private static Paragraph CitationParagraph(TextDocument document, string prefix, IReadOnlyList<Source> sources)
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run(prefix));
+        for (var i = 0; i < sources.Count; i++)
+        {
+            if (i > 0)
+                paragraph.Runs.Add(new Run(" "));
+
+            if (Citations.TryCreateCitationFieldRun(document, sources[i], document.BibliographyStyle, out var fieldRun))
+                paragraph.Runs.Add(fieldRun);
+            else
+                paragraph.Runs.Add(new Run(Citations.FormatInText(document, sources[i], document.BibliographyStyle)));
+        }
+
+        return paragraph;
+    }
+
+    private static Paragraph AuthorityParagraph(string visibleText, params Citation[] citations)
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run(visibleText));
+        foreach (var citation in citations)
+            paragraph.Runs.Add(Run.CitationMark(citation));
+        return paragraph;
+    }
+
+    private static Paragraph FieldParagraph(string prefix, Run fieldRun)
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run(prefix));
+        paragraph.Runs.Add(fieldRun);
+        return paragraph;
+    }
 
     private static byte[] BuildGeneratedWatermarkPngBytes()
     {

@@ -377,6 +377,28 @@ public static class FreeWVisualEvidencePlanner
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition with { ExpectsHeadersFooters = true }),
         new(
+            "references-heavy-fields",
+            "References-heavy CITATION, BIBLIOGRAPHY, and cached TOA field visual composition.",
+            [
+                "references",
+                "source-manager",
+                "citation-fields",
+                "bibliography-fields",
+                "toa-fields",
+                "complex-fields",
+                "legal-authorities",
+                "generated-bibliography",
+                "generated-table-of-authorities",
+                "page-composition",
+                "print-layout",
+                "multi-page",
+                "body-text"
+            ],
+            "references-heavy-fields_p{page}.png",
+            2,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition),
+        new(
             "f2-footnotes",
             "F2 footnote page composition.",
             ["f2", "page-composition", "print-layout", "footnotes", "multi-page", "body-text"],
