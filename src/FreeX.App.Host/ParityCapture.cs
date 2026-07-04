@@ -8,6 +8,7 @@ using System.Windows.Documents;
 using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using FreeX.App.Presentation.Accessibility;
 using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.Filtering;
@@ -647,7 +648,7 @@ internal static class ParityCapture
             new PasswordProtectionDialog(UiText.Get("Protection_ProtectWorkbookTitle"), UiText.Get("Protection_PasswordToUnprotectWorkbook")));
 
         CaptureDialog(results, "dialog.AccessibilityChecker", outDir, () =>
-            new AccessibilityCheckerDialog(CreateAccessibilityIssues(sheet.Id, sheet.Name)));
+            new AccessibilityCheckerDialog(AccessibilityCheckerParityFixture.CreateDialogIssues(sheet.Id)));
 
         CaptureDialog(results, "dialog.DataValidation", outDir, () =>
             new DataValidationDialog());
@@ -985,22 +986,6 @@ internal static class ParityCapture
         pivot.DataFields.Add(new PivotDataFieldModel(4, "Sum of Revenue", "sum"));
         return (pivot, cache, headers);
     }
-
-    private static IReadOnlyList<AccessibilityIssue> CreateAccessibilityIssues(SheetId sheetId, string sheetName) =>
-    [
-        new AccessibilityIssue(
-            AccessibilityIssueKind.DefaultWorksheetName,
-            sheetId,
-            sheetName,
-            sheetName,
-            "Worksheet tab names should describe their contents."),
-        new AccessibilityIssue(
-            AccessibilityIssueKind.MissingAltText,
-            sheetId,
-            sheetName,
-            "Revenue Chart",
-            "Charts should include descriptive alternative text."),
-    ];
 
     /// <summary>
     /// Seeds three example conditional-format rules (DataBar, three-color ColorScale, Greater-Than) over

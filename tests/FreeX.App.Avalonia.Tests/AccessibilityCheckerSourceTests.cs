@@ -46,7 +46,7 @@ public sealed class AccessibilityCheckerSourceTests
 
         mainSource.Should().Contain("_checkAccessibilityMenuItem.Click += async (_, _) => await ShowAccessibilityCheckerDialogAsync();");
         mainSource.Should().Contain("[\"review.checkAccessibility\"] = () => _ = ShowAccessibilityCheckerDialogAsync(),");
-        parityCaptureSource.Should().Contain("(\"dialog.AccessibilityChecker\", () => ShowAccessibilityCheckerDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.AccessibilityChecker\", () => ShowAccessibilityCheckerParityDialogAsync()),");
     }
 
     private static string RepoFile(params string[] parts)

@@ -2428,7 +2428,7 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("(\"dialog.AllowEditRanges\", () => ShowAllowEditRangesParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.ProtectSheet\", () => ShowProtectSheetDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.ProtectWorkbook\", () => ShowProtectWorkbookParityDialogAsync()),");
-        parityCaptureSource.Should().Contain("(\"dialog.AccessibilityChecker\", () => ShowAccessibilityCheckerDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.AccessibilityChecker\", () => ShowAccessibilityCheckerParityDialogAsync()),");
 
         parityCaptureSource.Should().Contain("private Task ShowInsertHyperlinkParityDialogAsync()");
         parityCaptureSource.Should().Contain("async () => { await ShowInsertHyperlinkInputDialogAsync(); }");
@@ -2501,9 +2501,9 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("private Task ShowTextToColumnsParityDialogAsync()");
         parityCaptureSource.Should().Contain("private Task ShowSparklineParityDialogAsync()");
         parityCaptureSource.Should().Contain("private async Task ShowSelectionPaneParityDialogAsync()");
-        parityCaptureSource.Should().Contain("chart.Name = \"Revenue Chart\";");
-        parityCaptureSource.Should().Contain("shape.Name = \"Rectangle 1\";");
-        parityCaptureSource.Should().Contain("new SelectionPaneItem(");
+        parityCaptureSource.Should().Contain("chart.Name = SelectionPaneParityFixture.ChartName;");
+        parityCaptureSource.Should().Contain("shape.Name = SelectionPaneParityFixture.ShapeName;");
+        parityCaptureSource.Should().Contain("SelectionPaneParityFixture.CreateDialogItems(");
         parityCaptureSource.Should().Contain("await OpenSelectionPaneDialogAsync(items);");
         parityCaptureSource.Should().Contain("await OpenSelectionPaneDialogAsync();");
         parityCaptureSource.Should().Contain("private async Task ShowWithParityPivotAsync(Func<Task> showDialogAsync)");
@@ -2594,6 +2594,8 @@ public sealed class AvaloniaShellSourceTests
         var wpfCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Host", "ParityCapture.cs"));
         var autoFilterFixtureSource = File.ReadAllText(RepositoryFileLocator.Find(
             "src", "FreeX.App.Presentation", "Filtering", "AutoFilterParityFixturePlanner.cs"));
+        var accessibilityCheckerFixtureSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Presentation", "Accessibility", "AccessibilityCheckerParityFixture.cs"));
         var dialogIds = new[]
         {
             "dialog.FormatCells",
@@ -2674,6 +2676,13 @@ public sealed class AvaloniaShellSourceTests
         wpfCaptureSource.Should().Contain("SelectionPaneParityFixture.CreateDialogItems(");
         avaloniaCaptureSource.Should().Contain("SelectionPaneParityFixture.ChartName");
         avaloniaCaptureSource.Should().Contain("SelectionPaneParityFixture.ShapeName");
+
+        avaloniaCaptureSource.Should().Contain("ShowAccessibilityCheckerParityDialogAsync()");
+        avaloniaCaptureSource.Should().Contain("AccessibilityCheckerParityFixture.CreateDialogIssues(");
+        wpfCaptureSource.Should().Contain("AccessibilityCheckerParityFixture.CreateDialogIssues(");
+        wpfCaptureSource.Should().NotContain("CreateAccessibilityIssues(");
+        accessibilityCheckerFixtureSource.Should().Contain("AccessibilityIssueKind.DefaultWorksheetName");
+        accessibilityCheckerFixtureSource.Should().Contain("AccessibilityIssueKind.MissingAltText");
 
         // The multi-tab / multi-category dialogs declare an identical, position-ordered tab-name list in
         // each shell, so the comparison runner pairs `dialog.<Name>.<TabName>` one-for-one. The capture

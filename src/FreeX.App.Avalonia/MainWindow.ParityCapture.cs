@@ -16,6 +16,7 @@ using Free.Shared.Shell.Avalonia;
 using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Avalonia.Ribbon;
+using FreeX.App.Presentation.Accessibility;
 using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.DrawingUI;
@@ -191,7 +192,7 @@ public sealed partial class MainWindow
         ("dialog.AllowEditRanges", () => ShowAllowEditRangesParityDialogAsync()),
         ("dialog.ProtectSheet", () => ShowProtectSheetDialogAsync()),
         ("dialog.ProtectWorkbook", () => ShowProtectWorkbookParityDialogAsync()),
-        ("dialog.AccessibilityChecker", () => ShowAccessibilityCheckerDialogAsync()),
+        ("dialog.AccessibilityChecker", () => ShowAccessibilityCheckerParityDialogAsync()),
         ("dialog.DataValidation", () => ShowDataValidationDialogAsync()),
         ("dialog.ConditionalFormatNewRule", () => ShowConditionalFormatNewRuleDialogAsync()),
         ("dialog.ConditionalFormatManage", () => ShowManageConditionalFormatsParityDialogAsync()),
@@ -898,6 +899,13 @@ public sealed partial class MainWindow
         }
 
         await OpenSelectionPaneDialogAsync();
+    }
+
+    private async Task ShowAccessibilityCheckerParityDialogAsync()
+    {
+        var issues = AccessibilityCheckerParityFixture.CreateDialogIssues(_session.ActiveSheet.Id);
+        var plan = AccessibilityCheckerDialogPlanner.Create(issues, UiText.Get);
+        await ShowAccessibilityCheckerIssuesDialogAsync(plan);
     }
 
     private async Task ShowWithParityPivotAsync(Func<Task> showDialogAsync)
