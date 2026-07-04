@@ -104,10 +104,12 @@ public sealed class ChartSmartArtContextualTabTests
 
         var cf = def.FindTab("chart-format")!;
         cf.Context!.ActivationKey.Should().Be(FloatingRibbonContextSource.ChartContextKey);
+        AssertUsesSharedZOrderCommands(cf, "chart-arrange");
 
         var sd = def.FindTab("smartart-design")!;
         sd.Context!.ActivationKey.Should().Be(FloatingRibbonContextSource.SmartArtContextKey);
         sd.Context.Color.Should().Be(RibbonContextColor.Blue);
+        AssertUsesSharedZOrderCommands(sd, "smartart-arrange");
     }
 
     [Fact]
@@ -460,4 +462,26 @@ public sealed class ChartSmartArtContextualTabTests
         RibbonGallery g      => g.CommandId,
         _                    => (RibbonCommandId?)null,
     };
+
+    private static void AssertUsesSharedZOrderCommands(RibbonTab tab, string groupId)
+    {
+        var commandIds = tab.Groups.Single(g => g.Id == groupId).Controls
+            .Select(control => GetCommandId(control)?.Value)
+            .Where(id => id is not null)
+            .Select(id => id!)
+            .ToArray();
+
+        commandIds.Should().Contain(new[]
+        {
+            "freew.image-bring-to-front",
+            "freew.image-send-to-back",
+        }, "Avalonia should share WPF's object z-order command ids for contextual object tabs");
+        commandIds.Should().NotContain(new[]
+        {
+            "freew.shape-bring-to-front",
+            "freew.shape-send-to-back",
+            "freew.shape-bring-forward",
+            "freew.shape-send-backward",
+        }, "shape-prefixed z-order ids create duplicate generated inventory rows");
+    }
 }
