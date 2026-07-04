@@ -505,6 +505,13 @@ function Get-ExpectedEvidenceSize {
                     source = "ConditionalFormatDialogCatalog.RuleEditorCaptureWidth/Height"
                 }
             }
+            "dialog.Consolidate" {
+                return [pscustomobject]@{
+                    width = 380
+                    height = 420
+                    source = "ConsolidateDialogPlanner.CaptureWidth/Height"
+                }
+            }
             "dialog.ShapeGradient" {
                 return [pscustomobject]@{
                     width = 500

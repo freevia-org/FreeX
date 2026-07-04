@@ -32,6 +32,10 @@ public sealed class ConsolidateSourceGuardTests
             .Should()
             .BeFalse("Avalonia should consume shared consolidate planners directly instead of keeping a pass-through facade");
         source.Should().Contain("ConsolidateDialogPlanner.FunctionChoices");
+        source.Should().Contain("Width = ConsolidateDialogPlanner.CaptureWidth");
+        source.Should().Contain("Height = ConsolidateDialogPlanner.CaptureHeight");
+        source.Should().Contain("MinWidth = ConsolidateDialogPlanner.MinWidth");
+        source.Should().Contain("MinHeight = ConsolidateDialogPlanner.ReferencesListHeight");
         source.Should().Contain("ConsolidateDialogPlanner.TryPlanApply(");
         source.Should().Contain("new ConsolidateCommand(");
         source.Should().NotContain("ConsolidateShellPlanner");
@@ -50,6 +54,10 @@ public sealed class ConsolidateSourceGuardTests
             .BeFalse("WPF should consume the shared consolidate planner directly instead of keeping a pass-through facade");
         planningSource.Should().Contain(
             "SharedConsolidateDialogPlanner = FreeX.App.Presentation.Consolidate.ConsolidateDialogPlanner");
+        var dialogSource = File.ReadAllText(Path.Combine(hostRoot, "ConsolidateDialog.cs"));
+
+        dialogSource.Should().Contain("Width = ConsolidateDialogPlanner.WpfWindowWidth");
+        dialogSource.Should().Contain("Height = ConsolidateDialogPlanner.ReferencesListHeight");
         planningSource.Should().Contain("SharedConsolidateDialogPlanner.TryAddReference(");
         planningSource.Should().Contain("SharedConsolidateDialogPlanner.TryParse(");
         planningSource.Should().Contain("ConsolidateDialogIssue");

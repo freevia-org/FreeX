@@ -14,7 +14,7 @@ public sealed partial class ConsolidateDialog : Window
     private readonly Func<string, SheetId?> _resolveSheetId;
     private readonly ComboBox _functionBox = new();
     private readonly TextBox _referenceBox = new();
-    private readonly ListBox _referencesList = new() { Height = 72 };
+    private readonly ListBox _referencesList = new() { Height = ConsolidateDialogPlanner.ReferencesListHeight };
     private readonly Button _deleteReferenceButton = new() { Content = UiText.Get("Consolidate_Delete"), Width = 76, IsEnabled = false };
     private readonly TextBox _destinationBox = new();
     private readonly CheckBox _topRowBox = new() { Content = UiText.Get("Consolidate_TopRow") };
@@ -37,7 +37,7 @@ public sealed partial class ConsolidateDialog : Window
         _resolveSheetId = resolveSheetId ?? (_ => null);
         _requestRangeSelection = requestRangeSelection;
         Title = UiText.Get("Consolidate_Consolidate");
-        Width = 420;
+        Width = ConsolidateDialogPlanner.WpfWindowWidth;
         MaxHeight = 560;
         SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize;
