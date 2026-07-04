@@ -381,6 +381,130 @@ public class TableOfAuthoritiesTests
     }
 
     [Fact]
+    public void Build_FromDocument_ExplicitPageBreaksAppendUniqueAscendingPageReferences()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(CitationMarkParagraph("Case A"));
+        doc.Blocks.Add(DocumentOps.CreatePageBreak());
+        doc.Blocks.Add(CitationMarkParagraph("Case A"));
+
+        var entry = TableOfAuthorities.Build(doc)
+            .Single(p => p.StyleId == TableOfAuthorities.EntryStyleId);
+
+        entry.PlainText.Should().Be("Case A\t1, 2");
+        entry.Runs.Select(run => run.Text).Should().Equal("Case A", "\t", "1, 2");
+    }
+
+    [Fact]
+    public void Build_FromDocument_DuplicatesOnSameExplicitPageCollapsePageReference()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.CitationMark(new Citation("Case A", CitationCategory.Cases)));
+        paragraph.Runs.Add(Run.CitationMark(new Citation("Case A", CitationCategory.Cases)));
+        doc.Blocks.Add(paragraph);
+        doc.Blocks.Add(DocumentOps.CreatePageBreak());
+
+        var entry = TableOfAuthorities.Build(doc)
+            .Single(p => p.StyleId == TableOfAuthorities.EntryStyleId);
+
+        entry.PlainText.Should().Be("Case A\t1");
+    }
+
+    [Fact]
+    public void Build_FromDocument_NoExplicitPageInformationKeepsTextOnlyEntry()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(CitationMarkParagraph("Case A"));
+
+        var entry = TableOfAuthorities.Build(doc)
+            .Single(p => p.StyleId == TableOfAuthorities.EntryStyleId);
+
+        entry.PlainText.Should().Be("Case A");
+        entry.Runs.Should().ContainSingle().Which.Text.Should().Be("Case A");
+    }
+
+    [Fact]
+    public void Build_FromDocument_UsePassimWithPageReferencesUsesPageReferenceSegment()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(CitationMarkParagraph("Case A"));
+        doc.Blocks.Add(DocumentOps.CreatePageBreak());
+        for (var i = 0; i < 4; i++)
+            doc.Blocks.Add(CitationMarkParagraph("Case A"));
+
+        var entry = TableOfAuthorities.Build(doc, new ToaOptions { UsePassim = true })
+            .Single(p => p.StyleId == TableOfAuthorities.EntryStyleId);
+
+        entry.PlainText.Should().Be("Case A\tpassim");
+        entry.Runs.Select(run => run.Text).Should().Equal("Case A", "\t", "passim");
+    }
+
+    [Fact]
+    public void Build_KeepOriginalFormatting_WithPageReferencesAppliesOnlyToCitationTextRun()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var formatting = new RunFormatting { Bold = true, Italic = true, ColorHex = "#C00000" };
+        doc.Blocks.Add(CitationMarkParagraph("Formatted Case", formatting: formatting));
+        doc.Blocks.Add(DocumentOps.CreatePageBreak());
+        doc.Blocks.Add(CitationMarkParagraph("Formatted Case"));
+
+        var entry = TableOfAuthorities.Build(doc, new ToaOptions { KeepOriginalFormatting = true })
+            .Single(p => p.StyleId == TableOfAuthorities.EntryStyleId);
+
+        entry.PlainText.Should().Be("Formatted Case\t1, 2");
+        entry.Runs.Should().HaveCount(3);
+        entry.Runs[0].Formatting.Should().Be(formatting);
+        entry.Runs[1].Formatting.Should().Be(RunFormatting.Default);
+        entry.Runs[2].Formatting.Should().Be(RunFormatting.Default);
+    }
+
+    [Fact]
+    public void Build_FromDocument_ManualPageBreakRunsAdvancePageReferencesWithinParagraph()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.CitationMark(new Citation("Case A", CitationCategory.Cases)));
+        paragraph.Runs.Add(Run.PageBreak());
+        paragraph.Runs.Add(Run.CitationMark(new Citation("Case A", CitationCategory.Cases)));
+        doc.Blocks.Add(paragraph);
+
+        var entry = TableOfAuthorities.Build(doc)
+            .Single(p => p.StyleId == TableOfAuthorities.EntryStyleId);
+
+        entry.PlainText.Should().Be("Case A\t1, 2");
+    }
+
+    [Theory]
+    [InlineData(SectionBreakKind.NextPage, "1, 2")]
+    [InlineData(SectionBreakKind.EvenPage, "1, 2")]
+    [InlineData(SectionBreakKind.OddPage, "1, 3")]
+    public void Build_FromDocument_PageSectionBreaksAdvancePageReferences(
+        SectionBreakKind breakKind,
+        string expectedPages)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(CitationMarkParagraph("Section Case"));
+        doc.Blocks.Add(new Paragraph("Section end")
+        {
+            SectionBreak = new Section(new PageSettings(), breakKind)
+        });
+        doc.Blocks.Add(CitationMarkParagraph("Section Case"));
+
+        var entry = TableOfAuthorities.Build(doc)
+            .Single(p => p.StyleId == TableOfAuthorities.EntryStyleId);
+
+        entry.PlainText.Should().Be($"Section Case\t{expectedPages}");
+    }
+
+    [Fact]
     public void Build_WithCitationsAndOptions_CategoryFilter_FromEnumerableOverload()
     {
         // The IEnumerable<Citation> overload that takes ToaOptions also respects CategoryFilter.
@@ -395,5 +519,16 @@ public class TableOfAuthoritiesTests
 
         table.Should().Equal(TableOfAuthorities.HeadingText, "Cases", "Case A");
         table.Should().NotContain("Statutes");
+    }
+
+    private static Paragraph CitationMarkParagraph(
+        string longCitation,
+        CitationCategory category = CitationCategory.Cases,
+        RunFormatting? formatting = null)
+    {
+        var mark = Run.CitationMark(new Citation(longCitation, category));
+        if (formatting is not null)
+            mark.Formatting = formatting;
+        return new Paragraph { Runs = { mark } };
     }
 }

@@ -73,6 +73,7 @@ public sealed class VisualEvidencePlannerTests
             "bibliography-fields",
             "toa-fields",
             "cached-toa-page-number-sentinel",
+            "generated-toa-page-references",
             "legal-authorities"]);
         referencesScenario.ExpectedOutputNamePattern.Should().Be("references-heavy-fields_p{page}.png");
         referencesScenario.MinimumExpectedOutputs.Should().Be(2);
@@ -378,6 +379,13 @@ public sealed class VisualEvidencePlannerTests
             .Where(r => r.Citation is not null)
             .Select(r => r.Citation!.Category)
             .Should().Contain([CitationCategory.Cases, CitationCategory.Statutes]);
+        document.Blocks.OfType<Paragraph>()
+            .Where(p => p.StyleId == TableOfAuthorities.EntryStyleId)
+            .Select(p => p.PlainText)
+            .Should().Contain([
+                "Example v. FreeW, 123 F.4th 456 (2026)\t1, 2",
+                "Free Software Evidence Act, 42 U.S.C. 2026\t1"
+            ]);
 
         var fields = FreeWVisualEvidencePlanner.BuildFieldExpectation(document);
         fields.SimpleFieldCount.Should().Be(0);

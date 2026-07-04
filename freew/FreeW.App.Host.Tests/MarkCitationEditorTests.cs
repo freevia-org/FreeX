@@ -106,6 +106,26 @@ public sealed class MarkCitationEditorTests
     }
 
     [StaFact]
+    public void InsertTableOfAuthorities_UsesSharedExplicitBreakPageReferencesInWpfHost()
+    {
+        var model = TextDocument.CreateEmpty();
+        model.Blocks.Clear();
+        model.Blocks.Add(CitationMarkParagraph("Brown v. Board", formatted: false));
+        model.Blocks.Add(DocumentOps.CreatePageBreak());
+        model.Blocks.Add(CitationMarkParagraph("Brown v. Board", formatted: false));
+        var view = new DocumentView();
+        view.LoadModel(model);
+
+        view.InsertTableOfAuthorities();
+        view.CommitToModel();
+
+        var entry = view.Model.Blocks.OfType<Paragraph>()
+            .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
+        entry.PlainText.Should().Be("Brown v. Board\t1, 2");
+        entry.Runs.Select(run => run.Text).Should().Equal("Brown v. Board", "\t", "1, 2");
+    }
+
+    [StaFact]
     public void RefreshTableOfAuthorities_ConsumesSharedRenderPlanInWpfHost()
     {
         var model = TextDocument.CreateEmpty();

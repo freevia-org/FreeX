@@ -160,7 +160,7 @@ public static class FreeWVisualEvidenceDocumentFactory
         doc.Properties.Author = "FreeW Visual Evidence";
         doc.Properties.Subject = "Citation, bibliography, and table of authorities visual parity";
         doc.Properties.Keywords = "CITATION, BIBLIOGRAPHY, TOA";
-        doc.Properties.Comments = "Exercises visible references fields without claiming live Word TOA page-number recomputation.";
+        doc.Properties.Comments = "Exercises visible references fields plus explicit-break generated TOA page references; Word PNG comparison remains separate.";
         doc.BibliographyStyle = CitationStyle.Ieee;
 
         var book = new Source
@@ -199,7 +199,8 @@ public static class FreeWVisualEvidenceDocumentFactory
         doc.Blocks.Add(StyledParagraph("References Heavy Evidence", "Heading1"));
         doc.Blocks.Add(new Paragraph(
             "This shared fixture exercises Word-style references output across visible CITATION fields, " +
-            "a bibliography field, structured source types, hidden legal-authority marks, and a cached TOA field."));
+            "a bibliography field, structured source types, hidden legal-authority marks, a cached TOA field, " +
+            "and shared generated TOA page references."));
 
         doc.Blocks.Add(CitationParagraph(
             doc,
@@ -216,6 +217,10 @@ public static class FreeWVisualEvidenceDocumentFactory
             "Marked authorities: Example v. FreeW and Free Software Evidence Act should be collected into the generated TOA region.",
             caseCitation,
             statuteCitation));
+        doc.Blocks.Add(DocumentOps.CreatePageBreak());
+        doc.Blocks.Add(AuthorityParagraph(
+            "Second-page authority mark: Example v. FreeW should produce a shared generated TOA page-reference range.",
+            caseCitation));
 
         for (var i = 1; i <= 16; i++)
         {
@@ -232,7 +237,7 @@ public static class FreeWVisualEvidenceDocumentFactory
             .Paragraphs);
 
         doc.Blocks.Add(FieldParagraph(
-            "TOA field cache with page-number placeholder: ",
+            "TOA field cache with page-reference sentinel: ",
             Run.ComplexFieldRun(" TOA \\c 1 \\p ", "Cases\t1, 2")));
         doc.Blocks.AddRange(TableOfAuthoritiesRegionPlanner
             .BuildInsertPlan(doc, doc.Blocks.Count, new ToaOptions { TabLeader = ToaTabLeader.Dots })

@@ -22,6 +22,26 @@ public sealed class TableOfAuthoritiesRegionPlannerTests
     }
 
     [Fact]
+    public void BuildInsertPlan_UsesSharedExplicitBreakPageReferencePlan()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Intro"));
+        document.Blocks.Add(CitationMarkParagraph("Brown v. Board"));
+        document.Blocks.Add(DocumentOps.CreatePageBreak());
+        document.Blocks.Add(CitationMarkParagraph("Brown v. Board"));
+
+        var plan = TableOfAuthoritiesRegionPlanner.BuildInsertPlan(document, insertAt: 1);
+
+        plan.DeleteIndicesDescending.Should().BeEmpty();
+        plan.InsertIndex.Should().Be(1);
+        plan.Paragraphs.Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Table of Authorities", "Cases", "Brown v. Board\t1, 2");
+        plan.Paragraphs.Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId)
+            .Runs.Select(run => run.Text).Should().Equal("Brown v. Board", "\t", "1, 2");
+    }
+
+    [Fact]
     public void BuildRefreshPlan_WithExistingRegion_DeletesGeneratedParagraphsDescendingAndReusesFirstPosition()
     {
         var document = TextDocument.CreateEmpty();
@@ -38,6 +58,27 @@ public sealed class TableOfAuthoritiesRegionPlannerTests
         plan.InsertIndex.Should().Be(1);
         plan.Paragraphs.Select(paragraph => paragraph.PlainText)
             .Should().Equal("Table of Authorities", "Cases", "New Case");
+    }
+
+    [Fact]
+    public void BuildRefreshPlan_ReplacesExistingRegionWithSharedPageReferencesAtSameLocation()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Before"));
+        document.Blocks.Add(CitationMarkParagraph("New Case"));
+        document.Blocks.Add(DocumentOps.CreatePageBreak());
+        document.Blocks.Add(CitationMarkParagraph("New Case"));
+        document.Blocks.AddRange(TableOfAuthorities.Build(
+            new[] { new Citation("Old Case", CitationCategory.Cases) }));
+        document.Blocks.Add(new Paragraph("After"));
+
+        var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(document);
+
+        plan.DeleteIndicesDescending.Should().Equal(6, 5, 4);
+        plan.InsertIndex.Should().Be(4);
+        plan.Paragraphs.Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Table of Authorities", "Cases", "New Case\t1, 2");
     }
 
     [Fact]
@@ -134,5 +175,11 @@ public sealed class TableOfAuthoritiesRegionPlannerTests
             TableOfAuthorities.HeadingStyleId,
             TableOfAuthorities.CategoryStyleId,
             TableOfAuthorities.EntryStyleId);
+    }
+
+    private static Paragraph CitationMarkParagraph(string longCitation)
+    {
+        var mark = Run.CitationMark(new Citation(longCitation, CitationCategory.Cases));
+        return new Paragraph { Runs = { mark } };
     }
 }

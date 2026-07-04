@@ -28,8 +28,7 @@ public enum ToaTabLeader
 /// <item><b>CategoryFilter</b> — when set to a non-null value, emit only that one category; when null
 /// (the default) all categories appear in Word's display order.</item>
 /// <item><b>TabLeader</b> — the fill character used between the citation text and its page reference.
-/// The current <see cref="TableOfAuthorities.Build"/> does not do live page numbers, so the leader
-/// is stored on the entry paragraph as a <see cref="ParagraphFormatting.TabLeader"/> hint for the
+/// The leader is stored on the entry paragraph as a <see cref="ParagraphFormatting.TabLeader"/> hint for the
 /// renderer; the default is <see cref="ToaTabLeader.Dots"/>.</item>
 /// </list>
 /// All properties carry sensible defaults that reproduce the no-options behaviour so existing call sites
@@ -39,9 +38,9 @@ public sealed class ToaOptions
 {
     /// <summary>
     /// When true, a citation that appears five or more times is listed as <c>passim</c> in the table
-    /// instead of individual page numbers. FreeW currently has no live page-number engine, so <c>passim</c>
-    /// is added as a suffix to the entry text (" passim") to signal the intent; the real page renderer can
-    /// honour this flag when page numbers become available. Default: <c>false</c>.
+    /// instead of individual page numbers. When the document builder can derive an explicit-break-based
+    /// page-reference segment, <c>passim</c> is emitted in that segment; otherwise the legacy text suffix is
+    /// kept so no caller receives invented page numbers. Default: <c>false</c>.
     /// </summary>
     public bool UsePassim { get; init; }
 
@@ -119,6 +118,10 @@ public static class TableOfAuthorities
         CitationCategory.ConstitutionalProvisions
     };
 
+    private const int PassimOccurrenceThreshold = 5;
+
+    private static readonly ToaEntryKeyComparer EntryKeyComparer = new();
+
     /// <summary>The human-readable heading text for each category.</summary>
     public static string CategoryHeading(CitationCategory category) => category switch
     {
@@ -156,19 +159,21 @@ public static class TableOfAuthorities
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(options);
 
-        var allCitations = CollectCitations(document);
+        var occurrences = CollectCitationOccurrences(document);
+        var allCitations = occurrences
+            .Select(occurrence => occurrence.Citation)
+            .ToList();
 
         // When UsePassim, count per (long-form, category) pair so we know which get the suffix.
-        Dictionary<(string Long, CitationCategory Cat), int>? occurrenceCounts = null;
+        Dictionary<ToaEntryKey, int>? occurrenceCounts = null;
         if (options.UsePassim)
         {
-            occurrenceCounts = new Dictionary<(string, CitationCategory), int>(
-                EqualityComparer<(string, CitationCategory)>.Default);
+            occurrenceCounts = new Dictionary<ToaEntryKey, int>(EntryKeyComparer);
             foreach (var c in allCitations)
             {
                 if (c.LongCitation.Length == 0)
                     continue;
-                var key = (c.LongCitation, c.Category);
+                var key = new ToaEntryKey(c.LongCitation, c.Category);
                 occurrenceCounts.TryGetValue(key, out var count);
                 occurrenceCounts[key] = count + 1;
             }
@@ -183,7 +188,8 @@ public static class TableOfAuthorities
             options,
             occurrenceCounts,
             EntryRightTabStopPt(document.Page),
-            formatting);
+            formatting,
+            BuildPageReferences(occurrences));
     }
 
     /// <summary>
@@ -222,7 +228,8 @@ public static class TableOfAuthorities
             ToaOptions.Default,
             occurrenceCounts: null,
             DefaultEntryRightTabStopPt,
-            sourceFormatting: null);
+            sourceFormatting: null,
+            pageReferences: null);
     }
 
     /// <summary>
@@ -242,16 +249,18 @@ public static class TableOfAuthorities
             options,
             occurrenceCounts: null,
             DefaultEntryRightTabStopPt,
-            sourceFormatting: null);
+            sourceFormatting: null,
+            pageReferences: null);
     }
 
     // Core builder shared by all public overloads.
     private static IReadOnlyList<Paragraph> Build(
         IEnumerable<Citation> citations,
         ToaOptions options,
-        Dictionary<(string Long, CitationCategory Cat), int>? occurrenceCounts,
+        Dictionary<ToaEntryKey, int>? occurrenceCounts,
         double entryRightTabStopPt,
-        Dictionary<(string Long, CitationCategory Cat), RunFormatting>? sourceFormatting)
+        Dictionary<ToaEntryKey, RunFormatting>? sourceFormatting,
+        Dictionary<ToaEntryKey, IReadOnlyList<int>>? pageReferences)
     {
         var paragraphs = new List<Paragraph>
         {
@@ -286,18 +295,25 @@ public static class TableOfAuthorities
             paragraphs.Add(new Paragraph(CategoryHeading(category)) { StyleId = CategoryStyleId });
             foreach (var entry in distinct)
             {
-                // UsePassim: if this long-form appears 5+ times, append " passim" as per Word's convention.
+                // UsePassim: with page references, passim belongs after the tab; without them, keep the
+                // legacy suffix so callers never receive fabricated page numbers.
+                var key = new ToaEntryKey(entry, category);
                 var text = entry;
-                if (options.UsePassim && occurrenceCounts is not null)
+                string? pageReferenceText = null;
+                if (pageReferences is not null
+                    && pageReferences.TryGetValue(key, out var pages)
+                    && pages.Count > 0)
                 {
-                    occurrenceCounts.TryGetValue((entry, category), out var count);
-                    if (count >= 5)
-                        text = entry + " passim";
+                    pageReferenceText = FormatPageReference(entry, category, pages, options, occurrenceCounts);
+                }
+                else if (options.UsePassim && IsPassimEntry(entry, category, occurrenceCounts))
+                {
+                    text = entry + " passim";
                 }
 
                 RunFormatting? runFormatting = null;
-                sourceFormatting?.TryGetValue((entry, category), out runFormatting);
-                paragraphs.Add(CreateEntryParagraph(text, options, entryRightTabStopPt, runFormatting));
+                sourceFormatting?.TryGetValue(key, out runFormatting);
+                paragraphs.Add(CreateEntryParagraph(text, pageReferenceText, options, entryRightTabStopPt, runFormatting));
             }
         }
 
@@ -306,11 +322,12 @@ public static class TableOfAuthorities
 
     private static Paragraph CreateEntryParagraph(
         string text,
+        string? pageReferenceText,
         ToaOptions options,
         double entryRightTabStopPt,
         RunFormatting? sourceFormatting)
     {
-        var paragraph = new Paragraph(text)
+        var paragraph = new Paragraph
         {
             StyleId = EntryStyleId,
             Formatting = ParagraphFormatting.Default with
@@ -324,6 +341,13 @@ public static class TableOfAuthorities
                 ]
             }
         };
+        paragraph.Runs.Add(new Run(text));
+
+        if (!string.IsNullOrWhiteSpace(pageReferenceText))
+        {
+            paragraph.Runs.Add(new Run("\t"));
+            paragraph.Runs.Add(new Run(pageReferenceText));
+        }
 
         if (sourceFormatting is not null && paragraph.Runs.Count > 0)
             paragraph.Runs[0].Formatting = sourceFormatting;
@@ -331,10 +355,35 @@ public static class TableOfAuthorities
         return paragraph;
     }
 
-    private static Dictionary<(string Long, CitationCategory Cat), RunFormatting> CollectFirstCitationFormatting(
+    private static string FormatPageReference(
+        string entry,
+        CitationCategory category,
+        IReadOnlyList<int> pages,
+        ToaOptions options,
+        Dictionary<ToaEntryKey, int>? occurrenceCounts)
+    {
+        if (options.UsePassim && IsPassimEntry(entry, category, occurrenceCounts))
+            return "passim";
+
+        return string.Join(", ", pages);
+    }
+
+    private static bool IsPassimEntry(
+        string entry,
+        CitationCategory category,
+        Dictionary<ToaEntryKey, int>? occurrenceCounts)
+    {
+        if (occurrenceCounts is null)
+            return false;
+
+        occurrenceCounts.TryGetValue(new ToaEntryKey(entry, category), out var count);
+        return count >= PassimOccurrenceThreshold;
+    }
+
+    private static Dictionary<ToaEntryKey, RunFormatting> CollectFirstCitationFormatting(
         TextDocument document)
     {
-        var formatting = new Dictionary<(string Long, CitationCategory Cat), RunFormatting>();
+        var formatting = new Dictionary<ToaEntryKey, RunFormatting>(EntryKeyComparer);
         foreach (var paragraph in document.Blocks.OfType<Paragraph>())
         {
             foreach (var run in paragraph.Runs)
@@ -342,11 +391,87 @@ public static class TableOfAuthorities
                 if (run.Citation is not { } citation || citation.LongCitation.Length == 0)
                     continue;
 
-                formatting.TryAdd((citation.LongCitation, citation.Category), run.Formatting);
+                formatting.TryAdd(new ToaEntryKey(citation.LongCitation, citation.Category), run.Formatting);
             }
         }
 
         return formatting;
+    }
+
+    private static IReadOnlyList<ToaCitationOccurrence> CollectCitationOccurrences(TextDocument document)
+    {
+        var useExplicitPageReferences = HasExplicitPageBoundary(document);
+        var occurrences = new List<ToaCitationOccurrence>();
+        var pageNumber = 1;
+
+        foreach (var block in document.Blocks)
+        {
+            if (block is not Paragraph paragraph)
+                continue;
+
+            if (paragraph.Formatting.PageBreakBefore)
+                pageNumber++;
+
+            foreach (var run in paragraph.Runs)
+            {
+                if (run.IsPageBreak)
+                {
+                    pageNumber++;
+                    continue;
+                }
+
+                if (run.Citation is { } citation)
+                    occurrences.Add(new ToaCitationOccurrence(
+                        citation,
+                        useExplicitPageReferences ? pageNumber : null));
+            }
+
+            if (paragraph.SectionBreak is { } sectionBreak)
+                pageNumber = AdvanceForSectionBreak(pageNumber, sectionBreak.BreakKind);
+        }
+
+        occurrences.AddRange(document.Citations.Select(citation => new ToaCitationOccurrence(citation, null)));
+        return occurrences;
+    }
+
+    private static bool HasExplicitPageBoundary(TextDocument document) =>
+        document.Blocks.OfType<Paragraph>().Any(paragraph =>
+            paragraph.Formatting.PageBreakBefore
+            || paragraph.Runs.Any(run => run.IsPageBreak)
+            || paragraph.SectionBreak is { BreakKind: SectionBreakKind.NextPage or SectionBreakKind.EvenPage or SectionBreakKind.OddPage });
+
+    private static int AdvanceForSectionBreak(int pageNumber, SectionBreakKind breakKind) => breakKind switch
+    {
+        SectionBreakKind.NextPage => pageNumber + 1,
+        SectionBreakKind.EvenPage => pageNumber % 2 == 0 ? pageNumber + 2 : pageNumber + 1,
+        SectionBreakKind.OddPage => pageNumber % 2 == 0 ? pageNumber + 1 : pageNumber + 2,
+        _ => pageNumber
+    };
+
+    private static Dictionary<ToaEntryKey, IReadOnlyList<int>>? BuildPageReferences(
+        IReadOnlyList<ToaCitationOccurrence> occurrences)
+    {
+        Dictionary<ToaEntryKey, SortedSet<int>>? pages = null;
+        foreach (var occurrence in occurrences)
+        {
+            if (occurrence.PageNumber is not { } pageNumber || occurrence.Citation.LongCitation.Length == 0)
+                continue;
+
+            pages ??= new Dictionary<ToaEntryKey, SortedSet<int>>(EntryKeyComparer);
+            var key = new ToaEntryKey(occurrence.Citation.LongCitation, occurrence.Citation.Category);
+            if (!pages.TryGetValue(key, out var entryPages))
+            {
+                entryPages = [];
+                pages[key] = entryPages;
+            }
+
+            entryPages.Add(pageNumber);
+        }
+
+        return pages?.ToDictionary(
+            pair => pair.Key,
+            pair => (IReadOnlyList<int>)pair.Value.ToList(),
+            EntryKeyComparer);
     }
 
     private static double EntryRightTabStopPt(PageSettings page) =>
@@ -359,6 +484,20 @@ public static class TableOfAuthorities
         ToaTabLeader.None => TabLeader.None,
         _ => TabLeader.Dots
     };
+
+    private readonly record struct ToaEntryKey(string LongCitation, CitationCategory Category);
+
+    private sealed record ToaCitationOccurrence(Citation Citation, int? PageNumber);
+
+    private sealed class ToaEntryKeyComparer : IEqualityComparer<ToaEntryKey>
+    {
+        public bool Equals(ToaEntryKey x, ToaEntryKey y) =>
+            x.Category == y.Category
+            && StringComparer.OrdinalIgnoreCase.Equals(x.LongCitation, y.LongCitation);
+
+        public int GetHashCode(ToaEntryKey obj) =>
+            HashCode.Combine(obj.Category, StringComparer.OrdinalIgnoreCase.GetHashCode(obj.LongCitation));
+    }
 
     /// <summary>
     /// True when <paramref name="styleId"/> is one of the Table of Authorities styles produced by

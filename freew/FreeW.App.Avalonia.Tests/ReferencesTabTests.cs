@@ -537,6 +537,22 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
+    public void Table_of_authorities_insert_uses_shared_explicit_break_page_references()
+    {
+        var view = ViewWith(
+            CitationMarkParagraph("Brown v. Board", formatted: false),
+            DocumentOps.CreatePageBreak(),
+            CitationMarkParagraph("Brown v. Board", formatted: false));
+
+        view.InsertTableOfAuthorities();
+
+        var entry = view.Document.Blocks.OfType<Paragraph>()
+            .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
+        entry.PlainText.Should().Be("Brown v. Board\t1, 2");
+        entry.Runs.Select(run => run.Text).Should().Equal("Brown v. Board", "\t", "1, 2");
+    }
+
+    [Fact]
     public void Table_of_authorities_refresh_consumes_shared_render_plan_metadata()
     {
         var oldRegion = TableOfAuthorities.Build(new[] { new Citation("Old Case", CitationCategory.Cases) });

@@ -378,7 +378,7 @@ public static class FreeWVisualEvidencePlanner
             BodyPrintComposition with { ExpectsHeadersFooters = true }),
         new(
             "references-heavy-fields",
-            "References-heavy CITATION, BIBLIOGRAPHY, and cached TOA field visual composition.",
+            "References-heavy CITATION, BIBLIOGRAPHY, cached TOA, and shared generated TOA page-reference composition.",
             [
                 "references",
                 "source-manager",
@@ -386,6 +386,7 @@ public static class FreeWVisualEvidencePlanner
                 "bibliography-fields",
                 "toa-fields",
                 "cached-toa-page-number-sentinel",
+                "generated-toa-page-references",
                 "complex-fields",
                 "legal-authorities",
                 "generated-bibliography",
