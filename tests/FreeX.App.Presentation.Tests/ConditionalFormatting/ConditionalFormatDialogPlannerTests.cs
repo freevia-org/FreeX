@@ -6,6 +6,16 @@ namespace FreeX.App.Presentation.Tests.ConditionalFormatting;
 
 public sealed class ConditionalFormatDialogPlannerTests
 {
+    [Fact]
+    public void RuleEditorSizeContract_MatchesCommittedWpfLogicalCapture()
+    {
+        ConditionalFormatDialogCatalog.RuleEditorWpfWindowWidth.Should().Be(650);
+        ConditionalFormatDialogCatalog.RuleEditorCaptureWidth.Should().Be(634);
+        ConditionalFormatDialogCatalog.RuleEditorCaptureHeight.Should().Be(334);
+        ConditionalFormatDialogCatalog.RuleEditorMinWidth.Should().Be(600);
+        ConditionalFormatDialogCatalog.RuleEditorMinHeight.Should().Be(320);
+    }
+
     [Theory]
     [InlineData(CfRuleType.Formula, null, true, false, "Formula")]
     [InlineData(CfRuleType.DataBar, null, true, false, "Data Bar")]

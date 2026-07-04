@@ -74,7 +74,7 @@ public partial class ConditionalFormatDialog : Window
         _existingId = Guid.NewGuid();
 
         Title = UiText.Format("ConditionalFormatDialog_TitleFormat", RuleTypeDisplayName(ruleType));
-        Width = 650;
+        Width = ConditionalFormatDialogCatalog.RuleEditorWpfWindowWidth;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         SizeToContent = SizeToContent.Height;

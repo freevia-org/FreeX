@@ -5275,6 +5275,10 @@ public sealed class AvaloniaShellSourceTests
 
         // New Formatting Rule editor: rule-type picker, presets, per-type controls, automation ids.
         cfSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"ConditionalFormatRuleDialog\");");
+        cfSource.Should().Contain("Width = ConditionalFormatDialogCatalog.RuleEditorCaptureWidth");
+        cfSource.Should().Contain("Height = ConditionalFormatDialogCatalog.RuleEditorCaptureHeight");
+        cfSource.Should().Contain("MinWidth = ConditionalFormatDialogCatalog.RuleEditorMinWidth");
+        cfSource.Should().Contain("MinHeight = ConditionalFormatDialogCatalog.RuleEditorMinHeight");
         cfSource.Should().Contain("AutomationProperties.SetAutomationId(ruleTypeBox, \"ConditionalFormatRuleTypeBox\");");
         cfSource.Should().Contain("AutomationProperties.SetAutomationId(presetBox, \"ConditionalFormatPresetBox\");");
         cfSource.Should().Contain("AutomationProperties.SetAutomationId(topBottomBox, \"ConditionalFormatTopBottomBox\");");
@@ -5297,6 +5301,10 @@ public sealed class AvaloniaShellSourceTests
         cfSource.Should().Contain("private sealed record ConditionalFormatRuleDialogSmokeProbe(");
         cfSource.Should().Contain("private sealed record ManageConditionalFormatsDialogSmokeProbe(");
         windowSource.Should().Contain("HasLaunchSmokeDialog(probe.Dialog, \"New Formatting Rule\")");
+        windowSource.Should().Contain("width: ConditionalFormatDialogCatalog.RuleEditorCaptureWidth");
+        windowSource.Should().Contain("height: ConditionalFormatDialogCatalog.RuleEditorCaptureHeight");
+        windowSource.Should().Contain("minWidth: ConditionalFormatDialogCatalog.RuleEditorMinWidth");
+        windowSource.Should().Contain("minHeight: ConditionalFormatDialogCatalog.RuleEditorMinHeight");
         windowSource.Should().Contain("HasLaunchSmokeDialog(probe.Dialog, UiText.Get(\"ManageConditionalFormats_ConditionalFormattingRulesManager\"))");
         windowSource.Should().Contain("HasLaunchSmokeText(AutomationProperties.GetName(probe.ListBox), UiText.Get(\"ManageConditionalFormats_ConditionalFormattingRules\"))");
         windowSource.Should().Contain("HasLaunchSmokeNamedButton(probe.MoveUpButton, \"ManageConditionalFormatsMoveUpButton\", UiText.Get(\"ManageConditionalFormats_MoveUp\"))");

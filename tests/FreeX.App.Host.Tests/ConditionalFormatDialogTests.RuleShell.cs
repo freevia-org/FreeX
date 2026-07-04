@@ -2,6 +2,7 @@ using System.Linq;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -72,6 +73,7 @@ public sealed partial class ConditionalFormatDialogTests
             var dialog = ShowDialogForTest(new NewConditionalFormatRuleDialog("Formula", RangeFor(SheetId.New())));
 
             dialog.Title.Should().Be(UiText.Get("ConditionalFormatDialog_NewTitle"));
+            dialog.Width.Should().BeApproximately(ConditionalFormatDialogCatalog.RuleEditorWpfWindowWidth, 2);
             FindText(dialog.Content, UiText.Get("ConditionalFormatDialog_SelectRuleTypeHeader")).Should().NotBeNull();
             FindText(dialog.Content, UiText.Get("ConditionalFormatDialog_EditRuleDescriptionHeader")).Should().NotBeNull();
 

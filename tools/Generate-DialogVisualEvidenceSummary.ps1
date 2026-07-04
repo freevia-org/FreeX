@@ -498,6 +498,13 @@ function Get-ExpectedEvidenceSize {
                     source = "HyperlinkDialogPlanner.Width/Height"
                 }
             }
+            "dialog.ConditionalFormatNewRule" {
+                return [pscustomobject]@{
+                    width = 634
+                    height = 334
+                    source = "ConditionalFormatDialogCatalog.RuleEditorCaptureWidth/Height"
+                }
+            }
             "dialog.ShapeGradient" {
                 return [pscustomobject]@{
                     width = 500

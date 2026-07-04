@@ -278,10 +278,10 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = existingRule is null ? UiText.Get("ConditionalFormat_NewRuleTitle") : UiText.Get("ConditionalFormat_EditRuleTitle"),
-            Width = 640,
-            Height = 380,
-            MinWidth = 600,
-            MinHeight = 340,
+            Width = ConditionalFormatDialogCatalog.RuleEditorCaptureWidth,
+            Height = ConditionalFormatDialogCatalog.RuleEditorCaptureHeight,
+            MinWidth = ConditionalFormatDialogCatalog.RuleEditorMinWidth,
+            MinHeight = ConditionalFormatDialogCatalog.RuleEditorMinHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
