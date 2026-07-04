@@ -132,7 +132,8 @@ public sealed class SlideCanvasGeometryPlannerTests
         wpfTable.Should().Contain("TableCellEditPlanner.PlanSelectedCell");
         wpfTable.Should().Contain("ApplyInitialSelection(_cellTextBox, editStart.InitialSelection)");
         wpfTable.Should().Contain("RichTextBox");
-        wpfTable.Should().Contain("EditingCommands.ToggleBold.Execute");
+        wpfTable.Should().Contain("ExecuteCellFormattingCommand(EditingCommands.ToggleBold)");
+        wpfTable.Should().Contain("ApplyWithPreservedSelection");
         wpfTable.Should().Contain("Selection.ApplyPropertyValue");
 
         var avaloniaTable = ReadWorkspaceFile(
