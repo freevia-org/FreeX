@@ -5932,11 +5932,11 @@ internal static class ExcelSmokeFixtures
             {
                 shapes = ((dynamic)worksheet).Shapes;
                 // AddTextEffect(PresetTextEffect, text, fontName, fontSize, fontBold, fontItalic, left, top)
-                // msoTextEffect1 = 1
+                // MsoPresetTextEffect is zero-based: msoTextEffect1 = 0, so 1 = msoTextEffect2
                 try
                 {
                     wa = ((dynamic)shapes).AddTextEffect(
-                        1,              // msoTextEffect1
+                        1,              // msoTextEffect2
                         "FreeX",        // text
                         "Arial Black",  // fontName
                         36f,            // fontSize
@@ -6028,7 +6028,7 @@ internal static class ExcelSmokeFixtures
             {
                 shapes = ((dynamic)worksheet).Shapes;
 
-                // Cylinder (orange) — msoShapeCan = 46
+                // Cylinder (orange) — msoShapeCan = 13
                 try
                 {
                     shape = ((dynamic)shapes).AddShape(MsoShapeCan, 10f, 36f, 100f, 120f);
@@ -6065,7 +6065,7 @@ internal static class ExcelSmokeFixtures
                             ln = ((dynamic)conn).Line;
                             ((dynamic)ln).ForeColor.RGB = ToOleColor(0x70, 0xAD, 0x47);  // green
                             ((dynamic)ln).Weight = 2.5f;
-                            try { ((dynamic)ln).EndArrowheadStyle = 2; /* msoArrowheadOpen */ } catch { }
+                            try { ((dynamic)ln).EndArrowheadStyle = 2; /* msoArrowheadTriangle */ } catch { }
                         }
                         finally { ReleaseComObject(ln); }
                     }
