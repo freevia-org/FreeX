@@ -3056,7 +3056,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 private ContextMenu CreateSheetTabContextMenu(WorkbookSheetTab tab) => new();
                 private IEnumerable<Control> CreateSheetTabContextMenuItems(WorkbookSheetTab tab, bool isIdle, int sheetTabIndex) => [];
                 private MenuItem CreateSheetTabContextMenuItem(WorkbookSheetTab tab, string header, Action action, bool isEnabled) => new();
-                private bool SelectSheetForContextCommand(SheetId sheetId) => true;
+                internal bool SelectSheetForContextCommand(SheetId sheetId) => true;
                 private async Task RenameSheetFromTabAsync(SheetId sheetId, TappedEventArgs args) => await RenameActiveSheetAsync();
                 private void HandleSheetTabKeyDown(SheetId sheetId, Button button, KeyEventArgs args) { }
                 private void OpenSheetTabContextMenuFromKeyboard(SheetId sheetId, Button button, KeyEventArgs args) { }

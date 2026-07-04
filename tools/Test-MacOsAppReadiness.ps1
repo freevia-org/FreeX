@@ -1900,7 +1900,7 @@ function Test-SourceWiring {
                 "CreateSheetTabContextMenuItem(tab, `"Ungroup Sheets`", UngroupSheets, isIdle && _session.IsWorkbookGrouped)",
                 "CreateSheetTabContextMenuItem(tab, `"Move Left`", MoveActiveSheetLeft, isIdle && sheetTabIndex > 0)",
                 "CreateSheetTabContextMenuItem(",
-                "private bool SelectSheetForContextCommand(SheetId sheetId)",
+                "internal bool SelectSheetForContextCommand(SheetId sheetId)",
                 "private async Task RenameSheetFromTabAsync(SheetId sheetId, TappedEventArgs args)",
                 "await RenameActiveSheetAsync();",
                 "private void HandleSheetTabKeyDown(SheetId sheetId, Button button, KeyEventArgs args)",
