@@ -2908,6 +2908,11 @@ public sealed class AvaloniaShellSourceTests
 
         source.Should().Contain("private async Task ShowScenarioManagerCompactDialogAsync(ScenarioManagerPlan initialPlan)");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"ScenarioManagerCompactDialog\");");
+        source.Should().Contain("Width = 360,");
+        source.Should().Contain("Height = 420,");
+        source.Should().Contain("MaxWidth = 360,");
+        source.Should().Contain("MaxHeight = 420,");
+        source.Should().Contain("CanResize = false,");
         source.Should().Contain("AutomationProperties.SetAutomationId(scenarioList, \"ScenarioManagerScenarioList\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(nameBox, \"ScenarioManagerNameBox\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(commentBox, \"ScenarioManagerCommentBox\");");
@@ -3274,13 +3279,7 @@ public sealed class AvaloniaShellSourceTests
             "AutomationProperties.SetHelpText(restoreButton, \"Undo the Goal Seek result and restore the original changing cell value.\");",
             "AutomationProperties.SetName(keepButton, \"Keep Result\");",
             "AutomationProperties.SetHelpText(keepButton, \"Keep the applied Goal Seek result in the workbook.\");",
-            "AutomationProperties.SetName(statusText, \"Scenario Manager status\");",
-            "AutomationProperties.SetHelpText(statusText, \"Shows Scenario Manager availability and status.\");",
-            "AutomationProperties.SetName(selectionText, \"Scenario Manager selection\");",
-            "AutomationProperties.SetHelpText(selectionText, \"Shows the current selection saved into new scenarios.\");",
             "AutomationProperties.SetHelpText(scenarioList, \"Select a saved scenario.\");",
-            "AutomationProperties.SetName(scenarioDetailsText, \"Scenario details\");",
-            "AutomationProperties.SetHelpText(scenarioDetailsText, \"Shows details for the selected scenario.\");",
             "AutomationProperties.SetName(saveButton, \"Save/Add\");",
             "AutomationProperties.SetHelpText(saveButton, \"Save the selected cells as a new or updated scenario.\");",
             "AutomationProperties.SetName(showButton, \"Show\");",
