@@ -129,6 +129,8 @@ public sealed class RestrictEditingEnforcementPolicyTests
             .BlockReason.Should().Be(RestrictEditingBlockReason.CommentsOnly);
         policy.DecisionForHistory(RestrictEditingOperationKind.HistoryUndo, DocumentCommandMutationKind.Mixed)
             .BlockReason.Should().Be(RestrictEditingBlockReason.CommentsOnly);
+        policy.DecisionForHistory(RestrictEditingOperationKind.HistoryRedo, mutationKind: null)
+            .BlockReason.Should().Be(RestrictEditingBlockReason.CommentsOnly);
     }
 
     [Fact]
