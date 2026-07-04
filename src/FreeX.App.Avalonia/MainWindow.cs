@@ -15915,10 +15915,13 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = UiText.Get("ScenarioManager_ScenarioManager"),
-            Width = 500,
-            Height = 640,
-            MinWidth = 480,
-            MinHeight = 600,
+            Width = 360,
+            Height = 420,
+            MinWidth = 360,
+            MinHeight = 420,
+            MaxWidth = 360,
+            MaxHeight = 420,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
             FontFamily = FormulaBarFontFamily,
@@ -15926,43 +15929,18 @@ public sealed partial class MainWindow : Window
         };
         AutomationProperties.SetAutomationId(dialog, "ScenarioManagerCompactDialog");
 
-        var statusText = new TextBlock
-        {
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = HeaderForeground,
-        };
-        AutomationProperties.SetName(statusText, "Scenario Manager status");
-        AutomationProperties.SetHelpText(statusText, "Shows Scenario Manager availability and status.");
-
-        var selectionText = new TextBlock
-        {
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = HeaderForeground,
-        };
-        AutomationProperties.SetName(selectionText, "Scenario Manager selection");
-        AutomationProperties.SetHelpText(selectionText, "Shows the current selection saved into new scenarios.");
-
         var scenarioList = new ListBox
         {
-            MinHeight = 120,
-            MaxHeight = 150,
+            MinHeight = 118,
+            MaxHeight = 118,
         };
         AutomationProperties.SetName(scenarioList, StripDisplayMnemonic(UiText.Get("ScenarioManager_Scenarios")));
         AutomationProperties.SetAutomationId(scenarioList, "ScenarioManagerScenarioList");
         AutomationProperties.SetHelpText(scenarioList, "Select a saved scenario.");
 
-        var scenarioDetailsText = new TextBlock
-        {
-            TextWrapping = TextWrapping.Wrap,
-            LineHeight = 20,
-            MinHeight = 58,
-        };
-        AutomationProperties.SetName(scenarioDetailsText, "Scenario details");
-        AutomationProperties.SetHelpText(scenarioDetailsText, "Shows details for the selected scenario.");
-
         var nameBox = new TextBox
         {
-            MinWidth = 260,
+            MinWidth = 170,
         };
         ApplyDataToolsTextBoxChrome(nameBox);
         AutomationProperties.SetName(nameBox, "Scenario name");
@@ -15971,7 +15949,7 @@ public sealed partial class MainWindow : Window
 
         var commentBox = new TextBox
         {
-            MinWidth = 260,
+            MinWidth = 170,
         };
         ApplyDataToolsTextBoxChrome(commentBox);
         AutomationProperties.SetName(commentBox, "Comment");
@@ -15980,7 +15958,7 @@ public sealed partial class MainWindow : Window
 
         var changingCellsBox = new TextBox
         {
-            MinWidth = 260,
+            MinWidth = 170,
             IsReadOnly = true,
         };
         ApplyDataToolsTextBoxChrome(changingCellsBox);
@@ -15991,7 +15969,7 @@ public sealed partial class MainWindow : Window
         // Result cells field (Windows shows both Changing cells and Result cells).
         var resultCellsBox = new TextBox
         {
-            MinWidth = 260,
+            MinWidth = 170,
             IsReadOnly = true,
         };
         ApplyDataToolsTextBoxChrome(resultCellsBox);
@@ -16022,7 +16000,7 @@ public sealed partial class MainWindow : Window
         {
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
-            MinHeight = 22,
+            IsVisible = false,
         };
         AutomationProperties.SetName(errorText, "Scenario Manager validation");
         AutomationProperties.SetAutomationId(errorText, "ScenarioManagerErrorText");
@@ -16031,10 +16009,10 @@ public sealed partial class MainWindow : Window
         var saveButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Add")),
-            Width = 110,
-            MinWidth = 110,
+            Width = 82,
+            MinWidth = 82,
         };
-        ApplyDataToolsButtonChrome(saveButton, 110);
+        ApplyDataToolsButtonChrome(saveButton, 82);
         AutomationProperties.SetName(saveButton, "Save/Add");
         AutomationProperties.SetAutomationId(saveButton, "ScenarioManagerSaveButton");
         AutomationProperties.SetHelpText(saveButton, "Save the selected cells as a new or updated scenario.");
@@ -16042,10 +16020,10 @@ public sealed partial class MainWindow : Window
         var editButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Edit")),
-            Width = 110,
-            MinWidth = 110,
+            Width = 82,
+            MinWidth = 82,
         };
-        ApplyDataToolsButtonChrome(editButton, 110);
+        ApplyDataToolsButtonChrome(editButton, 82);
         AutomationProperties.SetName(editButton, StripDisplayMnemonic(UiText.Get("ScenarioManager_EditScenarioAutomationName")));
         AutomationProperties.SetAutomationId(editButton, "ScenarioManagerEditButton");
         AutomationProperties.SetHelpText(editButton, UiText.Get("ScenarioManager_EditTheSelectedScenarioUsingTheScenarioFields"));
@@ -16053,10 +16031,10 @@ public sealed partial class MainWindow : Window
         var showButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Show")),
-            Width = 110,
-            MinWidth = 110,
+            Width = 82,
+            MinWidth = 82,
         };
-        ApplyDataToolsButtonChrome(showButton, 110);
+        ApplyDataToolsButtonChrome(showButton, 82);
         AutomationProperties.SetName(showButton, "Show");
         AutomationProperties.SetAutomationId(showButton, "ScenarioManagerShowButton");
         AutomationProperties.SetHelpText(showButton, "Apply the selected scenario values to the workbook.");
@@ -16064,10 +16042,10 @@ public sealed partial class MainWindow : Window
         var deleteButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Delete")),
-            Width = 110,
-            MinWidth = 110,
+            Width = 82,
+            MinWidth = 82,
         };
-        ApplyDataToolsButtonChrome(deleteButton, 110);
+        ApplyDataToolsButtonChrome(deleteButton, 82);
         AutomationProperties.SetName(deleteButton, "Delete");
         AutomationProperties.SetAutomationId(deleteButton, "ScenarioManagerDeleteButton");
         AutomationProperties.SetHelpText(deleteButton, "Delete the selected scenario.");
@@ -16075,10 +16053,10 @@ public sealed partial class MainWindow : Window
         var summaryButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Summary")),
-            Width = 110,
-            MinWidth = 110,
+            Width = 82,
+            MinWidth = 82,
         };
-        ApplyDataToolsButtonChrome(summaryButton, 110);
+        ApplyDataToolsButtonChrome(summaryButton, 82);
         AutomationProperties.SetName(summaryButton, "Summary Report");
         AutomationProperties.SetAutomationId(summaryButton, "ScenarioManagerSummaryButton");
         AutomationProperties.SetHelpText(summaryButton, "Create a scenario summary report sheet.");
@@ -16105,7 +16083,6 @@ public sealed partial class MainWindow : Window
                 ? item.Choice
                 : null;
             selectedScenarioName = selected?.Name;
-            scenarioDetailsText.Text = FormatScenarioManagerScenarioDetails(selected);
             showButton.IsEnabled = selected is not null;
             deleteButton.IsEnabled = selected is not null;
             editButton.IsEnabled = selected is not null;
@@ -16160,8 +16137,6 @@ public sealed partial class MainWindow : Window
             }
 
             scenarioList.SelectedItem = selectedItem;
-            statusText.Text = plan.StatusText;
-            selectionText.Text = FormatScenarioManagerSelectionSummary(_session.SelectedRange);
             changingCellsBox.Text = FormatRangeReference(_session.SelectedRange);
             summaryButton.IsEnabled = items.Length > 0;
             RefreshSelectionDetails();
@@ -16171,6 +16146,7 @@ public sealed partial class MainWindow : Window
         {
             var message = result.ErrorMessage ?? "Scenario Manager failed.";
             errorText.Text = message;
+            errorText.IsVisible = true;
             ShowEditIssue(message);
         }
 
@@ -16183,6 +16159,7 @@ public sealed partial class MainWindow : Window
             }
 
             errorText.Text = "";
+            errorText.IsVisible = false;
             RefreshShell(status);
             return true;
         }
@@ -16269,9 +16246,7 @@ public sealed partial class MainWindow : Window
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            // Top margin keeps Close clearly below the "Add/Edit Scenario" group box
-            // instead of overlapping its bottom border.
-            Margin = new Thickness(0, 14, 0, 0),
+            Margin = new Thickness(0, 12, 0, 0),
             Children =
             {
                 closeButton,
@@ -16340,7 +16315,7 @@ public sealed partial class MainWindow : Window
                     new StackPanel
                     {
                         Orientation = Orientation.Horizontal,
-                        Spacing = 16,
+                        Spacing = 8,
                         Children = { preventChangesBox, hideBox },
                     },
                 },
@@ -16356,15 +16331,12 @@ public sealed partial class MainWindow : Window
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Content = new StackPanel
             {
-                Margin = new Thickness(16),
-                Spacing = 10,
+                Margin = new Thickness(12),
+                Spacing = 8,
                 Children =
                 {
-                    statusText,
                     scenariosHeader,
                     listWithButtons,
-                    selectionText,
-                    scenarioDetailsText,
                     addEditGroup,
                     errorText,
                     closeButtonRow,
