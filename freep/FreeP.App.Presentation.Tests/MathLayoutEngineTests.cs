@@ -11,8 +11,15 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class MathLayoutEngineTests
 {
     private const double FontSizePt = 18.0;
+    private const string M = "http://schemas.openxmlformats.org/officeDocument/2006/math";
 
     private static MathNode Run(string text, bool isItalic = true) => new MathNode.Run(text, isItalic);
+
+    private static MathNode ParseOmml(string oMathInner)
+    {
+        var xml = $"<m:oMath xmlns:m=\"{M}\">{oMathInner}</m:oMath>";
+        return OmmlParser.Parse(xml, fallbackText: "FALLBACK");
+    }
 
     private static MathNode TallFraction() =>
         new MathNode.Frac(Run("1"), Run("x"));
@@ -117,6 +124,24 @@ public sealed class MathLayoutEngineTests
     }
 
     // ── HB3: superscript raised above a normal-size base ────────────────────
+
+    [Fact]
+    public void Nary_HiddenLimits_DoNotEmitSharedGlyphDrawOps()
+    {
+        var node = ParseOmml(
+            "<m:nary>" +
+            "<m:naryPr><m:chr m:val=\"S\"/><m:limLoc m:val=\"undOvr\"/><m:subHide/><m:supHide/></m:naryPr>" +
+            "<m:sub><m:r><m:t>0</m:t></m:r></m:sub>" +
+            "<m:sup><m:r><m:t>n</m:t></m:r></m:sup>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "</m:nary>");
+        var box = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var ops = MathBoxRenderPlanner.Plan(box, 10, 20, SrgbColor.Black, "Cambria Math");
+        ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text)
+            .Should().Equal(new[] { "S", "x" },
+                "hidden m:nary limits must not flow into the renderer-neutral draw plan");
+    }
 
     [Fact]
     public void Sup_OnNormalBase_ContainerAscentGrowsToContainRaisedScript()
