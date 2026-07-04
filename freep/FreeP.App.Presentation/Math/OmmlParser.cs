@@ -109,6 +109,7 @@ public static class OmmlParser
             "sSup"     => ParseSup(el),
             "sSub"     => ParseSub(el),
             "sSubSup"  => ParseSubSup(el),
+            "sPre"     => ParsePreSubSup(el),
             "rad"      => ParseRad(el),
             "nary"     => ParseNary(el),
             "limLow"   => ParseLimit(el, isUpper: false),
@@ -215,6 +216,18 @@ public static class OmmlParser
     }
 
     // ── m:rad radical ─────────────────────────────────────────────────────
+
+    private static MathNode ParsePreSubSup(XElement el)
+    {
+        var eEl = el.Element(M + "e");
+        var subEl = el.Element(M + "sub");
+        var supEl = el.Element(M + "sup");
+
+        return new MathNode.PreSubSup(
+            eEl is null ? new MathNode.Unknown(FlattenText(el)) : ParseRow(eEl),
+            subEl is null ? new MathNode.Unknown(string.Empty) : ParseRow(subEl),
+            supEl is null ? new MathNode.Unknown(string.Empty) : ParseRow(supEl));
+    }
 
     private static MathNode ParseRad(XElement el)
     {

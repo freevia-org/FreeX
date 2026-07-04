@@ -107,6 +107,18 @@ public abstract class MathNode
         }
     }
 
+    /// <summary><c>m:sPre</c> -- base with pre-subscript and pre-superscript to its left.</summary>
+    public sealed class PreSubSup : MathNode
+    {
+        public MathNode Base { get; }
+        public new MathNode Sub { get; }
+        public new MathNode Sup { get; }
+        public PreSubSup(MathNode @base, MathNode sub, MathNode sup)
+        {
+            Base = @base; Sub = sub; Sup = sup;
+        }
+    }
+
     // ── Radical ─────────────────────────────────────────────────────────────
 
     /// <summary>

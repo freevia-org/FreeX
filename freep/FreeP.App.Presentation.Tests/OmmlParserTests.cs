@@ -298,6 +298,41 @@ public sealed class OmmlParserTests
     }
 
     [Fact]
+    public void SPre_ParsesBaseSubAndSup_PreservingNestedChildren()
+    {
+        var node = Parse(
+            "<m:sPre>" +
+            "<m:e><m:f><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:rad><m:e><m:r><m:t>x</m:t></m:r></m:e></m:rad></m:den></m:f></m:e>" +
+            "<m:sub><m:sSup><m:e><m:r><m:t>a</m:t></m:r></m:e><m:sup><m:r><m:t>2</m:t></m:r></m:sup></m:sSup></m:sub>" +
+            "<m:sup><m:box><m:e><m:r><m:t>n</m:t></m:r></m:e></m:box></m:sup>" +
+            "</m:sPre>");
+
+        var pre = Assert.IsType<MathNode.PreSubSup>(node);
+        var frac = Assert.IsType<MathNode.Frac>(pre.Base);
+        Assert.Equal("1", Assert.IsType<MathNode.Run>(frac.Numerator).Text);
+        var radical = Assert.IsType<MathNode.Rad>(frac.Denominator);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(radical.Radicand).Text);
+
+        var nestedSubSup = Assert.IsType<MathNode.Sup>(pre.Sub);
+        Assert.Equal("a", Assert.IsType<MathNode.Run>(nestedSubSup.Base).Text);
+        Assert.Equal("2", Assert.IsType<MathNode.Run>(nestedSubSup.Script).Text);
+
+        var supBox = Assert.IsType<MathNode.Box>(pre.Sup);
+        Assert.Equal("n", Assert.IsType<MathNode.Run>(supBox.Base).Text);
+    }
+
+    [Fact]
+    public void SPre_WithMissingSubAndSup_UsesEmptyUnknownScriptFallbacks()
+    {
+        var node = Parse("<m:sPre><m:e><m:r><m:t>x</m:t></m:r></m:e></m:sPre>");
+
+        var pre = Assert.IsType<MathNode.PreSubSup>(node);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(pre.Base).Text);
+        Assert.Equal(string.Empty, Assert.IsType<MathNode.Unknown>(pre.Sub).FallbackText);
+        Assert.Equal(string.Empty, Assert.IsType<MathNode.Unknown>(pre.Sup).FallbackText);
+    }
+
+    [Fact]
     public void Box_PreservesNestedFractionAndRadicalChild()
     {
         var node = Parse(
