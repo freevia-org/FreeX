@@ -423,6 +423,72 @@ public sealed class ChartSmartArtContextualTabTests
     }
 
     [Fact]
+    public async Task EditChartData_command_replaces_chart_data_and_reverts_on_undo()
+    {
+        string[]? categoriesAfter = null, categoriesUndone = null;
+        double[]? valuesAfter = null, valuesUndone = null;
+        ChartKind? kindAfter = null, kindUndone = null;
+        var ran = await OnUi(() =>
+        {
+            var (doc, bi, ri) = DocWithFloatingChart();
+            var chart = ((Paragraph)doc.Blocks[0]).Runs[ri].Chart!;
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+            registry.TryGet(new RibbonCommandId("freew.chart-edit-data"), out var cmd);
+            cmd!.Execute(RibbonCommandContext.ForSelectedValue("Monthly Revenue"));
+            kindAfter = chart.Kind;
+            categoriesAfter = chart.Categories.ToArray();
+            valuesAfter = chart.Series[0].Values.ToArray();
+
+            view.Undo();
+            kindUndone = chart.Kind;
+            categoriesUndone = chart.Categories.ToArray();
+            valuesUndone = chart.Series[0].Values.ToArray();
+        });
+        if (!ran) return;
+        kindAfter.Should().Be(ChartKind.Line);
+        categoriesAfter.Should().Equal("Jan", "Feb", "Mar");
+        valuesAfter.Should().Equal(5.0, 6.0, 7.0);
+        kindUndone.Should().Be(ChartKind.Column);
+        categoriesUndone.Should().Equal("Q1", "Q2", "Q3");
+        valuesUndone.Should().Equal(1.0, 2.0, 3.0);
+    }
+
+    [Fact]
+    public async Task ChartSize_command_resizes_selected_chart_and_reverts_on_undo()
+    {
+        double? widthAfter = null, heightAfter = null, widthUndone = null, heightUndone = null;
+        var ran = await OnUi(() =>
+        {
+            var (doc, bi, ri) = DocWithFloatingChart();
+            var chart = ((Paragraph)doc.Blocks[0]).Runs[ri].Chart!;
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+            registry.TryGet(new RibbonCommandId("freew.chart-size"), out var cmd);
+            cmd!.Execute(RibbonCommandContext.ForSelectedValue("400 x 300"));
+            widthAfter = chart.WidthPt;
+            heightAfter = chart.HeightPt;
+
+            view.Undo();
+            widthUndone = chart.WidthPt;
+            heightUndone = chart.HeightPt;
+        });
+        if (!ran) return;
+        widthAfter.Should().Be(400);
+        heightAfter.Should().Be(300);
+        widthUndone.Should().Be(360);
+        heightUndone.Should().Be(216);
+    }
+
+    [Fact]
     public async Task SetSmartArtLayout_command_changes_kind_and_reverts_on_undo()
     {
         SmartArtKind? before = null, after = null, undone = null;
@@ -519,7 +585,7 @@ public sealed class ChartSmartArtContextualTabTests
             foreach (var id in new[]
             {
                 "freew.chart-type-bar", "freew.chart-style-3", "freew.chart-colors-colorful2",
-                "freew.chart-toggle-legend",
+                "freew.chart-toggle-legend", "freew.chart-edit-data", "freew.chart-size",
                 "freew.smartart-layout-cycle", "freew.smartart-colors-mono-blue",
             })
             {

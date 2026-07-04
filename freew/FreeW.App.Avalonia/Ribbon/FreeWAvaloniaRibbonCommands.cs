@@ -1335,6 +1335,16 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.chart-toggle-legend", new ActionRibbonCommand(editor.ToggleChartLegend));
         r.Register("freew.chart-title", new ActionRibbonCommand(editor.ToggleChartTitle));
         r.Register("freew.chart-axis-titles", new ActionRibbonCommand(editor.ToggleChartAxisTitles));
+        r.Register("freew.chart-edit-data", new ValueRibbonCommand(value =>
+        {
+            if (TryBuildChartDataPreset(value, out var chart))
+                editor.ReplaceSelectedChartData(chart);
+        }));
+        r.Register("freew.chart-size", new ValueRibbonCommand(value =>
+        {
+            if (TryParseChartSize(value, out var widthPt, out var heightPt))
+                editor.SetSelectedChartSize(widthPt, heightPt);
+        }));
 
         // ── SmartArt Design ───────────────────────────────────────────────────
         // Layouts — the four Word families. Cycle maps to the model's Process kind (closest flat sequence).
@@ -1351,6 +1361,47 @@ internal static class FreeWAvaloniaRibbonCommands
             var sc = scheme;
             r.Register($"freew.smartart-colors-{sc.Id}", new ActionRibbonCommand(() => editor.SetSmartArtColor(sc.Id)));
         }
+    }
+
+    private static bool TryBuildChartDataPreset(string? value, out Chart chart)
+    {
+        chart = new Chart();
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        chart = value.Trim() switch
+        {
+            "Quarterly Sales" => Chart.Create(
+                ChartKind.Column,
+                ["Q1", "Q2", "Q3", "Q4"],
+                [12.0, 18.0, 16.0, 24.0],
+                seriesName: "Sales",
+                title: "Quarterly Sales"),
+            "Monthly Revenue" => Chart.Create(
+                ChartKind.Line,
+                ["Jan", "Feb", "Mar"],
+                [5.0, 6.0, 7.0],
+                seriesName: "Revenue",
+                title: "Monthly Revenue"),
+            _ => null!
+        };
+
+        return chart is not null;
+    }
+
+    private static bool TryParseChartSize(string? value, out double widthPt, out double heightPt)
+    {
+        widthPt = 0;
+        heightPt = 0;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        var parts = value.Split(['x', 'X'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 2
+            && double.TryParse(parts[0], CultureInfo.InvariantCulture, out widthPt)
+            && double.TryParse(parts[1], CultureInfo.InvariantCulture, out heightPt)
+            && widthPt > 0
+            && heightPt > 0;
     }
 
     /// <summary>

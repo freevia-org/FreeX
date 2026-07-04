@@ -134,4 +134,37 @@ public sealed class ChartEditCommandTests
         chart.CategoryAxisTitle.Should().BeNull();
         chart.ValueAxisTitle.Should().BeNull();
     }
+
+    [Fact]
+    public void ReplaceChartDataCommand_AppliesAndRevertsEditableChartData()
+    {
+        var (_, bus, chart) = NewChartDoc();
+        chart.Title = "Old";
+        var replacement = Chart.Create(
+            ChartKind.Line,
+            ["Jan", "Feb", "Mar"],
+            [5.0, 6.0, 7.0],
+            seriesName: "Revenue",
+            title: "Monthly Revenue");
+
+        bus.Execute(new ReplaceChartDataCommand(0, 0, replacement));
+
+        chart.Kind.Should().Be(ChartKind.Line);
+        chart.Title.Should().Be("Monthly Revenue");
+        chart.Categories.Should().Equal("Jan", "Feb", "Mar");
+        chart.Series.Should().ContainSingle();
+        chart.Series[0].Name.Should().Be("Revenue");
+        chart.Series[0].Values.Should().Equal(5.0, 6.0, 7.0);
+
+        bus.Undo().Should().BeTrue();
+        chart.Kind.Should().Be(ChartKind.Column);
+        chart.Title.Should().Be("Old");
+        chart.Categories.Should().Equal("Q1", "Q2");
+        chart.Series[0].Name.Should().Be("Sales");
+        chart.Series[0].Values.Should().Equal(1.0, 2.0);
+
+        bus.Redo().Should().BeTrue();
+        chart.Kind.Should().Be(ChartKind.Line);
+        chart.Categories.Should().Equal("Jan", "Feb", "Mar");
+    }
 }
