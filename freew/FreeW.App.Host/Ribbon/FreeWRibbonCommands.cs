@@ -381,10 +381,10 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.image-align-center", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Center));
         registry.Register("freew.image-align-right", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Right));
         // Picture Format > Arrange — align floating images relative to page or margin, or distribute evenly.
-        registry.Register("freew.image-align-to-page",   new FloatingAlignCommand(editor, FloatingAlignTarget.Page));
-        registry.Register("freew.image-align-to-margin", new FloatingAlignCommand(editor, FloatingAlignTarget.Margin));
-        registry.Register("freew.image-distribute-h", new FloatingDistributeCommand(editor, vertical: false));
-        registry.Register("freew.image-distribute-v", new FloatingDistributeCommand(editor, vertical: true));
+        registry.Register("freew.image-align-to-page",   new FloatingAlignCommand(editor, FloatingObjectArrangeKind.AlignToPage));
+        registry.Register("freew.image-align-to-margin", new FloatingAlignCommand(editor, FloatingObjectArrangeKind.AlignToMargin));
+        registry.Register("freew.image-distribute-h", new FloatingDistributeCommand(editor, FloatingObjectArrangeKind.DistributeHorizontal));
+        registry.Register("freew.image-distribute-v", new FloatingDistributeCommand(editor, FloatingObjectArrangeKind.DistributeVertical));
         foreach (var command in ObjectFormatCommandPlanner.WrapCommands(ObjectFormatTarget.Picture))
             registry.Register(command.CommandId, new ImageWrapCommand(editor, command.Wrapping));
         // Picture Format tab — Arrange > Rotate / Flip.
@@ -822,10 +822,10 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.shape-align-center", new ShapeAlignCommand(editor, FreeW.Core.Model.TextAlignment.Center));
         registry.Register("freew.shape-align-right",  new ShapeAlignCommand(editor, FreeW.Core.Model.TextAlignment.Right));
         // Drawing Tools > Arrange — align floating shapes relative to page or margin, or distribute evenly.
-        registry.Register("freew.shape-align-to-page",   new FloatingAlignCommand(editor, FloatingAlignTarget.Page));
-        registry.Register("freew.shape-align-to-margin", new FloatingAlignCommand(editor, FloatingAlignTarget.Margin));
-        registry.Register("freew.shape-distribute-h", new FloatingDistributeCommand(editor, vertical: false));
-        registry.Register("freew.shape-distribute-v", new FloatingDistributeCommand(editor, vertical: true));
+        registry.Register("freew.shape-align-to-page",   new FloatingAlignCommand(editor, FloatingObjectArrangeKind.AlignToPage));
+        registry.Register("freew.shape-align-to-margin", new FloatingAlignCommand(editor, FloatingObjectArrangeKind.AlignToMargin));
+        registry.Register("freew.shape-distribute-h", new FloatingDistributeCommand(editor, FloatingObjectArrangeKind.DistributeHorizontal));
+        registry.Register("freew.shape-distribute-v", new FloatingDistributeCommand(editor, FloatingObjectArrangeKind.DistributeVertical));
         // Drawing Tools > Arrange — Wrap Text (6 modes for shapes, mirrors image-wrap-* pattern).
         foreach (var command in ObjectFormatCommandPlanner.WrapCommands(ObjectFormatTarget.Shape))
             registry.Register(command.CommandId, new ShapeWrapCommand(editor, command.Wrapping));
@@ -8824,86 +8824,33 @@ internal static class FreeWRibbonCommands
     // Feature 2 — Floating Align / Distribute commands
     // -----------------------------------------------------------------------------------------
 
-    /// <summary>Which reference frame the floating-align command targets.</summary>
-    private enum FloatingAlignTarget { Page, Margin }
-
     /// <summary>
-    /// Aligns the horizontal offset of all floating images in the document to the left edge of the
-    /// page or the printable margin area. Both floating-picture and floating-shape variants share
-    /// this command (the same <see cref="InlineImage"/> model underlies both).
+    /// Aligns floating objects to the page or margin through the shared undoable model command.
     /// </summary>
-    private sealed class FloatingAlignCommand(DocumentView editor, FloatingAlignTarget target) : IRibbonCommand
+    private sealed class FloatingAlignCommand(DocumentView editor, FloatingObjectArrangeKind kind) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
-            editor.CommitToModel();
-            var page = editor.Model.Page;
-            var refX = target == FloatingAlignTarget.Margin ? page.MarginLeftPt : 0.0;
-            var anchor = target == FloatingAlignTarget.Margin ? HorizontalAnchor.Margin : HorizontalAnchor.Page;
-
-            var changed = false;
-            foreach (var block in editor.Model.Blocks.OfType<FreeW.Core.Model.Paragraph>())
-            {
-                foreach (var run in block.Runs)
-                {
-                    if (run.Image?.IsFloating == true)
-                    {
-                        run.Image.HorizontalOffsetPt = refX;
-                        run.Image.HorizontalAnchor   = anchor;
-                        changed = true;
-                    }
-                }
-            }
-            if (changed) editor.Rerender();
+            editor.ArrangeFloatingObjects(kind);
         }
     }
 
     /// <summary>
-    /// Distributes all floating images evenly along the horizontal (vertical=false) or vertical
-    /// (vertical=true) axis so that the gaps between consecutive offsets are equal.
-    /// Requires at least two floating images; otherwise shows an informational notice.
+    /// Distributes floating objects through the shared undoable model command.
     /// </summary>
-    private sealed class FloatingDistributeCommand(DocumentView editor, bool vertical) : IRibbonCommand
+    private sealed class FloatingDistributeCommand(DocumentView editor, FloatingObjectArrangeKind kind) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
-            editor.CommitToModel();
-
-            // Collect all floating images in document order.
-            var images = editor.Model.Blocks
-                .OfType<FreeW.Core.Model.Paragraph>()
-                .SelectMany(p => p.Runs)
-                .Where(r => r.Image?.IsFloating == true)
-                .Select(r => r.Image!)
-                .ToList();
-
-            if (images.Count < 2)
+            if (!editor.ArrangeFloatingObjects(kind))
             {
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
                     "Select at least two floating objects to distribute.",
-                    vertical ? "Distribute Vertically" : "Distribute Horizontally");
-                return;
+                    kind == FloatingObjectArrangeKind.DistributeVertical
+                        ? "Distribute Vertically"
+                        : "Distribute Horizontally");
             }
-
-            if (vertical)
-            {
-                var offsets = images.Select(img => img.VerticalOffsetPt).OrderBy(v => v).ToList();
-                var step = images.Count > 1 ? (offsets[^1] - offsets[0]) / (images.Count - 1) : 0;
-                var sorted = images.OrderBy(img => img.VerticalOffsetPt).ToList();
-                for (var i = 0; i < sorted.Count; i++)
-                    sorted[i].VerticalOffsetPt = offsets[0] + i * step;
-            }
-            else
-            {
-                var offsets = images.Select(img => img.HorizontalOffsetPt).OrderBy(v => v).ToList();
-                var step = images.Count > 1 ? (offsets[^1] - offsets[0]) / (images.Count - 1) : 0;
-                var sorted = images.OrderBy(img => img.HorizontalOffsetPt).ToList();
-                for (var i = 0; i < sorted.Count; i++)
-                    sorted[i].HorizontalOffsetPt = offsets[0] + i * step;
-            }
-
-            editor.Rerender();
         }
     }
 }

@@ -1048,6 +1048,10 @@ internal static class FreeWAvaloniaRibbonDefinition
                         g.Button("freew.image-send-to-back",   "Send to Back");
                         g.Button("freew.image-bring-forward",  "Bring Forward");
                         g.Button("freew.image-send-backward",  "Send Backward");
+                        g.Button("freew.image-align-to-page",  "Align to Page");
+                        g.Button("freew.image-align-to-margin", "Align to Margin");
+                        g.Button("freew.image-distribute-h",   "Distribute Horizontally");
+                        g.Button("freew.image-distribute-v",   "Distribute Vertically");
                         g.Button("freew.object-group",         "Group");
                         g.Button("freew.object-ungroup",       "Ungroup");
                     });
@@ -1077,6 +1081,10 @@ internal static class FreeWAvaloniaRibbonDefinition
                         g.Button("freew.image-send-to-back",   "Send to Back");
                         g.Button("freew.image-bring-forward",  "Bring Forward");
                         g.Button("freew.image-send-backward",  "Send Backward");
+                        g.Button("freew.shape-align-to-page",  "Align to Page");
+                        g.Button("freew.shape-align-to-margin", "Align to Margin");
+                        g.Button("freew.shape-distribute-h",   "Distribute Horizontally");
+                        g.Button("freew.shape-distribute-v",   "Distribute Vertically");
                         g.Button("freew.object-group",         "Group");
                         g.Button("freew.object-ungroup",       "Ungroup");
                     });

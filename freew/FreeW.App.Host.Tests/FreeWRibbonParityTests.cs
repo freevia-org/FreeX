@@ -2413,6 +2413,55 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
+    public void FloatingArrange_RibbonCommand_ArrangesImagesAndShapesAndUndoRestores()
+    {
+        var editor = new DocumentView();
+        editor.Model.Blocks.Clear();
+        editor.Model.Page.MarginLeftPt = 90;
+        editor.Model.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.FromImage(new InlineImage([0x89, 0x50, 0x4E, 0x47], 60, 40)
+                {
+                    Wrapping = ImageWrapping.Square,
+                    HorizontalOffsetPt = 24,
+                    HorizontalAnchor = HorizontalAnchor.Column,
+                    VerticalOffsetPt = 12
+                }),
+                Run.FromShape(new Shape(ShapeKind.Rectangle, 80, 50)
+                {
+                    Placement = new FloatingPlacement
+                    {
+                        Wrapping = ImageWrapping.Square,
+                        HorizontalOffsetPt = 144,
+                        HorizontalAnchor = HorizontalAnchor.Column,
+                        VerticalOffsetPt = 48
+                    }
+                })
+            }
+        });
+        editor.Rerender();
+
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+        registry.TryGet("freew.image-align-to-margin", out var command).Should().BeTrue();
+
+        command!.Execute(RibbonCommandContext.Empty);
+
+        var paragraph = (Paragraph)editor.Model.Blocks[0];
+        paragraph.Runs[0].Image!.HorizontalOffsetPt.Should().Be(90);
+        paragraph.Runs[0].Image!.HorizontalAnchor.Should().Be(HorizontalAnchor.Margin);
+        paragraph.Runs[1].Shape!.Placement!.HorizontalOffsetPt.Should().Be(90);
+        paragraph.Runs[1].Shape!.Placement!.HorizontalAnchor.Should().Be(HorizontalAnchor.Margin);
+
+        editor.Commands.Undo().Should().BeTrue();
+        paragraph.Runs[0].Image!.HorizontalOffsetPt.Should().Be(24);
+        paragraph.Runs[0].Image!.HorizontalAnchor.Should().Be(HorizontalAnchor.Column);
+        paragraph.Runs[1].Shape!.Placement!.HorizontalOffsetPt.Should().Be(144);
+        paragraph.Runs[1].Shape!.Placement!.HorizontalAnchor.Should().Be(HorizontalAnchor.Column);
+    }
+
+    [StaFact]
     public void DrawingArrange_ZOrder_CommandsExistInRibbonAndRegistry()
     {
         // The z-order commands in drawing-arrange reuse the existing freew.image-bring-* / freew.image-send-*

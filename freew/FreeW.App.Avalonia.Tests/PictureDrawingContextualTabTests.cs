@@ -160,9 +160,13 @@ public sealed class PictureDrawingContextualTabTests
             .ToArray();
         pictureArrangeIds.Should().Contain(new[]
         {
+            "freew.image-align-to-page",
+            "freew.image-align-to-margin",
+            "freew.image-distribute-h",
+            "freew.image-distribute-v",
             "freew.object-group",
             "freew.object-ungroup",
-        }, "Picture Format should expose Word's object Group/Ungroup arrange commands");
+        }, "Picture Format should expose Word's object arrange commands");
 
         var drawingArrangeIds = draw.Groups.Single(g => g.Id == "drawing-arrange").Controls
             .Select(control => GetCommandId(control)?.Value)
@@ -175,6 +179,10 @@ public sealed class PictureDrawingContextualTabTests
             "freew.image-send-to-back",
             "freew.image-bring-forward",
             "freew.image-send-backward",
+            "freew.shape-align-to-page",
+            "freew.shape-align-to-margin",
+            "freew.shape-distribute-h",
+            "freew.shape-distribute-v",
             "freew.object-group",
             "freew.object-ungroup",
         }, "Avalonia should use the same shared arrange command ids as WPF for drawing objects");
@@ -201,12 +209,16 @@ public sealed class PictureDrawingContextualTabTests
             "freew.image-rotate-left90", "freew.image-flip-vertical", "freew.image-flip-horizontal",
             "freew.image-bring-to-front", "freew.image-send-to-back", "freew.image-bring-forward",
             "freew.image-send-backward", "freew.object-group", "freew.object-ungroup",
+            "freew.image-align-to-page", "freew.image-align-to-margin",
+            "freew.image-distribute-h", "freew.image-distribute-v",
             "freew.image-width", "freew.image-height",
             // Drawing
             "freew.shape-wrap", "freew.shape-wrap-inline", "freew.shape-wrap-square",
             "freew.shape-rotate", "freew.shape-rotate-right90", "freew.shape-flip-horizontal",
             "freew.shape-bring-to-front", "freew.shape-send-to-back", "freew.shape-bring-forward",
             "freew.shape-send-backward", "freew.shape-width", "freew.shape-height",
+            "freew.shape-align-to-page", "freew.shape-align-to-margin",
+            "freew.shape-distribute-h", "freew.shape-distribute-v",
             "freew.shape-fill", "freew.shape-fill-no-fill", "freew.shape-fill-gradient-blue",
             "freew.shape-fill-gradient-orange", "freew.shape-fill-pattern-diag",
             "freew.shape-outline", "freew.shape-outline-no-outline", "freew.shape-outline-solid",
@@ -518,6 +530,75 @@ public sealed class PictureDrawingContextualTabTests
         singleGroup.Should().BeFalse("single object selection cannot be grouped");
         multiGroup.Should().BeTrue("image + shape multi-selection can be grouped by the shared model command");
         groupUngroup.Should().BeTrue("Ungroup is available when the selected run is a drawing group");
+    }
+
+    [Fact]
+    public async Task ObjectArrangeCommands_enable_for_selected_floating_objects()
+    {
+        bool? noneAlign = null, singleAlign = null, singleDistribute = null, multiDistribute = null;
+        var ran = await OnUi(() =>
+        {
+            var doc = DocWithFloatingImageAndShape();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+
+            noneAlign = CommandIsEnabled(registry, "freew.image-align-to-page");
+            view.SelectFloating(0, 1);
+            singleAlign = CommandIsEnabled(registry, "freew.image-align-to-page");
+            singleDistribute = CommandIsEnabled(registry, "freew.image-distribute-h");
+            view.SelectFloating(0, 2, addToMultiSelect: true);
+            multiDistribute = CommandIsEnabled(registry, "freew.shape-distribute-v");
+        });
+        if (!ran) return;
+
+        noneAlign.Should().BeFalse("arrange commands need a selected floating object");
+        singleAlign.Should().BeTrue("align commands work for one selected floating object");
+        singleDistribute.Should().BeFalse("distribute commands need at least two selected floating objects");
+        multiDistribute.Should().BeTrue("image + shape multi-selection can be distributed by the shared model command");
+    }
+
+    [Fact]
+    public async Task ObjectArrangeCommands_align_mixed_selection_and_undo_through_registry()
+    {
+        double? imageX = null, shapeX = null, imageRevertedX = null, shapeRevertedX = null;
+        HorizontalAnchor? imageAnchor = null, shapeAnchor = null, imageRevertedAnchor = null, shapeRevertedAnchor = null;
+        var ran = await OnUi(() =>
+        {
+            var doc = DocWithFloatingImageAndShape();
+            doc.Page.MarginLeftPt = 90;
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(0, 1);
+            view.SelectFloating(0, 2, addToMultiSelect: true);
+
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+            ExecuteCommand(registry, "freew.image-align-to-margin");
+
+            var para = (Paragraph)doc.Blocks[0];
+            imageX = para.Runs[1].Image!.HorizontalOffsetPt;
+            shapeX = para.Runs[2].Shape!.Placement!.HorizontalOffsetPt;
+            imageAnchor = para.Runs[1].Image!.HorizontalAnchor;
+            shapeAnchor = para.Runs[2].Shape!.Placement!.HorizontalAnchor;
+
+            view.Undo();
+            imageRevertedX = para.Runs[1].Image!.HorizontalOffsetPt;
+            shapeRevertedX = para.Runs[2].Shape!.Placement!.HorizontalOffsetPt;
+            imageRevertedAnchor = para.Runs[1].Image!.HorizontalAnchor;
+            shapeRevertedAnchor = para.Runs[2].Shape!.Placement!.HorizontalAnchor;
+        });
+        if (!ran) return;
+
+        imageX.Should().Be(90);
+        shapeX.Should().Be(90);
+        imageAnchor.Should().Be(HorizontalAnchor.Margin);
+        shapeAnchor.Should().Be(HorizontalAnchor.Margin);
+        imageRevertedX.Should().Be(36);
+        shapeRevertedX.Should().Be(108);
+        imageRevertedAnchor.Should().Be(HorizontalAnchor.Column);
+        shapeRevertedAnchor.Should().Be(HorizontalAnchor.Column);
     }
 
     [Fact]
