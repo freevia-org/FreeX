@@ -212,4 +212,42 @@ public sealed class SlideCanvasMathBaselineTests
 
         thrown.Should().BeNull("Avalonia must render borderBox math from the shared MathBox line plan without host-specific layout branching");
     }
+
+    [Fact]
+    public async Task RenderParaWithMath_HiddenPhantom_UsesSharedMetricOnlyPlan_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var mathNode = new MathNode.Phantom(
+                    new MathNode.Frac(
+                        new MathNode.Run("1"),
+                        new MathNode.Rad(null, new MathNode.Run("x"))),
+                    show: false);
+                var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+                var ops = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math");
+                ops.OfType<MathDrawOp.DrawGlyph>().Should().BeEmpty(
+                    "hidden m:phant glyphs must be removed in the shared MathBox plan before Avalonia draws");
+                ops.Should().BeEmpty("this hidden phantom only contains glyph/radical descendants, so no draw ops should remain");
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "P = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+                    }
+                };
+
+                var rtb = new RenderTargetBitmap(new PixelSize(260, 140));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must render hidden m:phant metric-only math without host-specific layout branching");
+    }
 }

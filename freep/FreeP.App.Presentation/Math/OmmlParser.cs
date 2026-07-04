@@ -119,6 +119,7 @@ public static class OmmlParser
             "acc"      => ParseAcc(el),
             "bar"      => ParseBar(el),
             "box"      => ParseBox(el),
+            "phant"    => ParsePhantom(el),
             "borderBox"=> ParseBorderBox(el),
             "groupChr" => ParseGroupChr(el),
             "m"        => ParseMatrix(el),
@@ -364,6 +365,23 @@ public static class OmmlParser
     {
         var eEl = el.Element(M + "e");
         return new MathNode.Box(eEl is null ? new MathNode.Unknown(FlattenText(el)) : ParseRow(eEl));
+    }
+
+    private static MathNode ParsePhantom(XElement el)
+    {
+        var phantomPr = el.Element(M + "phantPr");
+        var eEl = el.Element(M + "e");
+
+        var showEl = phantomPr?.Element(M + "show");
+        bool show = showEl is null || IsOnOffOn(showEl);
+
+        return new MathNode.Phantom(
+            eEl is null ? new MathNode.Unknown(FlattenText(el)) : ParseRow(eEl),
+            show,
+            zeroWidth: IsOnOffOn(phantomPr?.Element(M + "zeroWid")),
+            zeroAscent: IsOnOffOn(phantomPr?.Element(M + "zeroAsc")),
+            zeroDescent: IsOnOffOn(phantomPr?.Element(M + "zeroDesc")),
+            transparentSpacing: IsOnOffOn(phantomPr?.Element(M + "transp")));
     }
 
     private static MathNode ParseBorderBox(XElement el)
