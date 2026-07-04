@@ -38,8 +38,13 @@ public class RibbonTransitionsAnimationsTests
 
     /// <summary>Builds a command registry with the given session (no slideshow Actions).</summary>
     private static RibbonCommandRegistry MakeRegistry(EditingSession editor,
-        Action? onStart = null, Action? onCurrent = null)
-        => FreePRibbonCommands.Build(new RibbonStateStore(), editor, onStart, onCurrent);
+        Action? onStart = null, Action? onCurrent = null, Action? onCustomShows = null)
+        => FreePRibbonCommands.Build(
+            new RibbonStateStore(),
+            editor,
+            onStart,
+            onCurrent,
+            onCustomShows: onCustomShows);
 
     /// <summary>Executes a registered command by id.</summary>
     private static void Exec(RibbonCommandRegistry registry, string id, RibbonCommandContext? context = null)
@@ -123,6 +128,7 @@ public class RibbonTransitionsAnimationsTests
         var group = tab.Groups.Single(g => g.Id == "slideshow-from-transitions");
         Assert.Contains(group.Controls, c => c.CommandId.Value == "freep.slideshow.from-beginning");
         Assert.Contains(group.Controls, c => c.CommandId.Value == "freep.slideshow.from-current-slide");
+        Assert.Contains(group.Controls, c => c.CommandId.Value == "freep.slideshow.custom-shows");
     }
 
     // ── Transition commands ────────────────────────────────────────────────────────
@@ -440,6 +446,16 @@ public class RibbonTransitionsAnimationsTests
     }
 
     [Fact]
+    public void Cmd_CustomShows_InvokesOnCustomShows()
+    {
+        var (ed, _) = MakeSession();
+        bool fired = false;
+        var reg = MakeRegistry(ed, onCustomShows: () => fired = true);
+        Exec(reg, "freep.slideshow.custom-shows");
+        Assert.True(fired);
+    }
+
+    [Fact]
     public void Cmd_FromBeginning_NullAction_DoesNotThrow()
     {
         var (ed, _) = MakeSession();
@@ -470,6 +486,7 @@ public class RibbonTransitionsAnimationsTests
     [InlineData("freep.transition.apply-all")]
     [InlineData("freep.slideshow.from-beginning")]
     [InlineData("freep.slideshow.from-current-slide")]
+    [InlineData("freep.slideshow.custom-shows")]
     [InlineData("freep.anim.entrance.appear")]
     [InlineData("freep.anim.entrance.fade")]
     [InlineData("freep.anim.entrance.fly-in")]

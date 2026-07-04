@@ -1751,6 +1751,8 @@ public sealed class MainWindow : Window
             new ActionRibbonCommand(() => StartSlideShow(fromStart: true)));
         r.Register("freep.slideshow.from-current-slide",
             new ActionRibbonCommand(() => StartSlideShow(fromStart: false)));
+        r.Register("freep.slideshow.custom-shows",
+            new ActionRibbonCommand(OpenCustomShowDialog));
 
         return r;
     }
@@ -5730,6 +5732,20 @@ public sealed class MainWindow : Window
 
         slideShow.Show();
         return true;
+    }
+
+    internal async void OpenCustomShowDialog()
+    {
+        await OpenCustomShowDialogAsync();
+    }
+
+    internal Task OpenCustomShowDialogAsyncForTests() =>
+        OpenCustomShowDialogAsync();
+
+    private async Task OpenCustomShowDialogAsync()
+    {
+        var dialog = new CustomShowDialog(this);
+        await dialog.ShowDialog(this);
     }
 
     private sealed class ViewShowToggleCommand : IRibbonStatefulCommand

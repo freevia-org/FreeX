@@ -94,6 +94,8 @@ internal static class FreePAvaloniaRibbonDefinition
                         RibbonCommandIconKind.Next, FreePRibbonText.SlideShowFromBeginningKeyTip);
                     g.Large("freep.slideshow.from-current-slide", FreePRibbonText.SlideShowFromCurrentSlideLabel,
                         RibbonCommandIconKind.Next, FreePRibbonText.SlideShowFromCurrentSlideKeyTip);
+                    g.Medium("freep.slideshow.custom-shows", FreePRibbonText.SlideShowCustomShowsLabel,
+                        RibbonCommandIconKind.List, FreePRibbonText.SlideShowCustomShowsKeyTip);
                 });
             })
             .Tab("insert", FreePRibbonText.InsertTabLabel, FreePRibbonText.InsertTabKeyTip, tab =>

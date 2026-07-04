@@ -145,7 +145,9 @@ public sealed class LocTests
             "Ribbon_Command_SlideShowFromBeginning_Label",
             "Ribbon_Command_SlideShowFromBeginning_KeyTip",
             "Ribbon_Command_SlideShowFromCurrentSlide_Label",
-            "Ribbon_Command_SlideShowFromCurrentSlide_KeyTip"
+            "Ribbon_Command_SlideShowFromCurrentSlide_KeyTip",
+            "Ribbon_Command_SlideShowCustomShows_Label",
+            "Ribbon_Command_SlideShowCustomShows_KeyTip"
         ]);
     }
 

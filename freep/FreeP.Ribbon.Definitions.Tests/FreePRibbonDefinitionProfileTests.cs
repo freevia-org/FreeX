@@ -86,6 +86,8 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredGroup(wpf, "transitions", "slideshow-from-transitions").Header,
                 RequiredControl(wpf, "freep.slideshow.from-beginning").Label,
                 RequiredControl(wpf, "freep.slideshow.from-current-slide").Label,
+                RequiredControl(wpf, "freep.slideshow.custom-shows").Label,
+                RequiredControl(wpf, "freep.slideshow.custom-shows").KeyTip!,
                 RequiredGroup(avalonia, "home", "file").Header,
                 RequiredGroup(avalonia, "home", "file").KeyTip!,
                 RequiredControl(avalonia, "freep.file.new").Label,
@@ -160,6 +162,8 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredGroup(avalonia, "home", "slideshow").Header,
                 RequiredControl(avalonia, "freep.slideshow.from-beginning").Label,
                 RequiredControl(avalonia, "freep.slideshow.from-current-slide").Label,
+                RequiredControl(avalonia, "freep.slideshow.custom-shows").Label,
+                RequiredControl(avalonia, "freep.slideshow.custom-shows").KeyTip!,
                 avalonia.FindTab("design")!.Header,
                 avalonia.FindTab("design")!.KeyTip!,
                 RequiredGroup(avalonia, "design", "themes").Header,
@@ -300,6 +304,7 @@ public sealed class FreePRibbonDefinitionProfileTests
                 "freep.transition.advance-on-click",
                 "freep.transition.advance-after",
                 "freep.transition.apply-all",
+                "freep.slideshow.custom-shows",
                 "freep.anim.entrance.appear",
                 "freep.anim.entrance.fade",
                 "freep.anim.entrance.fly-in",
@@ -575,6 +580,7 @@ public sealed class FreePRibbonDefinitionProfileTests
                      "\"Slide Show\"",
                      "\"From Beginning\"",
                      "\"From Current Slide\"",
+                     "\"Custom Shows\"",
                      "\"Insert\"",
                      "\"Text\"",
                      "\"Text Box\"",
@@ -694,7 +700,7 @@ public sealed class FreePRibbonDefinitionProfileTests
         var workflowEvidence = root.GetProperty("workflowEvidence")
             .EnumerateArray()
             .ToArray();
-        workflowEvidence.Should().HaveCount(3);
+        workflowEvidence.Should().HaveCount(5);
         root.GetProperty("summary").GetProperty("workflowEvidenceRows").GetInt32()
             .Should()
             .Be(workflowEvidence.Length);
@@ -703,10 +709,12 @@ public sealed class FreePRibbonDefinitionProfileTests
             .Equal(
                 "freep.presenter.recording.execution",
                 "freep.presenter.ink.execution",
-                "freep.presenter.session.summary");
+                "freep.presenter.session.summary",
+                "freep.review.comments.thread-depth",
+                "freep.review.accessibility.proofing-depth");
 
         workflowEvidence.Should().OnlyContain(row =>
-            row.GetProperty("status").GetString() == "shared-executable-evidence" &&
+            row.GetProperty("status").GetString()!.StartsWith("shared-", StringComparison.Ordinal) &&
             row.GetProperty("hostCoverage").GetString()!.Contains("WPF/Avalonia", StringComparison.Ordinal));
 
         var presenterSummary = workflowEvidence.Single(row =>

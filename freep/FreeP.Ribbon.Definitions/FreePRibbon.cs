@@ -186,6 +186,7 @@ public static class FreePRibbon
                 {
                     g.Large("freep.slideshow.from-beginning",     FreePRibbonText.SlideShowFromBeginningLabel,     RibbonCommandIconKind.Next,     FreePRibbonText.SlideShowFromBeginningKeyTip);
                     g.Large("freep.slideshow.from-current-slide", FreePRibbonText.SlideShowFromCurrentSlideLabel, RibbonCommandIconKind.Previous, FreePRibbonText.SlideShowFromCurrentSlideKeyTip);
+                    g.Medium("freep.slideshow.custom-shows", FreePRibbonText.SlideShowCustomShowsLabel, RibbonCommandIconKind.List, FreePRibbonText.SlideShowCustomShowsKeyTip);
                 });
             })
             // ── Wave 4C: Animations tab ───────────────────────────────────────────────

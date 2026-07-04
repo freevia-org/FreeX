@@ -1220,6 +1220,36 @@ public sealed partial class SlideShowMainWindowCustomShowTests
             window.Close();
         }
     }
+
+    [StaFact]
+    public void CustomShowDialog_RendersExistingShowsAndSlideRows()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        CustomShowDialog? dialog = null;
+        try
+        {
+            var presentation = window.Editor.Presentation;
+            presentation.Slides.Clear();
+            presentation.Slides.Add(new Slide { Title = "Intro" });
+            presentation.Slides.Add(new Slide { Title = "Deep dive" });
+
+            var create = window.CreateCustomShow(
+                "Executive review",
+                new[] { presentation.Slides[0].Id, presentation.Slides[1].Id });
+            create.Succeeded.Should().BeTrue();
+
+            dialog = new CustomShowDialog(window);
+
+            dialog.RenderedCustomShowCount.Should().Be(1);
+            dialog.RenderedSlideOptionCount.Should().Be(2);
+            dialog.ValidationMessage.Should().BeEmpty();
+        }
+        finally
+        {
+            dialog?.Close();
+            window.Close();
+        }
+    }
 }
 
 // Wave 16C: SlideShowMediaController tests
