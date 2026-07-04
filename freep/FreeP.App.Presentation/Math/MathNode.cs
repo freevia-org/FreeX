@@ -372,13 +372,29 @@ public abstract class MathNode
 
     /// <summary>
     /// <c>m:eqArr</c> — equation array with each <c>m:e</c> rendered as a stacked row.
-    /// Alignment-point semantics are intentionally left for a future slice.
+    /// Optional row alignment points come from invisible direct <c>m:aln</c> markers.
     /// </summary>
     public sealed class EqArray : MathNode
     {
         /// <summary>The ordered row expressions from direct m:e children.</summary>
         public IReadOnlyList<MathNode> Rows { get; }
-        public EqArray(IReadOnlyList<MathNode> rows) { Rows = rows; }
+
+        /// <summary>
+        /// Optional direct-child index before which each row's invisible m:aln marker appeared.
+        /// Missing entries or null values mean the row has no alignment marker.
+        /// </summary>
+        public IReadOnlyList<int?> AlignmentPointIndices { get; }
+
+        public EqArray(IReadOnlyList<MathNode> rows, IReadOnlyList<int?>? alignmentPointIndices = null)
+        {
+            Rows = rows;
+            AlignmentPointIndices = alignmentPointIndices ?? System.Array.Empty<int?>();
+        }
+
+        public int? GetAlignmentPointIndex(int rowIndex) =>
+            rowIndex >= 0 && rowIndex < AlignmentPointIndices.Count
+                ? AlignmentPointIndices[rowIndex]
+                : null;
     }
 
     // ── Row (horizontal sequence) ────────────────────────────────────────────

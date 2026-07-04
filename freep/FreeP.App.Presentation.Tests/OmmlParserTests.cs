@@ -223,6 +223,27 @@ public sealed class OmmlParserTests
     }
 
     [Fact]
+    public void Parse_EqArray_StripsAlnMarkersAndPreservesAlignmentPointIndices()
+    {
+        var node = Parse(
+            "<m:eqArr>" +
+            "<m:e><m:r><m:t>x</m:t></m:r><m:aln/><m:r><m:t>=1</m:t></m:r></m:e>" +
+            "<m:e><m:aln/><m:r><m:t>y=2</m:t></m:r></m:e>" +
+            "<m:e><m:r><m:t>z</m:t></m:r></m:e>" +
+            "</m:eqArr>");
+
+        var eqArray = Assert.IsType<MathNode.EqArray>(node);
+        Assert.Equal(new int?[] { 1, 0, null }, eqArray.AlignmentPointIndices);
+
+        var firstRow = Assert.IsType<MathNode.Row>(eqArray.Rows[0]);
+        Assert.Equal(2, firstRow.Children.Count);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(firstRow.Children[0]).Text);
+        Assert.Equal("=1", Assert.IsType<MathNode.Run>(firstRow.Children[1]).Text);
+        Assert.Equal("y=2", Assert.IsType<MathNode.Run>(eqArray.Rows[1]).Text);
+        Assert.Equal("z", Assert.IsType<MathNode.Run>(eqArray.Rows[2]).Text);
+    }
+
+    [Fact]
     public void Parse_MatrixColumnAlignments_ReadsMcsAlnMetadata()
     {
         var node = Parse(
