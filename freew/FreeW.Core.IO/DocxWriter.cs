@@ -5404,10 +5404,9 @@ public static class DocxWriter
     /// <summary>
     /// Builds word/bibliography/sources.xml: a b:Sources element carrying the document's selected
     /// <see cref="TextDocument.BibliographyStyle"/> (its <c>SelectedStyle</c> attribute as the style name)
-    /// and one b:Source per <see cref="Source"/>. Each source records its tag, type and populated fields —
-    /// the author as a single corporate author (b:Author/b:Author/b:Corporate) since FreeW models author as
-    /// one string — so both the chosen style and every source field round-trip via
-    /// <c>DocxReader.ReadBibliography</c>. Only non-empty fields are emitted.
+    /// and one b:Source per <see cref="Source"/>. Each source records its tag, type and populated fields.
+    /// Structured personal authors are emitted as Word <c>b:NameList/b:Person</c> rows; corporate and
+    /// legacy string-only authors are emitted as <c>b:Corporate</c>. Only non-empty fields are emitted.
     /// </summary>
     private static XDocument BuildBibliographySources(TextDocument document)
     {
@@ -5421,10 +5420,9 @@ public static class DocxWriter
                 new XElement(B + "Tag", source.Tag),
                 new XElement(B + "SourceType", BibliographySourceTypeName(source.Type)));
 
-            if (!string.IsNullOrEmpty(source.Author))
-                element.Add(new XElement(B + "Author",
-                    new XElement(B + "Author",
-                        new XElement(B + "Corporate", source.Author))));
+            var authorElement = BuildBibliographyAuthor(source);
+            if (authorElement is not null)
+                element.Add(authorElement);
 
             AddBibliographyField(element, "Title", source.Title);
             AddBibliographyField(element, "Year", source.Year);
@@ -5445,6 +5443,43 @@ public static class DocxWriter
         {
             if (!string.IsNullOrEmpty(value))
                 parent.Add(new XElement(B + localName, value));
+        }
+    }
+
+    private static XElement? BuildBibliographyAuthor(Source source)
+    {
+        var people = source.PersonalAuthors
+            .Where(person => person is not null && !person.IsEmpty)
+            .ToList();
+        if (people.Count > 0)
+        {
+            return new XElement(B + "Author",
+                new XElement(B + "Author",
+                    new XElement(B + "NameList",
+                        people.Select(person =>
+                        {
+                            var element = new XElement(B + "Person");
+                            AddPersonPart(element, "Last", person.Last);
+                            AddPersonPart(element, "First", person.First);
+                            AddPersonPart(element, "Middle", person.Middle);
+                            return element;
+                        }))));
+        }
+
+        var corporate = string.IsNullOrWhiteSpace(source.CorporateAuthor)
+            ? source.Author
+            : source.CorporateAuthor;
+        if (string.IsNullOrWhiteSpace(corporate))
+            return null;
+
+        return new XElement(B + "Author",
+            new XElement(B + "Author",
+                new XElement(B + "Corporate", corporate.Trim())));
+
+        static void AddPersonPart(XElement person, string localName, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                person.Add(new XElement(B + localName, value.Trim()));
         }
     }
 

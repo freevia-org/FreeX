@@ -54,6 +54,80 @@ public sealed class MasterSourceStoreTests
     }
 
     [Fact]
+    public void MasterStore_ToSources_PreservesStructuredAuthors()
+    {
+        var store = new MasterSourceStore
+        {
+            Sources =
+            [
+                SourceRecord.FromSource(new Source
+                {
+                    Tag = "Ada1843",
+                    Author = "Ada Lovelace",
+                    PersonalAuthors = [SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace")],
+                    Title = "Notes"
+                }),
+                SourceRecord.FromSource(new Source
+                {
+                    Tag = "Org2024",
+                    Author = "World Health Organization",
+                    CorporateAuthor = "World Health Organization"
+                })
+            ]
+        };
+
+        var sources = store.ToSources();
+
+        sources[0].PersonalAuthors.Should().ContainSingle()
+            .Which.Should().Be(SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace"));
+        sources[0].CorporateAuthor.Should().BeNull();
+        sources[1].PersonalAuthors.Should().BeEmpty();
+        sources[1].CorporateAuthor.Should().Be("World Health Organization");
+    }
+
+    [Fact]
+    public void MasterStore_JsonRoundTrip_PreservesStructuredAuthors()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"master-sources-structured-{Guid.NewGuid()}.json");
+        try
+        {
+            var store = new MasterSourceStore
+            {
+                Sources =
+                [
+                    SourceRecord.FromSource(new Source
+                    {
+                        Tag = "Ada1843",
+                        Author = "Ada Lovelace",
+                        PersonalAuthors = [SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace")],
+                        Title = "Notes"
+                    }),
+                    SourceRecord.FromSource(new Source
+                    {
+                        Tag = "Org2024",
+                        Author = "World Health Organization",
+                        CorporateAuthor = "World Health Organization"
+                    })
+                ]
+            };
+            var settingsStore = JsonSettingsStore<MasterSourceStore>.ForPath(path);
+
+            settingsStore.Save(store);
+            var reloaded = JsonSettingsStore<MasterSourceStore>.ForPath(path).Load().ToSources();
+
+            reloaded[0].PersonalAuthors.Should().ContainSingle()
+                .Which.Should().Be(SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace"));
+            reloaded[0].CorporateAuthor.Should().BeNull();
+            reloaded[1].PersonalAuthors.Should().BeEmpty();
+            reloaded[1].CorporateAuthor.Should().Be("World Health Organization");
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void MasterStore_AddOrUpdate_ReplacesExistingTag()
     {
         var store = new MasterSourceStore();

@@ -75,6 +75,23 @@ public class CitationsTests
     }
 
     [Fact]
+    public void FormatInText_StructuredPersonalAuthors_KeepFlatAuthorCompatibility()
+    {
+        var source = new Source
+        {
+            Author = "Jane Q. Doe; Alex Smith",
+            PersonalAuthors =
+            [
+                SourceAuthorPerson.Create("Jane", "Q.", "Doe"),
+                SourceAuthorPerson.Create("Alex", string.Empty, "Smith")
+            ],
+            Year = "2020"
+        };
+
+        Citations.FormatInText(source, CitationStyle.Apa).Should().Be("(Doe & Smith, 2020)");
+    }
+
+    [Fact]
     public void FormatInText_ThreePersonalAuthors_UsesFirstFamilyNameEtAl()
     {
         var source = new Source { Author = "Jane Q. Doe; Alex Smith; Priya Patel", Year = "2020" };

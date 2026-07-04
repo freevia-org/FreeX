@@ -5538,7 +5538,8 @@ internal static class FreeWRibbonCommands
             SourceManagementSourceEntry CurrentEntry() =>
                 SourceManagementDialogPlanner.CreateEntry(
                     SelectedType(),
-                    fields.ToDictionary(pair => pair.Key, pair => (string?)pair.Value.Text));
+                    fields.ToDictionary(pair => pair.Key, pair => (string?)pair.Value.Text),
+                    entry);
 
             void RefreshFields()
             {
