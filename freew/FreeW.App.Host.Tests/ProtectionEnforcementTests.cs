@@ -12,18 +12,6 @@ namespace FreeW.App.Host.Tests;
 /// </summary>
 public sealed class ProtectionEnforcementTests
 {
-    private sealed class CommentHistoryCommand : IDocumentCommand
-    {
-        public string Label => "Insert Comment";
-        public DocumentCommandMutationKind MutationKind => DocumentCommandMutationKind.Comment;
-
-        public void Apply(IDocumentCommandContext context) =>
-            context.Document.Comments[0] = new Comment(0, "note", "A", "A");
-
-        public void Revert(IDocumentCommandContext context) =>
-            context.Document.Comments.Remove(0);
-    }
-
     private sealed class BodyHistoryCommand : IDocumentCommand
     {
         public string Label => "Insert Body Paragraph";
@@ -105,10 +93,9 @@ public sealed class ProtectionEnforcementTests
     public void CommentsOnlyProtection_AllowsClassifiedCommentHistory_ButBlocksBodyHistory()
     {
         var view = Load();
-        view.Commands.Execute(new CommentHistoryCommand());
-        view.Model.Comments.Should().HaveCount(1);
-
         view.SetProtection(ProtectionMode.CommentsOnly);
+        view.InsertComment("review", "Ann", "A");
+        view.Model.Comments.Should().HaveCount(1);
 
         view.CanUndo.Should().BeTrue();
         view.Undo();
@@ -174,9 +161,29 @@ public sealed class ProtectionEnforcementTests
 
         view.ReplyToCommentAtCaret("reply", "Bob", "B").Should().BeTrue();
         view.Model.Comments[0].Replies.Should().ContainSingle();
+        view.CanUndo.Should().BeTrue();
+        view.Undo();
+        view.Model.Comments[0].Replies.Should().BeEmpty();
+        view.CanRedo.Should().BeTrue();
+        view.Redo();
+        view.Model.Comments[0].Replies.Should().ContainSingle();
+
         view.ToggleResolveCommentAtCaret().Should().BeTrue();
         view.Model.Comments[0].Resolved.Should().BeTrue();
+        view.CanUndo.Should().BeTrue();
+        view.Undo();
+        view.Model.Comments[0].Resolved.Should().BeFalse();
+        view.CanRedo.Should().BeTrue();
+        view.Redo();
+        view.Model.Comments[0].Resolved.Should().BeTrue();
+
         view.DeleteCommentAtCaret().Should().BeTrue();
+        view.Model.Comments.Should().BeEmpty();
+        view.CanUndo.Should().BeTrue();
+        view.Undo();
+        view.Model.Comments.Should().ContainKey(0);
+        view.CanRedo.Should().BeTrue();
+        view.Redo();
         view.Model.Comments.Should().BeEmpty();
     }
 

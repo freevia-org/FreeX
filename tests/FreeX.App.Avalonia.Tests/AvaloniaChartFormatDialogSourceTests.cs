@@ -66,6 +66,8 @@ public sealed class AvaloniaChartFormatDialogSourceTests
         source.Should().Contain("ChartAreaFormatPlanner.GetLegendSection()");
         source.Should().Contain(".GetLegendPositionChoices()");
         source.Should().Contain("ChartAreaFormatPlanner.TryParseDialogInput(");
+        source.Should().Contain("dialog.Width = ChartAreaFormatPlanner.DialogWidth;");
+        source.Should().Contain("dialog.Height = ChartAreaFormatPlanner.DialogHeight;");
         source.Should().Contain("MakeAreaDescriptorCheck(ChartAreaFormatDialogFieldId.ShowLegend");
         source.Should().Contain("MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.LegendFontSize");
         source.Should().Contain("MakeAreaColorButton(ChartAreaFormatDialogFieldId.ChartAreaFillColor");

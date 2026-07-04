@@ -64,8 +64,8 @@ public sealed class ChartAreaLegendDialog : Window
     {
         Result = FromChart(chart);
         Title = UiText.Get("ChartAreaLegend_Title");
-        Width = 420;
-        Height = 590;
+        Width = ChartAreaFormatPlanner.DialogWidth;
+        Height = ChartAreaFormatPlanner.DialogHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;

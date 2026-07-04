@@ -10951,20 +10951,19 @@ public sealed class DocumentView : RichTextBox
         if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph modelParagraph)
             return;
 
-        var id = _model.NextCommentId();
-        if (!MarkCommentRange(modelParagraph, startOffset, endOffset, id))
+        if (!AddCommentCommand.HasCommentableRange(modelParagraph, startOffset, endOffset))
             return; // nothing textual to anchor the comment to
 
-        _model.Comments[id] = new Comment(id)
+        var id = _model.NextCommentId();
+        var comment = new Comment(id)
         {
             Author = author,
             Initials = initials,
-            // W3CDTF (UTC, second precision) — matches what the docx writer expects for w:date.
+            // W3CDTF (UTC, second precision) - matches what the docx writer expects for w:date.
             DateXml = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture)
         };
-        _model.Comments[id].Content.Add(new ModelParagraph(text));
-
-        Render();
+        comment.Content.Add(new ModelParagraph(text));
+        _commands.Execute(new AddCommentCommand(paragraphIndex, startOffset, endOffset, id, comment));
     }
 
     /// <summary>
@@ -11007,12 +11006,7 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     private int TopLevelCommentId(int commentId)
     {
-        if (_model.Comments.ContainsKey(commentId))
-            return commentId;
-        foreach (var top in _model.Comments.Values)
-            if (top.Replies.Any(r => r.Id == commentId))
-                return top.Id;
-        return commentId;
+        return DeleteCommentCommand.ResolveTopLevel(_model, commentId);
     }
 
     private sealed record CommentNavigationTarget(int CommentId, int BlockIndex);
@@ -11072,9 +11066,15 @@ public sealed class DocumentView : RichTextBox
         if (CommentIdAtCaret() is not { } id || !_model.Comments.TryGetValue(id, out var comment))
             return false;
 
-        var reply = comment.AddReply(_model.NextCommentId(), text.Trim(), author, initials);
-        reply.DateXml = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
-        Render();
+        var replyId = _model.NextCommentId();
+        var reply = new Comment(replyId, text.Trim(), author, initials)
+        {
+            DateXml = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture)
+        };
+        _commands.Execute(new AddCommentReplyCommand(id, reply));
+        if (!comment.Replies.Any(candidate => candidate.Id == replyId))
+            return false;
+
         MoveCaretToComment(id);
         return true;
     }
@@ -11092,10 +11092,10 @@ public sealed class DocumentView : RichTextBox
         Focus();
         if (CommentIdAtCaret() is not { } id || !_model.Comments.TryGetValue(id, out var comment))
             return null;
-        comment.Resolved = !comment.Resolved;
-        Render();
+        var newState = !comment.Resolved;
+        _commands.Execute(new SetCommentResolvedCommand(id, newState));
         MoveCaretToComment(id);
-        return comment.Resolved;
+        return newState;
     }
 
     /// <summary>
@@ -11108,29 +11108,11 @@ public sealed class DocumentView : RichTextBox
             return false;
 
         Focus();
-        if (CommentIdAtCaret() is not { } id || !_model.Comments.Remove(id))
+        if (CommentIdAtCaret() is not { } id || !_model.Comments.ContainsKey(id))
             return false;
 
-        foreach (var block in _model.Blocks)
-        {
-            foreach (var paragraph in ParagraphsInBlock(block))
-            {
-                for (var i = paragraph.Runs.Count - 1; i >= 0; i--)
-                {
-                    var run = paragraph.Runs[i];
-                    if (run.CommentId is not { } commentId || TopLevelCommentId(commentId) != id)
-                        continue;
-
-                    if (run.IsCommentReference)
-                        paragraph.Runs.RemoveAt(i);
-                    else
-                        run.CommentId = null;
-                }
-            }
-        }
-
-        Render();
-        return true;
+        _commands.Execute(new DeleteCommentCommand(id));
+        return !_model.Comments.ContainsKey(id);
     }
 
     /// <summary>Moves the caret to the next comment thread in document order, wrapping at the end.</summary>
@@ -11971,7 +11953,7 @@ public sealed class DocumentView : RichTextBox
     /// Marks the model runs of <paramref name="paragraph"/> covering the character range
     /// [<paramref name="startOffset"/>, <paramref name="endOffset"/>) as a tracked change of
     /// <paramref name="kind"/>, splitting runs at the boundaries. Offsets are measured over the
-    /// paragraph's plain text. Mirrors <see cref="MarkCommentRange"/>.
+    /// paragraph's plain text. Mirrors <see cref="AddCommentCommand.MarkCommentRange"/>.
     /// </summary>
     private static void MarkRevisionRange(ModelParagraph paragraph, int startOffset, int endOffset, RevisionKind kind, string author, string? dateXml)
     {
@@ -12150,72 +12132,6 @@ public sealed class DocumentView : RichTextBox
         RevisionDateXml = source.RevisionDateXml,
         FormatRevision = source.FormatRevision
     };
-
-    /// <summary>
-    /// Marks the model runs of <paramref name="paragraph"/> covering the character range
-    /// [<paramref name="startOffset"/>, <paramref name="endOffset"/>) with comment id
-    /// <paramref name="commentId"/>, splitting runs at the boundaries, and inserts a textless reference
-    /// run just after the covered span. Offsets are measured over the paragraph's plain text. Returns
-    /// false when no textual run is covered (nothing to comment on).
-    /// </summary>
-    private static bool MarkCommentRange(ModelParagraph paragraph, int startOffset, int endOffset, int commentId)
-    {
-        var pos = 0;
-        var lastCoveredIndex = -1;
-        for (var i = 0; i < paragraph.Runs.Count; i++)
-        {
-            var run = paragraph.Runs[i];
-            // Non-text runs (images, markers) have no width in this offset model; skip but advance past
-            // any literal text they carry.
-            var len = run.Text.Length;
-            var runStart = pos;
-            var runEnd = pos + len;
-            pos = runEnd;
-            if (len == 0)
-                continue;
-
-            // Clip the run to the selected range; skip runs entirely outside it.
-            var coverStart = Math.Max(runStart, startOffset);
-            var coverEnd = Math.Min(runEnd, endOffset);
-            if (coverStart >= coverEnd)
-                continue;
-
-            // Split off the leading uncovered part, if any.
-            if (coverStart > runStart)
-            {
-                var head = new ModelRun(run.Text[..(coverStart - runStart)], run.Formatting)
-                {
-                    HyperlinkUrl = run.HyperlinkUrl,
-                    HyperlinkAnchor = run.HyperlinkAnchor,
-                    HyperlinkTooltip = run.HyperlinkTooltip
-                };
-                run.Text = run.Text[(coverStart - runStart)..];
-                paragraph.Runs.Insert(i, head);
-                i++;
-            }
-            // Split off the trailing uncovered part, if any.
-            if (coverEnd < runEnd)
-            {
-                var tail = new ModelRun(run.Text[(coverEnd - coverStart)..], run.Formatting)
-                {
-                    HyperlinkUrl = run.HyperlinkUrl,
-                    HyperlinkAnchor = run.HyperlinkAnchor,
-                    HyperlinkTooltip = run.HyperlinkTooltip
-                };
-                run.Text = run.Text[..(coverEnd - coverStart)];
-                paragraph.Runs.Insert(i + 1, tail);
-            }
-
-            run.CommentId = commentId;
-            lastCoveredIndex = i;
-        }
-
-        if (lastCoveredIndex < 0)
-            return false;
-
-        paragraph.Runs.Insert(lastCoveredIndex + 1, ModelRun.CommentReference(commentId));
-        return true;
-    }
 
     /// <summary>
     /// Applies an external hyperlink to the current selection. If the selection is non-empty its text

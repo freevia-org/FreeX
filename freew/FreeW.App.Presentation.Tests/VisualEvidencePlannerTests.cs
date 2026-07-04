@@ -1023,7 +1023,7 @@ public sealed class VisualEvidencePlannerTests
             plan.GeometryKind == ChartVisualGeometryKind.MarkerOnly);
         expectation.ChartSmartArt.SmartArts.Single().LayoutId.Should().Be("stepup1");
         expectation.ChartSmartArt.SmartArts.Single().Nodes.Select(node => node.FillHex)
-            .Should().ContainInOrder("#1F3864", "#2F5496", "#4E81BD");
+            .Should().ContainInOrder("#38517D", "#486DAF", "#679AD6");
     }
 
     [Fact]
@@ -1335,6 +1335,84 @@ public sealed class VisualEvidencePlannerTests
                 && f.Contains("rendered grouped child effect summaries differ", StringComparison.Ordinal)
                 && f.Contains("WPF 'GroupChild0:Shape:glow'", StringComparison.Ordinal)
                 && f.Contains("Avalonia 'GroupChild0:Shape:shadow'", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RequiresMatchingChartSmartArtPlanEvidence()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "chart-smartart-complex";
+            var wpfRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaPlan = avaloniaRow.PageExpectation.ChartSmartArt;
+            var alteredSmartArt = avaloniaPlan.SmartArts.Single() with
+            {
+                Nodes = avaloniaPlan.SmartArts.Single().Nodes
+                    .Select((node, index) => index == 1 ? node with { FillHex = "#101010" } : node)
+                    .ToList()
+            };
+            var avaloniaWithDifferentSmartArtPlan = avaloniaRow with
+            {
+                PageExpectation = avaloniaRow.PageExpectation with
+                {
+                    ChartSmartArt = avaloniaPlan with
+                    {
+                        SmartArts = [alteredSmartArt]
+                    }
+                }
+            };
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [wpfRow],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [avaloniaWithDifferentSmartArtPlan],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("chart/SmartArt renderer pair 'chart-smartart-complex' page 1", StringComparison.Ordinal)
+                && f.Contains("SmartArt plan signatures differ", StringComparison.Ordinal)
+                && f.Contains("#486DAF", StringComparison.Ordinal)
+                && f.Contains("#101010", StringComparison.Ordinal));
         }
         finally
         {

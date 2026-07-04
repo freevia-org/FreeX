@@ -69,6 +69,13 @@ public sealed class ThreadedCommentCommandTests
         comment.Replies[0].Author.Should().Be("Bob");
         // The reply got a fresh, document-unique id (clear of the parent's id 0).
         comment.Replies[0].Id.Should().Be(1);
+
+        view.Commands.CanUndo.Should().BeTrue();
+        view.Undo();
+        comment.Replies.Should().BeEmpty();
+        view.Commands.CanRedo.Should().BeTrue();
+        view.Redo();
+        comment.Replies.Should().ContainSingle();
     }
 
     [StaFact]
@@ -78,6 +85,12 @@ public sealed class ThreadedCommentCommandTests
         view.Model.Comments[0].Resolved.Should().BeFalse();
 
         view.ToggleResolveCommentAtCaret().Should().Be(true);
+        view.Model.Comments[0].Resolved.Should().BeTrue();
+        view.Commands.CanUndo.Should().BeTrue();
+        view.Undo();
+        view.Model.Comments[0].Resolved.Should().BeFalse();
+        view.Commands.CanRedo.Should().BeTrue();
+        view.Redo();
         view.Model.Comments[0].Resolved.Should().BeTrue();
 
         view.ToggleResolveCommentAtCaret().Should().Be(false);
@@ -115,6 +128,18 @@ public sealed class ThreadedCommentCommandTests
         paragraph.Runs[0].Text.Should().Be("Reviewed text");
         paragraph.Runs[0].CommentId.Should().BeNull();
         paragraph.Runs[0].IsCommentReference.Should().BeFalse();
+
+        view.Commands.CanUndo.Should().BeTrue();
+        view.Undo();
+        view.Model.Comments.Should().ContainKey(0);
+        paragraph.Runs.Should().HaveCount(2);
+        paragraph.Runs[0].CommentId.Should().Be(0);
+        paragraph.Runs[1].IsCommentReference.Should().BeTrue();
+
+        view.Commands.CanRedo.Should().BeTrue();
+        view.Redo();
+        view.Model.Comments.Should().NotContainKey(0);
+        paragraph.Runs.Should().ContainSingle();
     }
 
     [StaFact]
