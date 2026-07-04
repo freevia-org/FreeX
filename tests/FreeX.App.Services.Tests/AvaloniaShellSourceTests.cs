@@ -2412,7 +2412,7 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("await CaptureModalTabsAsync(outputDirectory, surfaceId, ParitySurfaceKind.Dialog, opener, tabNames)");
         parityCaptureSource.Should().Contain("private async Task<IReadOnlyList<ParitySurfaceResult>> CaptureModalTabsAsync(");
         parityCaptureSource.Should().Contain("(\"dialog.FormatCells\", () => ShowFormatCellsDialogAsync(),");
-        parityCaptureSource.Should().Contain("[\"Number\", \"Alignment\", \"Font\", \"Fill\", \"Border\", \"Protection\"]),");
+        parityCaptureSource.Should().Contain("[\"Number\", \"Alignment\", \"Font\", \"Border\", \"Fill\", \"Protection\"]),");
         parityCaptureSource.Should().Contain("(\"dialog.FindReplace\", () => ShowFindDialogAsync(),");
         // PageSetup is registered per-tab (both shells have Page/Margins/Header-Footer/Sheet in order).
         parityCaptureSource.Should().Contain("(\"dialog.PageSetup\", () => ShowPageSetupDialogAsync(),");
@@ -4352,9 +4352,12 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresCompactFormatCellsRouteThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "FormatCellsCompactPlanner.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
+        var normalizedSource = source.Replace("\r\n", "\n");
+        var normalizedParityCaptureSource = parityCaptureSource.Replace("\r\n", "\n");
 
         source.Should().Contain("private readonly NativeMenuItem _formatCellsMenuItem = new();");
         catalogSource.Should().Contain("new(NativeMenuItemId.FormatCells, \"Format Cells...\", new NativeMenuGesturePlan(NativeMenuGestureKey.D1, NativeMenuGestureModifiers.Meta))");
@@ -4417,6 +4420,17 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("UiText.Get(\"FormatCells_Line\")");
         source.Should().Contain("UiText.Get(\"FormatCells_Border\")");
         source.Should().Contain("UiText.Get(\"FormatCells_IndividualBorderDetails\")");
+        normalizedSource.Should().Contain(
+            "ItemsSource = new[]\n" +
+            "            {\n" +
+            "                numberTab,\n" +
+            "                alignmentTab,\n" +
+            "                fontTab,\n" +
+            "                borderTab,\n" +
+            "                fillTab,\n" +
+            "                protectionTab,\n" +
+            "            }");
+        normalizedParityCaptureSource.Should().Contain("[\"Number\", \"Alignment\", \"Font\", \"Border\", \"Fill\", \"Protection\"]");
         // Font tab: Font name + size are now selectable lists driving the existing boxes.
         source.Should().Contain("\"FormatCellsFontNameList\"");
         source.Should().Contain("\"FormatCellsFontSizeList\"");
