@@ -175,6 +175,8 @@ internal static class FreeWCommandInventory
             "Sets or clears selected chart axis titles through the shared chart edit command, clears quick-layout overrides, and keeps the change undoable in both shells.",
             "FreeWRibbonParityTests.ChartDesign_AxisTitlesSetterMutatesSelectedChartAndUndoRestoresIt",
             "ChartSmartArtContextualTabTests.ToggleChartAxisTitles_command_sets_default_titles_and_reverts_on_undo"),
+        ["freew.print-preview"] = BackstagePrintEvidence(
+            "Routes the shared Print Preview command to host-backed WPF and Avalonia preview callbacks while the Backstage evidence contract retains paired fixed-layout renderer rows."),
     };
 
     public static InventoryDocument Build(string repoRoot)
@@ -298,6 +300,18 @@ internal static class FreeWCommandInventory
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Avalonia.Tests/ChartSmartArtContextualTabTests.cs",
                 Test: avaloniaTest));
+
+    private static CommandBehaviorEvidence BackstagePrintEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.backstage-print-export.shared-behavior",
+            Slice: "Backstage print/export evidence",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
+                Test: "FreeWRibbonParityTests.PrintPreviewRibbonCommandInvokesHostCallback"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Avalonia.Tests/ViewTabDepthTests.cs",
+                Test: "ViewTabDepthTests.Print_preview_command_invokes_host_callback"));
 
     private static IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> Collect(RibbonDefinition definition, string profile)
     {

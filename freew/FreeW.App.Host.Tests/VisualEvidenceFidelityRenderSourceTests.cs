@@ -44,6 +44,7 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildWordArtWatermarkStressDocument");
         source.Should().Contain("wordart-picture-watermark-layout.docx");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildWordArtPictureWatermarkLayoutDocument");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildBackstagePrintExportDocument");
         source.Should().Contain("RenderPictureWatermark(");
         source.Should().Contain("WatermarkVisualPlanner.BuildPictureLayout(");
         source.Should().Contain("backstage-print-preview-fidelity.docx");

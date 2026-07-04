@@ -353,7 +353,7 @@ static int RenderAll(string outDir)
         label: "Backstage Print Preview p1",
         scenarioId: "backstage-print-preview-fidelity",
         evidence: evidence,
-        documentFactory: () => BuildBackstageDocument(
+        documentFactory: () => FreeWVisualEvidenceDocumentFactory.BuildBackstagePrintExportDocument(
             "Backstage Print Preview Fidelity",
             "Avalonia print preview renderer capture"),
         pageNumber: 1,
@@ -365,7 +365,7 @@ static int RenderAll(string outDir)
         label: "Backstage Print Preview p2",
         scenarioId: "backstage-print-preview-fidelity",
         evidence: evidence,
-        documentFactory: () => BuildBackstageDocument(
+        documentFactory: () => FreeWVisualEvidenceDocumentFactory.BuildBackstagePrintExportDocument(
             "Backstage Print Preview Fidelity",
             "Avalonia print preview renderer capture"),
         pageNumber: 2,
@@ -378,7 +378,7 @@ static int RenderAll(string outDir)
         label: "Backstage PDF Export p1",
         scenarioId: "backstage-pdf-export-fidelity",
         evidence: evidence,
-        documentFactory: () => BuildBackstageDocument(
+        documentFactory: () => FreeWVisualEvidenceDocumentFactory.BuildBackstagePrintExportDocument(
             "Backstage PDF Export Fidelity",
             "Avalonia PDF export raster renderer capture"),
         pageNumber: 1,
@@ -390,7 +390,7 @@ static int RenderAll(string outDir)
         label: "Backstage PDF Export p2",
         scenarioId: "backstage-pdf-export-fidelity",
         evidence: evidence,
-        documentFactory: () => BuildBackstageDocument(
+        documentFactory: () => FreeWVisualEvidenceDocumentFactory.BuildBackstagePrintExportDocument(
             "Backstage PDF Export Fidelity",
             "Avalonia PDF export raster renderer capture"),
         pageNumber: 2,
@@ -450,30 +450,6 @@ static TextDocument BuildBorderWatermarkDocument()
     AddPara("This capture verifies page background composition, a visible page border, and a diagonal text watermark.");
     for (var i = 1; i <= 12; i++)
         AddPara($"Watermark paragraph {i}: body text should remain visible above the watermark and inside the border.");
-
-    return doc;
-}
-
-static TextDocument BuildBackstageDocument(string title, string description)
-{
-    var doc = TextDocument.CreateEmpty();
-    doc.FinalSectionHeadersFooters.Header = new HeaderFooter(title);
-    doc.FinalSectionHeadersFooters.Footer = new HeaderFooter("FreeW visual evidence");
-    doc.Blocks.Clear();
-
-    var bodyFmt = RunFormatting.Default with { FontSizePt = 12 };
-    void AddPara(string text)
-    {
-        var paragraph = new Paragraph();
-        paragraph.Runs.Add(new Run(text, bodyFmt));
-        doc.Blocks.Add(paragraph);
-    }
-
-    AddPara(title);
-    AddPara(description);
-    AddPara("The first two rendered pages are retained as separate PNG evidence rows for the backstage renderer contract.");
-    for (var i = 1; i <= 56; i++)
-        AddPara($"Backstage renderer paragraph {i}: fixed-layout body text should survive capture, normalization, and trust validation.");
 
     return doc;
 }

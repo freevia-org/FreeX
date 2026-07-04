@@ -80,6 +80,25 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
+    public void PrintPreviewRibbonCommandInvokesHostCallback()
+    {
+        var invoked = false;
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(
+            editor,
+            new RibbonStateStore(),
+            onPrintPreview: () => invoked = true);
+
+        registry.TryGet("freew.print-preview", out var command)
+            .Should()
+            .BeTrue("Print Preview must be backed before the shared behavior evidence row can claim WPF parity");
+
+        command!.Execute(RibbonCommandContext.Empty);
+
+        invoked.Should().BeTrue();
+    }
+
+    [StaFact]
     public void InsertTab_GroupsBackedCommandsLikeWord()
     {
         var definition = FreeWRibbon.Build();

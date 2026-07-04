@@ -82,14 +82,22 @@ public sealed class VisualEvidencePlannerTests
         floatingScenario.Composition.ExpectsFloatingObjects.Should().BeTrue();
 
         var previewScenario = FreeWVisualEvidencePlanner.ResolveScenario("backstage-print-preview-fidelity");
-        previewScenario.ExpectedFeatureTags.Should().Contain(["backstage", "print-preview", "fixed-layout"]);
+        previewScenario.ExpectedFeatureTags.Should().Contain(["backstage", "print-preview", "fixed-layout", "header-footer", "columns", "page-border", "watermark"]);
         previewScenario.ExpectedOutputNamePattern.Should().Be("backstage-print-preview_p{page}.png");
         previewScenario.MinimumExpectedOutputs.Should().Be(2);
+        previewScenario.Composition.ExpectsHeadersFooters.Should().BeTrue();
+        previewScenario.Composition.ExpectsColumns.Should().BeTrue();
+        previewScenario.Composition.ExpectsPageBorder.Should().BeTrue();
+        previewScenario.Composition.ExpectsWatermark.Should().BeTrue();
 
         var pdfScenario = FreeWVisualEvidencePlanner.ResolveScenario("backstage-pdf-export-fidelity");
-        pdfScenario.ExpectedFeatureTags.Should().Contain(["backstage", "pdf-export", "pdf-rasterized"]);
+        pdfScenario.ExpectedFeatureTags.Should().Contain(["backstage", "pdf-export", "pdf-rasterized", "header-footer", "columns", "page-border", "watermark"]);
         pdfScenario.ExpectedOutputNamePattern.Should().Be("backstage-pdf-export_p{page}.png");
         pdfScenario.MinimumExpectedOutputs.Should().Be(2);
+        pdfScenario.Composition.ExpectsHeadersFooters.Should().BeTrue();
+        pdfScenario.Composition.ExpectsColumns.Should().BeTrue();
+        pdfScenario.Composition.ExpectsPageBorder.Should().BeTrue();
+        pdfScenario.Composition.ExpectsWatermark.Should().BeTrue();
 
         var columnsScenario = FreeWVisualEvidencePlanner.ResolveScenario("f2-columns");
         columnsScenario.Composition.ExpectsColumns.Should().BeTrue();
@@ -169,6 +177,39 @@ public sealed class VisualEvidencePlannerTests
         pictureWatermarkScenario.Composition.ExpectsColumns.Should().BeTrue();
         pictureWatermarkScenario.Composition.ExpectsPageBorder.Should().BeTrue();
         pictureWatermarkScenario.Composition.ExpectsFloatingObjects.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SharedBackstagePrintExportFactory_BuildsPrintSpecificContract()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildBackstagePrintExportDocument(
+            "Backstage Print Preview Fidelity",
+            "Print preview renderer capture");
+
+        document.FinalSectionHeadersFooters.Header.Should().NotBeNull();
+        document.FinalSectionHeadersFooters.Footer.Should().NotBeNull();
+        document.Page.ColumnCount.Should().Be(2);
+        document.Page.ColumnsLineBetween.Should().BeTrue();
+        document.Page.PageBorder.Should().NotBeNull();
+        document.Page.WatermarkOptions.Should().NotBeNull();
+
+        var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "backstage-print-preview-fidelity",
+            document.Page,
+            pageNumber: 1,
+            pageCount: 2,
+            outputName: "backstage-print-preview_p1.png",
+            headerSlotName: "default-header",
+            footerSlotName: "default-footer",
+            document: document);
+
+        expectation.Composition.ExpectsHeadersFooters.Should().BeTrue();
+        expectation.Composition.ExpectsColumns.Should().BeTrue();
+        expectation.Features.Columns.Count.Should().Be(2);
+        expectation.Features.PageBorder.Present.Should().BeTrue();
+        expectation.Features.Watermark.Present.Should().BeTrue();
+        expectation.HeaderSlotName.Should().Be("default-header");
+        expectation.FooterSlotName.Should().Be("default-footer");
     }
 
     [Fact]
@@ -3228,6 +3269,12 @@ public sealed class VisualEvidencePlannerTests
             "wordart-watermark-stress" => FreeWVisualEvidenceDocumentFactory.BuildWordArtWatermarkStressDocument(),
             "wordart-picture-watermark-layout" => FreeWVisualEvidenceDocumentFactory.BuildWordArtPictureWatermarkLayoutDocument(),
             "f2-section-landscape" => FreeWVisualEvidenceDocumentFactory.BuildSectionGeometryDocument(),
+            "backstage-print-preview-fidelity" => FreeWVisualEvidenceDocumentFactory.BuildBackstagePrintExportDocument(
+                "Backstage Print Preview Fidelity",
+                "Synthetic print preview renderer capture"),
+            "backstage-pdf-export-fidelity" => FreeWVisualEvidenceDocumentFactory.BuildBackstagePrintExportDocument(
+                "Backstage PDF Export Fidelity",
+                "Synthetic PDF export renderer capture"),
             "page-composition-floating-image" => BuildFloatingImageDocument(),
             _ => null
         };

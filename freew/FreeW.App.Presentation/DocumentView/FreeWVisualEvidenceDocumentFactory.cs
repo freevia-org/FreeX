@@ -630,6 +630,43 @@ public static class FreeWVisualEvidenceDocumentFactory
         return doc;
     }
 
+    public static TextDocument BuildBackstagePrintExportDocument(string title, string description)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Page.MarginTopPt = 60;
+        doc.Page.MarginBottomPt = 60;
+        doc.Page.MarginLeftPt = 54;
+        doc.Page.MarginRightPt = 54;
+        doc.Page.ColumnCount = 2;
+        doc.Page.ColumnSpacingPt = 36;
+        doc.Page.ColumnsLineBetween = true;
+        doc.Page.PageBorder = new PageBorder("#24536B", 1.5);
+        doc.Page.WatermarkOptions = new WatermarkOptions("PRINT COPY")
+        {
+            FontColorHex = "#74828A",
+            Opacity = 0.18,
+            Layout = WatermarkLayout.Diagonal,
+        };
+        doc.FinalSectionHeadersFooters.Header = new HeaderFooter(title);
+        doc.FinalSectionHeadersFooters.Footer = new HeaderFooter("FreeW backstage print/export evidence");
+
+        doc.Blocks.Clear();
+        doc.Blocks.Add(StyledParagraph(title, "Heading1"));
+        doc.Blocks.Add(new Paragraph(description));
+        doc.Blocks.Add(new Paragraph(
+            "The first two rendered pages are retained as real PNG evidence and normalized through the shared visual evidence manifest."));
+        doc.Blocks.Add(new Paragraph(
+            "This fixture intentionally includes headers, footers, columns, page border, watermark, margins, and body pagination so Backstage Print Preview and PDF export evidence is stronger than a plain text capture."));
+
+        for (var i = 1; i <= 72; i++)
+        {
+            doc.Blocks.Add(new Paragraph(
+                $"Backstage fixed-layout paragraph {i}: body text, pagination, page chrome, column flow, and header/footer composition must survive the renderer capture path."));
+        }
+
+        return doc;
+    }
+
     private static Paragraph StyledParagraph(string text, string styleId) =>
         new(text) { StyleId = styleId };
 

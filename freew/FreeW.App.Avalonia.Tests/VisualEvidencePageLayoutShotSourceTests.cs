@@ -79,6 +79,7 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildWordArtWatermarkStressDocument");
         source.Should().Contain("wordart-picture-watermark-layout");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildWordArtPictureWatermarkLayoutDocument");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildBackstagePrintExportDocument");
         source.Should().Contain("backstage-print-preview-fidelity");
         source.Should().Contain("backstage-pdf-export-fidelity");
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"backstage-print-preview-fidelity\", 1)");

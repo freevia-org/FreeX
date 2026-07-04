@@ -1849,19 +1849,17 @@ static void GenerateF2FlowCorpus(string outDir)
     }
 
     {
-        var doc = BuildBackstageFixtureDocument(
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildBackstagePrintExportDocument(
             "Backstage Print Preview Fidelity",
-            "This generated document is rendered through FreeW.FidelityRender for the backstage print preview evidence contract.",
-            "Print preview fixed-layout page");
+            "This generated document is rendered through FreeW.FidelityRender for the backstage print preview evidence contract.");
         DocxWriter.Write(doc, Path.Combine(outDir, "backstage-print-preview-fidelity.docx"));
         Console.WriteLine("  wrote backstage-print-preview-fidelity.docx");
     }
 
     {
-        var doc = BuildBackstageFixtureDocument(
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildBackstagePrintExportDocument(
             "Backstage PDF Export Fidelity",
-            "This generated document is rendered through FreeW.FidelityRender for the backstage PDF export raster evidence contract.",
-            "PDF export fixed-layout page");
+            "This generated document is rendered through FreeW.FidelityRender for the backstage PDF export raster evidence contract.");
         DocxWriter.Write(doc, Path.Combine(outDir, "backstage-pdf-export-fidelity.docx"));
         Console.WriteLine("  wrote backstage-pdf-export-fidelity.docx");
     }
@@ -1921,25 +1919,6 @@ static string? BackstageWorkflowForScenario(string scenarioId) =>
         "backstage-pdf-export-fidelity" => "pdf-export",
         _ => null
     };
-
-static TextDocument BuildBackstageFixtureDocument(string title, string description, string pageLabel)
-{
-    var doc = TextDocument.CreateEmpty();
-    doc.FinalSectionHeadersFooters.Header = new HeaderFooter(title);
-    doc.FinalSectionHeadersFooters.Footer = new HeaderFooter("FreeW visual evidence");
-    doc.Blocks.Clear();
-
-    doc.Blocks.Add(new FreeW.Core.Model.Paragraph(title) { StyleId = "Heading1" });
-    doc.Blocks.Add(new FreeW.Core.Model.Paragraph(description));
-    doc.Blocks.Add(new FreeW.Core.Model.Paragraph("The first two rendered pages are retained as real PNG evidence and normalized through the shared visual evidence manifest."));
-    for (var i = 1; i <= 56; i++)
-    {
-        doc.Blocks.Add(new FreeW.Core.Model.Paragraph(
-            $"{pageLabel} paragraph {i}: body text, pagination, page chrome, and header/footer composition must survive the renderer capture path."));
-    }
-
-    return doc;
-}
 
 static long SavePng(RenderTargetBitmap bmp, string path)
 {

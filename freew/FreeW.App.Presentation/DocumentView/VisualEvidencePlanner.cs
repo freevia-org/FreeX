@@ -346,6 +346,15 @@ public static class FreeWVisualEvidencePlanner
         ExpectsComments: false,
         ExpectsSectionGeometryChange: false);
 
+    private static readonly FreeWVisualCompositionExpectation BackstagePrintExportComposition =
+        BodyPrintComposition with
+        {
+            ExpectsHeadersFooters = true,
+            ExpectsColumns = true,
+            ExpectsPageBorder = true,
+            ExpectsWatermark = true
+        };
+
     private static readonly FreeWVisualEvidenceScenario[] ScenarioCatalog =
     [
         new(
@@ -675,19 +684,19 @@ public static class FreeWVisualEvidencePlanner
         new(
             "backstage-print-preview-fidelity",
             "Backstage Print Preview fixed-layout fidelity capture.",
-            ["backstage", "print-preview", "print-layout", "fixed-layout", "page-chrome", "body-text"],
+            ["backstage", "print-preview", "print-layout", "fixed-layout", "page-chrome", "header-footer", "columns", "page-border", "watermark", "body-text"],
             "backstage-print-preview_p{page}.png",
             2,
             DocumentViewLayoutKind.PrintLayout,
-            BodyPrintComposition),
+            BackstagePrintExportComposition),
         new(
             "backstage-pdf-export-fidelity",
             "Backstage PDF export rasterized fixed-layout fidelity capture.",
-            ["backstage", "pdf-export", "pdf-rasterized", "print-layout", "fixed-layout", "body-text"],
+            ["backstage", "pdf-export", "pdf-rasterized", "print-layout", "fixed-layout", "header-footer", "columns", "page-border", "watermark", "body-text"],
             "backstage-pdf-export_p{page}.png",
             2,
             DocumentViewLayoutKind.PrintLayout,
-            BodyPrintComposition)
+            BackstagePrintExportComposition)
     ];
 
     private static readonly IReadOnlyDictionary<string, FreeWVisualEvidenceScenario> ScenarioById =
