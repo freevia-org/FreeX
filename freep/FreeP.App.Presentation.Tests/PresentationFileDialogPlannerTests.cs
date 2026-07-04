@@ -131,6 +131,8 @@ public sealed class PresentationFileDialogPlannerTests
                 PresentationExportFormat.ImageSequence,
                 PresentationExportFormat.Video,
                 PresentationExportFormat.Print);
+        backstage.DeferredActions.Single(action => action.Format == PresentationExportFormat.Print)
+            .IsEnabled.Should().BeTrue();
     }
 
     [Fact]

@@ -182,6 +182,136 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_ReviewCommentReply_RoutesThroughSharedMutationPlan()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "Needs a reply.",
+                Idx = 1
+            });
+            window.SetSelectedReviewCommentIndexForTests(0);
+            var timestamp = new DateTime(2026, 7, 4, 9, 15, 0, DateTimeKind.Utc);
+
+            var mutation = window.ReplyToSelectedComment(
+                "  Paired WPF reply evidence. ",
+                timestamp,
+                "FreeP User",
+                null);
+
+            mutation.Should().BeEquivalentTo(new PresentationCommentMutationPlan(
+                PresentationReviewWorkflowIntentKind.ReplyComment,
+                true,
+                0,
+                0,
+                new SlideComment
+                {
+                    Author = "Reviewer",
+                    Initials = "RV",
+                    Text = "Needs a reply.",
+                    Idx = 1,
+                    Replies =
+                    {
+                        new SlideCommentReply
+                        {
+                            Author = "FreeP User",
+                            Initials = "FU",
+                            Text = "Paired WPF reply evidence.",
+                            DateTime = timestamp
+                        }
+                    }
+                },
+                null));
+            window.Editor.CurrentSlide.Comments.Should().ContainSingle();
+            var repliedComment = window.Editor.CurrentSlide.Comments.Single();
+            repliedComment.Replies.Should().ContainSingle().Which.Should().Match<SlideCommentReply>(reply =>
+                reply.Author == "FreeP User" &&
+                reply.Initials == "FU" &&
+                reply.Text == "Paired WPF reply evidence." &&
+                reply.DateTime == timestamp);
+            window.LastCommentPanePlan.Should().NotBeNull();
+            window.LastCommentPanePlan!.SelectedComment.Should().NotBeNull();
+            window.LastCommentPanePlan.SelectedComment!.ThreadStatusSummary.Should().Be("Open - 1 reply");
+            window.LastCommentPanePlan.SelectedComment.Replies.Single().Should().Match<PresentationCommentReplyDescriptor>(reply =>
+                reply.TextPreview == "Paired WPF reply evidence." &&
+                reply.AuthorDisplayName == "FreeP User" &&
+                reply.InitialsBadgeText == "FU" &&
+                reply.AuthorIdentityKey == "FREEP USER|FU");
+            window.IsDirty.Should().BeTrue();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
+    public void MainWindow_ReviewModernCommentReply_ReusesPowerPointAuthorIdentity()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Alice Reviewer",
+                Initials = "AR",
+                Text = "Modern thread.",
+                Idx = 1,
+                UsesModernCommentSchema = true,
+                ModernCommentId = "{11111111-1111-1111-1111-111111111111}",
+                ModernAuthorId = "{aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa}",
+                ModernAuthorUserId = "alice@example.com::powerpoint",
+                ModernAuthorProviderId = "aad",
+                Replies =
+                {
+                    new SlideCommentReply
+                    {
+                        Author = "Bob Reviewer",
+                        Initials = "BR",
+                        Text = "Taking a look.",
+                        ModernAuthorId = "{22222222-2222-2222-2222-222222222222}",
+                        ModernAuthorUserId = "bob@example.com::powerpoint",
+                        ModernAuthorProviderId = "aad"
+                    }
+                }
+            });
+            window.SetSelectedReviewCommentIndexForTests(0);
+
+            var mutation = window.ReplyToSelectedComment(
+                "  Confirmed after checking the deck. ",
+                new DateTime(2026, 7, 4, 9, 20, 0, DateTimeKind.Utc),
+                "bob reviewer",
+                "br");
+
+            mutation.ShouldApply.Should().BeTrue();
+            var repliedComment = window.Editor.CurrentSlide.Comments.Single();
+            repliedComment.Replies.Should().HaveCount(2);
+            repliedComment.Replies[1].Should().Match<SlideCommentReply>(reply =>
+                reply.Author == "bob reviewer" &&
+                reply.Initials == "br" &&
+                reply.Text == "Confirmed after checking the deck." &&
+                reply.ModernAuthorId == "{22222222-2222-2222-2222-222222222222}" &&
+                reply.ModernAuthorUserId == "bob@example.com::powerpoint" &&
+                reply.ModernAuthorProviderId == "aad");
+            window.LastCommentPanePlan.Should().NotBeNull();
+            window.LastCommentPanePlan!.SelectedComment!.Replies[1].Should().Match<PresentationCommentReplyDescriptor>(reply =>
+                reply.ModernAuthorId == "{22222222-2222-2222-2222-222222222222}" &&
+                reply.ModernAuthorUserId == "bob@example.com::powerpoint" &&
+                reply.ModernAuthorProviderId == "aad" &&
+                reply.AuthorIdentityKey == "BOB REVIEWER|BR");
+            window.IsDirty.Should().BeTrue();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_AccessibilityCheckerPane_RendersSharedPlanAndRoutesRows()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
