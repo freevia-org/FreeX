@@ -7446,6 +7446,24 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// AV-CHARTTAB: Toggle the selected floating chart title between Word's default title text and hidden.
+    /// Undoable + re-renders. No-op when the selected float is not a chart.
+    /// </summary>
+    public void ToggleChartTitle()
+    {
+        if (_selectedFloating is not { Kind: "Chart" } sel) return;
+        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return;
+        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return;
+        if (para.Runs[sel.RunIndex].Chart is not { } chart) return;
+
+        var state = ChartSmartArtVisualPlanner.BuildChartElementCommandState(chart);
+        var title = state.HasChartTitle ? null : "Chart Title";
+        _bus.Execute(new SetChartTitleCommand(sel.BlockIndex, sel.RunIndex, title));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
     /// AV-CHARTTAB: Toggle default axis titles on the selected floating chart.
     /// Undoable + re-renders. No-op when the selected float is not an axis-capable chart.
     /// </summary>

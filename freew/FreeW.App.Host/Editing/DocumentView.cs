@@ -2358,10 +2358,10 @@ public sealed class DocumentView : RichTextBox
     public void SetSelectedChartTitle(string? title)
     {
         CommitToModel();
-        var chart = SelectedChartLocation().Chart;
-        if (chart is null)
+        var location = SelectedChartLocation();
+        if (location.Chart is null)
             return;
-        chart.Title = string.IsNullOrWhiteSpace(title) ? null : title.Trim();
+        _commands.Execute(new SetChartTitleCommand(location.BlockIndex, location.RunIndex, title));
         Render();
     }
 

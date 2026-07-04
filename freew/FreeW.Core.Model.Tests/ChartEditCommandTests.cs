@@ -65,6 +65,39 @@ public sealed class ChartEditCommandTests
     }
 
     [Fact]
+    public void SetChartTitleCommand_AppliesNormalizesClearsLayoutAndRevertsTitle()
+    {
+        var (_, bus, chart) = NewChartDoc(quickLayoutId: 2);
+        chart.Title = "Old Title";
+
+        bus.Execute(new SetChartTitleCommand(0, 0, "  Chart Title  "));
+
+        chart.Title.Should().Be("Chart Title");
+        chart.QuickLayoutId.Should().Be(0);
+
+        bus.Undo().Should().BeTrue();
+        chart.Title.Should().Be("Old Title");
+        chart.QuickLayoutId.Should().Be(2);
+
+        bus.Redo().Should().BeTrue();
+        chart.Title.Should().Be("Chart Title");
+    }
+
+    [Fact]
+    public void SetChartTitleCommand_ClearsTitleWhenBlank()
+    {
+        var (_, bus, chart) = NewChartDoc();
+        chart.Title = "Old Title";
+
+        bus.Execute(new SetChartTitleCommand(0, 0, "   "));
+
+        chart.Title.Should().BeNull();
+
+        bus.Undo().Should().BeTrue();
+        chart.Title.Should().Be("Old Title");
+    }
+
+    [Fact]
     public void SetChartAxisTitlesCommand_AppliesNormalizesAndRevertsTitles()
     {
         var (_, bus, chart) = NewChartDoc(quickLayoutId: 9);

@@ -1323,6 +1323,31 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
+    public void ChartDesign_TitleSetterMutatesSelectedChartAndUndoRestoresIt()
+    {
+        var editor = new DocumentView();
+        editor.Model.Blocks.Clear();
+        editor.Model.Blocks.Add(new Paragraph("Before"));
+        editor.InsertChart(Chart.Create(ChartKind.Column, ["A", "B"], [1.0, 2.0], seriesName: "S"));
+        var chart = editor.SelectedChart() ?? editor.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Select(r => r.Chart)
+            .FirstOrDefault(c => c is not null);
+
+        chart.Should().NotBeNull();
+        chart!.Title = "Old Title";
+        chart.QuickLayoutId = 2;
+
+        editor.SetSelectedChartTitle("  Chart Title  ");
+
+        chart.Title.Should().Be("Chart Title");
+        chart.QuickLayoutId.Should().Be(0);
+        editor.Commands.Undo().Should().BeTrue();
+        chart.Title.Should().Be("Old Title");
+        chart.QuickLayoutId.Should().Be(2);
+    }
+
+    [StaFact]
     public void ChartDesign_AxisTitlesSetterMutatesSelectedChartAndUndoRestoresIt()
     {
         var editor = new DocumentView();
