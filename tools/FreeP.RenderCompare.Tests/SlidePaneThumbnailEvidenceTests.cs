@@ -49,6 +49,38 @@ public sealed class SlidePaneThumbnailEvidenceTests
         }
     }
 
+    [Theory]
+    [InlineData(false, 0, 0, 1)]
+    [InlineData(true, 0, 0, 0)]
+    [InlineData(true, 2, 0, 2)]
+    [InlineData(true, 0, 2, 2)]
+    public void GetExitCode_AllowsMissingPowerPointComOnlyWhenRequested(
+        bool allowMissingPowerPoint,
+        int wpfExitCode,
+        int avaloniaExitCode,
+        int expected)
+    {
+        var powerPoint = PowerPointExportResult.Failed(PowerPointExportFailureKind.ComUnavailable, 0, 0);
+
+        SlidePaneThumbnailEvidence.GetExitCode(wpfExitCode, avaloniaExitCode, powerPoint, allowMissingPowerPoint)
+            .Should()
+            .Be(expected);
+    }
+
+    [Fact]
+    public void GetExitCode_DoesNotAllowPowerPointExportFailures()
+    {
+        var powerPoint = PowerPointExportResult.Failed(PowerPointExportFailureKind.ExportFailed, 0, 0);
+
+        SlidePaneThumbnailEvidence.GetExitCode(
+                wpfExitCode: 0,
+                avaloniaExitCode: 0,
+                powerPoint: powerPoint,
+                allowMissingPowerPoint: true)
+            .Should()
+            .Be(1);
+    }
+
     private static void CreatePlaceholderPng(string directory, string fileName)
     {
         Directory.CreateDirectory(directory);

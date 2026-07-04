@@ -52,7 +52,7 @@ internal static class SlidePaneThumbnailEvidence
             Path.Combine(fullOutputDirectory, "slide-pane-thumbnail-diffs"));
     }
 
-    internal static int Run(string deckPath, string outputDirectory, int width, int height)
+    internal static int Run(string deckPath, string outputDirectory, int width, int height, bool allowMissingPowerPoint)
     {
         var plan = CreatePlan(deckPath, outputDirectory, width, height);
         if (!File.Exists(plan.DeckPath))
@@ -103,6 +103,12 @@ internal static class SlidePaneThumbnailEvidence
             Console.Error.WriteLine(
                 $"PowerPoint thumbnail baseline unavailable ({powerPoint.FailureKind}); " +
                 "WPF/Avalonia thumbnail diffs will still be reported, but PowerPoint-backed rows are n/a.");
+
+            if (allowMissingPowerPoint && CanAllowMissingPowerPoint(powerPoint))
+            {
+                Console.Error.WriteLine(
+                    "Missing PowerPoint baseline is allowed for this run; final exit code will be based on WPF/Avalonia thumbnail rendering.");
+            }
         }
 
         Console.WriteLine();
@@ -111,8 +117,27 @@ internal static class SlidePaneThumbnailEvidence
 
         Console.WriteLine();
         Console.WriteLine($"Output directory: {plan.OutputDirectory}");
-        return RenderCompareExitCodes.Combine(wpfExitCode, avaloniaExitCode, powerPoint.ExitCode);
+        return GetExitCode(wpfExitCode, avaloniaExitCode, powerPoint, allowMissingPowerPoint);
     }
+
+    internal static int GetExitCode(
+        int wpfExitCode,
+        int avaloniaExitCode,
+        PowerPointExportResult powerPoint,
+        bool allowMissingPowerPoint)
+    {
+        ArgumentNullException.ThrowIfNull(powerPoint);
+
+        var powerPointExitCode = allowMissingPowerPoint && CanAllowMissingPowerPoint(powerPoint)
+            ? 0
+            : powerPoint.ExitCode;
+
+        return RenderCompareExitCodes.Combine(wpfExitCode, avaloniaExitCode, powerPointExitCode);
+    }
+
+    private static bool CanAllowMissingPowerPoint(PowerPointExportResult powerPoint) =>
+        powerPoint.ExitCode != 0 &&
+        powerPoint.FailureKind == PowerPointExportFailureKind.ComUnavailable;
 
     internal static IReadOnlyList<SlidePaneThumbnailEvidenceFileSet> CollectFileSets(SlidePaneThumbnailEvidencePlan plan)
     {

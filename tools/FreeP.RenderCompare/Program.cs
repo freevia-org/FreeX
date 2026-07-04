@@ -25,9 +25,11 @@ namespace FreeP.RenderCompare;
 ///       Convenience: runs both --powerpoint-export and --freep-render, then
 ///       diffs every paired slide, prints a table, and writes diff heatmaps.
 ///
-///   --slide-pane-thumbnail-compare &lt;deck.pptx&gt; &lt;outDir&gt; [--width W] [--height H]
+///   --slide-pane-thumbnail-compare &lt;deck.pptx&gt; &lt;outDir&gt; [--width W] [--height H] [--allow-missing-powerpoint]
 ///       Render WPF/Avalonia slide-pane thumbnail bitmaps, try PowerPoint COM
 ///       thumbnail references, and diff every available paired slide.
+///       With --allow-missing-powerpoint, COM-unavailable PowerPoint baselines
+///       remain n/a but do not fail the run when WPF/Avalonia rendering succeeds.
 ///
 ///   --generate-corpus &lt;outDir&gt;
 ///       Author four deterministic test decks via PowerPoint COM and save them to
@@ -413,7 +415,7 @@ internal static class Program
     {
         if (args.Length < 2)
         {
-            Console.Error.WriteLine("usage: --slide-pane-thumbnail-compare <deck.pptx> <outDir> [--width W] [--height H]");
+            Console.Error.WriteLine("usage: --slide-pane-thumbnail-compare <deck.pptx> <outDir> [--width W] [--height H] [--allow-missing-powerpoint]");
             return 2;
         }
 
@@ -424,8 +426,9 @@ internal static class Program
             args[2..],
             SlidePaneThumbnailEvidence.DefaultRenderWidth,
             SlidePaneThumbnailEvidence.DefaultRenderHeight);
+        var allowMissingPowerPoint = HasFlag(args[2..], "--allow-missing-powerpoint");
 
-        return SlidePaneThumbnailEvidence.Run(pptxPath, outDir, width, height);
+        return SlidePaneThumbnailEvidence.Run(pptxPath, outDir, width, height, allowMissingPowerPoint);
     }
 
     // -----------------------------------------------------------------------
@@ -533,6 +536,9 @@ internal static class Program
         return (width, height);
     }
 
+    private static bool HasFlag(string[] args, string flag) =>
+        args.Any(arg => arg.Equals(flag, StringComparison.OrdinalIgnoreCase));
+
     private static void PrintUsage()
     {
         Console.WriteLine("FreeP.RenderCompare — PowerPoint interop harness (Wave 1F)");
@@ -556,8 +562,9 @@ internal static class Program
         Console.WriteLine("  --avalonia-compare <deck.pptx> <outDir> [--width W] [--height H]");
         Console.WriteLine("      WPF + Avalonia + PowerPoint renders + per-slide diff table.");
         Console.WriteLine();
-        Console.WriteLine("  --slide-pane-thumbnail-compare <deck.pptx> <outDir> [--width W] [--height H]");
+        Console.WriteLine("  --slide-pane-thumbnail-compare <deck.pptx> <outDir> [--width W] [--height H] [--allow-missing-powerpoint]");
         Console.WriteLine("      WPF + Avalonia + PowerPoint slide-pane thumbnail renders + per-slide diff table.");
+        Console.WriteLine("      --allow-missing-powerpoint treats COM-unavailable PowerPoint baselines as n/a while preserving WPF/Avalonia failures.");
         Console.WriteLine();
         Console.WriteLine("  --corpus-summary <corpusDir> [--refs <refsDir>]");
         Console.WriteLine("      Print compact per-deck status and PowerPoint reference PNG availability.");
