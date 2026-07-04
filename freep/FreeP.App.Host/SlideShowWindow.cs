@@ -342,6 +342,9 @@ public sealed class SlideShowWindow : Window
     public SlideShowInkExecutionResult ClearPresenterInkStrokes() =>
         ApplyInkExecution(SlideShowInkExecutionPlanner.ClearCurrentSlide(_inkExecutionState));
 
+    public SlideShowInkExecutionResult UndoLastPresenterInkStroke() =>
+        ApplyInkExecution(SlideShowInkExecutionPlanner.UndoLastStroke(_inkExecutionState));
+
     // ── Keyboard navigation ───────────────────────────────────────────────────────
 
     private void OnKeyDown(object sender, KeyEventArgs e)

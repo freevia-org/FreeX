@@ -397,6 +397,39 @@ public sealed class SlideShowWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlideShowWindow_InkUndo_uses_shared_undo_plan()
+    {
+        SlideShowInkExecutionResult? undo = null;
+        SlideShowInkExecutionState? inkState = null;
+        var overlayVisualCount = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var pres = MakePresentation(1);
+            var window = new SlideShowWindow(pres, 0);
+            window.ApplyPresenterToolIntent(pointerMode: SlideShowPresenterPointerMode.Highlighter);
+            window.BeginPresenterInkStroke(10, 20);
+            window.EndPresenterInkStroke(30, 40);
+            window.BeginPresenterInkStroke(50, 60);
+            window.EndPresenterInkStroke(70, 80);
+
+            undo = window.UndoLastPresenterInkStroke();
+            inkState = window.InkExecutionState;
+            overlayVisualCount = window.PresenterInkOverlayVisualCount;
+        });
+
+        if (!ran) return;
+        undo.Should().NotBeNull();
+        undo!.Mutations.Single().Kind.Should().Be(SlideShowInkExecutionMutationKind.UndoLastStroke);
+        undo.Mutations.Single().AffectedStrokeCount.Should().Be(1);
+        inkState.Should().NotBeNull();
+        inkState!.CommittedStrokes.Should().ContainSingle();
+        inkState.CommittedStrokes.Single().Points.Should().Equal(
+            new SlideShowInkPoint(10, 20),
+            new SlideShowInkPoint(30, 40));
+        overlayVisualCount.Should().Be(1);
+    }
+
+    [Fact]
     public async Task SlideShowWindow_navigation_commits_active_presenter_ink_through_shared_planner()
     {
         SlideShowInkExecutionState? inkState = null;

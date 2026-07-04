@@ -336,6 +336,9 @@ public sealed class SlideShowWindow : Window
     public SlideShowInkExecutionResult ClearPresenterInkStrokes() =>
         ApplyInkExecution(SlideShowInkExecutionPlanner.ClearCurrentSlide(_inkExecutionState));
 
+    public SlideShowInkExecutionResult UndoLastPresenterInkStroke() =>
+        ApplyInkExecution(SlideShowInkExecutionPlanner.UndoLastStroke(_inkExecutionState));
+
     /// <summary>Exposes the slide canvas for test assertions (DA1 suppression).</summary>
     internal SlideCanvas CanvasForTest => _slideCanvas;
 
