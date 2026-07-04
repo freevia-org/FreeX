@@ -1292,6 +1292,66 @@ public sealed class EditingSession
         return true;
     }
 
+    public TableCellParagraphFormatPlan PlanActiveTableCellParagraphBulletToggle(
+        (int Start, int End)? selection = null) =>
+        TableCellEditPlanner.PlanParagraphBulletToggle(
+            _currentSlideIndex,
+            CurrentSlide,
+            _selectedShapeIds,
+            ActiveTableCell,
+            selection);
+
+    public TableCellParagraphFormatPlan PlanActiveTableCellParagraphIndent(
+        (int Start, int End)? selection = null) =>
+        TableCellEditPlanner.PlanParagraphIndent(
+            _currentSlideIndex,
+            CurrentSlide,
+            _selectedShapeIds,
+            ActiveTableCell,
+            selection);
+
+    public TableCellParagraphFormatPlan PlanActiveTableCellParagraphOutdent(
+        (int Start, int End)? selection = null) =>
+        TableCellEditPlanner.PlanParagraphOutdent(
+            _currentSlideIndex,
+            CurrentSlide,
+            _selectedShapeIds,
+            ActiveTableCell,
+            selection);
+
+    public bool TryApplyActiveTableCellParagraphBulletToggle(
+        (int Start, int End)? selection = null)
+    {
+        var plan = PlanActiveTableCellParagraphBulletToggle(selection);
+        if (plan.Command is null)
+            return false;
+
+        Bus.Execute(plan.Command);
+        return true;
+    }
+
+    public bool TryApplyActiveTableCellParagraphIndent(
+        (int Start, int End)? selection = null)
+    {
+        var plan = PlanActiveTableCellParagraphIndent(selection);
+        if (plan.Command is null)
+            return false;
+
+        Bus.Execute(plan.Command);
+        return true;
+    }
+
+    public bool TryApplyActiveTableCellParagraphOutdent(
+        (int Start, int End)? selection = null)
+    {
+        var plan = PlanActiveTableCellParagraphOutdent(selection);
+        if (plan.Command is null)
+            return false;
+
+        Bus.Execute(plan.Command);
+        return true;
+    }
+
     public bool ToggleBoldOnActiveTableCell() =>
         TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Bold);
 

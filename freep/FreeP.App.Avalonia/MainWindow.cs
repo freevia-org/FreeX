@@ -1631,6 +1631,31 @@ public sealed class MainWindow : Window
             if (_textEditor?.TryApplyActiveTableCellParagraphAlignment(TextAlign.Justify) == true) return;
             Editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Justify);
         }));
+        r.Register("freep.bullets", new ActionRibbonCommand(() =>
+        {
+            if (_textEditor?.TryApplyActiveTableCellParagraphBulletToggle() == true) return;
+            Editor.TryApplyActiveTableCellParagraphBulletToggle();
+        }));
+        r.Register("freep.indent-increase", new ActionRibbonCommand(() =>
+        {
+            if (_textEditor?.TryApplyActiveTableCellParagraphIndent() == true) return;
+            Editor.TryApplyActiveTableCellParagraphIndent();
+        }));
+        r.Register("freep.indent-decrease", new ActionRibbonCommand(() =>
+        {
+            if (_textEditor?.TryApplyActiveTableCellParagraphOutdent() == true) return;
+            Editor.TryApplyActiveTableCellParagraphOutdent();
+        }));
+        r.Register("freep.increase-indent", new ActionRibbonCommand(() =>
+        {
+            if (_textEditor?.TryApplyActiveTableCellParagraphIndent() == true) return;
+            Editor.TryApplyActiveTableCellParagraphIndent();
+        }));
+        r.Register("freep.decrease-indent", new ActionRibbonCommand(() =>
+        {
+            if (_textEditor?.TryApplyActiveTableCellParagraphOutdent() == true) return;
+            Editor.TryApplyActiveTableCellParagraphOutdent();
+        }));
 
         foreach (var route in ArrangeCommandRoutes)
         {

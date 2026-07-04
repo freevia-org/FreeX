@@ -1981,6 +1981,7 @@ public static class PresentationReviewWorkflowPlanner
             SetTableHeaderRowCommandId => "Set Header Row",
             _ when issue.Title == "Chart title missing" => "Add Chart Title",
             _ when issue.Title == "Video captions missing" => "Select Media",
+            _ when issue.Title == "Merged or split table cells" => "Review Table Structure",
             _ when issue.ShapeId is null => "Go to Slide",
             _ => "Select Object"
         };
