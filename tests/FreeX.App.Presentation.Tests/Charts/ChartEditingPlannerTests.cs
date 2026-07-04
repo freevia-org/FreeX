@@ -1928,6 +1928,8 @@ public sealed class ChartEditingPlannerTests
         var sections = ChartAreaFormatPlanner.GetDialogSections();
         var fields = sections.SelectMany(section => section.Fields).ToList();
 
+        ChartAreaFormatPlanner.DialogWidth.Should().Be(420);
+        ChartAreaFormatPlanner.DialogHeight.Should().Be(590);
         sections.Select(section => section.HeaderResourceKey)
             .Should().Equal("ChartDialog_FillLineGroup", "ChartAreaLegend_LegendGroup");
         ChartAreaFormatPlanner.GetFillLineSection().HelpResourceKey.Should().Be("ChartAreaLegend_FillLineHelpText");
