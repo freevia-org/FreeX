@@ -506,13 +506,19 @@ internal static class ParityCapture
 
         if (!string.IsNullOrWhiteSpace(targetSurfaceId))
         {
-            if (string.Equals(targetSurfaceId, "dialog.AccessibilityChecker", StringComparison.Ordinal))
+            if (string.Equals(targetSurfaceId, "dialog.FormatCells", StringComparison.Ordinal))
+            {
+                CaptureDialogTabs(results, "dialog.FormatCells", outDir,
+                    () => new FormatCellsDialog(CellStyle.Default, FormatCellsDialogTab.Number),
+                    ["Number", "Alignment", "Font", "Border", "Fill", "Protection"]);
+            }
+            else if (string.Equals(targetSurfaceId, "dialog.AccessibilityChecker", StringComparison.Ordinal))
             {
                 CaptureAccessibilityCheckerDialog(results, outDir, AccessibilityCheckerParityFixture.CreateDialogIssues(sheet.Id));
             }
             else
             {
-                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.AccessibilityChecker in this lane.");
+                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells and dialog.AccessibilityChecker in this lane.");
             }
 
             return;
@@ -520,7 +526,7 @@ internal static class ParityCapture
 
         CaptureDialogTabs(results, "dialog.FormatCells", outDir,
             () => new FormatCellsDialog(CellStyle.Default, FormatCellsDialogTab.Number),
-            ["Number", "Alignment", "Font", "Fill", "Border", "Protection"]);
+            ["Number", "Alignment", "Font", "Border", "Fill", "Protection"]);
 
         CaptureDialogTabs(results, "dialog.FindReplace", outDir,
             () => new FindReplaceDialog(
