@@ -976,6 +976,98 @@ public sealed class DialogVisualEvidenceSummaryTests
     }
 
     [Fact]
+    public void DialogVisualEvidenceSummary_FlagsPivotTableOptionsEvidenceAgainstSharedDialogSize()
+    {
+        using var temp = new TestTemporaryDirectory();
+
+        var inventoryPath = Path.Combine(temp.Path, "dialog-parity-inventory.json");
+        var wpfManifestDirectory = Path.Combine(temp.Path, "wpf-capture");
+        var avaloniaManifestDirectory = Path.Combine(temp.Path, "avalonia-capture");
+        Directory.CreateDirectory(wpfManifestDirectory);
+        Directory.CreateDirectory(avaloniaManifestDirectory);
+
+        var wpfManifestPath = Path.Combine(wpfManifestDirectory, "manifest.json");
+        var avaloniaManifestPath = Path.Combine(avaloniaManifestDirectory, "manifest.json");
+        var markdownPath = Path.Combine(temp.Path, "summary.md");
+        var jsonPath = Path.Combine(temp.Path, "summary.json");
+
+        File.WriteAllText(
+            inventoryPath,
+            """
+            {
+              "summary": {
+                "totalRoutes": 1,
+                "wpfCaptures": 1,
+                "avaloniaCaptures": 1,
+                "avaloniaHarnessRoutes": 1,
+                "sharedOrPresentationBacked": 1
+              },
+              "rows": [
+                { "routeId": "dialog.PivotTableOptions" }
+              ]
+            }
+            """);
+
+        File.WriteAllText(
+            wpfManifestPath,
+            """
+            {
+              "platform": "windows",
+              "shell": "wpf",
+              "surfaces": [
+                {
+                  "id": "dialog.PivotTableOptions",
+                  "kind": "dialog",
+                  "png": "dialog.PivotTableOptions.png",
+                  "captured": true,
+                  "note": ""
+                }
+              ]
+            }
+            """);
+
+        File.WriteAllText(
+            avaloniaManifestPath,
+            """
+            {
+              "platform": "windows",
+              "shell": "avalonia",
+              "surfaces": [
+                {
+                  "id": "dialog.PivotTableOptions",
+                  "kind": "dialog",
+                  "png": "dialog.PivotTableOptions.png",
+                  "captured": true,
+                  "note": ""
+                }
+              ]
+            }
+            """);
+
+        WritePng(Path.Combine(wpfManifestDirectory, "dialog.PivotTableOptions.png"), width: 520, height: 676, nonBlank: true);
+        WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.PivotTableOptions.png"), width: 520, height: 610, nonBlank: true);
+
+        var result = PowerShellScriptRunner.RunToolScript(
+            "Generate-DialogVisualEvidenceSummary.ps1",
+            WorkspaceFileLocator.FindWorkspaceRoot(),
+            $"-MarkdownPath \"{markdownPath}\" -JsonPath \"{jsonPath}\" -InventoryPath \"{inventoryPath}\" -WpfManifestPath \"{wpfManifestPath}\" -AvaloniaManifestPath \"{avaloniaManifestPath}\"");
+
+        result.ExitCode.Should().Be(0, result.CombinedOutput);
+        result.Output.Should().Contain("Paired expected-size evidence mismatches: 1");
+        result.Output.Should().Contain("Dimension mismatch bucket 'evidence limitation': 1");
+
+        var markdown = File.ReadAllText(markdownPath);
+        markdown.Should().Contain("| dialog.PivotTableOptions | 520x676 | PivotOptionsPlanner.DialogWidth/LayoutAndFormatCaptureHeight | 520x676 | 520x676 px @ 96 DPI | True | 520x610 | 520x610 px @ 96 DPI | False |");
+
+        using var json = JsonDocument.Parse(File.ReadAllText(jsonPath));
+        var comparison = json.RootElement.GetProperty("pairedSurfaces")[0].GetProperty("comparison");
+        comparison.GetProperty("dimensionMismatchBucket").GetString().Should().Be("evidence limitation");
+        comparison.GetProperty("expectedSizeSource").GetString().Should().Be("PivotOptionsPlanner.DialogWidth/LayoutAndFormatCaptureHeight");
+        comparison.GetProperty("wpfExpectedSizeMatch").GetBoolean().Should().BeTrue();
+        comparison.GetProperty("avaloniaExpectedSizeMatch").GetBoolean().Should().BeFalse();
+    }
+
+    [Fact]
     public void DialogVisualEvidenceSummary_FlagsWorkbookStatisticsEvidenceAgainstSharedDialogSize()
     {
         using var temp = new TestTemporaryDirectory();

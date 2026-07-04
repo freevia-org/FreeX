@@ -76,6 +76,10 @@ public static class PivotOptionsPlanner
     public const int MinPageWrap = 0;
     public const int MaxPageWrap = 255;
     public const int MaxMissingItemsLimit = 1_048_576;
+    public const int DialogWidth = 520;
+    public const int DialogMinHeight = 500;
+    public const int LayoutAndFormatCaptureHeight = 676;
+    public const int LayoutAndFormatAvaloniaSpacerHeight = 56;
 
     public const string CompactIndentRangeMessage =
         "Enter a compact-form row-label indent between 0 and 15.";
