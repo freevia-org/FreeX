@@ -438,6 +438,49 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_AccessibilityCheckerLowQualityAltTextRow_UsesSharedPlan()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var shape = new SlideShape
+            {
+                Id = 811,
+                Name = "Hero product photo",
+                Kind = SlideShapeKind.Picture,
+                Picture = new ImagePart(),
+                AlternativeTextTitle = "Hero product photo",
+                AlternativeText = "IMG_2048.JPG"
+            };
+            window.Editor.CurrentSlide!.Title = "Intro";
+            window.Editor.CurrentSlide.Shapes.Add(shape);
+
+            var opened = window.ShowAccessibilityCheckerPane();
+            var actioned = window.ApplyAccessibilityCheckerRowAction(0);
+
+            window.IsAccessibilityCheckerPaneVisible.Should().BeTrue();
+            window.AccessibilityCheckerPaneHeading.Should().Be("Accessibility - 1 issues");
+            opened.Rows.Should().ContainSingle().Which.Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
+                row.Title == "Filename-like alt text" &&
+                row.Category == "Alt text" &&
+                row.ShapeId == shape.Id &&
+                row.ActionLabel == "Open Alt Text" &&
+                row.CommandHint == PresentationReviewWorkflowPlanner.AltTextCommandId &&
+                row.ShouldNavigateToSlide &&
+                row.ShouldSelectShape);
+            window.Editor.SelectedShapeIds.Should().Equal(shape.Id);
+            window.IsAltTextPaneVisible.Should().BeTrue();
+            window.LastAltTextRequestPlan.Should().NotBeNull();
+            window.LastAltTextRequestPlan!.CurrentDescription.Should().Be("IMG_2048.JPG");
+            actioned.SelectedRow!.Title.Should().Be("Filename-like alt text");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_AccessibilityCheckerTableHeaderAction_UsesSharedMutationAndRefreshesPane()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
