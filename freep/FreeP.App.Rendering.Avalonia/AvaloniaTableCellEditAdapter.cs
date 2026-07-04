@@ -112,6 +112,22 @@ public static class AvaloniaTableCellEditAdapter
             selection);
     }
 
+    public static TableCellParagraphFormatPlan PlanParagraphAlignment(
+        EditingSession editor,
+        TextAlign alignment,
+        (int Start, int End)? selection = null)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+
+        return TableCellEditPlanner.PlanParagraphAlignment(
+            editor.CurrentSlideIndex,
+            editor.CurrentSlide,
+            editor.SelectedShapeIds,
+            editor.ActiveTableCell,
+            alignment,
+            selection);
+    }
+
     public static void ApplyRichTextEditorPlan(
         TextBox textBox,
         InCanvasTableCellRichTextEditPlan? plan)

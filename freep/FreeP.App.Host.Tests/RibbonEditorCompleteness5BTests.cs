@@ -543,6 +543,42 @@ public class RibbonEditorCompleteness5BTests
 
     // ── Command: Format Painter ───────────────────────────────────────────────────
 
+    [Theory]
+    [InlineData("freep.paragraph.align-left", TextAlign.Left)]
+    [InlineData("freep.paragraph.align-center", TextAlign.Center)]
+    [InlineData("freep.paragraph.align-right", TextAlign.Right)]
+    [InlineData("freep.paragraph.align-justify", TextAlign.Justify)]
+    public void Cmd_ParagraphAlign_WithActiveTableCell_UsesSharedTableCellPlan(
+        string commandId,
+        TextAlign alignment)
+    {
+        var (ed, pres) = MakeSession();
+        var body = new TextBody { Wrap = true };
+        var paragraph = new Paragraph { Align = TextAlign.Left };
+        paragraph.Runs.Add(new Run { Text = "Cell" });
+        body.Paragraphs.Add(paragraph);
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(DrawingMlCoordinateUnits.EmuPerInch);
+        var row = new TableRow { HeightEmu = DrawingMlCoordinateUnits.EmuPerInch / 2 };
+        row.Cells.Add(new TableCell { TextBody = body });
+        table.Rows.Add(row);
+        var shape = new SlideShape
+        {
+            Id = 401,
+            Kind = SlideShapeKind.Table,
+            Table = table,
+            ExtentCxEmu = DrawingMlCoordinateUnits.EmuPerInch,
+            ExtentCyEmu = DrawingMlCoordinateUnits.EmuPerInch / 2,
+        };
+        pres.Slides[0].Shapes.Add(shape);
+        ed.Select(shape.Id);
+        ed.SetActiveTableCell(0, 0);
+
+        Exec(MakeRegistry(ed), commandId);
+
+        shape.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Align.Should().Be(alignment);
+    }
+
     [Fact]
     public void Cmd_FormatPainter_CopiesFillFromFirstSelectedToOthers()
     {
@@ -607,6 +643,10 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.header-footer")]
     [InlineData("freep.date-time")]
     [InlineData("freep.slide-number")]
+    [InlineData("freep.paragraph.align-left")]
+    [InlineData("freep.paragraph.align-center")]
+    [InlineData("freep.paragraph.align-right")]
+    [InlineData("freep.paragraph.align-justify")]
     [InlineData("freep.view.zoom")]
     [InlineData("freep.view.fit-to-window")]
     public void AllWave5BCommandIds_AreRegistered(string commandId)

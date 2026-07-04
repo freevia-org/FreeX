@@ -1269,6 +1269,29 @@ public sealed class EditingSession
         return true;
     }
 
+    public TableCellParagraphFormatPlan PlanActiveTableCellParagraphAlignment(
+        TextAlign alignment,
+        (int Start, int End)? selection = null) =>
+        TableCellEditPlanner.PlanParagraphAlignment(
+            _currentSlideIndex,
+            CurrentSlide,
+            _selectedShapeIds,
+            ActiveTableCell,
+            alignment,
+            selection);
+
+    public bool TryApplyActiveTableCellParagraphAlignment(
+        TextAlign alignment,
+        (int Start, int End)? selection = null)
+    {
+        var plan = PlanActiveTableCellParagraphAlignment(alignment, selection);
+        if (plan.Command is null)
+            return false;
+
+        Bus.Execute(plan.Command);
+        return true;
+    }
+
     public bool ToggleBoldOnActiveTableCell() =>
         TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Bold);
 

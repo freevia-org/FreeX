@@ -1207,6 +1207,44 @@ public sealed class MainWindowHeadlessTests
         runs[1].Bold.Should().BeTrue("table-cell value formatting should preserve unrelated mixed-run formatting");
     }
 
+    [Theory]
+    [InlineData("freep.paragraph.align-left", TextAlign.Left)]
+    [InlineData("freep.paragraph.align-center", TextAlign.Center)]
+    [InlineData("freep.paragraph.align-right", TextAlign.Right)]
+    [InlineData("freep.paragraph.align-justify", TextAlign.Justify)]
+    public async Task Ribbon_paragraph_alignment_commands_route_to_active_table_cell(
+        string commandId,
+        TextAlign alignment)
+    {
+        var found = false;
+        TextAlign? actual = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet(commandId, out var command);
+            found.Should().BeTrue($"{commandId} must be registered");
+
+            var shape = window.Editor.InsertTable(1, 1);
+            var body = new TextBody { Wrap = true };
+            var paragraph = new Paragraph { Align = TextAlign.Left };
+            paragraph.Runs.Add(new Run { Text = "Cell" });
+            body.Paragraphs.Add(paragraph);
+            shape.Table!.Rows[0].Cells[0].TextBody = body;
+            window.Editor.Select(shape.Id);
+            window.Editor.SetActiveTableCell(0, 0);
+
+            command!.Execute(RibbonCommandContext.Empty);
+
+            actual = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Align;
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue($"{commandId} must be registered");
+        actual.Should().Be(alignment);
+    }
+
     [Fact]
     public async Task Ribbon_chart_edit_data_command_is_registered_and_noops_without_selected_chart()
     {

@@ -219,6 +219,22 @@ public sealed class AvaloniaInCanvasTextEditor
         return true;
     }
 
+    public bool TryApplyActiveTableCellParagraphAlignment(TextAlign alignment)
+    {
+        var overlaySelection = GetActiveCellOverlaySelection();
+        var plan = AvaloniaTableCellEditAdapter.PlanParagraphAlignment(_editor, alignment, overlaySelection.Selection);
+        if (plan.Command is null)
+            return false;
+
+        _editor.Bus.Execute(plan.Command);
+        ApplyCellOverlayFormatResult(plan.ResultRichTextPlan);
+
+        if (IsCurrentCellPlan(plan) && overlaySelection.IsWholeCell)
+            ApplyCellOverlayParagraphAlignment(alignment);
+
+        return true;
+    }
+
     public AvaloniaInCanvasTextEditor(SlideCanvas canvas, EditingSession editor, Panel overlay)
     {
         _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
@@ -724,6 +740,27 @@ public sealed class AvaloniaInCanvasTextEditor
         plan.ShapeId == _editingTableShapeId &&
         plan.Row == _editingCellRow &&
         plan.Col == _editingCellCol;
+
+    private bool IsCurrentCellPlan(TableCellParagraphFormatPlan plan) =>
+        _cellEditActive &&
+        _cellTextBox is not null &&
+        plan.ShapeId == _editingTableShapeId &&
+        plan.Row == _editingCellRow &&
+        plan.Col == _editingCellCol;
+
+    private void ApplyCellOverlayParagraphAlignment(TextAlign alignment)
+    {
+        if (_cellTextBox is null)
+            return;
+
+        _cellTextBox.TextAlignment = alignment switch
+        {
+            TextAlign.Center => TextAlignment.Center,
+            TextAlign.Right => TextAlignment.Right,
+            TextAlign.Justify or TextAlign.Distributed => TextAlignment.Justify,
+            _ => TextAlignment.Left,
+        };
+    }
 
     private void ApplyCellOverlayFontFamily(string? fontFamily)
     {

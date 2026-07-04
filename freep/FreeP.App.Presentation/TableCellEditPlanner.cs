@@ -27,6 +27,11 @@ public enum TableCellTextValueFormatKind
     Color,
 }
 
+public enum TableCellParagraphFormatKind
+{
+    Alignment,
+}
+
 public enum TableCellTextFormatStatus
 {
     Ready,
@@ -163,6 +168,20 @@ public sealed record TableCellTextValueFormatPlan(
     int? Col,
     TableCellTextValueFormatKind Kind,
     object? Value,
+    IPresentationCommand? Command,
+    InCanvasEditorTextSelection? EffectiveSelection = null,
+    InCanvasTableCellRichTextEditPlan? ResultRichTextPlan = null)
+{
+    public bool IsReady => Status == TableCellTextFormatStatus.Ready && Command is not null;
+}
+
+public sealed record TableCellParagraphFormatPlan(
+    TableCellTextFormatStatus Status,
+    uint? ShapeId,
+    int? Row,
+    int? Col,
+    TableCellParagraphFormatKind Kind,
+    TextAlign? Value,
     IPresentationCommand? Command,
     InCanvasEditorTextSelection? EffectiveSelection = null,
     InCanvasTableCellRichTextEditPlan? ResultRichTextPlan = null)
@@ -449,6 +468,55 @@ public static class TableCellEditPlanner
             TableCellTextValueFormatKind.Color,
             color,
             selection);
+
+    public static TableCellParagraphFormatPlan PlanParagraphAlignment(
+        int slideIndex,
+        Slide? slide,
+        IReadOnlyList<uint> selectedShapeIds,
+        (int Row, int Col)? activeCell,
+        TextAlign alignment,
+        (int Start, int End)? selection = null)
+    {
+        ArgumentNullException.ThrowIfNull(selectedShapeIds);
+
+        if (slide is null)
+            return DisabledParagraphFormat(TableCellTextFormatStatus.MissingSlide, alignment);
+        if (selectedShapeIds.Count == 0)
+            return DisabledParagraphFormat(TableCellTextFormatStatus.ShapeNotFound, alignment);
+
+        var shape = slide.Shapes.FirstOrDefault(s => s.Id == selectedShapeIds[0]);
+        if (shape is null)
+            return DisabledParagraphFormat(TableCellTextFormatStatus.ShapeNotFound, alignment);
+        if (shape.Kind != SlideShapeKind.Table || shape.Table is null)
+            return DisabledParagraphFormat(TableCellTextFormatStatus.NotTable, alignment, shape.Id);
+        if (activeCell is not { } requested)
+            return DisabledParagraphFormat(TableCellTextFormatStatus.MissingActiveCell, alignment, shape.Id);
+
+        var normalized = NormalizeCell(shape.Table, requested.Row, requested.Col);
+        if (normalized is null)
+            return DisabledParagraphFormat(TableCellTextFormatStatus.CellOutOfRange, alignment, shape.Id);
+
+        var (row, col, cell) = normalized.Value;
+        if (cell.TextBody is null)
+            return DisabledParagraphFormat(TableCellTextFormatStatus.MissingTextBody, alignment, shape.Id, row, col);
+        if (cell.TextBody.Paragraphs.Count == 0)
+            return DisabledParagraphFormat(TableCellTextFormatStatus.NoTextRuns, alignment, shape.Id, row, col);
+
+        var editedBody = ApplyParagraphAlignment(cell.TextBody, alignment, selection);
+        var effectiveSelection = PlanFormatResultSelection(editedBody, selection);
+        var richTextPlan = PlanRichTextEdit(editedBody, effectiveSelection);
+
+        return new TableCellParagraphFormatPlan(
+            TableCellTextFormatStatus.Ready,
+            shape.Id,
+            row,
+            col,
+            TableCellParagraphFormatKind.Alignment,
+            alignment,
+            new SetTableCellTextCommand(slideIndex, shape.Id, row, col, editedBody),
+            effectiveSelection,
+            richTextPlan);
+    }
 
     private static TableCellTextValueFormatPlan PlanTextValueFormat(
         int slideIndex,
@@ -832,6 +900,61 @@ public static class TableCellEditPlanner
         int? row = null,
         int? col = null) =>
         new(status, shapeId, row, col, kind, value, null);
+
+    private static TableCellParagraphFormatPlan DisabledParagraphFormat(
+        TableCellTextFormatStatus status,
+        TextAlign value,
+        uint? shapeId = null,
+        int? row = null,
+        int? col = null) =>
+        new(status, shapeId, row, col, TableCellParagraphFormatKind.Alignment, value, null);
+
+    private static TextBody ApplyParagraphAlignment(
+        TextBody source,
+        TextAlign alignment,
+        (int Start, int End)? selection)
+    {
+        var editedBody = TextBodyModelCloner.CloneTextBody(source)!;
+        int textLength = InCanvasTextEditPlanner.ExtractPlainText(source).Length;
+        var range = NormalizeSelection(selection, textLength);
+
+        foreach (int paragraphIndex in ResolveParagraphIndexes(editedBody, range))
+            editedBody.Paragraphs[paragraphIndex].Align = alignment;
+
+        return editedBody;
+    }
+
+    private static IReadOnlyList<int> ResolveParagraphIndexes(
+        TextBody body,
+        (int Start, int End)? selection)
+    {
+        if (selection is null)
+            return Enumerable.Range(0, body.Paragraphs.Count).ToArray();
+
+        var selected = new List<int>();
+        int cursor = 0;
+        for (int pi = 0; pi < body.Paragraphs.Count; pi++)
+        {
+            int paragraphStart = cursor;
+            int paragraphEnd = paragraphStart + body.Paragraphs[pi].Runs.Sum(run => run.Text.Length);
+            bool overlapsText = paragraphEnd > selection.Value.Start && paragraphStart < selection.Value.End;
+            bool overlapsEmptyParagraph = paragraphStart == paragraphEnd &&
+                selection.Value.Start <= paragraphStart &&
+                paragraphStart < selection.Value.End;
+            bool overlapsSeparator = pi < body.Paragraphs.Count - 1 &&
+                paragraphEnd < selection.Value.End &&
+                paragraphEnd + 1 > selection.Value.Start;
+
+            if (overlapsText || overlapsEmptyParagraph || overlapsSeparator)
+                selected.Add(pi);
+
+            cursor = paragraphEnd + (pi < body.Paragraphs.Count - 1 ? 1 : 0);
+        }
+
+        return selected.Count > 0
+            ? selected
+            : Enumerable.Range(0, body.Paragraphs.Count).ToArray();
+    }
 
     private static bool GetRunFormat(Run run, TableCellTextFormatKind kind) => kind switch
     {

@@ -687,6 +687,113 @@ public sealed class TableCellEditPlannerTests
     }
 
     [Fact]
+    public void PlanParagraphAlignment_DisabledStates_MatchActiveTableCellRequirements()
+    {
+        var shape = MakeMergedTableShape();
+        var notTable = new SlideShape { Id = 77, Kind = SlideShapeKind.AutoShape };
+
+        TableCellEditPlanner.PlanParagraphAlignment(0, null, [shape.Id], (0, 0), TextAlign.Center)
+            .Status.Should().Be(TableCellTextFormatStatus.MissingSlide);
+        TableCellEditPlanner.PlanParagraphAlignment(0, new Slide { Shapes = { shape } }, [], (0, 0), TextAlign.Center)
+            .Status.Should().Be(TableCellTextFormatStatus.ShapeNotFound);
+        TableCellEditPlanner.PlanParagraphAlignment(0, new Slide { Shapes = { shape } }, [999], (0, 0), TextAlign.Center)
+            .Status.Should().Be(TableCellTextFormatStatus.ShapeNotFound);
+        TableCellEditPlanner.PlanParagraphAlignment(0, new Slide { Shapes = { notTable } }, [notTable.Id], (0, 0), TextAlign.Center)
+            .Status.Should().Be(TableCellTextFormatStatus.NotTable);
+        TableCellEditPlanner.PlanParagraphAlignment(0, new Slide { Shapes = { shape } }, [shape.Id], null, TextAlign.Center)
+            .Status.Should().Be(TableCellTextFormatStatus.MissingActiveCell);
+        TableCellEditPlanner.PlanParagraphAlignment(0, new Slide { Shapes = { shape } }, [shape.Id], (99, 0), TextAlign.Center)
+            .Status.Should().Be(TableCellTextFormatStatus.CellOutOfRange);
+
+        shape.Table!.Rows[0].Cells[0].TextBody = null;
+        TableCellEditPlanner.PlanParagraphAlignment(0, new Slide { Shapes = { shape } }, [shape.Id], (0, 0), TextAlign.Center)
+            .Status.Should().Be(TableCellTextFormatStatus.MissingTextBody);
+    }
+
+    [Fact]
+    public void PlanParagraphAlignment_WholeCell_BuildsUndoableCommandAndPreservesRuns()
+    {
+        var shape = MakeMergedTableShape();
+        var body = shape.Table!.Rows[0].Cells[0].TextBody!;
+        body.Paragraphs[0].Align = TextAlign.Left;
+        body.Paragraphs[0].Runs.Add(new Run { Text = " suffix", Bold = true, BoldSet = true });
+        var second = new Paragraph { Align = TextAlign.Right };
+        second.Runs.Add(new Run { Text = "Second", Italic = true, ItalicSet = true });
+        body.Paragraphs.Add(second);
+        var slide = new Slide { Shapes = { shape } };
+
+        var plan = TableCellEditPlanner.PlanParagraphAlignment(
+            0,
+            slide,
+            [shape.Id],
+            (0, 1),
+            TextAlign.Center);
+
+        plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+        plan.ShapeId.Should().Be(shape.Id);
+        plan.Row.Should().Be(0);
+        plan.Col.Should().Be(0);
+        plan.Value.Should().Be(TextAlign.Center);
+        plan.Command.Should().NotBeNull();
+        plan.EffectiveSelection.Should().Be(new InCanvasEditorTextSelection(0, "Anchor suffix\nSecond".Length));
+        plan.ResultRichTextPlan.Should().NotBeNull();
+        plan.ResultRichTextPlan!.PlainText.Should().Be("Anchor suffix\nSecond");
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(plan.Command!);
+
+        var paragraphs = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs;
+        paragraphs.Should().OnlyContain(paragraph => paragraph.Align == TextAlign.Center);
+        paragraphs[0].Runs[1].Bold.Should().BeTrue("run formatting should survive paragraph formatting");
+        paragraphs[1].Runs[0].Italic.Should().BeTrue("run formatting should survive paragraph formatting");
+
+        bus.Undo();
+        paragraphs = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs;
+        paragraphs[0].Align.Should().Be(TextAlign.Left);
+        paragraphs[1].Align.Should().Be(TextAlign.Right);
+    }
+
+    [Fact]
+    public void PlanParagraphAlignment_SubRangeSelection_AlignsOnlyTouchedParagraphs()
+    {
+        var shape = MakeMergedTableShape();
+        var body = shape.Table!.Rows[0].Cells[0].TextBody!;
+        body.Paragraphs[0].Align = TextAlign.Left;
+        var second = new Paragraph { Align = TextAlign.Left };
+        second.Runs.Add(new Run { Text = "Beta" });
+        body.Paragraphs.Add(second);
+        var third = new Paragraph { Align = TextAlign.Left };
+        third.Runs.Add(new Run { Text = "Gamma" });
+        body.Paragraphs.Add(third);
+        var slide = new Slide { Shapes = { shape } };
+
+        var plan = TableCellEditPlanner.PlanParagraphAlignment(
+            0,
+            slide,
+            [shape.Id],
+            (0, 0),
+            TextAlign.Right,
+            selection: (7, 11));
+
+        plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+        plan.EffectiveSelection.Should().Be(new InCanvasEditorTextSelection(7, 11));
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(plan.Command!);
+
+        var paragraphs = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs;
+        paragraphs[0].Align.Should().Be(TextAlign.Left);
+        paragraphs[1].Align.Should().Be(TextAlign.Right);
+        paragraphs[2].Align.Should().Be(TextAlign.Left);
+    }
+
+    [Fact]
     public void BeginEdit_OutOfRangeCell_ReturnsDisabledPlan()
     {
         var shape = MakeMergedTableShape();
