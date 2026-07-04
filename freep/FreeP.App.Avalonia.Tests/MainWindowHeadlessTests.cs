@@ -2447,6 +2447,7 @@ public sealed class MainWindowHeadlessTests
     public async Task Accessibility_checker_pane_routes_rows_through_shared_plan()
     {
         PresentationAccessibilityCheckerPanePlan? opened = null;
+        PresentationAccessibilityCheckerPanePlan? selectedChart = null;
         PresentationAccessibilityCheckerPanePlan? selectedTitle = null;
         PresentationAccessibilityCheckerPanePlan? actionedTitle = null;
         PresentationAccessibilityCheckerPanePlan? actionedAltText = null;
@@ -2455,6 +2456,8 @@ public sealed class MainWindowHeadlessTests
         var rowCount = 0;
         var selectedRowCount = 0;
         var heading = string.Empty;
+        var chartSlideIndex = -1;
+        uint[] chartSelection = [];
         var titleSlideIndex = -1;
         var titleSelectionCount = -1;
         var titleAfterAction = string.Empty;
@@ -2482,8 +2485,17 @@ public sealed class MainWindowHeadlessTests
                 Name = "Reference text",
                 TextBody = MakeLinkedTextBody("Project notes", new Hyperlink { Url = "https://example.test/notes" })
             };
+            var chart = new SlideShape
+            {
+                Id = 910,
+                Name = "Sales chart",
+                Kind = SlideShapeKind.Chart,
+                Chart = new ChartShape(),
+                AlternativeText = "Quarterly sales by region."
+            };
             firstSlide.Shapes.Add(shape);
             firstSlide.Shapes.Add(linkedText);
+            firstSlide.Shapes.Add(chart);
             window.Editor.InsertSlide();
             window.Editor.CurrentSlide!.Title = string.Empty;
             window.Editor.SelectSlide(0);
@@ -2494,11 +2506,15 @@ public sealed class MainWindowHeadlessTests
             selectedRowCount = window.AccessibilityCheckerPaneSelectedRowCount;
             heading = window.AccessibilityCheckerPaneHeading;
 
-            selectedTitle = window.SelectAccessibilityCheckerRow(2);
+            selectedChart = window.SelectAccessibilityCheckerRow(2);
+            chartSlideIndex = window.Editor.CurrentSlideIndex;
+            chartSelection = window.Editor.SelectedShapeIds.ToArray();
+
+            selectedTitle = window.SelectAccessibilityCheckerRow(3);
             titleSlideIndex = window.Editor.CurrentSlideIndex;
             titleSelectionCount = window.Editor.SelectedShapeIds.Count;
 
-            actionedTitle = window.ApplyAccessibilityCheckerRowAction(2);
+            actionedTitle = window.ApplyAccessibilityCheckerRowAction(3);
             titleAfterAction = window.Editor.CurrentSlide?.Title ?? string.Empty;
             titleMutation = window.LastSlideTitleMutationPlan;
             dirtyAfterTitle = window.IsDirty;
@@ -2512,13 +2528,14 @@ public sealed class MainWindowHeadlessTests
 
         if (!ran) return;
         paneVisible.Should().BeTrue();
-        rowCount.Should().Be(3);
+        rowCount.Should().Be(4);
         selectedRowCount.Should().Be(1);
-        heading.Should().Be("Accessibility - 3 issues");
+        heading.Should().Be("Accessibility - 4 issues");
         opened.Should().NotBeNull();
         opened!.Rows.Select(row => row.Title).Should().Equal(
             "Alt text missing",
             "Hyperlink ScreenTip missing",
+            "Chart title missing",
             "Missing slide title");
         opened.Rows[0].CommandHint.Should().Be(PresentationReviewWorkflowPlanner.AltTextCommandId);
         opened.Rows[1].Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
@@ -2529,11 +2546,22 @@ public sealed class MainWindowHeadlessTests
             row.ShouldNavigateToSlide &&
             row.ShouldSelectShape);
         opened.Rows[2].Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
+            row.Category == "Chart" &&
+            row.ShapeId == 910 &&
+            row.ActionLabel == "Add Chart Title" &&
+            row.CommandHint == null &&
+            row.ShouldNavigateToSlide &&
+            row.ShouldSelectShape);
+        opened.Rows[3].Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
             row.Category == "Slide title" &&
             row.ActionLabel == "Set Slide Title" &&
             row.CommandHint == PresentationReviewWorkflowPlanner.SetSlideTitleCommandId &&
             row.ShouldNavigateToSlide &&
             !row.ShouldSelectShape);
+        selectedChart.Should().NotBeNull();
+        selectedChart!.SelectedRow!.Title.Should().Be("Chart title missing");
+        chartSlideIndex.Should().Be(0);
+        chartSelection.Should().Equal(910u);
         selectedTitle.Should().NotBeNull();
         selectedTitle!.SelectedRow!.Title.Should().Be("Missing slide title");
         titleSlideIndex.Should().Be(1);
@@ -2541,7 +2569,8 @@ public sealed class MainWindowHeadlessTests
         actionedTitle.Should().NotBeNull();
         actionedTitle!.Rows.Select(row => row.Title).Should().Equal(
             "Alt text missing",
-            "Hyperlink ScreenTip missing");
+            "Hyperlink ScreenTip missing",
+            "Chart title missing");
         titleAfterAction.Should().Be("Slide 2");
         titleMutation.Should().Be(new PresentationSlideTitleMutationPlan(
             true,

@@ -37,9 +37,9 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("TableLoc_ConsolidateDialogTitle"),
-            Width = 420,
-            MinWidth = 400,
-            SizeToContent = SizeToContent.Height,
+            Width = ConsolidateDialogPlanner.CaptureWidth,
+            Height = ConsolidateDialogPlanner.CaptureHeight,
+            MinWidth = ConsolidateDialogPlanner.MinWidth,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -70,7 +70,7 @@ public sealed partial class MainWindow
                 referenceBox.Text = FormatRangeReference(_session.SelectedRange);
         };
 
-        var referencesList = new ListBox { MinHeight = 96 };
+        var referencesList = new ListBox { MinHeight = ConsolidateDialogPlanner.ReferencesListHeight };
         ApplyDataOpsListBoxChrome(referencesList);
         AutomationProperties.SetAutomationId(referencesList, "ConsolidateAllReferencesList");
 
@@ -245,7 +245,7 @@ public sealed partial class MainWindow
 
         dialog.Content = new DockPanel
         {
-            Margin = new Thickness(16),
+            Margin = new Thickness(12),
             Children =
             {
                 buttonRow,

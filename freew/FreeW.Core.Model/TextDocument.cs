@@ -1282,6 +1282,9 @@ public enum SourceType
 
     /// <summary>A report (adds the responsible institution plus report publication fields).</summary>
     Report = 3,
+
+    /// <summary>A chapter or section within a book (adds book title, chapter number and page range).</summary>
+    BookSection = 4,
 }
 
 /// <summary>
@@ -1324,7 +1327,8 @@ public sealed record SourceAuthorPerson(string First, string Middle, string Last
 /// to reference the source, e.g. <c>"Knuth1997"</c>) plus author/title/year and common Word bibliography
 /// fields such as city, institution, edition, standard number, short title and comments. A <see cref="SourceType"/>
 /// selects type-specific formatting and carries the extra fields that type needs
-/// (journal/volume/issue/pages for an article, url/accessed for a web site, institution for a report). Kept deliberately
+/// (journal/volume/issue/pages for an article, url/accessed for a web site, institution for a report,
+/// book title/chapter/pages for a book section). Kept deliberately
 /// small and immutable-friendly (init-only properties) so it round-trips cleanly and the
 /// citation/bibliography formatting helpers (see <see cref="Citations"/>) can stay pure. Missing fields
 /// are represented as empty strings / null and handled gracefully by the formatters.
@@ -1355,6 +1359,9 @@ public sealed class Source
     /// <summary>The title of the work. Empty when unknown.</summary>
     public string Title { get; init; } = string.Empty;
 
+    /// <summary>The containing book title for a <see cref="SourceType.BookSection"/>; null when unknown.</summary>
+    public string? BookTitle { get; init; }
+
     /// <summary>The year of publication. Empty when unknown.</summary>
     public string Year { get; init; } = string.Empty;
 
@@ -1373,6 +1380,9 @@ public sealed class Source
     /// <summary>A Word-style standard number such as ISBN or ISSN; null when unknown / not applicable.</summary>
     public string? StandardNumber { get; init; }
 
+    /// <summary>The chapter number for a <see cref="SourceType.BookSection"/>; null when unknown.</summary>
+    public string? ChapterNumber { get; init; }
+
     /// <summary>A shortened citation title; null when unknown.</summary>
     public string? ShortTitle { get; init; }
 
@@ -1388,7 +1398,10 @@ public sealed class Source
     /// <summary>The issue number for a <see cref="SourceType.JournalArticle"/>; null when unknown.</summary>
     public string? Issue { get; init; }
 
-    /// <summary>The page (range) for a <see cref="SourceType.JournalArticle"/>, e.g. <c>"12-20"</c>; null when unknown.</summary>
+    /// <summary>
+    /// The page (range) for a <see cref="SourceType.JournalArticle"/> or <see cref="SourceType.BookSection"/>,
+    /// e.g. <c>"12-20"</c>; null when unknown.
+    /// </summary>
     public string? Pages { get; init; }
 
     /// <summary>The URL for a <see cref="SourceType.WebSite"/>; null otherwise / when unknown.</summary>

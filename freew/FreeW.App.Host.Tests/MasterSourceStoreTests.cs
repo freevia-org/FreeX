@@ -199,6 +199,54 @@ public sealed class MasterSourceStoreTests
     }
 
     [Fact]
+    public void MasterStore_JsonRoundTrip_PreservesBookSectionFields()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"master-sources-book-section-{Guid.NewGuid()}.json");
+        try
+        {
+            var store = new MasterSourceStore
+            {
+                Sources =
+                [
+                    SourceRecord.FromSource(new Source
+                    {
+                        Tag = "Chapter2026",
+                        Type = SourceType.BookSection,
+                        Author = "Doe, J.",
+                        Title = "Chapter Title",
+                        BookTitle = "Containing Book",
+                        Year = "2026",
+                        ChapterNumber = "3",
+                        Pages = "12-20",
+                        City = "London",
+                        Publisher = "Test Press",
+                        Edition = "2",
+                        StandardNumber = "ISBN-1"
+                    })
+                ]
+            };
+            var settingsStore = JsonSettingsStore<MasterSourceStore>.ForPath(path);
+
+            settingsStore.Save(store);
+            var source = JsonSettingsStore<MasterSourceStore>.ForPath(path).Load().ToSources()
+                .Should().ContainSingle().Subject;
+
+            source.Type.Should().Be(SourceType.BookSection);
+            source.BookTitle.Should().Be("Containing Book");
+            source.ChapterNumber.Should().Be("3");
+            source.Pages.Should().Be("12-20");
+            source.City.Should().Be("London");
+            source.Publisher.Should().Be("Test Press");
+            source.Edition.Should().Be("2");
+            source.StandardNumber.Should().Be("ISBN-1");
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void MasterStore_AddOrUpdate_ReplacesExistingTag()
     {
         var store = new MasterSourceStore();

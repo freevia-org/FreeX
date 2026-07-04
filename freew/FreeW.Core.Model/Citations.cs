@@ -615,6 +615,7 @@ public static class Citations
 
     // The type-specific "source detail" common to several styles, comma-joined:
     //  - Book:           Publisher
+    //  - BookSection:    BookTitle, ChapterNumber, Pages, City: Publisher
     //  - JournalArticle: Journal, Volume, "no. Issue", "pp. Pages"
     //  - WebSite:        Publisher, Url, "accessed Accessed"
     //  - Report:         Institution, City, Publisher
@@ -643,6 +644,15 @@ public static class Citations
                 AddIfPresent(parts, source.Institution);
                 AddIfPresent(parts, source.City);
                 AddIfPresent(parts, source.Publisher);
+                break;
+            case SourceType.BookSection:
+                AddIfPresent(parts, source.BookTitle);
+                if (NonEmpty(source.ChapterNumber) is { } chapterNumber)
+                    parts.Add($"chap. {chapterNumber}");
+                if (NonEmpty(source.Pages) is { } bookPages)
+                    parts.Add($"pp. {bookPages}");
+                if (PlacePublisher(source) is { } placePublisher)
+                    parts.Add(placePublisher);
                 break;
             default: // Book
                 AddIfPresent(parts, source.Publisher);
@@ -753,7 +763,7 @@ public static class Citations
         if (title.Length > 0)
             segments.Add(WithPeriod(title));
 
-        // Type-specific: journal uses condensed Vancouver citation string; books use Publisher, Year.
+        // Type-specific: journal uses condensed Vancouver citation string; book sections name the containing book.
         if (source.Type == SourceType.JournalArticle)
         {
             // Build: Journal. Year;Vol(Issue):Pages.
@@ -773,6 +783,21 @@ public static class Citations
                 journalParts.Add(yearVolIssuePage.ToString());
             if (journalParts.Count > 0)
                 segments.Add(WithPeriod(string.Join(". ", journalParts)));
+        }
+        else if (source.Type == SourceType.BookSection)
+        {
+            AddIfPresent(segments, source.BookTitle);
+            if (NonEmpty(source.ChapterNumber) is { } chapterNumber)
+                segments.Add($"chap. {chapterNumber}.");
+            if (NonEmpty(source.Pages) is { } pages)
+                segments.Add($"pp. {pages}.");
+
+            var tail = new List<string>(2);
+            if (PlacePublisher(source) is { } placePublisher)
+                tail.Add(placePublisher);
+            AddIfPresent(tail, source.Year);
+            if (tail.Count > 0)
+                segments.Add(WithPeriod(string.Join("; ", tail)));
         }
         else
         {
@@ -848,6 +873,15 @@ public static class Citations
         }
         else
         {
+            if (source.Type == SourceType.BookSection)
+            {
+                AddIfPresent(segments, source.BookTitle);
+                if (NonEmpty(source.ChapterNumber) is { } chapterNumber)
+                    segments.Add($"Chap. {chapterNumber}.");
+                if (NonEmpty(source.Pages) is { } pages)
+                    segments.Add($"Pp. {pages}.");
+            }
+
             // City: Publisher, Year.
             var publisher = PlacePublisher(source) ?? (source.Publisher?.Trim() ?? string.Empty);
             var year = source.Year?.Trim() ?? string.Empty;
@@ -902,6 +936,15 @@ public static class Citations
         }
         else
         {
+            if (source.Type == SourceType.BookSection)
+            {
+                AddIfPresent(segments, source.BookTitle);
+                if (NonEmpty(source.ChapterNumber) is { } chapterNumber)
+                    segments.Add($"chap. {chapterNumber}.");
+                if (NonEmpty(source.Pages) is { } pages)
+                    segments.Add($"pp. {pages}.");
+            }
+
             var publisher = PlacePublisher(source) ?? (source.Publisher?.Trim() ?? string.Empty);
             if (publisher.Length > 0)
                 segments.Add(WithPeriod(publisher));
@@ -918,7 +961,7 @@ public static class Citations
 
     private static string? PlacePublisher(Source source)
     {
-        if (source.Type != SourceType.Book)
+        if (source.Type is not (SourceType.Book or SourceType.BookSection))
             return null;
 
         var city = NonEmpty(source.City);
@@ -1007,12 +1050,14 @@ public static class Citations
         left.Type == right.Type
         && Same(left.Author, right.Author)
         && Same(left.Title, right.Title)
+        && Same(left.BookTitle, right.BookTitle)
         && Same(left.Year, right.Year)
         && Same(left.Institution, right.Institution)
         && Same(left.Publisher, right.Publisher)
         && Same(left.City, right.City)
         && Same(left.Edition, right.Edition)
         && Same(left.StandardNumber, right.StandardNumber)
+        && Same(left.ChapterNumber, right.ChapterNumber)
         && Same(left.ShortTitle, right.ShortTitle)
         && Same(left.Comments, right.Comments)
         && Same(left.Journal, right.Journal)
