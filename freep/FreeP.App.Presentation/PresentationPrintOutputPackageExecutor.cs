@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -49,6 +50,36 @@ public sealed record PresentationPrintOutputPackage(
     PresentationPrintOutputPackagePlan Plan,
     byte[] Bytes);
 
+public sealed record PresentationPrintOutputPackageValidation(
+    int ByteCount,
+    bool HasBytes,
+    bool HasPdfHeader,
+    bool HasPdfEofMarker,
+    bool PlanCanBuildPackage,
+    bool IsValid,
+    string? FailureReason);
+
+public sealed record PresentationPrintOutputPackageExecutionDescriptor(
+    PresentationPrintOutputPackagePlan PackagePlan,
+    PresentationNativePrintHandoffPlan HandoffPlan,
+    PresentationPrintOutputPackageValidation Validation,
+    string PackageKind,
+    string ContentType,
+    string DefaultExtensionWithDot,
+    string SuggestedFileName,
+    string SuggestedDocumentName,
+    string SuggestedPrintJobName,
+    int ByteCount,
+    bool IsHostReadyPdfPackage,
+    bool CanMaterialize,
+    string? DisabledReason);
+
+public sealed record PresentationPrintOutputPackageMaterializationResult(
+    PresentationPrintOutputPackageExecutionDescriptor Descriptor,
+    string TargetPath,
+    bool Succeeded,
+    string? FailureReason);
+
 public enum PresentationNativePrintHandoffStatus
 {
     PackageReadyHostHandoffRequired,
@@ -81,6 +112,8 @@ public sealed record PresentationNativePrintHandoffPlan(
     int PageCount,
     string ContentType,
     string SuggestedTempFileName,
+    string SuggestedDocumentName,
+    string SuggestedPrintJobName,
     string DefaultExtensionWithDot,
     string LayoutSummary,
     string SlideRangeSummary,
@@ -95,6 +128,7 @@ public sealed record PresentationNativePrintHandoffPlan(
 public static class PresentationPrintOutputPackageExecutor
 {
     public const string PdfContentType = "application/pdf";
+    public const string PrintOutputPackageKind = "FreePPrintablePdfPackage";
     public const string NativePrinterDialogDeferredReason =
         "Printable PDF package execution is available; native printer dialog handoff is deferred.";
     public const string NativePrintPackageReadyReason =
@@ -103,6 +137,8 @@ public static class PresentationPrintOutputPackageExecutor
         "Printable PDF package is ready, but the host printer adapter is unavailable.";
     public const string NativePrintNoSlidesReason =
         "Native print handoff requires at least one slide.";
+    public const string InvalidPackageReason =
+        "Native print handoff requires a valid host-ready PDF package.";
 
     public static PresentationPrintOutputPackagePlan BuildPackagePlan(
         PresentationPrintRequest? request,
@@ -164,6 +200,9 @@ public static class PresentationPrintOutputPackageExecutor
         hostCapabilities ??= PresentationNativePrintHandoffHostCapabilities.Available("Host");
         var isPackageReady = packagePlan.CanBuildPackage && packagePlan.PageCount > 0;
         var status = ResolveHandoffStatus(packagePlan, hostCapabilities);
+        var suggestedDocumentName = BuildSuggestedDocumentName(suggestedBaseFileName);
+        var suggestedTempFileName = BuildSuggestedTempFileName(suggestedDocumentName, packagePlan.DefaultExtensionWithDot);
+        var suggestedPrintJobName = BuildSuggestedPrintJobName(suggestedDocumentName, packagePlan);
         var reason = status switch
         {
             PresentationNativePrintHandoffStatus.PackageReadyHostHandoffRequired => NativePrintPackageReadyReason,
@@ -187,7 +226,9 @@ public static class PresentationPrintOutputPackageExecutor
             packagePlan.Route,
             packagePlan.PageCount,
             packagePlan.ContentType,
-            BuildSuggestedTempFileName(suggestedBaseFileName, packagePlan.DefaultExtensionWithDot),
+            suggestedTempFileName,
+            suggestedDocumentName,
+            suggestedPrintJobName,
             packagePlan.DefaultExtensionWithDot,
             packagePlan.LayoutSummary,
             packagePlan.SlideRangeSummary,
@@ -233,6 +274,92 @@ public static class PresentationPrintOutputPackageExecutor
         return new PresentationPrintOutputPackage(plan, bytes);
     }
 
+    public static PresentationPrintOutputPackageValidation ValidatePackage(
+        PresentationPrintOutputPackage package)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+
+        var bytes = package.Bytes;
+        var hasBytes = bytes.Length > 0;
+        var hasPdfHeader = StartsWith(bytes, "%PDF-"u8);
+        var hasPdfEofMarker = Contains(bytes, "%%EOF"u8);
+        var planCanBuild = package.Plan.CanBuildPackage && package.Plan.PageCount > 0;
+        var failureReason =
+            !planCanBuild ? package.Plan.DisabledReason ?? NativePrintNoSlidesReason :
+            !hasBytes ? "Printable PDF package contains no bytes." :
+            !hasPdfHeader ? "Printable PDF package does not start with a PDF header." :
+            !hasPdfEofMarker ? "Printable PDF package does not contain a PDF EOF marker." :
+            null;
+
+        return new PresentationPrintOutputPackageValidation(
+            bytes.Length,
+            hasBytes,
+            hasPdfHeader,
+            hasPdfEofMarker,
+            planCanBuild,
+            failureReason is null,
+            failureReason);
+    }
+
+    public static PresentationPrintOutputPackageExecutionDescriptor BuildExecutionDescriptor(
+        PresentationPrintOutputPackage package,
+        PresentationNativePrintHandoffHostCapabilities? hostCapabilities = null,
+        string? suggestedBaseFileName = null)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+
+        var handoffPlan = BuildNativePrintHandoffPlan(
+            package.Plan,
+            hostCapabilities,
+            suggestedBaseFileName);
+        var validation = ValidatePackage(package);
+        var isHostReady = validation.IsValid &&
+            package.Plan.ContentType == PdfContentType &&
+            string.Equals(package.Plan.DefaultExtensionWithDot, PresentationExportPlanner.PdfExportExtension, StringComparison.OrdinalIgnoreCase);
+        var disabledReason = isHostReady ? null : validation.FailureReason ?? InvalidPackageReason;
+
+        return new PresentationPrintOutputPackageExecutionDescriptor(
+            package.Plan,
+            handoffPlan,
+            validation,
+            PrintOutputPackageKind,
+            package.Plan.ContentType,
+            package.Plan.DefaultExtensionWithDot,
+            handoffPlan.SuggestedTempFileName,
+            handoffPlan.SuggestedDocumentName,
+            handoffPlan.SuggestedPrintJobName,
+            validation.ByteCount,
+            isHostReady,
+            isHostReady,
+            disabledReason);
+    }
+
+    public static PresentationPrintOutputPackageMaterializationResult MaterializePackageForHandoff(
+        PresentationPrintOutputPackage package,
+        string targetPath,
+        PresentationNativePrintHandoffHostCapabilities? hostCapabilities = null,
+        string? suggestedBaseFileName = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
+
+        var descriptor = BuildExecutionDescriptor(package, hostCapabilities, suggestedBaseFileName);
+        if (!descriptor.CanMaterialize)
+        {
+            return new PresentationPrintOutputPackageMaterializationResult(
+                descriptor,
+                targetPath,
+                Succeeded: false,
+                descriptor.DisabledReason);
+        }
+
+        ExportAtomicWriter.WriteAllBytes(targetPath, package.Bytes);
+        return new PresentationPrintOutputPackageMaterializationResult(
+            descriptor,
+            targetPath,
+            Succeeded: true,
+            FailureReason: null);
+    }
+
     private static PresentationPrintOutputPackageRoute ResolveRoute(PresentationPrintLayoutKind layout) =>
         layout switch
         {
@@ -263,18 +390,23 @@ public static class PresentationPrintOutputPackageExecutor
             _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unsupported native print handoff status."),
         };
 
-    private static string BuildSuggestedTempFileName(string? suggestedBaseFileName, string extensionWithDot)
+    private static string BuildSuggestedDocumentName(string? suggestedBaseFileName)
     {
         var baseName = string.IsNullOrWhiteSpace(suggestedBaseFileName)
             ? "Presentation"
             : Path.GetFileNameWithoutExtension(suggestedBaseFileName.Trim());
         var invalid = Path.GetInvalidFileNameChars();
         var sanitized = new string(baseName.Select(ch => invalid.Contains(ch) ? '-' : ch).ToArray()).Trim();
-        if (string.IsNullOrWhiteSpace(sanitized))
-            sanitized = "Presentation";
-
-        return $"{sanitized}-print{extensionWithDot}";
+        return string.IsNullOrWhiteSpace(sanitized) ? "Presentation" : sanitized;
     }
+
+    private static string BuildSuggestedTempFileName(string suggestedDocumentName, string extensionWithDot) =>
+        $"{suggestedDocumentName}-print{extensionWithDot}";
+
+    private static string BuildSuggestedPrintJobName(
+        string suggestedDocumentName,
+        PresentationPrintOutputPackagePlan packagePlan) =>
+        $"{suggestedDocumentName} - {packagePlan.LayoutSummary}";
 
     private static int CalculatePageCount(PresentationPrintPlan plan, int? notesPageCount = null)
     {
@@ -436,4 +568,24 @@ public static class PresentationPrintOutputPackageExecutor
             plan.Options.ColorMode,
             plan.Options.FrameSlides,
             plan.Options.IncludeCommentsAndInkMarkup);
+
+    private static bool StartsWith(ReadOnlySpan<byte> bytes, ReadOnlySpan<byte> marker) =>
+        bytes.Length >= marker.Length && bytes[..marker.Length].SequenceEqual(marker);
+
+    private static bool Contains(ReadOnlySpan<byte> bytes, ReadOnlySpan<byte> marker)
+    {
+        if (marker.Length == 0)
+            return true;
+
+        if (bytes.Length < marker.Length)
+            return false;
+
+        for (var index = 0; index <= bytes.Length - marker.Length; index++)
+        {
+            if (bytes.Slice(index, marker.Length).SequenceEqual(marker))
+                return true;
+        }
+
+        return false;
+    }
 }

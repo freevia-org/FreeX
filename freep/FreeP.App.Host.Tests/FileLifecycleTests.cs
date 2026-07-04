@@ -205,7 +205,17 @@ public sealed class FileLifecycleTests : IDisposable
         file.LastNativePrintHandoffPlan.CanOpenNativePrintDialog.Should().BeFalse();
         file.LastNativePrintHandoffPlan.Route.Should().Be(PresentationPrintOutputPackageRoute.NotesPagePdf);
         file.LastNativePrintHandoffPlan.SuggestedTempFileName.Should().Be("Presentation-print.pdf");
+        file.LastNativePrintHandoffPlan.SuggestedDocumentName.Should().Be("Presentation");
+        file.LastNativePrintHandoffPlan.SuggestedPrintJobName.Should().Be("Presentation - Notes Pages - Slide 1, 1 page");
         file.LastNativePrintHandoffPlan.Reason.Should().Contain("Native printer handoff adapter is not wired");
+        file.LastPrintExecutionDescriptor.Should().NotBeNull();
+        file.LastPrintExecutionDescriptor!.PackagePlan.Should().BeSameAs(package.Plan);
+        file.LastPrintExecutionDescriptor.HandoffPlan.Should().BeSameAs(file.LastNativePrintHandoffPlan);
+        file.LastPrintExecutionDescriptor.Validation.IsValid.Should().BeTrue();
+        file.LastPrintExecutionDescriptor.IsHostReadyPdfPackage.Should().BeTrue();
+        file.LastPrintExecutionDescriptor.CanMaterialize.Should().BeTrue();
+        file.LastPrintExecutionDescriptor.SuggestedDocumentName.Should().Be("Presentation");
+        file.LastPrintExecutionDescriptor.SuggestedPrintJobName.Should().Be(file.LastNativePrintHandoffPlan.SuggestedPrintJobName);
         package.Bytes.Length.Should().BeGreaterThan(100);
         System.Text.Encoding.ASCII.GetString(package.Bytes, 0, 5).Should().Be("%PDF-");
     }
