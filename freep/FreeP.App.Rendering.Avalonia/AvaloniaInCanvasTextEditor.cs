@@ -59,6 +59,7 @@ public sealed class AvaloniaInCanvasTextEditor
             return false;
 
         _editor.Bus.Execute(plan.Command);
+        RefreshShapeOverlayRichTextPlan(overlaySelection.Selection);
 
         if (IsCurrentShapePlan(plan) &&
             plan.TargetValue is { } value &&
@@ -85,6 +86,7 @@ public sealed class AvaloniaInCanvasTextEditor
             return false;
 
         _editor.Bus.Execute(plan.Command);
+        RefreshShapeOverlayRichTextPlan(overlaySelection.Selection);
 
         if (IsCurrentShapePlan(plan) && overlaySelection.IsWholeText)
             ApplyOverlayFontFamily(_textBox, fontFamily);
@@ -107,6 +109,7 @@ public sealed class AvaloniaInCanvasTextEditor
             return false;
 
         _editor.Bus.Execute(plan.Command);
+        RefreshShapeOverlayRichTextPlan(overlaySelection.Selection);
 
         if (IsCurrentShapePlan(plan) && overlaySelection.IsWholeText)
             ApplyOverlayFontSize(_textBox, sizePt);
@@ -129,6 +132,7 @@ public sealed class AvaloniaInCanvasTextEditor
             return false;
 
         _editor.Bus.Execute(plan.Command);
+        RefreshShapeOverlayRichTextPlan(overlaySelection.Selection);
 
         if (IsCurrentShapePlan(plan) && overlaySelection.IsWholeText)
             ApplyOverlayColor(_textBox, color);
@@ -287,6 +291,7 @@ public sealed class AvaloniaInCanvasTextEditor
                 global::Avalonia.Media.Color.FromRgb(0x21, 0x96, 0xF3)),
             BorderThickness = new Thickness(1.5),
         };
+        AvaloniaInCanvasTextEditAdapter.ApplyRichTextEditorPlan(_textBox, startPlan.RichTextPlan);
 
         Canvas.SetLeft(_textBox, placement.Left);
         Canvas.SetTop(_textBox, placement.Top);
@@ -297,7 +302,7 @@ public sealed class AvaloniaInCanvasTextEditor
         _overlay.Children.Add(_textBox);
         UpdateOverlayState();
         _textBox.Focus();
-        _textBox.SelectAll();
+        ApplyInitialSelection(_textBox, startPlan.InitialSelection);
     }
 
     /// <summary>Activates the text editor for the given table cell.</summary>
@@ -788,5 +793,22 @@ public sealed class AvaloniaInCanvasTextEditor
             : TableCellEditPlanner.PlanInitialSelection(cell.TextBody);
         var richTextPlan = TableCellEditPlanner.PlanRichTextEdit(cell.TextBody, selectionPlan);
         AvaloniaTableCellEditAdapter.ApplyRichTextEditorPlan(_cellTextBox, richTextPlan);
+    }
+
+    private void RefreshShapeOverlayRichTextPlan((int Start, int End)? selection)
+    {
+        if (!_active || _textBox is null)
+            return;
+
+        var shape = _editor.CurrentSlide?
+            .Shapes.FirstOrDefault(s => s.Id == _editingShapeId);
+        if (shape?.TextBody is null)
+            return;
+
+        var selectionPlan = selection is { } selected
+            ? new InCanvasEditorTextSelection(selected.Start, selected.End)
+            : TableCellEditPlanner.PlanInitialSelection(shape.TextBody);
+        var richTextPlan = TableCellEditPlanner.PlanRichTextEdit(shape.TextBody, selectionPlan);
+        AvaloniaInCanvasTextEditAdapter.ApplyRichTextEditorPlan(_textBox, richTextPlan);
     }
 }

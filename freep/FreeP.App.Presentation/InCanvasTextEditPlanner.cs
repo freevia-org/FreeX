@@ -69,6 +69,8 @@ public sealed record InCanvasTextEditStartPlan(
     uint ShapeId,
     InCanvasTextEditKind Kind,
     InCanvasEditorPlacement? Placement,
+    InCanvasEditorTextSelection InitialSelection,
+    InCanvasTableCellRichTextEditPlan? RichTextPlan,
     TextBody? OriginalBody,
     string OriginalPlainText,
     InCanvasTextEditPlanner? EditPlanner)
@@ -139,16 +141,20 @@ public sealed class InCanvasTextEditPlanner
             screenRect,
             minimumWidth,
             minimumHeight);
+        var originalBody = TextBodyModelCloner.CloneTextBody(shape.TextBody);
+        var initialSelection = TableCellEditPlanner.PlanInitialSelection(originalBody);
+        var richTextPlan = TableCellEditPlanner.PlanRichTextEdit(originalBody, initialSelection);
         var planner = kind == InCanvasTextEditKind.RichText
             ? BeginRichText(slideIndex, shapeId, shape.TextBody)
             : BeginPlainText(slideIndex, shapeId, shape.TextBody);
-        var originalBody = TextBodyModelCloner.CloneTextBody(shape.TextBody);
 
         return new InCanvasTextEditStartPlan(
             InCanvasTextEditStartStatus.Ready,
             shapeId,
             kind,
             placement,
+            initialSelection,
+            richTextPlan,
             originalBody,
             ExtractPlainText(originalBody),
             planner);
@@ -317,7 +323,7 @@ public sealed class InCanvasTextEditPlanner
         InCanvasTextEditStartStatus status,
         uint shapeId,
         InCanvasTextEditKind kind) =>
-        new(status, shapeId, kind, null, null, string.Empty, null);
+        new(status, shapeId, kind, null, default, null, null, string.Empty, null);
 
     public static string ExtractPlainText(TextBody? body)
     {
