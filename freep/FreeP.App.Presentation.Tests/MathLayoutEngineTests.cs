@@ -144,6 +144,44 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void Rad_WithBareDegHide_DoesNotEmitDegreeGlyph()
+    {
+        var node = ParseOmml(
+            "<m:rad>" +
+            "<m:radPr><m:degHide/></m:radPr>" +
+            "<m:deg><m:r><m:t>3</m:t></m:r></m:deg>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "</m:rad>");
+        var box = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var ops = MathBoxRenderPlanner.Plan(box, 10, 20, SrgbColor.Black, "Cambria Math");
+        ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text)
+            .Should().Equal(new[] { "x" },
+                "m:radPr/m:degHide is a CT_OnOff flag, so a bare element hides the degree before renderers consume the plan");
+        ops.OfType<MathDrawOp.DrawRadical>().Should().ContainSingle();
+    }
+
+    [Fact]
+    public void Rad_WithDegHideOff_EmitsDegreeGlyphBeforeRadicand()
+    {
+        var node = ParseOmml(
+            "<m:rad>" +
+            "<m:radPr><m:degHide m:val=\"off\"/></m:radPr>" +
+            "<m:deg><m:r><m:t>3</m:t></m:r></m:deg>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "</m:rad>");
+        var box = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var container = Assert.IsType<MathBox.Container>(box.Children[0]);
+        container.Children.Should().HaveCount(3, "visible radical degree adds a degree box alongside radical and radicand");
+
+        var ops = MathBoxRenderPlanner.Plan(box, 10, 20, SrgbColor.Black, "Cambria Math");
+        ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text)
+            .Should().Equal(new[] { "x", "3" },
+                "visible degree and radicand glyphs must both reach the renderer-neutral plan");
+    }
+
+    [Fact]
     public void Sup_OnNormalBase_ContainerAscentGrowsToContainRaisedScript()
     {
         // sup on 'x': ideal scriptY = baseAscent - 0.40em - scriptAscent is

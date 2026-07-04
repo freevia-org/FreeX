@@ -238,9 +238,8 @@ public static class OmmlParser
         var degEl = el.Element(M + "deg");
         if (degEl is not null)
         {
-            // degHide means the degree is hidden (plain v)
             var radPr = el.Element(M + "radPr");
-            bool degHide = radPr?.Element(M + "degHide")?.Attribute(M + "val")?.Value is "1" or "true";
+            bool degHide = IsOnOffOn(radPr?.Element(M + "degHide"));
             if (!degHide)
                 degree = ParseRow(degEl);
         }

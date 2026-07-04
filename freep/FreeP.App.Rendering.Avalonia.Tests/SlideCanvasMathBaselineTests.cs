@@ -22,11 +22,19 @@ namespace FreeP.App.Rendering.Avalonia.Tests;
 /// </summary>
 public sealed class SlideCanvasMathBaselineTests
 {
+    private const string M = "http://schemas.openxmlformats.org/officeDocument/2006/math";
+
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(SlideHeadlessApp).Assembly);
 
     private static Task Run(System.Action action) =>
         Session.Dispatch(action, CancellationToken.None);
+
+    private static MathNode ParseOmml(string oMathInner)
+    {
+        var xml = $"<m:oMath xmlns:m=\"{M}\">{oMathInner}</m:oMath>";
+        return OmmlParser.Parse(xml, fallbackText: "FALLBACK");
+    }
 
     // ── Pure baseline arithmetic (HB4) — mirrors the WPF-side test for parity ──
 
@@ -292,5 +300,44 @@ public sealed class SlideCanvasMathBaselineTests
         });
 
         thrown.Should().BeNull("Avalonia must render hidden m:phant metric-only math without host-specific layout branching");
+    }
+
+    [Fact]
+    public async Task RenderParaWithMath_RadicalHiddenDegree_UsesSharedMathBoxPlan_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var mathNode = ParseOmml(
+                    "<m:rad>" +
+                    "<m:radPr><m:degHide/></m:radPr>" +
+                    "<m:deg><m:r><m:t>3</m:t></m:r></m:deg>" +
+                    "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+                    "</m:rad>");
+                var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+                var ops = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math");
+                ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text).Should().Equal(new[] { "x" },
+                    "m:radPr/m:degHide must be resolved in the shared MathBox plan before Avalonia draws");
+                ops.OfType<MathDrawOp.DrawRadical>().Should().ContainSingle();
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "R = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+                    }
+                };
+
+                var rtb = new RenderTargetBitmap(new PixelSize(260, 140));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must render hidden-degree radical math from the shared MathBox plan without host-specific layout branching");
     }
 }
