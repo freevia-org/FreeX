@@ -594,6 +594,105 @@ public sealed class DialogVisualEvidenceSummaryTests
     }
 
     [Fact]
+    public void DialogVisualEvidenceSummary_FlagsShapeGradientPromotedEvidenceAgainstSharedPlannerSize()
+    {
+        using var temp = new TestTemporaryDirectory();
+
+        var inventoryPath = Path.Combine(temp.Path, "dialog-parity-inventory.json");
+        var wpfManifestDirectory = Path.Combine(temp.Path, "wpf-capture");
+        var avaloniaManifestDirectory = Path.Combine(temp.Path, "avalonia-capture");
+        Directory.CreateDirectory(wpfManifestDirectory);
+        Directory.CreateDirectory(avaloniaManifestDirectory);
+
+        var wpfManifestPath = Path.Combine(wpfManifestDirectory, "manifest.json");
+        var avaloniaManifestPath = Path.Combine(avaloniaManifestDirectory, "manifest.json");
+        var markdownPath = Path.Combine(temp.Path, "summary.md");
+        var jsonPath = Path.Combine(temp.Path, "summary.json");
+
+        File.WriteAllText(
+            inventoryPath,
+            """
+            {
+              "summary": {
+                "totalRoutes": 1,
+                "wpfCaptures": 1,
+                "avaloniaCaptures": 1,
+                "avaloniaHarnessRoutes": 1,
+                "sharedOrPresentationBacked": 1
+              },
+              "rows": [
+                { "routeId": "dialog.ShapeGradient" }
+              ]
+            }
+            """);
+
+        File.WriteAllText(
+            wpfManifestPath,
+            """
+            {
+              "platform": "windows",
+              "shell": "wpf",
+              "surfaces": [
+                {
+                  "id": "dialog.ShapeGradient",
+                  "kind": "dialog",
+                  "png": "dialog.ShapeGradient.png",
+                  "captured": true,
+                  "note": "Promoted from draw-object-formatting-tour committed WPF screenshot evidence (screenshots\\draw-object-formatting-tour\\freex_draw_object_formatting_shape_gradient_dialog.png) after direct FreeX.App.Host --parity-capture emitted a transparent dialog PNG"
+                }
+              ]
+            }
+            """);
+
+        File.WriteAllText(
+            avaloniaManifestPath,
+            """
+            {
+              "platform": "windows",
+              "shell": "avalonia",
+              "surfaces": [
+                {
+                  "id": "dialog.ShapeGradient",
+                  "kind": "dialog",
+                  "png": "dialog.ShapeGradient.png",
+                  "captured": true,
+                  "note": ""
+                }
+              ]
+            }
+            """);
+
+        WritePng(Path.Combine(wpfManifestDirectory, "dialog.ShapeGradient.png"), width: 420, height: 280, nonBlank: true);
+        WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.ShapeGradient.png"), width: 500, height: 300, nonBlank: true);
+
+        var result = PowerShellScriptRunner.RunToolScript(
+            "Generate-DialogVisualEvidenceSummary.ps1",
+            WorkspaceFileLocator.FindWorkspaceRoot(),
+            $"-MarkdownPath \"{markdownPath}\" -JsonPath \"{jsonPath}\" -InventoryPath \"{inventoryPath}\" -WpfManifestPath \"{wpfManifestPath}\" -AvaloniaManifestPath \"{avaloniaManifestPath}\"");
+
+        result.ExitCode.Should().Be(0, result.CombinedOutput);
+        result.Output.Should().Contain("Paired expected-size evidence mismatches: 1");
+        result.Output.Should().Contain("Stale promoted expected-size evidence: 1");
+        result.Output.Should().Contain("Dimension mismatch bucket 'evidence limitation': 1");
+
+        var markdown = File.ReadAllText(markdownPath);
+        markdown.Should().Contain("| dialog.ShapeGradient | 500x300 | ShapeGradientPlanner.DialogWidth/DialogHeight | 420x280 | 420x280 px @ 96 DPI | False | 500x300 | 500x300 px @ 96 DPI | True |");
+        markdown.Should().Contain("| dialog.ShapeGradient | WPF | 420x280 logical (420x280 px @ 96 DPI) | 500x300 | screenshots\\draw-object-formatting-tour\\freex_draw_object_formatting_shape_gradient_dialog.png | blocked-transparent-direct-parity-capture |");
+
+        using var json = JsonDocument.Parse(File.ReadAllText(jsonPath));
+        var summary = json.RootElement.GetProperty("summary");
+        summary.GetProperty("pairedExpectedSizeMismatches").GetInt32().Should().Be(1);
+        summary.GetProperty("stalePromotedExpectedSizeEvidence").GetInt32().Should().Be(1);
+        summary.GetProperty("dimensionMismatchBuckets").GetProperty("evidence limitation").GetInt32().Should().Be(1);
+
+        var comparison = json.RootElement.GetProperty("pairedSurfaces")[0].GetProperty("comparison");
+        comparison.GetProperty("dimensionMismatchBucket").GetString().Should().Be("evidence limitation");
+        comparison.GetProperty("expectedSizeSource").GetString().Should().Be("ShapeGradientPlanner.DialogWidth/DialogHeight");
+        comparison.GetProperty("wpfExpectedSizeMatch").GetBoolean().Should().BeFalse();
+        comparison.GetProperty("avaloniaExpectedSizeMatch").GetBoolean().Should().BeTrue();
+    }
+
+    [Fact]
     public void DialogVisualEvidenceSummary_FlagsBlankPngEvidence()
     {
         using var temp = new TestTemporaryDirectory();
