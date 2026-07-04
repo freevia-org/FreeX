@@ -49,6 +49,59 @@ internal static partial class XlsxChartXmlWriter
                 dataLabelsRange));
     }
 
+    /// <summary>
+    /// Orientation-aware geometry for positional series-range computation. A "strip" is one series
+    /// line of <see cref="ChartModel.DataRange"/> — a column by default, a row when
+    /// <see cref="ChartModel.SeriesInRows"/> (Excel's "Switch Row/Column") — and the point axis runs
+    /// perpendicular to it. Series names come from the strip's cell at <see cref="HeaderPoint"/>;
+    /// categories come from the strip at <see cref="CategoryStrip"/>.
+    /// </summary>
+    private readonly struct ChartSeriesStripLayout
+    {
+        public required bool SeriesInRows { get; init; }
+        public required uint FirstValueStrip { get; init; }
+        public required uint LastStrip { get; init; }
+        public required uint CategoryStrip { get; init; }
+        public required uint FirstDataPoint { get; init; }
+        public required uint LastPoint { get; init; }
+        public required uint HeaderPoint { get; init; }
+    }
+
+    private static ChartSeriesStripLayout GetSeriesStripLayout(ChartModel chart) =>
+        chart.SeriesInRows
+            ? new ChartSeriesStripLayout
+            {
+                SeriesInRows = true,
+                FirstValueStrip = chart.FirstColIsCategories ? chart.DataRange.Start.Row + 1 : chart.DataRange.Start.Row,
+                LastStrip = chart.DataRange.End.Row,
+                CategoryStrip = chart.DataRange.Start.Row,
+                FirstDataPoint = chart.FirstRowIsHeader ? chart.DataRange.Start.Col + 1 : chart.DataRange.Start.Col,
+                LastPoint = chart.DataRange.End.Col,
+                HeaderPoint = chart.DataRange.Start.Col,
+            }
+            : new ChartSeriesStripLayout
+            {
+                SeriesInRows = false,
+                FirstValueStrip = chart.FirstColIsCategories ? chart.DataRange.Start.Col + 1 : chart.DataRange.Start.Col,
+                LastStrip = chart.DataRange.End.Col,
+                CategoryStrip = chart.DataRange.Start.Col,
+                FirstDataPoint = chart.FirstRowIsHeader ? chart.DataRange.Start.Row + 1 : chart.DataRange.Start.Row,
+                LastPoint = chart.DataRange.End.Row,
+                HeaderPoint = chart.DataRange.Start.Row,
+            };
+
+    /// <summary>Formula for one series strip's data points (a column strip or a row strip).</summary>
+    private static string FormatStripRange(ChartSeriesStripLayout layout, string sheetName, uint strip) =>
+        layout.SeriesInRows
+            ? FormatSheetRange(sheetName, strip, layout.FirstDataPoint, strip, layout.LastPoint)
+            : FormatSheetRange(sheetName, layout.FirstDataPoint, strip, layout.LastPoint, strip);
+
+    /// <summary>Formula for a strip's series-name (header) cell.</summary>
+    private static string FormatStripHeaderCell(ChartSeriesStripLayout layout, string sheetName, uint strip) =>
+        layout.SeriesInRows
+            ? FormatSheetRange(sheetName, strip, layout.HeaderPoint, strip, layout.HeaderPoint)
+            : FormatSheetRange(sheetName, layout.HeaderPoint, strip, layout.HeaderPoint, strip);
+
     private static IEnumerable<XElement> BuildChartSeries(
         ChartModel chart,
         Sheet sheet,
@@ -57,16 +110,15 @@ internal static partial class XlsxChartXmlWriter
         Func<int, bool>? includeSeries = null,
         bool forceLineShapeProperties = false)
     {
-        var dataStartRow = chart.FirstRowIsHeader ? chart.DataRange.Start.Row + 1 : chart.DataRange.Start.Row;
-        var seriesStartCol = chart.FirstColIsCategories ? chart.DataRange.Start.Col + 1 : chart.DataRange.Start.Col;
+        var layout = GetSeriesStripLayout(chart);
         var categoryRange = chart.FirstColIsCategories
-            ? FormatSheetRange(sheet.Name, dataStartRow, chart.DataRange.Start.Col, chart.DataRange.End.Row, chart.DataRange.Start.Col)
+            ? FormatStripRange(layout, sheet.Name, layout.CategoryStrip)
             : null;
         var categoryIsNumeric = chart.FirstColIsCategories &&
-            IsCategoryRangeNumeric(sheet, dataStartRow, chart.DataRange.Start.Col, chart.DataRange.End.Row);
+            IsCategoryRangeNumeric(sheet, layout);
 
         var seriesIndex = 0;
-        for (var col = seriesStartCol; col <= chart.DataRange.End.Col; col++)
+        for (var strip = layout.FirstValueStrip; strip <= layout.LastStrip; strip++)
         {
             if (includeSeries is not null && !includeSeries(seriesIndex))
             {
@@ -76,7 +128,7 @@ internal static partial class XlsxChartXmlWriter
 
             var verbatim = GetVerbatimFormulas(chart, seriesIndex);
             var valueRange = verbatim?.ValFormula
-                ?? FormatSheetRange(sheet.Name, dataStartRow, col, chart.DataRange.End.Row, col);
+                ?? FormatStripRange(layout, sheet.Name, strip);
             var effectiveCategoryRange = verbatim?.CatFormula ?? categoryRange;
             var effectiveCategoryIsNumeric = verbatim?.CatFormula is null && categoryIsNumeric;
 
@@ -89,7 +141,7 @@ internal static partial class XlsxChartXmlWriter
             }
             else
             {
-                txElement = ToSeriesTitleXml(chart, sheet, col, chartNs);
+                txElement = ToSeriesTitleXml(chart, sheet, layout, strip, chartNs);
             }
 
             yield return new XElement(chartNs + "ser",
@@ -119,15 +171,17 @@ internal static partial class XlsxChartXmlWriter
     }
 
     /// <summary>
-    /// Returns true when every non-blank cell in the category column within [dataStartRow, dataEndRow]
-    /// contains a numeric value. An all-blank column returns false (fall back to strRef).
+    /// Returns true when every non-blank cell in the category strip's data points contains a
+    /// numeric value. An all-blank strip returns false (fall back to strRef).
     /// </summary>
-    private static bool IsCategoryRangeNumeric(Sheet sheet, uint dataStartRow, uint col, uint dataEndRow)
+    private static bool IsCategoryRangeNumeric(Sheet sheet, ChartSeriesStripLayout layout)
     {
         var hasAnyValue = false;
-        for (var row = dataStartRow; row <= dataEndRow; row++)
+        for (var point = layout.FirstDataPoint; point <= layout.LastPoint; point++)
         {
-            var value = sheet.GetValue(row, col);
+            var value = layout.SeriesInRows
+                ? sheet.GetValue(layout.CategoryStrip, point)
+                : sheet.GetValue(point, layout.CategoryStrip);
             if (value is BlankValue)
                 continue;
             if (value is not NumberValue)
@@ -176,13 +230,12 @@ internal static partial class XlsxChartXmlWriter
         XNamespace drawingNs,
         Func<int, bool>? includeSeries = null)
     {
-        var dataStartRow = chart.FirstRowIsHeader ? chart.DataRange.Start.Row + 1 : chart.DataRange.Start.Row;
-        var xValueCol = chart.DataRange.Start.Col;
-        var seriesStartCol = chart.DataRange.Start.Col + 1;
-        var xValueRange = FormatSheetRange(sheet.Name, dataStartRow, xValueCol, chart.DataRange.End.Row, xValueCol);
+        var layout = GetSeriesStripLayout(chart);
+        var xValueStrip = chart.SeriesInRows ? chart.DataRange.Start.Row : chart.DataRange.Start.Col;
+        var xValueRange = FormatStripRange(layout, sheet.Name, xValueStrip);
 
         var seriesIndex = 0;
-        for (var col = seriesStartCol; col <= chart.DataRange.End.Col; col++)
+        for (var strip = xValueStrip + 1; strip <= layout.LastStrip; strip++)
         {
             if (includeSeries is not null && !includeSeries(seriesIndex))
             {
@@ -193,11 +246,11 @@ internal static partial class XlsxChartXmlWriter
             var verbatim = GetVerbatimFormulas(chart, seriesIndex);
             var effectiveXValueRange = verbatim?.CatFormula ?? xValueRange;
             var yValueRange = verbatim?.ValFormula
-                ?? FormatSheetRange(sheet.Name, dataStartRow, col, chart.DataRange.End.Row, col);
+                ?? FormatStripRange(layout, sheet.Name, strip);
 
             XElement? txElement = verbatim?.TxFormula is { } txFormula
                 ? new XElement(chartNs + "tx", new XElement(chartNs + "strRef", new XElement(chartNs + "f", txFormula)))
-                : ToSeriesTitleXml(chart, sheet, col, chartNs);
+                : ToSeriesTitleXml(chart, sheet, layout, strip, chartNs);
 
             yield return new XElement(chartNs + "ser",
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
@@ -278,26 +331,26 @@ internal static partial class XlsxChartXmlWriter
         XNamespace chartNs,
         XNamespace drawingNs)
     {
-        if (chart.DataRange.End.Col - chart.DataRange.Start.Col < 2)
+        var layout = GetSeriesStripLayout(chart);
+        var xValueStrip = chart.SeriesInRows ? chart.DataRange.Start.Row : chart.DataRange.Start.Col;
+        if (layout.LastStrip - xValueStrip < 2)
             yield break;
 
-        var dataStartRow = chart.FirstRowIsHeader ? chart.DataRange.Start.Row + 1 : chart.DataRange.Start.Row;
-        var xValueCol = chart.DataRange.Start.Col;
-        var xValueRange = FormatSheetRange(sheet.Name, dataStartRow, xValueCol, chart.DataRange.End.Row, xValueCol);
+        var xValueRange = FormatStripRange(layout, sheet.Name, xValueStrip);
 
         var seriesIndex = 0;
-        for (var yValueCol = chart.DataRange.Start.Col + 1; yValueCol < chart.DataRange.End.Col; yValueCol += 2)
+        for (var yValueStrip = xValueStrip + 1; yValueStrip < layout.LastStrip; yValueStrip += 2)
         {
-            var sizeCol = yValueCol + 1;
+            var sizeStrip = yValueStrip + 1;
             var verbatim = GetVerbatimFormulas(chart, seriesIndex);
             var effectiveXValueRange = verbatim?.CatFormula ?? xValueRange;
             var yValueRange = verbatim?.ValFormula
-                ?? FormatSheetRange(sheet.Name, dataStartRow, yValueCol, chart.DataRange.End.Row, yValueCol);
-            var sizeRange = FormatSheetRange(sheet.Name, dataStartRow, sizeCol, chart.DataRange.End.Row, sizeCol);
+                ?? FormatStripRange(layout, sheet.Name, yValueStrip);
+            var sizeRange = FormatStripRange(layout, sheet.Name, sizeStrip);
 
             XElement? txElement = verbatim?.TxFormula is { } txFormula
                 ? new XElement(chartNs + "tx", new XElement(chartNs + "strRef", new XElement(chartNs + "f", txFormula)))
-                : ToSeriesTitleXml(chart, sheet, yValueCol, chartNs);
+                : ToSeriesTitleXml(chart, sheet, layout, yValueStrip, chartNs);
 
             yield return new XElement(chartNs + "ser",
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
@@ -327,29 +380,28 @@ internal static partial class XlsxChartXmlWriter
         XNamespace chartNs,
         XNamespace drawingNs)
     {
-        if (chart.FirstColIsCategories && chart.DataRange.End.Col <= chart.DataRange.Start.Col)
+        var layout = GetSeriesStripLayout(chart);
+        if (chart.FirstColIsCategories && layout.LastStrip <= layout.CategoryStrip)
             yield break;
 
-        var dataStartRow = chart.FirstRowIsHeader ? chart.DataRange.Start.Row + 1 : chart.DataRange.Start.Row;
-        var firstValueCol = chart.FirstColIsCategories ? chart.DataRange.Start.Col + 1 : chart.DataRange.Start.Col;
         var categoryRange = chart.FirstColIsCategories
-            ? FormatSheetRange(sheet.Name, dataStartRow, chart.DataRange.Start.Col, chart.DataRange.End.Row, chart.DataRange.Start.Col)
+            ? FormatStripRange(layout, sheet.Name, layout.CategoryStrip)
             : null;
         var categoryIsNumeric = chart.FirstColIsCategories &&
-            IsCategoryRangeNumeric(sheet, dataStartRow, chart.DataRange.Start.Col, chart.DataRange.End.Row);
+            IsCategoryRangeNumeric(sheet, layout);
 
         var seriesIndex = 0;
-        for (var valueCol = firstValueCol; valueCol <= chart.DataRange.End.Col; valueCol++)
+        for (var valueStrip = layout.FirstValueStrip; valueStrip <= layout.LastStrip; valueStrip++)
         {
             var verbatim = GetVerbatimFormulas(chart, seriesIndex);
             var valueRange = verbatim?.ValFormula
-                ?? FormatSheetRange(sheet.Name, dataStartRow, valueCol, chart.DataRange.End.Row, valueCol);
+                ?? FormatStripRange(layout, sheet.Name, valueStrip);
             var effectiveCategoryRange = verbatim?.CatFormula ?? categoryRange;
             var effectiveCategoryIsNumeric = verbatim?.CatFormula is null && categoryIsNumeric;
 
             XElement? txElement = verbatim?.TxFormula is { } txFormula
                 ? new XElement(chartNs + "tx", new XElement(chartNs + "strRef", new XElement(chartNs + "f", txFormula)))
-                : ToSeriesTitleXml(chart, sheet, valueCol, chartNs);
+                : ToSeriesTitleXml(chart, sheet, layout, valueStrip, chartNs);
 
             yield return new XElement(chartNs + "ser",
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
@@ -370,13 +422,14 @@ internal static partial class XlsxChartXmlWriter
     private static XElement? ToSeriesTitleXml(
         ChartModel chart,
         Sheet sheet,
-        uint seriesColumn,
+        ChartSeriesStripLayout layout,
+        uint seriesStrip,
         XNamespace chartNs)
     {
         if (!chart.FirstRowIsHeader)
             return null;
 
-        var titleRange = FormatSheetRange(sheet.Name, chart.DataRange.Start.Row, seriesColumn, chart.DataRange.Start.Row, seriesColumn);
+        var titleRange = FormatStripHeaderCell(layout, sheet.Name, seriesStrip);
         return new XElement(chartNs + "tx",
             new XElement(chartNs + "strRef",
                 new XElement(chartNs + "f", titleRange)));

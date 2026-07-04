@@ -78,17 +78,17 @@ internal static partial class XlsxChartXmlWriter
         Sheet sheet,
         XNamespace chartExNs)
     {
-        var dataStartRow = chart.FirstRowIsHeader ? chart.DataRange.Start.Row + 1 : chart.DataRange.Start.Row;
-        var hasCategoryColumn = chart.FirstColIsCategories && chart.DataRange.End.Col > chart.DataRange.Start.Col;
-        var seriesStartCol = hasCategoryColumn ? chart.DataRange.Start.Col + 1 : chart.DataRange.Start.Col;
-        var categoryRange = hasCategoryColumn
-            ? FormatSheetRange(sheet.Name, dataStartRow, chart.DataRange.Start.Col, chart.DataRange.End.Row, chart.DataRange.Start.Col)
+        var layout = GetSeriesStripLayout(chart);
+        var hasCategoryStrip = chart.FirstColIsCategories && layout.LastStrip > layout.CategoryStrip;
+        var firstValueStrip = hasCategoryStrip ? layout.CategoryStrip + 1 : layout.CategoryStrip;
+        var categoryRange = hasCategoryStrip
+            ? FormatStripRange(layout, sheet.Name, layout.CategoryStrip)
             : null;
 
         var seriesIndex = 0;
-        for (var col = seriesStartCol; col <= chart.DataRange.End.Col; col++)
+        for (var strip = firstValueStrip; strip <= layout.LastStrip; strip++)
         {
-            var valueRange = FormatSheetRange(sheet.Name, dataStartRow, col, chart.DataRange.End.Row, col);
+            var valueRange = FormatStripRange(layout, sheet.Name, strip);
             yield return new XElement(chartExNs + "data",
                 new XAttribute("id", ToChartExDataId(seriesIndex)),
                 string.IsNullOrWhiteSpace(categoryRange)
@@ -101,7 +101,7 @@ internal static partial class XlsxChartXmlWriter
                     new XElement(chartExNs + "f", valueRange),
                     chart.FirstRowIsHeader
                         ? new XElement(chartExNs + "nf",
-                            FormatSheetRange(sheet.Name, chart.DataRange.Start.Row, col, chart.DataRange.Start.Row, col))
+                            FormatStripHeaderCell(layout, sheet.Name, strip))
                         : null));
             seriesIndex++;
         }
@@ -253,20 +253,24 @@ internal static partial class XlsxChartXmlWriter
         if (chart.Type != ChartType.BoxAndWhisker || !chart.FirstRowIsHeader)
             return null;
 
-        var seriesColumn = GetChartExSeriesValueColumn(chart, seriesIndex);
+        var layout = GetSeriesStripLayout(chart);
+        var seriesStrip = GetChartExSeriesValueStrip(chart, layout, seriesIndex);
+        var (headerRow, headerCol) = layout.SeriesInRows
+            ? (seriesStrip, layout.HeaderPoint)
+            : (layout.HeaderPoint, seriesStrip);
         return new XElement(chartExNs + "tx",
             new XElement(chartExNs + "txData",
                 new XElement(chartExNs + "f",
-                    FormatSheetRange(sheet.Name, chart.DataRange.Start.Row, seriesColumn, chart.DataRange.Start.Row, seriesColumn)),
+                    FormatStripHeaderCell(layout, sheet.Name, seriesStrip)),
                 new XElement(chartExNs + "v",
-                    ToChartExSeriesTitleText(sheet.GetCell(chart.DataRange.Start.Row, seriesColumn)?.Value))));
+                    ToChartExSeriesTitleText(sheet.GetCell(headerRow, headerCol)?.Value))));
     }
 
-    private static uint GetChartExSeriesValueColumn(ChartModel chart, int seriesIndex)
+    private static uint GetChartExSeriesValueStrip(ChartModel chart, ChartSeriesStripLayout layout, int seriesIndex)
     {
-        var hasCategoryColumn = chart.FirstColIsCategories && chart.DataRange.End.Col > chart.DataRange.Start.Col;
-        var seriesStartCol = hasCategoryColumn ? chart.DataRange.Start.Col + 1 : chart.DataRange.Start.Col;
-        return seriesStartCol + (uint)seriesIndex;
+        var hasCategoryStrip = chart.FirstColIsCategories && layout.LastStrip > layout.CategoryStrip;
+        var firstValueStrip = hasCategoryStrip ? layout.CategoryStrip + 1 : layout.CategoryStrip;
+        return firstValueStrip + (uint)seriesIndex;
     }
 
     private static string ToChartExSeriesTitleText(ScalarValue? value) =>

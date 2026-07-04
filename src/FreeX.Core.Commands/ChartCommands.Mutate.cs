@@ -141,7 +141,7 @@ public sealed class ChangeChartTypeCommand : IWorkbookCommand
             return unsupportedOutcome;
 
         var firstColIsCategories = _chartType is not (ChartType.Scatter or ChartType.Bubble);
-        if (!HasUsableChartData(_chartType, chart.DataRange, chart.FirstRowIsHeader, firstColIsCategories))
+        if (!HasUsableChartData(_chartType, chart.DataRange, chart.FirstRowIsHeader, firstColIsCategories, chart.SeriesInRows))
             return new CommandOutcome(false, "Chart data range is not valid for the selected chart type.");
 
         _previousType = chart.Type;
@@ -169,14 +169,16 @@ public sealed class ChangeChartTypeCommand : IWorkbookCommand
         ChartType chartType,
         GridRange dataRange,
         bool firstRowIsHeader,
-        bool firstColIsCategories)
+        bool firstColIsCategories,
+        bool seriesInRows = false)
     {
         var candidate = new ChartModel
         {
             Type = chartType,
             DataRange = dataRange,
             FirstRowIsHeader = firstRowIsHeader,
-            FirstColIsCategories = firstColIsCategories
+            FirstColIsCategories = firstColIsCategories,
+            SeriesInRows = seriesInRows
         };
 
         return ChartTypeSupport.GetDataSeriesCount(candidate) > 0
@@ -191,9 +193,14 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
     private readonly GridRange _dataRange;
     private readonly bool? _firstRowIsHeader;
     private readonly bool? _firstColIsCategories;
+    private readonly bool? _seriesInRows;
     private GridRange? _previousDataRange;
     private bool? _previousFirstRowIsHeader;
     private bool? _previousFirstColIsCategories;
+    private bool? _previousSeriesInRows;
+    private List<ChartSeriesColumnMapping>? _previousSeriesColumnMappings;
+    private List<ChartSeriesVerbatimFormulas>? _previousVerbatimSeriesFormulas;
+    private bool _clearedMappingsForOrientationChange;
 
     public string Label => "Select Chart Data";
 
@@ -202,13 +209,15 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
         Guid chartId,
         GridRange dataRange,
         bool? firstRowIsHeader = null,
-        bool? firstColIsCategories = null)
+        bool? firstColIsCategories = null,
+        bool? seriesInRows = null)
     {
         _sheetId = sheetId;
         _chartId = chartId;
         _dataRange = dataRange;
         _firstRowIsHeader = firstRowIsHeader;
         _firstColIsCategories = firstColIsCategories;
+        _seriesInRows = seriesInRows;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -226,19 +235,35 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
 
         var nextFirstRowIsHeader = _firstRowIsHeader ?? chart.FirstRowIsHeader;
         var nextFirstColIsCategories = _firstColIsCategories ?? chart.FirstColIsCategories;
+        var nextSeriesInRows = _seriesInRows ?? chart.SeriesInRows;
         if (!ChangeChartTypeCommand.HasUsableChartData(
                 chart.Type,
                 _dataRange,
                 nextFirstRowIsHeader,
-                nextFirstColIsCategories))
+                nextFirstColIsCategories,
+                nextSeriesInRows))
             return new CommandOutcome(false, "Chart data range must include at least one data series and one data point.");
 
         _previousDataRange = chart.DataRange;
         _previousFirstRowIsHeader = chart.FirstRowIsHeader;
         _previousFirstColIsCategories = chart.FirstColIsCategories;
+        _previousSeriesInRows = chart.SeriesInRows;
+        if (nextSeriesInRows != chart.SeriesInRows)
+        {
+            // Column-based series mappings and per-series verbatim formulas describe the old
+            // orientation; keeping them would mis-index series (renderer) or override the newly
+            // oriented range formulas (XLSX writer).
+            _previousSeriesColumnMappings = chart.SeriesColumnMappings;
+            _previousVerbatimSeriesFormulas = chart.VerbatimSeriesFormulas;
+            _clearedMappingsForOrientationChange = true;
+            chart.SeriesColumnMappings = [];
+            chart.VerbatimSeriesFormulas = null;
+        }
+
         chart.DataRange = _dataRange;
         chart.FirstRowIsHeader = nextFirstRowIsHeader;
         chart.FirstColIsCategories = nextFirstColIsCategories;
+        chart.SeriesInRows = nextSeriesInRows;
         return new CommandOutcome(true, AffectedCells: [_dataRange.Start]);
     }
 
@@ -253,9 +278,20 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
         chart.DataRange = _previousDataRange.Value;
         chart.FirstRowIsHeader = _previousFirstRowIsHeader.Value;
         chart.FirstColIsCategories = _previousFirstColIsCategories.Value;
+        chart.SeriesInRows = _previousSeriesInRows ?? chart.SeriesInRows;
+        if (_clearedMappingsForOrientationChange)
+        {
+            chart.SeriesColumnMappings = _previousSeriesColumnMappings ?? [];
+            chart.VerbatimSeriesFormulas = _previousVerbatimSeriesFormulas;
+        }
+
         _previousDataRange = null;
         _previousFirstRowIsHeader = null;
         _previousFirstColIsCategories = null;
+        _previousSeriesInRows = null;
+        _previousSeriesColumnMappings = null;
+        _previousVerbatimSeriesFormulas = null;
+        _clearedMappingsForOrientationChange = false;
     }
 }
 

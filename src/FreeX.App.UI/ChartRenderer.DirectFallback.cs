@@ -110,6 +110,8 @@ public static partial class ChartRenderer
         var endRow = chart.DataRange.End.Row;
         var startCol = chart.DataRange.Start.Col;
         var endCol = chart.DataRange.End.Col;
+        if (chart.SeriesInRows)
+            (cellLookup, endRow, endCol) = TransposeChartCellLookup(cellLookup, startRow, startCol, endRow, endCol);
         var dataStartRow = chart.FirstRowIsHeader ? startRow + 1 : startRow;
         var dataStartCol = chart.FirstColIsCategories ? startCol + 1 : startCol;
         if (endRow < dataStartRow || endCol < dataStartCol)

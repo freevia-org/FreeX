@@ -94,6 +94,27 @@ public sealed class ChartLayoutRequestBuilderTests
     }
 
     [Fact]
+    public void TryBuild_SwitchRowColumnTransposesSeriesExtraction()
+    {
+        // Excel's "Switch Row/Column": each ROW becomes one series (named from the first
+        // column) and the first row's cells become the category labels.
+        var chart = ColumnChart();
+        chart.SeriesInRows = true;
+
+        var request = ChartLayoutRequestBuilder.TryBuild(chart, Plot, BuildAccessor(), new FakeTextMeasurer());
+
+        request.Should().NotBeNull();
+        request!.Categories.Should().Equal("Sales", "Costs");
+        request.Series.Should().HaveCount(3);
+        request.Series[0].Name.Should().Be("North");
+        request.Series[0].Values.Should().Equal(10d, 5d);
+        request.Series[1].Name.Should().Be("South");
+        request.Series[1].Values.Should().Equal(20d, 15d);
+        request.Series[2].Name.Should().Be("East");
+        request.Series[2].Values.Should().Equal(30d, 25d);
+    }
+
+    [Fact]
     public void TryBuild_PassesPlotRectThrough()
     {
         var request = ChartLayoutRequestBuilder.TryBuild(ColumnChart(), Plot, BuildAccessor(), new FakeTextMeasurer());

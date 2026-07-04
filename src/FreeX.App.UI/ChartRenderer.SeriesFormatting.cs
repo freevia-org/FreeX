@@ -130,6 +130,11 @@ public static partial class ChartRenderer
     /// </summary>
     private static bool HasAuthoritativeSeriesColumns(ChartModel chart, uint dataStartCol, uint endCol)
     {
+        // Column-based mappings cannot describe row-major series, and under Switch Row/Column the
+        // renderer works in transposed (virtual) coordinates the mapped sheet columns don't match.
+        if (chart.SeriesInRows)
+            return false;
+
         var mappings = chart.SeriesColumnMappings;
         if (mappings.Count == 0)
             return false;

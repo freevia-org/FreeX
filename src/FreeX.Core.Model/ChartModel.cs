@@ -47,6 +47,16 @@ public sealed class ChartModel
     public StockChartSubtype StockSubtype { get; set; } = StockChartSubtype.HighLowClose;
     public bool FirstRowIsHeader { get; set; } = true;
     public bool FirstColIsCategories { get; set; } = true;
+
+    /// <summary>
+    /// Excel's "Switch Row/Column": when true, each ROW of <see cref="DataRange"/> is one data
+    /// series (row-major) instead of the default one-series-per-column. The chart is interpreted
+    /// as the transposed range, so <see cref="FirstRowIsHeader"/> and
+    /// <see cref="FirstColIsCategories"/> keep their series-axis-relative meanings: with the flag
+    /// set, series names come from the first COLUMN and category labels from the first ROW.
+    /// <see cref="SeriesColumnMappings"/> is column-based and is ignored while this flag is set.
+    /// </summary>
+    public bool SeriesInRows { get; set; }
     public string? Title { get; set; }
     public ChartManualLayoutModel? TitleLayout { get; set; }
     public bool TitleOverlay { get; set; }

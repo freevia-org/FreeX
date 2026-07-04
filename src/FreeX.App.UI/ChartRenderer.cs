@@ -78,6 +78,8 @@ public static partial class ChartRenderer
         uint endRow   = chart.DataRange.End.Row;
         uint startCol = chart.DataRange.Start.Col;
         uint endCol   = chart.DataRange.End.Col;
+        if (chart.SeriesInRows)
+            (cellLookup, endRow, endCol) = TransposeChartCellLookup(cellLookup, startRow, startCol, endRow, endCol);
 
         uint dataStartRow = chart.FirstRowIsHeader ? startRow + 1 : startRow;
         uint dataStartCol = chart.FirstColIsCategories ? startCol + 1 : startCol;
@@ -653,6 +655,27 @@ public static partial class ChartRenderer
 
         ApplyAxisBounds(model, chart, theme);
         return model;
+    }
+
+    /// <summary>
+    /// Re-keys a chart cell lookup into transposed (virtual) coordinates for Excel's
+    /// "Switch Row/Column" (<see cref="ChartModel.SeriesInRows"/>): virtual (row, col) = actual
+    /// (startRow + (col - startCol), startCol + (row - startRow)). The start corner is shared, so
+    /// only the end extents swap; the series extraction below then reads each ROW of the actual
+    /// range as one series (names from the first column, categories from the first row) without
+    /// any per-chart-type changes.
+    /// </summary>
+    private static (Dictionary<(uint Row, uint Col), DisplayCell> Lookup, uint EndRow, uint EndCol) TransposeChartCellLookup(
+        Dictionary<(uint Row, uint Col), DisplayCell> lookup,
+        uint startRow,
+        uint startCol,
+        uint endRow,
+        uint endCol)
+    {
+        var transposed = new Dictionary<(uint Row, uint Col), DisplayCell>(lookup.Count);
+        foreach (var entry in lookup)
+            transposed[(startRow + (entry.Key.Col - startCol), startCol + (entry.Key.Row - startRow))] = entry.Value;
+        return (transposed, startRow + (endCol - startCol), startCol + (endRow - startRow));
     }
 
     private static Dictionary<(uint Row, uint Col), DisplayCell> BuildChartCellLookup(ChartModel chart, ViewportModel viewport)

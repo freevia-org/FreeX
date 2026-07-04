@@ -159,6 +159,36 @@ internal static class XlsxChartSeriesRangeReader
         return range.Start.Col;
     }
 
+    /// <summary>
+    /// Detects Excel's "Switch Row/Column" orientation from the series value formulas: returns true
+    /// when every parseable value range is a single-row horizontal strip and at least one spans
+    /// multiple columns. Column-major charts emit single-column vertical strips, so all-1×1 ranges
+    /// stay column-major (ambiguous → keep the default).
+    /// </summary>
+    public static bool DetectSeriesInRows(
+        IEnumerable<XElement> seriesElements,
+        SheetId sheetId,
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver,
+        string valueContainerName = "val")
+    {
+        var anyMultiColumn = false;
+        foreach (var series in seriesElements)
+        {
+            var formula = ReadFirstFormula(series, valueContainerName);
+            if (string.IsNullOrWhiteSpace(formula))
+                continue;
+            if (!TryParseFormulaRange(formula, sheetId, sheetNameResolver, out var range))
+                continue;
+
+            if (range.Start.Row != range.End.Row)
+                return false;
+            if (range.End.Col > range.Start.Col)
+                anyMultiColumn = true;
+        }
+
+        return anyMultiColumn;
+    }
+
     public static GridRange UnionRanges(IReadOnlyList<GridRange> ranges)
     {
         var sheetId = ranges[0].Start.Sheet;

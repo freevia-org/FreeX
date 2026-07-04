@@ -121,21 +121,52 @@ public static class ChartTypeSupport
 
     public static int GetDataSeriesCount(ChartModel chart)
     {
+        // One series per "strip": a column of DataRange by default, a row when SeriesInRows.
+        var (seriesSpan, _) = GetOrientedSpans(chart);
         if (chart.Type == ChartType.Bubble)
-            return Math.Max(0, (int)(chart.DataRange.End.Col - chart.DataRange.Start.Col) / 2);
+            return Math.Max(0, (int)seriesSpan / 2);
 
-        var startCol = GetSeriesValueStartColumn(chart);
-        return IsPastEndColumn(chart, startCol)
+        var skipped = SkippedLeadingSeriesStrips(chart);
+        return seriesSpan + 1 <= skipped
             ? 0
-            : (int)(chart.DataRange.End.Col - startCol + 1);
+            : (int)(seriesSpan + 1 - skipped);
     }
 
     public static int GetDataPointCount(ChartModel chart)
     {
-        var startRow = chart.FirstRowIsHeader ? chart.DataRange.Start.Row + 1 : chart.DataRange.Start.Row;
-        return startRow > chart.DataRange.End.Row
+        var (_, pointSpan) = GetOrientedSpans(chart);
+        var skipped = chart.FirstRowIsHeader ? 1u : 0u;
+        return pointSpan + 1 <= skipped
             ? 0
-            : (int)(chart.DataRange.End.Row - startRow + 1);
+            : (int)(pointSpan + 1 - skipped);
+    }
+
+    /// <summary>
+    /// Inclusive extents of the data range along the series axis (strips) and the point axis,
+    /// as zero-based spans (count - 1). Column-major charts have series strips across columns and
+    /// points down rows; <see cref="ChartModel.SeriesInRows"/> transposes both.
+    /// </summary>
+    private static (uint SeriesSpan, uint PointSpan) GetOrientedSpans(ChartModel chart)
+    {
+        var rowSpan = chart.DataRange.End.Row >= chart.DataRange.Start.Row
+            ? chart.DataRange.End.Row - chart.DataRange.Start.Row
+            : 0;
+        var colSpan = chart.DataRange.End.Col >= chart.DataRange.Start.Col
+            ? chart.DataRange.End.Col - chart.DataRange.Start.Col
+            : 0;
+        return chart.SeriesInRows ? (rowSpan, colSpan) : (colSpan, rowSpan);
+    }
+
+    /// <summary>
+    /// Number of leading strips on the series axis that are not value series: the category strip
+    /// (when present) plus the scatter X-value strip.
+    /// </summary>
+    private static uint SkippedLeadingSeriesStrips(ChartModel chart)
+    {
+        var skipped = HasCategoryStrip(chart) ? 1u : 0u;
+        return chart.Type == ChartType.Scatter && !chart.FirstColIsCategories
+            ? skipped + 1
+            : skipped;
     }
 
     public static uint? GetXAxisValueColumn(ChartModel chart)
@@ -197,4 +228,13 @@ public static class ChartTypeSupport
         chart.FirstColIsCategories &&
         (chart.DataRange.End.Col > chart.DataRange.Start.Col ||
          chart.Type is not (ChartType.Histogram or ChartType.Pareto or ChartType.BoxAndWhisker));
+
+    /// <summary>Orientation-aware <see cref="HasCategoryColumn"/>: is the first series-axis strip categories?</summary>
+    private static bool HasCategoryStrip(ChartModel chart)
+    {
+        var (seriesSpan, _) = GetOrientedSpans(chart);
+        return chart.FirstColIsCategories &&
+            (seriesSpan > 0 ||
+             chart.Type is not (ChartType.Histogram or ChartType.Pareto or ChartType.BoxAndWhisker));
+    }
 }

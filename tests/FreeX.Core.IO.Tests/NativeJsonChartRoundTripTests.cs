@@ -57,6 +57,25 @@ public sealed class NativeJsonChartRoundTripTests
         chart.DataRange.End.Sheet.Should().Be(reloadedData.Id);
     }
 
+    [Fact]
+    public void SwitchedRowColumnChart_SurvivesRoundTrip()
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("Data");
+        Seed(sheet);
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = GridRange.Parse("A1:B2", sheet.Id),
+            SeriesInRows = true,
+        });
+
+        var reloaded = RoundTrip(wb);
+
+        var chart = (ChartModel)reloaded.Sheets[0].Charts.Single()!;
+        chart.SeriesInRows.Should().BeTrue("the Switch Row/Column orientation must survive an fxl round-trip");
+    }
+
     private static void Seed(Sheet sheet)
     {
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Name"));
