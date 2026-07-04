@@ -17,12 +17,16 @@ namespace FreeX.App.Avalonia;
 ///
 /// The mode is purely additive: it does not touch the launch-smoke / packaging-smoke code paths or markers.
 /// </summary>
-internal sealed record ParityCaptureOptions(string OutputDirectory)
+internal sealed record ParityCaptureOptions(string OutputDirectory, string? SurfaceId = null)
 {
     public const string Argument = "--parity-capture";
+    public const string SurfaceArgument = "--parity-capture-surface";
 
-    private static bool IsArgument(string argument) =>
+    private static bool IsCaptureArgument(string argument) =>
         string.Equals(argument, Argument, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsSurfaceArgument(string argument) =>
+        string.Equals(argument, SurfaceArgument, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Parses <c>--parity-capture &lt;outDir&gt;</c> out of <paramref name="args"/>, returning the remaining
@@ -41,10 +45,38 @@ internal sealed record ParityCaptureOptions(string OutputDirectory)
         error = "";
         var filteredArguments = new List<string>();
         string? outputDirectory = null;
+        string? surfaceId = null;
         for (var index = 0; index < args.Count; index++)
         {
             var argument = args[index];
-            if (!IsArgument(argument))
+            if (IsSurfaceArgument(argument))
+            {
+                if (surfaceId is not null)
+                {
+                    startupArguments = [];
+                    error = $"{SurfaceArgument} was specified more than once.";
+                    return false;
+                }
+
+                if (index + 1 >= args.Count)
+                {
+                    startupArguments = [];
+                    error = $"{SurfaceArgument} requires a surface id.";
+                    return false;
+                }
+
+                surfaceId = args[++index];
+                if (string.IsNullOrWhiteSpace(surfaceId))
+                {
+                    startupArguments = [];
+                    error = $"{SurfaceArgument} requires a non-empty surface id.";
+                    return false;
+                }
+
+                continue;
+            }
+
+            if (!IsCaptureArgument(argument))
             {
                 filteredArguments.Add(argument);
                 continue;
@@ -73,8 +105,15 @@ internal sealed record ParityCaptureOptions(string OutputDirectory)
             }
         }
 
+        if (outputDirectory is null && surfaceId is not null)
+        {
+            startupArguments = [];
+            error = $"{SurfaceArgument} requires {Argument} to be specified.";
+            return false;
+        }
+
         if (outputDirectory is not null)
-            options = new ParityCaptureOptions(outputDirectory);
+            options = new ParityCaptureOptions(outputDirectory, surfaceId);
 
         startupArguments = filteredArguments.ToArray();
         return true;
@@ -188,7 +227,9 @@ internal static class ParityCaptureCoordinator
         {
             Directory.CreateDirectory(options.OutputDirectory);
             await WaitForShellReadyAsync(mainWindow);
-            results = await mainWindow.CaptureParitySurfacesAsync(options.OutputDirectory);
+            results = await mainWindow.CaptureParitySurfacesAsync(
+                options.OutputDirectory,
+                targetSurfaceId: options.SurfaceId);
             WriteManifest(options.OutputDirectory, results);
             diagnostics?.RecordEvent("parity_capture", new Dictionary<string, string?>
             {

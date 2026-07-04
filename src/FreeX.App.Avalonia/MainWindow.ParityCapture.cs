@@ -89,38 +89,63 @@ public sealed partial class MainWindow
     /// outcome list that drives the manifest. Runs on the UI thread (the coordinator awaits it from the
     /// <see cref="Window.Opened"/> handler). Each surface is wrapped so one failure does not stop the others.
     /// </summary>
-    internal async Task<IReadOnlyList<ParitySurfaceResult>> CaptureParitySurfacesAsync(string outputDirectory, int? maxDialogSurfaces = null)
+    internal async Task<IReadOnlyList<ParitySurfaceResult>> CaptureParitySurfacesAsync(
+        string outputDirectory,
+        int? maxDialogSurfaces = null,
+        string? targetSurfaceId = null)
     {
         var results = new List<ParitySurfaceResult>();
+        var captureAll = string.IsNullOrWhiteSpace(targetSurfaceId);
+        var requestedSurfaceId = targetSurfaceId ?? "";
 
         // ── Ribbon tabs + grid: render the live shell window with each tab selected. ──
-        var ribbonTabControl = FindParityRibbonTabControl();
-        foreach (var (surfaceId, tabId) in ParityStaticRibbonTabs)
+        if (captureAll || requestedSurfaceId.StartsWith("tab.", StringComparison.Ordinal) ||
+            requestedSurfaceId.StartsWith("contextual.", StringComparison.Ordinal) ||
+            requestedSurfaceId.StartsWith("grid.", StringComparison.Ordinal))
         {
-            results.Add(CaptureRibbonTab(outputDirectory, ribbonTabControl, surfaceId, tabId, ParitySurfaceKind.StaticRibbonTab));
-        }
+            var ribbonTabControl = FindParityRibbonTabControl();
+            foreach (var (surfaceId, tabId) in ParityStaticRibbonTabs)
+            {
+                if (captureAll || string.Equals(requestedSurfaceId, surfaceId, StringComparison.Ordinal))
+                    results.Add(CaptureRibbonTab(outputDirectory, ribbonTabControl, surfaceId, tabId, ParitySurfaceKind.StaticRibbonTab));
+            }
 
-        foreach (var (surfaceId, tabId, activationKey) in ParityContextualRibbonTabs)
-        {
+            foreach (var (surfaceId, tabId, activationKey) in ParityContextualRibbonTabs)
+            {
+                if (!captureAll && !string.Equals(requestedSurfaceId, surfaceId, StringComparison.Ordinal))
+                    continue;
+
+                _ribbonContextSource.SetParityCaptureContext(null);
+                LayoutWindow();
+                _ribbonContextSource.SetParityCaptureContext(activationKey);
+                LayoutWindow();
+                ribbonTabControl = FindParityRibbonTabControl();
+                results.Add(CaptureRibbonTab(outputDirectory, ribbonTabControl, surfaceId, tabId, ParitySurfaceKind.ContextualRibbonTab));
+            }
             _ribbonContextSource.SetParityCaptureContext(null);
             LayoutWindow();
-            _ribbonContextSource.SetParityCaptureContext(activationKey);
-            LayoutWindow();
-            ribbonTabControl = FindParityRibbonTabControl();
-            results.Add(CaptureRibbonTab(outputDirectory, ribbonTabControl, surfaceId, tabId, ParitySurfaceKind.ContextualRibbonTab));
-        }
-        _ribbonContextSource.SetParityCaptureContext(null);
-        LayoutWindow();
 
-        // grid.demo: the worksheet over the startup demo workbook, framed by the Home tab.
-        SelectParityRibbonTab(ribbonTabControl, "HomeTab");
-        results.Add(CaptureWindowSurface(outputDirectory, "grid.demo", ParitySurfaceKind.Screen));
-        PrepareSheetTabsOverflowParityCapture();
-        SelectParityRibbonTab(ribbonTabControl, "HomeTab");
-        results.Add(CaptureWindowSurface(outputDirectory, "grid.sheetTabsOverflow", ParitySurfaceKind.Screen));
+            // grid.demo: the worksheet over the startup demo workbook, framed by the Home tab.
+            if (captureAll || string.Equals(requestedSurfaceId, "grid.demo", StringComparison.Ordinal))
+            {
+                SelectParityRibbonTab(ribbonTabControl, "HomeTab");
+                results.Add(CaptureWindowSurface(outputDirectory, "grid.demo", ParitySurfaceKind.Screen));
+            }
+
+            if (captureAll || string.Equals(requestedSurfaceId, "grid.sheetTabsOverflow", StringComparison.Ordinal))
+            {
+                PrepareSheetTabsOverflowParityCapture();
+                SelectParityRibbonTab(ribbonTabControl, "HomeTab");
+                results.Add(CaptureWindowSurface(outputDirectory, "grid.sheetTabsOverflow", ParitySurfaceKind.Screen));
+            }
+        }
 
         // ── Dialogs: open each, render the dialog window, close it. ──
         var dialogOpeners = ParityDialogOpeners();
+        if (!captureAll)
+            dialogOpeners = dialogOpeners
+                .Where(opener => string.Equals(opener.SurfaceId, requestedSurfaceId, StringComparison.Ordinal))
+                .ToArray();
         if (maxDialogSurfaces is { } limit)
             dialogOpeners = dialogOpeners.Take(Math.Max(0, limit)).ToArray();
 
@@ -133,12 +158,20 @@ public sealed partial class MainWindow
         var tabDialogs = ParityTabDialogOpeners();
         if (maxDialogSurfaces is not null)
             tabDialogs = [];
+        if (!captureAll)
+            tabDialogs = tabDialogs
+                .Where(dialog => string.Equals(dialog.SurfaceId, requestedSurfaceId, StringComparison.Ordinal) ||
+                    requestedSurfaceId.StartsWith(dialog.SurfaceId + ".", StringComparison.Ordinal))
+                .ToArray();
 
         foreach (var (surfaceId, opener, tabNames) in tabDialogs)
             results.AddRange(await CaptureModalTabsAsync(outputDirectory, surfaceId, ParitySurfaceKind.Dialog, opener, tabNames));
 
         foreach (var surfaceId in ParityBackstageSurfaces)
-            results.Add(CaptureBackstageSurface(outputDirectory, surfaceId));
+        {
+            if (captureAll || string.Equals(requestedSurfaceId, surfaceId, StringComparison.Ordinal))
+                results.Add(CaptureBackstageSurface(outputDirectory, surfaceId));
+        }
 
         return results;
     }
