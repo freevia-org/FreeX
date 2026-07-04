@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
 
@@ -50,6 +51,12 @@ public sealed class SlidePaneTests
         var overlay = (Grid)pane.Child!;
         return (ScrollViewer)overlay.Children[0];
     }
+
+    private static Color BrushColor(Brush brush) =>
+        brush.Should().BeOfType<SolidColorBrush>().Subject.Color;
+
+    private static Color ColorFromHex(string hex) =>
+        (Color)ColorConverter.ConvertFromString(hex)!;
 
     private static (SlidePane pane, EditingSession editor) MakePaneWithSlides(int count)
     {
@@ -131,6 +138,28 @@ public sealed class SlidePaneTests
     }
 
     // ── Structural changes ────────────────────────────────────────────────────────
+
+    [StaFact]
+    public void SlidePane_ThumbnailChrome_UsesSharedVisualPlanTokens()
+    {
+        var (pane, editor) = MakePaneWithSlides(2);
+        editor.SelectSlide(1);
+
+        var selected = GetItem(pane, 1);
+        BrushColor(selected.Background).Should().Be(ColorFromHex(SlidePanePlanner.DefaultItemSelectedBackgroundHex));
+        BrushColor(selected.BorderBrush).Should().Be(ColorFromHex(SlidePanePlanner.DefaultItemSelectedBorderHex));
+        selected.BorderThickness.Left.Should().Be(SlidePanePlanner.DefaultSelectedBorderThickness);
+        selected.CornerRadius.TopLeft.Should().Be(SlidePanePlanner.DefaultItemCornerRadius);
+
+        var normal = GetItem(pane, 0);
+        BrushColor(normal.Background).Should().Be(ColorFromHex(SlidePanePlanner.DefaultItemNormalBackgroundHex));
+        BrushColor(normal.BorderBrush).Should().Be(ColorFromHex(SlidePanePlanner.DefaultItemNormalBorderHex));
+        normal.BorderThickness.Left.Should().Be(SlidePanePlanner.DefaultNormalBorderThickness);
+
+        var panel = selected.Child.Should().BeOfType<StackPanel>().Subject;
+        var label = panel.Children[0].Should().BeOfType<TextBlock>().Subject;
+        BrushColor(label.Foreground).Should().Be(ColorFromHex(SlidePanePlanner.DefaultLabelForegroundHex));
+    }
 
     [StaFact]
     public void AfterInsertSlide_PaneShowsNPlusOneItems()

@@ -96,6 +96,7 @@ public sealed class MainWindow : Window
     private readonly Border _slidePaneInsertionIndicator;
     private readonly Button _slidePaneNewSlideButton;
     private readonly HashSet<string> _slidePaneCollapsedSectionIds = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<SlidePaneThumbnailVisualPlan> _slidePaneRenderedThumbnailPlans = new();
     private readonly TextBox _notesBox;
     private readonly TextBlock _statusText;
     private Border _layoutPickerHost = null!;
@@ -221,6 +222,7 @@ public sealed class MainWindow : Window
     internal bool IsSlidePaneInsertionIndicatorVisible => _slidePaneInsertionIndicator.IsVisible;
     internal bool IsSlidePaneNewSlideButtonVisible => _slidePaneNewSlideButton.IsVisible;
     internal string? SlidePaneNewSlideButtonText => _slidePaneNewSlideButton.Content?.ToString();
+    internal IReadOnlyList<SlidePaneThumbnailVisualPlan> SlidePaneRenderedThumbnailPlans => _slidePaneRenderedThumbnailPlans;
 
     internal bool IsDirty => _fileWorkflow.IsDirty;
     internal PresentationViewShowState ViewShowStateForTests => _viewShowState;
@@ -394,7 +396,7 @@ public sealed class MainWindow : Window
         {
             Width       = 180,
             Padding     = new Thickness(4),
-            Background  = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
+            Background  = BrushFromHex(SlidePanePlanner.DefaultPaneBackgroundHex),
         };
         _slidePaneList.SelectionChanged += OnSlidePaneSelectionChanged;
 
@@ -4797,6 +4799,7 @@ public sealed class MainWindow : Window
         try
         {
             _slidePaneList.Items.Clear();
+            _slidePaneRenderedThumbnailPlans.Clear();
 
             var entries = SlidePanePlanner.BuildEntries(
                 _presentation.Slides,
@@ -4815,6 +4818,7 @@ public sealed class MainWindow : Window
                     entry,
                     slide,
                     Editor.CurrentSlideIndex);
+                _slidePaneRenderedThumbnailPlans.Add(plan);
 
                 // Small SlideCanvas thumbnail using the shared slide pane metrics.
                 var thumb = new SlideCanvas
@@ -4834,6 +4838,7 @@ public sealed class MainWindow : Window
                     FontSize            = 10,
                     MinHeight           = plan.LabelHeight,
                     Margin              = new Thickness(0, 2, 0, 0),
+                    Foreground          = BrushFromHex(plan.LabelForegroundHex),
                 };
 
                 var panel = new StackPanel
@@ -4842,16 +4847,38 @@ public sealed class MainWindow : Window
                     Children = { thumb, label },
                 };
 
+                var itemChrome = new Border
+                {
+                    Background      = BrushFromHex(plan.IsSelected ? plan.ItemSelectedBackgroundHex : plan.ItemNormalBackgroundHex),
+                    BorderBrush     = BrushFromHex(plan.IsSelected ? plan.ItemSelectedBorderHex : plan.ItemNormalBorderHex),
+                    BorderThickness = new Thickness(plan.IsSelected ? plan.SelectedBorderThickness : plan.NormalBorderThickness),
+                    CornerRadius    = new CornerRadius(plan.ItemCornerRadius),
+                    Padding         = new Thickness(plan.ItemPadding * 0.25),
+                    Child           = panel,
+                };
+
                 var item = new ListBoxItem
                 {
                     Tag         = plan.SlideIndex,
-                    Content     = panel,
+                    Content     = itemChrome,
                     Padding     = new Thickness(2),
                     MinHeight   = plan.ItemHeight,
                     IsSelected  = plan.IsSelected,
                     ContextMenu = BuildSlidePaneContextMenu(plan.SlideIndex),
                 };
                 ToolTip.SetTip(item, plan.ToolTipText);
+                item.PointerEntered += (_, _) =>
+                {
+                    if (item.Tag is int idx && idx != Editor.CurrentSlideIndex)
+                        itemChrome.Background = BrushFromHex(plan.ItemHoverBackgroundHex);
+                };
+                item.PointerExited += (_, _) =>
+                {
+                    if (item.Tag is int idx)
+                        itemChrome.Background = BrushFromHex(idx == Editor.CurrentSlideIndex
+                            ? plan.ItemSelectedBackgroundHex
+                            : plan.ItemNormalBackgroundHex);
+                };
                 WireSlidePaneDragHandlers(item);
                 _slidePaneList.Items.Add(item);
             }
@@ -5232,6 +5259,7 @@ public sealed class MainWindow : Window
         }
 
         _slidePaneInsertionIndicator.Height = plan.IndicatorThickness;
+        _slidePaneInsertionIndicator.Background = BrushFromHex(plan.AccentColorHex);
         _slidePaneInsertionIndicator.Margin = new Thickness(
             plan.HorizontalInset,
             plan.IndicatorTopMargin,
@@ -5249,6 +5277,9 @@ public sealed class MainWindow : Window
             .Select(item => item.Tag is int)
             .ToArray();
 
+    private static IBrush BrushFromHex(string hex) =>
+        new SolidColorBrush(Color.Parse(hex));
+
     private void SelectSlidePaneItem(int slideIndex)
     {
         var itemIndex = 0;
@@ -5264,6 +5295,24 @@ public sealed class MainWindow : Window
         }
 
         _slidePaneList.SelectedIndex = -1;
+    }
+
+    private void UpdateSlidePaneItemChrome()
+    {
+        foreach (var item in _slidePaneList.Items.OfType<ListBoxItem>())
+        {
+            if (item.Tag is not int slideIndex || item.Content is not Border chrome)
+                continue;
+
+            var plan = _slidePaneRenderedThumbnailPlans.FirstOrDefault(p => p.SlideIndex == slideIndex);
+            if (plan is null)
+                continue;
+
+            var selected = slideIndex == Editor.CurrentSlideIndex;
+            chrome.Background = BrushFromHex(selected ? plan.ItemSelectedBackgroundHex : plan.ItemNormalBackgroundHex);
+            chrome.BorderBrush = BrushFromHex(selected ? plan.ItemSelectedBorderHex : plan.ItemNormalBorderHex);
+            chrome.BorderThickness = new Thickness(selected ? plan.SelectedBorderThickness : plan.NormalBorderThickness);
+        }
     }
 
     private void OnSlidePaneSelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -5336,6 +5385,7 @@ public sealed class MainWindow : Window
         try { SelectSlidePaneItem(Editor.CurrentSlideIndex); }
         finally { _slidePaneRefreshing = false; }
 
+        UpdateSlidePaneItemChrome();
         RefreshCanvas();
         RefreshNotesPane();
         RefreshReviewWorkflowPlans();

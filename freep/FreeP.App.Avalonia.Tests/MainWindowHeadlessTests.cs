@@ -528,6 +528,35 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlidePane_thumbnails_project_shared_visual_chrome_plan()
+    {
+        SlidePaneThumbnailVisualPlan? firstPlan = null;
+        var paneItems = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            paneItems = window.SlidePaneSlideItemCount;
+            firstPlan = window.SlidePaneRenderedThumbnailPlans.FirstOrDefault();
+        });
+
+        if (!ran) return;
+        paneItems.Should().BeGreaterThanOrEqualTo(1);
+        firstPlan.Should().NotBeNull();
+        firstPlan!.PaneBackgroundHex.Should().Be(SlidePanePlanner.DefaultPaneBackgroundHex);
+        firstPlan.ItemNormalBackgroundHex.Should().Be(SlidePanePlanner.DefaultItemNormalBackgroundHex);
+        firstPlan.ItemSelectedBackgroundHex.Should().Be(SlidePanePlanner.DefaultItemSelectedBackgroundHex);
+        firstPlan.ItemHoverBackgroundHex.Should().Be(SlidePanePlanner.DefaultItemHoverBackgroundHex);
+        firstPlan.ItemNormalBorderHex.Should().Be(SlidePanePlanner.DefaultItemNormalBorderHex);
+        firstPlan.ItemSelectedBorderHex.Should().Be(SlidePanePlanner.DefaultItemSelectedBorderHex);
+        firstPlan.ThumbnailBorderHex.Should().Be(SlidePanePlanner.DefaultThumbnailBorderHex);
+        firstPlan.LabelForegroundHex.Should().Be(SlidePanePlanner.DefaultLabelForegroundHex);
+        firstPlan.ItemCornerRadius.Should().Be(SlidePanePlanner.DefaultItemCornerRadius);
+        firstPlan.NormalBorderThickness.Should().Be(SlidePanePlanner.DefaultNormalBorderThickness);
+        firstPlan.SelectedBorderThickness.Should().Be(SlidePanePlanner.DefaultSelectedBorderThickness);
+    }
+
+    [Fact]
     public async Task SlidePane_section_header_toggle_collapses_member_slides()
     {
         var headersBefore = -1;
