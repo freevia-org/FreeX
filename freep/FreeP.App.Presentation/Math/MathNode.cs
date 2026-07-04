@@ -240,6 +240,37 @@ public abstract class MathNode
         public Bar(MathNode @base, bool isOver = true) { Base = @base; IsOver = isOver; }
     }
 
+    /// <summary><c>m:box</c> -- transparent wrapper around a base expression.</summary>
+    public sealed class Box : MathNode
+    {
+        public MathNode Base { get; }
+        public Box(MathNode @base) { Base = @base; }
+    }
+
+    /// <summary><c>m:borderBox</c> -- a box with optional visible borders around a base expression.</summary>
+    public sealed class BorderBox : MathNode
+    {
+        public MathNode Base { get; }
+        public bool ShowTop { get; }
+        public bool ShowBottom { get; }
+        public bool ShowLeft { get; }
+        public bool ShowRight { get; }
+
+        public BorderBox(
+            MathNode @base,
+            bool showTop = true,
+            bool showBottom = true,
+            bool showLeft = true,
+            bool showRight = true)
+        {
+            Base = @base;
+            ShowTop = showTop;
+            ShowBottom = showBottom;
+            ShowLeft = showLeft;
+            ShowRight = showRight;
+        }
+    }
+
     // ── Group character ──────────────────────────────────────────────────────
 
     /// <summary><c>m:groupChr</c> — a grouping character above/below the base.</summary>

@@ -388,6 +388,57 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void Box_LayoutsAsTransparentChildWrapper()
+    {
+        var child = new MathNode.Frac(Run("1"), new MathNode.Rad(null, Run("x")));
+        var layout = MathLayoutEngine.Layout(new MathNode.Box(child), "Cambria Math", FontSizePt);
+
+        var wrapper = Assert.IsType<MathBox.Container>(layout.Children[0]);
+        wrapper.Children.Should().ContainSingle("transparent m:box should preserve its child box without drawing a border");
+        wrapper.Children.Should().NotContain(b => b is MathBox.Line);
+
+        var childBox = wrapper.Children[0];
+        wrapper.Metrics.Width.Should().BeApproximately(childBox.Metrics.Width, 0.01);
+        wrapper.Metrics.Height.Should().BeApproximately(childBox.Metrics.Height, 0.01);
+        wrapper.Metrics.Ascent.Should().BeApproximately(childBox.Metrics.Ascent, 0.01);
+    }
+
+    [Fact]
+    public void BorderBox_EmitsVisibleSideLinesAndPadsNestedChild()
+    {
+        var child = new MathNode.Frac(Run("1"), new MathNode.Rad(null, Run("x")));
+        var node = new MathNode.BorderBox(
+            child,
+            showTop: true,
+            showBottom: false,
+            showLeft: true,
+            showRight: false);
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var container = Assert.IsType<MathBox.Container>(layout.Children[0]);
+        var childBox = container.Children[0];
+        var borderLines = container.Children.OfType<MathBox.Line>().ToList();
+
+        borderLines.Should().HaveCount(2, "only the visible top and left border sides should produce line primitives");
+        childBox.X.Should().BeGreaterThan(0, "borderBox must pad the nested child from the border");
+        childBox.Y.Should().BeGreaterThan(0, "borderBox must pad the nested child from the border");
+        container.Metrics.Width.Should().BeGreaterThan(childBox.Metrics.Width);
+        container.Metrics.Height.Should().BeGreaterThan(childBox.Metrics.Height);
+        container.Metrics.Ascent.Should().BeApproximately(childBox.Y + childBox.Metrics.Ascent, 0.01,
+            "the borderBox baseline should remain the nested child's baseline after padding");
+
+        var ops = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math");
+        ops.OfType<MathDrawOp.DrawLine>().Should().HaveCount(2);
+        ops.OfType<MathDrawOp.DrawLine>().Should().ContainSingle(line =>
+                Math.Abs(line.Y1 - line.Y2) < 0.01 && line.X2 > line.X1,
+            "the visible top side should produce exactly one horizontal line");
+        ops.OfType<MathDrawOp.DrawLine>().Should().ContainSingle(line =>
+                Math.Abs(line.X1 - line.X2) < 0.01 && line.Y2 > line.Y1,
+            "the visible left side should produce exactly one vertical line");
+        ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text).Should().Contain(new[] { "1", "x" });
+    }
+
+    [Fact]
     public void LimitLow_CentersLimitBelowBase_AndGrowsDescent()
     {
         var node = new MathNode.Limit(Run("lim"), Run("0"), isUpper: false);

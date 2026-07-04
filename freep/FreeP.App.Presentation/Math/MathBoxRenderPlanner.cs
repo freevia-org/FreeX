@@ -58,6 +58,22 @@ public abstract class MathDrawOp
         { X = x; Y = y; Width = width; Thickness = thickness; Color = color; }
     }
 
+    /// <summary>Draw a straight line segment.</summary>
+    public sealed class DrawLine : MathDrawOp
+    {
+        public double X1 { get; }
+        public double Y1 { get; }
+        public double X2 { get; }
+        public double Y2 { get; }
+        public double Thickness { get; }
+        public SrgbColor Color { get; }
+
+        public DrawLine(double x1, double y1, double x2, double y2, double thickness, SrgbColor color)
+        {
+            X1 = x1; Y1 = y1; X2 = x2; Y2 = y2; Thickness = thickness; Color = color;
+        }
+    }
+
     /// <summary>Draw a scaled bracket character at the given position.</summary>
     public sealed class DrawBracket : MathDrawOp
     {
@@ -145,6 +161,11 @@ public static class MathBoxRenderPlanner
             case MathBox.HRule hr:
                 ops.Add(new MathDrawOp.DrawHRule(
                     absX, absY + hr.Thickness / 2.0, hr.LineWidth, hr.Thickness, color));
+                break;
+
+            case MathBox.Line line:
+                ops.Add(new MathDrawOp.DrawLine(
+                    absX, absY, absX + line.X2, absY + line.Y2, line.Thickness, color));
                 break;
 
             case MathBox.Bracket br:

@@ -908,6 +908,31 @@ public sealed partial class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void RoundTrips_NativeJsonAboveAverageEqualAverageAndStdDev()
+    {
+        var workbook = new Workbook("AboveAverageStdDev");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = GridRange.Parse("A1:A9", sheet.Id),
+            RuleType = CfRuleType.AboveAverage,
+            AboveAverage = false,
+            EqualAverage = true,
+            StdDevCount = 2
+        });
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var format = adapter.Load(stream).GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        format.AboveAverage.Should().BeFalse();
+        format.EqualAverage.Should().BeTrue();
+        format.StdDevCount.Should().Be(2);
+    }
+
+    [Fact]
     public void Load_DropsNullNativeJsonConditionalFormatNativeChildXmlEntries()
     {
         const string json = """
