@@ -57,8 +57,41 @@ public sealed record PresentationMediaTranscriptPlan(
     int CueCount,
     IReadOnlyList<PresentationMediaTranscriptTrackDescriptor> Tracks);
 
+public sealed record PresentationMediaCaptionTrackAuthoringDescriptor(
+    string? Label,
+    string? Language,
+    string? Source,
+    string? TranscriptText,
+    IReadOnlyList<PresentationMediaTranscriptCueDescriptor>? Cues = null);
+
+public sealed record PresentationMediaCaptionTrackMutationResult(
+    bool Succeeded,
+    string? ErrorMessage,
+    int TrackIndex,
+    MediaCaptionTrackInfo? Track)
+{
+    public static PresentationMediaCaptionTrackMutationResult Success(int trackIndex, MediaCaptionTrackInfo track) =>
+        new(true, null, trackIndex, track);
+
+    public static PresentationMediaCaptionTrackMutationResult Deleted(int trackIndex, MediaCaptionTrackInfo track) =>
+        new(true, null, trackIndex, track);
+
+    public static PresentationMediaCaptionTrackMutationResult Failure(string errorMessage) =>
+        new(false, errorMessage, -1, null);
+}
+
 public static class PresentationMediaTranscriptPlanner
 {
+    public const string MissingMediaMessage = "Media object is required.";
+    public const string MissingCaptionTrackMessage = "Caption track was not found.";
+    public const string ExternalCaptionTrackMessage = "External caption tracks must remain link metadata; create a new internal track instead.";
+    public const string MissingCaptionDescriptorMessage = "Caption authoring descriptor is required.";
+    public const string MissingCaptionContentMessage = "Caption authoring requires typed cues or transcript text.";
+    public const string AmbiguousCaptionContentMessage = "Caption authoring accepts either typed cues or transcript text, not both.";
+    public const string EmptyCaptionContentMessage = "Caption authoring requires at least one valid cue.";
+    public const string InvalidCaptionCueTimingMessage = "Caption cues must have non-negative, increasing, non-overlapping time ranges.";
+    public const string InvalidCaptionSourceMessage = "Internal caption track source must be a relative .vtt package path or file name.";
+
     private enum CaptionTrackFormat
     {
         Unsupported,
@@ -68,6 +101,76 @@ public static class PresentationMediaTranscriptPlanner
 
     private static readonly Regex TagPattern = new("<[^>]+>", RegexOptions.Compiled);
     private static readonly Regex WhitespacePattern = new(@"\s+", RegexOptions.Compiled);
+
+    public static PresentationMediaCaptionTrackMutationResult CreateInternalCaptionTrack(
+        MediaInfo? media,
+        PresentationMediaCaptionTrackAuthoringDescriptor? descriptor)
+    {
+        if (media is null)
+        {
+            return PresentationMediaCaptionTrackMutationResult.Failure(MissingMediaMessage);
+        }
+
+        if (!TryBuildInternalCaptionTrack(media.CaptionTracks.Count, descriptor, existingTrack: null, out var track, out var errorMessage))
+        {
+            return PresentationMediaCaptionTrackMutationResult.Failure(errorMessage);
+        }
+
+        media.CaptionTracks.Add(track);
+        return PresentationMediaCaptionTrackMutationResult.Success(media.CaptionTracks.Count - 1, track);
+    }
+
+    public static PresentationMediaCaptionTrackMutationResult ReplaceInternalCaptionTrack(
+        MediaInfo? media,
+        int trackIndex,
+        PresentationMediaCaptionTrackAuthoringDescriptor? descriptor)
+    {
+        if (media is null)
+        {
+            return PresentationMediaCaptionTrackMutationResult.Failure(MissingMediaMessage);
+        }
+
+        if (!TryGetCaptionTrack(media, trackIndex, out var existingTrack))
+        {
+            return PresentationMediaCaptionTrackMutationResult.Failure(MissingCaptionTrackMessage);
+        }
+
+        if (existingTrack.IsExternal)
+        {
+            return PresentationMediaCaptionTrackMutationResult.Failure(ExternalCaptionTrackMessage);
+        }
+
+        if (!TryBuildInternalCaptionTrack(trackIndex, descriptor, existingTrack, out var replacement, out var errorMessage))
+        {
+            return PresentationMediaCaptionTrackMutationResult.Failure(errorMessage);
+        }
+
+        media.CaptionTracks[trackIndex] = replacement;
+        return PresentationMediaCaptionTrackMutationResult.Success(trackIndex, replacement);
+    }
+
+    public static PresentationMediaCaptionTrackMutationResult DeleteInternalCaptionTrack(
+        MediaInfo? media,
+        int trackIndex)
+    {
+        if (media is null)
+        {
+            return PresentationMediaCaptionTrackMutationResult.Failure(MissingMediaMessage);
+        }
+
+        if (!TryGetCaptionTrack(media, trackIndex, out var track))
+        {
+            return PresentationMediaCaptionTrackMutationResult.Failure(MissingCaptionTrackMessage);
+        }
+
+        if (track.IsExternal)
+        {
+            return PresentationMediaCaptionTrackMutationResult.Failure(ExternalCaptionTrackMessage);
+        }
+
+        media.CaptionTracks.RemoveAt(trackIndex);
+        return PresentationMediaCaptionTrackMutationResult.Deleted(trackIndex, track);
+    }
 
     public static PresentationMediaTranscriptPlan BuildTranscriptPlan(Presentation presentation)
     {
@@ -100,6 +203,227 @@ public static class PresentationMediaTranscriptPlanner
             tracks.Count,
             tracks.Sum(track => track.Cues.Count),
             tracks);
+    }
+
+    private static bool TryBuildInternalCaptionTrack(
+        int trackIndex,
+        PresentationMediaCaptionTrackAuthoringDescriptor? descriptor,
+        MediaCaptionTrackInfo? existingTrack,
+        out MediaCaptionTrackInfo track,
+        out string errorMessage)
+    {
+        track = new MediaCaptionTrackInfo();
+        errorMessage = string.Empty;
+
+        if (descriptor is null)
+        {
+            errorMessage = MissingCaptionDescriptorMessage;
+            return false;
+        }
+
+        if (!TryBuildAuthoredCues(descriptor, out var cues, out errorMessage))
+        {
+            return false;
+        }
+
+        var source = NormalizeCaptionSource(
+            descriptor.Source,
+            existingTrack?.Source,
+            trackIndex);
+        if (source is null)
+        {
+            errorMessage = InvalidCaptionSourceMessage;
+            return false;
+        }
+
+        track = new MediaCaptionTrackInfo
+        {
+            Source = source,
+            Bytes = BuildWebVttBytes(cues),
+            ContentType = "text/vtt",
+            Language = NormalizeText(descriptor.Language) ?? NormalizeText(existingTrack?.Language) ?? string.Empty,
+            Label = NormalizeText(descriptor.Label) ?? NormalizeText(existingTrack?.Label) ?? InferTrackLabel(source, trackIndex),
+            IsExternal = false
+        };
+
+        return true;
+    }
+
+    private static bool TryBuildAuthoredCues(
+        PresentationMediaCaptionTrackAuthoringDescriptor descriptor,
+        out IReadOnlyList<PresentationMediaTranscriptCueDescriptor> cues,
+        out string errorMessage)
+    {
+        var hasTypedCues = descriptor.Cues is { Count: > 0 };
+        var hasTranscript = !string.IsNullOrWhiteSpace(descriptor.TranscriptText);
+
+        cues = [];
+        errorMessage = string.Empty;
+
+        if (!hasTypedCues && !hasTranscript)
+        {
+            errorMessage = MissingCaptionContentMessage;
+            return false;
+        }
+
+        if (hasTypedCues && hasTranscript)
+        {
+            errorMessage = AmbiguousCaptionContentMessage;
+            return false;
+        }
+
+        cues = hasTypedCues
+            ? NormalizeAuthoredCues(descriptor.Cues!)
+            : ParseCaptionTranscriptText(descriptor.TranscriptText!);
+
+        if (cues.Count == 0)
+        {
+            errorMessage = EmptyCaptionContentMessage;
+            return false;
+        }
+
+        if (!ValidateCaptionCueTiming(cues))
+        {
+            errorMessage = InvalidCaptionCueTimingMessage;
+            return false;
+        }
+
+        return true;
+    }
+
+    private static IReadOnlyList<PresentationMediaTranscriptCueDescriptor> NormalizeAuthoredCues(
+        IEnumerable<PresentationMediaTranscriptCueDescriptor> cues)
+    {
+        var normalized = new List<PresentationMediaTranscriptCueDescriptor>();
+        foreach (var cue in cues)
+        {
+            var text = CollapseWhitespace(cue.Text);
+            if (text.Length == 0)
+            {
+                continue;
+            }
+
+            normalized.Add(new PresentationMediaTranscriptCueDescriptor(cue.StartTime, cue.EndTime, text));
+        }
+
+        return normalized;
+    }
+
+    private static IReadOnlyList<PresentationMediaTranscriptCueDescriptor> ParseCaptionTranscriptText(string text)
+    {
+        var normalizedText = DecodeUtf8(Encoding.UTF8.GetBytes(text));
+        var format = DetectFormat(
+            new MediaCaptionTrackInfo
+            {
+                Source = normalizedText.TrimStart().StartsWith("WEBVTT", StringComparison.OrdinalIgnoreCase)
+                    ? "captions.vtt"
+                    : "captions.srt"
+            },
+            normalizedText);
+
+        return format switch
+        {
+            CaptionTrackFormat.WebVtt => ParseWebVtt(normalizedText),
+            CaptionTrackFormat.Srt => ParseSrt(normalizedText),
+            _ => []
+        };
+    }
+
+    private static bool ValidateCaptionCueTiming(IReadOnlyList<PresentationMediaTranscriptCueDescriptor> cues)
+    {
+        var previousEnd = TimeSpan.Zero;
+        for (var index = 0; index < cues.Count; index++)
+        {
+            var cue = cues[index];
+            if (cue.StartTime < TimeSpan.Zero
+                || cue.EndTime <= cue.StartTime
+                || (index > 0 && cue.StartTime < previousEnd))
+            {
+                return false;
+            }
+
+            previousEnd = cue.EndTime;
+        }
+
+        return true;
+    }
+
+    private static byte[] BuildWebVttBytes(IReadOnlyList<PresentationMediaTranscriptCueDescriptor> cues)
+    {
+        var builder = new StringBuilder("WEBVTT\r\n\r\n");
+        foreach (var cue in cues)
+        {
+            builder
+                .Append(FormatWebVttTimestamp(cue.StartTime))
+                .Append(" --> ")
+                .Append(FormatWebVttTimestamp(cue.EndTime))
+                .Append("\r\n")
+                .Append(EscapeWebVttText(cue.Text))
+                .Append("\r\n\r\n");
+        }
+
+        return Encoding.UTF8.GetBytes(builder.ToString());
+    }
+
+    private static string FormatWebVttTimestamp(TimeSpan value)
+    {
+        var hours = (long)value.TotalHours;
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"{hours:00}:{value.Minutes:00}:{value.Seconds:00}.{value.Milliseconds:000}");
+    }
+
+    private static string EscapeWebVttText(string text)
+        => text
+            .Replace("&", "&amp;", StringComparison.Ordinal)
+            .Replace("<", "&lt;", StringComparison.Ordinal)
+            .Replace(">", "&gt;", StringComparison.Ordinal);
+
+    private static string? NormalizeCaptionSource(
+        string? requestedSource,
+        string? existingSource,
+        int trackIndex)
+    {
+        if (NormalizeText(requestedSource) is { } requested)
+        {
+            return NormalizeInternalWebVttSource(requested);
+        }
+
+        if (NormalizeText(existingSource) is { } existing
+            && NormalizeInternalWebVttSource(existing) is { } reusable)
+        {
+            return reusable;
+        }
+
+        var source = $"ppt/media/authored-captions{trackIndex + 1}.vtt";
+        return NormalizeInternalWebVttSource(source);
+    }
+
+    private static string? NormalizeInternalWebVttSource(string source)
+    {
+        source = source.Replace('\\', '/');
+
+        if (Uri.TryCreate(source, UriKind.Absolute, out _)
+            || source.StartsWith("/", StringComparison.Ordinal)
+            || source.Split('/').Any(part => part is ".." or ".")
+            || !source.EndsWith(".vtt", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return source;
+    }
+
+    private static bool TryGetCaptionTrack(MediaInfo media, int trackIndex, out MediaCaptionTrackInfo track)
+    {
+        if (trackIndex >= 0 && trackIndex < media.CaptionTracks.Count)
+        {
+            track = media.CaptionTracks[trackIndex];
+            return true;
+        }
+
+        track = new MediaCaptionTrackInfo();
+        return false;
     }
 
     private static PresentationMediaTranscriptTrackDescriptor BuildTrack(
