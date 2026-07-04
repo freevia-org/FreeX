@@ -110,6 +110,44 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void AxisLabelPlans_CarryNumberFormatMetadataWithoutChangingText()
+    {
+        var series = new ChartSeries { Name = "Sales" };
+        series.Values.AddRange(new double?[] { 1000, 2000 });
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.AddRange(new[] { "2026-01-01", "2026-02-01" });
+        chart.Series.Add(series);
+        chart.CategoryAxis.NumberFormatCode = "m/d/yy";
+        chart.CategoryAxis.NumberFormatSourceLinked = true;
+        chart.ValueAxis.NumberFormatCode = "#,##0.0";
+        chart.ValueAxis.NumberFormatSourceLinked = false;
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var categoryLabels = ChartRenderPlanner.BuildCategoryAxisLabelPlans(chart, frame);
+        var valueLabels = ChartRenderPlanner.BuildValueAxisLabelPlans(chart, frame);
+
+        categoryLabels[0].Text.Should().Be("2026-01-01");
+        categoryLabels[0].AxisLabelFormat.Should().Be(new ChartAxisLabelFormatPlan("m/d/yy", true));
+        valueLabels[0].Text.Should().Be("0");
+        valueLabels[0].AxisLabelFormat.Should().Be(new ChartAxisLabelFormatPlan("#,##0.0", false));
+    }
+
+    [Fact]
+    public void SecondaryValueAxisPlan_CarriesNumberFormatMetadataWithoutChangingText()
+    {
+        var chart = MakeSecondaryAxisChart();
+        chart.SecondaryValueAxis!.NumberFormatCode = "0.00%";
+        chart.SecondaryValueAxis.NumberFormatSourceLinked = false;
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var plan = ChartRenderPlanner.BuildSecondaryValueAxisPrimitivePlan(chart, frame);
+
+        plan.Labels[0].Text.Should().Be("0");
+        plan.Labels.Should().OnlyContain(label =>
+            label.AxisLabelFormat == new ChartAxisLabelFormatPlan("0.00%", false));
+    }
+
+    [Fact]
     public void FormatDataLabel_ComposesConfiguredParts()
     {
         var labels = new ChartDataLabels
