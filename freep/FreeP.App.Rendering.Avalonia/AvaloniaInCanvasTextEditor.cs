@@ -149,7 +149,7 @@ public sealed class AvaloniaInCanvasTextEditor
             return false;
 
         _editor.Bus.Execute(plan.Command);
-        RefreshCellOverlayRichTextPlan(overlaySelection.Selection);
+        ApplyCellOverlayFormatResult(plan.ResultRichTextPlan);
 
         if (_cellEditActive &&
             _cellTextBox is not null &&
@@ -179,7 +179,7 @@ public sealed class AvaloniaInCanvasTextEditor
             return false;
 
         _editor.Bus.Execute(plan.Command);
-        RefreshCellOverlayRichTextPlan(overlaySelection.Selection);
+        ApplyCellOverlayFormatResult(plan.ResultRichTextPlan);
 
         if (IsCurrentCellPlan(plan) && overlaySelection.IsWholeCell)
             ApplyCellOverlayFontFamily(fontFamily);
@@ -195,7 +195,7 @@ public sealed class AvaloniaInCanvasTextEditor
             return false;
 
         _editor.Bus.Execute(plan.Command);
-        RefreshCellOverlayRichTextPlan(overlaySelection.Selection);
+        ApplyCellOverlayFormatResult(plan.ResultRichTextPlan);
 
         if (IsCurrentCellPlan(plan) && overlaySelection.IsWholeCell)
             ApplyCellOverlayFontSize(sizePt);
@@ -211,7 +211,7 @@ public sealed class AvaloniaInCanvasTextEditor
             return false;
 
         _editor.Bus.Execute(plan.Command);
-        RefreshCellOverlayRichTextPlan(overlaySelection.Selection);
+        ApplyCellOverlayFormatResult(plan.ResultRichTextPlan);
 
         if (IsCurrentCellPlan(plan) && overlaySelection.IsWholeCell)
             ApplyCellOverlayColor(color);
@@ -793,6 +793,14 @@ public sealed class AvaloniaInCanvasTextEditor
             : TableCellEditPlanner.PlanInitialSelection(cell.TextBody);
         var richTextPlan = TableCellEditPlanner.PlanRichTextEdit(cell.TextBody, selectionPlan);
         AvaloniaTableCellEditAdapter.ApplyRichTextEditorPlan(_cellTextBox, richTextPlan);
+    }
+
+    private void ApplyCellOverlayFormatResult(InCanvasTableCellRichTextEditPlan? plan)
+    {
+        if (!_cellEditActive || _cellTextBox is null)
+            return;
+
+        AvaloniaTableCellEditAdapter.ApplyFormatResult(_cellTextBox, plan);
     }
 
     private void RefreshShapeOverlayRichTextPlan((int Start, int End)? selection)

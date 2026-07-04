@@ -102,6 +102,15 @@ public sealed record InCanvasEditorRunStyle(
     bool Strikethrough,
     ThemeAwareColor? Color);
 
+public sealed record InCanvasEditorSelectedRunRange(
+    int ParagraphIndex,
+    int RunIndex,
+    int RunStart,
+    int RunEnd,
+    int SelectionStart,
+    int SelectionEnd,
+    string Text);
+
 public sealed record InCanvasEditorTextStyleState(
     string? FontFamily,
     double? FontSizePt,
@@ -126,7 +135,9 @@ public sealed record InCanvasTableCellRichTextEditPlan(
     IReadOnlyList<InCanvasEditorRunStyle> Runs,
     InCanvasEditorTextStyleState SuggestedEditorStyle,
     InCanvasEditorTextStyleState InitialSelectionStyle,
-    bool HasMixedFormatting)
+    bool HasMixedFormatting,
+    InCanvasEditorTextSelection Selection,
+    IReadOnlyList<InCanvasEditorSelectedRunRange> SelectedRunRanges)
 {
     public bool HasRichFormatting => Runs.Count > 1 || HasMixedFormatting;
 }
@@ -138,7 +149,9 @@ public sealed record TableCellTextFormatPlan(
     int? Col,
     TableCellTextFormatKind Kind,
     bool? TargetValue,
-    IPresentationCommand? Command)
+    IPresentationCommand? Command,
+    InCanvasEditorTextSelection? EffectiveSelection = null,
+    InCanvasTableCellRichTextEditPlan? ResultRichTextPlan = null)
 {
     public bool IsReady => Status == TableCellTextFormatStatus.Ready && Command is not null;
 }
@@ -150,7 +163,9 @@ public sealed record TableCellTextValueFormatPlan(
     int? Col,
     TableCellTextValueFormatKind Kind,
     object? Value,
-    IPresentationCommand? Command)
+    IPresentationCommand? Command,
+    InCanvasEditorTextSelection? EffectiveSelection = null,
+    InCanvasTableCellRichTextEditPlan? ResultRichTextPlan = null)
 {
     public bool IsReady => Status == TableCellTextFormatStatus.Ready && Command is not null;
 }
@@ -302,19 +317,34 @@ public static class TableCellEditPlanner
     {
         var runs = BuildRunStyles(body);
         string plainText = InCanvasTextEditPlanner.ExtractPlainText(body);
+        var effectiveSelection = PlanPreservedSelection(initialSelection, plainText.Length);
         var suggestedStyle = BuildStyleState(runs.Count > 0 ? [runs[0]] : []);
         var selectionStyleRuns = ResolveInitialSelectionStyleRuns(
             runs,
-            initialSelection,
+            effectiveSelection,
             plainText.Length);
         var selectionStyle = BuildStyleState(selectionStyleRuns);
+        var selectedRunRanges = BuildSelectedRunRanges(runs, effectiveSelection);
 
         return new InCanvasTableCellRichTextEditPlan(
             plainText,
             runs,
             suggestedStyle,
             selectionStyle,
-            HasMixedFormatting(runs));
+            HasMixedFormatting(runs),
+            effectiveSelection,
+            selectedRunRanges);
+    }
+
+    public static InCanvasEditorTextSelection PlanPreservedSelection(
+        InCanvasEditorTextSelection selection,
+        int textLength)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(textLength);
+
+        return new InCanvasEditorTextSelection(
+            Math.Clamp(selection.Start, 0, textLength),
+            Math.Clamp(selection.End, 0, textLength));
     }
 
     public static TableCellTextFormatPlan PlanTextFormat(
@@ -357,6 +387,8 @@ public static class TableCellEditPlanner
             kind,
             selection,
             out var targetValue);
+        var effectiveSelection = PlanFormatResultSelection(editedBody, selection);
+        var richTextPlan = PlanRichTextEdit(editedBody, effectiveSelection);
 
         return new TableCellTextFormatPlan(
             TableCellTextFormatStatus.Ready,
@@ -365,7 +397,9 @@ public static class TableCellEditPlanner
             col,
             kind,
             targetValue,
-            new SetTableCellTextCommand(slideIndex, shape.Id, row, col, editedBody));
+            new SetTableCellTextCommand(slideIndex, shape.Id, row, col, editedBody),
+            effectiveSelection,
+            richTextPlan);
     }
 
     public static TableCellTextValueFormatPlan PlanFontFamily(
@@ -457,6 +491,8 @@ public static class TableCellEditPlanner
             kind,
             value,
             selection);
+        var effectiveSelection = PlanFormatResultSelection(editedBody, selection);
+        var richTextPlan = PlanRichTextEdit(editedBody, effectiveSelection);
 
         return new TableCellTextValueFormatPlan(
             TableCellTextFormatStatus.Ready,
@@ -465,7 +501,20 @@ public static class TableCellEditPlanner
             col,
             kind,
             value,
-            new SetTableCellTextCommand(slideIndex, shape.Id, row, col, editedBody));
+            new SetTableCellTextCommand(slideIndex, shape.Id, row, col, editedBody),
+            effectiveSelection,
+            richTextPlan);
+    }
+
+    private static InCanvasEditorTextSelection PlanFormatResultSelection(
+        TextBody body,
+        (int Start, int End)? selection)
+    {
+        int textLength = InCanvasTextEditPlanner.ExtractPlainText(body).Length;
+        var normalized = NormalizeSelection(selection, textLength);
+        return normalized is { } range
+            ? new InCanvasEditorTextSelection(range.Start, range.End)
+            : PlanInitialSelection(body);
     }
 
     private static (int Start, int End)? NormalizeSelection((int Start, int End)? selection, int textLength)
@@ -654,6 +703,37 @@ public static class TableCellEditPlanner
         int start = Math.Min(selection.Start, selection.End);
         int end = Math.Max(selection.Start, selection.End);
         return run.End > start && run.Start < end;
+    }
+
+    private static IReadOnlyList<InCanvasEditorSelectedRunRange> BuildSelectedRunRanges(
+        IReadOnlyList<InCanvasEditorRunStyle> runs,
+        InCanvasEditorTextSelection selection)
+    {
+        if (selection.IsCollapsed)
+            return [];
+
+        int selectionStart = Math.Min(selection.Start, selection.End);
+        int selectionEnd = Math.Max(selection.Start, selection.End);
+        var selected = new List<InCanvasEditorSelectedRunRange>();
+
+        foreach (var run in runs)
+        {
+            int overlapStart = Math.Max(run.Start, selectionStart);
+            int overlapEnd = Math.Min(run.End, selectionEnd);
+            if (overlapEnd <= overlapStart)
+                continue;
+
+            selected.Add(new InCanvasEditorSelectedRunRange(
+                run.ParagraphIndex,
+                run.RunIndex,
+                run.Start,
+                run.End,
+                overlapStart,
+                overlapEnd,
+                run.Text.Substring(overlapStart - run.Start, overlapEnd - overlapStart)));
+        }
+
+        return selected;
     }
 
     private static IReadOnlyList<InCanvasEditorRunStyle> ResolveInitialSelectionStyleRuns(

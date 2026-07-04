@@ -544,6 +544,8 @@ public sealed class SlideCanvasAvaloniaTests
         var projectedBold = false;
         var richClass = false;
         var mixedClass = false;
+        var selectionStartAfterFormat = -1;
+        var selectionEndAfterFormat = -1;
 
         await Run(() =>
         {
@@ -582,6 +584,8 @@ public sealed class SlideCanvasAvaloniaTests
             box.SelectionEnd = 10;
             textEditor.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Bold).Should().BeTrue();
             selectedPlan = box.Tag.Should().BeOfType<InCanvasTableCellRichTextEditPlan>().Subject;
+            selectionStartAfterFormat = box.SelectionStart;
+            selectionEndAfterFormat = box.SelectionEnd;
         });
 
         startPlan!.PlainText.Should().Be("HelloWorld");
@@ -598,6 +602,10 @@ public sealed class SlideCanvasAvaloniaTests
 
         selectedPlan!.InitialSelectionStyle.Bold.Should().BeTrue("the refreshed shared plan describes the selected subrange");
         selectedPlan.InitialSelectionStyle.Italic.Should().BeTrue("existing selected-run style stays visible in the shared selection state");
+        selectedPlan.Selection.Should().Be(new InCanvasEditorTextSelection(5, 10));
+        selectedPlan.SelectedRunRanges.Should().ContainSingle(range => range.Text == "World");
+        selectionStartAfterFormat.Should().Be(5);
+        selectionEndAfterFormat.Should().Be(10);
         shape!.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[1].Bold.Should().BeTrue();
     }
 
@@ -810,6 +818,8 @@ public sealed class SlideCanvasAvaloniaTests
         adapter.Should().Contain("TableCellEditPlanner.PlanFontFamily");
         adapter.Should().Contain("TableCellEditPlanner.PlanFontSize");
         adapter.Should().Contain("TableCellEditPlanner.PlanColor");
+        adapter.Should().Contain("ApplyFormatResult");
+        adapter.Should().Contain("TableCellEditPlanner.PlanPreservedSelection");
     }
 
     [Fact]
@@ -847,6 +857,7 @@ public sealed class SlideCanvasAvaloniaTests
         source.Should().Contain("AvaloniaTableCellEditAdapter.PlanFontFamily");
         source.Should().Contain("AvaloniaTableCellEditAdapter.PlanFontSize");
         source.Should().Contain("AvaloniaTableCellEditAdapter.PlanColor");
+        source.Should().Contain("AvaloniaTableCellEditAdapter.ApplyFormatResult");
         source.Should().Contain("ApplyInitialSelection(_cellTextBox, startPlan.InitialSelection)");
         source.Should().NotContain("_editor.PlanActiveTableCell");
         source.Should().Contain("TryApplyActiveTableCellTextFormat");
