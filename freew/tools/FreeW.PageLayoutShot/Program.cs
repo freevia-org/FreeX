@@ -76,6 +76,8 @@ static int RenderAll(string outDir)
     var fieldPageNumberP1Path = VisualEvidenceOutputPath(outDir, "field-page-number-variants", 1);
     var fieldPageNumberP2Path = VisualEvidenceOutputPath(outDir, "field-page-number-variants", 2);
     var fieldPageNumberP3Path = VisualEvidenceOutputPath(outDir, "field-page-number-variants", 3);
+    var referencesHeavyP1Path = VisualEvidenceOutputPath(outDir, "references-heavy-fields", 1);
+    var referencesHeavyP2Path = VisualEvidenceOutputPath(outDir, "references-heavy-fields", 2);
     var sectionLandscapeP1Path = VisualEvidenceOutputPath(outDir, "f2-section-landscape", 1);
     var sectionLandscapeP2Path = VisualEvidenceOutputPath(outDir, "f2-section-landscape", 2);
     var trackedChangesPath = VisualEvidenceOutputPath(outDir, "f2-tracked-changes", 1);
@@ -217,6 +219,27 @@ static int RenderAll(string outDir)
         pageNumber: 3,
         pageCount: 3,
         viewportOffsetY: 2200);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, referencesHeavyP1Path,
+        width: 960, height: 1200,
+        label: "References Heavy p1",
+        scenarioId: "references-heavy-fields",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildReferencesHeavyFieldDocument,
+        pageNumber: 1,
+        pageCount: 2);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, referencesHeavyP2Path,
+        width: 960, height: 1200,
+        label: "References Heavy p2",
+        scenarioId: "references-heavy-fields",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildReferencesHeavyFieldDocument,
+        pageNumber: 2,
+        pageCount: 2,
+        viewportOffsetY: 1100);
     if (rc != 0) return rc;
 
     rc = RenderMode(DocumentViewMode.PrintLayout, sectionLandscapeP1Path,

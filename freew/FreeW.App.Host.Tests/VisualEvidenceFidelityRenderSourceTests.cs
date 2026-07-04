@@ -30,6 +30,8 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument");
         source.Should().Contain("field-page-number-variants.docx");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument");
+        source.Should().Contain("references-heavy-fields.docx");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildReferencesHeavyFieldDocument");
         source.Should().Contain("table-layout-complex.docx");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument");
         source.Should().Contain("table-pagination-repeat-header.docx");
@@ -53,8 +55,8 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("\"--software-fallback\"");
         source.Should().Contain("RenderDocumentSoftwareFallback(");
         source.Should().Contain("Software evidence renderer requested by --software-fallback");
-        source.Should().Contain("[\"renderPath\"] = \"software-fallback\"");
-        source.Should().Contain("[\"captureSource\"] = \"software-renderer\"");
+        source.Should().Contain("renderPath: \"software-fallback\"");
+        source.Should().Contain("captureSource: \"software-renderer\"");
         source.Should().Contain("[\"wpfRenderTargetBitmapReason\"] = wpfRenderTargetFailure");
         project.Should().Contain("FreeW.App.Presentation");
         project.Should().Contain("PackageReference Include=\"SkiaSharp\"");
