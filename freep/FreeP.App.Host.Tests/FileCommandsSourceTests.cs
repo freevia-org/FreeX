@@ -31,8 +31,11 @@ public sealed class FileCommandsSourceTests
         source.Should().Contain("LastPrintOutputPackage");
         source.Should().Contain("LastPrintBackstagePlan");
         source.Should().Contain("PresentationVideoFramePackageExecutor.BuildPackage(");
+        source.Should().Contain("PresentationVideoFramePackageExecutor.BuildHandoffPlan(");
         source.Should().Contain("public PresentationVideoFramePackage BuildVideoFramePackage(");
+        source.Should().Contain("public PresentationVideoExportHandoffPlan BuildVideoExportHandoffPlan(");
         source.Should().Contain("LastVideoFramePackage");
+        source.Should().Contain("LastVideoExportHandoffPlan");
         source.Should().Contain("PresentationExportPlanner.ImageExportPickerTitle");
         source.Should().Contain("PresentationImageExportExecutor.Export(");
         source.Should().Contain("public bool ExportNotesPagePdf(");

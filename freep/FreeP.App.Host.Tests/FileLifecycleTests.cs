@@ -280,6 +280,15 @@ public sealed class FileLifecycleTests : IDisposable
             IncludeNarration: false));
 
         file.LastVideoFramePackage.Should().BeSameAs(package);
+        file.LastVideoExportHandoffPlan.Should().NotBeNull();
+        file.LastVideoExportHandoffPlan!.PackagePlan.Should().BeSameAs(package.Plan);
+        file.LastVideoExportHandoffPlan.Status.Should()
+            .Be(PresentationVideoExportHandoffStatus.EncoderInputPackageReadyHostDeferred);
+        file.LastVideoExportHandoffPlan.IsFramePackageReady.Should().BeTrue();
+        file.LastVideoExportHandoffPlan.CanOpenHostEncoder.Should().BeFalse();
+        file.LastVideoExportHandoffPlan.Mp4EncoderDeferredByHost.Should().BeTrue();
+        file.LastVideoExportHandoffPlan.StatusText.Should()
+            .Be("WPF video export host: MP4 encoder deferred; frame package ready");
         package.Plan.ExportPlan.CommandId.Should().Be(PresentationExportPlanner.VideoExportCommandId);
         package.Plan.ExportPlan.IsImplemented.Should().BeFalse();
         package.Plan.ExportPlan.CanExecute.Should().BeFalse();

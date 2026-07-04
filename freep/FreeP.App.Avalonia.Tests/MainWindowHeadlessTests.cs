@@ -1651,6 +1651,7 @@ public sealed class MainWindowHeadlessTests
         var found = false;
         PresentationVideoExportPlan? videoPlan = null;
         PresentationVideoFramePackage? videoPackage = null;
+        PresentationVideoExportHandoffPlan? videoHandoff = null;
 
         var ran = await OnUiThread(() =>
         {
@@ -1664,13 +1665,21 @@ public sealed class MainWindowHeadlessTests
             video!.Execute(RibbonCommandContext.Empty);
             videoPlan = window.LastVideoExportPlan;
             videoPackage = window.LastVideoFramePackage;
+            videoHandoff = window.LastVideoExportHandoffPlan;
         });
 
         if (!ran) return;
         found.Should().BeTrue("the Avalonia registry should expose the shared video frame package seam");
         videoPackage.Should().NotBeNull();
         videoPlan.Should().NotBeNull();
+        videoHandoff.Should().NotBeNull();
         videoPackage!.Plan.ExportPlan.Should().BeSameAs(videoPlan);
+        videoHandoff!.PackagePlan.Should().BeSameAs(videoPackage.Plan);
+        videoHandoff.Status.Should().Be(PresentationVideoExportHandoffStatus.EncoderInputPackageReadyHostDeferred);
+        videoHandoff.IsFramePackageReady.Should().BeTrue();
+        videoHandoff.CanOpenHostEncoder.Should().BeFalse();
+        videoHandoff.Mp4EncoderDeferredByHost.Should().BeTrue();
+        videoHandoff.StatusText.Should().Be("Avalonia video export host: MP4 encoder deferred; frame package ready");
         videoPackage.Plan.DeferredCapabilities.Should().Contain(PresentationVideoFramePackageExecutor.Mp4EncoderDeferred);
         videoPackage.Frames.Select(frame => frame.FileName)
             .Should()

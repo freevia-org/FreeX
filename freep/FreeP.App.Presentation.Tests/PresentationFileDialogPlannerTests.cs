@@ -109,7 +109,7 @@ public sealed class PresentationFileDialogPlannerTests
             !format.IsImplemented);
         formats.Should().Contain(format =>
             format.Format == PresentationExportFormat.Print &&
-            !format.IsImplemented);
+            format.IsImplemented);
 
         var backstage = PresentationExportPlanner.BuildBackstageExportPlan();
         backstage.DeferredGroupHeading.Should().Be("Other File Types");
