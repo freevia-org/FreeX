@@ -142,9 +142,10 @@ public sealed class WatchWindowDialogTests
     {
         var source = ReadWatchWindowSource();
 
-        source.Should().Contain("private const double WatchWindowColumnsWidth = 640;");
-        source.Should().Contain("Width = WatchWindowColumnsWidth + WatchWindowChromeAndPaddingWidth;");
-        source.Should().Contain("MinWidth = WatchWindowColumnsWidth + 80;");
+        source.Should().Contain("Width = WatchWindowDialogPlanner.Width;");
+        source.Should().Contain("MinWidth = WatchWindowDialogPlanner.MinWidth;");
+        source.Should().Contain("Width = WatchWindowDialogPlanner.BookColumnWidth");
+        source.Should().Contain("Width = WatchWindowDialogPlanner.FormulaColumnWidth");
         source.Should().Contain("Header = UiText.Get(\"WatchWindow_Book\")");
         source.Should().Contain("Header = UiText.Get(\"WatchWindow_Sheet\")");
         source.Should().Contain("Header = UiText.Get(\"WatchWindow_Name\")");

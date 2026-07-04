@@ -526,6 +526,13 @@ function Get-ExpectedEvidenceSize {
                     source = "ChartAreaFormatPlanner.DialogWidth/DialogHeight"
                 }
             }
+            "dialog.WatchWindow" {
+                return [pscustomobject]@{
+                    width = 760
+                    height = 320
+                    source = "WatchWindowDialogPlanner.Width/Height"
+                }
+            }
             "dialog.ProtectSheet" {
                 return [pscustomobject]@{
                     width = 430
