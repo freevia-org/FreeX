@@ -20,6 +20,8 @@ public sealed class AvaloniaSymbolPickerSourceTests
         source.Should().Contain("SymbolPickerCatalogPlanner.GetSpecialCharacters()");
         source.Should().Contain("SymbolPickerCatalogPlanner.TryParseCharacterCode(");
         source.Should().Contain("SymbolPickerCatalogPlanner.CreateSelection(selectedSymbol)");
+        source.Should().Contain("Width = SymbolPickerCatalogPlanner.DialogWidth");
+        source.Should().Contain("Height = SymbolPickerCatalogPlanner.DialogHeight");
 
         source.Should().NotContain("SymbolPickerFontChoices");
         source.Should().NotContain("SymbolPickerRecentSymbols");
@@ -48,6 +50,8 @@ public sealed class AvaloniaSymbolPickerSourceTests
         SymbolPickerCatalogPlanner.GetSpecialCharacters().Should().HaveCountGreaterThan(35);
         SymbolPickerCatalogPlanner.TryParseCharacterCode("U+2192", out var symbol).Should().BeTrue();
         symbol.Should().Be("\u2192");
+        SymbolPickerCatalogPlanner.DialogWidth.Should().Be(840);
+        SymbolPickerCatalogPlanner.DialogHeight.Should().Be(620);
     }
 
     private static string RepoFile(params string[] parts)

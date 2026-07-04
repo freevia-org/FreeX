@@ -498,6 +498,13 @@ function Get-ExpectedEvidenceSize {
                     source = "HyperlinkDialogPlanner.Width/Height"
                 }
             }
+            "dialog.SymbolPicker" {
+                return [pscustomobject]@{
+                    width = 840
+                    height = 620
+                    source = "SymbolPickerCatalogPlanner.DialogWidth/DialogHeight"
+                }
+            }
             "dialog.ConditionalFormatNewRule" {
                 return [pscustomobject]@{
                     width = 634

@@ -54,8 +54,8 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = "Symbol",
-            Width = 840,
-            Height = 620,
+            Width = SymbolPickerCatalogPlanner.DialogWidth,
+            Height = SymbolPickerCatalogPlanner.DialogHeight,
             MinWidth = 760,
             MinHeight = 540,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,

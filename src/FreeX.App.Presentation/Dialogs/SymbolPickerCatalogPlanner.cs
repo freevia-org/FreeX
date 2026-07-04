@@ -30,6 +30,8 @@ public sealed record SymbolPickerSymbolListPlan(
 /// </summary>
 public static class SymbolPickerCatalogPlanner
 {
+    public const double DialogWidth = 840;
+    public const double DialogHeight = 620;
     public const string DefaultSubsetName = "Latin-1 Supplement";
     public const int DefaultRecentSymbolCapacity = 12;
     public const string GenericSymbolName = "Symbol";

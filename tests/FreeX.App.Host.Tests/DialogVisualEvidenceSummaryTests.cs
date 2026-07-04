@@ -693,6 +693,105 @@ public sealed class DialogVisualEvidenceSummaryTests
     }
 
     [Fact]
+    public void DialogVisualEvidenceSummary_FlagsSymbolPickerPromotedEvidenceAgainstSharedDialogSize()
+    {
+        using var temp = new TestTemporaryDirectory();
+
+        var inventoryPath = Path.Combine(temp.Path, "dialog-parity-inventory.json");
+        var wpfManifestDirectory = Path.Combine(temp.Path, "wpf-capture");
+        var avaloniaManifestDirectory = Path.Combine(temp.Path, "avalonia-capture");
+        Directory.CreateDirectory(wpfManifestDirectory);
+        Directory.CreateDirectory(avaloniaManifestDirectory);
+
+        var wpfManifestPath = Path.Combine(wpfManifestDirectory, "manifest.json");
+        var avaloniaManifestPath = Path.Combine(avaloniaManifestDirectory, "manifest.json");
+        var markdownPath = Path.Combine(temp.Path, "summary.md");
+        var jsonPath = Path.Combine(temp.Path, "summary.json");
+
+        File.WriteAllText(
+            inventoryPath,
+            """
+            {
+              "summary": {
+                "totalRoutes": 1,
+                "wpfCaptures": 1,
+                "avaloniaCaptures": 1,
+                "avaloniaHarnessRoutes": 1,
+                "sharedOrPresentationBacked": 1
+              },
+              "rows": [
+                { "routeId": "dialog.SymbolPicker" }
+              ]
+            }
+            """);
+
+        File.WriteAllText(
+            wpfManifestPath,
+            """
+            {
+              "platform": "windows",
+              "shell": "wpf",
+              "surfaces": [
+                {
+                  "id": "dialog.SymbolPicker",
+                  "kind": "dialog",
+                  "png": "dialog.SymbolPicker.png",
+                  "captured": true,
+                  "note": "Promoted from insert-objects-links-tour committed WPF screenshot evidence (screenshots\\insert-objects-links-tour\\freex_insert_symbol_picker_opened.png) after direct FreeX.App.Host --parity-capture emitted a transparent dialog PNG"
+                }
+              ]
+            }
+            """);
+
+        File.WriteAllText(
+            avaloniaManifestPath,
+            """
+            {
+              "platform": "windows",
+              "shell": "avalonia",
+              "surfaces": [
+                {
+                  "id": "dialog.SymbolPicker",
+                  "kind": "dialog",
+                  "png": "dialog.SymbolPicker.png",
+                  "captured": true,
+                  "note": ""
+                }
+              ]
+            }
+            """);
+
+        WritePng(Path.Combine(wpfManifestDirectory, "dialog.SymbolPicker.png"), width: 620, height: 500, nonBlank: true);
+        WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.SymbolPicker.png"), width: 840, height: 620, nonBlank: true);
+
+        var result = PowerShellScriptRunner.RunToolScript(
+            "Generate-DialogVisualEvidenceSummary.ps1",
+            WorkspaceFileLocator.FindWorkspaceRoot(),
+            $"-MarkdownPath \"{markdownPath}\" -JsonPath \"{jsonPath}\" -InventoryPath \"{inventoryPath}\" -WpfManifestPath \"{wpfManifestPath}\" -AvaloniaManifestPath \"{avaloniaManifestPath}\"");
+
+        result.ExitCode.Should().Be(0, result.CombinedOutput);
+        result.Output.Should().Contain("Paired expected-size evidence mismatches: 1");
+        result.Output.Should().Contain("Stale promoted expected-size evidence: 1");
+        result.Output.Should().Contain("Dimension mismatch bucket 'evidence limitation': 1");
+
+        var markdown = File.ReadAllText(markdownPath);
+        markdown.Should().Contain("| dialog.SymbolPicker | 840x620 | SymbolPickerCatalogPlanner.DialogWidth/DialogHeight | 620x500 | 620x500 px @ 96 DPI | False | 840x620 | 840x620 px @ 96 DPI | True |");
+        markdown.Should().Contain("| dialog.SymbolPicker | WPF | 620x500 logical (620x500 px @ 96 DPI) | 840x620 | screenshots\\insert-objects-links-tour\\freex_insert_symbol_picker_opened.png | blocked-transparent-direct-parity-capture |");
+
+        using var json = JsonDocument.Parse(File.ReadAllText(jsonPath));
+        var summary = json.RootElement.GetProperty("summary");
+        summary.GetProperty("pairedExpectedSizeMismatches").GetInt32().Should().Be(1);
+        summary.GetProperty("stalePromotedExpectedSizeEvidence").GetInt32().Should().Be(1);
+        summary.GetProperty("dimensionMismatchBuckets").GetProperty("evidence limitation").GetInt32().Should().Be(1);
+
+        var comparison = json.RootElement.GetProperty("pairedSurfaces")[0].GetProperty("comparison");
+        comparison.GetProperty("dimensionMismatchBucket").GetString().Should().Be("evidence limitation");
+        comparison.GetProperty("expectedSizeSource").GetString().Should().Be("SymbolPickerCatalogPlanner.DialogWidth/DialogHeight");
+        comparison.GetProperty("wpfExpectedSizeMatch").GetBoolean().Should().BeFalse();
+        comparison.GetProperty("avaloniaExpectedSizeMatch").GetBoolean().Should().BeTrue();
+    }
+
+    [Fact]
     public void DialogVisualEvidenceSummary_FlagsSortPromotedEvidenceAgainstCurrentDialogSize()
     {
         using var temp = new TestTemporaryDirectory();

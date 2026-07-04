@@ -28,6 +28,8 @@ public sealed partial class SymbolPickerDialogSourceTests
         source.Should().Contain("ListBox");
         source.Should().Contain("WrapPanel");
         source.Should().Contain("GridViewColumn");
+        source.Should().Contain("Width = SymbolPickerCatalogPlanner.DialogWidth");
+        source.Should().Contain("Height = SymbolPickerCatalogPlanner.DialogHeight");
     }
 
     [Fact]
