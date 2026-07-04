@@ -231,6 +231,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         ValidateFieldRendererPairs(rows, failures);
         ValidateTableRendererPairs(rows, failures);
         ValidateDrawingObjectRendererPairs(rows, failures);
+        ValidateWordArtWatermarkRendererPairs(rows, failures);
         ValidateChartSmartArtRendererPairs(rows, failures);
         var orderedRows = rows
             .OrderBy(r => r.HostId, StringComparer.OrdinalIgnoreCase)
@@ -1544,6 +1545,50 @@ public static class FreeWVisualEvidenceManifestNormalizer
         }
     }
 
+    private static void ValidateWordArtWatermarkRendererPairs(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,
+        List<string> failures)
+    {
+        foreach (var scenarioId in WordArtWatermarkRendererScenarioIds)
+        {
+            var wpfRows = TrustedRowsForHostScenario(rows, WpfHostId, scenarioId);
+            var avaloniaRows = TrustedRowsForHostScenario(rows, AvaloniaHostId, scenarioId);
+            if (wpfRows.Count == 0 || avaloniaRows.Count == 0)
+                continue;
+
+            ValidateUniquePages(scenarioId, WpfHostId, wpfRows, failures);
+            ValidateUniquePages(scenarioId, AvaloniaHostId, avaloniaRows, failures);
+
+            var wpfPages = wpfRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var avaloniaPages = avaloniaRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var requiredPages = RequiredScenarioPages(scenarioId);
+            var missingAvaloniaPages = requiredPages.Except(avaloniaPages).ToList();
+            var missingWpfPages = requiredPages.Except(wpfPages).ToList();
+            if (missingAvaloniaPages.Count > 0)
+            {
+                failures.Add(
+                    $"WordArt watermark renderer pair '{scenarioId}' is missing Avalonia page(s): {FormatPages(missingAvaloniaPages)}");
+            }
+
+            if (missingWpfPages.Count > 0)
+            {
+                failures.Add(
+                    $"WordArt watermark renderer pair '{scenarioId}' is missing WPF page(s): {FormatPages(missingWpfPages)}");
+            }
+
+            foreach (var pageNumber in wpfPages.Intersect(avaloniaPages))
+            {
+                var wpf = wpfRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                var avalonia = avaloniaRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                if (wpf is null || avalonia is null)
+                    continue;
+
+                ValidateRendererPairRow("WordArt watermark renderer pair", scenarioId, pageNumber, wpf, avalonia, failures);
+                ValidateWordArtWatermarkPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+            }
+        }
+    }
+
     private static IReadOnlyList<int> RequiredScenarioPages(string scenarioId)
     {
         var minimumOutputs = Math.Max(1, FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
@@ -1768,6 +1813,39 @@ public static class FreeWVisualEvidenceManifestNormalizer
         }
     }
 
+    private static void ValidateWordArtWatermarkPairRow(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia,
+        List<string> failures)
+    {
+        var pairName = $"WordArt watermark renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        var wpfFeatureSignature = BuildWordArtWatermarkFeatureSignature(wpf.PageFeatures);
+        var avaloniaFeatureSignature = BuildWordArtWatermarkFeatureSignature(avalonia.PageFeatures);
+        if (!string.Equals(wpfFeatureSignature, avaloniaFeatureSignature, StringComparison.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} page feature signatures differ: WPF '{wpfFeatureSignature}', Avalonia '{avaloniaFeatureSignature}'");
+        }
+
+        var wpfDrawingSignatures = BuildFloatingObjectSignatures(wpf.DrawingObjects.Objects);
+        var avaloniaDrawingSignatures = BuildFloatingObjectSignatures(avalonia.DrawingObjects.Objects);
+        if (!wpfDrawingSignatures.SequenceEqual(avaloniaDrawingSignatures, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} floating object signatures differ: WPF '{FormatSummaries(wpfDrawingSignatures)}', Avalonia '{FormatSummaries(avaloniaDrawingSignatures)}'");
+        }
+
+        var wpfEffectSummaries = OrderedSummaries(wpf.DrawingObjects.Effects.EffectSummaries);
+        var avaloniaEffectSummaries = OrderedSummaries(avalonia.DrawingObjects.Effects.EffectSummaries);
+        if (!wpfEffectSummaries.SequenceEqual(avaloniaEffectSummaries, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} drawing effect summaries differ: WPF '{FormatSummaries(wpfEffectSummaries)}', Avalonia '{FormatSummaries(avaloniaEffectSummaries)}'");
+        }
+    }
+
     private static void ValidateChartSmartArtPairRow(
         string scenarioId,
         int pageNumber,
@@ -1944,6 +2022,49 @@ public static class FreeWVisualEvidenceManifestNormalizer
             FormatDouble(node.ShadowBlur),
             FormatDouble(node.ShadowDepth),
             node.ConnectorHex);
+
+    private static string BuildWordArtWatermarkFeatureSignature(FreeWVisualPageFeatureExpectation features)
+    {
+        var columns = features.Columns;
+        var border = features.PageBorder;
+        var watermark = features.Watermark;
+        return string.Join(
+            "|",
+            columns.Count.ToString(CultureInfo.InvariantCulture),
+            FormatDouble(columns.WidthDip),
+            FormatDouble(columns.GapDip),
+            BoolFlag(columns.LineBetween),
+            string.Join(",", columns.WidthsDip.Select(FormatDouble)),
+            BoolFlag(border.Present),
+            border.ColorHex ?? string.Empty,
+            FormatDouble(border.WidthDip),
+            BoolFlag(watermark.Present),
+            watermark.Text ?? string.Empty,
+            watermark.Layout ?? string.Empty,
+            watermark.FontColorHex ?? string.Empty,
+            FormatDouble(watermark.Opacity),
+            BoolFlag(watermark.IsPicture));
+    }
+
+    private static List<string> BuildFloatingObjectSignatures(IEnumerable<DocumentFloatingObjectSnapshot> objects) =>
+        objects
+            .Select(o => string.Join(
+                "|",
+                o.TypeTag,
+                o.BlockIndex.ToString(CultureInfo.InvariantCulture),
+                o.RunIndex.ToString(CultureInfo.InvariantCulture),
+                FormatDouble(o.Rect.XDip),
+                FormatDouble(o.Rect.YDip),
+                FormatDouble(o.Rect.WidthDip),
+                FormatDouble(o.Rect.HeightDip),
+                BoolFlag(o.BehindText),
+                o.ZOrderIndex.ToString(CultureInfo.InvariantCulture),
+                o.Wrapping.ToString(),
+                FormatDouble(o.RotationAngle),
+                BoolFlag(o.FlipH),
+                BoolFlag(o.FlipV)))
+            .OrderBy(signature => signature, StringComparer.Ordinal)
+            .ToList();
 
     private static string BoolFlag(bool value) => value ? "1" : "0";
 
