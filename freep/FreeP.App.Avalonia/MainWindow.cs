@@ -60,6 +60,11 @@ public sealed class MainWindow : Window
             "Avalonia print host",
             "Native printer handoff adapter is not wired in this host path yet.");
 
+    private static readonly PresentationVideoExportHandoffHostCapabilities VideoExportHostCapabilities =
+        PresentationVideoExportHandoffHostCapabilities.Deferred(
+            "Avalonia video export host",
+            "MP4 encoder, narration capture, and camera/media capture adapters are not wired in this host path yet.");
+
     private static readonly FilePickerFileType PictureFileType =
         AvaloniaFilePickerTypeAdapter.CreateFileType(
             PresentationFileTextResources.PictureFileTypeName,
@@ -274,6 +279,7 @@ public sealed class MainWindow : Window
     internal PresentationNativePrintHandoffPlan? LastNativePrintHandoffPlan { get; private set; }
     internal PresentationVideoExportPlan? LastVideoExportPlan { get; private set; }
     internal PresentationVideoFramePackage? LastVideoFramePackage { get; private set; }
+    internal PresentationVideoExportHandoffPlan? LastVideoExportHandoffPlan { get; private set; }
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
     internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
     internal TableInsertionPickerPlan? LastTablePickerPlan { get; private set; }
@@ -2949,8 +2955,10 @@ public sealed class MainWindow : Window
             request,
             SlideRenderer.RenderToBytes);
         LastVideoExportPlan = LastVideoFramePackage.Plan.ExportPlan;
-        _statusText.Text = LastVideoFramePackage.Plan.DisabledReason ??
-            PresentationVideoFramePackageExecutor.EncoderDeferredReason;
+        LastVideoExportHandoffPlan = PresentationVideoFramePackageExecutor.BuildHandoffPlan(
+            LastVideoFramePackage.Plan,
+            VideoExportHostCapabilities);
+        _statusText.Text = LastVideoExportHandoffPlan.StatusText;
         return LastVideoFramePackage;
     }
 

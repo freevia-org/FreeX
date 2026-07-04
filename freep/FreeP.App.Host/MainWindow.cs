@@ -173,6 +173,7 @@ public sealed class MainWindow : Window
     internal PresentationPrintBackstagePlan? LastPrintBackstagePlan { get; private set; }
     internal PresentationVideoExportPlan? LastVideoExportPlan { get; private set; }
     internal PresentationVideoFramePackage? LastVideoFramePackage { get; private set; }
+    internal PresentationVideoExportHandoffPlan? LastVideoExportHandoffPlan { get; private set; }
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
     internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
     internal TableInsertionPickerPlan? LastTablePickerPlan { get; private set; }
@@ -1260,6 +1261,7 @@ public sealed class MainWindow : Window
     {
         LastVideoFramePackage = _file.BuildVideoFramePackage(request);
         LastVideoExportPlan = LastVideoFramePackage.Plan.ExportPlan;
+        LastVideoExportHandoffPlan = _file.LastVideoExportHandoffPlan;
         return LastVideoFramePackage;
     }
 

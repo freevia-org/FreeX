@@ -1130,6 +1130,12 @@ public sealed class ReviewWorkflowAdapterTests
 
             window.LastVideoFramePackage.Should().BeSameAs(package);
             window.LastVideoExportPlan.Should().BeSameAs(plan);
+            window.LastVideoExportHandoffPlan.Should().NotBeNull();
+            window.LastVideoExportHandoffPlan!.PackagePlan.Should().BeSameAs(package.Plan);
+            window.LastVideoExportHandoffPlan.Status.Should()
+                .Be(PresentationVideoExportHandoffStatus.EncoderInputPackageReadyHostDeferred);
+            window.LastVideoExportHandoffPlan.StatusText.Should()
+                .Be("WPF video export host: MP4 encoder deferred; frame package ready");
             plan.CommandId.Should().Be(PresentationExportPlanner.VideoExportCommandId);
             plan.SlideRange.SlideNumbers.Should().Equal(1, 2);
             plan.Quality.Quality.Should().Be(PresentationVideoQualityKind.Standard);
