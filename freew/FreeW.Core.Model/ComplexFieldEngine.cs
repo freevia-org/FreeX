@@ -35,7 +35,7 @@ public static class ComplexFieldEngine
     public static bool CanRecompute(ComplexField field)
     {
         ArgumentNullException.ThrowIfNull(field);
-        return field.Keyword is "REF" or "PAGEREF" or "SEQ";
+        return field.Keyword is "REF" or "PAGEREF" or "SEQ" or "CITATION";
     }
 
     /// <summary>
@@ -72,6 +72,7 @@ public static class ComplexFieldEngine
             "REF" => ResolveRef(document, field, run.Text),
             "PAGEREF" => ResolvePageRef(document, field, run.Text, pageOf),
             "SEQ" => ResolveSeq(document, field, blockIndex, runIndex),
+            "CITATION" => Citations.ResolveCitationField(document, field, run.Text),
             _ => run.Text
         };
     }

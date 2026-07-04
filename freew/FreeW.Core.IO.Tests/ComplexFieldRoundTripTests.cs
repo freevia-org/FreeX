@@ -96,6 +96,26 @@ public class ComplexFieldRoundTripTests
     }
 
     [Fact]
+    public void CitationComplexField_SurvivesRoundTripWithSources()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.BibliographyStyle = CitationStyle.Ieee;
+        doc.Sources.Add(new Source { Tag = "Ada1843", Author = "Ada Lovelace", Title = "Notes", Year = "1843" });
+        doc.Sources.Add(new Source { Tag = "Tur1936", Author = "Alan Turing", Title = "Computable Numbers", Year = "1936" });
+        doc.Blocks.Add(new Paragraph { Runs = { Run.ComplexFieldRun(" CITATION Tur1936 ", "[2]") } });
+
+        var result = RoundTrip(doc);
+        var run = result.Blocks.OfType<Paragraph>().Single().Runs.Single();
+
+        run.ComplexField.Should().NotBeNull();
+        run.ComplexField!.Instruction.Should().Be(" CITATION Tur1936 ");
+        run.Text.Should().Be("[2]");
+        result.Sources.Select(source => source.Tag).Should().Equal("Ada1843", "Tur1936");
+        result.BibliographyStyle.Should().Be(CitationStyle.Ieee);
+    }
+
+    [Fact]
     public void ComplexField_PreservesRunFormatting()
     {
         var doc = TextDocument.CreateEmpty();
