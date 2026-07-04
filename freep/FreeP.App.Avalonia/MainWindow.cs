@@ -55,6 +55,10 @@ public sealed class MainWindow : Window
     private const string DefaultTitle = "FreeP";
     private const int DefaultRecentFilesCap = ApplicationOptionsNormalizer.DefaultRecentFilesCap;
     private static readonly SisterAppFileTextSpec FileText = SisterAppFileTextPlanner.Presentation;
+    private static readonly PresentationNativePrintHandoffHostCapabilities NativePrintHostCapabilities =
+        PresentationNativePrintHandoffHostCapabilities.Deferred(
+            "Avalonia print host",
+            "Native printer handoff adapter is not wired in this host path yet.");
 
     private static readonly FilePickerFileType PictureFileType =
         AvaloniaFilePickerTypeAdapter.CreateFileType(
@@ -267,6 +271,7 @@ public sealed class MainWindow : Window
     internal PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
     internal PresentationPrintOutputPackage? LastPrintOutputPackage { get; private set; }
     internal PresentationPrintBackstagePlan? LastPrintBackstagePlan { get; private set; }
+    internal PresentationNativePrintHandoffPlan? LastNativePrintHandoffPlan { get; private set; }
     internal PresentationVideoExportPlan? LastVideoExportPlan { get; private set; }
     internal PresentationVideoFramePackage? LastVideoFramePackage { get; private set; }
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
@@ -2747,9 +2752,24 @@ public sealed class MainWindow : Window
             request,
             SlideRenderer.RenderToBytes,
             SkiaRasterPdfWriter.WriteToBytes);
+        LastNativePrintHandoffPlan = PresentationPrintOutputPackageExecutor.BuildNativePrintHandoffPlan(
+            LastPrintOutputPackage.Plan,
+            NativePrintHostCapabilities,
+            suggestedBaseFileName: _fileWorkflow.CurrentFileName);
         _statusText.Text = LastPrintOutputPackage.Plan.DisabledReason ??
-            PresentationPrintOutputPackageExecutor.NativePrinterDialogDeferredReason;
+            LastNativePrintHandoffPlan.Reason;
         return LastPrintOutputPackage;
+    }
+
+    internal PresentationNativePrintHandoffPlan RefreshNativePrintHandoffPlan(PresentationPrintRequest? request = null)
+    {
+        var package = RefreshPrintOutputPackage(request);
+        LastNativePrintHandoffPlan = PresentationPrintOutputPackageExecutor.BuildNativePrintHandoffPlan(
+            package.Plan,
+            NativePrintHostCapabilities,
+            suggestedBaseFileName: _fileWorkflow.CurrentFileName);
+        _statusText.Text = LastNativePrintHandoffPlan.Reason;
+        return LastNativePrintHandoffPlan;
     }
 
     internal PresentationPrintBackstagePlan RefreshPrintBackstagePlan(PresentationPrintRequest? request = null)
@@ -2758,9 +2778,12 @@ public sealed class MainWindow : Window
             request,
             _presentation,
             Editor.CurrentSlideIndex + 1,
-            request?.SlideRange?.SelectedSlideNumbers);
+            request?.SlideRange?.SelectedSlideNumbers,
+            NativePrintHostCapabilities,
+            _fileWorkflow.CurrentFileName);
+        LastNativePrintHandoffPlan = LastPrintBackstagePlan.NativePrintHandoff;
         _statusText.Text = LastPrintBackstagePlan.DisabledReason ??
-            LastPrintBackstagePlan.NativePrinterDialogDeferredMessage;
+            LastPrintBackstagePlan.NativePrintHandoff.Reason;
         return LastPrintBackstagePlan;
     }
 
@@ -2795,7 +2818,7 @@ public sealed class MainWindow : Window
         AddPrintOptionsPaneField("Preview", plan.PreviewPlan.PageCountText);
         AddPrintOptionsPaneField("Hidden slides", plan.PrintHiddenSlides ? "Included" : "Not included");
         AddPrintOptionsPaneField("Options", plan.Options.DisplaySummary);
-        AddPrintOptionsPaneField("Native printer dialog", plan.NativePrinterDialogDeferred ? "Deferred" : "Available");
+        AddPrintOptionsPaneField("Native printer handoff", plan.NativePrintHandoff.StatusText);
 
         AddPrintOptionsPaneSection("Output options");
 
@@ -2846,7 +2869,7 @@ public sealed class MainWindow : Window
 
         _printOptionsPaneRowsPanel.Children.Add(new TextBlock
         {
-            Text = plan.DisabledReason ?? plan.NativePrinterDialogDeferredMessage,
+            Text = plan.DisabledReason ?? plan.NativePrintHandoff.Reason,
             TextWrapping = TextWrapping.Wrap,
             FontStyle = FontStyle.Italic,
             Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),

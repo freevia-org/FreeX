@@ -96,7 +96,7 @@ internal sealed class BackstageView : UserControl
         panel.Children.Add(Kit.Field("Preview", plan.PreviewPlan.PageCountText));
         panel.Children.Add(Kit.Field("Hidden slides", plan.PrintHiddenSlides ? "Included" : "Not included"));
         panel.Children.Add(Kit.Field("Options", plan.Options.DisplaySummary));
-        panel.Children.Add(Kit.Field("Native printer dialog", plan.NativePrinterDialogDeferred ? "Deferred" : "Available"));
+        panel.Children.Add(Kit.Field("Native printer handoff", plan.NativePrintHandoff.StatusText));
 
         panel.Children.Add(Kit.SubHeading("Output Options"));
         foreach (var choice in plan.OutputOptionChoices)
@@ -130,7 +130,7 @@ internal sealed class BackstageView : UserControl
 
         panel.Children.Add(new TextBlock
         {
-            Text = plan.DisabledReason ?? plan.NativePrinterDialogDeferredMessage,
+            Text = plan.DisabledReason ?? plan.NativePrintHandoff.Reason,
             Foreground = Kit.Muted,
             FontStyle = FontStyles.Italic,
             TextWrapping = TextWrapping.Wrap,

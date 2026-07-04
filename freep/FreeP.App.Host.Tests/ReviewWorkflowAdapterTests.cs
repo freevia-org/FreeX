@@ -1134,8 +1134,11 @@ public sealed class ReviewWorkflowAdapterTests
                     page.ThumbnailLabel == "Slide 2 notes" &&
                     page.Detail == "Notes page for slide 2");
             plan.NativePrinterDialogDeferred.Should().BeTrue();
-            plan.NativePrinterDialogDeferredMessage.Should().Be(
-                PresentationPrintOutputPackageExecutor.NativePrinterDialogDeferredReason);
+            plan.NativePrintHandoff.Status.Should().Be(PresentationNativePrintHandoffStatus.HostPrinterUnavailableDeferredByHost);
+            plan.NativePrintHandoff.IsPackageReady.Should().BeTrue();
+            plan.NativePrintHandoff.RequiresHostHandoff.Should().BeTrue();
+            plan.NativePrintHandoff.CanOpenNativePrintDialog.Should().BeFalse();
+            plan.NativePrintHandoff.Reason.Should().Contain("Native printer handoff adapter is not wired");
         }
         finally
         {

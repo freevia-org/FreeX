@@ -106,7 +106,7 @@ public sealed class PresentationExportPlannerTests
         var plan = PresentationExportPlanner.BuildPrintPlan(request, slideCount: 6);
 
         plan.CommandId.Should().Be(PresentationExportPlanner.PrintCommandId);
-        plan.IsImplemented.Should().BeFalse();
+        plan.IsImplemented.Should().BeTrue();
         plan.PrintHiddenSlides.Should().BeTrue();
         plan.Layout.Layout.Should().Be(PresentationPrintLayoutKind.Handouts);
         plan.Layout.SlidesPerPage.Should().Be(4);
@@ -151,7 +151,7 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
-    public void PrintOutputPackagePlan_SelectsSharedRoutesAndKeepsNativeDialogDeferred()
+    public void PrintOutputPackagePlan_SelectsSharedRoutesAndBuildsNativeHandoffPlan()
     {
         var fullPage = PresentationPrintOutputPackageExecutor.BuildPackagePlan(
             new PresentationPrintRequest(
@@ -186,9 +186,27 @@ public sealed class PresentationExportPlannerTests
                 page.ThumbnailLabel == "Slide 2" &&
                 page.Detail == "Full-page slide 2");
         fullPage.CanBuildPackage.Should().BeTrue();
-        fullPage.NativePrinterDialogDeferred.Should().BeTrue();
+        fullPage.NativePrinterDialogDeferred.Should().BeFalse();
         fullPage.DisabledReason.Should().BeNull();
-        fullPage.PrintPlan.IsImplemented.Should().BeFalse("native printer dialog handoff is still deferred");
+        fullPage.PrintPlan.IsImplemented.Should().BeTrue("shared package handoff is implemented before host-specific printer execution");
+        var handoff = PresentationPrintOutputPackageExecutor.BuildNativePrintHandoffPlan(fullPage, suggestedBaseFileName: "Quarter Review.pptx");
+        handoff.Status.Should().Be(PresentationNativePrintHandoffStatus.PackageReadyHostHandoffRequired);
+        handoff.IsPackageReady.Should().BeTrue();
+        handoff.RequiresHostHandoff.Should().BeTrue();
+        handoff.CanOpenNativePrintDialog.Should().BeTrue();
+        handoff.SuggestedTempFileName.Should().Be("Quarter Review-print.pdf");
+        handoff.Route.Should().Be(PresentationPrintOutputPackageRoute.FullPageSlidesRasterPdf);
+        handoff.ContentType.Should().Be(PresentationPrintOutputPackageExecutor.PdfContentType);
+        handoff.LayoutSummary.Should().Be(fullPage.LayoutSummary);
+        handoff.SlideRangeSummary.Should().Be("Slide 2");
+        handoff.OptionsSummary.Should().Be("1 copy, Collated, Color");
+        handoff.Reason.Should().Be(PresentationPrintOutputPackageExecutor.NativePrintPackageReadyReason);
+        var deferredByHost = PresentationPrintOutputPackageExecutor.BuildNativePrintHandoffPlan(
+            fullPage,
+            PresentationNativePrintHandoffHostCapabilities.Deferred("Unit test host", "No OS printer dialog in tests."));
+        deferredByHost.Status.Should().Be(PresentationNativePrintHandoffStatus.HostPrinterUnavailableDeferredByHost);
+        deferredByHost.CanOpenNativePrintDialog.Should().BeFalse();
+        deferredByHost.Reason.Should().Contain("No OS printer dialog in tests.");
         notes.Route.Should().Be(PresentationPrintOutputPackageRoute.NotesPagePdf);
         notes.PageCount.Should().Be(3);
         notes.LayoutSummary.Should().Be("Notes Pages - All slides, 3 pages");
@@ -266,6 +284,10 @@ public sealed class PresentationExportPlannerTests
         empty.PreviewPlan.Pages.Should().BeEmpty();
         empty.CanBuildPackage.Should().BeFalse();
         empty.DisabledReason.Should().Be("Print output requires at least one slide.");
+        var emptyHandoff = PresentationPrintOutputPackageExecutor.BuildNativePrintHandoffPlan(empty);
+        emptyHandoff.Status.Should().Be(PresentationNativePrintHandoffStatus.NoSlides);
+        emptyHandoff.DisabledReason.Should().Be("Print output requires at least one slide.");
+        emptyHandoff.IsPackageReady.Should().BeFalse();
     }
 
     [Fact]

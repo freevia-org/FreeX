@@ -49,6 +49,45 @@ public sealed record PresentationPrintOutputPackage(
     PresentationPrintOutputPackagePlan Plan,
     byte[] Bytes);
 
+public enum PresentationNativePrintHandoffStatus
+{
+    PackageReadyHostHandoffRequired,
+    NoSlides,
+    HostPrinterUnavailableDeferredByHost,
+}
+
+public sealed record PresentationNativePrintHandoffHostCapabilities(
+    string HostName,
+    bool CanOpenNativePrintDialog,
+    string? UnavailableReason)
+{
+    public static PresentationNativePrintHandoffHostCapabilities Available(string hostName) =>
+        new(hostName, CanOpenNativePrintDialog: true, UnavailableReason: null);
+
+    public static PresentationNativePrintHandoffHostCapabilities Deferred(string hostName, string unavailableReason) =>
+        new(hostName, CanOpenNativePrintDialog: false, unavailableReason);
+}
+
+public sealed record PresentationNativePrintHandoffPlan(
+    PresentationPrintOutputPackagePlan PackagePlan,
+    PresentationNativePrintHandoffStatus Status,
+    string StatusText,
+    string Reason,
+    bool CanBuildPackage,
+    bool IsPackageReady,
+    bool CanOpenNativePrintDialog,
+    bool RequiresHostHandoff,
+    PresentationPrintOutputPackageRoute Route,
+    int PageCount,
+    string ContentType,
+    string SuggestedTempFileName,
+    string DefaultExtensionWithDot,
+    string LayoutSummary,
+    string SlideRangeSummary,
+    string OptionsSummary,
+    IReadOnlyList<string> OptionSummaryLines,
+    string? DisabledReason);
+
 /// <summary>
 /// Shared printable-output execution for FreeP. Hosts provide only raster slide rendering and
 /// platform PDF writing for full-page slides; layout selection and notes/handout routing stay shared.
@@ -58,6 +97,12 @@ public static class PresentationPrintOutputPackageExecutor
     public const string PdfContentType = "application/pdf";
     public const string NativePrinterDialogDeferredReason =
         "Printable PDF package execution is available; native printer dialog handoff is deferred.";
+    public const string NativePrintPackageReadyReason =
+        "Printable PDF package is ready for native host printer handoff.";
+    public const string NativePrintHostUnavailableReason =
+        "Printable PDF package is ready, but the host printer adapter is unavailable.";
+    public const string NativePrintNoSlidesReason =
+        "Native print handoff requires at least one slide.";
 
     public static PresentationPrintOutputPackagePlan BuildPackagePlan(
         PresentationPrintRequest? request,
@@ -105,8 +150,50 @@ public static class PresentationPrintOutputPackageExecutor
             printPlan.Options,
             previewPlan,
             canBuild,
-            NativePrinterDialogDeferred: true,
+            NativePrinterDialogDeferred: false,
             disabledReason);
+    }
+
+    public static PresentationNativePrintHandoffPlan BuildNativePrintHandoffPlan(
+        PresentationPrintOutputPackagePlan packagePlan,
+        PresentationNativePrintHandoffHostCapabilities? hostCapabilities = null,
+        string? suggestedBaseFileName = null)
+    {
+        ArgumentNullException.ThrowIfNull(packagePlan);
+
+        hostCapabilities ??= PresentationNativePrintHandoffHostCapabilities.Available("Host");
+        var isPackageReady = packagePlan.CanBuildPackage && packagePlan.PageCount > 0;
+        var status = ResolveHandoffStatus(packagePlan, hostCapabilities);
+        var reason = status switch
+        {
+            PresentationNativePrintHandoffStatus.PackageReadyHostHandoffRequired => NativePrintPackageReadyReason,
+            PresentationNativePrintHandoffStatus.NoSlides => packagePlan.DisabledReason ?? NativePrintNoSlidesReason,
+            PresentationNativePrintHandoffStatus.HostPrinterUnavailableDeferredByHost =>
+                string.IsNullOrWhiteSpace(hostCapabilities.UnavailableReason)
+                    ? NativePrintHostUnavailableReason
+                    : $"{NativePrintHostUnavailableReason} {hostCapabilities.UnavailableReason}",
+            _ => throw new ArgumentOutOfRangeException(nameof(packagePlan), status, "Unsupported native print handoff status."),
+        };
+
+        return new PresentationNativePrintHandoffPlan(
+            packagePlan,
+            status,
+            FormatHandoffStatus(status),
+            reason,
+            packagePlan.CanBuildPackage,
+            isPackageReady,
+            isPackageReady && hostCapabilities.CanOpenNativePrintDialog,
+            isPackageReady,
+            packagePlan.Route,
+            packagePlan.PageCount,
+            packagePlan.ContentType,
+            BuildSuggestedTempFileName(suggestedBaseFileName, packagePlan.DefaultExtensionWithDot),
+            packagePlan.DefaultExtensionWithDot,
+            packagePlan.LayoutSummary,
+            packagePlan.SlideRangeSummary,
+            packagePlan.Options.DisplaySummary,
+            packagePlan.Options.SummaryLines,
+            status == PresentationNativePrintHandoffStatus.NoSlides ? reason : null);
     }
 
     public static PresentationPrintOutputPackage BuildPackage(
@@ -154,6 +241,40 @@ public static class PresentationPrintOutputPackageExecutor
             PresentationPrintLayoutKind.Handouts => PresentationPrintOutputPackageRoute.HandoutPdf,
             _ => throw new ArgumentOutOfRangeException(nameof(layout), layout, "Unsupported print layout."),
         };
+
+    private static PresentationNativePrintHandoffStatus ResolveHandoffStatus(
+        PresentationPrintOutputPackagePlan packagePlan,
+        PresentationNativePrintHandoffHostCapabilities hostCapabilities)
+    {
+        if (!packagePlan.CanBuildPackage || packagePlan.PageCount == 0)
+            return PresentationNativePrintHandoffStatus.NoSlides;
+
+        return hostCapabilities.CanOpenNativePrintDialog
+            ? PresentationNativePrintHandoffStatus.PackageReadyHostHandoffRequired
+            : PresentationNativePrintHandoffStatus.HostPrinterUnavailableDeferredByHost;
+    }
+
+    private static string FormatHandoffStatus(PresentationNativePrintHandoffStatus status) =>
+        status switch
+        {
+            PresentationNativePrintHandoffStatus.PackageReadyHostHandoffRequired => "Ready for host handoff",
+            PresentationNativePrintHandoffStatus.NoSlides => "No printable slides",
+            PresentationNativePrintHandoffStatus.HostPrinterUnavailableDeferredByHost => "Deferred by host",
+            _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unsupported native print handoff status."),
+        };
+
+    private static string BuildSuggestedTempFileName(string? suggestedBaseFileName, string extensionWithDot)
+    {
+        var baseName = string.IsNullOrWhiteSpace(suggestedBaseFileName)
+            ? "Presentation"
+            : Path.GetFileNameWithoutExtension(suggestedBaseFileName.Trim());
+        var invalid = Path.GetInvalidFileNameChars();
+        var sanitized = new string(baseName.Select(ch => invalid.Contains(ch) ? '-' : ch).ToArray()).Trim();
+        if (string.IsNullOrWhiteSpace(sanitized))
+            sanitized = "Presentation";
+
+        return $"{sanitized}-print{extensionWithDot}";
+    }
 
     private static int CalculatePageCount(PresentationPrintPlan plan, int? notesPageCount = null)
     {

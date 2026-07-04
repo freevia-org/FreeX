@@ -197,7 +197,15 @@ public sealed class FileLifecycleTests : IDisposable
                 page.SlideNumbers.SequenceEqual(new[] { 1 }) &&
                 page.ThumbnailLabel == "Slide 1 notes" &&
                 page.Detail == "Notes page for slide 1");
-        package.Plan.NativePrinterDialogDeferred.Should().BeTrue();
+        package.Plan.NativePrinterDialogDeferred.Should().BeFalse();
+        file.LastNativePrintHandoffPlan.Should().NotBeNull();
+        file.LastNativePrintHandoffPlan!.Status.Should().Be(PresentationNativePrintHandoffStatus.HostPrinterUnavailableDeferredByHost);
+        file.LastNativePrintHandoffPlan.IsPackageReady.Should().BeTrue();
+        file.LastNativePrintHandoffPlan.RequiresHostHandoff.Should().BeTrue();
+        file.LastNativePrintHandoffPlan.CanOpenNativePrintDialog.Should().BeFalse();
+        file.LastNativePrintHandoffPlan.Route.Should().Be(PresentationPrintOutputPackageRoute.NotesPagePdf);
+        file.LastNativePrintHandoffPlan.SuggestedTempFileName.Should().Be("Presentation-print.pdf");
+        file.LastNativePrintHandoffPlan.Reason.Should().Contain("Native printer handoff adapter is not wired");
         package.Bytes.Length.Should().BeGreaterThan(100);
         System.Text.Encoding.ASCII.GetString(package.Bytes, 0, 5).Should().Be("%PDF-");
     }
