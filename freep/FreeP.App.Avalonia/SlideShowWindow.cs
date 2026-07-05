@@ -104,13 +104,33 @@ public sealed class SlideShowWindow : Window
     public SlideShowWindow(Presentation presentation, int startIndex = 0)
         : this(
             presentation,
-            SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex))
+            SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex),
+            captureBackend: null)
+    {
+    }
+
+    internal SlideShowWindow(
+        Presentation presentation,
+        int startIndex,
+        ISlideShowRecordingCaptureBackend? captureBackend)
+        : this(
+            presentation,
+            SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex),
+            captureBackend)
     {
     }
 
     /// <param name="presentation">The presentation that owns slide size, theme, and timing state.</param>
     /// <param name="playbackRoute">The ordered slide route to play.</param>
     public SlideShowWindow(Presentation presentation, SlideShowPlaybackRoute playbackRoute)
+        : this(presentation, playbackRoute, captureBackend: null)
+    {
+    }
+
+    internal SlideShowWindow(
+        Presentation presentation,
+        SlideShowPlaybackRoute playbackRoute,
+        ISlideShowRecordingCaptureBackend? captureBackend)
     {
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
         _playbackRoute = playbackRoute ?? throw new ArgumentNullException(nameof(playbackRoute));
@@ -123,7 +143,7 @@ public sealed class SlideShowWindow : Window
             _presenterToolPlan,
             CurrentPresentationSlideIndex,
             _presenterStartedAtUtc,
-            CreateRecordingCaptureAdapterReadiness());
+            captureBackend ?? CreateDefaultRecordingCaptureBackend());
         _inkExecutionState = SlideShowInkExecutionPlanner.CreateState(
             _controller.CurrentSlideIndex,
             _presenterToolPlan.PointerInk);
@@ -345,10 +365,12 @@ public sealed class SlideShowWindow : Window
     public SlideShowInkExecutionResult UndoLastPresenterInkStroke() =>
         ApplyInkExecution(SlideShowInkExecutionPlanner.UndoLastStroke(_inkExecutionState));
 
-    private static SlideShowRecordingCaptureAdapterReadiness CreateRecordingCaptureAdapterReadiness() =>
-        SlideShowRecordingCaptureAdapterPlanner.BuildDeferredReadiness(
-            "Avalonia slideshow",
-            "Avalonia microphone/camera capture adapter");
+    private static ISlideShowRecordingCaptureBackend CreateDefaultRecordingCaptureBackend() =>
+        SlideShowHostCapabilityRecordingCaptureBackend.FromCapabilities(
+            SlideShowRecordingCaptureAdapterPlanner.BuildCapabilities(
+                SlideShowRecordingCaptureAdapterPlanner.BuildDeferredReadiness(
+                    "Avalonia slideshow",
+                    "Avalonia microphone/camera capture adapter")));
 
     /// <summary>Exposes the slide canvas for test assertions (DA1 suppression).</summary>
     internal SlideCanvas CanvasForTest => _slideCanvas;
