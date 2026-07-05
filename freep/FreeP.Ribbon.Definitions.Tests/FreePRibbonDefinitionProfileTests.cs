@@ -15,12 +15,6 @@ public sealed class FreePRibbonDefinitionProfileTests
         "freep.redo",
     ];
 
-    private static readonly string[] AvaloniaOnlyBackedCommands =
-    [
-        "freep.font-size",
-        "freep.font-color",
-    ];
-
     [Fact]
     public void Shared_factory_builds_valid_wpf_and_avalonia_profiles()
     {
@@ -71,6 +65,8 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredGroup(wpf, "home", "font").Header,
                 RequiredGroup(wpf, "home", "font").KeyTip!,
                 RequiredControl(wpf, "freep.font-family").Label,
+                RequiredControl(wpf, "freep.font-size").Label,
+                RequiredControl(wpf, "freep.font-color").Label,
                 RequiredControl(wpf, "freep.bold").Label,
                 RequiredControl(wpf, "freep.bold").KeyTip!,
                 RequiredControl(wpf, "freep.italic").Label,
@@ -409,17 +405,32 @@ public sealed class FreePRibbonDefinitionProfileTests
     }
 
     [Fact]
-    public void Avalonia_profile_exposes_font_size_and_color_controls_as_backed_combos()
+    public void Wpf_and_avalonia_profiles_expose_font_size_and_color_controls_as_backed_combos()
     {
+        var wpf = FreePRibbon.Build(FreePRibbonCapabilities.Wpf);
         var avalonia = FreePRibbon.Build(FreePRibbonCapabilities.Avalonia);
+        var wpfFontGroup = RequiredGroup(wpf, "home", "font");
         var fontGroup = RequiredGroup(avalonia, "home", "font");
+        var wpfCommandIds = wpfFontGroup.Controls
+            .Select(control => control.CommandId.Value)
+            .Where(commandId => !string.IsNullOrEmpty(commandId))
+            .ToArray();
         var commandIds = fontGroup.Controls
             .Select(control => control.CommandId.Value)
             .Where(commandId => !string.IsNullOrEmpty(commandId))
             .ToArray();
+        var wpfSize = RequiredCombo(wpf, "freep.font-size");
+        var wpfColor = RequiredCombo(wpf, "freep.font-color");
         var size = RequiredCombo(avalonia, "freep.font-size");
         var color = RequiredCombo(avalonia, "freep.font-color");
 
+        wpfCommandIds.Should().ContainInOrder(
+            "freep.font-family",
+            "freep.font-size",
+            "freep.font-color",
+            "freep.bold",
+            "freep.italic",
+            "freep.underline");
         commandIds.Should().ContainInOrder(
             "freep.font-family",
             "freep.font-size",
@@ -427,6 +438,8 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.bold",
             "freep.italic",
             "freep.underline");
+        wpfSize.Items.Should().Equal(FreePRibbonDefinitionData.FontSizes);
+        wpfColor.Items.Should().Equal(FreePRibbonDefinitionData.FontColors);
         size.Items.Should().Equal(FreePRibbonDefinitionData.FontSizes);
         color.Items.Should().Equal(FreePRibbonDefinitionData.FontColors);
     }
@@ -673,6 +686,24 @@ public sealed class FreePRibbonDefinitionProfileTests
             .Should()
             .Contain(["shared", "platform-only"]);
 
+        var platformOnlyRows = commands.Values
+            .Where(command => command.GetProperty("classification").GetString() == "platform-only")
+            .ToArray();
+        platformOnlyRows.Select(command => command.GetProperty("commandId").GetString())
+            .Should()
+            .BeEquivalentTo(
+            [
+                "freep.file.new",
+                "freep.file.open",
+                "freep.file.save",
+                "freep.file.save-as",
+                "freep.redo",
+                "freep.undo"
+            ]);
+        platformOnlyRows.Should().OnlyContain(command =>
+            command.GetProperty("notes").GetString()!.Contains("Intended shell/profile variance", StringComparison.Ordinal) &&
+            command.GetProperty("notes").GetString()!.Contains("WPF routes", StringComparison.Ordinal));
+
         root.GetProperty("summary").GetProperty("missingAvalonia").GetInt32()
             .Should()
             .Be(0);
@@ -787,8 +818,7 @@ public sealed class FreePRibbonDefinitionProfileTests
 
     private static bool IsAllowedAvaloniaProfileCommand(string commandId) =>
         commandId.StartsWith("freep.file.", StringComparison.Ordinal) ||
-        AvaloniaOnlyShellCommands.Contains(commandId, StringComparer.Ordinal) ||
-        AvaloniaOnlyBackedCommands.Contains(commandId, StringComparer.Ordinal);
+        AvaloniaOnlyShellCommands.Contains(commandId, StringComparer.Ordinal);
 
     private static Dictionary<string, string> ExpectedCommandSurfaces()
     {
