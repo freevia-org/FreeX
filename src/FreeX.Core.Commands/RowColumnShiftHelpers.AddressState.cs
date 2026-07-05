@@ -294,7 +294,7 @@ internal static partial class RowColumnShiftHelpers
 
         ShiftTextBoxes(sheet, snapshot, shift);
         ShiftDrawingShapes(sheet, snapshot, shift);
-        ShiftPictures(sheet, snapshot, shift);
+        ShiftPictures(workbook, sheet, snapshot, shift);
         ShiftSparklines(sheet, snapshot, shift);
         ShiftPivotTables(sheet, snapshot, shift);
         ShiftStructuredTables(sheet, snapshot, shift);
@@ -680,7 +680,7 @@ internal static partial class RowColumnShiftHelpers
         }
     }
 
-    private static void ShiftPictures(Sheet sheet, AddressBearingStateSnapshot snapshot, AddressShift shift)
+    private static void ShiftPictures(Workbook workbook, Sheet sheet, AddressBearingStateSnapshot snapshot, AddressShift shift)
     {
         sheet.Pictures.Clear();
         foreach (var entry in snapshot.Pictures)
@@ -689,13 +689,75 @@ internal static partial class RowColumnShiftHelpers
                 continue;
 
             entry.Picture.Anchor = anchor;
-            entry.Picture.LinkedSourceRange = entry.LinkedSourceRange is { } linkedRange
+            var shiftedRange = entry.LinkedSourceRange is { } linkedRange
                 ? shift.ShiftRange(linkedRange)
                 : null;
-            entry.Picture.IsLinkedToSourceRange = entry.IsLinkedToSourceRange && entry.Picture.LinkedSourceRange is not null;
+            entry.Picture.LinkedSourceRange = shiftedRange;
+            entry.Picture.IsLinkedToSourceRange = entry.IsLinkedToSourceRange && shiftedRange is not null;
+
+            // A row/column insert or delete that lands inside a same-sheet linked picture's source
+            // range grows/shrinks/moves LinkedSourceRange above, but the rendered grid geometry
+            // (SourceRowCount/SourceColumnCount) and cached cell content (Cells) are otherwise never
+            // touched. Left stale, the picture keeps drawing its old snapshot at the old dimensions
+            // even though the linked range now covers different cells. Excel refreshes a linked
+            // picture's content on structural edits to its source range, so re-snapshot here.
+            if (entry.Picture.IsLinkedToSourceRange &&
+                shiftedRange is { } newRange &&
+                entry.LinkedSourceRange is { } oldRange &&
+                newRange != oldRange)
+            {
+                RefreshLinkedPictureSnapshot(workbook, sheet, entry.Picture, newRange);
+            }
+
             sheet.Pictures.Add(entry.Picture);
         }
     }
+
+    /// <summary>
+    /// Rebuilds a linked picture's rendered grid dimensions and cached cell snapshot from the live
+    /// contents of its (possibly resized/relocated) linked source range. Only same-sheet ranges reach
+    /// here, since <see cref="AddressShift.ShiftRange"/> leaves cross-sheet ranges untouched.
+    /// </summary>
+    private static void RefreshLinkedPictureSnapshot(Workbook workbook, Sheet sheet, PictureModel picture, GridRange sourceRange)
+    {
+        picture.SourceRowCount = sourceRange.RowCount;
+        picture.SourceColumnCount = sourceRange.ColCount;
+
+        picture.Cells.Clear();
+        for (var row = sourceRange.Start.Row; row <= sourceRange.End.Row; row++)
+        {
+            for (var col = sourceRange.Start.Col; col <= sourceRange.End.Col; col++)
+            {
+                var cell = sheet.GetCell(row, col);
+                var styleId = cell?.StyleId
+                    ?? sheet.GetStyleOnly(row, col)
+                    ?? StyleId.Default;
+                var style = workbook.GetStyle(styleId);
+                var value = cell?.Value ?? BlankValue.Instance;
+
+                picture.Cells.Add(new PictureCellSnapshot(
+                    row - sourceRange.Start.Row,
+                    col - sourceRange.Start.Col,
+                    FormatPictureCellText(value),
+                    style.Clone(),
+                    value is NumberValue or DateTimeValue));
+            }
+        }
+    }
+
+    /// <summary>Mirrors DrawingInputParser.FormatPictureCellText (App.Presentation layer, not
+    /// referenceable from Core.Commands) so linked-picture snapshot refreshes render the same text
+    /// Excel/FreeX would show for each scalar value kind.</summary>
+    private static string FormatPictureCellText(ScalarValue value) =>
+        value switch
+        {
+            BlankValue => "",
+            NumberValue number => number.Value.ToString(CultureInfo.CurrentCulture),
+            BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+            TextValue text => text.Value,
+            ErrorValue error => error.Code,
+            _ => value.ToString() ?? ""
+        };
 
     private static void ShiftFormControls(Sheet sheet, AddressBearingStateSnapshot snapshot, AddressShift shift)
     {

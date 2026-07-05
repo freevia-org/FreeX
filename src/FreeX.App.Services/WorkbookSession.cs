@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeX.App.Presentation.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -1863,11 +1864,28 @@ public sealed class WorkbookSession
         return WorkbookClipboardTextResult.Succeeded(text);
     }
 
-    public WorkbookCellEditResult PasteClipboardTextAtActiveCell(string? text, bool preserveText = false)
+    public WorkbookCellEditResult PasteClipboardTextAtActiveCell(
+        string? text,
+        bool preserveText = false,
+        bool clipboardReadFailed = false)
     {
         if (_internalClipboard is { } internalClipboard)
         {
-            if (text is null || string.Equals(internalClipboard.Text, text, StringComparison.Ordinal))
+            var pastePlan = ClipboardPastePlanner.PlanPaste(internalClipboard.Text, text, clipboardReadFailed);
+            if (pastePlan == ClipboardPastePlan.ReadFailed)
+            {
+                // A transient OS-clipboard read failure must never be silently reinterpreted as
+                // "clipboard unchanged" — that would risk pasting a stale internal copy over content
+                // the user just copied elsewhere. Surface it instead of guessing, mirroring the WPF
+                // host's ClipboardPastePlanner.PlanPaste guard.
+                return new WorkbookCellEditResult(
+                    false,
+                    "The clipboard is busy. Try pasting again.",
+                    [],
+                    RecalcReport: null);
+            }
+
+            if (pastePlan == ClipboardPastePlan.UseInternalClipboard)
                 return PasteInternalClipboardAtActiveCell(internalClipboard, PasteCellsMode.All, default);
 
             _internalClipboard = null;
@@ -1889,13 +1907,27 @@ public sealed class WorkbookSession
         string? text,
         PasteCellsMode mode,
         PasteSpecialOptions options,
-        bool keepSourceColumnWidths = false)
+        bool keepSourceColumnWidths = false,
+        bool clipboardReadFailed = false)
     {
         if (!Enum.IsDefined(mode))
         {
             return new WorkbookCellEditResult(
                 false,
                 "Paste Special mode is not supported.",
+                [],
+                RecalcReport: null);
+        }
+
+        if (clipboardReadFailed)
+        {
+            // Mirror PasteClipboardTextAtActiveCell: a transient OS-clipboard read failure must not
+            // be treated as "clipboard changed" (which would drop the internal clipboard) nor as
+            // "clipboard unchanged" (which would silently paste a possibly-stale internal copy) —
+            // surface it so the caller can tell the user and let them retry.
+            return new WorkbookCellEditResult(
+                false,
+                "The clipboard is busy. Try pasting again.",
                 [],
                 RecalcReport: null);
         }
@@ -4015,6 +4047,15 @@ public sealed class WorkbookSession
         IsDirty = true;
         DirtyGeneration++;
     }
+
+    /// <summary>
+    /// Forces this session's dirty/modified state after a crash-recovery snapshot has been
+    /// loaded into it, so the host shows the modified indicator and prompts the user to save
+    /// rather than silently discarding the recovered data. Mirrors the WPF host's
+    /// <c>MarkWorkbookDirtyForRecovery</c>/<c>MarkWorkbookDirty</c> path, which reuses this same
+    /// document-state dirty-marking call for edits.
+    /// </summary>
+    public void MarkDirtyForRecovery() => MarkDirty();
 
     private static CellAddress FirstAffectedCellOrDefault(
         IReadOnlyList<CellAddress> affectedCells,

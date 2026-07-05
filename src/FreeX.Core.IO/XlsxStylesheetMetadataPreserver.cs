@@ -277,12 +277,26 @@ internal static class XlsxStylesheetMetadataPreserver
         reader.Prefix == "xmlns" ||
         (reader.Prefix.Length == 0 && reader.LocalName == "xmlns");
 
+    // Attributes of a cellXfs <xf> element that participate in its "rendered style" identity for
+    // the purpose of correlating a source xf with its rebuilt counterpart. fillId is deliberately
+    // excluded: it is exactly the reference that differs (or gets renumbered) across the rebuild,
+    // so it cannot be part of the signature used to find the corresponding target xf.
+    private static readonly string[] CellXfSignatureAttributes =
+    [
+        "numFmtId", "fontId", "borderId", "quotePrefix", "pivotButton",
+        "applyNumberFormat", "applyFont", "applyBorder", "applyAlignment", "applyProtection"
+    ];
+
     /// <summary>
     /// Copies gradient fill entries from the source styles.xml fills section into the target.
     /// ClosedXML does not know about gradient fills; when a loaded workbook is saved, ClosedXML
-    /// replaces all gradient fill entries with a default patternFill:None. This method detects
-    /// that case and restores the gradient fill at the correct fill index by matching fillId
-    /// references in the cellXfs sections.
+    /// rebuilds styles.xml from its own style cache: fills, cellXfs, and every other index space
+    /// are renumbered and resized, so a source fillId (or raw fill-list position) generally does
+    /// not name the same fill in the rebuilt target. This method instead correlates each source
+    /// cellXfs entry that references a gradient fill with its counterpart in the rebuilt target
+    /// cellXfs by comparing the rest of the xf's rendered style (number format, font, border,
+    /// alignment/protection children — everything except the fill itself), then restores the
+    /// gradient at that target xf's own fillId.
     /// </summary>
     private static bool MergeStylesheetGradientFills(XElement? sourceRoot, XElement targetRoot, XNamespace workbookNs)
     {
@@ -290,38 +304,102 @@ internal static class XlsxStylesheetMetadataPreserver
         if (sourceFills is null)
             return false;
 
-        var sourceGradientFills = sourceFills
-            .Elements(workbookNs + "fill")
-            .Select((fill, idx) => (Fill: fill, Index: idx))
-            .Where(pair => pair.Fill.Element(workbookNs + "gradientFill") is not null)
-            .ToList();
+        var sourceFillList = sourceFills.Elements(workbookNs + "fill").ToList();
+        var sourceGradientFillIndexes = new HashSet<int>();
+        for (var i = 0; i < sourceFillList.Count; i++)
+        {
+            if (sourceFillList[i].Element(workbookNs + "gradientFill") is not null)
+                sourceGradientFillIndexes.Add(i);
+        }
 
-        if (sourceGradientFills.Count == 0)
+        if (sourceGradientFillIndexes.Count == 0)
+            return false;
+
+        var sourceCellXfs = sourceRoot?.Element(workbookNs + "cellXfs")?.Elements(workbookNs + "xf").ToList();
+        if (sourceCellXfs is not { Count: > 0 })
             return false;
 
         var targetFills = targetRoot.Element(workbookNs + "fills");
-        if (targetFills is null)
+        var targetCellXfs = targetRoot.Element(workbookNs + "cellXfs")?.Elements(workbookNs + "xf").ToList();
+        if (targetFills is null || targetCellXfs is not { Count: > 0 })
             return false;
 
         var targetFillList = targetFills.Elements(workbookNs + "fill").ToList();
-        var changed = false;
 
-        foreach (var (sourceFill, fillIndex) in sourceGradientFills)
+        // Group target xf indexes by their style signature so each source xf can find its
+        // rebuilt counterpart even though absolute cellXfs positions are not preserved.
+        var targetXfsBySignature = new Dictionary<string, List<int>>(StringComparer.Ordinal);
+        for (var i = 0; i < targetCellXfs.Count; i++)
         {
-            if (fillIndex >= targetFillList.Count)
+            var signature = ComputeCellXfSignature(targetCellXfs[i]);
+            if (!targetXfsBySignature.TryGetValue(signature, out var list))
+                targetXfsBySignature[signature] = list = [];
+            list.Add(i);
+        }
+
+        var changed = false;
+        var restoredTargetFillIndexes = new HashSet<int>();
+        var consumedTargetXfIndexes = new HashSet<int>();
+
+        for (var sourceXfIndex = 0; sourceXfIndex < sourceCellXfs.Count; sourceXfIndex++)
+        {
+            var sourceXf = sourceCellXfs[sourceXfIndex];
+            if (!TryGetIntAttribute(sourceXf, "fillId", out var sourceFillId) ||
+                !sourceGradientFillIndexes.Contains(sourceFillId) ||
+                sourceFillId >= sourceFillList.Count)
+            {
+                continue;
+            }
+
+            var signature = ComputeCellXfSignature(sourceXf);
+            if (!targetXfsBySignature.TryGetValue(signature, out var candidateTargetXfs))
                 continue;
 
-            var targetFill = targetFillList[fillIndex];
-            // Only replace if target has a patternFill (not already a gradientFill)
+            var targetXfIndex = candidateTargetXfs.FirstOrDefault(idx => !consumedTargetXfIndexes.Contains(idx), -1);
+            if (targetXfIndex < 0)
+                targetXfIndex = candidateTargetXfs[0];
+            consumedTargetXfIndexes.Add(targetXfIndex);
+
+            if (!TryGetIntAttribute(targetCellXfs[targetXfIndex], "fillId", out var targetFillId) ||
+                targetFillId >= targetFillList.Count)
+            {
+                continue;
+            }
+
+            var targetFill = targetFillList[targetFillId];
             if (targetFill.Element(workbookNs + "gradientFill") is not null)
                 continue; // already a gradient — no change needed
 
-            // Replace the target fill's content with the source gradient fill content
-            targetFill.ReplaceNodes(sourceFill.Nodes().Select(n => new XElement((XElement)n)));
+            if (!restoredTargetFillIndexes.Add(targetFillId))
+                continue; // this target fill slot was already restored from another matched xf
+
+            targetFill.ReplaceNodes(sourceFillList[sourceFillId].Nodes().Select(n => new XElement((XElement)n)));
             changed = true;
         }
 
         return changed;
+    }
+
+    private static string ComputeCellXfSignature(XElement xf)
+    {
+        var parts = new List<string>(CellXfSignatureAttributes.Length + 2);
+        foreach (var attributeName in CellXfSignatureAttributes)
+            parts.Add(xf.Attribute(attributeName)?.Value ?? string.Empty);
+
+        var alignment = xf.Element(xf.Name.Namespace + "alignment");
+        parts.Add(alignment is null ? string.Empty : alignment.ToString(SaveOptions.DisableFormatting));
+
+        var protection = xf.Element(xf.Name.Namespace + "protection");
+        parts.Add(protection is null ? string.Empty : protection.ToString(SaveOptions.DisableFormatting));
+        const string separator = "";
+
+        return string.Join(separator, parts);
+    }
+
+    private static bool TryGetIntAttribute(XElement element, string attributeName, out int value)
+    {
+        var raw = element.Attribute(attributeName)?.Value;
+        return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
     }
 
     private static bool MergeStylesheetColors(XElement? sourceColors, XElement targetRoot, XNamespace workbookNs)

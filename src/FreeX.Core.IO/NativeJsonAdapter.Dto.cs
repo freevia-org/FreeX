@@ -957,6 +957,10 @@ public sealed partial class NativeJsonAdapter
         public DateTimeOffset? CreatedAtUtc { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public DateTimeOffset? ModifiedAtUtc { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Id { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? MentionsXml { get; set; }
         public List<CommentReplyDto> Replies { get; set; } = [];
     }
 
@@ -968,6 +972,10 @@ public sealed partial class NativeJsonAdapter
         public DateTimeOffset? CreatedAtUtc { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public DateTimeOffset? ModifiedAtUtc { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Id { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? MentionsXml { get; set; }
     }
 
     private class HyperlinkDto

@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Xml.Linq;
+using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
 
@@ -27,6 +28,29 @@ internal static class XlsxExternalLinkSchemaNormalizer
             if (NormalizeExternalLinkRoot(root))
                 XlsxPackageXmlEditor.ReplaceXml(archive, entry.FullName, document);
         }
+    }
+
+    /// <summary>
+    /// Reads the cached sheet names, defined names, and cached cell values off a (not-yet-normalized
+    /// or already-normalized) <c>externalBook</c> element and populates <paramref name="model"/> with
+    /// them, so the formula engine can resolve <c>[Book.xlsx]Sheet1!A1</c>-style references and named
+    /// ranges against the values Excel cached at last refresh, even when the source workbook is
+    /// unavailable. No-ops for <c>ddeLink</c>/<c>oleLink</c> payload elements, which never carry this
+    /// metadata.
+    /// </summary>
+    public static void PopulateModelFromExternalBook(XElement? externalBook, ExternalLinkModel model)
+    {
+        if (externalBook is null || externalBook.Name != WorkbookNs + "externalBook")
+            return;
+
+        model.SheetNames.Clear();
+        model.SheetNames.AddRange(ExternalLinkModel.ParseSheetNames(externalBook.Element(WorkbookNs + "sheetNames")));
+
+        model.DefinedNames.Clear();
+        model.DefinedNames.AddRange(ExternalLinkModel.ParseDefinedNames(externalBook.Element(WorkbookNs + "definedNames")));
+
+        model.CachedSheetData.Clear();
+        model.CachedSheetData.AddRange(ExternalLinkModel.ParseSheetDataSet(externalBook.Element(WorkbookNs + "sheetDataSet")));
     }
 
     public static bool NormalizeExternalLinkRoot(XElement externalLink)

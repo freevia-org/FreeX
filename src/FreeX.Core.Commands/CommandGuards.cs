@@ -159,6 +159,17 @@ internal static class CommandGuards
     public static string CannotInsertRowsPastLastRow(uint count) =>
         $"Cannot insert {count} row(s): data would be pushed past the last row ({CellAddress.MaxRow}).";
 
+    // M42: Excel's Allow Users to Edit Ranges feature lets each protected range carry its own
+    // password (distinct from the sheet password) and prompts for it before allowing an edit inside
+    // that range while the sheet is protected. The password is modeled on
+    // Sheet.AllowEditRangePasswords (keyed by the same GridRange stored in AllowEditRanges) and
+    // round-tripped by XlsxAllowEditRangeMapper; Sheet.UnlockedAllowEditRanges tracks which
+    // password-protected ranges the user has already unlocked this session (an in-memory gate, not
+    // persisted). A range with no stored password behaves exactly as before: unconditionally
+    // editable. The interactive "prompt for the range password" flow itself lives in the shell
+    // (outside this file's scope) and is expected to call TryUnlockAllowEditRange below on a correct
+    // password before retrying the edit; this guard only enforces the resulting locked/unlocked
+    // state.
     public static bool CanEditCell(Workbook workbook, Sheet sheet, CellAddress address)
     {
         if (!sheet.IsProtected)
@@ -166,7 +177,10 @@ internal static class CommandGuards
 
         foreach (var range in sheet.AllowEditRanges)
         {
-            if (range.Contains(address))
+            if (!range.Contains(address))
+                continue;
+
+            if (!IsPasswordProtected(sheet, range) || sheet.UnlockedAllowEditRanges.Contains(range))
                 return true;
         }
 
@@ -176,6 +190,29 @@ internal static class CommandGuards
             ?? StyleId.Default;
         var style = workbook.GetStyle(styleId);
         return !style.Locked;
+    }
+
+    /// <summary>True when <paramref name="range"/> has its own Allow-Edit-Range password set.</summary>
+    public static bool IsPasswordProtected(Sheet sheet, GridRange range) =>
+        sheet.AllowEditRangePasswords.TryGetValue(range, out var stored) && !string.IsNullOrEmpty(stored);
+
+    /// <summary>
+    /// Verifies <paramref name="password"/> against <paramref name="range"/>'s stored Allow-Edit-Range
+    /// password and, on success, marks the range unlocked for the remainder of the session (see
+    /// <see cref="Sheet.UnlockedAllowEditRanges"/>) so subsequent edits in it are not re-prompted.
+    /// Returns false without unlocking anything when the range has no password or the password does
+    /// not match.
+    /// </summary>
+    public static bool TryUnlockAllowEditRange(Sheet sheet, GridRange range, string? password)
+    {
+        if (!sheet.AllowEditRangePasswords.TryGetValue(range, out var stored) || string.IsNullOrEmpty(stored))
+            return false;
+
+        if (!ProtectionPasswordHelper.VerifyStoredPassword(stored, password))
+            return false;
+
+        sheet.UnlockedAllowEditRanges.Add(range);
+        return true;
     }
 
     /// <summary>

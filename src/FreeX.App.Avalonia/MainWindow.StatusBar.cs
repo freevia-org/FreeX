@@ -23,6 +23,11 @@ public sealed partial class MainWindow
     // be refreshed on open, mirroring the WPF host's _statusBarCustomizeMenuItems registry.
     private readonly Dictionary<string, MenuItem> _statusBarCustomizeMenuItems = new(StringComparer.Ordinal);
 
+    // Whether AutomationProperties.LiveSetting has already been applied to _selectionStatsText.
+    // Applied lazily on the first render rather than at construction time (which lives in
+    // MainWindow.cs) so this file alone can wire the live-region behavior.
+    private bool _selectionStatsLiveSettingApplied;
+
     private bool GetStatusBarOption(string optionTag) =>
         AvaloniaStatusBarSource.IsOptionVisible(_statusBarOptionVisibility, optionTag);
 
@@ -63,6 +68,7 @@ public sealed partial class MainWindow
         // element's Text (value/content). Overwriting Name with the readouts broke the launch-smoke /
         // accessibility contract (GetName must equal "Selection statistics") whenever a selection had stats.
         AutomationProperties.SetName(_selectionStatsText, "Selection statistics");
+        EnsureSelectionStatsLiveRegion();
 
         _zoomText.IsVisible = rendererPlan.IsElementVisible(StatusBarPresentationElement.ZoomText);
         _zoomText.Foreground = StatusBarForeground;
@@ -114,5 +120,40 @@ public sealed partial class MainWindow
     {
         _statusBarOptionVisibility[optionTag] = isChecked;
         ApplyStatusBarModel(_statusText.Text ?? AvaloniaStatusBarSource.ReadyText());
+    }
+
+    // ── Accessibility: live-region announcement for selection statistics ─────
+    // WPF's StatusAvgText/StatusCountText/StatusNumericalCountText/StatusSumText/StatusMinText/
+    // StatusMaxText are each individually AutomationProperties.LiveSetting="Polite", so a screen
+    // reader announces the new values whenever a selection's Sum/Average/Count/etc. change
+    // (MainWindow.xaml:1183-1212 + MainWindow.GridStatus.cs's SetStatusStatisticTextIfChanged /
+    // NotifyStatusStatisticAutomationChanged, which re-raises AutomationElementIdentifiers.NameProperty
+    // with the new value text). Avalonia renders all readouts into a single _selectionStatsText
+    // TextBlock whose accessible NAME and HelpText must both stay their fixed, static values —
+    // "Selection statistics" / "Shows statistics for the current selection." — because the launch-smoke
+    // source-contract check (MainWindow.cs's BuildLaunchSmokeSnapshot / HasSelectionStatsAutomationName
+    // and HasSelectionStatsAutomationHelp, pinned by tests/FreeX.App.Host.Tests/
+    // MacOsAppReadinessPreflightTests.cs and tests/FreeX.App.Services.Tests/AvaloniaShellSourceTests.cs)
+    // asserts both hold their static values at any point after construction, not just at startup —
+    // so, unlike WPF, neither Name nor HelpText is a safe carrier for the live value here.
+    //
+    // Mark the control as an AT-SPI/UIA live region (LiveSetting="Polite") so any backend that
+    // announces on the element's Text/content change (rather than only Name/HelpText) picks up the
+    // new Sum/Average/Count readout as _selectionStatsText.Text is updated above. This is applied
+    // once, lazily, since the field is constructed in MainWindow.cs (out of scope for this file).
+    //
+    // Full parity with WPF's per-field Name-carried announcement would additionally require either
+    // restructuring this single TextBlock into six separately-named controls (mirroring WPF's
+    // StatusAvgText/StatusCountText/.../StatusMaxText) or a MainWindow.cs-level accessible-name
+    // strategy change — both out of scope for this pass, since MainWindow.cs (the field's owner) is
+    // assigned to another change in this pass. Tracked as a residual gap rather than worked around
+    // by violating the pinned Name/HelpText contract above.
+    private void EnsureSelectionStatsLiveRegion()
+    {
+        if (_selectionStatsLiveSettingApplied)
+            return;
+
+        AutomationProperties.SetLiveSetting(_selectionStatsText, AutomationLiveSetting.Polite);
+        _selectionStatsLiveSettingApplied = true;
     }
 }

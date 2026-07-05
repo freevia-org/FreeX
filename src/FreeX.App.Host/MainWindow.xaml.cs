@@ -118,6 +118,10 @@ public partial class MainWindow : Window, IWorkbookWindow
     // AutofillRequested call, so OnAutofillRequested can pass Excel's Ctrl-flip state
     // (copy<->series) into AutofillCommand.
     private bool _autofillCtrlHeld;
+    // Captured from GridView.SelectionMoveModifiersResolved immediately before the paired
+    // SelectionMoveRequested call, so OnSelectionMoveRequested can tell Excel's Ctrl-drag-to-copy
+    // gesture apart from an ordinary (destructive) move.
+    private bool _selectionMoveCtrlHeld;
     private bool _dragSelectActive;
     private bool _dragSelectAddsAdditionalRange;
     private bool _dragSelectionTransientOverlaysCleared;
@@ -352,6 +356,7 @@ public partial class MainWindow : Window, IWorkbookWindow
         SheetGrid.AutofillRequested += OnAutofillRequested;
         SheetGrid.AutofillEdgeScrollRequested += OnAutofillEdgeScrollRequested;
         SheetGrid.AutofillHandleDoubleClicked += OnAutofillHandleDoubleClicked;
+        SheetGrid.SelectionMoveModifiersResolved += ctrlHeld => _selectionMoveCtrlHeld = ctrlHeld;
         SheetGrid.SelectionMoveRequested += OnSelectionMoveRequested;
         SheetGrid.ContextMenuRequested += OnGridContextMenuRequested;
         SheetGrid.HeaderContextMenuRequested += OnGridHeaderContextMenuRequested;

@@ -44,6 +44,12 @@ public sealed class AutofillCommand : IWorkbookCommand
         if (!TryGetFillPlan(out var plan))
             return new CommandOutcome(false, "The autofill range must be adjacent to the source range and aligned by row or column.");
 
+        // Excel refuses to fill across a merged region: the merge's non-anchor cells must never
+        // receive independent content, and a fill that only partially covers a merge would leave
+        // the merge's data model out of sync (mirrors MoveRangeCommand/SortCommand's merge guard).
+        if (sheet.MergedRegions.Any(region => _fillRange.Overlaps(region) || _sourceRange.Overlaps(region)))
+            return new CommandOutcome(false, "Cannot autofill a range that intersects merged cells.");
+
         for (var row = _fillRange.Start.Row; row <= _fillRange.End.Row; row++)
         {
             for (var col = _fillRange.Start.Col; col <= _fillRange.End.Col; col++)
@@ -56,6 +62,7 @@ public sealed class AutofillCommand : IWorkbookCommand
         var sourceAddr = GetSourceEdgeAddress(plan);
         var sourceCell = sheet.GetCell(sourceAddr);
         var sourceHasFormula = sourceCell is { HasFormula: true, FormulaText: not null };
+        var sourceLength = plan.Axis == FillAxis.Vertical ? (int)_sourceRange.RowCount : (int)_sourceRange.ColCount;
         var naturalScalarSeries = sourceHasFormula ? null : TryCreateScalarSeries(sheet, plan);
         var naturalListSeries = sourceHasFormula || naturalScalarSeries is not null ? null : TryCreateListSeries(sheet, plan);
         // Ctrl flips the natural default: a detected series (scalar trend, or any text/list
@@ -87,8 +94,6 @@ public sealed class AutofillCommand : IWorkbookCommand
                     continue;
                 }
 
-                int rowOffset = (int)addr.Row - (int)sourceAddr.Row;
-                int colOffset = (int)addr.Col - (int)sourceAddr.Col;
                 var offset = plan.Axis == FillAxis.Vertical
                     ? Math.Abs((int)addr.Row - (int)sourceAddr.Row)
                     : Math.Abs((int)addr.Col - (int)sourceAddr.Col);
@@ -97,24 +102,45 @@ public sealed class AutofillCommand : IWorkbookCommand
                 if (scalarSeries is not null)
                 {
                     newCell = Cell.FromValue(scalarSeries.CreateValue(scalarSeries.LastValue + scalarSeries.Step * offset));
+                    newCell.StyleId = sourceCell.StyleId;
                 }
                 else if (listSeries is not null)
                 {
                     newCell = Cell.FromValue(listSeries.ValueAt(offset));
-                }
-                else if (!forceCopyOnly && sourceCell.HasFormula && sourceCell.FormulaText is not null)
-                {
-                    var shifted = FormulaRewriter.Rewrite(sourceCell.FormulaText,
-                        new PasteOffsetOp(rowOffset, colOffset), sheet.Name)
-                        ?? sourceCell.FormulaText;
-                    newCell = Cell.FromFormula(shifted);
+                    newCell.StyleId = sourceCell.StyleId;
                 }
                 else
                 {
-                    newCell = Cell.FromValue(sourceCell.Value);
+                    // No detected trend/list series: replay the source range's own per-cell
+                    // pattern cyclically instead of collapsing every destination cell to the
+                    // single edge cell. A 2+ cell source (e.g. a running-total formula pair, or
+                    // an alternating copy like "A","B") repeats its whole shape every
+                    // sourceLength cells, matching Excel's fill-handle behavior.
+                    var patternSourceAddr = ResolvePatternSourceAddress(plan, addr, sourceLength);
+                    var patternSourceCell = sheet.GetCell(patternSourceAddr);
+                    if (patternSourceCell is null)
+                    {
+                        sheet.ClearCell(addr);
+                        continue;
+                    }
+
+                    if (!forceCopyOnly && patternSourceCell.HasFormula && patternSourceCell.FormulaText is not null)
+                    {
+                        int rowOffset = (int)addr.Row - (int)patternSourceAddr.Row;
+                        int colOffset = (int)addr.Col - (int)patternSourceAddr.Col;
+                        var shifted = FormulaRewriter.Rewrite(patternSourceCell.FormulaText,
+                            new PasteOffsetOp(rowOffset, colOffset), sheet.Name)
+                            ?? patternSourceCell.FormulaText;
+                        newCell = Cell.FromFormula(shifted);
+                    }
+                    else
+                    {
+                        newCell = Cell.FromValue(patternSourceCell.Value);
+                    }
+
+                    newCell.StyleId = patternSourceCell.StyleId;
                 }
 
-                newCell.StyleId = sourceCell.StyleId;
                 sheet.SetCell(addr, newCell);
             }
         }
@@ -242,6 +268,50 @@ public sealed class AutofillCommand : IWorkbookCommand
         FillDirection.Left => _sourceRange.Start,
         _ => _sourceRange.End
     };
+
+    /// <summary>
+    /// Resolves which cell within <see cref="_sourceRange"/> a given destination cell should
+    /// mirror when replaying the source's per-cell pattern (formula shape or plain copy) rather
+    /// than a detected trend/list series. Excel repeats the whole source pattern cyclically every
+    /// <paramref name="sourceLength"/> cells: the cell adjacent to the source mirrors the source
+    /// cell nearest the fill edge, and each subsequent cell advances one step further into the
+    /// pattern, wrapping back to the start of the pattern after <paramref name="sourceLength"/>
+    /// cells.
+    /// </summary>
+    private CellAddress ResolvePatternSourceAddress(FillPlan plan, CellAddress addr, int sourceLength)
+    {
+        if (sourceLength <= 0)
+            sourceLength = 1;
+
+        switch (plan.Direction)
+        {
+            case FillDirection.Down:
+            {
+                var stepsAway = (int)addr.Row - (int)_sourceRange.End.Row - 1;
+                var patternIndex = Mod(stepsAway, sourceLength);
+                return new CellAddress(_sheetId, _sourceRange.Start.Row + (uint)patternIndex, addr.Col);
+            }
+            case FillDirection.Up:
+            {
+                var stepsAway = (int)_sourceRange.Start.Row - (int)addr.Row - 1;
+                var patternIndex = Mod(stepsAway, sourceLength);
+                return new CellAddress(_sheetId, _sourceRange.End.Row - (uint)patternIndex, addr.Col);
+            }
+            case FillDirection.Right:
+            {
+                var stepsAway = (int)addr.Col - (int)_sourceRange.End.Col - 1;
+                var patternIndex = Mod(stepsAway, sourceLength);
+                return new CellAddress(_sheetId, addr.Row, _sourceRange.Start.Col + (uint)patternIndex);
+            }
+            case FillDirection.Left:
+            default:
+            {
+                var stepsAway = (int)_sourceRange.Start.Col - (int)addr.Col - 1;
+                var patternIndex = Mod(stepsAway, sourceLength);
+                return new CellAddress(_sheetId, addr.Row, _sourceRange.End.Col - (uint)patternIndex);
+            }
+        }
+    }
 
     private int GetFillCellCapacity()
     {

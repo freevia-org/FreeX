@@ -150,6 +150,8 @@ public class ProtectionGuardCoverageTests
     // - PasteRangeAsPictureCommand: inserts a picture from a range; requires special setup.
     //   Covered: delegates to InsertPictureCommand.
     // - MoveRangeCommand: moves cells (cut+paste); covered: CanEditCell on source+destination.
+    // - CopyRangeCommand: non-destructive copy (Ctrl+drag); mirrors MoveRangeCommand but leaves
+    //   the source intact, so only destination cells are CanEditCell-checked. Same skip rationale.
     // - CustomView commands: mutate custom-view bookmarks, not cell content.
     //   Not blocked by sheet protection in Excel; skip.
     // - WorkbookWindow/Theme/CalculationMode commands: workbook-global settings.
@@ -200,6 +202,7 @@ public class ProtectionGuardCoverageTests
         ["RemoveDuplicateRowsCommand"] = "Calls DeleteRowsCommand (guarded). Requires duplicate rows.",
         ["PasteRangeAsPictureCommand"] = "Delegates to InsertPictureCommand. Requires renderer.",
         ["MoveRangeCommand"] = "Calls CanEditCell on source + destination. Requires non-trivial range.",
+        ["CopyRangeCommand"] = "Non-destructive copy (mirrors MoveRangeCommand); calls CanEditCell on destination cells only, since source is left untouched. Requires non-trivial range.",
 
         // View / metadata — not blocked by protection in Excel
         ["SaveCustomViewCommand"] = "Saves view bookmarks; not cell content; not protection-blocked.",

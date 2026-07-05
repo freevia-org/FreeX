@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using FreeX.Core.Model;
 
@@ -52,7 +53,7 @@ public static class ClipboardSerializer
             if (cell.Row != expectedRow || cell.Col != expectedCol)
                 return false;
 
-            length += GetTsvEncodedLength(cell.DisplayText);
+            length += GetTsvEncodedLength(GetSerializedFieldText(cell));
             if (length > int.MaxValue)
                 return false;
         }
@@ -76,7 +77,7 @@ public static class ClipboardSerializer
                     }
                 }
 
-                AppendTsvCell(destination, ref offset, state.Cells[i].DisplayText);
+                AppendTsvCell(destination, ref offset, GetSerializedFieldText(state.Cells[i]));
             }
         });
         return true;
@@ -101,7 +102,7 @@ public static class ClipboardSerializer
                 firstCol = false;
 
                 if (cellLookup.TryGetValue((r, c), out var cell))
-                    AppendTsvCell(sb, cell.DisplayText);
+                    AppendTsvCell(sb, GetSerializedFieldText(cell));
             }
         }
     }
@@ -127,12 +128,93 @@ public static class ClipboardSerializer
 
                 if (cellIndex < cells.Count && cells[cellIndex].Row == r && cells[cellIndex].Col == c)
                 {
-                    AppendTsvCell(sb, cells[cellIndex].DisplayText);
+                    AppendTsvCell(sb, GetSerializedFieldText(cells[cellIndex]));
                     cellIndex++;
                 }
             }
         }
     }
+
+    /// <summary>Returns the text that should actually be written to the clipboard for
+    /// <paramref name="cell"/>, prefixing a leading apostrophe (Excel's text-escape convention,
+    /// as consumed by PasteCommandFactory.ParseClipboardValue) when the cell is text-typed but its
+    /// DisplayText would otherwise be silently re-coerced into a number/boolean/apostrophe-escape on
+    /// a subsequent OS-clipboard paste. Without this, a Text-formatted "00501" round-trips through
+    /// Notepad/another window and comes back as the number 501, losing the leading zeros and type.</summary>
+    private static string GetSerializedFieldText(DisplayCell cell)
+    {
+        if (cell.RawValue is not TextValue || string.IsNullOrEmpty(cell.DisplayText))
+            return cell.DisplayText;
+
+        return RequiresLeadingApostropheEscape(cell.DisplayText)
+            ? "'" + cell.DisplayText
+            : cell.DisplayText;
+    }
+
+    /// <summary>Mirrors the coercions PasteCommandFactory.ParseClipboardValue applies to pasted plain
+    /// text, so a leading apostrophe is added exactly when omitting it would change the value's type
+    /// on the round trip.</summary>
+    private static bool RequiresLeadingApostropheEscape(string text)
+    {
+        // A pre-existing leading apostrophe is itself the text-escape marker; without one of our own,
+        // ParseClipboardValue would strip it as an escape and change the value.
+        if (text.StartsWith('\''))
+            return true;
+
+        if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var cultureNumber) &&
+            double.IsFinite(cultureNumber))
+        {
+            return true;
+        }
+
+        if (TryParseExcelPasteNumber(text, out var excelNumber) && double.IsFinite(excelNumber))
+            return true;
+
+        if (text.Equals("TRUE", StringComparison.OrdinalIgnoreCase) ||
+            text.Equals("FALSE", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Parses accounting/thousands/parenthesized numeric text the way Excel does on paste,
+    /// mirroring PasteCommandFactory.TryParseExcelPasteNumber (same grouping regex, culture, and
+    /// NumberStyles) so the escape decision here matches the coercion that would actually happen on
+    /// the way back in.</summary>
+    private static bool TryParseExcelPasteNumber(string text, out double number)
+    {
+        if (!text.Contains(','))
+            return double.TryParse(text, StylesWithoutThousands, UsCulture, out number);
+
+        if (double.TryParse(text, StylesWithoutThousands, UsCulture, out number))
+            return true;
+
+        if (!ValidGroupingRegex.IsMatch(text))
+        {
+            number = 0;
+            return false;
+        }
+
+        return double.TryParse(text, NumberStyles.Any, UsCulture, out number);
+    }
+
+    // Kept in exact sync with PasteCommandFactory.ValidGroupingRegex/UsCulture/StylesWithoutThousands
+    // so a cell is only escaped here when the round trip would actually re-coerce it.
+    private static readonly System.Text.RegularExpressions.Regex ValidGroupingRegex = new(
+        @"^\(?[+-]?\$?\d{1,3}(,\d{3})*(\.\d*)?\$?[+-]?\)?$",
+        System.Text.RegularExpressions.RegexOptions.None);
+
+    private static readonly CultureInfo UsCulture = CultureInfo.GetCultureInfo("en-US");
+
+    private const NumberStyles StylesWithoutThousands =
+        NumberStyles.AllowLeadingSign |
+        NumberStyles.AllowTrailingSign |
+        NumberStyles.AllowParentheses |
+        NumberStyles.AllowDecimalPoint |
+        NumberStyles.AllowExponent |
+        NumberStyles.AllowCurrencySymbol;
 
     private static void AppendTsvCell(StringBuilder sb, string text)
     {
@@ -244,7 +326,7 @@ public static class ClipboardSerializer
 
             if (capacity < int.MaxValue)
             {
-                capacity += cell.DisplayText.Length + 2;
+                capacity += cell.DisplayText.Length + 3;
                 if (capacity >= int.MaxValue)
                     capacity = int.MaxValue;
             }
@@ -296,7 +378,7 @@ public static class ClipboardSerializer
                 continue;
             }
 
-            if (ch == '"' && atFieldStart)
+            if (ch == '"' && atFieldStart && IsProperlyQuotedField(text, i))
             {
                 inQuotes = true;
                 atFieldStart = false;
@@ -331,6 +413,31 @@ public static class ClipboardSerializer
         row.Add(field.ToString());
         rows.Add(row.ToArray());
         return rows.ToArray();
+    }
+
+    /// <summary>Returns true when the double-quote at <paramref name="quoteIndex"/> starts a genuine
+    /// RFC4180-style quoted field: scanning forward (treating "" as an escaped literal quote) reaches
+    /// a closing quote that is immediately followed by a tab, a line break, or the end of the text.
+    /// If no such closing quote exists, the character is a stray literal quote (e.g. a quoted saying
+    /// pasted from a browser) and must be preserved as data rather than consumed as CSV syntax.</summary>
+    private static bool IsProperlyQuotedField(string text, int quoteIndex)
+    {
+        for (var i = quoteIndex + 1; i < text.Length; i++)
+        {
+            if (text[i] != '"')
+                continue;
+
+            if (i + 1 < text.Length && text[i + 1] == '"')
+            {
+                i++;
+                continue;
+            }
+
+            var next = i + 1;
+            return next >= text.Length || text[next] is '\t' or '\r' or '\n';
+        }
+
+        return false;
     }
 
     private static string[][] DeserializePlainText(string text)

@@ -283,8 +283,8 @@ public static partial class BuiltInFunctions
         {
             foreach (var key in keys)
             {
-                int cmp = CompareScalar(key.Range.Cells[a, 0], key.Range.Cells[b, 0]);
-                if (cmp != 0) return key.Order * cmp;
+                int cmp = CompareSortKey(key.Range.Cells[a, 0], key.Range.Cells[b, 0], key.Order);
+                if (cmp != 0) return cmp;
             }
 
             return a.CompareTo(b);
@@ -304,8 +304,8 @@ public static partial class BuiltInFunctions
         {
             foreach (var key in keys)
             {
-                int cmp = CompareScalar(key.Range.Cells[0, a], key.Range.Cells[0, b]);
-                if (cmp != 0) return key.Order * cmp;
+                int cmp = CompareSortKey(key.Range.Cells[0, a], key.Range.Cells[0, b], key.Order);
+                if (cmp != 0) return cmp;
             }
 
             return a.CompareTo(b);

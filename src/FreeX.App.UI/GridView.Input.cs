@@ -7,6 +7,16 @@ namespace FreeX.App.UI;
 
 public partial class GridView
 {
+    /// <summary>
+    /// Fired immediately before <see cref="SelectionMoveRequested"/> with the Ctrl-key state at
+    /// release. Mirrors <see cref="AutofillModifiersResolved"/>: Excel copies the dragged range
+    /// to the destination (leaving the source intact) instead of moving it when Ctrl is held
+    /// during a selection-border drag. Hosts that want Ctrl-drag-to-copy support should read this
+    /// value in a handler for this event and branch between a copy and a move command when
+    /// handling the paired <see cref="SelectionMoveRequested"/> call.
+    /// </summary>
+    public event Action<bool>? SelectionMoveModifiersResolved;
+
     protected override void OnMouseMove(MouseEventArgs e)
     {
         if (HasActiveCapturedGridDrag() && e.LeftButton != MouseButtonState.Pressed)
@@ -1053,7 +1063,10 @@ public partial class GridView
             ReleaseMouseCapture();
 
             if (source.HasValue && target.HasValue && source.Value != target.Value)
+            {
+                SelectionMoveModifiersResolved?.Invoke(IsCtrlModifierDown());
                 SelectionMoveRequested?.Invoke(source.Value, target.Value);
+            }
 
             InvalidateVisual();
             e.Handled = true;
@@ -1144,7 +1157,7 @@ public partial class GridView
     }
 
     private bool IsOnSelectionMoveBorder(Point pos) =>
-        Keyboard.Modifiers == ModifierKeys.None &&
+        (Keyboard.Modifiers == ModifierKeys.None || Keyboard.Modifiers == ModifierKeys.Control) &&
         GridSelectionMovePlanner.IsOnMoveBorder(
             Viewport,
             SelectedRange,

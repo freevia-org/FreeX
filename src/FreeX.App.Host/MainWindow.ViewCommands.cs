@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
+using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using FreeX.App.Presentation.Shell;
@@ -453,13 +455,14 @@ public partial class MainWindow
             if (dialog.ShowDialog() != true)
                 return;
 
+            var (selectedColumnWidths, selectedRowHeights) = GetSelectionPixelMetrics(SheetGrid.SelectedRange);
             var zoomPercent = ZoomSelectionPlanner.CalculateZoomPercent(
                 dialog.Result.ZoomPercent,
                 dialog.Result.FitSelection,
                 SheetGrid.ActualWidth,
                 SheetGrid.ActualHeight,
-                SheetGrid.SelectedRange?.ColCount ?? 1,
-                SheetGrid.SelectedRange?.RowCount ?? 1);
+                selectedColumnWidths,
+                selectedRowHeights);
             ZoomSlider.Value = StatusZoomSliderValueForPercent(zoomPercent);
         }
         finally
@@ -490,12 +493,45 @@ public partial class MainWindow
     private void ZoomSelectionBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
+        var (selectedColumnWidths, selectedRowHeights) = GetSelectionPixelMetrics(range);
         var fitPct = ZoomSelectionPlanner.CalculateFitPercent(
             SheetGrid.ActualWidth,
             SheetGrid.ActualHeight,
-            range.ColCount,
-            range.RowCount);
+            selectedColumnWidths,
+            selectedRowHeights);
         ZoomSlider.Value = StatusZoomSliderValueForPercent(fitPct);
+    }
+
+    /// <summary>
+    /// Builds the selection's actual per-column pixel widths and per-row pixel heights (honoring
+    /// custom <see cref="Sheet.ColumnWidths"/>/<see cref="Sheet.RowHeights"/> and skipping
+    /// effectively-hidden columns/rows, matching <c>ViewportService</c>'s metrics builder), for use
+    /// with Excel-accurate Zoom-to-Selection fitting. Falls back to the sheet defaults when there is
+    /// no active sheet or range.
+    /// </summary>
+    private (IReadOnlyList<double> ColumnWidths, IReadOnlyList<double> RowHeights) GetSelectionPixelMetrics(
+        GridRange? range)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null || range is not { } selection)
+            return (Array.Empty<double>(), Array.Empty<double>());
+
+        var columnWidths = new List<double>();
+        for (var col = selection.Start.Col; col <= selection.End.Col; col++)
+        {
+            if (sheet.IsColEffectivelyHidden(col)) continue;
+            var widthChars = sheet.ColumnWidths.GetValueOrDefault(col, sheet.DefaultColumnWidth);
+            columnWidths.Add(ColumnWidthPixelMapper.ColumnWidthToPixels(widthChars));
+        }
+
+        var rowHeights = new List<double>();
+        for (var row = selection.Start.Row; row <= selection.End.Row; row++)
+        {
+            if (sheet.IsRowEffectivelyHidden(row)) continue;
+            rowHeights.Add(sheet.RowHeights.GetValueOrDefault(row, sheet.DefaultRowHeight));
+        }
+
+        return (columnWidths, rowHeights);
     }
     private void ZoomSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {

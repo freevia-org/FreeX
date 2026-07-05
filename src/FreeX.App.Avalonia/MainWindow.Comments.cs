@@ -2,10 +2,13 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
+using FreeX.App.Presentation.Comments;
 using FreeX.Core.Commands;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
 
@@ -28,16 +31,7 @@ public sealed partial class MainWindow
             : result.ErrorMessage ?? "Could not add note.");
     }
 
-    private async Task ShowNewThreadedCommentDialogAsync()
-    {
-        var text = await ShowCommentTextPromptAsync("New Comment", "Comment text");
-        if (string.IsNullOrWhiteSpace(text))
-            return;
-        var result = _session.SetActiveCellThreadedComment(text);
-        RefreshShell(result.Success
-            ? $"Added comment to {FormatCellReference(_session.ActiveCell)}"
-            : result.ErrorMessage ?? "Could not add comment.");
-    }
+    private async Task ShowNewThreadedCommentDialogAsync() => await ShowThreadedCommentDialogAsync();
 
     private async Task ShowEditNoteDialogAsync()
     {
@@ -57,23 +51,7 @@ public sealed partial class MainWindow
             : result.ErrorMessage ?? UiText.Get("Comment_NoteFailed"));
     }
 
-    private async Task ShowEditThreadedCommentDialogAsync()
-    {
-        var existing = _session.GetActiveCellThreadedCommentText();
-        if (existing is null)
-        {
-            RefreshShell(UiText.Get("Comment_NoComment"));
-            return;
-        }
-
-        var text = await ShowCommentTextPromptAsync(UiText.Get("Comment_EditCommentTitle"), UiText.Get("Comment_CommentLabel"), existing);
-        if (string.IsNullOrWhiteSpace(text))
-            return;
-        var result = _session.EditActiveCellThreadedComment(text);
-        RefreshShell(result.Success
-            ? UiText.Format("Comment_CommentUpdated", FormatCellReference(_session.ActiveCell))
-            : result.ErrorMessage ?? UiText.Get("Comment_CommentFailed"));
-    }
+    private async Task ShowEditThreadedCommentDialogAsync() => await ShowThreadedCommentDialogAsync();
 
     private void ResolveActiveCellThreadedComment(bool resolved)
     {
@@ -106,6 +84,372 @@ public sealed partial class MainWindow
 
         RefreshShell("Converted notes to comments.");
     }
+
+    // ── Threaded comment dialog: create / edit root / reply / edit-reply / delete-reply ────────
+    // Mirrors the WPF host's ThreadedCommentDialog, sharing its
+    // portable ThreadedCommentDialogPlanner (validation + result-shaping) so both shells agree on
+    // behavior. Previously this shell could only set/replace the root comment text or toggle resolved
+    // (WorkbookSession.SetActiveCellThreadedComment / EditActiveCellThreadedComment /
+    // SetActiveCellThreadedCommentResolved) with no way to add, edit, or delete a reply — a thread
+    // authored (with replies) on Windows was reply-read-only when opened on Linux/macOS. The
+    // Add/Update/Delete-reply commands (FreeX.Core.Commands.ThreadedCommentCommands) already exist and
+    // are routed through the existing generic WorkbookSession.ExecuteReviewCommand (used just above by
+    // ConvertNotesToComments), so no WorkbookSession changes are needed.
+    private async Task ShowThreadedCommentDialogAsync()
+    {
+        _session.ActiveSheet.ThreadedComments.TryGetValue(_session.ActiveCell, out var existing);
+        var cellRef = FormatCellReference(_session.ActiveCell);
+        var dialogResult = await ShowThreadedCommentEditorAsync(cellRef, existing);
+        if (dialogResult is null)
+            return;
+
+        var (success, errorMessage) = ApplyThreadedCommentDialogResult(existing, dialogResult);
+        if (!success)
+        {
+            RefreshShell(errorMessage ?? UiText.Get("Comment_CommentFailed"));
+            return;
+        }
+
+        RefreshShell(existing is null
+            ? $"Added comment to {cellRef}"
+            : UiText.Format("Comment_CommentUpdated", cellRef));
+    }
+
+    private (bool Success, string? ErrorMessage) ApplyThreadedCommentDialogResult(
+        ThreadedComment? existing,
+        ThreadedCommentDialogResult dialogResult)
+    {
+        var sheetId = _session.ActiveSheet.Id;
+        var cell = _session.ActiveCell;
+
+        switch (dialogResult.Action)
+        {
+            case ThreadedCommentDialogAction.EditReply when dialogResult.ReplyIndex is { } editIndex:
+            {
+                var result = _session.ExecuteReviewCommand(new UpdateThreadedCommentReplyCommand(
+                    sheetId,
+                    cell,
+                    editIndex,
+                    dialogResult.ReplyEditText ?? string.Empty,
+                    dialogResult.IsResolved));
+                return (result.Success, result.ErrorMessage);
+            }
+            case ThreadedCommentDialogAction.DeleteReply when dialogResult.ReplyIndex is { } deleteIndex:
+            {
+                var result = _session.ExecuteReviewCommand(new DeleteThreadedCommentReplyCommand(
+                    sheetId,
+                    cell,
+                    deleteIndex,
+                    dialogResult.IsResolved));
+                return (result.Success, result.ErrorMessage);
+            }
+            default:
+            {
+                if (existing is null)
+                {
+                    // No thread yet: the "reply" text box is actually the new root comment text.
+                    var result = _session.SetActiveCellThreadedComment(dialogResult.ReplyText ?? string.Empty);
+                    return (result.Success, result.ErrorMessage);
+                }
+
+                var hasThreadChange =
+                    dialogResult.RootText is not null ||
+                    dialogResult.ReplyText is not null ||
+                    dialogResult.IsResolved != existing.IsResolved;
+                if (!hasThreadChange)
+                    return (true, null);
+
+                var applyResult = _session.ExecuteReviewCommand(new ApplyThreadedCommentChangesCommand(
+                    sheetId,
+                    cell,
+                    dialogResult.RootText,
+                    dialogResult.ReplyText,
+                    dialogResult.IsResolved));
+                return (applyResult.Success, applyResult.ErrorMessage);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Shows the threaded-comment editor dialog and returns the user's chosen action as a
+    /// <see cref="ThreadedCommentDialogResult"/>, or <c>null</c> if the dialog was cancelled.
+    /// </summary>
+    private async Task<ThreadedCommentDialogResult?> ShowThreadedCommentEditorAsync(string cellRef, ThreadedComment? existing)
+    {
+        var style = CommentDialogChromeStyle;
+        ThreadedCommentDialogResult? dialogResult = null;
+        Window? dialogRef = null;
+
+        void Accept(ThreadedCommentDialogResult result)
+        {
+            dialogResult = result;
+            dialogRef?.Close();
+        }
+
+        var rootBox = new TextBox { AcceptsReturn = true, MinWidth = 320, MinHeight = 60, TextWrapping = TextWrapping.Wrap, Text = existing?.Text ?? string.Empty };
+        AvaloniaCompactDialogChrome.ApplyTextBox(rootBox, style, fixedHeight: false);
+        AutomationProperties.SetName(rootBox, existing is null ? UiText.Get("ThreadedComment_CommentAutomationName") : UiText.Get("ThreadedComment_EditCommentAutomationName"));
+        AutomationProperties.SetAutomationId(rootBox, "ThreadedCommentRootBox");
+        AutomationProperties.SetHelpText(rootBox, existing is null ? UiText.Get("ThreadedComment_CommentHelpText") : UiText.Get("ThreadedComment_EditCommentHelpText"));
+
+        var replyBox = new TextBox { AcceptsReturn = true, MinWidth = 320, MinHeight = 48, TextWrapping = TextWrapping.Wrap };
+        AvaloniaCompactDialogChrome.ApplyTextBox(replyBox, style, fixedHeight: false);
+        AutomationProperties.SetName(replyBox, UiText.Get("ThreadedComment_ReplyAutomationName"));
+        AutomationProperties.SetAutomationId(replyBox, "ThreadedCommentReplyBox");
+        AutomationProperties.SetHelpText(replyBox, UiText.Get("ThreadedComment_ReplyHelpText"));
+
+        var resolveBox = new CheckBox { Content = UiText.Get("ThreadedComment_MarkAsResolved"), IsChecked = existing?.IsResolved ?? false };
+        AvaloniaCompactDialogChrome.ApplyCheckBox(resolveBox, style);
+        AutomationProperties.SetName(resolveBox, UiText.Get("ThreadedComment_MarkAsResolvedAutomationName"));
+        AutomationProperties.SetAutomationId(resolveBox, "ThreadedCommentResolvedBox");
+        AutomationProperties.SetHelpText(resolveBox, UiText.Get("ThreadedComment_MarkAsResolvedHelpText"));
+
+        var validationText = new TextBlock();
+        AvaloniaCompactDialogChrome.ApplyValidationStatus(validationText, style, new Thickness(0, 4, 0, 0));
+
+        var ok = new Button { Content = existing is null ? UiText.Get("ThreadedComment_AddButton") : UiText.Get("ThreadedComment_ReplyButton"), IsDefault = true };
+        var cancel = new Button { Content = UiText.Get("ThreadedComment_CancelButton"), IsCancel = true };
+        AvaloniaCompactDialogChrome.ApplyButton(ok, style, 84, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(cancel, style, 84);
+        AutomationProperties.SetName(ok, existing is null ? UiText.Get("ThreadedComment_AddCommentAutomationName") : UiText.Get("ThreadedComment_ReplyToCommentAutomationName"));
+        AutomationProperties.SetAutomationId(ok, existing is null ? "ThreadedCommentAddButton" : "ThreadedCommentReplyButton");
+        AutomationProperties.SetHelpText(ok, existing is null ? UiText.Get("ThreadedComment_AddCommentHelpText") : UiText.Get("ThreadedComment_ReplyToCommentHelpText"));
+        AutomationProperties.SetName(cancel, UiText.CreateAutomationName(UiText.Cancel));
+        AutomationProperties.SetAutomationId(cancel, "ThreadedCommentCancelButton");
+        AutomationProperties.SetHelpText(cancel, UiText.Get("ThreadedComment_CancelHelpText"));
+
+        var dialog = new Window
+        {
+            Title = UiText.Format("ThreadedComment_TitleFormat", cellRef),
+            Width = 480,
+            MinHeight = 280,
+            MaxHeight = 640,
+            SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+            CanResize = false,
+        };
+        dialogRef = dialog;
+
+        var content = new StackPanel { Margin = new Thickness(14) };
+
+        if (existing is not null)
+        {
+            var scroll = new ScrollViewer
+            {
+                VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+                MaxHeight = existing.Replies.Count > 0 ? 160 : 260,
+                Margin = new Thickness(0, 0, 0, 8),
+            };
+            var threadPanel = new StackPanel();
+            threadPanel.Children.Add(BuildThreadMessage(existing.Author, existing.Text, existing.CreatedAtUtc, isRoot: true));
+            foreach (var reply in existing.Replies)
+                threadPanel.Children.Add(BuildThreadMessage(reply.Author, reply.Text, reply.CreatedAtUtc, isRoot: false));
+            scroll.Content = threadPanel;
+            content.Children.Add(scroll);
+        }
+
+        content.Children.Add(new TextBlock
+        {
+            Text = existing is null ? UiText.Get("ThreadedComment_CommentLabel") : UiText.Get("ThreadedComment_EditCommentLabel"),
+            Margin = new Thickness(0, 0, 0, 2),
+        });
+        content.Children.Add(rootBox);
+
+        if (existing is not null)
+        {
+            if (existing.Replies.Count > 0)
+                BuildReplyEditor(content, existing, style, Accept);
+
+            content.Children.Add(new TextBlock { Text = UiText.Get("ThreadedComment_ReplyLabel"), Margin = new Thickness(0, 8, 0, 2) });
+            content.Children.Add(replyBox);
+        }
+
+        content.Children.Add(resolveBox);
+        content.Children.Add(validationText);
+        content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([cancel, ok], new Thickness(0, 10, 0, 0)));
+
+        dialog.Content = content;
+
+        void ShowValidationMessage(string message, TextBox focusTarget)
+        {
+            validationText.Text = message;
+            validationText.IsVisible = true;
+            focusTarget.Focus();
+        }
+
+        void Submit()
+        {
+            if (!ThreadedCommentDialogPlanner.TryCreateResult(
+                    existing,
+                    rootBox.Text,
+                    replyBox.Text,
+                    resolveBox.IsChecked == true,
+                    out var result,
+                    out var error))
+            {
+                ShowValidationMessage(DescribeValidationError(error), rootBox);
+                return;
+            }
+
+            Accept(result);
+        }
+
+        ok.Click += (_, _) => Submit();
+        cancel.Click += (_, _) => dialog.Close();
+        replyBox.KeyDown += (_, e) =>
+        {
+            if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.Enter)
+            {
+                Submit();
+                e.Handled = true;
+            }
+        };
+
+        dialog.Opened += (_, _) => (existing is null ? rootBox : replyBox).Focus();
+
+        await dialog.ShowDialog(this);
+        return dialogResult;
+    }
+
+    private static void BuildReplyEditor(
+        StackPanel content,
+        ThreadedComment existing,
+        AvaloniaCompactDialogChromeStyle style,
+        Action<ThreadedCommentDialogResult> accept)
+    {
+        var selector = new ComboBox { MinWidth = 200 };
+        AvaloniaCompactDialogChrome.ApplyComboBox(selector, style);
+        AutomationProperties.SetName(selector, UiText.Get("ThreadedComment_ReplyToEditOrDeleteAutomationName"));
+        AutomationProperties.SetAutomationId(selector, "ThreadedCommentReplySelector");
+        AutomationProperties.SetHelpText(selector, UiText.Get("ThreadedComment_ReplySelectorHelpText"));
+        for (var i = 0; i < existing.Replies.Count; i++)
+        {
+            var item = new ComboBoxItem { Content = ThreadedCommentDialogPlanner.FormatReplyChoice(i, existing.Replies[i]) };
+            AutomationProperties.SetName(item, FormatReplyAutomationName(i, existing.Replies[i]));
+            selector.Items.Add(item);
+        }
+
+        var selectedReplyBox = new TextBox { AcceptsReturn = true, MinWidth = 320, MinHeight = 48, TextWrapping = TextWrapping.Wrap };
+        AvaloniaCompactDialogChrome.ApplyTextBox(selectedReplyBox, style, fixedHeight: false);
+        AutomationProperties.SetName(selectedReplyBox, UiText.Get("ThreadedComment_SelectedReplyTextAutomationName"));
+        AutomationProperties.SetAutomationId(selectedReplyBox, "ThreadedCommentSelectedReplyBox");
+        AutomationProperties.SetHelpText(selectedReplyBox, UiText.Get("ThreadedComment_SelectedReplyTextHelpText"));
+
+        var updateButton = new Button { Content = UiText.Get("ThreadedComment_UpdateReplyButton") };
+        var deleteButton = new Button { Content = UiText.Get("ThreadedComment_DeleteReplyButton") };
+        AvaloniaCompactDialogChrome.ApplyButton(updateButton, style, 110);
+        AvaloniaCompactDialogChrome.ApplyButton(deleteButton, style, 110);
+        AutomationProperties.SetName(updateButton, UiText.Get("ThreadedComment_UpdateSelectedReplyAutomationName"));
+        AutomationProperties.SetAutomationId(updateButton, "ThreadedCommentUpdateReplyButton");
+        AutomationProperties.SetHelpText(updateButton, UiText.Get("ThreadedComment_UpdateSelectedReplyHelpText"));
+        AutomationProperties.SetName(deleteButton, UiText.Get("ThreadedComment_DeleteSelectedReplyAutomationName"));
+        AutomationProperties.SetAutomationId(deleteButton, "ThreadedCommentDeleteReplyButton");
+        AutomationProperties.SetHelpText(deleteButton, UiText.Get("ThreadedComment_DeleteSelectedReplyHelpText"));
+
+        void PopulateSelectedReplyText()
+        {
+            var index = selector.SelectedIndex;
+            selectedReplyBox.Text = ThreadedCommentDialogPlanner.IsValidReplyIndex(existing, index)
+                ? existing.Replies[index].Text
+                : string.Empty;
+            UpdateActionState();
+        }
+
+        void UpdateActionState()
+        {
+            var hasSelection = ThreadedCommentDialogPlanner.IsValidReplyIndex(existing, selector.SelectedIndex);
+            deleteButton.IsEnabled = hasSelection;
+            updateButton.IsEnabled = hasSelection && !string.IsNullOrWhiteSpace(selectedReplyBox.Text);
+        }
+
+        selector.SelectionChanged += (_, _) => PopulateSelectedReplyText();
+        selectedReplyBox.TextChanged += (_, _) => UpdateActionState();
+
+        updateButton.Click += (_, _) =>
+        {
+            if (!ThreadedCommentDialogPlanner.TryCreateReplyEditResult(
+                    existing,
+                    selector.SelectedIndex,
+                    selectedReplyBox.Text,
+                    out var result,
+                    out _))
+            {
+                return;
+            }
+
+            accept(result);
+        };
+        deleteButton.Click += (_, _) =>
+        {
+            if (!ThreadedCommentDialogPlanner.TryCreateReplyDeleteResult(
+                    existing,
+                    selector.SelectedIndex,
+                    out var result,
+                    out _))
+            {
+                return;
+            }
+
+            accept(result);
+        };
+
+        var panel = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
+        panel.Children.Add(new TextBlock { Text = UiText.Get("ThreadedComment_SelectReplyLabel"), Margin = new Thickness(0, 0, 0, 2) });
+        panel.Children.Add(selector);
+        panel.Children.Add(new TextBlock { Text = UiText.Get("ThreadedComment_SelectedReplyTextLabel"), Margin = new Thickness(0, 8, 0, 2) });
+        panel.Children.Add(selectedReplyBox);
+        panel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([updateButton, deleteButton], new Thickness(0, 8, 0, 0)));
+        content.Children.Add(panel);
+
+        selector.SelectedIndex = 0;
+        PopulateSelectedReplyText();
+    }
+
+    private static string FormatReplyAutomationName(int index, CommentReply reply) =>
+        UiText.Format(
+            "ThreadedComment_ReplyAutomationNameFormat",
+            index + 1,
+            ThreadedCommentDialogPlanner.FormatMessageHeading(reply.Author, reply.CreatedAtUtc),
+            ThreadedCommentDialogPlanner.SummarizeReplyText(reply.Text));
+
+    private static Border BuildThreadMessage(string author, string text, DateTimeOffset? createdAtUtc, bool isRoot)
+    {
+        var panel = new StackPanel { Margin = new Thickness(0, 0, 0, 6) };
+        panel.Children.Add(new TextBlock
+        {
+            Text = ThreadedCommentDialogPlanner.FormatMessageHeading(author, createdAtUtc),
+            FontWeight = FontWeight.SemiBold,
+            FontSize = 11,
+            Foreground = new SolidColorBrush(isRoot ? Color.FromRgb(0x1F, 0x49, 0x7D) : Color.FromRgb(0x40, 0x40, 0x40)),
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = text,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(8, 2, 0, 0),
+        });
+        return new Border
+        {
+            Child = panel,
+            Background = new SolidColorBrush(isRoot ? Color.FromRgb(0xF0, 0xF4, 0xF8) : Colors.White),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(3),
+            Padding = new Thickness(8, 6, 8, 6),
+            Margin = new Thickness(0, 0, 0, 4),
+        };
+    }
+
+    private static string DescribeValidationError(ThreadedCommentDialogValidationError error) =>
+        error switch
+        {
+            ThreadedCommentDialogValidationError.EnterComment => UiText.Get("ThreadedComment_EnterCommentMessage"),
+            ThreadedCommentDialogValidationError.NoThreadedCommentAvailable => UiText.Get("ThreadedComment_NoThreadedCommentAvailableMessage"),
+            ThreadedCommentDialogValidationError.SelectReply => UiText.Get("ThreadedComment_SelectReplyMessage"),
+            ThreadedCommentDialogValidationError.EnterReply => UiText.Get("ThreadedComment_EnterReplyMessage"),
+            _ => UiText.Get("ThreadedComment_EnterCommentMessage"),
+        };
 
     private async Task<string?> ShowCommentTextPromptAsync(string title, string label, string? initialText = null)
     {

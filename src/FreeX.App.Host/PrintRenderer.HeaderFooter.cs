@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
+using FreeX.App.Presentation.Comments;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
@@ -7,6 +8,9 @@ namespace FreeX.App.Host;
 
 public static partial class PrintRenderer
 {
+    private static readonly IReadOnlyDictionary<CellAddress, ThreadedComment> EmptyThreadedComments =
+        new Dictionary<CellAddress, ThreadedComment>();
+
     private static (WorksheetHeaderFooter Header, WorksheetHeaderFooter Footer, WorksheetHeaderFooterPictureSet HeaderPictures, WorksheetHeaderFooterPictureSet FooterPictures) ResolveHeaderFooterForPage(
         Sheet sheet,
         int pageNumber)
@@ -185,11 +189,32 @@ public static partial class PrintRenderer
 
         if (!draftQuality && printComments == WorksheetPrintComments.AsDisplayed)
         {
+            // WorksheetPageLayout.GetDisplayedCommentOverlays only merges a threaded comment's ROOT
+            // text (pair.Value.Text) for addresses not already covered by a plain note — it has no
+            // way to include replies or the resolved marker. Pre-format every threaded comment with
+            // CommentNavigationPlanner.FormatThreadedComment (the same formatter the "Comments: At
+            // end of sheet" mode already uses via PrintCommentSummaryPlanner) and fold the result
+            // into the plain-notes dictionary here, so "As displayed on sheet" shows the identical,
+            // complete text (all replies + resolved state) instead of silently dropping them (M28).
+            // Passing an empty threaded-comments map onward avoids double-handling: the merge logic
+            // downstream only ever adds a threaded entry when its address is absent from `comments`.
+            var displayedComments = comments;
+            if (threadedComments.Count > 0)
+            {
+                var merged = new Dictionary<CellAddress, string>(comments);
+                foreach (var pair in threadedComments)
+                {
+                    if (!merged.ContainsKey(pair.Key))
+                        merged[pair.Key] = CommentNavigationPlanner.FormatThreadedComment(pair.Value);
+                }
+                displayedComments = merged;
+            }
+
             DrawDisplayedComments(
                 dc,
                 textOverlays,
-                comments,
-                threadedComments,
+                displayedComments,
+                EmptyThreadedComments,
                 pageRows,
                 pageColumns,
                 gridLeft,

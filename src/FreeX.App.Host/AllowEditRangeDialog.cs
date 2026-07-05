@@ -15,17 +15,36 @@ public sealed class AllowEditRangeDialog : Window
 {
     private readonly SheetId _sheetId;
     private readonly TextBox _rangeBox = new();
+    private readonly PasswordBox _rangePasswordBox = new();
     private readonly ListBox _existingRangesBox = new();
     private readonly Button _newRangeButton = new() { Content = UiText.Get("AllowEditRange_NewButton"), Width = 82, Margin = new Thickness(0, 0, 6, 0) };
     private readonly Button _modifyRangeButton = new() { Content = UiText.Get("AllowEditRange_ModifyButton"), Width = 82, Margin = new Thickness(0, 0, 6, 0) };
     private readonly Button _deleteRangeButton = new() { Content = UiText.Get("AllowEditRange_DeleteButton"), Width = 82, Margin = new Thickness(0, 0, 6, 0) };
     private readonly Button _permissionsButton = new() { Content = UiText.Get("AllowEditRange_PermissionsButton"), Width = 104 };
     private readonly Action<AllowEditRangeSelectionRequest>? _requestRangeSelection;
+    private readonly IReadOnlyDictionary<GridRange, string?> _existingRangePasswords;
     private GridRange? _rangeBeingModified;
 
     public GridRange Range { get; private set; }
     public AllowEditRangeResult Result { get; private set; } = CreateClearResult();
     public AllowEditRangeSelectionRequest? RangeSelectionRequest { get; private set; }
+
+    /// <summary>
+    /// The range-specific password typed into this dialog for the range in <see cref="Result"/>
+    /// (Excel's Allow Users to Edit Ranges "Range Password", distinct from the sheet password).
+    /// Null means "no password" (the range stays freely editable once reached). Only meaningful when
+    /// <see cref="RangePasswordChanged"/> is true; callers wire it into
+    /// <c>Sheet.AllowEditRangePasswords</c> alongside applying <see cref="Result"/>.
+    /// </summary>
+    public string? RangePassword { get; private set; }
+
+    /// <summary>
+    /// True when the user actually typed into the password box this time round (an add/new range
+    /// always counts as changed). False on a modify where the box was left blank, meaning "keep
+    /// whatever password (if any) the range already had" — mirrors Excel, which never redisplays or
+    /// silently clears an existing range password just because the dialog reopened.
+    /// </summary>
+    public bool RangePasswordChanged { get; private set; }
 
     public AllowEditRangeDialog(
         SheetId sheetId,
@@ -39,13 +58,17 @@ public sealed class AllowEditRangeDialog : Window
         SheetId sheetId,
         string defaultRange,
         IReadOnlyList<GridRange>? existingRanges = null,
-        Action<AllowEditRangeSelectionRequest>? requestRangeSelection = null)
+        Action<AllowEditRangeSelectionRequest>? requestRangeSelection = null,
+        IReadOnlyDictionary<GridRange, string?>? existingRangePasswords = null)
     {
         _sheetId = sheetId;
         _requestRangeSelection = requestRangeSelection;
+        _existingRangePasswords = existingRangePasswords is null
+            ? []
+            : new Dictionary<GridRange, string?>(existingRangePasswords);
         Title = UiText.Get("AllowEditRange_Title");
         Width = 430;
-        Height = 360;
+        Height = 420;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
@@ -130,6 +153,20 @@ public sealed class AllowEditRangeDialog : Window
             Foreground = SystemColors.GrayTextBrush,
             Margin = new Thickness(0, 6, 0, 10)
         });
+
+        // Range-specific password (Excel's per-range "Range Password", distinct from the sheet
+        // password): optional, so an empty box means the range stays freely editable once reached.
+        AutomationProperties.SetName(_rangePasswordBox, UiText.Get("Protection_PasswordAutomationName"));
+        AutomationProperties.SetAutomationId(_rangePasswordBox, "AllowEditRangePasswordBox");
+        AutomationProperties.SetHelpText(_rangePasswordBox, UiText.Get("Protection_PasswordHelpText"));
+        root.Children.Add(new Label
+        {
+            Content = UiText.Get("Protection_Password"),
+            Target = _rangePasswordBox,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 0, 0, 4)
+        });
+        root.Children.Add(_rangePasswordBox);
         root.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 84));
 
         Content = root;
@@ -153,6 +190,10 @@ public sealed class AllowEditRangeDialog : Window
         FocusRangeInput();
     }
 
+    /// <summary>True when <paramref name="range"/> already carries its own range password.</summary>
+    public bool HasExistingPassword(GridRange range) =>
+        _existingRangePasswords.TryGetValue(range, out var stored) && !string.IsNullOrEmpty(stored);
+
     public static AllowEditRangeResult CreateAddResult(GridRange range) =>
         AllowEditRangePlanner.CreateAddResult(range);
 
@@ -175,9 +216,18 @@ public sealed class AllowEditRangeDialog : Window
         }
 
         Range = range;
+        var isModify = _rangeBeingModified is not null;
         Result = _rangeBeingModified is { } originalRange
             ? CreateModifyResult(originalRange, range)
             : CreateAddResult(range);
+
+        var typedPassword = string.IsNullOrEmpty(_rangePasswordBox.Password) ? null : _rangePasswordBox.Password;
+        RangePassword = typedPassword;
+        // Adding a brand-new range always "changes" its password (from nothing to whatever was
+        // typed, including nothing). Modifying an existing range only counts as a password change
+        // when the user actually typed something — a blank box means "leave the stored password
+        // (if any) alone", since the box can never show the real existing password back to them.
+        RangePasswordChanged = !isModify || typedPassword is not null;
         DialogResult = true;
     }
 
@@ -185,6 +235,7 @@ public sealed class AllowEditRangeDialog : Window
     {
         _rangeBeingModified = null;
         _existingRangesBox.SelectedItem = null;
+        _rangePasswordBox.Password = string.Empty;
         FocusRangeInput();
     }
 
@@ -202,6 +253,10 @@ public sealed class AllowEditRangeDialog : Window
 
         _rangeBeingModified = range;
         _rangeBox.Text = selected;
+        // Mirrors Excel: an existing range password is never redisplayed (only its hash is known),
+        // so the box is always cleared here. See RangePasswordChanged for how a blank box on Accept
+        // is interpreted as "leave the stored password alone" rather than "clear it".
+        _rangePasswordBox.Password = string.Empty;
         FocusRangeInput();
         return true;
     }

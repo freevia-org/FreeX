@@ -129,7 +129,30 @@ public static class WorkbookViewportScrollPlanner
         double zoomLevel)
     {
         var effectiveZoom = zoomLevel > 0 ? zoomLevel : 1.0;
-        return Math.Max(0, gridWidth - rowHeaderWidth) / effectiveZoom;
+
+        // gridWidth (e.g. SheetGrid.ActualWidth) is the WPF physical/unscaled layout size of the
+        // container -- it is NOT affected by the zoom RenderTransform. rowHeaderWidth, however, is
+        // a logical (already-unscaled) pixel width used everywhere else under the RenderTransform
+        // (row/column offsets, hit-testing, etc). To combine them correctly we must first divide
+        // the physical container width by zoom to get it into the same logical space, and only
+        // then subtract the logical row-header width. Subtracting first and dividing afterwards
+        // (the previous behavior) is only correct at zoom = 100%.
+        return Math.Max(0, gridWidth / effectiveZoom - rowHeaderWidth);
+    }
+
+    /// <summary>
+    /// Same dimensional fix as <see cref="CalculateViewportAvailableWidth"/>, for the vertical
+    /// axis: gridHeight is the physical/unscaled container height, colHeaderHeight is a logical
+    /// (already-unscaled) pixel height, so gridHeight must be divided by zoom before subtracting
+    /// the logical header height.
+    /// </summary>
+    public static double CalculateViewportAvailableHeight(
+        double gridHeight,
+        double colHeaderHeight,
+        double zoomLevel)
+    {
+        var effectiveZoom = zoomLevel > 0 ? zoomLevel : 1.0;
+        return Math.Max(0, gridHeight / effectiveZoom - colHeaderHeight);
     }
 
     public static uint CalculateOpenedWorksheetScrollValue(

@@ -768,8 +768,11 @@ public partial class MainWindow
             return;
         }
 
-        var command = new MoveRangeCommand(_currentSheetId, sourceRange, targetRange.Start);
-        if (!TryExecuteCommand(command, "Move Cells", out var outcome))
+        var isCtrlCopy = _selectionMoveCtrlHeld;
+        IWorkbookCommand command = isCtrlCopy
+            ? new CopyRangeCommand(_currentSheetId, sourceRange, targetRange.Start)
+            : new MoveRangeCommand(_currentSheetId, sourceRange, targetRange.Start);
+        if (!TryExecuteCommand(command, isCtrlCopy ? "Copy Cells" : "Move Cells", out var outcome))
             return;
 
         ClearClipboardVisualState();

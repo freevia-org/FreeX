@@ -22,6 +22,10 @@ public sealed partial class XlsxFileAdapter
             sheet.AllowEditRanges.Add(new GridRange(
                 new CellAddress(sheet.Id, range.Start.Row, range.Start.Col),
                 new CellAddress(sheet.Id, range.End.Row, range.End.Col)));
+        foreach (var (range, password) in layout.AllowEditRangePasswords)
+            sheet.AllowEditRangePasswords[new GridRange(
+                new CellAddress(sheet.Id, range.Start.Row, range.Start.Col),
+                new CellAddress(sheet.Id, range.End.Row, range.End.Col))] = password;
         foreach (var range in layout.MergedRegions)
             sheet.AddMergedRegion(new GridRange(
                 new CellAddress(sheet.Id, range.Start.Row, range.Start.Col),

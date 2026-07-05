@@ -97,9 +97,14 @@ public static class WorkbookPdfContentBuilder
         var columnCount = Math.Max(1, contentPlan.ColumnCount);
         var rowCount    = Math.Max(1, contentPlan.RowCount);
 
-        // Distribute available width/height proportionally to actual column/row sizes.
+        // Distribute available width/height proportionally to actual column/row sizes, then apply
+        // the sheet's Scale%/Fit-to-pages ratio directly to the grid geometry -- matching the WPF
+        // PrintRenderer path (PrintRenderer.HeaderFooter.cs), which always applies
+        // ScaleTransform(scaleRatio, scaleRatio) once scaleRatio&lt;1, regardless of whether the
+        // unscaled content already fits the page. Excel shrinks/grows every printed element in
+        // direct proportion to the configured scale, not merely "when it would otherwise overflow".
         var (colWidths, rowHeights) = ComputeActualGridSizes(
-            sheet, contentPlan, contentWidth * scaleRatio, contentHeight * scaleRatio);
+            sheet, contentPlan, contentWidth, contentHeight, scaleRatio);
 
         // Grid origin: top-left corner in PDF y-up (top = high y).
         // We position the grid at the top of the content rect.
@@ -137,14 +142,22 @@ public static class WorkbookPdfContentBuilder
 
             if (!string.IsNullOrEmpty(cell.DisplayText))
             {
-                var fontSize  = Math.Clamp(style.FontSize, 7, 10);
+                // Font size honors the sheet's Scale%/Fit-to-pages ratio (shrink only, matching the
+                // grid geometry above) -- Excel's Page Setup scaling shrinks printed text along with
+                // everything else, matching the WPF print path's single ScaleTransform over the whole
+                // content area. Clamp is applied to the unscaled size first (matching the sheet's
+                // authored font sizes) and the result is then scaled, so a 50% scale on a 10pt font
+                // yields 5pt rather than re-clamping back up to the 7pt floor.
+                var textScale = Math.Min(1.0, scaleRatio);
+                var fontSize  = Math.Clamp(style.FontSize, 7, 10) * textScale;
                 var fontFace  = cell.IsTitle || style.Bold ? PdfFontFace.Bold : PdfFontFace.Regular;
                 // B&W mode: force font colour to black regardless of style.
                 var fontColor = bw ? PdfColor.Black : (ToPdfColor(style.ResolveFontColor(workbook.Theme)) ?? PdfColor.Black);
-                // Text baseline: ~3 pt from bottom of row.
-                var baseline = y + 3.0;
+                // Text inset/baseline scale with the grid so text stays proportionally placed
+                // within its (now possibly shrunk) cell rect.
+                var baseline = y + (3.0 * textScale);
                 ops.Add(new PdfText(
-                    x + 2,
+                    x + (2.0 * textScale),
                     baseline,
                     fontSize,
                     fontFace,
@@ -329,14 +342,20 @@ public static class WorkbookPdfContentBuilder
     }
 
     /// <summary>
-    /// Computes per-column widths and per-row heights in PDF points for the content plan,
-    /// scaled to fill the available content area proportionally to the sheet's actual sizes.
+    /// Computes per-column widths and per-row heights in PDF points for the content plan.
+    /// Sizes start from the sheet's actual (unscaled) column/row dimensions, are shrunk to fit
+    /// <paramref name="availableWidth"/>/<paramref name="availableHeight"/> only if they would
+    /// otherwise overflow the page, and are then multiplied by <paramref name="scaleRatio"/> so the
+    /// sheet's Page Setup &gt; Scaling (Scale%/Fit-to-pages) always shrinks the grid geometry in
+    /// direct proportion to the configured scale -- matching the WPF PrintRenderer path, which
+    /// applies its ScaleTransform unconditionally once scaleRatio&lt;1, never only "on overflow".
     /// </summary>
     private static (double[] ColWidths, double[] RowHeights) ComputeActualGridSizes(
         Sheet sheet,
         PortablePdfPageContentPlan contentPlan,
         double availableWidth,
-        double availableHeight)
+        double availableHeight,
+        double scaleRatio)
     {
         const double layoutDpi = 96.0;
         const double ptPerPx   = SheetPdfPageSetupResolver.PdfPointsPerInch / layoutDpi;
@@ -368,7 +387,26 @@ public static class WorkbookPdfContentBuilder
             totalRowHeightPt += pt;
         }
 
-        // Scale proportionally so the grid fits the available area.
+        // Apply the sheet's configured Scale%/Fit-to-pages ratio directly and unconditionally first
+        // (only for shrink — scale-up via ScalePercent > 100 is out of scope here and left to the
+        // pre-existing overflow-fit behavior below). This is what makes "Adjust to 50% normal size"
+        // visibly shrink a grid whose real size already fit the page (e.g. a small sheet), matching
+        // Excel: Scale% is a direct multiplier on every printed element, not merely a repagination
+        // hint that only matters once content overflows.
+        if (scaleRatio < 1.0)
+        {
+            for (var i = 0; i < colWidthsPt.Length; i++)
+                colWidthsPt[i] *= scaleRatio;
+            for (var i = 0; i < rowHeightsPt.Length; i++)
+                rowHeightsPt[i] *= scaleRatio;
+            totalColWidthPt  *= scaleRatio;
+            totalRowHeightPt *= scaleRatio;
+        }
+
+        // Defensive fit-to-page shrink: even after applying the configured scale, guard against
+        // residual overflow (e.g. a merged/oversized row that still doesn't fit) the same way the
+        // legacy path always has, but relative to the now-already-scaled sizes so a page whose
+        // scaled content exactly matches the available budget is never shrunk a second time.
         if (totalColWidthPt > 0 && totalColWidthPt > availableWidth)
         {
             var scale = availableWidth / totalColWidthPt;

@@ -370,6 +370,13 @@ public partial class MainWindow
             // Cleaned via save-point — still update title bar and fan out.
             UpdateTitleBar();
             _windowRegistry?.NotifyDocumentStateChanged(this);
+
+            // The workbook is clean again, but any autosave snapshot written while it was dirty
+            // (between the save point and this undo) is now stale — it reflects edits that have
+            // been undone away. Delete it so a later crash (even one before any new edit) does
+            // not surface stale, already-superseded content as a false "recover unsaved changes?"
+            // prompt for a document the user believes was never left dirty (M10).
+            NotifyAutosaveSaved();
         }
 
         InvalidateNavigationCaches();
@@ -400,6 +407,11 @@ public partial class MainWindow
             // Cleaned via save-point — still update title bar and fan out.
             UpdateTitleBar();
             _windowRegistry?.NotifyDocumentStateChanged(this);
+
+            // Same rationale as ExecuteUndo(): the stale dirty-period autosave snapshot must be
+            // deleted now that we are back at the save point, or a later crash offers stale
+            // content for a document that was never actually left dirty (M10).
+            NotifyAutosaveSaved();
         }
 
         InvalidateNavigationCaches();

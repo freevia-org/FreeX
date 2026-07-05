@@ -466,7 +466,7 @@ public sealed partial class ViewportService : IViewportService
 
         var displayText = cfIcon?.ShowValue == false || cfDataBar?.ShowValue == false
             ? ""
-            : GetDisplayText(workbook, sheet, cell, ref style, targetWidthCharacters);
+            : GetDisplayText(workbook, sheet, cell, row, col, ref style, targetWidthCharacters);
         var commentDisplay = hasComment
             ? CreateCellCommentDisplay(sheet, new CellAddress(sheetId, row, col))
             : null;
@@ -621,6 +621,8 @@ public sealed partial class ViewportService : IViewportService
                             workbook,
                             sourceSheet,
                             cell,
+                            row,
+                            col,
                             ref style,
                             EstimateCharacterWidth(ColumnWidthToPixels(
                                 sourceSheet.ColumnWidths.GetValueOrDefault(col, sourceSheet.DefaultColumnWidth)))),
@@ -963,19 +965,31 @@ public sealed partial class ViewportService : IViewportService
         var hasNote = sheet.Comments.TryGetValue(address, out var note);
         var hasThreadedComment = sheet.ThreadedComments.TryGetValue(address, out var threadedComment);
 
-        if (hasNote && hasThreadedComment)
+        if (hasThreadedComment && hasNote && IsLegacyMirrorOfThreadedComment(note, threadedComment!))
         {
-            var body = new StringBuilder();
-            body.AppendLine("Note:");
-            body.AppendLine(note ?? string.Empty);
-            body.AppendLine();
-            body.AppendLine("Comment:");
-            body.Append(FormatThreadedComment(threadedComment!));
+            // Excel mirrors a threaded comment's root text into a legacy comments1.xml/VML "note"
+            // for backward compatibility with older readers. That mirror is never surfaced to the
+            // user in real Excel -- only the threaded conversation is shown -- so when the note's
+            // text is exactly that backward-compat mirror, display only the threaded comment (no
+            // bogus duplicate "Note").
+            hasNote = false;
+        }
+
+        if (hasThreadedComment && hasNote)
+        {
+            // A genuine, independently-authored legacy Note coexists with a threaded comment
+            // (e.g. a note added before threaded comments existed, or added separately by a
+            // reader that doesn't understand threads). Excel shows both in this case, so combine
+            // them into a single Mixed preview rather than dropping the note.
+            var resolvedTitle = threadedComment!.IsResolved ? "Resolved comment" : "Comment";
+            var mixedBody = new StringBuilder();
+            mixedBody.Append("Note:").AppendLine().Append(note).AppendLine().AppendLine();
+            mixedBody.Append("Comment:").AppendLine().Append(FormatThreadedComment(threadedComment));
 
             return new CellCommentDisplay(
                 CellCommentDisplayKind.Mixed,
-                threadedComment!.IsResolved ? "Resolved comment and note" : "Comment and note",
-                body.ToString(),
+                $"{resolvedTitle} and note",
+                mixedBody.ToString(),
                 threadedComment.IsResolved);
         }
 
@@ -992,6 +1006,32 @@ public sealed partial class ViewportService : IViewportService
             ? new CellCommentDisplay(CellCommentDisplayKind.Note, "Note", note ?? string.Empty)
             : null;
     }
+
+    /// <summary>
+    /// Detects whether <paramref name="note"/> is the backward-compat mirror that Excel writes
+    /// into the legacy comments1.xml/VML "note" part for a threaded comment's root text (so
+    /// pre-2018 readers still see something), rather than a genuine, independently-authored Note.
+    /// Excel's mirror text is exactly "{Author}:\n{RootText}" (only the root comment, never
+    /// replies). Anything else -- including a note that merely happens to repeat the comment
+    /// text without the author prefix, or one that includes reply content -- is treated as a
+    /// real Note so it is never silently dropped from the display.
+    /// </summary>
+    private static bool IsLegacyMirrorOfThreadedComment(string? note, ThreadedComment threadedComment)
+    {
+        if (string.IsNullOrEmpty(note))
+            return false;
+
+        var expectedMirror = new StringBuilder();
+        AppendCommentLine(expectedMirror, threadedComment.Author, threadedComment.Text);
+
+        return string.Equals(
+            NormalizeLineEndings(note),
+            NormalizeLineEndings(expectedMirror.ToString()),
+            StringComparison.Ordinal);
+    }
+
+    private static string NormalizeLineEndings(string text) =>
+        text.Replace("\r\n", "\n").Trim();
 
     private static string FormatThreadedComment(ThreadedComment comment)
     {
@@ -1026,11 +1066,16 @@ public sealed partial class ViewportService : IViewportService
         Workbook workbook,
         Sheet sheet,
         Cell cell,
+        uint row,
+        uint col,
         ref CellStyle style,
         int targetWidthCharacters)
     {
-        if (sheet.ShowFormulas && cell.FormulaText is not null)
+        if (sheet.ShowFormulas && cell.FormulaText is not null &&
+            !(sheet.IsProtected && IsEffectivelyHidden(workbook, sheet, cell, row, col)))
+        {
             return "=" + cell.FormulaText;
+        }
 
         var result = NumberFormatter.FormatWithColor(
             cell.Value,
@@ -1049,6 +1094,20 @@ public sealed partial class ViewportService : IViewportService
         }
 
         return result.Text;
+    }
+
+    /// <summary>
+    /// Mirrors <c>SpreadsheetDisplayFormatter.IsHidden</c>: resolves the cell's effective style
+    /// (falling back to the row/column style-only run when the cell has no explicit style) and
+    /// returns whether Format Cells &gt; Protection &gt; Hidden is set. Used to keep Show Formulas
+    /// from disclosing formulas of Hidden cells while the sheet is protected (Excel parity).
+    /// </summary>
+    private static bool IsEffectivelyHidden(Workbook workbook, Sheet sheet, Cell cell, uint row, uint col)
+    {
+        var styleId = cell.StyleId != StyleId.Default
+            ? cell.StyleId
+            : sheet.GetStyleOnly(row, col) ?? StyleId.Default;
+        return workbook.GetStyle(styleId).Hidden;
     }
 
     private static bool TryParseHexColor(string? hex, out CellColor color)

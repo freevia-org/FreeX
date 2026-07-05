@@ -2,6 +2,91 @@ using FreeX.Core.Model;
 
 namespace FreeX.Core.Formula;
 
+/// <summary>
+/// Detects and resolves a bracketed external-workbook sheet reference (e.g. the literal string
+/// <c>[Budget.xlsx]Sheet1</c> that <c>'[Budget.xlsx]Sheet1'!A1</c> lexes/parses to, or the
+/// numeric-index form <c>[1]Sheet1</c>) against the source workbook's cached
+/// <see cref="ExternalLinkModel"/> data, so formulas referencing an unopened external workbook can
+/// still read the value Excel cached at last refresh instead of failing with #REF!.
+/// </summary>
+internal static class ExternalSheetReferenceResolver
+{
+    /// <summary>
+    /// Parses <paramref name="sheetName"/> as <c>[book]sheet</c> and returns the matching
+    /// <see cref="ExternalLinkModel"/> plus the 0-based cached-sheet index, or <see langword="null"/>
+    /// when <paramref name="sheetName"/> is not a bracketed external reference, or no external link
+    /// in <paramref name="workbook"/> matches the bracketed book/sheet.
+    /// </summary>
+    public static (ExternalLinkModel Link, int SheetIndex)? TryResolve(Workbook? workbook, string sheetName)
+    {
+        if (workbook is null || workbook.ExternalLinks.Count == 0)
+            return null;
+
+        if (!TrySplitBracketedReference(sheetName, out var book, out var sheet))
+            return null;
+
+        var link = TryFindExternalLink(workbook, book);
+        if (link is null)
+            return null;
+
+        var sheetIndex = link.TryFindSheetIndex(sheet);
+        if (sheetIndex is null)
+            return null;
+
+        return (link, sheetIndex.Value);
+    }
+
+    private static bool TrySplitBracketedReference(string sheetName, out string book, out string sheet)
+    {
+        book = "";
+        sheet = "";
+        if (string.IsNullOrEmpty(sheetName) || sheetName[0] != '[')
+            return false;
+
+        var closeIndex = sheetName.IndexOf(']');
+        if (closeIndex < 1 || closeIndex == sheetName.Length - 1)
+            return false;
+
+        book = sheetName[1..closeIndex];
+        sheet = sheetName[(closeIndex + 1)..];
+        return book.Length > 0 && sheet.Length > 0;
+    }
+
+    private static ExternalLinkModel? TryFindExternalLink(Workbook workbook, string book)
+    {
+        // Numeric form: [1]Sheet1 addresses the external reference by its 1-based position in
+        // workbook.xml's externalReferences list (same order XlsxExternalLinkMetadataReader builds
+        // Workbook.ExternalLinks in).
+        if (int.TryParse(book, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var index) &&
+            index >= 1 &&
+            index <= workbook.ExternalLinks.Count)
+        {
+            return workbook.ExternalLinks[index - 1];
+        }
+
+        // Filename form: [Budget.xlsx]Sheet1 addresses the external reference whose cached target
+        // file name matches (Excel compares by file name only, not full path).
+        foreach (var link in workbook.ExternalLinks)
+        {
+            if (FileNameMatches(link.TargetUri, book) || FileNameMatches(link.PackagePart, book))
+                return link;
+        }
+
+        return null;
+    }
+
+    private static bool FileNameMatches(string? path, string book)
+    {
+        if (string.IsNullOrEmpty(path))
+            return false;
+
+        var fileName = path.Contains('/') || path.Contains('\\')
+            ? path[(path.LastIndexOfAny(['/', '\\']) + 1)..]
+            : path;
+        return string.Equals(fileName, book, StringComparison.OrdinalIgnoreCase);
+    }
+}
+
 public sealed partial class FormulaEvaluator
 {
     private SheetEvalContext? _singleSheetEvalContext;
@@ -48,8 +133,18 @@ public sealed partial class FormulaEvaluator
         public ScalarValue GetCellValue(string sheetName, uint row, uint col)
         {
             var target = ResolveSheet(sheetName);
-            if (target is null) return ErrorValue.Ref;
-            return target.GetValue(row, col);
+            if (target is not null) return target.GetValue(row, col);
+
+            var external = ExternalSheetReferenceResolver.TryResolve(_workbook, sheetName);
+            if (external is { } resolved)
+            {
+                // A resolvable external sheet caches only the cells a formula actually referenced at
+                // last refresh; an uncached cell within it is a real blank, not a #REF! error.
+                resolved.Link.TryGetCachedValue(resolved.SheetIndex, row, col, out var cachedValue);
+                return cachedValue ?? BlankValue.Instance;
+            }
+
+            return ErrorValue.Ref;
         }
 
         public IReadOnlyList<ScalarValue> GetRangeValues(uint startRow, uint startCol, uint endRow, uint endCol)
@@ -67,9 +162,27 @@ public sealed partial class FormulaEvaluator
         public IReadOnlyList<ScalarValue> GetRangeValues(string sheetName, uint startRow, uint startCol, uint endRow, uint endCol)
         {
             var target = ResolveSheet(sheetName);
-            if (target is null) return [ErrorValue.Ref];
             var r0 = Math.Min(startRow, endRow); var r1 = Math.Max(startRow, endRow);
             var c0 = Math.Min(startCol, endCol); var c1 = Math.Max(startCol, endCol);
+            if (target is null)
+            {
+                var external = ExternalSheetReferenceResolver.TryResolve(_workbook, sheetName);
+                if (external is not { } resolved) return [ErrorValue.Ref];
+
+                var externalValues = CreateRangeValueList(r0, c0, r1, c1);
+                if (externalValues is null) return [new RangeMaterializationErrorValue(ErrorValue.Ref)];
+                for (var r = r0; r <= r1; r++)
+                {
+                    for (var c = c0; c <= c1; c++)
+                    {
+                        resolved.Link.TryGetCachedValue(resolved.SheetIndex, r, c, out var cachedValue);
+                        externalValues.Add(cachedValue ?? BlankValue.Instance);
+                    }
+                }
+
+                return externalValues;
+            }
+
             var values = CreateRangeValueList(r0, c0, r1, c1);
             if (values is null) return [new RangeMaterializationErrorValue(ErrorValue.Ref)];
             for (var r = r0; r <= r1; r++)
@@ -106,7 +219,9 @@ public sealed partial class FormulaEvaluator
         public string? TryGetSheetName(FreeX.Core.Model.SheetId sheetId)
             => _workbook?.GetSheet(sheetId)?.Name;
 
-        public bool SheetExists(string sheetName) => ResolveSheet(sheetName) is not null;
+        public bool SheetExists(string sheetName) =>
+            ResolveSheet(sheetName) is not null ||
+            ExternalSheetReferenceResolver.TryResolve(_workbook, sheetName) is not null;
 
         public bool IsRowHidden(uint row) => _sheet.IsRowEffectivelyHidden(row);
 

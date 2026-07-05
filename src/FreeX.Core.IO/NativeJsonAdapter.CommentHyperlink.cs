@@ -43,7 +43,9 @@ public sealed partial class NativeJsonAdapter
                     string.IsNullOrWhiteSpace(reply.Author) ? "FreeX" : reply.Author.Trim())
                 {
                     CreatedAtUtc = ToUtc(reply.CreatedAtUtc),
-                    ModifiedAtUtc = ToUtc(reply.ModifiedAtUtc)
+                    ModifiedAtUtc = ToUtc(reply.ModifiedAtUtc),
+                    Id = reply.Id,
+                    MentionsXml = reply.MentionsXml
                 })
                 .ToList();
             var comment = new ThreadedComment(
@@ -53,7 +55,9 @@ public sealed partial class NativeJsonAdapter
                 Replies = replies,
                 IsResolved = commentDto.IsResolved,
                 CreatedAtUtc = ToUtc(commentDto.CreatedAtUtc),
-                ModifiedAtUtc = ToUtc(commentDto.ModifiedAtUtc)
+                ModifiedAtUtc = ToUtc(commentDto.ModifiedAtUtc),
+                Id = commentDto.Id,
+                MentionsXml = commentDto.MentionsXml
             };
             return (address, comment);
         }
@@ -101,6 +105,8 @@ public sealed partial class NativeJsonAdapter
         IsResolved = pair.Value.IsResolved,
         CreatedAtUtc = ToUtc(pair.Value.CreatedAtUtc),
         ModifiedAtUtc = ToUtc(pair.Value.ModifiedAtUtc),
+        Id = pair.Value.Id,
+        MentionsXml = pair.Value.MentionsXml,
         Replies = pair.Value.Replies
             .OfType<CommentReply>()
             .Select(reply => new CommentReplyDto
@@ -108,7 +114,9 @@ public sealed partial class NativeJsonAdapter
                 Text = reply.Text,
                 Author = reply.Author,
                 CreatedAtUtc = ToUtc(reply.CreatedAtUtc),
-                ModifiedAtUtc = ToUtc(reply.ModifiedAtUtc)
+                ModifiedAtUtc = ToUtc(reply.ModifiedAtUtc),
+                Id = reply.Id,
+                MentionsXml = reply.MentionsXml
             })
             .ToList()
     };

@@ -443,6 +443,7 @@ public sealed partial class MainWindow : Window
     private readonly Button _updateReadyIndicator = new();
     private IUpdateService? _updateService;
     private string? _stagedUpdateVersion;
+    private AvaloniaAutosaveCoordinator? _autosaveCoordinator;
     private bool _formulaBarExpanded;
     private readonly Button _undoButton = new();
     private readonly Button _redoButton = new();
@@ -1808,6 +1809,18 @@ public sealed partial class MainWindow : Window
                 // Best-effort: a failed background check must never disrupt the app.
             }
         });
+    }
+
+    /// <summary>
+    /// Wires the autosave/crash-recovery coordinator so a clean save can delete the recovery
+    /// snapshot immediately (mirrors the WPF host's <c>NotifyAutosaveSaved</c> hook, called from
+    /// <c>AttachAutosaveService</c>). Called once from <c>App.cs</c> right after the coordinator is
+    /// constructed.
+    /// </summary>
+    internal void AttachAutosaveCoordinator(AvaloniaAutosaveCoordinator coordinator)
+    {
+        ArgumentNullException.ThrowIfNull(coordinator);
+        _autosaveCoordinator = coordinator;
     }
 
     /// <summary>Reveal the discreet update-ready indicator. Safe to call only on the UI thread.</summary>
@@ -4756,7 +4769,7 @@ public sealed partial class MainWindow : Window
         double height)
     {
         var drawingObject = renderPlan.Bounds;
-        var visual = CreateDrawingObjectVisual(renderPlan, width, height);
+        var visual = CreateDrawingObjectVisual(renderPlan, width, height, _session.Workbook.Theme);
         var selected = IsSelectedDrawingObject(drawingObject);
         var container = new AvaloniaGrid
         {
@@ -4849,7 +4862,8 @@ public sealed partial class MainWindow : Window
     private static Control CreateDrawingObjectVisual(
         DrawingObjectRenderPlan renderPlan,
         double width,
-        double height)
+        double height,
+        WorkbookTheme theme)
     {
         var drawingObject = renderPlan.Bounds;
         var visual = renderPlan.PrimitiveKind switch
@@ -4857,7 +4871,7 @@ public sealed partial class MainWindow : Window
             DrawingObjectRenderPrimitiveKind.Shape => CreateDrawingShapeVisual(drawingObject, width, height),
             DrawingObjectRenderPrimitiveKind.Image or DrawingObjectRenderPrimitiveKind.CroppedImage =>
                 CreateDrawingImageVisual(renderPlan, width, height),
-            DrawingObjectRenderPrimitiveKind.CellRangeSnapshot => CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height),
+            DrawingObjectRenderPrimitiveKind.CellRangeSnapshot => CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height, theme),
             DrawingObjectRenderPrimitiveKind.TextBox => CreateDrawingTextBoxVisual(drawingObject, width, height),
             _ => CreateDrawingObjectBoundsMarker(drawingObject, width, height)
         };
@@ -5307,7 +5321,8 @@ public sealed partial class MainWindow : Window
     private static Control CreateDrawingCellRangeSnapshotVisual(
         DrawingObjectRenderPlan renderPlan,
         double width,
-        double height)
+        double height,
+        WorkbookTheme theme)
     {
         var drawingObject = renderPlan.Bounds;
         if (renderPlan.PictureGrid is not { } pictureGrid)
@@ -5327,6 +5342,52 @@ public sealed partial class MainWindow : Window
         var columnCount = Math.Max(1u, pictureGrid.ColumnCount);
         var cellWidth = frameWidth / columnCount;
         var cellHeight = frameHeight / rowCount;
+        var cellLookup = pictureGrid.Cells
+            .Where(cell => cell.RowOffset < rowCount && cell.ColumnOffset < columnCount)
+            .ToDictionary(cell => (cell.RowOffset, cell.ColumnOffset));
+
+        // Fills/patterns render first so grid separator lines, text, and cell borders sit above
+        // them — mirroring WPF's RenderPicture draw order (DrawPictureCellStyle before the grid
+        // lines/text/borders passes) so styled snapshot cells match the Windows render exactly.
+        foreach (var cell in cellLookup.Values)
+        {
+            if (cell.Style is not { } cellStyle)
+                continue;
+
+            var cellRect = new Rect(
+                cell.ColumnOffset * cellWidth,
+                cell.RowOffset * cellHeight,
+                cellWidth,
+                cellHeight);
+
+            if (cellStyle.ResolveFillColor(theme) is { } fillColor)
+            {
+                var fillRect = new AvaloniaRectangle
+                {
+                    Width = cellRect.Width,
+                    Height = cellRect.Height,
+                    Fill = Brush(fillColor),
+                    IsHitTestVisible = false,
+                };
+                Canvas.SetLeft(fillRect, cellRect.X);
+                Canvas.SetTop(fillRect, cellRect.Y);
+                canvas.Children.Add(fillRect);
+            }
+
+            if (CellPatternFill.Build(cellStyle, theme) is { } patternBrush)
+            {
+                var patternRect = new AvaloniaRectangle
+                {
+                    Width = cellRect.Width,
+                    Height = cellRect.Height,
+                    Fill = patternBrush,
+                    IsHitTestVisible = false,
+                };
+                Canvas.SetLeft(patternRect, cellRect.X);
+                Canvas.SetTop(patternRect, cellRect.Y);
+                canvas.Children.Add(patternRect);
+            }
+        }
 
         for (uint row = 1; row < rowCount; row++)
         {
@@ -5356,14 +5417,19 @@ public sealed partial class MainWindow : Window
             canvas.Children.Add(line);
         }
 
-        foreach (var cell in pictureGrid.Cells)
+        foreach (var cell in cellLookup.Values)
         {
-            if (cell.RowOffset >= rowCount ||
-                cell.ColumnOffset >= columnCount ||
-                string.IsNullOrEmpty(cell.Text))
-            {
+            if (string.IsNullOrEmpty(cell.Text))
                 continue;
-            }
+
+            var style = cell.Style;
+            var foreground = style is null ? Brushes.Black : Brush(style.ResolveFontColor(theme));
+            var horizontalAlignment = style?.HorizontalAlignment ?? CellHAlign.General;
+            var textAlignment = MapCellTextAlignment(horizontalAlignment, cell.IsNumericOrDate, isEffectivelyRightToLeft: false);
+            var weight = style?.Bold == true ? FontWeight.Bold : FontWeight.Normal;
+            var fontStyle = style?.Italic == true ? FontStyle.Italic : FontStyle.Normal;
+            var fontSize = Math.Max(1, (style?.FontSize ?? CellStyle.Default.FontSize) + WorksheetFontSizeDisplayOffset);
+            var textDecorations = BuildTextDecorations(style);
 
             var text = new Border
             {
@@ -5375,8 +5441,12 @@ public sealed partial class MainWindow : Window
                 Child = new TextBlock
                 {
                     Text = cell.Text,
-                    FontSize = 11,
-                    Foreground = Brushes.Black,
+                    FontSize = fontSize,
+                    FontWeight = weight,
+                    FontStyle = fontStyle,
+                    Foreground = foreground,
+                    TextAlignment = textAlignment,
+                    TextDecorations = textDecorations,
                     TextTrimming = TextTrimming.CharacterEllipsis,
                     VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 },
@@ -5384,6 +5454,18 @@ public sealed partial class MainWindow : Window
             Canvas.SetLeft(text, cell.ColumnOffset * cellWidth + 3);
             Canvas.SetTop(text, cell.RowOffset * cellHeight + 1);
             canvas.Children.Add(text);
+
+            if (style is { } borderStyle && HasVisibleCellBorder(borderStyle))
+            {
+                var borderOverlay = new CellBorderPanel(borderStyle)
+                {
+                    Width = cellWidth,
+                    Height = cellHeight,
+                };
+                Canvas.SetLeft(borderOverlay, cell.ColumnOffset * cellWidth);
+                Canvas.SetTop(borderOverlay, cell.RowOffset * cellHeight);
+                canvas.Children.Add(borderOverlay);
+            }
         }
 
         return new Border
@@ -5894,7 +5976,7 @@ public sealed partial class MainWindow : Window
         if (_autofillDragging)
             CommitAutofillDrag(args.KeyModifiers.HasFlag(KeyModifiers.Control));
         else if (_selectionMoveDragging)
-            await CommitSelectionMoveDragAsync();
+            await CommitSelectionMoveDragAsync(args.KeyModifiers.HasFlag(KeyModifiers.Control));
 
         DetachCellSelectionDragHandlers();
         _cellDragSelectionPointer?.Capture(null);
@@ -6432,8 +6514,13 @@ public sealed partial class MainWindow : Window
 
     private bool TryBeginSelectionMoveDrag(PointerPressedEventArgs args, Control capture, CellAddress address)
     {
+        // Excel's Ctrl+drag-to-copy gesture: holding Ctrl while dragging a selection's border
+        // copies it to the destination instead of moving it (M33). The actual copy-vs-move
+        // decision is resolved from the drop-time modifier state in EndCellSelectionDragAsync,
+        // not here — the user may press/release Ctrl mid-drag, exactly like the existing
+        // autofill-drag Ctrl handling.
         if (!args.GetCurrentPoint(capture).Properties.IsLeftButtonPressed ||
-            args.KeyModifiers != KeyModifiers.None ||
+            (args.KeyModifiers != KeyModifiers.None && args.KeyModifiers != KeyModifiers.Control) ||
             !IsPointerOnSelectionMoveBorder(args) ||
             _session.SelectedRanges.Count > 1)
         {
@@ -6480,14 +6567,14 @@ public sealed partial class MainWindow : Window
     /// values and on whether the overwrite confirmation was consulted. Not used by production code
     /// paths.
     /// </summary>
-    internal Task RaiseSelectionMoveDragForTest(GridRange source, GridRange target)
+    internal Task RaiseSelectionMoveDragForTest(GridRange source, GridRange target, bool ctrlHeld = false)
     {
         _selectionMoveSourceRange = source;
         _selectionMovePreviewRange = target;
-        return CommitSelectionMoveDragAsync();
+        return CommitSelectionMoveDragAsync(ctrlHeld);
     }
 
-    private async Task CommitSelectionMoveDragAsync()
+    private async Task CommitSelectionMoveDragAsync(bool ctrlHeld = false)
     {
         if (_selectionMoveSourceRange is not { } source ||
             _selectionMovePreviewRange is not { } target ||
@@ -6505,6 +6592,22 @@ public sealed partial class MainWindow : Window
         }
 
         ClearSelectedDrawingObject();
+
+        if (ctrlHeld)
+        {
+            // Excel's Ctrl+drag-to-copy: write the payload at the destination and leave the
+            // source range untouched (M33), unlike a plain border drag which moves it.
+            var copyResult = _session.ExecuteReviewCommand(
+                new CopyRangeCommand(_session.ActiveSheet.Id, source, target.Start),
+                fallbackAddress: target.Start);
+            if (copyResult.Success)
+                _session.SelectRange(target);
+            RefreshShell(copyResult.Success
+                ? UiText.Format("MainLoc_SelectedX", FormatRangeReference(target))
+                : copyResult.ErrorMessage ?? "Copy Cells failed.");
+            return;
+        }
+
         var result = _session.MoveSelectedRangeTo(source, target);
         RefreshShell(result.Success
             ? UiText.Format("MainLoc_SelectedX", FormatRangeReference(target))
@@ -6866,6 +6969,17 @@ public sealed partial class MainWindow : Window
             patternBrush: patternBrush,
             richRuns: richRuns,
             flowDirection: flowDirection);
+
+        // Per-cell accessible name/id so a screen reader (Orca/AT-SPI on Linux, VoiceOver on macOS)
+        // can announce which cell has focus, its address, and its value while navigating the grid —
+        // mirrors WPF's GridViewCellAutomationPeer.GetAutomationIdCore/GetNameCore format exactly
+        // ("Cell_A1" / "A1" or "A1: value") so the two shells read identically to assistive tech.
+        // Cells are plain Borders rebuilt on every selection change/RefreshShell (no persisted control
+        // to "update" in place), so setting these at construction time keeps them live automatically.
+        var columnName = CellAddress.NumberToColumnName(address.Col);
+        AutomationProperties.SetAutomationId(border, $"Cell_{columnName}{address.Row}");
+        AutomationProperties.SetName(border, FormatCellAccessibleName(columnName, address.Row, text));
+
         // Excel treats a merged region as a single unit for the fill handle: if the selection's
         // bottom-right corner lands anywhere inside this cell's merge (not just on the merge's own
         // anchor), the handle belongs on the merge's rendered Border — otherwise a selection whose
@@ -7252,7 +7366,7 @@ public sealed partial class MainWindow : Window
             return false;
         }
 
-        var reference = FormatCellReference(address);
+        var reference = SpreadsheetDisplayFormatter.FormatCellReference(address, UseR1C1ReferenceStyle);
         var text = _formulaBox.Text ?? "";
         var selectionStart = Math.Clamp(Math.Min(_formulaBox.SelectionStart, _formulaBox.SelectionEnd), 0, text.Length);
         var selectionEnd = Math.Clamp(Math.Max(_formulaBox.SelectionStart, _formulaBox.SelectionEnd), 0, text.Length);
@@ -7797,14 +7911,19 @@ public sealed partial class MainWindow : Window
             cellContent = overlayHost;
         }
 
+        // Gridline/selection border thickness scales with zoom so it grows together with cell
+        // content/text — matching Excel/WPF where the whole grid (gridlines included) is scaled by a
+        // single RenderTransform (see MainWindow.ViewCommands.cs), instead of staying a razor-thin
+        // fixed 1 DIP line at high zoom while everything else quadruples in size.
+        var scaledBorderThickness = Math.Max(1, zoomFactor);
         return new Border
         {
             Background = background,
             BorderBrush = selected ? SelectionBorder : showGridlines ? GridLine : Brushes.Transparent,
             BorderThickness = selected
-                ? new Thickness(1)
+                ? new Thickness(scaledBorderThickness)
                 : showGridlines
-                    ? new Thickness(1)
+                    ? new Thickness(scaledBorderThickness)
                     : new Thickness(0),
             ClipToBounds = true,
             Child = cellContent,
@@ -9197,17 +9316,93 @@ public sealed partial class MainWindow : Window
         RefreshShell($"Zoom {StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent)}");
     }
 
+    /// <summary>
+    /// Selections larger than this (e.g. an entire selected row/column, which can span up to a
+    /// million+ cells) fall back to the default-cell-size overload instead of building a per-cell
+    /// pixel list — Excel's own Zoom-to-Selection degenerates to the minimum zoom for such
+    /// selections anyway, and there is no benefit to walking that many dictionary lookups.
+    /// </summary>
+    private const int ZoomToSelectionMetricsCap = 4096;
+
     private int CalculateZoomToSelectionPercent()
     {
         if (!TryGetSheetViewportDisplaySize(out var viewportHeight, out var viewportWidth))
             return 100;
 
         var range = _session.SelectedRange;
+        if (range.ColCount > ZoomToSelectionMetricsCap || range.RowCount > ZoomToSelectionMetricsCap)
+        {
+            return ZoomSelectionPlanner.CalculateFitWholePercent(
+                viewportWidth,
+                viewportHeight,
+                range.ColCount,
+                range.RowCount);
+        }
+
+        var columnWidths = BuildSelectionColumnWidthsPixels(range);
+        var rowHeights = BuildSelectionRowHeightsPixels(range);
         return ZoomSelectionPlanner.CalculateFitWholePercent(
             viewportWidth,
             viewportHeight,
-            range.ColCount,
-            range.RowCount);
+            columnWidths,
+            rowHeights);
+    }
+
+    /// <summary>
+    /// Builds the selection's actual per-column pixel widths: prefers the currently materialized
+    /// <see cref="ViewportModel.ColMetrics"/> (already-computed display pixels, accounting for any
+    /// custom width), falling back to <see cref="Sheet.ColumnWidths"/>/<see cref="Sheet.DefaultColumnWidth"/>
+    /// converted via <see cref="ColumnWidthPixelMapper"/> for columns outside the materialized
+    /// viewport — so Zoom to Selection fits the selection's real extent instead of assuming every
+    /// column is the Excel default width (M24).
+    /// </summary>
+    private IReadOnlyList<double> BuildSelectionColumnWidthsPixels(GridRange range)
+    {
+        var metricsByCol = new Dictionary<uint, double>();
+        foreach (var metric in _session.Viewport.ColMetrics)
+        {
+            if (metric.Col >= range.Start.Col && metric.Col <= range.End.Col)
+                metricsByCol[metric.Col] = metric.Width;
+        }
+
+        var sheet = _session.ActiveSheet;
+        var widths = new List<double>((int)range.ColCount);
+        for (var col = range.Start.Col; col <= range.End.Col; col++)
+        {
+            widths.Add(metricsByCol.TryGetValue(col, out var width)
+                ? width
+                : ColumnWidthPixelMapper.ColumnWidthToPixels(
+                    sheet.ColumnWidths.GetValueOrDefault(col, sheet.DefaultColumnWidth)));
+        }
+
+        return widths;
+    }
+
+    /// <summary>
+    /// Builds the selection's actual per-row pixel heights: prefers the currently materialized
+    /// <see cref="ViewportModel.RowMetrics"/>, falling back to <see cref="Sheet.RowHeights"/>/
+    /// <see cref="Sheet.DefaultRowHeight"/> (already stored in pixels) for rows outside the
+    /// materialized viewport — the row analogue of <see cref="BuildSelectionColumnWidthsPixels"/>.
+    /// </summary>
+    private IReadOnlyList<double> BuildSelectionRowHeightsPixels(GridRange range)
+    {
+        var metricsByRow = new Dictionary<uint, double>();
+        foreach (var metric in _session.Viewport.RowMetrics)
+        {
+            if (metric.Row >= range.Start.Row && metric.Row <= range.End.Row)
+                metricsByRow[metric.Row] = metric.Height;
+        }
+
+        var sheet = _session.ActiveSheet;
+        var heights = new List<double>((int)range.RowCount);
+        for (var row = range.Start.Row; row <= range.End.Row; row++)
+        {
+            heights.Add(metricsByRow.TryGetValue(row, out var height)
+                ? height
+                : sheet.RowHeights.GetValueOrDefault(row, sheet.DefaultRowHeight));
+        }
+
+        return heights;
     }
 
     private void ToggleShowFormulas()
@@ -14092,7 +14287,7 @@ public sealed partial class MainWindow : Window
         }
 
         var address = _session.FormulaEditAddress ?? _session.ActiveCell;
-        var result = _session.CommitCellText(_formulaBox.Text ?? "");
+        var result = _session.CommitCellText(_formulaBox.Text ?? "", UseR1C1ReferenceStyle);
 
         if (!result.Success)
         {
@@ -18676,7 +18871,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var text = await clipboard.TryGetTextAsync();
+        var (text, clipboardReadFailed) = await TryGetClipboardTextAsync(clipboard);
         var destination = _session.ActiveCell;
         if (_session.ShouldPreferExternalClipboardImage(text) &&
             await TryPasteClipboardImageAsync(clipboard, destination))
@@ -18684,7 +18879,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var result = _session.PasteClipboardTextAtActiveCell(text);
+        var result = _session.PasteClipboardTextAtActiveCell(text, clipboardReadFailed: clipboardReadFailed);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? "Paste failed.");
@@ -18692,6 +18887,26 @@ public sealed partial class MainWindow : Window
         }
 
         RefreshShell(UiText.Format("MainLoc_PastedAt", FormatCellReference(destination)));
+    }
+
+    /// <summary>
+    /// Reads the OS clipboard text via Avalonia's <see cref="IClipboard"/>, distinguishing "read
+    /// failed" (an exception, e.g. another process transiently holding the clipboard) from "read
+    /// succeeded but empty/non-text" (<c>TryGetTextAsync</c> returning null) — the paste planner
+    /// must skip the paste on failure instead of falling back to a stale internal-clipboard paste,
+    /// mirroring the WPF host's <c>TryGetClipboardText(out bool readFailed)</c> (review P1/M5).
+    /// </summary>
+    private static async Task<(string? Text, bool ReadFailed)> TryGetClipboardTextAsync(IClipboard clipboard)
+    {
+        try
+        {
+            var text = await clipboard.TryGetTextAsync();
+            return (text, false);
+        }
+        catch (Exception)
+        {
+            return (null, true);
+        }
     }
 
     private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard, CellAddress destination)
@@ -18766,11 +18981,11 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var text = await clipboard.TryGetTextAsync();
+        var (text, clipboardReadFailed) = await TryGetClipboardTextAsync(clipboard);
         var destination = _session.ActiveCell;
         var result = keepSourceColumnWidths
-            ? _session.PasteSpecialClipboardAtActiveCell(text, mode, options, keepSourceColumnWidths: true)
-            : _session.PasteSpecialClipboardAtActiveCell(text, mode, options);
+            ? _session.PasteSpecialClipboardAtActiveCell(text, mode, options, keepSourceColumnWidths: true, clipboardReadFailed: clipboardReadFailed)
+            : _session.PasteSpecialClipboardAtActiveCell(text, mode, options, clipboardReadFailed: clipboardReadFailed);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? "Paste Special failed.");
@@ -18903,9 +19118,9 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var text = await clipboard.TryGetTextAsync();
+        var (text, clipboardReadFailed) = await TryGetClipboardTextAsync(clipboard);
         var destination = _session.ActiveCell;
-        var result = _session.PasteClipboardTextAtActiveCell(text, preserveText: true);
+        var result = _session.PasteClipboardTextAtActiveCell(text, preserveText: true, clipboardReadFailed: clipboardReadFailed);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_PasteSpecialTextFailed"));
@@ -21298,7 +21513,7 @@ public sealed partial class MainWindow : Window
 
         var address = _session.ActiveCell;
         _session.BeginFormulaEdit(address);
-        var result = _session.CommitCellText(selected);
+        var result = _session.CommitCellText(selected, UseR1C1ReferenceStyle);
         if (!result.Success)
         {
             _session.CancelFormulaEdit();
@@ -21884,6 +22099,55 @@ public sealed partial class MainWindow : Window
         {
             _isOpening = false;
             UpdateSaveButton();
+        }
+    }
+
+    /// <summary>
+    /// Loads a crash-recovery snapshot (a <c>NativeJsonAdapter</c>-serialized <c>.fxl</c> sidecar
+    /// written by <see cref="AvaloniaAutosaveCoordinator"/>) directly into this window's session,
+    /// associates it with <paramref name="originalFilePath"/> so Save goes back to the right
+    /// place, and marks the shell refreshed — mirroring the WPF host's
+    /// <c>OpenRecoverySnapshotAsync</c> + <c>SetCurrentFilePathForRecovery</c> combination. Unlike
+    /// a normal open, the snapshot path itself is never recorded in the recent-files list (it is a
+    /// temporary file under the app-data recovery folder, not a document the user opened).
+    /// </summary>
+    internal Task<bool> LoadRecoverySnapshotAsync(string snapshotPath, string? originalFilePath)
+    {
+        try
+        {
+            var adapter = new NativeJsonAdapter();
+            Workbook workbook;
+            using (var stream = File.OpenRead(snapshotPath))
+                workbook = adapter.Load(stream);
+
+            var displayName = string.IsNullOrWhiteSpace(originalFilePath)
+                ? workbook.Name
+                : Path.GetFileName(originalFilePath);
+            workbook.Name = displayName;
+
+            var source = new StartupWorkbookLoadResult(
+                workbook,
+                displayName,
+                "Recovered from a previous session.",
+                IsFallback: false,
+                SourcePath: originalFilePath);
+
+            var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
+            _session = _sessionFactory.Create(source, viewportHeight, viewportWidth, includeObjects: true);
+            // Mark the recovered session dirty so the user sees the modified indicator and is
+            // prompted to save rather than risk silently losing the recovered data — mirrors the
+            // WPF host's MarkWorkbookDirtyForRecovery call after a successful recovery load.
+            _session.MarkDirtyForRecovery();
+            RefreshViewportSizeForZoom();
+            ClearSelectedDrawingObject();
+            RefreshShell(_session.StartupStatus);
+            return Task.FromResult(true);
+        }
+        catch (Exception)
+        {
+            // Best-effort recovery: a corrupt/partially-written snapshot (e.g. the process was
+            // killed mid-write) must never crash startup — just report "nothing to recover".
+            return Task.FromResult(false);
         }
     }
 
@@ -22602,6 +22866,10 @@ public sealed partial class MainWindow : Window
             using var fileAccess = await _workbookFileAccessService.BeginAccessAsync(StorageProvider, fileAccessIdentity);
             var saveWarnings = await _saveService.SaveAsync(target.Path, target.Adapter, _session.Workbook, progress);
             _session.TryMarkSavedIfNoEditsArrived(generationAtSaveStart, target.Path, fileAccessIdentity);
+            // A clean save means there is nothing left to recover from — delete the crash-recovery
+            // snapshot immediately rather than waiting for window close (mirrors WPF's
+            // NotifyAutosaveSaved, called from the same save-completion point).
+            _autosaveCoordinator?.NotifyAutosaveSaved();
             RecordRecentWorkbook(target.Path, fileAccessIdentity);
             RefreshShell(FormatSaveCompletionStatus(target.Path, saveWarnings));
             return true;
@@ -22802,6 +23070,95 @@ public sealed partial class MainWindow : Window
         {
             _isDirtyCloseDialogOpen = false;
         }
+    }
+
+    /// <summary>
+    /// Minimal Yes/No confirmation dialog for the startup crash-recovery prompt (see
+    /// <c>App.OfferStartupRecoveryAsync</c>). Mirrors the plain <c>Window</c>-based dialog pattern
+    /// already used by <see cref="ShowDirtyWorkbookCloseDialogAsync"/> rather than introducing a
+    /// new shared message-service dependency for this single call site.
+    /// </summary>
+    internal async Task<bool> ShowRecoveryPromptAsync(string message, string title)
+    {
+        var accepted = false;
+        var dialog = new Window
+        {
+            Title = title,
+            Width = 440,
+            Height = 190,
+            MinWidth = 400,
+            MinHeight = 180,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+            CanResize = false,
+        };
+
+        var messageText = new TextBlock
+        {
+            Text = message,
+            FontSize = 14,
+            TextWrapping = TextWrapping.Wrap,
+        };
+
+        var yesButton = new Button
+        {
+            Content = "Recover",
+            MinWidth = 92,
+            Padding = new Thickness(10, 4),
+            IsDefault = true,
+        };
+        AutomationProperties.SetAutomationId(yesButton, "RecoverySnapshotYesButton");
+        AutomationProperties.SetName(yesButton, "Recover");
+
+        var noButton = new Button
+        {
+            Content = "Discard",
+            MinWidth = 92,
+            Padding = new Thickness(10, 4),
+            IsCancel = true,
+        };
+        AutomationProperties.SetAutomationId(noButton, "RecoverySnapshotNoButton");
+        AutomationProperties.SetName(noButton, "Discard");
+
+        void Finish(bool selected)
+        {
+            accepted = selected;
+            dialog.Close();
+        }
+
+        yesButton.Click += (_, _) => Finish(true);
+        noButton.Click += (_, _) => Finish(false);
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                Finish(true);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                Finish(false);
+                e.Handled = true;
+            }
+        };
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Children = { noButton, yesButton },
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(18),
+            Spacing = 12,
+            Children = { messageText, new Border { Height = 10 }, buttonRow },
+        };
+
+        await dialog.ShowDialog(this);
+        return accepted;
     }
 
     private async Task OpenExternalHelpLinkAsync(string url, string title)
@@ -23146,6 +23503,21 @@ public sealed partial class MainWindow : Window
     private static string FormatCellReference(CellAddress address) =>
         CellAddress.NumberToColumnName(address.Col) + address.Row.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
+    /// <summary>
+    /// Builds the UIA/AT-SPI accessible name for a worksheet cell: the plain A1-style address alone
+    /// when the cell is empty, or "&lt;address&gt;: &lt;value&gt;" when it has display text — matching
+    /// WPF's <c>GridViewCellAutomationPeer.GetNameCore</c> (GridView.cs) exactly so a screen reader
+    /// announces the same thing on both platforms regardless of the R1C1 display option (accessible
+    /// names always use plain A1 addressing, matching Excel/NVDA/VoiceOver convention).
+    /// </summary>
+    private static string FormatCellAccessibleName(string columnName, uint row, string displayText)
+    {
+        var address = $"{columnName}{row}";
+        return string.IsNullOrWhiteSpace(displayText)
+            ? address
+            : $"{address}: {displayText}";
+    }
+
     private static string FormatRangeReference(GridRange range)
     {
         var start = FormatCellReference(range.Start);
@@ -23187,9 +23559,21 @@ public sealed partial class MainWindow : Window
         SpreadsheetDisplayFormatter.FormatFormulaBarText(
             cell,
             address,
-            useR1C1ReferenceStyle: false,
+            useR1C1ReferenceStyle: UseR1C1ReferenceStyle,
             _session.Workbook.GetSheet(address.Sheet),
             _session.Workbook);
+
+    /// <summary>
+    /// Reads the persisted "R1C1 Reference Style" toggle (Options ▸ Formulas) directly from disk on
+    /// every call rather than caching it on a field: the Options dialog (MainWindow.Options.cs) already
+    /// persists the flag via <see cref="AppOptionsStore.Save"/> as soon as the user clicks OK, and this
+    /// keeps every R1C1-aware call site (formula-bar display, cell-text commit, name-box commit) in
+    /// sync with that persisted value without needing a second, easily-stale in-memory copy. Mirrors
+    /// WPF's live <c>_options.UseR1C1ReferenceStyle</c> field (MainWindow.Editing.cs,
+    /// MainWindow.FormulaReferenceEditing.cs) but sourced from the shared options store instead of a
+    /// per-window field, since the Avalonia shell does not keep one.
+    /// </summary>
+    private static bool UseR1C1ReferenceStyle => AppOptionsStore.Load().UseR1C1ReferenceStyle;
 
     private static string FormatScalarValue(ScalarValue? value) => value switch
     {

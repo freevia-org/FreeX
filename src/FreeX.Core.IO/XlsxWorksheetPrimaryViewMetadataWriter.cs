@@ -57,7 +57,7 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
 
             if (pvChildren.Count > 0)
             {
-                PruneSelectionsForModeledActiveCell(sheetView, sheet);
+                var activePaneName = PruneSelectionsForModeledActiveCell(sheetView, sheet);
 
                 sheetView.Elements()
                     .Where(element => !IsModeledPrimaryViewElement(element.Name.LocalName))
@@ -65,7 +65,7 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
 
                 foreach (var childXml in pvChildren)
                 {
-                    TryApplyNativePrimaryViewChild(sheetView, childXml);
+                    TryApplyNativePrimaryViewChild(sheetView, childXml, activePaneName);
                 }
             }
 
@@ -122,7 +122,7 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
         return null;
     }
 
-    private static void TryApplyNativePrimaryViewChild(XElement sheetView, string? childXml)
+    private static void TryApplyNativePrimaryViewChild(XElement sheetView, string? childXml, string activePaneName)
     {
         if (string.IsNullOrWhiteSpace(childXml))
             return;
@@ -132,7 +132,7 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
             var nativeChild = XElement.Parse(childXml);
             if (nativeChild.Name == WorksheetNs + "selection")
             {
-                MergeMatchingSelectionNativeAttributes(sheetView, nativeChild);
+                MergeMatchingSelectionNativeAttributes(sheetView, nativeChild, activePaneName);
                 return;
             }
 
@@ -144,36 +144,102 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
         }
     }
 
-    private static void PruneSelectionsForModeledActiveCell(XElement sheetView, Sheet sheet)
+    // A frozen/split sheetView can carry one <selection> per pane (topLeft/topRight/bottomLeft/
+    // bottomRight), each keyed by its own @pane attribute (missing @pane means "topLeft"). Only the
+    // pane holding the true cursor -- named by pane/@activePane (defaulting to "topLeft" per OOXML
+    // when no pane element is present) -- is kept in sync with the model; every other pane's
+    // <selection> must be left completely untouched here, mirroring XlsxWorksheetViewWriter's own
+    // pane-scoped update, or this writer clobbers the per-pane selections that writer just wrote.
+    //
+    // The active pane's selection must WIN with the model's current active cell even when a stale
+    // native selection (restored from the load-time metadata bag, e.g. by source-package
+    // preservation) still names an older cell: rather than removing a non-matching active-pane
+    // selection and relying on the native-merge fallback to re-add it (which resurrects the stale
+    // cell -- see the regression this guards against), update the active-pane selection's
+    // activeCell/sqref in place so it always reflects the model, while any other attributes it
+    // carries (e.g. a preserved native marker) survive untouched. Returns the active pane name so
+    // the caller can tell the native-merge step which pane must not have its activeCell/sqref
+    // clobbered back to a stale value.
+    private static string PruneSelectionsForModeledActiveCell(XElement sheetView, Sheet sheet)
     {
+        var activePaneName = GetActivePaneName(sheetView);
+
         if (sheet.ActiveRow is not { } row || sheet.ActiveCol is not { } col)
-            return;
+            return activePaneName;
 
         var activeCell = new CellAddress(sheet.Id, row, col).ToA1();
-        var matchingSelectionKept = false;
+        XElement? activePaneSelection = null;
         foreach (var selection in sheetView.Elements(WorksheetNs + "selection").ToList())
         {
-            var isModeledSelection =
-                string.Equals(selection.Attribute("activeCell")?.Value, activeCell, StringComparison.Ordinal) &&
-                string.Equals(selection.Attribute("sqref")?.Value, activeCell, StringComparison.Ordinal);
-            if (!isModeledSelection || matchingSelectionKept)
-                selection.Remove();
+            if (!string.Equals(GetSelectionPaneName(selection), activePaneName, StringComparison.Ordinal))
+                continue; // leave other panes' selections untouched
+
+            if (activePaneSelection is null)
+            {
+                activePaneSelection = selection;
+                var currentActiveCell = selection.Attribute("activeCell")?.Value;
+                if (!string.Equals(currentActiveCell, activeCell, StringComparison.Ordinal))
+                {
+                    // Stale native selection (names an older cell than the model's current active
+                    // cell): the model wins -- overwrite both activeCell and its sqref to the model
+                    // cursor so a resurrected native cursor can never linger.
+                    selection.SetAttributeValue("activeCell", activeCell);
+                    selection.SetAttributeValue("sqref", activeCell);
+                }
+                // else: the native selection already names the model's active cell -- preserve it
+                // verbatim, including a multi-cell sqref range (e.g. A1:F2) that the model does not
+                // itself track, so a genuine preserved selection range is not narrowed to one cell.
+            }
             else
-                matchingSelectionKept = true;
+            {
+                // A duplicate selection for the same pane can only be stale/malformed; drop it.
+                selection.Remove();
+            }
         }
+
+        return activePaneName;
     }
 
-    private static void MergeMatchingSelectionNativeAttributes(XElement sheetView, XElement nativeSelection)
+    private static string GetActivePaneName(XElement sheetView)
+    {
+        var paneElement = sheetView.Element(WorksheetNs + "pane");
+        var activePaneName = paneElement?.Attribute("activePane")?.Value;
+        return string.IsNullOrWhiteSpace(activePaneName) ? "topLeft" : activePaneName;
+    }
+
+    private static string GetSelectionPaneName(XElement selection)
+    {
+        var paneName = selection.Attribute("pane")?.Value;
+        return string.IsNullOrWhiteSpace(paneName) ? "topLeft" : paneName;
+    }
+
+    private static void MergeMatchingSelectionNativeAttributes(XElement sheetView, XElement nativeSelection, string activePaneName)
     {
         var nativeActiveCell = nativeSelection.Attribute("activeCell")?.Value;
         var nativeSelectionRef = nativeSelection.Attribute("sqref")?.Value;
         if (string.IsNullOrWhiteSpace(nativeActiveCell) || string.IsNullOrWhiteSpace(nativeSelectionRef))
             return;
 
-        var targetSelection = FindMatchingSelection(sheetView, nativeActiveCell, nativeSelectionRef);
+        var nativePaneName = GetSelectionPaneName(nativeSelection);
+        var isActivePane = string.Equals(nativePaneName, activePaneName, StringComparison.Ordinal);
+
+        // The active pane's <selection> was already normalized to the model's current active cell by
+        // PruneSelectionsForModeledActiveCell, so it must always be findable by pane alone here --
+        // never fall through to the "no live selection for this pane" branch below, which would
+        // resurrect the stale native activeCell/sqref this reconciliation exists to prevent.
+        var targetSelection = isActivePane
+            ? sheetView.Elements(WorksheetNs + "selection")
+                .FirstOrDefault(selection => string.Equals(GetSelectionPaneName(selection), nativePaneName, StringComparison.Ordinal))
+            : FindMatchingSelection(sheetView, nativePaneName, nativeActiveCell, nativeSelectionRef);
         if (targetSelection is null)
         {
-            if (!sheetView.Elements(WorksheetNs + "selection").Any())
+            // No live selection exists for this pane yet (either it was pruned as the active pane's
+            // stale duplicate and replaced by the model's own selection, or this pane was never
+            // touched by the live writer) -- only add the native fragment back when this pane truly
+            // has no selection at all, so a pane other than the active one never silently loses its
+            // preserved cursor position.
+            if (!sheetView.Elements(WorksheetNs + "selection")
+                    .Any(selection => string.Equals(GetSelectionPaneName(selection), nativePaneName, StringComparison.Ordinal)))
                 sheetView.Add(new XElement(nativeSelection));
             return;
         }
@@ -183,25 +249,39 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
             if (attribute.IsNamespaceDeclaration || attribute.Name.LocalName is "activeCell")
                 continue;
 
+            // The active pane's cursor is owned by the model (already written by Prune). A STALE
+            // native sqref -- one whose native activeCell names a different cell than the model's
+            // current active cell -- must never overwrite it. But when the native selection names
+            // the SAME active cell as the model, its sqref is the genuine preserved selection RANGE
+            // (e.g. A1:F2) that the model does not itself track, so it must merge through. Other
+            // custom attributes (e.g. a preserved marker) always merge through.
+            if (isActivePane && attribute.Name.LocalName is "sqref" &&
+                !string.Equals(nativeActiveCell, targetSelection.Attribute("activeCell")?.Value, StringComparison.Ordinal))
+                continue;
+
             targetSelection.SetAttributeValue(attribute.Name, attribute.Value);
         }
     }
 
-    private static XElement? FindMatchingSelection(XElement sheetView, string nativeActiveCell, string nativeSelectionRef)
+    private static XElement? FindMatchingSelection(XElement sheetView, string nativePaneName, string nativeActiveCell, string nativeSelectionRef)
     {
-        foreach (var selection in sheetView.Elements(WorksheetNs + "selection"))
+        var paneSelections = sheetView.Elements(WorksheetNs + "selection")
+            .Where(selection => string.Equals(GetSelectionPaneName(selection), nativePaneName, StringComparison.Ordinal))
+            .ToList();
+
+        foreach (var selection in paneSelections)
         {
             if (string.Equals(selection.Attribute("activeCell")?.Value, nativeActiveCell, StringComparison.Ordinal) &&
                 string.Equals(selection.Attribute("sqref")?.Value, nativeSelectionRef, StringComparison.Ordinal))
                 return selection;
         }
 
-        foreach (var selection in sheetView.Elements(WorksheetNs + "selection"))
+        foreach (var selection in paneSelections)
         {
             if (string.Equals(selection.Attribute("activeCell")?.Value, nativeActiveCell, StringComparison.Ordinal))
                 return selection;
         }
 
-        return null;
+        return paneSelections.Count > 0 ? paneSelections[0] : null;
     }
 }

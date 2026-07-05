@@ -76,12 +76,15 @@ public sealed class AutosaveSnapshotCoordinator
         if (_disposed)
             return;
 
-        TryWriteSnapshot(source);
+        TryWriteSnapshot(source, bypassGenerationGate: false);
     }
 
     /// <summary>
     /// Performs an emergency best-effort snapshot — used from crash handlers. Must never throw.
-    /// Bypasses generation gating: a crash handler always tries to capture the latest state.
+    /// Bypasses generation gating: a crash handler always tries to capture the latest state,
+    /// even when the source is not currently dirty or its generation has not advanced since the
+    /// last periodic snapshot (e.g. a fault that occurs before any edit bumps the generation
+    /// again after a prior autosave tick).
     /// </summary>
     public void TryEmergencySnapshot(IAutosaveSnapshotSource source)
     {
@@ -90,7 +93,7 @@ public sealed class AutosaveSnapshotCoordinator
             if (_disposed || source is null)
                 return;
 
-            TryWriteSnapshot(source);
+            TryWriteSnapshot(source, bypassGenerationGate: true);
         }
         catch
         {
@@ -103,11 +106,11 @@ public sealed class AutosaveSnapshotCoordinator
     /// </summary>
     public void DeleteSnapshot() => _store.DeleteSnapshot(_snapshotId);
 
-    private void TryWriteSnapshot(IAutosaveSnapshotSource source)
+    private void TryWriteSnapshot(IAutosaveSnapshotSource source, bool bypassGenerationGate)
     {
         try
         {
-            if (!AutosaveSnapshotStore.ShouldSnapshot(
+            if (!bypassGenerationGate && !AutosaveSnapshotStore.ShouldSnapshot(
                     source.IsDirty,
                     source.DirtyGeneration,
                     _lastSnapshotGeneration))

@@ -507,9 +507,25 @@ public partial class App : Application
     /// <summary>
     /// Identity key grouping candidates that are recovery snapshots of the same document.
     /// A saved workbook is keyed by its original file path (case-insensitive, matching Windows
-    /// path semantics); an unsaved workbook has no file path, so we fall back to its display name.
-    /// Candidates that have neither (should not normally happen) each get their own unique key so
-    /// they are never incorrectly merged with an unrelated candidate.
+    /// path semantics) — a real path is a globally unique identity regardless of which process or
+    /// launch produced the snapshot, so those are always safe to dedupe across sessions.
+    /// <para>
+    /// An unsaved workbook has no file path. Its <see cref="AutosaveSidecar.DisplayName"/> is
+    /// almost always the compile-time constant <c>WorkbookFactory.DefaultWorkbookName</c>
+    /// ("Book1") for every never-touched fresh launch, so display name alone is NOT a reliable
+    /// document identity — two unrelated crashed processes that both still had their untouched
+    /// default workbook would otherwise collide on "name:Book1" and one would be silently deleted
+    /// (see M9). We therefore scope the name-based key to the originating session by also keying
+    /// on the "recovery-{processId}-{launchTag}-" prefix embedded in every snapshot's file name
+    /// (see MainWindow.Autosave.cs's AttachAutosaveService). Candidates from the SAME process
+    /// launch that share a display name are still merged (that is the legitimate "New Window"
+    /// sibling-snapshot case this method exists to collapse); candidates from DIFFERENT launches
+    /// that merely happen to share a name are always treated as distinct documents.
+    /// </para>
+    /// <para>
+    /// Candidates that have neither a path nor a name (should not normally happen) each get their
+    /// own unique key so they are never incorrectly merged with an unrelated candidate.
+    /// </para>
     /// </summary>
     private static string GetDocumentIdentityKey(AutosaveRecoveryCandidate candidate)
     {
@@ -517,9 +533,28 @@ public partial class App : Application
             return "path:" + candidate.Sidecar.OriginalFilePath;
 
         if (!string.IsNullOrWhiteSpace(candidate.Sidecar.DisplayName))
-            return "name:" + candidate.Sidecar.DisplayName;
+            return "name:" + GetLaunchScope(candidate) + ":" + candidate.Sidecar.DisplayName;
 
         return "snapshot:" + candidate.SnapshotPath;
+    }
+
+    /// <summary>
+    /// Extracts the "{processId}-{launchTag}" scope from a snapshot's file name, e.g.
+    /// "recovery-12345-a1b2c3d4-e5f6a7b8.fxl" -&gt; "12345-a1b2c3d4". This identifies the
+    /// originating process launch (not the individual window within it), so sibling windows of
+    /// the same crashed session still share a scope and can be deduplicated, while two different
+    /// processes/launches never do. Falls back to the full snapshot path when the file name does
+    /// not match the expected pattern, so an unrecognized name is always treated as its own
+    /// distinct scope rather than accidentally merged with anything else.
+    /// </summary>
+    private static string GetLaunchScope(AutosaveRecoveryCandidate candidate)
+    {
+        var baseName = Path.GetFileNameWithoutExtension(candidate.SnapshotPath);
+        var parts = baseName.Split('-');
+        if (parts.Length >= 4 && string.Equals(parts[0], "recovery", StringComparison.OrdinalIgnoreCase))
+            return parts[1] + "-" + parts[2];
+
+        return candidate.SnapshotPath;
     }
 
     private static DateTimeOffset GetCandidateTimestamp(AutosaveRecoveryCandidate candidate)

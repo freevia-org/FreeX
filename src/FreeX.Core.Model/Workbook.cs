@@ -146,7 +146,11 @@ public sealed class Workbook
     /// <summary>Timeline metadata loaded from XLSX packages.</summary>
     public List<TimelineModel> Timelines { get; } = [];
 
-    /// <summary>External workbook link metadata loaded from XLSX packages.</summary>
+    /// <summary>
+    /// External workbook link metadata loaded from XLSX packages: package path/target plus (when
+    /// present in the source file) the linked workbook's cached sheet names, defined names, and
+    /// cached cell values — see <see cref="ExternalLinkModel"/>.
+    /// </summary>
     public List<ExternalLinkModel> ExternalLinks { get; } = [];
 
     /// <summary>Whether the loaded workbook package contained an xl/vbaProject.bin macro project.</summary>

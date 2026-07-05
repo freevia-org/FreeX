@@ -423,4 +423,170 @@ public sealed class WorkbookDocumentStateTests
         clearedByUndoToSavePoint.Should().BeTrue();
         state.IsDirty.Should().BeFalse();
     }
+
+    // ── Version-aware MarkSavedAtUndoDepth(int, long) ─────────────────────────
+
+    [Fact]
+    public void MarkSavedAtUndoDepth_WithVersion_ClearsDirtyAndRecordsDepthAndVersion()
+    {
+        var state = new WorkbookDocumentState();
+        state.MarkDirty();
+
+        state.MarkSavedAtUndoDepth(3, 3L);
+
+        state.IsDirty.Should().BeFalse();
+        state.SavedUndoDepth.Should().Be(3);
+        state.SavedUndoStackVersion.Should().Be(3L);
+    }
+
+    [Fact]
+    public void MarkSaved_ResetsSavedUndoStackVersionToNull()
+    {
+        var state = new WorkbookDocumentState();
+        state.MarkSavedAtUndoDepth(5, 5L);
+
+        state.MarkSaved();
+
+        state.SavedUndoStackVersion.Should().BeNull(
+            "MarkSaved without a depth/version means no save-point is known");
+    }
+
+    [Fact]
+    public void MarkSavedWithPath_ResetsSavedUndoStackVersionToNull()
+    {
+        var state = new WorkbookDocumentState();
+        state.MarkSavedAtUndoDepth(4, 4L);
+
+        state.MarkSavedWithPath(@"C:\work\book.xlsx");
+
+        state.SavedUndoStackVersion.Should().BeNull();
+    }
+
+    [Fact]
+    public void MarkSavedAtUndoDepth_LegacyOverload_LeavesSavedUndoStackVersionNull()
+    {
+        var state = new WorkbookDocumentState();
+
+        state.MarkSavedAtUndoDepth(3);
+
+        state.SavedUndoStackVersion.Should().BeNull(
+            "the legacy 1-arg overload does not know the version, so the robust check must fall back to depth-only");
+    }
+
+    // ── Version-aware TryMarkCleanIfAtSavePoint(int, long) ────────────────────
+
+    [Fact]
+    public void TryMarkCleanIfAtSavePoint_WithVersion_MatchingDepthAndVersion_ClearsAndReturnsTrue()
+    {
+        var state = new WorkbookDocumentState();
+        state.MarkSavedAtUndoDepth(2, 2L);
+        state.MarkDirty();
+
+        var result = state.TryMarkCleanIfAtSavePoint(currentUndoDepth: 2, currentUndoStackVersion: 2L);
+
+        result.Should().BeTrue();
+        state.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public void TryMarkCleanIfAtSavePoint_WithVersion_MatchingDepthButDifferentVersion_ReturnsFalse()
+    {
+        var state = new WorkbookDocumentState();
+        state.MarkSavedAtUndoDepth(2, 2L);
+        state.MarkDirty();
+
+        // Depth matches but the version differs -- the stack was trimmed and refilled to the
+        // same depth with different entries (eviction aliasing). Must NOT be treated as clean.
+        var result = state.TryMarkCleanIfAtSavePoint(currentUndoDepth: 2, currentUndoStackVersion: 7L);
+
+        result.Should().BeFalse(
+            "a depth match alone is not sufficient once the stack has been trimmed/refilled to a different content identity");
+        state.IsDirty.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TryMarkCleanIfAtSavePoint_WithVersion_NonMatchingDepth_ReturnsFalse()
+    {
+        var state = new WorkbookDocumentState();
+        state.MarkSavedAtUndoDepth(2, 2L);
+        state.MarkDirty();
+
+        var result = state.TryMarkCleanIfAtSavePoint(currentUndoDepth: 1, currentUndoStackVersion: 1L);
+
+        result.Should().BeFalse("undo depth does not match the save point");
+        state.IsDirty.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TryMarkCleanIfAtSavePoint_WithVersion_NoVersionRecorded_FallsBackToDepthOnlyCheck()
+    {
+        var state = new WorkbookDocumentState();
+        // Legacy 1-arg save point: no version recorded.
+        state.MarkSavedAtUndoDepth(2);
+        state.MarkDirty();
+
+        var result = state.TryMarkCleanIfAtSavePoint(currentUndoDepth: 2, currentUndoStackVersion: 999L);
+
+        result.Should().BeTrue(
+            "when no version was recorded at the save point, the robust overload falls back to the depth-only check");
+        state.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public void TryMarkCleanIfAtSavePoint_WithVersion_NoSavePointRecorded_ReturnsFalse()
+    {
+        var state = new WorkbookDocumentState();
+        state.MarkDirty();
+
+        var result = state.TryMarkCleanIfAtSavePoint(currentUndoDepth: -1, currentUndoStackVersion: -1L);
+
+        result.Should().BeFalse("a depth of -1 must never be treated as a save point");
+        state.IsDirty.Should().BeTrue();
+    }
+
+    // ── Save-point round-trip with version: the exact production wiring ──────
+    // (MainWindow.WorkbookLifecycle.cs's MarkWorkbookSaved / MainWindow.CommandExecution.cs's
+    // ExecuteUndo both call the 2-arg overloads via ICommandBus.GetUndoStackDepth/GetUndoStackVersion.)
+
+    [Fact]
+    public void SavePointRoundTrip_WithVersion_UndoBackToSavePoint_MarksClean()
+    {
+        var state = new WorkbookDocumentState();
+
+        // Simulate: 3 commands pushed (undo stack Version bumps by 1 per push -> 3), then saved.
+        state.MarkSavedAtUndoDepth(3, 3L);
+
+        // User makes another edit -> dirty, depth 4, version 4.
+        state.MarkDirty();
+        state.IsDirty.Should().BeTrue();
+
+        // User undoes the edit: UndoRedoStack.PopUndo() is self-inverse with the push it undoes,
+        // so depth returns to 3 AND version returns to exactly 3 (not 5) -- this is the case the
+        // M50 PopUndo-aliasing regression broke (PopUndo previously left Version at 4, never
+        // returning it to the pre-push value, so this would have false-reported dirty).
+        var clearedByUndoToSavePoint = state.TryMarkCleanIfAtSavePoint(currentUndoDepth: 3, currentUndoStackVersion: 3L);
+
+        clearedByUndoToSavePoint.Should().BeTrue(
+            "undoing the single edit made after the save must restore the exact saved depth+version and report clean");
+        state.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SavePointRoundTrip_WithVersion_EvictionAliasedDepth_StaysDirty()
+    {
+        var state = new WorkbookDocumentState();
+
+        // Save point recorded at depth 3, version 3.
+        state.MarkSavedAtUndoDepth(3, 3L);
+        state.MarkDirty();
+
+        // Simulate the undo stack having been trimmed (depth-cap eviction) and refilled with
+        // different entries that happen to bring the raw depth back to 3, but the content
+        // identity (version) has moved on to a much higher value because of the evictions.
+        var result = state.TryMarkCleanIfAtSavePoint(currentUndoDepth: 3, currentUndoStackVersion: 42L);
+
+        result.Should().BeFalse(
+            "the version mismatch must detect that depth 3 no longer holds the same entries as at save time");
+        state.IsDirty.Should().BeTrue();
+    }
 }

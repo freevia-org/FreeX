@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Windows;
 using FreeX.App.Presentation.Editing;
 using FreeX.App.Services;
@@ -71,8 +73,26 @@ public partial class MainWindow
         if (viewport == null) return;
 
         var text = ClipboardSerializer.Serialize(viewport, range);
-        try { System.Windows.Clipboard.SetText(text); }
-        catch { /* clipboard may be locked */ }
+        var sheetForHtml = _workbook.GetSheet(_currentSheetId);
+        try
+        {
+            // Place plain text AND an HTML table fragment (CF_HTML) on the OS clipboard together,
+            // matching real Excel: destination apps that understand HTML (Word, Outlook, browsers,
+            // LibreOffice Calc) pick the richer format and preserve bold/fill/merges/number-format
+            // display text, while anything HTML-unaware still gets the existing plain TSV text (M7).
+            var data = new DataObject();
+            data.SetText(text);
+            var html = BuildHtmlClipboardFragment(viewport, sheetForHtml, range, _workbook.Theme);
+            if (!string.IsNullOrEmpty(html))
+                data.SetData(System.Windows.DataFormats.Html, html);
+            System.Windows.Clipboard.SetDataObject(data, copy: true);
+        }
+        catch
+        {
+            // Clipboard may be locked by another process — fall back to plain text only.
+            try { System.Windows.Clipboard.SetText(text); }
+            catch { /* clipboard may be locked */ }
+        }
 
         // Show marching ants around the copied range
         SheetGrid.ClipboardRange = range;
@@ -792,4 +812,199 @@ public partial class MainWindow
         UpdateViewport();
         RefreshToolbar();
     }
+
+    // ── HTML clipboard payload (CF_HTML) ─────────────────────────────────────
+    //
+    // Real Excel places CF_HTML (and RTF) on the clipboard alongside plain text so that
+    // formatting-aware destinations (Word, Outlook, browsers, LibreOffice Calc) preserve bold,
+    // fill colors, alignment, borders, and merged cells instead of receiving flattened TSV text.
+    // This mirrors that for the write side (M7). The CSS mapping intentionally matches
+    // FreeX.Core.IO.HtmlTableWriter's conventions (bold/italic/underline, effective font name,
+    // resolved font/fill color, horizontal alignment, per-edge borders) so pasting into FreeX's
+    // own HTML importer — or re-exporting to .html — sees consistent styling either way.
+    //
+    // Read-side (importing a foreign app's CF_HTML/RTF payload back into styled cells) is NOT
+    // implemented here — that is a materially larger feature (HTML table parsing + per-cell style
+    // reconstruction) and is left for a follow-up; plain-text/plain-image paste continues to work
+    // unchanged via the existing TryGetClipboardText/TryClipboardContainsImage paths.
+
+    /// <summary>
+    /// Builds a CF_HTML-wrapped clipboard payload (header + HTML fragment) for <paramref name="range"/>,
+    /// or <c>null</c> if the range is empty/invalid. Returns the full string ready for
+    /// <see cref="System.Windows.DataObject.SetData(string, object)"/> with
+    /// <see cref="System.Windows.DataFormats.Html"/> — WPF does not auto-wrap CF_HTML, the header
+    /// with byte offsets must be supplied by the caller.
+    /// </summary>
+    private static string? BuildHtmlClipboardFragment(
+        ViewportModel viewport, Sheet? sheet, GridRange range, WorkbookTheme theme)
+    {
+        if (range.RowCount == 0 || range.ColCount == 0)
+            return null;
+
+        var cellLookup = new Dictionary<(uint Row, uint Col), DisplayCell>(viewport.Cells.Count);
+        foreach (var cell in viewport.Cells)
+            cellLookup[(cell.Row, cell.Col)] = cell;
+
+        // Map merge-region anchor -> region, and mark covered (non-anchor) cells to skip, exactly
+        // as HtmlTableWriter does for full-sheet HTML export, so a copied merged range keeps its
+        // rowspan/colspan on paste into another app instead of splitting back into single cells.
+        var anchors = new Dictionary<(uint, uint), GridRange>();
+        var covered = new HashSet<(uint, uint)>();
+        if (sheet is not null)
+        {
+            foreach (var region in sheet.MergedRegions)
+            {
+                if (!RangesOverlap(region, range))
+                    continue;
+
+                anchors[(region.Start.Row, region.Start.Col)] = region;
+                foreach (var addr in region.AllCells())
+                {
+                    if (addr.Row != region.Start.Row || addr.Col != region.Start.Col)
+                        covered.Add((addr.Row, addr.Col));
+                }
+            }
+        }
+
+        var body = new StringBuilder();
+        body.Append("<table border=\"1\" cellspacing=\"0\" style=\"border-collapse:collapse\">");
+        for (var r = range.Start.Row; r <= range.End.Row; r++)
+        {
+            body.Append("<tr>");
+            for (var c = range.Start.Col; c <= range.End.Col; c++)
+            {
+                if (covered.Contains((r, c)))
+                    continue;
+
+                var spanAttrs = "";
+                if (anchors.TryGetValue((r, c), out var region))
+                {
+                    var colspan = Math.Min(region.ColCount, range.End.Col - c + 1);
+                    var rowspan = Math.Min(region.RowCount, range.End.Row - r + 1);
+                    if (colspan > 1) spanAttrs += $" colspan=\"{colspan}\"";
+                    if (rowspan > 1) spanAttrs += $" rowspan=\"{rowspan}\"";
+                }
+
+                cellLookup.TryGetValue((r, c), out var displayCell);
+                var css = displayCell.Style is { } cellStyle ? BuildCellCss(cellStyle, theme) : "";
+                var styleAttr = css.Length > 0 ? $" style=\"{css}\"" : "";
+                var display = EscapeHtml(displayCell.DisplayText ?? "");
+                body.Append($"<td{spanAttrs}{styleAttr}>{display}</td>");
+            }
+            body.Append("</tr>");
+        }
+        body.Append("</table>");
+
+        return WrapAsCfHtml(body.ToString());
+    }
+
+    private static bool RangesOverlap(GridRange a, GridRange b) =>
+        a.Start.Row <= b.End.Row && a.End.Row >= b.Start.Row &&
+        a.Start.Col <= b.End.Col && a.End.Col >= b.Start.Col;
+
+    private static string BuildCellCss(CellStyle style, WorkbookTheme theme)
+    {
+        var sb = new StringBuilder();
+
+        if (style.Bold) sb.Append("font-weight:bold;");
+        if (style.Italic) sb.Append("font-style:italic;");
+        if (style.Underline || style.DoubleUnderline) sb.Append("text-decoration:underline;");
+        if (style.Strikethrough) sb.Append("text-decoration:line-through;");
+
+        var fontName = style.ResolveEffectiveFontName(theme);
+        if (!string.Equals(fontName, "Calibri", StringComparison.Ordinal))
+            sb.Append($"font-family:'{fontName.Replace("'", "", StringComparison.Ordinal)}';");
+        if (Math.Abs(style.FontSize - 11) > 0.001)
+            sb.Append($"font-size:{style.FontSize.ToString("0.##", CultureInfo.InvariantCulture)}pt;");
+
+        var fontColor = style.ResolveFontColor(theme);
+        if (!fontColor.IsBlack)
+            sb.Append($"color:{HexColor(fontColor)};");
+
+        var fill = style.ResolveFillColor(theme);
+        if (fill is { } f)
+            sb.Append($"background-color:{HexColor(f)};");
+
+        var align = style.HorizontalAlignment switch
+        {
+            FreeX.Core.Model.HorizontalAlignment.Left => "left",
+            FreeX.Core.Model.HorizontalAlignment.Center => "center",
+            FreeX.Core.Model.HorizontalAlignment.Right => "right",
+            FreeX.Core.Model.HorizontalAlignment.Justify => "justify",
+            _ => null,
+        };
+        if (align is not null)
+            sb.Append($"text-align:{align};");
+
+        AppendBorderCss(sb, "top", style.BorderTop);
+        AppendBorderCss(sb, "right", style.BorderRight);
+        AppendBorderCss(sb, "bottom", style.BorderBottom);
+        AppendBorderCss(sb, "left", style.BorderLeft);
+
+        return sb.ToString();
+    }
+
+    private static void AppendBorderCss(StringBuilder sb, string edge, CellBorder border)
+    {
+        if (border.Style == BorderStyle.None)
+            return;
+
+        var (width, line) = border.Style switch
+        {
+            BorderStyle.Thin => ("1px", "solid"),
+            BorderStyle.Medium => ("2px", "solid"),
+            BorderStyle.Thick => ("3px", "solid"),
+            BorderStyle.Dashed => ("1px", "dashed"),
+            BorderStyle.Dotted => ("1px", "dotted"),
+            BorderStyle.Double => ("3px", "double"),
+            _ => ("1px", "solid"),
+        };
+        sb.Append($"border-{edge}:{width} {line} {HexColor(border.Color)};");
+    }
+
+    private static string HexColor(CellColor c) =>
+        $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+
+    private static string EscapeHtml(string text) =>
+        text
+            .Replace("&", "&amp;", StringComparison.Ordinal)
+            .Replace("<", "&lt;", StringComparison.Ordinal)
+            .Replace(">", "&gt;", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Wraps an HTML fragment in the Windows CF_HTML clipboard descriptor: a header of
+    /// byte-offset placeholders (StartHTML/EndHTML/StartFragment/EndFragment) followed by a
+    /// minimal HTML document with <c>&lt;!--StartFragment--&gt;</c>/<c>&lt;!--EndFragment--&gt;</c>
+    /// markers around the actual content, per the documented CF_HTML format. Offsets are counted
+    /// in UTF-8 bytes (the format's requirement) using fixed-width 10-digit placeholders so the
+    /// header's own length does not shift the offsets it describes.
+    /// </summary>
+    private static string WrapAsCfHtml(string fragment)
+    {
+        const string header =
+            "Version:0.9\r\n" +
+            "StartHTML:0000000000\r\n" +
+            "EndHTML:0000000000\r\n" +
+            "StartFragment:0000000000\r\n" +
+            "EndFragment:0000000000\r\n";
+
+        const string htmlStart = "<html><body>\r\n<!--StartFragment-->";
+        const string htmlEnd = "<!--EndFragment-->\r\n</body></html>";
+
+        var startHtml = Utf8Length(header);
+        var startFragment = startHtml + Utf8Length(htmlStart);
+        var endFragment = startFragment + Utf8Length(fragment);
+        var endHtml = endFragment + Utf8Length(htmlEnd);
+
+        var filledHeader =
+            "Version:0.9\r\n" +
+            $"StartHTML:{startHtml:D10}\r\n" +
+            $"EndHTML:{endHtml:D10}\r\n" +
+            $"StartFragment:{startFragment:D10}\r\n" +
+            $"EndFragment:{endFragment:D10}\r\n";
+
+        return filledHeader + htmlStart + fragment + htmlEnd;
+    }
+
+    private static int Utf8Length(string text) => Encoding.UTF8.GetByteCount(text);
 }

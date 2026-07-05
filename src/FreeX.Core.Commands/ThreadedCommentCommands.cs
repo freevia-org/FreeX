@@ -47,7 +47,20 @@ public sealed class SetThreadedCommentCommand : IWorkbookCommand
     }
 }
 
-/// <summary>Append a reply to an existing threaded comment with undo support.</summary>
+/// <summary>
+/// Append a reply to an existing threaded comment with undo support.
+/// </summary>
+/// <remarks>
+/// This is the reply-only counterpart to <see cref="ApplyThreadedCommentChangesCommand"/> (which
+/// additionally supports editing the root comment text and toggling resolved state in one
+/// undoable step). Production reply-adding UI (WPF and Avalonia) currently goes through
+/// <see cref="ApplyThreadedCommentChangesCommand"/> with only <c>replyText</c> set, not through
+/// this class directly — so before changing reply-authoring/timestamp-stamping behavior here,
+/// check whether <see cref="ApplyThreadedCommentChangesCommand"/>'s reply branch needs the same
+/// fix, since that is the path actually exercised by the app today. Kept as a standalone,
+/// separately undoable command for callers (e.g. future reply-only UI/automation entry points)
+/// that don't want to touch the root comment or resolved state at all.
+/// </remarks>
 public sealed class AddThreadedCommentReplyCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;

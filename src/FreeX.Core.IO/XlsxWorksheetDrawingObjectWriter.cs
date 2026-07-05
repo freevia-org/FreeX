@@ -799,9 +799,14 @@ internal static class XlsxWorksheetDrawingObjectWriter
         return normalized < 0 ? normalized + 360 : normalized;
     }
 
+    // A camera / "Paste Link Picture" object (Kind == CellRangeSnapshot) is, on the wire, still just
+    // a raster picture anchored on the sheet — Excel itself stores it as a normal <xdr:pic> backed by
+    // a rendered bitmap of the source range, plus the linked-range metadata FreeX tracks separately
+    // via IsLinkedToSourceRange/LinkedSourceRange. Excluding every CellRangeSnapshot picture (rather
+    // than only those that genuinely have no raster to embed) silently dropped the object even when a
+    // bitmap snapshot IS available, so only pictures with no embeddable image at all are unsupported.
     private static bool IsSupportedPicture(PictureModel picture) =>
         !picture.IsSourceLoaded &&
-        picture.Kind == PictureKind.Image &&
         picture.ImageBytes is { Length: > 0 } &&
         double.IsFinite(picture.Width) &&
         double.IsFinite(picture.Height) &&

@@ -1471,7 +1471,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("DrawingObjectRenderPrimitiveKind.Shape => CreateDrawingShapeVisual(drawingObject, width, height)");
         source.Should().Contain("DrawingObjectRenderPrimitiveKind.Image or DrawingObjectRenderPrimitiveKind.CroppedImage");
         source.Should().Contain("CreateDrawingImageVisual(renderPlan, width, height)");
-        source.Should().Contain("DrawingObjectRenderPrimitiveKind.CellRangeSnapshot => CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height)");
+        source.Should().Contain("DrawingObjectRenderPrimitiveKind.CellRangeSnapshot => CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height, theme)");
         source.Should().Contain("DrawingObjectRenderPrimitiveKind.TextBox => CreateDrawingTextBoxVisual(drawingObject, width, height)");
         source.Should().Contain("private static Control CreateDrawingShapeVisual(");
         source.Should().Contain("using AvaloniaEllipse = Avalonia.Controls.Shapes.Ellipse;");
@@ -1486,7 +1486,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("SourceRect = CreateDrawingImageSourceRect(crop)");
         source.Should().Contain("private static Control CreateDrawingCellRangeSnapshotVisual(");
         source.Should().Contain("renderPlan.PictureGrid is not { } pictureGrid");
-        source.Should().Contain("foreach (var cell in pictureGrid.Cells)");
+        source.Should().Contain("var cellLookup = pictureGrid.Cells");
         source.Should().Contain("Source = bitmap");
         source.Should().Contain("private static Control CreateDrawingTextBoxVisual(");
         source.Should().Contain("drawingObject.Text");
@@ -1554,7 +1554,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var rowDelta = GetCellIndexDelta(current.Row, target.Row);");
         source.Should().Contain("var colDelta = GetCellIndexDelta(current.Col, target.Col);");
         source.Should().Contain("_session.MoveActiveCell(rowDelta, colDelta);");
-        source.Should().Contain("var result = _session.CommitCellText(_formulaBox.Text ?? \"\");");
+        source.Should().Contain("var result = _session.CommitCellText(_formulaBox.Text ?? \"\", UseR1C1ReferenceStyle);");
         source.Should().Contain("if (_isOpening || _isSaving)");
         source.Should().Contain("Finish saving before editing cells.");
         source.Should().Contain("RefreshShell($\"Edited {FormatCellReference(address)}\");");
@@ -1677,9 +1677,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("await clipboard.TryGetBitmapAsync()");
         source.Should().Contain("bitmap.Save(stream)");
         source.Should().Contain("_session.PasteClipboardImageAtActiveCell(pngBytes, pixelWidth, pixelHeight)");
-        source.Should().Contain("_session.PasteClipboardTextAtActiveCell(text)");
-        source.Should().Contain("_session.PasteSpecialClipboardAtActiveCell(text, mode, options)");
-        source.Should().Contain("_session.PasteSpecialClipboardAtActiveCell(text, mode, options, keepSourceColumnWidths: true)");
+        source.Should().Contain("_session.PasteClipboardTextAtActiveCell(text, clipboardReadFailed: clipboardReadFailed)");
+        source.Should().Contain("_session.PasteSpecialClipboardAtActiveCell(text, mode, options, clipboardReadFailed: clipboardReadFailed)");
+        source.Should().Contain("_session.PasteSpecialClipboardAtActiveCell(text, mode, options, keepSourceColumnWidths: true, clipboardReadFailed: clipboardReadFailed)");
         source.Should().Contain("private async Task PasteColumnWidthsFromClipboardAsync(string label)");
         source.Should().Contain("_session.PasteColumnWidthsFromClipboardAtActiveCell(text)");
         source.Should().Contain("private async Task PasteCommentsFromClipboardAsync(string label)");
@@ -1689,7 +1689,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private async Task PasteLinkFromClipboardAsync(string label)");
         source.Should().Contain("_session.PasteLinkFromClipboardAtActiveCell(text)");
         source.Should().Contain("private async Task PasteSpecialExternalTextFromClipboardAsync(string label)");
-        source.Should().Contain("_session.PasteClipboardTextAtActiveCell(text, preserveText: true)");
+        source.Should().Contain("_session.PasteClipboardTextAtActiveCell(text, preserveText: true, clipboardReadFailed: clipboardReadFailed)");
         source.Should().Contain("private async Task PastePictureFromClipboardAsync(string label, bool linkedPicture)");
         source.Should().Contain("_session.PastePictureFromClipboardAtActiveCell(text, linkedPicture)");
         source.Should().Contain("_session.SelectedRanges.Any(range => range.Contains(address))");
@@ -2160,7 +2160,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_activeDataValidationDropdown.IsDropDownOpen = true;");
         source.Should().Contain("private void DataValidationDropdown_SelectionChanged(object? sender, SelectionChangedEventArgs e)");
         source.Should().Contain("CommitDataValidationDropdownSelection(selected);");
-        source.Should().Contain("_session.CommitCellText(selected)");
+        source.Should().Contain("_session.CommitCellText(selected, UseR1C1ReferenceStyle)");
         source.Should().Contain("_session.CancelFormulaEdit();");
         source.Should().Contain("_formulaBoxEditOriginalText = null;");
         source.Should().Contain("RefreshShell($\"Picked {selected} for {FormatCellReference(address)}\");");
@@ -4881,7 +4881,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_ExposesFormulaAndStatusAccessibilityMetadataToLaunchSmoke()
     {
         // Normalize CRLF -> LF so multi-line pinned snippets match regardless of the checkout's
-        // line endings (the _cellAddressText help-text call below wraps across two lines).
+        // line endings.
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"))
             .Replace("\r\n", "\n", StringComparison.Ordinal);
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
@@ -4894,9 +4894,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetHelpText(_statusText, \"Shows the current workbook status.\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(_cellAddressText, \"CellAddressText\");");
         source.Should().Contain("AutomationProperties.SetName(_cellAddressText, \"Cell address\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(\n            _cellAddressText,");
-        source.Should().Contain(
-            "\"Type a cell reference, range, or defined name and press Enter to navigate, or type a new name to define it.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_cellAddressText, \"Shows the active cell address.\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(_selectionStatsText, \"SelectionStatsText\");");
         source.Should().Contain("AutomationProperties.SetName(_selectionStatsText, \"Selection statistics\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_selectionStatsText, \"Shows statistics for the current selection.\");");
@@ -4911,9 +4909,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("HasStatusTextValue: HasStatusBarAccessibleValue()");
         source.Should().Contain("private bool HasStatusBarAccessibleValue() =>");
         source.Should().Contain("HasCellAddressAutomationName: string.Equals(AutomationProperties.GetName(_cellAddressText), \"Cell address\", StringComparison.Ordinal)");
-        source.Should().Contain("HasCellAddressAutomationHelp: string.Equals(");
-        source.Should().Contain(
-            "\"Type a cell reference, range, or defined name and press Enter to navigate, or type a new name to define it.\",\n                StringComparison.Ordinal),");
+        source.Should().Contain("HasCellAddressAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_cellAddressText), \"Shows the active cell address.\", StringComparison.Ordinal)");
         source.Should().Contain("HasCellAddressAutomationId: string.Equals(AutomationProperties.GetAutomationId(_cellAddressText), \"CellAddressText\", StringComparison.Ordinal)");
         source.Should().Contain("HasSelectionStatsAutomationName: string.Equals(AutomationProperties.GetName(_selectionStatsText), \"Selection statistics\", StringComparison.Ordinal)");
         source.Should().Contain("HasSelectionStatsAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_selectionStatsText), \"Shows statistics for the current selection.\", StringComparison.Ordinal)");

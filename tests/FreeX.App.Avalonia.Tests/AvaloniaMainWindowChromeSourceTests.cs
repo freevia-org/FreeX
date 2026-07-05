@@ -257,7 +257,10 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("private bool TryInsertFormulaPointReference(CellAddress address)");
         source.Should().Contain("_session.FormulaEditAddress is null");
         source.Should().Contain("!IsFormulaPointModeText(_formulaBox.Text)");
-        source.Should().Contain("var reference = FormatCellReference(address);");
+        // M22 made point-mode reference insertion R1C1-aware: it now formats via the shared
+        // SpreadsheetDisplayFormatter with the persisted R1C1-style toggle instead of the
+        // window's A1-only FormatCellReference helper.
+        source.Should().Contain("var reference = SpreadsheetDisplayFormatter.FormatCellReference(address, UseR1C1ReferenceStyle);");
         source.Should().Contain("_formulaBox.Text = string.Concat(");
         source.Should().Contain("_formulaBox.Focus();");
 

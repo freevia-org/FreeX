@@ -18,6 +18,7 @@ public sealed partial class XlsxFileAdapter
         NativeXmlPreserveBag? ProtectionMetadata,
         IReadOnlyList<SheetProtectionPermission> ProtectionPermissions,
         IReadOnlyList<GridRange> AllowEditRanges,
+        Dictionary<GridRange, string?> AllowEditRangePasswords,
         IReadOnlyList<GridRange> MergedRegions,
         WorksheetViewMode ViewMode,
         bool ShowGridlines,
@@ -255,7 +256,7 @@ public sealed partial class XlsxFileAdapter
         var passwordHash = ReadSheetProtectionPasswordHash(protection);
         var protectionMetadata = XlsxWorksheetLayoutMetadataReader.ReadWorksheetProtectionMetadata(protection);
         var protectionPermissions = XlsxSheetProtectionPermissionMapper.Read(protection);
-        var allowEditRanges = XlsxAllowEditRangeMapper.Read(worksheetXml, worksheetNs);
+        var allowEditRanges = XlsxAllowEditRangeMapper.Read(worksheetXml, worksheetNs, out var allowEditRangePasswords);
         var mergedRegions = ReadMergedRegions(worksheetXml, worksheetNs);
 
         var sheetView = FindPrimarySheetView(worksheetXml, worksheetNs);
@@ -347,6 +348,7 @@ public sealed partial class XlsxFileAdapter
             protectionMetadata,
             protectionPermissions,
             allowEditRanges,
+            allowEditRangePasswords,
             mergedRegions,
             ParseWorksheetViewMode(sheetView?.Attribute("view")?.Value),
             !IsFalse(sheetView?.Attribute("showGridLines")?.Value),

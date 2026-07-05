@@ -616,6 +616,29 @@ public sealed partial class Sheet
     /// <summary>Ranges that remain editable while the sheet is protected.</summary>
     public List<GridRange> AllowEditRanges { get; } = [];
 
+    /// <summary>
+    /// Per-range password for entries in <see cref="AllowEditRanges"/> (Excel's Allow Users to Edit
+    /// Ranges "Range Password", distinct from the sheet's own <see cref="ProtectionPassword"/>).
+    /// Keyed by the exact <see cref="GridRange"/> as stored in <see cref="AllowEditRanges"/>. Stored
+    /// in the same encoded form <see cref="ProtectionPasswordHelper"/> understands (a plain-hashed
+    /// legacy verifier or an <see cref="ProtectionPasswordHelper.EncodeIso29500Hash"/>-encoded modern
+    /// hash), so it can be verified with <see cref="ProtectionPasswordHelper.VerifyStoredPassword"/>.
+    /// A range absent from this dictionary (or mapped to null/empty) has no password of its own.
+    /// </summary>
+    public Dictionary<GridRange, string?> AllowEditRangePasswords { get; } = [];
+
+    /// <summary>
+    /// Ranges from <see cref="AllowEditRanges"/> that have already been unlocked in the current
+    /// session (the user supplied the correct range password once, verified via
+    /// <c>CommandGuards.TryUnlockAllowEditRange</c>). Not persisted to the workbook file or undo
+    /// history — purely an in-memory, per-session gate so the password prompt is not repeated for
+    /// every edit. Nothing currently clears an entry when the sheet is unprotected/re-protected or
+    /// the range's password is changed/removed; a stale unlock would only matter if the sheet were
+    /// re-protected without reloading, which callers that flip <see cref="IsProtected"/> should take
+    /// into account (e.g. by clearing this set themselves) if that scenario needs to re-lock ranges.
+    /// </summary>
+    public HashSet<GridRange> UnlockedAllowEditRanges { get; } = [];
+
     public Sheet(SheetId id, string name)
     {
         Id = id;

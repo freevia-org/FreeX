@@ -52,6 +52,14 @@ internal static class XlsxExternalLinkMetadataReader
                 }
 
                 var model = new ExternalLinkModel { PackagePart = externalLinkPath };
+                var externalLinkEntry = archive.GetEntry(externalLinkPath);
+                if (externalLinkEntry is not null)
+                {
+                    var externalLinkXml = XlsxPackageXmlEditor.LoadXml(externalLinkEntry);
+                    var externalBookElement = externalLinkXml.Root?.Element(workbookNs + "externalBook");
+                    XlsxExternalLinkSchemaNormalizer.PopulateModelFromExternalBook(externalBookElement, model);
+                }
+
                 var externalLinkRelsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(externalLinkPath));
                 if (externalLinkRelsEntry is not null)
                 {

@@ -268,6 +268,12 @@ public sealed class AvaloniaChartRenderer
         // Fix 4: Trendlines — draw trendline overlay after the series geometry.
         if (series.Trendline is { Points.Count: >= 2 } tl)
             RenderTrendline(canvas, tl, series.SeriesIndex);
+
+        // M40: Error bars — draw the whisker overlay after the series geometry (and any trendline),
+        // matching the source renderer's AddErrorBarsIfRequested (added in its own pass, after all
+        // series are plotted).
+        if (series.ErrorBars is { Whiskers.Count: > 0 } errorBars)
+            RenderErrorBars(canvas, errorBars);
     }
 
     private void RenderBars(Canvas canvas, SeriesLayout series)
@@ -568,6 +574,51 @@ public sealed class AvaloniaChartRenderer
             });
 
             i += 6;
+        }
+    }
+
+    // M40: Error-bar whiskers (Std Error / Percentage / Fixed Value / Custom) — draws one disjoint
+    // line segment per plotted point (mirroring the source (WPF) renderer's AddWhisker), plus
+    // optional perpendicular end-cap ticks, in the chart's configured error-bar color/thickness/dash
+    // style. The layout engine has already resolved which side(s) (plus/minus) are drawn and where
+    // every endpoint sits in pixel space; this method is purely a painter, matching the pattern of
+    // every other Render* method in this class.
+    private void RenderErrorBars(Canvas canvas, ErrorBarLayout errorBars)
+    {
+        var barColor = _chart.ErrorBarThemeColor?.Resolve(_theme) ?? _chart.ErrorBarColor;
+        IBrush stroke = barColor is { } color ? SolidBrush(color) : Brushes.Black;
+        var strokeThickness = _chart.ErrorBarThickness > 0 ? _chart.ErrorBarThickness : 1;
+        var dashArray = ToAvaloniaStrokeDashArray(_chart.ErrorBarDashStyle);
+
+        Line NewLine(LayoutPoint start, LayoutPoint end)
+        {
+            var line = new Line
+            {
+                StartPoint = new AvaloniaPoint(start.X, start.Y),
+                EndPoint = new AvaloniaPoint(end.X, end.Y),
+                Stroke = stroke,
+                StrokeThickness = strokeThickness,
+            };
+            if (dashArray is not null)
+                line.StrokeDashArray = dashArray;
+            return line;
+        }
+
+        foreach (var whisker in errorBars.Whiskers)
+        {
+            if (whisker.HasPlus)
+            {
+                canvas.Children.Add(NewLine(whisker.Center, whisker.PlusEnd));
+                if (errorBars.EndCaps)
+                    canvas.Children.Add(NewLine(whisker.PlusCapStart, whisker.PlusCapEnd));
+            }
+
+            if (whisker.HasMinus)
+            {
+                canvas.Children.Add(NewLine(whisker.Center, whisker.MinusEnd));
+                if (errorBars.EndCaps)
+                    canvas.Children.Add(NewLine(whisker.MinusCapStart, whisker.MinusCapEnd));
+            }
         }
     }
 

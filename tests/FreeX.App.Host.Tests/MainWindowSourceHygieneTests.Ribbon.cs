@@ -616,7 +616,7 @@ public sealed partial class MainWindowSourceHygieneTests
         // Dirty-flag mutations now delegate to WorkbookDocumentState; the lifecycle
         // methods call _documentState directly instead of assigning to _workbookDirty.
         lifecycleSource.Should().Contain("_documentState.MarkDirty();");
-        lifecycleSource.Should().Contain("_documentState.MarkSavedAtUndoDepth(undoDepth);");
+        lifecycleSource.Should().Contain("_documentState.MarkSavedAtUndoDepth(undoDepth, undoStackVersion);");
         lifecycleSource.Should().Contain("UpdateTitleBar();");
         backstageSource.Should().Contain("_workbook.Name = fileContext.DisplayName;");
         backstageSource.Should().Contain("MarkWorkbookSaved();");

@@ -531,6 +531,18 @@ internal static class DuplicateSheetDrawingCloner
     /// <c>RowColumnShiftHelpers.RewriteVerbatimFormula</c>'s wrapper handling since that helper is
     /// private to its own file. Returns <see langword="null"/> when nothing changed.
     /// </summary>
+    /// <remarks>
+    /// Excel writes/accepts multi-area unions where only the FIRST area of the union is
+    /// sheet-qualified and later areas omit the sheet name, e.g.
+    /// <c>(Sheet1!$A$1:$A$5,$C$1:$C$5)</c> — the unqualified areas implicitly mean "same sheet
+    /// as the union's first (or nearest preceding qualified) area", not "current/host sheet".
+    /// <see cref="FormulaRewriter.Rewrite"/> only rewrites <see cref="RenameSheetOp"/> references
+    /// that already carry an explicit sheet qualifier, so splitting the union and rewriting each
+    /// area independently would silently leave later unqualified areas untouched — detached from
+    /// the sheet being renamed. To avoid that, each area inherits the nearest preceding explicit
+    /// sheet qualifier in the union before being rewritten, and the rewritten qualifier is made
+    /// explicit on that area so it travels with the duplicate/rename unambiguously.
+    /// </remarks>
     private static string? RewriteVerbatimRangeText(string text, RenameSheetOp op, string hostSheetName)
     {
         var hasPrefix = text.Length > 0 && text[0] == '=';
@@ -543,18 +555,33 @@ internal static class DuplicateSheetDrawingCloner
         var areas = SplitOnUnquotedCommas(body);
         var anyChanged = false;
         var rewrittenAreas = new string[areas.Length];
+        string? inheritedSheetQualifier = null;
         for (var i = 0; i < areas.Length; i++)
         {
             var area = areas[i];
+            var qualifier = TryExtractLeadingSheetQualifier(area);
+            if (qualifier is not null)
+            {
+                inheritedSheetQualifier = qualifier;
+            }
+            else if (inheritedSheetQualifier is not null)
+            {
+                // This area has no sheet qualifier of its own; it implicitly belongs to the
+                // nearest preceding qualified area's sheet. Make that explicit before rewriting
+                // so FormulaRewriter's RenameSheetOp match (which requires a non-null sheet name)
+                // can see and rewrite it too.
+                area = inheritedSheetQualifier + "!" + area;
+            }
+
             var rewritten = FormulaRewriter.Rewrite(area, op, hostSheetName);
-            if (rewritten is not null && rewritten != area)
+            if (rewritten is not null && rewritten != areas[i])
             {
                 rewrittenAreas[i] = rewritten;
                 anyChanged = true;
             }
             else
             {
-                rewrittenAreas[i] = area;
+                rewrittenAreas[i] = areas[i];
             }
         }
 
@@ -565,6 +592,54 @@ internal static class DuplicateSheetDrawingCloner
         if (hasParens)
             newBody = "(" + newBody + ")";
         return hasPrefix ? "=" + newBody : newBody;
+    }
+
+    /// <summary>
+    /// Detects a leading sheet-name qualifier (<c>Sheet1</c> from <c>Sheet1!...</c>, or the quoted
+    /// form <c>'Sheet 1'</c> from <c>'Sheet 1'!...</c>, quotes included) at the start of a single
+    /// range/cell reference area and returns it (without the trailing <c>!</c>), or
+    /// <see langword="null"/> if the area has no sheet qualifier. Only looks at the very start of
+    /// the string since a verbatim area is a bare reference, not a general formula expression.
+    /// </summary>
+    private static string? TryExtractLeadingSheetQualifier(string area)
+    {
+        if (area.Length == 0)
+            return null;
+
+        if (area[0] == '\'')
+        {
+            var i = 1;
+            while (i < area.Length)
+            {
+                if (area[i] == '\'')
+                {
+                    if (i + 1 < area.Length && area[i + 1] == '\'')
+                    {
+                        i += 2; // escaped quote inside the sheet name
+                        continue;
+                    }
+
+                    // Closing quote found; must be immediately followed by '!'.
+                    return i + 1 < area.Length && area[i + 1] == '!'
+                        ? area[..(i + 1)]
+                        : null;
+                }
+
+                i++;
+            }
+
+            return null;
+        }
+
+        var bang = area.IndexOf('!');
+        if (bang <= 0)
+            return null;
+
+        // Bare (unquoted) sheet name: must not itself contain characters that would mean this
+        // '!' belongs to something other than a leading sheet qualifier (e.g. a colon inside the
+        // prefix would mean this isn't a simple "Sheet!" prefix).
+        var candidate = area[..bang];
+        return candidate.IndexOfAny([':', '$', '\'']) < 0 ? candidate : null;
     }
 
     /// <summary>

@@ -52,6 +52,16 @@ public enum SeriesGeometryKind
     /// Rows correspond to series, columns to categories. Rendered by the shell renderers.
     /// </summary>
     SurfaceCells,
+    /// <summary>
+    /// Error-bar whisker overlay: disjoint line segments (one whisker per plotted point, plus
+    /// optional perpendicular end-cap ticks). Unlike <see cref="BoxWhiskers"/> (fixed groups of 6
+    /// points with box/median/whisker-specific semantics), each <see cref="ErrorBarWhisker"/> is a
+    /// self-describing segment list, so consumers do not need to interpret point-count groupings.
+    /// Carried on <see cref="SeriesLayout.ErrorBars"/> as an overlay alongside the series' own
+    /// <see cref="SeriesLayout.Kind"/> geometry — never the value of <see cref="SeriesLayout.Kind"/>
+    /// itself.
+    /// </summary>
+    ErrorBarWhiskers,
 }
 
 /// <summary>The fit a trendline overlay was computed with, so consumers can label/style it.</summary>
@@ -174,6 +184,14 @@ public sealed record SeriesLayout
     public TrendlineLayout? Trendline { get; init; }
 
     /// <summary>
+    /// The error-bar whisker overlay for this series, when the chart has
+    /// <see cref="ChartModel.ShowErrorBars"/> enabled and the chart type supports it (see
+    /// <c>ChartErrorBarsPlanner.SupportsErrorBars</c>); otherwise null. Additive: existing series
+    /// have no error bars.
+    /// </summary>
+    public ErrorBarLayout? ErrorBars { get; init; }
+
+    /// <summary>
     /// True when this series is plotted against the chart's secondary value axis (combo charts).
     /// Consumers map the series with <see cref="ChartLayout.SecondaryValueAxis"/> when set.
     /// </summary>
@@ -192,6 +210,39 @@ public sealed record SeriesLayout
 /// z-value, its pixel rectangle, and the pre-computed gradient fill color.
 /// </summary>
 public readonly record struct SurfaceCell(int Row, int Col, double Value, LayoutRect Rect, CellColor FillColor);
+
+/// <summary>
+/// One laid-out error-bar whisker for a single plotted point: the center line's two pixel endpoints
+/// (already clamped to zero-length on the side(s) Excel's Direction/amount suppress — see
+/// <see cref="HasPlus"/>/<see cref="HasMinus"/>) plus the optional perpendicular end-cap tick
+/// endpoints on each drawn side. Mirrors the source renderer's AddWhisker: <see cref="PlusEnd"/> is
+/// the point offset in the positive whisker direction (only meaningful when <see cref="HasPlus"/>),
+/// <see cref="MinusEnd"/> the negative direction (only meaningful when <see cref="HasMinus"/>).
+/// </summary>
+public readonly record struct ErrorBarWhisker(
+    int PointIndex,
+    LayoutPoint Center,
+    LayoutPoint PlusEnd,
+    LayoutPoint MinusEnd,
+    bool HasPlus,
+    bool HasMinus,
+    LayoutPoint PlusCapStart,
+    LayoutPoint PlusCapEnd,
+    LayoutPoint MinusCapStart,
+    LayoutPoint MinusCapEnd);
+
+/// <summary>
+/// The laid-out error-bar overlay for a series: one <see cref="ErrorBarWhisker"/> per plotted point
+/// that has a positive amount on at least one side, plus whether end-cap ticks should be drawn (the
+/// per-whisker cap endpoints are always computed; consumers skip drawing them when this is false —
+/// mirroring how the source renderer only appends cap segments when <c>chart.ErrorBarEndCaps</c>).
+/// Additive: existing series have no error bars (this is null).
+/// </summary>
+public sealed class ErrorBarLayout
+{
+    public required IReadOnlyList<ErrorBarWhisker> Whiskers { get; init; }
+    public bool EndCaps { get; init; }
+}
 
 /// <summary>A single laid-out legend entry: its swatch rectangle and its label box.</summary>
 public readonly record struct LegendEntry(int SeriesIndex, string Label, LayoutRect SwatchRect, LayoutRect LabelRect);

@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Xml.Linq;
+
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using FreeX.App.Presentation.Text;
@@ -47,6 +50,29 @@ public static class ChartLayoutEngine
         chart.BarGapWidth is int gapWidth
             ? Math.Clamp(0.5 * 100.0 / (100.0 + gapWidth), 0.05, 0.5)
             : StackedColumnHalfWidth;
+
+    /// <summary>
+    /// Resolves the effective Series Overlap percentage for a clustered/stacked column or bar
+    /// chart, mirroring Excel's own native default: when the chart XML has no explicit
+    /// <c>&lt;c:overlap&gt;</c> (<see cref="ChartModel.BarOverlap"/> is null), real Excel still
+    /// draws clustered AND stacked/100%-stacked 2-D bar/column charts with overlap=-27 (a small gap
+    /// between bars in the same cluster) — see <c>XlsxChartPartReader.Bar.cs</c>'s
+    /// NormalizeExcelNativeDefaultBarOverlap, which maps a written -27 back to null on read so a
+    /// default chart round-trips cleanly. Falling back to a literal 0 here (edge-to-edge bars)
+    /// would silently diverge from Excel's rendering for the overwhelming majority of real-world
+    /// clustered charts, so the null case must resolve to -27 for the same chart-type family the
+    /// writer/reader normalize, and to 0 for 3-D bar/column (which Excel does not apply the -27
+    /// default to).
+    /// </summary>
+    private static int EffectiveBarOverlap(ChartModel chart) =>
+        chart.BarOverlap ?? (chart.Type is ChartType.Column
+            or ChartType.Bar
+            or ChartType.StackedColumn
+            or ChartType.PercentStackedColumn
+            or ChartType.StackedBar
+            or ChartType.PercentStackedBar
+                ? -27
+                : 0);
 
     /// <summary>
     /// Returns the left/right offsets (relative to the category centre) for the bar of the
@@ -362,6 +388,7 @@ public static class ChartLayoutEngine
         }
 
         AttachTrendline(request, seriesLayouts, x => categoryScale.Transform(x), valueScale, secondaryScale, useSecondary);
+        AttachErrorBars(request, seriesLayouts, x => categoryScale.Transform(x), valueScale, secondaryScale, useSecondary);
 
         return new ChartLayout
         {
@@ -395,7 +422,7 @@ public static class ChartLayoutEngine
         // With N series each occupies a 1/N sub-slot positioned at ordinal*subWidth,
         // mirroring WPF ClusteredBarOffsets so multi-series bars sit side by side.
         var halfWidth = ClusteredBarHalfWidth(chart);
-        var (clusterLeft, clusterRight) = ClusteredBarOffsets(halfWidth, clusterOrdinal, clusterCount, chart.BarOverlap ?? 0);
+        var (clusterLeft, clusterRight) = ClusteredBarOffsets(halfWidth, clusterOrdinal, clusterCount, EffectiveBarOverlap(chart));
         for (var i = 0; i < series.Values.Count; i++)
         {
             double v;
@@ -601,7 +628,7 @@ public static class ChartLayoutEngine
             else
             {
                 var barHalfWidth = ClusteredBarHalfWidth(chart);
-                (ySlotLeft, ySlotRight) = ClusteredBarOffsets(barHalfWidth, clusteredBarOrdinal, clusteredBarCount, chart.BarOverlap ?? 0);
+                (ySlotLeft, ySlotRight) = ClusteredBarOffsets(barHalfWidth, clusteredBarOrdinal, clusteredBarCount, EffectiveBarOverlap(chart));
                 clusteredBarOrdinal++;
             }
 
@@ -655,6 +682,7 @@ public static class ChartLayoutEngine
         // (swapTrendlineAxes: true); attach the trendline here so every renderer draws it for
         // Bar/StackedBar/PercentStackedBar/ThreeDBar.
         AttachBarTrendline(request, seriesLayouts, categoryScale, valueScale);
+        AttachBarErrorBars(request, seriesLayouts, categoryScale, valueScale);
 
         return new ChartLayout
         {
@@ -706,6 +734,7 @@ public static class ChartLayoutEngine
         }
 
         AttachScatterTrendline(request, seriesLayouts, xScale, yScale);
+        AttachScatterErrorBars(request, seriesLayouts, xScale, yScale);
 
         return new ChartLayout
         {
@@ -770,6 +799,7 @@ public static class ChartLayoutEngine
         }
 
         AttachScatterTrendline(request, seriesLayouts, xScale, yScale);
+        AttachScatterErrorBars(request, seriesLayouts, xScale, yScale);
 
         return new ChartLayout
         {
@@ -1196,6 +1226,140 @@ public static class ChartLayoutEngine
 
     // ---- Trendline overlay ----------------------------------------------------------------
 
+    // Mirrors the source renderer's AddTrendlineIfRequested: Excel only allows a fixed intercept on
+    // the Linear trendline, so when ChartModel.TrendlineIntercept is set, the free-intercept fit
+    // TrendlineCalculator.Calculate produced is discarded and refit with the intercept pinned
+    // (least squares over the residual y - intercept), then the (possibly refit) trendline is
+    // extended by the Forecast Forward/Backward periods. Without this step (the bug this method
+    // fixes), both persisted, round-tripped chart options were silently dropped on this shell.
+    private static IReadOnlyList<TrendPoint> ApplyTrendlineInterceptAndForecast(
+        ChartModel chart,
+        IReadOnlyList<TrendPoint> sourcePoints,
+        IReadOnlyList<TrendPoint> trend)
+    {
+        if (chart.TrendlineType == ChartTrendlineType.Linear && chart.TrendlineIntercept is { } fixedIntercept)
+            trend = CalculateLinearWithFixedIntercept(sourcePoints, fixedIntercept) ?? trend;
+
+        return ApplyTrendlineForecast(chart, trend);
+    }
+
+    /// <summary>
+    /// Refits a linear trendline with the intercept pinned to <paramref name="intercept"/> (Excel's
+    /// "Set Intercept" option), returning the two fitted endpoints across the source X range. Uses
+    /// ordinary least squares on the residual (y - intercept) so slope = Σx·(y-intercept) / Σx².
+    /// Returns null when the fit is undefined (fewer than 2 points or a degenerate X range). Mirrors
+    /// the source renderer's CalculateLinearWithFixedIntercept exactly.
+    /// </summary>
+    private static IReadOnlyList<TrendPoint>? CalculateLinearWithFixedIntercept(
+        IReadOnlyList<TrendPoint> points,
+        double intercept)
+    {
+        var sumXX = 0.0;
+        var sumXResidual = 0.0;
+        var minX = double.PositiveInfinity;
+        var maxX = double.NegativeInfinity;
+        var count = 0;
+        for (var i = 0; i < points.Count; i++)
+        {
+            var point = points[i];
+            sumXX += point.X * point.X;
+            sumXResidual += point.X * (point.Y - intercept);
+            minX = Math.Min(minX, point.X);
+            maxX = Math.Max(maxX, point.X);
+            count++;
+        }
+
+        if (count < 2 || Math.Abs(sumXX) < double.Epsilon)
+            return null;
+
+        var slope = sumXResidual / sumXX;
+        return [new TrendPoint(minX, intercept + slope * minX), new TrendPoint(maxX, intercept + slope * maxX)];
+    }
+
+    /// <summary>
+    /// Extends the fitted trendline by Excel's Forward/Backward forecast periods (measured in
+    /// category-axis units, i.e. the same X units as the source points). Extrapolates using the
+    /// trendline's own boundary segment (linear/exponential/logarithmic/power all sample a smooth
+    /// curve whose two nearest boundary points define the local slope) so the extension continues the
+    /// fitted shape rather than requiring a shared-file change to the trendline calculator. Moving
+    /// Average has no Excel forecast option and is returned unchanged. Mirrors the source renderer's
+    /// ApplyTrendlineForecast exactly.
+    /// </summary>
+    private static IReadOnlyList<TrendPoint> ApplyTrendlineForecast(
+        ChartModel chart,
+        IReadOnlyList<TrendPoint> trendPoints)
+    {
+        var forward = chart.TrendlineForward is { } f && f > 0 ? f : 0;
+        var backward = chart.TrendlineBackward is { } b && b > 0 ? b : 0;
+        if ((forward <= 0 && backward <= 0) || chart.TrendlineType == ChartTrendlineType.MovingAverage || trendPoints.Count < 2)
+            return trendPoints;
+
+        var result = new List<TrendPoint>(trendPoints.Count + 2);
+        if (backward > 0)
+        {
+            var first = trendPoints[0];
+            var second = trendPoints[1];
+            var extendedX = first.X - backward;
+            result.Add(new TrendPoint(extendedX, ExtrapolateY(chart.TrendlineType, first, second, extendedX)));
+        }
+
+        result.AddRange(trendPoints);
+
+        if (forward > 0)
+        {
+            var last = trendPoints[^1];
+            var secondToLast = trendPoints[^2];
+            var extendedX = last.X + forward;
+            result.Add(new TrendPoint(extendedX, ExtrapolateY(chart.TrendlineType, secondToLast, last, extendedX)));
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Extrapolates a Y value at <paramref name="targetX"/> beyond the boundary segment
+    /// (<paramref name="a"/>, <paramref name="b"/>) of a fitted trendline, using the closed-form shape
+    /// appropriate to <paramref name="type"/> (log-linear for exponential/power in the relevant axis,
+    /// straight-line extension otherwise). Falls back to a linear extension of the segment when the
+    /// closed form is undefined for the given points (e.g. non-positive X/Y for log/power). Mirrors
+    /// the source renderer's ExtrapolateY exactly.
+    /// </summary>
+    private static double ExtrapolateY(ChartTrendlineType type, TrendPoint a, TrendPoint b, double targetX)
+    {
+        var dx = b.X - a.X;
+        if (Math.Abs(dx) < double.Epsilon)
+            return b.Y;
+
+        switch (type)
+        {
+            case ChartTrendlineType.Exponential when a.Y > 0 && b.Y > 0:
+            {
+                var slope = Math.Log(b.Y / a.Y) / dx;
+                return a.Y * Math.Exp(slope * (targetX - a.X));
+            }
+            case ChartTrendlineType.Power when a.X > 0 && b.X > 0 && a.Y > 0 && b.Y > 0 && targetX > 0:
+            {
+                var dLogX = Math.Log(b.X) - Math.Log(a.X);
+                if (Math.Abs(dLogX) < double.Epsilon)
+                    break;
+                var slope = Math.Log(b.Y / a.Y) / dLogX;
+                return a.Y * Math.Pow(targetX / a.X, slope);
+            }
+            case ChartTrendlineType.Logarithmic when a.X > 0 && b.X > 0 && targetX > 0:
+            {
+                var dLogX = Math.Log(b.X) - Math.Log(a.X);
+                if (Math.Abs(dLogX) < double.Epsilon)
+                    break;
+                var slope = (b.Y - a.Y) / dLogX;
+                return b.Y + slope * (Math.Log(targetX) - Math.Log(b.X));
+            }
+        }
+
+        // Linear (and any degenerate curve case above) extends the straight segment.
+        var linearSlope = (b.Y - a.Y) / dx;
+        return b.Y + linearSlope * (targetX - b.X);
+    }
+
     // Computes the trendline overlay for the first plotted series (matching the source renderer,
     // which fits the trendline to the first series' points) and attaches it to that series' layout.
     private static void AttachTrendline(
@@ -1226,6 +1390,8 @@ public static class ChartLayoutEngine
         var trend = TrendlineCalculator.Calculate(chart.TrendlineType, sourcePoints, chart.TrendlinePeriod, chart.TrendlineOrder);
         if (trend.Count < 2)
             return;
+
+        trend = ApplyTrendlineInterceptAndForecast(chart, sourcePoints, trend);
 
         var onSecondary = useSecondary && UsesSecondaryAxis(chart, first.SeriesIndex) && secondaryScale is not null;
         var yScale = onSecondary ? secondaryScale! : primaryScale;
@@ -1272,6 +1438,8 @@ public static class ChartLayoutEngine
         if (trend.Count < 2)
             return;
 
+        trend = ApplyTrendlineInterceptAndForecast(chart, sourcePoints, trend);
+
         // TrendPoint.X is the category index (→ categoryScale, vertical); TrendPoint.Y is the value
         // (→ valueScale, horizontal).
         var pixelPoints = new List<LayoutPoint>(trend.Count);
@@ -1316,6 +1484,8 @@ public static class ChartLayoutEngine
         var trend = TrendlineCalculator.Calculate(chart.TrendlineType, sourcePoints, chart.TrendlinePeriod, chart.TrendlineOrder);
         if (trend.Count < 2)
             return;
+
+        trend = ApplyTrendlineInterceptAndForecast(chart, sourcePoints, trend);
 
         var pixelPoints = new List<LayoutPoint>(trend.Count);
         foreach (var point in trend)
@@ -1394,6 +1564,305 @@ public static class ChartLayoutEngine
             ChartTrendlineType.Polynomial => TrendlineFitKind.Polynomial,
             _ => TrendlineFitKind.Linear,
         };
+
+    // ---- Error bars (Std Error / Percentage / Fixed Value / Custom) -----------------------
+
+    // Mirrors the source (WPF) renderer's AddErrorBarsIfRequested/AddWhisker/GetErrorBarAmount
+    // (ChartRenderer.SeriesFormatting.cs) so every plotted series on every chart family that
+    // supports error bars (column/bar/line/scatter/bubble/area — ChartTypeSupport.SupportsTrendlines)
+    // draws identical whiskers on the portable rendering path. Unlike the trendline overlay (fitted
+    // once for the first series only), error bars are attached per plotted series, matching Excel
+    // (every series in the plot can carry its own error bars).
+
+    /// <summary>
+    /// Attaches the error-bar overlay to <paramref name="seriesLayouts"/> for the column/line/area
+    /// family, where the category index maps to the horizontal pixel axis via
+    /// <paramref name="xToPixel"/> and the plotted value maps to <paramref name="yScale"/> (or the
+    /// secondary axis, when the series uses one).
+    /// </summary>
+    private static void AttachErrorBars(
+        ChartLayoutRequest request,
+        List<SeriesLayout> seriesLayouts,
+        Func<double, double> xToPixel,
+        AxisScale primaryScale,
+        AxisScale? secondaryScale,
+        bool useSecondary)
+    {
+        var chart = request.Chart;
+        if (!chart.ShowErrorBars || !ChartTypeSupport.SupportsTrendlines(chart.Type))
+            return;
+
+        for (var s = 0; s < seriesLayouts.Count && s < request.Series.Count; s++)
+        {
+            var series = request.Series[s];
+            var onSecondary = useSecondary && UsesSecondaryAxis(chart, series.SeriesIndex) && secondaryScale is not null;
+            var yScale = onSecondary ? secondaryScale! : primaryScale;
+
+            // Mirrors the same blank-handling every column/line/area layout uses (LayoutColumnSeries/
+            // LayoutLineSeries): a blank cell contributes a zero-valued anchor when BlankDisplayMode
+            // is Zero, otherwise it is skipped entirely, so the error-bar overlay never draws a
+            // whisker at a point the series geometry itself has no marker for.
+            var anchors = new List<(int Index, double Value, LayoutPoint Pixel)>(series.Values.Count);
+            for (var i = 0; i < series.Values.Count; i++)
+            {
+                double v;
+                if (series.Values[i] is { } actual)
+                    v = actual;
+                else if (chart.BlankDisplayMode == ChartBlankDisplayMode.Zero)
+                    v = 0;
+                else
+                    continue;
+
+                anchors.Add((i, v, new LayoutPoint(xToPixel(i), yScale.Transform(v))));
+            }
+
+            var whiskers = BuildErrorBarWhiskers(chart, anchors, isHorizontal: false, yScale);
+            if (whiskers is not null)
+                seriesLayouts[s] = seriesLayouts[s] with { ErrorBars = whiskers };
+        }
+    }
+
+    /// <summary>
+    /// Attaches the error-bar overlay for the horizontal Bar/StackedBar/PercentStackedBar/ThreeDBar
+    /// family, where the category index maps to the vertical pixel axis via
+    /// <paramref name="categoryScale"/> and the plotted value maps to the horizontal
+    /// <paramref name="valueScale"/> — the mirror image of <see cref="AttachErrorBars"/> (matching the
+    /// source renderer's isBarOrientedHorizontal path, which always whiskers along the value/X axis).
+    /// </summary>
+    private static void AttachBarErrorBars(
+        ChartLayoutRequest request,
+        List<SeriesLayout> seriesLayouts,
+        AxisScale categoryScale,
+        AxisScale valueScale)
+    {
+        var chart = request.Chart;
+        if (!chart.ShowErrorBars || !ChartTypeSupport.SupportsTrendlines(chart.Type))
+            return;
+
+        for (var s = 0; s < seriesLayouts.Count && s < request.Series.Count; s++)
+        {
+            var series = request.Series[s];
+            // Mirrors LayoutBar's own blank-handling (BlankDisplayMode.Zero ⇒ zero-valued anchor,
+            // otherwise skipped) so the overlay never draws a whisker at a point with no bar.
+            var anchors = new List<(int Index, double Value, LayoutPoint Pixel)>(series.Values.Count);
+            for (var i = 0; i < series.Values.Count; i++)
+            {
+                double v;
+                if (series.Values[i] is { } actual)
+                    v = actual;
+                else if (chart.BlankDisplayMode == ChartBlankDisplayMode.Zero)
+                    v = 0;
+                else
+                    continue;
+
+                anchors.Add((i, v, new LayoutPoint(valueScale.Transform(v), categoryScale.Transform(i))));
+            }
+
+            var whiskers = BuildErrorBarWhiskers(chart, anchors, isHorizontal: true, valueScale);
+            if (whiskers is not null)
+                seriesLayouts[s] = seriesLayouts[s] with { ErrorBars = whiskers };
+        }
+    }
+
+    /// <summary>
+    /// Attaches the error-bar overlay for scatter/bubble series, where each point's own X value (not
+    /// the category index) maps through <paramref name="xScale"/>. Whiskers run along Y by default,
+    /// matching every other family, unless the chart XML explicitly requests X-direction error bars
+    /// (only meaningful — and only ever set by Excel — for Scatter/Bubble, whose X axis carries real
+    /// values rather than a category index), mirroring the source renderer exactly.
+    /// </summary>
+    private static void AttachScatterErrorBars(
+        ChartLayoutRequest request,
+        List<SeriesLayout> seriesLayouts,
+        AxisScale xScale,
+        AxisScale yScale)
+    {
+        var chart = request.Chart;
+        if (!chart.ShowErrorBars || !ChartTypeSupport.SupportsTrendlines(chart.Type))
+            return;
+
+        var isHorizontal = chart.ErrorBarAxisDirection == ChartErrorBarAxisDirection.X;
+        for (var s = 0; s < seriesLayouts.Count && s < request.Series.Count; s++)
+        {
+            var series = request.Series[s];
+            var anchors = new List<(int Index, double Value, LayoutPoint Pixel)>(series.Values.Count);
+            for (var i = 0; i < series.Values.Count; i++)
+            {
+                if (series.Values[i] is not { } y || double.IsNaN(y))
+                    continue;
+                var x = series.XValues is { } xs && i < xs.Count ? xs[i] : i;
+                var pixel = new LayoutPoint(xScale.Transform(x), yScale.Transform(y));
+                // The amount kind (Standard Error/Percentage/Fixed) is always computed off the
+                // plotted value the whisker direction runs along, mirroring GetErrorBarAnchorPoints'
+                // `values[i] = isHorizontal ? points[i].X : points[i].Y`.
+                anchors.Add((i, isHorizontal ? x : y, pixel));
+            }
+
+            var whiskers = BuildErrorBarWhiskers(chart, anchors, isHorizontal, isHorizontal ? xScale : yScale);
+            if (whiskers is not null)
+                seriesLayouts[s] = seriesLayouts[s] with { ErrorBars = whiskers };
+        }
+    }
+
+    /// <summary>
+    /// Builds the whisker overlay for one series from its plotted (index, value, pixel-anchor)
+    /// triples, mirroring the source renderer's AddWhisker/GetErrorBarAmount: computes each point's
+    /// plus/minus amount per <see cref="ChartModel.ErrorBarKind"/>, maps it through
+    /// <paramref name="amountScale"/> (the axis the whisker direction runs along, so amounts are
+    /// expressed and transformed in the same data units as the plotted value) to get the whisker's
+    /// pixel half-length, and builds the perpendicular end-cap tick endpoints. Returns null when no
+    /// point has a positive amount on either side (nothing to draw), matching the source renderer's
+    /// `any` guard that skips adding an empty whiskers series.
+    /// </summary>
+    private static ErrorBarLayout? BuildErrorBarWhiskers(
+        ChartModel chart,
+        IReadOnlyList<(int Index, double Value, LayoutPoint Pixel)> anchors,
+        bool isHorizontal,
+        AxisScale amountScale)
+    {
+        if (anchors.Count == 0)
+            return null;
+
+        var values = new double[anchors.Count];
+        for (var i = 0; i < anchors.Count; i++)
+            values[i] = anchors[i].Value;
+
+        var customPlus = ParseErrorBarRangeCache(chart.ErrorBarPlusRangeCacheXml);
+        var customMinus = ParseErrorBarRangeCache(chart.ErrorBarMinusRangeCacheXml) ?? customPlus;
+
+        // The end-cap tick runs perpendicular to the whisker (i.e. along the *other* screen axis than
+        // the whisker itself). A fixed data-space half-width (matching the source renderer's 0.08
+        // category-unit tick) has no meaning on the perpendicular axis, so the tick length is instead
+        // derived as a small fraction of the whisker axis' own pixel extent — small, visible, and
+        // resolution-independent regardless of which concrete axis backs the whisker.
+        var capHalfLengthPixels = Math.Max(3.0, Math.Abs(amountScale.ScreenMax - amountScale.ScreenMin) * 0.015);
+
+        var whiskers = new List<ErrorBarWhisker>(anchors.Count);
+        var any = false;
+        for (var i = 0; i < anchors.Count; i++)
+        {
+            var amount = GetErrorBarAmount(chart, values, i, customPlus, customMinus, out var plusAmount, out var minusAmount);
+            var plus = chart.ErrorBarDirection == ChartErrorBarDirection.Minus ? 0 : (plusAmount > 0 ? plusAmount : amount);
+            var minus = chart.ErrorBarDirection == ChartErrorBarDirection.Plus ? 0 : (minusAmount > 0 ? minusAmount : amount);
+            if (plus <= 0 && minus <= 0)
+                continue;
+
+            any = true;
+            var (index, value, pixel) = anchors[i];
+
+            LayoutPoint PixelAt(double coordinate) =>
+                isHorizontal ? new LayoutPoint(coordinate, pixel.Y) : new LayoutPoint(pixel.X, coordinate);
+
+            var plusEnd = plus > 0 ? PixelAt(amountScale.Transform(value + plus)) : pixel;
+            var minusEnd = minus > 0 ? PixelAt(amountScale.Transform(value - minus)) : pixel;
+
+            LayoutPoint PerpendicularAt(LayoutPoint end, double offset) =>
+                isHorizontal
+                    ? new LayoutPoint(end.X, end.Y + offset)
+                    : new LayoutPoint(end.X + offset, end.Y);
+
+            whiskers.Add(new ErrorBarWhisker(
+                index,
+                pixel,
+                plusEnd,
+                minusEnd,
+                HasPlus: plus > 0,
+                HasMinus: minus > 0,
+                PlusCapStart: plus > 0 ? PerpendicularAt(plusEnd, -capHalfLengthPixels) : plusEnd,
+                PlusCapEnd: plus > 0 ? PerpendicularAt(plusEnd, capHalfLengthPixels) : plusEnd,
+                MinusCapStart: minus > 0 ? PerpendicularAt(minusEnd, -capHalfLengthPixels) : minusEnd,
+                MinusCapEnd: minus > 0 ? PerpendicularAt(minusEnd, capHalfLengthPixels) : minusEnd));
+        }
+
+        if (!any)
+            return null;
+
+        return new ErrorBarLayout { Whiskers = whiskers, EndCaps = chart.ErrorBarEndCaps };
+    }
+
+    /// <summary>
+    /// Computes the whisker half-length for point <paramref name="index"/> of a series whose plotted
+    /// values are <paramref name="values"/>, per Excel's error-bar amount kinds: Standard Error (the
+    /// series' own sample standard error, same for every point), Percentage (a percentage of that
+    /// point's value), Fixed Value (a constant amount), and Custom (explicit plus/minus amounts read
+    /// from the cached range values, one entry per point). <paramref name="plusAmount"/>/
+    /// <paramref name="minusAmount"/> carry the resolved Custom-kind asymmetric amounts (zero when not
+    /// Custom or when no cached value exists for this point); the return value is the symmetric amount
+    /// used for every other kind. Mirrors the source renderer's GetErrorBarAmount exactly.
+    /// </summary>
+    private static double GetErrorBarAmount(
+        ChartModel chart,
+        IReadOnlyList<double> values,
+        int index,
+        IReadOnlyList<double>? customPlus,
+        IReadOnlyList<double>? customMinus,
+        out double plusAmount,
+        out double minusAmount)
+    {
+        plusAmount = 0;
+        minusAmount = 0;
+        switch (chart.ErrorBarKind)
+        {
+            case ChartErrorBarKind.Percentage:
+                return Math.Abs(values[index]) * chart.ErrorBarValue / 100.0;
+            case ChartErrorBarKind.FixedValue:
+                return chart.ErrorBarValue;
+            case ChartErrorBarKind.Custom:
+                plusAmount = customPlus is not null && index < customPlus.Count ? Math.Abs(customPlus[index]) : 0;
+                minusAmount = customMinus is not null && index < customMinus.Count ? Math.Abs(customMinus[index]) : 0;
+                return 0;
+            default:
+                return CalculateStandardError(values);
+        }
+    }
+
+    /// <summary>Sample standard error of the mean (sample stddev / sqrt(n)) — Excel's "Standard Error" amount.</summary>
+    private static double CalculateStandardError(IReadOnlyList<double> values)
+    {
+        if (values.Count < 2)
+            return 0;
+
+        var mean = values.Average();
+        var sumSquares = 0.0;
+        for (var i = 0; i < values.Count; i++)
+            sumSquares += (values[i] - mean) * (values[i] - mean);
+
+        var variance = sumSquares / (values.Count - 1);
+        return Math.Sqrt(variance) / Math.Sqrt(values.Count);
+    }
+
+    /// <summary>
+    /// Parses a cached <c>&lt;c:numCache&gt;</c> XML fragment (as stored in
+    /// <see cref="ChartModel.ErrorBarPlusRangeCacheXml"/>/<see cref="ChartModel.ErrorBarMinusRangeCacheXml"/>)
+    /// into an index-ordered value list for Custom-kind error bars. Returns null for missing/unparsable input.
+    /// </summary>
+    private static IReadOnlyList<double>? ParseErrorBarRangeCache(string? cacheXml)
+    {
+        if (string.IsNullOrWhiteSpace(cacheXml))
+            return null;
+
+        try
+        {
+            var element = XElement.Parse(cacheXml);
+            var points = new SortedDictionary<int, double>();
+            foreach (var pt in element.Elements().Where(e => e.Name.LocalName == "pt"))
+            {
+                var idxAttribute = pt.Attribute("idx");
+                var valueElement = pt.Elements().FirstOrDefault(e => e.Name.LocalName == "v");
+                if (idxAttribute is null || valueElement is null)
+                    continue;
+                if (int.TryParse(idxAttribute.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idx)
+                    && double.TryParse(valueElement.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+                    points[idx] = value;
+            }
+
+            return points.Count == 0 ? null : points.Values.ToArray();
+        }
+        catch (System.Xml.XmlException)
+        {
+            return null;
+        }
+    }
 
     // ---- Data-label helpers ---------------------------------------------------------------
 

@@ -22,10 +22,14 @@ public class AutofillCommandFAutofillCoreTests
     // ---- J37: Ctrl flips copy <-> series ------------------------------------------------
 
     [Fact]
-    public void CtrlHeld_OnDetectedNumericSeries_ForcesCopyOfLastValueInstead()
+    public void CtrlHeld_OnDetectedNumericSeries_ForcesRepeatOfSourceBlockInstead()
     {
-        // Excel gesture: A1=1, A2=2 (a detected series), Ctrl-drag down to A5 forces a
-        // copy of the last value (2) instead of continuing the series (3, 4, 5).
+        // Excel gesture: A1=1, A2=2 (a detected series), Ctrl-drag down to A5 forces a plain
+        // copy instead of continuing the series (3, 4, 5) - but a *copy* of a multi-cell source
+        // repeats the whole source block cyclically (1, 2, 1), it does not collapse every
+        // destination cell to the single last value in the block. (Round-7 finding M31 fixed
+        // this collapse-to-last-edge-cell bug; this test previously asserted the pre-M31 buggy
+        // behavior of 2, 2, 2 and has been corrected to Excel's actual block-repeat semantics.)
         var (_, sheet, ctx) = Setup();
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(2));
@@ -40,9 +44,9 @@ public class AutofillCommandFAutofillCoreTests
         var outcome = new AutofillCommand(sheet.Id, sourceRange, fillRange, ctrlHeld: true).Apply(ctx);
 
         outcome.Success.Should().BeTrue(outcome.ErrorMessage);
-        sheet.GetValue(3, 1).Should().Be(new NumberValue(2));
+        sheet.GetValue(3, 1).Should().Be(new NumberValue(1));
         sheet.GetValue(4, 1).Should().Be(new NumberValue(2));
-        sheet.GetValue(5, 1).Should().Be(new NumberValue(2));
+        sheet.GetValue(5, 1).Should().Be(new NumberValue(1));
     }
 
     [Fact]

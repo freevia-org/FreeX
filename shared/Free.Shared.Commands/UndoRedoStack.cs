@@ -55,18 +55,27 @@ public class UndoRedoStack<TCommand, TPayload>
     public int UndoDepth => _undoStack.Count;
 
     /// <summary>
-    /// Monotonically-increasing token bumped on every entry added to the undo stack
-    /// (<see cref="Push"/>, <see cref="PushWithoutClearingRedo"/>, <see cref="RollbackPopUndo"/>)
-    /// AND every silent eviction performed by <see cref="TrimUndoStack"/>. A plain <see cref="PopUndo"/>
-    /// (undo) does not evict from the bottom and does not bump this by itself.
+    /// Content-identity token for the undo stack: incremented by one on every entry added
+    /// (<see cref="Push"/>, <see cref="PushWithoutClearingRedo"/>, <see cref="RollbackPopUndo"/>),
+    /// decremented by one on every entry removed (<see cref="PopUndo"/>), and incremented
+    /// irreversibly on every silent eviction performed by <see cref="TrimUndoStack"/>.
     /// <para>
-    /// Unlike <see cref="UndoDepth"/> (a raw count), this can never alias: once the stack has been
-    /// trimmed by the depth/byte cap, the entries present at a given depth after trimming differ
-    /// from whatever was at that depth before, and eviction always advances this token. So two
-    /// observations with equal <see cref="UndoDepth"/> but an intervening eviction are guaranteed
-    /// to have different <see cref="Version"/> values. Callers that need to know "is the live undo
-    /// stack identical to the one recorded at some earlier point" must compare this token, not
-    /// <see cref="UndoDepth"/>.
+    /// A plain push/pop round trip is exactly self-inverse: pushing a command and later undoing it
+    /// (popping it back off) returns <see cref="Version"/> to precisely the value it held before the
+    /// push, because the pop's decrement cancels the push's increment. This is what lets a
+    /// document's save-point tracker (e.g. <c>WorkbookDocumentState.TryMarkCleanIfAtSavePoint</c> in
+    /// the app-services layer) recognize an ordinary undo/redo back to the save point as clean: both
+    /// <see cref="UndoDepth"/> and <see cref="Version"/> return to their exact saved values.
+    /// </para>
+    /// <para>
+    /// Eviction breaks that symmetry on purpose: once the depth/byte cap has trimmed an entry from
+    /// the bottom of the stack, that entry can never be popped back (only <see cref="PopUndo"/> from
+    /// the top ever removes entries via undo, and evicted entries are gone), so the trim's increment
+    /// is never cancelled by a later pop. That guarantees two observations with equal
+    /// <see cref="UndoDepth"/> straddling an eviction always have different <see cref="Version"/>
+    /// values — the aliasing that a raw depth count alone cannot detect. Callers that need to know
+    /// "is the live undo stack identical to the one recorded at some earlier point" must compare
+    /// this token together with <see cref="UndoDepth"/>, not <see cref="UndoDepth"/> alone.
     /// </para>
     /// </summary>
     public long Version => _version;
@@ -110,6 +119,7 @@ public class UndoRedoStack<TCommand, TPayload>
         _undoStack.RemoveLast();
         _undoStackBytes -= entry.Bytes;
         _redoStack.Push(entry);
+        _version--;
         return entry;
     }
 
