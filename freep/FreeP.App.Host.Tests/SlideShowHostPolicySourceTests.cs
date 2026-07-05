@@ -113,6 +113,11 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("BuildStripsGeometry(");
         source.Should().Contain("plan.GeometricMaskStripsSlopeDown");
         source.Should().Contain("new GeometryGroup { FillRule = FillRule.Nonzero }");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Peek:");
+        source.Should().Contain("PeekEffect(sb, element, plan);");
+        source.Should().Contain("private void PeekEffect(Storyboard sb, FrameworkElement el,");
+        source.Should().Contain("el.RenderTransform = translate;");
+        source.Should().Contain("el.Clip = new RectangleGeometry(new Rect(0, 0, w, h));");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Zoom:");
         source.Should().Contain("ZoomEffect(sb, element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Pulse:");
