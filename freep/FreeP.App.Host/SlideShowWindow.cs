@@ -1107,6 +1107,10 @@ public sealed class SlideShowWindow : Window
                 BoxEffect(sb, element, plan);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Checkerboard:
+                CheckerboardEffect(sb, element, plan);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Zoom:
                 ZoomEffect(sb, element, plan);
                 break;
@@ -1373,6 +1377,78 @@ public sealed class SlideShowWindow : Window
             new Rect(x, 0, 0, height),
             new Rect(x, 0, Math.Max(0, nextX - x), height));
     }
+
+    private static void CheckerboardEffect(Storyboard sb, FrameworkElement el,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        double w = el.Width  > 0 ? el.Width  : 960;
+        double h = el.Height > 0 ? el.Height : 540;
+        var opens = plan.ToOpacity >= plan.FromOpacity;
+        var rowCount = Math.Max(1, plan.CheckerboardRowCount);
+        var columnCount = Math.Max(1, plan.CheckerboardColumnCount);
+        var cells = new GeometryGroup();
+        var phaseDelayMs = Math.Max(0, plan.DurationMs / 3);
+        var cellDurationMs = Math.Max(1, plan.DurationMs - phaseDelayMs);
+
+        el.Clip = cells;
+        el.Opacity = 1;
+
+        var dur = new Duration(TimeSpan.FromMilliseconds(cellDurationMs));
+        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+
+        for (var row = 0; row < rowCount; row++)
+        {
+            for (var column = 0; column < columnCount; column++)
+            {
+                var (closed, open) = BuildCheckerboardCell(
+                    w,
+                    h,
+                    rowCount,
+                    columnCount,
+                    row,
+                    column,
+                    plan.CheckerboardHorizontal);
+                var from = opens ? closed : open;
+                var to = opens ? open : closed;
+                var cell = new RectangleGeometry(from);
+                cells.Children.Add(cell);
+
+                var anim = new RectAnimation(from, to, dur)
+                {
+                    BeginTime = TimeSpan.FromMilliseconds(
+                        plan.DelayMs + (IsSecondCheckerboardPhase(row, column) ? phaseDelayMs : 0)),
+                    EasingFunction = ease
+                };
+                Storyboard.SetTarget(anim, cell);
+                Storyboard.SetTargetProperty(anim, new PropertyPath(RectangleGeometry.RectProperty));
+                sb.Children.Add(anim);
+            }
+        }
+    }
+
+    private static (Rect Closed, Rect Open) BuildCheckerboardCell(
+        double width,
+        double height,
+        int rowCount,
+        int columnCount,
+        int row,
+        int column,
+        bool horizontal)
+    {
+        var x = width * column / columnCount;
+        var nextX = width * (column + 1) / columnCount;
+        var y = height * row / rowCount;
+        var nextY = height * (row + 1) / rowCount;
+        var cellWidth = Math.Max(0, nextX - x);
+        var cellHeight = Math.Max(0, nextY - y);
+
+        return horizontal
+            ? (new Rect(x, y, 0, cellHeight), new Rect(x, y, cellWidth, cellHeight))
+            : (new Rect(x, y, cellWidth, 0), new Rect(x, y, cellWidth, cellHeight));
+    }
+
+    private static bool IsSecondCheckerboardPhase(int row, int column) =>
+        ((row + column) & 1) == 1;
 
     private static void BoxEffect(Storyboard sb, FrameworkElement el,
         SlideShowShapeAnimationPlaybackPlan plan)
