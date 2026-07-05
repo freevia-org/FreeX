@@ -684,6 +684,27 @@ public static class SourceManagementDialogPlanner
         return new SourceManagementListMutationPlan(nextState, ClampIndex(masterSources.Count - 1, masterSources.Count));
     }
 
+    public static SourceManagementListMutationPlan EditMasterSource(
+        SourceManagementDialogState state,
+        int selectedIndex,
+        SourceManagementSourceEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        if (!IsValidIndex(selectedIndex, state.MasterSources.Count))
+            return new SourceManagementListMutationPlan(state, selectedIndex);
+
+        var existing = state.MasterSources[selectedIndex];
+        if (!TryBuildManagedSource(entry, existing, out var source, out var validation))
+            return new SourceManagementListMutationPlan(state, selectedIndex, validation);
+
+        var masterSources = state.MasterSources.Select(CloneSource).ToList();
+        selectedIndex = ReplaceSourceAtIndexByTag(masterSources, selectedIndex, source!);
+
+        var nextState = state with { MasterSources = masterSources };
+        return new SourceManagementListMutationPlan(nextState, selectedIndex);
+    }
+
     public static SourceManagementListMutationPlan DeleteMasterSource(
         SourceManagementDialogState state,
         int selectedIndex)
@@ -719,6 +740,23 @@ public static class SourceManagementDialogPlanner
 
         var nextState = state with { CurrentSources = currentSources };
         return new SourceManagementListMutationPlan(nextState, currentSources.Count - 1);
+    }
+
+    public static SourceManagementListMutationPlan CopyCurrentToMaster(
+        SourceManagementDialogState state,
+        int currentSelectedIndex,
+        int masterSelectedIndex)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        if (!IsValidIndex(currentSelectedIndex, state.CurrentSources.Count))
+            return new SourceManagementListMutationPlan(state, masterSelectedIndex);
+
+        var masterSources = state.MasterSources.Select(CloneSource).ToList();
+        var selectedIndex = UpsertSourceByTag(masterSources, state.CurrentSources[currentSelectedIndex]);
+
+        var nextState = state with { MasterSources = masterSources };
+        return new SourceManagementListMutationPlan(nextState, selectedIndex);
     }
 
     public static SourceManagementListMutationPlan AddCurrentSource(

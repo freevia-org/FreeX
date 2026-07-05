@@ -29,6 +29,23 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
     }
 
     [Fact]
+    public void ReferencesDialogs_DelegatesManageSourcesPolicyToPresentationPlanner()
+    {
+        var source = ReadReferencesDialogsSource();
+
+        source.Should().Contain("SourceManagementDialogPlanner.BuildInitialState(");
+        source.Should().Contain("SourceManagementDialogPlanner.AddMasterSource(");
+        source.Should().Contain("SourceManagementDialogPlanner.EditMasterSource(");
+        source.Should().Contain("SourceManagementDialogPlanner.DeleteMasterSource(");
+        source.Should().Contain("SourceManagementDialogPlanner.CopyMasterToCurrent(");
+        source.Should().Contain("SourceManagementDialogPlanner.CopyCurrentToMaster(");
+        source.Should().Contain("SourceManagementDialogPlanner.AddCurrentSource(");
+        source.Should().Contain("SourceManagementDialogPlanner.EditCurrentSource(");
+        source.Should().Contain("SourceManagementDialogPlanner.DeleteCurrentSource(");
+        source.Should().Contain("SourceManagementDialogPlanner.BuildResult(");
+    }
+
+    [Fact]
     public void ReferencesDialogs_DoesNotOwnSourceAuthorParsingPolicy()
     {
         var source = ReadReferencesDialogsSource();

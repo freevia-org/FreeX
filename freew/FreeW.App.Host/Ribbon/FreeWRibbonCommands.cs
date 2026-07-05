@@ -5698,6 +5698,26 @@ internal static class FreeWRibbonCommands
                 RefreshMasterList(plan.SelectedIndex);
             }
 
+            void EditMasterSource()
+            {
+                var idx = masterList.SelectedIndex;
+                if (idx < 0 || idx >= state.MasterSources.Count)
+                    return;
+                var entry = NewSourceDialog.Ask(dialog, state.MasterSources[idx]);
+                if (entry is null)
+                    return;
+
+                var plan = SourceManagementDialogPlanner.EditMasterSource(state, idx, entry);
+                if (plan.Validation is not null)
+                {
+                    ShowValidation(plan.Validation);
+                    return;
+                }
+
+                state = plan.State;
+                RefreshMasterList(plan.SelectedIndex);
+            }
+
             // ── copy master → current doc ─────────────────────────────────────────────────────
             void CopyToDoc()
             {
@@ -5707,6 +5727,16 @@ internal static class FreeWRibbonCommands
                     docList.SelectedIndex);
                 state = plan.State;
                 RefreshDocList(plan.SelectedIndex);
+            }
+
+            void CopyToMaster()
+            {
+                var plan = SourceManagementDialogPlanner.CopyCurrentToMaster(
+                    state,
+                    docList.SelectedIndex,
+                    masterList.SelectedIndex);
+                state = plan.State;
+                RefreshMasterList(plan.SelectedIndex);
             }
 
             // ── current-doc actions ───────────────────────────────────────────────────────────
@@ -5756,8 +5786,10 @@ internal static class FreeWRibbonCommands
 
             // ── buttons ───────────────────────────────────────────────────────────────────────
             var masterAdd    = new System.Windows.Controls.Button { Content = "Add...", MinWidth = 72, Margin = new Thickness(0, 0, 6, 0) };
+            var masterEdit   = new System.Windows.Controls.Button { Content = "Edit...", MinWidth = 72, Margin = new Thickness(0, 0, 6, 0) };
             var masterDelete = new System.Windows.Controls.Button { Content = "Delete",  MinWidth = 72 };
             var copyBtn      = new System.Windows.Controls.Button { Content = "Copy →",  MinWidth = 72 };
+            var copyBackBtn  = new System.Windows.Controls.Button { Content = "Copy <-", MinWidth = 72, Margin = new Thickness(0, 6, 0, 0) };
             var docAdd       = new System.Windows.Controls.Button { Content = "Add...", MinWidth = 72, Margin = new Thickness(0, 0, 6, 0) };
             var docEdit      = new System.Windows.Controls.Button { Content = "Edit...", MinWidth = 72, Margin = new Thickness(0, 0, 6, 0) };
             var docDelete    = new System.Windows.Controls.Button { Content = "Delete",  MinWidth = 72 };
@@ -5765,11 +5797,14 @@ internal static class FreeWRibbonCommands
             var cancel       = new System.Windows.Controls.Button { Content = "Cancel",  IsCancel = true,  MinWidth = 72 };
 
             masterAdd.Click    += (_, _) => AddToMaster();
+            masterEdit.Click   += (_, _) => EditMasterSource();
             masterDelete.Click += (_, _) => DeleteFromMaster();
             copyBtn.Click      += (_, _) => CopyToDoc();
+            copyBackBtn.Click  += (_, _) => CopyToMaster();
             docAdd.Click       += (_, _) => AddToDoc();
             docEdit.Click      += (_, _) => EditDocSource();
             docDelete.Click    += (_, _) => DeleteFromDoc();
+            masterList.MouseDoubleClick += (_, _) => EditMasterSource();
             docList.MouseDoubleClick += (_, _) => EditDocSource();
 
             ok.Click += (_, _) =>
@@ -5786,6 +5821,7 @@ internal static class FreeWRibbonCommands
                 HorizontalAlignment = HorizontalAlignment.Left
             };
             masterButtons.Children.Add(masterAdd);
+            masterButtons.Children.Add(masterEdit);
             masterButtons.Children.Add(masterDelete);
 
             var masterPane = new System.Windows.Controls.StackPanel { Margin = new Thickness(0, 0, 8, 0) };
@@ -5799,6 +5835,7 @@ internal static class FreeWRibbonCommands
                 Margin = new Thickness(0, 0, 8, 0)
             };
             centerPane.Children.Add(copyBtn);
+            centerPane.Children.Add(copyBackBtn);
 
             var docButtons = new System.Windows.Controls.StackPanel
             {

@@ -516,16 +516,19 @@ internal sealed class ManageSourcesDialog : Window
             _masterList,
             [
                 Button("Add...", () => _ = AddMasterAsync()),
+                Button("Edit...", () => _ = EditMasterAsync()),
                 Button("Delete", DeleteMaster)
             ]);
 
         var copy = Button("Copy ->", CopyMasterToCurrent);
+        var copyBack = Button("Copy <-", CopyCurrentToMaster);
         var centerPane = new StackPanel
         {
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(8, 0),
         };
         centerPane.Children.Add(copy);
+        centerPane.Children.Add(copyBack);
 
         var currentPane = Pane(
             SourceManagementDialogPlanner.CurrentDocumentListLabel,
@@ -577,6 +580,24 @@ internal sealed class ManageSourcesDialog : Window
         RefreshMasterList(plan.SelectedIndex);
     }
 
+    private async Task EditMasterAsync()
+    {
+        var index = _masterList.SelectedIndex;
+        if (index < 0 || index >= _state.MasterSources.Count)
+            return;
+
+        var entry = await AskEntryAsync(_state.MasterSources[index]);
+        if (entry is null)
+            return;
+
+        var plan = SourceManagementDialogPlanner.EditMasterSource(_state, index, entry);
+        if (!ApplyValidation(plan.Validation))
+            return;
+
+        _state = plan.State;
+        RefreshMasterList(plan.SelectedIndex);
+    }
+
     private void CopyMasterToCurrent()
     {
         var plan = SourceManagementDialogPlanner.CopyMasterToCurrent(
@@ -585,6 +606,16 @@ internal sealed class ManageSourcesDialog : Window
             _currentList.SelectedIndex);
         _state = plan.State;
         RefreshCurrentList(plan.SelectedIndex);
+    }
+
+    private void CopyCurrentToMaster()
+    {
+        var plan = SourceManagementDialogPlanner.CopyCurrentToMaster(
+            _state,
+            _currentList.SelectedIndex,
+            _masterList.SelectedIndex);
+        _state = plan.State;
+        RefreshMasterList(plan.SelectedIndex);
     }
 
     private async Task AddCurrentAsync()
