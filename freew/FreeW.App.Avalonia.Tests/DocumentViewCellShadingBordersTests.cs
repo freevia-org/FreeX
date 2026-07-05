@@ -1,8 +1,11 @@
+using System.Collections;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Media;
 using FreeW.App.Avalonia.Editing;
 using FreeW.Core.Model;
 
@@ -55,6 +58,56 @@ public sealed class DocumentViewCellShadingBordersTests
         view.Measure(new Size(800, 4000));
         var idx = doc.Blocks.IndexOf(tbl);
         return (view, idx, tbl);
+    }
+
+    [Fact]
+    public async Task NamedTableStyle_HeaderFill_UsesCatalogColor()
+    {
+        Color? headerFill = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var table = Table.Create(2, 2);
+            table.Formatting = TableFormatting.Default with
+            {
+                Borders = true,
+                HeaderRow = true,
+                BandedRows = true
+            };
+            table.TableStyleId = "GridTable4";
+            doc.Blocks.Add(table);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 4000));
+            view.Arrange(new Rect(0, 0, 800, 4000));
+
+            headerFill = FirstRenderedTableFill(view);
+        });
+
+        if (!ran) return;
+
+        headerFill.Should().Be(
+            Color.FromRgb(0x2F, 0x54, 0x96),
+            "Avalonia table rendering must use the same named table-style header fill as WPF visual evidence");
+    }
+
+    private static Color? FirstRenderedTableFill(DocumentView view)
+    {
+        var field = typeof(DocumentView).GetField("_rects", BindingFlags.Instance | BindingFlags.NonPublic);
+        var rects = field?.GetValue(view) as IEnumerable;
+        if (rects is null)
+            return null;
+
+        foreach (var rect in rects)
+        {
+            var fill = rect?.GetType().GetField("Item2")?.GetValue(rect) as ISolidColorBrush;
+            if (fill is not null)
+                return fill.Color;
+        }
+
+        return null;
     }
 
     // ── SetCellShading – caret cell ──────────────────────────────────────────────────────────────

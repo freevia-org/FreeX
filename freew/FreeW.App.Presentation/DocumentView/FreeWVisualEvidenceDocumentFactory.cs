@@ -1413,7 +1413,7 @@ public static class FreeWVisualEvidenceDocumentFactory
     }
 
     private static TableCell HeaderCell(string text, int gridSpan = 1) =>
-        Cell(text, gridSpan: gridSpan, shading: "#D9E2F3", customBorder: true);
+        Cell(text, gridSpan: gridSpan, customBorder: true);
 
     private static TableCell Cell(
         string text,
