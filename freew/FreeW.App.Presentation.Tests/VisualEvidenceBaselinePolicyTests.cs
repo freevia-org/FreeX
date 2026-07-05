@@ -14,6 +14,7 @@ public sealed class VisualEvidenceBaselinePolicyTests
 
         var policy = FreeWVisualBaselineComparisonPlanner.ResolveWordBaselinePolicy(row);
         var candidates = FreeWVisualBaselineComparisonPlanner.BuildBaselineCandidateRelativePaths(row);
+        var missing = FreeWVisualBaselineComparisonPlanner.BuildMissingBaselineComparison(row);
 
         policy.IsComparable.Should().BeTrue();
         policy.BaselineScenarioId.Should().Be("f2-columns");
@@ -22,6 +23,10 @@ public sealed class VisualEvidenceBaselinePolicyTests
         candidates.Should().Contain([
             "f2-columns/f2-columns_p1.png",
             "f2-columns_p1.png"]);
+        FreeWVisualBaselineComparisonPlanner.ClassifyBaselineEvidence(missing)
+            .Should().Be(FreeWVisualBaselineComparisonPlanner.WordPngBaselineMissingClass);
+        FreeWVisualBaselineComparisonPlanner.DescribeBaselineEvidence(missing)
+            .Should().Contain("candidate paths are recorded");
     }
 
     [Fact]
@@ -43,6 +48,10 @@ public sealed class VisualEvidenceBaselinePolicyTests
         comparison.Trust.Passed.Should().BeTrue();
         comparison.BaselinePath.Should().BeEmpty();
         comparison.SkipReason.Should().Contain("no direct MS Word PNG baseline mapping");
+        FreeWVisualBaselineComparisonPlanner.ClassifyBaselineEvidence(comparison)
+            .Should().Be(FreeWVisualBaselineComparisonPlanner.ScenarioSkippedOrUnmappedClass);
+        FreeWVisualBaselineComparisonPlanner.DescribeBaselineEvidence(comparison)
+            .Should().Contain("unmapped");
     }
 
     [Fact]
@@ -129,6 +138,10 @@ public sealed class VisualEvidenceBaselinePolicyTests
             "f2-hf-basic/f2-hf-basic_p1.png",
             "f2-hf-basic_p1.png"]);
         comparison.SkipReason.Should().Contain("Word.Application");
+        FreeWVisualBaselineComparisonPlanner.ClassifyBaselineEvidence(comparison)
+            .Should().Be(FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableClass);
+        FreeWVisualBaselineComparisonPlanner.DescribeBaselineEvidence(comparison)
+            .Should().Contain("no authoritative Word PNG parity claimed");
     }
 
     private static FreeWVisualEvidenceNormalizedRow BuildRow(

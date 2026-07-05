@@ -15,6 +15,9 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("\"--composite\", \"--software-fallback\"");
         source.Should().Contain("-AllowMissingWord");
         source.Should().Contain("--word-baseline-unavailable-reason");
+        source.Should().Contain("evidenceMode = \"no-word-fallback\"");
+        source.Should().Contain("baselineEvidenceClass = \"word-baseline-unavailable\"");
+        source.Should().Contain("authoritativeWordPngParity = $false");
         source.Should().Contain("FreeW.VisualEvidenceSummary");
     }
 
@@ -55,6 +58,21 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("Backstage evidence readiness failed");
         source.Should().Contain("Backstage evidence readiness: trusted required rows=");
         source.Should().Contain("Backstage workflow metadata: verified rows=");
+        source.Should().Contain("Word baseline mode: word-png-comparison");
+        source.Should().Contain("Word baseline mode: visual-evidence-only");
+    }
+
+    [Fact]
+    public void WordBaselineRenderer_ReportsMissingWordComBeforeAutomation()
+    {
+        var source = File.ReadAllText(RepositoryFile(
+            "freew-fidelity-corpus",
+            "tools",
+            "Render-WordBaseline.ps1"));
+
+        source.Should().Contain("[type]::GetTypeFromProgID('Word.Application', $false)");
+        source.Should().Contain("Word COM is not available: COM ProgID 'Word.Application' is not registered");
+        source.Should().Contain("Word baseline mode: real-word-png-render");
     }
 
     private static string RepositoryFile(params string[] parts)

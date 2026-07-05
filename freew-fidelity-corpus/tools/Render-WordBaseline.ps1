@@ -67,6 +67,12 @@ if ($Docs) { $Docs | ForEach-Object { Join-Path $FilesDir $_ } | Where-Object { 
 else { Get-ChildItem $FilesDir -Filter *.docx | Where-Object { $_.Name -notlike '~$*' } | Select-Object -ExpandProperty FullName }
 if (-not $files) { throw "No .docx found under $FilesDir" }
 
+$wordType = [type]::GetTypeFromProgID('Word.Application', $false)
+if ($null -eq $wordType) {
+    throw "Word COM is not available: COM ProgID 'Word.Application' is not registered"
+}
+Write-Host "Word baseline mode: real-word-png-render"
+
 $pdfDir = Join-Path $OutDir '_pdf'; $null = New-Item -ItemType Directory -Force $pdfDir
 $wordDir = Join-Path $OutDir 'word'; $null = New-Item -ItemType Directory -Force $wordDir
 

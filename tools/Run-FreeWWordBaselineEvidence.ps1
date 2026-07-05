@@ -43,6 +43,46 @@ function Invoke-DotNetRunNoBuild([string]$ProjectPath, [string[]]$ToolArgs) {
     }
 }
 
+function Write-WordBaselineUnavailableSummary([string]$Reason) {
+    $skipPath = Join-Path $runRootFull "_word_baseline_unavailable.json"
+    [ordered]@{
+        status = "word-baseline-unavailable"
+        evidenceMode = "no-word-fallback"
+        baselineEvidenceClass = "word-baseline-unavailable"
+        authoritativeWordPngParity = $false
+        reason = $Reason
+        allowMissingWord = [bool]$AllowMissingWord
+        trust = [ordered]@{
+            passed = $true
+            failures = @()
+        }
+        summaryRowStatus = "word-baseline-unavailable"
+        createdUtc = [DateTimeOffset]::UtcNow.ToString("O")
+    } | ConvertTo-Json | Set-Content -Encoding UTF8 $skipPath
+
+    if (-not $AllowMissingWord) {
+        Write-Error "Word baseline is unavailable: $Reason. Re-run with -AllowMissingWord to verify the no-Word summary path."
+        exit 3
+    }
+
+    Write-Host "Word baseline unavailable: $skipPath"
+    Write-Host "Word baseline mode: no-word-fallback"
+
+    Invoke-DotNetRun $summaryProject @(
+        "--run-root", $runRootFull,
+        "--manifest", $wpfManifest,
+        "--manifest", $avaloniaManifest,
+        "--word-baseline-scope", "generated-corpus",
+        "--baseline-tolerance", "word-png-default",
+        "--word-baseline-unavailable-reason", $Reason,
+        "--output-json", $summaryJson,
+        "--output-md", $summaryMd)
+
+    Write-Host "summary json: $summaryJson"
+    Write-Host "summary markdown: $summaryMd"
+    exit 0
+}
+
 $repoRoot = Resolve-FullPath (Join-Path $PSScriptRoot "..")
 $runRootFull = Resolve-FullPath $RunRoot
 $fixtureDir = Join-Path $runRootFull "fixtures"
@@ -75,62 +115,35 @@ if (-not (Test-Path $wpfManifest) -or -not (Test-Path $avaloniaManifest)) {
 
 $wordAvailable = Test-ComProgIdAvailable $WordApplicationProgId
 if (-not $wordAvailable) {
-    $wordUnavailableReason = "COM ProgID '$WordApplicationProgId' is not registered"
-    $skipPath = Join-Path $runRootFull "_word_baseline_unavailable.json"
-    [ordered]@{
-        status = "word-baseline-unavailable"
-        reason = $wordUnavailableReason
-        allowMissingWord = [bool]$AllowMissingWord
-        trust = [ordered]@{
-            passed = $true
-            failures = @()
+    Write-WordBaselineUnavailableSummary "COM ProgID '$WordApplicationProgId' is not registered"
+}
+
+try {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $wordExportScript -CorpusDir $fixtureDir -OutDir $wordPdfDir
+    if ($LASTEXITCODE -ne 0) {
+        throw "Word PDF export failed with exit code $LASTEXITCODE"
+    }
+
+    foreach ($pdf in Get-ChildItem -Path $wordPdfDir -Filter *.pdf | Sort-Object Name) {
+        Invoke-DotNetRun $pdfRasterizeProject @($pdf.FullName, $wordBaselineDir)
+    }
+
+    foreach ($page in 1..[Math]::Max(1, $MaxPagesPerDocument)) {
+        $printPreviewSource = Join-Path $wordBaselineDir ("backstage-print-preview-fidelity_p{0}.png" -f $page)
+        $printPreviewTarget = Join-Path $wordBaselineDir ("backstage-print-preview_p{0}.png" -f $page)
+        if ((Test-Path $printPreviewSource) -and -not (Test-Path $printPreviewTarget)) {
+            Copy-Item -LiteralPath $printPreviewSource -Destination $printPreviewTarget
         }
-        summaryRowStatus = "word-baseline-unavailable"
-        createdUtc = [DateTimeOffset]::UtcNow.ToString("O")
-    } | ConvertTo-Json | Set-Content -Encoding UTF8 $skipPath
 
-    if (-not $AllowMissingWord) {
-        Write-Error "Word COM is not available: $wordUnavailableReason. Re-run with -AllowMissingWord to verify the no-Word summary path."
-        exit 3
+        $pdfExportSource = Join-Path $wordBaselineDir ("backstage-pdf-export-fidelity_p{0}.png" -f $page)
+        $pdfExportTarget = Join-Path $wordBaselineDir ("backstage-pdf-export_p{0}.png" -f $page)
+        if ((Test-Path $pdfExportSource) -and -not (Test-Path $pdfExportTarget)) {
+            Copy-Item -LiteralPath $pdfExportSource -Destination $pdfExportTarget
+        }
     }
-
-    Invoke-DotNetRun $summaryProject @(
-        "--run-root", $runRootFull,
-        "--manifest", $wpfManifest,
-        "--manifest", $avaloniaManifest,
-        "--word-baseline-scope", "generated-corpus",
-        "--baseline-tolerance", "word-png-default",
-        "--word-baseline-unavailable-reason", $wordUnavailableReason,
-        "--output-json", $summaryJson,
-        "--output-md", $summaryMd)
-
-    Write-Host "Word baseline unavailable: $skipPath"
-    Write-Host "summary json: $summaryJson"
-    Write-Host "summary markdown: $summaryMd"
-    exit 0
 }
-
-& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $wordExportScript -CorpusDir $fixtureDir -OutDir $wordPdfDir
-if ($LASTEXITCODE -ne 0) {
-    throw "Word PDF export failed with exit code $LASTEXITCODE"
-}
-
-foreach ($pdf in Get-ChildItem -Path $wordPdfDir -Filter *.pdf | Sort-Object Name) {
-    Invoke-DotNetRun $pdfRasterizeProject @($pdf.FullName, $wordBaselineDir)
-}
-
-foreach ($page in 1..[Math]::Max(1, $MaxPagesPerDocument)) {
-    $printPreviewSource = Join-Path $wordBaselineDir ("backstage-print-preview-fidelity_p{0}.png" -f $page)
-    $printPreviewTarget = Join-Path $wordBaselineDir ("backstage-print-preview_p{0}.png" -f $page)
-    if ((Test-Path $printPreviewSource) -and -not (Test-Path $printPreviewTarget)) {
-        Copy-Item -LiteralPath $printPreviewSource -Destination $printPreviewTarget
-    }
-
-    $pdfExportSource = Join-Path $wordBaselineDir ("backstage-pdf-export-fidelity_p{0}.png" -f $page)
-    $pdfExportTarget = Join-Path $wordBaselineDir ("backstage-pdf-export_p{0}.png" -f $page)
-    if ((Test-Path $pdfExportSource) -and -not (Test-Path $pdfExportTarget)) {
-        Copy-Item -LiteralPath $pdfExportSource -Destination $pdfExportTarget
-    }
+catch {
+    Write-WordBaselineUnavailableSummary "MS Word baseline PNG generation failed: $($_.Exception.Message)"
 }
 
 Invoke-DotNetRun $summaryProject @(
@@ -145,5 +158,6 @@ Invoke-DotNetRun $summaryProject @(
 
 Write-Host "fixtures: $((Get-ChildItem -Path $fixtureDir -Filter *.docx).Count)"
 Write-Host "word baseline PNGs: $((Get-ChildItem -Path $wordBaselineDir -Filter *.png).Count)"
+Write-Host "Word baseline mode: real-word-png-comparison"
 Write-Host "summary json: $summaryJson"
 Write-Host "summary markdown: $summaryMd"

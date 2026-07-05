@@ -334,9 +334,11 @@ public static class FreeWVisualEvidenceManifestNormalizer
             sb.AppendLine("## Word Baseline Comparison");
             sb.AppendLine();
             sb.AppendLine($"Status counts: {EscapeMarkdown(FormatBaselineStatusCounts(summary.BaselineComparisons))}");
+            sb.AppendLine($"Evidence class counts: {EscapeMarkdown(FormatBaselineEvidenceClassCounts(summary.BaselineComparisons))}");
+            sb.AppendLine($"Evidence class legend: {EscapeMarkdown(FormatBaselineEvidenceClassLegend(summary.BaselineComparisons))}");
             sb.AppendLine();
-            sb.AppendLine("| Host | Scenario | Output | Baseline ID | Baseline Path | Status | Size | Mean Channel Delta | Mean Gray Delta | Changed Pixels | Tolerance | Limits | Notes |");
-            sb.AppendLine("| --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | --- | --- | --- |");
+            sb.AppendLine("| Host | Scenario | Output | Baseline ID | Baseline Path | Status | Evidence Class | Size | Mean Channel Delta | Mean Gray Delta | Changed Pixels | Tolerance | Limits | Notes |");
+            sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | --- | --- | --- |");
             foreach (var comparison in summary.BaselineComparisons)
             {
                 var metrics = comparison.Metrics;
@@ -352,6 +354,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
                     $"{EscapeMarkdown(comparison.BaselineId)} | " +
                     $"{EscapeMarkdown(FormatBaselinePath(comparison))} | " +
                     $"{EscapeMarkdown(comparison.Status)} | " +
+                    $"{EscapeMarkdown(comparison.BaselineEvidenceClass)} | " +
                     $"{EscapeMarkdown(size)} | {meanChannel} | {meanGray} | {FormatChangedPixels(metrics)} | " +
                     $"{EscapeMarkdown(comparison.Tolerance.Name)} | " +
                     $"{EscapeMarkdown(FormatToleranceLimits(comparison.Tolerance))} | " +
@@ -2366,6 +2369,34 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
                 .Select(g => $"{g.Key}={g.Count().ToString(CultureInfo.InvariantCulture)}"));
 
+    private static string FormatBaselineEvidenceClassCounts(
+        IReadOnlyList<FreeWVisualBaselineComparison> comparisons) =>
+        string.Join(
+            ", ",
+            comparisons
+                .GroupBy(c => c.BaselineEvidenceClass, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => WordBaselineEvidenceClassPriority(g.Key))
+                .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(g => $"{g.Key}={g.Count().ToString(CultureInfo.InvariantCulture)}"));
+
+    private static string FormatBaselineEvidenceClassLegend(
+        IReadOnlyList<FreeWVisualBaselineComparison> comparisons)
+    {
+        var classes = comparisons
+            .Select(c => c.BaselineEvidenceClass)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(WordBaselineEvidenceClassPriority)
+            .ThenBy(evidenceClass => evidenceClass, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return classes.Count == 0
+            ? "-"
+            : string.Join(
+                "; ",
+                classes.Select(evidenceClass =>
+                    evidenceClass + "=" + FreeWVisualBaselineComparisonPlanner.DescribeBaselineEvidenceClass(evidenceClass)));
+    }
+
     private static string FormatTriageStatusCounts(
         IReadOnlyList<FreeWVisualBaselineTriageItem> triage) =>
         string.Join(
@@ -2512,6 +2543,27 @@ public static class FreeWVisualEvidenceManifestNormalizer
             return 2;
 
         if (string.Equals(triageStatus, "not-in-scope", StringComparison.OrdinalIgnoreCase))
+            return 3;
+
+        return 4;
+    }
+
+    private static int WordBaselineEvidenceClassPriority(string evidenceClass)
+    {
+        if (string.Equals(evidenceClass, FreeWVisualBaselineComparisonPlanner.RealWordPngComparisonFailedClass, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(evidenceClass, FreeWVisualBaselineComparisonPlanner.PngDecodeFailedClass, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(evidenceClass, FreeWVisualBaselineComparisonPlanner.WordPngBaselineMissingClass, StringComparison.OrdinalIgnoreCase))
+        {
+            return 0;
+        }
+
+        if (string.Equals(evidenceClass, FreeWVisualBaselineComparisonPlanner.RealWordPngComparedClass, StringComparison.OrdinalIgnoreCase))
+            return 1;
+
+        if (string.Equals(evidenceClass, FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableClass, StringComparison.OrdinalIgnoreCase))
+            return 2;
+
+        if (string.Equals(evidenceClass, FreeWVisualBaselineComparisonPlanner.ScenarioSkippedOrUnmappedClass, StringComparison.OrdinalIgnoreCase))
             return 3;
 
         return 4;

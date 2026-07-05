@@ -281,8 +281,12 @@ Write-Host ""
 Write-Host "Visual evidence run complete." -ForegroundColor Green
 Write-Host "Run root: $runRoot"
 if ($wordBaselineRoot) {
+    Write-Host "Word baseline mode: word-png-comparison"
     Write-Host "Word baseline directory: $wordBaselineRoot"
     Write-Host "Baseline tolerance: $BaselineTolerance"
+}
+else {
+    Write-Host "Word baseline mode: visual-evidence-only"
 }
 Write-Host "Summary JSON: $summaryJson"
 Write-Host "Summary Markdown: $summaryMarkdown"
