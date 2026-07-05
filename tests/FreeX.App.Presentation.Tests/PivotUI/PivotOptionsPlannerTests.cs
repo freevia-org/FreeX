@@ -12,7 +12,7 @@ public sealed class PivotOptionsPlannerTests
         PivotOptionsPlanner.DialogWidth.Should().Be(520);
         PivotOptionsPlanner.DialogMinHeight.Should().Be(500);
         PivotOptionsPlanner.LayoutAndFormatCaptureHeight.Should().Be(676);
-        PivotOptionsPlanner.LayoutAndFormatAvaloniaSpacerHeight.Should().Be(56);
+        PivotOptionsPlanner.LayoutAndFormatAvaloniaSpacerHeight.Should().Be(57);
     }
 
     [Fact]
