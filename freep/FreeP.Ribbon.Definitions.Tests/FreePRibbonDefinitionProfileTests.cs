@@ -775,7 +775,7 @@ public sealed class FreePRibbonDefinitionProfileTests
         var workflowEvidence = root.GetProperty("workflowEvidence")
             .EnumerateArray()
             .ToArray();
-        workflowEvidence.Should().HaveCount(5);
+        workflowEvidence.Should().HaveCount(6);
         root.GetProperty("summary").GetProperty("workflowEvidenceRows").GetInt32()
             .Should()
             .Be(workflowEvidence.Length);
@@ -786,7 +786,8 @@ public sealed class FreePRibbonDefinitionProfileTests
                 "freep.presenter.ink.execution",
                 "freep.presenter.session.summary",
                 "freep.review.comments.thread-depth",
-                "freep.review.accessibility.proofing-depth");
+                "freep.review.accessibility.proofing-depth",
+                "freep.table.inline-text.workflow-depth");
 
         workflowEvidence.Should().OnlyContain(row =>
             row.GetProperty("status").GetString()!.StartsWith("shared-", StringComparison.Ordinal) &&
@@ -802,6 +803,19 @@ public sealed class FreePRibbonDefinitionProfileTests
             .Select(path => path.GetString())
             .Should()
             .Contain("freep/FreeP.App.Presentation.Tests/SlideShowPresenterSessionSummaryPlannerTests.cs");
+
+        var tableInlineText = workflowEvidence.Single(row =>
+            row.GetProperty("evidenceId").GetString() == "freep.table.inline-text.workflow-depth");
+        tableInlineText.GetProperty("area").GetString()
+            .Should()
+            .Contain("table-cell text editing");
+        var tableInlineTextVerification = tableInlineText.GetProperty("verification")
+            .EnumerateArray()
+            .Select(path => path.GetString())
+            .ToArray();
+        tableInlineTextVerification.Should().Contain("freep/FreeP.App.Presentation.Tests/TableCellEditPlannerTests.cs");
+        tableInlineTextVerification.Should().Contain("freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasAvaloniaTests.cs");
+        tableInlineTextVerification.Should().Contain("freep/FreeP.App.Host.Tests/CanvasEditingTests.cs");
     }
 
     [Fact]
@@ -839,6 +853,8 @@ public sealed class FreePRibbonDefinitionProfileTests
         markdown.Should().Contain("`freep.presenter.recording.execution`");
         markdown.Should().Contain("`freep.presenter.ink.execution`");
         markdown.Should().Contain("`freep.presenter.session.summary`");
+        markdown.Should().Contain("`freep.table.inline-text.workflow-depth`");
+        markdown.Should().Contain("Rich inline table-cell text editing");
         markdown.Should().Contain(expectedSummaryRow);
 
         var expectedCommandIds = json.RootElement.GetProperty("commands")
