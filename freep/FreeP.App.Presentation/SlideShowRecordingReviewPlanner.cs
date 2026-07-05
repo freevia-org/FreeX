@@ -30,6 +30,34 @@ public sealed record SlideShowRecordingReviewMediaArtifact(
         !string.IsNullOrWhiteSpace(ContentSha256);
 }
 
+public enum SlideShowRecordingCaptionArtifactKind
+{
+    NarrationCaption,
+    CameraCaption
+}
+
+public sealed record SlideShowRecordingReviewCaptionArtifact(
+    SlideShowRecordingCaptionArtifactKind Kind,
+    SlideShowRecordingMediaArtifactKind SourceMediaKind,
+    bool IsCaptured,
+    string SuggestedFileName,
+    string ContentType,
+    string StatusText,
+    string PackagePath,
+    long ContentLengthBytes,
+    string ContentSha256,
+    string Language,
+    string Label,
+    byte[] PayloadBytes)
+{
+    public bool IsPersistable =>
+        IsCaptured &&
+        !string.IsNullOrWhiteSpace(PackagePath) &&
+        ContentLengthBytes > 0 &&
+        !string.IsNullOrWhiteSpace(ContentSha256) &&
+        PayloadBytes.Length > 0;
+}
+
 public sealed record SlideShowRecordingReviewRow(
     int SlideIndex,
     string SlideTitle,
@@ -38,6 +66,7 @@ public sealed record SlideShowRecordingReviewRow(
     SlideShowRecordingReviewTimingStatus TimingStatus,
     bool TimingWillPersist,
     IReadOnlyList<SlideShowRecordingReviewMediaArtifact> MediaArtifacts,
+    IReadOnlyList<SlideShowRecordingReviewCaptionArtifact> CaptionArtifacts,
     IReadOnlyList<string> EvidenceLines);
 
 public sealed record SlideShowRecordingReviewPlan(
@@ -50,9 +79,17 @@ public sealed record SlideShowRecordingReviewPlan(
     int DeferredMediaArtifactCount,
     int CapturedMediaArtifactCount,
     int PersistableMediaArtifactCount,
+    int PersistableCaptionArtifactCount,
     IReadOnlyList<SlideShowRecordingReviewRow> Rows,
     IReadOnlyList<SlideShowSlideTimingMutation> TimingMutations,
     IReadOnlyList<string> EvidenceLines);
+
+public sealed record SlideShowRecordingReviewApplyResult(
+    int MediaArtifactCount,
+    int CaptionArtifactCount)
+{
+    public int TotalArtifactCount => MediaArtifactCount + CaptionArtifactCount;
+}
 
 public static class SlideShowRecordingReviewPlanner
 {
@@ -84,6 +121,7 @@ public static class SlideShowRecordingReviewPlanner
             rows.Sum(row => row.MediaArtifacts.Count(artifact => artifact.IsDeferred)),
             rows.Sum(row => row.MediaArtifacts.Count(artifact => artifact.IsCaptured)),
             rows.Sum(row => row.MediaArtifacts.Count(artifact => artifact.IsPersistable)),
+            rows.Sum(row => row.CaptionArtifacts.Count(artifact => artifact.IsPersistable)),
             rows,
             mutations,
             BuildEvidenceLines(state, rows, mutations));
@@ -99,6 +137,18 @@ public static class SlideShowRecordingReviewPlanner
         SlideShowTimingRecorderPlanner.ApplyTimings(presentation, plan.TimingMutations);
     }
 
+    public static SlideShowRecordingReviewApplyResult ApplyPersistableArtifacts(
+        Presentation presentation,
+        SlideShowRecordingReviewPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        ArgumentNullException.ThrowIfNull(plan);
+
+        var mediaCount = ApplyPersistableMediaArtifacts(presentation, plan);
+        var captionCount = ApplyPersistableCaptionArtifacts(presentation, plan);
+        return new SlideShowRecordingReviewApplyResult(mediaCount, captionCount);
+    }
+
     public static int ApplyPersistableMediaArtifacts(
         Presentation presentation,
         SlideShowRecordingReviewPlan plan)
@@ -111,6 +161,44 @@ public static class SlideShowRecordingReviewPlanner
                 .Where(artifact => artifact.IsPersistable)
                 .Select(artifact => new PresentationRecordingMediaArtifact(
                     MapArtifactKind(artifact.Kind),
+                    row.SlideIndex,
+                    artifact.SuggestedFileName,
+                    artifact.ContentType,
+                    artifact.PackagePath,
+                    artifact.ContentLengthBytes,
+                    artifact.ContentSha256,
+                    row.DurationMs,
+                    plan.HostName,
+                    artifact.StatusText,
+                    artifact.PayloadBytes)))
+            .ToArray();
+
+        if (artifacts.Length == 0)
+        {
+            return 0;
+        }
+
+        var replacementKeys = artifacts
+            .Select(ArtifactKey)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        presentation.RecordingMediaArtifacts.RemoveAll(existing =>
+            replacementKeys.Contains(ArtifactKey(existing)));
+        presentation.RecordingMediaArtifacts.AddRange(artifacts);
+        return artifacts.Length;
+    }
+
+    public static int ApplyPersistableCaptionArtifacts(
+        Presentation presentation,
+        SlideShowRecordingReviewPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        ArgumentNullException.ThrowIfNull(plan);
+
+        var artifacts = plan.Rows
+            .SelectMany(row => row.CaptionArtifacts
+                .Where(artifact => artifact.IsPersistable)
+                .Select(artifact => new PresentationRecordingMediaArtifact(
+                    MapCaptionArtifactKind(artifact.Kind),
                     row.SlideIndex,
                     artifact.SuggestedFileName,
                     artifact.ContentType,
@@ -162,6 +250,7 @@ public static class SlideShowRecordingReviewPlanner
                 artifact.ContentSha256,
                 artifact.PayloadBytes))
             .ToArray();
+        var captions = BuildCaptionArtifacts(state.HostCapabilities.HostName, title, segment, artifacts);
 
         return new SlideShowRecordingReviewRow(
             segment.SlideIndex,
@@ -171,7 +260,8 @@ public static class SlideShowRecordingReviewPlanner
             timingStatus,
             timingStatus is SlideShowRecordingReviewTimingStatus.WillPersist,
             artifacts,
-            BuildRowEvidenceLines(state.HostCapabilities.HostName, title, segment, timingStatus, artifacts));
+            captions,
+            BuildRowEvidenceLines(state.HostCapabilities.HostName, title, segment, timingStatus, artifacts, captions));
     }
 
     private static SlideShowRecordingReviewTimingStatus ResolveTimingStatus(
@@ -206,7 +296,8 @@ public static class SlideShowRecordingReviewPlanner
         string slideTitle,
         SlideShowRecordingSlideSegment segment,
         SlideShowRecordingReviewTimingStatus timingStatus,
-        IReadOnlyList<SlideShowRecordingReviewMediaArtifact> artifacts)
+        IReadOnlyList<SlideShowRecordingReviewMediaArtifact> artifacts,
+        IReadOnlyList<SlideShowRecordingReviewCaptionArtifact> captions)
     {
         var lines = new List<string>
         {
@@ -242,6 +333,18 @@ public static class SlideShowRecordingReviewPlanner
             }
         }
 
+        if (captions.Count > 0)
+        {
+            foreach (var caption in captions.Where(caption => caption.IsPersistable))
+            {
+                var shortHash = caption.ContentSha256.Length > 12
+                    ? caption.ContentSha256[..12]
+                    : caption.ContentSha256;
+                lines.Add(
+                    $"{hostName}: {slideTitle} {caption.Kind} ready for PPTX caption persistence at {caption.PackagePath} ({caption.ContentLengthBytes} bytes; sha256 {shortHash})");
+            }
+        }
+
         return lines;
     }
 
@@ -273,7 +376,80 @@ public static class SlideShowRecordingReviewPlanner
             lines.Add($"{state.HostCapabilities.HostName}: {persistableArtifacts} recording media artifact(s) ready for PPTX media persistence");
         }
 
+        var persistableCaptionArtifacts = rows.Sum(row => row.CaptionArtifacts.Count(artifact => artifact.IsPersistable));
+        if (persistableCaptionArtifacts > 0)
+        {
+            lines.Add($"{state.HostCapabilities.HostName}: {persistableCaptionArtifacts} recording caption artifact(s) ready for PPTX caption persistence");
+        }
+
         return lines;
+    }
+
+    private static IReadOnlyList<SlideShowRecordingReviewCaptionArtifact> BuildCaptionArtifacts(
+        string hostName,
+        string slideTitle,
+        SlideShowRecordingSlideSegment segment,
+        IReadOnlyList<SlideShowRecordingReviewMediaArtifact> mediaArtifacts)
+    {
+        var captions = new List<SlideShowRecordingReviewCaptionArtifact>();
+        foreach (var artifact in mediaArtifacts.Where(artifact => artifact.IsPersistable))
+        {
+            captions.Add(BuildCaptionArtifact(hostName, slideTitle, segment, artifact));
+        }
+
+        return captions;
+    }
+
+    private static SlideShowRecordingReviewCaptionArtifact BuildCaptionArtifact(
+        string hostName,
+        string slideTitle,
+        SlideShowRecordingSlideSegment segment,
+        SlideShowRecordingReviewMediaArtifact sourceArtifact)
+    {
+        var isNarration = sourceArtifact.Kind == SlideShowRecordingMediaArtifactKind.NarrationAudio;
+        var fileStem = isNarration ? "narration-captions" : "camera-captions";
+        var suggestedFileName = $"slide-{segment.SlideIndex + 1:000}-{fileStem}.vtt";
+        var packagePath = $"ppt/media/recording-captions/{suggestedFileName}";
+        var label = isNarration ? "Narration captions" : "Camera subtitles";
+        var cueText = isNarration
+            ? $"{slideTitle}: narration captured by {hostName} for {segment.DurationMs} ms."
+            : $"{slideTitle}: camera video captured by {hostName} for {segment.DurationMs} ms.";
+
+        var media = new MediaInfo();
+        var result = PresentationMediaTranscriptPlanner.CreateInternalCaptionTrack(
+            media,
+            new PresentationMediaCaptionTrackAuthoringDescriptor(
+                label,
+                "en-US",
+                packagePath,
+                TranscriptText: null,
+                Cues:
+                [
+                    new PresentationMediaTranscriptCueDescriptor(
+                        TimeSpan.Zero,
+                        TimeSpan.FromMilliseconds(Math.Max(1, segment.DurationMs)),
+                        cueText)
+                ]));
+
+        var track = result.Track ?? throw new InvalidOperationException(result.ErrorMessage);
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(track.Bytes)).ToLowerInvariant();
+        var kind = isNarration
+            ? SlideShowRecordingCaptionArtifactKind.NarrationCaption
+            : SlideShowRecordingCaptionArtifactKind.CameraCaption;
+
+        return new SlideShowRecordingReviewCaptionArtifact(
+            kind,
+            sourceArtifact.Kind,
+            IsCaptured: true,
+            suggestedFileName,
+            "text/vtt",
+            $"{hostName}: {label} authored for {sourceArtifact.SuggestedFileName}",
+            track.Source,
+            track.Bytes.Length,
+            hash,
+            track.Language,
+            track.Label,
+            track.Bytes);
     }
 
     private static string ResolveSlideTitle(Slide slide, int slideIndex) =>
@@ -286,6 +462,12 @@ public static class SlideShowRecordingReviewPlanner
         kind == SlideShowRecordingMediaArtifactKind.NarrationAudio
             ? PresentationRecordingMediaArtifactKind.NarrationAudio
             : PresentationRecordingMediaArtifactKind.CameraVideo;
+
+    private static PresentationRecordingMediaArtifactKind MapCaptionArtifactKind(
+        SlideShowRecordingCaptionArtifactKind kind) =>
+        kind == SlideShowRecordingCaptionArtifactKind.NarrationCaption
+            ? PresentationRecordingMediaArtifactKind.NarrationCaption
+            : PresentationRecordingMediaArtifactKind.CameraCaption;
 
     private static string ArtifactKey(PresentationRecordingMediaArtifact artifact) =>
         $"{artifact.SlideIndex}|{artifact.Kind}|{artifact.PackagePath}";

@@ -163,6 +163,7 @@ internal static class FreePCommandInventory
             [
                 "docs/parity/freep-presenter-recording-backend-contract-2026-07-05.md",
                 "docs/parity/freep-presenter-recording-execution-2026-07-04.md",
+                "docs/parity/freep-presenter-recording-media-artifact-manifest-2026-07-05.md",
                 "docs/parity/freep-presenter-recording-review-2026-07-04.md"
             ],
             Verification:
@@ -172,7 +173,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/SlideShowTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/SlideShowWindowHeadlessTests.cs"
             ],
-            RemainingWork: "Shared recording capture backend contracts, deterministic no-device artifact evidence, review rows, session-summary persistable counts, and captured PPTX media-part payload authoring are covered. Real microphone/camera adapters, subtitles, and PowerPoint COM recording baselines remain deferred."),
+            RemainingWork: "Shared recording capture backend contracts, deterministic no-device artifact evidence, review rows, session-summary persistable counts, captured PPTX media-part payload authoring, and generated WebVTT recording-caption artifact persistence are covered. Real microphone/camera adapters, PowerPoint-native caption relationship baselines, and PowerPoint COM recording baselines remain deferred."),
         new(
             EvidenceId: "freep.presenter.ink.execution",
             Area: "Presenter ink, laser, and persistence execution",
