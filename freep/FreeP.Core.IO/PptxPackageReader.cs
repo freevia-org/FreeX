@@ -2907,7 +2907,7 @@ public static class PptxPackageReader
             }
 
             var target = rel.Target.Trim();
-            var isExternal = IsExternalCaptionTrackTarget(target);
+            var isExternal = rel.IsExternal || IsExternalCaptionTrackTarget(target);
             var source = isExternal
                 ? target
                 : ResolveRelativeZipPath(GetDirectoryName(partPath), target);

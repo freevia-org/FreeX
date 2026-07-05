@@ -302,6 +302,115 @@ public sealed class MediaFieldsTests
     }
 
     [Fact]
+    public void Media_PowerPointExternalCaptionTrack_ReadSaveReopen_PreservesRelationshipContract()
+    {
+        const string externalCaptionTarget = "captions/external-en.vtt";
+
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 1,
+            Name        = "PowerPoint externally captioned video",
+            Kind        = SlideShapeKind.Media,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Picture = new ImagePart { Bytes = CreateMinimal1x1Png(), ContentType = "image/png" },
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                Bytes = new byte[] { 0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70 },
+                ContentType = "video/mp4"
+            }
+        });
+        pres.Slides.Add(slide);
+
+        using var source = new MemoryStream();
+        PptxPackageWriter.Write(pres, source);
+        AddExternalCaptionTrack(source, externalCaptionTarget);
+
+        source.Position = 0;
+        var loaded = PptxPackageReader.Read(source);
+        loaded.RecordingMediaArtifacts.Should().BeEmpty(
+            "external PowerPoint caption relationships are media metadata, not FreeP recording artifacts");
+        loaded.PackageSnapshot!.TryGetEntry("ppt/slides/captions/external-en.vtt", out _).Should().BeFalse(
+            "TargetMode=External is authoritative even when the target string is relative");
+
+        var loadedTrack = loaded.Slides[0].Shapes[0].Media!.CaptionTracks.Should().ContainSingle().Subject;
+        loadedTrack.RelationshipId.Should().Be("rIdCaptionExternal1");
+        loadedTrack.Source.Should().Be(externalCaptionTarget);
+        loadedTrack.ContentType.Should().Be("text/vtt");
+        loadedTrack.Language.Should().Be("en-US");
+        loadedTrack.Label.Should().Be("External English captions");
+        loadedTrack.IsExternal.Should().BeTrue();
+        loadedTrack.Bytes.Should().BeEmpty();
+
+        var transcript = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(loaded);
+        transcript.Tracks.Should().ContainSingle()
+            .Which.Should().Match<PresentationMediaTranscriptTrackDescriptor>(descriptor =>
+                descriptor.ShapeId == 1 &&
+                descriptor.Label == "External English captions" &&
+                descriptor.Language == "en-US" &&
+                descriptor.Source == externalCaptionTarget &&
+                descriptor.Status == PresentationMediaTranscriptTrackStatus.External &&
+                descriptor.CueCount == 0);
+
+        loaded.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 2,
+            Name = "Modeled edit",
+            Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 3657600,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 914400,
+            Text = "edit"
+        });
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+
+        saved.Position = 0;
+        using (var zip = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            zip.GetEntry("ppt/media/recordingArtifacts.xml").Should().BeNull(
+                "external captions must not be converted to generated recording artifacts");
+            zip.Entries.Should().NotContain(entry =>
+                entry.FullName.StartsWith("ppt/media/recording-captions/", StringComparison.OrdinalIgnoreCase));
+            zip.Entries.Should().NotContain(entry =>
+                entry.FullName.Contains("external-en.vtt", StringComparison.OrdinalIgnoreCase),
+                "external caption links must remain relationship metadata instead of authored package sidecars");
+
+            var rels = ReadXml(zip, "ppt/slides/_rels/slide1.xml.rels");
+            var relNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships");
+            var captionRel = rels.Root!.Elements(relNs + "Relationship")
+                .Single(e => e.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2011/relationships/mediaCaption");
+            captionRel.Attribute("Target")!.Value.Should().Be(externalCaptionTarget);
+            captionRel.Attribute("TargetMode")!.Value.Should().Be("External");
+
+            var slideXml = ReadXml(zip, "ppt/slides/slide1.xml");
+            var r = XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+            var captionEl = slideXml.Descendants().Single(e => e.Name.LocalName == "caption");
+            captionEl.Name.NamespaceName.Should().Be("http://schemas.microsoft.com/office/powerpoint/2020/media");
+            captionEl.Attribute(r + "link")!.Value.Should().Be(captionRel.Attribute("Id")!.Value);
+            captionEl.Attribute(r + "embed").Should().BeNull();
+            captionEl.Attribute("lang")!.Value.Should().Be("en-US");
+            captionEl.Attribute("label")!.Value.Should().Be("External English captions");
+        }
+
+        saved.Position = 0;
+        var reopened = PptxPackageReader.Read(saved);
+        reopened.RecordingMediaArtifacts.Should().BeEmpty();
+        var reopenedTrack = reopened.Slides[0].Shapes[0].Media!.CaptionTracks.Should().ContainSingle().Subject;
+        reopenedTrack.Source.Should().Be(externalCaptionTarget);
+        reopenedTrack.IsExternal.Should().BeTrue();
+        reopenedTrack.Bytes.Should().BeEmpty();
+        reopened.Slides[0].Shapes.Should().Contain(shape => shape.Name == "Modeled edit");
+    }
+
+    [Fact]
     public void Media_PowerPointNativeCaptionPackage_WithMultipleCaptionTracks_PreservesCorpusRelationshipSet()
     {
         var pres = new Presentation();
@@ -887,6 +996,41 @@ public sealed class MediaFieldsTests
                     "English captions",
                     "Demo caption")
             ]);
+
+    private static void AddExternalCaptionTrack(MemoryStream package, string externalCaptionTarget)
+    {
+        package.Position = 0;
+        using var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true);
+        var rels = ReadXml(archive, "ppt/slides/_rels/slide1.xml.rels");
+        var relNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships");
+        rels.Root!.Add(new XElement(
+            relNs + "Relationship",
+            new XAttribute("Id", "rIdCaptionExternal1"),
+            new XAttribute("Type", "http://schemas.microsoft.com/office/2011/relationships/mediaCaption"),
+            new XAttribute("Target", externalCaptionTarget),
+            new XAttribute("TargetMode", "External")));
+        WriteXml(archive, "ppt/slides/_rels/slide1.xml.rels", rels);
+
+        var slide = ReadXml(archive, "ppt/slides/slide1.xml");
+        var p = XNamespace.Get("http://schemas.openxmlformats.org/presentationml/2006/main");
+        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var r = XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+        var c = XNamespace.Get("http://schemas.microsoft.com/office/powerpoint/2020/media");
+        var nvPr = slide.Descendants(p + "nvPr").First(element => element.Element(a + "videoFile") is not null);
+        var extLst = nvPr.Element(p + "extLst");
+        if (extLst is null)
+        {
+            extLst = new XElement(p + "extLst");
+            nvPr.Add(extLst);
+        }
+
+        extLst.Add(new XElement(
+            c + "caption",
+            new XAttribute(r + "link", "rIdCaptionExternal1"),
+            new XAttribute("lang", "en-US"),
+            new XAttribute("label", "External English captions")));
+        WriteXml(archive, "ppt/slides/slide1.xml", slide);
+    }
 
     private static void AddCaptionTracks(MemoryStream package, IReadOnlyList<CaptionTrackFixture> tracks)
     {

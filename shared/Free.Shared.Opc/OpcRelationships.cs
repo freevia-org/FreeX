@@ -16,7 +16,16 @@ public readonly record struct OpcCanonicalRelationship(
 public readonly record struct OpcRelationshipTarget(
     string Id,
     string Type,
-    string Target);
+    string Target,
+    bool IsExternal = false)
+{
+    public void Deconstruct(out string id, out string type, out string target)
+    {
+        id = Id;
+        type = Type;
+        target = Target;
+    }
+}
 
 public static class OpcRelationships
 {
@@ -86,7 +95,8 @@ public static class OpcRelationships
             .Select(relationship => new OpcRelationshipTarget(
                 relationship.Id,
                 relationship.Type,
-                relationship.Target))
+                relationship.Target,
+                relationship.IsExternal))
             .ToList();
 
     public static string? FirstTargetByType(
