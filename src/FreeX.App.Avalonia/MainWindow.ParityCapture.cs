@@ -1673,7 +1673,13 @@ public sealed partial class MainWindow
 
         try
         {
-            // Default surface first (whatever tab the dialog opens on).
+            // Default surface first (whatever tab the dialog opens on). Pump once before
+            // rendering so SizeToContent tab dialogs settle to the same frame the tab
+            // captures use after changing SelectedIndex.
+            await Task.Delay(ParityCaptureDialogPollMilliseconds);
+            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
+            try { dialog.UpdateLayout(); } catch { /* best-effort */ }
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
             results.Add(RenderParityDialogTab(outputDirectory, dialog, surfaceId, defaultPng, kind));
 
             // A real TabControl drives selection via SelectedIndex; the Options dialog instead carries an
