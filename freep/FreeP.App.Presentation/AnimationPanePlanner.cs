@@ -80,6 +80,13 @@ public sealed record AnimationPaneTimelineItemPlan(
     bool IsSelected,
     AnimationPaneEffectOptionsPlan EffectOptions);
 
+public sealed record AnimationPaneWorkflowViewPlan(
+    string Heading,
+    string Message,
+    string EmptyMessage,
+    IReadOnlyList<string> RowSummaries,
+    IReadOnlyList<string> PlaybackControlSummaries);
+
 public enum AnimationPanePlaybackIntentKind
 {
     None,
@@ -844,6 +851,51 @@ public static class AnimationPanePlanner
         return true;
     }
 
+    public static AnimationPaneWorkflowViewPlan BuildWorkflowViewPlan(
+        AnimationPaneTimelinePlan timelinePlan,
+        int slideIndex)
+    {
+        ArgumentNullException.ThrowIfNull(timelinePlan);
+
+        const string EmptyMessage = "No animations on this slide.";
+        var safeSlideNumber = Math.Max(0, slideIndex) + 1;
+        var heading = $"Animation Pane - slide {safeSlideNumber} ({timelinePlan.Items.Count} animations)";
+        var message = timelinePlan.SelectedItem is { } selected
+            ? $"Selected: {selected.ShapeName} - {selected.EffectText}"
+            : timelinePlan.HasAnimations
+                ? "Select an animation row to inspect and reorder it."
+                : EmptyMessage;
+        var rowSummaries = timelinePlan.Items
+            .Select(BuildWorkflowRowSummary)
+            .ToArray();
+        var controlSummaries = timelinePlan.PlaybackControls
+            .Select(BuildPlaybackControlSummary)
+            .ToArray();
+
+        return new AnimationPaneWorkflowViewPlan(
+            heading,
+            message,
+            EmptyMessage,
+            rowSummaries,
+            controlSummaries);
+    }
+
+    public static string BuildWorkflowRowSummary(AnimationPaneTimelineItemPlan item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        return $"{item.OrderText}. {item.ShapeName} - {item.EffectText}{FormatEffectOptions(item.EffectOptions)} - {item.TriggerText}; "
+            + $"duration {item.DurationText}s; delay {item.DelayText}s; starts {item.StartText}s; "
+            + $"move earlier {FormatAvailability(item.CanMoveEarlier)}; move later {FormatAvailability(item.CanMoveLater)}";
+    }
+
+    public static string BuildPlaybackControlSummary(AnimationPanePlaybackControlDescriptor control)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+
+        return $"{control.Label}: {FormatAvailability(control.IsEnabled)}";
+    }
+
     private static int NormalizeSelectedIndex(
         IReadOnlyList<ShapeAnimation> animations,
         IReadOnlyList<uint>? selectedShapeIds,
@@ -929,6 +981,14 @@ public static class AnimationPanePlanner
             string.Empty,
             Array.Empty<AnimationPaneEffectOptionDescriptor>(),
             disabledReason);
+
+    private static string FormatEffectOptions(AnimationPaneEffectOptionsPlan plan)
+        => plan.CanApply
+            ? $" ({plan.SelectedOptionText})"
+            : string.Empty;
+
+    private static string FormatAvailability(bool isAvailable)
+        => isAvailable ? "available" : "unavailable";
 
     private static IEnumerable<AnimationPaneEffectOptionDescriptor> BuildSupportedEffectOptions(
         ShapeAnimation animation)

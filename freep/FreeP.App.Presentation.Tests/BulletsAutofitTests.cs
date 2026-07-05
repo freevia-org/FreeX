@@ -701,6 +701,32 @@ public sealed class BulletsAutofitTests
         rtBody.AutoFit.Should().BeFalse();
     }
 
+    [Fact]
+    public void PptxImport_BuBlip_ResolvesImageBulletIntoSharedRenderPlan()
+    {
+        var imageBytes = Minimal1x1Png();
+        using var package = CreatePictureBulletPptx(imageBytes);
+
+        var presentation = FreeP.Core.IO.PptxPackageReader.Read(package);
+
+        var paragraph = presentation.Slides[0].Shapes[0].TextBody!.Paragraphs[0];
+        paragraph.BulletKind.Should().Be(BulletKind.Image);
+        paragraph.BulletImage.Should().NotBeNull();
+        paragraph.BulletImage!.Bytes.Should().Equal(imageBytes);
+        paragraph.BulletImage.ContentType.Should().Be("image/png");
+
+        var ops = SlideCompositor.Compose(presentation, presentation.Slides[0]);
+        var layout = ops.OfType<DrawOp.Shape>().Single().Text!;
+        layout.Paragraphs[0].BulletKind.Should().Be(BulletKind.Image);
+        layout.Paragraphs[0].BulletImage.Should().BeSameAs(paragraph.BulletImage);
+
+        var plan = TextLayoutPlanner.PlanBodyText(
+            layout,
+            new LayoutRect(0, 0, 300, 160),
+            new[] { new TextParagraphMeasure(0, 24, 0, 0) });
+        plan.Paragraphs.Single().Bullet!.Value.Image.Should().BeSameAs(paragraph.BulletImage);
+    }
+
     // ─── BU1: explicit buNone suppresses inherited bullet ─────────────────────
 
     /// <summary>
@@ -969,4 +995,114 @@ public sealed class BulletsAutofitTests
         spcBefIdx.Should().BeLessThan(spcAftIdx,
             "a:spcBef must come before a:spcAft");
     }
+
+    private static System.IO.MemoryStream CreatePictureBulletPptx(byte[] imageBytes)
+    {
+        var stream = new System.IO.MemoryStream();
+        using (var zip = new System.IO.Compression.ZipArchive(
+                   stream,
+                   System.IO.Compression.ZipArchiveMode.Create,
+                   leaveOpen: true))
+        {
+            WriteZipEntry(zip, "[Content_Types].xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Default Extension="png" ContentType="image/png"/>
+                  <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
+                  <Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
+                </Types>
+                """);
+            WriteZipEntry(zip, "_rels/.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>
+                </Relationships>
+                """);
+            WriteZipEntry(zip, "ppt/_rels/presentation.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>
+                </Relationships>
+                """);
+            WriteZipEntry(zip, "ppt/presentation.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <p:sldSz cx="9144000" cy="5143500"/>
+                  <p:sldIdLst>
+                    <p:sldId id="256" r:id="rId1"/>
+                  </p:sldIdLst>
+                </p:presentation>
+                """);
+            WriteZipEntry(zip, "ppt/slides/_rels/slide1.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdImage1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>
+                </Relationships>
+                """);
+            WriteZipEntry(zip, "ppt/slides/slide1.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <p:cSld>
+                    <p:spTree>
+                      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+                      <p:grpSpPr/>
+                      <p:sp>
+                        <p:nvSpPr><p:cNvPr id="2" name="Picture bullet text"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+                        <p:spPr>
+                          <a:xfrm><a:off x="0" y="0"/><a:ext cx="3000000" cy="1000000"/></a:xfrm>
+                          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+                        </p:spPr>
+                        <p:txBody>
+                          <a:bodyPr/>
+                          <a:lstStyle/>
+                          <a:p>
+                            <a:pPr marL="342900" indent="-171450"><a:buBlip><a:blip r:embed="rIdImage1"/></a:buBlip></a:pPr>
+                            <a:r><a:rPr sz="1800"/><a:t>Imported image bullet</a:t></a:r>
+                          </a:p>
+                        </p:txBody>
+                      </p:sp>
+                    </p:spTree>
+                  </p:cSld>
+                </p:sld>
+                """);
+
+            var imageEntry = zip.CreateEntry("ppt/media/image1.png");
+            using var imageStream = imageEntry.Open();
+            imageStream.Write(imageBytes, 0, imageBytes.Length);
+        }
+
+        stream.Position = 0;
+        return stream;
+    }
+
+    private static void WriteZipEntry(
+        System.IO.Compression.ZipArchive zip,
+        string path,
+        string text)
+    {
+        var entry = zip.CreateEntry(path);
+        using var writer = new System.IO.StreamWriter(entry.Open(), System.Text.Encoding.UTF8);
+        writer.Write(text);
+    }
+
+    private static byte[] Minimal1x1Png() =>
+    [
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+        0x42, 0x60, 0x82
+    ];
 }

@@ -63,6 +63,7 @@ public sealed class AnimationPane : Border
     internal AnimationPanePlaybackSessionPlan? CurrentPlaybackSessionPlanForTest => _playbackSessionPlan;
     internal IReadOnlyList<AnimationPanePlaybackControlDescriptor> CurrentPlaybackControlsForTest =>
         BuildTimelinePlan().PlaybackControls;
+    internal AnimationPaneWorkflowViewPlan CurrentWorkflowViewPlanForTest => BuildWorkflowViewPlan();
 
     // ── Construction ──────────────────────────────────────────────────────────────
 
@@ -152,9 +153,10 @@ public sealed class AnimationPane : Border
         RenderPlaybackControls(plan);
         if (!plan.HasAnimations)
         {
+            var viewPlan = BuildWorkflowViewPlan(plan);
             _listPanel.Children.Add(new TextBlock
             {
-                Text       = "No animations on this slide.",
+                Text       = viewPlan.EmptyMessage,
                 FontSize   = 11,
                 Foreground = MutedBrush,
                 Margin     = new Thickness(10, 12, 10, 12),
@@ -545,6 +547,12 @@ public sealed class AnimationPane : Border
             _editor.SelectedShapeIds,
             _selectedRowIndex,
             isPlaybackRunning: _playbackSessionPlan?.IsRunning == true);
+
+    private AnimationPaneWorkflowViewPlan BuildWorkflowViewPlan()
+        => BuildWorkflowViewPlan(BuildTimelinePlan());
+
+    private AnimationPaneWorkflowViewPlan BuildWorkflowViewPlan(AnimationPaneTimelinePlan plan)
+        => AnimationPanePlanner.BuildWorkflowViewPlan(plan, _editor.CurrentSlideIndex);
 
     // ── Static freeze helper ──────────────────────────────────────────────────────
 

@@ -59,6 +59,12 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("FreeWVisualEvidencePlanner.ExpectedOutputName(scenarioId, pageNumber)");
         source.Should().Contain("hostId: \"wpf-fidelity-render\"");
         source.Should().Contain("[\"captureSource\"] = \"wpf-composite-renderer\"");
+        source.Should().Contain("metadata[\"backstageArtifactKind\"] = BackstageArtifactKindForScenario(documentName);");
+        source.Should().Contain("metadata[\"backstagePipeline\"] = BackstagePipelineForScenario(documentName);");
+        source.Should().Contain("\"print-preview-fixed-layout\"");
+        source.Should().Contain("\"pdf-export-rasterized\"");
+        source.Should().Contain("\"print-preview-fixed-layout-artifact\"");
+        source.Should().Contain("\"pdf-export-rasterized-artifact\"");
         source.Should().Contain("\"--software-fallback\"");
         source.Should().Contain("RenderDocumentSoftwareFallback(");
         source.Should().Contain("Software evidence renderer requested by --software-fallback");

@@ -1,6 +1,7 @@
 using System.IO;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
+using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor.Tests;
 
@@ -219,8 +220,47 @@ public sealed class TextLayoutPlannerTests
             "Aptos",
             14,
             new SrgbColor(0x22, 0x33, 0x44),
+            null,
             39,
             26));
+    }
+
+    [Fact]
+    public void PlanBodyText_ImageBullet_PlansImagePlacementFromIndentAndHanging()
+    {
+        var image = new ImagePart
+        {
+            Bytes = new byte[] { 1, 2, 3 },
+            ContentType = "image/png"
+        };
+        var text = new ResolvedTextLayout
+        {
+            Paragraphs = new[]
+            {
+                new ResolvedParagraph
+                {
+                    Runs = new[] { new ResolvedRun { Text = "Picture bullet" } },
+                    BulletKind = BulletKind.Image,
+                    BulletImage = image,
+                    BulletFontSizePt = 12,
+                    IndentDip = 36,
+                    HangingDip = 18
+                }
+            }
+        };
+
+        var plan = TextLayoutPlanner.PlanBodyText(
+            text,
+            new LayoutRect(10, 20, 200, 100),
+            new[] { new TextParagraphMeasure(0, 20, 0, 0) });
+
+        var bullet = plan.Paragraphs.Single().Bullet;
+        bullet.Should().NotBeNull();
+        bullet!.Value.IsImage.Should().BeTrue();
+        bullet.Value.Image.Should().BeSameAs(image);
+        bullet.Value.Text.Should().BeEmpty();
+        bullet.Value.X.Should().BeApproximately(37.14, 0.001);
+        bullet.Value.Y.Should().BeApproximately(24.57, 0.001);
     }
 
     [Fact]
@@ -681,6 +721,8 @@ public sealed class TextLayoutPlannerTests
         wpf.Should().Contain("TextLayoutPlanner.PlanTextOrientation");
         wpf.Should().Contain("TextLayoutPlanner.PlanStackedVerticalText");
         wpf.Should().Contain("placement.Bullet");
+        wpf.Should().Contain("DrawBulletPlacementWpf");
+        wpf.Should().Contain("bullet.Image");
         wpf.Should().NotContain("bool isVertical = text.VerticalType");
         wpf.Should().NotContain("bool isVert270");
         wpf.Should().NotContain("FontScalePPT");
@@ -703,6 +745,8 @@ public sealed class TextLayoutPlannerTests
         avalonia.Should().Contain("TextLayoutPlanner.PlanTextOrientation");
         avalonia.Should().Contain("TextLayoutPlanner.PlanStackedVerticalText");
         avalonia.Should().Contain("placement.Bullet");
+        avalonia.Should().Contain("DrawBulletPlacementAvalonia");
+        avalonia.Should().Contain("bullet.Image");
         avalonia.Should().NotContain("bool isVertical = text.VerticalType");
         avalonia.Should().NotContain("bool isVert270");
         avalonia.Should().NotContain("FontScalePPT");

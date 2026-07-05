@@ -1501,8 +1501,7 @@ public sealed class SlideCanvas : Control
             var para = renderText.Paragraphs[placement.ParagraphIndex];
             var ft = formatted[placement.ParagraphIndex];
             if (placement.Bullet is { } bullet)
-                DrawBulletAvalonia(dc, bullet.Text, bullet.FontFamily, bullet.FontSizePt,
-                    bullet.Color, bullet.X, bullet.Y);
+                DrawBulletPlacementAvalonia(dc, bullet);
 
             switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, renderText))
             {
@@ -1574,8 +1573,7 @@ public sealed class SlideCanvas : Control
 
             if (placement.Bullet is { } bullet)
             {
-                DrawBulletAvalonia(dc, bullet.Text, bullet.FontFamily, bullet.FontSizePt,
-                    bullet.Color, bullet.X, bullet.Y);
+                DrawBulletPlacementAvalonia(dc, bullet);
             }
 
             switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, renderText))
@@ -1601,6 +1599,29 @@ public sealed class SlideCanvas : Control
     /// <summary>
     /// Wave 19A: draws a bullet glyph or number string at the given position.
     /// </summary>
+    private static void DrawBulletPlacementAvalonia(DrawingContext dc, TextBulletPlacement bullet)
+    {
+        if (bullet.Image is { Bytes.Length: > 0 } image)
+        {
+            try
+            {
+                using var ms = new MemoryStream(image.Bytes);
+                using var bitmap = new Bitmap(ms);
+                double size = Math.Max(1.0, bullet.FontSizePt * (96.0 / 72.0));
+                dc.DrawImage(bitmap, new Rect(bullet.X, bullet.Y, size, size));
+            }
+            catch
+            {
+                // Keep text rendering resilient when an imported bullet image cannot be decoded.
+            }
+
+            return;
+        }
+
+        DrawBulletAvalonia(dc, bullet.Text, bullet.FontFamily, bullet.FontSizePt,
+            bullet.Color, bullet.X, bullet.Y);
+    }
+
     private static void DrawBulletAvalonia(
         DrawingContext dc,
         string bulletText,

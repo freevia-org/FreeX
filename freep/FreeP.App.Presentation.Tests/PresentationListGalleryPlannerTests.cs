@@ -24,7 +24,7 @@ public sealed class PresentationListGalleryPlannerTests
         plan.EnabledItems.Should().HaveCount(5);
         plan.Items.Last().Kind.Should().Be(PresentationListGalleryItemKind.ImageBulletPlaceholder);
         plan.Items.Last().IsEnabled.Should().BeFalse(
-            "image bullets need a visible shared contract without claiming import/render parity yet");
+            "image bullets need a visible shared contract without claiming picker or media authoring parity yet");
     }
 
     [Fact]

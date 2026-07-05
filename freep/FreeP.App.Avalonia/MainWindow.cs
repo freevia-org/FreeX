@@ -3690,14 +3690,10 @@ public sealed class MainWindow : Window
     private void RenderAnimationPane(AnimationPaneTimelinePlan plan)
     {
         _selectedAnimationIndex = plan.SelectedIndex;
-        _animationPaneHeading.Text =
-            $"Animation Pane - slide {Editor.CurrentSlideIndex + 1} ({plan.Items.Count} animations)";
-        _animationPaneMessage.Text = plan.SelectedItem is { } selected
-            ? $"Selected: {selected.ShapeName} - {selected.EffectText}"
-            : plan.HasAnimations
-                ? "Select an animation row to inspect and reorder it."
-                : "No animations on this slide.";
-        RenderAnimationPanePlaybackControls(plan);
+        var viewPlan = AnimationPanePlanner.BuildWorkflowViewPlan(plan, Editor.CurrentSlideIndex);
+        _animationPaneHeading.Text = viewPlan.Heading;
+        _animationPaneMessage.Text = viewPlan.Message;
+        RenderAnimationPanePlaybackControls(plan, viewPlan);
 
         _animationPaneRenderedRows.Clear();
         _animationPaneItemsPanel.Children.Clear();
@@ -3709,7 +3705,7 @@ public sealed class MainWindow : Window
         {
             _animationPaneItemsPanel.Children.Add(new TextBlock
             {
-                Text = "No animations on this slide.",
+                Text = viewPlan.EmptyMessage,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
                 Margin = new Thickness(12, 0, 12, 10),
                 TextWrapping = TextWrapping.Wrap,
@@ -3717,19 +3713,23 @@ public sealed class MainWindow : Window
             return;
         }
 
-        foreach (var item in plan.Items)
+        for (var i = 0; i < plan.Items.Count; i++)
         {
-            _animationPaneRenderedRows.Add(BuildAnimationPaneRowSummary(item));
+            var item = plan.Items[i];
+            _animationPaneRenderedRows.Add(viewPlan.RowSummaries[i]);
             _animationPaneItemsPanel.Children.Add(BuildAnimationPaneItemCard(item));
         }
     }
 
-    private void RenderAnimationPanePlaybackControls(AnimationPaneTimelinePlan plan)
+    private void RenderAnimationPanePlaybackControls(
+        AnimationPaneTimelinePlan plan,
+        AnimationPaneWorkflowViewPlan viewPlan)
     {
         _animationPanePlaybackControlsPanel.Children.Clear();
         _animationPaneRenderedPlaybackControls.Clear();
-        foreach (var control in plan.PlaybackControls)
+        for (var i = 0; i < plan.PlaybackControls.Count; i++)
         {
+            var control = plan.PlaybackControls[i];
             var button = new Button
             {
                 Content = control.Label,
@@ -3742,8 +3742,7 @@ public sealed class MainWindow : Window
             ToolTip.SetTip(button, control.DisabledReason ?? control.ToolTip);
             button.Click += (_, _) => ExecuteAnimationPanePlaybackControl(control);
             _animationPanePlaybackControlsPanel.Children.Add(button);
-            _animationPaneRenderedPlaybackControls.Add(
-                $"{control.Label}: {FormatAvailability(control.IsEnabled)}");
+            _animationPaneRenderedPlaybackControls.Add(viewPlan.PlaybackControlSummaries[i]);
 
             if (control.Kind == AnimationPanePlaybackControlKind.PreviewCurrentSlide)
                 _animationPanePreviewButton = button;
@@ -4080,16 +4079,6 @@ public sealed class MainWindow : Window
         RefreshVisibleAnimationPane(_selectedAnimationIndex);
         return plan;
     }
-
-    private static string BuildAnimationPaneRowSummary(AnimationPaneTimelineItemPlan item)
-        => $"{item.OrderText}. {item.ShapeName} - {item.EffectText}{FormatEffectOptions(item.EffectOptions)} - {item.TriggerText}; "
-            + $"duration {item.DurationText}s; delay {item.DelayText}s; starts {item.StartText}s; "
-            + $"move earlier {FormatAvailability(item.CanMoveEarlier)}; move later {FormatAvailability(item.CanMoveLater)}";
-
-    private static string FormatEffectOptions(AnimationPaneEffectOptionsPlan plan)
-        => plan.CanApply
-            ? $" ({plan.SelectedOptionText})"
-            : string.Empty;
 
     private static string FormatAvailability(bool isAvailable)
         => isAvailable ? "available" : "unavailable";

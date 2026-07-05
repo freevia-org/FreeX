@@ -278,12 +278,14 @@ internal static class FreePCommandInventory
             [
                 "freep/FreeP.App.Presentation.Tests/TableCellEditPlannerTests.cs",
                 "freep/FreeP.App.Presentation.Tests/TableEditCommandTests.cs",
+                "freep/FreeP.App.Presentation.Tests/BulletsAutofitTests.cs",
+                "freep/FreeP.App.Presentation.Tests/TextLayoutPlannerTests.cs",
                 "freep/FreeP.App.Host.Tests/CanvasEditingTests.cs",
                 "freep/FreeP.App.Host.Tests/RibbonEditorCompleteness5BTests.cs",
                 "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasAvaloniaTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "Avalonia still lacks a true editable rich-text widget equivalent to WPF RichTextBox; picture-bullet import/rendering and PowerPoint-authoritative list-gallery/rich-editor visual baselines remain deferred.")
+            RemainingWork: "Avalonia still lacks a true editable rich-text widget equivalent to WPF RichTextBox; picture-bullet picker/media authoring and PowerPoint-authoritative list-gallery/rich-editor visual baselines remain deferred.")
     ];
 
     private static IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> Collect(RibbonDefinition definition, string profile)

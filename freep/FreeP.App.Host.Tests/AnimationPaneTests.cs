@@ -332,6 +332,16 @@ public sealed class AnimationPaneTests
         pane.CurrentPlaybackControlsForTest.Should().Contain(control =>
             control.Kind == AnimationPanePlaybackControlKind.Stop
             && !control.IsEnabled);
+        pane.CurrentWorkflowViewPlanForTest.Heading.Should().Be("Animation Pane - slide 1 (2 animations)");
+        pane.CurrentWorkflowViewPlanForTest.Message.Should().Be("Selected: Content Box - In: Fade");
+        pane.CurrentWorkflowViewPlanForTest.RowSummaries.Should().Contain(row =>
+            row.Contains("2. Content Box - In: Fade", StringComparison.Ordinal)
+            && row.Contains("move earlier available", StringComparison.Ordinal));
+        pane.CurrentWorkflowViewPlanForTest.PlaybackControlSummaries.Should().Equal(
+            "Preview: available",
+            "Play From Selected: available",
+            "Play All: available",
+            "Stop: unavailable");
     }
 
     [StaFact]
@@ -397,6 +407,7 @@ public sealed class AnimationPaneTests
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "AnimationPane.cs");
 
         source.Should().Contain("AnimationPanePlanner.BuildTimelinePlan(");
+        source.Should().Contain("AnimationPanePlanner.BuildWorkflowViewPlan(");
         source.Should().Contain("AnimationPanePlanner.BuildPlaybackSessionPlan(");
         source.Should().Contain("plan.PlaybackControls");
         source.Should().Contain("AnimationPanePlaybackControlKind.PlayFromSelected");

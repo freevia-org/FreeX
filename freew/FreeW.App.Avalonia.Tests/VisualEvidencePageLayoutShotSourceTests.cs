@@ -98,6 +98,12 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("pageNumber: pageNumber");
         source.Should().Contain("pageCount: pageCount");
         source.Should().Contain("refusing placeholder fallback for backstage renderer evidence");
+        source.Should().Contain("metadata[\"backstageArtifactKind\"] = BackstageArtifactKindForScenario(scenarioId);");
+        source.Should().Contain("metadata[\"backstagePipeline\"] = BackstagePipelineForScenario(scenarioId);");
+        source.Should().Contain("\"print-preview-fixed-layout\"");
+        source.Should().Contain("\"pdf-export-rasterized\"");
+        source.Should().Contain("\"print-preview-fixed-layout-artifact\"");
+        source.Should().Contain("\"pdf-export-rasterized-artifact\"");
         source.Should().Contain("refusing placeholder fallback for review renderer evidence");
         source.Should().Contain("freew_columns_layout.png");
         source.Should().Contain("freew_border_watermark.png");

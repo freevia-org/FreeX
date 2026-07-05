@@ -355,6 +355,12 @@ public sealed class Paragraph
     /// <summary>The bullet character when <see cref="BulletKind"/> == Char (e.g. "•").</summary>
     public string? BulletChar { get; set; }
 
+    /// <summary>
+    /// Resolved image payload when <see cref="BulletKind"/> is <see cref="BulletKind.Image"/>.
+    /// Populated from DrawingML <c>a:buBlip</c> relationships during PPTX import.
+    /// </summary>
+    public ImagePart? BulletImage { get; set; }
+
     // ── Wave 19A: extended bullet fields ──────────────────────────────────────
 
     /// <summary>

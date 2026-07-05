@@ -1461,8 +1461,7 @@ public sealed class SlideCanvas : FrameworkElement
             var para = renderText.Paragraphs[placement.ParagraphIndex];
             var ft = formatted[placement.ParagraphIndex];
             if (placement.Bullet is { } bullet)
-                DrawBulletWpf(dc, bullet.Text, bullet.FontFamily, bullet.FontSizePt,
-                    bullet.Color, bullet.X, bullet.Y);
+                DrawBulletPlacementWpf(dc, bullet);
 
             switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, renderText))
             {
@@ -1537,8 +1536,7 @@ public sealed class SlideCanvas : FrameworkElement
 
             if (placement.Bullet is { } bullet)
             {
-                DrawBulletWpf(dc, bullet.Text, bullet.FontFamily, bullet.FontSizePt,
-                    bullet.Color, bullet.X, bullet.Y);
+                DrawBulletPlacementWpf(dc, bullet);
             }
 
             switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, renderText))
@@ -1564,6 +1562,35 @@ public sealed class SlideCanvas : FrameworkElement
     /// <summary>
     /// Wave 19A: draws a bullet glyph or number string at the given position.
     /// </summary>
+    private static void DrawBulletPlacementWpf(DrawingContext dc, TextBulletPlacement bullet)
+    {
+        if (bullet.Image is { Bytes.Length: > 0 } image)
+        {
+            try
+            {
+                using var ms = new System.IO.MemoryStream(image.Bytes);
+                var bitmap = new BitmapImage();
+                bitmap.BeginInit();
+                bitmap.StreamSource = ms;
+                bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                bitmap.EndInit();
+                if (bitmap.CanFreeze) bitmap.Freeze();
+
+                double size = Math.Max(1.0, bullet.FontSizePt * (96.0 / 72.0));
+                dc.DrawImage(bitmap, new Rect(bullet.X, bullet.Y, size, size));
+            }
+            catch
+            {
+                // Keep text rendering resilient when an imported bullet image cannot be decoded.
+            }
+
+            return;
+        }
+
+        DrawBulletWpf(dc, bullet.Text, bullet.FontFamily, bullet.FontSizePt,
+            bullet.Color, bullet.X, bullet.Y);
+    }
+
     private static void DrawBulletWpf(
         DrawingContext dc,
         string bulletText,
