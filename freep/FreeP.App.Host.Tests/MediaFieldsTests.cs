@@ -302,6 +302,145 @@ public sealed class MediaFieldsTests
     }
 
     [Fact]
+    public void Media_PowerPointNativeCaptionPackage_WithMultipleCaptionTracks_PreservesCorpusRelationshipSet()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 1,
+            Name        = "PowerPoint multilingual captioned video",
+            Kind        = SlideShapeKind.Media,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Picture = new ImagePart { Bytes = CreateMinimal1x1Png(), ContentType = "image/png" },
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                Bytes = new byte[] { 0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70 },
+                ContentType = "video/mp4"
+            }
+        });
+        pres.Slides.Add(slide);
+
+        var tracks = new[]
+        {
+            new CaptionTrackFixture(
+                "rIdCaption1",
+                "ppt/media/captions1.vtt",
+                "en-US",
+                "English captions",
+                "English demo caption"),
+            new CaptionTrackFixture(
+                "rIdCaption2",
+                "ppt/media/captions-es.vtt",
+                "es-ES",
+                "Spanish subtitles",
+                "Subtitulo de demostracion")
+        };
+
+        using var source = new MemoryStream();
+        PptxPackageWriter.Write(pres, source);
+        AddCaptionTracks(source, tracks);
+
+        source.Position = 0;
+        var loaded = PptxPackageReader.Read(source);
+        loaded.RecordingMediaArtifacts.Should().BeEmpty(
+            "native caption tracks are PowerPoint media metadata, not FreeP recording artifacts");
+
+        foreach (var fixture in tracks)
+        {
+            loaded.PackageSnapshot!.TryGetEntry(fixture.PackagePath, out var snapshotCaptionBytes)
+                .Should().BeTrue($"caption sidecar {fixture.PackagePath} should be captured in the package snapshot");
+            snapshotCaptionBytes.Should().Equal(CaptionPayload(fixture.Text));
+        }
+
+        var loadedTracks = loaded.Slides[0].Shapes[0].Media!.CaptionTracks;
+        loadedTracks.Select(track => (track.RelationshipId, track.Source, track.ContentType, track.Language, track.Label, track.IsExternal))
+            .Should().Equal(tracks.Select(fixture => (
+                fixture.RelationshipId,
+                fixture.PackagePath,
+                "text/vtt",
+                fixture.Language,
+                fixture.Label,
+                false)));
+        loadedTracks.Zip(tracks).Should().OnlyContain(pair =>
+            pair.First.Bytes.SequenceEqual(CaptionPayload(pair.Second.Text)));
+
+        var transcript = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(loaded);
+        transcript.Tracks.Select(track => (track.Label, track.Language, track.Source, track.CueCount, CueText: track.Cues[0].Text))
+            .Should().Equal(tracks.Select(fixture => (
+                fixture.Label,
+                fixture.Language,
+                fixture.PackagePath,
+                1,
+                fixture.Text)));
+
+        loaded.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 2,
+            Name = "Modeled edit",
+            Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 3657600,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 914400,
+            Text = "edit"
+        });
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+
+        saved.Position = 0;
+        using (var zip = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            zip.GetEntry("ppt/media/recordingArtifacts.xml").Should().BeNull(
+                "native PowerPoint caption packages must remain separate from FreeP generated recording artifacts");
+            zip.Entries.Should().NotContain(entry =>
+                entry.FullName.StartsWith("ppt/media/recording-captions/", StringComparison.OrdinalIgnoreCase));
+
+            ReadBytes(zip, "ppt/media/slide1_caption1.vtt").Should().Equal(CaptionPayload(tracks[0].Text));
+            ReadBytes(zip, "ppt/media/slide1_caption2.vtt").Should().Equal(CaptionPayload(tracks[1].Text));
+
+            var rels = ReadXml(zip, "ppt/slides/_rels/slide1.xml.rels");
+            var relNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships");
+            var captionRels = rels.Root!.Elements(relNs + "Relationship")
+                .Where(e => e.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2011/relationships/mediaCaption")
+                .ToArray();
+            captionRels.Select(e => (Id: e.Attribute("Id")!.Value, Target: e.Attribute("Target")!.Value, TargetMode: e.Attribute("TargetMode")?.Value))
+                .Should().Equal(
+                    ("rIdCaption1", "../media/slide1_caption1.vtt", null),
+                    ("rIdCaption2", "../media/slide1_caption2.vtt", null));
+
+            var slideXml = ReadXml(zip, "ppt/slides/slide1.xml");
+            var r = XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+            var captionEls = slideXml.Descendants()
+                .Where(e => e.Name.LocalName == "caption")
+                .ToArray();
+            captionEls.Select(e => (
+                    Namespace: e.Name.NamespaceName,
+                    Embed: e.Attribute(r + "embed")!.Value,
+                    Language: e.Attribute("lang")!.Value,
+                    Label: e.Attribute("label")!.Value))
+                .Should().Equal(
+                    ("http://schemas.microsoft.com/office/powerpoint/2020/media", "rIdCaption1", "en-US", "English captions"),
+                    ("http://schemas.microsoft.com/office/powerpoint/2020/media", "rIdCaption2", "es-ES", "Spanish subtitles"));
+        }
+
+        saved.Position = 0;
+        var reopened = PptxPackageReader.Read(saved);
+        reopened.RecordingMediaArtifacts.Should().BeEmpty();
+        reopened.Slides[0].Shapes[0].Media!.CaptionTracks
+            .Select(track => (track.Source, track.Language, track.Label, Text: Encoding.UTF8.GetString(track.Bytes)))
+            .Should().Equal(
+                ("ppt/media/slide1_caption1.vtt", "en-US", "English captions", CaptionText(tracks[0].Text)),
+                ("ppt/media/slide1_caption2.vtt", "es-ES", "Spanish subtitles", CaptionText(tracks[1].Text)));
+        reopened.Slides[0].Shapes.Should().Contain(shape => shape.Name == "Modeled edit");
+    }
+
+    [Fact]
     public void Media_SlideCloner_ClonesMedia()
     {
         var shape = new SlideShape
@@ -724,17 +863,45 @@ public sealed class MediaFieldsTests
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8" +
             "z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==");
 
+    private sealed record CaptionTrackFixture(
+        string RelationshipId,
+        string PackagePath,
+        string Language,
+        string Label,
+        string Text);
+
+    private static byte[] CaptionPayload(string text)
+        => Encoding.UTF8.GetBytes(CaptionText(text));
+
+    private static string CaptionText(string text)
+        => $"WEBVTT\r\n\r\n00:00.000 --> 00:01.000\r\n{text}\r\n";
+
     private static void AddCaptionTrack(MemoryStream package)
+        => AddCaptionTracks(
+            package,
+            [
+                new CaptionTrackFixture(
+                    "rIdCaption1",
+                    "ppt/media/captions1.vtt",
+                    "en-US",
+                    "English captions",
+                    "Demo caption")
+            ]);
+
+    private static void AddCaptionTracks(MemoryStream package, IReadOnlyList<CaptionTrackFixture> tracks)
     {
         package.Position = 0;
         using var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true);
         var rels = ReadXml(archive, "ppt/slides/_rels/slide1.xml.rels");
         var relNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships");
-        rels.Root!.Add(new XElement(
-            relNs + "Relationship",
-            new XAttribute("Id", "rIdCaption1"),
-            new XAttribute("Type", "http://schemas.microsoft.com/office/2011/relationships/mediaCaption"),
-            new XAttribute("Target", "../media/captions1.vtt")));
+        foreach (var track in tracks)
+        {
+            rels.Root!.Add(new XElement(
+                relNs + "Relationship",
+                new XAttribute("Id", track.RelationshipId),
+                new XAttribute("Type", "http://schemas.microsoft.com/office/2011/relationships/mediaCaption"),
+                new XAttribute("Target", "../media/" + Path.GetFileName(track.PackagePath))));
+        }
         WriteXml(archive, "ppt/slides/_rels/slide1.xml.rels", rels);
 
         var slide = ReadXml(archive, "ppt/slides/slide1.xml");
@@ -750,14 +917,20 @@ public sealed class MediaFieldsTests
             nvPr.Add(extLst);
         }
 
-        extLst.Add(new XElement(
-            c + "caption",
-            new XAttribute(r + "embed", "rIdCaption1"),
-            new XAttribute("lang", "en-US"),
-            new XAttribute("label", "English captions")));
+        foreach (var track in tracks)
+        {
+            extLst.Add(new XElement(
+                c + "caption",
+                new XAttribute(r + "embed", track.RelationshipId),
+                new XAttribute("lang", track.Language),
+                new XAttribute("label", track.Label)));
+        }
         WriteXml(archive, "ppt/slides/slide1.xml", slide);
 
-        WriteText(archive, "ppt/media/captions1.vtt", "WEBVTT\r\n\r\n00:00.000 --> 00:01.000\r\nDemo caption\r\n");
+        foreach (var track in tracks)
+        {
+            WriteText(archive, track.PackagePath, CaptionText(track.Text));
+        }
     }
 
     private static byte[] ReadBytes(ZipArchive archive, string path)
