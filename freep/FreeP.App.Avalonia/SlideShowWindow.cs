@@ -1133,6 +1133,10 @@ public sealed class SlideShowWindow : Window
                 PeekEffect(element, plan, onReveal);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Crawl:
+                CrawlEffect(element, plan, onReveal);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Zoom:
                 ZoomEffect(element, plan, onReveal);
                 break;
@@ -1244,6 +1248,9 @@ public sealed class SlideShowWindow : Window
                 plan.DurationMs,
                 onComplete: CompleteReveal(plan, onReveal)));
     }
+
+    private void CrawlEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null) =>
+        PeekEffect(el, plan, onReveal);
 
     private void WipeEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
     {

@@ -497,10 +497,43 @@ public sealed class SlideShowPlaybackPlannerTests
         peekExitFromBottom.OffsetYFactor.Should().Be(1);
         peekExitFromBottom.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
 
-        var growShrink = SlideShowPlaybackPlanner.PlanShapeAnimation(
+        var crawlFromRight = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
                 ShapeId = 25,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Crawl,
+                Direction = AnimationDirection.FromRight,
+                DurationMs = 310
+            },
+            startDelayMs: 45);
+
+        crawlFromRight.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Crawl);
+        crawlFromRight.OffsetXFactor.Should().Be(1);
+        crawlFromRight.OffsetYFactor.Should().Be(0);
+        crawlFromRight.DurationMs.Should().Be(310);
+        crawlFromRight.DelayMs.Should().Be(45);
+        crawlFromRight.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.OnComplete);
+
+        var crawlExitFromTop = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 26,
+                Kind = AnimationKind.Exit,
+                Preset = AnimationPreset.Crawl,
+                Direction = AnimationDirection.FromTop
+            },
+            startDelayMs: 0);
+
+        crawlExitFromTop.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Crawl);
+        crawlExitFromTop.OffsetXFactor.Should().Be(0);
+        crawlExitFromTop.OffsetYFactor.Should().Be(-1);
+        crawlExitFromTop.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
+
+        var growShrink = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 27,
                 Kind = AnimationKind.Emphasis,
                 Preset = AnimationPreset.Grow,
                 DurationMs = 450

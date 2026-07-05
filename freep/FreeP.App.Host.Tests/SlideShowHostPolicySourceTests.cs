@@ -119,6 +119,10 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("private void PeekEffect(Storyboard sb, FrameworkElement el,");
         source.Should().Contain("el.RenderTransform = translate;");
         source.Should().Contain("el.Clip = new RectangleGeometry(new Rect(0, 0, w, h));");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Crawl:");
+        source.Should().Contain("CrawlEffect(sb, element, plan);");
+        source.Should().Contain("private void CrawlEffect(Storyboard sb, FrameworkElement el,");
+        source.Should().Contain("PeekEffect(sb, el, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Zoom:");
         source.Should().Contain("ZoomEffect(sb, element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Pulse:");
