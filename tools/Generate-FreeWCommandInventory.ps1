@@ -225,6 +225,12 @@ internal static class FreeWCommandInventory
             "NumericCitationEditorTests.UpdateFields_CitationFieldAndBibliographyRefresh_DoNotOverwriteCitationFromStaleView",
             "freew/FreeW.App.Avalonia.Tests/ReferencesTabTests.cs",
             "ReferencesTabTests.UpdateFields_refreshes_toc_and_bibliography_in_same_pass"),
+        ["freew.merge-next-record"] = MailingsEvidence(
+            "Inserts the Word-style NEXT RECORD mail-merge rule field through both ribbon registries so record advancement survives as a model placeholder."),
+        ["freew.merge-record-number"] = MailingsEvidence(
+            "Inserts the Word-style MERGE RECORD # mail-merge rule field through both ribbon registries so record numbering survives as a model placeholder."),
+        ["freew.merge-sequence-number"] = MailingsEvidence(
+            "Inserts the Word-style MERGE SEQUENCE # mail-merge rule field through both ribbon registries so merge sequence numbering survives as a model placeholder."),
         ["freew.print-layout"] = PrintFamilyViewEvidence(
             "Routes the shared Print Layout command through WPF stateful view-mode commands and the Avalonia host callback so the Word-style page surface can be restored from print-family view changes."),
         ["freew.print-preview"] = BackstagePrintEvidence(
@@ -421,6 +427,18 @@ internal static class FreeWCommandInventory
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: avaloniaPath,
                 Test: avaloniaTest));
+
+    private static CommandBehaviorEvidence MailingsEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.mailings-rules.shared-behavior",
+            Slice: "Mailings merge rule fields",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
+                Test: "FreeWRibbonParityTests.MailingsRulesSpecialFields_InsertSharedInstructionsThroughRegistry"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Avalonia.Tests/MailingsTabTests.cs",
+                Test: "MailingsTabTests.Rules_commands_insert_shared_rule_instructions_via_registry"));
 
     private static CommandBehaviorEvidence PrintFamilyViewEvidence(string summary) =>
         new(
