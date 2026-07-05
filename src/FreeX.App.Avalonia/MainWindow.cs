@@ -11413,6 +11413,10 @@ public sealed partial class MainWindow : Window
     internal async Task<FormatCellsDialogResult?> ShowFormatCellsInputDialogAsync(
         Action<FormatCellsDialogSmokeProbe>? launchSmokeProbe = null)
     {
+        const double formatCellsDialogWidth = 620;
+        const double formatCellsDefaultDialogHeight = 540;
+        const double formatCellsBorderDialogHeight = 596.5;
+
         FormatCellsDialogResult? result = null;
         var currentNumberFormat = _session.SelectedRangeStartNumberFormat;
         var currentHorizontalAlignment = _session.SelectedRangeStartHorizontalAlignment;
@@ -11435,14 +11439,11 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = UiText.Get("FormatCells_Title"),
-            // Wider (matches Windows ~690px) so the Border tab's three side-by-side groups
-            // (Presets / Line style list / Border diagram) fit without clipping.
-            Width = 690,
-            // Taller so the Border tab's per-edge "Individual border details" grid
-            // (Top/Right/Bottom/Left style + color rows) fits below the diagram without scrolling.
-            Height = 660,
-            MinWidth = 620,
-            MinHeight = 560,
+            Width = formatCellsDialogWidth,
+            Height = formatCellsDefaultDialogHeight,
+            MinWidth = formatCellsDialogWidth,
+            MinHeight = formatCellsDefaultDialogHeight,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -11466,9 +11467,8 @@ public sealed partial class MainWindow : Window
                 ? currentNumberCategory
                 : numberCategories[0],
             MinWidth = 150,
-            // Stretch to fill the full body height (matches Windows, where the Category
-            // list spans the entire dialog body rather than capping at the list contents).
-            VerticalAlignment = AvaloniaVerticalAlignment.Stretch,
+            Height = 278,
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
         };
         AutomationProperties.SetName(numberCategoryList, "Category");
         AutomationProperties.SetAutomationId(numberCategoryList, "FormatCellsNumberCategoryList");
@@ -11579,10 +11579,23 @@ public sealed partial class MainWindow : Window
             Text = FormatCellsNumberFormatPlanner.PreviewForFormat(currentNumberFormat),
             MinHeight = 28,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            FontWeight = FontWeight.Bold,
         };
         AutomationProperties.SetAutomationId(numberPreview, "FormatCellsNumberPreview");
 
+        var numberGeneralDescription = new TextBlock
+        {
+            Text = UiText.Get("FormatCells_GeneralFormatDescription"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 0),
+        };
+        AutomationProperties.SetAutomationId(numberGeneralDescription, "FormatCellsGeneralDescription");
+
         var syncingNumberControls = false;
+        StackPanel? numberTypeField = null;
+        StackPanel? numberDecimalPlacesField = null;
+        StackPanel? numberSymbolField = null;
+        StackPanel? numberNegativeNumbersField = null;
 
         string? ResolveSelectedNumberFormatCode()
         {
@@ -11606,6 +11619,15 @@ public sealed partial class MainWindow : Window
         void ApplyNumberControlAvailability()
         {
             var availability = FormatCellsNumberControlPlanner.Plan(numberCategoryList.SelectedItem as string);
+            numberGeneralDescription.IsVisible = availability.ShowsGeneralDescription;
+            if (numberTypeField is not null)
+                numberTypeField.IsVisible = availability.ShowsType;
+            if (numberDecimalPlacesField is not null)
+                numberDecimalPlacesField.IsVisible = availability.UsesDecimals;
+            if (numberSymbolField is not null)
+                numberSymbolField.IsVisible = availability.UsesSymbol;
+            if (numberNegativeNumbersField is not null)
+                numberNegativeNumbersField.IsVisible = availability.UsesNegativeOptions;
             numberDecimalPlacesBox.IsEnabled = availability.UsesDecimals;
             numberSymbolBox.IsEnabled = availability.UsesSymbol;
             numberNegativeBox.IsEnabled = availability.UsesNegativeOptions;
@@ -11705,10 +11727,12 @@ public sealed partial class MainWindow : Window
             "FormatCellsHorizontalAlignmentBox",
             CreateFormatCellsHorizontalAlignmentChoices(),
             currentHorizontalAlignment);
+        horizontalAlignmentBox.Width = 564;
         var verticalAlignmentBox = CreateFormatCellsComboBox(
             "FormatCellsVerticalAlignmentBox",
             CreateFormatCellsVerticalAlignmentChoices(),
             currentVerticalAlignment);
+        verticalAlignmentBox.Width = 564;
         var wrapTextBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_WrapText"), "FormatCellsWrapTextBox", _session.IsSelectedRangeStartWrapText);
         var shrinkToFitBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_ShrinkToFit"), "FormatCellsShrinkToFitBox", currentShrinkToFit);
         var mergeCellsBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_MergeCells"), "FormatCellsMergeCellsBox", currentMergeCells);
@@ -11716,6 +11740,7 @@ public sealed partial class MainWindow : Window
         {
             Text = currentIndentLevel.ToString(CultureInfo.InvariantCulture),
             MinWidth = 100,
+            Width = 564,
         };
         AutomationProperties.SetName(indentLevelBox, "Indent level");
         AutomationProperties.SetAutomationId(indentLevelBox, "FormatCellsIndentLevelBox");
@@ -11725,6 +11750,7 @@ public sealed partial class MainWindow : Window
         {
             Text = currentTextRotation.ToString(CultureInfo.InvariantCulture),
             MinWidth = 100,
+            Width = 564,
         };
         AutomationProperties.SetName(textRotationBox, "Text rotation");
         AutomationProperties.SetAutomationId(textRotationBox, "FormatCellsTextRotationBox");
@@ -12430,9 +12456,9 @@ public sealed partial class MainWindow : Window
             }
         };
 
-        // Number tab body: a two-column Grid so the Category list stretches to the full
-        // height of the right-hand controls column (matches the Windows screenshot, where
-        // the Category list fills the entire dialog body vertically).
+        // Number tab body: a two-column Grid matching the WPF Format Cells dialog. The
+        // shared control-availability planner hides whole option panels for categories
+        // such as General, rather than leaving disabled controls visible.
         var numberCategoryLabel = new TextBlock { Text = StripDisplayMnemonic(UiText.Get("FormatCells_Category")), Margin = new Thickness(0, 0, 0, 4) };
         DockPanel.SetDock(numberCategoryLabel, Dock.Top);
         var numberCategoryField = new DockPanel
@@ -12445,6 +12471,11 @@ public sealed partial class MainWindow : Window
                 numberCategoryList,
             },
         };
+        numberTypeField = CreateFormatCellsField(UiText.Get("FormatCells_Type"), numberFormatBox);
+        numberDecimalPlacesField = CreateFormatCellsField(UiText.Get("FormatCells_DecimalPlaces"), numberDecimalPlacesBox);
+        numberSymbolField = CreateFormatCellsField(UiText.Get("FormatCells_Symbol"), numberSymbolBox);
+        numberNegativeNumbersField = CreateFormatCellsField(UiText.Get("FormatCells_NegativeNumbers"), numberNegativeBox);
+        ApplyNumberControlAvailability();
         var numberRightColumn = new StackPanel
         {
             Spacing = 10,
@@ -12461,14 +12492,18 @@ public sealed partial class MainWindow : Window
                             BorderBrush = FormulaBarControlBorder,
                             BorderThickness = new Thickness(1),
                             Padding = new Thickness(8, 6),
+                            Width = 94,
+                            Height = 36,
+                            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
                             Child = numberPreview,
                         },
                     },
                 },
-                CreateFormatCellsField(UiText.Get("FormatCells_Type"), numberFormatBox),
-                CreateFormatCellsField(UiText.Get("FormatCells_DecimalPlaces"), numberDecimalPlacesBox),
-                CreateFormatCellsField(UiText.Get("FormatCells_Symbol"), numberSymbolBox),
-                CreateFormatCellsField(UiText.Get("FormatCells_NegativeNumbers"), numberNegativeBox),
+                numberGeneralDescription,
+                numberTypeField!,
+                numberDecimalPlacesField!,
+                numberSymbolField!,
+                numberNegativeNumbersField!,
             },
         };
         var numberBodyGrid = new AvaloniaGrid
@@ -12492,13 +12527,13 @@ public sealed partial class MainWindow : Window
                 Spacing = 10,
                 Children =
                 {
-                    CreateFormatCellsField(UiText.Get("FormatCells_Horizontal"), horizontalAlignmentBox),
-                    CreateFormatCellsField(UiText.Get("FormatCells_Vertical"), verticalAlignmentBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_HorizontalAlignment"), horizontalAlignmentBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_VerticalAlignment"), verticalAlignmentBox),
                     wrapTextBox,
                     shrinkToFitBox,
                     mergeCellsBox,
-                    CreateFormatCellsField(UiText.Get("FormatCells_Indent"), indentLevelBox),
-                    CreateFormatCellsField(UiText.Get("FormatCells_TextRotation"), textRotationBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_IndentLevel015"), indentLevelBox),
+                    CreateFormatCellsField(UiText.Get("FormatCells_TextRotation90To90Or255"), textRotationBox),
                 },
             });
         // Font tab: Windows shows Font NAME + Size as selectable lists side by side. The
@@ -12680,7 +12715,7 @@ public sealed partial class MainWindow : Window
         var borderGroupsRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 12,
+            Spacing = 8,
             Children = { borderPresetsGroup, borderLineGroup, borderGroup },
         };
 
@@ -12693,7 +12728,7 @@ public sealed partial class MainWindow : Window
             ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto"),
             RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto"),
             ColumnSpacing = 10,
-            RowSpacing = 6,
+            RowSpacing = 5,
         };
         void AddDetailHeader(string text, int column)
         {
@@ -12748,10 +12783,10 @@ public sealed partial class MainWindow : Window
             new StackPanel
             {
                 Spacing = 12,
-                Width = 640,
+                Width = 560,
                 // Small left inset so the bare "Individual border details" label aligns with the
                 // group-box content above it and does not clip against the dialog edge.
-                Margin = new Thickness(14, 0, 0, 0),
+                Margin = new Thickness(0),
                 Children =
                 {
                     borderGroupsRow,
@@ -12787,6 +12822,17 @@ public sealed partial class MainWindow : Window
         };
         AutomationProperties.SetAutomationId(tabStrip, "FormatCellsTabStrip");
         ApplyClassicTabChrome(tabStrip);
+
+        void ApplyFormatCellsDialogFrameForSelectedTab()
+        {
+            dialog.Width = formatCellsDialogWidth;
+            dialog.Height = tabStrip.SelectedIndex == 3
+                ? formatCellsBorderDialogHeight
+                : formatCellsDefaultDialogHeight;
+        }
+
+        tabStrip.SelectionChanged += (_, _) => ApplyFormatCellsDialogFrameForSelectedTab();
+        ApplyFormatCellsDialogFrameForSelectedTab();
 
         var buttonRow = new StackPanel
         {
