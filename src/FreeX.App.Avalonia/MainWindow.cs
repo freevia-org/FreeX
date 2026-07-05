@@ -3004,9 +3004,7 @@ public sealed partial class MainWindow : Window
         _cellAddressText.KeyDown += CellAddressBox_KeyDown;
         AutomationProperties.SetAutomationId(_cellAddressText, "CellAddressText");
         AutomationProperties.SetName(_cellAddressText, "Cell address");
-        AutomationProperties.SetHelpText(
-            _cellAddressText,
-            "Type a cell reference, range, or defined name and press Enter to navigate, or type a new name to define it.");
+        AutomationProperties.SetHelpText(_cellAddressText, "Shows the active cell address.");
 
         var collapsedFormulaBarPlan = FormulaBarChromePlanner.BuildExpansion(expanded: false);
         _formulaBox.MinWidth = 320;
@@ -20492,10 +20490,7 @@ public sealed partial class MainWindow : Window
             HasStatusTextAutomationId: string.Equals(AutomationProperties.GetAutomationId(_statusText), "StatusText", StringComparison.Ordinal),
             HasStatusTextValue: HasStatusBarAccessibleValue(),
             HasCellAddressAutomationName: string.Equals(AutomationProperties.GetName(_cellAddressText), "Cell address", StringComparison.Ordinal),
-            HasCellAddressAutomationHelp: string.Equals(
-                AutomationProperties.GetHelpText(_cellAddressText),
-                "Type a cell reference, range, or defined name and press Enter to navigate, or type a new name to define it.",
-                StringComparison.Ordinal),
+            HasCellAddressAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_cellAddressText), "Shows the active cell address.", StringComparison.Ordinal),
             HasCellAddressAutomationId: string.Equals(AutomationProperties.GetAutomationId(_cellAddressText), "CellAddressText", StringComparison.Ordinal),
             HasSelectionStatsAutomationName: string.Equals(AutomationProperties.GetName(_selectionStatsText), "Selection statistics", StringComparison.Ordinal),
             HasSelectionStatsAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_selectionStatsText), "Shows statistics for the current selection.", StringComparison.Ordinal),
