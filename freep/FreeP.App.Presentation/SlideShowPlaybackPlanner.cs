@@ -26,6 +26,7 @@ public enum SlideShowShapeAnimationEffectKind
     RandomBars,
     Blinds,
     Box,
+    Checkerboard,
     Zoom,
     Pulse,
     GrowShrink,
@@ -63,6 +64,9 @@ public sealed record SlideShowShapeAnimationPlaybackPlan(
     bool BlindsHorizontal,
     int BlindsBandCount,
     bool BoxExpandsFromCenter,
+    bool CheckerboardHorizontal,
+    int CheckerboardRowCount,
+    int CheckerboardColumnCount,
     IReadOnlyList<SlideShowMotionPathKeyFrame> MotionKeyFrames);
 
 public sealed record SlideShowFallbackAnimationPlaybackPlan(
@@ -78,6 +82,8 @@ public static class SlideShowPlaybackPlanner
     public const int MinFallbackAnimationDurationMs = 100;
     public const int MotionPathFrameCount = 30;
     public const int BlindsBandCount = 8;
+    public const int CheckerboardRowCount = 4;
+    public const int CheckerboardColumnCount = 6;
 
     public static SlideShowTransitionPlaybackPlan PlanTransition(SlideTransition transition)
     {
@@ -137,6 +143,9 @@ public static class SlideShowPlaybackPlanner
             IsHorizontalBlinds(animation.Direction),
             BlindsBandCount,
             BoxExpandsFromCenter(animation),
+            IsHorizontalCheckerboard(animation.Direction),
+            CheckerboardRowCount,
+            CheckerboardColumnCount,
             BuildMotionKeyFrames(animation.Motion));
     }
 
@@ -172,6 +181,7 @@ public static class SlideShowPlaybackPlanner
             AnimationPreset.RandomBars => SlideShowShapeAnimationEffectKind.RandomBars,
             AnimationPreset.Blinds => SlideShowShapeAnimationEffectKind.Blinds,
             AnimationPreset.Box => SlideShowShapeAnimationEffectKind.Box,
+            AnimationPreset.Checkerboard => SlideShowShapeAnimationEffectKind.Checkerboard,
             AnimationPreset.Zoom => SlideShowShapeAnimationEffectKind.Zoom,
             AnimationPreset.Pulse => SlideShowShapeAnimationEffectKind.Pulse,
             AnimationPreset.Grow or AnimationPreset.Shrink => SlideShowShapeAnimationEffectKind.GrowShrink,
@@ -242,6 +252,9 @@ public static class SlideShowPlaybackPlanner
             or null;
 
     private static bool IsHorizontalBlinds(AnimationDirection? direction) =>
+        direction is not AnimationDirection.Vertical;
+
+    private static bool IsHorizontalCheckerboard(AnimationDirection? direction) =>
         direction is not AnimationDirection.Vertical;
 
     private static bool BoxExpandsFromCenter(ShapeAnimation animation) =>

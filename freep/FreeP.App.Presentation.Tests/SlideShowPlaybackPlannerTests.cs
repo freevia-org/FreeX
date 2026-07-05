@@ -226,10 +226,43 @@ public sealed class SlideShowPlaybackPlannerTests
         boxOut.BoxExpandsFromCenter.Should().BeFalse();
         boxOut.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
 
-        var growShrink = SlideShowPlaybackPlanner.PlanShapeAnimation(
+        var horizontalCheckerboard = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
                 ShapeId = 9,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Checkerboard,
+                Direction = AnimationDirection.Horizontal,
+                DurationMs = 325
+            },
+            startDelayMs: 15);
+
+        horizontalCheckerboard.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Checkerboard);
+        horizontalCheckerboard.CheckerboardHorizontal.Should().BeTrue();
+        horizontalCheckerboard.CheckerboardRowCount.Should().Be(SlideShowPlaybackPlanner.CheckerboardRowCount);
+        horizontalCheckerboard.CheckerboardColumnCount.Should().Be(SlideShowPlaybackPlanner.CheckerboardColumnCount);
+        horizontalCheckerboard.DurationMs.Should().Be(325);
+        horizontalCheckerboard.DelayMs.Should().Be(15);
+        horizontalCheckerboard.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.OnComplete);
+
+        var verticalCheckerboard = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 10,
+                Kind = AnimationKind.Exit,
+                Preset = AnimationPreset.Checkerboard,
+                Direction = AnimationDirection.Vertical
+            },
+            startDelayMs: 0);
+
+        verticalCheckerboard.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Checkerboard);
+        verticalCheckerboard.CheckerboardHorizontal.Should().BeFalse();
+        verticalCheckerboard.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
+
+        var growShrink = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 11,
                 Kind = AnimationKind.Emphasis,
                 Preset = AnimationPreset.Grow,
                 DurationMs = 450

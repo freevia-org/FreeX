@@ -1101,6 +1101,10 @@ public sealed class SlideShowWindow : Window
                 BoxEffect(element, plan, onReveal);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Checkerboard:
+                CheckerboardEffect(element, plan, onReveal);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Zoom:
                 ZoomEffect(element, plan, onReveal);
                 break;
@@ -1337,6 +1341,125 @@ public sealed class SlideShowWindow : Window
         return (
             new Rect(x, 0, 0, height),
             new Rect(x, 0, Math.Max(0, nextX - x), height));
+    }
+
+    private void CheckerboardEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
+    {
+        double w = el.Width  > 0 ? el.Width  : 960;
+        double h = el.Height > 0 ? el.Height : 540;
+        var opens = plan.ToOpacity >= plan.FromOpacity;
+        var rowCount = Math.Max(1, plan.CheckerboardRowCount);
+        var columnCount = Math.Max(1, plan.CheckerboardColumnCount);
+        var phaseDelayMs = Math.Max(0, plan.DurationMs / 3);
+        var cellDurationMs = Math.Max(1, plan.DurationMs - phaseDelayMs);
+        var cells = new GeometryGroup();
+        var animatedCells = new List<(RectangleGeometry Geometry, Rect From, Rect To, int DelayMs, int DurationMs)>(
+            rowCount * columnCount);
+
+        for (var row = 0; row < rowCount; row++)
+        {
+            for (var column = 0; column < columnCount; column++)
+            {
+                var (closed, open) = BuildCheckerboardCell(
+                    w,
+                    h,
+                    rowCount,
+                    columnCount,
+                    row,
+                    column,
+                    plan.CheckerboardHorizontal);
+                var from = opens ? closed : open;
+                var to = opens ? open : closed;
+                var cell = new RectangleGeometry(from);
+                cells.Children.Add(cell);
+                animatedCells.Add((
+                    cell,
+                    from,
+                    to,
+                    IsSecondCheckerboardPhase(row, column) ? phaseDelayMs : 0,
+                    cellDurationMs));
+            }
+        }
+
+        el.Clip = cells;
+        el.Opacity = 1;
+        InvokeRevealAtStart(plan, onReveal);
+
+        DelayedAction(plan.DelayMs, () =>
+            AnimateCheckerboardClip(
+                animatedCells,
+                plan.DurationMs,
+                onComplete: CompleteReveal(plan, onReveal)));
+    }
+
+    private static (Rect Closed, Rect Open) BuildCheckerboardCell(
+        double width,
+        double height,
+        int rowCount,
+        int columnCount,
+        int row,
+        int column,
+        bool horizontal)
+    {
+        var x = width * column / columnCount;
+        var nextX = width * (column + 1) / columnCount;
+        var y = height * row / rowCount;
+        var nextY = height * (row + 1) / rowCount;
+        var cellWidth = Math.Max(0, nextX - x);
+        var cellHeight = Math.Max(0, nextY - y);
+
+        return horizontal
+            ? (new Rect(x, y, 0, cellHeight), new Rect(x, y, cellWidth, cellHeight))
+            : (new Rect(x, y, cellWidth, 0), new Rect(x, y, cellWidth, cellHeight));
+    }
+
+    private static bool IsSecondCheckerboardPhase(int row, int column) =>
+        ((row + column) & 1) == 1;
+
+    private void AnimateCheckerboardClip(
+        IReadOnlyList<(RectangleGeometry Geometry, Rect From, Rect To, int DelayMs, int DurationMs)> cells,
+        int durationMs,
+        Action? onComplete = null)
+    {
+        if (durationMs <= 0)
+        {
+            foreach (var (geometry, _, to, _, _) in cells)
+                geometry.Rect = to;
+            onComplete?.Invoke();
+            return;
+        }
+
+        const int frameMs = 16;
+        int elapsedMs = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            elapsedMs = Math.Min(durationMs, elapsedMs + frameMs);
+            foreach (var (geometry, from, to, delayMs, cellDurationMs) in cells)
+            {
+                var localElapsed = Math.Max(0, elapsedMs - delayMs);
+                var t = Math.Min(1.0, (double)localElapsed / cellDurationMs);
+                var e = EaseInOut(t);
+                geometry.Rect = new Rect(
+                    from.X + (to.X - from.X) * e,
+                    from.Y + (to.Y - from.Y) * e,
+                    from.Width  + (to.Width  - from.Width)  * e,
+                    from.Height + (to.Height - from.Height) * e);
+            }
+
+            if (elapsedMs >= durationMs)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                foreach (var (geometry, _, to, _, _) in cells)
+                    geometry.Rect = to;
+                onComplete?.Invoke();
+            }
+        };
+        timer.Start();
     }
 
     private void AnimateBlindsClip(

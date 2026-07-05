@@ -86,6 +86,8 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("BlindsEffect(element, plan, onReveal);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Box:");
         source.Should().Contain("BoxEffect(element, plan, onReveal);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Checkerboard:");
+        source.Should().Contain("CheckerboardEffect(element, plan, onReveal);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Zoom:");
         source.Should().Contain("ZoomEffect(element, plan, onReveal);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Pulse:");
