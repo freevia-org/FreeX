@@ -422,17 +422,21 @@ public sealed class MainWindow : Window
         if (entryDialog.Entry is not { } entry)
             return null;
 
-        if (!SourceManagementDialogPlanner.TryBuildCitationSource(entry, out var source, out var validation))
+        var masterStore = MasterSourceStore.Load();
+        var state = SourceManagementDialogPlanner.BuildInitialState(sources, masterStore.ToSources());
+        var plan = SourceManagementDialogPlanner.AddCitationSource(state, entry);
+        if (plan.Validation is { } validation)
         {
-            if (validation is not null)
-                _status.Text = validation.Message;
+            _status.Text = validation.Message;
             return null;
         }
+        if (plan.Source is null)
+            return null;
 
-        var nextSources = sources.Select(SourceManagementDialogPlanner.CloneSource).ToList();
-        nextSources.Add(source!);
-        _editor.ReplaceSources(nextSources);
-        return source;
+        var result = SourceManagementDialogPlanner.BuildResult(plan.State);
+        _editor.ReplaceSources(result.CurrentSources);
+        MasterSourceStore.Save(CreateMasterSourceStore(result.MasterSources));
+        return plan.Source;
     }
 
     private async Task OpenManageSourcesDialogAsync()

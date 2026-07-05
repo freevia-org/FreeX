@@ -10,7 +10,7 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         var source = ReadHostRibbonSource();
 
         source.Should().Contain("using FreeW.App.Presentation.Ribbon;");
-        source.Should().Contain("SourceManagementDialogPlanner.TryBuildCitationSource(");
+        source.Should().Contain("SourceManagementDialogPlanner.AddCitationSource(");
         source.Should().Contain("SourceManagementDialogPlanner.BuildPickerItems(");
         source.Should().Contain("SourceManagementDialogPlanner.BuildSourceTypeChoices(");
         source.Should().Contain("SourceManagementDialogPlanner.BuildEntryFieldPlans(");
