@@ -247,6 +247,23 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "PowerPoint-authoritative accessibility checker baselines, grammar-scale proofing, remediation-pane baselines, and reading-order pane visual baselines remain deferred."),
         new(
+            EvidenceId: "freep.export.backstage.package-handoff",
+            Area: "Backstage export and print package-handoff depth beyond notes-page PDF",
+            Status: "shared-planner-and-tool-evidence",
+            HostCoverage: "WPF/Avalonia shared Backstage export, print package, image export, and video frame-package planners with PowerPoint COM rows n/a/deferred",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-export-backstage-evidence-2026-07-05.md",
+                "docs/parity/2026-06-27-avalonia-wpf-parity-scope.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/PresentationExportBackstageEvidencePlannerTests.cs",
+                "tools/FreeP.RenderCompare.Tests/ExportBackstageEvidenceTests.cs",
+                "tools/FreeP.RenderCompare --export-backstage-evidence <deck.pptx> <outDir>"
+            ],
+            RemainingWork: "PowerPoint-authoritative fixed-layout, image, video, print, and Backstage visual baselines still require a PowerPoint COM-capable machine; local WPF/Avalonia evidence does not claim Microsoft PowerPoint visual parity."),
+        new(
             EvidenceId: "freep.table.inline-text.workflow-depth",
             Area: "Rich inline table-cell text editing, paragraph formatting, selection, and persistence",
             Status: "shared-planner-and-host-evidence",
