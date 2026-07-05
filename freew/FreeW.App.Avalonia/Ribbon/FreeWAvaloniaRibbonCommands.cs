@@ -1090,9 +1090,10 @@ internal static class FreeWAvaloniaRibbonCommands
     /// is the command-id prefix (<c>image-</c> vs <c>shape-</c>) used by the respective tab.
     ///
     /// <para>
-    /// Every command safely no-ops when no float is selected (the DocumentView methods guard on
-    /// <c>SelectedFloatingInfo</c>). Wrap, rotate/flip, z-order, size, and shape/text-box fill/outline
-    /// commands are all generated from the shared object-format planner.
+    /// Commands no-op when no compatible float is selected (the DocumentView methods guard on
+    /// <c>SelectedFloatingInfo</c>). Top-level button commands use shared default plans when Avalonia
+    /// has no dialog value yet; wrap, rotate/flip, z-order, size, and shape/text-box fill/outline
+    /// commands are generated from the shared object-format planner.
     /// </para>
     /// </summary>
     private static void RegisterFloatingFormatCommands(RibbonCommandRegistry r, DocumentView editor)
@@ -1131,29 +1132,60 @@ internal static class FreeWAvaloniaRibbonCommands
             }
         }
 
-        r.Register("freew.image-position", new FloatingObjectPositionCommand(editor));
-        r.Register("freew.image-align-left", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignLeft));
-        r.Register("freew.image-align-center", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignCenter));
-        r.Register("freew.image-align-right", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignRight));
+        RegisterFloatingPositionCommands(r, editor, "image", "Image");
+        r.Register("freew.image-align-left", new FloatingObjectParagraphAlignCommand(editor, "Image", TextAlignment.Left));
+        r.Register("freew.image-align-center", new FloatingObjectParagraphAlignCommand(editor, "Image", TextAlignment.Center));
+        r.Register("freew.image-align-right", new FloatingObjectParagraphAlignCommand(editor, "Image", TextAlignment.Right));
         r.Register("freew.image-align-to-page", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignToPage));
         r.Register("freew.image-align-to-margin", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignToMargin));
         r.Register("freew.image-distribute-h", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.DistributeHorizontal));
         r.Register("freew.image-distribute-v", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.DistributeVertical));
-        r.Register("freew.shape-position", new FloatingObjectPositionCommand(editor));
-        r.Register("freew.shape-align-left", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignLeft));
-        r.Register("freew.shape-align-center", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignCenter));
-        r.Register("freew.shape-align-right", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignRight));
+        RegisterFloatingPositionCommands(r, editor, "shape", "Shape");
+        r.Register("freew.shape-align-left", new FloatingObjectParagraphAlignCommand(editor, "Shape", TextAlignment.Left));
+        r.Register("freew.shape-align-center", new FloatingObjectParagraphAlignCommand(editor, "Shape", TextAlignment.Center));
+        r.Register("freew.shape-align-right", new FloatingObjectParagraphAlignCommand(editor, "Shape", TextAlignment.Right));
         r.Register("freew.shape-align-to-page", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignToPage));
         r.Register("freew.shape-align-to-margin", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignToMargin));
         r.Register("freew.shape-distribute-h", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.DistributeHorizontal));
         r.Register("freew.shape-distribute-v", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.DistributeVertical));
-        r.Register("freew.shape-size", new FloatingObjectSizeCommand(editor));
+        r.Register("freew.shape-size", new FloatingObjectSizeCommand(editor, "Shape"));
+        foreach (var preset in FreeWRibbonDefinitionData.FloatingSizePresets)
+        {
+            var captured = preset;
+            r.Register(
+                $"freew.shape-size-{captured.Suffix}",
+                new FloatingObjectSizePresetCommand(editor, "Shape", captured));
+        }
+
         r.Register("freew.shape-alt-text", new FloatingObjectAltTextCommand(editor));
+        foreach (var preset in FreeWRibbonDefinitionData.ShapeAltTextPresets)
+        {
+            var captured = preset;
+            r.Register(
+                $"freew.shape-alt-text-{captured.Suffix}",
+                new FloatingObjectAltTextPresetCommand(editor, captured));
+        }
         r.Register("freew.object-group", new FloatingObjectGroupCommand(editor));
         r.Register("freew.object-ungroup", new FloatingObjectUngroupCommand(editor));
 
         // Shape Styles fill/outline: top-level opener ids plus menu item commands.
         RegisterShapeFillOutlineCommands(r, editor);
+    }
+
+    private static void RegisterFloatingPositionCommands(
+        RibbonCommandRegistry r,
+        DocumentView editor,
+        string prefix,
+        string requiredKind)
+    {
+        r.Register($"freew.{prefix}-position", new FloatingObjectPositionCommand(editor, requiredKind));
+        foreach (var preset in FreeWRibbonDefinitionData.FloatingPositionPresets)
+        {
+            var captured = preset;
+            r.Register(
+                $"freew.{prefix}-position-{captured.Suffix}",
+                new FloatingObjectPositionPresetCommand(editor, requiredKind, captured));
+        }
     }
 
     private sealed class FloatingObjectArrangeCommand(
@@ -1170,19 +1202,43 @@ internal static class FreeWAvaloniaRibbonCommands
             new(IsEnabled: editor.CanArrangeSelectedFloatingObjects(kind));
     }
 
-    private sealed class FloatingObjectPositionCommand(DocumentView editor) : IRibbonStatefulCommand
+    private sealed class FloatingObjectParagraphAlignCommand(
+        DocumentView editor,
+        string requiredKind,
+        TextAlignment alignment) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (editor.SelectedFloatingInfo is null
+            if (!IsEnabled())
+                return;
+
+            if (requiredKind == "Image")
+                editor.SetSelectedImageAlignment(alignment);
+            else
+                editor.SetSelectedShapeAlignment(alignment);
+        }
+
+        public RibbonCommandState GetState() => new(IsEnabled: IsEnabled());
+
+        private bool IsEnabled() => editor.SelectedFloatingInfo?.Kind == requiredKind;
+    }
+
+    private sealed class FloatingObjectPositionCommand(
+        DocumentView editor,
+        string requiredKind) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!IsEnabled()
                 || !TryParsePosition(context.SelectedValue, out var hOffset, out var vOffset, out var hAnchor, out var vAnchor))
                 return;
 
             editor.SetFloatingPosition(hOffset, vOffset, hAnchor, vAnchor);
         }
 
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: editor.SelectedFloatingInfo is not null);
+        public RibbonCommandState GetState() => new(IsEnabled: IsEnabled());
+
+        private bool IsEnabled() => editor.SelectedFloatingInfo?.Kind == requiredKind;
 
         private static bool TryParsePosition(
             string? value,
@@ -1214,19 +1270,45 @@ internal static class FreeWAvaloniaRibbonCommands
         }
     }
 
-    private sealed class FloatingObjectSizeCommand(DocumentView editor) : IRibbonStatefulCommand
+    private sealed class FloatingObjectPositionPresetCommand(
+        DocumentView editor,
+        string requiredKind,
+        FreeWFloatingPositionPreset preset) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (editor.GetSelectedFloatingSize() is null
+            if (!IsEnabled())
+                return;
+
+            editor.SetFloatingPosition(
+                preset.HorizontalOffsetPt,
+                preset.VerticalOffsetPt,
+                preset.HorizontalAnchor,
+                preset.VerticalAnchor);
+        }
+
+        public RibbonCommandState GetState() => new(IsEnabled: IsEnabled());
+
+        private bool IsEnabled() => editor.SelectedFloatingInfo?.Kind == requiredKind;
+    }
+
+    private sealed class FloatingObjectSizeCommand(
+        DocumentView editor,
+        string requiredKind) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!IsEnabled()
                 || !TryParseSize(context.SelectedValue, out var widthPt, out var heightPt))
                 return;
 
             editor.SetFloatingSize(widthPt, heightPt);
         }
 
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: editor.GetSelectedFloatingSize() is not null);
+        public RibbonCommandState GetState() => new(IsEnabled: IsEnabled());
+
+        private bool IsEnabled() => editor.SelectedFloatingInfo?.Kind == requiredKind
+            && editor.GetSelectedFloatingSize() is not null;
 
         private static bool TryParseSize(string? value, out double widthPt, out double heightPt)
         {
@@ -1244,6 +1326,23 @@ internal static class FreeWAvaloniaRibbonCommands
         }
     }
 
+    private sealed class FloatingObjectSizePresetCommand(
+        DocumentView editor,
+        string requiredKind,
+        FreeWFloatingSizePreset preset) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (IsEnabled())
+                editor.SetFloatingSize(preset.WidthPt, preset.HeightPt);
+        }
+
+        public RibbonCommandState GetState() => new(IsEnabled: IsEnabled());
+
+        private bool IsEnabled() => editor.SelectedFloatingInfo?.Kind == requiredKind
+            && editor.GetSelectedFloatingSize() is not null;
+    }
+
     private sealed class FloatingObjectAltTextCommand(DocumentView editor) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -1256,6 +1355,22 @@ internal static class FreeWAvaloniaRibbonCommands
 
         public RibbonCommandState GetState() =>
             new(IsEnabled: CanEditAltText());
+
+        private bool CanEditAltText() =>
+            editor.SelectedFloatingInfo?.Kind is "Shape" or "WordArt";
+    }
+
+    private sealed class FloatingObjectAltTextPresetCommand(
+        DocumentView editor,
+        FreeWAltTextPreset preset) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (CanEditAltText())
+                editor.SetSelectedFloatingAltText(preset.AltText);
+        }
+
+        public RibbonCommandState GetState() => new(IsEnabled: CanEditAltText());
 
         private bool CanEditAltText() =>
             editor.SelectedFloatingInfo?.Kind is "Shape" or "WordArt";
@@ -1300,6 +1415,11 @@ internal static class FreeWAvaloniaRibbonCommands
             r.Register(command.CommandId, new ShapeOutlineCommand(editor, command));
 
         r.Register("freew.shape-styles-gallery", new ShapeStylesGalleryCommand(editor));
+        foreach (var preset in ShapeStylePreset.Catalog)
+        {
+            var captured = preset;
+            r.Register($"freew.{captured.Id}", new ShapeStylePresetCommand(editor, captured));
+        }
     }
 
     private sealed class ShapeStyleCommand(DocumentView editor, Action execute) : IRibbonStatefulCommand
@@ -1361,15 +1481,29 @@ internal static class FreeWAvaloniaRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!ObjectFormatCommandPlanner.CanFormatShapeFillOutline(editor.SelectedFloatingShape()?.Kind)
-                || string.IsNullOrWhiteSpace(context.SelectedValue))
-            {
+            if (!ObjectFormatCommandPlanner.CanFormatShapeFillOutline(editor.SelectedFloatingShape()?.Kind))
                 return;
-            }
+
+            if (string.IsNullOrWhiteSpace(context.SelectedValue))
+                return;
 
             var preset = ShapeStylePreset.Catalog
                 .FirstOrDefault(item => string.Equals(item.Id, context.SelectedValue, StringComparison.OrdinalIgnoreCase));
             if (preset is not null)
+                editor.ApplySelectedShapeStyle(preset);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: ObjectFormatCommandPlanner.CanFormatShapeFillOutline(editor.SelectedFloatingShape()?.Kind));
+    }
+
+    private sealed class ShapeStylePresetCommand(
+        DocumentView editor,
+        ShapeStylePreset preset) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (ObjectFormatCommandPlanner.CanFormatShapeFillOutline(editor.SelectedFloatingShape()?.Kind))
                 editor.ApplySelectedShapeStyle(preset);
         }
 

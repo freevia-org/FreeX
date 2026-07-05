@@ -6,10 +6,12 @@ using Avalonia;
 using Avalonia.Headless;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 using SkiaSharp;
 using Xunit;
+using FreeWRibbonDefinitionData = FreeW.Ribbon.Definitions.FreeWRibbonDefinitionData;
 
 namespace FreeW.App.Avalonia.Tests;
 
@@ -246,6 +248,25 @@ public sealed class PictureDrawingContextualTabTests
         foreach (var id in ids)
             registry.TryGet(new RibbonCommandId(id), out _)
                 .Should().BeTrue($"command '{id}' must be registered");
+
+        foreach (var preset in FreeWRibbonDefinitionData.FloatingPositionPresets)
+        {
+            registry.TryGet(new RibbonCommandId($"freew.image-position-{preset.Suffix}"), out _)
+                .Should().BeTrue($"image position preset '{preset.Suffix}' must be registered");
+            registry.TryGet(new RibbonCommandId($"freew.shape-position-{preset.Suffix}"), out _)
+                .Should().BeTrue($"shape position preset '{preset.Suffix}' must be registered");
+        }
+
+        foreach (var preset in FreeWRibbonDefinitionData.FloatingSizePresets)
+            registry.TryGet(new RibbonCommandId($"freew.shape-size-{preset.Suffix}"), out _)
+                .Should().BeTrue($"shape size preset '{preset.Suffix}' must be registered");
+
+        foreach (var preset in FreeWRibbonDefinitionData.ShapeAltTextPresets)
+            registry.TryGet(new RibbonCommandId($"freew.shape-alt-text-{preset.Suffix}"), out _)
+                .Should().BeTrue($"shape alt-text preset '{preset.Suffix}' must be registered");
+
+        registry.TryGet(new RibbonCommandId("freew.shape-style-1"), out _)
+            .Should().BeTrue("shape style menu items must be registered");
     }
 
     [Fact]
@@ -620,43 +641,41 @@ public sealed class PictureDrawingContextualTabTests
     }
 
     [Fact]
-    public async Task ObjectAlignCommands_align_left_center_right_through_shared_model_command()
+    public async Task ObjectAlignCommands_match_wpf_selected_object_paragraph_alignment()
     {
-        double? centeredImageX = null, centeredShapeX = null, rightImageX = null, rightShapeX = null;
-        HorizontalAnchor? centeredImageAnchor = null, centeredShapeAnchor = null;
+        TextAlignment? imageAlignment = null, shapeAlignment = null;
+        double? imageX = null, shapeX = null;
+        HorizontalAnchor? imageAnchor = null, shapeAnchor = null;
         var ran = await OnUi(() =>
         {
             var doc = DocWithFloatingImageAndShape();
-            doc.Page.WidthPt = 600;
-            doc.Page.MarginLeftPt = 72;
-            doc.Page.MarginRightPt = 72;
             var view = new DocumentView();
             view.LoadDocument(doc);
             view.Measure(new Size(800, 2000));
-            view.SelectFloating(0, 1);
-            view.SelectFloating(0, 2, addToMultiSelect: true);
 
             var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+            view.SelectFloating(0, 1);
             ExecuteCommand(registry, "freew.image-align-center");
 
             var para = (Paragraph)doc.Blocks[0];
-            centeredImageX = para.Runs[1].Image!.HorizontalOffsetPt;
-            centeredShapeX = para.Runs[2].Shape!.Placement!.HorizontalOffsetPt;
-            centeredImageAnchor = para.Runs[1].Image!.HorizontalAnchor;
-            centeredShapeAnchor = para.Runs[2].Shape!.Placement!.HorizontalAnchor;
+            imageAlignment = para.Formatting.Alignment;
+            imageX = para.Runs[1].Image!.HorizontalOffsetPt;
+            imageAnchor = para.Runs[1].Image!.HorizontalAnchor;
 
+            view.SelectFloating(0, 2);
             ExecuteCommand(registry, "freew.shape-align-right");
-            rightImageX = para.Runs[1].Image!.HorizontalOffsetPt;
-            rightShapeX = para.Runs[2].Shape!.Placement!.HorizontalOffsetPt;
+            shapeAlignment = para.Formatting.Alignment;
+            shapeX = para.Runs[2].Shape!.Placement!.HorizontalOffsetPt;
+            shapeAnchor = para.Runs[2].Shape!.Placement!.HorizontalAnchor;
         });
         if (!ran) return;
 
-        centeredImageX.Should().Be(270);
-        centeredShapeX.Should().Be(264);
-        centeredImageAnchor.Should().Be(HorizontalAnchor.Margin);
-        centeredShapeAnchor.Should().Be(HorizontalAnchor.Margin);
-        rightImageX.Should().Be(468);
-        rightShapeX.Should().Be(456);
+        imageAlignment.Should().Be(TextAlignment.Center, "image-align-* matches WPF by aligning the containing paragraph");
+        imageX.Should().Be(36, "image-align-* must not route to floating placement alignment");
+        imageAnchor.Should().Be(HorizontalAnchor.Column);
+        shapeAlignment.Should().Be(TextAlignment.Right, "shape-align-* matches WPF by aligning the containing paragraph");
+        shapeX.Should().Be(108, "shape-align-* must not route to floating placement alignment");
+        shapeAnchor.Should().Be(HorizontalAnchor.Column);
     }
 
     [Fact]
@@ -730,6 +749,113 @@ public sealed class PictureDrawingContextualTabTests
         shape.ExtendedFill.Should().NotBeNull();
         shape.ExtendedFill!.Kind.Should().Be(ShapeFillKind.NoFill);
         shape.OutlineColorHex.Should().Be("#4472C4");
+    }
+
+    [Fact]
+    public async Task ObjectFormatDropdownOpeners_do_not_mutate_on_empty_context()
+    {
+        InlineImage? image = null;
+        Shape? shape = null;
+        var ran = await OnUi(() =>
+        {
+            var (imageDoc, imageBlock, imageRun) = DocWithFloatingImage();
+            var imageView = new DocumentView();
+            imageView.LoadDocument(imageDoc);
+            imageView.Measure(new Size(800, 2000));
+            imageView.SelectFloating(imageBlock, imageRun);
+
+            var imageRegistry = FreeWAvaloniaRibbonCommands.Build(imageView, NoopCallbacks());
+            ExecuteCommand(imageRegistry, "freew.image-position");
+            image = ((Paragraph)imageDoc.Blocks[0]).Runs[imageRun].Image!;
+
+            var (shapeDoc, shapeBlock, shapeRun) = DocWithFloatingShape();
+            var shapeView = new DocumentView();
+            shapeView.LoadDocument(shapeDoc);
+            shapeView.Measure(new Size(800, 2000));
+            shapeView.SelectFloating(shapeBlock, shapeRun);
+
+            var shapeRegistry = FreeWAvaloniaRibbonCommands.Build(shapeView, NoopCallbacks());
+            ExecuteCommand(shapeRegistry, "freew.shape-position");
+            ExecuteCommand(shapeRegistry, "freew.shape-size");
+            ExecuteCommand(shapeRegistry, "freew.shape-alt-text");
+            ExecuteCommand(shapeRegistry, "freew.shape-styles-gallery");
+
+            shape = ((Paragraph)shapeDoc.Blocks[0]).Runs[shapeRun].Shape!;
+        });
+        if (!ran) return;
+
+        image.Should().NotBeNull();
+        image!.HorizontalOffsetPt.Should().Be(36, "opening Position must not silently move the image");
+        image.VerticalOffsetPt.Should().Be(36);
+        image.HorizontalAnchor.Should().Be(HorizontalAnchor.Column);
+        image.VerticalAnchor.Should().Be(VerticalAnchor.Paragraph);
+
+        shape.Should().NotBeNull();
+        shape!.Placement!.HorizontalOffsetPt.Should().Be(36, "opening Position must not silently move the shape");
+        shape.Placement.VerticalOffsetPt.Should().Be(36);
+        shape.Placement.HorizontalAnchor.Should().Be(HorizontalAnchor.Column);
+        shape.Placement.VerticalAnchor.Should().Be(VerticalAnchor.Paragraph);
+        shape.WidthPt.Should().Be(120, "opening Size must not silently resize the shape");
+        shape.HeightPt.Should().Be(80);
+        shape.AltText.Should().BeNull("opening Alt Text must not write placeholder text");
+        shape.ExtendedFill.Should().BeNull("opening Shape Styles must not apply the first style");
+        shape.FillColorHex.Should().Be("#FF0000");
+    }
+
+    [Fact]
+    public async Task ObjectFormatMenuCommands_apply_explicit_user_choices()
+    {
+        InlineImage? image = null;
+        Shape? shape = null;
+        var ran = await OnUi(() =>
+        {
+            var (imageDoc, imageBlock, imageRun) = DocWithFloatingImage();
+            var imageView = new DocumentView();
+            imageView.LoadDocument(imageDoc);
+            imageView.Measure(new Size(800, 2000));
+            imageView.SelectFloating(imageBlock, imageRun);
+
+            var imageRegistry = FreeWAvaloniaRibbonCommands.Build(imageView, NoopCallbacks());
+            ExecuteCommand(imageRegistry, "freew.image-position-page-top");
+            image = ((Paragraph)imageDoc.Blocks[0]).Runs[imageRun].Image!;
+
+            var (shapeDoc, shapeBlock, shapeRun) = DocWithFloatingShape();
+            var shapeView = new DocumentView();
+            shapeView.LoadDocument(shapeDoc);
+            shapeView.Measure(new Size(800, 2000));
+            shapeView.SelectFloating(shapeBlock, shapeRun);
+
+            var shapeRegistry = FreeWAvaloniaRibbonCommands.Build(shapeView, NoopCallbacks());
+            ExecuteCommand(shapeRegistry, "freew.shape-position-margin-paragraph");
+            ExecuteCommand(shapeRegistry, "freew.shape-size-wide");
+            ExecuteCommand(shapeRegistry, "freew.shape-alt-text-process-diagram");
+            ExecuteCommand(shapeRegistry, "freew.shape-style-1");
+
+            shape = ((Paragraph)shapeDoc.Blocks[0]).Runs[shapeRun].Shape!;
+        });
+        if (!ran) return;
+
+        image.Should().NotBeNull();
+        var imagePosition = FreeWRibbonDefinitionData.FloatingPositionPresets.Single(p => p.Suffix == "page-top");
+        image!.HorizontalOffsetPt.Should().Be(imagePosition.HorizontalOffsetPt);
+        image.VerticalOffsetPt.Should().Be(imagePosition.VerticalOffsetPt);
+        image.HorizontalAnchor.Should().Be(imagePosition.HorizontalAnchor);
+        image.VerticalAnchor.Should().Be(imagePosition.VerticalAnchor);
+
+        shape.Should().NotBeNull();
+        var shapePosition = FreeWRibbonDefinitionData.FloatingPositionPresets.Single(p => p.Suffix == "margin-paragraph");
+        var shapeSize = FreeWRibbonDefinitionData.FloatingSizePresets.Single(p => p.Suffix == "wide");
+        var shapeStyle = ShapeStylePreset.Catalog.Single(p => p.Id == "shape-style-1");
+        shape!.Placement!.HorizontalOffsetPt.Should().Be(shapePosition.HorizontalOffsetPt);
+        shape.Placement.VerticalOffsetPt.Should().Be(shapePosition.VerticalOffsetPt);
+        shape.Placement.HorizontalAnchor.Should().Be(shapePosition.HorizontalAnchor);
+        shape.Placement.VerticalAnchor.Should().Be(shapePosition.VerticalAnchor);
+        shape.WidthPt.Should().Be(shapeSize.WidthPt);
+        shape.HeightPt.Should().Be(shapeSize.HeightPt);
+        shape.AltText.Should().Be("Process diagram");
+        shape.ExtendedFill.Should().NotBeNull();
+        shape.ExtendedFill!.Kind.Should().Be(shapeStyle.Fill!.Kind);
+        shape.OutlineColorHex.Should().Be(shapeStyle.OutlineColorHex);
     }
 
     [Fact]

@@ -7308,6 +7308,44 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// Align the paragraph containing the selected floating image, matching the WPF command behavior.
+    /// </summary>
+    public void SetSelectedImageAlignment(TextAlignment alignment) =>
+        SetSelectedFloatingParagraphAlignment("Image", alignment);
+
+    /// <summary>
+    /// Align the paragraph containing the selected floating shape, matching the WPF command behavior.
+    /// </summary>
+    public void SetSelectedShapeAlignment(TextAlignment alignment) =>
+        SetSelectedFloatingParagraphAlignment("Shape", alignment);
+
+    private void SetSelectedFloatingParagraphAlignment(string kind, TextAlignment alignment)
+    {
+        if (_selectedFloating is not { } sel || sel.Kind != kind)
+            return;
+        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para)
+            return;
+        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count)
+            return;
+
+        var run = para.Runs[sel.RunIndex];
+        var applies = kind switch
+        {
+            "Image" => run.Image is { IsFloating: true },
+            "Shape" => run.Shape is { IsFloating: true },
+            _ => false
+        };
+        if (!applies)
+            return;
+
+        _bus.Execute(new SetParagraphFormattingCommand(
+            sel.BlockIndex,
+            para.Formatting with { Alignment = alignment }));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
     /// Set the wrap mode on the selected floating object. Undoable.
     /// No-op when nothing is selected.
     /// </summary>

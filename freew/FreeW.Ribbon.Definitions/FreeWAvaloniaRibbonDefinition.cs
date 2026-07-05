@@ -109,6 +109,34 @@ internal static class FreeWAvaloniaRibbonDefinition
             new("Flip Horizontal",  new RibbonCommandId($"freew.{prefix}-flip-horizontal")),
         });
 
+    private static RibbonMenu BuildFloatingPositionMenu(string prefix) =>
+        new(FreeWRibbonDefinitionData.FloatingPositionPresets
+            .Select(preset => new RibbonMenuItem(
+                preset.Label,
+                new RibbonCommandId($"freew.{prefix}-position-{preset.Suffix}")))
+            .ToArray());
+
+    private static RibbonMenu BuildShapeSizeMenu() =>
+        new(FreeWRibbonDefinitionData.FloatingSizePresets
+            .Select(preset => new RibbonMenuItem(
+                preset.Label,
+                new RibbonCommandId($"freew.shape-size-{preset.Suffix}")))
+            .ToArray());
+
+    private static RibbonMenu BuildShapeAltTextMenu() =>
+        new(FreeWRibbonDefinitionData.ShapeAltTextPresets
+            .Select(preset => new RibbonMenuItem(
+                preset.Label,
+                new RibbonCommandId($"freew.shape-alt-text-{preset.Suffix}")))
+            .ToArray());
+
+    private static RibbonMenu BuildShapeStylesMenu() =>
+        new(ShapeStylePreset.Catalog
+            .Select(preset => new RibbonMenuItem(
+                preset.Name,
+                new RibbonCommandId($"freew.{preset.Id}")))
+            .ToArray());
+
     private static RibbonMenu BuildTableBordersMenu() =>
         new(new RibbonMenuItem[]
         {
@@ -1042,7 +1070,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     tab.Group("picture-arrange", "Arrange", null, 100, g =>
                     {
-                        g.Button("freew.image-position", "Position");
+                        g.Dropdown("freew.image-position", "Position", BuildFloatingPositionMenu("image"));
                         g.Dropdown("freew.image-wrap", "Wrap Text", BuildWrapMenu("image"));
                         g.Dropdown("freew.image-rotate", "Rotate", BuildRotateMenu("image"));
                         g.Button("freew.image-bring-to-front", "Bring to Front");
@@ -1073,13 +1101,13 @@ internal static class FreeWAvaloniaRibbonDefinition
                     // Shape Styles — gallery/fill/outline use the shared object-format model commands.
                     tab.Group("drawing-styles", "Shape Styles", null, 100, g =>
                     {
-                        g.Button("freew.shape-styles-gallery", "Shape Styles");
+                        g.Dropdown("freew.shape-styles-gallery", "Shape Styles", BuildShapeStylesMenu());
                         g.Button("freew.shape-fill",    "Shape Fill");
                         g.Button("freew.shape-outline", "Shape Outline");
                     });
                     tab.Group("drawing-arrange", "Arrange", null, 90, g =>
                     {
-                        g.Button("freew.shape-position", "Position");
+                        g.Dropdown("freew.shape-position", "Position", BuildFloatingPositionMenu("shape"));
                         g.Dropdown("freew.shape-wrap", "Wrap Text", BuildWrapMenu("shape"));
                         g.Dropdown("freew.shape-rotate", "Rotate", BuildRotateMenu("shape"));
                         g.Button("freew.image-bring-to-front", "Bring to Front");
@@ -1100,8 +1128,8 @@ internal static class FreeWAvaloniaRibbonDefinition
                     {
                         g.ComboBox("freew.shape-width",  "Width",  c => c with { Items = FloatSizes, Width = 72 });
                         g.ComboBox("freew.shape-height", "Height", c => c with { Items = FloatSizes, Width = 72 });
-                        g.Button("freew.shape-size", "Size");
-                        g.Button("freew.shape-alt-text", "Alt Text");
+                        g.Dropdown("freew.shape-size", "Size", BuildShapeSizeMenu());
+                        g.Dropdown("freew.shape-alt-text", "Alt Text", BuildShapeAltTextMenu());
                     });
                 })
             // ── AV-CHARTTAB: Chart Design contextual tab (shown when a floating CHART is selected) ──
