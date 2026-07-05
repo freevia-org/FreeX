@@ -17,7 +17,17 @@ public sealed record SlideShowRecordingReviewMediaArtifact(
     bool IsDeferred,
     string SuggestedFileName,
     string ContentType,
-    string StatusText);
+    string StatusText,
+    string PackagePath = "",
+    long ContentLengthBytes = 0,
+    string ContentSha256 = "")
+{
+    public bool IsPersistable =>
+        IsCaptured &&
+        !string.IsNullOrWhiteSpace(PackagePath) &&
+        ContentLengthBytes > 0 &&
+        !string.IsNullOrWhiteSpace(ContentSha256);
+}
 
 public sealed record SlideShowRecordingReviewRow(
     int SlideIndex,
@@ -38,6 +48,7 @@ public sealed record SlideShowRecordingReviewPlan(
     int TotalRecordedDurationMs,
     int DeferredMediaArtifactCount,
     int CapturedMediaArtifactCount,
+    int PersistableMediaArtifactCount,
     IReadOnlyList<SlideShowRecordingReviewRow> Rows,
     IReadOnlyList<SlideShowSlideTimingMutation> TimingMutations,
     IReadOnlyList<string> EvidenceLines);
@@ -71,6 +82,7 @@ public static class SlideShowRecordingReviewPlanner
             rows.Sum(row => row.DurationMs),
             rows.Sum(row => row.MediaArtifacts.Count(artifact => artifact.IsDeferred)),
             rows.Sum(row => row.MediaArtifacts.Count(artifact => artifact.IsCaptured)),
+            rows.Sum(row => row.MediaArtifacts.Count(artifact => artifact.IsPersistable)),
             rows,
             mutations,
             BuildEvidenceLines(state, rows, mutations));
@@ -105,7 +117,10 @@ public static class SlideShowRecordingReviewPlanner
                 artifact.IsDeferred,
                 artifact.SuggestedFileName,
                 artifact.ContentType,
-                artifact.StatusText))
+                artifact.StatusText,
+                artifact.PackagePath,
+                artifact.ContentLengthBytes,
+                artifact.ContentSha256))
             .ToArray();
 
         return new SlideShowRecordingReviewRow(
@@ -176,6 +191,15 @@ public static class SlideShowRecordingReviewPlanner
             var captured = artifacts.Count(artifact => artifact.IsCaptured);
             var deferred = artifacts.Count(artifact => artifact.IsDeferred);
             lines.Add($"{hostName}: {slideTitle} media artifacts captured {captured}, deferred {deferred}");
+
+            foreach (var artifact in artifacts.Where(artifact => artifact.IsPersistable))
+            {
+                var shortHash = artifact.ContentSha256.Length > 12
+                    ? artifact.ContentSha256[..12]
+                    : artifact.ContentSha256;
+                lines.Add(
+                    $"{hostName}: {slideTitle} {artifact.Kind} ready for PPTX media persistence at {artifact.PackagePath} ({artifact.ContentLengthBytes} bytes; sha256 {shortHash})");
+            }
         }
 
         return lines;
@@ -201,6 +225,12 @@ public static class SlideShowRecordingReviewPlanner
         if (deferredArtifacts > 0)
         {
             lines.Add($"{state.HostCapabilities.HostName}: {deferredArtifacts} recording media artifact(s) deferred");
+        }
+
+        var persistableArtifacts = rows.Sum(row => row.MediaArtifacts.Count(artifact => artifact.IsPersistable));
+        if (persistableArtifacts > 0)
+        {
+            lines.Add($"{state.HostCapabilities.HostName}: {persistableArtifacts} recording media artifact(s) ready for PPTX media persistence");
         }
 
         return lines;

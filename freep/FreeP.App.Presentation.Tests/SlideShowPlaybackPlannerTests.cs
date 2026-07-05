@@ -358,10 +358,46 @@ public sealed class SlideShowPlaybackPlannerTests
         plusOut.GeometricMaskExpandsFromCenter.Should().BeFalse();
         plusOut.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
 
-        var wedgeIn = SlideShowPlaybackPlanner.PlanShapeAnimation(
+        var stripsLeftDown = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
                 ShapeId = 17,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Strips,
+                Direction = AnimationDirection.LeftDown,
+                DurationMs = 315
+            },
+            startDelayMs: 30);
+
+        stripsLeftDown.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Strips);
+        stripsLeftDown.GeometricMaskKind.Should().Be(SlideShowGeometricMaskKind.Strips);
+        stripsLeftDown.GeometricMaskExpandsFromCenter.Should().BeTrue();
+        stripsLeftDown.GeometricMaskStripCount.Should().Be(SlideShowPlaybackPlanner.StripsBandCount);
+        stripsLeftDown.GeometricMaskStripsSlopeDown.Should().BeTrue();
+        stripsLeftDown.DurationMs.Should().Be(315);
+        stripsLeftDown.DelayMs.Should().Be(30);
+        stripsLeftDown.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.OnComplete);
+
+        var stripsRightDownExit = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 18,
+                Kind = AnimationKind.Exit,
+                Preset = AnimationPreset.Strips,
+                Direction = AnimationDirection.RightDown
+            },
+            startDelayMs: 0);
+
+        stripsRightDownExit.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Strips);
+        stripsRightDownExit.GeometricMaskKind.Should().Be(SlideShowGeometricMaskKind.Strips);
+        stripsRightDownExit.GeometricMaskExpandsFromCenter.Should().BeFalse();
+        stripsRightDownExit.GeometricMaskStripsSlopeDown.Should().BeFalse();
+        stripsRightDownExit.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
+
+        var wedgeIn = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 19,
                 Kind = AnimationKind.Entrance,
                 Preset = AnimationPreset.Wedge,
                 Direction = AnimationDirection.In,
@@ -379,7 +415,7 @@ public sealed class SlideShowPlaybackPlannerTests
         var wedgeOut = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
-                ShapeId = 18,
+                ShapeId = 20,
                 Kind = AnimationKind.Exit,
                 Preset = AnimationPreset.Wedge,
                 Direction = AnimationDirection.Out
@@ -394,7 +430,7 @@ public sealed class SlideShowPlaybackPlannerTests
         var wheelIn = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
-                ShapeId = 19,
+                ShapeId = 21,
                 Kind = AnimationKind.Entrance,
                 Preset = AnimationPreset.Wheel,
                 Direction = AnimationDirection.In,
@@ -414,7 +450,7 @@ public sealed class SlideShowPlaybackPlannerTests
         var wheelOut = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
-                ShapeId = 20,
+                ShapeId = 22,
                 Kind = AnimationKind.Exit,
                 Preset = AnimationPreset.Wheel,
                 Direction = AnimationDirection.Out,
@@ -431,7 +467,7 @@ public sealed class SlideShowPlaybackPlannerTests
         var growShrink = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
-                ShapeId = 21,
+                ShapeId = 23,
                 Kind = AnimationKind.Emphasis,
                 Preset = AnimationPreset.Grow,
                 DurationMs = 450
