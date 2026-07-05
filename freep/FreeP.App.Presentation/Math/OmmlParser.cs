@@ -330,11 +330,16 @@ public static class OmmlParser
             ? ","
             : sepChrEl.Attribute(M + "val")?.Value ?? sepChrEl.Value;
 
+        // m:grow is CT_OnOff. Absent means on; present with false/off/0 means
+        // delimiters keep normal glyph height instead of stretching to content.
+        var growEl = dPr?.Element(M + "grow");
+        bool grow = growEl is null || IsOnOffOn(growEl);
+
         var elements = new List<MathNode>();
         foreach (var eEl in el.Elements(M + "e"))
             elements.Add(ParseRow(eEl));
 
-        return new MathNode.Delim(begChr, endChr, elements, sepChr);
+        return new MathNode.Delim(begChr, endChr, elements, sepChr, grow);
     }
 
     // ── m:acc accent ──────────────────────────────────────────────────────

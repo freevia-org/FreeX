@@ -794,13 +794,13 @@ public static class MathLayoutEngine
         if (innerBoxes.Count > 1)
             innerW += gapWidth * (innerBoxes.Count - 1);
 
-        // Brackets scale to inner height * 1.10
-        double bracketH = innerH * 1.10;
+        // Brackets scale to inner height * 1.10 unless OMML m:grow is off.
+        double bracketH = delim.Grow ? innerH * 1.10 : em;
         double bracketW = em * 0.35; // fixed bracket width
 
         double totalW = bracketW + innerW + bracketW;
-        double totalH = bracketH;
-        double ascent = innerAscent + (bracketH - innerH) / 2.0;
+        double totalH = Math.Max(innerH, bracketH);
+        double ascent = innerAscent + (totalH - innerH) / 2.0;
 
         var c = new MathBox.Container();
         c.Metrics.Width  = totalW;
@@ -810,14 +810,15 @@ public static class MathLayoutEngine
         // Opening bracket
         if (!string.IsNullOrEmpty(delim.BegChar))
         {
-            var beg = new MathBox.Bracket(delim.BegChar) { X = 0, Y = 0, ScaledHeight = bracketH };
+            double bracketTop = (totalH - bracketH) / 2.0;
+            var beg = new MathBox.Bracket(delim.BegChar) { X = 0, Y = bracketTop, ScaledHeight = bracketH };
             beg.Metrics.Width = bracketW; beg.Metrics.Height = bracketH; beg.Metrics.Ascent = ascent;
             c.Children.Add(beg);
         }
 
         // Inner elements
         double x = bracketW;
-        double innerTop = (bracketH - innerH) / 2.0;
+        double innerTop = (totalH - innerH) / 2.0;
         for (int i = 0; i < innerBoxes.Count; i++)
         {
             var b = innerBoxes[i];
@@ -844,7 +845,8 @@ public static class MathLayoutEngine
         // Closing bracket
         if (!string.IsNullOrEmpty(delim.EndChar))
         {
-            var end = new MathBox.Bracket(delim.EndChar) { X = x, Y = 0, ScaledHeight = bracketH };
+            double bracketTop = (totalH - bracketH) / 2.0;
+            var end = new MathBox.Bracket(delim.EndChar) { X = x, Y = bracketTop, ScaledHeight = bracketH };
             end.Metrics.Width = bracketW; end.Metrics.Height = bracketH; end.Metrics.Ascent = ascent;
             c.Children.Add(end);
         }

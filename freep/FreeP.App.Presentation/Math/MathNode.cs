@@ -215,15 +215,22 @@ public abstract class MathNode
         /// </summary>
         public string SepChar { get; }
 
+        /// <summary>
+        /// Whether delimiter glyphs grow to match the inner expression height
+        /// (ECMA-376 CT_DPr m:grow). Defaults to true when absent.
+        /// </summary>
+        public bool Grow { get; }
+
         /// <summary>The inner expressions (one per m:e child).</summary>
         public IReadOnlyList<MathNode> Elements { get; }
 
-        public Delim(string begChar, string endChar, IReadOnlyList<MathNode> elements, string sepChar = ",")
+        public Delim(string begChar, string endChar, IReadOnlyList<MathNode> elements, string sepChar = ",", bool grow = true)
         {
             BegChar = begChar;
             EndChar = endChar;
             Elements = elements;
             SepChar = sepChar;
+            Grow = grow;
         }
     }
 

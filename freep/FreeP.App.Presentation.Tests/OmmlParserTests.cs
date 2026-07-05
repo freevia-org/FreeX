@@ -172,6 +172,7 @@ public sealed class OmmlParserTests
         var delim = Assert.IsType<MathNode.Delim>(node);
         Assert.Equal("(", delim.BegChar);
         Assert.Equal(")", delim.EndChar);
+        Assert.True(delim.Grow);
     }
 
     [Fact]
@@ -181,6 +182,34 @@ public sealed class OmmlParserTests
 
         var delim = Assert.IsType<MathNode.Delim>(node);
         Assert.Equal(string.Empty, delim.EndChar);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("off")]
+    [InlineData("false")]
+    public void Delim_WithGrowExplicitlyOff_DoesNotAutoSizeBrackets(string val)
+    {
+        var node = Parse($"<m:d><m:dPr><m:grow m:val=\"{val}\"/></m:dPr><m:e><m:r><m:t>x</m:t></m:r></m:e></m:d>");
+
+        var delim = Assert.IsType<MathNode.Delim>(node);
+        Assert.False(delim.Grow);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("1")]
+    [InlineData("on")]
+    [InlineData("true")]
+    public void Delim_WithGrowAbsentOrOn_AutoSizesBrackets(string val)
+    {
+        var grow = string.IsNullOrEmpty(val)
+            ? string.Empty
+            : $"<m:dPr><m:grow m:val=\"{val}\"/></m:dPr>";
+        var node = Parse($"<m:d>{grow}<m:e><m:r><m:t>x</m:t></m:r></m:e></m:d>");
+
+        var delim = Assert.IsType<MathNode.Delim>(node);
+        Assert.True(delim.Grow);
     }
 
     // ── HA5: m:nor as CT_OnOff ─────────────────────────────────────────────
