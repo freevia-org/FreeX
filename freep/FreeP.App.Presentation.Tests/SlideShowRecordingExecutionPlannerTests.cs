@@ -88,6 +88,53 @@ public sealed class SlideShowRecordingExecutionPlannerTests
     }
 
     [Fact]
+    public void MoveToSlide_WithDeterministicBackend_StoresPersistableCapturedArtifacts()
+    {
+        var started = new DateTimeOffset(2026, 7, 5, 13, 0, 0, TimeSpan.Zero);
+        var plan = SlideShowPresenterToolPlanner.BuildPlan(
+            SlideShowTimingIntent.RecordTimings,
+            SlideShowRecordingMediaIntent.NarrationAndMedia);
+        var backend = new SlideShowDeterministicRecordingCaptureBackend(
+            "Deterministic evidence backend",
+            "ppt/media/freep-recordings");
+        var state = SlideShowRecordingExecutionPlanner.CreateState(
+            plan,
+            currentSlideIndex: 0,
+            started,
+            backend);
+
+        var moved = SlideShowRecordingExecutionPlanner.MoveToSlide(
+            state,
+            slideIndex: 1,
+            started.AddMilliseconds(3450));
+
+        moved.HostCapabilities.HostName.Should().Be("Deterministic evidence backend");
+        moved.IsNarrationCaptureActive.Should().BeTrue();
+        moved.IsCameraCaptureActive.Should().BeTrue();
+        moved.LastActions.Should().OnlyContain(action => !action.IsDeferred);
+
+        var segment = moved.Segments.Should().ContainSingle().Subject;
+        segment.NarrationCaptured.Should().BeTrue();
+        segment.CameraCaptured.Should().BeTrue();
+        segment.MediaArtifacts.Should().HaveCount(2);
+        segment.MediaArtifacts.Should().OnlyContain(artifact =>
+            artifact.IsCaptured &&
+            !artifact.IsDeferred &&
+            artifact.IsPersistable &&
+            artifact.ContentLengthBytes > 0 &&
+            artifact.ContentSha256.Length == 64);
+        segment.MediaArtifacts.Select(artifact => artifact.PackagePath).Should().Equal(
+            "ppt/media/freep-recordings/slide-001-narration.m4a",
+            "ppt/media/freep-recordings/slide-001-camera.mp4");
+        segment.MediaArtifacts.Select(artifact => artifact.ContentType).Should().Equal(
+            "audio/mp4",
+            "video/mp4");
+        segment.MediaArtifacts.Select(artifact => artifact.StatusText).Should().OnlyContain(
+            text => text.Contains("Deterministic evidence backend") &&
+                text.Contains("ppt/media/freep-recordings"));
+    }
+
+    [Fact]
     public void CreateState_DeferredHostCapabilitiesEmitCaptureUnavailableActions()
     {
         var started = new DateTimeOffset(2026, 7, 4, 9, 0, 0, TimeSpan.Zero);
