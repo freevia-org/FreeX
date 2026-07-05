@@ -829,7 +829,7 @@ public sealed class FreePRibbonDefinitionProfileTests
         var workflowEvidence = root.GetProperty("workflowEvidence")
             .EnumerateArray()
             .ToArray();
-        workflowEvidence.Should().HaveCount(7);
+        workflowEvidence.Should().HaveCount(9);
         root.GetProperty("summary").GetProperty("workflowEvidenceRows").GetInt32()
             .Should()
             .Be(workflowEvidence.Length);
@@ -842,7 +842,9 @@ public sealed class FreePRibbonDefinitionProfileTests
                 "freep.review.comments.thread-depth",
                 "freep.review.accessibility.proofing-depth",
                 "freep.export.backstage.package-handoff",
-                "freep.table.inline-text.workflow-depth");
+                "freep.table.inline-text.workflow-depth",
+                "freep.header-footer.placeholder-creation",
+                "freep.chart.number-format-rendering");
 
         workflowEvidence.Should().OnlyContain(row =>
             row.GetProperty("status").GetString()!.StartsWith("shared-", StringComparison.Ordinal) &&
