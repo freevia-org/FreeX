@@ -130,6 +130,8 @@ public sealed class MasterSourceStoreTests
                         Tag = "Ada1843",
                         Author = "Ada Lovelace",
                         PersonalAuthors = [SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace")],
+                        Editors = [SourceAuthorPerson.Create("Edna", string.Empty, "Editor")],
+                        Translators = [SourceAuthorPerson.Create("Tara", string.Empty, "Translator")],
                         Title = "Notes"
                     }),
                     SourceRecord.FromSource(new Source
@@ -147,6 +149,10 @@ public sealed class MasterSourceStoreTests
 
             reloaded[0].PersonalAuthors.Should().ContainSingle()
                 .Which.Should().Be(SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace"));
+            reloaded[0].Editors.Should().ContainSingle()
+                .Which.Should().Be(SourceAuthorPerson.Create("Edna", string.Empty, "Editor"));
+            reloaded[0].Translators.Should().ContainSingle()
+                .Which.Should().Be(SourceAuthorPerson.Create("Tara", string.Empty, "Translator"));
             reloaded[0].CorporateAuthor.Should().BeNull();
             reloaded[1].PersonalAuthors.Should().BeEmpty();
             reloaded[1].CorporateAuthor.Should().Be("World Health Organization");

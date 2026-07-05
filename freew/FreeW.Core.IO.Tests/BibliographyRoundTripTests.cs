@@ -669,6 +669,57 @@ public class BibliographyRoundTripTests
     }
 
     [Fact]
+    public void WordStyleContributorRoles_ReadsEditorAndTranslatorNameLists()
+    {
+        var result = ReadDocxWithSourcesXml(
+            """
+            <b:Sources xmlns:b="http://schemas.openxmlformats.org/officeDocument/2006/bibliography">
+              <b:Source>
+                <b:Tag>Edited2026</b:Tag>
+                <b:SourceType>BookSection</b:SourceType>
+                <b:Author>
+                  <b:Author>
+                    <b:NameList>
+                      <b:Person>
+                        <b:Last>Author</b:Last>
+                        <b:First>Ada</b:First>
+                      </b:Person>
+                    </b:NameList>
+                  </b:Author>
+                  <b:Editor>
+                    <b:NameList>
+                      <b:Person>
+                        <b:Last>Editor</b:Last>
+                        <b:First>Edna</b:First>
+                        <b:Middle>Q.</b:Middle>
+                      </b:Person>
+                    </b:NameList>
+                  </b:Editor>
+                  <b:Translator>
+                    <b:NameList>
+                      <b:Person>
+                        <b:Last>Translator</b:Last>
+                        <b:First>Tara</b:First>
+                      </b:Person>
+                    </b:NameList>
+                  </b:Translator>
+                </b:Author>
+                <b:Title>Chapter with Roles</b:Title>
+              </b:Source>
+            </b:Sources>
+            """);
+
+        var source = result.Sources.Should().ContainSingle().Subject;
+        source.Author.Should().Be("Ada Author");
+        source.PersonalAuthors.Should().ContainSingle()
+            .Which.Should().Be(SourceAuthorPerson.Create("Ada", string.Empty, "Author"));
+        source.Editors.Should().ContainSingle()
+            .Which.Should().Be(SourceAuthorPerson.Create("Edna", "Q.", "Editor"));
+        source.Translators.Should().ContainSingle()
+            .Which.Should().Be(SourceAuthorPerson.Create("Tara", string.Empty, "Translator"));
+    }
+
+    [Fact]
     public void StructuredPersonAuthors_WriteNameListInsteadOfCorporate()
     {
         var doc = TextDocument.CreateEmpty();
@@ -722,5 +773,65 @@ public class BibliographyRoundTripTests
         source.PersonalAuthors.Should().ContainSingle()
             .Which.Should().Be(SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace"));
         source.CorporateAuthor.Should().BeNull();
+    }
+
+    [Fact]
+    public void ContributorRoleNameLists_WriteEditorAndTranslatorBlocks()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Sources.Add(new Source
+        {
+            Tag = "Edited2026",
+            Type = SourceType.Book,
+            Author = "Ada Author",
+            PersonalAuthors = [SourceAuthorPerson.Create("Ada", string.Empty, "Author")],
+            Editors = [SourceAuthorPerson.Create("Edna", "Q.", "Editor")],
+            Translators = [SourceAuthorPerson.Create("Tara", string.Empty, "Translator")],
+            Title = "Book with Roles"
+        });
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        using var zip = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
+        using var entry = zip.GetEntry("word/bibliography/sources.xml")!.Open();
+        var contributors = XDocument.Load(entry).Root!.Element(B + "Source")!.Element(B + "Author")!;
+
+        contributors.Element(B + "Author")!.Element(B + "NameList")!
+            .Elements(B + "Person").Should().ContainSingle();
+        var editor = contributors.Element(B + "Editor")!.Element(B + "NameList")!
+            .Elements(B + "Person").Should().ContainSingle().Subject;
+        editor.Element(B + "First")!.Value.Should().Be("Edna");
+        editor.Element(B + "Middle")!.Value.Should().Be("Q.");
+        editor.Element(B + "Last")!.Value.Should().Be("Editor");
+        var translator = contributors.Element(B + "Translator")!.Element(B + "NameList")!
+            .Elements(B + "Person").Should().ContainSingle().Subject;
+        translator.Element(B + "First")!.Value.Should().Be("Tara");
+        translator.Element(B + "Last")!.Value.Should().Be("Translator");
+    }
+
+    [Fact]
+    public void ContributorRoleNameLists_RoundTripThroughDocx()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Sources.Add(new Source
+        {
+            Tag = "Chapter2026",
+            Type = SourceType.BookSection,
+            Author = "Ada Author",
+            PersonalAuthors = [SourceAuthorPerson.Create("Ada", string.Empty, "Author")],
+            Editors = [SourceAuthorPerson.Create("Edna", "Q.", "Editor")],
+            Translators = [SourceAuthorPerson.Create("Tara", string.Empty, "Translator")],
+            Title = "Chapter with Roles",
+            BookTitle = "Edited Book"
+        });
+
+        var source = RoundTrip(doc).Sources.Should().ContainSingle().Subject;
+
+        source.PersonalAuthors.Should().ContainSingle()
+            .Which.Should().Be(SourceAuthorPerson.Create("Ada", string.Empty, "Author"));
+        source.Editors.Should().ContainSingle()
+            .Which.Should().Be(SourceAuthorPerson.Create("Edna", "Q.", "Editor"));
+        source.Translators.Should().ContainSingle()
+            .Which.Should().Be(SourceAuthorPerson.Create("Tara", string.Empty, "Translator"));
     }
 }

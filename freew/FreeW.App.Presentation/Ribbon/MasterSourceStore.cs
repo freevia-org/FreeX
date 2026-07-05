@@ -56,6 +56,8 @@ public sealed class SourceRecord
     public string Author { get; set; } = string.Empty;
     public List<SourceAuthorPerson> PersonalAuthors { get; set; } = [];
     public string? CorporateAuthor { get; set; }
+    public List<SourceAuthorPerson> Editors { get; set; } = [];
+    public List<SourceAuthorPerson> Translators { get; set; } = [];
     public string Title { get; set; } = string.Empty;
     public string? BookTitle { get; set; }
     public string? ConferenceName { get; set; }
@@ -88,6 +90,14 @@ public sealed class SourceRecord
             .Select(person => SourceAuthorPerson.Create(person.First, person.Middle, person.Last))
             .ToArray(),
         CorporateAuthor = CorporateAuthor,
+        Editors = Editors
+            .Where(person => person is not null && !person.IsEmpty)
+            .Select(person => SourceAuthorPerson.Create(person.First, person.Middle, person.Last))
+            .ToArray(),
+        Translators = Translators
+            .Where(person => person is not null && !person.IsEmpty)
+            .Select(person => SourceAuthorPerson.Create(person.First, person.Middle, person.Last))
+            .ToArray(),
         Title = Title,
         BookTitle = BookTitle,
         ConferenceName = ConferenceName,
@@ -125,6 +135,14 @@ public sealed class SourceRecord
                 .Select(person => SourceAuthorPerson.Create(person.First, person.Middle, person.Last))
                 .ToList(),
             CorporateAuthor = source.CorporateAuthor,
+            Editors = source.Editors
+                .Where(person => person is not null && !person.IsEmpty)
+                .Select(person => SourceAuthorPerson.Create(person.First, person.Middle, person.Last))
+                .ToList(),
+            Translators = source.Translators
+                .Where(person => person is not null && !person.IsEmpty)
+                .Select(person => SourceAuthorPerson.Create(person.First, person.Middle, person.Last))
+                .ToList(),
             Title = source.Title,
             BookTitle = source.BookTitle,
             ConferenceName = source.ConferenceName,

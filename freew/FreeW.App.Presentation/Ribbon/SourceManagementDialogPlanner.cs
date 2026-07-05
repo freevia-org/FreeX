@@ -6,6 +6,8 @@ public enum SourceManagementSourceField
 {
     Tag,
     Author,
+    Editor,
+    Translator,
     Title,
     BookTitle,
     ConferenceName,
@@ -70,6 +72,14 @@ public sealed record SourceManagementSourceEntry(
     public IReadOnlyList<SourceAuthorPerson> PersonalAuthors { get; init; } = [];
 
     public string? CorporateAuthor { get; init; }
+
+    public string Editor { get; init; } = string.Empty;
+
+    public IReadOnlyList<SourceAuthorPerson> Editors { get; init; } = [];
+
+    public string Translator { get; init; } = string.Empty;
+
+    public IReadOnlyList<SourceAuthorPerson> Translators { get; init; } = [];
 
     public SourceManagementSourceEntry(
         SourceType Type,
@@ -192,6 +202,8 @@ public static class SourceManagementDialogPlanner
             [
                 SourceManagementSourceField.Tag,
                 SourceManagementSourceField.Author,
+                SourceManagementSourceField.Editor,
+                SourceManagementSourceField.Translator,
                 SourceManagementSourceField.Title,
                 SourceManagementSourceField.Year,
                 SourceManagementSourceField.City,
@@ -246,6 +258,8 @@ public static class SourceManagementDialogPlanner
             [
                 SourceManagementSourceField.Tag,
                 SourceManagementSourceField.Author,
+                SourceManagementSourceField.Editor,
+                SourceManagementSourceField.Translator,
                 SourceManagementSourceField.Title,
                 SourceManagementSourceField.BookTitle,
                 SourceManagementSourceField.Year,
@@ -307,6 +321,8 @@ public static class SourceManagementDialogPlanner
         {
             [SourceManagementSourceField.Tag] = "Tag (short id):",
             [SourceManagementSourceField.Author] = "Author:",
+            [SourceManagementSourceField.Editor] = "Editor:",
+            [SourceManagementSourceField.Translator] = "Translator:",
             [SourceManagementSourceField.Title] = "Title:",
             [SourceManagementSourceField.BookTitle] = "Book title:",
             [SourceManagementSourceField.ConferenceName] = "Conference name:",
@@ -391,7 +407,11 @@ public static class SourceManagementDialogPlanner
             ConferenceName = source?.ConferenceName ?? string.Empty,
             ChapterNumber = source?.ChapterNumber ?? string.Empty,
             PersonalAuthors = ClonePersonalAuthors(source?.PersonalAuthors ?? []),
-            CorporateAuthor = source?.CorporateAuthor
+            CorporateAuthor = source?.CorporateAuthor,
+            Editor = SourceAuthorPerson.FormatDisplayText(source?.Editors ?? []),
+            Editors = ClonePersonalAuthors(source?.Editors ?? []),
+            Translator = SourceAuthorPerson.FormatDisplayText(source?.Translators ?? []),
+            Translators = ClonePersonalAuthors(source?.Translators ?? [])
         };
 
     public static SourceManagementSourceEntry CreateEntry(
@@ -415,6 +435,12 @@ public static class SourceManagementDialogPlanner
         var author = NormalizeAuthor(
             TrimmedValue(values, SourceManagementSourceField.Author),
             previousEntry);
+        var editors = NormalizePersonalContributors(
+            TrimmedValue(values, SourceManagementSourceField.Editor),
+            previousEntry?.Editors ?? []);
+        var translators = NormalizePersonalContributors(
+            TrimmedValue(values, SourceManagementSourceField.Translator),
+            previousEntry?.Translators ?? []);
 
         return new SourceManagementSourceEntry(
             NormalizeSourceType(type),
@@ -443,7 +469,11 @@ public static class SourceManagementDialogPlanner
             ConferenceName = TrimmedValue(values, SourceManagementSourceField.ConferenceName),
             ChapterNumber = TrimmedValue(values, SourceManagementSourceField.ChapterNumber),
             PersonalAuthors = author.PersonalAuthors,
-            CorporateAuthor = author.CorporateAuthor
+            CorporateAuthor = author.CorporateAuthor,
+            Editor = editors.DisplayText,
+            Editors = editors.People,
+            Translator = translators.DisplayText,
+            Translators = translators.People
         };
     }
 
@@ -522,6 +552,12 @@ public static class SourceManagementDialogPlanner
 
         var type = NormalizeSourceType(entry.Type);
         var author = NormalizeAuthor(entry.Author, AuthorPreservationEntry(entry, existing));
+        var editors = NormalizePersonalContributors(
+            entry.Editor,
+            ContributorPreservationPeople(entry.Editor, entry.Editors, existing?.Editors));
+        var translators = NormalizePersonalContributors(
+            entry.Translator,
+            ContributorPreservationPeople(entry.Translator, entry.Translators, existing?.Translators));
         return new Source
         {
             Tag = SourceManagementTagIdentity.Canonicalize(entry.Tag),
@@ -529,6 +565,8 @@ public static class SourceManagementDialogPlanner
             Author = author.DisplayText,
             PersonalAuthors = author.PersonalAuthors,
             CorporateAuthor = author.CorporateAuthor,
+            Editors = type is SourceType.Book or SourceType.BookSection ? editors.People : [],
+            Translators = type is SourceType.Book or SourceType.BookSection ? translators.People : [],
             Title = entry.Title.Trim(),
             BookTitle = type == SourceType.BookSection ? NullIfWhiteSpace(entry.BookTitle) : null,
             ConferenceName = type == SourceType.ConferenceProceedings ? NullIfWhiteSpace(entry.ConferenceName) : null,
@@ -568,6 +606,8 @@ public static class SourceManagementDialogPlanner
             Author = source.Author,
             PersonalAuthors = ClonePersonalAuthors(source.PersonalAuthors),
             CorporateAuthor = source.CorporateAuthor,
+            Editors = ClonePersonalAuthors(source.Editors),
+            Translators = ClonePersonalAuthors(source.Translators),
             Title = source.Title,
             BookTitle = source.BookTitle,
             ConferenceName = source.ConferenceName,
@@ -818,6 +858,8 @@ public static class SourceManagementDialogPlanner
 
     private static bool HasCitationSourceData(SourceManagementSourceEntry entry) =>
         entry.Author.Length > 0
+        || entry.Editor.Length > 0
+        || entry.Translator.Length > 0
         || entry.Title.Length > 0
         || entry.BookTitle.Length > 0
         || entry.ConferenceName.Length > 0
@@ -848,6 +890,8 @@ public static class SourceManagementDialogPlanner
         {
             SourceManagementSourceField.Tag => entry.Tag,
             SourceManagementSourceField.Author => entry.Author,
+            SourceManagementSourceField.Editor => entry.Editor,
+            SourceManagementSourceField.Translator => entry.Translator,
             SourceManagementSourceField.Title => entry.Title,
             SourceManagementSourceField.BookTitle => entry.BookTitle,
             SourceManagementSourceField.ConferenceName => entry.ConferenceName,
@@ -891,6 +935,58 @@ public static class SourceManagementDialogPlanner
 
     private static bool HasStructuredAuthorMetadata(SourceManagementSourceEntry entry) =>
         entry.PersonalAuthors.Count > 0 || !string.IsNullOrWhiteSpace(entry.CorporateAuthor);
+
+    private static IReadOnlyList<SourceAuthorPerson> ContributorPreservationPeople(
+        string displayText,
+        IReadOnlyList<SourceAuthorPerson> entryPeople,
+        IReadOnlyList<SourceAuthorPerson>? existingPeople)
+    {
+        var entryContributorPeople = ClonePersonalAuthors(entryPeople);
+        if (entryContributorPeople.Count > 0)
+            return entryContributorPeople;
+
+        var existingContributorPeople = ClonePersonalAuthors(existingPeople ?? []);
+        if (existingContributorPeople.Count == 0)
+            return [];
+
+        return string.Equals(
+            displayText.Trim(),
+            SourceAuthorPerson.FormatDisplayText(existingContributorPeople),
+            StringComparison.Ordinal)
+            ? existingContributorPeople
+            : [];
+    }
+
+    private static SourceManagementContributorProjection NormalizePersonalContributors(
+        string contributorText,
+        IReadOnlyList<SourceAuthorPerson> previousPeople)
+    {
+        var trimmed = contributorText.Trim();
+        if (trimmed.Length == 0)
+            return SourceManagementContributorProjection.Empty;
+
+        var previous = ClonePersonalAuthors(previousPeople);
+        if (previous.Count > 0
+            && string.Equals(trimmed, SourceAuthorPerson.FormatDisplayText(previous), StringComparison.Ordinal))
+            return new SourceManagementContributorProjection(trimmed, previous);
+
+        var people = new List<SourceAuthorPerson>();
+        foreach (var row in trimmed
+                     .Split(';')
+                     .Select(row => row.Trim())
+                     .Where(row => row.Length > 0))
+        {
+            if (!TryParsePersonalAuthorRow(row, out var person))
+                person = SourceAuthorPerson.Create(null, null, row);
+
+            if (!person.IsEmpty)
+                people.Add(person);
+        }
+
+        return people.Count == 0
+            ? SourceManagementContributorProjection.Empty
+            : new SourceManagementContributorProjection(SourceAuthorPerson.FormatDisplayText(people), people);
+    }
 
     private static SourceManagementAuthorProjection NormalizeAuthor(
         string authorText,
@@ -992,6 +1088,13 @@ public static class SourceManagementDialogPlanner
         string? CorporateAuthor)
     {
         public static readonly SourceManagementAuthorProjection Empty = new(string.Empty, [], null);
+    }
+
+    private sealed record SourceManagementContributorProjection(
+        string DisplayText,
+        IReadOnlyList<SourceAuthorPerson> People)
+    {
+        public static readonly SourceManagementContributorProjection Empty = new(string.Empty, []);
     }
 
     private static SourceType NormalizeSourceType(SourceType type) =>
