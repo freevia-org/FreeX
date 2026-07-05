@@ -132,7 +132,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
     public static IReadOnlyList<string> TableRendererScenarioIds { get; } =
     [
         "table-layout-complex",
-        "table-pagination-repeat-header"
+        "table-pagination-repeat-header",
+        "table-page-composition-stress"
     ];
     public static IReadOnlyList<string> DrawingObjectRendererScenarioIds { get; } =
     [

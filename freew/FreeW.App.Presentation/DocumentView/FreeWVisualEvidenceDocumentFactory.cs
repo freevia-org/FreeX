@@ -577,6 +577,67 @@ public static class FreeWVisualEvidenceDocumentFactory
         return doc;
     }
 
+    public static TextDocument BuildTablePageCompositionStressDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        Captions.EnsureStyles(doc);
+
+        doc.Properties.Title = "Table Page Composition Stress";
+        doc.Properties.Author = "FreeW Visual Evidence";
+        doc.Properties.Subject = "Combined table and page composition visual parity";
+        doc.Page.WidthPt = 612;
+        doc.Page.HeightPt = 396;
+        doc.Page.MarginLeftPt = 42;
+        doc.Page.MarginRightPt = 42;
+        doc.Page.MarginTopPt = 42;
+        doc.Page.MarginBottomPt = 42;
+        doc.Page.HeaderDistancePt = 18;
+        doc.Page.FooterDistancePt = 18;
+        doc.Page.PageBorder = new PageBorder("#24536B", 1.5)
+        {
+            LineStyle = BorderLineStyle.Double
+        };
+        doc.Page.WatermarkOptions = new WatermarkOptions("TABLE REVIEW")
+        {
+            FontColorHex = "#7F7F7F",
+            Opacity = 0.22,
+            Layout = WatermarkLayout.Diagonal
+        };
+
+        doc.FinalSectionHeadersFooters.Header = FieldHeaderFooter(
+            new Run("Table composition stress page "),
+            Run.PageNumberField(),
+            new Run(" of "),
+            Run.NumPagesField("2"));
+        doc.FinalSectionHeadersFooters.Footer = FieldHeaderFooter(
+            new Run("FreeW visual evidence | "),
+            Run.TitleField("Table Page Composition Stress"));
+
+        doc.Blocks.Add(StyledParagraph("Table Page Composition Stress", "Heading1"));
+        var intro = new Paragraph();
+        intro.Runs.Add(new Run(
+            "This bounded fixture combines repeated table headers, page border, watermark, " +
+            "header/footer fields, explicit table layout metadata, a caption, and a footnote reference"));
+        intro.Runs.Add(Run.FootnoteReference(1));
+        intro.Runs.Add(new Run("."));
+        doc.Blocks.Add(intro);
+        doc.Footnotes[1] = new Footnote(
+            1,
+            "Footnote 1: Confirms the shared fixture carries note metadata alongside table pagination.");
+
+        doc.Blocks.Add(BuildTablePageCompositionStressTable());
+        doc.Blocks.Add(Captions.BuildCaption(
+            CaptionLabel.Table,
+            1,
+            "Repeated-header table with page chrome, field headers, watermark, and explicit cell borders."));
+        doc.Blocks.Add(new Paragraph(
+            "Both renderers should emit two trusted rows for this shared scenario, and the normalizer " +
+            "should reject missing or drifted table/page-composition metadata."));
+
+        return doc;
+    }
+
     public static TextDocument BuildDrawingObjectsCompositionDocument()
     {
         var doc = TextDocument.CreateEmpty();
@@ -933,6 +994,71 @@ public static class FreeWVisualEvidenceDocumentFactory
                 Cell("$5.49M", gridSpan: 2, shading: "#D9EAD3", customBorder: true)
             }
         });
+
+        return table;
+    }
+
+    private static Table BuildTablePageCompositionStressTable()
+    {
+        var table = new Table
+        {
+            Formatting = new TableFormatting
+            {
+                Borders = true,
+                HeaderRow = true,
+                RepeatHeaderRow = true,
+                BandedRows = true,
+                FirstColumn = true
+            },
+            TableStyleId = "GridTable1Light",
+            PreferredWidthPt = 520,
+            Alignment = TableAlignment.Center,
+            AutoFit = AutoFitMode.Fixed,
+            CellSpacingPt = 1.8,
+            DefaultCellMargins = new TableCellMargins(TopPt: 3, LeftPt: 6, BottomPt: 3, RightPt: 6)
+        };
+        table.ColumnWidthsPt.AddRange([118, 126, 136, 140]);
+        table.Rows.Add(new TableRow
+        {
+            HeightPt = 30,
+            HeightRule = TableRowHeightRule.Exact,
+            AllowBreakAcrossPages = false,
+            Cells =
+            {
+                HeaderCell("Page area"),
+                HeaderCell("Owner"),
+                HeaderCell("Table evidence"),
+                HeaderCell("Composition evidence")
+            }
+        });
+
+        for (var row = 1; row <= 8; row++)
+        {
+            var shaded = row % 2 == 0 ? "#EAF2F8" : "#F8FBFD";
+            table.Rows.Add(new TableRow
+            {
+                HeightPt = 58,
+                HeightRule = TableRowHeightRule.Exact,
+                AllowBreakAcrossPages = row is not 3 and not 6,
+                Cells =
+                {
+                    Cell($"Segment {row}", shading: shaded, customBorder: true),
+                    Cell(row is 3 or 6 ? "Keep row together" : "Flow row", customBorder: true),
+                    Cell(
+                        $"Repeated-header table row {row} keeps fixed widths, margins, spacing, and cell border metadata.",
+                        shading: row == 5 ? "#FFF2CC" : null,
+                        customBorder: true),
+                    Cell(
+                        row <= 4
+                            ? "Page 1 should show header/footer fields, watermark, and border."
+                            : "Page 2 should repeat the header row inside the same page chrome.",
+                        customBorder: true,
+                        verticalAlignment: row >= 7
+                            ? TableCellVerticalAlignment.Center
+                            : TableCellVerticalAlignment.Top)
+                }
+            });
+        }
 
         return table;
     }

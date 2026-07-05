@@ -90,6 +90,41 @@ public sealed class SlideShowInkPersistencePlannerTests
     }
 
     [Fact]
+    public void BuildPlan_PlaybackRoutePreservesRepeatedCustomShowOccurrences()
+    {
+        var presentation = MakePresentation(3);
+        presentation.Slides[0].Id = "intro-slide";
+        presentation.Slides[2].Id = "appendix-slide";
+        var route = SlideShowCustomShowPlanner.BuildCustomShowRoute(
+            presentation,
+            new SlideShowCustomSlideSequence(
+                "Executive review",
+                new[] { presentation.Slides[2].Id, presentation.Slides[0].Id, presentation.Slides[2].Id }));
+        var state = SlideShowInkExecutionPlanner.CreateState(
+            committedStrokes: new[]
+            {
+                Stroke("appendix-first-pass", 0, SlideShowPresenterPointerMode.Pen, "#111111", 4, 1,
+                    new SlideShowInkPoint(1, 2)),
+                Stroke("intro-pass", 1, SlideShowPresenterPointerMode.Pen, "#222222", 4, 1,
+                    new SlideShowInkPoint(3, 4)),
+                Stroke("appendix-second-pass", 2, SlideShowPresenterPointerMode.Pen, "#333333", 4, 1,
+                    new SlideShowInkPoint(5, 6)),
+            });
+
+        var plan = SlideShowInkPersistencePlanner.BuildPlan(presentation, state, route);
+
+        plan.Slides.Select(slide => slide.RouteSlideIndex).Should().Equal(0, 1, 2);
+        plan.Slides.Select(slide => slide.PresentationSlideIndex).Should().Equal(2, 0, 2);
+        plan.Slides.Select(slide => slide.PlaybackSlideCount).Should().OnlyContain(count => count == 3);
+        plan.Slides.Select(slide => slide.SourceSlideOccurrenceIndex).Should().Equal(0, 0, 1);
+        plan.Slides[0].InkPartPath.Should().Be("ppt/ink/freepInk_s3_2.xml");
+        plan.Slides[2].InkPartPath.Should().Be("ppt/ink/freepInk_s3_3.xml");
+        plan.Slides[0].InkXml.Should().Contain("freep:playbackSlideCount=\"3\"");
+        plan.Slides[2].InkXml.Should().Contain("freep:sourceSlideOccurrenceIndex=\"1\"");
+        plan.Slides[2].InkXml.Should().Contain("appendix-second-pass");
+    }
+
+    [Fact]
     public void BuildPlan_ProducesDeterministicReadableStrokeSerialization()
     {
         var presentation = MakePresentation(1);
