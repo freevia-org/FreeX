@@ -499,6 +499,47 @@ public class RibbonEditorCompleteness5BTests
         Assert.Null(ex);
     }
 
+    [Fact]
+    public void Cmd_FontSizeAndColor_WithSelectedTextShape_RoutesToEditor()
+    {
+        var (ed, pres) = MakeSession();
+        ed.InsertDefaultTextBox();
+        var shape = pres.Slides[0].Shapes.Last();
+        ed.Select(shape.Id);
+        var reg = MakeRegistry(ed);
+
+        Exec(reg, "freep.font-size", RibbonCommandContext.ForSelectedValue("26pt"));
+        Exec(reg, "freep.font-color", RibbonCommandContext.ForSelectedValue("#336699"));
+
+        var run = shape.TextBody!.Paragraphs[0].Runs[0];
+        Assert.Equal(26, run.FontSizePt);
+        Assert.NotNull(run.Color);
+        Assert.Equal(SrgbColor.FromRgb(0x336699), run.Color!.Resolved);
+    }
+
+    [Fact]
+    public void Cmd_FontSizeAndColor_WithActiveTableCell_RoutesToSharedTableCellPlan()
+    {
+        var (ed, pres) = MakeSession();
+        var body = new TextBody { Wrap = true };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = "Cell", FontSizePt = 10 });
+        paragraph.Runs.Add(new Run { Text = " text", FontSizePt = 14, Bold = true });
+        body.Paragraphs.Add(paragraph);
+        var shape = AddSingleCellTable(pres, 800, body);
+        ed.Select(shape.Id);
+        ed.SetActiveTableCell(0, 0);
+        var reg = MakeRegistry(ed);
+
+        Exec(reg, "freep.font-size", RibbonCommandContext.ForSelectedValue("22"));
+        Exec(reg, "freep.font-color", RibbonCommandContext.ForSelectedValue("#8844CC"));
+
+        var runs = shape.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs;
+        Assert.All(runs, run => Assert.Equal(22, run.FontSizePt));
+        Assert.All(runs, run => Assert.Equal(SrgbColor.FromRgb(0x8844CC), run.Color!.Resolved));
+        Assert.True(runs[1].Bold);
+    }
+
     [Theory]
     [InlineData("freep.bold", TableCellTextFormatKind.Bold)]
     [InlineData("freep.italic", TableCellTextFormatKind.Italic)]
@@ -699,6 +740,8 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.cut")]
     [InlineData("freep.paste")]
     [InlineData("freep.font-family")]
+    [InlineData("freep.font-size")]
+    [InlineData("freep.font-color")]
     [InlineData("freep.format-painter")]
     [InlineData("freep.theme.office")]
     [InlineData("freep.theme.berlin")]

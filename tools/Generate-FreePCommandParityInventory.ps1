@@ -371,7 +371,7 @@ internal static class FreePCommandInventory
             return new Classification("shared", "Available in both generated FreeP ribbon profiles.");
 
         if (avaloniaPresent && IsAvaloniaPlatformCommand(commandId))
-            return new Classification("platform-only", "Avalonia shell or backed profile command exposed by its generated profile.");
+            return new Classification("platform-only", AvaloniaPlatformCommandNote(commandId));
 
         if (wpfPresent && IsKnownDeferredWpfSlice(wpfLocations ?? Array.Empty<CommandLocation>()))
             return new Classification("known-deferred", "WPF-only profile slice not yet present in the generated Avalonia profile.");
@@ -385,9 +385,19 @@ internal static class FreePCommandInventory
     private static bool IsAvaloniaPlatformCommand(string commandId) =>
         commandId.StartsWith("freep.file.", StringComparison.Ordinal) ||
         string.Equals(commandId, "freep.undo", StringComparison.Ordinal) ||
-        string.Equals(commandId, "freep.redo", StringComparison.Ordinal) ||
-        string.Equals(commandId, "freep.font-size", StringComparison.Ordinal) ||
-        string.Equals(commandId, "freep.font-color", StringComparison.Ordinal);
+        string.Equals(commandId, "freep.redo", StringComparison.Ordinal);
+
+    private static string AvaloniaPlatformCommandNote(string commandId) =>
+        commandId switch
+        {
+            "freep.file.new" => "Intended shell/profile variance: Avalonia exposes document lifecycle in its generated Home/File ribbon group; WPF routes New through ApplicationCommands.New, Backstage chrome, and FileCommands rather than a generated ribbon control.",
+            "freep.file.open" => "Intended shell/profile variance: Avalonia exposes document lifecycle in its generated Home/File ribbon group; WPF routes Open through ApplicationCommands.Open, Backstage chrome, and FileCommands rather than a generated ribbon control.",
+            "freep.file.save" => "Intended shell/profile variance: Avalonia exposes document lifecycle in its generated Home/File ribbon group; WPF routes Save through ApplicationCommands.Save, Backstage chrome, and FileCommands rather than a generated ribbon control.",
+            "freep.file.save-as" => "Intended shell/profile variance: Avalonia exposes document lifecycle in its generated Home/File ribbon group; WPF routes Save As through ApplicationCommands.SaveAs, Backstage chrome, and FileCommands rather than a generated ribbon control.",
+            "freep.undo" => "Intended shell/profile variance: Avalonia exposes Undo in its generated Home/Edit ribbon group; WPF routes Undo through ApplicationCommands.Undo, keyboard bindings, and Backstage/QAT chrome rather than a generated ribbon control.",
+            "freep.redo" => "Intended shell/profile variance: Avalonia exposes Redo in its generated Home/Edit ribbon group; WPF routes Redo through a routed command, keyboard bindings, and Backstage/QAT chrome rather than a generated ribbon control.",
+            _ => "Command is present only in one generated platform profile."
+        };
 
     private static bool IsKnownDeferredWpfSlice(IReadOnlyList<CommandLocation> locations) =>
         locations.Any(location => location.TabId is "design" or "transitions" or "animations");
