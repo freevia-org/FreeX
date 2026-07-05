@@ -385,6 +385,9 @@ public sealed class FreeWRibbonDefinitionProfileTests
         commands.Select(command => command.GetProperty("commandId").GetString()!)
             .Should()
             .Equal(commandIds);
+        commands.Select(command => command.GetProperty("commandId").GetString()!)
+            .Should()
+            .NotContain("freew.word-count", "freew.word-count is a registry compatibility alias, not a generated inventory row");
         var gapClassificationCounts = commands
             .GroupBy(command => command.GetProperty("gapClassification").GetString()!, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
@@ -434,7 +437,11 @@ public sealed class FreeWRibbonDefinitionProfileTests
         AssertGapClassification(commands, "freew.cc-date", "shared-profile");
         AssertGapClassification(commands, "freew.cc-dropdown", "shared-profile");
         AssertGapClassification(commands, "freew.cc-combo", "shared-profile");
+        AssertGapClassification(commands, "freew.statistics", "shared-profile");
+        AssertGapClassification(commands, "freew.spellcheck-toggle", "shared-profile");
         AssertGapClassification(commands, "freew.add-to-dictionary", "shared-profile");
+        AssertGapClassification(commands, "freew.thesaurus", "shared-profile");
+        AssertGapClassification(commands, "freew.set-proofing-language", "shared-profile");
         AssertGapClassification(commands, "freew.split", "command-id-alias");
         var platformOnlyRows = commands
             .Where(command => command.GetProperty("gapClassification").GetString() == "platform-only")
@@ -663,6 +670,51 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "ReferencesTabTests.UpdateFields_refreshes_toc_and_bibliography_in_same_pass",
             "freew.references-fields.shared-behavior",
             "References fields and generated regions");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.statistics",
+            "freew/FreeW.Core.Model.Tests/WordCountTests.cs",
+            "WordCountTests.Of_IncludesTableCellParagraphs",
+            "freew/FreeW.App.Avalonia.Tests/DocumentViewReviewTests.cs",
+            "DocumentViewReviewTests.Review_safety_commands_route_to_host_callbacks",
+            "freew.review-proofing-statistics.shared-behavior",
+            "Review proofing statistics");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.spellcheck-toggle",
+            "freew/FreeW.Core.Model.Tests/ProofingDiagnosticPlannerTests.cs",
+            "ProofingDiagnosticPlannerTests.Build_suppresses_diagnostics_when_spellcheck_disabled",
+            "freew/FreeW.App.Avalonia.Tests/DocumentViewReviewTests.cs",
+            "DocumentViewReviewTests.Proofing_commands_toggle_state_dictionary_thesaurus_and_language",
+            "freew.review-proofing.shared-behavior",
+            "Review proofing");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.add-to-dictionary",
+            "freew/FreeW.Core.Model.Tests/CustomDictionaryTests.cs",
+            "CustomDictionaryTests.Add_ThenContains_FindsWord",
+            "freew/FreeW.App.Avalonia.Tests/DocumentViewReviewTests.cs",
+            "DocumentViewReviewTests.Proofing_commands_toggle_state_dictionary_thesaurus_and_language",
+            "freew.review-proofing.shared-behavior",
+            "Review proofing");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.thesaurus",
+            "freew/FreeW.App.Host.Tests/ThesaurusAndBalloonsTests.cs",
+            "ThesaurusAndBalloonsTests.ThesaurusLookup_KnownWord_ReturnsSensesWithSynonyms",
+            "freew/FreeW.App.Avalonia.Tests/DocumentViewReviewTests.cs",
+            "DocumentViewReviewTests.Thesaurus_replace_current_proofing_word_replaces_caret_word",
+            "freew.review-thesaurus.shared-behavior",
+            "Review thesaurus");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.set-proofing-language",
+            "freew/FreeW.App.Host.Tests/CharacterBorderShadingLanguageApplyTests.cs",
+            "CharacterBorderShadingLanguageApplyTests.SetProofingLanguage_MultiParagraphSelection_IsReversibleWithSingleUndo",
+            "freew/FreeW.App.Avalonia.Tests/DocumentViewReviewTests.cs",
+            "DocumentViewReviewTests.Proofing_language_applies_only_to_the_selected_range_across_paragraphs",
+            "freew.review-proofing-language.shared-behavior",
+            "Review proofing language");
 
         var markdown = ReadRepositoryFile("docs", "parity", "freew-command-inventory.md");
         markdown.Should().Contain($"| {commandIds.Length} | {both} | {wpfOnly} | {avaloniaOnly} | {avaloniaOnly} | {wpfOnly} |");
@@ -673,6 +725,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
         markdown.Should().Contain("Behavior evidence rows");
         markdown.Should().Contain("Review comments: ThreadedCommentCommandTests.DeleteCommentAtCaret_RemovesThreadRangeAndReference");
         markdown.Should().Contain("References fields and generated regions: CitationEditorTests.InsertCitation_TaggedSourceWithQuotedFieldArgument_RenumbersOnUpdateFields");
+        markdown.Should().Contain("Review proofing statistics: WordCountTests.Of_IncludesTableCellParagraphs");
+        markdown.Should().Contain("Review thesaurus: ThesaurusAndBalloonsTests.ThesaurusLookup_KnownWord_ReturnsSensesWithSynonyms");
     }
 
     [Fact]

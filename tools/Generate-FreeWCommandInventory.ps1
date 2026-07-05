@@ -284,6 +284,20 @@ internal static class FreeWCommandInventory
             "NumericCitationEditorTests.UpdateFields_CitationFieldAndBibliographyRefresh_DoNotOverwriteCitationFromStaleView",
             "freew/FreeW.App.Avalonia.Tests/ReferencesTabTests.cs",
             "ReferencesTabTests.UpdateFields_refreshes_toc_and_bibliography_in_same_pass"),
+        ["freew.statistics"] = StatisticsEvidence(
+            "Computes Review > Proofing statistics from the shared document model, including paragraphs nested inside table cells, and routes the Avalonia review command to the host statistics callback."),
+        ["freew.spellcheck-toggle"] = ProofingEvidence(
+            "Toggles spellcheck diagnostics through the shared proofing planner and the Avalonia review command registry without mutating document content.",
+            "freew/FreeW.Core.Model.Tests/ProofingDiagnosticPlannerTests.cs",
+            "ProofingDiagnosticPlannerTests.Build_suppresses_diagnostics_when_spellcheck_disabled"),
+        ["freew.add-to-dictionary"] = ProofingEvidence(
+            "Adds the current proofing word to the custom dictionary so the shared proofing planner suppresses that diagnostic on subsequent passes.",
+            "freew/FreeW.Core.Model.Tests/CustomDictionaryTests.cs",
+            "CustomDictionaryTests.Add_ThenContains_FindsWord"),
+        ["freew.thesaurus"] = ThesaurusEvidence(
+            "Loads bundled thesaurus senses for known words and lets the Avalonia review surface replace the current proofing word with the chosen synonym."),
+        ["freew.set-proofing-language"] = ProofingLanguageEvidence(
+            "Applies proofing language metadata to selected text ranges in both shells while keeping multi-paragraph language changes reversible."),
         ["freew.merge-next-record"] = MailingsEvidence(
             "Inserts the Word-style NEXT RECORD mail-merge rule field through both ribbon registries so record advancement survives as a model placeholder."),
         ["freew.merge-record-number"] = MailingsEvidence(
@@ -539,6 +553,49 @@ internal static class FreeWCommandInventory
             wpfTest: "FreeWRibbonParityTests.ReviewTrackingAndChanges_CommandRoutesExecuteBackedActions",
             avaloniaPath: "freew/FreeW.App.Avalonia.Tests/DocumentViewReviewTests.cs",
             avaloniaTest: "DocumentViewReviewTests.Review_change_navigation_commands_route_to_host_callbacks");
+
+    private static CommandBehaviorEvidence StatisticsEvidence(string summary) =>
+        ReviewEvidence(
+            evidenceId: "freew.review-proofing-statistics.shared-behavior",
+            slice: "Review proofing statistics",
+            summary: summary,
+            wpfPath: "freew/FreeW.Core.Model.Tests/WordCountTests.cs",
+            wpfTest: "WordCountTests.Of_IncludesTableCellParagraphs",
+            avaloniaPath: "freew/FreeW.App.Avalonia.Tests/DocumentViewReviewTests.cs",
+            avaloniaTest: "DocumentViewReviewTests.Review_safety_commands_route_to_host_callbacks");
+
+    private static CommandBehaviorEvidence ProofingEvidence(
+        string summary,
+        string wpfPath,
+        string wpfTest) =>
+        ReviewEvidence(
+            evidenceId: "freew.review-proofing.shared-behavior",
+            slice: "Review proofing",
+            summary: summary,
+            wpfPath: wpfPath,
+            wpfTest: wpfTest,
+            avaloniaPath: "freew/FreeW.App.Avalonia.Tests/DocumentViewReviewTests.cs",
+            avaloniaTest: "DocumentViewReviewTests.Proofing_commands_toggle_state_dictionary_thesaurus_and_language");
+
+    private static CommandBehaviorEvidence ThesaurusEvidence(string summary) =>
+        ReviewEvidence(
+            evidenceId: "freew.review-thesaurus.shared-behavior",
+            slice: "Review thesaurus",
+            summary: summary,
+            wpfPath: "freew/FreeW.App.Host.Tests/ThesaurusAndBalloonsTests.cs",
+            wpfTest: "ThesaurusAndBalloonsTests.ThesaurusLookup_KnownWord_ReturnsSensesWithSynonyms",
+            avaloniaPath: "freew/FreeW.App.Avalonia.Tests/DocumentViewReviewTests.cs",
+            avaloniaTest: "DocumentViewReviewTests.Thesaurus_replace_current_proofing_word_replaces_caret_word");
+
+    private static CommandBehaviorEvidence ProofingLanguageEvidence(string summary) =>
+        ReviewEvidence(
+            evidenceId: "freew.review-proofing-language.shared-behavior",
+            slice: "Review proofing language",
+            summary: summary,
+            wpfPath: "freew/FreeW.App.Host.Tests/CharacterBorderShadingLanguageApplyTests.cs",
+            wpfTest: "CharacterBorderShadingLanguageApplyTests.SetProofingLanguage_MultiParagraphSelection_IsReversibleWithSingleUndo",
+            avaloniaPath: "freew/FreeW.App.Avalonia.Tests/DocumentViewReviewTests.cs",
+            avaloniaTest: "DocumentViewReviewTests.Proofing_language_applies_only_to_the_selected_range_across_paragraphs");
 
     private static CommandBehaviorEvidence ReviewEvidence(
         string evidenceId,
