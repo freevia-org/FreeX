@@ -369,7 +369,7 @@ public static class HeaderFooterCommandPlanner
             TextBody = new TextBody()
         };
 
-        if (!HasInheritedHeaderFooterGeometry(presentation, slide, shape.Placeholder))
+        if (!TryApplyInheritedGeometry(presentation, slide, shape))
         {
             ApplyFallbackGeometry(presentation, kind, shape);
         }
@@ -377,19 +377,41 @@ public static class HeaderFooterCommandPlanner
         return shape;
     }
 
-    private static bool HasInheritedHeaderFooterGeometry(
+    private static bool TryApplyInheritedGeometry(
         Presentation presentation,
         Slide slide,
-        Placeholder placeholder)
+        SlideShape shape)
     {
-        var layoutShape = PlaceholderResolver.FindLayoutPlaceholder(placeholder, slide, presentation);
-        if (layoutShape is not null && (layoutShape.ExtentCxEmu > 0 || layoutShape.ExtentCyEmu > 0))
+        if (shape.Placeholder is null)
+        {
+            return false;
+        }
+
+        var layoutShape = PlaceholderResolver.FindLayoutPlaceholder(shape.Placeholder, slide, presentation);
+        if (TryCopyGeometry(layoutShape, shape))
         {
             return true;
         }
 
-        var masterShape = PlaceholderResolver.FindMasterPlaceholder(placeholder, slide, presentation);
-        return masterShape is not null && (masterShape.ExtentCxEmu > 0 || masterShape.ExtentCyEmu > 0);
+        var masterShape = PlaceholderResolver.FindMasterPlaceholder(shape.Placeholder, slide, presentation);
+        return TryCopyGeometry(masterShape, shape);
+    }
+
+    private static bool TryCopyGeometry(SlideShape? source, SlideShape target)
+    {
+        if (source is null || source.ExtentCxEmu <= 0 || source.ExtentCyEmu <= 0)
+        {
+            return false;
+        }
+
+        target.OffsetXEmu = source.OffsetXEmu;
+        target.OffsetYEmu = source.OffsetYEmu;
+        target.ExtentCxEmu = source.ExtentCxEmu;
+        target.ExtentCyEmu = source.ExtentCyEmu;
+        target.RotationDeg = source.RotationDeg;
+        target.FlipH = source.FlipH;
+        target.FlipV = source.FlipV;
+        return true;
     }
 
     private static void ApplyFallbackGeometry(

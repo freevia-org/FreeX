@@ -89,6 +89,74 @@ public sealed class HeaderFooterCommandPlannerTests
     }
 
     [Fact]
+    public void TryApply_CreatedPlaceholderCopiesLayoutGeometryWhenAvailable()
+    {
+        var editor = MakeEditor();
+        editor.Presentation.Layouts[0].Placeholders.Add(LayoutPlaceholder(
+            PlaceholderType.Footer,
+            idx: 11,
+            offsetX: 111_000,
+            offsetY: 222_000,
+            extentCx: 3_333_000,
+            extentCy: 444_000,
+            rotation: 3.5,
+            flipH: true,
+            flipV: false));
+
+        HeaderFooterCommandPlanner.TryApply(
+            editor,
+            new HeaderFooterApplyOptions(
+                ShowDateTime: false,
+                ShowFooter: true,
+                ShowSlideNumber: false,
+                FooterText: "Inherited layout footer",
+                HeaderFooterApplyScope.CurrentSlide),
+            out _).Should().BeTrue();
+
+        var footer = SinglePlaceholder(editor.Presentation.Slides[0], PlaceholderType.Footer);
+        footer.OffsetXEmu.Should().Be(111_000);
+        footer.OffsetYEmu.Should().Be(222_000);
+        footer.ExtentCxEmu.Should().Be(3_333_000);
+        footer.ExtentCyEmu.Should().Be(444_000);
+        footer.RotationDeg.Should().Be(3.5);
+        footer.FlipH.Should().BeTrue();
+        footer.FlipV.Should().BeFalse();
+    }
+
+    [Fact]
+    public void TryApply_CreatedPlaceholderCopiesMasterGeometryWhenLayoutDoesNotDefineIt()
+    {
+        var editor = MakeEditor();
+        editor.Presentation.Masters[0].Placeholders.Add(LayoutPlaceholder(
+            PlaceholderType.DateTime,
+            idx: 10,
+            offsetX: 123_000,
+            offsetY: 456_000,
+            extentCx: 1_234_000,
+            extentCy: 345_000,
+            rotation: 0,
+            flipH: false,
+            flipV: true));
+
+        HeaderFooterCommandPlanner.TryApply(
+            editor,
+            new HeaderFooterApplyOptions(
+                ShowDateTime: true,
+                ShowFooter: false,
+                ShowSlideNumber: false,
+                FooterText: string.Empty,
+                HeaderFooterApplyScope.CurrentSlide),
+            out _).Should().BeTrue();
+
+        var date = SinglePlaceholder(editor.Presentation.Slides[0], PlaceholderType.DateTime);
+        date.OffsetXEmu.Should().Be(123_000);
+        date.OffsetYEmu.Should().Be(456_000);
+        date.ExtentCxEmu.Should().Be(1_234_000);
+        date.ExtentCyEmu.Should().Be(345_000);
+        date.FlipV.Should().BeTrue();
+    }
+
+    [Fact]
     public void TryApply_AutoDateTime_UsesSelectedSharedFieldType()
     {
         var editor = MakeEditor();
@@ -331,6 +399,30 @@ public sealed class HeaderFooterCommandPlannerTests
             ExtentCyEmu = 457200,
         };
     }
+
+    private static SlideShape LayoutPlaceholder(
+        PlaceholderType type,
+        int idx,
+        long offsetX,
+        long offsetY,
+        long extentCx,
+        long extentCy,
+        double rotation,
+        bool flipH,
+        bool flipV) =>
+        new()
+        {
+            Id = (uint)(1_000 + idx),
+            Kind = SlideShapeKind.AutoShape,
+            Placeholder = new Placeholder { Type = type, Idx = idx },
+            OffsetXEmu = offsetX,
+            OffsetYEmu = offsetY,
+            ExtentCxEmu = extentCx,
+            ExtentCyEmu = extentCy,
+            RotationDeg = rotation,
+            FlipH = flipH,
+            FlipV = flipV
+        };
 
     private static SlideShape SinglePlaceholder(Slide slide, PlaceholderType type) =>
         slide.Shapes.Single(shape => shape.Placeholder?.Type == type);
