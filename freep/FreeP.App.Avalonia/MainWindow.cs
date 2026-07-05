@@ -1657,6 +1657,7 @@ public sealed class MainWindow : Window
             if (_textEditor?.TryApplyActiveTableCellParagraphNumberingToggle() == true) return;
             Editor.TryApplyActiveTableCellParagraphNumberingToggle();
         }));
+        RegisterListGalleryPresetCommands(r);
         r.Register("freep.indent-increase", new ActionRibbonCommand(() =>
         {
             if (_textEditor?.TryApplyActiveTableCellParagraphIndent() == true) return;
@@ -1752,6 +1753,25 @@ public sealed class MainWindow : Window
             new ActionRibbonCommand(OpenCustomShowDialog));
 
         return r;
+    }
+
+    private void RegisterListGalleryPresetCommands(RibbonCommandRegistry registry)
+    {
+        foreach (var item in PresentationListGalleryPlanner.BuildPlans().SelectMany(plan => plan.Items))
+        {
+            if (!item.IsEnabled || item.ListPreset is null)
+                continue;
+
+            registry.Register(item.CommandId, new ActionRibbonCommand(() =>
+            {
+                if (_textEditor?.TryApplyActiveTableCellParagraphListPreset(item.ListPreset) == true) return;
+                Editor.TryApplyActiveTableCellParagraphListPreset(item.ListPreset);
+            }));
+        }
+
+        registry.Register(
+            PresentationListGalleryPlanner.ImageBulletCommandId,
+            new ActionRibbonCommand(() => { }));
     }
 
     private static bool TryGetRibbonFontSize(RibbonCommandContext ctx, out double sizePt)

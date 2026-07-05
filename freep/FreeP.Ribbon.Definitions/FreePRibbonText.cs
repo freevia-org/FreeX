@@ -53,6 +53,16 @@ internal static class FreePRibbonText
     public static string UnderlineLabel => Get("Ribbon_Command_Underline_Label");
     public static string UnderlineKeyTip => Get("Ribbon_Command_Underline_KeyTip");
 
+    public static RibbonText ParagraphGroup { get; } = new("Ribbon_Group_Paragraph_Label", "Ribbon_Group_Paragraph_KeyTip");
+    public static RibbonText BulletsCommand { get; } = new("Ribbon_Command_Bullets_Label", "Ribbon_Command_Bullets_KeyTip");
+    public static RibbonText NumberingCommand { get; } = new("Ribbon_Command_Numbering_Label", "Ribbon_Command_Numbering_KeyTip");
+    public static RibbonText AlignLeftCommand { get; } = new("Ribbon_Command_ParagraphAlignLeft_Label", "Ribbon_Command_ParagraphAlignLeft_KeyTip");
+    public static RibbonText AlignCenterCommand { get; } = new("Ribbon_Command_ParagraphAlignCenter_Label", "Ribbon_Command_ParagraphAlignCenter_KeyTip");
+    public static RibbonText AlignRightCommand { get; } = new("Ribbon_Command_ParagraphAlignRight_Label", "Ribbon_Command_ParagraphAlignRight_KeyTip");
+    public static RibbonText AlignJustifyCommand { get; } = new("Ribbon_Command_ParagraphAlignJustify_Label", "Ribbon_Command_ParagraphAlignJustify_KeyTip");
+    public static RibbonText IndentIncreaseCommand { get; } = new("Ribbon_Command_IndentIncrease_Label", "Ribbon_Command_IndentIncrease_KeyTip");
+    public static RibbonText IndentDecreaseCommand { get; } = new("Ribbon_Command_IndentDecrease_Label", "Ribbon_Command_IndentDecrease_KeyTip");
+
     public static string EditGroupLabel => Get("Ribbon_Group_Edit_Label");
     public static string EditGroupKeyTip => Get("Ribbon_Group_Edit_KeyTip");
     public static string EditingGroupLabel => Get("Ribbon_Group_Editing_Label");

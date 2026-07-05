@@ -164,6 +164,7 @@ internal static class FreePRibbonCommands
                 if (ApplyTableCellListPreset(editor, ctx.SelectedValue)) return;
                 editor.TryApplyActiveTableCellParagraphNumberingToggle();
             }));
+        RegisterListGalleryPresetCommands(registry, editor);
         registry.Register("freep.indent-increase",
             new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphIndent()));
         registry.Register("freep.indent-decrease",
@@ -392,6 +393,26 @@ internal static class FreePRibbonCommands
     private static bool ApplyTableCellListPreset(EditingSession editor, string? presetId) =>
         !string.IsNullOrWhiteSpace(presetId) &&
         editor.TryApplyActiveTableCellParagraphListPreset(presetId);
+
+    private static void RegisterListGalleryPresetCommands(
+        RibbonCommandRegistry registry,
+        EditingSession editor)
+    {
+        foreach (var item in PresentationListGalleryPlanner.BuildPlans().SelectMany(plan => plan.Items))
+        {
+            if (!item.IsEnabled || item.ListPreset is null)
+                continue;
+
+            registry.Register(
+                item.CommandId,
+                new ActionRibbonCommand(() =>
+                    editor.TryApplyActiveTableCellParagraphListPreset(item.ListPreset)));
+        }
+
+        registry.Register(
+            PresentationListGalleryPlanner.ImageBulletCommandId,
+            new ActionRibbonCommand(() => { }));
+    }
 
     internal static void RegisterSlideObjectInsertionCommands(
         RibbonCommandRegistry registry,

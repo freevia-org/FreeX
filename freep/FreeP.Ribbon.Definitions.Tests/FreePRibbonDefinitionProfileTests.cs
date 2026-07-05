@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using Free.Shared.Ribbon;
 using FreeP.App.Localization;
+using FreeP.App.Compositor;
 
 namespace FreeP.Ribbon.Definitions.Tests;
 
@@ -65,6 +66,59 @@ public sealed class FreePRibbonDefinitionProfileTests
 
         RibbonDefinitionValidator.Validate(wpf).HasErrors.Should().BeFalse();
         RibbonDefinitionValidator.Validate(avalonia).HasErrors.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Home_paragraph_group_exposes_shared_visible_list_gallery_in_both_profiles()
+    {
+        var wpf = FreePRibbon.Build(FreePRibbonCapabilities.Wpf);
+        var avalonia = FreePRibbon.Build(FreePRibbonCapabilities.Avalonia);
+
+        foreach (var definition in new[] { wpf, avalonia })
+        {
+            var paragraph = RequiredGroup(definition, "home", "paragraph");
+            paragraph.Controls.Select(control => control.CommandId.Value)
+                .Should()
+                .Contain([
+                    PresentationListGalleryPlanner.BulletsCommandId,
+                    PresentationListGalleryPlanner.NumberingCommandId,
+                    "freep.paragraph.align-left",
+                    "freep.paragraph.align-center",
+                    "freep.paragraph.align-right",
+                    "freep.paragraph.align-justify",
+                    "freep.indent-decrease",
+                    "freep.indent-increase",
+                ]);
+
+            var bullets = RequiredControl(definition, PresentationListGalleryPlanner.BulletsCommandId)
+                .Should()
+                .BeOfType<RibbonDropdown>()
+                .Subject;
+            bullets.Menu.Items.Select(item => item.CommandId?.Value)
+                .Should()
+                .Contain([
+                    "freep.bullets.bullet.disc",
+                    "freep.bullets.bullet.square",
+                    PresentationListGalleryPlanner.ImageBulletCommandId,
+                ]);
+            bullets.Menu.Items.Single(item =>
+                    item.CommandId?.Value == PresentationListGalleryPlanner.ImageBulletCommandId)
+                .IsEnabled
+                .Should()
+                .BeFalse("image bullet UI is visible but still deferred until import/render support lands");
+
+            var numbering = RequiredControl(definition, PresentationListGalleryPlanner.NumberingCommandId)
+                .Should()
+                .BeOfType<RibbonDropdown>()
+                .Subject;
+            numbering.Menu.Items.Select(item => item.CommandId?.Value)
+                .Should()
+                .Contain([
+                    "freep.numbering.number.arabic-period",
+                    "freep.numbering.number.roman-upper-period",
+                    "freep.numbering.number.alpha-lower-period",
+                ]);
+        }
     }
 
     [Fact]

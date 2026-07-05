@@ -271,6 +271,7 @@ internal static class FreePCommandInventory
             EvidenceDocs:
             [
                 "docs/parity/freep-table-cell-rich-editor-fidelity-2026-07-03.md",
+                "docs/parity/freep-list-gallery-image-bullet-ui-2026-07-05.md",
                 "docs/planning/freep-powerpoint-parity-status-2026-06-27.md"
             ],
             Verification:
@@ -282,7 +283,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasAvaloniaTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "Avalonia still lacks a true editable rich-text widget equivalent to WPF RichTextBox; visible PowerPoint-style list galleries, image bullets, and PowerPoint-authoritative rich-editor visual baselines remain deferred.")
+            RemainingWork: "Avalonia still lacks a true editable rich-text widget equivalent to WPF RichTextBox; picture-bullet import/rendering and PowerPoint-authoritative list-gallery/rich-editor visual baselines remain deferred.")
     ];
 
     private static IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> Collect(RibbonDefinition definition, string profile)

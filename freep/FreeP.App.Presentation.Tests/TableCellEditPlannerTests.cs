@@ -980,12 +980,18 @@ public sealed class TableCellEditPlannerTests
             .Should()
             .Equal(
                 TableCellListPresetCatalog.BulletDiscId,
+                TableCellListPresetCatalog.BulletHollowCircleId,
+                TableCellListPresetCatalog.BulletSquareId,
+                TableCellListPresetCatalog.BulletDashId,
+                TableCellListPresetCatalog.BulletCheckId,
                 TableCellListPresetCatalog.NumberArabicPeriodId,
                 TableCellListPresetCatalog.NumberRomanUpperPeriodId,
                 TableCellListPresetCatalog.NumberRomanLowerPeriodId,
                 TableCellListPresetCatalog.NumberAlphaUpperPeriodId,
                 TableCellListPresetCatalog.NumberAlphaLowerPeriodId);
 
+        TableCellListPresetCatalog.BulletSquare.BulletChar.Should().Be("\u25AA");
+        TableCellListPresetCatalog.BulletCheck.BulletChar.Should().Be("\u2713");
         TableCellListPresetCatalog.NumberRomanUpperPeriod.AutoNumType.Should().Be(AutoNumType.RomanUcPeriod);
         TableCellListPresetCatalog.NumberAlphaLowerPeriod.AutoNumType.Should().Be(AutoNumType.AlphaLcPeriod);
     }

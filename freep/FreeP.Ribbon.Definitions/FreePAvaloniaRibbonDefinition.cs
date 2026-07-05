@@ -1,4 +1,5 @@
 using Free.Shared.Ribbon;
+using FreeP.App.Compositor;
 
 namespace FreeP.Ribbon.Definitions;
 
@@ -58,6 +59,7 @@ internal static class FreePAvaloniaRibbonDefinition
                     g.IconToggle("freep.italic", FreePRibbonText.ItalicLabel, RibbonCommandIconKind.Italic, FreePRibbonText.ItalicKeyTip);
                     g.IconToggle("freep.underline", FreePRibbonText.UnderlineLabel, RibbonCommandIconKind.Underline, FreePRibbonText.UnderlineKeyTip);
                 });
+                tab.Group("paragraph", FreePRibbonText.ParagraphGroup.Label, FreePRibbonText.ParagraphGroup.KeyTip, 84, AddParagraphControls);
                 tab.Group("arrange", FreePRibbonText.ArrangeGroup.Label, FreePRibbonText.ArrangeGroup.KeyTip, 85, g =>
                 {
                     g.Large("freep.arrange.group", FreePRibbonText.ArrangeGroupCommand.Label, RibbonCommandIconKind.Group, FreePRibbonText.ArrangeGroupCommand.KeyTip);
@@ -254,5 +256,35 @@ internal static class FreePAvaloniaRibbonDefinition
                 });
             })
             .Build();
+    }
+
+    private static void AddParagraphControls(RibbonGroupBuilder g)
+    {
+        g.Dropdown(
+            PresentationListGalleryPlanner.BulletsCommandId,
+            FreePRibbonText.BulletsCommand.Label,
+            FreePRibbon.BuildListGalleryMenu(PresentationListGalleryPlanner.BuildBulletGalleryPlan()),
+            d => d with
+            {
+                PreferredLayout = RibbonCommandLayoutKind.Medium,
+                Icon = new RibbonCommandIcon(RibbonCommandIconKind.List),
+                KeyTip = FreePRibbonText.BulletsCommand.KeyTip,
+            });
+        g.Dropdown(
+            PresentationListGalleryPlanner.NumberingCommandId,
+            FreePRibbonText.NumberingCommand.Label,
+            FreePRibbon.BuildListGalleryMenu(PresentationListGalleryPlanner.BuildNumberingGalleryPlan()),
+            d => d with
+            {
+                PreferredLayout = RibbonCommandLayoutKind.Medium,
+                Icon = new RibbonCommandIcon(RibbonCommandIconKind.List),
+                KeyTip = FreePRibbonText.NumberingCommand.KeyTip,
+            });
+        g.Icon("freep.paragraph.align-left", FreePRibbonText.AlignLeftCommand.Label, RibbonCommandIconKind.AlignLeft, FreePRibbonText.AlignLeftCommand.KeyTip);
+        g.Icon("freep.paragraph.align-center", FreePRibbonText.AlignCenterCommand.Label, RibbonCommandIconKind.AlignCenter, FreePRibbonText.AlignCenterCommand.KeyTip);
+        g.Icon("freep.paragraph.align-right", FreePRibbonText.AlignRightCommand.Label, RibbonCommandIconKind.AlignRight, FreePRibbonText.AlignRightCommand.KeyTip);
+        g.Icon("freep.paragraph.align-justify", FreePRibbonText.AlignJustifyCommand.Label, RibbonCommandIconKind.Align, FreePRibbonText.AlignJustifyCommand.KeyTip);
+        g.Icon("freep.indent-decrease", FreePRibbonText.IndentDecreaseCommand.Label, RibbonCommandIconKind.ArrowLeft, FreePRibbonText.IndentDecreaseCommand.KeyTip);
+        g.Icon("freep.indent-increase", FreePRibbonText.IndentIncreaseCommand.Label, RibbonCommandIconKind.ArrowRight, FreePRibbonText.IndentIncreaseCommand.KeyTip);
     }
 }
