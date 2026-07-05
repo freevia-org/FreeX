@@ -1894,6 +1894,11 @@ public static class PptxPackageWriter
             new XElement(P + "stCondLst",
                 new XElement(P + "cond", new XAttribute("delay", "0"))));
 
+        var animEffectEl = BuildWheelSpokeAnimEffectEl(anim, ref nodeId);
+        var childTimingItems = new List<object> { animCTn };
+        if (animEffectEl is not null)
+            childTimingItems.Add(animEffectEl);
+
         var setEl = new XElement(P + "set",
             new XElement(P + "cBhvr",
                 new XElement(P + "cTn",
@@ -1902,6 +1907,7 @@ public static class PptxPackageWriter
                     new XAttribute("fill", "hold")),
                 new XElement(P + "tgtEl",
                     new XElement(P + "spTgt", new XAttribute("spid", anim.ShapeId)))));
+        childTimingItems.Add(setEl);
 
         return new XElement(P + "par",
             new XElement(P + "cTn",
@@ -1915,7 +1921,25 @@ public static class PptxPackageWriter
                             new XAttribute("fill", "hold"),
                             new XElement(P + "stCondLst",
                                 new XElement(P + "cond", new XAttribute("delay", "0"))),
-                            new XElement(P + "childTnLst", animCTn, setEl))))));
+                            new XElement(P + "childTnLst", childTimingItems))))));
+    }
+
+    private static XElement? BuildWheelSpokeAnimEffectEl(ShapeAnimation anim, ref uint nodeId)
+    {
+        if (anim.Preset != AnimationPreset.Wheel || anim.WheelSpokeCount is not > 0)
+            return null;
+
+        return new XElement(P + "animEffect",
+            new XAttribute("filter", FormattableString.Invariant($"wheel(spokes={anim.WheelSpokeCount.Value})")),
+            new XAttribute("transition", anim.Kind == AnimationKind.Exit ? "out" : "in"),
+            new XElement(P + "cBhvr",
+                new XElement(P + "cTn",
+                    new XAttribute("id", nodeId++),
+                    new XAttribute("dur", anim.DurationMs),
+                    new XElement(P + "stCondLst",
+                        new XElement(P + "cond", new XAttribute("delay", "0")))),
+                new XElement(P + "tgtEl",
+                    new XElement(P + "spTgt", new XAttribute("spid", anim.ShapeId)))));
     }
 
     /// <summary>

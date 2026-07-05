@@ -36,6 +36,9 @@ public sealed class ShapeAnimation
     /// <summary>Optional direction modifier (e.g. FlyIn from left vs. right).</summary>
     public AnimationDirection? Direction { get; set; }
 
+    /// <summary>Optional PowerPoint Wheel spoke count metadata for <see cref="AnimationPreset.Wheel"/>.</summary>
+    public int? WheelSpokeCount { get; set; }
+
     /// <summary>
     /// Motion-path data. Non-null only when <see cref="Kind"/> is <see cref="AnimationKind.Motion"/>.
     /// Segments are expressed in slide-normalized coordinates (0..1) where the origin is the

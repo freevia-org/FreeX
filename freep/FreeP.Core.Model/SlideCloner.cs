@@ -295,6 +295,7 @@ public static class SlideCloner
             DelayMs       = a.DelayMs,
             DurationMs    = a.DurationMs,
             Direction     = a.Direction,
+            WheelSpokeCount = a.WheelSpokeCount,
             TriggerShapeId = a.TriggerShapeId,
         };
 
