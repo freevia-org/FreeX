@@ -1105,8 +1105,12 @@ public sealed class SlideShowWindow : Window
                 CheckerboardEffect(element, plan, onReveal);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Circle:
+                GeometricMaskEffect(element, plan, onReveal);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Diamond:
-                DiamondEffect(element, plan, onReveal);
+                GeometricMaskEffect(element, plan, onReveal);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Zoom:
@@ -1537,7 +1541,22 @@ public sealed class SlideShowWindow : Window
                 onComplete: CompleteReveal(plan, onReveal)));
     }
 
-    private void DiamondEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
+    private void GeometricMaskEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
+    {
+        switch (plan.GeometricMaskKind)
+        {
+            case SlideShowGeometricMaskKind.Circle:
+            case SlideShowGeometricMaskKind.Diamond:
+                GeometricMaskClipEffect(el, plan, onReveal);
+                break;
+
+            default:
+                AppearEffect(el, plan.DelayMs, CompleteReveal(plan, onReveal));
+                break;
+        }
+    }
+
+    private void GeometricMaskClipEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
     {
         double w = el.Width  > 0 ? el.Width  : 960;
         double h = el.Height > 0 ? el.Height : 540;
@@ -1545,13 +1564,14 @@ public sealed class SlideShowWindow : Window
         var fromProgress = plan.GeometricMaskExpandsFromCenter ? 0.0 : 1.0;
         var toProgress = plan.GeometricMaskExpandsFromCenter ? 1.0 : 0.0;
 
-        el.Clip = BuildDiamondGeometry(w, h, fromProgress);
+        el.Clip = BuildGeometricMaskGeometry(plan.GeometricMaskKind, w, h, fromProgress);
         el.Opacity = 1;
         InvokeRevealAtStart(plan, onReveal);
 
         DelayedAction(plan.DelayMs, () =>
-            AnimateDiamondClip(
+            AnimateGeometricMaskClip(
                 el,
+                plan.GeometricMaskKind,
                 w,
                 h,
                 fromProgress,
@@ -1560,8 +1580,9 @@ public sealed class SlideShowWindow : Window
                 onComplete: CompleteReveal(plan, onReveal)));
     }
 
-    private void AnimateDiamondClip(
+    private void AnimateGeometricMaskClip(
         Control target,
+        SlideShowGeometricMaskKind maskKind,
         double width,
         double height,
         double fromProgress,
@@ -1571,7 +1592,7 @@ public sealed class SlideShowWindow : Window
     {
         if (durationMs <= 0)
         {
-            target.Clip = BuildDiamondGeometry(width, height, toProgress);
+            target.Clip = BuildGeometricMaskGeometry(maskKind, width, height, toProgress);
             onComplete?.Invoke();
             return;
         }
@@ -1589,16 +1610,39 @@ public sealed class SlideShowWindow : Window
             double t = Math.Min(1.0, (double)frame / steps);
             double eased = EaseInOut(t);
             double progress = fromProgress + (toProgress - fromProgress) * eased;
-            target.Clip = BuildDiamondGeometry(width, height, progress);
+            target.Clip = BuildGeometricMaskGeometry(maskKind, width, height, progress);
             if (frame >= steps)
             {
                 timer.Stop();
                 _activeTimers.Remove(timer);
-                target.Clip = BuildDiamondGeometry(width, height, toProgress);
+                target.Clip = BuildGeometricMaskGeometry(maskKind, width, height, toProgress);
                 onComplete?.Invoke();
             }
         };
         timer.Start();
+    }
+
+    private static Geometry BuildGeometricMaskGeometry(
+        SlideShowGeometricMaskKind maskKind,
+        double width,
+        double height,
+        double progress) =>
+        maskKind switch
+        {
+            SlideShowGeometricMaskKind.Circle => BuildCircleGeometry(width, height, progress),
+            SlideShowGeometricMaskKind.Diamond => BuildDiamondGeometry(width, height, progress),
+            _ => new RectangleGeometry(new Rect(0, 0, width, height))
+        };
+
+    private static EllipseGeometry BuildCircleGeometry(double width, double height, double progress)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        return new EllipseGeometry
+        {
+            Center = new Point(width / 2, height / 2),
+            RadiusX = width / 2 * progress,
+            RadiusY = height / 2 * progress
+        };
     }
 
     private static StreamGeometry BuildDiamondGeometry(double width, double height, double progress)
