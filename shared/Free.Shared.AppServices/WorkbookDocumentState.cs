@@ -15,6 +15,10 @@ namespace Free.Shared.AppServices;
 /// </summary>
 public sealed class WorkbookDocumentState
 {
+    public WorkbookDocumentState()
+    {
+    }
+
     // ── State ─────────────────────────────────────────────────────────────────
 
     /// <summary>True when the workbook has unsaved changes.</summary>
@@ -38,6 +42,16 @@ public sealed class WorkbookDocumentState
     /// </para>
     /// </summary>
     public int SavedUndoDepth { get; private set; } = -1;
+
+    /// <summary>
+    /// The undo stack's monotonic <c>UndoRedoStack.Version</c> token at the time the workbook was
+    /// last saved via <see cref="MarkSavedAtUndoDepth(int, long)"/>, or <c>null</c> when the save
+    /// point was recorded without a version (legacy <see cref="MarkSavedAtUndoDepth(int)"/>
+    /// overload, or no save point at all). When present, <see cref="TryMarkCleanIfAtSavePoint(int, long)"/>
+    /// uses it as the robust identity check instead of relying on <see cref="SavedUndoDepth"/> alone
+    /// — the version can never alias across a depth-cap eviction the way a raw count can.
+    /// </summary>
+    public long? SavedUndoStackVersion { get; private set; }
 
     /// <summary>The full path of the file most recently saved to or opened from, or <c>null</c> for an unsaved workbook.</summary>
     public string? CurrentFilePath { get; private set; }
@@ -74,12 +88,13 @@ public sealed class WorkbookDocumentState
     {
         IsDirty = false;
         SavedUndoDepth = -1;
+        SavedUndoStackVersion = null;
     }
 
     /// <summary>
     /// Marks the workbook clean and records the undo-stack depth at the time of save.
     /// After this call, <c>ExecuteUndo</c> / <c>ExecuteRedo</c> can call
-    /// <see cref="TryMarkCleanIfAtSavePoint"/> to restore the clean state when the stack
+    /// <see cref="TryMarkCleanIfAtSavePoint(int)"/> to restore the clean state when the stack
     /// returns to this depth.
     /// </summary>
     /// <param name="undoDepthAtSave">
@@ -90,6 +105,30 @@ public sealed class WorkbookDocumentState
     {
         IsDirty = false;
         SavedUndoDepth = undoDepthAtSave;
+        SavedUndoStackVersion = null;
+    }
+
+    /// <summary>
+    /// Marks the workbook clean and records both the undo-stack depth and the robust
+    /// <c>UndoRedoStack.Version</c> token at the time of save. Prefer this overload over
+    /// <see cref="MarkSavedAtUndoDepth(int)"/> whenever the caller has access to
+    /// <c>ICommandBus.GetUndoStackVersion</c>: <see cref="TryMarkCleanIfAtSavePoint(int, long)"/>
+    /// then uses the version as the save-point identity check, which — unlike a raw depth
+    /// count — can never alias after the undo stack has been trimmed by its depth/byte cap.
+    /// </summary>
+    /// <param name="undoDepthAtSave">
+    ///   The value of <c>_commandBus.GetUndoStackDepth(workbookId)</c> at the time the
+    ///   save completed.
+    /// </param>
+    /// <param name="undoStackVersionAtSave">
+    ///   The value of <c>_commandBus.GetUndoStackVersion(workbookId)</c> at the time the
+    ///   save completed.
+    /// </param>
+    public void MarkSavedAtUndoDepth(int undoDepthAtSave, long undoStackVersionAtSave)
+    {
+        IsDirty = false;
+        SavedUndoDepth = undoDepthAtSave;
+        SavedUndoStackVersion = undoStackVersionAtSave;
     }
 
     /// <summary>
@@ -104,6 +143,7 @@ public sealed class WorkbookDocumentState
         IsDirty = false;
         CurrentFilePath = path;
         SavedUndoDepth = -1;
+        SavedUndoStackVersion = null;
     }
 
     /// <summary>
@@ -111,12 +151,53 @@ public sealed class WorkbookDocumentState
     /// (the user has undone/redone back to the save point — no unsaved changes).
     /// Returns <c>true</c> when the state transitioned from dirty to clean.
     /// </summary>
+    /// <remarks>
+    /// Depth alone is not a fully reliable identity check: once the undo stack's depth/byte cap
+    /// has evicted entries (see <c>UndoRedoStack.TrimUndoStack</c>), a later depth match no longer
+    /// proves the live state equals the saved state. Callers that also have the stack's version
+    /// token available should call <see cref="TryMarkCleanIfAtSavePoint(int, long)"/> instead,
+    /// which is immune to this aliasing. This depth-only overload is kept for callers/tests that
+    /// only track depth; it accepts the residual (now rare — only within a single
+    /// non-trimmed session) aliasing risk.
+    /// </remarks>
     /// <param name="currentUndoDepth">
     ///   The value of <c>_commandBus.GetUndoStackDepth(workbookId)</c> right now.
     /// </param>
     public bool TryMarkCleanIfAtSavePoint(int currentUndoDepth)
     {
         if (SavedUndoDepth < 0 || currentUndoDepth != SavedUndoDepth)
+            return false;
+
+        IsDirty = false;
+        return true;
+    }
+
+    /// <summary>
+    /// Robust variant of <see cref="TryMarkCleanIfAtSavePoint(int)"/>: in addition to the depth
+    /// check, requires the undo stack's monotonic <c>UndoRedoStack.Version</c> token to match the
+    /// version recorded at the save point (when one was recorded via
+    /// <see cref="MarkSavedAtUndoDepth(int, long)"/>). The version can never alias across a
+    /// depth-cap eviction and trim/refill, so this eliminates the false-clean scenario where the
+    /// stack's raw depth returns to the saved value after the save-point entries were evicted and
+    /// replaced with different ones.
+    /// <para>
+    /// If no version was recorded at the save point (the save point came from the legacy
+    /// <see cref="MarkSavedAtUndoDepth(int)"/> overload, or none was recorded at all), this falls
+    /// back to the depth-only check.
+    /// </para>
+    /// </summary>
+    /// <param name="currentUndoDepth">
+    ///   The value of <c>_commandBus.GetUndoStackDepth(workbookId)</c> right now.
+    /// </param>
+    /// <param name="currentUndoStackVersion">
+    ///   The value of <c>_commandBus.GetUndoStackVersion(workbookId)</c> right now.
+    /// </param>
+    public bool TryMarkCleanIfAtSavePoint(int currentUndoDepth, long currentUndoStackVersion)
+    {
+        if (SavedUndoDepth < 0 || currentUndoDepth != SavedUndoDepth)
+            return false;
+
+        if (SavedUndoStackVersion is { } savedVersion && currentUndoStackVersion != savedVersion)
             return false;
 
         IsDirty = false;

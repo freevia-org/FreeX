@@ -22,6 +22,11 @@ public static class CellEntryParser
 
     public static ScalarValue ParseScalarValue(string text)
     {
+        if (text.Length == 0)
+        {
+            return BlankValue.Instance;
+        }
+
         if (TryParseFiniteNumber(text, out var number))
         {
             return new NumberValue(number);

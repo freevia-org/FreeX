@@ -33,6 +33,8 @@ internal static class XlsxStylesheetMetadataPreserver
             changed = true;
         if (MergeStylesheetTableStyles(sourceStylesXml.Root?.Element(workbookNs + "tableStyles"), targetRoot, workbookNs))
             changed = true;
+        if (MergeStylesheetNamedCellStyles(sourceStylesXml.Root, targetRoot, workbookNs))
+            changed = true;
         if (XlsxNativeXmlMerger.MergeExtensionList(sourceStylesXml.Root?.Element(workbookNs + "extLst"), targetRoot, workbookNs))
             changed = true;
 
@@ -92,6 +94,10 @@ internal static class XlsxStylesheetMetadataPreserver
                         break;
                     case "tableStyles":
                         if (HasPreservableTableStyles(reader))
+                            return true;
+                        break;
+                    case "cellStyles":
+                        if (HasPreservableNamedCellStyles(reader))
                             return true;
                         break;
                 }
@@ -202,6 +208,49 @@ internal static class XlsxStylesheetMetadataPreserver
         }
 
         return false;
+    }
+
+    // ClosedXML always emits exactly one cellStyles entry: the built-in "Normal" style (xfId="0",
+    // builtinId="0") pointing at the sole default cellStyleXfs record it produces. Any additional
+    // <cellStyle> entry, or a first entry that isn't that default "Normal" definition, means the
+    // source workbook had custom/Excel-authored named cell styles that would otherwise be dropped.
+    private static bool HasPreservableNamedCellStyles(XmlReader reader)
+    {
+        if (reader.IsEmptyElement)
+            return false;
+
+        using var subtree = reader.ReadSubtree();
+        var sawCellStyle = false;
+        while (subtree.Read())
+        {
+            if (subtree.NodeType != XmlNodeType.Element || subtree.Depth != 1)
+                continue;
+
+            if (subtree.LocalName != "cellStyle")
+                return true;
+
+            if (sawCellStyle)
+                return true;
+            sawCellStyle = true;
+
+            if (!IsDefaultNormalCellStyle(subtree))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsDefaultNormalCellStyle(XmlReader reader)
+    {
+        if (!reader.HasAttributes)
+            return false;
+
+        var name = reader.GetAttribute("name");
+        var xfId = reader.GetAttribute("xfId");
+        var builtinId = reader.GetAttribute("builtinId");
+        return string.Equals(name, "Normal", StringComparison.Ordinal) &&
+               string.Equals(xfId, "0", StringComparison.Ordinal) &&
+               string.Equals(builtinId, "0", StringComparison.Ordinal);
     }
 
     private static bool HasNativeOnlyAttributes(XmlReader reader, params string[] modeledLocalNames)
@@ -464,5 +513,83 @@ internal static class XlsxStylesheetMetadataPreserver
             ?? element.Attribute("uri")?.Value
             ?? string.Empty;
         return $"{element.Name}\u001f{identity}";
+    }
+
+    /// <summary>
+    /// Recovers named cell style definitions (cellStyleXfs/cellStyles) that ClosedXML drops on
+    /// rebuild. ClosedXML has no notion of a named cell style, so a saved workbook's styles.xml
+    /// always ends up with just the single built-in "Normal" entry, silently deleting any
+    /// custom/Excel-authored named styles the source file defined. This merge appends the source's
+    /// additional cellStyleXfs format records (remapping their xfId references) and cellStyles
+    /// name bindings that are missing from the rebuilt target, so the style gallery entries and
+    /// their name bindings survive a save even though FreeX's own per-cell model still only tracks
+    /// direct formatting (a cell already linked to a custom style by xfId in the source keeps that
+    /// binding only if ClosedXML preserved the referencing cellXfs entry's xfId; the style
+    /// definitions themselves are no longer silently discarded).
+    /// </summary>
+    private static bool MergeStylesheetNamedCellStyles(XElement? sourceRoot, XElement targetRoot, XNamespace workbookNs)
+    {
+        var sourceCellStyles = sourceRoot?.Element(workbookNs + "cellStyles");
+        var sourceCellStyleXfs = sourceRoot?.Element(workbookNs + "cellStyleXfs");
+        if (sourceCellStyles is null || sourceCellStyleXfs is null)
+            return false;
+
+        var sourceStyleList = sourceCellStyles.Elements(workbookNs + "cellStyle").ToList();
+        if (sourceStyleList.Count == 0)
+            return false;
+
+        var targetCellStyles = targetRoot.Element(workbookNs + "cellStyles");
+        var targetCellStyleXfs = targetRoot.Element(workbookNs + "cellStyleXfs");
+        if (targetCellStyles is null || targetCellStyleXfs is null)
+            return false;
+
+        var targetStyleNames = targetCellStyles
+            .Elements(workbookNs + "cellStyle")
+            .Select(style => style.Attribute("name")?.Value)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var sourceStyleXfList = sourceCellStyleXfs.Elements(workbookNs + "xf").ToList();
+        var targetStyleXfCountBeforeMerge = targetCellStyleXfs.Elements(workbookNs + "xf").Count();
+        var appendedXfIndexBySourceIndex = new Dictionary<int, int>();
+        var changed = false;
+
+        foreach (var sourceStyle in sourceStyleList)
+        {
+            var name = sourceStyle.Attribute("name")?.Value;
+            if (string.IsNullOrWhiteSpace(name) || targetStyleNames.Contains(name))
+                continue;
+
+            var sourceXfId = XlsxXmlAttributeReader.ReadIntAttribute(sourceStyle, "xfId") ?? 0;
+            if (!appendedXfIndexBySourceIndex.TryGetValue(sourceXfId, out var newXfIndex))
+            {
+                var sourceStyleXf = sourceXfId >= 0 && sourceXfId < sourceStyleXfList.Count
+                    ? sourceStyleXfList[sourceXfId]
+                    : null;
+                if (sourceStyleXf is null)
+                    continue;
+
+                targetCellStyleXfs.Add(new XElement(sourceStyleXf));
+                newXfIndex = targetStyleXfCountBeforeMerge + appendedXfIndexBySourceIndex.Count;
+                appendedXfIndexBySourceIndex[sourceXfId] = newXfIndex;
+            }
+
+            var newStyle = new XElement(sourceStyle);
+            newStyle.SetAttributeValue("xfId", newXfIndex.ToString(CultureInfo.InvariantCulture));
+            targetCellStyles.Add(newStyle);
+            targetStyleNames.Add(name);
+            changed = true;
+        }
+
+        if (!changed)
+            return false;
+
+        targetCellStyleXfs.SetAttributeValue(
+            "count",
+            targetCellStyleXfs.Elements(workbookNs + "xf").Count().ToString(CultureInfo.InvariantCulture));
+        targetCellStyles.SetAttributeValue(
+            "count",
+            targetCellStyles.Elements(workbookNs + "cellStyle").Count().ToString(CultureInfo.InvariantCulture));
+        return true;
     }
 }

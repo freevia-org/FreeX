@@ -328,7 +328,7 @@ public static partial class ChartRenderer
                 ApplyNativeDataLabelStyle(series, chart, theme);
                 var trendPoints = firstSeriesPoints is null ? new List<DataPoint>() : null;
                 var colHalfWidth = ColumnBarHalfWidth(chart);
-                var (clusterLeft, clusterRight) = ClusteredBarOffsets(colHalfWidth, clusteredColumnOrdinal, clusteredColumnCount);
+                var (clusterLeft, clusterRight) = ClusteredBarOffsets(colHalfWidth, clusteredColumnOrdinal, clusteredColumnCount, chart.BarOverlap ?? 0);
                 clusteredColumnOrdinal++;
                 var barCategoryValues = new List<double?>();
                 var i = 0;

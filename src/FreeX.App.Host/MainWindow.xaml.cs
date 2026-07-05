@@ -351,6 +351,7 @@ public partial class MainWindow : Window, IWorkbookWindow
         SheetGrid.AutofillModifiersResolved += ctrlHeld => _autofillCtrlHeld = ctrlHeld;
         SheetGrid.AutofillRequested += OnAutofillRequested;
         SheetGrid.AutofillEdgeScrollRequested += OnAutofillEdgeScrollRequested;
+        SheetGrid.AutofillHandleDoubleClicked += OnAutofillHandleDoubleClicked;
         SheetGrid.SelectionMoveRequested += OnSelectionMoveRequested;
         SheetGrid.ContextMenuRequested += OnGridContextMenuRequested;
         SheetGrid.HeaderContextMenuRequested += OnGridHeaderContextMenuRequested;
@@ -424,6 +425,60 @@ public partial class MainWindow : Window, IWorkbookWindow
 
     private void RecordDiagnosticEvent(string eventName, IReadOnlyDictionary<string, string?>? properties = null) =>
         _diagnostics?.RecordEvent(eventName, properties);
+
+    /// <summary>
+    /// Handles a fill-handle double-click: fill straight down to match the populated extent of the
+    /// nearest non-blank adjacent column (checked to the left first, then the right, matching
+    /// Excel), stopping at the first blank row below the source. GridView has no cell data access,
+    /// so this host resolves the adjacent-column extent and hands it to
+    /// <see cref="GridAutofillPlanner.CalculateDoubleClickFillRange"/> to compute the fill range,
+    /// then executes it the same way as a dragged <see cref="OnAutofillRequested"/> fill.
+    /// </summary>
+    private void OnAutofillHandleDoubleClicked(GridRange source)
+    {
+        if (_workbook.GetSheet(_currentSheetId) is not { } sheet)
+            return;
+
+        var adjacentLastRow = ResolveAdjacentColumnLastPopulatedRow(sheet, source);
+        var fillRange = GridAutofillPlanner.CalculateDoubleClickFillRange(source, adjacentLastRow);
+        if (fillRange is null)
+            return;
+
+        OnAutofillRequested(source, fillRange.Value);
+    }
+
+    /// <summary>
+    /// Finds the last populated row of the contiguous data run in the column immediately to the
+    /// left of <paramref name="source"/> (checked first) or immediately to the right, starting
+    /// from the row below the source's seed row and stopping at the first blank cell. Returns null
+    /// when neither neighbor has any data immediately below the seed row.
+    /// </summary>
+    private static uint? ResolveAdjacentColumnLastPopulatedRow(Sheet sheet, GridRange source)
+    {
+        var seedRow = source.Start.Row;
+        if (source.Start.Col > 1 &&
+            ResolveColumnLastPopulatedRow(sheet, source.Start.Col - 1, seedRow) is { } leftRow)
+        {
+            return leftRow;
+        }
+
+        return ResolveColumnLastPopulatedRow(sheet, source.End.Col + 1, seedRow);
+    }
+
+    private static uint? ResolveColumnLastPopulatedRow(Sheet sheet, uint column, uint seedRow)
+    {
+        if (column > CellAddress.MaxCol || seedRow >= CellAddress.MaxRow)
+            return null;
+
+        if (sheet.GetValue(seedRow + 1, column) is BlankValue)
+            return null;
+
+        var lastRow = seedRow + 1;
+        while (lastRow < CellAddress.MaxRow && sheet.GetValue(lastRow + 1, column) is not BlankValue)
+            lastRow++;
+
+        return lastRow;
+    }
 
     private void CommandStackChangeNotifier_StackChanged(object? sender, CommandStackChangedEventArgs e)
     {

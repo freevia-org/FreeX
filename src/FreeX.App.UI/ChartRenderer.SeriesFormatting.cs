@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Xml.Linq;
 using OxyPlot;
 using OxyPlot.Annotations;
 using OxyPlot.Axes;
@@ -97,22 +98,31 @@ public static partial class ChartRenderer
 
     /// <summary>
     /// Returns the left/right x-offsets (relative to the category centre) for the bar of the
-    /// <paramref name="clusterOrdinal"/>-th clustered series, given the full category half-width
-    /// and the total clustered-series count. With one series the bar fills the whole slot; with N
-    /// series each occupies a disjoint 1/N sub-slot so the bars sit side by side (Excel's clustered
-    /// layout).
+    /// <paramref name="clusterOrdinal"/>-th clustered series, given the full category half-width,
+    /// the total clustered-series count, and Excel's Series Overlap percentage (-100..100, Format
+    /// Data Series' "Overlap" slider; <see cref="ChartModel.BarOverlap"/>). With one series the bar
+    /// fills the whole slot regardless of overlap (there's nothing to overlap/space against). With
+    /// N series each bar has a fixed width <c>unitWidth</c> chosen so the whole cluster of N bars —
+    /// spaced <c>unitWidth * (1 - overlap/100)</c> apart center-to-center — exactly fills
+    /// <c>[-halfWidth, halfWidth]</c>: overlap=0 reproduces the previous disjoint side-by-side tiling,
+    /// overlap=100 collapses every bar onto the same full-width position (Excel's fully-overlapping
+    /// look), and overlap=-100 spreads the bars out with equal gaps between them.
     /// </summary>
     private static (double Left, double Right) ClusteredBarOffsets(
         double halfWidth,
         int clusterOrdinal,
-        int clusterCount)
+        int clusterCount,
+        int overlapPercent = 0)
     {
         if (clusterCount <= 1)
             return (-halfWidth, halfWidth);
 
-        var slotWidth = 2.0 * halfWidth / clusterCount;
-        var left = -halfWidth + clusterOrdinal * slotWidth;
-        return (left, left + slotWidth);
+        var overlap = Math.Clamp(overlapPercent, -100, 100) / 100.0;
+        var denominator = clusterCount - (overlap * (clusterCount - 1));
+        var unitWidth = Math.Abs(denominator) < 1e-9 ? 2.0 * halfWidth : 2.0 * halfWidth / denominator;
+        var step = unitWidth * (1 - overlap);
+        var left = -halfWidth + clusterOrdinal * step;
+        return (left, left + unitWidth);
     }
 
     private static bool ShouldSkipScatterXColumn(ChartModel chart, uint col, uint dataStartCol) =>
@@ -779,4 +789,234 @@ public static partial class ChartRenderer
             ChartLegendPosition.Bottom => OxyPlot.Legends.LegendPosition.BottomCenter,
             _ => overlay ? OxyPlot.Legends.LegendPosition.RightTop : OxyPlot.Legends.LegendPosition.RightMiddle
         };
+
+    /// <summary>
+    /// Draws Excel-style error-bar whiskers for every plotted series that supports them
+    /// (column/bar/line/scatter/bubble/area — the same set <see cref="ChartTypeSupport.SupportsTrendlines"/>
+    /// covers, mirroring <c>ChartErrorBarsPlanner.SupportsErrorBars</c>). Reads the already-built series
+    /// out of <paramref name="model"/> (added earlier in the same render pass) rather than requiring a
+    /// second pass over the worksheet. Each whisker is drawn as a disjoint line segment (plus optional
+    /// end-cap ticks) in a single marker-less <see cref="LineSeries"/> per plotted series — rather than
+    /// OxyPlot's built-in <see cref="ScatterErrorSeries"/>, whose <see cref="ScatterErrorPoint"/> can only
+    /// express one symmetric magnitude per axis — so Excel's Plus-only/Minus-only directions and
+    /// asymmetric Custom plus/minus amounts render correctly as one-sided or unequal whiskers.
+    /// </summary>
+    private static void AddErrorBarsIfRequested(PlotModel model, ChartModel chart, WorkbookTheme theme)
+    {
+        if (!chart.ShowErrorBars || !ChartTypeSupport.SupportsTrendlines(chart.Type))
+            return;
+
+        var barColor = chart.ErrorBarThemeColor?.Resolve(theme) ?? chart.ErrorBarColor;
+        var oxyColor = barColor is { } color ? OxyColor.FromRgb(color.R, color.G, color.B) : OxyColors.Black;
+        var customPlus = ParseErrorBarRangeCache(chart.ErrorBarPlusRangeCacheXml);
+        var customMinus = ParseErrorBarRangeCache(chart.ErrorBarMinusRangeCacheXml) ?? customPlus;
+
+        // Snapshot first: we're about to append whisker LineSeries entries to model.Series and must
+        // not walk into those while iterating the series this pass is meant to annotate.
+        var targets = model.Series.ToArray();
+        foreach (var series in targets)
+        {
+            var points = GetErrorBarAnchorPoints(series, out var isBarOrientedHorizontal);
+            if (points is null || points.Count == 0)
+                continue;
+
+            // A horizontal Bar chart always whiskers along its value axis (X). Everything else
+            // whiskers along Y unless the chart XML explicitly requested X-direction error bars
+            // (errDir="x" — only meaningful, and only ever set by Excel, for Scatter/Bubble, whose
+            // X axis carries real values rather than a category index).
+            var isHorizontal = isBarOrientedHorizontal || chart.ErrorBarAxisDirection == ChartErrorBarAxisDirection.X;
+            var values = new double[points.Count];
+            for (var i = 0; i < points.Count; i++)
+                values[i] = isHorizontal ? points[i].X : points[i].Y;
+
+            // A small tick perpendicular to the whisker at half a category-slot wide; consistent with
+            // the 0.05..0.5 half-width range ColumnBarHalfWidth uses for real bar geometry.
+            const double endCapHalfWidth = 0.08;
+            var whiskers = new LineSeries
+            {
+                LineStyle = ToOxyLineStyle(chart.ErrorBarDashStyle),
+                StrokeThickness = chart.ErrorBarThickness,
+                Color = oxyColor,
+                MarkerType = MarkerType.None,
+                YAxisKey = (series as XYAxisSeries)?.YAxisKey
+            };
+
+            var any = false;
+            for (var i = 0; i < points.Count; i++)
+            {
+                var amount = GetErrorBarAmount(chart, values, i, customPlus, customMinus, out var plusAmount, out var minusAmount);
+                var plus = chart.ErrorBarDirection == ChartErrorBarDirection.Minus ? 0 : (plusAmount > 0 ? plusAmount : amount);
+                var minus = chart.ErrorBarDirection == ChartErrorBarDirection.Plus ? 0 : (minusAmount > 0 ? minusAmount : amount);
+                if (plus <= 0 && minus <= 0)
+                    continue;
+
+                any = true;
+                var point = points[i];
+                AddWhisker(whiskers, point, plus, minus, isHorizontal, chart.ErrorBarEndCaps, endCapHalfWidth);
+            }
+
+            if (any)
+                model.Series.Add(whiskers);
+        }
+    }
+
+    /// <summary>
+    /// Appends one error-bar whisker (and its optional end-cap ticks) for a single data point to
+    /// <paramref name="whiskers"/>, using <c>NaN</c> point separators so each whisker/cap renders as its
+    /// own disjoint segment within the shared <see cref="LineSeries"/> (the same idiom
+    /// <see cref="AddLinePoints"/> uses for gapped blank cells).
+    /// </summary>
+    private static void AddWhisker(
+        LineSeries whiskers,
+        DataPoint point,
+        double plus,
+        double minus,
+        bool isHorizontal,
+        bool endCaps,
+        double endCapHalfWidth)
+    {
+        DataPoint AtOffset(double offset) =>
+            isHorizontal ? new DataPoint(point.X + offset, point.Y) : new DataPoint(point.X, point.Y + offset);
+
+        DataPoint CapPoint(double offset, double perpendicular) =>
+            isHorizontal
+                ? new DataPoint(point.X + offset, point.Y + perpendicular)
+                : new DataPoint(point.X + perpendicular, point.Y + offset);
+
+        if (whiskers.Points.Count > 0)
+            whiskers.Points.Add(DataPoint.Undefined);
+
+        whiskers.Points.Add(plus > 0 ? AtOffset(plus) : point);
+        whiskers.Points.Add(minus > 0 ? AtOffset(-minus) : point);
+
+        if (!endCaps)
+            return;
+
+        if (plus > 0)
+        {
+            whiskers.Points.Add(DataPoint.Undefined);
+            whiskers.Points.Add(CapPoint(plus, -endCapHalfWidth));
+            whiskers.Points.Add(CapPoint(plus, endCapHalfWidth));
+        }
+
+        if (minus > 0)
+        {
+            whiskers.Points.Add(DataPoint.Undefined);
+            whiskers.Points.Add(CapPoint(-minus, -endCapHalfWidth));
+            whiskers.Points.Add(CapPoint(-minus, endCapHalfWidth));
+        }
+    }
+
+    /// <summary>
+    /// Extracts the (category/value) anchor points to hang error-bar whiskers off, for each renderer
+    /// series type that supports error bars. <paramref name="isHorizontal"/> reports true for the
+    /// horizontal Bar chart orientation (value on the X axis), so the caller knows which axis the
+    /// whisker error amount applies to.
+    /// </summary>
+    private static IReadOnlyList<DataPoint>? GetErrorBarAnchorPoints(OxyPlot.Series.Series series, out bool isHorizontal)
+    {
+        isHorizontal = false;
+        switch (series)
+        {
+            case LineSeries lineSeries:
+                return lineSeries.Points;
+            case ScatterSeries scatterSeries:
+                return scatterSeries.Points.Select(p => new DataPoint(p.X, p.Y)).ToArray();
+            case RectangleBarSeries rectangleBarSeries:
+                return rectangleBarSeries.Items
+                    .Select(item => new DataPoint((item.X0 + item.X1) / 2.0, item.Y1 >= 0 ? item.Y1 : item.Y0))
+                    .ToArray();
+            case BarSeries barSeries:
+                isHorizontal = true;
+                return barSeries.Items
+                    .Select((item, index) => new DataPoint(item.Value, index))
+                    .ToArray();
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>
+    /// Computes the whisker half-length for point <paramref name="index"/> of a series whose plotted
+    /// values are <paramref name="values"/>, per Excel's error-bar amount kinds: Standard Error (the
+    /// series' own sample standard error, same for every point), Percentage (a percentage of that
+    /// point's value), Fixed Value (a constant amount), and Custom (explicit plus/minus amounts read
+    /// from the cached range values, one entry per point). <paramref name="plusAmount"/>/
+    /// <paramref name="minusAmount"/> carry the resolved Custom-kind asymmetric amounts (zero when not
+    /// Custom or when no cached value exists for this point); the return value is the symmetric amount
+    /// used for every other kind.
+    /// </summary>
+    private static double GetErrorBarAmount(
+        ChartModel chart,
+        IReadOnlyList<double> values,
+        int index,
+        IReadOnlyList<double>? customPlus,
+        IReadOnlyList<double>? customMinus,
+        out double plusAmount,
+        out double minusAmount)
+    {
+        plusAmount = 0;
+        minusAmount = 0;
+        switch (chart.ErrorBarKind)
+        {
+            case ChartErrorBarKind.Percentage:
+                return Math.Abs(values[index]) * chart.ErrorBarValue / 100.0;
+            case ChartErrorBarKind.FixedValue:
+                return chart.ErrorBarValue;
+            case ChartErrorBarKind.Custom:
+                plusAmount = customPlus is not null && index < customPlus.Count ? Math.Abs(customPlus[index]) : 0;
+                minusAmount = customMinus is not null && index < customMinus.Count ? Math.Abs(customMinus[index]) : 0;
+                return 0;
+            default:
+                return CalculateStandardError(values);
+        }
+    }
+
+    /// <summary>Sample standard error of the mean (sample stddev / sqrt(n)) — Excel's "Standard Error" amount.</summary>
+    private static double CalculateStandardError(IReadOnlyList<double> values)
+    {
+        if (values.Count < 2)
+            return 0;
+
+        var mean = values.Average();
+        var sumSquares = 0.0;
+        for (var i = 0; i < values.Count; i++)
+            sumSquares += (values[i] - mean) * (values[i] - mean);
+
+        var variance = sumSquares / (values.Count - 1);
+        return Math.Sqrt(variance) / Math.Sqrt(values.Count);
+    }
+
+    /// <summary>
+    /// Parses a cached <c>&lt;c:numCache&gt;</c> XML fragment (as stored in
+    /// <see cref="ChartModel.ErrorBarPlusRangeCacheXml"/>/<see cref="ChartModel.ErrorBarMinusRangeCacheXml"/>)
+    /// into an index-ordered value list for Custom-kind error bars. Returns null for missing/unparsable input.
+    /// </summary>
+    private static IReadOnlyList<double>? ParseErrorBarRangeCache(string? cacheXml)
+    {
+        if (string.IsNullOrWhiteSpace(cacheXml))
+            return null;
+
+        try
+        {
+            var element = XElement.Parse(cacheXml);
+            var points = new SortedDictionary<int, double>();
+            foreach (var pt in element.Elements().Where(e => e.Name.LocalName == "pt"))
+            {
+                var idxAttribute = pt.Attribute("idx");
+                var valueElement = pt.Elements().FirstOrDefault(e => e.Name.LocalName == "v");
+                if (idxAttribute is null || valueElement is null)
+                    continue;
+                if (int.TryParse(idxAttribute.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idx)
+                    && double.TryParse(valueElement.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+                    points[idx] = value;
+            }
+
+            return points.Count == 0 ? null : points.Values.ToArray();
+        }
+        catch (System.Xml.XmlException)
+        {
+            return null;
+        }
+    }
 }

@@ -10,6 +10,10 @@ public static partial class ChartRenderer
 {
     private static void ApplyAxisBounds(PlotModel model, ChartModel chart, WorkbookTheme theme)
     {
+        // Added before the axis bound pass below so autoscale (when no explicit Min/Max is set)
+        // accounts for the whiskers' extent, same as any other plotted series.
+        AddErrorBarsIfRequested(model, chart, theme);
+
         for (var index = 0; index < model.Axes.Count; index++)
         {
             var axis = model.Axes[index];
@@ -36,6 +40,7 @@ public static partial class ChartRenderer
             if (axis.Position is AxisPosition.Bottom or AxisPosition.Top)
             {
                 ApplyAxisTitleStyle(axis, chart, theme);
+                ApplyAxisReverseOrder(axis, chart.XAxisReverseOrder);
                 if (ChartTypeSupport.SupportsXAxisBounds(chart.Type))
                 {
                     if (chart.XAxisMinimum is { } minimum)
@@ -65,6 +70,7 @@ public static partial class ChartRenderer
             else if (axis.Position is AxisPosition.Left or AxisPosition.Right)
             {
                 ApplyAxisTitleStyle(axis, chart, theme);
+                ApplyAxisReverseOrder(axis, chart.YAxisReverseOrder);
                 if (ChartTypeSupport.SupportsYAxisBounds(chart.Type))
                 {
                     if (chart.YAxisMinimum is { } minimum)
@@ -232,6 +238,25 @@ public static partial class ChartRenderer
             ChartAxisTickStyle.Cross => TickStyle.Crossing,
             _ => TickStyle.Outside
         };
+
+    /// <summary>
+    /// Applies Excel's "Values in reverse order" axis option (<see cref="ChartModel.XAxisReverseOrder"/>/
+    /// <see cref="ChartModel.YAxisReverseOrder"/>, OOXML scaling <c>orientation="maxMin"</c>) to the
+    /// actual plotted geometry by swapping <see cref="Axis.StartPosition"/>/<see cref="Axis.EndPosition"/>
+    /// (OxyPlot's own reversed-axis mechanism — <c>0</c> is bottom/left, <c>1</c> is top/right, so
+    /// swapping them flips every series/gridline/tick drawn against this axis). Previously only the
+    /// printed axis *label text* was repositioned to fake a reversal (<c>PrintChartTextOverlayPlanner</c>),
+    /// which left the plotted bars/lines pointing the un-reversed way under reversed labels; driving the
+    /// axis itself keeps the interactive chart, the print label overlay, and the underlying series all
+    /// consistent.
+    /// </summary>
+    private static void ApplyAxisReverseOrder(Axis axis, bool reverseOrder)
+    {
+        if (!reverseOrder)
+            return;
+
+        (axis.StartPosition, axis.EndPosition) = (1, 0);
+    }
 
     private static bool ShouldUseLogAxis(ChartModel chart, Axis axis) =>
         axis.Position is AxisPosition.Bottom or AxisPosition.Top

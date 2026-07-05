@@ -100,7 +100,7 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
         var col = table.Range.Start.Col + (uint)columnIndex;
         var lastDataRow = table.TotalsRowShown ? table.Range.End.Row - 1 : table.Range.End.Row;
         var aggregate = new NumberAggregate();
-        for (var row = table.Range.Start.Row + 1; row <= lastDataRow; row++)
+        for (var row = table.Range.Start.Row + HeaderRowCount(table); row <= lastDataRow; row++)
         {
             // Excel's table totals row is backed by SUBTOTAL(10x, ...), whose 100-series function
             // numbers skip every effectively-hidden row (manual, filter, and group-collapsed) — not
@@ -119,7 +119,7 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
         var col = table.Range.Start.Col + (uint)columnIndex;
         var lastDataRow = table.TotalsRowShown ? table.Range.End.Row - 1 : table.Range.End.Row;
         var count = 0;
-        for (var row = table.Range.Start.Row + 1; row <= lastDataRow; row++)
+        for (var row = table.Range.Start.Row + HeaderRowCount(table); row <= lastDataRow; row++)
         {
             if (sheet.IsRowEffectivelyHidden(row))
                 continue;
@@ -128,6 +128,15 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
         }
 
         return count;
+    }
+
+    // Excel tables normally have a single header row, but headerRowCount="0" (a headerless table)
+    // is a supported, round-tripped feature — clamp to the table's actual row span so a headerless
+    // table's very first row is treated as data, not silently excluded from the totals aggregate.
+    private static uint HeaderRowCount(StructuredTableModel table)
+    {
+        var rowCount = checked((int)table.Range.RowCount);
+        return (uint)Math.Clamp(table.HeaderRowCount ?? 1, 0, rowCount);
     }
 
     private static double? TryGetNumber(ScalarValue value) =>

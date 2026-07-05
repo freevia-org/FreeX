@@ -140,6 +140,9 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
     public int GetUndoStackDepth(WorkbookId workbookId) =>
         _stacks.TryGetValue(workbookId, out var stack) ? stack.UndoDepth : 0;
 
+    public long GetUndoStackVersion(WorkbookId workbookId) =>
+        _stacks.TryGetValue(workbookId, out var stack) ? stack.Version : 0;
+
     public IReadOnlyList<CommandHistoryEntry> GetUndoHistory(WorkbookId workbookId, int maxCount) =>
         maxCount <= 0 || !_stacks.TryGetValue(workbookId, out var stack)
             ? []

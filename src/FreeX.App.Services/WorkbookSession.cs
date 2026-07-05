@@ -144,6 +144,16 @@ public sealed class WorkbookSession
     private bool _formatPainterPersistent;
     private double _viewportHeight;
     private double _viewportWidth;
+    /// <summary>
+    /// Per-sheet Window ▸ Split (<see cref="Sheet.SplitRow"/>/<see cref="Sheet.SplitColumn"/>,
+    /// distinct from Freeze Panes) independent-scroll offsets for the TopRight/BottomLeft
+    /// quadrants, mirroring the WPF host's own <c>_splitPaneViewportOffsets</c> field. Excel lets
+    /// each of the four split quadrants scroll independently; without this, TopRight/BottomLeft
+    /// always mirror the main (BottomRight) pane's scroll position. Entries are dropped once a
+    /// sheet's split is removed or its offsets fall back to matching the main pane, so this stays
+    /// small and never grows unbounded across many sheets.
+    /// </summary>
+    private readonly Dictionary<SheetId, SplitPaneViewportOffsets> _splitPaneViewportOffsets = [];
     private ulong _selectionStatsRevision;
     private string? _lastFindText;
     private FindOptions? _lastFindOptions;
@@ -272,6 +282,9 @@ public sealed class WorkbookSession
     public bool CanUndo => _cellEditService.CanUndo(Workbook.Id);
 
     public bool CanRedo => _cellEditService.CanRedo(Workbook.Id);
+
+    /// <summary>Whether a repeatable command is available for <see cref="RepeatLastAction"/> (F4).</summary>
+    public bool CanRepeatLastAction => _cellEditService.CanRepeatLastEdit(Workbook.Id);
 
     public bool IsSelectedRangeStartBold => GetCellStyle(SelectedRange.Start).Bold;
 
@@ -1079,6 +1092,84 @@ public sealed class WorkbookSession
 
         ActiveSheet.ViewTopRow = normalizedTopRow;
         ActiveSheet.ViewLeftCol = normalizedLeftCol;
+        RefreshViewport();
+        return true;
+    }
+
+    /// <summary>
+    /// True when the active sheet has a Window ▸ Split column boundary (<see cref="Sheet.SplitColumn"/>),
+    /// i.e. there is a TopRight pane that can scroll independently of the main (BottomRight) pane.
+    /// </summary>
+    public bool HasIndependentSplitPaneTopRight => ActiveSheet.SplitColumn is not null;
+
+    /// <summary>
+    /// True when the active sheet has a Window ▸ Split row boundary (<see cref="Sheet.SplitRow"/>),
+    /// i.e. there is a BottomLeft pane that can scroll independently of the main (BottomRight) pane.
+    /// </summary>
+    public bool HasIndependentSplitPaneBottomLeft => ActiveSheet.SplitRow is not null;
+
+    /// <summary>
+    /// Scrolls the TopRight split-pane quadrant's columns independently of the main (BottomRight)
+    /// pane's <see cref="ActiveSheet.ViewLeftCol"/>, matching Excel/the WPF host's
+    /// TryScrollIndependentSplitPane. No-op when the active sheet has no column split.
+    /// </summary>
+    public bool ScrollSplitPaneTopRight(int colDelta) =>
+        HasIndependentSplitPaneTopRight && SetSplitPaneTopRightLeftCol(
+            Offset(GetSplitPaneTopRightLeftCol(), colDelta, CellAddress.MaxCol));
+
+    /// <summary>
+    /// Scrolls the BottomLeft split-pane quadrant's rows independently of the main (BottomRight)
+    /// pane's <see cref="ActiveSheet.ViewTopRow"/>, matching Excel/the WPF host's
+    /// TryScrollIndependentSplitPane. No-op when the active sheet has no row split.
+    /// </summary>
+    public bool ScrollSplitPaneBottomLeft(int rowDelta) =>
+        HasIndependentSplitPaneBottomLeft && SetSplitPaneBottomLeftTopRow(
+            Offset(GetSplitPaneBottomLeftTopRow(), rowDelta, CellAddress.MaxRow));
+
+    /// <summary>Current first-visible column of the TopRight split-pane quadrant, defaulting to the main pane's when no independent offset has been recorded yet.</summary>
+    public uint GetSplitPaneTopRightLeftCol() =>
+        _splitPaneViewportOffsets.TryGetValue(ActiveSheet.Id, out var offsets) && offsets.TopRightLeftCol is { } leftCol
+            ? leftCol
+            : ActiveSheet.ViewLeftCol ?? GetScrollableColumnStart();
+
+    /// <summary>Current first-visible row of the BottomLeft split-pane quadrant, defaulting to the main pane's when no independent offset has been recorded yet.</summary>
+    public uint GetSplitPaneBottomLeftTopRow() =>
+        _splitPaneViewportOffsets.TryGetValue(ActiveSheet.Id, out var offsets) && offsets.BottomLeftTopRow is { } topRow
+            ? topRow
+            : ActiveSheet.ViewTopRow ?? GetScrollableRowStart();
+
+    /// <summary>Sets the TopRight split-pane quadrant's first-visible column directly (e.g. from a dedicated scrollbar drag).</summary>
+    public bool SetSplitPaneTopRightLeftCol(uint leftCol)
+    {
+        if (!HasIndependentSplitPaneTopRight)
+            return false;
+
+        var normalized = Math.Clamp(leftCol, 1, CellAddress.MaxCol);
+        if (normalized == GetSplitPaneTopRightLeftCol())
+            return false;
+
+        var existing = _splitPaneViewportOffsets.TryGetValue(ActiveSheet.Id, out var offsets)
+            ? offsets
+            : new SplitPaneViewportOffsets();
+        _splitPaneViewportOffsets[ActiveSheet.Id] = existing with { TopRightLeftCol = normalized };
+        RefreshViewport();
+        return true;
+    }
+
+    /// <summary>Sets the BottomLeft split-pane quadrant's first-visible row directly (e.g. from a dedicated scrollbar drag).</summary>
+    public bool SetSplitPaneBottomLeftTopRow(uint topRow)
+    {
+        if (!HasIndependentSplitPaneBottomLeft)
+            return false;
+
+        var normalized = Math.Clamp(topRow, 1, CellAddress.MaxRow);
+        if (normalized == GetSplitPaneBottomLeftTopRow())
+            return false;
+
+        var existing = _splitPaneViewportOffsets.TryGetValue(ActiveSheet.Id, out var offsets)
+            ? offsets
+            : new SplitPaneViewportOffsets();
+        _splitPaneViewportOffsets[ActiveSheet.Id] = existing with { BottomLeftTopRow = normalized };
         RefreshViewport();
         return true;
     }
@@ -2425,7 +2516,7 @@ public sealed class WorkbookSession
     /// edge-cell copy (<see cref="FillCellsCommand"/>), mirroring the WPF host's
     /// <c>OnAutofillRequested</c>.
     /// </summary>
-    public WorkbookCellEditResult AutofillDragRange(GridRange sourceRange, GridRange fillRange)
+    public WorkbookCellEditResult AutofillDragRange(GridRange sourceRange, GridRange fillRange, bool ctrlHeld = false)
     {
         if (!sourceRange.Start.Sheet.Equals(ActiveSheet.Id) ||
             !sourceRange.End.Sheet.Equals(ActiveSheet.Id) ||
@@ -2438,7 +2529,7 @@ public sealed class WorkbookSession
         var completedSelection = FreeX.App.Presentation.GridInteraction.GridAutofillPlanner.CalculateCompletedSelectionRange(sourceRange, fillRange);
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            new AutofillCommand(ActiveSheet.Id, sourceRange, fillRange));
+            new AutofillCommand(ActiveSheet.Id, sourceRange, fillRange, ctrlHeld));
         if (!result.Success)
             return result;
 
@@ -3575,10 +3666,29 @@ public sealed class WorkbookSession
 
     private WorkbookCellEditResult ApplySelectedRangeStyle(StyleDiff diff)
     {
-        var range = SelectedRange;
-        var result = _cellEditService.ExecuteEditCommand(
+        // Routed through ExecuteRepeatableEditCommand (rather than plain ExecuteEditCommand) so
+        // that F4 / Repeat Last Action (RepeatLastAction) can replay this style change against a
+        // newly-selected range later, matching the WPF host's TryExecuteRepeatableApplyStyle. The
+        // factory re-reads SelectedRange each time it runs rather than closing over the range
+        // captured here, since a repeat invocation targets whatever is selected at that time.
+        var result = _cellEditService.ExecuteRepeatableEditCommand(
             Workbook,
-            CreateApplyStyleCommand(range, diff));
+            () => CreateApplyStyleCommand(SelectedRange, diff));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, SelectedRange);
+        return result;
+    }
+
+    /// <summary>
+    /// Replays the last repeatable command (F4 / Repeat Last Action), matching Excel and the WPF
+    /// host's ExecuteRepeatLast. Applies to whatever range/cell is currently selected.
+    /// </summary>
+    public WorkbookCellEditResult RepeatLastAction()
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.RepeatLastEdit(Workbook);
         if (!result.Success)
             return result;
 
@@ -4796,7 +4906,26 @@ public sealed class WorkbookSession
                 ActiveSheet.ViewLeftCol ?? 1,
                 AvailableHeight: _viewportHeight,
                 AvailableWidth: _viewportWidth,
-                IncludeObjects: _includeObjects));
+                IncludeObjects: _includeObjects,
+                SplitPaneOffsets: GetSplitPaneOffsetsForActiveSheet()));
+
+    /// <summary>
+    /// Returns the TopRight/BottomLeft independent-scroll offsets for the active sheet, if it has
+    /// an active Window ▸ Split and any offsets were recorded; discards (and forgets) stale
+    /// entries left over from a since-removed split so <see cref="_splitPaneViewportOffsets"/>
+    /// never grows unbounded. See <see cref="ScrollSplitPaneTopRight"/>/
+    /// <see cref="ScrollSplitPaneBottomLeft"/> for how offsets are recorded.
+    /// </summary>
+    private SplitPaneViewportOffsets? GetSplitPaneOffsetsForActiveSheet()
+    {
+        if (ActiveSheet.SplitRow is null && ActiveSheet.SplitColumn is null)
+        {
+            _splitPaneViewportOffsets.Remove(ActiveSheet.Id);
+            return null;
+        }
+
+        return _splitPaneViewportOffsets.TryGetValue(ActiveSheet.Id, out var offsets) ? offsets : null;
+    }
 
     private bool CanWriteTarget(string path, out string message)
     {
