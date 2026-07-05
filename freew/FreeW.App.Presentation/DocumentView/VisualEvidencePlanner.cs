@@ -197,6 +197,8 @@ public sealed record FreeWVisualChartSmartArtExpectation(
     bool HasSmartArtStyle,
     int SmartArtNodeCount,
     int DistinctSmartArtFillCount,
+    IReadOnlyList<string> ChartVisualSignatures,
+    IReadOnlyList<string> SmartArtVisualSignatures,
     IReadOnlyList<ChartVisualPlan> Charts,
     IReadOnlyList<SmartArtVisualPlan> SmartArts);
 
@@ -326,7 +328,7 @@ public static class FreeWVisualEvidencePlanner
 {
     public const string ManifestFileName = "freew_visual_evidence_manifest.json";
     public const string SchemaId = "freew.visual-evidence.v1";
-    public const int SchemaVersion = 12;
+    public const int SchemaVersion = 13;
     public const string SectionGeometryPageSurfaceRenderStatus = "section-page-surface";
 
     private const int MaxTrackedColorCount = 4096;
@@ -607,9 +609,12 @@ public static class FreeWVisualEvidencePlanner
                 "data-labels",
                 "axis-titles",
                 "plot-area-fill",
+                "chart-visual-signature",
                 "smartart-layout",
                 "smartart-colors",
-                "smartart-style"
+                "smartart-style",
+                "smartart-node-fills",
+                "smartart-visual-signature"
             ],
             "chart-smartart-complex_p{page}.png",
             1,
@@ -1552,6 +1557,8 @@ public static class FreeWVisualEvidencePlanner
             .Select(ChartSmartArtVisualPlanner.BuildSmartArtPlan)
             .ToList();
         var smartArtNodeCount = smartArts.Sum(plan => plan.Nodes.Count);
+        var chartVisualSignatures = ChartSmartArtVisualPlanner.BuildChartVisualSignatures(charts);
+        var smartArtVisualSignatures = ChartSmartArtVisualPlanner.BuildSmartArtVisualSignatures(smartArts);
 
         return new FreeWVisualChartSmartArtExpectation(
             ChartCount: charts.Count,
@@ -1572,6 +1579,8 @@ public static class FreeWVisualEvidencePlanner
                 .SelectMany(plan => plan.Nodes.Select(node => node.FillHex))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Count(),
+            ChartVisualSignatures: chartVisualSignatures,
+            SmartArtVisualSignatures: smartArtVisualSignatures,
             Charts: charts,
             SmartArts: smartArts);
     }
@@ -1952,6 +1961,8 @@ public static class FreeWVisualEvidencePlanner
         HasSmartArtStyle: false,
         SmartArtNodeCount: 0,
         DistinctSmartArtFillCount: 0,
+        ChartVisualSignatures: [],
+        SmartArtVisualSignatures: [],
         Charts: [],
         SmartArts: []);
 

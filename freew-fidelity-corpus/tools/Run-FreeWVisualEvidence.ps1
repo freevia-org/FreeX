@@ -130,8 +130,8 @@ function Assert-BackstageEvidenceReadiness {
     }
 
     $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
-    if ([int]$summary.schemaVersion -ne 20) {
-        throw "Backstage evidence readiness requires FreeW visual evidence summary schema v20, found v$($summary.schemaVersion)"
+    if ([int]$summary.schemaVersion -ne 21) {
+        throw "Backstage evidence readiness requires FreeW visual evidence summary schema v21, found v$($summary.schemaVersion)"
     }
 
     $readinessRows = @($summary.backstagePrintEvidenceReadiness)
