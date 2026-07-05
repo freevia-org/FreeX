@@ -446,7 +446,8 @@ public static class OmmlParser
 
     private static MathNode ParseMatrix(XElement el)
     {
-        var columnAlignments = ParseMatrixColumnAlignments(el.Element(M + "mPr"));
+        var mPr = el.Element(M + "mPr");
+        var columnAlignments = ParseMatrixColumnAlignments(mPr);
         var rows = new List<IReadOnlyList<MathNode>>();
         foreach (var mrEl in el.Elements(M + "mr"))
         {
@@ -455,7 +456,15 @@ public static class OmmlParser
                 cells.Add(ParseRow(eEl));
             rows.Add(cells);
         }
-        return new MathNode.Matrix(rows, columnAlignments);
+        return new MathNode.Matrix(
+            rows,
+            columnAlignments,
+            ParseMatrixBaseJustification(mPr),
+            ParseMatrixSpacingRule(mPr, "rSpRule"),
+            ParseMatrixIntValue(mPr, "rSp"),
+            ParseMatrixSpacingRule(mPr, "cGpRule"),
+            ParseMatrixIntValue(mPr, "cGp"),
+            ParseMatrixIntValue(mPr, "cSp"));
     }
 
     private static IReadOnlyList<MathNode.Matrix.MatrixColumnAlignment> ParseMatrixColumnAlignments(XElement? mPr)
@@ -476,6 +485,39 @@ public static class OmmlParser
         return alignments;
     }
 
+    private static MathNode.Matrix.MatrixBaseJustification ParseMatrixBaseJustification(XElement? mPr)
+    {
+        var val = ReadVal(mPr?.Element(M + "baseJc"));
+        return val switch
+        {
+            "top" => MathNode.Matrix.MatrixBaseJustification.Top,
+            "bot" or "bottom" => MathNode.Matrix.MatrixBaseJustification.Bottom,
+            _ => MathNode.Matrix.MatrixBaseJustification.Center
+        };
+    }
+
+    private static MathNode.Matrix.MatrixSpacingRule? ParseMatrixSpacingRule(XElement? mPr, string localName)
+    {
+        var val = ReadVal(mPr?.Element(M + localName));
+        return val switch
+        {
+            "0" => MathNode.Matrix.MatrixSpacingRule.Single,
+            "1" => MathNode.Matrix.MatrixSpacingRule.OneAndHalf,
+            "2" => MathNode.Matrix.MatrixSpacingRule.Double,
+            "3" => MathNode.Matrix.MatrixSpacingRule.Exactly,
+            "4" => MathNode.Matrix.MatrixSpacingRule.Multiple,
+            _ => null
+        };
+    }
+
+    private static int? ParseMatrixIntValue(XElement? mPr, string localName)
+    {
+        var val = ReadVal(mPr?.Element(M + localName));
+        return int.TryParse(val, out var parsed) && parsed >= 0
+            ? parsed
+            : null;
+    }
+
     private static MathNode.Matrix.MatrixColumnAlignment ParseMatrixColumnAlignment(string? val) =>
         val switch
         {
@@ -486,6 +528,11 @@ public static class OmmlParser
         };
 
     // ── Unknown / fallback ────────────────────────────────────────────────
+
+    private static string? ReadVal(XElement? element) =>
+        element?.Attribute(M + "val")?.Value
+        ?? element?.Attribute("val")?.Value
+        ?? element?.Value;
 
     private static MathNode ParseEqArray(XElement el)
     {

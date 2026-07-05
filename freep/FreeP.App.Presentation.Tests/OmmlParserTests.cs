@@ -356,6 +356,49 @@ public sealed class OmmlParserTests
     }
 
     [Fact]
+    public void Parse_MatrixProperties_ReadsBaseJustificationAndSpacingMetadata()
+    {
+        var node = Parse(
+            "<m:m>" +
+            "<m:mPr>" +
+            "<m:baseJc m:val=\"top\"/>" +
+            "<m:rSpRule m:val=\"2\"/>" +
+            "<m:rSp m:val=\"7\"/>" +
+            "<m:cGpRule m:val=\"3\"/>" +
+            "<m:cGp m:val=\"24\"/>" +
+            "<m:cSp m:val=\"120\"/>" +
+            "</m:mPr>" +
+            "<m:mr><m:e><m:r><m:t>a</m:t></m:r></m:e></m:mr>" +
+            "</m:m>");
+
+        var matrix = Assert.IsType<MathNode.Matrix>(node);
+        Assert.Equal(MathNode.Matrix.MatrixBaseJustification.Top, matrix.BaseJustification);
+        Assert.Equal(MathNode.Matrix.MatrixSpacingRule.Double, matrix.RowSpacingRule);
+        Assert.Equal(7, matrix.RowSpacing);
+        Assert.Equal(MathNode.Matrix.MatrixSpacingRule.Exactly, matrix.ColumnGapRule);
+        Assert.Equal(24, matrix.ColumnGap);
+        Assert.Equal(120, matrix.ColumnSpacingTwips);
+    }
+
+    [Fact]
+    public void Parse_MatrixProperties_DefaultsMissingSpacingAndBaseJustification()
+    {
+        var node = Parse(
+            "<m:m>" +
+            "<m:mPr/>" +
+            "<m:mr><m:e><m:r><m:t>a</m:t></m:r></m:e></m:mr>" +
+            "</m:m>");
+
+        var matrix = Assert.IsType<MathNode.Matrix>(node);
+        Assert.Equal(MathNode.Matrix.MatrixBaseJustification.Center, matrix.BaseJustification);
+        Assert.Null(matrix.RowSpacingRule);
+        Assert.Null(matrix.RowSpacing);
+        Assert.Null(matrix.ColumnGapRule);
+        Assert.Null(matrix.ColumnGap);
+        Assert.Null(matrix.ColumnSpacingTwips);
+    }
+
+    [Fact]
     public void Parse_MatrixWithRaggedRows_PreservesLaterExtraCells()
     {
         var node = Parse(

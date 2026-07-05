@@ -353,18 +353,64 @@ public abstract class MathNode
             Right
         }
 
+        public enum MatrixBaseJustification
+        {
+            Top,
+            Center,
+            Bottom
+        }
+
+        public enum MatrixSpacingRule
+        {
+            Single = 0,
+            OneAndHalf = 1,
+            Double = 2,
+            Exactly = 3,
+            Multiple = 4
+        }
+
         /// <summary>Rows x Columns grid of nodes.</summary>
         public IReadOnlyList<IReadOnlyList<MathNode>> Rows { get; }
 
         /// <summary>Optional per-column alignment metadata; missing entries default to center.</summary>
         public IReadOnlyList<MatrixColumnAlignment> ColumnAlignments { get; }
 
+        /// <summary>Vertical matrix baseline justification from m:mPr/m:baseJc.</summary>
+        public MatrixBaseJustification BaseJustification { get; }
+
+        /// <summary>Optional row-spacing rule from m:mPr/m:rSpRule.</summary>
+        public MatrixSpacingRule? RowSpacingRule { get; }
+
+        /// <summary>Optional row-spacing value from m:mPr/m:rSp.</summary>
+        public int? RowSpacing { get; }
+
+        /// <summary>Optional column-gap rule from m:mPr/m:cGpRule.</summary>
+        public MatrixSpacingRule? ColumnGapRule { get; }
+
+        /// <summary>Optional column-gap value from m:mPr/m:cGp.</summary>
+        public int? ColumnGap { get; }
+
+        /// <summary>Optional minimum column width from m:mPr/m:cSp, in twips.</summary>
+        public int? ColumnSpacingTwips { get; }
+
         public Matrix(
             IReadOnlyList<IReadOnlyList<MathNode>> rows,
-            IReadOnlyList<MatrixColumnAlignment>? columnAlignments = null)
+            IReadOnlyList<MatrixColumnAlignment>? columnAlignments = null,
+            MatrixBaseJustification baseJustification = MatrixBaseJustification.Center,
+            MatrixSpacingRule? rowSpacingRule = null,
+            int? rowSpacing = null,
+            MatrixSpacingRule? columnGapRule = null,
+            int? columnGap = null,
+            int? columnSpacingTwips = null)
         {
             Rows = rows;
             ColumnAlignments = columnAlignments ?? System.Array.Empty<MatrixColumnAlignment>();
+            BaseJustification = baseJustification;
+            RowSpacingRule = rowSpacingRule;
+            RowSpacing = rowSpacing;
+            ColumnGapRule = columnGapRule;
+            ColumnGap = columnGap;
+            ColumnSpacingTwips = columnSpacingTwips;
         }
     }
 

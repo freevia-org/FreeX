@@ -1164,8 +1164,16 @@ public static class MathLayoutEngine
     private static MathBox LayoutMatrix(MathNode.Matrix matrix, string fontFamily, double fontSizePt)
     {
         double em = Em(fontSizePt);
-        double cellGapH = em * 0.25;
-        double cellGapV = em * 0.20;
+        double cellGapH = ResolveMatrixGap(
+            matrix.ColumnGapRule,
+            matrix.ColumnGap,
+            em,
+            em * 0.25);
+        double cellGapV = ResolveMatrixGap(
+            matrix.RowSpacingRule,
+            matrix.RowSpacing,
+            em,
+            em * 0.20);
 
         if (matrix.Rows.Count == 0)
             return MakeGlyph("", fontFamily, fontSizePt, false);
@@ -1187,9 +1195,12 @@ public static class MathLayoutEngine
         // Per-column width
         var colW = new double[colCount];
         for (int c = 0; c < colCount; c++)
+        {
+            colW[c] = Math.Max(colW[c], TwipsToDip(matrix.ColumnSpacingTwips));
             for (int r = 0; r < rowCount; r++)
                 if (cells[r][c] is not null)
                     colW[c] = Math.Max(colW[c], cells[r][c].Metrics.Width);
+        }
 
         // Per-row ascent and descent
         var rowAsc = new double[rowCount];
@@ -1210,8 +1221,7 @@ public static class MathLayoutEngine
         for (int r = 0; r < rowCount; r++) totalH += rowAsc[r] + rowDsc[r];
         totalH += cellGapV * Math.Max(0, rowCount - 1);
 
-        // Baseline of the matrix = center of the matrix on the math axis
-        double ascent = totalH / 2.0 + em * 0.45;
+        double ascent = ResolveMatrixAscent(matrix, rowAsc, rowDsc, cellGapV, totalH, em);
 
         var container = new MathBox.Container();
         container.Metrics.Width  = totalW;
@@ -1242,6 +1252,63 @@ public static class MathLayoutEngine
 
         return container;
     }
+
+    private static double ResolveMatrixGap(
+        MathNode.Matrix.MatrixSpacingRule? rule,
+        int? value,
+        double em,
+        double defaultGap)
+    {
+        if (!rule.HasValue && !value.HasValue)
+            return defaultGap;
+
+        return (rule ?? MathNode.Matrix.MatrixSpacingRule.Single) switch
+        {
+            MathNode.Matrix.MatrixSpacingRule.OneAndHalf => defaultGap * 1.5,
+            MathNode.Matrix.MatrixSpacingRule.Double => defaultGap * 2.0,
+            MathNode.Matrix.MatrixSpacingRule.Exactly => PointsToDip(value ?? 0),
+            MathNode.Matrix.MatrixSpacingRule.Multiple => defaultGap * Math.Max(0, value ?? 1),
+            _ => defaultGap
+        };
+    }
+
+    private static double ResolveMatrixAscent(
+        MathNode.Matrix matrix,
+        IReadOnlyList<double> rowAsc,
+        IReadOnlyList<double> rowDsc,
+        double rowGap,
+        double totalHeight,
+        double em)
+    {
+        if (rowAsc.Count == 0)
+            return 0;
+
+        double ascent = matrix.BaseJustification switch
+        {
+            MathNode.Matrix.MatrixBaseJustification.Top => rowAsc[0],
+            MathNode.Matrix.MatrixBaseJustification.Bottom => GetLastRowBaseline(rowAsc, rowDsc, rowGap),
+            _ => totalHeight / 2.0 + em * 0.45
+        };
+
+        return Math.Clamp(ascent, 0, totalHeight);
+    }
+
+    private static double GetLastRowBaseline(
+        IReadOnlyList<double> rowAsc,
+        IReadOnlyList<double> rowDsc,
+        double rowGap)
+    {
+        double y = 0;
+        for (int row = 0; row < rowAsc.Count - 1; row++)
+            y += rowAsc[row] + rowDsc[row] + rowGap;
+
+        return y + rowAsc[^1];
+    }
+
+    private static double PointsToDip(int points) => points * (96.0 / 72.0);
+
+    private static double TwipsToDip(int? twips) =>
+        twips.HasValue ? PointsToDip(twips.Value) / 20.0 : 0;
 
     private static MathNode.Matrix.MatrixColumnAlignment GetMatrixColumnAlignment(MathNode.Matrix matrix, int column) =>
         column >= 0 && column < matrix.ColumnAlignments.Count

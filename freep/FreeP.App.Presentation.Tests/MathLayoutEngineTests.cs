@@ -487,6 +487,94 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void Matrix_RowSpacingRuleChangesVerticalGap()
+    {
+        var rows = new[]
+        {
+            new MathNode[] { Run("a") },
+            new MathNode[] { Run("b") }
+        };
+        var defaultMatrix = new MathNode.Matrix(rows);
+        var spacedMatrix = new MathNode.Matrix(
+            rows,
+            rowSpacingRule: MathNode.Matrix.MatrixSpacingRule.Double);
+
+        var defaultContainer = (MathBox.Container)MathLayoutEngine
+            .Layout(defaultMatrix, "Cambria Math", FontSizePt)
+            .Children[0];
+        var spacedContainer = (MathBox.Container)MathLayoutEngine
+            .Layout(spacedMatrix, "Cambria Math", FontSizePt)
+            .Children[0];
+
+        var defaultSecondRow = defaultContainer.Children[1];
+        var spacedSecondRow = spacedContainer.Children[1];
+
+        spacedSecondRow.Y.Should().BeGreaterThan(defaultSecondRow.Y,
+            "explicit m:rSpRule metadata should increase the shared vertical matrix gap");
+        spacedContainer.Metrics.Height.Should().BeGreaterThan(defaultContainer.Metrics.Height);
+    }
+
+    [Fact]
+    public void Matrix_ColumnGapRuleChangesHorizontalGap()
+    {
+        var rows = new[]
+        {
+            new MathNode[] { Run("a"), Run("b") }
+        };
+        var defaultMatrix = new MathNode.Matrix(rows);
+        var spacedMatrix = new MathNode.Matrix(
+            rows,
+            columnGapRule: MathNode.Matrix.MatrixSpacingRule.Exactly,
+            columnGap: 24);
+
+        var defaultContainer = (MathBox.Container)MathLayoutEngine
+            .Layout(defaultMatrix, "Cambria Math", FontSizePt)
+            .Children[0];
+        var spacedContainer = (MathBox.Container)MathLayoutEngine
+            .Layout(spacedMatrix, "Cambria Math", FontSizePt)
+            .Children[0];
+
+        var defaultSecondCell = defaultContainer.Children[1];
+        var spacedSecondCell = spacedContainer.Children[1];
+
+        spacedSecondCell.X.Should().BeGreaterThan(defaultSecondCell.X,
+            "explicit m:cGpRule/m:cGp metadata should increase the shared horizontal matrix gap");
+        spacedContainer.Metrics.Width.Should().BeGreaterThan(defaultContainer.Metrics.Width);
+    }
+
+    [Fact]
+    public void Matrix_BaseJustificationChangesReportedAscentWithoutMovingCells()
+    {
+        var rows = new[]
+        {
+            new MathNode[] { Run("a") },
+            new MathNode[] { TallFraction() }
+        };
+        var topMatrix = new MathNode.Matrix(
+            rows,
+            baseJustification: MathNode.Matrix.MatrixBaseJustification.Top);
+        var centerMatrix = new MathNode.Matrix(
+            rows,
+            baseJustification: MathNode.Matrix.MatrixBaseJustification.Center);
+        var bottomMatrix = new MathNode.Matrix(
+            rows,
+            baseJustification: MathNode.Matrix.MatrixBaseJustification.Bottom);
+
+        var top = (MathBox.Container)MathLayoutEngine.Layout(topMatrix, "Cambria Math", FontSizePt).Children[0];
+        var center = (MathBox.Container)MathLayoutEngine.Layout(centerMatrix, "Cambria Math", FontSizePt).Children[0];
+        var bottom = (MathBox.Container)MathLayoutEngine.Layout(bottomMatrix, "Cambria Math", FontSizePt).Children[0];
+
+        top.Children.Select(child => child.Y).Should().Equal(
+            center.Children.Select(child => child.Y),
+            "baseJc changes the matrix baseline/ascent contract, not the cell layout positions");
+        bottom.Children.Select(child => child.Y).Should().Equal(center.Children.Select(child => child.Y));
+
+        top.Metrics.Ascent.Should().BeLessThan(center.Metrics.Ascent);
+        center.Metrics.Ascent.Should().BeLessThan(bottom.Metrics.Ascent);
+        bottom.Metrics.Ascent.Should().BeLessThanOrEqualTo(bottom.Metrics.Height);
+    }
+
+    [Fact]
     public void Frac_DefaultBarType_RendersHRule_Unchanged()
     {
         var frac = new MathNode.Frac(Run("1"), Run("2")); // default FracType.Bar
