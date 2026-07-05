@@ -342,6 +342,12 @@ public sealed class AnimationPaneTests
             "Play From Selected: available",
             "Play All: available",
             "Stop: unavailable");
+        pane.CurrentWorkflowEvidencePlanForTest.RowCount.Should().Be(2);
+        pane.CurrentWorkflowEvidencePlanForTest.EditableTimingRowCount.Should().Be(2);
+        pane.CurrentWorkflowEvidencePlanForTest.HasSelectedRow.Should().BeTrue();
+        pane.CurrentWorkflowEvidencePlanForTest.CanPlayFromSelected.Should().BeTrue();
+        pane.CurrentWorkflowEvidencePlanForTest.EvidenceLines.Should().Contain(
+            "Rows: 2; selected: 2; timing editors: 2; effect-option rows: 0; reorderable rows: 2");
     }
 
     [StaFact]
@@ -408,6 +414,7 @@ public sealed class AnimationPaneTests
 
         source.Should().Contain("AnimationPanePlanner.BuildTimelinePlan(");
         source.Should().Contain("AnimationPanePlanner.BuildWorkflowViewPlan(");
+        source.Should().Contain("AnimationPanePlanner.BuildWorkflowEvidencePlan(");
         source.Should().Contain("AnimationPanePlanner.BuildPlaybackSessionPlan(");
         source.Should().Contain("plan.PlaybackControls");
         source.Should().Contain("AnimationPanePlaybackControlKind.PlayFromSelected");

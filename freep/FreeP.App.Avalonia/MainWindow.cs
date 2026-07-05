@@ -263,6 +263,7 @@ public sealed class MainWindow : Window
     internal PresentationProofingPanePlan? LastProofingPanePlan { get; private set; }
     internal PresentationMediaTranscriptPlan? LastMediaTranscriptPlan { get; private set; }
     internal AnimationPaneTimelinePlan? LastAnimationPaneTimelinePlan { get; private set; }
+    internal AnimationPaneWorkflowEvidencePlan? LastAnimationPaneWorkflowEvidencePlan { get; private set; }
     internal AnimationPanePlaybackSessionPlan? LastAnimationPanePlaybackSessionPlan => _animationPanePlaybackSessionPlan;
     internal FindReplaceWorkflowPlan? LastFindReplaceWorkflowPlan { get; private set; }
     internal PresentationDesignCommandPlan? LastCustomSlideSizeRequestPlan { get; private set; }
@@ -362,6 +363,8 @@ public sealed class MainWindow : Window
     internal bool IsAnimationPanePreviewEnabled => _animationPanePreviewButton?.IsEnabled == true;
     internal IReadOnlyList<string> AnimationPanePlaybackControls => _animationPaneRenderedPlaybackControls;
     internal IReadOnlyList<string> AnimationPaneRenderedRows => _animationPaneRenderedRows;
+    internal IReadOnlyList<string> AnimationPaneWorkflowEvidenceLines =>
+        LastAnimationPaneWorkflowEvidencePlan?.EvidenceLines ?? Array.Empty<string>();
     internal int AnimationPaneEffectOptionControlCount => _animationPaneEffectOptionControlCount;
     internal int AnimationPaneTriggerControlCount => _animationPaneTriggerControlCount;
     internal int AnimationPaneDurationControlCount => _animationPaneDurationControlCount;
@@ -3863,7 +3866,9 @@ public sealed class MainWindow : Window
     private void RenderAnimationPane(AnimationPaneTimelinePlan plan)
     {
         _selectedAnimationIndex = plan.SelectedIndex;
-        var viewPlan = AnimationPanePlanner.BuildWorkflowViewPlan(plan, Editor.CurrentSlideIndex);
+        LastAnimationPaneWorkflowEvidencePlan =
+            AnimationPanePlanner.BuildWorkflowEvidencePlan(plan, Editor.CurrentSlideIndex);
+        var viewPlan = LastAnimationPaneWorkflowEvidencePlan.View;
         _animationPaneHeading.Text = viewPlan.Heading;
         _animationPaneMessage.Text = viewPlan.Message;
         RenderAnimationPanePlaybackControls(plan, viewPlan);

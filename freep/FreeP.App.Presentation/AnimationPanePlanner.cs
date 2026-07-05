@@ -87,6 +87,17 @@ public sealed record AnimationPaneWorkflowViewPlan(
     IReadOnlyList<string> RowSummaries,
     IReadOnlyList<string> PlaybackControlSummaries);
 
+public sealed record AnimationPaneWorkflowEvidencePlan(
+    AnimationPaneWorkflowViewPlan View,
+    int RowCount,
+    int EditableTimingRowCount,
+    int EffectOptionRowCount,
+    int ReorderableRowCount,
+    bool HasSelectedRow,
+    bool CanPreview,
+    bool CanPlayFromSelected,
+    IReadOnlyList<string> EvidenceLines);
+
 public enum AnimationPanePlaybackIntentKind
 {
     None,
@@ -880,6 +891,51 @@ public static class AnimationPanePlanner
             controlSummaries);
     }
 
+    public static AnimationPaneWorkflowEvidencePlan BuildWorkflowEvidencePlan(
+        AnimationPaneTimelinePlan timelinePlan,
+        int slideIndex)
+    {
+        ArgumentNullException.ThrowIfNull(timelinePlan);
+
+        var viewPlan = BuildWorkflowViewPlan(timelinePlan, slideIndex);
+        var editableTimingRowCount = timelinePlan.Items.Count;
+        var effectOptionRowCount = timelinePlan.Items.Count(item => item.EffectOptions.Options.Count > 0);
+        var reorderableRowCount = timelinePlan.Items.Count(item => item.CanMoveEarlier || item.CanMoveLater);
+        var canPreview = timelinePlan.PlaybackControls.Any(control =>
+            control.Kind == AnimationPanePlaybackControlKind.PreviewCurrentSlide && control.IsEnabled);
+        var canPlayFromSelected = timelinePlan.PlaybackControls.Any(control =>
+            control.Kind == AnimationPanePlaybackControlKind.PlayFromSelected && control.IsEnabled);
+        var evidenceLines = new List<string>
+        {
+            $"Rows: {timelinePlan.Items.Count}; selected: {FormatSelectedEvidence(timelinePlan.SelectedIndex)}; "
+                + $"timing editors: {editableTimingRowCount}; effect-option rows: {effectOptionRowCount}; "
+                + $"reorderable rows: {reorderableRowCount}",
+            "Playback controls: " + string.Join("; ", viewPlan.PlaybackControlSummaries),
+        };
+
+        if (timelinePlan.SelectedItem is { } selected)
+        {
+            evidenceLines.Add(
+                $"Selected row: {selected.ShapeName} - {selected.EffectText}; trigger {selected.TriggerText}; "
+                    + $"duration {selected.DurationText}s; delay {selected.DelayText}s");
+        }
+        else
+        {
+            evidenceLines.Add(viewPlan.Message);
+        }
+
+        return new AnimationPaneWorkflowEvidencePlan(
+            viewPlan,
+            timelinePlan.Items.Count,
+            editableTimingRowCount,
+            effectOptionRowCount,
+            reorderableRowCount,
+            timelinePlan.SelectedIndex >= 0,
+            canPreview,
+            canPlayFromSelected,
+            evidenceLines);
+    }
+
     public static string BuildWorkflowRowSummary(AnimationPaneTimelineItemPlan item)
     {
         ArgumentNullException.ThrowIfNull(item);
@@ -989,6 +1045,11 @@ public static class AnimationPanePlanner
 
     private static string FormatAvailability(bool isAvailable)
         => isAvailable ? "available" : "unavailable";
+
+    private static string FormatSelectedEvidence(int selectedIndex)
+        => selectedIndex >= 0
+            ? (selectedIndex + 1).ToString(CultureInfo.InvariantCulture)
+            : "none";
 
     private static IEnumerable<AnimationPaneEffectOptionDescriptor> BuildSupportedEffectOptions(
         ShapeAnimation animation)

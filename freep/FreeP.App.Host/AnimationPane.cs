@@ -64,6 +64,8 @@ public sealed class AnimationPane : Border
     internal IReadOnlyList<AnimationPanePlaybackControlDescriptor> CurrentPlaybackControlsForTest =>
         BuildTimelinePlan().PlaybackControls;
     internal AnimationPaneWorkflowViewPlan CurrentWorkflowViewPlanForTest => BuildWorkflowViewPlan();
+    internal AnimationPaneWorkflowEvidencePlan CurrentWorkflowEvidencePlanForTest =>
+        AnimationPanePlanner.BuildWorkflowEvidencePlan(BuildTimelinePlan(), _editor.CurrentSlideIndex);
 
     // ── Construction ──────────────────────────────────────────────────────────────
 
