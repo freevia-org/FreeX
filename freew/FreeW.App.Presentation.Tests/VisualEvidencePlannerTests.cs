@@ -846,8 +846,15 @@ public sealed class VisualEvidencePlannerTests
         source.Should().Contain("--word-baseline-unavailable-reason");
         source.Should().Contain("_word_baseline_unavailable.json");
         source.Should().Contain("status = \"word-baseline-unavailable\"");
+        source.Should().Contain("evidenceMode = \"no-word-fallback\"");
+        source.Should().Contain("baselineEvidenceClass = \"word-baseline-unavailable\"");
+        source.Should().Contain("authoritativeWordPngParity = $false");
         source.Should().Contain("summaryRowStatus = \"word-baseline-unavailable\"");
         source.Should().Contain("passed = $true");
+        source.Should().Contain("function Write-WordBaselineUnavailableSummary");
+        source.Should().Contain("MS Word baseline PNG generation failed");
+        source.Should().Contain("Word baseline mode: no-word-fallback");
+        source.Should().Contain("Word baseline mode: real-word-png-comparison");
         source.Should().Contain("FreeW.VisualEvidenceSummary.csproj");
     }
 
@@ -2691,6 +2698,10 @@ public sealed class VisualEvidencePlannerTests
             var baselineComparison = doc.RootElement.GetProperty("baselineComparisons")[0];
             baselineComparison.GetProperty("status").GetString()
                 .Should().Be("word-baseline-unavailable");
+            baselineComparison.GetProperty("baselineEvidenceClass").GetString()
+                .Should().Be("word-baseline-unavailable");
+            baselineComparison.GetProperty("baselineEvidenceDescription").GetString()
+                .Should().Contain("no authoritative Word PNG parity claimed");
             baselineComparison.GetProperty("skipReason").GetString()
                 .Should().Contain("Word.Application");
 
@@ -2700,6 +2711,8 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("Unavailable reason(s): COM ProgID 'Word.Application' is not registered");
             markdown.Should().Contain("Triage counts: word-unavailable=1");
             markdown.Should().Contain("Status counts: word-baseline-unavailable=1");
+            markdown.Should().Contain("Evidence class counts: word-baseline-unavailable=1");
+            markdown.Should().Contain("word-baseline-unavailable=Word COM or baseline generation unavailable; no authoritative Word PNG parity claimed");
             markdown.Should().Contain("COM ProgID 'Word.Application' is not registered");
             markdown.Should().Contain("f2-hf-basic/f2-hf-basic_p1.png");
         }
@@ -2885,6 +2898,12 @@ public sealed class VisualEvidencePlannerTests
                 baselineHeight: 2,
                 baselineStride: 8,
                 FreeWVisualEvidencePixelFormat.Bgra32);
+            failed.Status.Should().Be(FreeWVisualBaselineComparisonPlanner.FailedStatus);
+            failed.Metrics.Should().NotBeNull();
+            FreeWVisualBaselineComparisonPlanner.ClassifyBaselineEvidence(failed)
+                .Should().Be(FreeWVisualBaselineComparisonPlanner.RealWordPngComparisonFailedClass);
+            FreeWVisualBaselineComparisonPlanner.DescribeBaselineEvidence(failed)
+                .Should().Contain("metrics and tolerance failures are recorded");
             var decode = FreeWVisualBaselineComparisonPlanner.BuildDecodeFailure(
                 decodeRow,
                 "table-layout-complex/table-layout-complex_p1.png",
@@ -2919,6 +2938,11 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("needs-decode-fix=1");
             markdown.Should().Contain("needs-baseline=1");
             markdown.Should().Contain("not-in-scope=1");
+            markdown.Should().Contain("Evidence class counts:");
+            markdown.Should().Contain("real-word-png-comparison-failed=1");
+            markdown.Should().Contain("png-decode-failed=1");
+            markdown.Should().Contain("word-png-baseline-missing=1");
+            markdown.Should().Contain("scenario-skipped-or-unmapped=1");
             markdown.Should().Contain("Skipped rows hidden from triage table: 1.");
             markdown.Should().NotContain("| avalonia-page-layout-shot | page-composition-web-layout | p1/freew_web_layout.png | not-in-scope | skipped |");
         }
@@ -3123,6 +3147,10 @@ public sealed class VisualEvidencePlannerTests
                 .Should().Contain("word-png-default");
             var baselineComparison = doc.RootElement.GetProperty("baselineComparisons")[0];
             baselineComparison.GetProperty("status").GetString().Should().Be("passed");
+            baselineComparison.GetProperty("baselineEvidenceClass").GetString()
+                .Should().Be("real-word-png-compared");
+            baselineComparison.GetProperty("baselineEvidenceDescription").GetString()
+                .Should().Contain("compared within tolerance");
             baselineComparison.GetProperty("baselineId").GetString()
                 .Should().Be("f2-hf-basic/p1/f2-hf-basic_p1.png");
             baselineComparison.GetProperty("baselineScenarioId").GetString()
@@ -3141,6 +3169,8 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("Word Baseline Comparison");
             markdown.Should().Contain("Triage counts: within-tolerance=1");
             markdown.Should().Contain("Status counts: passed=1");
+            markdown.Should().Contain("Evidence class counts: real-word-png-compared=1");
+            markdown.Should().Contain("real-word-png-compared=real Word PNG baseline available and compared within tolerance");
             markdown.Should().Contain("f2-hf-basic/p1/f2-hf-basic_p1.png");
             markdown.Should().Contain("word-png-default");
             markdown.Should().Contain("pixel delta > 8");

@@ -66,6 +66,12 @@ public sealed record FreeWVisualBaselineComparison(
     FreeWVisualEvidenceTrust Trust)
 {
     public string BaselineId => MatchKey;
+
+    public string BaselineEvidenceClass =>
+        FreeWVisualBaselineComparisonPlanner.ClassifyBaselineEvidence(this);
+
+    public string BaselineEvidenceDescription =>
+        FreeWVisualBaselineComparisonPlanner.DescribeBaselineEvidence(this);
 }
 
 public sealed record FreeWVisualWordBaselinePolicy(
@@ -81,6 +87,13 @@ public static class FreeWVisualBaselineComparisonPlanner
     public const string FailedStatus = "failed";
     public const string SkippedStatus = "skipped";
     public const string WordBaselineUnavailableStatus = "word-baseline-unavailable";
+    public const string RealWordPngComparedClass = "real-word-png-compared";
+    public const string RealWordPngComparisonFailedClass = "real-word-png-comparison-failed";
+    public const string WordBaselineUnavailableClass = "word-baseline-unavailable";
+    public const string WordPngBaselineMissingClass = "word-png-baseline-missing";
+    public const string ScenarioSkippedOrUnmappedClass = "scenario-skipped-or-unmapped";
+    public const string PngDecodeFailedClass = "png-decode-failed";
+    public const string UnknownBaselineEvidenceClass = "unknown";
 
     private static readonly IReadOnlyDictionary<string, string> BaselineScenarioAliases =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -119,6 +132,47 @@ public static class FreeWVisualBaselineComparisonPlanner
             ", ",
             FreeWVisualBaselineComparisonTolerance.BuiltIn.Select(t => t.Name));
         throw new ArgumentException($"Unknown visual baseline tolerance '{name}'. Known tolerances: {known}");
+    }
+
+    public static string ClassifyBaselineEvidence(FreeWVisualBaselineComparison comparison)
+    {
+        ArgumentNullException.ThrowIfNull(comparison);
+
+        if (string.Equals(comparison.Status, PassedStatus, StringComparison.OrdinalIgnoreCase))
+            return RealWordPngComparedClass;
+        if (string.Equals(comparison.Status, FailedStatus, StringComparison.OrdinalIgnoreCase))
+            return RealWordPngComparisonFailedClass;
+        if (string.Equals(comparison.Status, WordBaselineUnavailableStatus, StringComparison.OrdinalIgnoreCase))
+            return WordBaselineUnavailableClass;
+        if (string.Equals(comparison.Status, MissingBaselineStatus, StringComparison.OrdinalIgnoreCase))
+            return WordPngBaselineMissingClass;
+        if (string.Equals(comparison.Status, SkippedStatus, StringComparison.OrdinalIgnoreCase))
+            return ScenarioSkippedOrUnmappedClass;
+        if (string.Equals(comparison.Status, DecodeFailedStatus, StringComparison.OrdinalIgnoreCase))
+            return PngDecodeFailedClass;
+
+        return UnknownBaselineEvidenceClass;
+    }
+
+    public static string DescribeBaselineEvidence(FreeWVisualBaselineComparison comparison) =>
+        DescribeBaselineEvidenceClass(ClassifyBaselineEvidence(comparison));
+
+    public static string DescribeBaselineEvidenceClass(string evidenceClass)
+    {
+        if (string.Equals(evidenceClass, RealWordPngComparedClass, StringComparison.OrdinalIgnoreCase))
+            return "real Word PNG baseline available and compared within tolerance";
+        if (string.Equals(evidenceClass, RealWordPngComparisonFailedClass, StringComparison.OrdinalIgnoreCase))
+            return "real Word PNG baseline available and compared outside tolerance; metrics and tolerance failures are recorded";
+        if (string.Equals(evidenceClass, WordBaselineUnavailableClass, StringComparison.OrdinalIgnoreCase))
+            return "Word COM or baseline generation unavailable; no authoritative Word PNG parity claimed";
+        if (string.Equals(evidenceClass, WordPngBaselineMissingClass, StringComparison.OrdinalIgnoreCase))
+            return "mapped Word baseline PNG unavailable on disk; candidate paths are recorded";
+        if (string.Equals(evidenceClass, ScenarioSkippedOrUnmappedClass, StringComparison.OrdinalIgnoreCase))
+            return "scenario intentionally skipped, outside baseline scope, or unmapped";
+        if (string.Equals(evidenceClass, PngDecodeFailedClass, StringComparison.OrdinalIgnoreCase))
+            return "candidate Word PNG or evidence PNG could not be decoded before comparison";
+
+        return "unrecognized Word baseline evidence status";
     }
 
     public static string NormalizeBaselinePath(string value) =>
