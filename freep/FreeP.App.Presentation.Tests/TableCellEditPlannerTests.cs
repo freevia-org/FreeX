@@ -249,6 +249,58 @@ public sealed class TableCellEditPlannerTests
     }
 
     [Fact]
+    public void PlanRichTextEdit_SelectionReportsParagraphAndListMetadata()
+    {
+        var body = MakeBody("Alpha");
+        body.Paragraphs[0].Align = TextAlign.Left;
+        var second = new Paragraph
+        {
+            Align = TextAlign.Center,
+            BulletKind = BulletKind.Auto,
+            AutoNumType = AutoNumType.RomanLcPeriod,
+            AutoNumStartAt = 3,
+            Level = 1,
+            MarginLeftEmu = 457200,
+            IndentEmu = -228600,
+        };
+        second.Runs.Add(new Run { Text = "Beta" });
+        body.Paragraphs.Add(second);
+        var third = new Paragraph
+        {
+            BulletKind = BulletKind.Char,
+            BulletChar = "\u2022",
+        };
+        third.Runs.Add(new Run { Text = "Gamma" });
+        body.Paragraphs.Add(third);
+
+        var rich = TableCellEditPlanner.PlanRichTextEdit(
+            body,
+            new InCanvasEditorTextSelection(6, 10));
+
+        rich.Paragraphs
+            .Select(paragraph => (
+                paragraph.ParagraphIndex,
+                paragraph.Start,
+                paragraph.End,
+                paragraph.Text,
+                paragraph.BulletKind,
+                paragraph.AutoNumType,
+                paragraph.Level))
+            .Should()
+            .Equal(
+                (0, 0, 5, "Alpha", BulletKind.None, null, 0),
+                (1, 6, 10, "Beta", BulletKind.Auto, AutoNumType.RomanLcPeriod, 1),
+                (2, 11, 16, "Gamma", BulletKind.Char, null, 0));
+        rich.SelectedParagraphs.Should().ContainSingle();
+        rich.SelectedParagraphs[0].ParagraphIndex.Should().Be(1);
+        rich.SelectedParagraphs[0].AutoNumStartAt.Should().Be(3);
+        rich.SelectedParagraphs[0].MarginLeftEmu.Should().Be(457200);
+        rich.SelectedParagraphs[0].IndentEmu.Should().Be(-228600);
+        rich.HasListFormatting.Should().BeTrue();
+        rich.HasMixedParagraphFormatting.Should().BeTrue();
+    }
+
+    [Fact]
     public void PlanRichTextEdit_CollapsedSelection_UsesCaretRunStyle()
     {
         var body = MakeBody("Hello");
@@ -1021,6 +1073,12 @@ public sealed class TableCellEditPlannerTests
         plan.Kind.Should().Be(TableCellParagraphFormatKind.ListPreset);
         plan.ListPreset.Should().Be(TableCellListPresetCatalog.NumberRomanUpperPeriod);
         plan.EffectiveSelection.Should().Be(new InCanvasEditorTextSelection(7, 11));
+        plan.ResultRichTextPlan.Should().NotBeNull();
+        plan.ResultRichTextPlan!.SelectedParagraphs.Should().ContainSingle();
+        plan.ResultRichTextPlan.SelectedParagraphs[0].ParagraphIndex.Should().Be(1);
+        plan.ResultRichTextPlan.SelectedParagraphs[0].BulletKind.Should().Be(BulletKind.Auto);
+        plan.ResultRichTextPlan.SelectedParagraphs[0].AutoNumType.Should().Be(AutoNumType.RomanUcPeriod);
+        plan.ResultRichTextPlan.SelectedParagraphs[0].AutoNumStartAt.Should().Be(1);
 
         var presentation = Presentation.CreateEmpty();
         presentation.Slides[0].Shapes.Clear();
