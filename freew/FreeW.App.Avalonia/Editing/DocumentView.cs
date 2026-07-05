@@ -4703,11 +4703,12 @@ public sealed class DocumentView : Control
             // AV-TBL: carry the TableCell model reference and actual column index so we can emit
             // per-paragraph, per-character cell-aware PlacedChars for caret routing.
             // BE2: CellParas holds wrapped lines per-paragraph (outer list = para, inner = wrapped lines).
-            var measured = new List<(TableCell Cell, int StartCol, int Span, List<List<(double Height, List<(char Ch, double W)> Chars)>> CellParas, RunFormatting Fmt)>();
+            var measured = new List<(TableCell Cell, int CellIndex, int StartCol, int Span, List<List<(double Height, List<(char Ch, double W)> Chars)>> CellParas, RunFormatting Fmt)>();
             var rowHeight = Build("Ag", RunFormatting.Default).Height + 2 * pad;
             var col = 0;
-            foreach (var cell in row.Cells)
+            for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
             {
+                var cell = row.Cells[cellIndex];
                 if (col >= cols)
                     break;
                 var span = Math.Clamp(cell.GridSpan <= 0 ? 1 : cell.GridSpan, 1, cols - col);
@@ -4732,7 +4733,7 @@ public sealed class DocumentView : Control
                 if (cellHeight > rowHeight)
                     rowHeight = cellHeight;
 
-                measured.Add((cell, col, span, cellParas, fmt));
+                measured.Add((cell, cellIndex, col, span, cellParas, fmt));
                 col += span;
             }
 
@@ -4743,7 +4744,7 @@ public sealed class DocumentView : Control
             // AV-COL-NONTXT AG1: use the column band that this row's content-Y falls in.
             var rowColLeft = ColumnLeftFor(rowContentY);
 
-            foreach (var (cellModel, startCol, span, cellParas, fmt) in measured)
+            foreach (var (cellModel, cellIndex, startCol, span, cellParas, fmt) in measured)
             {
                 double cellWidth = 0;
                 for (var s = 0; s < span; s++)
@@ -4751,7 +4752,7 @@ public sealed class DocumentView : Control
                 var cellX = rowColLeft + colOffsets[startCol];
                 var rect = new Rect(cellX, rowPageSpaceY, cellWidth, rowHeight);
                 // AV-TBL4: per-cell ShadingColorHex overrides table-style fills; header/band still apply as fallback.
-                IBrush? fill = ResolveCellFill(cellModel, isHeader, isBand);
+                IBrush? fill = ResolveCellFill(cellModel, table, r, cellIndex, isHeader, isBand);
                 var cellBorderPlan = TableCellBorderVisualPlanner.Build(cellModel.Borders, PxPerPoint);
                 _rects.Add((rect, fill, borders, cellBorderPlan.HasVisibleEdges ? cellBorderPlan : null));
                 _cellHits.Add((rect, blockIndex, r, startCol));
@@ -5508,10 +5509,33 @@ public sealed class DocumentView : Control
     }
 
     // AV-TBL4: resolve the fill brush for a cell — per-cell ShadingColorHex wins; header/band are fallbacks.
-    private IBrush? ResolveCellFill(TableCell cell, bool isHeader, bool isBand)
+    private IBrush? ResolveCellFill(
+        TableCell cell,
+        Table table,
+        int rowIndex,
+        int cellIndex,
+        bool isHeader,
+        bool isBand)
     {
         if (!string.IsNullOrEmpty(cell.ShadingColorHex))
             return BrushFor(cell.ShadingColorHex);
+
+        var catalogStyle = table.TableStyleId is { Length: > 0 } styleId
+            ? DocumentTableStyle.FindById(styleId)
+            : null;
+        if (catalogStyle is not null)
+        {
+            var columnCount = Math.Max(0, table.Rows[rowIndex].Cells.Count);
+            var (fillHex, _) = catalogStyle.ResolveCellStyle(
+                rowIndex,
+                table.Rows.Count,
+                cellIndex == 0,
+                cellIndex == Math.Max(0, columnCount - 1),
+                table.Formatting);
+            if (!string.IsNullOrWhiteSpace(fillHex))
+                return BrushFor("#" + fillHex);
+        }
+
         if (isHeader) return HeaderFill;
         if (isBand)   return BandFill;
         return null;

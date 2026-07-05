@@ -129,6 +129,12 @@ public sealed class DocumentViewLayoutPlannerTests
         plan.AutoFit.Should().Be(nameof(AutoFitMode.Fixed));
         plan.TableStyleId.Should().Be("GridTable4");
         plan.ColumnWidthsDip.Should().HaveCount(4);
+        plan.Cells.Where(cell => cell.RowIndex == 0)
+            .Should()
+            .OnlyContain(cell => cell.ShadingColorHex == null, "header fill is style-derived evidence, not explicit cell shading");
+        plan.Cells.Where(cell => cell.RowIndex > 0)
+            .Should()
+            .Contain(cell => cell.ShadingColorHex != null, "body cells still carry explicit cell-shading evidence");
         plan.Cells.Should().Contain(cell => cell.GridSpan == 2);
         plan.Cells.Should().Contain(cell => cell.RowSpan == 2);
         plan.Cells.Should().Contain(cell => cell.IsVerticalMergeContinuation);
