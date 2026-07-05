@@ -5,6 +5,100 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class SlideShowRecordingExecutionPlannerTests
 {
     [Fact]
+    public void CaptureAdapterReadiness_FromDeviceDescriptors_ProjectsHostCapabilities()
+    {
+        var readiness = SlideShowRecordingCaptureAdapterReadiness.FromDevices(
+            "Shared host",
+            "Shared microphone/camera adapter",
+            new[]
+            {
+                new SlideShowRecordingCaptureDeviceDescriptor(
+                    SlideShowRecordingCaptureDeviceKind.Microphone,
+                    "mic-0",
+                    "Default microphone",
+                    IsDefault: true,
+                    IsAvailable: true,
+                    "audio/mp4"),
+                new SlideShowRecordingCaptureDeviceDescriptor(
+                    SlideShowRecordingCaptureDeviceKind.Camera,
+                    "cam-0",
+                    "Presenter camera",
+                    IsDefault: true,
+                    IsAvailable: true,
+                    "video/mp4")
+            });
+
+        var capabilities = SlideShowRecordingCaptureAdapterPlanner.BuildCapabilities(readiness);
+
+        capabilities.HostName.Should().Be("Shared host");
+        capabilities.CanCaptureNarration.Should().BeTrue();
+        capabilities.CanCaptureCamera.Should().BeTrue();
+        capabilities.UnavailableReason.Should().BeEmpty();
+        capabilities.EffectiveCaptureAdapterReadiness.Should().BeSameAs(readiness);
+        readiness.ReadyStreams.Should().Equal(
+            SlideShowRecordingCaptureStreamKind.NarrationAudio,
+            SlideShowRecordingCaptureStreamKind.CameraVideo);
+        readiness.MissingStreams.Should().BeEmpty();
+        readiness.StatusText.Should().Be("Shared microphone/camera adapter: 2 capture stream(s) ready");
+    }
+
+    [Fact]
+    public void CreateState_WithPartialCaptureAdapterReadiness_StartsReadyStreamAndDefersMissingStream()
+    {
+        var started = new DateTimeOffset(2026, 7, 5, 12, 0, 0, TimeSpan.Zero);
+        var plan = SlideShowPresenterToolPlanner.BuildPlan(
+            SlideShowTimingIntent.RecordTimings,
+            SlideShowRecordingMediaIntent.NarrationAndMedia);
+        var readiness = SlideShowRecordingCaptureAdapterReadiness.FromDevices(
+            "Shared host",
+            "Shared capture adapter",
+            new[]
+            {
+                new SlideShowRecordingCaptureDeviceDescriptor(
+                    SlideShowRecordingCaptureDeviceKind.Microphone,
+                    "mic-0",
+                    "Default microphone",
+                    IsDefault: true,
+                    IsAvailable: true,
+                    "audio/mp4"),
+                new SlideShowRecordingCaptureDeviceDescriptor(
+                    SlideShowRecordingCaptureDeviceKind.Camera,
+                    "cam-0",
+                    "Blocked camera",
+                    IsDefault: true,
+                    IsAvailable: false,
+                    "video/mp4")
+            },
+            unavailableReason: "Camera permission was denied by the OS.");
+
+        var state = SlideShowRecordingExecutionPlanner.CreateState(
+            plan,
+            currentSlideIndex: 0,
+            started,
+            readiness);
+
+        state.HostCapabilities.EffectiveCaptureAdapterReadiness.Should().BeSameAs(readiness);
+        state.IsNarrationCaptureActive.Should().BeTrue();
+        state.IsCameraCaptureActive.Should().BeFalse();
+        state.LastActions.Select(action => action.Kind).Should().Equal(
+            SlideShowRecordingExecutionActionKind.StartSession,
+            SlideShowRecordingExecutionActionKind.EnterSlide,
+            SlideShowRecordingExecutionActionKind.StartNarrationCapture,
+            SlideShowRecordingExecutionActionKind.CaptureUnavailable);
+        state.LastActions.Last().StatusText.Should().Contain("Camera permission was denied by the OS.");
+
+        var ended = SlideShowRecordingExecutionPlanner.EndSession(
+            state,
+            started.AddMilliseconds(2100));
+
+        var segment = ended.Segments.Should().ContainSingle().Subject;
+        segment.NarrationCaptured.Should().BeTrue();
+        segment.CameraCaptured.Should().BeFalse();
+        segment.MediaArtifacts.Select(artifact => artifact.IsCaptured).Should().Equal(true, false);
+        segment.MediaArtifacts.Select(artifact => artifact.IsDeferred).Should().Equal(false, true);
+    }
+
+    [Fact]
     public void CreateState_WhenRecordingRequested_StartsSessionAndCaptureActions()
     {
         var started = new DateTimeOffset(2026, 7, 4, 9, 0, 0, TimeSpan.Zero);
@@ -109,6 +203,10 @@ public sealed class SlideShowRecordingExecutionPlannerTests
             started.AddMilliseconds(3450));
 
         moved.HostCapabilities.HostName.Should().Be("Deterministic evidence backend");
+        moved.HostCapabilities.EffectiveCaptureAdapterReadiness.Devices.Select(device => device.Kind)
+            .Should().Equal(
+                SlideShowRecordingCaptureDeviceKind.Microphone,
+                SlideShowRecordingCaptureDeviceKind.Camera);
         moved.IsNarrationCaptureActive.Should().BeTrue();
         moved.IsCameraCaptureActive.Should().BeTrue();
         moved.LastActions.Should().OnlyContain(action => !action.IsDeferred);
