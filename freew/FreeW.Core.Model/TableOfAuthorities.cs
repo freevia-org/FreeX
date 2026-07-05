@@ -159,32 +159,20 @@ public static class TableOfAuthorities
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(options);
 
-        var occurrences = CollectCitationOccurrences(document);
-        var allCitations = occurrences
-            .Select(occurrence => occurrence.Citation)
-            .ToList();
+        var occurrences = CanonicalizeOccurrences(CollectCitationOccurrences(document));
 
-        // When UsePassim, count per (long-form, category) pair so we know which get the suffix.
+        // When UsePassim, count per canonical (long-form, category) pair so short-form marks contribute
+        // to the full authority entry they reference.
         Dictionary<ToaEntryKey, int>? occurrenceCounts = null;
         if (options.UsePassim)
-        {
-            occurrenceCounts = new Dictionary<ToaEntryKey, int>(EntryKeyComparer);
-            foreach (var c in allCitations)
-            {
-                if (c.LongCitation.Length == 0)
-                    continue;
-                var key = new ToaEntryKey(c.LongCitation, c.Category);
-                occurrenceCounts.TryGetValue(key, out var count);
-                occurrenceCounts[key] = count + 1;
-            }
-        }
+            occurrenceCounts = BuildOccurrenceCounts(occurrences);
 
         var formatting = options.KeepOriginalFormatting
-            ? CollectFirstCitationFormatting(document)
+            ? CollectFirstCitationFormatting(occurrences)
             : null;
 
         return Build(
-            allCitations,
+            occurrences,
             options,
             occurrenceCounts,
             EntryRightTabStopPt(document.Page),
@@ -224,7 +212,7 @@ public static class TableOfAuthorities
     {
         ArgumentNullException.ThrowIfNull(citations);
         return Build(
-            citations,
+            CanonicalizeOccurrences(ToCitationOccurrences(citations)),
             ToaOptions.Default,
             occurrenceCounts: null,
             DefaultEntryRightTabStopPt,
@@ -245,7 +233,7 @@ public static class TableOfAuthorities
         ArgumentNullException.ThrowIfNull(citations);
         ArgumentNullException.ThrowIfNull(options);
         return Build(
-            citations,
+            CanonicalizeOccurrences(ToCitationOccurrences(citations)),
             options,
             occurrenceCounts: null,
             DefaultEntryRightTabStopPt,
@@ -255,7 +243,7 @@ public static class TableOfAuthorities
 
     // Core builder shared by all public overloads.
     private static IReadOnlyList<Paragraph> Build(
-        IEnumerable<Citation> citations,
+        IReadOnlyList<ToaCanonicalCitation> citations,
         ToaOptions options,
         Dictionary<ToaEntryKey, int>? occurrenceCounts,
         double entryRightTabStopPt,
@@ -268,8 +256,8 @@ public static class TableOfAuthorities
         };
 
         var byCategory = citations
-            .Where(c => c is not null && c.LongCitation.Length > 0)
-            .GroupBy(c => c.Category)
+            .Where(c => c.EntryKey.LongCitation.Length > 0)
+            .GroupBy(c => c.EntryKey.Category)
             .ToDictionary(g => g.Key, g => g.ToList());
 
         // Respect the category filter: when set, only emit that one category.
@@ -283,7 +271,7 @@ public static class TableOfAuthorities
                 continue;
 
             var distinct = inCategory
-                .Select(c => c.LongCitation)
+                .Select(c => c.EntryKey.LongCitation)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(t => t, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(t => t, StringComparer.Ordinal)
@@ -380,19 +368,113 @@ public static class TableOfAuthorities
         return count >= PassimOccurrenceThreshold;
     }
 
+    private static IReadOnlyList<ToaCitationOccurrence> ToCitationOccurrences(IEnumerable<Citation> citations)
+    {
+        var occurrences = new List<ToaCitationOccurrence>();
+        foreach (var citation in citations)
+        {
+            if (citation is not null)
+                occurrences.Add(new ToaCitationOccurrence(citation, null, null));
+        }
+
+        return occurrences;
+    }
+
+    private static IReadOnlyList<ToaCanonicalCitation> CanonicalizeOccurrences(
+        IReadOnlyList<ToaCitationOccurrence> occurrences)
+    {
+        if (occurrences.Count == 0)
+            return [];
+
+        var aliasMap = BuildShortCitationAliasMap(occurrences);
+        var activeAliases = new HashSet<ToaEntryKey>(EntryKeyComparer);
+        var canonical = new List<ToaCanonicalCitation>(occurrences.Count);
+
+        foreach (var occurrence in occurrences)
+        {
+            var citation = occurrence.Citation;
+            var key = new ToaEntryKey(citation.LongCitation, citation.Category);
+            if (citation.LongCitation.Length > 0
+                && activeAliases.Contains(key)
+                && aliasMap.TryGetValue(key, out var canonicalLongCitation))
+            {
+                key = new ToaEntryKey(canonicalLongCitation, citation.Category);
+            }
+
+            canonical.Add(new ToaCanonicalCitation(citation, key, occurrence.PageNumber, occurrence.SourceFormatting));
+
+            if (citation.LongCitation.Length == 0 || citation.ShortCitation.Length == 0)
+                continue;
+
+            var aliasKey = new ToaEntryKey(citation.ShortCitation, citation.Category);
+            if (aliasMap.TryGetValue(aliasKey, out var mappedLongCitation)
+                && StringComparer.OrdinalIgnoreCase.Equals(mappedLongCitation, citation.LongCitation))
+            {
+                activeAliases.Add(aliasKey);
+            }
+        }
+
+        return canonical;
+    }
+
+    private static Dictionary<ToaEntryKey, string> BuildShortCitationAliasMap(
+        IReadOnlyList<ToaCitationOccurrence> occurrences)
+    {
+        var aliases = new Dictionary<ToaEntryKey, string>(EntryKeyComparer);
+        var ambiguousAliases = new HashSet<ToaEntryKey>(EntryKeyComparer);
+
+        foreach (var occurrence in occurrences)
+        {
+            var citation = occurrence.Citation;
+            if (citation.LongCitation.Length == 0 || citation.ShortCitation.Length == 0)
+                continue;
+
+            var aliasKey = new ToaEntryKey(citation.ShortCitation, citation.Category);
+            if (ambiguousAliases.Contains(aliasKey))
+                continue;
+
+            if (!aliases.TryGetValue(aliasKey, out var existingLongCitation))
+            {
+                aliases[aliasKey] = citation.LongCitation;
+                continue;
+            }
+
+            if (StringComparer.OrdinalIgnoreCase.Equals(existingLongCitation, citation.LongCitation))
+                continue;
+
+            aliases.Remove(aliasKey);
+            ambiguousAliases.Add(aliasKey);
+        }
+
+        return aliases;
+    }
+
+    private static Dictionary<ToaEntryKey, int> BuildOccurrenceCounts(
+        IReadOnlyList<ToaCanonicalCitation> occurrences)
+    {
+        var counts = new Dictionary<ToaEntryKey, int>(EntryKeyComparer);
+        foreach (var occurrence in occurrences)
+        {
+            if (occurrence.EntryKey.LongCitation.Length == 0)
+                continue;
+
+            counts.TryGetValue(occurrence.EntryKey, out var count);
+            counts[occurrence.EntryKey] = count + 1;
+        }
+
+        return counts;
+    }
+
     private static Dictionary<ToaEntryKey, RunFormatting> CollectFirstCitationFormatting(
-        TextDocument document)
+        IReadOnlyList<ToaCanonicalCitation> occurrences)
     {
         var formatting = new Dictionary<ToaEntryKey, RunFormatting>(EntryKeyComparer);
-        foreach (var paragraph in document.Blocks.OfType<Paragraph>())
+        foreach (var occurrence in occurrences)
         {
-            foreach (var run in paragraph.Runs)
-            {
-                if (run.Citation is not { } citation || citation.LongCitation.Length == 0)
-                    continue;
+            if (occurrence.EntryKey.LongCitation.Length == 0 || occurrence.SourceFormatting is null)
+                continue;
 
-                formatting.TryAdd(new ToaEntryKey(citation.LongCitation, citation.Category), run.Formatting);
-            }
+            formatting.TryAdd(occurrence.EntryKey, occurrence.SourceFormatting);
         }
 
         return formatting;
@@ -423,14 +505,15 @@ public static class TableOfAuthorities
                 if (run.Citation is { } citation)
                     occurrences.Add(new ToaCitationOccurrence(
                         citation,
-                        useExplicitPageReferences ? pageNumber : null));
+                        useExplicitPageReferences ? pageNumber : null,
+                        run.Formatting));
             }
 
             if (paragraph.SectionBreak is { } sectionBreak)
                 pageNumber = AdvanceForSectionBreak(pageNumber, sectionBreak.BreakKind);
         }
 
-        occurrences.AddRange(document.Citations.Select(citation => new ToaCitationOccurrence(citation, null)));
+        occurrences.AddRange(document.Citations.Select(citation => new ToaCitationOccurrence(citation, null, null)));
         return occurrences;
     }
 
@@ -449,16 +532,16 @@ public static class TableOfAuthorities
     };
 
     private static Dictionary<ToaEntryKey, IReadOnlyList<int>>? BuildPageReferences(
-        IReadOnlyList<ToaCitationOccurrence> occurrences)
+        IReadOnlyList<ToaCanonicalCitation> occurrences)
     {
         Dictionary<ToaEntryKey, SortedSet<int>>? pages = null;
         foreach (var occurrence in occurrences)
         {
-            if (occurrence.PageNumber is not { } pageNumber || occurrence.Citation.LongCitation.Length == 0)
+            if (occurrence.PageNumber is not { } pageNumber || occurrence.EntryKey.LongCitation.Length == 0)
                 continue;
 
             pages ??= new Dictionary<ToaEntryKey, SortedSet<int>>(EntryKeyComparer);
-            var key = new ToaEntryKey(occurrence.Citation.LongCitation, occurrence.Citation.Category);
+            var key = occurrence.EntryKey;
             if (!pages.TryGetValue(key, out var entryPages))
             {
                 entryPages = [];
@@ -487,7 +570,13 @@ public static class TableOfAuthorities
 
     private readonly record struct ToaEntryKey(string LongCitation, CitationCategory Category);
 
-    private sealed record ToaCitationOccurrence(Citation Citation, int? PageNumber);
+    private sealed record ToaCitationOccurrence(Citation Citation, int? PageNumber, RunFormatting? SourceFormatting);
+
+    private sealed record ToaCanonicalCitation(
+        Citation Citation,
+        ToaEntryKey EntryKey,
+        int? PageNumber,
+        RunFormatting? SourceFormatting);
 
     private sealed class ToaEntryKeyComparer : IEqualityComparer<ToaEntryKey>
     {
