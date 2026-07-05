@@ -17,6 +17,8 @@ public sealed record SlideShowInkPersistenceStrokePlan(
 public sealed record SlideShowInkPersistenceSlidePlan(
     int RouteSlideIndex,
     int PresentationSlideIndex,
+    int PlaybackSlideCount,
+    int SourceSlideOccurrenceIndex,
     string SourceSlideId,
     string? CustomShowName,
     uint ShapeId,
@@ -61,8 +63,24 @@ public static class SlideShowInkPersistencePlanner
     public static SlideShowInkPersistenceResult ApplyRetentionOnExit(
         Presentation presentation,
         SlideShowInkExecutionState state,
+        SlideShowPlaybackRoute playbackRoute)
+    {
+        ArgumentNullException.ThrowIfNull(playbackRoute);
+
+        return ApplyRetentionOnExit(
+            presentation,
+            state,
+            playbackRoute.GetSourceSlideIndex,
+            playbackRoute.CustomShowName,
+            playbackRoute.SourceSlideIndices);
+    }
+
+    public static SlideShowInkPersistenceResult ApplyRetentionOnExit(
+        Presentation presentation,
+        SlideShowInkExecutionState state,
         Func<int, int>? mapRouteSlideToPresentationSlide = null,
-        string? customShowName = null)
+        string? customShowName = null,
+        IReadOnlyList<int>? routeSourceSlideIndices = null)
     {
         ArgumentNullException.ThrowIfNull(presentation);
         ArgumentNullException.ThrowIfNull(state);
@@ -75,7 +93,8 @@ public static class SlideShowInkPersistencePlanner
             presentation,
             retainedState,
             mapRouteSlideToPresentationSlide,
-            customShowName);
+            customShowName,
+            routeSourceSlideIndices);
         ApplyPlan(presentation, plan);
 
         return new SlideShowInkPersistenceResult(retainedState, plan);
@@ -84,8 +103,24 @@ public static class SlideShowInkPersistencePlanner
     public static SlideShowInkPersistencePlan BuildPlan(
         Presentation presentation,
         SlideShowInkExecutionState retainedState,
+        SlideShowPlaybackRoute playbackRoute)
+    {
+        ArgumentNullException.ThrowIfNull(playbackRoute);
+
+        return BuildPlan(
+            presentation,
+            retainedState,
+            playbackRoute.GetSourceSlideIndex,
+            playbackRoute.CustomShowName,
+            playbackRoute.SourceSlideIndices);
+    }
+
+    public static SlideShowInkPersistencePlan BuildPlan(
+        Presentation presentation,
+        SlideShowInkExecutionState retainedState,
         Func<int, int>? mapRouteSlideToPresentationSlide = null,
-        string? customShowName = null)
+        string? customShowName = null,
+        IReadOnlyList<int>? routeSourceSlideIndices = null)
     {
         ArgumentNullException.ThrowIfNull(presentation);
         ArgumentNullException.ThrowIfNull(retainedState);
@@ -98,6 +133,7 @@ public static class SlideShowInkPersistencePlanner
         }
 
         mapRouteSlideToPresentationSlide ??= static slideIndex => slideIndex;
+        var playbackSlideCount = routeSourceSlideIndices?.Count ?? presentation.Slides.Count;
         var routeGroups = retainedState.CommittedStrokes
             .Where(IsPersistableStroke)
             .GroupBy(stroke => stroke.SlideIndex)
@@ -144,9 +180,15 @@ public static class SlideShowInkPersistencePlanner
                 ? string.Empty
                 : slide.Id.Trim();
             var normalizedCustomShowName = NormalizeOptional(customShowName);
+            var sourceSlideOccurrenceIndex = SourceSlideOccurrenceIndex(
+                routeGroup.Key,
+                presentationSlideIndex,
+                routeSourceSlideIndices);
             var inkXml = BuildInkXml(
                 routeGroup.Key,
                 presentationSlideIndex,
+                playbackSlideCount,
+                sourceSlideOccurrenceIndex,
                 sourceSlideId,
                 normalizedCustomShowName,
                 shapeId,
@@ -155,6 +197,8 @@ public static class SlideShowInkPersistencePlanner
             slidePlans.Add(new SlideShowInkPersistenceSlidePlan(
                 routeGroup.Key,
                 presentationSlideIndex,
+                playbackSlideCount,
+                sourceSlideOccurrenceIndex,
                 sourceSlideId,
                 normalizedCustomShowName,
                 shapeId,
@@ -273,6 +317,8 @@ public static class SlideShowInkPersistencePlanner
     private static string BuildInkXml(
         int routeSlideIndex,
         int presentationSlideIndex,
+        int playbackSlideCount,
+        int sourceSlideOccurrenceIndex,
         string sourceSlideId,
         string? customShowName,
         uint shapeId,
@@ -285,7 +331,9 @@ public static class SlideShowInkPersistencePlanner
             new(FreePInk + "format", "freep-slideshow-ink"),
             new(FreePInk + "shapeId", shapeId.ToString(CultureInfo.InvariantCulture)),
             new(FreePInk + "routeSlideIndex", routeSlideIndex.ToString(CultureInfo.InvariantCulture)),
-            new(FreePInk + "presentationSlideIndex", presentationSlideIndex.ToString(CultureInfo.InvariantCulture))
+            new(FreePInk + "presentationSlideIndex", presentationSlideIndex.ToString(CultureInfo.InvariantCulture)),
+            new(FreePInk + "playbackSlideCount", playbackSlideCount.ToString(CultureInfo.InvariantCulture)),
+            new(FreePInk + "sourceSlideOccurrenceIndex", sourceSlideOccurrenceIndex.ToString(CultureInfo.InvariantCulture))
         };
         if (!string.IsNullOrWhiteSpace(sourceSlideId))
         {
@@ -337,4 +385,28 @@ public static class SlideShowInkPersistencePlanner
         string.IsNullOrWhiteSpace(value)
             ? null
             : value.Trim();
+
+    private static int SourceSlideOccurrenceIndex(
+        int routeSlideIndex,
+        int presentationSlideIndex,
+        IReadOnlyList<int>? routeSourceSlideIndices)
+    {
+        if (routeSourceSlideIndices is null ||
+            routeSlideIndex < 0 ||
+            routeSlideIndex >= routeSourceSlideIndices.Count)
+        {
+            return 0;
+        }
+
+        var occurrenceIndex = 0;
+        for (var index = 0; index < routeSlideIndex; index++)
+        {
+            if (routeSourceSlideIndices[index] == presentationSlideIndex)
+            {
+                occurrenceIndex++;
+            }
+        }
+
+        return occurrenceIndex;
+    }
 }

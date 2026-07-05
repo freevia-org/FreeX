@@ -189,7 +189,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/SlideShowTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/SlideShowWindowHeadlessTests.cs"
             ],
-            RemainingWork: "Retained presenter ink now carries source slide and custom-show route metadata through the shared WPF/Avalonia planner. Authored PPTX ink package baselines, PowerPoint-authoritative presenter UI baselines, and PowerPoint visual baselines remain deferred."),
+            RemainingWork: "Retained presenter ink now carries full playback-route metadata, source slide ids, playback counts, and repeated custom-show occurrence indexes through the shared WPF/Avalonia planner. Authored PPTX ink package baselines, PowerPoint-authoritative presenter UI baselines, and PowerPoint visual baselines remain deferred."),
         new(
             EvidenceId: "freep.presenter.session.summary",
             Area: "Presenter recording plus ink session summary",
