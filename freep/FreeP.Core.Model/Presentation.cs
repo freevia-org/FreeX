@@ -2,6 +2,24 @@ using Free.Shared.Opc;
 
 namespace FreeP.Core.Model;
 
+public enum PresentationRecordingMediaArtifactKind
+{
+    NarrationAudio,
+    CameraVideo
+}
+
+public sealed record PresentationRecordingMediaArtifact(
+    PresentationRecordingMediaArtifactKind Kind,
+    int SlideIndex,
+    string SuggestedFileName,
+    string ContentType,
+    string PackagePath,
+    long ContentLengthBytes,
+    string ContentSha256,
+    int DurationMs,
+    string CapturedByHost,
+    string StatusText);
+
 /// <summary>
 /// The root presentation model. Holds the slide list, masters, layouts, theme, and document
 /// properties. Designed to support a real .pptx reader/writer: one master, N layouts, M slides,
@@ -71,6 +89,13 @@ public sealed class Presentation
     /// <see cref="Slide.Id"/> values and is serialized as p:custShowLst in ppt/presentation.xml.
     /// </summary>
     public List<PresentationCustomShow> CustomShows { get; } = new();
+
+    /// <summary>
+    /// Package-ready presenter-recording media descriptors captured by the shared slideshow
+    /// recording backend contract. The actual media bytes can be authored later; this manifest
+    /// keeps deterministic metadata with the presentation instead of leaving it in host state.
+    /// </summary>
+    public List<PresentationRecordingMediaArtifact> RecordingMediaArtifacts { get; } = new();
 
     // ── Factory ───────────────────────────────────────────────────────────────────
 

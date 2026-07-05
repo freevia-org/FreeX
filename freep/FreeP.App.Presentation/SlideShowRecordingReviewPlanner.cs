@@ -98,6 +98,43 @@ public static class SlideShowRecordingReviewPlanner
         SlideShowTimingRecorderPlanner.ApplyTimings(presentation, plan.TimingMutations);
     }
 
+    public static int ApplyPersistableMediaArtifacts(
+        Presentation presentation,
+        SlideShowRecordingReviewPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        ArgumentNullException.ThrowIfNull(plan);
+
+        var artifacts = plan.Rows
+            .SelectMany(row => row.MediaArtifacts
+                .Where(artifact => artifact.IsPersistable)
+                .Select(artifact => new PresentationRecordingMediaArtifact(
+                    MapArtifactKind(artifact.Kind),
+                    row.SlideIndex,
+                    artifact.SuggestedFileName,
+                    artifact.ContentType,
+                    artifact.PackagePath,
+                    artifact.ContentLengthBytes,
+                    artifact.ContentSha256,
+                    row.DurationMs,
+                    plan.HostName,
+                    artifact.StatusText)))
+            .ToArray();
+
+        if (artifacts.Length == 0)
+        {
+            return 0;
+        }
+
+        var replacementKeys = artifacts
+            .Select(ArtifactKey)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        presentation.RecordingMediaArtifacts.RemoveAll(existing =>
+            replacementKeys.Contains(ArtifactKey(existing)));
+        presentation.RecordingMediaArtifacts.AddRange(artifacts);
+        return artifacts.Length;
+    }
+
     private static SlideShowRecordingReviewRow BuildRow(
         Presentation? presentation,
         SlideShowRecordingExecutionState state,
@@ -240,4 +277,13 @@ public static class SlideShowRecordingReviewPlanner
         string.IsNullOrWhiteSpace(slide.Title)
             ? $"Slide {slideIndex + 1}"
             : slide.Title.Trim();
+
+    private static PresentationRecordingMediaArtifactKind MapArtifactKind(
+        SlideShowRecordingMediaArtifactKind kind) =>
+        kind == SlideShowRecordingMediaArtifactKind.NarrationAudio
+            ? PresentationRecordingMediaArtifactKind.NarrationAudio
+            : PresentationRecordingMediaArtifactKind.CameraVideo;
+
+    private static string ArtifactKey(PresentationRecordingMediaArtifact artifact) =>
+        $"{artifact.SlideIndex}|{artifact.Kind}|{artifact.PackagePath}";
 }

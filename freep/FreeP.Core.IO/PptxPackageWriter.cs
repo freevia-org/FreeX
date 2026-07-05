@@ -38,7 +38,9 @@ public static class PptxPackageWriter
     private static readonly XNamespace Adec    = "http://schemas.microsoft.com/office/drawing/2017/decorative";
     private static readonly XNamespace P188    = "http://schemas.microsoft.com/office/powerpoint/2018/8/main";
     private static readonly XNamespace P20Media = "http://schemas.microsoft.com/office/powerpoint/2020/media";
+    private static readonly XNamespace FreePRecording = "https://freex.local/freep/recording/2026";
     private const string DecorativeExtUri = "{C183D7F6-B498-43B3-948B-1728B52AA6E4}";
+    private const string RecordingMediaArtifactsPath = "ppt/media/recordingArtifacts.xml";
 
     // ── Relationship types ────────────────────────────────────────────────────────
     private const string OfficeDocRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
@@ -673,10 +675,40 @@ public static class PptxPackageWriter
         WriteEntry(archive, "ppt/presentation.xml",
             BuildPresentationXml(presentation, sldIdElements, masterRelIds));
 
+        if (presentation.RecordingMediaArtifacts.Count > 0)
+        {
+            WriteEntry(archive, RecordingMediaArtifactsPath, BuildRecordingMediaArtifactsXml(presentation));
+        }
+
         CopyPreservedPackageEntries(archive, packageSnapshot, preservedChartWorkbookPaths);
     }
 
     // ── [Content_Types].xml ───────────────────────────────────────────────────────
+
+    private static XDocument BuildRecordingMediaArtifactsXml(Presentation presentation)
+    {
+        var root = new XElement(
+            FreePRecording + "recordingMediaArtifacts",
+            new XAttribute(XNamespace.Xmlns + "freepRec", FreePRecording.NamespaceName));
+
+        foreach (var artifact in presentation.RecordingMediaArtifacts)
+        {
+            root.Add(new XElement(
+                FreePRecording + "artifact",
+                new XAttribute("kind", artifact.Kind.ToString()),
+                new XAttribute("slideIndex", artifact.SlideIndex),
+                new XAttribute("suggestedFileName", artifact.SuggestedFileName),
+                new XAttribute("contentType", artifact.ContentType),
+                new XAttribute("packagePath", artifact.PackagePath),
+                new XAttribute("contentLengthBytes", artifact.ContentLengthBytes),
+                new XAttribute("contentSha256", artifact.ContentSha256),
+                new XAttribute("durationMs", artifact.DurationMs),
+                new XAttribute("capturedByHost", artifact.CapturedByHost),
+                new XAttribute("statusText", artifact.StatusText)));
+        }
+
+        return new XDocument(new XDeclaration("1.0", "utf-8", null), root);
+    }
 
     private static XDocument BuildContentTypesXml(
         Presentation p, List<SlideMaster> masters, List<SlideLayout> layouts,
