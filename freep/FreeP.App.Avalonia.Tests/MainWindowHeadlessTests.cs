@@ -319,6 +319,9 @@ public sealed class MainWindowHeadlessTests
         source.Should().Contain("AnimationPanePlanner.BuildDurationMutationPlan(");
         source.Should().Contain("AnimationPanePlanner.BuildDelayMutationPlan(");
         source.Should().Contain("AnimationPanePlanner.TryApplyTimingMutation(");
+        source.Should().Contain("AnimationPanePlanner.BuildReorderMutationPlan(");
+        source.Should().Contain("AnimationPanePlanner.TryApplyReorderMutation(");
+        source.Should().NotContain("Editor.MoveAnimation(");
     }
 
     [Fact]
@@ -2183,6 +2186,64 @@ public sealed class MainWindowHeadlessTests
             .And.Contain("delay 0.5s")
             .And.Contain("move earlier available")
             .And.Contain("move later unavailable");
+    }
+
+    [Fact]
+    public async Task Animation_pane_reorders_rows_through_shared_mutation_plan()
+    {
+        AnimationPaneReorderMutationPlan? moveEarlierPlan = null;
+        AnimationPaneReorderMutationPlan? invalidPlan = null;
+        IReadOnlyList<uint> animationShapeOrder = [];
+        IReadOnlyList<string> paneRows = [];
+        var selectedIndex = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet("freep.anim.entrance.fade", out var fade).Should().BeTrue();
+
+            var hero = window.Editor.InsertDefaultRectangle();
+            hero.Name = "Hero box";
+            window.Editor.Select(hero.Id);
+            fade!.Execute(RibbonCommandContext.Empty);
+
+            var caption = window.Editor.InsertDefaultRectangle();
+            caption.Name = "Caption box";
+            window.Editor.Select(caption.Id);
+            fade.Execute(RibbonCommandContext.Empty);
+            window.ShowAnimationPane();
+
+            moveEarlierPlan = window.MoveAnimationPaneItemForTests(1, -1);
+            invalidPlan = window.MoveAnimationPaneItemForTests(0, -1);
+
+            animationShapeOrder = window.Editor.CurrentSlideAnimations
+                .Select(animation => animation.ShapeId)
+                .ToArray();
+            selectedIndex = window.LastAnimationPaneTimelinePlan!.SelectedIndex;
+            paneRows = window.AnimationPaneRenderedRows.ToArray();
+        });
+
+        if (!ran) return;
+        moveEarlierPlan.Should().Be(new AnimationPaneReorderMutationPlan(
+            true,
+            1,
+            0,
+            0,
+            "Move animation 2 earlier",
+            null));
+        invalidPlan.Should().NotBeNull();
+        invalidPlan!.ShouldApply.Should().BeFalse();
+        invalidPlan.DisabledReason.Should().Be(AnimationPanePlanner.InvalidReorderMessage);
+        animationShapeOrder.Should().HaveCount(2);
+        paneRows.Should().HaveCount(2);
+        paneRows[0].Should().Contain("1. Caption box - In: Fade")
+            .And.Contain("move earlier unavailable")
+            .And.Contain("move later available");
+        paneRows[1].Should().Contain("2. Hero box - In: Fade")
+            .And.Contain("move earlier available")
+            .And.Contain("move later unavailable");
+        selectedIndex.Should().Be(0);
     }
 
     [Fact]

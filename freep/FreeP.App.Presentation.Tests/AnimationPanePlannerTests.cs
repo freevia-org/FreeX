@@ -196,6 +196,62 @@ public sealed class AnimationPanePlannerTests
         intent.Should().Be(new AnimationPaneReorderIntent(canMove, fromIndex, toIndex));
     }
 
+    [Fact]
+    public void BuildReorderMutationPlan_AppliesUndoableSharedPaneReorder()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        presentation.Slides[0].Animations.Add(new ShapeAnimation { ShapeId = 10u, Preset = AnimationPreset.Appear });
+        presentation.Slides[0].Animations.Add(new ShapeAnimation { ShapeId = 20u, Preset = AnimationPreset.Fade });
+
+        var plan = AnimationPanePlanner.BuildReorderMutationPlan(
+            editor.CurrentSlideAnimations,
+            1,
+            -1);
+
+        plan.Should().Be(new AnimationPaneReorderMutationPlan(
+            true,
+            1,
+            0,
+            0,
+            "Move animation 2 earlier",
+            null));
+        AnimationPanePlanner.TryApplyReorderMutation(editor, plan).Should().BeTrue();
+
+        editor.CurrentSlideAnimations.Select(animation => animation.ShapeId)
+            .Should()
+            .Equal(20u, 10u);
+
+        editor.Undo();
+        editor.CurrentSlideAnimations.Select(animation => animation.ShapeId)
+            .Should()
+            .Equal(10u, 20u);
+    }
+
+    [Fact]
+    public void BuildReorderMutationPlan_DisablesOutOfRangePaneMoves()
+    {
+        var slide = CreateSlideWithTimelineAnimations();
+
+        var firstEarlier = AnimationPanePlanner.BuildReorderMutationPlan(slide.Animations, 0, -1);
+        var missing = AnimationPanePlanner.BuildReorderMutationPlan(slide.Animations, 9, 1);
+
+        firstEarlier.Should().Be(new AnimationPaneReorderMutationPlan(
+            false,
+            0,
+            -1,
+            0,
+            "Cannot move animation",
+            AnimationPanePlanner.InvalidReorderMessage));
+        missing.Should().Be(new AnimationPaneReorderMutationPlan(
+            false,
+            9,
+            10,
+            2,
+            "Cannot move animation",
+            AnimationPanePlanner.InvalidReorderMessage));
+    }
+
     [Theory]
     [InlineData(AnimationKind.Entrance, AnimationPreset.Appear, "In: Appear")]
     [InlineData(AnimationKind.Exit, AnimationPreset.Fade, "Out: Fade")]
