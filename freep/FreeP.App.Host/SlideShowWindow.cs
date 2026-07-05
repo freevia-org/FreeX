@@ -1099,6 +1099,10 @@ public sealed class SlideShowWindow : Window
                 RandomBarsEffect(sb, element, plan);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Blinds:
+                BlindsEffect(sb, element, plan);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Box:
                 BoxEffect(sb, element, plan);
                 break;
@@ -1311,6 +1315,63 @@ public sealed class SlideShowWindow : Window
         Storyboard.SetTarget(opacityAnim, el);
         Storyboard.SetTargetProperty(opacityAnim, new PropertyPath(OpacityProperty));
         sb.Children.Add(opacityAnim);
+    }
+
+    private static void BlindsEffect(Storyboard sb, FrameworkElement el,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        double w = el.Width  > 0 ? el.Width  : 960;
+        double h = el.Height > 0 ? el.Height : 540;
+        var opens = plan.ToOpacity >= plan.FromOpacity;
+        var bandCount = Math.Max(1, plan.BlindsBandCount);
+        var bands = new GeometryGroup();
+
+        el.Clip = bands;
+        el.Opacity = 1;
+
+        var dur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
+        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+
+        for (var i = 0; i < bandCount; i++)
+        {
+            var (closed, open) = BuildBlindsBand(w, h, bandCount, i, plan.BlindsHorizontal);
+            var from = opens ? closed : open;
+            var to = opens ? open : closed;
+            var band = new RectangleGeometry(from);
+            bands.Children.Add(band);
+
+            var anim = new RectAnimation(from, to, dur)
+            {
+                BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
+                EasingFunction = ease
+            };
+            Storyboard.SetTarget(anim, band);
+            Storyboard.SetTargetProperty(anim, new PropertyPath(RectangleGeometry.RectProperty));
+            sb.Children.Add(anim);
+        }
+    }
+
+    private static (Rect Closed, Rect Open) BuildBlindsBand(
+        double width,
+        double height,
+        int bandCount,
+        int index,
+        bool horizontal)
+    {
+        if (horizontal)
+        {
+            var y = height * index / bandCount;
+            var nextY = height * (index + 1) / bandCount;
+            return (
+                new Rect(0, y, width, 0),
+                new Rect(0, y, width, Math.Max(0, nextY - y)));
+        }
+
+        var x = width * index / bandCount;
+        var nextX = width * (index + 1) / bandCount;
+        return (
+            new Rect(x, 0, 0, height),
+            new Rect(x, 0, Math.Max(0, nextX - x), height));
     }
 
     private static void BoxEffect(Storyboard sb, FrameworkElement el,

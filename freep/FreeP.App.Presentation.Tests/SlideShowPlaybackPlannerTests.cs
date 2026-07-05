@@ -163,6 +163,38 @@ public sealed class SlideShowPlaybackPlannerTests
         randomBars.WipeHorizontal.Should().BeTrue();
         randomBars.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.OnComplete);
 
+        var horizontalBlinds = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 6,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Blinds,
+                Direction = AnimationDirection.Horizontal,
+                DurationMs = 275
+            },
+            startDelayMs: 5);
+
+        horizontalBlinds.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Blinds);
+        horizontalBlinds.BlindsHorizontal.Should().BeTrue();
+        horizontalBlinds.BlindsBandCount.Should().Be(SlideShowPlaybackPlanner.BlindsBandCount);
+        horizontalBlinds.DurationMs.Should().Be(275);
+        horizontalBlinds.DelayMs.Should().Be(5);
+        horizontalBlinds.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.OnComplete);
+
+        var verticalBlinds = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 6,
+                Kind = AnimationKind.Exit,
+                Preset = AnimationPreset.Blinds,
+                Direction = AnimationDirection.Vertical
+            },
+            startDelayMs: 0);
+
+        verticalBlinds.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Blinds);
+        verticalBlinds.BlindsHorizontal.Should().BeFalse();
+        verticalBlinds.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
+
         var boxIn = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {

@@ -1093,6 +1093,10 @@ public sealed class SlideShowWindow : Window
                 RandomBarsEffect(element, plan, onReveal);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Blinds:
+                BlindsEffect(element, plan, onReveal);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Box:
                 BoxEffect(element, plan, onReveal);
                 break;
@@ -1280,6 +1284,105 @@ public sealed class SlideShowWindow : Window
             DelayedAction(plan.DurationMs / 2, () => el.Opacity = 0.75);
             DelayedAction(plan.DurationMs, () => el.Opacity = plan.ToOpacity);
         });
+    }
+
+    private void BlindsEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
+    {
+        double w = el.Width  > 0 ? el.Width  : 960;
+        double h = el.Height > 0 ? el.Height : 540;
+        var opens = plan.ToOpacity >= plan.FromOpacity;
+        var bandCount = Math.Max(1, plan.BlindsBandCount);
+        var bands = new GeometryGroup();
+        var animatedBands = new List<(RectangleGeometry Geometry, Rect From, Rect To)>(bandCount);
+
+        for (var i = 0; i < bandCount; i++)
+        {
+            var (closed, open) = BuildBlindsBand(w, h, bandCount, i, plan.BlindsHorizontal);
+            var from = opens ? closed : open;
+            var to = opens ? open : closed;
+            var band = new RectangleGeometry(from);
+            bands.Children.Add(band);
+            animatedBands.Add((band, from, to));
+        }
+
+        el.Clip = bands;
+        el.Opacity = 1;
+        InvokeRevealAtStart(plan, onReveal);
+
+        DelayedAction(plan.DelayMs, () =>
+            AnimateBlindsClip(
+                animatedBands,
+                plan.DurationMs,
+                onComplete: CompleteReveal(plan, onReveal)));
+    }
+
+    private static (Rect Closed, Rect Open) BuildBlindsBand(
+        double width,
+        double height,
+        int bandCount,
+        int index,
+        bool horizontal)
+    {
+        if (horizontal)
+        {
+            var y = height * index / bandCount;
+            var nextY = height * (index + 1) / bandCount;
+            return (
+                new Rect(0, y, width, 0),
+                new Rect(0, y, width, Math.Max(0, nextY - y)));
+        }
+
+        var x = width * index / bandCount;
+        var nextX = width * (index + 1) / bandCount;
+        return (
+            new Rect(x, 0, 0, height),
+            new Rect(x, 0, Math.Max(0, nextX - x), height));
+    }
+
+    private void AnimateBlindsClip(
+        IReadOnlyList<(RectangleGeometry Geometry, Rect From, Rect To)> bands,
+        int durationMs,
+        Action? onComplete = null)
+    {
+        if (durationMs <= 0)
+        {
+            foreach (var (geometry, _, to) in bands)
+                geometry.Rect = to;
+            onComplete?.Invoke();
+            return;
+        }
+
+        const int frameMs = 16;
+        int steps = Math.Max(1, durationMs / frameMs);
+        int frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            double t = Math.Min(1.0, (double)frame / steps);
+            double e = EaseInOut(t);
+            foreach (var (geometry, from, to) in bands)
+            {
+                geometry.Rect = new Rect(
+                    from.X + (to.X - from.X) * e,
+                    from.Y + (to.Y - from.Y) * e,
+                    from.Width  + (to.Width  - from.Width)  * e,
+                    from.Height + (to.Height - from.Height) * e);
+            }
+
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                foreach (var (geometry, _, to) in bands)
+                    geometry.Rect = to;
+                onComplete?.Invoke();
+            }
+        };
+        timer.Start();
     }
 
     private void BoxEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
