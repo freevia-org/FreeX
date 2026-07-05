@@ -1367,6 +1367,41 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Ribbon_visible_bullet_gallery_preset_command_routes_to_active_table_cell()
+    {
+        var found = false;
+        string? bulletChar = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            var commandId = PresentationListGalleryPlanner.BuildBulletGalleryPlan()
+                .Items.Single(item => item.ListPreset?.Id == TableCellListPresetCatalog.BulletCheckId)
+                .CommandId;
+            found = registry.TryGet(commandId, out var command);
+            found.Should().BeTrue("visible bullet gallery preset commands must be registered");
+
+            var shape = window.Editor.InsertTable(1, 1);
+            var body = new TextBody { Wrap = true };
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run { Text = "Cell" });
+            body.Paragraphs.Add(paragraph);
+            shape.Table!.Rows[0].Cells[0].TextBody = body;
+            window.Editor.Select(shape.Id);
+            window.Editor.SetActiveTableCell(0, 0);
+
+            command!.Execute(RibbonCommandContext.Empty);
+
+            bulletChar = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].BulletChar;
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue();
+        bulletChar.Should().Be("\u2713");
+    }
+
+    [Fact]
     public async Task Ribbon_chart_edit_data_command_is_registered_and_noops_without_selected_chart()
     {
         var found = false;

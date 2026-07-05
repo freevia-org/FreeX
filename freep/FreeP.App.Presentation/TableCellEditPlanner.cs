@@ -208,6 +208,10 @@ public sealed record TableCellListPresetDescriptor(
 public static class TableCellListPresetCatalog
 {
     public const string BulletDiscId = "bullet.disc";
+    public const string BulletHollowCircleId = "bullet.hollow-circle";
+    public const string BulletSquareId = "bullet.square";
+    public const string BulletDashId = "bullet.dash";
+    public const string BulletCheckId = "bullet.check";
     public const string NumberArabicPeriodId = "number.arabic-period";
     public const string NumberRomanUpperPeriodId = "number.roman-upper-period";
     public const string NumberRomanLowerPeriodId = "number.roman-lower-period";
@@ -219,6 +223,30 @@ public static class TableCellListPresetCatalog
         "Disc Bullet",
         BulletKind.Char,
         BulletChar: "\u2022");
+
+    public static readonly TableCellListPresetDescriptor BulletHollowCircle = new(
+        BulletHollowCircleId,
+        "Hollow Circle Bullet",
+        BulletKind.Char,
+        BulletChar: "\u25E6");
+
+    public static readonly TableCellListPresetDescriptor BulletSquare = new(
+        BulletSquareId,
+        "Square Bullet",
+        BulletKind.Char,
+        BulletChar: "\u25AA");
+
+    public static readonly TableCellListPresetDescriptor BulletDash = new(
+        BulletDashId,
+        "Dash Bullet",
+        BulletKind.Char,
+        BulletChar: "\u2013");
+
+    public static readonly TableCellListPresetDescriptor BulletCheck = new(
+        BulletCheckId,
+        "Check Bullet",
+        BulletKind.Char,
+        BulletChar: "\u2713");
 
     public static readonly TableCellListPresetDescriptor NumberArabicPeriod = new(
         NumberArabicPeriodId,
@@ -253,6 +281,10 @@ public static class TableCellListPresetCatalog
     public static IReadOnlyList<TableCellListPresetDescriptor> BuiltIn { get; } =
     [
         BulletDisc,
+        BulletHollowCircle,
+        BulletSquare,
+        BulletDash,
+        BulletCheck,
         NumberArabicPeriod,
         NumberRomanUpperPeriod,
         NumberRomanLowerPeriod,
