@@ -4251,6 +4251,9 @@ public static class PptxPackageReader
 
         var (kind, preset) = PptxAnimationMap.OoxmlToAnimationPreset(presetClass, presetId);
         var direction = PptxAnimationMap.SubtypeToAnimationDirection(presetSubtype);
+        var wheelSpokeCount = preset == AnimationPreset.Wheel
+            ? ReadWheelSpokeCount(buildPar, cTn)
+            : null;
 
         return new ShapeAnimation
         {
@@ -4261,9 +4264,64 @@ public static class PptxPackageReader
             DelayMs        = delayMs,
             DurationMs     = durationMs,
             Direction      = direction,
+            WheelSpokeCount = wheelSpokeCount,
             TriggerShapeId = triggerShapeId,
         };
     }
+
+    private static int? ReadWheelSpokeCount(XElement buildPar, XElement cTn)
+    {
+        foreach (var animEffect in buildPar.Descendants(P + "animEffect"))
+        {
+            var fromFilter = ReadWheelSpokeCountFromFilter(animEffect.Attribute("filter")?.Value);
+            if (fromFilter is not null)
+                return fromFilter;
+
+            var fromAttr = ReadPositiveInt(animEffect.Attribute("spokes")?.Value);
+            if (fromAttr is not null)
+                return fromAttr;
+        }
+
+        var cTnSpokes = ReadPositiveInt(cTn.Attribute("spokes")?.Value);
+        if (cTnSpokes is not null)
+            return cTnSpokes;
+
+        return buildPar
+            .Descendants(P + "wheel")
+            .Select(wheel => ReadPositiveInt(wheel.Attribute("spokes")?.Value))
+            .FirstOrDefault(spokes => spokes is not null);
+    }
+
+    private static int? ReadWheelSpokeCountFromFilter(string? filter)
+    {
+        if (string.IsNullOrWhiteSpace(filter))
+            return null;
+
+        var spokesIndex = filter.IndexOf("spokes", StringComparison.OrdinalIgnoreCase);
+        if (spokesIndex < 0)
+            return null;
+
+        var equalsIndex = filter.IndexOf('=', spokesIndex);
+        if (equalsIndex < 0)
+            return null;
+
+        var start = equalsIndex + 1;
+        while (start < filter.Length && char.IsWhiteSpace(filter[start]))
+            start++;
+
+        var end = start;
+        while (end < filter.Length && char.IsDigit(filter[end]))
+            end++;
+
+        return end > start
+            ? ReadPositiveInt(filter[start..end])
+            : null;
+    }
+
+    private static int? ReadPositiveInt(string? value) =>
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) && parsed > 0
+            ? parsed
+            : null;
 
     private static ShapeAnimation? ReadMotionBuildItem(
         XElement animMotion, XElement buildPar,
