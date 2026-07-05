@@ -615,8 +615,8 @@ public static class Citations
     }
 
     // The type-specific "source detail" common to several styles, comma-joined:
-    //  - Book:           Publisher
-    //  - BookSection:    BookTitle, ChapterNumber, Pages, City: Publisher
+    //  - Book:           Editor/translator roles, Publisher
+    //  - BookSection:    BookTitle, editor/translator roles, ChapterNumber, Pages, City: Publisher
     //  - JournalArticle / ArticleInPeriodical: Journal, Volume, "no. Issue", "pp. Pages"
     //  - ConferenceProceedings: ConferenceName, "pp. Pages", City: Publisher
     //  - WebSite / ElectronicSource: Publisher, Url, "accessed AccessedDate"
@@ -651,6 +651,7 @@ public static class Citations
                 break;
             case SourceType.BookSection:
                 AddIfPresent(parts, source.BookTitle);
+                AddContributorRoleSegments(parts, source);
                 if (NonEmpty(source.ChapterNumber) is { } chapterNumber)
                     parts.Add($"chap. {chapterNumber}");
                 if (NonEmpty(source.Pages) is { } bookPages)
@@ -666,6 +667,7 @@ public static class Citations
                     parts.Add(proceedingsPlacePublisher);
                 break;
             default: // Book
+                AddContributorRoleSegments(parts, source);
                 AddIfPresent(parts, source.Publisher);
                 break;
         }
@@ -813,6 +815,7 @@ public static class Citations
         else if (source.Type == SourceType.BookSection)
         {
             AddIfPresent(segments, source.BookTitle);
+            AddContributorRoleSegments(segments, source, terminate: true);
             if (NonEmpty(source.ChapterNumber) is { } chapterNumber)
                 segments.Add($"chap. {chapterNumber}.");
             if (NonEmpty(source.Pages) is { } pages)
@@ -842,8 +845,12 @@ public static class Citations
         {
             // Book / website / electronic source: Publisher; Year. Books use City: Publisher when present.
             var tail = new List<string>(4);
-            if (source.Type == SourceType.Book && PlacePublisher(source) is { } placePublisher)
-                tail.Add(placePublisher);
+            if (source.Type == SourceType.Book)
+            {
+                AddContributorRoleSegments(segments, source, terminate: true);
+                if (PlacePublisher(source) is { } placePublisher)
+                    tail.Add(placePublisher);
+            }
             else if (IsElectronicSource(source.Type))
                 tail.AddRange(SourceDetail(source));
             else
@@ -917,6 +924,7 @@ public static class Citations
             if (source.Type == SourceType.BookSection)
             {
                 AddIfPresent(segments, source.BookTitle);
+                AddContributorRoleSegments(segments, source, terminate: true);
                 if (NonEmpty(source.ChapterNumber) is { } chapterNumber)
                     segments.Add($"Chap. {chapterNumber}.");
                 if (NonEmpty(source.Pages) is { } pages)
@@ -933,6 +941,10 @@ public static class Citations
                 var detail = string.Join(", ", SourceDetail(source));
                 if (detail.Length > 0)
                     segments.Add(WithPeriod(detail));
+            }
+            else if (source.Type == SourceType.Book)
+            {
+                AddContributorRoleSegments(segments, source, terminate: true);
             }
 
             // City: Publisher, Year.
@@ -994,6 +1006,7 @@ public static class Citations
             if (source.Type == SourceType.BookSection)
             {
                 AddIfPresent(segments, source.BookTitle);
+                AddContributorRoleSegments(segments, source, terminate: true);
                 if (NonEmpty(source.ChapterNumber) is { } chapterNumber)
                     segments.Add($"chap. {chapterNumber}.");
                 if (NonEmpty(source.Pages) is { } pages)
@@ -1010,6 +1023,10 @@ public static class Citations
                 var detail = string.Join(", ", SourceDetail(source));
                 if (detail.Length > 0)
                     segments.Add(WithPeriod(detail));
+            }
+            else if (source.Type == SourceType.Book)
+            {
+                AddContributorRoleSegments(segments, source, terminate: true);
             }
 
             var publisher = PlacePublisher(source) ?? (source.Publisher?.Trim() ?? string.Empty);
@@ -1047,6 +1064,26 @@ public static class Citations
 
     private static bool IsElectronicSource(SourceType type) =>
         type is SourceType.WebSite or SourceType.ElectronicSource;
+
+    private static void AddContributorRoleSegments(List<string> parts, Source source, bool terminate = false)
+    {
+        AddContributorRoleSegment(parts, "Ed.", source.Editors, terminate);
+        AddContributorRoleSegment(parts, "Trans.", source.Translators, terminate);
+    }
+
+    private static void AddContributorRoleSegment(
+        List<string> parts,
+        string label,
+        IEnumerable<SourceAuthorPerson>? people,
+        bool terminate)
+    {
+        var names = people is null ? string.Empty : SourceAuthorPerson.FormatDisplayText(people).Trim();
+        if (names.Length == 0)
+            return;
+
+        var segment = $"{label} {names}";
+        parts.Add(terminate ? WithPeriod(segment) : segment);
+    }
 
     private static void AddIfPresent(List<string> parts, string? value)
     {

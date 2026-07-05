@@ -22,6 +22,37 @@ public sealed class BibliographyRegionPlannerTests
     }
 
     [Fact]
+    public void BuildInsertPlan_UsesSharedBibliographyRoleFormatting()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Sources.Add(new Source
+        {
+            Type = SourceType.BookSection,
+            Author = "Lee, S.",
+            Title = "Citation Tools",
+            BookTitle = "The Word Processor Handbook",
+            Year = "2025",
+            Editors =
+            [
+                SourceAuthorPerson.Create("Helen", string.Empty, "Ortiz")
+            ],
+            Translators =
+            [
+                SourceAuthorPerson.Create("Marco", string.Empty, "Silva")
+            ]
+        });
+
+        var plan = BibliographyRegionPlanner.BuildInsertPlan(document, insertAt: 0);
+
+        plan.Paragraphs.Select(paragraph => paragraph.PlainText)
+            .Should().Equal(
+                "References",
+                "Lee, S. (2025). Citation Tools. The Word Processor Handbook, " +
+                "Ed. Helen Ortiz, Trans. Marco Silva.");
+    }
+
+    [Fact]
     public void BuildRefreshPlan_WithExistingRegion_ReusesFirstPositionAndDeletesDescending()
     {
         var document = TextDocument.CreateEmpty();
