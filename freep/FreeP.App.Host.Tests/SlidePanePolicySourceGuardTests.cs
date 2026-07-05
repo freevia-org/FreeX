@@ -14,13 +14,14 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("SlidePanePlanner.BuildSectionHeaderVisualPlan(entry)");
         source.Should().Contain("_collapsedSectionIds");
         source.Should().Contain("ToggleSection(plan.SectionId)");
-        source.Should().Contain("SlidePanePlanner.HitTestInsertionPoint(");
-        source.Should().Contain("SlidePanePlanner.BuildDropVisualPlan(");
-        source.Should().Contain("SlidePanePlanner.DefaultDragStartThreshold");
+        source.Should().Contain("SlidePanePlanner.BeginDragSession(");
+        source.Should().Contain("SlidePanePlanner.UpdateDragSession(");
+        source.Should().Contain("SlidePanePlanner.CompleteDragSession(");
+        source.Should().Contain("SlidePanePlanner.CancelDragSession(");
+        source.Should().Contain("ShowInsertIndicator(update.DropVisualPlan)");
         source.Should().Contain("SlidePanePlanner.DefaultDropIndicatorThickness");
         source.Should().Contain("SlidePanePlanner.DefaultDropIndicatorAccentHex");
         source.Should().Contain("SlidePanePlanner.BuildContextActions(");
-        source.Should().Contain("SlidePanePlanner.PlanMoveAction(");
         source.Should().Contain("SlidePanePlanner.TryApplyAction(");
         source.Should().Contain("SlidePanePlanner.NewSlideButtonText");
         source.Should().Contain("Width            = plan.ThumbnailWidth");
@@ -46,6 +47,9 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().NotContain("SectionHeaderFg");
         source.Should().NotContain("runningY + ItemHeight * 0.5");
         source.Should().NotContain("Math.Abs(pos.Y - _dragStartPoint.Y) < 5");
+        source.Should().NotContain("Math.Abs(pos.Y - _dragStartPoint.Y) < SlidePanePlanner.DefaultDragStartThreshold");
+        source.Should().NotContain("SlidePanePlanner.HitTestInsertionPoint(");
+        source.Should().NotContain("SlidePanePlanner.BuildDropVisualPlan(");
         source.Should().NotContain("new Thickness(0, indicatorY - 1, 0, 0)");
         source.Should().NotContain("\"+ New Slide\"");
         source.Should().NotContain("\"Duplicate Slide\"");

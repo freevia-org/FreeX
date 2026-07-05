@@ -55,9 +55,11 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("PointerPressed += OnSlidePaneItemPointerPressed");
         source.Should().Contain("PointerMoved += OnSlidePaneItemPointerMoved");
         source.Should().Contain("PointerReleased += OnSlidePaneItemPointerReleased");
-        source.Should().Contain("SlidePanePlanner.HitTestInsertionPoint(");
-        source.Should().Contain("SlidePanePlanner.BuildDropVisualPlan(");
-        source.Should().Contain("SlidePanePlanner.DefaultDragStartThreshold");
+        source.Should().Contain("SlidePanePlanner.BeginDragSession(");
+        source.Should().Contain("SlidePanePlanner.UpdateDragSession(");
+        source.Should().Contain("SlidePanePlanner.CompleteDragSession(");
+        source.Should().Contain("SlidePanePlanner.CancelDragSession(");
+        source.Should().Contain("ShowSlidePaneInsertionIndicator(update.DropVisualPlan)");
         source.Should().Contain("SlidePanePlanner.DefaultSlideItemHeight");
         source.Should().Contain("SlidePanePlanner.DefaultDropIndicatorThickness");
         source.Should().Contain("SlidePanePlanner.DefaultDropIndicatorAccentHex");
@@ -75,6 +77,9 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().NotContain("Color.FromRgb(0xFF, 0xE0, 0xD6)");
         source.Should().NotContain("Color.FromRgb(0xEB, 0xEB, 0xEB)");
         source.Should().NotContain("Math.Abs(itemPosition.Y - _slidePaneDragStartPoint.Y) < 5");
+        source.Should().NotContain("Math.Abs(itemPosition.Y - _slidePaneDragStartPoint.Y) < SlidePanePlanner.DefaultDragStartThreshold");
+        source.Should().NotContain("SlidePanePlanner.HitTestInsertionPoint(");
+        source.Should().NotContain("SlidePanePlanner.BuildDropVisualPlan(");
         source.Should().NotContain("new Thickness(0, indicatorY - 1, 0, 0)");
         source.Should().NotContain("_slidePaneList.SelectedIndex = Editor.CurrentSlideIndex");
         source.Should().NotContain("Editor.DuplicateCurrentSlide();");

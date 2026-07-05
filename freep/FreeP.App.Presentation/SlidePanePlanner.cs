@@ -78,6 +78,26 @@ public sealed record SlidePaneDropVisualPlan(
     string AccentColorHex,
     string AutomationDescription);
 
+public sealed record SlidePaneDragSessionState(
+    bool IsTracking,
+    bool IsDragging,
+    int SourceSlideIndex,
+    int TargetSlideIndex,
+    double StartPointerY)
+{
+    public static SlidePaneDragSessionState None { get; } = new(false, false, -1, -1, 0.0);
+}
+
+public sealed record SlidePaneDragUpdatePlan(
+    SlidePaneDragSessionState State,
+    SlidePaneDropVisualPlan DropVisualPlan,
+    bool ShouldCapturePointer);
+
+public sealed record SlidePaneDragCompletionPlan(
+    SlidePaneDragSessionState State,
+    SlidePaneActionPlan Action,
+    bool ShouldReleaseCapture);
+
 public enum SlidePaneActionKind
 {
     InsertAfterSlide,
@@ -297,6 +317,109 @@ public static class SlidePanePlanner
             sourceSlideIndex,
             targetInsertionIndex,
             canMove);
+    }
+
+    public static SlidePaneDragSessionState BeginDragSession(
+        int sourceSlideIndex,
+        double startPointerY)
+    {
+        if (sourceSlideIndex < 0)
+            return SlidePaneDragSessionState.None;
+
+        return new SlidePaneDragSessionState(
+            true,
+            false,
+            sourceSlideIndex,
+            sourceSlideIndex,
+            startPointerY);
+    }
+
+    public static SlidePaneDragUpdatePlan UpdateDragSession(
+        SlidePaneDragSessionState state,
+        IReadOnlyList<bool> paneItemIsSlide,
+        double pointerYWithinItem,
+        double pointerYWithinPane,
+        double slideItemHeight,
+        double nonSlideItemHeight = DefaultSectionHeaderHeight)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(paneItemIsSlide);
+
+        if (!state.IsTracking)
+        {
+            return new SlidePaneDragUpdatePlan(
+                SlidePaneDragSessionState.None,
+                BuildDropVisualPlan(
+                    paneItemIsSlide,
+                    sourceSlideIndex: -1,
+                    targetSlideIndex: -1,
+                    slideItemHeight: slideItemHeight,
+                    nonSlideItemHeight: nonSlideItemHeight),
+                false);
+        }
+
+        if (!state.IsDragging &&
+            Math.Abs(pointerYWithinItem - state.StartPointerY) < DefaultDragStartThreshold)
+        {
+            return new SlidePaneDragUpdatePlan(
+                state,
+                BuildDropVisualPlan(
+                    paneItemIsSlide,
+                    state.SourceSlideIndex,
+                    state.TargetSlideIndex,
+                    slideItemHeight,
+                    nonSlideItemHeight),
+                false);
+        }
+
+        var targetSlideIndex = HitTestInsertionPoint(
+            paneItemIsSlide,
+            pointerYWithinPane,
+            slideItemHeight,
+            nonSlideItemHeight);
+        var nextState = state with
+        {
+            IsDragging = true,
+            TargetSlideIndex = targetSlideIndex,
+        };
+
+        return new SlidePaneDragUpdatePlan(
+            nextState,
+            BuildDropVisualPlan(
+                paneItemIsSlide,
+                nextState.SourceSlideIndex,
+                nextState.TargetSlideIndex,
+                slideItemHeight,
+                nonSlideItemHeight),
+            !state.IsDragging);
+    }
+
+    public static SlidePaneDragCompletionPlan CompleteDragSession(
+        SlidePaneDragSessionState state,
+        int slideCount)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        var action = state.IsDragging
+            ? PlanMoveAction(slideCount, state.SourceSlideIndex, state.TargetSlideIndex)
+            : new SlidePaneActionPlan(
+                SlidePaneActionKind.MoveSlide,
+                "Move Slide",
+                state.SourceSlideIndex,
+                state.TargetSlideIndex,
+                false);
+
+        return new SlidePaneDragCompletionPlan(
+            SlidePaneDragSessionState.None,
+            action,
+            state.IsDragging);
+    }
+
+    public static SlidePaneDragSessionState CancelDragSession(
+        SlidePaneDragSessionState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        return SlidePaneDragSessionState.None;
     }
 
     public static SlidePaneActionPlan BuildKeyboardAction(

@@ -322,6 +322,52 @@ public sealed class SlidePanePlannerTests
     }
 
     [Fact]
+    public void DragSession_PlansThresholdTargetCompletionAndCancel()
+    {
+        var layout = new[] { true, true, true };
+        var session = SlidePanePlanner.BeginDragSession(
+            sourceSlideIndex: 0,
+            startPointerY: 10);
+
+        var belowThreshold = SlidePanePlanner.UpdateDragSession(
+            session,
+            layout,
+            pointerYWithinItem: 12,
+            pointerYWithinPane: 240,
+            slideItemHeight: 100);
+
+        belowThreshold.State.IsTracking.Should().BeTrue();
+        belowThreshold.State.IsDragging.Should().BeFalse();
+        belowThreshold.ShouldCapturePointer.Should().BeFalse();
+
+        var active = SlidePanePlanner.UpdateDragSession(
+            belowThreshold.State,
+            layout,
+            pointerYWithinItem: 20,
+            pointerYWithinPane: 260,
+            slideItemHeight: 100);
+
+        active.State.IsDragging.Should().BeTrue();
+        active.State.TargetSlideIndex.Should().Be(3);
+        active.ShouldCapturePointer.Should().BeTrue();
+        active.DropVisualPlan.IsMoveEnabled.Should().BeTrue();
+        active.DropVisualPlan.IndicatorOffset.Should().Be(300);
+
+        var completion = SlidePanePlanner.CompleteDragSession(active.State, slideCount: 3);
+
+        completion.ShouldReleaseCapture.Should().BeTrue();
+        completion.State.Should().Be(SlidePaneDragSessionState.None);
+        completion.Action.Should().Be(new SlidePaneActionPlan(
+            SlidePaneActionKind.MoveSlide,
+            "Move Slide",
+            0,
+            3,
+            true));
+
+        SlidePanePlanner.CancelDragSession(active.State).Should().Be(SlidePaneDragSessionState.None);
+    }
+
+    [Fact]
     public void BuildContextActions_ForValidSlide_ReturnsSharedMenuOrderAndTargets()
     {
         var actions = SlidePanePlanner.BuildContextActions(slideCount: 3, slideIndex: 1);

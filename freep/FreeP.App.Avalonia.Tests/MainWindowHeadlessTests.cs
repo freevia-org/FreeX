@@ -1583,7 +1583,9 @@ public sealed class MainWindowHeadlessTests
         var moved = false;
         var slidePaneCount = 0;
         var currentSlideIndex = -1;
-        var indicatorVisible = true;
+        var indicatorVisibleDuringDrag = false;
+        var indicatorVisibleAfterDrop = true;
+        SlidePaneDropVisualPlan? dropPlan = null;
         string[] titles = [];
 
         var ran = await OnUiThread(() =>
@@ -1597,18 +1599,28 @@ public sealed class MainWindowHeadlessTests
             window.Editor.SelectSlide(0);
 
             slidePaneCount = window.SlidePaneSlideItemCount;
-            moved = window.TryApplySlidePaneMove(sourceSlideIndex: 0, targetInsertionIndex: 3);
+            dropPlan = window.PreviewSlidePaneDragForTests(
+                sourceSlideIndex: 0,
+                startPointerY: 0,
+                pointerYWithinItem: SlidePanePlanner.DefaultDragStartThreshold + 1,
+                pointerYWithinPane: SlidePanePlanner.DefaultSlideItemHeight * 3);
+            indicatorVisibleDuringDrag = window.IsSlidePaneInsertionIndicatorVisible;
+            moved = window.CompleteSlidePaneDragForTests();
             titles = window.Editor.Presentation.Slides.Select(slide => slide.Title).ToArray();
             currentSlideIndex = window.CurrentSlideIndex;
-            indicatorVisible = window.IsSlidePaneInsertionIndicatorVisible;
+            indicatorVisibleAfterDrop = window.IsSlidePaneInsertionIndicatorVisible;
         });
 
         if (!ran) return;
         slidePaneCount.Should().Be(3, "the Avalonia slide pane should render one selectable item per slide");
+        dropPlan.Should().NotBeNull("drag preview should be planned before the drop is applied");
+        dropPlan!.TargetSlideIndex.Should().Be(3);
+        dropPlan.IsMoveEnabled.Should().BeTrue();
+        indicatorVisibleDuringDrag.Should().BeTrue("the shared drop plan should drive visible Avalonia insertion feedback");
         moved.Should().BeTrue("drag release should apply the shared move action plan");
         titles.Should().Equal("Slide 2", "Slide 3", "Slide 1");
         currentSlideIndex.Should().Be(2, "the moved slide should remain selected after reorder");
-        indicatorVisible.Should().BeFalse("the insertion indicator is only visible during active drag feedback");
+        indicatorVisibleAfterDrop.Should().BeFalse("the insertion indicator is only visible during active drag feedback");
     }
 
     [Fact]

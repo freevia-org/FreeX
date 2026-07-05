@@ -56,10 +56,7 @@ public sealed class SlidePane : Border
     private readonly Border _insertIndicator;
 
     // Drag state
-    private bool   _isDragging;
-    private int    _dragSourceIndex = -1;
-    private int    _dragTargetIndex = -1;  // insertion point (0 = before slide 0)
-    private Point  _dragStartPoint;
+    private SlidePaneDragSessionState _dragSession = SlidePaneDragSessionState.None;
 
     private sealed record SectionHeaderTag(string SectionId, int SectionIndex);
 
@@ -292,7 +289,7 @@ public sealed class SlidePane : Border
         {
             if (sender is Border b && b.Tag is int idx)
             {
-                _dragStartPoint = e.GetPosition(b);
+                _dragSession = SlidePanePlanner.BeginDragSession(idx, e.GetPosition(b).Y);
                 _editor.SelectSlide(idx);
                 e.Handled = true;
             }
@@ -315,6 +312,7 @@ public sealed class SlidePane : Border
         // Drag-to-reorder.
         item.MouseMove         += OnItemMouseMove;
         item.MouseLeftButtonUp += OnItemMouseLeftButtonUp;
+        item.LostMouseCapture  += OnItemLostMouseCapture;
         item.KeyDown           += OnSlideItemKeyDown;
 
         // Context menu.
@@ -554,23 +552,21 @@ public sealed class SlidePane : Border
     private void OnItemMouseMove(object sender, MouseEventArgs e)
     {
         if (e.LeftButton != MouseButtonState.Pressed) return;
-        if (sender is not Border item || item.Tag is not int sourceIdx) return;
+        if (sender is not Border item || !_dragSession.IsTracking) return;
 
-        if (!_isDragging)
-        {
-            // Start drag only after a minimum Y distance.
-            var pos = e.GetPosition(item);
-            if (Math.Abs(pos.Y - _dragStartPoint.Y) < SlidePanePlanner.DefaultDragStartThreshold) return;
+        var update = SlidePanePlanner.UpdateDragSession(
+            _dragSession,
+            GetPaneItemKinds(),
+            e.GetPosition(item).Y,
+            e.GetPosition(_stack).Y,
+            ItemHeight);
+        _dragSession = update.State;
+        if (!_dragSession.IsDragging) return;
 
-            _isDragging      = true;
-            _dragSourceIndex = sourceIdx;
+        if (update.ShouldCapturePointer)
             item.CaptureMouse();
-        }
 
-        // Determine insertion point from Y relative to _stack.
-        var posInStack = e.GetPosition(_stack);
-        _dragTargetIndex = HitTestInsertionPoint(posInStack.Y);
-        ShowInsertIndicator();
+        ShowInsertIndicator(update.DropVisualPlan);
         e.Handled = true;
     }
 
@@ -578,40 +574,29 @@ public sealed class SlidePane : Border
     {
         if (sender is not Border item) return;
 
-        if (_isDragging)
+        var completion = SlidePanePlanner.CompleteDragSession(
+            _dragSession,
+            _editor.Presentation.Slides.Count);
+        _dragSession = completion.State;
+
+        if (completion.ShouldReleaseCapture)
         {
             item.ReleaseMouseCapture();
-            _isDragging = false;
             HideInsertIndicator();
-
-            var action = SlidePanePlanner.PlanMoveAction(
-                _editor.Presentation.Slides.Count,
-                _dragSourceIndex,
-                _dragTargetIndex);
-            SlidePanePlanner.TryApplyAction(_editor, action);
+            SlidePanePlanner.TryApplyAction(_editor, completion.Action);
         }
 
         e.Handled = true;
     }
 
-    /// <summary>
-    /// Returns insertion index (0 = before slide 0, N = after last slide)
-    /// based on Y coordinate relative to the StackPanel.
-    /// Iterates over _stack children skipping section-header borders.
-    /// </summary>
-    private int HitTestInsertionPoint(double y)
+    private void OnItemLostMouseCapture(object sender, MouseEventArgs e)
     {
-        return SlidePanePlanner.HitTestInsertionPoint(GetPaneItemKinds(), y, ItemHeight);
+        _dragSession = SlidePanePlanner.CancelDragSession(_dragSession);
+        HideInsertIndicator();
     }
 
-    private void ShowInsertIndicator()
+    private void ShowInsertIndicator(SlidePaneDropVisualPlan plan)
     {
-        var plan = SlidePanePlanner.BuildDropVisualPlan(
-            GetPaneItemKinds(),
-            _dragSourceIndex,
-            _dragTargetIndex,
-            ItemHeight);
-
         if (!plan.IsVisible)
         {
             HideInsertIndicator();

@@ -206,10 +206,7 @@ public sealed class MainWindow : Window
 
     private bool _notesRefreshing;
     private bool _slidePaneRefreshing;
-    private bool _slidePaneIsDragging;
-    private int _slidePaneDragSourceIndex = -1;
-    private int _slidePaneDragTargetIndex = -1;
-    private Point _slidePaneDragStartPoint;
+    private SlidePaneDragSessionState _slidePaneDragSession = SlidePaneDragSessionState.None;
 
     private sealed record SlidePaneSectionHeaderTag(string SectionId, int SectionIndex);
 
@@ -5275,66 +5272,59 @@ public sealed class MainWindow : Window
         if (!point.Properties.IsLeftButtonPressed)
             return;
 
-        _slidePaneDragSourceIndex = sourceSlideIndex;
-        _slidePaneDragTargetIndex = sourceSlideIndex;
-        _slidePaneDragStartPoint = e.GetPosition(item);
+        _slidePaneDragSession = SlidePanePlanner.BeginDragSession(
+            sourceSlideIndex,
+            e.GetPosition(item).Y);
     }
 
     private void OnSlidePaneItemPointerMoved(object? sender, PointerEventArgs e)
     {
-        if (sender is not ListBoxItem item || _slidePaneDragSourceIndex < 0)
+        if (sender is not ListBoxItem item || !_slidePaneDragSession.IsTracking)
             return;
 
         var point = e.GetCurrentPoint(item);
         if (!point.Properties.IsLeftButtonPressed)
             return;
 
-        var itemPosition = e.GetPosition(item);
-        if (!_slidePaneIsDragging &&
-            Math.Abs(itemPosition.Y - _slidePaneDragStartPoint.Y) < SlidePanePlanner.DefaultDragStartThreshold)
+        var update = SlidePanePlanner.UpdateDragSession(
+            _slidePaneDragSession,
+            GetSlidePaneItemKinds(),
+            e.GetPosition(item).Y,
+            e.GetPosition(_slidePaneList).Y,
+            SlidePanePlanner.DefaultSlideItemHeight);
+        _slidePaneDragSession = update.State;
+        if (!_slidePaneDragSession.IsDragging)
             return;
 
-        if (!_slidePaneIsDragging)
-        {
-            _slidePaneIsDragging = true;
+        if (update.ShouldCapturePointer)
             e.Pointer.Capture(item);
-        }
 
-        var panePosition = e.GetPosition(_slidePaneList);
-        _slidePaneDragTargetIndex = SlidePanePlanner.HitTestInsertionPoint(
-            GetSlidePaneItemKinds(),
-            panePosition.Y,
-            SlidePanePlanner.DefaultSlideItemHeight);
-        ShowSlidePaneInsertionIndicator();
+        ShowSlidePaneInsertionIndicator(update.DropVisualPlan);
         e.Handled = true;
     }
 
     private void OnSlidePaneItemPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (!_slidePaneIsDragging)
+        var completion = SlidePanePlanner.CompleteDragSession(
+            _slidePaneDragSession,
+            _presentation.Slides.Count);
+        _slidePaneDragSession = completion.State;
+
+        if (!completion.ShouldReleaseCapture)
         {
-            _slidePaneDragSourceIndex = -1;
-            _slidePaneDragTargetIndex = -1;
             return;
         }
 
-        var sourceSlideIndex = _slidePaneDragSourceIndex;
-        var targetInsertionIndex = _slidePaneDragTargetIndex;
-        _slidePaneIsDragging = false;
-        _slidePaneDragSourceIndex = -1;
-        _slidePaneDragTargetIndex = -1;
         e.Pointer.Capture(null);
         HideSlidePaneInsertionIndicator();
 
-        TryApplySlidePaneMove(sourceSlideIndex, targetInsertionIndex);
+        SlidePanePlanner.TryApplyAction(Editor, completion.Action);
         e.Handled = true;
     }
 
     private void OnSlidePaneItemPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
     {
-        _slidePaneIsDragging = false;
-        _slidePaneDragSourceIndex = -1;
-        _slidePaneDragTargetIndex = -1;
+        _slidePaneDragSession = SlidePanePlanner.CancelDragSession(_slidePaneDragSession);
         HideSlidePaneInsertionIndicator();
     }
 
@@ -5346,6 +5336,39 @@ public sealed class MainWindow : Window
             targetInsertionIndex);
 
         return SlidePanePlanner.TryApplyAction(Editor, action);
+    }
+
+    internal SlidePaneDropVisualPlan PreviewSlidePaneDragForTests(
+        int sourceSlideIndex,
+        double startPointerY,
+        double pointerYWithinItem,
+        double pointerYWithinPane)
+    {
+        _slidePaneDragSession = SlidePanePlanner.BeginDragSession(sourceSlideIndex, startPointerY);
+        var update = SlidePanePlanner.UpdateDragSession(
+            _slidePaneDragSession,
+            GetSlidePaneItemKinds(),
+            pointerYWithinItem,
+            pointerYWithinPane,
+            SlidePanePlanner.DefaultSlideItemHeight);
+        _slidePaneDragSession = update.State;
+        if (update.State.IsDragging)
+            ShowSlidePaneInsertionIndicator(update.DropVisualPlan);
+        else
+            HideSlidePaneInsertionIndicator();
+
+        return update.DropVisualPlan;
+    }
+
+    internal bool CompleteSlidePaneDragForTests()
+    {
+        var completion = SlidePanePlanner.CompleteDragSession(
+            _slidePaneDragSession,
+            _presentation.Slides.Count);
+        _slidePaneDragSession = completion.State;
+        HideSlidePaneInsertionIndicator();
+        return completion.ShouldReleaseCapture &&
+            SlidePanePlanner.TryApplyAction(Editor, completion.Action);
     }
 
     internal bool TryApplySlidePaneKeyboardAction(SlidePaneKeyboardIntentKind intent)
@@ -5419,14 +5442,8 @@ public sealed class MainWindow : Window
     private void InsertSlideFromSlidePaneAffordance() =>
         Editor.InsertSlide();
 
-    private void ShowSlidePaneInsertionIndicator()
+    private void ShowSlidePaneInsertionIndicator(SlidePaneDropVisualPlan plan)
     {
-        var plan = SlidePanePlanner.BuildDropVisualPlan(
-            GetSlidePaneItemKinds(),
-            _slidePaneDragSourceIndex,
-            _slidePaneDragTargetIndex,
-            SlidePanePlanner.DefaultSlideItemHeight);
-
         if (!plan.IsVisible)
         {
             HideSlidePaneInsertionIndicator();
