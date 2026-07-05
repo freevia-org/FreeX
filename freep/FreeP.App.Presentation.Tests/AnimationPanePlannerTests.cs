@@ -158,6 +158,37 @@ public sealed class AnimationPanePlannerTests
     }
 
     [Fact]
+    public void BuildWorkflowViewPlan_ProjectsSharedPaneSurface()
+    {
+        var timeline = AnimationPanePlanner.BuildTimelinePlan(
+            CreateSlideWithTimelineAnimations(),
+            selectedAnimationIndex: 1,
+            displayCulture: Invariant);
+
+        var viewPlan = AnimationPanePlanner.BuildWorkflowViewPlan(timeline, slideIndex: 2);
+
+        viewPlan.Heading.Should().Be("Animation Pane - slide 3 (3 animations)");
+        viewPlan.Message.Should().Be("Selected: Content Box - Em: Pulse");
+        viewPlan.EmptyMessage.Should().Be("No animations on this slide.");
+        viewPlan.PlaybackControlSummaries.Should().Equal(
+            "Preview: available",
+            "Play From Selected: available",
+            "Play All: available",
+            "Stop: unavailable");
+        viewPlan.RowSummaries.Should().HaveCount(3);
+        viewPlan.RowSummaries[0].Should().Contain("1. Title Box - In: Appear")
+            .And.Contain("On Click")
+            .And.Contain("duration 0.5s")
+            .And.Contain("move earlier unavailable")
+            .And.Contain("move later available");
+        viewPlan.RowSummaries[1].Should().Contain("2. Content Box - Em: Pulse")
+            .And.Contain("With Previous")
+            .And.Contain("delay 0.25s")
+            .And.Contain("move earlier available")
+            .And.Contain("move later available");
+    }
+
+    [Fact]
     public void BuildPlaybackControls_EnablesSlidePlaybackButRequiresSelectedRow()
     {
         var controls = AnimationPanePlanner.BuildPlaybackControls(-1, 2, 900);

@@ -308,6 +308,7 @@ public sealed class MainWindowHeadlessTests
         source.Should().Contain("PresentationAnimationCommandPlanner.TryApply(");
         source.Should().Contain("OnAnimationPaneRequested");
         source.Should().Contain("AnimationPanePlanner.BuildTimelinePlan(");
+        source.Should().Contain("AnimationPanePlanner.BuildWorkflowViewPlan(");
         source.Should().Contain("AnimationPanePlanner.BuildPlaybackSessionPlan(");
         source.Should().Contain("plan.PlaybackControls");
         source.Should().Contain("AnimationPanePlaybackControlKind.PlayFromSelected");
@@ -322,6 +323,8 @@ public sealed class MainWindowHeadlessTests
         source.Should().Contain("AnimationPanePlanner.BuildReorderMutationPlan(");
         source.Should().Contain("AnimationPanePlanner.TryApplyReorderMutation(");
         source.Should().NotContain("Editor.MoveAnimation(");
+        source.Should().NotContain("BuildAnimationPaneRowSummary(");
+        source.Should().NotContain("FormatEffectOptions(");
     }
 
     [Fact]
