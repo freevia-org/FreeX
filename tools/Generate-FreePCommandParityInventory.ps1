@@ -250,6 +250,23 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "PowerPoint-authoritative accessibility checker baselines, grammar-scale proofing, remediation-pane baselines, and reading-order pane visual baselines remain deferred."),
         new(
+            EvidenceId: "freep.animation-pane.workflow-depth",
+            Area: "Animation pane row workflow, timing/effect options, reordering, and playback readiness",
+            Status: "shared-planner-and-host-evidence",
+            HostCoverage: "WPF/Avalonia consume shared animation-pane workflow evidence over thin host pane adapters",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-animation-pane-workflow-depth-2026-07-06.md",
+                "docs/parity/freep-animation-pane-advanced-effect-options-2026-07-05.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/AnimationPanePlannerTests.cs",
+                "freep/FreeP.App.Host.Tests/AnimationPaneTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
+            ],
+            RemainingWork: "Shared animation-pane row evidence now covers selected-row state, timing editors, effect-option rows, reorder availability, and playback control readiness across WPF/Avalonia. PowerPoint-authoritative animation-pane UI baselines, advanced effect playback visuals, and unsupported imported effect families remain deferred."),
+        new(
             EvidenceId: "freep.export.backstage.package-handoff",
             Area: "Backstage export and print package-handoff depth beyond notes-page PDF",
             Status: "shared-planner-and-tool-evidence",

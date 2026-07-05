@@ -829,7 +829,7 @@ public sealed class FreePRibbonDefinitionProfileTests
         var workflowEvidence = root.GetProperty("workflowEvidence")
             .EnumerateArray()
             .ToArray();
-        workflowEvidence.Should().HaveCount(9);
+        workflowEvidence.Should().HaveCount(10);
         root.GetProperty("summary").GetProperty("workflowEvidenceRows").GetInt32()
             .Should()
             .Be(workflowEvidence.Length);
@@ -841,6 +841,7 @@ public sealed class FreePRibbonDefinitionProfileTests
                 "freep.presenter.session.summary",
                 "freep.review.comments.thread-depth",
                 "freep.review.accessibility.proofing-depth",
+                "freep.animation-pane.workflow-depth",
                 "freep.export.backstage.package-handoff",
                 "freep.table.inline-text.workflow-depth",
                 "freep.header-footer.placeholder-creation",
@@ -873,6 +874,19 @@ public sealed class FreePRibbonDefinitionProfileTests
         tableInlineTextVerification.Should().Contain("freep/FreeP.App.Presentation.Tests/TableCellEditPlannerTests.cs");
         tableInlineTextVerification.Should().Contain("freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasAvaloniaTests.cs");
         tableInlineTextVerification.Should().Contain("freep/FreeP.App.Host.Tests/CanvasEditingTests.cs");
+
+        var animationPane = workflowEvidence.Single(row =>
+            row.GetProperty("evidenceId").GetString() == "freep.animation-pane.workflow-depth");
+        animationPane.GetProperty("area").GetString()
+            .Should()
+            .Contain("Animation pane row workflow");
+        var animationPaneVerification = animationPane.GetProperty("verification")
+            .EnumerateArray()
+            .Select(path => path.GetString())
+            .ToArray();
+        animationPaneVerification.Should().Contain("freep/FreeP.App.Presentation.Tests/AnimationPanePlannerTests.cs");
+        animationPaneVerification.Should().Contain("freep/FreeP.App.Host.Tests/AnimationPaneTests.cs");
+        animationPaneVerification.Should().Contain("freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs");
     }
 
     [Fact]
@@ -910,7 +924,9 @@ public sealed class FreePRibbonDefinitionProfileTests
         markdown.Should().Contain("`freep.presenter.recording.execution`");
         markdown.Should().Contain("`freep.presenter.ink.execution`");
         markdown.Should().Contain("`freep.presenter.session.summary`");
+        markdown.Should().Contain("`freep.animation-pane.workflow-depth`");
         markdown.Should().Contain("`freep.table.inline-text.workflow-depth`");
+        markdown.Should().Contain("Animation pane row workflow");
         markdown.Should().Contain("Rich inline table-cell text editing");
         markdown.Should().Contain(expectedSummaryRow);
 

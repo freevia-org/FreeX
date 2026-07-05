@@ -308,7 +308,7 @@ public sealed class MainWindowHeadlessTests
         source.Should().Contain("PresentationAnimationCommandPlanner.TryApply(");
         source.Should().Contain("OnAnimationPaneRequested");
         source.Should().Contain("AnimationPanePlanner.BuildTimelinePlan(");
-        source.Should().Contain("AnimationPanePlanner.BuildWorkflowViewPlan(");
+        source.Should().Contain("AnimationPanePlanner.BuildWorkflowEvidencePlan(");
         source.Should().Contain("AnimationPanePlanner.BuildPlaybackSessionPlan(");
         source.Should().Contain("plan.PlaybackControls");
         source.Should().Contain("AnimationPanePlaybackControlKind.PlayFromSelected");
@@ -2179,6 +2179,7 @@ public sealed class MainWindowHeadlessTests
         var previewEnabled = false;
         IReadOnlyList<string> playbackControls = [];
         IReadOnlyList<string> paneRows = [];
+        IReadOnlyList<string> evidenceLines = [];
 
         var ran = await OnUiThread(() =>
         {
@@ -2212,6 +2213,7 @@ public sealed class MainWindowHeadlessTests
             previewEnabled = window.IsAnimationPanePreviewEnabled;
             playbackControls = window.AnimationPanePlaybackControls.ToArray();
             paneRows = window.AnimationPaneRenderedRows.ToArray();
+            evidenceLines = window.AnimationPaneWorkflowEvidenceLines.ToArray();
         });
 
         if (!ran) return;
@@ -2235,6 +2237,10 @@ public sealed class MainWindowHeadlessTests
             .And.Contain("delay 0.5s")
             .And.Contain("move earlier available")
             .And.Contain("move later unavailable");
+        evidenceLines.Should().Equal(
+            "Rows: 2; selected: 2; timing editors: 2; effect-option rows: 0; reorderable rows: 2",
+            "Playback controls: Preview: available; Play From Selected: available; Play All: available; Stop: unavailable",
+            "Selected row: Caption box - In: Fade; trigger After Previous; duration 0.5s; delay 0.5s");
     }
 
     [Fact]

@@ -189,6 +189,30 @@ public sealed class AnimationPanePlannerTests
     }
 
     [Fact]
+    public void BuildWorkflowEvidencePlan_ProjectsSharedPaneDepthContract()
+    {
+        var timeline = AnimationPanePlanner.BuildTimelinePlan(
+            CreateSlideWithTimelineAnimations(),
+            selectedAnimationIndex: 1,
+            displayCulture: Invariant);
+
+        var evidence = AnimationPanePlanner.BuildWorkflowEvidencePlan(timeline, slideIndex: 2);
+
+        evidence.View.Heading.Should().Be("Animation Pane - slide 3 (3 animations)");
+        evidence.RowCount.Should().Be(3);
+        evidence.EditableTimingRowCount.Should().Be(3);
+        evidence.EffectOptionRowCount.Should().Be(0);
+        evidence.ReorderableRowCount.Should().Be(3);
+        evidence.HasSelectedRow.Should().BeTrue();
+        evidence.CanPreview.Should().BeTrue();
+        evidence.CanPlayFromSelected.Should().BeTrue();
+        evidence.EvidenceLines.Should().Equal(
+            "Rows: 3; selected: 2; timing editors: 3; effect-option rows: 0; reorderable rows: 3",
+            "Playback controls: Preview: available; Play From Selected: available; Play All: available; Stop: unavailable",
+            "Selected row: Content Box - Em: Pulse; trigger With Previous; duration 1s; delay 0.25s");
+    }
+
+    [Fact]
     public void BuildPlaybackControls_EnablesSlidePlaybackButRequiresSelectedRow()
     {
         var controls = AnimationPanePlanner.BuildPlaybackControls(-1, 2, 900);
