@@ -793,7 +793,7 @@ public static partial class ChartRenderPlanner
                 int renderRow = categoryCount - 1 - categoryIndex;
                 double y = plot.Y + renderRow * categoryStep;
                 labels.Add(new ChartTextPlan(
-                    chart.Categories[categoryIndex],
+                    FormatCategoryAxisLabel(chart.Categories[categoryIndex], chart.CategoryAxis),
                     new ChartPlanRect(plot.X - BarCategoryLabelWidth, y, BarCategoryLabelWidth - 4, categoryStep),
                     IsBold: false,
                     FontSize: 6.5,
@@ -808,7 +808,7 @@ public static partial class ChartRenderPlanner
             {
                 double x = plot.X + categoryIndex * categoryStep;
                 labels.Add(new ChartTextPlan(
-                    chart.Categories[categoryIndex],
+                    FormatCategoryAxisLabel(chart.Categories[categoryIndex], chart.CategoryAxis),
                     new ChartPlanRect(x, plot.Bottom + 2, categoryStep, CategoryLabelHeight),
                     IsBold: false,
                     FontSize: 7.0,
@@ -842,7 +842,7 @@ public static partial class ChartRenderPlanner
             {
                 double x = plot.X + plot.Width * tickIndex / steps;
                 labels.Add(new ChartTextPlan(
-                    FormatAxisValue(value),
+                    FormatAxisValue(value, chart.ValueAxis.NumberFormatCode),
                     new ChartPlanRect(x - AxisLabelWidth / 2, plot.Bottom + 2, AxisLabelWidth, CategoryLabelHeight),
                     IsBold: false,
                     FontSize: 6.5,
@@ -853,7 +853,7 @@ public static partial class ChartRenderPlanner
             {
                 double y = plot.Bottom - plot.Height * tickIndex / steps;
                 labels.Add(new ChartTextPlan(
-                    FormatAxisValue(value),
+                    FormatAxisValue(value, chart.ValueAxis.NumberFormatCode),
                     new ChartPlanRect(plot.X - AxisLabelWidth, y - 6, AxisLabelWidth - GridlinePad, 12),
                     IsBold: false,
                     FontSize: 6.5,
@@ -1208,7 +1208,7 @@ public static partial class ChartRenderPlanner
                 new ChartPlanPoint(plot.Right, y),
                 new ChartPlanPoint(plot.Right + AxisMajorTickLength, y)));
             labels.Add(new ChartTextPlan(
-                FormatAxisValue(value),
+                FormatAxisValue(value, chart.SecondaryValueAxis.NumberFormatCode),
                 new ChartPlanRect(labelX, y - 6, labelWidth, 12),
                 IsBold: false,
                 FontSize: 6.5,
@@ -2156,6 +2156,11 @@ public static partial class ChartRenderPlanner
                 ? ((long)value).ToString(CultureInfo.InvariantCulture)
                 : value.ToString("G3", CultureInfo.InvariantCulture);
 
+    public static string FormatAxisValue(double value, string? numberFormatCode) =>
+        string.IsNullOrWhiteSpace(numberFormatCode)
+            ? FormatAxisValue(value)
+            : FormatWithCode(value, numberFormatCode!);
+
     public static ChartDataLabels? ResolveEffectiveLabels(ChartShape chart, int seriesIndex)
     {
         var series = seriesIndex < chart.Series.Count ? chart.Series[seriesIndex] : null;
@@ -2193,26 +2198,224 @@ public static partial class ChartRenderPlanner
 
     public static string FormatWithCode(double value, string code)
     {
-        if (code.Contains('%'))
+        if (string.IsNullOrWhiteSpace(code))
+            return FormatAxisValue(value);
+
+        var section = NormalizeNumberFormatSection(SelectNumberFormatSection(value, code));
+        if (string.IsNullOrWhiteSpace(section) ||
+            string.Equals(section, "General", StringComparison.OrdinalIgnoreCase))
         {
-            double percent = value * 100.0;
-            int dotPosition = code.IndexOf('.');
-            int decimals = dotPosition >= 0 ? code.LastIndexOf('%') - dotPosition - 1 : 0;
-            string format = decimals > 0 ? $"F{decimals}" : "F0";
-            return percent.ToString(format, CultureInfo.InvariantCulture) + "%";
+            return FormatAxisValue(value);
         }
 
-        if (code.Contains(','))
-            return value.ToString("N0", CultureInfo.InvariantCulture);
+        if (LooksLikeDateFormat(section) && TryFromOaDate(value, out var date))
+            return FormatDateValue(date, section);
 
-        int dotIndex = code.IndexOf('.');
+        var placeholderStart = IndexOfAny(section, '#', '0', '?');
+        if (placeholderStart < 0)
+            return FormatAxisValue(value);
+
+        var placeholderEnd = LastIndexOfAny(section, '#', '0', '?');
+        var prefix = section[..placeholderStart];
+        var numericPattern = section[placeholderStart..(placeholderEnd + 1)];
+        var suffix = section[(placeholderEnd + 1)..];
+        bool asPercent = section.Contains('%', StringComparison.Ordinal);
+        double scaled = asPercent ? value * 100.0 : value;
+        suffix = suffix.Replace("%", string.Empty, StringComparison.Ordinal);
+
+        var number = FormatNumberWithPattern(scaled, numericPattern);
+        var hasAuthoredNegativeAffordance =
+            prefix.Contains('-', StringComparison.Ordinal) ||
+            suffix.Contains('-', StringComparison.Ordinal) ||
+            prefix.Contains('(', StringComparison.Ordinal) ||
+            suffix.Contains(')', StringComparison.Ordinal);
+        var sign = scaled < 0 && !hasAuthoredNegativeAffordance ? "-" : string.Empty;
+        return $"{sign}{prefix}{number}{suffix}{(asPercent ? "%" : string.Empty)}";
+    }
+
+    private static string FormatCategoryAxisLabel(string label, ChartAxis axis)
+    {
+        if (string.IsNullOrWhiteSpace(axis.NumberFormatCode))
+            return label;
+
+        var section = NormalizeNumberFormatSection(SelectNumberFormatSection(1, axis.NumberFormatCode!));
+        if (LooksLikeDateFormat(section) && TryParseCategoryDate(label, out var date))
+            return FormatDateValue(date, section);
+
+        return double.TryParse(label, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+            ? FormatWithCode(value, axis.NumberFormatCode!)
+            : label;
+    }
+
+    private static string SelectNumberFormatSection(double value, string code)
+    {
+        var sections = code.Split(';');
+        if (sections.Length == 1)
+            return sections[0];
+
+        if (value > 0)
+            return sections[0];
+
+        if (value < 0)
+            return sections.Length > 1 ? sections[1] : sections[0];
+
+        return sections.Length > 2 ? sections[2] : sections[0];
+    }
+
+    private static string NormalizeNumberFormatSection(string section)
+    {
+        var builder = new StringBuilder(section.Length);
+        bool inQuotedLiteral = false;
+        for (int index = 0; index < section.Length; index++)
+        {
+            var ch = section[index];
+            if (ch == '"')
+            {
+                inQuotedLiteral = !inQuotedLiteral;
+                continue;
+            }
+
+            if (!inQuotedLiteral && ch == '[')
+            {
+                var end = section.IndexOf(']', index + 1);
+                if (end >= 0)
+                {
+                    index = end;
+                    continue;
+                }
+            }
+
+            if (!inQuotedLiteral && (ch == '_' || ch == '*'))
+            {
+                if (index + 1 < section.Length)
+                    index++;
+                continue;
+            }
+
+            if (!inQuotedLiteral && ch == '\\' && index + 1 < section.Length)
+            {
+                builder.Append(section[++index]);
+                continue;
+            }
+
+            builder.Append(ch);
+        }
+
+        return builder.ToString().Trim();
+    }
+
+    private static string FormatNumberWithPattern(double value, string pattern)
+    {
+        var absolute = Math.Abs(value);
+        var dotIndex = pattern.IndexOf('.');
+        var integerPattern = dotIndex >= 0 ? pattern[..dotIndex] : pattern;
+        var decimalPattern = dotIndex >= 0 ? pattern[(dotIndex + 1)..] : string.Empty;
+        bool useGrouping = integerPattern.Contains(',', StringComparison.Ordinal);
+        int maxDecimals = decimalPattern.Count(ch => ch is '0' or '#');
+        int minDecimals = decimalPattern.Count(ch => ch == '0');
+
+        var rounded = Math.Round(absolute, maxDecimals, MidpointRounding.AwayFromZero);
+        var fixedText = rounded.ToString($"F{maxDecimals}", CultureInfo.InvariantCulture);
+        var parts = fixedText.Split('.');
+        var integerText = useGrouping && long.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var whole)
+            ? whole.ToString("N0", CultureInfo.InvariantCulture)
+            : parts[0];
+
+        if (maxDecimals == 0)
+            return integerText;
+
+        var decimals = parts.Length > 1 ? parts[1] : string.Empty;
+        while (decimals.Length > minDecimals && decimals.EndsWith('0'))
+            decimals = decimals[..^1];
+
+        return decimals.Length == 0
+            ? integerText
+            : $"{integerText}.{decimals}";
+    }
+
+    private static bool LooksLikeDateFormat(string code)
+    {
+        if (code.Contains('%', StringComparison.Ordinal))
+            return false;
+
+        var lower = code.ToLowerInvariant();
+        return lower.Contains('y') ||
+            (lower.Contains('d') && lower.Contains('m'));
+    }
+
+    private static bool TryParseCategoryDate(string label, out DateTime date)
+    {
+        if (DateTime.TryParse(label, CultureInfo.InvariantCulture, DateTimeStyles.None, out date))
+            return true;
+
+        if (double.TryParse(label, NumberStyles.Float, CultureInfo.InvariantCulture, out var serial))
+            return TryFromOaDate(serial, out date);
+
+        date = default;
+        return false;
+    }
+
+    private static bool TryFromOaDate(double value, out DateTime date)
+    {
+        if (value is < 1 or > 2958465)
+        {
+            date = default;
+            return false;
+        }
+
+        try
+        {
+            date = DateTime.FromOADate(value);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            date = default;
+            return false;
+        }
+    }
+
+    private static string FormatDateValue(DateTime date, string code)
+    {
+        var dotIndex = code.IndexOf('.');
         if (dotIndex >= 0)
+            code = code[..dotIndex];
+
+        var netFormat = code
+            .Replace("yyyy", "yyyy", StringComparison.OrdinalIgnoreCase)
+            .Replace("yy", "yy", StringComparison.OrdinalIgnoreCase)
+            .Replace("mmmm", "MMMM", StringComparison.OrdinalIgnoreCase)
+            .Replace("mmm", "MMM", StringComparison.OrdinalIgnoreCase)
+            .Replace("mm", "MM", StringComparison.OrdinalIgnoreCase)
+            .Replace("m", "M", StringComparison.OrdinalIgnoreCase)
+            .Replace("dddd", "dddd", StringComparison.OrdinalIgnoreCase)
+            .Replace("ddd", "ddd", StringComparison.OrdinalIgnoreCase)
+            .Replace("dd", "dd", StringComparison.OrdinalIgnoreCase)
+            .Replace("d", "d", StringComparison.OrdinalIgnoreCase);
+
+        return date.ToString(netFormat, CultureInfo.InvariantCulture);
+    }
+
+    private static int IndexOfAny(string text, params char[] chars)
+    {
+        for (int index = 0; index < text.Length; index++)
         {
-            int decimals = code.Length - dotIndex - 1;
-            return value.ToString($"F{decimals}", CultureInfo.InvariantCulture);
+            if (chars.Contains(text[index]))
+                return index;
         }
 
-        return FormatAxisValue(value);
+        return -1;
+    }
+
+    private static int LastIndexOfAny(string text, params char[] chars)
+    {
+        for (int index = text.Length - 1; index >= 0; index--)
+        {
+            if (chars.Contains(text[index]))
+                return index;
+        }
+
+        return -1;
     }
 
     private static IReadOnlyList<ChartPieSlicePrimitive> BuildSlicePrimitivesForSeries(
@@ -2297,7 +2500,7 @@ public static partial class ChartRenderPlanner
 
             double value = xMin + xUnit * tickIndex;
             xLabels.Add(new ChartTextPlan(
-                FormatAxisValue(value),
+                FormatAxisValue(value, xAxisLabelFormat?.FormatCode),
                 new ChartPlanRect(x - 20, plot.Bottom + 2, 40, 12),
                 IsBold: false,
                 FontSize: 6.5,
@@ -2314,7 +2517,7 @@ public static partial class ChartRenderPlanner
 
             double value = yMin + yUnit * tickIndex;
             yLabels.Add(new ChartTextPlan(
-                FormatAxisValue(value),
+                FormatAxisValue(value, yAxisLabelFormat?.FormatCode),
                 new ChartPlanRect(plot.X - 38, y - 6, 36, 12),
                 IsBold: false,
                 FontSize: 6.5,

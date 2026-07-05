@@ -2429,7 +2429,7 @@ public sealed class VisualEvidencePlannerTests
                 HostMetadata = new Dictionary<string, string>
                 {
                     ["renderer"] = "FreeW.FidelityRender",
-                    ["captureSource"] = "software-renderer"
+                    ["captureSource"] = "wpf-composite-renderer"
                 }
             };
             FreeWVisualEvidencePlanner.WriteManifest(
@@ -2459,6 +2459,66 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void BuildNormalizedSummaryFromFiles_RejectsBackstageSoftwareRendererRows()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var row = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                "backstage-pdf-export-fidelity",
+                pageNumber: 1,
+                pageCount: 2);
+            var softwareFallback = row with
+            {
+                HostMetadata = new Dictionary<string, string>
+                {
+                    ["renderer"] = "FreeW.FidelityRender",
+                    ["captureSource"] = "software-renderer",
+                    ["backstageWorkflow"] = "pdf-export",
+                    ["backstageArtifactKind"] = "pdf-export-rasterized",
+                    ["backstagePipeline"] = "pdf-export-rasterized-artifact"
+                }
+            };
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [softwareFallback],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName)],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "backstage-pdf-export-fidelity",
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Evidence.Single().Trust.Passed.Should().BeFalse();
+            summary.BackstagePrintEvidenceReadiness.Should().ContainSingle(row =>
+                row.ScenarioId == "backstage-pdf-export-fidelity" &&
+                row.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
+                row.PageNumber == 1 &&
+                row.Status == "failed" &&
+                row.Notes.Contains("must use real capture source 'wpf-composite-renderer'", StringComparison.Ordinal));
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("backstage renderer evidence for host 'wpf-fidelity-render' must use real capture source 'wpf-composite-renderer', found 'software-renderer'", StringComparison.Ordinal));
+            summary.RemainingEvidenceBlockers.Should().ContainSingle(blocker =>
+                blocker.BlockerId == "backstage-real-captures-backstage-pdf-export-fidelity" &&
+                blocker.Status == "missing-real-captures" &&
+                blocker.SemanticEvidence.Contains("wpf-fidelity-render/p1=failed"));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void BuildNormalizedSummaryFromFiles_RequiresBackstageArtifactMetadata()
     {
         var root = CreateTempRoot();
@@ -2476,7 +2536,7 @@ public sealed class VisualEvidencePlannerTests
                 HostMetadata = new Dictionary<string, string>
                 {
                     ["renderer"] = "FreeW.FidelityRender",
-                    ["captureSource"] = "software-renderer",
+                    ["captureSource"] = "wpf-composite-renderer",
                     ["backstageWorkflow"] = "print-preview"
                 }
             };
@@ -2626,7 +2686,7 @@ public sealed class VisualEvidencePlannerTests
                 HostMetadata = new Dictionary<string, string>
                 {
                     ["renderer"] = "FreeW.FidelityRender",
-                    ["captureSource"] = "software-renderer",
+                    ["captureSource"] = "wpf-composite-renderer",
                     ["backstageWorkflow"] = "print-preview",
                     ["backstageArtifactKind"] = "pdf-export-rasterized",
                     ["backstagePipeline"] = "pdf-export-rasterized-artifact"
@@ -3958,7 +4018,7 @@ public sealed class VisualEvidencePlannerTests
         }
 
         metadata["captureSource"] = hostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId
-            ? "software-renderer"
+            ? "wpf-composite-renderer"
             : "avalonia-render-target";
         metadata["backstageWorkflow"] = scenarioId switch
         {

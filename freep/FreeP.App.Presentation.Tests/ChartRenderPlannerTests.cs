@@ -109,8 +109,28 @@ public sealed class ChartRenderPlannerTests
         ChartRenderPlanner.FormatAxisValue(value).Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData(0.25, "0.0%", "25.0%")]
+    [InlineData(1234.5, "#,##0.0", "1,234.5")]
+    [InlineData(1234.5, "$#,##0.00", "$1,234.50")]
+    [InlineData(-1234.5, "#,##0.0;(#,##0.0)", "(1,234.5)")]
+    [InlineData(12.34, "#,##0.0 \"kg\"", "12.3 kg")]
+    [InlineData(42, "[Red]#,##0", "42")]
+    public void FormatWithCode_UsesPowerPointStyleNumericCodes(double value, string code, string expected)
+    {
+        ChartRenderPlanner.FormatWithCode(value, code).Should().Be(expected);
+    }
+
     [Fact]
-    public void AxisLabelPlans_CarryNumberFormatMetadataWithoutChangingText()
+    public void FormatWithCode_UnsupportedFormatFallsBackWithoutThrowing()
+    {
+        var act = () => ChartRenderPlanner.FormatWithCode(1200, "unsupported text");
+
+        act.Should().NotThrow().Which.Should().Be("1.2K");
+    }
+
+    [Fact]
+    public void AxisLabelPlans_FormatTextAndCarryNumberFormatMetadata()
     {
         var series = new ChartSeries { Name = "Sales" };
         series.Values.AddRange(new double?[] { 1000, 2000 });
@@ -126,14 +146,33 @@ public sealed class ChartRenderPlannerTests
         var categoryLabels = ChartRenderPlanner.BuildCategoryAxisLabelPlans(chart, frame);
         var valueLabels = ChartRenderPlanner.BuildValueAxisLabelPlans(chart, frame);
 
-        categoryLabels[0].Text.Should().Be("2026-01-01");
+        categoryLabels[0].Text.Should().Be("1/1/26");
         categoryLabels[0].AxisLabelFormat.Should().Be(new ChartAxisLabelFormatPlan("m/d/yy", true));
-        valueLabels[0].Text.Should().Be("0");
+        valueLabels[0].Text.Should().Be("0.0");
         valueLabels[0].AxisLabelFormat.Should().Be(new ChartAxisLabelFormatPlan("#,##0.0", false));
     }
 
     [Fact]
-    public void SecondaryValueAxisPlan_CarriesNumberFormatMetadataWithoutChangingText()
+    public void CategoryAxisLabelPlans_FormatIsoAndSerialDateLabels()
+    {
+        var series = new ChartSeries { Name = "Sales" };
+        series.Values.AddRange(new double?[] { 10, 20, 30 });
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.AddRange(new[] { "2026-01-01", "46024", "Not a date" });
+        chart.Series.Add(series);
+        chart.CategoryAxis.NumberFormatCode = "[$-409]d\\-mmm;@";
+        chart.CategoryAxis.NumberFormatSourceLinked = false;
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var categoryLabels = ChartRenderPlanner.BuildCategoryAxisLabelPlans(chart, frame);
+
+        categoryLabels.Select(label => label.Text).Should().Equal("1-Jan", "2-Jan", "Not a date");
+        categoryLabels.Should().OnlyContain(label =>
+            label.AxisLabelFormat == new ChartAxisLabelFormatPlan("[$-409]d\\-mmm;@", false));
+    }
+
+    [Fact]
+    public void SecondaryValueAxisPlan_FormatsTextAndCarriesNumberFormatMetadata()
     {
         var chart = MakeSecondaryAxisChart();
         chart.SecondaryValueAxis!.NumberFormatCode = "0.00%";
@@ -142,7 +181,7 @@ public sealed class ChartRenderPlannerTests
 
         var plan = ChartRenderPlanner.BuildSecondaryValueAxisPrimitivePlan(chart, frame);
 
-        plan.Labels[0].Text.Should().Be("0");
+        plan.Labels[0].Text.Should().Be("0.00%");
         plan.Labels.Should().OnlyContain(label =>
             label.AxisLabelFormat == new ChartAxisLabelFormatPlan("0.00%", false));
     }

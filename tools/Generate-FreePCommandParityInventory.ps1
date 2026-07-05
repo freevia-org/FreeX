@@ -286,7 +286,25 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasAvaloniaTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "WPF/Avalonia now share picture-bullet picker payload execution, paragraph authoring, and PPTX media-part persistence. Avalonia still lacks a true editable rich-text widget equivalent to WPF RichTextBox; PowerPoint-authoritative list-gallery/rich-editor visual baselines remain deferred.")
+            RemainingWork: "WPF/Avalonia now share picture-bullet picker payload execution, paragraph authoring, and PPTX media-part persistence. Avalonia still lacks a true editable rich-text widget equivalent to WPF RichTextBox; PowerPoint-authoritative list-gallery/rich-editor visual baselines remain deferred."),
+        new(
+            EvidenceId: "freep.chart.number-format-rendering",
+            Area: "Chart axis number/date format rendering",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume shared ChartRenderPlanner text plans with no renderer-local number-format policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-chart-number-format-rendering-2026-07-05.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/ChartRenderPlannerTests.cs",
+                "freep/FreeP.App.Presentation.Tests/RendererNeutralDedupPlannerTests.cs",
+                "freep/FreeP.App.Host.Tests/ChartTests.cs",
+                "freep/FreeP.App.Host.Tests/ChartDataLabelsTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasAvaloniaTests.cs"
+            ],
+            RemainingWork: "Shared chart label planning now applies preserved PowerPoint-style number/date format codes for common axis and category label cases. Full Excel custom number-format semantics, exact locale behavior, and PowerPoint-authoritative chart visual baselines remain deferred.")
       ];
 
     private static IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> Collect(RibbonDefinition definition, string profile)

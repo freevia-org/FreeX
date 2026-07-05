@@ -1376,22 +1376,22 @@ public static class FreeWVisualEvidenceManifestNormalizer
             return;
         }
 
-        var expectedCaptureSources = row.HostId switch
+        var expectedCaptureSource = row.HostId switch
         {
-            WpfHostId => new[] { "software-renderer", "wpf-composite-renderer" },
-            AvaloniaHostId => new[] { "avalonia-render-target" },
+            WpfHostId => "wpf-composite-renderer",
+            AvaloniaHostId => "avalonia-render-target",
             _ => null
         };
-        if (expectedCaptureSources is null)
+        if (expectedCaptureSource is null)
         {
             rowFailures.Add($"backstage renderer evidence has unsupported host id '{row.HostId}'");
             return;
         }
 
-        if (!expectedCaptureSources.Contains(captureSource, StringComparer.OrdinalIgnoreCase))
+        if (!string.Equals(captureSource, expectedCaptureSource, StringComparison.OrdinalIgnoreCase))
         {
             rowFailures.Add(
-                $"backstage renderer evidence for host '{row.HostId}' must use capture source '{string.Join("' or '", expectedCaptureSources)}', found '{captureSource}'");
+                $"backstage renderer evidence for host '{row.HostId}' must use real capture source '{expectedCaptureSource}', found '{captureSource}'");
         }
 
         var expectedWorkflow = ExpectedBackstageWorkflow(row.ScenarioId);
