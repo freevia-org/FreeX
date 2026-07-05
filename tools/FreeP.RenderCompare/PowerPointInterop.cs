@@ -22,7 +22,7 @@ namespace FreeP.RenderCompare;
 internal static class PowerPointInterop
 {
     private const string PowerPointProcessName = "POWERPNT";
-    private const string ProgId = "PowerPoint.Application";
+    internal const string ProgId = "PowerPoint.Application";
 
     // msoFalse / msoTrue
     private const int MsoFalse = 0;
@@ -38,6 +38,36 @@ internal static class PowerPointInterop
     /// <returns>0 on success, 1 on failure.</returns>
     internal static int ExportSlidesToPng(string pptxPath, string outDir, int width, int height) =>
         ExportSlidesToPngDetailed(pptxPath, outDir, width, height).ExitCode;
+
+    internal static PowerPointComAvailability CheckAvailability(
+        Func<string, Type?>? resolveProgId = null,
+        DateTimeOffset? checkedAtUtc = null,
+        string? machineName = null)
+    {
+        resolveProgId ??= Type.GetTypeFromProgID;
+        checkedAtUtc ??= DateTimeOffset.UtcNow;
+        machineName ??= Environment.MachineName;
+
+        try
+        {
+            var type = resolveProgId(ProgId);
+            return type is null
+                ? PowerPointComAvailability.Unavailable(
+                    ProgId,
+                    checkedAtUtc.Value,
+                    machineName,
+                    $"COM ProgID '{ProgId}' is not registered. Install desktop Microsoft PowerPoint to generate authoritative baselines.")
+                : PowerPointComAvailability.Available(ProgId, checkedAtUtc.Value, machineName);
+        }
+        catch (Exception ex)
+        {
+            return PowerPointComAvailability.Unavailable(
+                ProgId,
+                checkedAtUtc.Value,
+                machineName,
+                $"COM ProgID '{ProgId}' probe failed: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
 
     internal static PowerPointExportResult ExportSlidesToPngDetailed(string pptxPath, string outDir, int width, int height)
     {
@@ -280,6 +310,24 @@ internal sealed record PowerPointExportResult(
 
     internal static PowerPointExportResult Failed(PowerPointExportFailureKind failureKind, int exportedSlides, int totalSlides) =>
         new(1, failureKind, exportedSlides, totalSlides);
+}
+
+internal sealed record PowerPointComAvailability(
+    string ProgId,
+    bool IsRegistered,
+    string MachineName,
+    DateTimeOffset CheckedAtUtc,
+    string? UnavailableReason)
+{
+    internal static PowerPointComAvailability Available(string progId, DateTimeOffset checkedAtUtc, string machineName) =>
+        new(progId, IsRegistered: true, machineName, checkedAtUtc, UnavailableReason: null);
+
+    internal static PowerPointComAvailability Unavailable(
+        string progId,
+        DateTimeOffset checkedAtUtc,
+        string machineName,
+        string unavailableReason) =>
+        new(progId, IsRegistered: false, machineName, checkedAtUtc, unavailableReason);
 }
 
 internal enum PowerPointExportFailureKind

@@ -36,6 +36,10 @@ namespace FreeP.RenderCompare;
 ///       CSV evidence rows, and report WPF/Avalonia parity without requiring
 ///       PowerPoint COM.
 ///
+///   --corpus-summary &lt;corpusDir&gt; [--refs &lt;refsDir&gt;] [--manifest &lt;out.json&gt;]
+///       Print compact per-deck status, PowerPoint reference PNG availability,
+///       and the local PowerPoint COM prerequisite state.
+///
 ///   --generate-corpus &lt;outDir&gt;
 ///       Author four deterministic test decks via PowerPoint COM and save them to
 ///       outDir as *.pptx.  Also exports PowerPoint's own PNGs next to each deck.
@@ -476,12 +480,16 @@ internal static class Program
     {
         if (args.Length < 1)
         {
-            Console.Error.WriteLine("usage: --corpus-summary <corpusDir> [--refs <refsDir>]");
+            Console.Error.WriteLine("usage: --corpus-summary <corpusDir> [--refs <refsDir>] [--manifest <out.json>] [--require-complete-refs] [--allow-missing-powerpoint]");
             return 2;
         }
 
         var corpusDir = Path.GetFullPath(args[0]);
         var refsDir = Path.Combine(corpusDir, "pptx-ref");
+        string? manifestPath = null;
+        var requireCompleteReferences = false;
+        var allowMissingPowerPoint = false;
+
         for (var i = 1; i < args.Length - 1; i++)
         {
             if (args[i].Equals("--refs", StringComparison.OrdinalIgnoreCase))
@@ -489,6 +497,19 @@ internal static class Program
                 refsDir = Path.GetFullPath(args[i + 1]);
                 i++;
             }
+            else if (args[i].Equals("--manifest", StringComparison.OrdinalIgnoreCase))
+            {
+                manifestPath = Path.GetFullPath(args[i + 1]);
+                i++;
+            }
+        }
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            if (args[i].Equals("--require-complete-refs", StringComparison.OrdinalIgnoreCase))
+                requireCompleteReferences = true;
+            else if (args[i].Equals("--allow-missing-powerpoint", StringComparison.OrdinalIgnoreCase))
+                allowMissingPowerPoint = true;
         }
 
         if (!Directory.Exists(corpusDir))
@@ -498,8 +519,24 @@ internal static class Program
         }
 
         var summary = CorpusSummary.Create(corpusDir, refsDir);
+        var powerPoint = PowerPointInterop.CheckAvailability();
         summary.Print(Console.Out);
-        return 0;
+        summary.PrintBaselineVerification(
+            Console.Out,
+            powerPoint,
+            requireCompleteReferences,
+            allowMissingPowerPoint);
+
+        if (manifestPath is not null)
+        {
+            CorpusSummary.WriteManifest(manifestPath, summary.CreateManifest(powerPoint));
+            Console.WriteLine($"  manifest             : {manifestPath}");
+        }
+
+        return summary.GetBaselineVerificationExitCode(
+            powerPoint,
+            requireCompleteReferences,
+            allowMissingPowerPoint);
     }
 
     // -----------------------------------------------------------------------
@@ -589,8 +626,9 @@ internal static class Program
         Console.WriteLine("  --notes-page-preview-evidence <deck.pptx> <outDir>");
         Console.WriteLine("      Shared notes-page PDF render plan + portable PDF/CSV evidence; no PowerPoint COM required.");
         Console.WriteLine();
-        Console.WriteLine("  --corpus-summary <corpusDir> [--refs <refsDir>]");
+        Console.WriteLine("  --corpus-summary <corpusDir> [--refs <refsDir>] [--manifest <out.json>] [--require-complete-refs] [--allow-missing-powerpoint]");
         Console.WriteLine("      Print compact per-deck status and PowerPoint reference PNG availability.");
+        Console.WriteLine("      --require-complete-refs fails when refs are missing unless --allow-missing-powerpoint is set and PowerPoint COM is unavailable.");
         Console.WriteLine();
         Console.WriteLine("  --generate-corpus <outDir>");
         Console.WriteLine("      Author test .pptx decks via PowerPoint COM.");
