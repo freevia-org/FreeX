@@ -358,10 +358,43 @@ public sealed class SlideShowPlaybackPlannerTests
         plusOut.GeometricMaskExpandsFromCenter.Should().BeFalse();
         plusOut.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
 
-        var growShrink = SlideShowPlaybackPlanner.PlanShapeAnimation(
+        var wedgeIn = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
                 ShapeId = 17,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Wedge,
+                Direction = AnimationDirection.In,
+                DurationMs = 285
+            },
+            startDelayMs: 25);
+
+        wedgeIn.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Wedge);
+        wedgeIn.GeometricMaskKind.Should().Be(SlideShowGeometricMaskKind.Wedge);
+        wedgeIn.GeometricMaskExpandsFromCenter.Should().BeTrue();
+        wedgeIn.DurationMs.Should().Be(285);
+        wedgeIn.DelayMs.Should().Be(25);
+        wedgeIn.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.OnComplete);
+
+        var wedgeOut = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 18,
+                Kind = AnimationKind.Exit,
+                Preset = AnimationPreset.Wedge,
+                Direction = AnimationDirection.Out
+            },
+            startDelayMs: 0);
+
+        wedgeOut.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Wedge);
+        wedgeOut.GeometricMaskKind.Should().Be(SlideShowGeometricMaskKind.Wedge);
+        wedgeOut.GeometricMaskExpandsFromCenter.Should().BeFalse();
+        wedgeOut.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
+
+        var growShrink = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 19,
                 Kind = AnimationKind.Emphasis,
                 Preset = AnimationPreset.Grow,
                 DurationMs = 450

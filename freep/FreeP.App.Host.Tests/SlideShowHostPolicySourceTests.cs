@@ -92,12 +92,16 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("GeometricMaskEffect(sb, element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Diamond:");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Plus:");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Wedge:");
         source.Should().Contain("case SlideShowGeometricMaskKind.Circle:");
         source.Should().Contain("CircleEffect(sb, el, plan);");
         source.Should().Contain("case SlideShowGeometricMaskKind.Diamond:");
         source.Should().Contain("DiamondEffect(sb, el, plan);");
         source.Should().Contain("case SlideShowGeometricMaskKind.Plus:");
         source.Should().Contain("PlusEffect(sb, el, plan);");
+        source.Should().Contain("case SlideShowGeometricMaskKind.Wedge:");
+        source.Should().Contain("WedgeEffect(sb, el, plan);");
+        source.Should().Contain("BuildWedgeGeometry(w, h, fromProgress)");
         source.Should().Contain("new GeometryGroup { FillRule = FillRule.Nonzero }");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Zoom:");
         source.Should().Contain("ZoomEffect(sb, element, plan);");

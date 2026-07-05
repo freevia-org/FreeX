@@ -30,6 +30,7 @@ public enum SlideShowShapeAnimationEffectKind
     Circle,
     Diamond,
     Plus,
+    Wedge,
     Zoom,
     Pulse,
     GrowShrink,
@@ -54,7 +55,8 @@ public enum SlideShowGeometricMaskKind
     None,
     Circle,
     Diamond,
-    Plus
+    Plus,
+    Wedge
 }
 
 public sealed record SlideShowShapeAnimationPlaybackPlan(
@@ -200,6 +202,7 @@ public static class SlideShowPlaybackPlanner
             AnimationPreset.Circle => SlideShowShapeAnimationEffectKind.Circle,
             AnimationPreset.Diamond => SlideShowShapeAnimationEffectKind.Diamond,
             AnimationPreset.Plus => SlideShowShapeAnimationEffectKind.Plus,
+            AnimationPreset.Wedge => SlideShowShapeAnimationEffectKind.Wedge,
             AnimationPreset.Zoom => SlideShowShapeAnimationEffectKind.Zoom,
             AnimationPreset.Pulse => SlideShowShapeAnimationEffectKind.Pulse,
             AnimationPreset.Grow or AnimationPreset.Shrink => SlideShowShapeAnimationEffectKind.GrowShrink,
@@ -284,6 +287,7 @@ public static class SlideShowPlaybackPlanner
             AnimationPreset.Circle => SlideShowGeometricMaskKind.Circle,
             AnimationPreset.Diamond => SlideShowGeometricMaskKind.Diamond,
             AnimationPreset.Plus => SlideShowGeometricMaskKind.Plus,
+            AnimationPreset.Wedge => SlideShowGeometricMaskKind.Wedge,
             _ => SlideShowGeometricMaskKind.None
         };
 

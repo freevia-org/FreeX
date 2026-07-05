@@ -1123,6 +1123,10 @@ public sealed class SlideShowWindow : Window
                 GeometricMaskEffect(sb, element, plan);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Wedge:
+                GeometricMaskEffect(sb, element, plan);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Zoom:
                 ZoomEffect(sb, element, plan);
                 break;
@@ -1507,6 +1511,10 @@ public sealed class SlideShowWindow : Window
                 PlusEffect(sb, el, plan);
                 break;
 
+            case SlideShowGeometricMaskKind.Wedge:
+                WedgeEffect(sb, el, plan);
+                break;
+
             default:
                 AppearEffect(sb, el, plan.DelayMs);
                 break;
@@ -1689,6 +1697,82 @@ public sealed class SlideShowWindow : Window
         return (
             new Rect((width - verticalWidth) / 2, 0, verticalWidth, height),
             new Rect(0, (height - horizontalHeight) / 2, width, horizontalHeight));
+    }
+
+    private static void WedgeEffect(Storyboard sb, FrameworkElement el,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        double w = el.Width  > 0 ? el.Width  : 960;
+        double h = el.Height > 0 ? el.Height : 540;
+
+        var fromProgress = plan.GeometricMaskExpandsFromCenter ? 0.0 : 1.0;
+        var toProgress = plan.GeometricMaskExpandsFromCenter ? 1.0 : 0.0;
+        el.Clip = BuildWedgeGeometry(w, h, fromProgress);
+        el.Opacity = 1;
+
+        var anim = new ObjectAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
+            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
+        };
+
+        const int frameCount = 24;
+        for (var frame = 0; frame <= frameCount; frame++)
+        {
+            var t = frame / (double)frameCount;
+            var progress = fromProgress + (toProgress - fromProgress) * t;
+            anim.KeyFrames.Add(new DiscreteObjectKeyFrame(
+                BuildWedgeGeometry(w, h, progress),
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * t))));
+        }
+
+        Storyboard.SetTarget(anim, el);
+        Storyboard.SetTargetProperty(anim, new PropertyPath(UIElement.ClipProperty));
+        sb.Children.Add(anim);
+    }
+
+    private static Geometry BuildWedgeGeometry(double width, double height, double progress)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        if (progress >= 0.999)
+            return new RectangleGeometry(new Rect(0, 0, width, height));
+
+        var center = new Point(width / 2, height / 2);
+        if (progress <= 0)
+            return new PathGeometry(new[]
+            {
+                new PathFigure(center, new PathSegment[] { new LineSegment(center, true) }, closed: true)
+            });
+
+        var radius = Math.Sqrt(width * width + height * height) / 2;
+        var start = PointOnWedgeRadius(center, radius, -90);
+        var end = PointOnWedgeRadius(center, radius, -90 + 360 * progress);
+        var figure = new PathFigure
+        {
+            StartPoint = center,
+            IsClosed = true,
+            IsFilled = true
+        };
+        figure.Segments.Add(new LineSegment(start, true));
+        figure.Segments.Add(new ArcSegment(
+            end,
+            new Size(radius, radius),
+            rotationAngle: 0,
+            isLargeArc: progress > 0.5,
+            sweepDirection: SweepDirection.Clockwise,
+            isStroked: true));
+
+        var geometry = new PathGeometry();
+        geometry.Figures.Add(figure);
+        return geometry;
+    }
+
+    private static Point PointOnWedgeRadius(Point center, double radius, double degrees)
+    {
+        var radians = degrees * Math.PI / 180;
+        return new Point(
+            center.X + radius * Math.Cos(radians),
+            center.Y + radius * Math.Sin(radians));
     }
 
     private static void AddRectAnimation(

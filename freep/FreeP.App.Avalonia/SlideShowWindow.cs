@@ -1117,6 +1117,10 @@ public sealed class SlideShowWindow : Window
                 GeometricMaskEffect(element, plan, onReveal);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Wedge:
+                GeometricMaskEffect(element, plan, onReveal);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Zoom:
                 ZoomEffect(element, plan, onReveal);
                 break;
@@ -1552,6 +1556,7 @@ public sealed class SlideShowWindow : Window
             case SlideShowGeometricMaskKind.Circle:
             case SlideShowGeometricMaskKind.Diamond:
             case SlideShowGeometricMaskKind.Plus:
+            case SlideShowGeometricMaskKind.Wedge:
                 GeometricMaskClipEffect(el, plan, onReveal);
                 break;
 
@@ -1637,6 +1642,7 @@ public sealed class SlideShowWindow : Window
             SlideShowGeometricMaskKind.Circle => BuildCircleGeometry(width, height, progress),
             SlideShowGeometricMaskKind.Diamond => BuildDiamondGeometry(width, height, progress),
             SlideShowGeometricMaskKind.Plus => BuildPlusGeometry(width, height, progress),
+            SlideShowGeometricMaskKind.Wedge => BuildWedgeGeometry(width, height, progress),
             _ => new RectangleGeometry(new Rect(0, 0, width, height))
         };
 
@@ -1700,6 +1706,49 @@ public sealed class SlideShowWindow : Window
         return (
             new Rect((width - verticalWidth) / 2, 0, verticalWidth, height),
             new Rect(0, (height - horizontalHeight) / 2, width, horizontalHeight));
+    }
+
+    private static Geometry BuildWedgeGeometry(double width, double height, double progress)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        if (progress >= 0.999)
+            return new RectangleGeometry(new Rect(0, 0, width, height));
+
+        var center = new Point(width / 2, height / 2);
+        if (progress <= 0)
+        {
+            var collapsed = new StreamGeometry();
+            using (var ctx = collapsed.Open())
+            {
+                ctx.BeginFigure(center, isFilled: true);
+                ctx.LineTo(center);
+                ctx.EndFigure(isClosed: true);
+            }
+
+            return collapsed;
+        }
+
+        var radius = Math.Sqrt(width * width + height * height) / 2;
+        var start = PointOnWedgeRadius(center, radius, -90);
+        var end = PointOnWedgeRadius(center, radius, -90 + 360 * progress);
+        var geometry = new StreamGeometry();
+        using (var ctx = geometry.Open())
+        {
+            ctx.BeginFigure(center, isFilled: true);
+            ctx.LineTo(start);
+            ctx.ArcTo(end, new Size(radius, radius), 0, progress > 0.5, SweepDirection.Clockwise);
+            ctx.EndFigure(isClosed: true);
+        }
+
+        return geometry;
+    }
+
+    private static Point PointOnWedgeRadius(Point center, double radius, double degrees)
+    {
+        var radians = degrees * Math.PI / 180;
+        return new Point(
+            center.X + radius * Math.Cos(radians),
+            center.Y + radius * Math.Sin(radians));
     }
 
     private void AnimateRectClip(Control target, RectangleGeometry clipRect,
