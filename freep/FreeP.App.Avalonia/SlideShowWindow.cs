@@ -1121,6 +1121,10 @@ public sealed class SlideShowWindow : Window
                 GeometricMaskEffect(element, plan, onReveal);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Wheel:
+                GeometricMaskEffect(element, plan, onReveal);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Zoom:
                 ZoomEffect(element, plan, onReveal);
                 break;
@@ -1557,6 +1561,7 @@ public sealed class SlideShowWindow : Window
             case SlideShowGeometricMaskKind.Diamond:
             case SlideShowGeometricMaskKind.Plus:
             case SlideShowGeometricMaskKind.Wedge:
+            case SlideShowGeometricMaskKind.Wheel:
                 GeometricMaskClipEffect(el, plan, onReveal);
                 break;
 
@@ -1574,7 +1579,7 @@ public sealed class SlideShowWindow : Window
         var fromProgress = plan.GeometricMaskExpandsFromCenter ? 0.0 : 1.0;
         var toProgress = plan.GeometricMaskExpandsFromCenter ? 1.0 : 0.0;
 
-        el.Clip = BuildGeometricMaskGeometry(plan.GeometricMaskKind, w, h, fromProgress);
+        el.Clip = BuildGeometricMaskGeometry(plan.GeometricMaskKind, w, h, fromProgress, plan.GeometricMaskSpokeCount);
         el.Opacity = 1;
         InvokeRevealAtStart(plan, onReveal);
 
@@ -1582,6 +1587,7 @@ public sealed class SlideShowWindow : Window
             AnimateGeometricMaskClip(
                 el,
                 plan.GeometricMaskKind,
+                plan.GeometricMaskSpokeCount,
                 w,
                 h,
                 fromProgress,
@@ -1593,6 +1599,7 @@ public sealed class SlideShowWindow : Window
     private void AnimateGeometricMaskClip(
         Control target,
         SlideShowGeometricMaskKind maskKind,
+        int spokeCount,
         double width,
         double height,
         double fromProgress,
@@ -1602,7 +1609,7 @@ public sealed class SlideShowWindow : Window
     {
         if (durationMs <= 0)
         {
-            target.Clip = BuildGeometricMaskGeometry(maskKind, width, height, toProgress);
+            target.Clip = BuildGeometricMaskGeometry(maskKind, width, height, toProgress, spokeCount);
             onComplete?.Invoke();
             return;
         }
@@ -1620,12 +1627,12 @@ public sealed class SlideShowWindow : Window
             double t = Math.Min(1.0, (double)frame / steps);
             double eased = EaseInOut(t);
             double progress = fromProgress + (toProgress - fromProgress) * eased;
-            target.Clip = BuildGeometricMaskGeometry(maskKind, width, height, progress);
+            target.Clip = BuildGeometricMaskGeometry(maskKind, width, height, progress, spokeCount);
             if (frame >= steps)
             {
                 timer.Stop();
                 _activeTimers.Remove(timer);
-                target.Clip = BuildGeometricMaskGeometry(maskKind, width, height, toProgress);
+                target.Clip = BuildGeometricMaskGeometry(maskKind, width, height, toProgress, spokeCount);
                 onComplete?.Invoke();
             }
         };
@@ -1636,13 +1643,15 @@ public sealed class SlideShowWindow : Window
         SlideShowGeometricMaskKind maskKind,
         double width,
         double height,
-        double progress) =>
+        double progress,
+        int spokeCount) =>
         maskKind switch
         {
             SlideShowGeometricMaskKind.Circle => BuildCircleGeometry(width, height, progress),
             SlideShowGeometricMaskKind.Diamond => BuildDiamondGeometry(width, height, progress),
             SlideShowGeometricMaskKind.Plus => BuildPlusGeometry(width, height, progress),
             SlideShowGeometricMaskKind.Wedge => BuildWedgeGeometry(width, height, progress),
+            SlideShowGeometricMaskKind.Wheel => BuildWheelGeometry(width, height, progress, spokeCount),
             _ => new RectangleGeometry(new Rect(0, 0, width, height))
         };
 
@@ -1749,6 +1758,61 @@ public sealed class SlideShowWindow : Window
         return new Point(
             center.X + radius * Math.Cos(radians),
             center.Y + radius * Math.Sin(radians));
+    }
+
+    private static Geometry BuildWheelGeometry(double width, double height, double progress, int spokeCount)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        if (progress >= 0.999)
+            return new RectangleGeometry(new Rect(0, 0, width, height));
+
+        var center = new Point(width / 2, height / 2);
+        if (progress <= 0)
+        {
+            var collapsed = new StreamGeometry();
+            using (var ctx = collapsed.Open())
+            {
+                ctx.BeginFigure(center, isFilled: true);
+                ctx.LineTo(center);
+                ctx.EndFigure(isClosed: true);
+            }
+
+            return collapsed;
+        }
+
+        var radius = Math.Sqrt(width * width + height * height) / 2;
+        var spokes = Math.Max(1, spokeCount);
+        var spokeSweep = 360.0 / spokes;
+        var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
+
+        for (var spoke = 0; spoke < spokes; spoke++)
+        {
+            var startDegrees = -90 + spoke * spokeSweep;
+            var sweepDegrees = spokeSweep * progress;
+            geometry.Children.Add(BuildWheelSpokeGeometry(center, radius, startDegrees, sweepDegrees));
+        }
+
+        return geometry;
+    }
+
+    private static StreamGeometry BuildWheelSpokeGeometry(
+        Point center,
+        double radius,
+        double startDegrees,
+        double sweepDegrees)
+    {
+        var start = PointOnWedgeRadius(center, radius, startDegrees);
+        var end = PointOnWedgeRadius(center, radius, startDegrees + sweepDegrees);
+        var geometry = new StreamGeometry();
+        using (var ctx = geometry.Open())
+        {
+            ctx.BeginFigure(center, isFilled: true);
+            ctx.LineTo(start);
+            ctx.ArcTo(end, new Size(radius, radius), 0, sweepDegrees > 180, SweepDirection.Clockwise);
+            ctx.EndFigure(isClosed: true);
+        }
+
+        return geometry;
     }
 
     private void AnimateRectClip(Control target, RectangleGeometry clipRect,

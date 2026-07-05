@@ -1127,6 +1127,10 @@ public sealed class SlideShowWindow : Window
                 GeometricMaskEffect(sb, element, plan);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Wheel:
+                GeometricMaskEffect(sb, element, plan);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Zoom:
                 ZoomEffect(sb, element, plan);
                 break;
@@ -1515,6 +1519,10 @@ public sealed class SlideShowWindow : Window
                 WedgeEffect(sb, el, plan);
                 break;
 
+            case SlideShowGeometricMaskKind.Wheel:
+                WheelEffect(sb, el, plan);
+                break;
+
             default:
                 AppearEffect(sb, el, plan.DelayMs);
                 break;
@@ -1773,6 +1781,94 @@ public sealed class SlideShowWindow : Window
         return new Point(
             center.X + radius * Math.Cos(radians),
             center.Y + radius * Math.Sin(radians));
+    }
+
+    private static void WheelEffect(Storyboard sb, FrameworkElement el,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        double w = el.Width  > 0 ? el.Width  : 960;
+        double h = el.Height > 0 ? el.Height : 540;
+
+        var fromProgress = plan.GeometricMaskExpandsFromCenter ? 0.0 : 1.0;
+        var toProgress = plan.GeometricMaskExpandsFromCenter ? 1.0 : 0.0;
+        el.Clip = BuildWheelGeometry(w, h, fromProgress, plan.GeometricMaskSpokeCount);
+        el.Opacity = 1;
+
+        var anim = new ObjectAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
+            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
+        };
+
+        const int frameCount = 24;
+        for (var frame = 0; frame <= frameCount; frame++)
+        {
+            var t = frame / (double)frameCount;
+            var progress = fromProgress + (toProgress - fromProgress) * t;
+            anim.KeyFrames.Add(new DiscreteObjectKeyFrame(
+                BuildWheelGeometry(w, h, progress, plan.GeometricMaskSpokeCount),
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * t))));
+        }
+
+        Storyboard.SetTarget(anim, el);
+        Storyboard.SetTargetProperty(anim, new PropertyPath(UIElement.ClipProperty));
+        sb.Children.Add(anim);
+    }
+
+    private static Geometry BuildWheelGeometry(double width, double height, double progress, int spokeCount)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        if (progress >= 0.999)
+            return new RectangleGeometry(new Rect(0, 0, width, height));
+
+        var center = new Point(width / 2, height / 2);
+        if (progress <= 0)
+            return new PathGeometry(new[]
+            {
+                new PathFigure(center, new PathSegment[] { new LineSegment(center, true) }, closed: true)
+            });
+
+        var radius = Math.Sqrt(width * width + height * height) / 2;
+        var spokes = Math.Max(1, spokeCount);
+        var spokeSweep = 360.0 / spokes;
+        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
+
+        for (var spoke = 0; spoke < spokes; spoke++)
+        {
+            var startDegrees = -90 + spoke * spokeSweep;
+            var sweepDegrees = spokeSweep * progress;
+            geometry.Children.Add(BuildWheelSpokeGeometry(center, radius, startDegrees, sweepDegrees));
+        }
+
+        return geometry;
+    }
+
+    private static PathGeometry BuildWheelSpokeGeometry(
+        Point center,
+        double radius,
+        double startDegrees,
+        double sweepDegrees)
+    {
+        var start = PointOnWedgeRadius(center, radius, startDegrees);
+        var end = PointOnWedgeRadius(center, radius, startDegrees + sweepDegrees);
+        var figure = new PathFigure
+        {
+            StartPoint = center,
+            IsClosed = true,
+            IsFilled = true
+        };
+        figure.Segments.Add(new LineSegment(start, true));
+        figure.Segments.Add(new ArcSegment(
+            end,
+            new Size(radius, radius),
+            rotationAngle: 0,
+            isLargeArc: sweepDegrees > 180,
+            sweepDirection: SweepDirection.Clockwise,
+            isStroked: true));
+
+        var geometry = new PathGeometry();
+        geometry.Figures.Add(figure);
+        return geometry;
     }
 
     private static void AddRectAnimation(

@@ -391,10 +391,45 @@ public sealed class SlideShowPlaybackPlannerTests
         wedgeOut.GeometricMaskExpandsFromCenter.Should().BeFalse();
         wedgeOut.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
 
-        var growShrink = SlideShowPlaybackPlanner.PlanShapeAnimation(
+        var wheelIn = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
                 ShapeId = 19,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Wheel,
+                Direction = AnimationDirection.In,
+                DurationMs = 285
+            },
+            startDelayMs: 25);
+
+        wheelIn.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Wheel);
+        wheelIn.GeometricMaskKind.Should().Be(SlideShowGeometricMaskKind.Wheel);
+        wheelIn.GeometricMaskExpandsFromCenter.Should().BeTrue();
+        wheelIn.GeometricMaskSpokeCount.Should().Be(SlideShowPlaybackPlanner.WheelSpokeCount);
+        wheelIn.DurationMs.Should().Be(285);
+        wheelIn.DelayMs.Should().Be(25);
+        wheelIn.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.OnComplete);
+
+        var wheelOut = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 20,
+                Kind = AnimationKind.Exit,
+                Preset = AnimationPreset.Wheel,
+                Direction = AnimationDirection.Out
+            },
+            startDelayMs: 0);
+
+        wheelOut.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Wheel);
+        wheelOut.GeometricMaskKind.Should().Be(SlideShowGeometricMaskKind.Wheel);
+        wheelOut.GeometricMaskExpandsFromCenter.Should().BeFalse();
+        wheelOut.GeometricMaskSpokeCount.Should().Be(SlideShowPlaybackPlanner.WheelSpokeCount);
+        wheelOut.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
+
+        var growShrink = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 21,
                 Kind = AnimationKind.Emphasis,
                 Preset = AnimationPreset.Grow,
                 DurationMs = 450

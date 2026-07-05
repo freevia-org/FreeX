@@ -31,6 +31,7 @@ public enum SlideShowShapeAnimationEffectKind
     Diamond,
     Plus,
     Wedge,
+    Wheel,
     Zoom,
     Pulse,
     GrowShrink,
@@ -56,7 +57,8 @@ public enum SlideShowGeometricMaskKind
     Circle,
     Diamond,
     Plus,
-    Wedge
+    Wedge,
+    Wheel
 }
 
 public sealed record SlideShowShapeAnimationPlaybackPlan(
@@ -79,6 +81,7 @@ public sealed record SlideShowShapeAnimationPlaybackPlan(
     bool BoxExpandsFromCenter,
     SlideShowGeometricMaskKind GeometricMaskKind,
     bool GeometricMaskExpandsFromCenter,
+    int GeometricMaskSpokeCount,
     bool CheckerboardHorizontal,
     int CheckerboardRowCount,
     int CheckerboardColumnCount,
@@ -99,6 +102,7 @@ public static class SlideShowPlaybackPlanner
     public const int BlindsBandCount = 8;
     public const int CheckerboardRowCount = 4;
     public const int CheckerboardColumnCount = 6;
+    public const int WheelSpokeCount = 4;
 
     public static SlideShowTransitionPlaybackPlan PlanTransition(SlideTransition transition)
     {
@@ -160,6 +164,7 @@ public static class SlideShowPlaybackPlanner
             BoxExpandsFromCenter(animation),
             ResolveGeometricMaskKind(animation),
             GeometricMaskExpandsFromCenter(animation),
+            ResolveGeometricMaskSpokeCount(animation),
             IsHorizontalCheckerboard(animation.Direction),
             CheckerboardRowCount,
             CheckerboardColumnCount,
@@ -203,6 +208,7 @@ public static class SlideShowPlaybackPlanner
             AnimationPreset.Diamond => SlideShowShapeAnimationEffectKind.Diamond,
             AnimationPreset.Plus => SlideShowShapeAnimationEffectKind.Plus,
             AnimationPreset.Wedge => SlideShowShapeAnimationEffectKind.Wedge,
+            AnimationPreset.Wheel => SlideShowShapeAnimationEffectKind.Wheel,
             AnimationPreset.Zoom => SlideShowShapeAnimationEffectKind.Zoom,
             AnimationPreset.Pulse => SlideShowShapeAnimationEffectKind.Pulse,
             AnimationPreset.Grow or AnimationPreset.Shrink => SlideShowShapeAnimationEffectKind.GrowShrink,
@@ -288,11 +294,17 @@ public static class SlideShowPlaybackPlanner
             AnimationPreset.Diamond => SlideShowGeometricMaskKind.Diamond,
             AnimationPreset.Plus => SlideShowGeometricMaskKind.Plus,
             AnimationPreset.Wedge => SlideShowGeometricMaskKind.Wedge,
+            AnimationPreset.Wheel => SlideShowGeometricMaskKind.Wheel,
             _ => SlideShowGeometricMaskKind.None
         };
 
     private static bool GeometricMaskExpandsFromCenter(ShapeAnimation animation) =>
         ExpandsFromCenter(animation);
+
+    private static int ResolveGeometricMaskSpokeCount(ShapeAnimation animation) =>
+        animation.Preset == AnimationPreset.Wheel
+            ? WheelSpokeCount
+            : 0;
 
     private static bool ExpandsFromCenter(ShapeAnimation animation) =>
         animation.Direction switch
