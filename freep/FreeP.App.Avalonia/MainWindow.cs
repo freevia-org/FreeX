@@ -68,8 +68,8 @@ public sealed class MainWindow : Window
     private static readonly FilePickerFileType PictureFileType =
         AvaloniaFilePickerTypeAdapter.CreateFileType(
             PresentationFileTextResources.PictureFileTypeName,
-            ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.svg"],
-            ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/svg+xml"]);
+            ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.svg", "*.wmf", "*.emf"],
+            ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/svg+xml", "image/x-wmf", "image/x-emf"]);
 
     private static readonly (string CommandId, Action<EditingSession> Execute)[] ArrangeCommandRoutes =
     [
@@ -268,6 +268,7 @@ public sealed class MainWindow : Window
     internal HyperlinkDialogRequest? LastHyperlinkDialogRequest { get; private set; }
     internal HyperlinkDialogApplyPlan? LastHyperlinkDialogApplyPlan { get; private set; }
     internal Func<HyperlinkDialogRequest, Task<Hyperlink?>>? HyperlinkDialogResultProviderForTests { get; set; }
+    internal Func<Task<PresentationPictureBulletPayload?>>? PictureBulletPayloadProviderForTests { get; set; }
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationHandoutLayoutPlan? LastHandoutLayoutPlan { get; private set; }
     internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
@@ -1771,7 +1772,7 @@ public sealed class MainWindow : Window
 
         registry.Register(
             PresentationListGalleryPlanner.ImageBulletCommandId,
-            new ActionRibbonCommand(() => { }));
+            new ActionRibbonCommand(() => _ = ApplyPictureBulletFromFileAsync()));
     }
 
     private static bool TryGetRibbonFontSize(RibbonCommandContext ctx, out double sizePt)
@@ -2374,6 +2375,60 @@ public sealed class MainWindow : Window
     }
 
     // ── File lifecycle ─────────────────────────────────────────────────────────
+
+    internal Task ApplyPictureBulletFromFileAsyncForTests() => ApplyPictureBulletFromFileAsync();
+
+    private async Task ApplyPictureBulletFromFileAsync()
+    {
+        try
+        {
+            var payload = PictureBulletPayloadProviderForTests is { } provider
+                ? await provider()
+                : await PickPictureBulletPayloadAsync();
+
+            if (payload is null)
+                return;
+
+            if (_textEditor?.TryApplyActiveTableCellParagraphPictureBullet(payload) == true)
+            {
+                _statusText.Text = "Picture bullet applied.";
+                return;
+            }
+
+            if (Editor.TryApplyActiveTableCellParagraphPictureBullet(payload))
+                _statusText.Text = "Picture bullet applied.";
+        }
+        catch (Exception ex)
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed("Picture Bullet", ex.Message);
+        }
+    }
+
+    private async Task<PresentationPictureBulletPayload?> PickPictureBulletPayloadAsync()
+    {
+        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable("Picture Bullet");
+            return null;
+        }
+
+        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromFileTypes(
+                "Choose Picture Bullet",
+                [PictureFileType]));
+
+        if (file is null)
+            return null;
+
+        await using var source = await file.OpenReadAsync();
+        using var memory = new MemoryStream();
+        await source.CopyToAsync(memory);
+
+        return PresentationPictureBulletAuthoringPlanner.CreatePayloadFromFileName(
+            memory.ToArray(),
+            file.Name);
+    }
 
     internal void OpenChartDataDialog()
     {

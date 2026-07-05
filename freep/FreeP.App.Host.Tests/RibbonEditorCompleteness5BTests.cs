@@ -1,3 +1,4 @@
+using System;
 using Free.Shared.Drawing;
 using Free.Shared.Ribbon;
 using FreeP.App.Compositor;
@@ -28,6 +29,14 @@ public class RibbonEditorCompleteness5BTests
 
     private static RibbonCommandRegistry MakeRegistry(EditingSession editor)
         => FreePRibbonCommands.Build(new RibbonStateStore(), editor);
+
+    private static RibbonCommandRegistry MakeRegistry(
+        EditingSession editor,
+        Func<PresentationPictureBulletPayload?> pickPictureBulletPayload)
+        => FreePRibbonCommands.Build(
+            new RibbonStateStore(),
+            editor,
+            pickPictureBulletPayload: pickPictureBulletPayload);
 
     private static void Exec(RibbonCommandRegistry registry, string id,
         RibbonCommandContext? context = null)
@@ -691,6 +700,31 @@ public class RibbonEditorCompleteness5BTests
         var paragraph = shape.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0];
         paragraph.BulletKind.Should().Be(BulletKind.Char);
         paragraph.BulletChar.Should().Be("\u25AA");
+        paragraph.BulletSuppressed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Cmd_PictureBullet_WithInjectedPicker_AppliesSharedTableCellImageBullet()
+    {
+        var (ed, pres) = MakeSession();
+        var body = MakeTextBody("Cell");
+        var table = AddSingleCellTable(pres, 2, body);
+        ed.Select(table.Id);
+        ed.SetActiveTableCell(0, 0);
+        var reg = MakeRegistry(ed, () =>
+            PresentationPictureBulletAuthoringPlanner.CreatePayload(
+                [0x89, 0x50, 0x4E, 0x47],
+                "image/png",
+                "bullet.png"));
+
+        Exec(reg, PresentationListGalleryPlanner.ImageBulletCommandId);
+
+        var paragraph = table.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+        paragraph.BulletKind.Should().Be(BulletKind.Image);
+        paragraph.BulletImage.Should().NotBeNull();
+        paragraph.BulletImage!.ContentType.Should().Be("image/png");
+        paragraph.BulletImage.Bytes.Should().Equal(0x89, 0x50, 0x4E, 0x47);
+        paragraph.BulletChar.Should().BeNull();
         paragraph.BulletSuppressed.Should().BeFalse();
     }
 

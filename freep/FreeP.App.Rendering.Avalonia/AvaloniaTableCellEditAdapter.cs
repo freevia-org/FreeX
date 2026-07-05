@@ -173,6 +173,21 @@ public static class AvaloniaTableCellEditAdapter
             selection);
     }
 
+    public static TableCellParagraphFormatPlan PlanParagraphPictureBullet(
+        EditingSession editor,
+        PresentationPictureBulletPayload payload,
+        (int Start, int End)? selection = null)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        return TableCellEditPlanner.PlanParagraphPictureBullet(
+            editor.CurrentSlideIndex,
+            editor.CurrentSlide,
+            editor.SelectedShapeIds,
+            editor.ActiveTableCell,
+            payload,
+            selection);
+    }
+
     public static TableCellParagraphFormatPlan PlanParagraphIndent(
         EditingSession editor,
         (int Start, int End)? selection = null)

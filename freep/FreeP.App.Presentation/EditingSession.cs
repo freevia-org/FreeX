@@ -1321,6 +1321,17 @@ public sealed class EditingSession
             preset,
             selection);
 
+    public TableCellParagraphFormatPlan PlanActiveTableCellParagraphPictureBullet(
+        PresentationPictureBulletPayload payload,
+        (int Start, int End)? selection = null) =>
+        TableCellEditPlanner.PlanParagraphPictureBullet(
+            _currentSlideIndex,
+            CurrentSlide,
+            _selectedShapeIds,
+            ActiveTableCell,
+            payload,
+            selection);
+
     public TableCellParagraphFormatPlan PlanActiveTableCellParagraphIndent(
         (int Start, int End)? selection = null) =>
         TableCellEditPlanner.PlanParagraphIndent(
@@ -1381,6 +1392,18 @@ public sealed class EditingSession
             return false;
 
         return TryApplyActiveTableCellParagraphListPreset(preset, selection);
+    }
+
+    public bool TryApplyActiveTableCellParagraphPictureBullet(
+        PresentationPictureBulletPayload payload,
+        (int Start, int End)? selection = null)
+    {
+        var plan = PlanActiveTableCellParagraphPictureBullet(payload, selection);
+        if (plan.Command is null)
+            return false;
+
+        Bus.Execute(plan.Command);
+        return true;
     }
 
     public bool TryApplyActiveTableCellParagraphIndent(

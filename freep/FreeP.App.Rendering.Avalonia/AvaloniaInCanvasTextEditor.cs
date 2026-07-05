@@ -271,6 +271,18 @@ public sealed class AvaloniaInCanvasTextEditor
         return true;
     }
 
+    public bool TryApplyActiveTableCellParagraphPictureBullet(PresentationPictureBulletPayload payload)
+    {
+        var overlaySelection = GetActiveCellOverlaySelection();
+        var plan = AvaloniaTableCellEditAdapter.PlanParagraphPictureBullet(_editor, payload, overlaySelection.Selection);
+        if (plan.Command is null)
+            return false;
+
+        _editor.Bus.Execute(plan.Command);
+        ApplyCellOverlayFormatResult(plan.ResultRichTextPlan);
+        return true;
+    }
+
     public bool TryApplyActiveTableCellParagraphIndent()
     {
         var overlaySelection = GetActiveCellOverlaySelection();

@@ -1134,6 +1134,57 @@ public sealed class TableCellEditPlannerTests
     }
 
     [Fact]
+    public void PlanParagraphPictureBullet_SelectionBuildsUndoableSharedCommand()
+    {
+        var shape = MakeMergedTableShape();
+        var body = shape.Table!.Rows[0].Cells[0].TextBody!;
+        var second = new Paragraph();
+        second.Runs.Add(new Run { Text = "Beta" });
+        body.Paragraphs.Add(second);
+        var slide = new Slide { Shapes = { shape } };
+        var payload = PresentationPictureBulletAuthoringPlanner.CreatePayload(
+            [0x89, 0x50, 0x4E, 0x47],
+            "image/png",
+            "bullet.png");
+
+        var plan = TableCellEditPlanner.PlanParagraphPictureBullet(
+            0,
+            slide,
+            [shape.Id],
+            (0, 0),
+            payload,
+            selection: (7, 11));
+
+        plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+        plan.Kind.Should().Be(TableCellParagraphFormatKind.PictureBullet);
+        plan.BulletImage.Should().NotBeNull();
+        plan.BulletImage!.Bytes.Should().Equal(0x89, 0x50, 0x4E, 0x47);
+        plan.ResultRichTextPlan.Should().NotBeNull();
+        plan.ResultRichTextPlan!.SelectedParagraphs.Should().ContainSingle();
+        plan.ResultRichTextPlan.SelectedParagraphs[0].BulletKind.Should().Be(BulletKind.Image);
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(plan.Command!);
+
+        var paragraphs = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs;
+        paragraphs[0].BulletKind.Should().Be(BulletKind.None);
+        paragraphs[1].BulletKind.Should().Be(BulletKind.Image);
+        paragraphs[1].BulletImage.Should().NotBeNull();
+        paragraphs[1].BulletImage!.ContentType.Should().Be("image/png");
+        paragraphs[1].BulletImage!.Bytes.Should().Equal(0x89, 0x50, 0x4E, 0x47);
+        paragraphs[1].BulletChar.Should().BeNull();
+        paragraphs[1].BulletSuppressed.Should().BeFalse();
+
+        bus.Undo();
+        paragraphs = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs;
+        paragraphs[1].BulletKind.Should().Be(BulletKind.None);
+        paragraphs[1].BulletImage.Should().BeNull();
+    }
+
+    [Fact]
     public void PlanParagraphIndent_SubRangeSelection_IndentsOnlyTouchedParagraphs()
     {
         var shape = MakeMergedTableShape();

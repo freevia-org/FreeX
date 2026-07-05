@@ -33,6 +33,7 @@ public enum TableCellParagraphFormatKind
     BulletToggle,
     NumberingToggle,
     ListPreset,
+    PictureBullet,
     Indent,
     Outdent,
 }
@@ -215,7 +216,8 @@ public sealed record TableCellParagraphFormatPlan(
     InCanvasTableCellRichTextEditPlan? ResultRichTextPlan = null,
     bool? BulletEnabled = null,
     int LevelDelta = 0,
-    TableCellListPresetDescriptor? ListPreset = null)
+    TableCellListPresetDescriptor? ListPreset = null,
+    ImagePart? BulletImage = null)
 {
     public bool IsReady => Status == TableCellTextFormatStatus.Ready && Command is not null;
 }
@@ -732,6 +734,37 @@ public static class TableCellEditPlanner
             selection);
     }
 
+    public static TableCellParagraphFormatPlan PlanParagraphPictureBullet(
+        int slideIndex,
+        Slide? slide,
+        IReadOnlyList<uint> selectedShapeIds,
+        (int Row, int Col)? activeCell,
+        PresentationPictureBulletPayload payload,
+        (int Start, int End)? selection = null)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+
+        if (!payload.IsValid)
+        {
+            return DisabledParagraphFormat(
+                TableCellTextFormatStatus.NoTextRuns,
+                TableCellParagraphFormatKind.PictureBullet,
+                null);
+        }
+
+        var image = PresentationPictureBulletAuthoringPlanner.CreateImagePart(payload);
+        return PlanParagraphFormat(
+            slideIndex,
+            slide,
+            selectedShapeIds,
+            activeCell,
+            TableCellParagraphFormatKind.PictureBullet,
+            null,
+            selection,
+            body => ApplyParagraphPictureBullet(body, selection, image),
+            bulletImage: image);
+    }
+
     public static TableCellParagraphFormatPlan PlanParagraphIndent(
         int slideIndex,
         Slide? slide,
@@ -781,7 +814,8 @@ public static class TableCellEditPlanner
         Func<TextBody, TextBody> mutate,
         Func<TextBody, bool?>? bulletEnabledFactory = null,
         int levelDelta = 0,
-        TableCellListPresetDescriptor? listPreset = null)
+        TableCellListPresetDescriptor? listPreset = null,
+        ImagePart? bulletImage = null)
     {
         ArgumentNullException.ThrowIfNull(selectedShapeIds);
         ArgumentNullException.ThrowIfNull(mutate);
@@ -826,7 +860,8 @@ public static class TableCellEditPlanner
             richTextPlan,
             bulletEnabled,
             levelDelta,
-            listPreset);
+            listPreset,
+            bulletImage);
     }
 
     private static TableCellTextValueFormatPlan PlanTextValueFormat(
@@ -1433,6 +1468,21 @@ public static class TableCellEditPlanner
 
         paragraph.BulletChar = null;
         paragraph.BulletSuppressed = true;
+    }
+
+    private static TextBody ApplyParagraphPictureBullet(
+        TextBody source,
+        (int Start, int End)? selection,
+        ImagePart image)
+    {
+        var editedBody = TextBodyModelCloner.CloneTextBody(source)!;
+        int textLength = InCanvasTextEditPlanner.ExtractPlainText(source).Length;
+        var range = NormalizeSelection(selection, textLength);
+
+        foreach (int paragraphIndex in ResolveParagraphIndexes(editedBody, range))
+            PresentationPictureBulletAuthoringPlanner.ApplyToParagraph(editedBody.Paragraphs[paragraphIndex], image);
+
+        return editedBody;
     }
 
     private static TextBody ApplyParagraphIndent(

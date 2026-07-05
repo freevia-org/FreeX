@@ -279,6 +279,16 @@ public static class PptxPackageWriter
                     mediaExtensions.Add(prvExt);
                 }
             }
+
+            foreach (var paragraph in EnumerateSlideParagraphs(slide))
+            {
+                if (paragraph.BulletKind == BulletKind.Image &&
+                    paragraph.BulletImage?.Bytes is { Length: > 0 } bulletBytes)
+                {
+                    var ct = paragraph.BulletImage.ContentType ?? "image/png";
+                    mediaExtensions.Add(OpcMediaTypes.GetDrawingMediaExtension(ct));
+                }
+            }
         }
 
         foreach (var artifact in presentation.RecordingMediaArtifacts)
@@ -530,6 +540,8 @@ public static class PptxPackageWriter
             // Wave 25A: preserved modern objects (zoom / ink / 3D / unknown)
             var (prvRels, _) = WriteSlidePreservedObjects(archive, slide, si + 1, usedRelIds);
 
+            var bulletImageRelIds = WriteSlideBulletImages(archive, slide, si + 1, usedRelIds);
+
             // Combined shapeId→relId map for shape element building (picture shapes + charts + OLE)
             var mediaById = new Dictionary<uint, string>();
             foreach (var (id, relId, _) in mediaRelIds)  mediaById[id] = relId;
@@ -571,7 +583,7 @@ public static class PptxPackageWriter
             }
 
             // Slide xml — use the owning master's theme color scheme for scheme-color pre-resolution.
-            WriteEntry(archive, slidePath, BuildSlideXml(slide, slideColorScheme, mediaById, smartArtRelIdRemap, hlinkRelIds, presentation.Slides, fillBlipById, transSoundRelId, prvRelIdByShapeAndOldId, captionTracksByShape));
+            WriteEntry(archive, slidePath, BuildSlideXml(slide, slideColorScheme, mediaById, smartArtRelIdRemap, hlinkRelIds, presentation.Slides, fillBlipById, transSoundRelId, prvRelIdByShapeAndOldId, captionTracksByShape, bulletImageRelIds.ToDictionary(item => item.paragraph, item => item.relId)));
 
             // Slide rels: rId1=layout, images (picture shapes + fill blips), charts, SmartArt, optional notesSlide
             var slideRels = new OpcRelationshipDocument();
@@ -594,6 +606,8 @@ public static class PptxPackageWriter
                 slideRels.Add(embRelId, embRelType, $"../embeddings/{embPath.Split('/').Last()}");
             foreach (var (_, imgRelId, imgPath) in oleImgRels)
                 slideRels.Add(imgRelId, ImageRelType, $"../media/{imgPath.Split('/').Last()}");
+            foreach (var (_, relId, mediaPath) in bulletImageRelIds)
+                slideRels.Add(relId, ImageRelType, $"../media/{mediaPath.Split('/').Last()}");
             // Wave 25A: preserved modern object rels (absolute paths in prvRelIdPatch, relative in rels entry)
             foreach (var (_, _, newRelId, relType, targetPath) in prvRels)
                 slideRels.Add(newRelId, relType, MakeRelativePath(slidePath, targetPath));
@@ -1146,7 +1160,8 @@ public static class PptxPackageWriter
         Dictionary<uint, string>? fillBlipById = null,
         string? transSoundRelId = null,
         Dictionary<(uint shapeId, string oldRelId), string>? prvRelIdByShapeAndOldId = null,
-        IReadOnlyDictionary<uint, IReadOnlyList<MediaCaptionTrackRelationship>>? captionTracksByShape = null)
+        IReadOnlyDictionary<uint, IReadOnlyList<MediaCaptionTrackRelationship>>? captionTracksByShape = null,
+        Dictionary<Paragraph, string>? bulletImageRelIds = null)
     {
         return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
@@ -1162,7 +1177,7 @@ public static class PptxPackageWriter
                     new XElement(P + "spTree",
                         GrpSpHeader(),
                         slide.Shapes
-                            .Select(s => BuildShapeEl(s, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById, prvRelIdByShapeAndOldId, captionTracksByShape))
+                            .Select(s => BuildShapeEl(s, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById, prvRelIdByShapeAndOldId, captionTracksByShape, bulletImageRelIds))
                             .OfType<XElement>())),
                 // II2: p:hf is NOT valid on p:sld (CT_Slide schema has no hf element);
                 // it is only valid on slideMaster/slideLayout/handoutMaster/notesMaster.
@@ -2429,14 +2444,15 @@ public static class PptxPackageWriter
         List<Slide>? allSlides = null,
         Dictionary<uint, string>? fillBlipById = null,
         Dictionary<(uint shapeId, string oldRelId), string>? prvRelIdByShapeAndOldId = null,
-        IReadOnlyDictionary<uint, IReadOnlyList<MediaCaptionTrackRelationship>>? captionTracksByShape = null) =>
+        IReadOnlyDictionary<uint, IReadOnlyList<MediaCaptionTrackRelationship>>? captionTracksByShape = null,
+        Dictionary<Paragraph, string>? bulletImageRelIds = null) =>
         shape.Kind switch
         {
             SlideShapeKind.Picture => BuildPicEl(shape, mediaById),
             SlideShapeKind.Media   => BuildMediaPicEl(shape, mediaById, captionTracksByShape),
-            SlideShapeKind.Group => BuildGrpSpEl(shape, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById, prvRelIdByShapeAndOldId, captionTracksByShape),
+            SlideShapeKind.Group => BuildGrpSpEl(shape, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById, prvRelIdByShapeAndOldId, captionTracksByShape, bulletImageRelIds),
             SlideShapeKind.Connector => BuildCxnSpEl(shape, scheme, hlinkRelIds, fillBlipById),
-            SlideShapeKind.Table when shape.Table is not null => BuildGraphicFrameEl(shape, scheme),
+            SlideShapeKind.Table when shape.Table is not null => BuildGraphicFrameEl(shape, scheme, bulletImageRelIds),
             SlideShapeKind.Chart when shape.Chart is not null => BuildChartGraphicFrameEl(shape, mediaById),
             SlideShapeKind.SmartArt when shape.SmartArt is not null =>
                 BuildSmartArtGraphicFrameEl(shape,
@@ -2448,13 +2464,14 @@ public static class PptxPackageWriter
             SlideShapeKind.Zoom or SlideShapeKind.Ink or SlideShapeKind.Model3d
                 or SlideShapeKind.PreservedObject when shape.PreservedObject is not null =>
                     BuildPreservedObjectEl(shape, prvRelIdByShapeAndOldId),
-            _ => BuildSpEl(shape, scheme, hlinkRelIds, allSlides, fillBlipById)
+            _ => BuildSpEl(shape, scheme, hlinkRelIds, allSlides, fillBlipById, bulletImageRelIds)
         };
 
     private static XElement BuildSpEl(SlideShape shape, PresentationColorScheme scheme,
         Dictionary<string, string>? hlinkRelIds = null,
         List<Slide>? allSlides = null,
-        Dictionary<uint, string>? fillBlipById = null)
+        Dictionary<uint, string>? fillBlipById = null,
+        Dictionary<Paragraph, string>? bulletImageRelIds = null)
     {
         string? fillBlipRelId = null;
         fillBlipById?.TryGetValue(shape.Id, out fillBlipRelId);
@@ -2465,7 +2482,7 @@ public static class PptxPackageWriter
                 new XElement(P + "nvPr",
                     shape.Placeholder is not null ? BuildPhEl(shape.Placeholder) : null)),
             BuildSpPrEl(shape, scheme, fillBlipRelId: fillBlipRelId),
-            shape.TextBody is not null ? BuildTxBodyEl(shape.TextBody, scheme, hlinkRelIds, allSlides) : null);
+            shape.TextBody is not null ? BuildTxBodyEl(shape.TextBody, scheme, hlinkRelIds, allSlides, bulletImageRelIds) : null);
     }
 
     private static XElement BuildCxnSpEl(SlideShape shape, PresentationColorScheme scheme,
@@ -2665,7 +2682,8 @@ public static class PptxPackageWriter
         List<Slide>? allSlides = null,
         Dictionary<uint, string>? fillBlipById = null,
         Dictionary<(uint shapeId, string oldRelId), string>? prvRelIdByShapeAndOldId = null,
-        IReadOnlyDictionary<uint, IReadOnlyList<MediaCaptionTrackRelationship>>? captionTracksByShape = null) =>
+        IReadOnlyDictionary<uint, IReadOnlyList<MediaCaptionTrackRelationship>>? captionTracksByShape = null,
+        Dictionary<Paragraph, string>? bulletImageRelIds = null) =>
         new XElement(P + "grpSp",
             new XElement(P + "nvGrpSpPr",
                 CnvPr(shape),
@@ -2673,7 +2691,7 @@ public static class PptxPackageWriter
                 new XElement(P + "nvPr")),
             BuildGrpSpPrEl(shape),
             shape.Children
-                .Select(c => BuildShapeEl(c, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById, prvRelIdByShapeAndOldId, captionTracksByShape))
+                .Select(c => BuildShapeEl(c, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById, prvRelIdByShapeAndOldId, captionTracksByShape, bulletImageRelIds))
                 .OfType<XElement>());
 
     /// <summary>
@@ -2934,7 +2952,10 @@ public static class PptxPackageWriter
 
     private const string DrawingTableUri = "http://schemas.openxmlformats.org/drawingml/2006/table";
 
-    private static XElement BuildGraphicFrameEl(SlideShape shape, PresentationColorScheme scheme)
+    private static XElement BuildGraphicFrameEl(
+        SlideShape shape,
+        PresentationColorScheme scheme,
+        Dictionary<Paragraph, string>? bulletImageRelIds = null)
     {
         var table = shape.Table!;
 
@@ -2958,7 +2979,7 @@ public static class PptxPackageWriter
             new XElement(A + "graphic",
                 new XElement(A + "graphicData",
                     new XAttribute("uri", DrawingTableUri),
-                    BuildTableEl(table, scheme))));
+                    BuildTableEl(table, scheme, bulletImageRelIds))));
     }
 
     // ── Chart / graphicFrame elements ─────────────────────────────────────────────
@@ -3060,7 +3081,10 @@ public static class PptxPackageWriter
                     relIdsEl)));
     }
 
-    private static XElement BuildTableEl(TableShape table, PresentationColorScheme scheme)
+    private static XElement BuildTableEl(
+        TableShape table,
+        PresentationColorScheme scheme,
+        Dictionary<Paragraph, string>? bulletImageRelIds = null)
     {
         // tblPr
         var tblPr = new XElement(A + "tblPr");
@@ -3079,17 +3103,23 @@ public static class PptxPackageWriter
                 new XElement(A + "gridCol", new XAttribute("w", w))));
 
         // rows
-        var rowEls = table.Rows.Select(row => BuildTableRowEl(row, scheme));
+        var rowEls = table.Rows.Select(row => BuildTableRowEl(row, scheme, bulletImageRelIds));
 
         return new XElement(A + "tbl", tblPr, tblGrid, rowEls);
     }
 
-    private static XElement BuildTableRowEl(TableRow row, PresentationColorScheme scheme) =>
+    private static XElement BuildTableRowEl(
+        TableRow row,
+        PresentationColorScheme scheme,
+        Dictionary<Paragraph, string>? bulletImageRelIds = null) =>
         new XElement(A + "tr",
             new XAttribute("h", row.HeightEmu),
-            row.Cells.Select(cell => BuildTableCellEl(cell, scheme)));
+            row.Cells.Select(cell => BuildTableCellEl(cell, scheme, bulletImageRelIds)));
 
-    private static XElement BuildTableCellEl(TableCell cell, PresentationColorScheme scheme)
+    private static XElement BuildTableCellEl(
+        TableCell cell,
+        PresentationColorScheme scheme,
+        Dictionary<Paragraph, string>? bulletImageRelIds = null)
     {
         // txBody (a:txBody inside a cell uses A namespace directly)
         XElement? txBody = null;
@@ -3107,7 +3137,7 @@ public static class PptxPackageWriter
             txBody = new XElement(A + "txBody",
                 bodyPr,
                 BuildLstStyleEl(cell.TextBody.LstStyle),
-                cell.TextBody.Paragraphs.Select(p => BuildParaEl(p)));
+                cell.TextBody.Paragraphs.Select(p => BuildParaEl(p, bulletImageRelIds: bulletImageRelIds)));
         }
         else
         {
@@ -3355,7 +3385,8 @@ public static class PptxPackageWriter
 
     private static XElement BuildTxBodyEl(TextBody body, PresentationColorScheme scheme,
         Dictionary<string, string>? hlinkRelIds = null,
-        List<Slide>? allSlides = null)
+        List<Slide>? allSlides = null,
+        Dictionary<Paragraph, string>? bulletImageRelIds = null)
     {
         // Write anchor only when explicitly set; omit when null (inherited from layout/master).
         var bodyPr = new XElement(A + "bodyPr");
@@ -3438,12 +3469,13 @@ public static class PptxPackageWriter
         return new XElement(P + "txBody",
             bodyPr,
             BuildLstStyleEl(body.LstStyle),
-            body.Paragraphs.Select(p => BuildParaEl(p, hlinkRelIds, allSlides)));
+            body.Paragraphs.Select(p => BuildParaEl(p, hlinkRelIds, allSlides, bulletImageRelIds)));
     }
 
     private static XElement BuildParaEl(Paragraph para,
         Dictionary<string, string>? hlinkRelIds = null,
-        List<Slide>? allSlides = null)
+        List<Slide>? allSlides = null,
+        Dictionary<Paragraph, string>? bulletImageRelIds = null)
     {
         var pPr = new XElement(A + "pPr");
         bool hasPPr = false;
@@ -3522,6 +3554,20 @@ public static class PptxPackageWriter
                 var autoNumEl = new XElement(A + "buAutoNum", new XAttribute("type", autoNumTypeStr));
                 if (para.AutoNumStartAt != 1) autoNumEl.Add(new XAttribute("startAt", para.AutoNumStartAt));
                 pPr.Add(autoNumEl); hasPPr = true; break;
+            case BulletKind.Image:
+                if (bulletImageRelIds is not null &&
+                    bulletImageRelIds.TryGetValue(para, out var bulletImageRelId))
+                {
+                    pPr.Add(new XElement(A + "buBlip",
+                        new XElement(A + "blip", new XAttribute(R + "embed", bulletImageRelId))));
+                    hasPPr = true;
+                }
+                else
+                {
+                    pPr.Add(new XElement(A + "buNone"));
+                    hasPPr = true;
+                }
+                break;
         }
 
         // Wave 18B: tab stops (a:tabLst)
@@ -3835,6 +3881,68 @@ public static class PptxPackageWriter
         }
 
         return (pictureResult, fillBlipResult);
+    }
+
+    private static List<(Paragraph paragraph, string relId, string mediaPath)> WriteSlideBulletImages(
+        ZipArchive archive,
+        Slide slide,
+        int slideIndex,
+        HashSet<string> usedRelIds)
+    {
+        var result = new List<(Paragraph, string, string)>();
+        int mediaIdx = 1;
+        int relIdx = 1;
+
+        foreach (var paragraph in EnumerateSlideParagraphs(slide))
+        {
+            if (paragraph.BulletKind != BulletKind.Image ||
+                paragraph.BulletImage?.Bytes is not { Length: > 0 } bytes)
+            {
+                continue;
+            }
+
+            var contentType = paragraph.BulletImage.ContentType ?? "image/png";
+            var ext = OpcMediaTypes.GetDrawingMediaExtension(contentType);
+            var mediaPath = $"ppt/media/slide{slideIndex}_bullet{mediaIdx}.{ext}";
+            WriteRawEntry(archive, mediaPath, bytes);
+
+            string relId;
+            do
+            {
+                relId = $"rIdBulletImg{relIdx++}";
+            }
+            while (!usedRelIds.Add(relId));
+
+            result.Add((paragraph, relId, mediaPath));
+            mediaIdx++;
+        }
+
+        return result;
+    }
+
+    private static IEnumerable<Paragraph> EnumerateSlideParagraphs(Slide slide)
+    {
+        foreach (var shape in AllShapes(slide.Shapes))
+        {
+            if (shape.TextBody is not null)
+            {
+                foreach (var paragraph in shape.TextBody.Paragraphs)
+                    yield return paragraph;
+            }
+
+            if (shape.Table is null)
+                continue;
+
+            foreach (var row in shape.Table.Rows)
+            foreach (var cell in row.Cells)
+            {
+                if (cell.TextBody is null)
+                    continue;
+
+                foreach (var paragraph in cell.TextBody.Paragraphs)
+                    yield return paragraph;
+            }
+        }
     }
 
     /// <summary>

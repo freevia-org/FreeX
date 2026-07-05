@@ -1,4 +1,5 @@
 using System.IO;
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Xml.Linq;
 using Free.Shared.Drawing;
@@ -35,6 +36,60 @@ public sealed class PptxRoundTripTests : IDisposable
         var reloaded = PptxPackageReader.Read(path);
 
         reloaded.Slides.Should().HaveCount(2, "we wrote 2 slides");
+    }
+
+    [Fact]
+    public void RoundTrip_AuthoredPictureBullet_WritesAndReadsBuBlipMedia()
+    {
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 42,
+            Name = "Picture Bullet Text",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = DrawingMlCoordinateUnits.EmuPerInch * 2,
+            ExtentCyEmu = DrawingMlCoordinateUnits.EmuPerInch,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        BulletKind = BulletKind.Image,
+                        BulletImage = new ImagePart
+                        {
+                            Bytes = [0x89, 0x50, 0x4E, 0x47],
+                            ContentType = "image/png"
+                        },
+                        Runs = { new Run { Text = "Picture bullet" } }
+                    }
+                }
+            }
+        });
+
+        var path = WriteToPptx(pres);
+
+        using (var zip = ZipFile.OpenRead(path))
+        {
+            var slideXml = new StreamReader(zip.GetEntry("ppt/slides/slide1.xml")!.Open()).ReadToEnd();
+            var relsXml = new StreamReader(zip.GetEntry("ppt/slides/_rels/slide1.xml.rels")!.Open()).ReadToEnd();
+            slideXml.Should().Contain("buBlip");
+            slideXml.Should().Contain("rIdBulletImg");
+            relsXml.Should().Contain("relationships/image");
+            zip.Entries.Any(entry => entry.FullName.StartsWith("ppt/media/slide1_bullet", StringComparison.Ordinal))
+                .Should().BeTrue();
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var paragraph = reloaded.Slides[0].Shapes.Single(s => s.Id == 42).TextBody!.Paragraphs[0];
+        paragraph.BulletKind.Should().Be(BulletKind.Image);
+        paragraph.BulletImage.Should().NotBeNull();
+        paragraph.BulletImage!.ContentType.Should().Be("image/png");
+        paragraph.BulletImage.Bytes.Should().Equal(0x89, 0x50, 0x4E, 0x47);
     }
 
     [Fact]

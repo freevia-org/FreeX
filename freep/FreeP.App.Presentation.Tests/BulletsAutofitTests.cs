@@ -727,6 +727,55 @@ public sealed class BulletsAutofitTests
         plan.Paragraphs.Single().Bullet!.Value.Image.Should().BeSameAs(paragraph.BulletImage);
     }
 
+    [Fact]
+    public void RoundTrip_ImageBullet_WritesBuBlipMediaRelationshipAndReadsBack()
+    {
+        var imageBytes = Minimal1x1Png();
+        var body = new TextBody();
+        var para = new Paragraph
+        {
+            BulletKind = BulletKind.Image,
+            BulletImage = new ImagePart
+            {
+                Bytes = imageBytes,
+                ContentType = "image/png"
+            },
+            MarginLeftEmu = 342900,
+            IndentEmu = -171450,
+        };
+        para.Runs.Add(new Run { Text = "Picture bullet", FontSizePt = 18 });
+        body.Paragraphs.Add(para);
+
+        var presentation = MakePresentation();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(MakeShapeWithText(body));
+
+        using var ms = new System.IO.MemoryStream();
+        FreeP.Core.IO.PptxPackageWriter.Write(presentation, ms);
+        var bytes = ms.ToArray();
+
+        using (var zip = new System.IO.Compression.ZipArchive(
+            new System.IO.MemoryStream(bytes),
+            System.IO.Compression.ZipArchiveMode.Read))
+        {
+            var slideXml = ReadZipText(zip, "ppt/slides/slide1.xml");
+            var slideRels = ReadZipText(zip, "ppt/slides/_rels/slide1.xml.rels");
+            slideXml.Should().Contain("<a:buBlip>");
+            slideXml.Should().Contain("r:embed=\"rIdBulletImg1\"");
+            slideRels.Should().Contain("Id=\"rIdBulletImg1\"");
+            slideRels.Should().Contain("Target=\"../media/slide1_bullet1.png\"");
+            zip.GetEntry("ppt/media/slide1_bullet1.png").Should().NotBeNull();
+        }
+
+        using var readStream = new System.IO.MemoryStream(bytes);
+        var roundTripped = FreeP.Core.IO.PptxPackageReader.Read(readStream);
+        var paragraph = roundTripped.Slides[0].Shapes[0].TextBody!.Paragraphs[0];
+        paragraph.BulletKind.Should().Be(BulletKind.Image);
+        paragraph.BulletImage.Should().NotBeNull();
+        paragraph.BulletImage!.ContentType.Should().Be("image/png");
+        paragraph.BulletImage.Bytes.Should().Equal(imageBytes);
+    }
+
     // ─── BU1: explicit buNone suppresses inherited bullet ─────────────────────
 
     /// <summary>
@@ -1091,6 +1140,13 @@ public sealed class BulletsAutofitTests
         var entry = zip.CreateEntry(path);
         using var writer = new System.IO.StreamWriter(entry.Open(), System.Text.Encoding.UTF8);
         writer.Write(text);
+    }
+
+    private static string ReadZipText(System.IO.Compression.ZipArchive zip, string path)
+    {
+        var entry = zip.GetEntry(path) ?? throw new InvalidOperationException($"Missing ZIP entry: {path}");
+        using var reader = new System.IO.StreamReader(entry.Open(), System.Text.Encoding.UTF8);
+        return reader.ReadToEnd();
     }
 
     private static byte[] Minimal1x1Png() =>

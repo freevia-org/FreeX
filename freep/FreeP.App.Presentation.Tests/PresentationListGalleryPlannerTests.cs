@@ -5,7 +5,7 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class PresentationListGalleryPlannerTests
 {
     [Fact]
-    public void BulletGallery_ExposesPowerPointLikeCharacterPresetsAndDeferredImageBulletSlot()
+    public void BulletGallery_ExposesPowerPointLikeCharacterPresetsAndImageBulletCommand()
     {
         var plan = PresentationListGalleryPlanner.BuildBulletGalleryPlan();
 
@@ -21,10 +21,10 @@ public sealed class PresentationListGalleryPlannerTests
                 TableCellListPresetCatalog.BulletCheckId,
                 PresentationListGalleryPlanner.ImageBulletCommandId);
 
-        plan.EnabledItems.Should().HaveCount(5);
-        plan.Items.Last().Kind.Should().Be(PresentationListGalleryItemKind.ImageBulletPlaceholder);
-        plan.Items.Last().IsEnabled.Should().BeFalse(
-            "image bullets need a visible shared contract without claiming picker or media authoring parity yet");
+        plan.EnabledItems.Should().HaveCount(6);
+        plan.Items.Last().Kind.Should().Be(PresentationListGalleryItemKind.ImageBullet);
+        plan.Items.Last().IsEnabled.Should().BeTrue(
+            "image bullets now have a shared authoring contract fed by WPF/Avalonia picker adapters");
     }
 
     [Fact]
@@ -63,5 +63,38 @@ public sealed class PresentationListGalleryPlannerTests
 
         preset.Should().Be(TableCellListPresetCatalog.BulletSquare);
         preset!.BulletChar.Should().Be("\u25AA");
+    }
+
+    [Theory]
+    [InlineData("bullet.png", "image/png")]
+    [InlineData("bullet.jpeg", "image/jpeg")]
+    [InlineData("bullet.gif", "image/gif")]
+    [InlineData("bullet.bmp", "image/bmp")]
+    [InlineData("bullet.svg", "image/svg+xml")]
+    [InlineData("bullet.wmf", "image/x-wmf")]
+    [InlineData("bullet.emf", "image/x-emf")]
+    [InlineData("bullet.unknown", "image/png")]
+    public void PictureBulletPayload_InfersContentTypeAndClonesBytes(
+        string fileName,
+        string expectedContentType)
+    {
+        var source = new byte[] { 1, 2, 3 };
+
+        var payload = PresentationPictureBulletAuthoringPlanner.CreatePayloadFromFileName(source, fileName);
+        var image = PresentationPictureBulletAuthoringPlanner.CreateImagePart(payload);
+        source[0] = 9;
+
+        payload.ContentType.Should().Be(expectedContentType);
+        payload.ImageBytes.Should().Equal(1, 2, 3);
+        image.ContentType.Should().Be(expectedContentType);
+        image.Bytes.Should().Equal(1, 2, 3);
+
+        var paragraph = new Paragraph { BulletKind = BulletKind.Char, BulletChar = "\u2022" };
+        PresentationPictureBulletAuthoringPlanner.ApplyToParagraph(paragraph, payload);
+        paragraph.BulletKind.Should().Be(BulletKind.Image);
+        paragraph.BulletImage.Should().NotBeNull();
+        paragraph.BulletImage!.Bytes.Should().Equal(1, 2, 3);
+        paragraph.BulletChar.Should().BeNull();
+        paragraph.BulletSuppressed.Should().BeFalse();
     }
 }

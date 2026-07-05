@@ -285,8 +285,8 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasAvaloniaTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "Avalonia still lacks a true editable rich-text widget equivalent to WPF RichTextBox; picture-bullet picker/media authoring and PowerPoint-authoritative list-gallery/rich-editor visual baselines remain deferred.")
-    ];
+            RemainingWork: "WPF/Avalonia now share picture-bullet picker payload execution, paragraph authoring, and PPTX media-part persistence. Avalonia still lacks a true editable rich-text widget equivalent to WPF RichTextBox; PowerPoint-authoritative list-gallery/rich-editor visual baselines remain deferred.")
+      ];
 
     private static IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> Collect(RibbonDefinition definition, string profile)
     {

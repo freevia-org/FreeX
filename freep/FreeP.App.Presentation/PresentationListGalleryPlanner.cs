@@ -12,7 +12,17 @@ public enum PresentationListGalleryItemKind
 {
     CharacterBullet,
     Numbering,
-    ImageBulletPlaceholder,
+    ImageBullet,
+}
+
+public sealed record PresentationPictureBulletPayload(
+    byte[] ImageBytes,
+    string ContentType,
+    string? SourceName = null)
+{
+    public bool IsValid =>
+        ImageBytes.Length > 0 &&
+        !string.IsNullOrWhiteSpace(ContentType);
 }
 
 public sealed record PresentationListGalleryItem(
@@ -29,7 +39,7 @@ public sealed record PresentationListGalleryPlan(
     string OwnerCommandId,
     string DisplayName,
     IReadOnlyList<PresentationListGalleryItem> Items,
-    string DeferredImageBulletCommandId)
+    string ImageBulletCommandId)
 {
     public IReadOnlyList<PresentationListGalleryItem> EnabledItems =>
         Items.Where(item => item.IsEnabled).ToArray();
@@ -70,10 +80,10 @@ public static class PresentationListGalleryPlanner
                     ImageBulletCommandId,
                     "Picture...",
                     "[image]",
-                    PresentationListGalleryItemKind.ImageBulletPlaceholder,
+                    PresentationListGalleryItemKind.ImageBullet,
                     null,
-                    IsEnabled: false,
-                    "Picture bullet chooser is deferred until media-part authoring and picker execution are implemented."))
+                    IsEnabled: true,
+                    "Choose a picture bullet image"))
                 .ToArray(),
             ImageBulletCommandId);
 
@@ -144,5 +154,94 @@ public static class PresentationListGalleryPlanner
             AutoNumType.AlphaUcPeriod => "A.",
             AutoNumType.AlphaLcPeriod => "a.",
             _ => "1.",
+        };
+}
+
+public static class PresentationPictureBulletAuthoringPlanner
+{
+    public const string DefaultContentType = "image/png";
+
+    public static PresentationPictureBulletPayload CreatePayload(
+        byte[] imageBytes,
+        string? contentType,
+        string? sourceName = null)
+    {
+        ArgumentNullException.ThrowIfNull(imageBytes);
+
+        var normalizedContentType = string.IsNullOrWhiteSpace(contentType)
+            ? InferContentType(sourceName)
+            : contentType.Trim();
+
+        return new PresentationPictureBulletPayload(
+            imageBytes.ToArray(),
+            normalizedContentType,
+            sourceName);
+    }
+
+    public static PresentationPictureBulletPayload CreatePayloadFromFileName(
+        byte[] imageBytes,
+        string? fileName) =>
+        CreatePayload(imageBytes, InferContentType(fileName), fileName);
+
+    public static ImagePart CreateImagePart(PresentationPictureBulletPayload payload)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+
+        return new ImagePart
+        {
+            Bytes = payload.ImageBytes.ToArray(),
+            ContentType = string.IsNullOrWhiteSpace(payload.ContentType)
+                ? DefaultContentType
+                : payload.ContentType
+        };
+    }
+
+    public static void ApplyToParagraph(
+        Paragraph paragraph,
+        PresentationPictureBulletPayload payload)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        ArgumentNullException.ThrowIfNull(payload);
+
+        ApplyToParagraph(paragraph, CreateImagePart(payload));
+    }
+
+    public static void ApplyToParagraph(
+        Paragraph paragraph,
+        ImagePart image)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        ArgumentNullException.ThrowIfNull(image);
+
+        paragraph.BulletKind = BulletKind.Image;
+        paragraph.BulletImage = CloneImagePart(image);
+        paragraph.BulletChar = null;
+        paragraph.AutoNumType = AutoNumType.ArabicPeriod;
+        paragraph.AutoNumStartAt = 1;
+        paragraph.BulletSuppressed = false;
+    }
+
+    public static string InferContentType(string? fileName)
+    {
+        var extension = (Path.GetExtension(fileName) ?? string.Empty).ToLowerInvariant();
+        return extension switch
+        {
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".gif" => "image/gif",
+            ".bmp" => "image/bmp",
+            ".svg" => "image/svg+xml",
+            ".wmf" => "image/x-wmf",
+            ".emf" => "image/x-emf",
+            _ => DefaultContentType,
+        };
+    }
+
+    private static ImagePart CloneImagePart(ImagePart source) =>
+        new()
+        {
+            Bytes = source.Bytes.ToArray(),
+            ContentType = string.IsNullOrWhiteSpace(source.ContentType)
+                ? DefaultContentType
+                : source.ContentType
         };
 }

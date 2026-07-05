@@ -96,7 +96,8 @@ internal static class FreePRibbonCommands
         Action<PresentationViewShowState>? applyViewShowState = null,
         Func<PresentationViewZoomState>? getViewZoomState = null,
         Action<PresentationViewZoomState>? applyViewZoomState = null,
-        Action?             onCustomShows     = null)
+        Action?             onCustomShows     = null,
+        Func<PresentationPictureBulletPayload?>? pickPictureBulletPayload = null)
     {
         var registry = new RibbonCommandRegistry();
 
@@ -164,7 +165,7 @@ internal static class FreePRibbonCommands
                 if (ApplyTableCellListPreset(editor, ctx.SelectedValue)) return;
                 editor.TryApplyActiveTableCellParagraphNumberingToggle();
             }));
-        RegisterListGalleryPresetCommands(registry, editor);
+        RegisterListGalleryPresetCommands(registry, editor, pickPictureBulletPayload);
         registry.Register("freep.indent-increase",
             new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphIndent()));
         registry.Register("freep.indent-decrease",
@@ -396,7 +397,8 @@ internal static class FreePRibbonCommands
 
     private static void RegisterListGalleryPresetCommands(
         RibbonCommandRegistry registry,
-        EditingSession editor)
+        EditingSession editor,
+        Func<PresentationPictureBulletPayload?>? pickPictureBulletPayload)
     {
         foreach (var item in PresentationListGalleryPlanner.BuildPlans().SelectMany(plan => plan.Items))
         {
@@ -411,7 +413,12 @@ internal static class FreePRibbonCommands
 
         registry.Register(
             PresentationListGalleryPlanner.ImageBulletCommandId,
-            new ActionRibbonCommand(() => { }));
+            new ActionRibbonCommand(() =>
+            {
+                var payload = (pickPictureBulletPayload ?? TryPickPictureBulletPayload)();
+                if (payload is not null)
+                    editor.TryApplyActiveTableCellParagraphPictureBullet(payload);
+            }));
     }
 
     internal static void RegisterSlideObjectInsertionCommands(
@@ -455,7 +462,7 @@ internal static class FreePRibbonCommands
     {
         var result = WpfFileDialogService.ShowOpenDialog(
             owner: null,
-            filter: "Image files|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.svg|All files|*.*",
+            filter: "Image files|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.svg;*.wmf;*.emf|All files|*.*",
             title: "Insert Picture");
 
         if (!result.Chosen || string.IsNullOrWhiteSpace(result.FileName))
@@ -475,6 +482,29 @@ internal static class FreePRibbonCommands
     }
 
     // ── Transition helpers ────────────────────────────────────────────────────────
+
+    private static PresentationPictureBulletPayload? TryPickPictureBulletPayload()
+    {
+        var result = WpfFileDialogService.ShowOpenDialog(
+            owner: null,
+            filter: "Image files|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.svg|All files|*.*",
+            title: "Choose Picture Bullet");
+
+        if (!result.Chosen || string.IsNullOrWhiteSpace(result.FileName))
+        {
+            return null;
+        }
+
+        try
+        {
+            var bytes = System.IO.File.ReadAllBytes(result.FileName);
+            return PresentationPictureBulletAuthoringPlanner.CreatePayloadFromFileName(bytes, result.FileName);
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     private static void RegisterHeaderFooterCommands(
         RibbonCommandRegistry registry,

@@ -1408,6 +1408,52 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Ribbon_picture_bullet_command_routes_picked_payload_to_active_table_cell()
+    {
+        var found = false;
+        BulletKind bulletKind = BulletKind.None;
+        ImagePart? bulletImage = null;
+        string? bulletChar = "not-null";
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.PictureBulletPayloadProviderForTests = () => Task.FromResult<PresentationPictureBulletPayload?>(
+                PresentationPictureBulletAuthoringPlanner.CreatePayload(
+                    [0x89, 0x50, 0x4E, 0x47],
+                    "image/png",
+                    "bullet.png"));
+            var shape = window.Editor.InsertTable(1, 1);
+            var body = new TextBody { Wrap = true };
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run { Text = "Cell" });
+            body.Paragraphs.Add(paragraph);
+            shape.Table!.Rows[0].Cells[0].TextBody = body;
+            window.Editor.Select(shape.Id);
+            window.Editor.SetActiveTableCell(0, 0);
+
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet(PresentationListGalleryPlanner.ImageBulletCommandId, out _);
+            found.Should().BeTrue("picture bullet command must be registered");
+
+            window.ApplyPictureBulletFromFileAsyncForTests().GetAwaiter().GetResult();
+
+            var edited = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+            bulletKind = edited.BulletKind;
+            bulletImage = edited.BulletImage;
+            bulletChar = edited.BulletChar;
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue();
+        bulletKind.Should().Be(BulletKind.Image);
+        bulletImage.Should().NotBeNull();
+        bulletImage!.ContentType.Should().Be("image/png");
+        bulletImage.Bytes.Should().Equal(0x89, 0x50, 0x4E, 0x47);
+        bulletChar.Should().BeNull();
+    }
+
+    [Fact]
     public async Task Ribbon_chart_edit_data_command_is_registered_and_noops_without_selected_chart()
     {
         var found = false;

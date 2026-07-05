@@ -249,8 +249,8 @@ try {
             commandIdAliases = [int]$freep.summary.commandIdAliases
             workflowEvidenceRows = [int](Get-JsonPropertyValue $freep.summary "workflowEvidenceRows")
         }
-        nextSlice = "Layout picker, table picker, rich inline table/text editing, shared visible list galleries, picture-bullet import/rendering, slide-pane reorder, bottom New Slide, notes-page preview/PDF rendering, export/backstage package-handoff, presenter recording backend contracts plus captured PPTX media payload authoring, ink execution with repeated custom-show route retention, modern comments/review, and accessibility/proofing workflow depth now have WPF/Avalonia no-COM evidence paths. Continue workflow-depth slices in real microphone/camera adapters, picture-bullet picker execution, animation-pane workflows, and PowerPoint/package baselines."
-    }
+        nextSlice = "Layout picker, table picker, rich inline table/text editing, shared visible list galleries, picture-bullet import/rendering plus picker/media authoring, slide-pane reorder, bottom New Slide, notes-page preview/PDF rendering, export/backstage package-handoff, presenter recording backend contracts plus captured PPTX media payload authoring, ink execution with repeated custom-show route retention, modern comments/review, and accessibility/proofing workflow depth now have WPF/Avalonia no-COM evidence paths. Continue workflow-depth slices in real microphone/camera adapters, animation-pane workflows, and PowerPoint/package baselines."
+      }
 
     $dashboard = [ordered]@{
         schema = "freex.parity.cross-app-dashboard.v1"
