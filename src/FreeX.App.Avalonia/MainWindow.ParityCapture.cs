@@ -563,8 +563,8 @@ public sealed partial class MainWindow
         var fixture = AutoFilterParityFixturePlanner.CreateFixturePlan(
             _session.Workbook,
             sheet,
-            InvariantAutoFilterMenuTextProvider.Instance,
-            InvariantAutoFilterMenuTextProvider.BlankDisplayText);
+            AvaloniaAutoFilterParityTextProvider.Instance,
+            UiText.Get("AutoFilter_BlankDisplayText"));
         _session.SelectRange(new GridRange(fixture.Range.Start, fixture.Range.Start));
         RefreshShell(_statusText.Text ?? "Ready");
 
@@ -585,8 +585,10 @@ public sealed partial class MainWindow
         {
             Title = UiText.Format("AutoFilter_TitleWithHeader", menuPlan.HeaderText),
             Width = 312,
-            SizeToContent = SizeToContent.Height,
+            Height = 437,
+            SizeToContent = SizeToContent.Manual,
             MaxHeight = 560,
+            Background = Brushes.White,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -654,7 +656,7 @@ public sealed partial class MainWindow
             var checklistPanel = new StackPanel();
             foreach (var box in checkBoxes)
                 checklistPanel.Children.Add(box);
-            stack.Children.Add(new ScrollViewer { Content = checklistPanel, MaxHeight = 220 });
+            stack.Children.Add(new ScrollViewer { Content = checklistPanel, Height = 180 });
         }
 
         var okButton = new Button { Content = "OK", IsDefault = true };
@@ -697,6 +699,15 @@ public sealed partial class MainWindow
             Background = Brush(0xDA, 0xDC, 0xDF),
             Margin = new Thickness(0, 3),
         });
+
+    private sealed class AvaloniaAutoFilterParityTextProvider : IAutoFilterMenuTextProvider
+    {
+        public static AvaloniaAutoFilterParityTextProvider Instance { get; } = new();
+
+        public string Get(string resourceKey) => UiText.Get(resourceKey);
+
+        public string Format(string resourceKey, string value) => UiText.Format(resourceKey, value);
+    }
 
     private async Task ShowAdvancedFilterParityDialogAsync()
     {
