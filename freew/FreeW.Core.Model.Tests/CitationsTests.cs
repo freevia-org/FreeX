@@ -781,8 +781,6 @@ public class CitationsTests
             Publisher = "Test Press"
         };
 
-        // Contributor roles are not modeled in this bounded slice; Author remains the chapter author.
-        bookSection.Author.Should().Be("Doe, J.");
         Citations.FormatBibliographyEntry(bookSection, CitationStyle.Apa).Should().Be(
             "Doe, J. (2026). Chapter Title. " +
             "Containing Book, chap. 3, pp. 12-20, London: Test Press.");
@@ -838,6 +836,71 @@ public class CitationsTests
             .Should().Be("Knuth, D. The Art of Computer Programming. Addison-Wesley, 1997.");
         Citations.FormatBibliographyEntry(book, CitationStyle.Ieee)
             .Should().Be("Knuth, D., \"The Art of Computer Programming,\" Addison-Wesley, 1997.");
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_Book_IncludesStructuredEditorAndTranslatorRoles()
+    {
+        var book = new Source
+        {
+            Type = SourceType.Book,
+            Author = "Ramos, L.",
+            Title = "Designing Shared Documents",
+            Year = "2026",
+            City = "Boston",
+            Publisher = "Contoso Press",
+            Editors =
+            [
+                SourceAuthorPerson.Create("Eve", string.Empty, "Carter"),
+                SourceAuthorPerson.Create("Max", "O.", "Lane")
+            ],
+            Translators =
+            [
+                SourceAuthorPerson.Create("Nina", string.Empty, "Patel")
+            ]
+        };
+
+        Citations.FormatBibliographyEntry(book, CitationStyle.Apa).Should().Be(
+            "Ramos, L. (2026). Designing Shared Documents. " +
+            "Ed. Eve Carter; Max O. Lane, Trans. Nina Patel, Contoso Press.");
+        Citations.FormatBibliographyEntry(book, CitationStyle.Vancouver).Should().Be(
+            "Ramos, L. Designing Shared Documents. " +
+            "Ed. Eve Carter; Max O. Lane. Trans. Nina Patel. Boston: Contoso Press; 2026.");
+        Citations.FormatInText(book, CitationStyle.Apa).Should().Be("(Ramos, 2026)");
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_BookSection_IncludesStructuredEditorAndTranslatorRoles()
+    {
+        var bookSection = new Source
+        {
+            Type = SourceType.BookSection,
+            Author = "Lee, S.",
+            Title = "Citation Tools",
+            BookTitle = "The Word Processor Handbook",
+            Year = "2025",
+            ChapterNumber = "7",
+            Pages = "101-118",
+            City = "Seattle",
+            Publisher = "Northwest Press",
+            Editors =
+            [
+                SourceAuthorPerson.Create("Helen", string.Empty, "Ortiz")
+            ],
+            Translators =
+            [
+                SourceAuthorPerson.Create("Marco", string.Empty, "Silva"),
+                SourceAuthorPerson.Create("Irene", "N.", "Cho")
+            ]
+        };
+
+        Citations.FormatBibliographyEntry(bookSection, CitationStyle.Apa).Should().Be(
+            "Lee, S. (2025). Citation Tools. The Word Processor Handbook, " +
+            "Ed. Helen Ortiz, Trans. Marco Silva; Irene N. Cho, chap. 7, pp. 101-118, Seattle: Northwest Press.");
+        Citations.FormatBibliographyEntry(bookSection, CitationStyle.Chicago).Should().Be(
+            "Lee, S. Citation Tools. The Word Processor Handbook, " +
+            "Ed. Helen Ortiz, Trans. Marco Silva; Irene N. Cho, chap. 7, pp. 101-118, Seattle: Northwest Press, 2025.");
+        Citations.FormatInText(bookSection, CitationStyle.Chicago).Should().Be("(Lee 2025)");
     }
 
     [Fact]
