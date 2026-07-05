@@ -1799,6 +1799,12 @@ static void GenerateF2FlowCorpus(string outDir)
     }
 
     {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildTablePageCompositionStressDocument();
+        DocxWriter.Write(doc, Path.Combine(outDir, "table-page-composition-stress.docx"));
+        Console.WriteLine("  wrote table-page-composition-stress.docx");
+    }
+
+    {
         var doc = FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument();
         DocxWriter.Write(doc, Path.Combine(outDir, "drawing-objects-complex.docx"));
         Console.WriteLine("  wrote drawing-objects-complex.docx");

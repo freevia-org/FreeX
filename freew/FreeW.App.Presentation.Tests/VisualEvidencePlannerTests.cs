@@ -27,6 +27,7 @@ public sealed class VisualEvidencePlannerTests
             "review-proofing-visual-depth",
             "table-layout-complex",
             "table-pagination-repeat-header",
+            "table-page-composition-stress",
             "drawing-objects-complex",
             "object-format-position-size-style",
             "chart-smartart-complex",
@@ -139,6 +140,25 @@ public sealed class VisualEvidencePlannerTests
         tablePaginationScenario.ExpectedOutputNamePattern.Should().Be("table-pagination-repeat-header_p{page}.png");
         tablePaginationScenario.MinimumExpectedOutputs.Should().Be(2);
         tablePaginationScenario.Composition.ExpectsTables.Should().BeTrue();
+
+        var tablePageCompositionScenario = FreeWVisualEvidencePlanner.ResolveScenario("table-page-composition-stress");
+        tablePageCompositionScenario.ExpectedFeatureTags.Should().Contain([
+            "table-pagination",
+            "repeat-header-row",
+            "keep-rows",
+            "cell-borders",
+            "header-footer-fields",
+            "page-border",
+            "watermark",
+            "caption",
+            "footnotes"]);
+        tablePageCompositionScenario.ExpectedOutputNamePattern.Should().Be("table-page-composition-stress_p{page}.png");
+        tablePageCompositionScenario.MinimumExpectedOutputs.Should().Be(2);
+        tablePageCompositionScenario.Composition.ExpectsTables.Should().BeTrue();
+        tablePageCompositionScenario.Composition.ExpectsHeadersFooters.Should().BeTrue();
+        tablePageCompositionScenario.Composition.ExpectsPageBorder.Should().BeTrue();
+        tablePageCompositionScenario.Composition.ExpectsWatermark.Should().BeTrue();
+        FreeWVisualEvidenceManifestNormalizer.TableRendererScenarioIds.Should().Contain("table-page-composition-stress");
 
         var drawingScenario = FreeWVisualEvidencePlanner.ResolveScenario("drawing-objects-complex");
         drawingScenario.ExpectedFeatureTags.Should().Contain([
@@ -819,8 +839,8 @@ public sealed class VisualEvidencePlannerTests
 
             plan.WordApplicationProgId.Should().Be("Word.Application");
             plan.MaxPagesPerDocument.Should().Be(3);
-            plan.ExpectedFixtureCount.Should().Be(22);
-            plan.ExpectedBaselinePngCount.Should().Be(66);
+            plan.ExpectedFixtureCount.Should().Be(23);
+            plan.ExpectedBaselinePngCount.Should().Be(69);
             plan.Fixtures.Select(f => f.DocumentName).Should().Contain([
                 "f2-hf-basic.docx",
                 "field-page-number-variants.docx",
@@ -828,6 +848,7 @@ public sealed class VisualEvidencePlannerTests
                 "review-proofing-visual-depth.docx",
                 "table-layout-complex.docx",
                 "table-pagination-repeat-header.docx",
+                "table-page-composition-stress.docx",
                 "drawing-objects-complex.docx",
                 "object-format-position-size-style.docx",
                 "chart-smartart-complex.docx",
@@ -841,6 +862,8 @@ public sealed class VisualEvidencePlannerTests
                 .ExpectedBaselinePaths.Should().Contain("backstage-pdf-export-fidelity/backstage-pdf-export_p1.png");
             plan.Fixtures.Single(f => f.ScenarioId == "table-pagination-repeat-header")
                 .ExpectedBaselinePaths.Should().Contain("table-pagination-repeat-header/table-pagination-repeat-header_p2.png");
+            plan.Fixtures.Single(f => f.ScenarioId == "table-page-composition-stress")
+                .ExpectedBaselinePaths.Should().Contain("table-page-composition-stress/table-page-composition-stress_p2.png");
             plan.Fixtures.Single(f => f.ScenarioId == "field-page-number-variants")
                 .ExpectedBaselinePaths.Should().Contain("field-page-number-variants/field-page-number-variants_p1.png");
             plan.Fixtures.Single(f => f.ScenarioId == "references-heavy-fields")
@@ -1090,6 +1113,63 @@ public sealed class VisualEvidencePlannerTests
         expectation.Tables.HasMultiPageTables.Should().BeTrue();
         expectation.Tables.HasRepeatedHeaderPages.Should().BeTrue();
         expectation.Tables.HasKeepTogetherRows.Should().BeTrue();
+        var page2 = expectation.Tables.PaginationPlans.Single().Pages[1];
+        page2.RepeatedHeaderRowIndexes.Should().Equal(0);
+        page2.RenderRows[0].Should().Match<DocumentTablePaginationRenderRowPlan>(row =>
+            row.SourceRowIndex == 0
+            && row.IsRepeatedHeader
+            && row.StartsPlannedPage
+            && row.PageNumber == 2);
+    }
+
+    [Fact]
+    public void BuildPageExpectation_RecordsSharedTablePageCompositionStressPlan()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildTablePageCompositionStressDocument();
+        var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "table-page-composition-stress",
+            document.Page,
+            pageNumber: 2,
+            pageCount: 2,
+            outputName: "table-page-composition-stress_p2.png",
+            headerSlotName: "header",
+            footerSlotName: "footer",
+            document: document);
+
+        document.Page.PageBorder.Should().NotBeNull();
+        document.Page.WatermarkOptions.Should().NotBeNull();
+        document.FinalSectionHeadersFooters.Header.Should().NotBeNull();
+        document.FinalSectionHeadersFooters.Footer.Should().NotBeNull();
+        document.Footnotes.Should().ContainKey(1);
+        document.Blocks.OfType<Paragraph>().Should().Contain(p =>
+            p.StyleId == Captions.StyleId &&
+            p.PlainText.StartsWith("Table 1:", StringComparison.Ordinal));
+
+        expectation.Composition.ExpectsTables.Should().BeTrue();
+        expectation.Composition.ExpectsHeadersFooters.Should().BeTrue();
+        expectation.Composition.ExpectsPageBorder.Should().BeTrue();
+        expectation.Composition.ExpectsWatermark.Should().BeTrue();
+        expectation.HeaderSlotName.Should().Be("header");
+        expectation.FooterSlotName.Should().Be("footer");
+        expectation.Features.PageBorder.Present.Should().BeTrue();
+        expectation.Features.PageBorder.ColorHex.Should().Be("#24536B");
+        expectation.Features.Watermark.Present.Should().BeTrue();
+        expectation.Features.Watermark.Text.Should().Be("TABLE REVIEW");
+        expectation.Fields.HasPageFields.Should().BeTrue();
+        expectation.Fields.HasNumPagesFields.Should().BeTrue();
+        expectation.Fields.HasHeaderFooterFields.Should().BeTrue();
+        expectation.Tables.TableCount.Should().Be(1);
+        expectation.Tables.EstimatedPageCount.Should().Be(2);
+        expectation.Tables.HasMultiPageTables.Should().BeTrue();
+        expectation.Tables.HasRepeatedHeaderPages.Should().BeTrue();
+        expectation.Tables.HasKeepTogetherRows.Should().BeTrue();
+        expectation.Tables.HasCustomCellBorders.Should().BeTrue();
+        expectation.Tables.HasCellMargins.Should().BeTrue();
+        expectation.Tables.HasCellSpacing.Should().BeTrue();
+        expectation.Tables.HasNamedStyle.Should().BeTrue();
+        expectation.Tables.Tables.Single().TableStyleId.Should().Be("GridTable1Light");
+        expectation.Tables.Tables.Single().Cells.Should().Contain(cell =>
+            cell.HasCustomBorders && cell.ShadingColorHex == "#F8FBFD");
         var page2 = expectation.Tables.PaginationPlans.Single().Pages[1];
         page2.RepeatedHeaderRowIndexes.Should().Equal(0);
         page2.RenderRows[0].Should().Match<DocumentTablePaginationRenderRowPlan>(row =>
@@ -3513,6 +3593,7 @@ public sealed class VisualEvidencePlannerTests
             "review-proofing-visual-depth" => FreeWVisualEvidenceDocumentFactory.BuildReviewProofingVisualDepthDocument(),
             "table-layout-complex" => FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument(),
             "table-pagination-repeat-header" => FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument(),
+            "table-page-composition-stress" => FreeWVisualEvidenceDocumentFactory.BuildTablePageCompositionStressDocument(),
             "drawing-objects-complex" => FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument(),
             "object-format-position-size-style" => FreeWVisualEvidenceDocumentFactory.BuildObjectFormatPositionSizeStyleDocument(),
             "chart-smartart-complex" => FreeWVisualEvidenceDocumentFactory.BuildChartSmartArtCompositionDocument(),
