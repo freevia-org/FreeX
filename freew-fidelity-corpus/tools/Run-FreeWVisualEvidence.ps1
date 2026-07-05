@@ -130,8 +130,8 @@ function Assert-BackstageEvidenceReadiness {
     }
 
     $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
-    if ([int]$summary.schemaVersion -ne 19) {
-        throw "Backstage evidence readiness requires FreeW visual evidence summary schema v19, found v$($summary.schemaVersion)"
+    if ([int]$summary.schemaVersion -ne 20) {
+        throw "Backstage evidence readiness requires FreeW visual evidence summary schema v20, found v$($summary.schemaVersion)"
     }
 
     $readinessRows = @($summary.backstagePrintEvidenceReadiness)
@@ -143,6 +143,14 @@ function Assert-BackstageEvidenceReadiness {
     $requiredWorkflowByScenario = @{
         'backstage-print-preview-fidelity' = 'print-preview'
         'backstage-pdf-export-fidelity' = 'pdf-export'
+    }
+    $requiredArtifactKindByScenario = @{
+        'backstage-print-preview-fidelity' = 'print-preview-fixed-layout'
+        'backstage-pdf-export-fidelity' = 'pdf-export-rasterized'
+    }
+    $requiredPipelineByScenario = @{
+        'backstage-print-preview-fidelity' = 'print-preview-fixed-layout-artifact'
+        'backstage-pdf-export-fidelity' = 'pdf-export-rasterized-artifact'
     }
     $requiredHosts = @(
         'wpf-fidelity-render',
@@ -180,16 +188,32 @@ function Assert-BackstageEvidenceReadiness {
                 $evidenceMatch = @($evidenceRows | Where-Object {
                     $_.scenarioId -eq $scenarioId -and
                     $_.hostId -eq $hostId -and
-                    [int]$_.pageNumber -eq $pageNumber
+                    [int]$_.pageNumber -eq $pageNumber -and
+                    $_.trust.passed -eq $true
                 })
                 if ($evidenceMatch.Count -eq 0) {
-                    $failures.Add("$scenarioId/$hostId/p${pageNumber}: missing normalized evidence row for backstage workflow metadata")
+                    $failures.Add("$scenarioId/$hostId/p${pageNumber}: missing trusted normalized evidence row for backstage artifact metadata")
                     continue
                 }
 
-                $workflow = [string]$evidenceMatch[0].hostMetadata.backstageWorkflow
+                $metadata = $evidenceMatch[0].hostMetadata
+                $workflow = [string]$metadata.backstageWorkflow
                 if ($workflow -ne $expectedWorkflow) {
                     $failures.Add("$scenarioId/$hostId/p${pageNumber}: backstageWorkflow '$workflow' expected '$expectedWorkflow'")
+                    continue
+                }
+
+                $expectedArtifactKind = $requiredArtifactKindByScenario[$scenarioId]
+                $artifactKind = [string]$metadata.backstageArtifactKind
+                if ($artifactKind -ne $expectedArtifactKind) {
+                    $failures.Add("$scenarioId/$hostId/p${pageNumber}: backstageArtifactKind '$artifactKind' expected '$expectedArtifactKind'")
+                    continue
+                }
+
+                $expectedPipeline = $requiredPipelineByScenario[$scenarioId]
+                $pipeline = [string]$metadata.backstagePipeline
+                if ($pipeline -ne $expectedPipeline) {
+                    $failures.Add("$scenarioId/$hostId/p${pageNumber}: backstagePipeline '$pipeline' expected '$expectedPipeline'")
                     continue
                 }
             }
@@ -201,7 +225,7 @@ function Assert-BackstageEvidenceReadiness {
     }
 
     Write-Host "Backstage evidence readiness: trusted required rows=$trustedCount"
-    Write-Host "Backstage workflow metadata: verified rows=$trustedCount schema=v$($summary.schemaVersion)"
+    Write-Host "Backstage artifact metadata: verified rows=$trustedCount schema=v$($summary.schemaVersion)"
 }
 
 New-Item -ItemType Directory -Force $fixtureDir | Out-Null
