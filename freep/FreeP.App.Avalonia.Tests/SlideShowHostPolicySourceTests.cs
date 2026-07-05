@@ -109,6 +109,11 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SlideShowGeometricMaskKind.Wheel => BuildWheelGeometry(width, height, progress, spokeCount),");
         source.Should().Contain("plan.GeometricMaskStripsSlopeDown");
         source.Should().Contain("new GeometryGroup { FillRule = FillRule.NonZero }");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Peek:");
+        source.Should().Contain("PeekEffect(element, plan, onReveal);");
+        source.Should().Contain("private void PeekEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)");
+        source.Should().Contain("el.RenderTransform = new TranslateTransform(dx, dy);");
+        source.Should().Contain("el.Clip = new RectangleGeometry(new Rect(0, 0, w, h));");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Zoom:");
         source.Should().Contain("ZoomEffect(element, plan, onReveal);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Pulse:");
