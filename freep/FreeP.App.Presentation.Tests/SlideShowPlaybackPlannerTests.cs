@@ -259,10 +259,43 @@ public sealed class SlideShowPlaybackPlannerTests
         verticalCheckerboard.CheckerboardHorizontal.Should().BeFalse();
         verticalCheckerboard.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
 
-        var growShrink = SlideShowPlaybackPlanner.PlanShapeAnimation(
+        var diamondIn = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
                 ShapeId = 11,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Diamond,
+                Direction = AnimationDirection.In,
+                DurationMs = 285
+            },
+            startDelayMs: 25);
+
+        diamondIn.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Diamond);
+        diamondIn.GeometricMaskKind.Should().Be(SlideShowGeometricMaskKind.Diamond);
+        diamondIn.GeometricMaskExpandsFromCenter.Should().BeTrue();
+        diamondIn.DurationMs.Should().Be(285);
+        diamondIn.DelayMs.Should().Be(25);
+        diamondIn.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.OnComplete);
+
+        var diamondOut = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 12,
+                Kind = AnimationKind.Exit,
+                Preset = AnimationPreset.Diamond,
+                Direction = AnimationDirection.Out
+            },
+            startDelayMs: 0);
+
+        diamondOut.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Diamond);
+        diamondOut.GeometricMaskKind.Should().Be(SlideShowGeometricMaskKind.Diamond);
+        diamondOut.GeometricMaskExpandsFromCenter.Should().BeFalse();
+        diamondOut.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
+
+        var growShrink = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 13,
                 Kind = AnimationKind.Emphasis,
                 Preset = AnimationPreset.Grow,
                 DurationMs = 450

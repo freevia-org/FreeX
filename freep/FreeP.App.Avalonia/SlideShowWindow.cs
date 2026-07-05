@@ -1105,6 +1105,10 @@ public sealed class SlideShowWindow : Window
                 CheckerboardEffect(element, plan, onReveal);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Diamond:
+                DiamondEffect(element, plan, onReveal);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Zoom:
                 ZoomEffect(element, plan, onReveal);
                 break;
@@ -1531,6 +1535,102 @@ public sealed class SlideShowWindow : Window
                 to,
                 plan.DurationMs,
                 onComplete: CompleteReveal(plan, onReveal)));
+    }
+
+    private void DiamondEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
+    {
+        double w = el.Width  > 0 ? el.Width  : 960;
+        double h = el.Height > 0 ? el.Height : 540;
+
+        var fromProgress = plan.GeometricMaskExpandsFromCenter ? 0.0 : 1.0;
+        var toProgress = plan.GeometricMaskExpandsFromCenter ? 1.0 : 0.0;
+
+        el.Clip = BuildDiamondGeometry(w, h, fromProgress);
+        el.Opacity = 1;
+        InvokeRevealAtStart(plan, onReveal);
+
+        DelayedAction(plan.DelayMs, () =>
+            AnimateDiamondClip(
+                el,
+                w,
+                h,
+                fromProgress,
+                toProgress,
+                plan.DurationMs,
+                onComplete: CompleteReveal(plan, onReveal)));
+    }
+
+    private void AnimateDiamondClip(
+        Control target,
+        double width,
+        double height,
+        double fromProgress,
+        double toProgress,
+        int durationMs,
+        Action? onComplete = null)
+    {
+        if (durationMs <= 0)
+        {
+            target.Clip = BuildDiamondGeometry(width, height, toProgress);
+            onComplete?.Invoke();
+            return;
+        }
+
+        const int frameMs = 16;
+        int steps = Math.Max(1, durationMs / frameMs);
+        int frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            double t = Math.Min(1.0, (double)frame / steps);
+            double eased = EaseInOut(t);
+            double progress = fromProgress + (toProgress - fromProgress) * eased;
+            target.Clip = BuildDiamondGeometry(width, height, progress);
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                target.Clip = BuildDiamondGeometry(width, height, toProgress);
+                onComplete?.Invoke();
+            }
+        };
+        timer.Start();
+    }
+
+    private static StreamGeometry BuildDiamondGeometry(double width, double height, double progress)
+    {
+        var geometry = new StreamGeometry();
+        using (var ctx = geometry.Open())
+        {
+            ctx.BeginFigure(BuildDiamondPoint(width, height, vertexIndex: 0, progress: progress), isFilled: true);
+            ctx.LineTo(BuildDiamondPoint(width, height, vertexIndex: 1, progress: progress));
+            ctx.LineTo(BuildDiamondPoint(width, height, vertexIndex: 2, progress: progress));
+            ctx.LineTo(BuildDiamondPoint(width, height, vertexIndex: 3, progress: progress));
+            ctx.EndFigure(isClosed: true);
+        }
+
+        return geometry;
+    }
+
+    private static Point BuildDiamondPoint(double width, double height, int vertexIndex, double progress)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        var center = new Point(width / 2, height / 2);
+        var full = vertexIndex switch
+        {
+            0 => new Point(width / 2, 0),
+            1 => new Point(width, height / 2),
+            2 => new Point(width / 2, height),
+            _ => new Point(0, height / 2)
+        };
+
+        return new Point(
+            center.X + (full.X - center.X) * progress,
+            center.Y + (full.Y - center.Y) * progress);
     }
 
     private void AnimateRectClip(Control target, RectangleGeometry clipRect,

@@ -1111,6 +1111,10 @@ public sealed class SlideShowWindow : Window
                 CheckerboardEffect(sb, element, plan);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Diamond:
+                DiamondEffect(sb, element, plan);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Zoom:
                 ZoomEffect(sb, element, plan);
                 break;
@@ -1476,6 +1480,129 @@ public sealed class SlideShowWindow : Window
         Storyboard.SetTarget(anim, el);
         Storyboard.SetTargetProperty(anim, new PropertyPath("Clip.Rect"));
         sb.Children.Add(anim);
+    }
+
+    private static void DiamondEffect(Storyboard sb, FrameworkElement el,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        double w = el.Width  > 0 ? el.Width  : 960;
+        double h = el.Height > 0 ? el.Height : 540;
+
+        var fromProgress = plan.GeometricMaskExpandsFromCenter ? 0.0 : 1.0;
+        var toProgress = plan.GeometricMaskExpandsFromCenter ? 1.0 : 0.0;
+        var clip = BuildDiamondGeometry(
+            w,
+            h,
+            fromProgress,
+            out var figure,
+            out var rightSegment,
+            out var bottomSegment,
+            out var leftSegment);
+
+        el.Clip = clip;
+        el.Opacity = 1;
+
+        var dur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
+        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+        AddDiamondPointAnimation(
+            sb,
+            figure,
+            PathFigure.StartPointProperty,
+            BuildDiamondPoint(w, h, vertexIndex: 0, progress: fromProgress),
+            BuildDiamondPoint(w, h, vertexIndex: 0, progress: toProgress),
+            dur,
+            ease,
+            plan.DelayMs);
+        AddDiamondPointAnimation(
+            sb,
+            rightSegment,
+            LineSegment.PointProperty,
+            BuildDiamondPoint(w, h, vertexIndex: 1, progress: fromProgress),
+            BuildDiamondPoint(w, h, vertexIndex: 1, progress: toProgress),
+            dur,
+            ease,
+            plan.DelayMs);
+        AddDiamondPointAnimation(
+            sb,
+            bottomSegment,
+            LineSegment.PointProperty,
+            BuildDiamondPoint(w, h, vertexIndex: 2, progress: fromProgress),
+            BuildDiamondPoint(w, h, vertexIndex: 2, progress: toProgress),
+            dur,
+            ease,
+            plan.DelayMs);
+        AddDiamondPointAnimation(
+            sb,
+            leftSegment,
+            LineSegment.PointProperty,
+            BuildDiamondPoint(w, h, vertexIndex: 3, progress: fromProgress),
+            BuildDiamondPoint(w, h, vertexIndex: 3, progress: toProgress),
+            dur,
+            ease,
+            plan.DelayMs);
+    }
+
+    private static PathGeometry BuildDiamondGeometry(
+        double width,
+        double height,
+        double progress,
+        out PathFigure figure,
+        out LineSegment rightSegment,
+        out LineSegment bottomSegment,
+        out LineSegment leftSegment)
+    {
+        figure = new PathFigure
+        {
+            StartPoint = BuildDiamondPoint(width, height, vertexIndex: 0, progress: progress),
+            IsClosed = true,
+            IsFilled = true
+        };
+        rightSegment = new LineSegment(BuildDiamondPoint(width, height, vertexIndex: 1, progress: progress), true);
+        bottomSegment = new LineSegment(BuildDiamondPoint(width, height, vertexIndex: 2, progress: progress), true);
+        leftSegment = new LineSegment(BuildDiamondPoint(width, height, vertexIndex: 3, progress: progress), true);
+        figure.Segments.Add(rightSegment);
+        figure.Segments.Add(bottomSegment);
+        figure.Segments.Add(leftSegment);
+
+        var geometry = new PathGeometry();
+        geometry.Figures.Add(figure);
+        return geometry;
+    }
+
+    private static Point BuildDiamondPoint(double width, double height, int vertexIndex, double progress)
+    {
+        var center = new Point(width / 2, height / 2);
+        var full = vertexIndex switch
+        {
+            0 => new Point(width / 2, 0),
+            1 => new Point(width, height / 2),
+            2 => new Point(width / 2, height),
+            _ => new Point(0, height / 2)
+        };
+
+        return new Point(
+            center.X + (full.X - center.X) * progress,
+            center.Y + (full.Y - center.Y) * progress);
+    }
+
+    private static void AddDiamondPointAnimation(
+        Storyboard storyboard,
+        DependencyObject target,
+        DependencyProperty pointProperty,
+        Point from,
+        Point to,
+        Duration duration,
+        IEasingFunction easing,
+        int delayMs)
+    {
+        var anim = new PointAnimation(from, to, duration)
+        {
+            BeginTime = TimeSpan.FromMilliseconds(delayMs),
+            EasingFunction = easing
+        };
+        Storyboard.SetTarget(anim, target);
+        Storyboard.SetTargetProperty(anim, new PropertyPath(pointProperty));
+        storyboard.Children.Add(anim);
     }
 
     private void ZoomEffect(Storyboard sb, FrameworkElement el,
