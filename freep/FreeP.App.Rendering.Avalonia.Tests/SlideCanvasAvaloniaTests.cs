@@ -610,6 +610,68 @@ public sealed class SlideCanvasAvaloniaTests
     }
 
     [Fact]
+    public async Task TableCellTextEditor_ListPresetSelection_RefreshesSharedParagraphPlan()
+    {
+        SlideShape? shape = null;
+        InCanvasTableCellRichTextEditPlan? selectedPlan = null;
+        var selectionStartAfterFormat = -1;
+        var selectionEndAfterFormat = -1;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = MakeTableShape(26, "Alpha");
+                var body = shape!.Table!.Rows[0].Cells[0].TextBody!;
+                var second = new Paragraph();
+                second.Runs.Add(new Run { Text = "Beta" });
+                body.Paragraphs.Add(second);
+                var third = new Paragraph();
+                third.Runs.Add(new Run { Text = "Gamma" });
+                body.Paragraphs.Add(third);
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            var bus = new PresentationCommandBus(presentation);
+            var editor = new EditingSession(presentation, bus);
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            textEditor.ActivateCellEdit(shape!.Id, 0, 0);
+            var box = overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single();
+            box.Text.Should().Be("Alpha\nBeta\nGamma");
+            box.SelectionStart = 6;
+            box.SelectionEnd = 10;
+
+            textEditor.TryApplyActiveTableCellParagraphListPreset(
+                TableCellListPresetCatalog.NumberAlphaUpperPeriod).Should().BeTrue();
+            selectedPlan = box.Tag.Should().BeOfType<InCanvasTableCellRichTextEditPlan>().Subject;
+            selectionStartAfterFormat = box.SelectionStart;
+            selectionEndAfterFormat = box.SelectionEnd;
+        });
+
+        selectedPlan!.Selection.Should().Be(new InCanvasEditorTextSelection(6, 10));
+        selectedPlan.SelectedParagraphs.Should().ContainSingle();
+        selectedPlan.SelectedParagraphs[0].ParagraphIndex.Should().Be(1);
+        selectedPlan.SelectedParagraphs[0].BulletKind.Should().Be(BulletKind.Auto);
+        selectedPlan.SelectedParagraphs[0].AutoNumType.Should().Be(AutoNumType.AlphaUcPeriod);
+        selectedPlan.SelectedParagraphs[0].AutoNumStartAt.Should().Be(1);
+        selectedPlan.Paragraphs[0].BulletKind.Should().Be(BulletKind.None);
+        selectedPlan.Paragraphs[2].BulletKind.Should().Be(BulletKind.None);
+        selectedPlan.HasListFormatting.Should().BeTrue();
+        selectionStartAfterFormat.Should().Be(6);
+        selectionEndAfterFormat.Should().Be(10);
+
+        var paragraphs = shape!.Table!.Rows[0].Cells[0].TextBody!.Paragraphs;
+        paragraphs[0].BulletKind.Should().Be(BulletKind.None);
+        paragraphs[1].BulletKind.Should().Be(BulletKind.Auto);
+        paragraphs[1].AutoNumType.Should().Be(AutoNumType.AlphaUcPeriod);
+        paragraphs[2].BulletKind.Should().Be(BulletKind.None);
+    }
+
+    [Fact]
     public async Task TableCellTextEditor_ValueFormatsWholeCell_MirrorsOverlayAndPreservesMixedRunsOnCommit()
     {
         SlideShape? shape = null;

@@ -121,6 +121,25 @@ public sealed record InCanvasEditorSelectedRunRange(
     int SelectionEnd,
     string Text);
 
+public sealed record InCanvasEditorParagraphStyle(
+    int ParagraphIndex,
+    int Start,
+    int End,
+    string Text,
+    TextAlign? Align,
+    BulletKind BulletKind,
+    string? BulletChar,
+    AutoNumType? AutoNumType,
+    int? AutoNumStartAt,
+    bool BulletSuppressed,
+    int Level,
+    long? MarginLeftEmu,
+    long? IndentEmu)
+{
+    public bool HasListFormatting =>
+        !BulletSuppressed && BulletKind != BulletKind.None;
+}
+
 public sealed record InCanvasEditorTextStyleState(
     string? FontFamily,
     double? FontSizePt,
@@ -147,9 +166,13 @@ public sealed record InCanvasTableCellRichTextEditPlan(
     InCanvasEditorTextStyleState InitialSelectionStyle,
     bool HasMixedFormatting,
     InCanvasEditorTextSelection Selection,
-    IReadOnlyList<InCanvasEditorSelectedRunRange> SelectedRunRanges)
+    IReadOnlyList<InCanvasEditorSelectedRunRange> SelectedRunRanges,
+    IReadOnlyList<InCanvasEditorParagraphStyle> Paragraphs,
+    IReadOnlyList<InCanvasEditorParagraphStyle> SelectedParagraphs,
+    bool HasMixedParagraphFormatting)
 {
     public bool HasRichFormatting => Runs.Count > 1 || HasMixedFormatting;
+    public bool HasListFormatting => Paragraphs.Any(paragraph => paragraph.HasListFormatting);
 }
 
 public sealed record TableCellTextFormatPlan(
@@ -208,6 +231,10 @@ public sealed record TableCellListPresetDescriptor(
 public static class TableCellListPresetCatalog
 {
     public const string BulletDiscId = "bullet.disc";
+    public const string BulletHollowCircleId = "bullet.hollow-circle";
+    public const string BulletSquareId = "bullet.square";
+    public const string BulletDashId = "bullet.dash";
+    public const string BulletCheckId = "bullet.check";
     public const string NumberArabicPeriodId = "number.arabic-period";
     public const string NumberRomanUpperPeriodId = "number.roman-upper-period";
     public const string NumberRomanLowerPeriodId = "number.roman-lower-period";
@@ -219,6 +246,30 @@ public static class TableCellListPresetCatalog
         "Disc Bullet",
         BulletKind.Char,
         BulletChar: "\u2022");
+
+    public static readonly TableCellListPresetDescriptor BulletHollowCircle = new(
+        BulletHollowCircleId,
+        "Hollow Circle Bullet",
+        BulletKind.Char,
+        BulletChar: "\u25E6");
+
+    public static readonly TableCellListPresetDescriptor BulletSquare = new(
+        BulletSquareId,
+        "Square Bullet",
+        BulletKind.Char,
+        BulletChar: "\u25AA");
+
+    public static readonly TableCellListPresetDescriptor BulletDash = new(
+        BulletDashId,
+        "Dash Bullet",
+        BulletKind.Char,
+        BulletChar: "\u2013");
+
+    public static readonly TableCellListPresetDescriptor BulletCheck = new(
+        BulletCheckId,
+        "Check Bullet",
+        BulletKind.Char,
+        BulletChar: "\u2713");
 
     public static readonly TableCellListPresetDescriptor NumberArabicPeriod = new(
         NumberArabicPeriodId,
@@ -253,6 +304,10 @@ public static class TableCellListPresetCatalog
     public static IReadOnlyList<TableCellListPresetDescriptor> BuiltIn { get; } =
     [
         BulletDisc,
+        BulletHollowCircle,
+        BulletSquare,
+        BulletDash,
+        BulletCheck,
         NumberArabicPeriod,
         NumberRomanUpperPeriod,
         NumberRomanLowerPeriod,
@@ -428,6 +483,11 @@ public static class TableCellEditPlanner
             plainText.Length);
         var selectionStyle = BuildStyleState(selectionStyleRuns);
         var selectedRunRanges = BuildSelectedRunRanges(runs, effectiveSelection);
+        var paragraphs = BuildParagraphStyles(body);
+        var selectedParagraphs = BuildSelectedParagraphStyles(
+            paragraphs,
+            effectiveSelection,
+            plainText.Length);
 
         return new InCanvasTableCellRichTextEditPlan(
             plainText,
@@ -436,7 +496,10 @@ public static class TableCellEditPlanner
             selectionStyle,
             HasMixedFormatting(runs),
             effectiveSelection,
-            selectedRunRanges);
+            selectedRunRanges,
+            paragraphs,
+            selectedParagraphs,
+            HasMixedParagraphFormatting(paragraphs));
     }
 
     public static InCanvasEditorTextSelection PlanPreservedSelection(
@@ -1052,6 +1115,77 @@ public static class TableCellEditPlanner
         return selected;
     }
 
+    private static IReadOnlyList<InCanvasEditorParagraphStyle> BuildParagraphStyles(TextBody? body)
+    {
+        var paragraphs = new List<InCanvasEditorParagraphStyle>();
+        if (body is null)
+            return paragraphs;
+
+        int cursor = 0;
+        for (int pi = 0; pi < body.Paragraphs.Count; pi++)
+        {
+            var paragraph = body.Paragraphs[pi];
+            string text = string.Concat(paragraph.Runs.Select(run => run.Text));
+            int start = cursor;
+            int end = start + text.Length;
+            paragraphs.Add(new InCanvasEditorParagraphStyle(
+                pi,
+                start,
+                end,
+                text,
+                paragraph.Align,
+                paragraph.BulletKind,
+                paragraph.BulletKind == BulletKind.Char ? paragraph.BulletChar : null,
+                paragraph.BulletKind == BulletKind.Auto ? paragraph.AutoNumType : null,
+                paragraph.BulletKind == BulletKind.Auto ? paragraph.AutoNumStartAt : null,
+                paragraph.BulletSuppressed,
+                paragraph.Level,
+                paragraph.MarginLeftEmu,
+                paragraph.IndentEmu));
+            cursor = end + (pi < body.Paragraphs.Count - 1 ? 1 : 0);
+        }
+
+        return paragraphs;
+    }
+
+    private static IReadOnlyList<InCanvasEditorParagraphStyle> BuildSelectedParagraphStyles(
+        IReadOnlyList<InCanvasEditorParagraphStyle> paragraphs,
+        InCanvasEditorTextSelection selection,
+        int plainTextLength)
+    {
+        if (paragraphs.Count == 0)
+            return [];
+
+        if (selection.IsCollapsed)
+        {
+            int caret = Math.Clamp(selection.Start, 0, plainTextLength);
+            var paragraph = paragraphs.LastOrDefault(candidate =>
+                candidate.Start <= caret && caret <= candidate.End);
+            return paragraph is null ? [paragraphs[0]] : [paragraph];
+        }
+
+        int selectionStart = Math.Min(selection.Start, selection.End);
+        int selectionEnd = Math.Max(selection.Start, selection.End);
+        var selected = new List<InCanvasEditorParagraphStyle>();
+
+        for (int i = 0; i < paragraphs.Count; i++)
+        {
+            var paragraph = paragraphs[i];
+            bool overlapsText = paragraph.End > selectionStart && paragraph.Start < selectionEnd;
+            bool overlapsEmptyParagraph = paragraph.Start == paragraph.End &&
+                selectionStart <= paragraph.Start &&
+                paragraph.Start < selectionEnd;
+            bool overlapsSeparator = i < paragraphs.Count - 1 &&
+                paragraph.End < selectionEnd &&
+                paragraph.End + 1 > selectionStart;
+
+            if (overlapsText || overlapsEmptyParagraph || overlapsSeparator)
+                selected.Add(paragraph);
+        }
+
+        return selected;
+    }
+
     private static IReadOnlyList<InCanvasEditorRunStyle> ResolveInitialSelectionStyleRuns(
         IReadOnlyList<InCanvasEditorRunStyle> runs,
         InCanvasEditorTextSelection selection,
@@ -1130,6 +1264,24 @@ public static class TableCellEditPlanner
             run.Underline != first.Underline ||
             run.Strikethrough != first.Strikethrough ||
             !TextBodyModelCloner.ColorsEqual(run.Color, first.Color));
+    }
+
+    private static bool HasMixedParagraphFormatting(IReadOnlyList<InCanvasEditorParagraphStyle> paragraphs)
+    {
+        if (paragraphs.Count <= 1)
+            return false;
+
+        var first = paragraphs[0];
+        return paragraphs.Any(paragraph =>
+            paragraph.Align != first.Align ||
+            paragraph.BulletKind != first.BulletKind ||
+            paragraph.BulletChar != first.BulletChar ||
+            paragraph.AutoNumType != first.AutoNumType ||
+            paragraph.AutoNumStartAt != first.AutoNumStartAt ||
+            paragraph.BulletSuppressed != first.BulletSuppressed ||
+            paragraph.Level != first.Level ||
+            paragraph.MarginLeftEmu != first.MarginLeftEmu ||
+            paragraph.IndentEmu != first.IndentEmu);
     }
 
     private static TableCellTextFormatPlan DisabledFormat(

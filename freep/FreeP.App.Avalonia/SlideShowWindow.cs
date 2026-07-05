@@ -1129,6 +1129,10 @@ public sealed class SlideShowWindow : Window
                 GeometricMaskEffect(element, plan, onReveal);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Peek:
+                PeekEffect(element, plan, onReveal);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Zoom:
                 ZoomEffect(element, plan, onReveal);
                 break;
@@ -1216,6 +1220,29 @@ public sealed class SlideShowWindow : Window
                 plan.DurationMs,
                 onComplete: CompleteReveal(plan, onReveal));
         });
+    }
+
+    private void PeekEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
+    {
+        double w = _slideCanvas.Bounds.Width  > 0 ? _slideCanvas.Bounds.Width  : 960;
+        double h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+
+        double dx = plan.OffsetXFactor * w;
+        double dy = plan.OffsetYFactor * h;
+
+        el.Opacity = 1;
+        el.Clip = new RectangleGeometry(new Rect(0, 0, w, h));
+        el.RenderTransform = new TranslateTransform(dx, dy);
+
+        DelayedAction(plan.DelayMs, () =>
+            AnimateTranslate(
+                el,
+                dx,
+                dy,
+                0,
+                0,
+                plan.DurationMs,
+                onComplete: CompleteReveal(plan, onReveal)));
     }
 
     private void WipeEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)

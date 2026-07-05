@@ -271,6 +271,60 @@
   <data name="Ribbon_Command_Underline_KeyTip" xml:space="preserve">
     <value>3</value>
   </data>
+  <data name="Ribbon_Group_Paragraph_Label" xml:space="preserve">
+    <value>Paragraph</value>
+  </data>
+  <data name="Ribbon_Group_Paragraph_KeyTip" xml:space="preserve">
+    <value>P</value>
+  </data>
+  <data name="Ribbon_Command_Bullets_Label" xml:space="preserve">
+    <value>Bullets</value>
+  </data>
+  <data name="Ribbon_Command_Bullets_KeyTip" xml:space="preserve">
+    <value>U</value>
+  </data>
+  <data name="Ribbon_Command_Numbering_Label" xml:space="preserve">
+    <value>Numbering</value>
+  </data>
+  <data name="Ribbon_Command_Numbering_KeyTip" xml:space="preserve">
+    <value>N</value>
+  </data>
+  <data name="Ribbon_Command_ParagraphAlignLeft_Label" xml:space="preserve">
+    <value>Align Left</value>
+  </data>
+  <data name="Ribbon_Command_ParagraphAlignLeft_KeyTip" xml:space="preserve">
+    <value>AL</value>
+  </data>
+  <data name="Ribbon_Command_ParagraphAlignCenter_Label" xml:space="preserve">
+    <value>Center</value>
+  </data>
+  <data name="Ribbon_Command_ParagraphAlignCenter_KeyTip" xml:space="preserve">
+    <value>AC</value>
+  </data>
+  <data name="Ribbon_Command_ParagraphAlignRight_Label" xml:space="preserve">
+    <value>Align Right</value>
+  </data>
+  <data name="Ribbon_Command_ParagraphAlignRight_KeyTip" xml:space="preserve">
+    <value>AR</value>
+  </data>
+  <data name="Ribbon_Command_ParagraphAlignJustify_Label" xml:space="preserve">
+    <value>Justify</value>
+  </data>
+  <data name="Ribbon_Command_ParagraphAlignJustify_KeyTip" xml:space="preserve">
+    <value>AJ</value>
+  </data>
+  <data name="Ribbon_Command_IndentIncrease_Label" xml:space="preserve">
+    <value>Increase Indent</value>
+  </data>
+  <data name="Ribbon_Command_IndentIncrease_KeyTip" xml:space="preserve">
+    <value>AI</value>
+  </data>
+  <data name="Ribbon_Command_IndentDecrease_Label" xml:space="preserve">
+    <value>Decrease Indent</value>
+  </data>
+  <data name="Ribbon_Command_IndentDecrease_KeyTip" xml:space="preserve">
+    <value>AO</value>
+  </data>
   <data name="Ribbon_Group_Edit_Label" xml:space="preserve">
     <value>Edit</value>
   </data>

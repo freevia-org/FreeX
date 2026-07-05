@@ -676,6 +676,25 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
+    public void Cmd_Bullets_VisibleGalleryPresetCommand_AppliesSharedTableCellPreset()
+    {
+        var (ed, pres) = MakeSession();
+        var shape = AddSingleCellTable(pres, 406, MakeTextBody("Cell"));
+        ed.Select(shape.Id);
+        ed.SetActiveTableCell(0, 0);
+        var commandId = PresentationListGalleryPlanner.BuildBulletGalleryPlan()
+            .Items.Single(item => item.ListPreset?.Id == TableCellListPresetCatalog.BulletSquareId)
+            .CommandId;
+
+        Exec(MakeRegistry(ed), commandId);
+
+        var paragraph = shape.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+        paragraph.BulletKind.Should().Be(BulletKind.Char);
+        paragraph.BulletChar.Should().Be("\u25AA");
+        paragraph.BulletSuppressed.Should().BeFalse();
+    }
+
+    [Fact]
     public void Cmd_IndentIncreaseDecrease_WithActiveTableCell_UsesSharedTableCellPlan()
     {
         var (ed, pres) = MakeSession();
@@ -770,6 +789,9 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.numbering")]
     [InlineData("freep.indent-increase")]
     [InlineData("freep.indent-decrease")]
+    [InlineData("freep.bullets.bullet.square")]
+    [InlineData("freep.numbering.number.roman-upper-period")]
+    [InlineData("freep.bullets.picture")]
     [InlineData("freep.increase-indent")]
     [InlineData("freep.decrease-indent")]
     [InlineData("freep.view.zoom")]

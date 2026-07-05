@@ -1,4 +1,5 @@
 using Free.Shared.Ribbon;
+using FreeP.App.Compositor;
 
 namespace FreeP.Ribbon.Definitions;
 
@@ -61,6 +62,7 @@ public static class FreePRibbon
                     g.IconToggle("freep.underline", FreePRibbonText.UnderlineLabel, RibbonCommandIconKind.Underline, FreePRibbonText.UnderlineKeyTip);
                 });
                 // ── Wave 12A: Arrange group ───────────────────────────────────────────────
+                tab.Group("paragraph", FreePRibbonText.ParagraphGroup.Label, FreePRibbonText.ParagraphGroup.KeyTip, 78, AddParagraphControls);
                 tab.Group("arrange", FreePRibbonText.ArrangeGroup.Label, FreePRibbonText.ArrangeGroup.KeyTip, 70, g =>
                 {
                     // Group / Ungroup
@@ -279,4 +281,42 @@ public static class FreePRibbon
             })
             .Build();
     }
+
+    private static void AddParagraphControls(RibbonGroupBuilder g)
+    {
+        g.Dropdown(
+            PresentationListGalleryPlanner.BulletsCommandId,
+            FreePRibbonText.BulletsCommand.Label,
+            BuildListGalleryMenu(PresentationListGalleryPlanner.BuildBulletGalleryPlan()),
+            d => d with
+            {
+                PreferredLayout = RibbonCommandLayoutKind.Medium,
+                Icon = new RibbonCommandIcon(RibbonCommandIconKind.List),
+                KeyTip = FreePRibbonText.BulletsCommand.KeyTip,
+            });
+        g.Dropdown(
+            PresentationListGalleryPlanner.NumberingCommandId,
+            FreePRibbonText.NumberingCommand.Label,
+            BuildListGalleryMenu(PresentationListGalleryPlanner.BuildNumberingGalleryPlan()),
+            d => d with
+            {
+                PreferredLayout = RibbonCommandLayoutKind.Medium,
+                Icon = new RibbonCommandIcon(RibbonCommandIconKind.List),
+                KeyTip = FreePRibbonText.NumberingCommand.KeyTip,
+            });
+        g.Icon("freep.paragraph.align-left", FreePRibbonText.AlignLeftCommand.Label, RibbonCommandIconKind.AlignLeft, FreePRibbonText.AlignLeftCommand.KeyTip);
+        g.Icon("freep.paragraph.align-center", FreePRibbonText.AlignCenterCommand.Label, RibbonCommandIconKind.AlignCenter, FreePRibbonText.AlignCenterCommand.KeyTip);
+        g.Icon("freep.paragraph.align-right", FreePRibbonText.AlignRightCommand.Label, RibbonCommandIconKind.AlignRight, FreePRibbonText.AlignRightCommand.KeyTip);
+        g.Icon("freep.paragraph.align-justify", FreePRibbonText.AlignJustifyCommand.Label, RibbonCommandIconKind.Align, FreePRibbonText.AlignJustifyCommand.KeyTip);
+        g.Icon("freep.indent-decrease", FreePRibbonText.IndentDecreaseCommand.Label, RibbonCommandIconKind.ArrowLeft, FreePRibbonText.IndentDecreaseCommand.KeyTip);
+        g.Icon("freep.indent-increase", FreePRibbonText.IndentIncreaseCommand.Label, RibbonCommandIconKind.ArrowRight, FreePRibbonText.IndentIncreaseCommand.KeyTip);
+    }
+
+    internal static RibbonMenu BuildListGalleryMenu(PresentationListGalleryPlan plan) =>
+        new(plan.Items.Select(item => new RibbonMenuItem(
+            item.PreviewText,
+            new RibbonCommandId(item.CommandId))
+        {
+            IsEnabled = item.IsEnabled
+        }).ToArray());
 }
