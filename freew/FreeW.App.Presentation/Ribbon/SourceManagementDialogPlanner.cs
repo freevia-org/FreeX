@@ -649,7 +649,7 @@ public static class SourceManagementDialogPlanner
             return new SourceManagementListMutationPlan(state, selectedIndex);
 
         var masterSources = state.MasterSources.Select(CloneSource).ToList();
-        var removedIndex = RemoveSourcesByTag(masterSources, masterSources[selectedIndex].Tag);
+        var removedIndex = RemoveSourceAtIndexOrMatchingTag(masterSources, selectedIndex);
 
         var nextState = state with { MasterSources = masterSources };
         return new SourceManagementListMutationPlan(nextState, ClampIndex(removedIndex, masterSources.Count));
@@ -723,7 +723,7 @@ public static class SourceManagementDialogPlanner
             return new SourceManagementListMutationPlan(state, selectedIndex);
 
         var currentSources = state.CurrentSources.Select(CloneSource).ToList();
-        var removedIndex = RemoveSourcesByTag(currentSources, currentSources[selectedIndex].Tag);
+        var removedIndex = RemoveSourceAtIndexOrMatchingTag(currentSources, selectedIndex);
 
         var nextState = state with { CurrentSources = currentSources };
         return new SourceManagementListMutationPlan(nextState, ClampIndex(removedIndex, currentSources.Count));
@@ -743,6 +743,12 @@ public static class SourceManagementDialogPlanner
 
     private static int UpsertSourceByTag(List<Source> sources, Source source)
     {
+        if (!SourceManagementTagIdentity.HasIdentity(source.Tag))
+        {
+            sources.Add(CloneSource(source));
+            return sources.Count - 1;
+        }
+
         var index = FindSourceIndexByTag(sources, source.Tag);
         if (index < 0)
         {
@@ -759,16 +765,31 @@ public static class SourceManagementDialogPlanner
     {
         sources.RemoveAt(selectedIndex);
 
-        var duplicateIndex = FindSourceIndexByTag(sources, source.Tag);
-        if (duplicateIndex >= 0)
+        if (SourceManagementTagIdentity.HasIdentity(source.Tag))
         {
-            RemoveSourcesByTag(sources, source.Tag);
-            selectedIndex = duplicateIndex;
+            var duplicateIndex = FindSourceIndexByTag(sources, source.Tag);
+            if (duplicateIndex >= 0)
+            {
+                RemoveSourcesByTag(sources, source.Tag);
+                selectedIndex = duplicateIndex;
+            }
         }
 
         var insertionIndex = Math.Clamp(selectedIndex, 0, sources.Count);
         sources.Insert(insertionIndex, CloneSource(source));
         return insertionIndex;
+    }
+
+    private static int RemoveSourceAtIndexOrMatchingTag(List<Source> sources, int selectedIndex)
+    {
+        var tag = sources[selectedIndex].Tag;
+        if (!SourceManagementTagIdentity.HasIdentity(tag))
+        {
+            sources.RemoveAt(selectedIndex);
+            return Math.Min(selectedIndex, sources.Count);
+        }
+
+        return RemoveSourcesByTag(sources, tag);
     }
 
     private static int RemoveSourcesByTag(List<Source> sources, string tag)

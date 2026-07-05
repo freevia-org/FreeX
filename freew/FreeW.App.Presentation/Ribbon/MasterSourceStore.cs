@@ -26,17 +26,19 @@ public sealed class MasterSourceStore
     {
         ArgumentNullException.ThrowIfNull(source);
 
-        var index = Sources.FindIndex(record => SourceManagementTagIdentity.Equals(record.Tag, source.Tag));
         var replacement = SourceRecord.FromSource(source);
-        if (index >= 0)
+        if (SourceManagementTagIdentity.HasIdentity(source.Tag))
         {
-            Sources.RemoveAll(record => SourceManagementTagIdentity.Equals(record.Tag, source.Tag));
-            Sources.Insert(Math.Min(index, Sources.Count), replacement);
+            var index = Sources.FindIndex(record => SourceManagementTagIdentity.Equals(record.Tag, source.Tag));
+            if (index >= 0)
+            {
+                Sources.RemoveAll(record => SourceManagementTagIdentity.Equals(record.Tag, source.Tag));
+                Sources.Insert(Math.Min(index, Sources.Count), replacement);
+                return;
+            }
         }
-        else
-        {
-            Sources.Add(replacement);
-        }
+
+        Sources.Add(replacement);
     }
 
     public bool Remove(string tag) =>

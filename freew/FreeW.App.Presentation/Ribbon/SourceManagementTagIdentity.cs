@@ -7,6 +7,11 @@ internal static class SourceManagementTagIdentity
     public static string Canonicalize(string? tag) =>
         (tag ?? string.Empty).Trim();
 
+    public static bool HasIdentity(string? tag) =>
+        Canonicalize(tag).Length > 0;
+
     public static bool Equals(string? left, string? right) =>
-        Comparer.Equals(Canonicalize(left), Canonicalize(right));
+        HasIdentity(left)
+        && HasIdentity(right)
+        && Comparer.Equals(Canonicalize(left), Canonicalize(right));
 }
