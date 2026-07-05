@@ -281,6 +281,16 @@ public static class PptxPackageWriter
             }
         }
 
+        foreach (var artifact in presentation.RecordingMediaArtifacts)
+        {
+            if (artifact.PayloadBytes is not { Length: > 0 })
+                continue;
+
+            var extension = GetPackagePathExtension(artifact.PackagePath);
+            if (!string.IsNullOrWhiteSpace(extension))
+                mediaExtensions.Add(extension);
+        }
+
         // FA1 (was EA2): Pre-scan preserved parts to determine which paths will be reindexed by
         // WriteSlidePreservedObjects, so BuildContentTypesXml can emit Overrides at the
         // WRITTEN (possibly reindexed) path rather than the original path.
@@ -677,6 +687,7 @@ public static class PptxPackageWriter
 
         if (presentation.RecordingMediaArtifacts.Count > 0)
         {
+            WriteRecordingMediaArtifactPayloads(archive, presentation);
             WriteEntry(archive, RecordingMediaArtifactsPath, BuildRecordingMediaArtifactsXml(presentation));
         }
 
@@ -709,6 +720,42 @@ public static class PptxPackageWriter
 
         return new XDocument(new XDeclaration("1.0", "utf-8", null), root);
     }
+
+    private static void WriteRecordingMediaArtifactPayloads(
+        ZipArchive archive,
+        Presentation presentation)
+    {
+        var writtenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var artifact in presentation.RecordingMediaArtifacts)
+        {
+            if (artifact.PayloadBytes is not { Length: > 0 } ||
+                string.IsNullOrWhiteSpace(artifact.PackagePath))
+            {
+                continue;
+            }
+
+            var normalizedPath = NormalizeZipPath(artifact.PackagePath);
+            if (!writtenPaths.Add(normalizedPath))
+                continue;
+
+            WriteRawEntry(archive, normalizedPath, artifact.PayloadBytes);
+        }
+    }
+
+    private static string GetPackagePathExtension(string packagePath)
+    {
+        var normalized = NormalizeZipPath(packagePath);
+        var fileName = normalized.Contains('/')
+            ? normalized[(normalized.LastIndexOf('/') + 1)..]
+            : normalized;
+        var dotIndex = fileName.LastIndexOf('.');
+        return dotIndex >= 0 && dotIndex < fileName.Length - 1
+            ? fileName[(dotIndex + 1)..]
+            : string.Empty;
+    }
+
+    private static string NormalizeZipPath(string packagePath) =>
+        packagePath.Replace('\\', '/').TrimStart('/');
 
     private static XDocument BuildContentTypesXml(
         Presentation p, List<SlideMaster> masters, List<SlideLayout> layouts,

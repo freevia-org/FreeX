@@ -53,7 +53,8 @@ public sealed record SlideShowRecordingMediaArtifact(
     string StatusText,
     string PackagePath = "",
     long ContentLengthBytes = 0,
-    string ContentSha256 = "")
+    string ContentSha256 = "",
+    byte[]? PayloadBytes = null)
 {
     public bool IsPersistable =>
         IsCaptured &&
@@ -77,20 +78,23 @@ public sealed record SlideShowRecordingCaptureResult(
     string StatusText,
     string PackagePath,
     long ContentLengthBytes,
-    string ContentSha256)
+    string ContentSha256,
+    byte[]? PayloadBytes = null)
 {
     public static SlideShowRecordingCaptureResult Captured(
         string statusText,
         string packagePath = "",
         long contentLengthBytes = 0,
-        string contentSha256 = "") =>
+        string contentSha256 = "",
+        byte[]? payloadBytes = null) =>
         new(
             IsCaptured: true,
             IsDeferred: false,
             statusText,
             packagePath,
             contentLengthBytes,
-            contentSha256);
+            contentSha256,
+            payloadBytes);
 
     public static SlideShowRecordingCaptureResult Deferred(string statusText) =>
         new(
@@ -99,7 +103,8 @@ public sealed record SlideShowRecordingCaptureResult(
             statusText,
             PackagePath: string.Empty,
             ContentLengthBytes: 0,
-            ContentSha256: string.Empty);
+            ContentSha256: string.Empty,
+            PayloadBytes: null);
 }
 
 public interface ISlideShowRecordingCaptureBackend
@@ -194,7 +199,8 @@ public sealed class SlideShowDeterministicRecordingCaptureBackend : ISlideShowRe
             $"{Capabilities.HostName}: {KindLabel(request.Kind)} captured to {packagePath}",
             packagePath,
             payload.Length,
-            hash);
+            hash,
+            payload);
     }
 
     private static string NormalizePackageRoot(string packageRoot)
@@ -538,7 +544,8 @@ public static class SlideShowRecordingExecutionPlanner
             result.StatusText,
             result.PackagePath,
             result.ContentLengthBytes,
-            result.ContentSha256);
+            result.ContentSha256,
+            result.PayloadBytes);
     }
 
     private static IReadOnlyList<SlideShowRecordingExecutionAction> EnterSlideActions(

@@ -121,6 +121,9 @@ public sealed class SlideShowRecordingExecutionPlannerTests
             artifact.IsCaptured &&
             !artifact.IsDeferred &&
             artifact.IsPersistable &&
+            artifact.PayloadBytes != null &&
+            artifact.PayloadBytes.Length > 0 &&
+            artifact.PayloadBytes.Length == artifact.ContentLengthBytes &&
             artifact.ContentLengthBytes > 0 &&
             artifact.ContentSha256.Length == 64);
         segment.MediaArtifacts.Select(artifact => artifact.PackagePath).Should().Equal(

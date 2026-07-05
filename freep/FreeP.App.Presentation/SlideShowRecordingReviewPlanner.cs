@@ -20,7 +20,8 @@ public sealed record SlideShowRecordingReviewMediaArtifact(
     string StatusText,
     string PackagePath = "",
     long ContentLengthBytes = 0,
-    string ContentSha256 = "")
+    string ContentSha256 = "",
+    byte[]? PayloadBytes = null)
 {
     public bool IsPersistable =>
         IsCaptured &&
@@ -118,7 +119,8 @@ public static class SlideShowRecordingReviewPlanner
                     artifact.ContentSha256,
                     row.DurationMs,
                     plan.HostName,
-                    artifact.StatusText)))
+                    artifact.StatusText,
+                    artifact.PayloadBytes)))
             .ToArray();
 
         if (artifacts.Length == 0)
@@ -157,7 +159,8 @@ public static class SlideShowRecordingReviewPlanner
                 artifact.StatusText,
                 artifact.PackagePath,
                 artifact.ContentLengthBytes,
-                artifact.ContentSha256))
+                artifact.ContentSha256,
+                artifact.PayloadBytes))
             .ToArray();
 
         return new SlideShowRecordingReviewRow(

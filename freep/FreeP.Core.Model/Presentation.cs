@@ -18,7 +18,13 @@ public sealed record PresentationRecordingMediaArtifact(
     string ContentSha256,
     int DurationMs,
     string CapturedByHost,
-    string StatusText);
+    string StatusText,
+    byte[]? PayloadBytes = null)
+{
+    public bool HasPayload =>
+        PayloadBytes is { Length: > 0 } &&
+        !string.IsNullOrWhiteSpace(PackagePath);
+}
 
 /// <summary>
 /// The root presentation model. Holds the slide list, masters, layouts, theme, and document

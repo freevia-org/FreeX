@@ -52,29 +52,38 @@ public sealed class PptxRoundTripTests : IDisposable
     public void RoundTrip_RecordingMediaArtifactManifest_Preserved()
     {
         var pres = Presentation.CreateEmpty();
+        var payload = System.Text.Encoding.UTF8.GetBytes("deterministic narration payload");
         pres.RecordingMediaArtifacts.Add(new PresentationRecordingMediaArtifact(
             PresentationRecordingMediaArtifactKind.NarrationAudio,
             SlideIndex: 0,
             SuggestedFileName: "slide-001-narration.m4a",
             ContentType: "audio/mp4",
             PackagePath: "ppt/media/recordings/slide-001-narration.m4a",
-            ContentLengthBytes: 128,
+            ContentLengthBytes: payload.Length,
             ContentSha256: new string('a', 64),
             DurationMs: 2400,
             CapturedByHost: "Capture evidence",
-            StatusText: "Capture evidence: Narration audio captured"));
+            StatusText: "Capture evidence: Narration audio captured",
+            PayloadBytes: payload));
 
         var path = WriteToPptx(pres);
 
         using (var archive = System.IO.Compression.ZipFile.OpenRead(path))
         {
             archive.GetEntry("ppt/media/recordingArtifacts.xml").Should().NotBeNull();
+            var mediaEntry = archive.GetEntry("ppt/media/recordings/slide-001-narration.m4a");
+            mediaEntry.Should().NotBeNull();
+            mediaEntry!.Length.Should().Be(payload.Length);
+            using var contentTypesStream = archive.GetEntry("[Content_Types].xml")!.Open();
+            using var reader = new StreamReader(contentTypesStream);
+            reader.ReadToEnd().Should().Contain("Extension=\"m4a\"");
         }
 
         var reloaded = PptxPackageReader.Read(path);
 
         reloaded.RecordingMediaArtifacts.Should().ContainSingle().Which.Should()
             .BeEquivalentTo(pres.RecordingMediaArtifacts.Single());
+        reloaded.RecordingMediaArtifacts.Single().PayloadBytes.Should().Equal(payload);
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
