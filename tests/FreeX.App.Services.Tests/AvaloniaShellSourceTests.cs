@@ -509,6 +509,9 @@ public sealed class AvaloniaShellSourceTests
         optionsSource.Should().Contain("private void ApplyLiveOptions(OptionsDialogPlanner.OptionsDialogInput input)");
         optionsSource.Should().Contain("_session.SetShowGridlines(input.ShowGridlines);");
         optionsSource.Should().Contain("_session.SetShowHeadings(input.ShowHeadings);");
+        optionsSource.Should().Contain("FormulaErrorCheckingRuleCatalog.SupportedRules");
+        optionsSource.Should().Contain("workbook.DisabledFormulaErrorCodes.Contains(rule.ErrorCode)");
+        optionsSource.Should().Contain("new SetFormulaErrorCheckingRuleCommand(rule.ErrorCode, enabled: !shouldDisable)");
 
         // PresentationPortabilityGuard forbids these tokens in portable shell source — make sure we stayed clean.
         optionsSource.Should().NotContain("System.Windows");
@@ -2489,7 +2492,7 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("private async Task ShowUnhideSheetParityDialogAsync()");
         parityCaptureSource.Should().Contain("await ShowUnhideSheetDialogAsync([new WorkbookHiddenSheet(_session.ActiveSheet.Id, \"Archive\")]);");
         parityCaptureSource.Should().Contain("private async Task ShowSelectDataSourceParityDialogAsync()");
-        parityCaptureSource.Should().Contain("await ShowSelectDataDialogAsync(\"Sheet1!$A$1:$D$4\", firstColumnIsCategories: true);");
+        parityCaptureSource.Should().Contain("await ShowSelectDataDialogAsync(\"A1:C6\", firstColumnIsCategories: true);");
         parityCaptureSource.Should().Contain("private async Task ShowChangeChartTypeParityDialogAsync()");
         parityCaptureSource.Should().Contain("await ShowWithSelectedParityChartAsync(ShowChangeChartTypeDialog);");
         parityCaptureSource.Should().Contain("private async Task ShowFormatChartAreaParityDialogAsync()");
