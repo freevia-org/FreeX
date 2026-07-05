@@ -528,10 +528,55 @@ public sealed class AnimationPanePlannerTests
     }
 
     [Theory]
+    [InlineData(AnimationPreset.Blinds, AnimationDirection.Vertical, "Horizontal,Vertical", "Vertical")]
+    [InlineData(AnimationPreset.Checkerboard, AnimationDirection.Horizontal, "Horizontal,Vertical", "Horizontal")]
+    [InlineData(AnimationPreset.Box, AnimationDirection.Out, "In,Out", "Out")]
+    [InlineData(AnimationPreset.Circle, AnimationDirection.In, "In,Out", "In")]
+    [InlineData(AnimationPreset.Diamond, AnimationDirection.Out, "In,Out", "Out")]
+    [InlineData(AnimationPreset.Plus, AnimationDirection.In, "In,Out", "In")]
+    [InlineData(AnimationPreset.Wedge, AnimationDirection.Out, "In,Out", "Out")]
+    [InlineData(AnimationPreset.Wheel, AnimationDirection.In, "In,Out", "In")]
+    [InlineData(AnimationPreset.Peek, AnimationDirection.FromTop, "From Bottom,From Left,From Right,From Top", "From Top")]
+    [InlineData(AnimationPreset.Crawl, AnimationDirection.FromRight, "From Bottom,From Left,From Right,From Top", "From Right")]
+    [InlineData(AnimationPreset.Strips, AnimationDirection.LeftDown, "Left Up,Left Down,Right Up,Right Down", "Left Down")]
+    public void BuildEffectOptionsPlan_ProjectsAdvancedImportedEffectOptions(
+        AnimationPreset preset,
+        AnimationDirection direction,
+        string expectedLabelsCsv,
+        string expectedSelected)
+    {
+        var slide = new Slide();
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 10u,
+            Kind = AnimationKind.Entrance,
+            Preset = preset,
+            Direction = direction,
+        });
+
+        var plan = AnimationPanePlanner.BuildEffectOptionsPlan(slide.Animations, 0);
+
+        plan.CanApply.Should().BeTrue();
+        plan.SelectedOptionText.Should().Be(expectedSelected);
+        plan.Options.Select(option => option.DisplayText)
+            .Should()
+            .Equal(expectedLabelsCsv.Split(','));
+        plan.Options.Should().ContainSingle(option =>
+            option.DisplayText == expectedSelected && option.IsSelected);
+    }
+
+    [Theory]
     [InlineData(AnimationPreset.Wipe, "from-top", AnimationDirection.FromTop)]
     [InlineData(AnimationPreset.Zoom, "out", AnimationDirection.Out)]
     [InlineData(AnimationPreset.Split, "vertical", AnimationDirection.Vertical)]
     [InlineData(AnimationPreset.RandomBars, "horizontal", AnimationDirection.Horizontal)]
+    [InlineData(AnimationPreset.Blinds, "vertical", AnimationDirection.Vertical)]
+    [InlineData(AnimationPreset.Checkerboard, "horizontal", AnimationDirection.Horizontal)]
+    [InlineData(AnimationPreset.Circle, "out", AnimationDirection.Out)]
+    [InlineData(AnimationPreset.Wheel, "in", AnimationDirection.In)]
+    [InlineData(AnimationPreset.Peek, "from-left", AnimationDirection.FromLeft)]
+    [InlineData(AnimationPreset.Crawl, "from-top", AnimationDirection.FromTop)]
+    [InlineData(AnimationPreset.Strips, "right-up", AnimationDirection.RightUp)]
     public void BuildEffectOptionMutationPlan_MapsSupportedOptionIds(
         AnimationPreset preset,
         string optionId,

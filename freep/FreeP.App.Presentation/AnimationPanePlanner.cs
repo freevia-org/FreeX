@@ -1002,23 +1002,66 @@ public static class AnimationPanePlanner
         {
             case AnimationPreset.FlyIn:
             case AnimationPreset.Wipe:
-                yield return EffectOption("from-bottom", "From Bottom", AnimationDirection.FromBottom);
-                yield return EffectOption("from-left", "From Left", AnimationDirection.FromLeft);
-                yield return EffectOption("from-right", "From Right", AnimationDirection.FromRight);
-                yield return EffectOption("from-top", "From Top", AnimationDirection.FromTop);
+                foreach (var option in FromCardinalOptions())
+                    yield return option;
                 break;
 
             case AnimationPreset.Zoom:
-                yield return EffectOption("in", "In", AnimationDirection.In);
-                yield return EffectOption("out", "Out", AnimationDirection.Out);
+                foreach (var option in InOutOptions())
+                    yield return option;
                 break;
 
             case AnimationPreset.Split:
             case AnimationPreset.RandomBars:
-                yield return EffectOption("horizontal", "Horizontal", AnimationDirection.Horizontal);
-                yield return EffectOption("vertical", "Vertical", AnimationDirection.Vertical);
+            case AnimationPreset.Blinds:
+            case AnimationPreset.Checkerboard:
+                foreach (var option in HorizontalVerticalOptions())
+                    yield return option;
+                break;
+
+            case AnimationPreset.Box:
+            case AnimationPreset.Circle:
+            case AnimationPreset.Diamond:
+            case AnimationPreset.Plus:
+            case AnimationPreset.Wedge:
+            case AnimationPreset.Wheel:
+                foreach (var option in InOutOptions())
+                    yield return option;
+                break;
+
+            case AnimationPreset.Peek:
+            case AnimationPreset.Crawl:
+                foreach (var option in FromCardinalOptions())
+                    yield return option;
+                break;
+
+            case AnimationPreset.Strips:
+                yield return EffectOption("left-up", "Left Up", AnimationDirection.LeftUp);
+                yield return EffectOption("left-down", "Left Down", AnimationDirection.LeftDown);
+                yield return EffectOption("right-up", "Right Up", AnimationDirection.RightUp);
+                yield return EffectOption("right-down", "Right Down", AnimationDirection.RightDown);
                 break;
         }
+    }
+
+    private static IEnumerable<AnimationPaneEffectOptionDescriptor> FromCardinalOptions()
+    {
+        yield return EffectOption("from-bottom", "From Bottom", AnimationDirection.FromBottom);
+        yield return EffectOption("from-left", "From Left", AnimationDirection.FromLeft);
+        yield return EffectOption("from-right", "From Right", AnimationDirection.FromRight);
+        yield return EffectOption("from-top", "From Top", AnimationDirection.FromTop);
+    }
+
+    private static IEnumerable<AnimationPaneEffectOptionDescriptor> HorizontalVerticalOptions()
+    {
+        yield return EffectOption("horizontal", "Horizontal", AnimationDirection.Horizontal);
+        yield return EffectOption("vertical", "Vertical", AnimationDirection.Vertical);
+    }
+
+    private static IEnumerable<AnimationPaneEffectOptionDescriptor> InOutOptions()
+    {
+        yield return EffectOption("in", "In", AnimationDirection.In);
+        yield return EffectOption("out", "Out", AnimationDirection.Out);
     }
 
     private static AnimationPaneEffectOptionDescriptor EffectOption(
