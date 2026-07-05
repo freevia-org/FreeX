@@ -62,6 +62,7 @@ public sealed class SlideShowInkPersistencePlannerTests
     public void BuildPlan_MapsRouteSlidesToPresentationSlidesAndSkipsInvalidTargets()
     {
         var presentation = MakePresentation(3);
+        presentation.Slides[2].Id = "deck-slide-three";
         var state = SlideShowInkExecutionPlanner.CreateState(
             committedStrokes: new[]
             {
@@ -74,13 +75,18 @@ public sealed class SlideShowInkPersistencePlannerTests
         var plan = SlideShowInkPersistencePlanner.BuildPlan(
             presentation,
             state,
-            routeIndex => routeIndex == 1 ? 2 : 99);
+            routeIndex => routeIndex == 1 ? 2 : 99,
+            "Executive review");
 
         plan.Slides.Should().ContainSingle();
         plan.Slides.Single().RouteSlideIndex.Should().Be(1);
         plan.Slides.Single().PresentationSlideIndex.Should().Be(2);
+        plan.Slides.Single().SourceSlideId.Should().Be("deck-slide-three");
+        plan.Slides.Single().CustomShowName.Should().Be("Executive review");
         plan.Slides.Single().InkXml.Should().Contain("route-one");
         plan.Slides.Single().InkXml.Should().NotContain("invalid-route");
+        plan.Slides.Single().InkXml.Should().Contain("freep:sourceSlideId=\"deck-slide-three\"");
+        plan.Slides.Single().InkXml.Should().Contain("freep:customShowName=\"Executive review\"");
     }
 
     [Fact]
