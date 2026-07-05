@@ -91,6 +91,30 @@ public sealed class FileCommandsSourceTests
         source.Should().NotContain("File.WriteAllBytes(");
     }
 
+    [Fact]
+    public void WpfMainWindow_RoutesPlatformOnlyCommandResidualsThroughShellCommands()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "freep",
+            "FreeP.App.Host",
+            "MainWindow.cs"));
+
+        source.Should().Contain("CommandBindings.Add(new CommandBinding(ApplicationCommands.New,    (_, _) => _file.New()))");
+        source.Should().Contain("CommandBindings.Add(new CommandBinding(ApplicationCommands.Open,   (_, _) => _file.Open()))");
+        source.Should().Contain("CommandBindings.Add(new CommandBinding(ApplicationCommands.Save,   (_, _) => _file.Save()))");
+        source.Should().Contain("CommandBindings.Add(new CommandBinding(ApplicationCommands.SaveAs, (_, _) => _file.SaveAs()))");
+        source.Should().Contain("New: () => _file.New()");
+        source.Should().Contain("Open: () => _file.Open()");
+        source.Should().Contain("Save: () => _file.Save()");
+        source.Should().Contain("SaveAs: () => _file.SaveAs()");
+        source.Should().Contain("CommandBindings.Add(new CommandBinding(ApplicationCommands.Undo, (_, _) => Editor.Undo()))");
+        source.Should().Contain("var redoCommand = new RoutedCommand(\"Redo\", typeof(MainWindow))");
+        source.Should().Contain("CommandBindings.Add(new CommandBinding(redoCommand, (_, _) => Editor.Redo()))");
+        source.Should().Contain("new KeyGesture(Key.Y, ModifierKeys.Control)");
+        source.Should().Contain("new KeyGesture(Key.Z, ModifierKeys.Control | ModifierKeys.Shift)");
+    }
+
     private static string FindRepositoryRoot()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
