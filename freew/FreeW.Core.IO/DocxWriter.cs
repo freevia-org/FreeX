@@ -5410,8 +5410,9 @@ public static class DocxWriter
     /// Builds word/bibliography/sources.xml: a b:Sources element carrying the document's selected
     /// <see cref="TextDocument.BibliographyStyle"/> (its <c>SelectedStyle</c> attribute as the style name)
     /// and one b:Source per <see cref="Source"/>. Each source records its tag, type and populated fields.
-    /// Structured personal authors are emitted as Word <c>b:NameList/b:Person</c> rows; corporate and
-    /// legacy string-only authors are emitted as <c>b:Corporate</c>. Only non-empty fields are emitted.
+    /// Structured personal authors/editors/translators are emitted as Word contributor role blocks with
+    /// <c>b:NameList/b:Person</c> rows; corporate and legacy string-only authors are emitted as
+    /// <c>b:Corporate</c>. Only non-empty fields are emitted.
     /// </summary>
     private static XDocument BuildBibliographySources(TextDocument document)
     {
@@ -5476,33 +5477,59 @@ public static class DocxWriter
 
     private static XElement? BuildBibliographyAuthor(Source source)
     {
-        var people = source.PersonalAuthors
-            .Where(person => person is not null && !person.IsEmpty)
-            .ToList();
-        if (people.Count > 0)
-        {
-            return new XElement(B + "Author",
-                new XElement(B + "Author",
-                    new XElement(B + "NameList",
-                        people.Select(person =>
-                        {
-                            var element = new XElement(B + "Person");
-                            AddPersonPart(element, "Last", person.Last);
-                            AddPersonPart(element, "First", person.First);
-                            AddPersonPart(element, "Middle", person.Middle);
-                            return element;
-                        }))));
-        }
+        var roles = new List<XElement>();
 
         var corporate = string.IsNullOrWhiteSpace(source.CorporateAuthor)
             ? source.Author
             : source.CorporateAuthor;
-        if (string.IsNullOrWhiteSpace(corporate))
-            return null;
 
-        return new XElement(B + "Author",
-            new XElement(B + "Author",
-                new XElement(B + "Corporate", corporate.Trim())));
+        AddRole(roles, "Author", source.PersonalAuthors, corporate);
+        AddRole(roles, "Editor", source.Editors, corporate: null);
+        AddRole(roles, "Translator", source.Translators, corporate: null);
+
+        return roles.Count == 0 ? null : new XElement(B + "Author", roles);
+
+        static void AddRole(
+            List<XElement> roles,
+            string roleName,
+            IEnumerable<SourceAuthorPerson> people,
+            string? corporate)
+        {
+            var role = BuildPersonalRole(roleName, people) ?? BuildCorporateRole(roleName, corporate);
+            if (role is not null)
+                roles.Add(role);
+        }
+
+        static XElement? BuildPersonalRole(string roleName, IEnumerable<SourceAuthorPerson> people)
+        {
+            var personElements = people
+                .Where(person => person is not null && !person.IsEmpty)
+                .Select(BuildPerson)
+                .ToList();
+            if (personElements.Count == 0)
+                return null;
+
+            return new XElement(B + roleName,
+                new XElement(B + "NameList", personElements));
+        }
+
+        static XElement? BuildCorporateRole(string roleName, string? corporate)
+        {
+            if (string.IsNullOrWhiteSpace(corporate))
+                return null;
+
+            return new XElement(B + roleName,
+                new XElement(B + "Corporate", corporate.Trim()));
+        }
+
+        static XElement BuildPerson(SourceAuthorPerson person)
+        {
+            var element = new XElement(B + "Person");
+            AddPersonPart(element, "Last", person.Last);
+            AddPersonPart(element, "First", person.First);
+            AddPersonPart(element, "Middle", person.Middle);
+            return element;
+        }
 
         static void AddPersonPart(XElement person, string localName, string? value)
         {
