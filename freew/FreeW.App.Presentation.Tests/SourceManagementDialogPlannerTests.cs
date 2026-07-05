@@ -1012,6 +1012,38 @@ public sealed class SourceManagementDialogPlannerTests
     }
 
     [Fact]
+    public void CopyMasterToCurrent_UsesTrimmedTagIdentityAndKeepsCurrentSelection()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources: [new Source { Tag = "Smith2020", Author = "Current Smith" }],
+            masterSources:
+            [
+                new Source { Tag = " Smith2020 ", Author = "Master Smith" },
+                new Source { Tag = "smith2020", Author = "Lowercase Smith" }
+            ]);
+
+        var duplicate = SourceManagementDialogPlanner.CopyMasterToCurrent(
+            state,
+            masterSelectedIndex: 0,
+            currentSelectedIndex: 0);
+
+        duplicate.State.CurrentSources.Should().ContainSingle();
+        duplicate.State.CurrentSources[0].Tag.Should().Be("Smith2020");
+        duplicate.State.CurrentSources[0].Author.Should().Be("Current Smith");
+        duplicate.SelectedIndex.Should().Be(0);
+
+        var distinctCase = SourceManagementDialogPlanner.CopyMasterToCurrent(
+            duplicate.State,
+            masterSelectedIndex: 1,
+            currentSelectedIndex: duplicate.SelectedIndex);
+
+        distinctCase.State.CurrentSources.Should().HaveCount(2);
+        distinctCase.State.CurrentSources[1].Tag.Should().Be("smith2020");
+        distinctCase.State.CurrentSources[1].Author.Should().Be("Lowercase Smith");
+        distinctCase.SelectedIndex.Should().Be(1);
+    }
+
+    [Fact]
     public void EditAndDeleteCurrentSource_PreserveSelectionThroughPlanner()
     {
         var state = SourceManagementDialogPlanner.BuildInitialState(

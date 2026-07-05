@@ -524,7 +524,7 @@ public static class SourceManagementDialogPlanner
         var author = NormalizeAuthor(entry.Author, AuthorPreservationEntry(entry, existing));
         return new Source
         {
-            Tag = entry.Tag.Trim(),
+            Tag = SourceManagementTagIdentity.Canonicalize(entry.Tag),
             Type = type,
             Author = author.DisplayText,
             PersonalAuthors = author.PersonalAuthors,
@@ -563,7 +563,7 @@ public static class SourceManagementDialogPlanner
 
         return new Source
         {
-            Tag = source.Tag,
+            Tag = SourceManagementTagIdentity.Canonicalize(source.Tag),
             Type = source.Type,
             Author = source.Author,
             PersonalAuthors = ClonePersonalAuthors(source.PersonalAuthors),
@@ -633,11 +633,7 @@ public static class SourceManagementDialogPlanner
             return new SourceManagementListMutationPlan(state, SelectedIndex: -1, validation);
 
         var masterSources = state.MasterSources.Select(CloneSource).ToList();
-        var index = masterSources.FindIndex(s => s.Tag == source!.Tag);
-        if (index >= 0)
-            masterSources[index] = source!;
-        else
-            masterSources.Add(source!);
+        UpsertSourceByTag(masterSources, source!);
 
         var nextState = state with { MasterSources = masterSources };
         return new SourceManagementListMutationPlan(nextState, ClampIndex(masterSources.Count - 1, masterSources.Count));
@@ -653,10 +649,10 @@ public static class SourceManagementDialogPlanner
             return new SourceManagementListMutationPlan(state, selectedIndex);
 
         var masterSources = state.MasterSources.Select(CloneSource).ToList();
-        masterSources.RemoveAt(selectedIndex);
+        var removedIndex = RemoveSourcesByTag(masterSources, masterSources[selectedIndex].Tag);
 
         var nextState = state with { MasterSources = masterSources };
-        return new SourceManagementListMutationPlan(nextState, ClampIndex(selectedIndex, masterSources.Count));
+        return new SourceManagementListMutationPlan(nextState, ClampIndex(removedIndex, masterSources.Count));
     }
 
     public static SourceManagementListMutationPlan CopyMasterToCurrent(
@@ -670,7 +666,7 @@ public static class SourceManagementDialogPlanner
             return new SourceManagementListMutationPlan(state, currentSelectedIndex);
 
         var source = state.MasterSources[masterSelectedIndex];
-        if (state.CurrentSources.Any(s => s.Tag == source.Tag))
+        if (ContainsSourceTag(state.CurrentSources, source.Tag))
             return new SourceManagementListMutationPlan(state, currentSelectedIndex);
 
         var currentSources = state.CurrentSources.Select(CloneSource).ToList();
@@ -690,10 +686,10 @@ public static class SourceManagementDialogPlanner
             return new SourceManagementListMutationPlan(state, SelectedIndex: -1, validation);
 
         var currentSources = state.CurrentSources.Select(CloneSource).ToList();
-        currentSources.Add(source!);
+        var selectedIndex = UpsertSourceByTag(currentSources, source!);
 
         var nextState = state with { CurrentSources = currentSources };
-        return new SourceManagementListMutationPlan(nextState, currentSources.Count - 1);
+        return new SourceManagementListMutationPlan(nextState, selectedIndex);
     }
 
     public static SourceManagementListMutationPlan EditCurrentSource(
@@ -711,7 +707,7 @@ public static class SourceManagementDialogPlanner
             return new SourceManagementListMutationPlan(state, selectedIndex, validation);
 
         var currentSources = state.CurrentSources.Select(CloneSource).ToList();
-        currentSources[selectedIndex] = source!;
+        selectedIndex = ReplaceSourceAtIndexByTag(currentSources, selectedIndex, source!);
 
         var nextState = state with { CurrentSources = currentSources };
         return new SourceManagementListMutationPlan(nextState, selectedIndex);
@@ -727,10 +723,10 @@ public static class SourceManagementDialogPlanner
             return new SourceManagementListMutationPlan(state, selectedIndex);
 
         var currentSources = state.CurrentSources.Select(CloneSource).ToList();
-        currentSources.RemoveAt(selectedIndex);
+        var removedIndex = RemoveSourcesByTag(currentSources, currentSources[selectedIndex].Tag);
 
         var nextState = state with { CurrentSources = currentSources };
-        return new SourceManagementListMutationPlan(nextState, ClampIndex(selectedIndex, currentSources.Count));
+        return new SourceManagementListMutationPlan(nextState, ClampIndex(removedIndex, currentSources.Count));
     }
 
     public static SourceManagementDialogResult BuildResult(SourceManagementDialogState state)
@@ -740,6 +736,60 @@ public static class SourceManagementDialogPlanner
         return new SourceManagementDialogResult(
             CloneSources(state.CurrentSources),
             CloneSources(state.MasterSources));
+    }
+
+    private static bool ContainsSourceTag(IReadOnlyList<Source> sources, string tag) =>
+        sources.Any(source => SourceManagementTagIdentity.Equals(source.Tag, tag));
+
+    private static int UpsertSourceByTag(List<Source> sources, Source source)
+    {
+        var index = FindSourceIndexByTag(sources, source.Tag);
+        if (index < 0)
+        {
+            sources.Add(CloneSource(source));
+            return sources.Count - 1;
+        }
+
+        RemoveSourcesByTag(sources, source.Tag);
+        sources.Insert(Math.Min(index, sources.Count), CloneSource(source));
+        return Math.Min(index, sources.Count - 1);
+    }
+
+    private static int ReplaceSourceAtIndexByTag(List<Source> sources, int selectedIndex, Source source)
+    {
+        sources.RemoveAt(selectedIndex);
+
+        var duplicateIndex = FindSourceIndexByTag(sources, source.Tag);
+        if (duplicateIndex >= 0)
+        {
+            RemoveSourcesByTag(sources, source.Tag);
+            selectedIndex = duplicateIndex;
+        }
+
+        var insertionIndex = Math.Clamp(selectedIndex, 0, sources.Count);
+        sources.Insert(insertionIndex, CloneSource(source));
+        return insertionIndex;
+    }
+
+    private static int RemoveSourcesByTag(List<Source> sources, string tag)
+    {
+        var index = FindSourceIndexByTag(sources, tag);
+        if (index < 0)
+            return index;
+
+        sources.RemoveAll(source => SourceManagementTagIdentity.Equals(source.Tag, tag));
+        return Math.Min(index, sources.Count);
+    }
+
+    private static int FindSourceIndexByTag(IReadOnlyList<Source> sources, string tag)
+    {
+        for (var index = 0; index < sources.Count; index++)
+        {
+            if (SourceManagementTagIdentity.Equals(sources[index].Tag, tag))
+                return index;
+        }
+
+        return -1;
     }
 
     private static IReadOnlyList<Source> CloneSources(IReadOnlyList<Source> sources) =>
@@ -770,7 +820,7 @@ public static class SourceManagementDialogPlanner
         || entry.AccessedYear.Length > 0;
 
     private static bool HasManagedSourceData(SourceManagementSourceEntry entry) =>
-        entry.Tag.Length > 0 || HasCitationSourceData(entry);
+        SourceManagementTagIdentity.Canonicalize(entry.Tag).Length > 0 || HasCitationSourceData(entry);
 
     private static string FieldValue(SourceManagementSourceEntry entry, SourceManagementSourceField field) =>
         field switch

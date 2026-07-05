@@ -26,16 +26,21 @@ public sealed class MasterSourceStore
     {
         ArgumentNullException.ThrowIfNull(source);
 
-        var index = Sources.FindIndex(record => record.Tag == source.Tag);
+        var index = Sources.FindIndex(record => SourceManagementTagIdentity.Equals(record.Tag, source.Tag));
         var replacement = SourceRecord.FromSource(source);
         if (index >= 0)
-            Sources[index] = replacement;
+        {
+            Sources.RemoveAll(record => SourceManagementTagIdentity.Equals(record.Tag, source.Tag));
+            Sources.Insert(Math.Min(index, Sources.Count), replacement);
+        }
         else
+        {
             Sources.Add(replacement);
+        }
     }
 
     public bool Remove(string tag) =>
-        Sources.RemoveAll(record => record.Tag == tag) > 0;
+        Sources.RemoveAll(record => SourceManagementTagIdentity.Equals(record.Tag, tag)) > 0;
 
     private static JsonSettingsStore<MasterSourceStore> Store() =>
         s_store ??= JsonSettingsStore<MasterSourceStore>.ForProductFile(FileName);
@@ -73,7 +78,7 @@ public sealed class SourceRecord
 
     public Source ToSource() => new()
     {
-        Tag = Tag,
+        Tag = SourceManagementTagIdentity.Canonicalize(Tag),
         Type = Enum.TryParse<SourceType>(Type, out var sourceType) ? sourceType : SourceType.Book,
         Author = Author,
         PersonalAuthors = PersonalAuthors
@@ -110,7 +115,7 @@ public sealed class SourceRecord
 
         return new SourceRecord
         {
-            Tag = source.Tag,
+            Tag = SourceManagementTagIdentity.Canonicalize(source.Tag),
             Type = source.Type.ToString(),
             Author = source.Author,
             PersonalAuthors = source.PersonalAuthors
