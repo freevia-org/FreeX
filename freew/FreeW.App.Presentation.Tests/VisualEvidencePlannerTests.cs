@@ -196,7 +196,15 @@ public sealed class VisualEvidencePlannerTests
         objectFormatScenario.Composition.ExpectsFloatingObjects.Should().BeTrue();
 
         var chartSmartArtScenario = FreeWVisualEvidencePlanner.ResolveScenario("chart-smartart-complex");
-        chartSmartArtScenario.ExpectedFeatureTags.Should().Contain(["chart-smartart", "chart-palette", "scatter-markers", "smartart-style"]);
+        chartSmartArtScenario.ExpectedFeatureTags.Should().Contain([
+            "chart-smartart",
+            "chart-palette",
+            "quick-layout",
+            "scatter-markers",
+            "chart-visual-signature",
+            "smartart-style",
+            "smartart-node-fills",
+            "smartart-visual-signature"]);
         chartSmartArtScenario.ExpectedOutputNamePattern.Should().Be("chart-smartart-complex_p{page}.png");
         chartSmartArtScenario.MinimumExpectedOutputs.Should().Be(1);
 
@@ -1343,6 +1351,28 @@ public sealed class VisualEvidencePlannerTests
         expectation.ChartSmartArt.HasSmartArtStyle.Should().BeTrue();
         expectation.ChartSmartArt.SmartArtNodeCount.Should().Be(3);
         expectation.ChartSmartArt.DistinctSmartArtFillCount.Should().BeGreaterThan(1);
+        expectation.ChartSmartArt.ChartVisualSignatures.Should().HaveCount(2);
+        expectation.ChartSmartArt.ChartVisualSignatures.Should().Contain(signature =>
+            signature.Contains("kind=Column", StringComparison.Ordinal) &&
+            signature.Contains("colorScheme=mono-blue", StringComparison.Ordinal) &&
+            signature.Contains("quickLayout=9", StringComparison.Ordinal) &&
+            signature.Contains("plotFill=1", StringComparison.Ordinal) &&
+            signature.Contains("dataLabels=1", StringComparison.Ordinal) &&
+            signature.Contains("axisTitles=1", StringComparison.Ordinal) &&
+            signature.Contains("palette=#214A82,#2E5FAA,#4472C4,#6C8FD1,#A9C1E7,#D6E4F4", StringComparison.Ordinal));
+        expectation.ChartSmartArt.ChartVisualSignatures.Should().Contain(signature =>
+            signature.Contains("kind=Scatter", StringComparison.Ordinal) &&
+            signature.Contains("geometry=MarkerOnly", StringComparison.Ordinal) &&
+            signature.Contains("markers=1", StringComparison.Ordinal) &&
+            signature.Contains("categoryAxis=Height", StringComparison.Ordinal) &&
+            signature.Contains("valueAxis=Weight", StringComparison.Ordinal));
+        expectation.ChartSmartArt.SmartArtVisualSignatures.Should().ContainSingle(signature =>
+            signature.Contains("layout=stepup1", StringComparison.Ordinal) &&
+            signature.Contains("colorScheme=accent1", StringComparison.Ordinal) &&
+            signature.Contains("style=intense1", StringComparison.Ordinal) &&
+            signature.Contains("#38517D", StringComparison.Ordinal) &&
+            signature.Contains("#486DAF", StringComparison.Ordinal) &&
+            signature.Contains("#679AD6", StringComparison.Ordinal));
         expectation.ChartSmartArt.Charts.Should().Contain(plan =>
             plan.Kind == ChartKind.Scatter &&
             plan.GeometryKind == ChartVisualGeometryKind.MarkerOnly);
@@ -1767,13 +1797,15 @@ public sealed class VisualEvidencePlannerTests
                     .Select((node, index) => index == 1 ? node with { FillHex = "#101010" } : node)
                     .ToList()
             };
+            var alteredSmartArtSignatures = ChartSmartArtVisualPlanner.BuildSmartArtVisualSignatures([alteredSmartArt]);
             var avaloniaWithDifferentSmartArtPlan = avaloniaRow with
             {
                 PageExpectation = avaloniaRow.PageExpectation with
                 {
                     ChartSmartArt = avaloniaPlan with
                     {
-                        SmartArts = [alteredSmartArt]
+                        SmartArts = [alteredSmartArt],
+                        SmartArtVisualSignatures = alteredSmartArtSignatures
                     }
                 }
             };
@@ -1807,7 +1839,7 @@ public sealed class VisualEvidencePlannerTests
             summary.Trust.Passed.Should().BeFalse();
             summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("chart/SmartArt renderer pair 'chart-smartart-complex' page 1", StringComparison.Ordinal)
-                && f.Contains("SmartArt plan signatures differ", StringComparison.Ordinal)
+                && f.Contains("SmartArt visual signatures differ", StringComparison.Ordinal)
                 && f.Contains("#486DAF", StringComparison.Ordinal)
                 && f.Contains("#101010", StringComparison.Ordinal));
         }

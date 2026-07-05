@@ -1,3 +1,4 @@
+using System.Globalization;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.DocumentView;
@@ -15,6 +16,9 @@ public enum ChartVisualGeometryKind
 public sealed record ChartVisualPlan(
     ChartKind Kind,
     ChartVisualGeometryKind GeometryKind,
+    int StyleId,
+    string ColorSchemeId,
+    int QuickLayoutId,
     bool ShowTitle,
     bool ShowLegend,
     bool ShowGridlines,
@@ -73,7 +77,8 @@ public static class ChartSmartArtVisualPlanner
         var showGridlines = style.ShowGridlines;
         var showDataLabels = style.ShowDataLabels;
 
-        if (chart.QuickLayoutId > 0 && ChartQuickLayout.FindById(chart.QuickLayoutId) is { } quickLayout)
+        var quickLayout = chart.QuickLayoutId > 0 ? ChartQuickLayout.FindById(chart.QuickLayoutId) : null;
+        if (quickLayout is not null)
         {
             showTitle = quickLayout.ShowTitle && !string.IsNullOrEmpty(chart.Title);
             showLegend = quickLayout.ShowLegend && chart.Series.Count > 0;
@@ -96,6 +101,9 @@ public static class ChartSmartArtVisualPlanner
         return new ChartVisualPlan(
             chart.Kind,
             ToGeometryKind(chart.Kind),
+            style.Id,
+            scheme.Id,
+            quickLayout?.Id ?? 0,
             showTitle,
             showLegend,
             showGridlines,
@@ -106,6 +114,39 @@ public static class ChartSmartArtVisualPlanner
             showAxisTitles ? chart.CategoryAxisTitle : null,
             showAxisTitles ? chart.ValueAxisTitle : null,
             scheme.Colors.Select(NormalizeHex).ToList());
+    }
+
+    public static IReadOnlyList<string> BuildChartVisualSignatures(IEnumerable<ChartVisualPlan> charts)
+    {
+        ArgumentNullException.ThrowIfNull(charts);
+
+        return charts
+            .Select(BuildChartVisualSignature)
+            .OrderBy(signature => signature, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    public static string BuildChartVisualSignature(ChartVisualPlan chart)
+    {
+        ArgumentNullException.ThrowIfNull(chart);
+
+        return string.Join(
+            "|",
+            "kind=" + chart.Kind,
+            "geometry=" + chart.GeometryKind,
+            "style=" + chart.StyleId.ToString(CultureInfo.InvariantCulture),
+            "colorScheme=" + NormalizeSignatureText(chart.ColorSchemeId),
+            "quickLayout=" + chart.QuickLayoutId.ToString(CultureInfo.InvariantCulture),
+            "title=" + BoolFlag(chart.ShowTitle),
+            "legend=" + BoolFlag(chart.ShowLegend),
+            "gridlines=" + BoolFlag(chart.ShowGridlines),
+            "plotFill=" + BoolFlag(chart.PlotAreaFill),
+            "markers=" + BoolFlag(chart.ShowMarkers),
+            "dataLabels=" + BoolFlag(chart.ShowDataLabels),
+            "axisTitles=" + BoolFlag(chart.ShowAxisTitles),
+            "categoryAxis=" + NormalizeSignatureText(chart.CategoryAxisTitle),
+            "valueAxis=" + NormalizeSignatureText(chart.ValueAxisTitle),
+            "palette=" + string.Join(",", chart.PaletteHex));
     }
 
     public static ChartElementCommandState BuildChartElementCommandState(Chart chart)
@@ -149,6 +190,30 @@ public static class ChartSmartArtVisualPlanner
             colorScheme,
             style,
             nodes);
+    }
+
+    public static IReadOnlyList<string> BuildSmartArtVisualSignatures(IEnumerable<SmartArtVisualPlan> smartArts)
+    {
+        ArgumentNullException.ThrowIfNull(smartArts);
+
+        return smartArts
+            .Select(BuildSmartArtVisualSignature)
+            .OrderBy(signature => signature, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    public static string BuildSmartArtVisualSignature(SmartArtVisualPlan smartArt)
+    {
+        ArgumentNullException.ThrowIfNull(smartArt);
+
+        return string.Join(
+            "|",
+            "kind=" + smartArt.Kind,
+            "layout=" + NormalizeSignatureText(smartArt.LayoutId),
+            "preset=" + NormalizeSignatureText(smartArt.Layout.Id),
+            "colorScheme=" + NormalizeSignatureText(smartArt.ColorScheme.Id),
+            "style=" + NormalizeSignatureText(smartArt.Style.Id),
+            "nodes=" + string.Join(";", smartArt.Nodes.Select(BuildSmartArtNodeVisualSignature)));
     }
 
     private static ChartVisualGeometryKind ToGeometryKind(ChartKind kind) =>
@@ -232,6 +297,45 @@ public static class ChartSmartArtVisualPlanner
 
     private static string ToHex(byte r, byte g, byte b) =>
         $"#{r:X2}{g:X2}{b:X2}";
+
+    private static string BuildSmartArtNodeVisualSignature(SmartArtNodeVisualPlan node) =>
+        string.Join(
+            ":",
+            NormalizeSignatureText(node.Text),
+            node.Depth.ToString(CultureInfo.InvariantCulture),
+            node.ColorIndex.ToString(CultureInfo.InvariantCulture),
+            node.FillHex,
+            node.TextHex,
+            node.BorderHex,
+            FormatSignatureDouble(node.BorderThickness),
+            FormatSignatureDouble(node.CornerRadius),
+            FormatSignatureDouble(node.ShadowOpacity),
+            FormatSignatureDouble(node.ShadowBlur),
+            FormatSignatureDouble(node.ShadowDepth),
+            node.ConnectorHex);
+
+    private static string BoolFlag(bool value) => value ? "1" : "0";
+
+    private static string FormatSignatureDouble(double value) =>
+        double.IsFinite(value)
+            ? Math.Round(value, 3, MidpointRounding.AwayFromZero).ToString("0.###", CultureInfo.InvariantCulture)
+            : "0";
+
+    private static string NormalizeSignatureText(string? value)
+    {
+        var normalized = (value ?? string.Empty)
+            .Trim()
+            .Replace("\r", " ", StringComparison.Ordinal)
+            .Replace("\n", " ", StringComparison.Ordinal)
+            .Replace("\t", "\\t", StringComparison.Ordinal)
+            .Replace("|", "/", StringComparison.Ordinal)
+            .Replace(";", ",", StringComparison.Ordinal)
+            .Replace(":", "-", StringComparison.Ordinal);
+
+        return string.Join(
+            " ",
+            normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+    }
 
     private static string NormalizeHex(string? value)
     {

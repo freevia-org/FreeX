@@ -16,6 +16,9 @@ public sealed class ChartSmartArtVisualPlannerTests
 
         var plan = ChartSmartArtVisualPlanner.BuildChartPlan(chart);
 
+        plan.ColorSchemeId.Should().Be("mono-blue");
+        plan.StyleId.Should().Be(7);
+        plan.QuickLayoutId.Should().Be(9);
         plan.PaletteHex[0].Should().Be("#214A82");
         plan.ShowTitle.Should().BeTrue();
         plan.ShowLegend.Should().BeTrue();
@@ -25,6 +28,14 @@ public sealed class ChartSmartArtVisualPlannerTests
         plan.ShowDataLabels.Should().BeTrue();
         plan.CategoryAxisTitle.Should().Be("Quarter");
         plan.ValueAxisTitle.Should().Be("USD");
+
+        var signature = ChartSmartArtVisualPlanner.BuildChartVisualSignature(plan);
+        signature.Should().Contain("colorScheme=mono-blue");
+        signature.Should().Contain("quickLayout=9");
+        signature.Should().Contain("plotFill=1");
+        signature.Should().Contain("dataLabels=1");
+        signature.Should().Contain("axisTitles=1");
+        signature.Should().Contain("palette=#214A82,#2E5FAA,#4472C4,#6C8FD1,#A9C1E7,#D6E4F4");
     }
 
     [Fact]
@@ -82,6 +93,8 @@ public sealed class ChartSmartArtVisualPlannerTests
 
         plan.GeometryKind.Should().Be(ChartVisualGeometryKind.MarkerOnly);
         plan.ShowMarkers.Should().BeTrue();
+        ChartSmartArtVisualPlanner.BuildChartVisualSignature(plan)
+            .Should().Contain("geometry=MarkerOnly|style=1|colorScheme=colorful1|quickLayout=0");
     }
 
     [Fact]
@@ -114,6 +127,14 @@ public sealed class ChartSmartArtVisualPlannerTests
         plan.ColorScheme.Id.Should().Be("accent1");
         plan.Style.Id.Should().Be("intense1");
         plan.Nodes.Select(n => n.FillHex).Should().ContainInOrder("#38517D", "#486DAF", "#679AD6");
+
+        var signature = ChartSmartArtVisualPlanner.BuildSmartArtVisualSignature(plan);
+        signature.Should().Contain("layout=stepup1");
+        signature.Should().Contain("colorScheme=accent1");
+        signature.Should().Contain("style=intense1");
+        signature.Should().Contain("#38517D");
+        signature.Should().Contain("#486DAF");
+        signature.Should().Contain("#679AD6");
     }
 
     [Theory]

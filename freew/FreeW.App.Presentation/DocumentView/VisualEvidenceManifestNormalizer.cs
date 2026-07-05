@@ -104,7 +104,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 20;
+    public const int SummarySchemaVersion = 21;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -757,7 +757,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 BuildReferencesHeavyToaBlocker(
                     "semantic-toa-page-references-missing",
                     "trusted references-heavy rows with generated Table of Authorities page-reference metadata",
-                    "trusted references-heavy evidence did not record generated TOA page references; regenerate v20 evidence or fix shared TOA generation before treating this as a Word-baseline-only gap",
+                    "trusted references-heavy evidence did not record generated TOA page references; regenerate current-schema evidence or fix shared TOA generation before treating this as a Word-baseline-only gap",
                     [],
                     [],
                     semanticEvidence,
@@ -1308,14 +1308,48 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("chart/SmartArt evidence expects chart axis titles but the chart plan records none");
         if (tags.Contains("plot-area-fill", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasPlotAreaFill)
             rowFailures.Add("chart/SmartArt evidence expects chart plot-area fill but the chart plan records none");
+        if (tags.Contains("chart-visual-signature", StringComparer.OrdinalIgnoreCase)
+            && (chartSmartArt.ChartVisualSignatures is null || chartSmartArt.ChartVisualSignatures.Count == 0))
+        {
+            rowFailures.Add("chart/SmartArt evidence expects chart visual signatures but the chart plan records none");
+        }
         if (tags.Contains("smartart-layout", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasSmartArtLayout)
             rowFailures.Add("chart/SmartArt evidence expects SmartArt layout metadata but the SmartArt plan records none");
         if (tags.Contains("smartart-colors", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasSmartArtColorScheme)
             rowFailures.Add("chart/SmartArt evidence expects SmartArt color scheme metadata but the SmartArt plan records none");
         if (tags.Contains("smartart-style", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasSmartArtStyle)
             rowFailures.Add("chart/SmartArt evidence expects SmartArt style metadata but the SmartArt plan records none");
+        if (tags.Contains("smartart-node-fills", StringComparer.OrdinalIgnoreCase) && chartSmartArt.DistinctSmartArtFillCount <= 1)
+            rowFailures.Add("chart/SmartArt evidence expects distinct SmartArt node fills but the SmartArt plan records one or fewer");
+        if (tags.Contains("smartart-visual-signature", StringComparer.OrdinalIgnoreCase)
+            && (chartSmartArt.SmartArtVisualSignatures is null || chartSmartArt.SmartArtVisualSignatures.Count == 0))
+        {
+            rowFailures.Add("chart/SmartArt evidence expects SmartArt visual signatures but the SmartArt plan records none");
+        }
         if (chartSmartArt.SmartArtCount > 0 && chartSmartArt.SmartArtNodeCount <= 0)
             rowFailures.Add("chart/SmartArt evidence includes SmartArt but records no nodes");
+        ValidateChartSmartArtVisualSignatures(chartSmartArt, rowFailures);
+    }
+
+    private static void ValidateChartSmartArtVisualSignatures(
+        FreeWVisualChartSmartArtExpectation chartSmartArt,
+        List<string> rowFailures)
+    {
+        var expectedChartSignatures = ChartSmartArtVisualPlanner.BuildChartVisualSignatures(chartSmartArt.Charts ?? []);
+        var actualChartSignatures = OrderedSummaries(chartSmartArt.ChartVisualSignatures ?? []);
+        if (!expectedChartSignatures.SequenceEqual(actualChartSignatures, StringComparer.Ordinal))
+        {
+            rowFailures.Add(
+                $"chart visual signatures do not match chart plans: expected '{FormatSummaries(expectedChartSignatures)}', actual '{FormatSummaries(actualChartSignatures)}'");
+        }
+
+        var expectedSmartArtSignatures = ChartSmartArtVisualPlanner.BuildSmartArtVisualSignatures(chartSmartArt.SmartArts ?? []);
+        var actualSmartArtSignatures = OrderedSummaries(chartSmartArt.SmartArtVisualSignatures ?? []);
+        if (!expectedSmartArtSignatures.SequenceEqual(actualSmartArtSignatures, StringComparer.Ordinal))
+        {
+            rowFailures.Add(
+                $"SmartArt visual signatures do not match SmartArt plans: expected '{FormatSummaries(expectedSmartArtSignatures)}', actual '{FormatSummaries(actualSmartArtSignatures)}'");
+        }
     }
 
     private static void ValidateFieldFeatureTags(
@@ -2321,20 +2355,20 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{pairName} SmartArt node counts differ: WPF {wpfPlan.SmartArtNodeCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaPlan.SmartArtNodeCount.ToString(CultureInfo.InvariantCulture)}");
         }
 
-        var wpfChartSignatures = BuildChartPlanSignatures(wpfPlan.Charts);
-        var avaloniaChartSignatures = BuildChartPlanSignatures(avaloniaPlan.Charts);
+        var wpfChartSignatures = OrderedSummaries(wpfPlan.ChartVisualSignatures ?? []);
+        var avaloniaChartSignatures = OrderedSummaries(avaloniaPlan.ChartVisualSignatures ?? []);
         if (!wpfChartSignatures.SequenceEqual(avaloniaChartSignatures, StringComparer.Ordinal))
         {
             failures.Add(
-                $"{pairName} chart plan signatures differ: WPF '{FormatSummaries(wpfChartSignatures)}', Avalonia '{FormatSummaries(avaloniaChartSignatures)}'");
+                $"{pairName} chart visual signatures differ: WPF '{FormatSummaries(wpfChartSignatures)}', Avalonia '{FormatSummaries(avaloniaChartSignatures)}'");
         }
 
-        var wpfSmartArtSignatures = BuildSmartArtPlanSignatures(wpfPlan.SmartArts);
-        var avaloniaSmartArtSignatures = BuildSmartArtPlanSignatures(avaloniaPlan.SmartArts);
+        var wpfSmartArtSignatures = OrderedSummaries(wpfPlan.SmartArtVisualSignatures ?? []);
+        var avaloniaSmartArtSignatures = OrderedSummaries(avaloniaPlan.SmartArtVisualSignatures ?? []);
         if (!wpfSmartArtSignatures.SequenceEqual(avaloniaSmartArtSignatures, StringComparer.Ordinal))
         {
             failures.Add(
-                $"{pairName} SmartArt plan signatures differ: WPF '{FormatSummaries(wpfSmartArtSignatures)}', Avalonia '{FormatSummaries(avaloniaSmartArtSignatures)}'");
+                $"{pairName} SmartArt visual signatures differ: WPF '{FormatSummaries(wpfSmartArtSignatures)}', Avalonia '{FormatSummaries(avaloniaSmartArtSignatures)}'");
         }
     }
 
@@ -2582,54 +2616,6 @@ public static class FreeWVisualEvidenceManifestNormalizer
             BoolFlag(row.StartsPlannedPage),
             FormatDouble(row.PageOffsetYDip),
             FormatDouble(row.EstimatedHeightDip));
-
-    private static List<string> BuildChartPlanSignatures(IEnumerable<ChartVisualPlan> charts) =>
-        charts
-            .Select(chart => string.Join(
-                "|",
-                chart.Kind,
-                chart.GeometryKind,
-                BoolFlag(chart.ShowTitle),
-                BoolFlag(chart.ShowLegend),
-                BoolFlag(chart.ShowGridlines),
-                BoolFlag(chart.PlotAreaFill),
-                BoolFlag(chart.ShowMarkers),
-                BoolFlag(chart.ShowDataLabels),
-                BoolFlag(chart.ShowAxisTitles),
-                chart.CategoryAxisTitle ?? string.Empty,
-                chart.ValueAxisTitle ?? string.Empty,
-                string.Join(",", chart.PaletteHex)))
-            .OrderBy(signature => signature, StringComparer.Ordinal)
-            .ToList();
-
-    private static List<string> BuildSmartArtPlanSignatures(IEnumerable<SmartArtVisualPlan> smartArts) =>
-        smartArts
-            .Select(smartArt => string.Join(
-                "|",
-                smartArt.Kind,
-                smartArt.LayoutId,
-                smartArt.Layout.Id,
-                smartArt.ColorScheme.Id,
-                smartArt.Style.Id,
-                string.Join(";", smartArt.Nodes.Select(BuildSmartArtNodeSignature))))
-            .OrderBy(signature => signature, StringComparer.Ordinal)
-            .ToList();
-
-    private static string BuildSmartArtNodeSignature(SmartArtNodeVisualPlan node) =>
-        string.Join(
-            ":",
-            node.Text,
-            node.Depth.ToString(CultureInfo.InvariantCulture),
-            node.ColorIndex.ToString(CultureInfo.InvariantCulture),
-            node.FillHex,
-            node.TextHex,
-            node.BorderHex,
-            FormatDouble(node.BorderThickness),
-            FormatDouble(node.CornerRadius),
-            FormatDouble(node.ShadowOpacity),
-            FormatDouble(node.ShadowBlur),
-            FormatDouble(node.ShadowDepth),
-            node.ConnectorHex);
 
     private static string BuildWordArtWatermarkFeatureSignature(FreeWVisualPageFeatureExpectation features)
     {
