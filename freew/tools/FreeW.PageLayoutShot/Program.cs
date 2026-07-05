@@ -86,6 +86,8 @@ static int RenderAll(string outDir)
     var tableLayoutPath = VisualEvidenceOutputPath(outDir, "table-layout-complex", 1);
     var tablePaginationP1Path = VisualEvidenceOutputPath(outDir, "table-pagination-repeat-header", 1);
     var tablePaginationP2Path = VisualEvidenceOutputPath(outDir, "table-pagination-repeat-header", 2);
+    var tablePageCompositionP1Path = VisualEvidenceOutputPath(outDir, "table-page-composition-stress", 1);
+    var tablePageCompositionP2Path = VisualEvidenceOutputPath(outDir, "table-page-composition-stress", 2);
     var drawingObjectsPath = VisualEvidenceOutputPath(outDir, "drawing-objects-complex", 1);
     var objectFormatPath = VisualEvidenceOutputPath(outDir, "object-format-position-size-style", 1);
     var chartSmartArtPath = VisualEvidenceOutputPath(outDir, "chart-smartart-complex", 1);
@@ -322,6 +324,29 @@ static int RenderAll(string outDir)
         pageNumber: 2,
         pageCount: 2,
         viewportOffsetY: 550);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, tablePageCompositionP1Path,
+        width: 960, height: 900,
+        label: "Table Page Composition p1",
+        scenarioId: "table-page-composition-stress",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildTablePageCompositionStressDocument,
+        pageNumber: 1,
+        pageCount: 2,
+        hasFootnotes: true);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, tablePageCompositionP2Path,
+        width: 960, height: 900,
+        label: "Table Page Composition p2",
+        scenarioId: "table-page-composition-stress",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildTablePageCompositionStressDocument,
+        pageNumber: 2,
+        pageCount: 2,
+        viewportOffsetY: 550,
+        hasFootnotes: true);
     if (rc != 0) return rc;
 
     rc = RenderMode(DocumentViewMode.PrintLayout, drawingObjectsPath,

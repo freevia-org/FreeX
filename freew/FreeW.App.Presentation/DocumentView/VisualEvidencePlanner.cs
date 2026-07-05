@@ -546,6 +546,44 @@ public static class FreeWVisualEvidencePlanner
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition with { ExpectsTables = true }),
         new(
+            "table-page-composition-stress",
+            "Combined table pagination and page-composition fidelity capture.",
+            [
+                "table-layout",
+                "table-pagination",
+                "tables",
+                "repeat-header-row",
+                "keep-rows",
+                "banded-rows",
+                "cell-shading",
+                "cell-borders",
+                "cell-margins",
+                "cell-spacing",
+                "named-table-style",
+                "fields",
+                "page-number-fields",
+                "numpages-fields",
+                "header-footer-fields",
+                "caption",
+                "footnotes",
+                "page-composition",
+                "print-layout",
+                "header-footer",
+                "page-border",
+                "watermark",
+                "body-text"
+            ],
+            "table-page-composition-stress_p{page}.png",
+            2,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition with
+            {
+                ExpectsTables = true,
+                ExpectsHeadersFooters = true,
+                ExpectsPageBorder = true,
+                ExpectsWatermark = true
+            }),
+        new(
             "chart-smartart-complex",
             "Complex Word-style chart and SmartArt fidelity capture.",
             [

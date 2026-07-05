@@ -38,6 +38,7 @@ public static class FreeWWordBaselineEvidencePlanner
         "f2-border-watermark",
         "table-layout-complex",
         "table-pagination-repeat-header",
+        "table-page-composition-stress",
         "drawing-objects-complex",
         "object-format-position-size-style",
         "wordart-watermark-stress",
