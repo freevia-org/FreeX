@@ -174,6 +174,63 @@ public class TableOfAuthoritiesTests
         citation.ShortCitation.Should().Be("Brown");
     }
 
+    [Fact]
+    public void Build_UniquePriorShortCitationAliasCollapsesIntoLongCitation()
+    {
+        var citations = new[]
+        {
+            new Citation("Brown v. Board of Education, 347 U.S. 483 (1954)", CitationCategory.Cases, "Brown"),
+            new Citation("Brown", CitationCategory.Cases)
+        };
+
+        var table = TableOfAuthorities.Build(citations).Select(p => p.PlainText).ToList();
+
+        table.Should().Equal(
+            TableOfAuthorities.HeadingText,
+            "Cases",
+            "Brown v. Board of Education, 347 U.S. 483 (1954)");
+    }
+
+    [Fact]
+    public void Build_AmbiguousShortCitationAliasDoesNotMergeAuthorities()
+    {
+        var citations = new[]
+        {
+            new Citation("Alpha v. One, 1 U.S. 1", CitationCategory.Cases, "Signal"),
+            new Citation("Beta v. Two, 2 U.S. 2", CitationCategory.Cases, "Signal"),
+            new Citation("Signal", CitationCategory.Cases)
+        };
+
+        var table = TableOfAuthorities.Build(citations).Select(p => p.PlainText).ToList();
+
+        table.Should().Equal(
+            TableOfAuthorities.HeadingText,
+            "Cases",
+            "Alpha v. One, 1 U.S. 1",
+            "Beta v. Two, 2 U.S. 2",
+            "Signal");
+    }
+
+    [Fact]
+    public void Build_ShortCitationAliasPreservesCategoryBoundaries()
+    {
+        var citations = new[]
+        {
+            new Citation("Case Long", CitationCategory.Cases, "Shared"),
+            new Citation("Shared", CitationCategory.Cases),
+            new Citation("Shared", CitationCategory.Statutes)
+        };
+
+        var table = TableOfAuthorities.Build(citations).Select(p => p.PlainText).ToList();
+
+        table.Should().Equal(
+            TableOfAuthorities.HeadingText,
+            "Cases",
+            "Case Long",
+            "Statutes",
+            "Shared");
+    }
+
     // --- ToaOptions depth -----------------------------------------------------------------------
 
     [Fact]
@@ -397,6 +454,50 @@ public class TableOfAuthoritiesTests
     }
 
     [Fact]
+    public void Build_FromDocument_ShortCitationAliasAggregatesPageReferences()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(CitationMarkParagraph(
+            "Brown v. Board of Education, 347 U.S. 483 (1954)",
+            shortCitation: "Brown"));
+        doc.Blocks.Add(DocumentOps.CreatePageBreak());
+        doc.Blocks.Add(CitationMarkParagraph("Brown"));
+
+        var entry = TableOfAuthorities.Build(doc)
+            .Single(p => p.StyleId == TableOfAuthorities.EntryStyleId);
+
+        entry.PlainText.Should().Be("Brown v. Board of Education, 347 U.S. 483 (1954)\t1, 2");
+        entry.Runs.Select(run => run.Text).Should().Equal(
+            "Brown v. Board of Education, 347 U.S. 483 (1954)",
+            "\t",
+            "1, 2");
+    }
+
+    [Fact]
+    public void Build_FromDocument_UsePassimCountsCanonicalShortCitationAlias()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(CitationMarkParagraph(
+            "National Federation of Independent Business v. Sebelius, 567 U.S. 519 (2012)",
+            shortCitation: "NFIB"));
+        doc.Blocks.Add(DocumentOps.CreatePageBreak());
+        for (var i = 0; i < 4; i++)
+            doc.Blocks.Add(CitationMarkParagraph("NFIB"));
+
+        var entry = TableOfAuthorities.Build(doc, new ToaOptions { UsePassim = true })
+            .Single(p => p.StyleId == TableOfAuthorities.EntryStyleId);
+
+        entry.PlainText.Should().Be(
+            "National Federation of Independent Business v. Sebelius, 567 U.S. 519 (2012)\tpassim");
+        entry.Runs.Select(run => run.Text).Should().Equal(
+            "National Federation of Independent Business v. Sebelius, 567 U.S. 519 (2012)",
+            "\t",
+            "passim");
+    }
+
+    [Fact]
     public void Build_FromDocument_DuplicatesOnSameExplicitPageCollapsePageReference()
     {
         var doc = TextDocument.CreateEmpty();
@@ -524,9 +625,10 @@ public class TableOfAuthoritiesTests
     private static Paragraph CitationMarkParagraph(
         string longCitation,
         CitationCategory category = CitationCategory.Cases,
-        RunFormatting? formatting = null)
+        RunFormatting? formatting = null,
+        string? shortCitation = null)
     {
-        var mark = Run.CitationMark(new Citation(longCitation, category));
+        var mark = Run.CitationMark(new Citation(longCitation, category, shortCitation));
         if (formatting is not null)
             mark.Formatting = formatting;
         return new Paragraph { Runs = { mark } };

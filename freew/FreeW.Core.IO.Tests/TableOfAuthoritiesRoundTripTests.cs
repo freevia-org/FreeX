@@ -114,6 +114,31 @@ public class TableOfAuthoritiesRoundTripTests
     }
 
     [Fact]
+    public void TableOfAuthorities_ShortCitationAliasesAggregateAfterReopen()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var full = new Paragraph();
+        full.Runs.Add(Run.CitationMark(new Citation(
+            "Brown v. Board of Education, 347 U.S. 483 (1954)",
+            CitationCategory.Cases,
+            "Brown")));
+        doc.Blocks.Add(full);
+        doc.Blocks.Add(DocumentOps.CreatePageBreak());
+        var shortForm = new Paragraph();
+        shortForm.Runs.Add(Run.CitationMark(new Citation("Brown", CitationCategory.Cases)));
+        doc.Blocks.Add(shortForm);
+
+        var reopened = RoundTrip(doc);
+        reopened.Citations.Should().BeEmpty();
+
+        var entry = TableOfAuthorities.Build(reopened)
+            .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
+
+        entry.PlainText.Should().Be("Brown v. Board of Education, 347 U.S. 483 (1954)\t1, 2");
+    }
+
+    [Fact]
     public void TableOfAuthoritiesEntryTabLeader_SurvivesRoundTrip()
     {
         var doc = TextDocument.CreateEmpty();
