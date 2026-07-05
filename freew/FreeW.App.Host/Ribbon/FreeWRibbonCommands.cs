@@ -48,6 +48,12 @@ internal static class FreeWRibbonCommands
             _ => throw new ArgumentOutOfRangeException(nameof(command), command, null)
         };
 
+    private static MasterSourceStore CreateMasterStore(IReadOnlyList<Source> sources) =>
+        new()
+        {
+            Sources = sources.Select(SourceRecord.FromSource).ToList()
+        };
+
     public static RibbonCommandRegistry Build(DocumentView editor, RibbonStateStore stateStore) =>
         Build(editor, stateStore, onPrintPreview: null);
 
@@ -4399,7 +4405,8 @@ internal static class FreeWRibbonCommands
 
     // Insert > References > Citation: insert an in-text citation at the caret. If the document already
     // has sources, the user picks one (or chooses "Add New Source…"); otherwise they go straight to the
-    // new-source form. A new source is appended to the model, then its in-text citation is inserted.
+    // new-source form. A new source is upserted into the document and master source lists, then its
+    // in-text citation is inserted.
     private sealed class InsertCitationCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -4428,22 +4435,29 @@ internal static class FreeWRibbonCommands
             editor.InsertCitation(chosen);
         }
 
-        // Show the new-source form, append the captured source to the model, and return it (or null if
-        // the user cancelled or left every field blank — nothing worth citing).
+        // Show the new-source form, apply it to the document and master source lists, and return the
+        // citation source (or null if the user cancelled or left no citeable source details).
         private Source? PromptForNewSource(Window? owner)
         {
             var entry = NewSourceDialog.Ask(owner);
             if (entry is null)
                 return null;
-            if (!SourceManagementDialogPlanner.TryBuildCitationSource(entry, out var source, out _))
+
+            var masterStore = MasterSourceStore.Load();
+            var state = SourceManagementDialogPlanner.BuildInitialState(editor.Sources, masterStore.ToSources());
+            var plan = SourceManagementDialogPlanner.AddCitationSource(state, entry);
+            if (plan.Validation is not null || plan.Source is null)
                 return null;
-            return editor.AddSource(source!);
+
+            var result = SourceManagementDialogPlanner.BuildResult(plan.State);
+            editor.ReplaceSources(result.CurrentSources);
+            MasterSourceStore.Save(CreateMasterStore(result.MasterSources));
+            return plan.Source;
         }
     }
 
-    // References > Citations & Bibliography > Manage Sources: edit the document-local source list.
-    // Word also has a master source list; FreeW currently backs the document source store only, so the
-    // dialog labels that scope directly instead of exposing a fake global library.
+    // References > Citations & Bibliography > Manage Sources: edit the document-local source list and
+    // the shared master source list.
     private sealed class ManageSourcesCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -4458,12 +4472,6 @@ internal static class FreeWRibbonCommands
             editor.ReplaceSources(result.CurrentSources);
             MasterSourceStore.Save(CreateMasterStore(result.MasterSources));
         }
-
-        private static MasterSourceStore CreateMasterStore(IReadOnlyList<Source> sources) =>
-            new()
-            {
-                Sources = sources.Select(SourceRecord.FromSource).ToList()
-            };
     }
 
     // Insert > References > Caption: pick a label (Figure/Table — defaulting to Table when the caret is

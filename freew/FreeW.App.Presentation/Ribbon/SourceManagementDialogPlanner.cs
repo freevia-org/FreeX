@@ -169,6 +169,11 @@ public sealed record SourceManagementDialogResult(
     IReadOnlyList<Source> CurrentSources,
     IReadOnlyList<Source> MasterSources);
 
+public sealed record SourceManagementCitationSourcePlan(
+    SourceManagementDialogState State,
+    Source? Source,
+    SourceManagementValidation? Validation = null);
+
 public static class SourceManagementDialogPlanner
 {
     public const string SourcePickerTitle = "Insert Citation";
@@ -730,6 +735,28 @@ public static class SourceManagementDialogPlanner
 
         var nextState = state with { CurrentSources = currentSources };
         return new SourceManagementListMutationPlan(nextState, selectedIndex);
+    }
+
+    public static SourceManagementCitationSourcePlan AddCitationSource(
+        SourceManagementDialogState state,
+        SourceManagementSourceEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        if (!TryBuildCitationSource(entry, out var source, out var validation))
+            return new SourceManagementCitationSourcePlan(state, Source: null, validation);
+
+        var currentSources = state.CurrentSources.Select(CloneSource).ToList();
+        var currentIndex = UpsertSourceByTag(currentSources, source!);
+        var masterSources = state.MasterSources.Select(CloneSource).ToList();
+        UpsertSourceByTag(masterSources, source!);
+
+        var nextState = state with
+        {
+            CurrentSources = currentSources,
+            MasterSources = masterSources
+        };
+        return new SourceManagementCitationSourcePlan(nextState, CloneSource(currentSources[currentIndex]));
     }
 
     public static SourceManagementListMutationPlan EditCurrentSource(

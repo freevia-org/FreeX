@@ -1070,6 +1070,98 @@ public sealed class SourceManagementDialogPlannerTests
     }
 
     [Fact]
+    public void AddCitationSource_AddsNewSourceToCurrentAndMasterSources()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources: [new Source { Tag = "Doc", Author = "Document Author" }],
+            masterSources: [new Source { Tag = "Master", Author = "Master Author" }]);
+
+        var plan = SourceManagementDialogPlanner.AddCitationSource(
+            state,
+            new SourceManagementSourceEntry("Lovelace2026", "Ada Lovelace", "Notes", "2026", "Analytical Press"));
+
+        plan.Validation.Should().BeNull();
+        plan.Source.Should().NotBeNull();
+        plan.Source!.Tag.Should().Be("Lovelace2026");
+        plan.Source.Author.Should().Be("Ada Lovelace");
+        plan.State.CurrentSources.Select(source => source.Tag).Should().Equal("Doc", "Lovelace2026");
+        plan.State.MasterSources.Select(source => source.Tag).Should().Equal("Master", "Lovelace2026");
+        plan.State.CurrentSources[1].Author.Should().Be("Ada Lovelace");
+        plan.State.MasterSources[1].Author.Should().Be("Ada Lovelace");
+    }
+
+    [Fact]
+    public void AddCitationSource_UpsertsSameCanonicalTagInCurrentAndMasterSources()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources:
+            [
+                new Source { Tag = "Keep", Author = "Keep" },
+                new Source { Tag = " Smith2020 ", Author = "Old Current" },
+                new Source { Tag = "Tail", Author = "Tail" }
+            ],
+            masterSources:
+            [
+                new Source { Tag = "Smith2020", Author = "Old Master" },
+                new Source { Tag = "Other", Author = "Other" },
+                new Source { Tag = " Smith2020 ", Author = "Duplicate Master" }
+            ]);
+
+        var plan = SourceManagementDialogPlanner.AddCitationSource(
+            state,
+            new SourceManagementSourceEntry(" Smith2020 ", "Updated Smith", "Updated Title", "2026", string.Empty));
+
+        plan.Validation.Should().BeNull();
+        plan.Source.Should().NotBeNull();
+        plan.Source!.Tag.Should().Be("Smith2020");
+        plan.State.CurrentSources.Select(source => source.Tag).Should().Equal("Keep", "Smith2020", "Tail");
+        plan.State.CurrentSources[1].Author.Should().Be("Updated Smith");
+        plan.State.CurrentSources[1].Title.Should().Be("Updated Title");
+        plan.State.MasterSources.Select(source => source.Tag).Should().Equal("Smith2020", "Other");
+        plan.State.MasterSources[0].Author.Should().Be("Updated Smith");
+        plan.State.MasterSources[0].Title.Should().Be("Updated Title");
+    }
+
+    [Fact]
+    public void AddCitationSource_DoesNotCollapseUntaggedSources()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources: [new Source { Tag = string.Empty, Author = "Current Untagged" }],
+            masterSources: [new Source { Tag = " ", Author = "Master Untagged" }]);
+
+        var plan = SourceManagementDialogPlanner.AddCitationSource(
+            state,
+            new SourceManagementSourceEntry(string.Empty, "New Untagged", "New Title", string.Empty, string.Empty));
+
+        plan.Validation.Should().BeNull();
+        plan.Source.Should().NotBeNull();
+        plan.Source!.Tag.Should().BeEmpty();
+        plan.State.CurrentSources.Should().HaveCount(2);
+        plan.State.MasterSources.Should().HaveCount(2);
+        plan.State.CurrentSources.Select(source => source.Author).Should().Equal("Current Untagged", "New Untagged");
+        plan.State.MasterSources.Select(source => source.Author).Should().Equal("Master Untagged", "New Untagged");
+    }
+
+    [Fact]
+    public void AddCitationSource_RejectsTagOnlyEntryWithoutChangingLists()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources: [new Source { Tag = "Doc", Author = "Document Author" }],
+            masterSources: [new Source { Tag = "Master", Author = "Master Author" }]);
+
+        var plan = SourceManagementDialogPlanner.AddCitationSource(
+            state,
+            new SourceManagementSourceEntry("TagOnly", string.Empty, string.Empty, string.Empty, string.Empty));
+
+        plan.Source.Should().BeNull();
+        plan.Validation.Should().Be(new SourceManagementValidation(
+            SourceManagementValidationTarget.SourceFields,
+            SourceManagementDialogPlanner.MissingCitationSourceDataMessage));
+        plan.State.CurrentSources.Should().ContainSingle().Which.Tag.Should().Be("Doc");
+        plan.State.MasterSources.Should().ContainSingle().Which.Tag.Should().Be("Master");
+    }
+
+    [Fact]
     public void CopyMasterToCurrent_AppendsNonDuplicateAndSkipsDuplicateTags()
     {
         var state = SourceManagementDialogPlanner.BuildInitialState(

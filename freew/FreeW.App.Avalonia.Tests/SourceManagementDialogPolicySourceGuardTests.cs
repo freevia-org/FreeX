@@ -17,6 +17,18 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
     }
 
     [Fact]
+    public void MainWindow_DelegatesCitationAddNewPolicyToPresentationPlanner()
+    {
+        var source = ReadMainWindowSource();
+
+        source.Should().Contain("SourceManagementDialogPlanner.BuildInitialState(");
+        source.Should().Contain("SourceManagementDialogPlanner.AddCitationSource(");
+        source.Should().Contain("SourceManagementDialogPlanner.BuildResult(");
+        source.Should().Contain("MasterSourceStore.Load()");
+        source.Should().Contain("MasterSourceStore.Save(");
+    }
+
+    [Fact]
     public void ReferencesDialogs_DoesNotOwnSourceAuthorParsingPolicy()
     {
         var source = ReadReferencesDialogsSource();
@@ -34,6 +46,16 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
             "freew",
             "FreeW.App.Avalonia",
             "ReferencesDialogs.cs");
+        return File.ReadAllText(path);
+    }
+
+    private static string ReadMainWindowSource()
+    {
+        var path = Path.Combine(
+            FindRepositoryRoot(),
+            "freew",
+            "FreeW.App.Avalonia",
+            "MainWindow.cs");
         return File.ReadAllText(path);
     }
 
