@@ -27,6 +27,7 @@ public enum SlideShowShapeAnimationEffectKind
     Blinds,
     Box,
     Checkerboard,
+    Diamond,
     Zoom,
     Pulse,
     GrowShrink,
@@ -46,6 +47,12 @@ public sealed record SlideShowMotionPathKeyFrame(
     double OffsetXFactor,
     double OffsetYFactor);
 
+public enum SlideShowGeometricMaskKind
+{
+    None,
+    Diamond
+}
+
 public sealed record SlideShowShapeAnimationPlaybackPlan(
     ShapeAnimation Animation,
     SlideShowShapeAnimationEffectKind EffectKind,
@@ -64,6 +71,8 @@ public sealed record SlideShowShapeAnimationPlaybackPlan(
     bool BlindsHorizontal,
     int BlindsBandCount,
     bool BoxExpandsFromCenter,
+    SlideShowGeometricMaskKind GeometricMaskKind,
+    bool GeometricMaskExpandsFromCenter,
     bool CheckerboardHorizontal,
     int CheckerboardRowCount,
     int CheckerboardColumnCount,
@@ -143,6 +152,8 @@ public static class SlideShowPlaybackPlanner
             IsHorizontalBlinds(animation.Direction),
             BlindsBandCount,
             BoxExpandsFromCenter(animation),
+            ResolveGeometricMaskKind(animation),
+            GeometricMaskExpandsFromCenter(animation),
             IsHorizontalCheckerboard(animation.Direction),
             CheckerboardRowCount,
             CheckerboardColumnCount,
@@ -182,6 +193,7 @@ public static class SlideShowPlaybackPlanner
             AnimationPreset.Blinds => SlideShowShapeAnimationEffectKind.Blinds,
             AnimationPreset.Box => SlideShowShapeAnimationEffectKind.Box,
             AnimationPreset.Checkerboard => SlideShowShapeAnimationEffectKind.Checkerboard,
+            AnimationPreset.Diamond => SlideShowShapeAnimationEffectKind.Diamond,
             AnimationPreset.Zoom => SlideShowShapeAnimationEffectKind.Zoom,
             AnimationPreset.Pulse => SlideShowShapeAnimationEffectKind.Pulse,
             AnimationPreset.Grow or AnimationPreset.Shrink => SlideShowShapeAnimationEffectKind.GrowShrink,
@@ -258,6 +270,17 @@ public static class SlideShowPlaybackPlanner
         direction is not AnimationDirection.Vertical;
 
     private static bool BoxExpandsFromCenter(ShapeAnimation animation) =>
+        ExpandsFromCenter(animation);
+
+    private static SlideShowGeometricMaskKind ResolveGeometricMaskKind(ShapeAnimation animation) =>
+        animation.Preset == AnimationPreset.Diamond
+            ? SlideShowGeometricMaskKind.Diamond
+            : SlideShowGeometricMaskKind.None;
+
+    private static bool GeometricMaskExpandsFromCenter(ShapeAnimation animation) =>
+        ExpandsFromCenter(animation);
+
+    private static bool ExpandsFromCenter(ShapeAnimation animation) =>
         animation.Direction switch
         {
             AnimationDirection.In => true,
