@@ -2459,6 +2459,108 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void BuildNormalizedSummaryFromFiles_RequiresBackstageArtifactMetadata()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var row = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                "backstage-print-preview-fidelity",
+                pageNumber: 1,
+                pageCount: 1);
+            var missingArtifactMetadata = row with
+            {
+                HostMetadata = new Dictionary<string, string>
+                {
+                    ["renderer"] = "FreeW.FidelityRender",
+                    ["captureSource"] = "software-renderer",
+                    ["backstageWorkflow"] = "print-preview"
+                }
+            };
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [missingArtifactMetadata],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName)],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "backstage-print-preview-fidelity",
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Evidence.Single().Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("must declare backstageArtifactKind 'print-preview-fixed-layout'", StringComparison.Ordinal));
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("must declare backstagePipeline 'print-preview-fixed-layout-artifact'", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RejectsGenericBackstageArtifactMetadata()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var row = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                "backstage-pdf-export-fidelity",
+                pageNumber: 1,
+                pageCount: 1);
+            var genericArtifactMetadata = row with
+            {
+                HostMetadata = new Dictionary<string, string>
+                {
+                    ["renderer"] = "FreeW.PageLayoutShot",
+                    ["captureSource"] = "avalonia-render-target",
+                    ["backstageWorkflow"] = "pdf-export",
+                    ["backstageArtifactKind"] = "pdf-export",
+                    ["backstagePipeline"] = "generic-page-screenshot"
+                }
+            };
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [genericArtifactMetadata],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        "backstage-pdf-export-fidelity",
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Evidence.Single().Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("cannot use generic or fallback backstageArtifactKind 'pdf-export'", StringComparison.Ordinal));
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("cannot use generic or fallback backstagePipeline 'generic-page-screenshot'", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void BuildNormalizedSummaryFromFiles_RejectsCrossWiredBackstageWorkflowMetadata()
     {
         var root = CreateTempRoot();
@@ -2499,6 +2601,58 @@ public sealed class VisualEvidencePlannerTests
             summary.Evidence.Single().Trust.Passed.Should().BeFalse();
             summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("must use backstageWorkflow 'pdf-export', found 'print-preview'", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RejectsCrossWiredBackstageArtifactMetadata()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var row = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                "backstage-print-preview-fidelity",
+                pageNumber: 1,
+                pageCount: 1);
+            var crossWired = row with
+            {
+                HostMetadata = new Dictionary<string, string>
+                {
+                    ["renderer"] = "FreeW.FidelityRender",
+                    ["captureSource"] = "software-renderer",
+                    ["backstageWorkflow"] = "print-preview",
+                    ["backstageArtifactKind"] = "pdf-export-rasterized",
+                    ["backstagePipeline"] = "pdf-export-rasterized-artifact"
+                }
+            };
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [crossWired],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName)],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "backstage-print-preview-fidelity",
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Evidence.Single().Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("must use backstageArtifactKind 'print-preview-fixed-layout', found 'pdf-export-rasterized'", StringComparison.Ordinal));
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("must use backstagePipeline 'print-preview-fixed-layout-artifact', found 'pdf-export-rasterized-artifact'", StringComparison.Ordinal));
         }
         finally
         {
@@ -2645,6 +2799,13 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain(
                 "| backstage-print-preview-fidelity | avalonia-page-layout-shot | 2 | missing | - | no normalized row |");
             markdown.Should().NotContain("| backstage-pdf-export-fidelity |");
+            markdown.Should().Contain("## Remaining Evidence Blockers");
+            markdown.Should().Contain("| backstage-real-captures-backstage-print-preview-fidelity | backstage-print-preview-fidelity | Backstage print/export visual evidence | missing-real-captures |");
+            markdown.Should().Contain("Backstage print preview has paired renderer contracts, but the visual-evidence summary is missing trusted real capture rows");
+            summary.RemainingEvidenceBlockers.Should().ContainSingle(blocker =>
+                blocker.BlockerId == "backstage-real-captures-backstage-print-preview-fidelity" &&
+                blocker.Status == "missing-real-captures" &&
+                blocker.Trust.Passed == false);
 
             var json = FreeWVisualEvidenceManifestNormalizer.ToJson(summary);
             using var doc = JsonDocument.Parse(json);
@@ -2665,7 +2826,17 @@ public sealed class VisualEvidencePlannerTests
                 row.GetProperty("hostId").GetString() == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
                 row.GetProperty("scenarioId").GetString() == "backstage-print-preview-fidelity" &&
                 row.GetProperty("pageNumber").GetInt32() == 1 &&
-                row.GetProperty("hostMetadata").GetProperty("backstageWorkflow").GetString() == "print-preview");
+                row.GetProperty("hostMetadata").GetProperty("backstageWorkflow").GetString() == "print-preview" &&
+                row.GetProperty("hostMetadata").GetProperty("backstageArtifactKind").GetString() == "print-preview-fixed-layout" &&
+                row.GetProperty("hostMetadata").GetProperty("backstagePipeline").GetString() == "print-preview-fixed-layout-artifact");
+            var blockers = doc.RootElement
+                .GetProperty("remainingEvidenceBlockers")
+                .EnumerateArray()
+                .ToArray();
+            blockers.Should().Contain(row =>
+                row.GetProperty("blockerId").GetString() == "backstage-real-captures-backstage-print-preview-fidelity" &&
+                row.GetProperty("requiresWordBaseline").GetBoolean() == false &&
+                row.GetProperty("trust").GetProperty("passed").GetBoolean() == false);
         }
         finally
         {
@@ -3793,6 +3964,18 @@ public sealed class VisualEvidencePlannerTests
         {
             "backstage-print-preview-fidelity" => "print-preview",
             "backstage-pdf-export-fidelity" => "pdf-export",
+            _ => throw new InvalidOperationException($"Unsupported backstage visual evidence scenario: {scenarioId}")
+        };
+        metadata["backstageArtifactKind"] = scenarioId switch
+        {
+            "backstage-print-preview-fidelity" => "print-preview-fixed-layout",
+            "backstage-pdf-export-fidelity" => "pdf-export-rasterized",
+            _ => throw new InvalidOperationException($"Unsupported backstage visual evidence scenario: {scenarioId}")
+        };
+        metadata["backstagePipeline"] = scenarioId switch
+        {
+            "backstage-print-preview-fidelity" => "print-preview-fixed-layout-artifact",
+            "backstage-pdf-export-fidelity" => "pdf-export-rasterized-artifact",
             _ => throw new InvalidOperationException($"Unsupported backstage visual evidence scenario: {scenarioId}")
         };
         return metadata;

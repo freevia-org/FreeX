@@ -1919,7 +1919,11 @@ static Dictionary<string, string> BuildHostMetadata(
     };
 
     if (BackstageWorkflowForScenario(documentName) is { } backstageWorkflow)
+    {
         metadata["backstageWorkflow"] = backstageWorkflow;
+        metadata["backstageArtifactKind"] = BackstageArtifactKindForScenario(documentName);
+        metadata["backstagePipeline"] = BackstagePipelineForScenario(documentName);
+    }
 
     if (extra is not null)
     {
@@ -1936,6 +1940,22 @@ static string? BackstageWorkflowForScenario(string scenarioId) =>
         "backstage-print-preview-fidelity" => "print-preview",
         "backstage-pdf-export-fidelity" => "pdf-export",
         _ => null
+    };
+
+static string BackstageArtifactKindForScenario(string scenarioId) =>
+    scenarioId switch
+    {
+        "backstage-print-preview-fidelity" => "print-preview-fixed-layout",
+        "backstage-pdf-export-fidelity" => "pdf-export-rasterized",
+        _ => throw new InvalidOperationException($"Unsupported backstage visual evidence scenario: {scenarioId}")
+    };
+
+static string BackstagePipelineForScenario(string scenarioId) =>
+    scenarioId switch
+    {
+        "backstage-print-preview-fidelity" => "print-preview-fixed-layout-artifact",
+        "backstage-pdf-export-fidelity" => "pdf-export-rasterized-artifact",
+        _ => throw new InvalidOperationException($"Unsupported backstage visual evidence scenario: {scenarioId}")
     };
 
 static long SavePng(RenderTargetBitmap bmp, string path)

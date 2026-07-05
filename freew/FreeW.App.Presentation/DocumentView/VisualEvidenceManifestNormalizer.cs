@@ -104,7 +104,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 19;
+    public const int SummarySchemaVersion = 20;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -265,7 +265,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
             .ThenBy(r => r.OutputName, StringComparer.OrdinalIgnoreCase)
             .ToList();
         var summaryTrust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures);
-        return new FreeWVisualEvidenceNormalizedSummary(
+        var backstageReadiness = BuildBackstagePrintEvidenceReadinessRows(expected, orderedRows);
+        var summary = new FreeWVisualEvidenceNormalizedSummary(
             SummarySchemaId,
             SummarySchemaVersion,
             sources
@@ -274,11 +275,15 @@ public static class FreeWVisualEvidenceManifestNormalizer
             expected,
             scenarios,
             orderedRows,
-            BuildBackstagePrintEvidenceReadinessRows(expected, orderedRows),
+            backstageReadiness,
             [],
             [],
             [],
             summaryTrust);
+        return summary with
+        {
+            RemainingEvidenceBlockers = BuildRemainingEvidenceBlockers(summary, [])
+        };
     }
 
     public static string ToJson(FreeWVisualEvidenceNormalizedSummary summary)
@@ -735,27 +740,29 @@ public static class FreeWVisualEvidenceManifestNormalizer
         FreeWVisualEvidenceNormalizedSummary summary,
         IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
     {
+        var blockers = new List<FreeWVisualRemainingEvidenceBlocker>();
+        blockers.AddRange(BuildBackstageRealCaptureBlockers(summary));
+
         var rows = summary.Evidence
             .Where(row => string.Equals(row.ScenarioId, "references-heavy-fields", StringComparison.OrdinalIgnoreCase))
             .Where(row => row.Trust.Passed)
             .ToList();
         if (rows.Count == 0)
-            return [];
+            return blockers;
 
         var semanticEvidence = BuildReferencesHeavyToaSemanticEvidence(rows);
         if (semanticEvidence.Count == 0)
         {
-            return
-            [
+            blockers.Add(
                 BuildReferencesHeavyToaBlocker(
                     "semantic-toa-page-references-missing",
                     "trusted references-heavy rows with generated Table of Authorities page-reference metadata",
-                    "trusted references-heavy evidence did not record generated TOA page references; regenerate v19 evidence or fix shared TOA generation before treating this as a Word-baseline-only gap",
+                    "trusted references-heavy evidence did not record generated TOA page references; regenerate v20 evidence or fix shared TOA generation before treating this as a Word-baseline-only gap",
                     [],
                     [],
                     semanticEvidence,
-                    requiresWordBaseline: false)
-            ];
+                    requiresWordBaseline: false));
+            return blockers;
         }
 
         var related = baselineComparisons
@@ -763,8 +770,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             .ToList();
         if (related.Count == 0)
         {
-            return
-            [
+            blockers.Add(
                 BuildReferencesHeavyToaBlocker(
                     "needs-word-baseline-run",
                     "real MS Word PNG comparisons for references-heavy Table of Authorities page numbers",
@@ -772,8 +778,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
                     [],
                     [],
                     semanticEvidence,
-                    requiresWordBaseline: true)
-            ];
+                    requiresWordBaseline: true));
+            return blockers;
         }
 
         var statuses = related
@@ -804,8 +810,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             var reason = reasons.Count == 0
                 ? "MS Word baseline PNG generation was unavailable for references-heavy-fields"
                 : string.Join("; ", reasons);
-            return
-            [
+            blockers.Add(
                 BuildReferencesHeavyToaBlocker(
                     FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
                     "real MS Word PNG comparisons for references-heavy Table of Authorities page numbers",
@@ -813,15 +818,14 @@ public static class FreeWVisualEvidenceManifestNormalizer
                     statuses,
                     candidates,
                     semanticEvidence,
-                    requiresWordBaseline: true)
-            ];
+                    requiresWordBaseline: true));
+            return blockers;
         }
 
         if (related.Any(comparison =>
             string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus, StringComparison.OrdinalIgnoreCase)))
         {
-            return
-            [
+            blockers.Add(
                 BuildReferencesHeavyToaBlocker(
                     FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus,
                     "real MS Word PNG comparisons for references-heavy Table of Authorities page numbers",
@@ -829,18 +833,17 @@ public static class FreeWVisualEvidenceManifestNormalizer
                     statuses,
                     candidates,
                     semanticEvidence,
-                    requiresWordBaseline: true)
-            ];
+                    requiresWordBaseline: true));
+            return blockers;
         }
 
         if (related.All(comparison =>
             string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.PassedStatus, StringComparison.OrdinalIgnoreCase)))
         {
-            return [];
+            return blockers;
         }
 
-        return
-        [
+        blockers.Add(
             BuildReferencesHeavyToaBlocker(
                 "needs-render-review",
                 "render-review resolution for failed references-heavy Word PNG comparisons",
@@ -848,8 +851,64 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 statuses,
                 candidates,
                 semanticEvidence,
-                requiresWordBaseline: false)
-        ];
+                requiresWordBaseline: false));
+        return blockers;
+    }
+
+    private static IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> BuildBackstageRealCaptureBlockers(
+        FreeWVisualEvidenceNormalizedSummary summary)
+    {
+        if (summary.BackstagePrintEvidenceReadiness.Count == 0)
+            return [];
+
+        var blockers = new List<FreeWVisualRemainingEvidenceBlocker>();
+        foreach (var scenarioGroup in summary.BackstagePrintEvidenceReadiness
+            .GroupBy(row => row.ScenarioId, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            var missing = scenarioGroup
+                .Where(row => !string.Equals(row.Status, "trusted", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(row => row.HostId, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(row => row.PageNumber)
+                .ToList();
+            if (missing.Count == 0)
+                continue;
+
+            var semanticEvidence = scenarioGroup
+                .OrderBy(row => row.HostId, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(row => row.PageNumber)
+                .Select(row => $"{row.HostId}/p{row.PageNumber.ToString(CultureInfo.InvariantCulture)}={row.Status}")
+                .ToList();
+            var missingSummary = string.Join(
+                "; ",
+                missing.Select(row =>
+                    $"{row.HostId}/p{row.PageNumber.ToString(CultureInfo.InvariantCulture)} {row.Status}: {row.Notes}"));
+            var scenarioLabel = scenarioGroup.Key switch
+            {
+                "backstage-print-preview-fidelity" => "Backstage print preview",
+                "backstage-pdf-export-fidelity" => "Backstage PDF export",
+                _ => scenarioGroup.Key
+            };
+
+            blockers.Add(new FreeWVisualRemainingEvidenceBlocker(
+                $"backstage-real-captures-{scenarioGroup.Key}",
+                scenarioGroup.Key,
+                "Backstage print/export visual evidence",
+                "missing-real-captures",
+                $"trusted WPF and Avalonia real capture rows for {scenarioGroup.Key}",
+                $"{scenarioLabel} has paired renderer contracts, but the visual-evidence summary is missing trusted real capture rows: {missingSummary}",
+                [],
+                [],
+                semanticEvidence,
+                false,
+                new FreeWVisualEvidenceTrust(
+                    false,
+                    missing.Select(row =>
+                        $"{row.HostId}/{row.ScenarioId}/p{row.PageNumber.ToString(CultureInfo.InvariantCulture)} is {row.Status}: {row.Notes}")
+                        .ToList())));
+        }
+
+        return blockers;
     }
 
     private static FreeWVisualRemainingEvidenceBlocker BuildReferencesHeavyToaBlocker(
@@ -1352,6 +1411,26 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add(
                 $"backstage renderer evidence for scenario '{row.ScenarioId}' must use backstageWorkflow '{expectedWorkflow}', found '{workflow}'");
         }
+
+        var expectedArtifactKind = ExpectedBackstageArtifactKind(row.ScenarioId);
+        if (expectedArtifactKind is not null)
+        {
+            ValidateBackstageArtifactMetadata(
+                row,
+                rowFailures,
+                "backstageArtifactKind",
+                expectedArtifactKind);
+        }
+
+        var expectedPipeline = ExpectedBackstagePipeline(row.ScenarioId);
+        if (expectedPipeline is not null)
+        {
+            ValidateBackstageArtifactMetadata(
+                row,
+                rowFailures,
+                "backstagePipeline",
+                expectedPipeline);
+        }
     }
 
     private static string? ExpectedBackstageWorkflow(string scenarioId) =>
@@ -1361,6 +1440,80 @@ public static class FreeWVisualEvidenceManifestNormalizer
             "backstage-pdf-export-fidelity" => "pdf-export",
             _ => null
         };
+
+    private static string? ExpectedBackstageArtifactKind(string scenarioId) =>
+        scenarioId switch
+        {
+            "backstage-print-preview-fidelity" => "print-preview-fixed-layout",
+            "backstage-pdf-export-fidelity" => "pdf-export-rasterized",
+            _ => null
+        };
+
+    private static string? ExpectedBackstagePipeline(string scenarioId) =>
+        scenarioId switch
+        {
+            "backstage-print-preview-fidelity" => "print-preview-fixed-layout-artifact",
+            "backstage-pdf-export-fidelity" => "pdf-export-rasterized-artifact",
+            _ => null
+        };
+
+    private static void ValidateBackstageArtifactMetadata(
+        FreeWVisualEvidenceRow row,
+        List<string> rowFailures,
+        string key,
+        string expectedValue)
+    {
+        if (!row.HostMetadata.TryGetValue(key, out var value)
+            || string.IsNullOrWhiteSpace(value))
+        {
+            rowFailures.Add(
+                $"backstage renderer evidence for scenario '{row.ScenarioId}' must declare {key} '{expectedValue}'");
+            return;
+        }
+
+        var normalizedValue = value.Trim();
+        if (IsGenericOrFallbackBackstageArtifactMetadata(normalizedValue))
+        {
+            rowFailures.Add(
+                $"backstage renderer evidence for scenario '{row.ScenarioId}' cannot use generic or fallback {key} '{value}'");
+            return;
+        }
+
+        if (!string.Equals(normalizedValue, expectedValue, StringComparison.OrdinalIgnoreCase))
+        {
+            rowFailures.Add(
+                $"backstage renderer evidence for scenario '{row.ScenarioId}' must use {key} '{expectedValue}', found '{value}'");
+        }
+    }
+
+    private static bool IsGenericOrFallbackBackstageArtifactMetadata(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+
+        if (value.Contains("placeholder", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("fallback", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("generic", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("unknown", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var genericValues = new[]
+        {
+            "capture",
+            "page-capture",
+            "page-screenshot",
+            "pdf-export",
+            "print-preview",
+            "rasterized",
+            "screenshot",
+            "screen-capture",
+            "ui-screenshot",
+            "workflow-only"
+        };
+        return genericValues.Contains(value, StringComparer.OrdinalIgnoreCase);
+    }
 
     private static IReadOnlyList<FreeWVisualEvidenceNormalizedScenario> BuildScenarioSummaries(
         IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,

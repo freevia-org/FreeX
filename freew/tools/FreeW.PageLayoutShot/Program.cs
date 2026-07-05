@@ -825,6 +825,22 @@ static string BackstageWorkflowForScenario(string scenarioId) =>
         _ => throw new InvalidOperationException($"Unsupported backstage visual evidence scenario: {scenarioId}")
     };
 
+static string BackstageArtifactKindForScenario(string scenarioId) =>
+    scenarioId switch
+    {
+        "backstage-print-preview-fidelity" => "print-preview-fixed-layout",
+        "backstage-pdf-export-fidelity" => "pdf-export-rasterized",
+        _ => throw new InvalidOperationException($"Unsupported backstage visual evidence scenario: {scenarioId}")
+    };
+
+static string BackstagePipelineForScenario(string scenarioId) =>
+    scenarioId switch
+    {
+        "backstage-print-preview-fidelity" => "print-preview-fixed-layout-artifact",
+        "backstage-pdf-export-fidelity" => "pdf-export-rasterized-artifact",
+        _ => throw new InvalidOperationException($"Unsupported backstage visual evidence scenario: {scenarioId}")
+    };
+
 static void AddAvaloniaEvidence(
     List<FreeWVisualEvidenceRow> evidence,
     string scenarioId,
@@ -872,7 +888,11 @@ static void AddAvaloniaEvidence(
     }
 
     if (IsBackstageRendererScenario(scenarioId))
+    {
         metadata["backstageWorkflow"] = BackstageWorkflowForScenario(scenarioId);
+        metadata["backstageArtifactKind"] = BackstageArtifactKindForScenario(scenarioId);
+        metadata["backstagePipeline"] = BackstagePipelineForScenario(scenarioId);
+    }
 
     if (sectionGeometrySurfacePlan is not null)
     {
