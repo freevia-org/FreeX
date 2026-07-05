@@ -827,6 +827,40 @@ public sealed class SlideCanvasAvaloniaTests
     }
 
     [Fact]
+    public void TableCellEditAdapter_PlanParagraphPictureBullet_ReportsSharedImageMetadata()
+    {
+        var presentation = MakePresentation(pres =>
+        {
+            pres.Slides[0].Shapes.Clear();
+            pres.Slides[0].Shapes.Add(MakeTableShape(24, "abc"));
+        });
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var shape = presentation.Slides[0].Shapes[0];
+        editor.Select(shape.Id);
+        editor.SetActiveTableCell(0, 0);
+        var payload = PresentationPictureBulletAuthoringPlanner.CreatePayload(
+            [0x89, 0x50, 0x4E, 0x47],
+            "image/png",
+            "bullet.png");
+
+        var plan = AvaloniaTableCellEditAdapter.PlanParagraphPictureBullet(editor, payload);
+
+        plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+        plan.ResultRichTextPlan.Should().NotBeNull();
+        plan.ResultRichTextPlan!.SelectedParagraphs.Should().ContainSingle();
+        plan.ResultRichTextPlan.SelectedParagraphs[0].BulletKind.Should().Be(BulletKind.Image);
+        plan.ResultRichTextPlan.SelectedParagraphs[0].BulletImage.Should().NotBeNull();
+        plan.ResultRichTextPlan.SelectedParagraphs[0].BulletImage!.Bytes.Should().Equal(0x89, 0x50, 0x4E, 0x47);
+
+        editor.Bus.Execute(plan.Command!);
+
+        var paragraph = shape.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+        paragraph.BulletKind.Should().Be(BulletKind.Image);
+        paragraph.BulletImage.Should().NotBeNull();
+        paragraph.BulletImage!.ContentType.Should().Be("image/png");
+    }
+
+    [Fact]
     public async Task TableCellTextEditor_Cancel_DiscardsChanges()
     {
         EditingSession? editor = null;

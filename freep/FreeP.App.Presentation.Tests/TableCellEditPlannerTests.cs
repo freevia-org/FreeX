@@ -301,6 +301,31 @@ public sealed class TableCellEditPlannerTests
     }
 
     [Fact]
+    public void PlanRichTextEdit_ImageBulletParagraph_ReportsImageBulletMetadata()
+    {
+        var body = MakeBody("Alpha");
+        body.Paragraphs[0].BulletKind = BulletKind.Image;
+        body.Paragraphs[0].BulletImage = new ImagePart
+        {
+            Bytes = [0x89, 0x50, 0x4E, 0x47],
+            ContentType = "image/png",
+        };
+
+        var rich = TableCellEditPlanner.PlanRichTextEdit(
+            body,
+            new InCanvasEditorTextSelection(0, 5));
+
+        rich.Paragraphs.Should().ContainSingle();
+        rich.Paragraphs[0].BulletKind.Should().Be(BulletKind.Image);
+        rich.Paragraphs[0].BulletImage.Should().NotBeNull();
+        rich.Paragraphs[0].BulletImage!.ContentType.Should().Be("image/png");
+        rich.Paragraphs[0].BulletImage!.Bytes.Should().Equal(0x89, 0x50, 0x4E, 0x47);
+        rich.SelectedParagraphs.Should().ContainSingle();
+        rich.SelectedParagraphs[0].BulletImage.Should().BeSameAs(rich.Paragraphs[0].BulletImage);
+        rich.HasListFormatting.Should().BeTrue();
+    }
+
+    [Fact]
     public void PlanRichTextEdit_CollapsedSelection_UsesCaretRunStyle()
     {
         var body = MakeBody("Hello");
@@ -1131,6 +1156,45 @@ public sealed class TableCellEditPlannerTests
                 paragraph.AutoNumType == AutoNumType.AlphaLcPeriod &&
                 paragraph.AutoNumStartAt == 1 &&
                 !paragraph.BulletSuppressed);
+    }
+
+    [Fact]
+    public void PlanParagraphListPreset_CharacterPresetClearsExistingPictureBulletPayload()
+    {
+        var shape = MakeMergedTableShape();
+        var paragraph = shape.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+        paragraph.BulletKind = BulletKind.Image;
+        paragraph.BulletImage = new ImagePart
+        {
+            Bytes = [0x89, 0x50, 0x4E, 0x47],
+            ContentType = "image/png",
+        };
+        var slide = new Slide { Shapes = { shape } };
+
+        var plan = TableCellEditPlanner.PlanParagraphListPreset(
+            0,
+            slide,
+            [shape.Id],
+            (0, 0),
+            TableCellListPresetCatalog.BulletSquare);
+
+        plan.Status.Should().Be(TableCellTextFormatStatus.Ready);
+        plan.ResultRichTextPlan.Should().NotBeNull();
+        plan.ResultRichTextPlan!.SelectedParagraphs.Should().ContainSingle();
+        plan.ResultRichTextPlan.SelectedParagraphs[0].BulletKind.Should().Be(BulletKind.Char);
+        plan.ResultRichTextPlan.SelectedParagraphs[0].BulletImage.Should().BeNull();
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(plan.Command!);
+
+        paragraph = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0];
+        paragraph.BulletKind.Should().Be(BulletKind.Char);
+        paragraph.BulletChar.Should().Be("\u25AA");
+        paragraph.BulletImage.Should().BeNull();
+        paragraph.BulletSuppressed.Should().BeFalse();
     }
 
     [Fact]
