@@ -132,7 +132,7 @@ internal static class FreePCommandInventory
             SchemaVersion: 1,
             GeneratedBy: "tools/Generate-FreePCommandParityInventory.ps1",
             Source: "freep/FreeP.Ribbon.Definitions FreePRibbon.Build(FreePRibbonCapabilities.Wpf/Avalonia)",
-            Notes: "Raw missing counts preserve one-sided generated profile surface counts. Actionable missing counts exclude platform-only commands so Avalonia shell and backed profile commands are not reported as WPF or Avalonia implementation gaps. Workflow evidence rows track bounded FreeP WPF/Avalonia parity-depth slices that are not command gaps.",
+            Notes: "Raw missing counts preserve one-sided generated profile surface counts. Actionable missing counts exclude platform-only commands so Avalonia shell and backed profile commands are not reported as WPF or Avalonia implementation gaps. Platform-only rows are allowed only when the note names the intended shell/profile variance and the WPF shell route that carries the behavior. Workflow evidence rows track bounded FreeP WPF/Avalonia parity-depth slices that are not command gaps.",
             Summary: new InventorySummary(
                 TotalCommands: commands.Length,
                 Both: commands.Count(command => command.Surface == "both"),
@@ -188,7 +188,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/SlideShowTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/SlideShowWindowHeadlessTests.cs"
             ],
-            RemainingWork: "Deeper ink persistence workflows, authored PPTX ink package baselines, richer presenter UI, and PowerPoint visual baselines remain deferred."),
+            RemainingWork: "Authored PPTX ink package baselines, PowerPoint-authoritative presenter UI baselines, and PowerPoint visual baselines remain deferred."),
         new(
             EvidenceId: "freep.presenter.session.summary",
             Area: "Presenter recording plus ink session summary",
@@ -243,7 +243,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/ReviewWorkflowAdapterTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "PowerPoint-authoritative accessibility checker baselines, grammar-scale proofing, richer remediation panes, and full reading-order visual parity remain deferred.")
+            RemainingWork: "PowerPoint-authoritative accessibility checker baselines, grammar-scale proofing, remediation-pane baselines, and reading-order pane visual baselines remain deferred.")
     ];
 
     private static IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> Collect(RibbonDefinition definition, string profile)
@@ -390,12 +390,12 @@ internal static class FreePCommandInventory
     private static string AvaloniaPlatformCommandNote(string commandId) =>
         commandId switch
         {
-            "freep.file.new" => "Intended shell/profile variance: Avalonia exposes document lifecycle in its generated Home/File ribbon group; WPF routes New through ApplicationCommands.New, Backstage chrome, and FileCommands rather than a generated ribbon control.",
-            "freep.file.open" => "Intended shell/profile variance: Avalonia exposes document lifecycle in its generated Home/File ribbon group; WPF routes Open through ApplicationCommands.Open, Backstage chrome, and FileCommands rather than a generated ribbon control.",
-            "freep.file.save" => "Intended shell/profile variance: Avalonia exposes document lifecycle in its generated Home/File ribbon group; WPF routes Save through ApplicationCommands.Save, Backstage chrome, and FileCommands rather than a generated ribbon control.",
-            "freep.file.save-as" => "Intended shell/profile variance: Avalonia exposes document lifecycle in its generated Home/File ribbon group; WPF routes Save As through ApplicationCommands.SaveAs, Backstage chrome, and FileCommands rather than a generated ribbon control.",
-            "freep.undo" => "Intended shell/profile variance: Avalonia exposes Undo in its generated Home/Edit ribbon group; WPF routes Undo through ApplicationCommands.Undo, keyboard bindings, and Backstage/QAT chrome rather than a generated ribbon control.",
-            "freep.redo" => "Intended shell/profile variance: Avalonia exposes Redo in its generated Home/Edit ribbon group; WPF routes Redo through a routed command, keyboard bindings, and Backstage/QAT chrome rather than a generated ribbon control.",
+            "freep.file.new" => "Intended shell/profile variance: Avalonia exposes document lifecycle in its generated Home/File ribbon group; WPF routes New through ApplicationCommands.New, Backstage chrome, and FileCommands.New rather than a generated ribbon control.",
+            "freep.file.open" => "Intended shell/profile variance: Avalonia exposes document lifecycle in its generated Home/File ribbon group; WPF routes Open through ApplicationCommands.Open, Backstage chrome, and FileCommands.Open rather than a generated ribbon control.",
+            "freep.file.save" => "Intended shell/profile variance: Avalonia exposes document lifecycle in its generated Home/File ribbon group; WPF routes Save through ApplicationCommands.Save, Backstage chrome, and FileCommands.Save rather than a generated ribbon control.",
+            "freep.file.save-as" => "Intended shell/profile variance: Avalonia exposes document lifecycle in its generated Home/File ribbon group; WPF routes Save As through ApplicationCommands.SaveAs, Backstage chrome, and FileCommands.SaveAs rather than a generated ribbon control.",
+            "freep.undo" => "Intended shell/profile variance: Avalonia exposes Undo in its generated Home/Edit ribbon group; WPF routes Undo through ApplicationCommands.Undo, keyboard bindings, and Editor.Undo rather than a generated ribbon control.",
+            "freep.redo" => "Intended shell/profile variance: Avalonia exposes Redo in its generated Home/Edit ribbon group; WPF routes Redo through a routed command, keyboard bindings, and Editor.Redo rather than a generated ribbon control.",
             _ => "Command is present only in one generated platform profile."
         };
 

@@ -9,11 +9,46 @@ public sealed class FreePRibbonDefinitionProfileTests
 {
     private static readonly string[] WpfOnlyTabIds = [];
 
-    private static readonly string[] AvaloniaOnlyShellCommands =
-    [
-        "freep.undo",
-        "freep.redo",
-    ];
+    private static readonly IReadOnlyDictionary<string, string[]> PlatformOnlyShellCommandEvidence =
+        new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["freep.file.new"] =
+            [
+                "Intended shell/profile variance",
+                "ApplicationCommands.New",
+                "FileCommands.New"
+            ],
+            ["freep.file.open"] =
+            [
+                "Intended shell/profile variance",
+                "ApplicationCommands.Open",
+                "FileCommands.Open"
+            ],
+            ["freep.file.save"] =
+            [
+                "Intended shell/profile variance",
+                "ApplicationCommands.Save",
+                "FileCommands.Save"
+            ],
+            ["freep.file.save-as"] =
+            [
+                "Intended shell/profile variance",
+                "ApplicationCommands.SaveAs",
+                "FileCommands.SaveAs"
+            ],
+            ["freep.undo"] =
+            [
+                "Intended shell/profile variance",
+                "ApplicationCommands.Undo",
+                "Editor.Undo"
+            ],
+            ["freep.redo"] =
+            [
+                "Intended shell/profile variance",
+                "routed command",
+                "Editor.Redo"
+            ],
+        };
 
     [Fact]
     public void Shared_factory_builds_valid_wpf_and_avalonia_profiles()
@@ -691,18 +726,27 @@ public sealed class FreePRibbonDefinitionProfileTests
             .ToArray();
         platformOnlyRows.Select(command => command.GetProperty("commandId").GetString())
             .Should()
-            .BeEquivalentTo(
-            [
-                "freep.file.new",
-                "freep.file.open",
-                "freep.file.save",
-                "freep.file.save-as",
-                "freep.redo",
-                "freep.undo"
-            ]);
-        platformOnlyRows.Should().OnlyContain(command =>
-            command.GetProperty("notes").GetString()!.Contains("Intended shell/profile variance", StringComparison.Ordinal) &&
-            command.GetProperty("notes").GetString()!.Contains("WPF routes", StringComparison.Ordinal));
+            .BeEquivalentTo(PlatformOnlyShellCommandEvidence.Keys);
+        foreach (var platformOnlyRow in platformOnlyRows)
+        {
+            var commandId = platformOnlyRow.GetProperty("commandId").GetString()
+                ?? throw new InvalidOperationException("Platform-only row is missing commandId.");
+            var notes = platformOnlyRow.GetProperty("notes").GetString()
+                ?? throw new InvalidOperationException($"Platform-only row '{commandId}' is missing notes.");
+
+            platformOnlyRow.GetProperty("missingSide").GetString()
+                .Should()
+                .Be("WPF", $"'{commandId}' is an Avalonia shell/profile command");
+            platformOnlyRow.GetProperty("wpfPresent").GetBoolean().Should().BeFalse();
+            platformOnlyRow.GetProperty("avaloniaPresent").GetBoolean().Should().BeTrue();
+            foreach (var fragment in PlatformOnlyShellCommandEvidence[commandId])
+            {
+                notes.Should().Contain(fragment, $"'{commandId}' must cite the intended shell variance and WPF route");
+            }
+        }
+        root.GetProperty("summary").GetProperty("platformOnly").GetInt32()
+            .Should()
+            .Be(PlatformOnlyShellCommandEvidence.Count);
 
         root.GetProperty("summary").GetProperty("missingAvalonia").GetInt32()
             .Should()
@@ -747,6 +791,9 @@ public sealed class FreePRibbonDefinitionProfileTests
         workflowEvidence.Should().OnlyContain(row =>
             row.GetProperty("status").GetString()!.StartsWith("shared-", StringComparison.Ordinal) &&
             row.GetProperty("hostCoverage").GetString()!.Contains("WPF/Avalonia", StringComparison.Ordinal));
+        workflowEvidence.Should().OnlyContain(
+            row => WorkflowResidualLooksExternal(row),
+            "workflow residuals should read as external PowerPoint/device/backend scope, not unresolved WPF/Avalonia command parity");
 
         var presenterSummary = workflowEvidence.Single(row =>
             row.GetProperty("evidenceId").GetString() == "freep.presenter.session.summary");
@@ -817,8 +864,15 @@ public sealed class FreePRibbonDefinitionProfileTests
     }
 
     private static bool IsAllowedAvaloniaProfileCommand(string commandId) =>
-        commandId.StartsWith("freep.file.", StringComparison.Ordinal) ||
-        AvaloniaOnlyShellCommands.Contains(commandId, StringComparer.Ordinal);
+        PlatformOnlyShellCommandEvidence.ContainsKey(commandId);
+
+    private static bool WorkflowResidualLooksExternal(JsonElement row)
+    {
+        var remainingWork = row.GetProperty("remainingWork").GetString()!;
+        return remainingWork.Contains("PowerPoint", StringComparison.Ordinal) ||
+            remainingWork.Contains("capture", StringComparison.Ordinal) ||
+            remainingWork.Contains("notification routing", StringComparison.Ordinal);
+    }
 
     private static Dictionary<string, string> ExpectedCommandSurfaces()
     {
