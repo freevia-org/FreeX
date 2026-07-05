@@ -839,7 +839,22 @@ public sealed partial class MainWindow : Window
         }
         else
         {
-            source = new StartupWorkbookLoader().Load(startupArguments);
+            // StartupWorkbookLoader's own catch filter only covers IOException/InvalidDataException/
+            // NotSupportedException/UnauthorizedAccessException/WorkbookTooLargeException, so a
+            // password-protected workbook (WorkbookPasswordProtectedException) or any other startup-time
+            // failure would otherwise propagate out of this constructor and crash the whole app before
+            // _statusText (built by BuildContent below) even exists. Fall back to the sample workbook with
+            // a status message instead, matching the WPF host's broad startup catch and Avalonia's own
+            // File > Open catch (ShowOpenIssue).
+            try
+            {
+                source = new StartupWorkbookLoader().Load(startupArguments);
+            }
+            catch (Exception ex)
+            {
+                source = PortPreviewWorkbookFactory.Create($"Open failed: {ex.Message}", true);
+            }
+
             _session = _sessionFactory.Create(source, InitialViewportHeight, InitialViewportWidth, includeObjects: true);
         }
 
@@ -5879,7 +5894,7 @@ public sealed partial class MainWindow : Window
     private async Task EndCellSelectionDragAsync(PointerReleasedEventArgs args)
     {
         if (_autofillDragging)
-            CommitAutofillDrag();
+            CommitAutofillDrag(args.KeyModifiers.HasFlag(KeyModifiers.Control));
         else if (_selectionMoveDragging)
             await CommitSelectionMoveDragAsync();
 
@@ -6369,7 +6384,7 @@ public sealed partial class MainWindow : Window
         args.Handled = true;
     }
 
-    private void CommitAutofillDrag()
+    private void CommitAutofillDrag(bool ctrlHeld = false)
     {
         if (_autofillSourceRange is not { } source ||
             _autofillTarget is not { } target ||
@@ -6384,8 +6399,10 @@ public sealed partial class MainWindow : Window
         // Unlike keyboard/menu Fill Down/Up/Left/Right (FillSelectedRange, which verbatim-copies
         // the source edge cell), the fill-handle drag gesture runs Excel-style series detection
         // (numeric/date linear-fit trend, list series) via AutofillCommand - mirroring the WPF
-        // host's OnAutofillRequested.
-        var result = _session.AutofillDragRange(source, fillRange);
+        // host's OnAutofillRequested. Holding Ctrl while dragging flips the fill behavior (forces
+        // a plain copy of the last value instead of continuing the series, or forces an
+        // increment-by-1 series for a single plain number), matching Excel/the WPF host.
+        var result = _session.AutofillDragRange(source, fillRange, ctrlHeld);
         _session.SelectRange(completedSelection);
         RefreshShell(result.Success
             ? $"{FormatFillCellsAction(direction)} in {FormatRangeReference(completedSelection)}"
@@ -6397,11 +6414,11 @@ public sealed partial class MainWindow : Window
     /// instead of via pointer capture), so headless tests can assert on the resulting cell
     /// values/formulas without simulating pointer input. Not used by production code paths.
     /// </summary>
-    internal void RaiseAutofillDragForTest(GridRange source, CellAddress target)
+    internal void RaiseAutofillDragForTest(GridRange source, CellAddress target, bool ctrlHeld = false)
     {
         _autofillSourceRange = source;
         _autofillTarget = target;
-        CommitAutofillDrag();
+        CommitAutofillDrag(ctrlHeld);
     }
 
     private static FillCellsDirection ResolveAutofillDirection(GridRange source, GridRange fillRange)
@@ -19180,6 +19197,33 @@ public sealed partial class MainWindow : Window
         RefreshShell($"{(enabled ? "Bolded" : "Unbolded")} {rangeReference}");
     }
 
+    /// <summary>
+    /// F4 / Repeat Last Action: replays the last repeatable command against the current
+    /// selection, matching Excel and the WPF host's KeyboardCommandShortcut.RepeatLastAction ->
+    /// ExecuteRepeatLast -> CommandBus.RepeatLast.
+    /// </summary>
+    private void ExecuteRepeatLastAction()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        if (!_session.CanRepeatLastAction)
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.RepeatLastAction();
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Repeat failed.");
+            return;
+        }
+
+        RefreshShell($"Repeated last action in {rangeReference}");
+    }
+
     private void ApplySelectedRangeItalic(bool enabled)
     {
         if (_isOpening || _isSaving)
@@ -20925,6 +20969,14 @@ public sealed partial class MainWindow : Window
         if (TryHandleRowColumnVisibilityShortcut(e))
             return;
 
+        if (e.Key == Key.F4 && e.KeyModifiers == KeyModifiers.None &&
+            !_formulaBox.IsFocused && !IsTextEditingEventSource(e))
+        {
+            e.Handled = true;
+            ExecuteRepeatLastAction();
+            return;
+        }
+
         if (e.Key == Key.F9 && !_formulaBox.IsFocused && !IsTextEditingEventSource(e))
         {
             if (e.KeyModifiers == KeyModifiers.None)
@@ -21085,6 +21137,11 @@ public sealed partial class MainWindow : Window
         {
             e.Handled = true;
             await ShowGoToDialogAsync();
+        }
+        else if (e.Key == Key.K && HasOnlyControlModifier(e.KeyModifiers))
+        {
+            e.Handled = true;
+            await ShowInsertHyperlinkDialogAsync();
         }
         else if ((e.Key is Key.D1 or Key.NumPad1) && HasOnlyCommandModifier(e.KeyModifiers))
         {
@@ -23131,13 +23188,13 @@ public sealed partial class MainWindow : Window
             _ => "middle"
         };
 
-    private static string FormatEditText(Cell? cell, CellAddress address)
-    {
-        if (cell?.HasFormula == true && cell.FormulaText is not null)
-            return "=" + cell.FormulaText;
-
-        return FormatScalarValue(cell?.Value);
-    }
+    private string FormatEditText(Cell? cell, CellAddress address) =>
+        SpreadsheetDisplayFormatter.FormatFormulaBarText(
+            cell,
+            address,
+            useR1C1ReferenceStyle: false,
+            _session.Workbook.GetSheet(address.Sheet),
+            _session.Workbook);
 
     private static string FormatScalarValue(ScalarValue? value) => value switch
     {

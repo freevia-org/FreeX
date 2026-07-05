@@ -5,14 +5,28 @@
              xmlns:local="clr-namespace:FreeX.App.Host"
              Startup="App_OnStartup">
     <Application.Resources>
-        <SolidColorBrush x:Key="{x:Static sys:SystemColors.WindowBrushKey}" Color="White"/>
-        <SolidColorBrush x:Key="{x:Static sys:SystemColors.ControlBrushKey}" Color="White"/>
-        <SolidColorBrush x:Key="{x:Static sys:SystemColors.MenuBrushKey}" Color="White"/>
-        <SolidColorBrush x:Key="{x:Static sys:SystemColors.MenuBarBrushKey}" Color="White"/>
-        <SolidColorBrush x:Key="{x:Static sys:SystemColors.ControlLightBrushKey}" Color="White"/>
-        <SolidColorBrush x:Key="{x:Static sys:SystemColors.ControlLightLightBrushKey}" Color="White"/>
-        <SolidColorBrush x:Key="{x:Static sys:SystemColors.ControlTextBrushKey}" Color="#111111"/>
-        <SolidColorBrush x:Key="{x:Static sys:SystemColors.MenuTextBrushKey}" Color="#111111"/>
+        <!--
+            These used to be flat SolidColorBrush literals (White / #111111) merged at application
+            scope, which permanently shadowed WPF's own SystemColors.*BrushKey lookups (including
+            the OS-supplied High Contrast brushes. A user running a Windows High Contrast theme would
+            get forced white/near-black chrome for every dialog and menu that binds
+            {DynamicResource {x:Static SystemColors.XxxBrushKey}} (FormatCellsDialog, ColorPickerDialog,
+            DataValidationDialog, HeaderFooterDialog, WorkbookThemeDialog, and any unstyled default
+            Window/Menu template), silently defeating the accessibility setting they turned on.
+            SystemColors.WindowBrush/ControlBrush/MenuBrush/ControlTextBrush/MenuTextBrush (the
+            non-"Key" properties) are the live brushes WPF resolves from the current OS theme at
+            process start, so on a normal Windows theme they still resolve to the same light
+            background / dark text this app has always shown, but on a High Contrast theme they
+            resolve to the user's chosen HC colors instead of a hardcoded literal.
+        -->
+        <SolidColorBrush x:Key="{x:Static sys:SystemColors.WindowBrushKey}" Color="{x:Static sys:SystemColors.WindowColor}"/>
+        <SolidColorBrush x:Key="{x:Static sys:SystemColors.ControlBrushKey}" Color="{x:Static sys:SystemColors.ControlColor}"/>
+        <SolidColorBrush x:Key="{x:Static sys:SystemColors.MenuBrushKey}" Color="{x:Static sys:SystemColors.MenuColor}"/>
+        <SolidColorBrush x:Key="{x:Static sys:SystemColors.MenuBarBrushKey}" Color="{x:Static sys:SystemColors.MenuBarColor}"/>
+        <SolidColorBrush x:Key="{x:Static sys:SystemColors.ControlLightBrushKey}" Color="{x:Static sys:SystemColors.ControlLightColor}"/>
+        <SolidColorBrush x:Key="{x:Static sys:SystemColors.ControlLightLightBrushKey}" Color="{x:Static sys:SystemColors.ControlLightLightColor}"/>
+        <SolidColorBrush x:Key="{x:Static sys:SystemColors.ControlTextBrushKey}" Color="{x:Static sys:SystemColors.ControlTextColor}"/>
+        <SolidColorBrush x:Key="{x:Static sys:SystemColors.MenuTextBrushKey}" Color="{x:Static sys:SystemColors.MenuTextColor}"/>
         <Style TargetType="{x:Type ComboBox}">
             <Setter Property="local:ComboBoxDropDownWheelBehavior.IsEnabled" Value="True"/>
         </Style>

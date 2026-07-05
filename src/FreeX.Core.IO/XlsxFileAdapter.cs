@@ -587,7 +587,10 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             }
 
             if (xmlLayout is { } layout)
+            {
                 ApplySheetXmlLayout(workbook, sheet, layout, loadedScenarioNames, customViewStatesById);
+                sheet.ShowZeros = layout.ShowZeros;
+            }
             if (pivotMetadata.PivotTablesBySheetName.TryGetValue(xlSheet.Name, out var pivotTables))
             {
                 foreach (var pivotTable in pivotTables)

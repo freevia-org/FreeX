@@ -4,10 +4,26 @@ namespace Free.Shared.AppServices;
 
 public static partial class NumberFormatDecimalAdjuster
 {
+    /// <summary>
+    /// The canonical Special-category format codes (ZIP code, ZIP+4, phone number, SSN). These are
+    /// digit-mask layouts, not numeric magnitudes with a decimal component, so real Excel treats
+    /// Increase/Decrease Decimal as a no-op on them rather than mutating the mask.
+    /// </summary>
+    private static readonly string[] SpecialFormatCodes =
+    [
+        "00000",
+        "00000-0000",
+        "[<=9999999]###-####;(###) ###-####",
+        "000-00-0000"
+    ];
+
     public static string AddDecimalPlace(string? format)
     {
         if (string.IsNullOrEmpty(format) || format == "General")
             return "0.0";
+
+        if (IsUnadjustableFormat(format))
+            return format;
 
         var adjusted = AdjustSections(format, addDecimalPlace: true, out var changed);
         return changed ? adjusted : format + ".0";
@@ -18,7 +34,42 @@ public static partial class NumberFormatDecimalAdjuster
         if (string.IsNullOrEmpty(format) || format == "General")
             return "0";
 
+        if (IsUnadjustableFormat(format))
+            return format;
+
         return AdjustSections(format, addDecimalPlace: false, out _);
+    }
+
+    /// <summary>
+    /// True when the whole format is a Special (ZIP/ZIP+4/phone/SSN) digit-mask code, or any section
+    /// of it is a Fraction layout (e.g. "# ?/?", "# ??/??", "# ?/4"). Increase/Decrease Decimal Places
+    /// is a no-op on both categories in Excel: fractions have no decimal component to adjust, and the
+    /// Special masks are literal digit layouts that must not be reshaped.
+    /// </summary>
+    private static bool IsUnadjustableFormat(string format)
+    {
+        if (SpecialFormatCodes.Contains(format))
+            return true;
+
+        foreach (var section in SplitSections(format))
+        {
+            if (IsFractionSection(section))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Recognizes a Fraction-category section: an (optionally quoted/spaced) integer part followed by
+    /// '/' and a run of '?' or '0' denominator placeholders (with an optional fixed-digit denominator,
+    /// e.g. "# ?/4"), all outside quoted literals and bracketed conditions. This mirrors the shapes
+    /// produced by <c>NumberFormatMetadata.FractionFormatCode</c> in FreeX.App.Presentation.
+    /// </summary>
+    private static bool IsFractionSection(string section)
+    {
+        var match = FractionShapeRegex().Match(section);
+        return match.Success && IsEditablePlaceholder(section, match.Index);
     }
 
     private static string AdjustSections(string format, bool addDecimalPlace, out bool changed)
@@ -178,4 +229,12 @@ public static partial class NumberFormatDecimalAdjuster
 
     [GeneratedRegex(@"\.(\d+)")]
     private static partial Regex RemoveDecimalPlacesRegex();
+
+    /// <summary>
+    /// Matches a fraction numerator/denominator run, e.g. the "?/?" in "# ?/?" or the "?/4" in "# ?/4".
+    /// Requires at least one '?' placeholder on either side of the slash so ordinary digit-mask codes
+    /// (which use '0'/'#' but never '?') are not mistaken for a fraction.
+    /// </summary>
+    [GeneratedRegex(@"[?0]*\?[?0]*/[?0-9]+")]
+    private static partial Regex FractionShapeRegex();
 }

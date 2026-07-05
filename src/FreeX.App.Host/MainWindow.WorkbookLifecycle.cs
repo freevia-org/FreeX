@@ -24,10 +24,13 @@ public partial class MainWindow
     private void MarkWorkbookSaved()
     {
         // Delegates to this document's WorkbookDocumentState (shared by its "New Window" views).
-        // Record the undo-stack depth at save time so ExecuteUndo/Redo can detect
-        // when the stack returns to the save point and clear the dirty flag cleanly.
+        // Record the undo-stack depth AND its monotonic version at save time so ExecuteUndo/Redo
+        // can detect when the stack returns to the save point and clear the dirty flag cleanly.
+        // The version (not just the depth) guards against the stack having been trimmed and
+        // refilled to the same depth with different entries — see TryMarkCleanIfAtSavePoint.
         var undoDepth = _commandBus.GetUndoStackDepth(_workbook.Id);
-        _documentState.MarkSavedAtUndoDepth(undoDepth);
+        var undoStackVersion = _commandBus.GetUndoStackVersion(_workbook.Id);
+        _documentState.MarkSavedAtUndoDepth(undoDepth, undoStackVersion);
         UpdateTitleBar();
         // Fan out to this document's sibling views so they also reflect the saved (clean) state.
         _windowRegistry?.NotifyDocumentStateChanged(this);

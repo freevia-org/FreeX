@@ -25,6 +25,7 @@ public sealed partial class XlsxFileAdapter
         bool ShowRulers,
         int ZoomPercent,
         bool ShowFormulas,
+        bool ShowZeros,
         bool IsRightToLeft,
         double? DefaultColumnWidth,
         double? DefaultRowHeight,
@@ -274,7 +275,7 @@ public sealed partial class XlsxFileAdapter
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         var pane = sheetView?.Element(worksheetNs + "pane");
         var viewTopLeft = ParseOptionalCellReference(sheetView?.Attribute("topLeftCell")?.Value);
-        var activeCell = ReadActiveSelectionCell(sheetView, worksheetNs);
+        var activeCell = ReadActiveSelectionCell(sheetView, pane, worksheetNs);
         var background = XlsxWorksheetBackgroundReaderWriter.Read(archive, worksheetPath, worksheetXml);
         var headerFooterPictures = XlsxHeaderFooterPictureReaderWriter.Read(archive, worksheetPath, worksheetXml);
         var drawingParts = XlsxWorksheetDrawingPartReader.ReadParts(archive, worksheetPath, worksheetXml);
@@ -353,6 +354,7 @@ public sealed partial class XlsxFileAdapter
             !IsFalse(sheetView?.Attribute("showRuler")?.Value),
             ParseZoomPercent(sheetView?.Attribute("zoomScale")?.Value),
             IsTruthy(sheetView?.Attribute("showFormulas")?.Value),
+            !IsFalse(sheetView?.Attribute("showZeros")?.Value),
             IsTruthy(sheetView?.Attribute("rightToLeft")?.Value),
             XlsxWorksheetXmlValueParser.ParsePositiveFiniteDouble(
                 sheetFormatPr?.Attribute("defaultColWidth")?.Value),
@@ -819,19 +821,40 @@ public sealed partial class XlsxFileAdapter
         return null;
     }
 
-    private static CellAddress? ReadActiveSelectionCell(XElement? sheetView, XNamespace worksheetNs)
+    private static CellAddress? ReadActiveSelectionCell(XElement? sheetView, XElement? pane, XNamespace worksheetNs)
     {
         if (sheetView is null)
             return null;
 
+        // When the view is frozen/split into panes, Excel writes one <selection> per pane and
+        // marks the pane holding the true cursor via pane/@activePane (defaulting to "topLeft"
+        // when no pane element is present). A <selection> with no @pane attribute implicitly
+        // belongs to "topLeft". Picking the first <selection> in document order (rather than the
+        // one matching the active pane) silently reports the wrong active cell whenever the user's
+        // cursor was left in any pane other than the first one Excel happened to write.
+        var activePaneName = pane?.Attribute("activePane")?.Value;
+        if (string.IsNullOrWhiteSpace(activePaneName))
+            activePaneName = "topLeft";
+
+        XElement? fallbackSelection = null;
         foreach (var selection in sheetView.Elements(worksheetNs + "selection"))
         {
             var activeCell = selection.Attribute("activeCell")?.Value;
-            if (!string.IsNullOrWhiteSpace(activeCell))
+            if (string.IsNullOrWhiteSpace(activeCell))
+                continue;
+
+            fallbackSelection ??= selection;
+
+            var selectionPaneName = selection.Attribute("pane")?.Value;
+            if (string.IsNullOrWhiteSpace(selectionPaneName))
+                selectionPaneName = "topLeft";
+
+            if (string.Equals(selectionPaneName, activePaneName, StringComparison.Ordinal))
                 return ParseOptionalCellReference(activeCell);
         }
 
-        return null;
+        var fallbackActiveCell = fallbackSelection?.Attribute("activeCell")?.Value;
+        return string.IsNullOrWhiteSpace(fallbackActiveCell) ? null : ParseOptionalCellReference(fallbackActiveCell);
     }
 
     private static XElement? FindNormalCellStyle(XElement stylesRoot, XNamespace ns)

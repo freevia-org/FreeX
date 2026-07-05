@@ -645,6 +645,14 @@ public partial class MainWindow
             _currentXlsxFeatureReport = plan.FeatureReport;
             _workbook = plan.Workbook;
             _workbookRef.Current = plan.Workbook;
+            // OpenWorkbookLoader only recalculates (and thereby rebuilds the dependency graph) when
+            // the file demands a full recalc on load; most real-world workbooks trust their cached
+            // values and skip that branch entirely (WorkbookOpenService.ShouldRecalculateLoadedFormulas).
+            // Without this, _recalcEngine's single persistent graph stays empty for every formula in
+            // the newly opened workbook, so later edits to precedent cells never propagate to
+            // dependents until a manual F9 or save/reopen. Rebuild unconditionally after every load,
+            // matching the Avalonia host's WorkbookSessionFactory.Create.
+            _recalcEngine.RebuildFormulaDependencies(_workbook);
             InvalidateToolbarVisualState();
             _workbook.Name = plan.DisplayName;
             _worksheetSelections.Clear();

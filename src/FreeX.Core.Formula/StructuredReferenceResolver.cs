@@ -332,7 +332,7 @@ public static class StructuredReferenceResolver
 
     private static GridRange? DataBodyRange(Sheet sheet, StructuredTableModel table, uint startCol, uint endCol)
     {
-        var startRow = table.Range.Start.Row + 1;
+        var startRow = table.Range.Start.Row + HeaderRowCount(table);
         var endRow = table.TotalsRowShown && table.Range.End.Row > startRow
             ? table.Range.End.Row - 1
             : table.Range.End.Row;
@@ -346,11 +346,20 @@ public static class StructuredReferenceResolver
 
     private static bool IsDataBodyRow(StructuredTableModel table, uint row)
     {
-        var startRow = table.Range.Start.Row + 1;
+        var startRow = table.Range.Start.Row + HeaderRowCount(table);
         var endRow = table.TotalsRowShown && table.Range.End.Row > startRow
             ? table.Range.End.Row - 1
             : table.Range.End.Row;
         return row >= startRow && row <= endRow;
+    }
+
+    // Excel tables normally have a single header row, but headerRowCount="0" (a headerless table)
+    // is a supported, round-tripped feature — clamp to the table's actual row span so a headerless
+    // table's very first row is treated as data, not silently swallowed as a phantom header.
+    private static uint HeaderRowCount(StructuredTableModel table)
+    {
+        var rowCount = checked((int)table.Range.RowCount);
+        return (uint)Math.Clamp(table.HeaderRowCount ?? 1, 0, rowCount);
     }
 
     private static bool StructuredTableNameMatches(StructuredTableModel table, string name) =>

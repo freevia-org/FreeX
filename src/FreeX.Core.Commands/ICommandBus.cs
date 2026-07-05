@@ -40,6 +40,23 @@ public interface ICommandBus
     /// Returns 0 when there is nothing to undo or the workbook has no stack yet.
     /// </summary>
     int GetUndoStackDepth(WorkbookId workbookId);
+
+    /// <summary>
+    /// Returns the current monotonic version token of the undo stack (see
+    /// <see cref="Free.Shared.Commands.UndoRedoStack{TCommand,TPayload}.Version"/>): it advances on
+    /// every push AND every silent eviction caused by the depth/byte cap, so unlike
+    /// <see cref="GetUndoStackDepth"/> it can never alias across a trim. Used by
+    /// <c>WorkbookDocumentState</c> as the robust save-point identity check — two observations
+    /// with equal depth but a different version are guaranteed to no longer represent the same
+    /// undo-stack contents. Returns 0 when the workbook has no stack yet.
+    /// </summary>
+    /// <remarks>
+    /// Has a default implementation returning 0 so pre-existing test fakes that implement
+    /// <see cref="ICommandBus"/> without a real backing stack continue to compile unchanged.
+    /// <see cref="CommandBus"/> (the only production implementation) overrides it with the real
+    /// value from its underlying <c>UndoRedoStack</c>.
+    /// </remarks>
+    long GetUndoStackVersion(WorkbookId workbookId) => 0;
 }
 
 public interface ICommandStackChangeNotifier

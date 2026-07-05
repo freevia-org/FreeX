@@ -53,7 +53,10 @@ public static class HyperlinkNavigationPlanner
 
         if (kind == HyperlinkTargetKind.PlaceInThisDocument)
         {
-            plan = new HyperlinkNavigationPlan(HyperlinkNavigationKind.WorksheetCell, normalizedTarget, null);
+            var reference = !string.IsNullOrWhiteSpace(metadata?.Bookmark)
+                ? metadata.Bookmark.Trim()
+                : normalizedTarget;
+            plan = new HyperlinkNavigationPlan(HyperlinkNavigationKind.WorksheetCell, reference, null);
             return true;
         }
 

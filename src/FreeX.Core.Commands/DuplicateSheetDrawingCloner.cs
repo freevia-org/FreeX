@@ -1,3 +1,4 @@
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -10,6 +11,22 @@ internal static class DuplicateSheetDrawingCloner
         var zOrderIdMap = new Dictionary<DrawingObjectZOrderEntry, DrawingObjectZOrderEntry>();
         foreach (var chart in source.Charts)
             copy.Charts.Add(CloneChart(chart, source.Id, copyId));
+
+        // The DataRange remap above (in CloneChart) only handles the GridRange-typed series
+        // range. Verbatim (multi-area/unparsable) series formulas, "value from cells" data-label
+        // formulas, and custom error-bar range formulas are stored as raw sheet-qualified text
+        // and are copied byte-for-byte by CloneChart, so they still literally say the SOURCE
+        // sheet's name. Reuse the same RenameSheetOp-based rewriter that SheetCommands' actual
+        // Rename Sheet path uses, so a same-sheet reference on the duplicate now points at the
+        // copy sheet — matching Excel's Duplicate Sheet behavior for the GridRange DataRange case.
+        if (copy.Charts.Count > 0 && !string.Equals(source.Name, copy.Name, StringComparison.Ordinal))
+        {
+            var renameOp = new RenameSheetOp(source.Name, copy.Name);
+            RowColumnShiftHelpers.RewriteChartVerbatimFormulas(copy, renameOp, copy.Name);
+            foreach (var chart in copy.Charts)
+                RewriteErrorBarRangeFormulas(chart, renameOp, copy.Name);
+        }
+
         foreach (var textBox in source.TextBoxes)
         {
             var cloned = CloneTextBox(textBox, copyId);
@@ -483,6 +500,103 @@ internal static class DuplicateSheetDrawingCloner
 
     private static GridRange RemapRange(GridRange range, SheetId sheetId) =>
         new(RemapAddress(range.Start, sheetId), RemapAddress(range.End, sheetId));
+
+    /// <summary>
+    /// Rewrites the custom error-bar range formulas (raw <c>&lt;c:f&gt;</c> text, same
+    /// verbatim/multi-area-union form as <see cref="ChartModel.VerbatimSeriesFormulas"/>) so a
+    /// same-sheet reference travels with the duplicate instead of still pointing at the source
+    /// sheet by name.
+    /// </summary>
+    private static void RewriteErrorBarRangeFormulas(ChartModel chart, RenameSheetOp op, string hostSheetName)
+    {
+        if (chart.ErrorBarPlusRangeFormula is { } plus)
+        {
+            var rewritten = RewriteVerbatimRangeText(plus, op, hostSheetName);
+            if (rewritten is not null)
+                chart.ErrorBarPlusRangeFormula = rewritten;
+        }
+
+        if (chart.ErrorBarMinusRangeFormula is { } minus)
+        {
+            var rewritten = RewriteVerbatimRangeText(minus, op, hostSheetName);
+            if (rewritten is not null)
+                chart.ErrorBarMinusRangeFormula = rewritten;
+        }
+    }
+
+    /// <summary>
+    /// Rewrites a raw (non-"="-prefixed) <c>&lt;c:f&gt;</c> range formula that may be a
+    /// comma-separated multi-area union wrapped in parentheses, e.g.
+    /// <c>(Sheet1!$A$1:$A$5,Sheet1!$C$1:$C$5)</c>. Mirrors
+    /// <c>RowColumnShiftHelpers.RewriteVerbatimFormula</c>'s wrapper handling since that helper is
+    /// private to its own file. Returns <see langword="null"/> when nothing changed.
+    /// </summary>
+    private static string? RewriteVerbatimRangeText(string text, RenameSheetOp op, string hostSheetName)
+    {
+        var hasPrefix = text.Length > 0 && text[0] == '=';
+        var body = hasPrefix ? text[1..] : text;
+
+        var hasParens = body.Length >= 2 && body[0] == '(' && body[^1] == ')';
+        if (hasParens)
+            body = body[1..^1];
+
+        var areas = SplitOnUnquotedCommas(body);
+        var anyChanged = false;
+        var rewrittenAreas = new string[areas.Length];
+        for (var i = 0; i < areas.Length; i++)
+        {
+            var area = areas[i];
+            var rewritten = FormulaRewriter.Rewrite(area, op, hostSheetName);
+            if (rewritten is not null && rewritten != area)
+            {
+                rewrittenAreas[i] = rewritten;
+                anyChanged = true;
+            }
+            else
+            {
+                rewrittenAreas[i] = area;
+            }
+        }
+
+        if (!anyChanged)
+            return null;
+
+        var newBody = string.Join(",", rewrittenAreas);
+        if (hasParens)
+            newBody = "(" + newBody + ")";
+        return hasPrefix ? "=" + newBody : newBody;
+    }
+
+    /// <summary>
+    /// Splits a comma-separated area-union string on commas that are not inside single-quoted
+    /// sheet names (e.g. <c>'Sheet, Name'!A1</c> must not be split on the comma inside the quotes).
+    /// Mirrors <c>RowColumnShiftHelpers.SplitOnUnquotedCommas</c>.
+    /// </summary>
+    private static string[] SplitOnUnquotedCommas(string text)
+    {
+        var parts = new List<string>();
+        var start = 0;
+        var inQuote = false;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (c == '\'')
+            {
+                if (inQuote && i + 1 < text.Length && text[i + 1] == '\'')
+                    i++; // skip escaped quote
+                else
+                    inQuote = !inQuote;
+            }
+            else if (c == ',' && !inQuote)
+            {
+                parts.Add(text[start..i]);
+                start = i + 1;
+            }
+        }
+
+        parts.Add(text[start..]);
+        return parts.ToArray();
+    }
 
     private static GridRange? RemapRange(GridRange? range, SheetId sheetId) =>
         range.HasValue ? RemapRange(range.Value, sheetId) : null;

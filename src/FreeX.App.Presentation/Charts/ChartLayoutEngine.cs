@@ -50,22 +50,31 @@ public static class ChartLayoutEngine
 
     /// <summary>
     /// Returns the left/right offsets (relative to the category centre) for the bar of the
-    /// <paramref name="clusterOrdinal"/>-th clustered series, given the full category half-width
-    /// and the total clustered-series count. Mirrors WPF ClusteredBarOffsets exactly:
-    /// with one series the bar fills the whole slot; with N series each occupies a disjoint 1/N
-    /// sub-slot so the bars sit side by side (Excel's clustered layout).
+    /// <paramref name="clusterOrdinal"/>-th clustered series, given the full category half-width,
+    /// the total clustered-series count, and Excel's Series Overlap percentage (-100..100, Format
+    /// Data Series' "Overlap" slider; <see cref="ChartModel.BarOverlap"/>). Mirrors WPF
+    /// ClusteredBarOffsets exactly: with one series the bar fills the whole slot regardless of
+    /// overlap. With N series each bar has a fixed width <c>unitWidth</c> chosen so the whole
+    /// cluster of N bars — spaced <c>unitWidth * (1 - overlap/100)</c> apart center-to-center —
+    /// exactly fills <c>[-halfWidth, halfWidth]</c>: overlap=0 reproduces the previous disjoint
+    /// side-by-side tiling, overlap=100 collapses every bar onto the same full-width position
+    /// (Excel's fully-overlapping look), and overlap=-100 spreads the bars out with equal gaps.
     /// </summary>
     private static (double Left, double Right) ClusteredBarOffsets(
         double halfWidth,
         int clusterOrdinal,
-        int clusterCount)
+        int clusterCount,
+        int overlapPercent = 0)
     {
         if (clusterCount <= 1)
             return (-halfWidth, halfWidth);
 
-        var slotWidth = 2.0 * halfWidth / clusterCount;
-        var left = -halfWidth + clusterOrdinal * slotWidth;
-        return (left, left + slotWidth);
+        var overlap = Math.Clamp(overlapPercent, -100, 100) / 100.0;
+        var denominator = clusterCount - (overlap * (clusterCount - 1));
+        var unitWidth = Math.Abs(denominator) < 1e-9 ? 2.0 * halfWidth : 2.0 * halfWidth / denominator;
+        var step = unitWidth * (1 - overlap);
+        var left = -halfWidth + clusterOrdinal * step;
+        return (left, left + unitWidth);
     }
 
     /// <summary>Returns true when this engine can lay out the given chart type.</summary>
@@ -386,7 +395,7 @@ public static class ChartLayoutEngine
         // With N series each occupies a 1/N sub-slot positioned at ordinal*subWidth,
         // mirroring WPF ClusteredBarOffsets so multi-series bars sit side by side.
         var halfWidth = ClusteredBarHalfWidth(chart);
-        var (clusterLeft, clusterRight) = ClusteredBarOffsets(halfWidth, clusterOrdinal, clusterCount);
+        var (clusterLeft, clusterRight) = ClusteredBarOffsets(halfWidth, clusterOrdinal, clusterCount, chart.BarOverlap ?? 0);
         for (var i = 0; i < series.Values.Count; i++)
         {
             double v;
@@ -592,7 +601,7 @@ public static class ChartLayoutEngine
             else
             {
                 var barHalfWidth = ClusteredBarHalfWidth(chart);
-                (ySlotLeft, ySlotRight) = ClusteredBarOffsets(barHalfWidth, clusteredBarOrdinal, clusteredBarCount);
+                (ySlotLeft, ySlotRight) = ClusteredBarOffsets(barHalfWidth, clusteredBarOrdinal, clusteredBarCount, chart.BarOverlap ?? 0);
                 clusteredBarOrdinal++;
             }
 

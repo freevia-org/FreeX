@@ -42,6 +42,9 @@ public sealed class PasteCellsCommand : IWorkbookCommand
             }
         }
 
+        if (CommandGuards.RejectIfSplitsArray(sheet, _cells.Select(c => c.Address)) is { } splitsArrayRejection)
+            return splitsArrayRejection;
+
         _snapshot = [];
         var affected = new List<CellAddress>(_cells.Count);
 

@@ -609,7 +609,8 @@ public record StyleDiff(
     CellFillPatternStyle? FillPatternStyle = null,
     CellColor? FillPatternColor = null,
     WorkbookThemeColorReference? FillPatternThemeColor = null,
-    CellFontScheme? FontScheme  = null
+    CellFontScheme? FontScheme  = null,
+    CellGradientFill? GradientFill = null
 )
 {
     /// <summary>Create a StyleDiff that captures all properties of <paramref name="style"/> as explicit overrides.</summary>
@@ -645,7 +646,8 @@ public record StyleDiff(
         BorderDiagonalUp:     style.BorderDiagonalUp,
         Locked:          style.Locked,
         Hidden:          style.Hidden,
-        FontScheme:      style.FontScheme
+        FontScheme:      style.FontScheme,
+        GradientFill:    style.GradientFill?.Clone()
     );
 
     /// <summary>Apply this diff to a base style, returning a new style with only non-null fields overridden.</summary>
@@ -690,8 +692,18 @@ public record StyleDiff(
         {
             s.FillColor = FillColor.Value;
             s.FillThemeColor = null;
+            // A new flat fill color supersedes any stale gradient fill from the base style,
+            // matching Excel's behavior of replacing a gradient with a flat fill when a new
+            // fill is applied (e.g. Format Painter or a Cell Style preset), unless this same
+            // diff explicitly carries its own GradientFill override (e.g. Format Painter
+            // copying a gradient-filled source cell).
+            if (GradientFill is null) s.GradientFill = null;
         }
-        if (FillThemeColor is not null) s.FillThemeColor = FillThemeColor.Value;
+        if (FillThemeColor is not null)
+        {
+            s.FillThemeColor = FillThemeColor.Value;
+            if (GradientFill is null) s.GradientFill = null;
+        }
         if (ClearFill      == true)
         {
             s.FillColor = null;
@@ -701,6 +713,7 @@ public record StyleDiff(
             s.FillPatternThemeColor = null;
             s.GradientFill = null;
         }
+        if (GradientFill   is not null) s.GradientFill = GradientFill.Clone();
         if (FillPatternStyle is not null) s.FillPatternStyle = FillPatternStyle.Value;
         if (FillPatternColor is not null)
         {
