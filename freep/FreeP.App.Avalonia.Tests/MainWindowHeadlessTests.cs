@@ -3494,6 +3494,61 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Review_comment_mention_insertion_routes_through_shared_mutation_plan()
+    {
+        PresentationCommentMentionPickerPlan? picker = null;
+        PresentationCommentMentionInsertionPlan? insertion = null;
+        PresentationCommentMutationPlan? mutation = null;
+        PresentationCommentPanePlan? panePlan = null;
+        SlideComment? editedComment = null;
+        var dirtyAfterMention = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Alice Writer",
+                Initials = "AW",
+                Text = "Please ask @No",
+                Idx = 1
+            });
+            window.Editor.CurrentSlide.Comments.Add(new SlideComment
+            {
+                Author = "Nora Reviewer",
+                Initials = "NR",
+                Text = "Available for review.",
+                Idx = 2
+            });
+            window.SetSelectedReviewCommentIndexForTests(0);
+
+            picker = window.BuildCommentMentionPickerPlanForTests("nor");
+            mutation = window.InsertMentionInSelectedCommentForTests(
+                "Please ask @No".Length,
+                picker.Candidates.Single());
+            insertion = window.LastCommentMentionInsertionPlan;
+            editedComment = window.Editor.CurrentSlide.Comments[0];
+            panePlan = window.LastCommentPanePlan;
+            dirtyAfterMention = window.IsDirty;
+        });
+
+        if (!ran) return;
+        picker.Should().NotBeNull();
+        picker!.Candidates.Should().ContainSingle().Which.DisplayName.Should().Be("Nora Reviewer");
+        insertion.Should().NotBeNull();
+        insertion!.UpdatedText.Should().Be("Please ask @Nora.Reviewer ");
+        mutation.Should().NotBeNull();
+        mutation!.ShouldApply.Should().BeTrue();
+        mutation.Intent.Should().Be(PresentationReviewWorkflowIntentKind.EditComment);
+        editedComment.Should().NotBeNull();
+        editedComment!.Text.Should().Be("Please ask @Nora.Reviewer");
+        panePlan.Should().NotBeNull();
+        panePlan!.SelectedComment!.MentionCount.Should().Be(1);
+        panePlan.SelectedComment.MentionDetailSummary.Should().Be("Mentions: @Nora.Reviewer");
+        dirtyAfterMention.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Review_modern_comment_reply_reuses_powerpoint_author_identity()
     {
         SlideComment? repliedComment = null;

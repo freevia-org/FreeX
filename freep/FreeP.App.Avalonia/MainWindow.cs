@@ -245,6 +245,8 @@ public sealed class MainWindow : Window
 
     internal PresentationCommentPanePlan? LastCommentPanePlan { get; private set; }
     internal PresentationCommentNavigationPlan? LastCommentNavigationPlan { get; private set; }
+    internal PresentationCommentMentionPickerPlan? LastCommentMentionPickerPlan { get; private set; }
+    internal PresentationCommentMentionInsertionPlan? LastCommentMentionInsertionPlan { get; private set; }
     internal PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan { get; private set; }
     internal PresentationAccessibilityCheckerPanePlan? LastAccessibilityCheckerPanePlan { get; private set; }
     internal PresentationSlideTitleMutationPlan? LastSlideTitleMutationPlan { get; private set; }
@@ -3591,6 +3593,55 @@ public sealed class MainWindow : Window
             timestamp,
             author,
             initials);
+
+    internal PresentationCommentMentionPickerPlan BuildCommentMentionPickerPlanForTests(
+        string? query = null,
+        string? currentAuthor = null,
+        string? currentInitials = null)
+    {
+        LastCommentMentionPickerPlan = PresentationReviewWorkflowPlanner.BuildCommentMentionPickerPlan(
+            _presentation.Slides,
+            query,
+            currentAuthor,
+            currentInitials);
+        return LastCommentMentionPickerPlan;
+    }
+
+    internal PresentationCommentMentionInsertionPlan InsertCommentMentionForTests(
+        string? text,
+        int caretIndex,
+        PresentationCommentMentionCandidate? candidate)
+    {
+        LastCommentMentionInsertionPlan = PresentationReviewWorkflowPlanner.BuildCommentMentionInsertionPlan(
+            text,
+            caretIndex,
+            candidate);
+        return LastCommentMentionInsertionPlan;
+    }
+
+    internal PresentationCommentMutationPlan InsertMentionInSelectedCommentForTests(
+        int caretIndex,
+        PresentationCommentMentionCandidate? candidate,
+        string? author = null,
+        string? initials = null)
+    {
+        LastCommentMentionInsertionPlan = PresentationReviewWorkflowPlanner.BuildCommentMentionInsertionPlan(
+            GetSelectedCommentText(),
+            caretIndex,
+            candidate);
+        if (!LastCommentMentionInsertionPlan.ShouldApply)
+        {
+            return new PresentationCommentMutationPlan(
+                PresentationReviewWorkflowIntentKind.EditComment,
+                false,
+                Editor.CurrentSlideIndex,
+                _selectedCommentIndex,
+                null,
+                LastCommentMentionInsertionPlan.ValidationMessage);
+        }
+
+        return EditSelectedComment(LastCommentMentionInsertionPlan.UpdatedText, author, initials);
+    }
 
     private PresentationCommentMutationPlan ApplySelectedCommentMutation(
         PresentationReviewWorkflowIntentKind intent,

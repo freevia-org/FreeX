@@ -886,6 +886,50 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_InsertMentionInSelectedComment_UsesSharedPickerAndRefreshesPane()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Alice Writer",
+                Initials = "AW",
+                Text = "Please ask @No",
+                Idx = 1
+            });
+            window.Editor.CurrentSlide.Comments.Add(new SlideComment
+            {
+                Author = "Nora Reviewer",
+                Initials = "NR",
+                Text = "Available for review.",
+                Idx = 2
+            });
+            window.SetSelectedReviewCommentIndexForTests(0);
+            var picker = window.BuildCommentMentionPickerPlanForTests("nor");
+            var candidate = picker.Candidates.Single();
+
+            var mutation = window.InsertMentionInSelectedCommentForTests(
+                "Please ask @No".Length,
+                candidate);
+
+            picker.SummaryLabel.Should().Be("1 mention candidate");
+            mutation.ShouldApply.Should().BeTrue();
+            mutation.Intent.Should().Be(PresentationReviewWorkflowIntentKind.EditComment);
+            window.LastCommentMentionInsertionPlan.Should().NotBeNull();
+            window.LastCommentMentionInsertionPlan!.UpdatedText.Should().Be("Please ask @Nora.Reviewer ");
+            window.Editor.CurrentSlide.Comments[0].Text.Should().Be("Please ask @Nora.Reviewer");
+            window.LastCommentPanePlan!.SelectedComment!.MentionCount.Should().Be(1);
+            window.LastCommentPanePlan.SelectedComment.MentionDetailSummary.Should().Be("Mentions: @Nora.Reviewer");
+            window.IsDirty.Should().BeTrue();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_ReplyToModernComment_ReusesPowerPointAuthorIdentity()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);

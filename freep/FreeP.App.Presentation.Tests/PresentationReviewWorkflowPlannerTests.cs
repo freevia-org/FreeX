@@ -248,6 +248,114 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildCommentMentionPickerPlan_DeduplicatesAuthorsAndFiltersByQuery()
+    {
+        var slides = new[] { new Slide { Title = "Review" }, new Slide { Title = "Wrap-up" } };
+        slides[0].Comments.Add(new SlideComment
+        {
+            Author = "Nora Reviewer",
+            Initials = "NR",
+            Text = "Please verify.",
+            Replies =
+            {
+                new SlideCommentReply
+                {
+                    Author = "Alice Writer",
+                    Initials = "AW",
+                    Text = "Taking it."
+                }
+            }
+        });
+        slides[1].Comments.Add(new SlideComment
+        {
+            Author = "Nora Reviewer",
+            Initials = "NR",
+            Text = "Same reviewer appears again."
+        });
+
+        var all = PresentationReviewWorkflowPlanner.BuildCommentMentionPickerPlan(
+            slides,
+            currentAuthor: "Current Editor",
+            currentInitials: "CE");
+        var filtered = PresentationReviewWorkflowPlanner.BuildCommentMentionPickerPlan(slides, "@nor");
+
+        all.Candidates.Select(candidate => candidate.DisplayName)
+            .Should().Equal("Alice Writer", "Current Editor", "Nora Reviewer");
+        all.Candidates.Select(candidate => candidate.IdentityKey).Should().OnlyHaveUniqueItems();
+        all.Candidates.Single(candidate => candidate.DisplayName == "Nora Reviewer").Should().Be(
+            new PresentationCommentMentionCandidate(
+                "Nora Reviewer",
+                "NR",
+                "NORA REVIEWER|NR",
+                "Nora.Reviewer",
+                "Comment author"));
+        all.SummaryLabel.Should().Be("3 mention candidates");
+
+        filtered.Query.Should().Be("nor");
+        filtered.Candidates.Should().ContainSingle().Which.DisplayName.Should().Be("Nora Reviewer");
+    }
+
+    [Fact]
+    public void BuildCommentMentionInsertionPlan_ReplacesPartialMentionToken()
+    {
+        var candidate = new PresentationCommentMentionCandidate(
+            "Nora Reviewer",
+            "NR",
+            "NORA REVIEWER|NR",
+            "Nora.Reviewer",
+            "Comment author");
+
+        var plan = PresentationReviewWorkflowPlanner.BuildCommentMentionInsertionPlan(
+            "Please ask @No",
+            "Please ask @No".Length,
+            candidate);
+
+        plan.Should().Be(new PresentationCommentMentionInsertionPlan(
+            true,
+            "Please ask @No",
+            "Please ask @Nora.Reviewer ",
+            "Please ask @Nora.Reviewer ".Length,
+            0,
+            candidate,
+            null));
+    }
+
+    [Fact]
+    public void BuildCommentMentionInsertionPlan_InsertedTextFlowsThroughAddCommentMutation()
+    {
+        var slides = new[] { new Slide { Title = "Review" } };
+        slides[0].Comments.Add(new SlideComment
+        {
+            Author = "Nora Reviewer",
+            Initials = "NR",
+            Text = "Existing thread."
+        });
+        var candidate = PresentationReviewWorkflowPlanner
+            .BuildCommentMentionPickerPlan(slides, "nora")
+            .Candidates
+            .Single();
+        var insertion = PresentationReviewWorkflowPlanner.BuildCommentMentionInsertionPlan(
+            "Loop in",
+            "Loop in".Length,
+            candidate);
+
+        var mutation = PresentationReviewWorkflowPlanner.BuildAddCommentPlan(
+            slides,
+            0,
+            insertion.UpdatedText,
+            "Alice Writer",
+            "AW",
+            10,
+            20);
+        PresentationReviewWorkflowPlanner.TryApplyCommentMutationPlan(slides, mutation).Should().BeTrue();
+
+        var pane = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(slides, 0, selectedCommentIndex: 1);
+        pane.SelectedComment!.TextPreview.Should().Be("Loop in @Nora.Reviewer");
+        pane.SelectedComment.MentionCount.Should().Be(1);
+        pane.SelectedComment.MentionDetailSummary.Should().Be("Mentions: @Nora.Reviewer");
+    }
+
+    [Fact]
     public void BuildCommentNavigationPlan_TargetsAdjacentThreadsAcrossSlides()
     {
         var slides = new[]

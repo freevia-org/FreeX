@@ -85,6 +85,40 @@ public sealed record PresentationCommentMentionDescriptor(
     public string Label => $"@{DisplayText}";
 }
 
+public sealed record PresentationCommentMentionCandidate(
+    string DisplayName,
+    string Initials,
+    string IdentityKey,
+    string InsertToken,
+    string SourceLabel)
+{
+    public string Label => $"@{InsertToken}";
+
+    public string Summary => string.IsNullOrWhiteSpace(Initials)
+        ? DisplayName
+        : $"{DisplayName} ({Initials})";
+}
+
+public sealed record PresentationCommentMentionPickerPlan(
+    string Query,
+    IReadOnlyList<PresentationCommentMentionCandidate> Candidates)
+{
+    public bool HasCandidates => Candidates.Count > 0;
+
+    public string SummaryLabel => HasCandidates
+        ? PresentationCommentMetadataPolicy.BuildCountSummary(Candidates.Count, "mention candidate")
+        : "No mention candidates";
+}
+
+public sealed record PresentationCommentMentionInsertionPlan(
+    bool ShouldApply,
+    string OriginalText,
+    string UpdatedText,
+    int SelectionStart,
+    int SelectionLength,
+    PresentationCommentMentionCandidate? Candidate,
+    string? ValidationMessage);
+
 public sealed record PresentationCommentReplyDescriptor(
     int ReplyIndex,
     string Author,
@@ -616,6 +650,7 @@ public static class PresentationReviewWorkflowPlanner
     public const string MissingCommentMessage = "Select an existing comment first.";
     public const string EmptyCommentMessage = "Comment text cannot be empty.";
     public const string EmptyCommentReplyMessage = "Reply text cannot be empty.";
+    public const string MissingMentionCandidateMessage = "Select a mention candidate first.";
     public const string CannotReplyToResolvedCommentMessage =
         "Reopen the thread before adding a reply.";
     public const string CommentAlreadyResolvedMessage =
@@ -922,6 +957,112 @@ public static class PresentationReviewWorkflowPlanner
             slideIndex,
             commentIndex,
             comment,
+            null);
+    }
+
+    public static PresentationCommentMentionPickerPlan BuildCommentMentionPickerPlan(
+        IReadOnlyList<Slide> slides,
+        string? query = null,
+        string? currentAuthor = null,
+        string? currentInitials = null)
+    {
+        ArgumentNullException.ThrowIfNull(slides);
+
+        var normalizedQuery = NormalizeMentionQuery(query);
+        var candidates = new Dictionary<string, PresentationCommentMentionCandidate>(StringComparer.Ordinal);
+
+        AddMentionCandidate(candidates, currentAuthor, currentInitials, "Current author");
+        foreach (var comment in slides.SelectMany(slide => slide.Comments))
+        {
+            AddMentionCandidate(candidates, comment.Author, comment.Initials, "Comment author");
+            foreach (var reply in comment.Replies)
+            {
+                AddMentionCandidate(candidates, reply.Author, reply.Initials, "Reply author");
+            }
+        }
+
+        var filtered = candidates.Values
+            .Where(candidate => MatchesMentionCandidate(candidate, normalizedQuery))
+            .OrderBy(candidate => candidate.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(candidate => candidate.Initials, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return new PresentationCommentMentionPickerPlan(normalizedQuery, filtered);
+    }
+
+    public static PresentationCommentMentionInsertionPlan BuildCommentMentionInsertionPlan(
+        string? text,
+        int caretIndex,
+        PresentationCommentMentionCandidate? candidate)
+    {
+        var original = text ?? string.Empty;
+        var safeCaret = Math.Clamp(caretIndex, 0, original.Length);
+        if (candidate is null || string.IsNullOrWhiteSpace(candidate.InsertToken))
+        {
+            return new PresentationCommentMentionInsertionPlan(
+                false,
+                original,
+                original,
+                safeCaret,
+                0,
+                candidate,
+                MissingMentionCandidateMessage);
+        }
+
+        var token = NormalizeMentionToken(candidate.InsertToken);
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return new PresentationCommentMentionInsertionPlan(
+                false,
+                original,
+                original,
+                safeCaret,
+                0,
+                candidate,
+                MissingMentionCandidateMessage);
+        }
+
+        var replacement = $"@{token}";
+        var replaceStart = safeCaret;
+        var replaceEnd = safeCaret;
+        var replacingPartialMention = false;
+
+        var tokenStart = safeCaret;
+        while (tokenStart > 0 && IsMentionCharacter(original[tokenStart - 1]))
+        {
+            tokenStart--;
+        }
+
+        if (tokenStart > 0 &&
+            original[tokenStart - 1] == '@' &&
+            HasMentionBoundaryBefore(original, tokenStart - 1))
+        {
+            replaceStart = tokenStart - 1;
+            while (replaceEnd < original.Length && IsMentionCharacter(original[replaceEnd]))
+            {
+                replaceEnd++;
+            }
+
+            replacingPartialMention = true;
+        }
+
+        var prefix = !replacingPartialMention &&
+            replaceStart > 0 &&
+            !char.IsWhiteSpace(original[replaceStart - 1])
+                ? " "
+                : string.Empty;
+        var suffix = replaceEnd < original.Length && char.IsWhiteSpace(original[replaceEnd])
+            ? string.Empty
+            : " ";
+        var inserted = prefix + replacement + suffix;
+        var updated = original[..replaceStart] + inserted + original[replaceEnd..];
+        return new PresentationCommentMentionInsertionPlan(
+            true,
+            original,
+            updated,
+            replaceStart + inserted.Length,
+            0,
+            candidate,
             null);
     }
 
@@ -2788,6 +2929,91 @@ public static class PresentationReviewWorkflowPlanner
                 DateTime = reply.DateTime,
             });
         }
+    }
+
+    private static void AddMentionCandidate(
+        IDictionary<string, PresentationCommentMentionCandidate> candidates,
+        string? author,
+        string? initials,
+        string sourceLabel)
+    {
+        if (NormalizeText(author) is not { } normalizedAuthor)
+        {
+            return;
+        }
+
+        var displayName = PresentationCommentMetadataPolicy.NormalizeAuthorDisplayName(normalizedAuthor);
+        var initialsBadge = PresentationCommentMetadataPolicy.NormalizeInitialsBadge(initials, displayName);
+        var identityKey = PresentationCommentMetadataPolicy.BuildAuthorIdentityKey(displayName, initialsBadge);
+        if (string.IsNullOrWhiteSpace(identityKey) || candidates.ContainsKey(identityKey))
+        {
+            return;
+        }
+
+        var insertToken = NormalizeMentionToken(displayName);
+        if (string.IsNullOrWhiteSpace(insertToken))
+        {
+            insertToken = NormalizeMentionToken(initialsBadge);
+        }
+
+        if (string.IsNullOrWhiteSpace(insertToken))
+        {
+            return;
+        }
+
+        candidates.Add(identityKey, new PresentationCommentMentionCandidate(
+            displayName,
+            initialsBadge,
+            identityKey,
+            insertToken,
+            sourceLabel));
+    }
+
+    private static bool MatchesMentionCandidate(
+        PresentationCommentMentionCandidate candidate,
+        string query)
+        => string.IsNullOrWhiteSpace(query) ||
+            candidate.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+            candidate.Initials.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+            candidate.InsertToken.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+            candidate.IdentityKey.Contains(query, StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizeMentionQuery(string? query)
+    {
+        var normalized = NormalizeText(query) ?? string.Empty;
+        return normalized.StartsWith('@') ? normalized[1..] : normalized;
+    }
+
+    private static string NormalizeMentionToken(string? value)
+    {
+        var normalized = NormalizeText(value);
+        if (normalized is null)
+        {
+            return string.Empty;
+        }
+
+        var chars = new List<char>(normalized.Length);
+        var lastWasSeparator = false;
+        foreach (var ch in normalized)
+        {
+            if (char.IsLetterOrDigit(ch) || ch is '_' or '-' or '.')
+            {
+                chars.Add(ch);
+                lastWasSeparator = false;
+            }
+            else if (!lastWasSeparator && chars.Count > 0)
+            {
+                chars.Add('.');
+                lastWasSeparator = true;
+            }
+        }
+
+        while (chars.Count > 0 && chars[^1] == '.')
+        {
+            chars.RemoveAt(chars.Count - 1);
+        }
+
+        return new string(chars.ToArray());
     }
 
     private static PresentationCommentMutationPlan InvalidMutation(
