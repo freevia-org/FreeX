@@ -30,6 +30,7 @@ public enum SlideShowShapeAnimationEffectKind
     Circle,
     Diamond,
     Plus,
+    Strips,
     Wedge,
     Wheel,
     Zoom,
@@ -57,6 +58,7 @@ public enum SlideShowGeometricMaskKind
     Circle,
     Diamond,
     Plus,
+    Strips,
     Wedge,
     Wheel
 }
@@ -82,6 +84,8 @@ public sealed record SlideShowShapeAnimationPlaybackPlan(
     SlideShowGeometricMaskKind GeometricMaskKind,
     bool GeometricMaskExpandsFromCenter,
     int GeometricMaskSpokeCount,
+    int GeometricMaskStripCount,
+    bool GeometricMaskStripsSlopeDown,
     bool CheckerboardHorizontal,
     int CheckerboardRowCount,
     int CheckerboardColumnCount,
@@ -103,6 +107,7 @@ public static class SlideShowPlaybackPlanner
     public const int CheckerboardRowCount = 4;
     public const int CheckerboardColumnCount = 6;
     public const int WheelSpokeCount = 4;
+    public const int StripsBandCount = 6;
 
     public static SlideShowTransitionPlaybackPlan PlanTransition(SlideTransition transition)
     {
@@ -165,6 +170,8 @@ public static class SlideShowPlaybackPlanner
             ResolveGeometricMaskKind(animation),
             GeometricMaskExpandsFromCenter(animation),
             ResolveGeometricMaskSpokeCount(animation),
+            ResolveGeometricMaskStripCount(animation),
+            StripsSlopeDown(animation.Direction),
             IsHorizontalCheckerboard(animation.Direction),
             CheckerboardRowCount,
             CheckerboardColumnCount,
@@ -207,6 +214,7 @@ public static class SlideShowPlaybackPlanner
             AnimationPreset.Circle => SlideShowShapeAnimationEffectKind.Circle,
             AnimationPreset.Diamond => SlideShowShapeAnimationEffectKind.Diamond,
             AnimationPreset.Plus => SlideShowShapeAnimationEffectKind.Plus,
+            AnimationPreset.Strips => SlideShowShapeAnimationEffectKind.Strips,
             AnimationPreset.Wedge => SlideShowShapeAnimationEffectKind.Wedge,
             AnimationPreset.Wheel => SlideShowShapeAnimationEffectKind.Wheel,
             AnimationPreset.Zoom => SlideShowShapeAnimationEffectKind.Zoom,
@@ -293,6 +301,7 @@ public static class SlideShowPlaybackPlanner
             AnimationPreset.Circle => SlideShowGeometricMaskKind.Circle,
             AnimationPreset.Diamond => SlideShowGeometricMaskKind.Diamond,
             AnimationPreset.Plus => SlideShowGeometricMaskKind.Plus,
+            AnimationPreset.Strips => SlideShowGeometricMaskKind.Strips,
             AnimationPreset.Wedge => SlideShowGeometricMaskKind.Wedge,
             AnimationPreset.Wheel => SlideShowGeometricMaskKind.Wheel,
             _ => SlideShowGeometricMaskKind.None
@@ -307,6 +316,13 @@ public static class SlideShowPlaybackPlanner
                 ? animation.WheelSpokeCount.Value
                 : WheelSpokeCount
             : 0;
+
+    private static int ResolveGeometricMaskStripCount(ShapeAnimation animation) =>
+        animation.Preset == AnimationPreset.Strips ? StripsBandCount : 0;
+
+    private static bool StripsSlopeDown(AnimationDirection? direction) =>
+        direction is AnimationDirection.LeftDown or AnimationDirection.RightUp or AnimationDirection.FromTopRight
+            or AnimationDirection.FromBottomLeft;
 
     private static bool ExpandsFromCenter(ShapeAnimation animation) =>
         animation.Direction switch

@@ -1117,6 +1117,10 @@ public sealed class SlideShowWindow : Window
                 GeometricMaskEffect(element, plan, onReveal);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Strips:
+                GeometricMaskEffect(element, plan, onReveal);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Wedge:
                 GeometricMaskEffect(element, plan, onReveal);
                 break;
@@ -1560,6 +1564,7 @@ public sealed class SlideShowWindow : Window
             case SlideShowGeometricMaskKind.Circle:
             case SlideShowGeometricMaskKind.Diamond:
             case SlideShowGeometricMaskKind.Plus:
+            case SlideShowGeometricMaskKind.Strips:
             case SlideShowGeometricMaskKind.Wedge:
             case SlideShowGeometricMaskKind.Wheel:
                 GeometricMaskClipEffect(el, plan, onReveal);
@@ -1579,7 +1584,14 @@ public sealed class SlideShowWindow : Window
         var fromProgress = plan.GeometricMaskExpandsFromCenter ? 0.0 : 1.0;
         var toProgress = plan.GeometricMaskExpandsFromCenter ? 1.0 : 0.0;
 
-        el.Clip = BuildGeometricMaskGeometry(plan.GeometricMaskKind, w, h, fromProgress, plan.GeometricMaskSpokeCount);
+        el.Clip = BuildGeometricMaskGeometry(
+            plan.GeometricMaskKind,
+            w,
+            h,
+            fromProgress,
+            plan.GeometricMaskSpokeCount,
+            plan.GeometricMaskStripCount,
+            plan.GeometricMaskStripsSlopeDown);
         el.Opacity = 1;
         InvokeRevealAtStart(plan, onReveal);
 
@@ -1588,6 +1600,8 @@ public sealed class SlideShowWindow : Window
                 el,
                 plan.GeometricMaskKind,
                 plan.GeometricMaskSpokeCount,
+                plan.GeometricMaskStripCount,
+                plan.GeometricMaskStripsSlopeDown,
                 w,
                 h,
                 fromProgress,
@@ -1600,6 +1614,8 @@ public sealed class SlideShowWindow : Window
         Control target,
         SlideShowGeometricMaskKind maskKind,
         int spokeCount,
+        int stripCount,
+        bool stripsSlopeDown,
         double width,
         double height,
         double fromProgress,
@@ -1609,7 +1625,7 @@ public sealed class SlideShowWindow : Window
     {
         if (durationMs <= 0)
         {
-            target.Clip = BuildGeometricMaskGeometry(maskKind, width, height, toProgress, spokeCount);
+            target.Clip = BuildGeometricMaskGeometry(maskKind, width, height, toProgress, spokeCount, stripCount, stripsSlopeDown);
             onComplete?.Invoke();
             return;
         }
@@ -1627,12 +1643,12 @@ public sealed class SlideShowWindow : Window
             double t = Math.Min(1.0, (double)frame / steps);
             double eased = EaseInOut(t);
             double progress = fromProgress + (toProgress - fromProgress) * eased;
-            target.Clip = BuildGeometricMaskGeometry(maskKind, width, height, progress, spokeCount);
+            target.Clip = BuildGeometricMaskGeometry(maskKind, width, height, progress, spokeCount, stripCount, stripsSlopeDown);
             if (frame >= steps)
             {
                 timer.Stop();
                 _activeTimers.Remove(timer);
-                target.Clip = BuildGeometricMaskGeometry(maskKind, width, height, toProgress, spokeCount);
+                target.Clip = BuildGeometricMaskGeometry(maskKind, width, height, toProgress, spokeCount, stripCount, stripsSlopeDown);
                 onComplete?.Invoke();
             }
         };
@@ -1644,12 +1660,15 @@ public sealed class SlideShowWindow : Window
         double width,
         double height,
         double progress,
-        int spokeCount) =>
+        int spokeCount,
+        int stripCount,
+        bool stripsSlopeDown) =>
         maskKind switch
         {
             SlideShowGeometricMaskKind.Circle => BuildCircleGeometry(width, height, progress),
             SlideShowGeometricMaskKind.Diamond => BuildDiamondGeometry(width, height, progress),
             SlideShowGeometricMaskKind.Plus => BuildPlusGeometry(width, height, progress),
+            SlideShowGeometricMaskKind.Strips => BuildStripsGeometry(width, height, progress, stripCount, stripsSlopeDown),
             SlideShowGeometricMaskKind.Wedge => BuildWedgeGeometry(width, height, progress),
             SlideShowGeometricMaskKind.Wheel => BuildWheelGeometry(width, height, progress, spokeCount),
             _ => new RectangleGeometry(new Rect(0, 0, width, height))
@@ -1715,6 +1734,69 @@ public sealed class SlideShowWindow : Window
         return (
             new Rect((width - verticalWidth) / 2, 0, verticalWidth, height),
             new Rect(0, (height - horizontalHeight) / 2, width, horizontalHeight));
+    }
+
+    private static Geometry BuildStripsGeometry(
+        double width,
+        double height,
+        double progress,
+        int stripCount,
+        bool slopeDown)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        if (progress >= 0.999)
+            return new RectangleGeometry(new Rect(0, 0, width, height));
+
+        var bands = Math.Max(1, stripCount);
+        var bandWidth = width / bands;
+        var diagonalShift = height;
+        var openWidth = bandWidth + diagonalShift;
+        var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
+
+        for (var band = 0; band < bands; band++)
+        {
+            var x0 = band * bandWidth - diagonalShift;
+            var x1 = x0 + openWidth * progress;
+            geometry.Children.Add(BuildStripGeometry(x0, x1, height, diagonalShift, slopeDown));
+        }
+
+        return geometry;
+    }
+
+    private static StreamGeometry BuildStripGeometry(
+        double x0,
+        double x1,
+        double height,
+        double diagonalShift,
+        bool slopeDown)
+    {
+        var points = slopeDown
+            ? new[]
+            {
+                new Point(x0, 0),
+                new Point(x1, 0),
+                new Point(x1 + diagonalShift, height),
+                new Point(x0 + diagonalShift, height)
+            }
+            : new[]
+            {
+                new Point(x0 + diagonalShift, 0),
+                new Point(x1 + diagonalShift, 0),
+                new Point(x1, height),
+                new Point(x0, height)
+            };
+
+        var geometry = new StreamGeometry();
+        using (var ctx = geometry.Open())
+        {
+            ctx.BeginFigure(points[0], isFilled: true);
+            ctx.LineTo(points[1]);
+            ctx.LineTo(points[2]);
+            ctx.LineTo(points[3]);
+            ctx.EndFigure(isClosed: true);
+        }
+
+        return geometry;
     }
 
     private static Geometry BuildWedgeGeometry(double width, double height, double progress)

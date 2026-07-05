@@ -1123,6 +1123,10 @@ public sealed class SlideShowWindow : Window
                 GeometricMaskEffect(sb, element, plan);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Strips:
+                GeometricMaskEffect(sb, element, plan);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Wedge:
                 GeometricMaskEffect(sb, element, plan);
                 break;
@@ -1515,6 +1519,10 @@ public sealed class SlideShowWindow : Window
                 PlusEffect(sb, el, plan);
                 break;
 
+            case SlideShowGeometricMaskKind.Strips:
+                StripsEffect(sb, el, plan);
+                break;
+
             case SlideShowGeometricMaskKind.Wedge:
                 WedgeEffect(sb, el, plan);
                 break;
@@ -1705,6 +1713,113 @@ public sealed class SlideShowWindow : Window
         return (
             new Rect((width - verticalWidth) / 2, 0, verticalWidth, height),
             new Rect(0, (height - horizontalHeight) / 2, width, horizontalHeight));
+    }
+
+    private static void StripsEffect(Storyboard sb, FrameworkElement el,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        double w = el.Width  > 0 ? el.Width  : 960;
+        double h = el.Height > 0 ? el.Height : 540;
+
+        var fromProgress = plan.GeometricMaskExpandsFromCenter ? 0.0 : 1.0;
+        var toProgress = plan.GeometricMaskExpandsFromCenter ? 1.0 : 0.0;
+        el.Clip = BuildStripsGeometry(
+            w,
+            h,
+            fromProgress,
+            plan.GeometricMaskStripCount,
+            plan.GeometricMaskStripsSlopeDown);
+        el.Opacity = 1;
+
+        var anim = new ObjectAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
+            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
+        };
+
+        const int frameCount = 24;
+        for (var frame = 0; frame <= frameCount; frame++)
+        {
+            var t = frame / (double)frameCount;
+            var progress = fromProgress + (toProgress - fromProgress) * t;
+            anim.KeyFrames.Add(new DiscreteObjectKeyFrame(
+                BuildStripsGeometry(
+                    w,
+                    h,
+                    progress,
+                    plan.GeometricMaskStripCount,
+                    plan.GeometricMaskStripsSlopeDown),
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * t))));
+        }
+
+        Storyboard.SetTarget(anim, el);
+        Storyboard.SetTargetProperty(anim, new PropertyPath(UIElement.ClipProperty));
+        sb.Children.Add(anim);
+    }
+
+    private static Geometry BuildStripsGeometry(
+        double width,
+        double height,
+        double progress,
+        int stripCount,
+        bool slopeDown)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        if (progress >= 0.999)
+            return new RectangleGeometry(new Rect(0, 0, width, height));
+
+        var bands = Math.Max(1, stripCount);
+        var bandWidth = width / bands;
+        var diagonalShift = height;
+        var openWidth = bandWidth + diagonalShift;
+        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
+
+        for (var band = 0; band < bands; band++)
+        {
+            var x0 = band * bandWidth - diagonalShift;
+            var x1 = x0 + openWidth * progress;
+            geometry.Children.Add(BuildStripGeometry(x0, x1, height, diagonalShift, slopeDown));
+        }
+
+        return geometry;
+    }
+
+    private static PathGeometry BuildStripGeometry(
+        double x0,
+        double x1,
+        double height,
+        double diagonalShift,
+        bool slopeDown)
+    {
+        var points = slopeDown
+            ? new[]
+            {
+                new Point(x0, 0),
+                new Point(x1, 0),
+                new Point(x1 + diagonalShift, height),
+                new Point(x0 + diagonalShift, height)
+            }
+            : new[]
+            {
+                new Point(x0 + diagonalShift, 0),
+                new Point(x1 + diagonalShift, 0),
+                new Point(x1, height),
+                new Point(x0, height)
+            };
+
+        var figure = new PathFigure
+        {
+            StartPoint = points[0],
+            IsClosed = true,
+            IsFilled = true
+        };
+        figure.Segments.Add(new LineSegment(points[1], true));
+        figure.Segments.Add(new LineSegment(points[2], true));
+        figure.Segments.Add(new LineSegment(points[3], true));
+
+        var geometry = new PathGeometry();
+        geometry.Figures.Add(figure);
+        return geometry;
     }
 
     private static void WedgeEffect(Storyboard sb, FrameworkElement el,

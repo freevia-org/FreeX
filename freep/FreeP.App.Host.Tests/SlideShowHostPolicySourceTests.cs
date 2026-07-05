@@ -93,6 +93,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("GeometricMaskEffect(sb, element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Diamond:");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Plus:");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Strips:");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Wedge:");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Wheel:");
         source.Should().Contain("case SlideShowGeometricMaskKind.Circle:");
@@ -101,12 +102,16 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("DiamondEffect(sb, el, plan);");
         source.Should().Contain("case SlideShowGeometricMaskKind.Plus:");
         source.Should().Contain("PlusEffect(sb, el, plan);");
+        source.Should().Contain("case SlideShowGeometricMaskKind.Strips:");
+        source.Should().Contain("StripsEffect(sb, el, plan);");
         source.Should().Contain("case SlideShowGeometricMaskKind.Wedge:");
         source.Should().Contain("WedgeEffect(sb, el, plan);");
         source.Should().Contain("case SlideShowGeometricMaskKind.Wheel:");
         source.Should().Contain("WheelEffect(sb, el, plan);");
         source.Should().Contain("BuildWedgeGeometry(w, h, fromProgress)");
         source.Should().Contain("BuildWheelGeometry(w, h, fromProgress, plan.GeometricMaskSpokeCount)");
+        source.Should().Contain("BuildStripsGeometry(");
+        source.Should().Contain("plan.GeometricMaskStripsSlopeDown");
         source.Should().Contain("new GeometryGroup { FillRule = FillRule.Nonzero }");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Zoom:");
         source.Should().Contain("ZoomEffect(sb, element, plan);");
