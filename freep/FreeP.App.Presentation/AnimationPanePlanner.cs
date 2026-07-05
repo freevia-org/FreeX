@@ -149,6 +149,14 @@ public sealed record AnimationPaneReorderIntent(
     int FromIndex,
     int ToIndex);
 
+public sealed record AnimationPaneReorderMutationPlan(
+    bool ShouldApply,
+    int FromIndex,
+    int ToIndex,
+    int SelectedAnimationIndex,
+    string DisplayText,
+    string? DisabledReason);
+
 public static class AnimationPanePlanner
 {
     public const string MissingAnimationMessage = "Select an animation to edit timing.";
@@ -158,6 +166,7 @@ public static class AnimationPanePlanner
     public const string MissingEffectOptionMessage = "Select an animation to edit effect options.";
     public const string UnsupportedEffectOptionMessage = "This effect has no shared effect options yet.";
     public const string InvalidEffectOptionMessage = "Choose a valid effect option.";
+    public const string InvalidReorderMessage = "Select an animation row that can move in that direction.";
 
     private static readonly string[] TriggerLabelValues =
     [
@@ -467,6 +476,34 @@ public static class AnimationPanePlanner
         return new AnimationPaneReorderIntent(canMove, animationIndex, toIndex);
     }
 
+    public static AnimationPaneReorderMutationPlan BuildReorderMutationPlan(
+        IReadOnlyList<ShapeAnimation> animations,
+        int animationIndex,
+        int offset)
+    {
+        var intent = BuildReorderIntent(animationIndex, animations.Count, offset);
+        if (!intent.CanMove)
+        {
+            return new AnimationPaneReorderMutationPlan(
+                false,
+                intent.FromIndex,
+                intent.ToIndex,
+                NormalizeReorderSelection(animationIndex, animations.Count),
+                "Cannot move animation",
+                InvalidReorderMessage);
+        }
+
+        return new AnimationPaneReorderMutationPlan(
+            true,
+            intent.FromIndex,
+            intent.ToIndex,
+            intent.ToIndex,
+            intent.ToIndex < intent.FromIndex
+                ? $"Move animation {intent.FromIndex + 1} earlier"
+                : $"Move animation {intent.FromIndex + 1} later",
+            null);
+    }
+
     public static string FormatEffect(ShapeAnimation animation)
     {
         var kindPrefix = animation.Kind switch
@@ -760,6 +797,32 @@ public static class AnimationPanePlanner
         return true;
     }
 
+    public static bool TryApplyReorderMutation(
+        EditingSession editor,
+        AnimationPaneReorderMutationPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        ArgumentNullException.ThrowIfNull(plan);
+
+        if (!plan.ShouldApply)
+        {
+            return false;
+        }
+
+        var animations = editor.CurrentSlideAnimations;
+        if (plan.FromIndex < 0
+            || plan.FromIndex >= animations.Count
+            || plan.ToIndex < 0
+            || plan.ToIndex >= animations.Count
+            || plan.FromIndex == plan.ToIndex)
+        {
+            return false;
+        }
+
+        editor.MoveAnimation(plan.FromIndex, plan.ToIndex);
+        return true;
+    }
+
     public static bool TryApplyTimingMutation(
         EditingSession editor,
         AnimationPaneTimingMutationPlan plan)
@@ -805,6 +868,16 @@ public static class AnimationPanePlanner
         }
 
         return -1;
+    }
+
+    private static int NormalizeReorderSelection(int animationIndex, int animationCount)
+    {
+        if (animationCount <= 0)
+        {
+            return -1;
+        }
+
+        return Math.Clamp(animationIndex, 0, animationCount - 1);
     }
 
     private static string ResolveShapeName(Slide slide, uint shapeId)

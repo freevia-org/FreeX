@@ -363,6 +363,34 @@ public sealed class AnimationPaneTests
             control.Kind == AnimationPanePlaybackControlKind.Stop && !control.IsEnabled);
     }
 
+    [StaFact]
+    public void AnimationPane_ReordersThroughSharedMutationPlan()
+    {
+        var editor = MakeSessionWithAnimations();
+        var pane = new AnimationPane(editor);
+
+        var plan = pane.MoveAnimationForTest(1, -1);
+
+        plan.Should().Be(new AnimationPaneReorderMutationPlan(
+            true,
+            1,
+            0,
+            0,
+            "Move animation 2 earlier",
+            null));
+        editor.CurrentSlideAnimations.Select(animation => animation.ShapeId)
+            .Should()
+            .Equal(20u, 10u);
+        CollectRowShapeNames(pane).Should().Equal(
+            "Content Box",
+            "Title Box");
+        pane.CurrentTimelinePlanForTest.SelectedIndex.Should().Be(0);
+
+        var invalid = pane.MoveAnimationForTest(0, -1);
+        invalid.ShouldApply.Should().BeFalse();
+        invalid.DisabledReason.Should().Be(AnimationPanePlanner.InvalidReorderMessage);
+    }
+
     [Fact]
     public void AnimationPane_UsesSharedPlannerForPolicy()
     {
@@ -376,6 +404,8 @@ public sealed class AnimationPaneTests
         source.Should().Contain("item.EffectOptions.Options");
         source.Should().Contain("AnimationPanePlanner.BuildEffectOptionMutationPlan(");
         source.Should().Contain("AnimationPanePlanner.TryApplyEffectOptionMutation(");
+        source.Should().Contain("AnimationPanePlanner.BuildReorderMutationPlan(");
+        source.Should().Contain("AnimationPanePlanner.TryApplyReorderMutation(");
         source.Should().Contain("AnimationPanePlanner.TriggerLabels");
         source.Should().Contain("Text              = item.DurationText");
         source.Should().Contain("Text              = item.DelayText");
@@ -392,6 +422,7 @@ public sealed class AnimationPaneTests
         source.Should().NotContain("private string ResolveShapeName");
         source.Should().NotContain("private static ShapeAnimation CloneAnimation");
         source.Should().NotContain("double.TryParse");
+        source.Should().NotContain("_editor.MoveAnimation(");
     }
 
     // ── Test-seam helpers ─────────────────────────────────────────────────────────

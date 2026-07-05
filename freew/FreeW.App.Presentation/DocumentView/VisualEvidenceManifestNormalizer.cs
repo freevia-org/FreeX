@@ -104,7 +104,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 18;
+    public const int SummarySchemaVersion = 19;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -157,6 +157,25 @@ public static class FreeWVisualEvidenceManifestNormalizer
     [
         "field-page-number-variants",
         "references-heavy-fields"
+    ];
+
+    private static readonly string[] ReferencesHeavyRequiredComplexFieldKeywords =
+    [
+        "BIBLIOGRAPHY",
+        "CITATION",
+        "TOA"
+    ];
+
+    private static readonly string[] ReferencesHeavyRequiredToaCategories =
+    [
+        "Cases",
+        "Statutes"
+    ];
+
+    private static readonly string[] ReferencesHeavyRequiredToaPageReferenceSignatures =
+    [
+        "category=Cases|entry=Example v. FreeW, 123 F.4th 456 (2026)|kind=explicit-page-numbers|pages=1,2|text=1, 2",
+        "category=Statutes|entry=Free Software Evidence Act, 42 U.S.C. 2026|kind=explicit-page-numbers|pages=1|text=1"
     ];
 
     public static IReadOnlyList<FreeWVisualEvidenceExpectedScenario> DefaultExpectedScenarios { get; } =
@@ -731,7 +750,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 BuildReferencesHeavyToaBlocker(
                     "semantic-toa-page-references-missing",
                     "trusted references-heavy rows with generated Table of Authorities page-reference metadata",
-                    "trusted references-heavy evidence did not record generated TOA page references; regenerate v18 evidence or fix shared TOA generation before treating this as a Word-baseline-only gap",
+                    "trusted references-heavy evidence did not record generated TOA page references; regenerate v19 evidence or fix shared TOA generation before treating this as a Word-baseline-only gap",
                     [],
                     [],
                     semanticEvidence,
@@ -857,21 +876,26 @@ public static class FreeWVisualEvidenceManifestNormalizer
     private static IReadOnlyList<string> BuildReferencesHeavyToaSemanticEvidence(
         IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows) =>
         rows
-            .Where(row => row.TableOfAuthorities.HasPageReferences)
-            .SelectMany(row => row.TableOfAuthorities.PageReferences.Select(reference =>
+            .Where(row => HasReferencesHeavyToaPageReferenceSignatures(row.TableOfAuthorities))
+            .SelectMany(row => row.TableOfAuthorities.PageReferenceSignatures.Select(signature =>
                 string.Concat(
                     row.HostId,
                     "/p",
                     row.PageNumber.ToString(CultureInfo.InvariantCulture),
-                    ": ",
-                    reference.Category,
-                    ": ",
-                    reference.EntryText,
-                    " -> ",
-                    reference.PageReferenceText)))
+                    ": entries=",
+                    row.TableOfAuthorities.EntryCount.ToString(CultureInfo.InvariantCulture),
+                    "; categories=",
+                    string.Join(",", row.TableOfAuthorities.Categories),
+                    "; ",
+                    signature)))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+    private static bool HasReferencesHeavyToaPageReferenceSignatures(
+        FreeWVisualTableOfAuthoritiesExpectation tableOfAuthorities) =>
+        ReferencesHeavyRequiredToaPageReferenceSignatures.All(signature =>
+            tableOfAuthorities.PageReferenceSignatures.Contains(signature, StringComparer.Ordinal));
 
     private static void ValidateManifestHeader(
         FreeWVisualEvidenceManifest manifest,
@@ -992,6 +1016,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add(
                 "scenario expects generated Table of Authorities page references but the page expectation records none");
         }
+        ValidateReferencesHeavyTableOfAuthoritiesEvidence(row, rowFailures);
         if (composition.ExpectsTables && row.PageExpectation.Tables.TableCount <= 0)
             rowFailures.Add("scenario expects table layout but the page expectation records no tables");
         if (composition.ExpectsFloatingObjects && row.PageExpectation.DrawingObjects.FloatingObjectCount <= 0)
@@ -1005,6 +1030,86 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("section ordinal must be positive");
         if (features.Section.SectionRelativePageNumber <= 0)
             rowFailures.Add("section-relative page number must be positive");
+    }
+
+    private static void ValidateReferencesHeavyTableOfAuthoritiesEvidence(
+        FreeWVisualEvidenceRow row,
+        List<string> rowFailures)
+    {
+        if (!string.Equals(row.ScenarioId, "references-heavy-fields", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var fields = row.PageExpectation.Fields;
+        var toa = row.PageExpectation.TableOfAuthorities;
+
+        foreach (var keyword in ReferencesHeavyRequiredComplexFieldKeywords)
+        {
+            if (!fields.ComplexFieldKeywords.Contains(keyword, StringComparer.OrdinalIgnoreCase))
+            {
+                rowFailures.Add(
+                    $"references-heavy field evidence must include complex {keyword} field metadata");
+            }
+        }
+
+        if (!fields.ComplexFieldResultSignatures.Contains("TOA=Cases\\t1, 2", StringComparer.OrdinalIgnoreCase))
+        {
+            rowFailures.Add(
+                "references-heavy field evidence must include cached TOA page-reference sentinel 'TOA=Cases\\t1, 2'");
+        }
+
+        if (!toa.HasGeneratedTable || toa.EntryCount < 2)
+        {
+            rowFailures.Add(
+                "references-heavy TOA evidence must include the shared generated Table of Authorities entries");
+        }
+
+        if (toa.EntryWithPageReferenceCount < 2)
+        {
+            rowFailures.Add(
+                "references-heavy TOA evidence must include generated page references for both authority entries");
+        }
+
+        if (toa.CategoryCount < 2)
+        {
+            rowFailures.Add(
+                "references-heavy TOA evidence must include distinct Cases and Statutes category labels");
+        }
+
+        foreach (var category in ReferencesHeavyRequiredToaCategories)
+        {
+            if (!toa.Categories.Contains(category, StringComparer.OrdinalIgnoreCase))
+            {
+                rowFailures.Add(
+                    $"references-heavy TOA evidence is missing category label '{category}'");
+            }
+        }
+
+        if (!toa.HasExplicitPageNumbers)
+        {
+            rowFailures.Add(
+                "references-heavy TOA evidence must include explicit page-number references, not generic field metadata only");
+        }
+
+        foreach (var signature in ReferencesHeavyRequiredToaPageReferenceSignatures)
+        {
+            if (!toa.PageReferenceSignatures.Contains(signature, StringComparer.Ordinal))
+            {
+                rowFailures.Add(
+                    $"references-heavy TOA evidence is missing generated page-reference signature '{signature}'");
+            }
+        }
+
+        var weakReferences = toa.PageReferences
+            .Where(reference => !reference.HasPageReferenceSentinel)
+            .Select(reference => reference.StableSignature)
+            .Where(signature => !string.IsNullOrWhiteSpace(signature))
+            .ToList();
+        if (weakReferences.Count > 0)
+        {
+            rowFailures.Add(
+                "references-heavy TOA evidence contains weak generated page-reference signature(s): " +
+                string.Join("; ", weakReferences));
+        }
     }
 
     private static void ValidateTableFeatureTags(
@@ -1450,7 +1555,13 @@ public static class FreeWVisualEvidenceManifestNormalizer
             var wpfRows = TrustedRowsForHostScenario(rows, WpfHostId, scenarioId);
             var avaloniaRows = TrustedRowsForHostScenario(rows, AvaloniaHostId, scenarioId);
             if (wpfRows.Count == 0 || avaloniaRows.Count == 0)
-                continue;
+            {
+                if (!string.Equals(scenarioId, "references-heavy-fields", StringComparison.OrdinalIgnoreCase)
+                    || (wpfRows.Count == 0 && avaloniaRows.Count == 0))
+                {
+                    continue;
+                }
+            }
 
             ValidateUniquePages(scenarioId, WpfHostId, wpfRows, failures);
             ValidateUniquePages(scenarioId, AvaloniaHostId, avaloniaRows, failures);
@@ -1481,6 +1592,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
                 ValidateRendererPairRow("field renderer pair", scenarioId, pageNumber, wpf, avalonia, failures);
                 ValidateFieldPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+                if (string.Equals(scenarioId, "references-heavy-fields", StringComparison.OrdinalIgnoreCase))
+                    ValidateReferencesHeavyToaPairRow(pageNumber, wpf, avalonia, failures);
             }
         }
     }
@@ -1880,12 +1993,65 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{pairName} complex field keywords differ: WPF '{FormatSummaries(wpfComplexKeywords)}', Avalonia '{FormatSummaries(avaloniaComplexKeywords)}'");
         }
 
+        var wpfComplexResultSignatures = OrderedSummaries(wpfFields.ComplexFieldResultSignatures);
+        var avaloniaComplexResultSignatures = OrderedSummaries(avaloniaFields.ComplexFieldResultSignatures);
+        if (!wpfComplexResultSignatures.SequenceEqual(avaloniaComplexResultSignatures, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} complex field result signatures differ: WPF '{FormatSummaries(wpfComplexResultSignatures)}', Avalonia '{FormatSummaries(avaloniaComplexResultSignatures)}'");
+        }
+
         var wpfSlots = OrderedSummaries(wpfFields.HeaderFooterSlotNames);
         var avaloniaSlots = OrderedSummaries(avaloniaFields.HeaderFooterSlotNames);
         if (!wpfSlots.SequenceEqual(avaloniaSlots, StringComparer.Ordinal))
         {
             failures.Add(
                 $"{pairName} header/footer field slots differ: WPF '{FormatSummaries(wpfSlots)}', Avalonia '{FormatSummaries(avaloniaSlots)}'");
+        }
+    }
+
+    private static void ValidateReferencesHeavyToaPairRow(
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia,
+        List<string> failures)
+    {
+        var pairName = $"field renderer pair 'references-heavy-fields' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        var wpfToa = wpf.TableOfAuthorities;
+        var avaloniaToa = avalonia.TableOfAuthorities;
+
+        if (wpfToa.EntryCount != avaloniaToa.EntryCount)
+        {
+            failures.Add(
+                $"{pairName} generated TOA entry counts differ: WPF {wpfToa.EntryCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaToa.EntryCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (wpfToa.EntryWithPageReferenceCount != avaloniaToa.EntryWithPageReferenceCount)
+        {
+            failures.Add(
+                $"{pairName} generated TOA page-reference counts differ: WPF {wpfToa.EntryWithPageReferenceCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaToa.EntryWithPageReferenceCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (wpfToa.CategoryCount != avaloniaToa.CategoryCount)
+        {
+            failures.Add(
+                $"{pairName} generated TOA category counts differ: WPF {wpfToa.CategoryCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaToa.CategoryCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        var wpfCategories = OrderedSummaries(wpfToa.Categories);
+        var avaloniaCategories = OrderedSummaries(avaloniaToa.Categories);
+        if (!wpfCategories.SequenceEqual(avaloniaCategories, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} generated TOA category labels differ: WPF '{FormatSummaries(wpfCategories)}', Avalonia '{FormatSummaries(avaloniaCategories)}'");
+        }
+
+        var wpfSignatures = OrderedSummaries(wpfToa.PageReferenceSignatures);
+        var avaloniaSignatures = OrderedSummaries(avaloniaToa.PageReferenceSignatures);
+        if (!wpfSignatures.SequenceEqual(avaloniaSignatures, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} generated TOA page-reference signatures differ: WPF '{FormatSummaries(wpfSignatures)}', Avalonia '{FormatSummaries(avaloniaSignatures)}'");
         }
     }
 

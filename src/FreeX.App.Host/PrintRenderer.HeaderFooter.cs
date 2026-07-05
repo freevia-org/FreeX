@@ -91,12 +91,46 @@ public static partial class PrintRenderer
 
         var printedWidth = measurement.HeaderWidth + measurement.TotalColumnWidth(pageColumns.Count);
         var printedHeight = measurement.HeaderHeight + measurement.TotalRowHeight(pageRows.Count);
-        var xOffset = centerHorizontally ? Math.Max(0, (printableW - printedWidth) / 2) : 0;
-        var yOffset = centerVertically ? Math.Max(0, (printableH - printedHeight) / 2) : 0;
+
+        // Excel's Page Setup > Scaling ('Adjust to N%' or 'Fit to N pages') shrinks every printed
+        // element (gridlines, cell text, headings, charts, text boxes, comments) so the page's real
+        // content fits the printable area -- it never just changes how many rows/columns are packed
+        // onto a page and then draws them at full size. PagePaginationPlanner already inflated the
+        // rows/columns-per-page capacity to reach the correct page count (so pageRows/pageColumns can
+        // be larger than what fits the printable area at 100%); the ratio between the printable area
+        // and this page's actual (unscaled) drawn size is exactly the visual shrink factor to apply
+        // here, capped at 1 so content that already fits is never scaled up.
+        var scaleRatio = 1.0;
+        if (printedWidth > 0)
+            scaleRatio = Math.Min(scaleRatio, printableW / printedWidth);
+        if (printedHeight > 0)
+            scaleRatio = Math.Min(scaleRatio, printableH / printedHeight);
+        if (!double.IsFinite(scaleRatio) || scaleRatio <= 0)
+            scaleRatio = 1.0;
+
+        var scaledWidth = printedWidth * scaleRatio;
+        var scaledHeight = printedHeight * scaleRatio;
+        var xOffset = centerHorizontally ? Math.Max(0, (printableW - scaledWidth) / 2) : 0;
+        var yOffset = centerVertically ? Math.Max(0, (printableH - scaledHeight) / 2) : 0;
         var contentLeft = marginLeft + xOffset;
         var contentTop = marginTop + yOffset;
-        var gridLeft = contentLeft + measurement.HeaderWidth;
-        var gridTop = contentTop + measurement.HeaderHeight;
+        var gridLeft = contentLeft + measurement.HeaderWidth * scaleRatio;
+        var gridTop = contentTop + measurement.HeaderHeight * scaleRatio;
+
+        var scaledTextOverlayStart = textOverlays.Count;
+        var scaledLinkOverlayStart = linkOverlays.Count;
+        var scaledCellDestinationOverlayStart = cellDestinationOverlays.Count;
+
+        if (scaleRatio < 1.0)
+        {
+            // Scale everything printed inside the content area (headings, gridlines, cells, charts,
+            // text boxes, comments) about the content's own top-left corner so it shrinks in place
+            // without shifting off the already-applied centering offset. Header/footer bands are
+            // drawn outside this transform (matching Excel, which never scales header/footer text).
+            dc.PushTransform(new TranslateTransform(contentLeft, contentTop));
+            dc.PushTransform(new ScaleTransform(scaleRatio, scaleRatio));
+            dc.PushTransform(new TranslateTransform(-contentLeft, -contentTop));
+        }
 
         if (printHeadings)
             DrawPrintHeadings(dc, contentLeft, contentTop, measurement, pageRows, pageColumns);
@@ -166,7 +200,80 @@ public static partial class PrintRenderer
                 blackAndWhite);
         }
 
+        if (scaleRatio < 1.0)
+        {
+            dc.Pop();
+            dc.Pop();
+            dc.Pop();
+
+            // The overlay lists above are plain coordinate records, not visual-tree elements, so they
+            // don't inherit dc's pushed transforms the way the drawn content does. Rescale the entries
+            // added while the transform was active (grid text, hyperlinks, cell destinations) about the
+            // same anchor so PDF export's selectable-text/link layer lines up with the shrunk raster.
+            RescaleTextOverlays(textOverlays, scaledTextOverlayStart, scaleRatio, contentLeft, contentTop);
+            RescaleLinkOverlays(linkOverlays, scaledLinkOverlayStart, scaleRatio, contentLeft, contentTop);
+            RescaleCellDestinationOverlays(cellDestinationOverlays, scaledCellDestinationOverlayStart, scaleRatio, contentLeft, contentTop);
+        }
+
         return (visual, textOverlays, linkOverlays, cellDestinationOverlays);
     }
 
+    private static void RescaleTextOverlays(
+        List<PdfTextOverlay> overlays,
+        int startIndex,
+        double scaleRatio,
+        double anchorX,
+        double anchorY)
+    {
+        for (var i = startIndex; i < overlays.Count; i++)
+        {
+            var overlay = overlays[i];
+            overlays[i] = overlay with
+            {
+                X = anchorX + (overlay.X - anchorX) * scaleRatio,
+                Y = anchorY + (overlay.Y - anchorY) * scaleRatio,
+                FontSize = overlay.FontSize * scaleRatio
+            };
+        }
+    }
+
+    private static void RescaleLinkOverlays(
+        List<PdfLinkOverlay> overlays,
+        int startIndex,
+        double scaleRatio,
+        double anchorX,
+        double anchorY)
+    {
+        for (var i = startIndex; i < overlays.Count; i++)
+        {
+            var overlay = overlays[i];
+            overlays[i] = overlay with
+            {
+                X = anchorX + (overlay.X - anchorX) * scaleRatio,
+                Y = anchorY + (overlay.Y - anchorY) * scaleRatio,
+                Width = overlay.Width * scaleRatio,
+                Height = overlay.Height * scaleRatio
+            };
+        }
+    }
+
+    private static void RescaleCellDestinationOverlays(
+        List<PdfCellDestinationOverlay> overlays,
+        int startIndex,
+        double scaleRatio,
+        double anchorX,
+        double anchorY)
+    {
+        for (var i = startIndex; i < overlays.Count; i++)
+        {
+            var overlay = overlays[i];
+            overlays[i] = overlay with
+            {
+                X = anchorX + (overlay.X - anchorX) * scaleRatio,
+                Y = anchorY + (overlay.Y - anchorY) * scaleRatio,
+                Width = overlay.Width * scaleRatio,
+                Height = overlay.Height * scaleRatio
+            };
+        }
+    }
 }

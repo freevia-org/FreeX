@@ -14,6 +14,7 @@ internal static class XlsxWorksheetViewWriter
         XlsxWorksheetValueSanitizer.ValidEnumOrDefault(sheet.ViewMode, WorksheetViewMode.Normal) != WorksheetViewMode.Normal ||
         sheet.ZoomPercent != 100 ||
         sheet.ShowFormulas ||
+        !sheet.ShowZeros ||
         sheet.IsRightToLeft ||
         sheet.ViewTopRow.HasValue ||
         sheet.ViewLeftCol.HasValue ||
@@ -113,21 +114,51 @@ internal static class XlsxWorksheetViewWriter
         changed |= XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(sheetView, "showRuler", sheet.ShowRulers ? null : "0");
         changed |= XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(sheetView, "zoomScale", sheet.ZoomPercent == 100 ? null : sheet.ZoomPercent.ToString(CultureInfo.InvariantCulture));
         changed |= XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(sheetView, "showFormulas", sheet.ShowFormulas ? "1" : null);
+        changed |= XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(sheetView, "showZeros", sheet.ShowZeros ? null : "0");
         changed |= XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(sheetView, "rightToLeft", sheet.IsRightToLeft ? "1" : null);
         changed |= XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(sheetView, "topLeftCell", ToOptionalA1(sheet.ViewTopRow, sheet.ViewLeftCol));
         if (ToOptionalA1(sheet.ActiveRow, sheet.ActiveCol) is { } activeCell)
         {
+            // A frozen/split sheetView can carry one <selection> per pane (topLeft/topRight/
+            // bottomLeft/bottomRight), each keyed by its own @pane attribute (missing @pane means
+            // "topLeft"). Only the pane holding the true cursor -- named by pane/@activePane
+            // (defaulting to "topLeft" per OOXML when no pane element is present) -- should be
+            // updated from the model; the other panes' <selection> elements must be carried
+            // through untouched, or a full-rebuild save silently destroys their cursor positions.
+            var paneElement = sheetView.Element(worksheetNs + "pane");
+            var activePaneName = paneElement?.Attribute("activePane")?.Value;
+            if (string.IsNullOrWhiteSpace(activePaneName))
+                activePaneName = "topLeft";
+
             var selections = sheetView.Elements(worksheetNs + "selection").ToList();
-            if (selections.Count != 1 ||
-                !string.Equals(selections[0].Attribute("activeCell")?.Value, activeCell, StringComparison.Ordinal) ||
-                !string.Equals(selections[0].Attribute("sqref")?.Value, activeCell, StringComparison.Ordinal))
+            XElement? activeSelection = null;
+            foreach (var selection in selections)
             {
-                selections.Remove();
-                sheetView.Add(new XElement(
-                    worksheetNs + "selection",
-                    new XAttribute("activeCell", activeCell),
-                    new XAttribute("sqref", activeCell)));
+                var selectionPaneName = selection.Attribute("pane")?.Value;
+                if (string.IsNullOrWhiteSpace(selectionPaneName))
+                    selectionPaneName = "topLeft";
+
+                if (string.Equals(selectionPaneName, activePaneName, StringComparison.Ordinal))
+                {
+                    activeSelection = selection;
+                    break;
+                }
+            }
+
+            if (activeSelection is null)
+            {
+                activeSelection = string.Equals(activePaneName, "topLeft", StringComparison.Ordinal)
+                    ? new XElement(worksheetNs + "selection")
+                    : new XElement(worksheetNs + "selection", new XAttribute("pane", activePaneName));
+                sheetView.Add(activeSelection);
                 changed = true;
+            }
+
+            if (!string.Equals(activeSelection.Attribute("activeCell")?.Value, activeCell, StringComparison.Ordinal) ||
+                !string.Equals(activeSelection.Attribute("sqref")?.Value, activeCell, StringComparison.Ordinal))
+            {
+                changed |= XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(activeSelection, "activeCell", activeCell);
+                changed |= XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(activeSelection, "sqref", activeCell);
             }
         }
 

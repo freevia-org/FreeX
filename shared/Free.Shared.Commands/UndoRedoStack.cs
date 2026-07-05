@@ -36,6 +36,7 @@ public class UndoRedoStack<TCommand, TPayload>
     private readonly LinkedList<UndoRedoStackEntry<TCommand, TPayload>> _undoStack = new();
     private readonly Stack<UndoRedoStackEntry<TCommand, TPayload>> _redoStack = new();
     private int _undoStackBytes;
+    private long _version;
 
     public UndoRedoStack(int maxDepth, int maxBytes)
     {
@@ -52,6 +53,23 @@ public class UndoRedoStack<TCommand, TPayload>
 
     /// <summary>Number of commands currently on the undo stack.</summary>
     public int UndoDepth => _undoStack.Count;
+
+    /// <summary>
+    /// Monotonically-increasing token bumped on every entry added to the undo stack
+    /// (<see cref="Push"/>, <see cref="PushWithoutClearingRedo"/>, <see cref="RollbackPopUndo"/>)
+    /// AND every silent eviction performed by <see cref="TrimUndoStack"/>. A plain <see cref="PopUndo"/>
+    /// (undo) does not evict from the bottom and does not bump this by itself.
+    /// <para>
+    /// Unlike <see cref="UndoDepth"/> (a raw count), this can never alias: once the stack has been
+    /// trimmed by the depth/byte cap, the entries present at a given depth after trimming differ
+    /// from whatever was at that depth before, and eviction always advances this token. So two
+    /// observations with equal <see cref="UndoDepth"/> but an intervening eviction are guaranteed
+    /// to have different <see cref="Version"/> values. Callers that need to know "is the live undo
+    /// stack identical to the one recorded at some earlier point" must compare this token, not
+    /// <see cref="UndoDepth"/>.
+    /// </para>
+    /// </summary>
+    public long Version => _version;
 
     /// <summary>Push a freshly applied command, invalidating the redo history.</summary>
     public void Push(TCommand command, int bytes, TPayload payload, string label)
@@ -72,6 +90,7 @@ public class UndoRedoStack<TCommand, TPayload>
     {
         _undoStack.AddLast(entry);
         _undoStackBytes += entry.Bytes;
+        _version++;
     }
 
     private void TrimUndoStack()
@@ -81,6 +100,7 @@ public class UndoRedoStack<TCommand, TPayload>
             var first = _undoStack.First!.Value;
             _undoStack.RemoveFirst();
             _undoStackBytes -= first.Bytes;
+            _version++;
         }
     }
 

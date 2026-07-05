@@ -3999,6 +3999,9 @@ public sealed class MainWindow : Window
         string optionId)
         => ApplyAnimationPaneEffectOptionEdit(animationIndex, optionId);
 
+    internal AnimationPaneReorderMutationPlan MoveAnimationPaneItemForTests(int animationIndex, int offset)
+        => MoveAnimationPaneItem(animationIndex, offset);
+
     private AnimationPaneEffectOptionMutationPlan ApplyAnimationPaneEffectOptionEdit(
         int animationIndex,
         string optionId)
@@ -4064,18 +4067,18 @@ public sealed class MainWindow : Window
         RefreshVisibleAnimationPane(_selectedAnimationIndex);
     }
 
-    private void MoveAnimationPaneItem(int animationIndex, int offset)
+    private AnimationPaneReorderMutationPlan MoveAnimationPaneItem(int animationIndex, int offset)
     {
-        var intent = AnimationPanePlanner.BuildReorderIntent(
+        var plan = AnimationPanePlanner.BuildReorderMutationPlan(
+            Editor.CurrentSlideAnimations,
             animationIndex,
-            Editor.CurrentSlideAnimations.Count,
             offset);
-        if (!intent.CanMove)
-            return;
+        if (!AnimationPanePlanner.TryApplyReorderMutation(Editor, plan))
+            return plan;
 
-        _selectedAnimationIndex = intent.ToIndex;
-        Editor.MoveAnimation(intent.FromIndex, intent.ToIndex);
+        _selectedAnimationIndex = plan.SelectedAnimationIndex;
         RefreshVisibleAnimationPane(_selectedAnimationIndex);
+        return plan;
     }
 
     private static string BuildAnimationPaneRowSummary(AnimationPaneTimelineItemPlan item)

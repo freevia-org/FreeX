@@ -464,10 +464,43 @@ public sealed class SlideShowPlaybackPlannerTests
         wheelOut.GeometricMaskSpokeCount.Should().Be(SlideShowPlaybackPlanner.WheelSpokeCount);
         wheelOut.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
 
-        var growShrink = SlideShowPlaybackPlanner.PlanShapeAnimation(
+        var peekFromLeft = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
                 ShapeId = 23,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Peek,
+                Direction = AnimationDirection.FromLeft,
+                DurationMs = 275
+            },
+            startDelayMs: 35);
+
+        peekFromLeft.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Peek);
+        peekFromLeft.OffsetXFactor.Should().Be(-1);
+        peekFromLeft.OffsetYFactor.Should().Be(0);
+        peekFromLeft.DurationMs.Should().Be(275);
+        peekFromLeft.DelayMs.Should().Be(35);
+        peekFromLeft.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.OnComplete);
+
+        var peekExitFromBottom = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 24,
+                Kind = AnimationKind.Exit,
+                Preset = AnimationPreset.Peek,
+                Direction = AnimationDirection.FromBottom
+            },
+            startDelayMs: 0);
+
+        peekExitFromBottom.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Peek);
+        peekExitFromBottom.OffsetXFactor.Should().Be(0);
+        peekExitFromBottom.OffsetYFactor.Should().Be(1);
+        peekExitFromBottom.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
+
+        var growShrink = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 25,
                 Kind = AnimationKind.Emphasis,
                 Preset = AnimationPreset.Grow,
                 DurationMs = 450

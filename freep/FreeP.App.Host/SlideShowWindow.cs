@@ -1135,6 +1135,10 @@ public sealed class SlideShowWindow : Window
                 GeometricMaskEffect(sb, element, plan);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Peek:
+                PeekEffect(sb, element, plan);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Zoom:
                 ZoomEffect(sb, element, plan);
                 break;
@@ -1223,6 +1227,38 @@ public sealed class SlideShowWindow : Window
         sb.Children.Add(animX);
         sb.Children.Add(animY);
         sb.Children.Add(animOp);
+    }
+
+    private void PeekEffect(Storyboard sb, FrameworkElement el,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        double w = _slideCanvas.ActualWidth  > 0 ? _slideCanvas.ActualWidth  : 960;
+        double h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+
+        var translate = new TranslateTransform(0, 0);
+        el.RenderTransform = translate;
+        el.Clip = new RectangleGeometry(new Rect(0, 0, w, h));
+        el.Opacity = 1;
+
+        double dx = plan.OffsetXFactor * w;
+        double dy = plan.OffsetYFactor * h;
+        var dur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+
+        var animX = new DoubleAnimation(dx, 0, dur)
+            { BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs), EasingFunction = ease };
+        var animY = new DoubleAnimation(dy, 0, dur)
+            { BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs), EasingFunction = ease };
+
+        Storyboard.SetTarget(animX, el);
+        Storyboard.SetTarget(animY, el);
+        Storyboard.SetTargetProperty(animX,
+            new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.X)"));
+        Storyboard.SetTargetProperty(animY,
+            new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.Y)"));
+
+        sb.Children.Add(animX);
+        sb.Children.Add(animY);
     }
 
     private static void WipeEffect(Storyboard sb, FrameworkElement el,

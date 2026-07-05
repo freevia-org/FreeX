@@ -83,8 +83,12 @@ public sealed class DSheetObjectsRegressionTests
     [Fact]
     public void DuplicateSheet_PreservesVerbatimSeriesFormulasAndEmbeddedSeriesData()
     {
-        // Multi-area verbatim series formulas and cached numCache/strCache series data must
-        // survive Duplicate Sheet — not be silently dropped from the cloned chart.
+        // Multi-area verbatim series formulas, "value from cells" data-label formulas, and cached
+        // numCache/strCache series data must survive Duplicate Sheet — not be silently dropped from
+        // the cloned chart. Same-sheet ("Sheet1!") references additionally travel with the duplicate
+        // and are remapped onto the copy ("Sheet1 (2)"), matching Excel and the GridRange DataRange
+        // remap asserted in DuplicateSheet_SameSheetChartDataRange_IsRemappedOntoCopy. Cached
+        // embedded series data carries no sheet reference, so it is copied verbatim.
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
         var ctx = new TestCommandContext(wb);
@@ -120,11 +124,22 @@ public sealed class DSheetObjectsRegressionTests
         command.Apply(ctx).Success.Should().BeTrue();
 
         var copiedChart = wb.Sheets[1].Charts.Should().ContainSingle().Subject;
+        var expectedVerbatim = new List<ChartSeriesVerbatimFormulas>
+        {
+            new(SeriesIndex: 0,
+                ValFormula: "'Sheet1 (2)'!$A$1:$A$5,'Sheet1 (2)'!$C$1:$C$5",
+                CatFormula: null,
+                TxFormula: "'Sheet1 (2)'!$A$1")
+        };
+        var expectedRangeLabels = new List<ChartSeriesRangeDataLabels>
+        {
+            new(SeriesIndex: 0, Formula: "'Sheet1 (2)'!$D$1:$D$5", PointCount: 5, Points: [])
+        };
         copiedChart.VerbatimSeriesFormulas.Should().NotBeNull();
-        copiedChart.VerbatimSeriesFormulas.Should().BeEquivalentTo(verbatim);
+        copiedChart.VerbatimSeriesFormulas.Should().BeEquivalentTo(expectedVerbatim);
         copiedChart.EmbeddedSeriesData.Should().NotBeNull();
         copiedChart.EmbeddedSeriesData.Should().BeEquivalentTo(embedded);
-        copiedChart.SeriesRangeDataLabels.Should().BeEquivalentTo(rangeLabels);
+        copiedChart.SeriesRangeDataLabels.Should().BeEquivalentTo(expectedRangeLabels);
     }
 
     // ══════════════════════════════════════════════════════════════════════════

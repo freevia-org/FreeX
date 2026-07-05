@@ -207,6 +207,9 @@ public sealed class AnimationPane : Border
         return ExecutePlaybackControl(control, invokePreview: false);
     }
 
+    internal AnimationPaneReorderMutationPlan MoveAnimationForTest(int animationIndex, int offset)
+        => ApplyReorderMutation(animationIndex, offset);
+
     private AnimationPanePlaybackSessionPlan ExecutePlaybackControl(
         AnimationPanePlaybackControlDescriptor control,
         bool invokePreview)
@@ -400,11 +403,7 @@ public sealed class AnimationPane : Border
         };
         upBtn.Click += (_, _) =>
         {
-            if (capturedIndex > 0)
-            {
-                _editor.MoveAnimation(capturedIndex, capturedIndex - 1);
-                _selectedRowIndex = capturedIndex - 1;
-            }
+            ApplyReorderMutation(capturedIndex, -1);
         };
 
         // ── Move down button ────────────────────────────────────────────────────
@@ -424,12 +423,7 @@ public sealed class AnimationPane : Border
         };
         downBtn.Click += (_, _) =>
         {
-            var anims = _editor.CurrentSlideAnimations;
-            if (capturedIndex < anims.Count - 1)
-            {
-                _editor.MoveAnimation(capturedIndex, capturedIndex + 1);
-                _selectedRowIndex = capturedIndex + 1;
-            }
+            ApplyReorderMutation(capturedIndex, 1);
         };
 
         // ── Remove button ───────────────────────────────────────────────────────
@@ -532,6 +526,18 @@ public sealed class AnimationPane : Border
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────────
+
+    private AnimationPaneReorderMutationPlan ApplyReorderMutation(int animationIndex, int offset)
+    {
+        var plan = AnimationPanePlanner.BuildReorderMutationPlan(
+            _editor.CurrentSlideAnimations,
+            animationIndex,
+            offset);
+        if (AnimationPanePlanner.TryApplyReorderMutation(_editor, plan))
+            _selectedRowIndex = plan.SelectedAnimationIndex;
+
+        return plan;
+    }
 
     private AnimationPaneTimelinePlan BuildTimelinePlan()
         => AnimationPanePlanner.BuildTimelinePlan(

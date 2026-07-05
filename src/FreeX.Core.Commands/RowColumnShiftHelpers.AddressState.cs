@@ -1,3 +1,4 @@
+using System.Globalization;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -797,8 +798,91 @@ internal static partial class RowColumnShiftHelpers
         foreach (var table in snapshot.StructuredTables)
         {
             if (shift.ShiftRange(table.Range) is { } range)
-                sheet.StructuredTables.Add(CopyStructuredTableWithRange(table, range));
+                sheet.StructuredTables.Add(CopyStructuredTableWithRange(table, range, shift));
         }
+    }
+
+    // A column insert/delete that overlaps the table changes its Range width, but table.Columns
+    // (and FilterColumns, keyed by the same 0-based index) describe columns by position within the
+    // OLD range. Left untouched, every column after the shift point silently maps onto the wrong
+    // physical column (e.g. deleting the table's 3rd column would still leave 'Columns[3]' aligned
+    // with what is now physically the table's 4th-turned-3rd column). Reconcile the column list to
+    // the new width: drop columns whose position was deleted, and insert placeholder columns at the
+    // position(s) newly added to the table by the insert.
+    private static List<StructuredTableColumnModel> ReconcileStructuredTableColumns(
+        StructuredTableModel table,
+        GridRange newRange,
+        AddressShift shift)
+    {
+        if (shift.Axis != AddressShiftAxis.Columns)
+            return [.. table.Columns];
+
+        var oldRange = table.Range;
+        var usedNames = new HashSet<string>(
+            table.Columns.Select(column => column.Name),
+            StringComparer.OrdinalIgnoreCase);
+        var nextId = 1;
+        foreach (var existing in table.Columns)
+            nextId = Math.Max(nextId, existing.Id + 1);
+
+        var reconciled = new List<StructuredTableColumnModel>((int)newRange.ColCount);
+        for (var col = newRange.Start.Col; col <= newRange.End.Col; col++)
+        {
+            // Map this new physical column back to where it lived before the shift.
+            var oldCol = shift.Kind == AddressShiftKind.Insert
+                ? (col >= shift.Start && col <= shift.End ? (uint?)null : (col > shift.End ? col - shift.Count : col))
+                : (col >= shift.Start ? col + shift.Count : col);
+
+            if (oldCol is { } sourceCol && sourceCol >= oldRange.Start.Col && sourceCol <= oldRange.End.Col)
+            {
+                var oldIndex = (int)(sourceCol - oldRange.Start.Col);
+                if (oldIndex < table.Columns.Count)
+                {
+                    reconciled.Add(table.Columns[oldIndex]);
+                    continue;
+                }
+            }
+
+            // Newly-inserted column: Excel auto-names it "ColumnN" (N = 1-based physical position
+            // within the table, de-duplicated against every surviving name) and assigns it a fresh id.
+            var baseName = $"Column{reconciled.Count + 1}";
+            var name = baseName;
+            for (var suffix = 2; usedNames.Contains(name); suffix++)
+                name = $"{baseName}{suffix.ToString(CultureInfo.InvariantCulture)}";
+            usedNames.Add(name);
+            reconciled.Add(new StructuredTableColumnModel(nextId++, name));
+        }
+
+        return reconciled;
+    }
+
+    private static List<StructuredTableFilterColumnModel> ReconcileStructuredTableFilterColumns(
+        StructuredTableModel table,
+        GridRange newRange,
+        AddressShift shift)
+    {
+        if (shift.Axis != AddressShiftAxis.Columns)
+            return [.. table.FilterColumns.Select(column => CloneStructuredTableFilterColumn(column))];
+
+        var oldRange = table.Range;
+        var reconciled = new List<StructuredTableFilterColumnModel>();
+        foreach (var filterColumn in table.FilterColumns)
+        {
+            if (filterColumn.ColumnId < 0)
+                continue;
+
+            var absoluteColumn = oldRange.Start.Col + (uint)filterColumn.ColumnId;
+            if (shift.ShiftIndex(absoluteColumn) is not { } shiftedColumn)
+                continue;
+
+            var shiftedColumnId = (long)shiftedColumn - newRange.Start.Col;
+            if (shiftedColumnId < 0 || shiftedColumnId >= newRange.ColCount)
+                continue;
+
+            reconciled.Add(CloneStructuredTableFilterColumn(filterColumn, (int)shiftedColumnId));
+        }
+
+        return reconciled;
     }
 
     private static void ShiftPivotCaches(AddressBearingStateSnapshot snapshot, AddressShift shift)
@@ -996,7 +1080,10 @@ internal static partial class RowColumnShiftHelpers
             NativeAttributes = new Dictionary<string, string>(condition.NativeAttributes, StringComparer.Ordinal)
         };
 
-    private static StructuredTableModel CopyStructuredTableWithRange(StructuredTableModel table, GridRange range)
+    private static StructuredTableModel CopyStructuredTableWithRange(
+        StructuredTableModel table,
+        GridRange range,
+        AddressShift shift)
     {
         var clone = new StructuredTableModel
         {
@@ -1026,15 +1113,16 @@ internal static partial class RowColumnShiftHelpers
             NativeStyleInfoAttributes = CloneReadOnlyDictionary(table.NativeStyleInfoAttributes),
             NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls?.ToArray()
         };
-        clone.Columns.AddRange(table.Columns);
-        clone.FilterColumns.AddRange(table.FilterColumns.Select(CloneStructuredTableFilterColumn));
+        clone.Columns.AddRange(ReconcileStructuredTableColumns(table, range, shift));
+        clone.FilterColumns.AddRange(ReconcileStructuredTableFilterColumns(table, range, shift));
         return clone;
     }
 
     private static StructuredTableFilterColumnModel CloneStructuredTableFilterColumn(
-        StructuredTableFilterColumnModel column) =>
+        StructuredTableFilterColumnModel column,
+        int? columnId = null) =>
         new(
-            column.ColumnId,
+            columnId ?? column.ColumnId,
             column.Values.ToArray(),
             column.IncludeBlank,
             column.CustomFilters.Select(filter => new StructuredTableCustomFilterModel(

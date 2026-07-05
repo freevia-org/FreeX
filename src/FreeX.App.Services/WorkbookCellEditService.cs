@@ -44,6 +44,32 @@ public sealed class WorkbookCellEditService
         return ApplyHistoryOutcome(workbook, _commandBus.Execute(workbook.Id, command));
     }
 
+    /// <summary>
+    /// Executes <paramref name="commandFactory"/> as a repeatable command (F4 / Repeat Last
+    /// Action), matching the WPF host's <c>TryExecuteRepeatable*</c> helpers. The factory is
+    /// invoked again by <see cref="RepeatLastEdit"/> so it must re-resolve any live state (e.g.
+    /// the current selection) rather than closing over a stale range.
+    /// </summary>
+    public WorkbookCellEditResult ExecuteRepeatableEditCommand(Workbook workbook, Func<IWorkbookCommand> commandFactory)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(commandFactory);
+
+        return ApplyHistoryOutcome(workbook, _commandBus.ExecuteRepeatable(workbook.Id, commandFactory));
+    }
+
+    /// <summary>Repeats the last repeatable command (F4), matching Excel/the WPF host.</summary>
+    public WorkbookCellEditResult RepeatLastEdit(Workbook workbook)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+
+        return ApplyHistoryOutcome(workbook, _commandBus.RepeatLast(workbook.Id));
+    }
+
+    /// <summary>Whether a repeatable command is available to replay via <see cref="RepeatLastEdit"/>.</summary>
+    public bool CanRepeatLastEdit(WorkbookId workbookId) =>
+        _commandBus.CanRepeat(workbookId);
+
     public RecalcReport? RecalculateIfAutomatic(Workbook workbook, IReadOnlyList<CellAddress> affectedCells)
     {
         ArgumentNullException.ThrowIfNull(workbook);

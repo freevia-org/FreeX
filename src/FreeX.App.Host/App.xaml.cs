@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Media;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
@@ -58,6 +59,18 @@ public partial class App : Application
             : BrandThemes.FreeX;
         ActiveTheme = theme;
         WpfThemeApplier.Apply(this, theme, "FreeX");
+
+        // Keep the SystemColors.*Brush overrides in App.Resources (see App.xaml) in sync with a
+        // LIVE toggle of Windows High Contrast (or any other OS theme change) while FreeX is
+        // already running. Those overrides are plain <SolidColorBrush Color="{x:Static
+        // sys:SystemColors.XxxColor}"/> entries: the Color is read once at XAML-parse time and
+        // then frozen, so without this handler a user who turns HC on/off after launch would keep
+        // seeing the colors captured at startup instead of the OS's new palette.
+        // SystemParameters.StaticPropertyChanged fires for every SystemParameters/SystemColors
+        // property WPF is tracking, including HighContrast and the individual *Color properties
+        // it derives from — so re-applying our brushes on every notification keeps them current
+        // without needing to special-case the raised property.
+        SystemParameters.StaticPropertyChanged += (_, _) => RefreshSystemColorsBrushOverrides();
 
         // Velopack is invoked earlier, from Program.Main, before the WPF Application is created,
         // so install/update/uninstall hooks are serviced before any UI initializes.
@@ -231,6 +244,35 @@ public partial class App : Application
             }
             catch (Exception ex) { Log.Debug(ex, "Background update check failed."); }
         });
+    }
+
+    /// <summary>
+    /// Re-applies the SystemColors.*Brush overrides declared in App.xaml using the CURRENT OS
+    /// colors, so a live toggle of Windows High Contrast (or a regular theme/accent-color change)
+    /// while FreeX is already running is picked up immediately -- not just at process start.
+    ///
+    /// <para>
+    /// App.xaml intentionally overrides these specific SystemColors brush keys (rather than
+    /// leaving WPF's own dynamic resolution in place) so unstyled default control templates and
+    /// FreeX dialogs that bind {DynamicResource {x:Static SystemColors.XxxBrushKey}} keep
+    /// resolving through the SAME resource entry across a live change: <c>DynamicResource</c>
+    /// consumers re-pull the value from the dictionary whenever the resource identified by that
+    /// key is replaced, so swapping the <see cref="SolidColorBrush"/> instance in
+    /// <see cref="Application.Resources"/> is enough to push the new color out to every open
+    /// window/dialog without needing to touch each consumer.
+    /// </para>
+    /// </summary>
+    private void RefreshSystemColorsBrushOverrides()
+    {
+        var resources = Resources;
+        resources[SystemColors.WindowBrushKey] = new SolidColorBrush(SystemColors.WindowColor);
+        resources[SystemColors.ControlBrushKey] = new SolidColorBrush(SystemColors.ControlColor);
+        resources[SystemColors.MenuBrushKey] = new SolidColorBrush(SystemColors.MenuColor);
+        resources[SystemColors.MenuBarBrushKey] = new SolidColorBrush(SystemColors.MenuBarColor);
+        resources[SystemColors.ControlLightBrushKey] = new SolidColorBrush(SystemColors.ControlLightColor);
+        resources[SystemColors.ControlLightLightBrushKey] = new SolidColorBrush(SystemColors.ControlLightLightColor);
+        resources[SystemColors.ControlTextBrushKey] = new SolidColorBrush(SystemColors.ControlTextColor);
+        resources[SystemColors.MenuTextBrushKey] = new SolidColorBrush(SystemColors.MenuTextColor);
     }
 
     private static IReadOnlyList<string> GetStartupArgs(StartupEventArgs e)

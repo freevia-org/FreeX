@@ -445,8 +445,9 @@ public partial class MainWindow
             return;
         }
 
-        if (intent.Action == ExcelEditKeyAction.CommitAndMove && intent.Target is { } next)
+        if (intent.Action == ExcelEditKeyAction.CommitAndMove && intent.Target is { } rawNext)
         {
+            var next = AdjustTargetPastMerge(_workbook.GetSheet(_currentSheetId), editNavigationCurrent, rawNext);
             var text = _inlineEditor!.Text;
             FormulaBar.Text = text;
             if (string.IsNullOrEmpty(text))
@@ -468,6 +469,41 @@ public partial class MainWindow
             }
             e.Handled = true;
         }
+    }
+
+    /// <summary>
+    /// When <paramref name="from"/> (the cell that was just being edited) belongs to a merged
+    /// region and the plain +1/-1 step in <paramref name="next"/> still lands inside that same
+    /// merge, advances past the merge's far edge in the direction of travel instead. Without this,
+    /// Enter/Tab from inside a merge spanning more than one row/column recomputes "next" from the
+    /// merge's own top-left anchor (SetActiveCell always collapses the selection to the merge's
+    /// bounds), so a plain current+1 still falls inside the same merge and the cursor never
+    /// advances -- unlike Excel, which always steps past the whole merged block.
+    /// </summary>
+    private static CellAddress AdjustTargetPastMerge(Sheet? sheet, CellAddress from, CellAddress next)
+    {
+        if (sheet is not { MergedRegions.Count: > 0 } || sheet.GetMergeRegion(from) is not { } merge)
+            return next;
+
+        if (!merge.Contains(next))
+            return next;
+
+        var row = next.Row;
+        var col = next.Col;
+        if (next.Row != from.Row)
+        {
+            row = next.Row > from.Row
+                ? Math.Min(merge.End.Row + 1, CellAddress.MaxRow)
+                : (merge.Start.Row > 1 ? merge.Start.Row - 1 : 1u);
+        }
+        else if (next.Col != from.Col)
+        {
+            col = next.Col > from.Col
+                ? Math.Min(merge.End.Col + 1, CellAddress.MaxCol)
+                : (merge.Start.Col > 1 ? merge.Start.Col - 1 : 1u);
+        }
+
+        return new CellAddress(next.Sheet, row, col);
     }
 
     private static void InsertLineBreak(System.Windows.Controls.TextBox editor)
@@ -697,8 +733,9 @@ public partial class MainWindow
                     e.Handled = true;
                 }
             }
-            else if (intent.Action == ExcelEditKeyAction.CommitAndMove && intent.Target is { } target)
+            else if (intent.Action == ExcelEditKeyAction.CommitAndMove && intent.Target is { } rawTarget)
             {
+                var target = AdjustTargetPastMerge(_workbook.GetSheet(_currentSheetId), editNavigationCurrent, rawTarget);
                 if (CommitEdit())
                 {
                     HideInlineEditor(commit: false);
@@ -972,11 +1009,22 @@ public partial class MainWindow
                             DvAlertStyle.Warning => MessageBoxImage.Warning,
                             _ => MessageBoxImage.Error
                         };
+                        // Excel's three AskToContinue alert styles offer different button sets:
+                        // Information is OK/Cancel (OK = accept, Cancel = stay in the cell to
+                        // re-edit); Warning is Yes/No/Cancel (Yes = accept, No = stay in the cell
+                        // to re-edit, Cancel = discard the entry and restore the prior value).
                         var buttons = dvRule.AlertStyle == DvAlertStyle.Information
                             ? MessageBoxButton.OKCancel
-                            : MessageBoxButton.YesNo;
+                            : MessageBoxButton.YesNoCancel;
                         var result = ShowOwnedMessage(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
                             buttons, icon);
+                        if (result == MessageBoxResult.Cancel && dvRule.AlertStyle == DvAlertStyle.Warning)
+                        {
+                            RefreshValidationDropdown();
+                            RestoreFormulaBarToCommittedValue(addr);
+                            return false;
+                        }
+
                         if (result is MessageBoxResult.No or MessageBoxResult.Cancel)
                         {
                             RefreshValidationDropdown();
@@ -988,6 +1036,20 @@ public partial class MainWindow
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Discards the in-progress edit and restores the formula bar to the cell's currently
+    /// committed value/formula, mirroring what Escape does while editing. Used when a Warning-style
+    /// data validation alert is dismissed with Cancel: Excel discards the invalid entry entirely
+    /// rather than leaving it for the user to fix (that's what No does instead).
+    /// </summary>
+    private void RestoreFormulaBarToCommittedValue(CellAddress addr)
+    {
+        HideInlineEditor(commit: false);
+        var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr);
+        FormulaBar.Text = FormatFormulaBarText(cell, addr);
+        ClearFormulaRangeEntryState();
     }
 
     private bool CommitPreparedEdits(

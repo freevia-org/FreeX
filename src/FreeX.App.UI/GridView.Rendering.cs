@@ -16,6 +16,19 @@ public partial class GridView
 {
     // Grid rendering for freeze dividers, selection, headers, cells, borders, and text decorations.
 
+    // Mirrors the active sheet's Sheet.IsRightToLeft flag (Excel's sheetView rightToLeft="1") so cell
+    // text can be mirrored the same way the Avalonia shell already does via
+    // CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft. Host code (e.g. MainWindow.Viewport.cs)
+    // is expected to bind this to the active sheet whenever it changes, the same way ActiveSheetId is set.
+    public static readonly DependencyProperty IsSheetRightToLeftProperty =
+        DependencyProperty.Register(nameof(IsSheetRightToLeft), typeof(bool), typeof(GridView),
+            new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
+    public bool IsSheetRightToLeft
+    {
+        get => (bool)GetValue(IsSheetRightToLeftProperty);
+        set => SetValue(IsSheetRightToLeftProperty, value);
+    }
+
     private FreeX.App.Presentation.PageLayout.PageMarginGuideLayout? GetPageMarginGuidePixels(GridRange printArea)
     {
         if (Viewport == null) return null;
@@ -286,6 +299,9 @@ public partial class GridView
         var wrapText = style?.WrapText == true;
         var textRotation = style?.TextRotation ?? 0;
         var renderText = PrepareCellDisplayTextForRender(cell.DisplayText, textRotation);
+        var isEffectivelyRightToLeft = CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft(
+            style?.ReadingOrder ?? CellReadingOrder.Context, IsSheetRightToLeft);
+        var flowDirection = isEffectivelyRightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
         var fontSize = ToDisplayFontSize((style?.FontSize > 0) ? style!.FontSize : DefaultCellFontSizePoints);
         Brush textBrush = TextBrush;
 
@@ -319,7 +335,10 @@ public partial class GridView
         }
         var hasSplitRichRuns = splitRichRuns is { Count: > 0 };
 
-        var useDefaultTextLayout = !hasSplitRichRuns && CanUseDefaultFormattedText(style, wrapText);
+        // The cached default-layout fast paths below always build FlowDirection.LeftToRight text keyed
+        // without regard to reading order, so an effectively-RTL cell must bypass them and take the
+        // uncached branch, which honors flowDirection.
+        var useDefaultTextLayout = !hasSplitRichRuns && !isEffectivelyRightToLeft && CanUseDefaultFormattedText(style, wrapText);
         var wrapMaxTextWidth = wrapText ? Math.Max(1, rect.Width - 4) : 0;
         var wrapTextAlignment = TextAlignment.Left;
         var useDefaultWrappedTextLayout = false;
@@ -331,7 +350,7 @@ public partial class GridView
                 CellHAlign.Right => TextAlignment.Right,
                 _ => TextAlignment.Left
             };
-            useDefaultWrappedTextLayout = !hasSplitRichRuns && CanUseDefaultWrappedFormattedText(style);
+            useDefaultWrappedTextLayout = !hasSplitRichRuns && !isEffectivelyRightToLeft && CanUseDefaultWrappedFormattedText(style);
         }
         FormattedText text;
         if (useDefaultTextLayout)
@@ -351,7 +370,7 @@ public partial class GridView
             text = new FormattedText(
                     renderText,
                     CultureInfo.CurrentCulture,
-                    FlowDirection.LeftToRight,
+                    flowDirection,
                     typeface,
                     fontSize,
                     textBrush,
@@ -379,7 +398,8 @@ public partial class GridView
             style?.VerticalAlignment,
             isNumeric,
             indentPx,
-            textRotation);
+            textRotation,
+            isEffectivelyRightToLeft);
 
         // Fill alignment: repeat text horizontally to fill the cell width, clipped to textClipRect.
         if (hAlign == CellHAlign.Fill && text.Width > 0 && rect.Width > 0)
@@ -614,6 +634,9 @@ public partial class GridView
             bool wrapText  = style?.WrapText == true;
             var textRotation = style?.TextRotation ?? 0;
             var renderText = PrepareCellDisplayTextForRender(cell.DisplayText, textRotation);
+            var isEffectivelyRightToLeft = CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft(
+                style?.ReadingOrder ?? CellReadingOrder.Context, IsSheetRightToLeft);
+            var flowDirection = isEffectivelyRightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
 
             bool canOverflow = CanOverflowCellText(style, cell.RawValue, cell.DisplayText, cellMerge);
 
@@ -656,7 +679,9 @@ public partial class GridView
 
             // When the cell has per-run rich text, force the full (non-cached) FormattedText path so
             // ApplyRichRunFormatting can mutate font/color ranges without corrupting the shared cache.
-            var useDefaultTextLayout = !hasRichRuns && CanUseDefaultFormattedText(style, wrapText);
+            // Effectively-RTL cells must also take this path: the cached default-layout fast paths
+            // always build FlowDirection.LeftToRight text regardless of reading order.
+            var useDefaultTextLayout = !hasRichRuns && !isEffectivelyRightToLeft && CanUseDefaultFormattedText(style, wrapText);
             var wrapMaxTextWidth = wrapText ? Math.Max(1, rect.Width - 4) : 0;
             var wrapTextAlignment = TextAlignment.Left;
             var useDefaultWrappedTextLayout = false;
@@ -668,7 +693,7 @@ public partial class GridView
                     CellHAlign.Right => TextAlignment.Right,
                     _ => TextAlignment.Left
                 };
-                useDefaultWrappedTextLayout = !hasRichRuns && CanUseDefaultWrappedFormattedText(style);
+                useDefaultWrappedTextLayout = !hasRichRuns && !isEffectivelyRightToLeft && CanUseDefaultWrappedFormattedText(style);
             }
 
             FormattedText text;
@@ -690,7 +715,7 @@ public partial class GridView
                 text = new FormattedText(
                         renderText,
                         CultureInfo.CurrentCulture,
-                        FlowDirection.LeftToRight,
+                        flowDirection,
                         typeface, fontSize, textBrush,
                         pixelsPerDip);
             }
@@ -718,7 +743,8 @@ public partial class GridView
                 style?.VerticalAlignment,
                 isNumeric,
                 indentPx,
-                textRotation);
+                textRotation,
+                isEffectivelyRightToLeft);
 
             var clipRect = new Rect(rect.Left, rect.Top, renderWidth, rect.Height);
             if (canOverflow && textLayout.Bounds.Right > rect.Right)
@@ -1158,7 +1184,8 @@ public partial class GridView
         CellVAlign? vAlign,
         bool isNumeric,
         double indentPx,
-        int textRotation)
+        int textRotation,
+        bool isEffectivelyRightToLeft = false)
     {
         var layout = CellTextOrientationLayoutPlanner.CalculateLayout(
             new CellTextLayoutRect(rect.Left, rect.Top, rect.Width, rect.Height),
@@ -1168,7 +1195,8 @@ public partial class GridView
             vAlign,
             isNumeric,
             indentPx,
-            textRotation);
+            textRotation,
+            isEffectivelyRightToLeft);
         return ToWpfLayout(layout);
     }
 

@@ -491,8 +491,18 @@ public sealed partial class MainWindow
                 return;
 
             var preset = ConditionalFormatPresetChoices[presetBox.SelectedIndex].Preset;
+            var presetInput = ConditionalFormatPresetFactory.BuildInput(preset);
+
+            // BuildInput returns an identical AboveAverage CfRuleInput for both the AboveAverage
+            // and BelowAverage presets (the model has no dedicated field for the direction; it
+            // reuses IsTop/AboveAverage instead), so the Below Average choice must flip IsTop here
+            // the same way ConditionalFormatPresetFactory.BuildRule does for the ribbon's one-click
+            // apply path. Without this, picking "Below Average" silently seeds an Above Average rule.
+            if (preset == ConditionalFormatPreset.BelowAverage)
+                presetInput = presetInput with { IsTop = false };
+
             ApplyConditionalFormatPresetToEditor(
-                ConditionalFormatPresetFactory.BuildInput(preset),
+                presetInput,
                 ruleTypeBox, operatorBox, value1Box, rankBox, percentBox, topBottomBox,
                 iconSetBox, threeColorBox, minColorBox, midColorBox, maxColorBox);
             UpdateFieldVisibility();

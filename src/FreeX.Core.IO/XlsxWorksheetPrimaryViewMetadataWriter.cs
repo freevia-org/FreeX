@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -46,7 +47,13 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
             XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(
                 sheetView,
                 pvAttrs,
-                ["workbookViewId", "view", "showGridLines", "showRowColHeaders", "showRuler", "zoomScale", "showFormulas", "topLeftCell"]);
+                [
+                    "workbookViewId", "view", "showGridLines", "showRowColHeaders", "showRuler", "zoomScale",
+                    "showFormulas", "topLeftCell",
+                    "zoomScaleNormal", "zoomScaleSheetLayoutView", "zoomScalePageLayoutView"
+                ]);
+
+            RefreshPerViewModeZoom(sheetView, sheet, pvAttrs);
 
             if (pvChildren.Count > 0)
             {
@@ -69,6 +76,40 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
 
     private static bool IsModeledPrimaryViewElement(string name) =>
         name is "pane" or "selection";
+
+    private static readonly string[] PerViewModeZoomAttributeNames =
+        ["zoomScaleNormal", "zoomScaleSheetLayoutView", "zoomScalePageLayoutView"];
+
+    // FreeX models a single live Sheet.ZoomPercent for whichever view mode is current (Sheet.ViewMode)
+    // and has no per-view-mode zoom memory of its own. Excel additionally remembers the zoom last used
+    // in each of the three view modes via zoomScaleNormal/zoomScaleSheetLayoutView/
+    // zoomScalePageLayoutView. Those three attributes are excluded from the bulk ApplyNativeAttributes
+    // call above so a stale load-time bag value is never blindly reapplied over a live zoom change; here
+    // we re-seed all three from the load-time bag (preserving Excel's per-view-mode zoom memory for the
+    // two view modes the user is not currently in), then overwrite just the current view mode's
+    // attribute with the live Sheet.ZoomPercent so it never goes stale relative to the live zoomScale
+    // that XlsxWorksheetViewWriter already wrote.
+    private static void RefreshPerViewModeZoom(
+        XElement sheetView,
+        Sheet sheet,
+        IReadOnlyDictionary<string, string>? pvAttrs)
+    {
+        foreach (var attributeName in PerViewModeZoomAttributeNames)
+        {
+            if (pvAttrs is not null && pvAttrs.TryGetValue(attributeName, out var staleValue))
+                XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(sheetView, attributeName, staleValue);
+        }
+
+        var currentZoomAttribute = XlsxWorksheetValueSanitizer.ValidEnumOrDefault(sheet.ViewMode, WorksheetViewMode.Normal) switch
+        {
+            WorksheetViewMode.PageBreakPreview => "zoomScaleSheetLayoutView",
+            WorksheetViewMode.PageLayout => "zoomScalePageLayoutView",
+            _ => "zoomScaleNormal"
+        };
+
+        var zoomValue = sheet.ZoomPercent.ToString(CultureInfo.InvariantCulture);
+        XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(sheetView, currentZoomAttribute, zoomValue);
+    }
 
     private static XElement? FindPrimarySheetView(XElement sheetViews)
     {
