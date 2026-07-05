@@ -122,6 +122,7 @@ public sealed class ResolvedParagraph
     public int Level { get; init; }
     public BulletKind BulletKind { get; init; } = BulletKind.None;
     public string? BulletChar { get; init; }
+    public ImagePart? BulletImage { get; init; }
     public double SpaceBeforePt { get; init; }
     public double SpaceAfterPt { get; init; }
 

@@ -44,8 +44,12 @@ public readonly record struct TextBulletPlacement(
     string FontFamily,
     double FontSizePt,
     SrgbColor Color,
+    ImagePart? Image,
     double X,
-    double Y);
+    double Y)
+{
+    public bool IsImage => Image is not null;
+}
 
 public readonly record struct TextTabSegmentPlacement(
     int RunIndex,
@@ -325,6 +329,7 @@ public static class TextLayoutPlanner
             BulletColor = paragraph.BulletColor,
             BulletFontFamily = paragraph.BulletFontFamily,
             BulletFontSizePt = paragraph.BulletFontSizePt * scale,
+            BulletImage = paragraph.BulletImage,
             IndentDip = paragraph.IndentDip,
             HangingDip = paragraph.HangingDip
         };
@@ -670,7 +675,7 @@ public static class TextLayoutPlanner
         double paragraphX,
         double paragraphY)
     {
-        if (string.IsNullOrEmpty(paragraph.BulletText))
+        if (paragraph.BulletImage is null && string.IsNullOrEmpty(paragraph.BulletText))
             return null;
 
         return new TextBulletPlacement(
@@ -678,6 +683,7 @@ public static class TextLayoutPlanner
             paragraph.BulletFontFamily,
             paragraph.BulletFontSizePt,
             paragraph.BulletColor,
+            paragraph.BulletImage,
             paragraphX - paragraph.HangingDip,
             paragraphY);
     }

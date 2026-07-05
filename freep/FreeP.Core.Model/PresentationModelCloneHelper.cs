@@ -148,6 +148,7 @@ internal static class PresentationModelCloneHelper
             BulletKind = source.BulletKind,
             BulletSuppressed = source.BulletSuppressed,
             BulletChar = source.BulletChar,
+            BulletImage = CloneImagePart(source.BulletImage),
             AutoNumType = source.AutoNumType,
             AutoNumStartAt = source.AutoNumStartAt,
             MarginLeftEmu = source.MarginLeftEmu,
@@ -175,6 +176,15 @@ internal static class PresentationModelCloneHelper
 
         return copy;
     }
+
+    private static ImagePart? CloneImagePart(ImagePart? source) =>
+        source is null
+            ? null
+            : new ImagePart
+            {
+                Bytes = source.Bytes.ToArray(),
+                ContentType = source.ContentType
+            };
 
     private static Run CloneRun(Run source) => new()
     {

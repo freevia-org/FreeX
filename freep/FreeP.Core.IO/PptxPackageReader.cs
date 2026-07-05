@@ -2693,7 +2693,7 @@ public static class PptxPackageReader
         shape.AutoShapeKind = PptxShapeKindMap.FromPreset(prst);
 
         var txBody = sp.Element(P + "txBody");
-        if (txBody is not null) shape.TextBody = ReadTxBody(txBody, scheme, slideRels, allSlides, slideDir, slidePartPathToId);
+        if (txBody is not null) shape.TextBody = ReadTxBody(txBody, scheme, slideRels, allSlides, slideDir, slidePartPathToId, archive, partPath);
 
         return shape;
     }
@@ -3442,7 +3442,9 @@ public static class PptxPackageReader
         IReadOnlyList<OpcRelationshipTarget>? slideRels = null,
         List<Slide>? allSlides = null,
         string? slideDir = null,
-        IReadOnlyDictionary<string, string>? slidePartPathToId = null)
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null,
+        ZipArchive? archive = null,
+        string? partPath = null)
     {
         var body = new TextBody();
 
@@ -3543,7 +3545,7 @@ public static class PptxPackageReader
         }
 
         foreach (var pEl in txBody.Elements(A + "p"))
-            body.Paragraphs.Add(ReadParagraph(pEl, scheme, slideRels, allSlides, slideDir, slidePartPathToId));
+            body.Paragraphs.Add(ReadParagraph(pEl, scheme, slideRels, allSlides, slideDir, slidePartPathToId, archive, partPath));
 
         return body;
     }
@@ -3552,7 +3554,9 @@ public static class PptxPackageReader
         IReadOnlyList<OpcRelationshipTarget>? slideRels = null,
         List<Slide>? allSlides = null,
         string? slideDir = null,
-        IReadOnlyDictionary<string, string>? slidePartPathToId = null)
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null,
+        ZipArchive? archive = null,
+        string? partPath = null)
     {
         var para = new Paragraph();
         var pPr = pEl.Element(A + "pPr");
@@ -3586,6 +3590,12 @@ public static class PptxPackageReader
                 para.AutoNumType = ParseAutoNumType(buAutoNum.Attribute("type")?.Value);
                 if (int.TryParse(buAutoNum.Attribute("startAt")?.Value, out var startAt) && startAt >= 1)
                     para.AutoNumStartAt = startAt;
+            }
+            else if (pPr.Element(A + "buBlip") is { } buBlip)
+            {
+                para.BulletImage = ReadBulletImage(buBlip, slideRels, archive, partPath);
+                if (para.BulletImage is not null)
+                    para.BulletKind = BulletKind.Image;
             }
 
             // Wave 19A: marL/indent/buClr/buSzPct/buFont
@@ -3682,6 +3692,32 @@ public static class PptxPackageReader
         }
 
         return para;
+    }
+
+    private static ImagePart? ReadBulletImage(
+        XElement buBlip,
+        IReadOnlyList<OpcRelationshipTarget>? slideRels,
+        ZipArchive? archive,
+        string? partPath)
+    {
+        var embedId = buBlip.Element(A + "blip")?.Attribute(R + "embed")?.Value
+            ?? buBlip.Descendants(A + "blip").FirstOrDefault()?.Attribute(R + "embed")?.Value;
+        if (string.IsNullOrWhiteSpace(embedId) || slideRels is null || archive is null || partPath is null)
+            return null;
+
+        var imageTarget = slideRels.FirstOrDefault(r => r.Id == embedId && r.Type == ImageRelType).Target;
+        if (string.IsNullOrWhiteSpace(imageTarget))
+            return null;
+
+        var imagePath = ResolveRelativeZipPath(GetDirectoryName(partPath), imageTarget);
+        var bytes = ReadEntryBytes(archive, imagePath);
+        return bytes is null
+            ? null
+            : new ImagePart
+            {
+                Bytes = bytes,
+                ContentType = OpcMediaTypes.GetDrawingMediaContentType(imagePath)
+            };
     }
 
     // ── OMML math run parsing (Theme 21) ─────────────────────────────────────────

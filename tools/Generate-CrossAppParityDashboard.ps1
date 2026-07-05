@@ -249,7 +249,7 @@ try {
             commandIdAliases = [int]$freep.summary.commandIdAliases
             workflowEvidenceRows = [int](Get-JsonPropertyValue $freep.summary "workflowEvidenceRows")
         }
-        nextSlice = "Layout picker, table picker, rich inline table/text editing, shared visible list galleries, slide-pane reorder, bottom New Slide, notes-page preview/PDF rendering, export/backstage package-handoff, presenter recording backend contracts, ink execution with repeated custom-show route retention, modern comments/review, and accessibility/proofing workflow depth now have WPF/Avalonia no-COM evidence paths. Continue workflow-depth slices in real microphone/camera adapters plus PPTX media-part authoring, picture-bullet import/rendering/picker execution, animation-pane workflows, and PowerPoint/package baselines."
+        nextSlice = "Layout picker, table picker, rich inline table/text editing, shared visible list galleries, picture-bullet import/rendering, slide-pane reorder, bottom New Slide, notes-page preview/PDF rendering, export/backstage package-handoff, presenter recording backend contracts, ink execution with repeated custom-show route retention, modern comments/review, and accessibility/proofing workflow depth now have WPF/Avalonia no-COM evidence paths. Continue workflow-depth slices in real microphone/camera adapters plus PPTX media-part authoring, picture-bullet picker execution, animation-pane workflows, and PowerPoint/package baselines."
     }
 
     $dashboard = [ordered]@{

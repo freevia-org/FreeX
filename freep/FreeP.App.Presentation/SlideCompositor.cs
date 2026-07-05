@@ -997,6 +997,7 @@ public static class SlideCompositor
                 Level        = para.Level,
                 BulletKind   = para.BulletKind,
                 BulletChar   = para.BulletChar,
+                BulletImage  = para.BulletImage,
                 SpaceBeforePt = para.SpaceBeforePt ?? 0,
                 SpaceAfterPt  = para.SpaceAfterPt ?? 0
             });
@@ -1396,6 +1397,7 @@ public static class SlideCompositor
             // Determine effective bullet kind (paragraph > inherited style).
             var effectiveBulletKind = para.BulletKind;
             string? effectiveBulletChar = para.BulletChar;
+            ImagePart? effectiveBulletImage = para.BulletImage;
             AutoNumType effectiveAutoNumType = para.AutoNumType;
             ThemeAwareColor? effectiveBulletColor = null;
             if (para.BulletColorFollowsText)
@@ -1524,6 +1526,7 @@ public static class SlideCompositor
                 Level = para.Level,
                 BulletKind = effectiveBulletKind,
                 BulletChar = effectiveBulletChar,
+                BulletImage = effectiveBulletKind == BulletKind.Image ? effectiveBulletImage : null,
                 SpaceBeforePt = para.SpaceBeforePt ?? 0,
                 SpaceAfterPt = para.SpaceAfterPt ?? 0,
                 TabStops = resolvedTabStops,  // Wave 18B

@@ -73,7 +73,7 @@ public static class PresentationListGalleryPlanner
                     PresentationListGalleryItemKind.ImageBulletPlaceholder,
                     null,
                     IsEnabled: false,
-                    "Picture bullet chooser is deferred until image bullet import and rendering are implemented."))
+                    "Picture bullet chooser is deferred until media-part authoring and picker execution are implemented."))
                 .ToArray(),
             ImageBulletCommandId);
 
