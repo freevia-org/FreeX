@@ -1099,6 +1099,10 @@ public sealed class SlideShowWindow : Window
                 RandomBarsEffect(sb, element, plan);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Box:
+                BoxEffect(sb, element, plan);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Zoom:
                 ZoomEffect(sb, element, plan);
                 break;
@@ -1307,6 +1311,34 @@ public sealed class SlideShowWindow : Window
         Storyboard.SetTarget(opacityAnim, el);
         Storyboard.SetTargetProperty(opacityAnim, new PropertyPath(OpacityProperty));
         sb.Children.Add(opacityAnim);
+    }
+
+    private static void BoxEffect(Storyboard sb, FrameworkElement el,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        double w = el.Width  > 0 ? el.Width  : 960;
+        double h = el.Height > 0 ? el.Height : 540;
+
+        var center = new Rect(w / 2, h / 2, 0, 0);
+        var full = new Rect(0, 0, w, h);
+        var from = plan.BoxExpandsFromCenter ? center : full;
+        var to = plan.BoxExpandsFromCenter ? full : center;
+
+        var clip = new RectangleGeometry(from);
+        el.Clip = clip;
+        el.Opacity = 1;
+
+        var anim = new RectAnimation(
+            from,
+            to,
+            new Duration(TimeSpan.FromMilliseconds(plan.DurationMs)))
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+        };
+        Storyboard.SetTarget(anim, el);
+        Storyboard.SetTargetProperty(anim, new PropertyPath("Clip.Rect"));
+        sb.Children.Add(anim);
     }
 
     private void ZoomEffect(Storyboard sb, FrameworkElement el,

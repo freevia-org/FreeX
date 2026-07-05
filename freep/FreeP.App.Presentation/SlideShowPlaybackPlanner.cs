@@ -24,6 +24,7 @@ public enum SlideShowShapeAnimationEffectKind
     Wipe,
     Split,
     RandomBars,
+    Box,
     Zoom,
     Pulse,
     GrowShrink,
@@ -58,6 +59,7 @@ public sealed record SlideShowShapeAnimationPlaybackPlan(
     double OffsetXFactor,
     double OffsetYFactor,
     bool WipeHorizontal,
+    bool BoxExpandsFromCenter,
     IReadOnlyList<SlideShowMotionPathKeyFrame> MotionKeyFrames);
 
 public sealed record SlideShowFallbackAnimationPlaybackPlan(
@@ -128,6 +130,7 @@ public static class SlideShowPlaybackPlanner
             offsetX,
             offsetY,
             IsHorizontalWipe(animation.Direction),
+            BoxExpandsFromCenter(animation),
             BuildMotionKeyFrames(animation.Motion));
     }
 
@@ -161,6 +164,7 @@ public static class SlideShowPlaybackPlanner
             AnimationPreset.Wipe => SlideShowShapeAnimationEffectKind.Wipe,
             AnimationPreset.Split => SlideShowShapeAnimationEffectKind.Split,
             AnimationPreset.RandomBars => SlideShowShapeAnimationEffectKind.RandomBars,
+            AnimationPreset.Box => SlideShowShapeAnimationEffectKind.Box,
             AnimationPreset.Zoom => SlideShowShapeAnimationEffectKind.Zoom,
             AnimationPreset.Pulse => SlideShowShapeAnimationEffectKind.Pulse,
             AnimationPreset.Grow or AnimationPreset.Shrink => SlideShowShapeAnimationEffectKind.GrowShrink,
@@ -229,6 +233,14 @@ public static class SlideShowPlaybackPlanner
             or AnimationDirection.FromRight
             or AnimationDirection.Horizontal
             or null;
+
+    private static bool BoxExpandsFromCenter(ShapeAnimation animation) =>
+        animation.Direction switch
+        {
+            AnimationDirection.In => true,
+            AnimationDirection.Out => false,
+            _ => animation.Kind != AnimationKind.Exit
+        };
 
     private static IReadOnlyList<SlideShowMotionPathKeyFrame> BuildMotionKeyFrames(MotionPath? path)
     {
