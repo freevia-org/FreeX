@@ -11,6 +11,8 @@ public sealed class SourceManagementDialogPlannerTests
         {
             Tag = "Knuth1997",
             Author = "Knuth",
+            Editors = [SourceAuthorPerson.Create("Alice", "Q.", "Editor")],
+            Translators = [SourceAuthorPerson.Create("Boris", string.Empty, "Translator")],
             Title = "TAOCP",
             Year = "1997",
             Publisher = "AW",
@@ -26,6 +28,8 @@ public sealed class SourceManagementDialogPlannerTests
         plans.Select(plan => plan.Field).Should().Equal(
             SourceManagementSourceField.Tag,
             SourceManagementSourceField.Author,
+            SourceManagementSourceField.Editor,
+            SourceManagementSourceField.Translator,
             SourceManagementSourceField.Title,
             SourceManagementSourceField.Year,
             SourceManagementSourceField.City,
@@ -37,6 +41,8 @@ public sealed class SourceManagementDialogPlannerTests
         plans.Select(plan => plan.Label).Should().Equal(
             "Tag (short id):",
             "Author:",
+            "Editor:",
+            "Translator:",
             "Title:",
             "Year:",
             "City:",
@@ -48,6 +54,8 @@ public sealed class SourceManagementDialogPlannerTests
         plans.Select(plan => plan.Text).Should().Equal(
             "Knuth1997",
             "Knuth",
+            "Alice Q. Editor",
+            "Boris Translator",
             "TAOCP",
             "1997",
             "Reading",
@@ -138,6 +146,8 @@ public sealed class SourceManagementDialogPlannerTests
         bookSectionPlans.Select(plan => plan.Field).Should().Equal(
             SourceManagementSourceField.Tag,
             SourceManagementSourceField.Author,
+            SourceManagementSourceField.Editor,
+            SourceManagementSourceField.Translator,
             SourceManagementSourceField.Title,
             SourceManagementSourceField.BookTitle,
             SourceManagementSourceField.Year,
@@ -257,6 +267,8 @@ public sealed class SourceManagementDialogPlannerTests
             Type = SourceType.BookSection,
             Tag = "Ch1",
             Author = "Chapter Author",
+            Editors = [SourceAuthorPerson.Create("Edna", "Q.", "Editor")],
+            Translators = [SourceAuthorPerson.Create("Tara", string.Empty, "Translator")],
             Title = "The Chapter",
             BookTitle = "The Containing Book",
             Year = "2026",
@@ -272,7 +284,13 @@ public sealed class SourceManagementDialogPlannerTests
         var plans = SourceManagementDialogPlanner.BuildEntryFieldPlans(entry);
 
         entry.BookTitle.Should().Be("The Containing Book");
+        entry.Editor.Should().Be("Edna Q. Editor");
+        entry.Translator.Should().Be("Tara Translator");
         entry.ChapterNumber.Should().Be("3");
+        plans.Single(plan => plan.Field == SourceManagementSourceField.Editor)
+            .Text.Should().Be("Edna Q. Editor");
+        plans.Single(plan => plan.Field == SourceManagementSourceField.Translator)
+            .Text.Should().Be("Tara Translator");
         plans.Single(plan => plan.Field == SourceManagementSourceField.BookTitle)
             .Text.Should().Be("The Containing Book");
         plans.Single(plan => plan.Field == SourceManagementSourceField.ChapterNumber)
@@ -438,6 +456,26 @@ public sealed class SourceManagementDialogPlannerTests
     }
 
     [Fact]
+    public void CreateEntry_ImportsEditorAndTranslatorContributorRows()
+    {
+        var entry = SourceManagementDialogPlanner.CreateEntry(
+            SourceType.Book,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Editor] = " Jane Q. Doe ; Smith, Alex ",
+                [SourceManagementSourceField.Translator] = " Plato "
+            });
+
+        entry.Editor.Should().Be("Jane Q. Doe; Alex Smith");
+        entry.Editors.Should().Equal(
+            SourceAuthorPerson.Create("Jane", "Q.", "Doe"),
+            SourceAuthorPerson.Create("Alex", string.Empty, "Smith"));
+        entry.Translator.Should().Be("Plato");
+        entry.Translators.Should().ContainSingle()
+            .Which.Should().Be(SourceAuthorPerson.Create(null, null, "Plato"));
+    }
+
+    [Fact]
     public void DescribeSource_FormatsAuthorYearTitleAndGracefulFallbacks()
     {
         SourceManagementDialogPlanner.DescribeSource(new Source
@@ -541,6 +579,25 @@ public sealed class SourceManagementDialogPlannerTests
         source.Should().NotBeNull();
         source!.Type.Should().Be(SourceType.Report);
         source.Institution.Should().Be("National Bureau of Standards");
+
+        SourceManagementDialogPlanner.TryBuildCitationSource(
+                SourceManagementDialogPlanner.CreateEntry(
+                    SourceType.Book,
+                    new Dictionary<SourceManagementSourceField, string?>
+                    {
+                        [SourceManagementSourceField.Editor] = " Jane Editor ",
+                        [SourceManagementSourceField.Translator] = " Taylor, Sam "
+                    }),
+                out source,
+                out validation)
+            .Should().BeTrue();
+
+        validation.Should().BeNull();
+        source.Should().NotBeNull();
+        source!.Editors.Should().ContainSingle()
+            .Which.Should().Be(SourceAuthorPerson.Create("Jane", string.Empty, "Editor"));
+        source.Translators.Should().ContainSingle()
+            .Which.Should().Be(SourceAuthorPerson.Create("Sam", string.Empty, "Taylor"));
     }
 
     [Fact]
@@ -737,6 +794,8 @@ public sealed class SourceManagementDialogPlannerTests
             {
                 [SourceManagementSourceField.Tag] = " Ch1 ",
                 [SourceManagementSourceField.Author] = " Chapter Author ",
+                [SourceManagementSourceField.Editor] = " Ellen Editor ",
+                [SourceManagementSourceField.Translator] = " Theo Translator ",
                 [SourceManagementSourceField.Title] = " Chapter Title ",
                 [SourceManagementSourceField.BookTitle] = " Containing Book ",
                 [SourceManagementSourceField.Year] = " 2026 ",
@@ -759,6 +818,10 @@ public sealed class SourceManagementDialogPlannerTests
 
         source.Type.Should().Be(SourceType.BookSection);
         source.Author.Should().Be("Chapter Author");
+        source.Editors.Should().ContainSingle()
+            .Which.Should().Be(SourceAuthorPerson.Create("Ellen", string.Empty, "Editor"));
+        source.Translators.Should().ContainSingle()
+            .Which.Should().Be(SourceAuthorPerson.Create("Theo", string.Empty, "Translator"));
         source.Title.Should().Be("Chapter Title");
         source.BookTitle.Should().Be("Containing Book");
         source.Year.Should().Be("2026");
@@ -885,6 +948,27 @@ public sealed class SourceManagementDialogPlannerTests
     }
 
     [Fact]
+    public void BuildSource_ClearsContributorRolesOutsideBookFamilies()
+    {
+        var source = SourceManagementDialogPlanner.BuildSource(
+            SourceManagementDialogPlanner.ProjectEntry(new Source
+            {
+                Type = SourceType.Book,
+                Editors = [SourceAuthorPerson.Create("Ellen", string.Empty, "Editor")],
+                Translators = [SourceAuthorPerson.Create("Theo", string.Empty, "Translator")]
+            }) with
+            {
+                Type = SourceType.WebSite,
+                Title = "Web Source",
+                Url = "https://example.test"
+            });
+
+        source.Type.Should().Be(SourceType.WebSite);
+        source.Editors.Should().BeEmpty();
+        source.Translators.Should().BeEmpty();
+    }
+
+    [Fact]
     public void BuildSource_ProjectsStructuredAndCorporateAuthors()
     {
         var personal = SourceManagementDialogPlanner.BuildSource(
@@ -930,6 +1014,8 @@ public sealed class SourceManagementDialogPlannerTests
             Tag = "Doc",
             Author = "Ada Lovelace",
             PersonalAuthors = [SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace")],
+            Editors = [SourceAuthorPerson.Create("Edna", string.Empty, "Editor")],
+            Translators = [SourceAuthorPerson.Create("Tara", string.Empty, "Translator")],
             Type = SourceType.Report,
             Institution = "Analytical Society",
             BookTitle = "Collected Notes",
@@ -948,6 +1034,8 @@ public sealed class SourceManagementDialogPlannerTests
         state.CurrentSources[0].Tag.Should().Be("Doc");
         state.CurrentSources[0].Type.Should().Be(SourceType.Report);
         state.CurrentSources[0].PersonalAuthors.Should().BeEquivalentTo(current.PersonalAuthors);
+        state.CurrentSources[0].Editors.Should().BeEquivalentTo(current.Editors);
+        state.CurrentSources[0].Translators.Should().BeEquivalentTo(current.Translators);
         state.CurrentSources[0].Institution.Should().Be("Analytical Society");
         state.CurrentSources[0].BookTitle.Should().Be("Collected Notes");
         state.CurrentSources[0].City.Should().Be("London");

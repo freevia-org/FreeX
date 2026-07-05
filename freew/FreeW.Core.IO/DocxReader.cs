@@ -503,6 +503,8 @@ public static class DocxReader
         foreach (var element in root.Elements(B + "Source"))
         {
             var author = ReadBibliographyAuthor(element);
+            var editors = ReadBibliographyPersonalContributors(element, "Editor");
+            var translators = ReadBibliographyPersonalContributors(element, "Translator");
             var dayAccessed = Field(element, "DayAccessed");
             var monthAccessed = Field(element, "MonthAccessed");
             var yearAccessed = Field(element, "YearAccessed");
@@ -515,6 +517,8 @@ public static class DocxReader
                 Author = author.DisplayText,
                 PersonalAuthors = author.PersonalAuthors,
                 CorporateAuthor = author.CorporateAuthor,
+                Editors = editors,
+                Translators = translators,
                 Title = Field(element, "Title") ?? string.Empty,
                 BookTitle = Field(element, "BookTitle"),
                 ConferenceName = Field(element, "ConferenceName"),
@@ -548,32 +552,48 @@ public static class DocxReader
 
     private static BibliographyAuthorInfo ReadBibliographyAuthor(XElement source)
     {
-        var author = source.Element(B + "Author");
-        if (author is null)
+        var role = source.Element(B + "Author")?.Element(B + "Author");
+        if (role is null)
             return BibliographyAuthorInfo.Empty;
 
-        var corporate = author.Element(B + "Author")?.Element(B + "Corporate")?.Value;
+        var corporate = role.Element(B + "Corporate")?.Value;
         if (!string.IsNullOrWhiteSpace(corporate))
         {
             var trimmed = corporate.Trim();
             return new BibliographyAuthorInfo(trimmed, [], trimmed);
         }
 
-        var people = author.Descendants(B + "Person")
-            .Select(Person)
-            .Where(person => !person.IsEmpty)
+        var people = ReadPeople(role)
             .ToList();
         if (people.Count > 0)
             return new BibliographyAuthorInfo(SourceAuthorPerson.FormatDisplayText(people), people, CorporateAuthor: null);
 
-        return new BibliographyAuthorInfo((author.Value ?? string.Empty).Trim(), [], CorporateAuthor: null);
-
-        static SourceAuthorPerson Person(XElement person) =>
-            SourceAuthorPerson.Create(
-                person.Element(B + "First")?.Value,
-                person.Element(B + "Middle")?.Value,
-                person.Element(B + "Last")?.Value);
+        return new BibliographyAuthorInfo((role.Value ?? string.Empty).Trim(), [], CorporateAuthor: null);
     }
+
+    private static IReadOnlyList<SourceAuthorPerson> ReadBibliographyPersonalContributors(
+        XElement source,
+        string roleName)
+    {
+        var role = source.Element(B + "Author")?.Element(B + roleName);
+        if (role is null)
+            return [];
+
+        return ReadPeople(role).ToList();
+    }
+
+    private static IEnumerable<SourceAuthorPerson> ReadPeople(XElement role) =>
+        role.Element(B + "NameList")?
+            .Elements(B + "Person")
+            .Select(Person)
+            .Where(person => !person.IsEmpty)
+        ?? [];
+
+    private static SourceAuthorPerson Person(XElement person) =>
+        SourceAuthorPerson.Create(
+            person.Element(B + "First")?.Value,
+            person.Element(B + "Middle")?.Value,
+            person.Element(B + "Last")?.Value);
 
     private sealed record BibliographyAuthorInfo(
         string DisplayText,

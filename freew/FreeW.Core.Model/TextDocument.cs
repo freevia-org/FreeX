@@ -1366,6 +1366,16 @@ public sealed class Source
     /// </summary>
     public string? CorporateAuthor { get; init; }
 
+    /// <summary>
+    /// Structured personal editors parsed from or written to Word <c>b:Editor/b:NameList/b:Person</c> rows.
+    /// </summary>
+    public IReadOnlyList<SourceAuthorPerson> Editors { get; init; } = [];
+
+    /// <summary>
+    /// Structured personal translators parsed from or written to Word <c>b:Translator/b:NameList/b:Person</c> rows.
+    /// </summary>
+    public IReadOnlyList<SourceAuthorPerson> Translators { get; init; } = [];
+
     /// <summary>The title of the work. Empty when unknown.</summary>
     public string Title { get; init; } = string.Empty;
 
