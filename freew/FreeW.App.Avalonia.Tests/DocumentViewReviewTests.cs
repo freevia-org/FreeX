@@ -975,6 +975,8 @@ public sealed class DocumentViewReviewTests
             "freew.reject-this",
             "freew.accept-all",
             "freew.reject-all",
+            "freew.previous-change",
+            "freew.next-change",
             "freew.mark-as-final",
             "freew.restrict-editing",
             "freew.inspect-document",
@@ -1129,7 +1131,7 @@ public sealed class DocumentViewReviewTests
             "freew.spellcheck-toggle", "freew.add-to-dictionary",
             "freew.thesaurus", "freew.set-proofing-language",
             "freew.check-accessibility", "freew.accept-this", "freew.reject-this",
-            "freew.accept-all", "freew.reject-all", "freew.new-comment",
+            "freew.accept-all", "freew.reject-all", "freew.previous-change", "freew.next-change", "freew.new-comment",
             "freew.delete-comment", "freew.previous-comment", "freew.next-comment",
             "freew.reply-comment", "freew.resolve-comment", "freew.show-comments",
             "freew.mark-as-final", "freew.restrict-editing",
@@ -1183,6 +1185,23 @@ public sealed class DocumentViewReviewTests
             "mark-final",
             "restrict",
         });
+    }
+
+    [Fact]
+    public void Review_change_navigation_commands_route_to_host_callbacks()
+    {
+        var calls = new List<string>();
+        var callbacks = NoopCallbacks() with
+        {
+            PreviousChange = () => calls.Add("previous-change"),
+            NextChange = () => calls.Add("next-change"),
+        };
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks);
+
+        Execute(registry, "freew.previous-change");
+        Execute(registry, "freew.next-change");
+
+        calls.Should().Equal("previous-change", "next-change");
     }
 
     [Fact]

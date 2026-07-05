@@ -137,6 +137,65 @@ internal static class FreeWCommandInventory
             "Toggles the resolved state for the comment thread at the caret through WPF editor behavior and Avalonia registry execution.",
             "ThreadedCommentCommandTests.ToggleResolveCommentAtCaret_TogglesResolved",
             "DocumentViewReviewTests.ResolveComment_registry_command_toggles_the_comment_at_the_caret"),
+        ["freew.track-changes"] = ReviewTrackingEvidence(
+            "Toggles the WPF Track Changes state through the ribbon command and proves Avalonia records typed edits as tracked insertions while Track Changes is enabled.",
+            "freew/FreeW.App.Avalonia.Tests/DocumentViewTrackEditTests.cs",
+            "DocumentViewTrackEditTests.Typing_with_TrackChanges_on_records_a_tracked_insertion"),
+        ["freew.reviewing-pane"] = ReviewPaneEvidence(
+            "Surfaces tracked revisions in the Reviewing Pane data path and resolves pane entries through the shared revision list behavior.",
+            "ReviewingPaneTests.ListRevisions_SurfacesEveryTrackedChangeInReadingOrder",
+            "ReviewingPaneTests.AcceptEntry_Insertion_Keeps_Run_As_Ordinary_Text"),
+        ["freew.display-for-review"] = ReviewDisplayEvidence(
+            "Keeps tracked revision data intact while returning the display policy to All Markup in both shells.",
+            "TrackingDisplayControlTests.DisplayForReview_TogglingBackToAllMarkup_RestoresNormalRenderingAndLosesNothing",
+            "DocumentViewReviewTests.DisplayForReview_AllMarkup_shows_and_styles_insertions_and_deletions"),
+        ["freew.display-for-review-all-markup"] = ReviewDisplayEvidence(
+            "Applies All Markup without mutating the document model while rendering tracked insertions and deletions in both shells.",
+            "TrackingDisplayControlTests.DisplayForReview_SetToAllMarkup_DoesNotAffectModel",
+            "DocumentViewReviewTests.DisplayForReview_AllMarkup_shows_and_styles_insertions_and_deletions"),
+        ["freew.display-for-review-simple-markup"] = ReviewDisplayEvidence(
+            "Uses Simple Markup/final inline text while preserving tracked revision metadata across the display-mode round trip.",
+            "TrackingDisplayControlTests.DisplayForReview_SimpleMarkup_InsertedRunSurvivesCommitWithKindAndText",
+            "DocumentViewReviewTests.DisplayForReview_SimpleMarkup_uses_final_inline_text_and_change_bar"),
+        ["freew.display-for-review-no-markup"] = ReviewDisplayEvidence(
+            "Hides deleted text in No Markup while preserving deleted-run revision data in both shells.",
+            "TrackingDisplayControlTests.DisplayForReview_NoMarkup_DeletedRunSurvivesCommitWithKindAndText",
+            "DocumentViewReviewTests.DisplayForReview_NoMarkup_hides_deleted_text_without_losing_revision_data"),
+        ["freew.display-for-review-original"] = ReviewDisplayEvidence(
+            "Hides inserted text in Original view while preserving inserted-run revision data in both shells.",
+            "TrackingDisplayControlTests.DisplayForReview_Original_InsertedRunSurvivesCommitWithKindAndText",
+            "DocumentViewReviewTests.DisplayForReview_Original_hides_inserted_text_without_losing_revision_data"),
+        ["freew.show-markup-insertions-deletions"] = ReviewShowMarkupEvidence(
+            "Toggles Insertions and Deletions visual chrome without dropping tracked revision markers from the model.",
+            "TrackingDisplayControlTests.ShowMarkupInsertionsDeletions_WhenToggedOff_RevisionMarkerSurvivesCommit"),
+        ["freew.show-markup-comments"] = ReviewShowMarkupEvidence(
+            "Toggles comment markup visibility without dropping comment anchors from the model.",
+            "TrackingDisplayControlTests.ShowMarkupComments_WhenToggedOff_CommentIdSurvivesCommit"),
+        ["freew.show-markup-formatting"] = ReviewShowMarkupEvidence(
+            "Toggles tracked-formatting chrome while preserving FormatRevision metadata through commit.",
+            "TrackingDisplayControlTests.ShowMarkupFormatting_WhenOff_FormatRevisionSurvivesCommit"),
+        ["freew.show-markup-balloons"] = ReviewBalloonsEvidence(
+            "Renders comment and tracked-change balloons with shared card metadata and anchored revision/comment data in both shells."),
+        ["freew.accept-this"] = ReviewChangesEvidence(
+            "Accepts the selected/current insertion as ordinary text while leaving unrelated tracked changes pending.",
+            "ReviewingPaneTests.AcceptRevision_ResolvesOnlyTheSelectedChange",
+            "DocumentViewReviewTests.AcceptCurrent_clears_insertion_mark_keeping_text"),
+        ["freew.reject-this"] = ReviewChangesEvidence(
+            "Rejects the selected/current insertion by removing inserted text while leaving unrelated tracked changes pending.",
+            "ReviewingPaneTests.RejectRevision_ResolvesOnlyTheSelectedChange_AndRemovesInsertedText",
+            "DocumentViewReviewTests.RejectCurrent_removes_inserted_text"),
+        ["freew.accept-all"] = ReviewBulkChangesEvidence(
+            "Accepts every tracked insertion/deletion through the shared model and clears the document's revision list.",
+            "TrackChangesTests.AcceptAll_NormalizesInsertions_AndRemovesDeletions",
+            "DocumentViewReviewTests.AcceptAll_clears_every_revision"),
+        ["freew.reject-all"] = ReviewBulkChangesEvidence(
+            "Rejects every tracked insertion/deletion through the shared model and clears the document's revision list.",
+            "TrackChangesTests.RejectAll_RemovesInsertions_AndNormalizesDeletions",
+            "DocumentViewReviewTests.RejectAll_clears_every_revision_and_drops_insertions"),
+        ["freew.previous-change"] = ReviewChangeNavigationEvidence(
+            "Routes the Previous Change command to the host-owned Reviewing Pane navigation callback in both shells."),
+        ["freew.next-change"] = ReviewChangeNavigationEvidence(
+            "Routes the Next Change command to the host-owned Reviewing Pane navigation callback in both shells."),
         ["freew.new-comment"] = ProtectionHistoryEvidence(
             "Creates a comment under comments-only protection and keeps the classified comment-history entry undoable and redoable in both shells."),
         ["freew.reply-comment"] = ProtectionHistoryEvidence(
@@ -383,6 +442,122 @@ internal static class FreeWCommandInventory
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Avalonia.Tests/DocumentViewProtectionTests.cs",
                 Test: "DocumentViewProtectionTests.CommentsOnly_allows_each_classified_comment_history_entry"));
+
+    private static CommandBehaviorEvidence ReviewTrackingEvidence(
+        string summary,
+        string avaloniaPath,
+        string avaloniaTest) =>
+        ReviewEvidence(
+            evidenceId: "freew.review-tracking.shared-behavior",
+            slice: "Review tracking",
+            summary: summary,
+            wpfPath: "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
+            wpfTest: "FreeWRibbonParityTests.ReviewTrackingAndChanges_CommandRoutesExecuteBackedActions",
+            avaloniaPath: avaloniaPath,
+            avaloniaTest: avaloniaTest);
+
+    private static CommandBehaviorEvidence ReviewPaneEvidence(
+        string summary,
+        string wpfTest,
+        string avaloniaTest) =>
+        ReviewEvidence(
+            evidenceId: "freew.reviewing-pane.shared-behavior",
+            slice: "Reviewing Pane",
+            summary: summary,
+            wpfPath: "freew/FreeW.App.Host.Tests/ReviewingPaneTests.cs",
+            wpfTest: wpfTest,
+            avaloniaPath: "freew/FreeW.App.Avalonia.Tests/ReviewingPaneTests.cs",
+            avaloniaTest: avaloniaTest);
+
+    private static CommandBehaviorEvidence ReviewDisplayEvidence(
+        string summary,
+        string wpfTest,
+        string avaloniaTest) =>
+        ReviewEvidence(
+            evidenceId: "freew.review-display.shared-behavior",
+            slice: "Review display modes",
+            summary: summary,
+            wpfPath: "freew/FreeW.App.Host.Tests/TrackingDisplayControlTests.cs",
+            wpfTest: wpfTest,
+            avaloniaPath: "freew/FreeW.App.Avalonia.Tests/DocumentViewReviewTests.cs",
+            avaloniaTest: avaloniaTest);
+
+    private static CommandBehaviorEvidence ReviewShowMarkupEvidence(
+        string summary,
+        string wpfTest) =>
+        ReviewEvidence(
+            evidenceId: "freew.review-show-markup.shared-behavior",
+            slice: "Review Show Markup",
+            summary: summary,
+            wpfPath: "freew/FreeW.App.Host.Tests/TrackingDisplayControlTests.cs",
+            wpfTest: wpfTest,
+            avaloniaPath: "freew/FreeW.App.Avalonia.Tests/DocumentViewReviewTests.cs",
+            avaloniaTest: "DocumentViewReviewTests.ShowMarkup_toggles_hide_visual_chrome_but_preserve_model_data");
+
+    private static CommandBehaviorEvidence ReviewBalloonsEvidence(string summary) =>
+        ReviewEvidence(
+            evidenceId: "freew.review-balloons.shared-behavior",
+            slice: "Review balloons",
+            summary: summary,
+            wpfPath: "freew/FreeW.App.Host.Tests/ThesaurusAndBalloonsTests.cs",
+            wpfTest: "ThesaurusAndBalloonsTests.BalloonOverlay_Enable_RendersSharedCardMetadata",
+            avaloniaPath: "freew/FreeW.App.Avalonia.Tests/DocumentViewReviewTests.cs",
+            avaloniaTest: "DocumentViewReviewTests.Review_balloons_pane_renders_revisions_and_comments_from_model_data");
+
+    private static CommandBehaviorEvidence ReviewChangesEvidence(
+        string summary,
+        string wpfTest,
+        string avaloniaTest) =>
+        ReviewEvidence(
+            evidenceId: "freew.review-changes.shared-behavior",
+            slice: "Review changes",
+            summary: summary,
+            wpfPath: "freew/FreeW.App.Host.Tests/ReviewingPaneTests.cs",
+            wpfTest: wpfTest,
+            avaloniaPath: "freew/FreeW.App.Avalonia.Tests/DocumentViewReviewTests.cs",
+            avaloniaTest: avaloniaTest);
+
+    private static CommandBehaviorEvidence ReviewBulkChangesEvidence(
+        string summary,
+        string sharedModelTest,
+        string avaloniaTest) =>
+        ReviewEvidence(
+            evidenceId: "freew.review-bulk-changes.shared-behavior",
+            slice: "Review bulk changes",
+            summary: summary,
+            wpfPath: "freew/FreeW.Core.Model.Tests/TrackChangesTests.cs",
+            wpfTest: sharedModelTest,
+            avaloniaPath: "freew/FreeW.App.Avalonia.Tests/DocumentViewReviewTests.cs",
+            avaloniaTest: avaloniaTest);
+
+    private static CommandBehaviorEvidence ReviewChangeNavigationEvidence(string summary) =>
+        ReviewEvidence(
+            evidenceId: "freew.review-change-navigation.shared-behavior",
+            slice: "Review change navigation",
+            summary: summary,
+            wpfPath: "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
+            wpfTest: "FreeWRibbonParityTests.ReviewTrackingAndChanges_CommandRoutesExecuteBackedActions",
+            avaloniaPath: "freew/FreeW.App.Avalonia.Tests/DocumentViewReviewTests.cs",
+            avaloniaTest: "DocumentViewReviewTests.Review_change_navigation_commands_route_to_host_callbacks");
+
+    private static CommandBehaviorEvidence ReviewEvidence(
+        string evidenceId,
+        string slice,
+        string summary,
+        string wpfPath,
+        string wpfTest,
+        string avaloniaPath,
+        string avaloniaTest) =>
+        new(
+            EvidenceId: evidenceId,
+            Slice: slice,
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: wpfPath,
+                Test: wpfTest),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: avaloniaPath,
+                Test: avaloniaTest));
 
     private static CommandBehaviorEvidence ChartCommandEvidence(
         string summary,
