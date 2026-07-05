@@ -281,7 +281,7 @@ public sealed partial class MainWindow
         void ValidateLive(object? _, EventArgs __)
         {
             var name = nameBox.Text?.Trim() ?? string.Empty;
-            var existing = _session.Workbook.NamedRanges.Keys;
+            var existing = ExistingDefinedNames(_session.Workbook);
             var nameResult = DefinedNameValidator.Validate(name, existing, seed?.Name);
             if (!nameResult.IsValid)
             {
@@ -309,7 +309,7 @@ public sealed partial class MainWindow
         okButton.Click += (_, _) =>
         {
             var name = nameBox.Text?.Trim() ?? string.Empty;
-            var existing = _session.Workbook.NamedRanges.Keys;
+            var existing = ExistingDefinedNames(_session.Workbook);
             var nameResult = DefinedNameValidator.Validate(name, existing, seed?.Name);
             if (!nameResult.IsValid)
             {
@@ -324,14 +324,14 @@ public sealed partial class MainWindow
                 return;
             }
 
-            if (!TryParseDefinedNameRange(refersToText, out var range))
-            {
-                ShowWarning(UiText.Get("InsertLoc_RefersToMustResolve"));
-                return;
-            }
-
             var scope = scopeChoices[Math.Max(0, scopeBox.SelectedIndex)].Scope;
             var draft = new DefinedNameDraft(name, scope, refersToText, commentBox.Text?.Trim() ?? string.Empty);
+
+            // The refers-to text is first tried as a range/cell/existing-name reference (the common case);
+            // when it does not resolve to one but does parse as a formula expression (checked above), it is a
+            // named formula/constant (e.g. "=1.05" or "=SUM(Sheet1!A:A)") and is defined as such instead of
+            // being rejected — Excel's Define Name dialog accepts both equally.
+            var isRange = TryParseDefinedNameRange(refersToText, out var range);
 
             // Renaming an existing name: remove the old entry first so it does not linger alongside the new one.
             if (seed is not null && !string.Equals(seed.Name, name, StringComparison.OrdinalIgnoreCase))
@@ -344,8 +344,9 @@ public sealed partial class MainWindow
                 }
             }
 
-            var command = DefinedNamesShellGlue.BuildDefineCommand(draft, range);
-            var result = _session.ExecuteReviewCommand(command);
+            var result = isRange
+                ? _session.ExecuteReviewCommand(DefinedNamesShellGlue.BuildDefineCommand(draft, range))
+                : _session.ExecuteReviewCommand(DefinedNamesShellGlue.BuildDefineFormulaCommand(draft));
             if (!result.Success)
             {
                 ShowWarning(result.ErrorMessage ?? UiText.Get("InsertLoc_CouldNotDefineName"));
@@ -538,6 +539,15 @@ public sealed partial class MainWindow
 
     private static string FormatNameManagerRow(DefinedNameRow row) =>
         $"{row.Name}    [{row.ScopeLabel}]    {row.RefersTo}    {row.Value}";
+
+    /// <summary>
+    /// Every name already defined in the workbook, range- or formula-valued, for the Define Name dialog's
+    /// duplicate check. A formula/constant name (<see cref="Workbook.NamedFormulas"/>) occupies the same name
+    /// namespace as a range name, so both must be considered or a new name could silently collide with one of
+    /// the other kind.
+    /// </summary>
+    private static IEnumerable<string> ExistingDefinedNames(Workbook workbook) =>
+        workbook.NamedRanges.Keys.Concat(workbook.NamedFormulas.Keys);
 
     private static int FindScopeIndex(
         IReadOnlyList<DefinedNamesShellGlue.ScopeChoice> choices,

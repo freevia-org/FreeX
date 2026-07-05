@@ -39,16 +39,18 @@ public static partial class PrintRenderer
             measurement.ColumnOffset(columnPlanTitleCount + bodyColumns.Count) - measurement.ColumnOffset(columnPlanTitleCount),
             measurement.RowOffset(rowPlanTitleCount + bodyRows.Count) - measurement.RowOffset(rowPlanTitleCount));
 
-        // chart.Left/chart.Top are absolute pixel offsets from the sheet's real (non-uniform,
-        // hidden-row/column-skipping) origin in XlsxDrawingAnchorApplier's width-in-chars*8 convention —
-        // see ChartAnchorGeometry. That is a DIFFERENT pixel-per-character convention than the print
-        // grid's own column/row measurement (measurement.ColumnOffset, built from ColumnWidthPixelMapper's
-        // width*7+5 convention), so chart.Left/pageGridLeft (both *8-space) must never be summed directly
-        // with bodyGridLeft/measurement (7x+5-space). ShouldPrintChart's intersection test stays in the
-        // anchor's own *8 space (pageGridRect below), but the chart's final on-page rect is computed by
-        // first converting its anchor position into the grid's own pixel space via
-        // ChartAnchorGeometry.ConvertColumnOffsetToGridSpace/ConvertRowOffsetToGridSpace, then
-        // translating within that single, consistent space.
+        // chart.Left/chart.Top/chart.Width/chart.Height are absolute pixel offsets/extents from the
+        // sheet's real (non-uniform, hidden-row/column-skipping) origin in XlsxDrawingAnchorApplier's
+        // width-in-chars*8 convention — see ChartAnchorGeometry. That is a DIFFERENT pixel-per-character
+        // convention than the print grid's own column/row measurement (measurement.ColumnOffset, built from
+        // ColumnWidthPixelMapper's width*7+5 convention), so chart.Left/pageGridLeft (both *8-space) must
+        // never be summed directly with bodyGridLeft/measurement (7x+5-space), and chart.Width/chart.Height
+        // must never be used unconverted alongside a grid-space position either. ShouldPrintChart's
+        // intersection test stays in the anchor's own *8 space (pageGridRect below), but the chart's final
+        // on-page rect is computed by first converting its anchor position AND extent into the grid's own
+        // pixel space via ChartAnchorGeometry.ConvertColumnOffsetToGridSpace/ConvertRowOffsetToGridSpace and
+        // ConvertColumnExtentToGridSpace/ConvertRowExtentToGridSpace, then translating within that single,
+        // consistent space.
         var firstBodyColumn = bodyColumns[0];
         var firstBodyRow = bodyRows[0];
         var pageGridLeft = ChartAnchorGeometry.SumColumnPixels(sheet, 1, firstBodyColumn - 1);
@@ -73,11 +75,13 @@ public static partial class PrintRenderer
 
             var chartGridLeft = ChartAnchorGeometry.ConvertColumnOffsetToGridSpace(sheet, chart.Left);
             var chartGridTop = ChartAnchorGeometry.ConvertRowOffsetToGridSpace(sheet, chart.Top);
+            var chartGridWidth = ChartAnchorGeometry.ConvertColumnExtentToGridSpace(sheet, chart.Left, chart.Width);
+            var chartGridHeight = ChartAnchorGeometry.ConvertRowExtentToGridSpace(sheet, chart.Top, chart.Height);
             var chartRect = new Rect(
                 bodyGridLeft + chartGridLeft - pageGridLeftInGridSpace,
                 bodyGridTop + chartGridTop - pageGridTopInGridSpace,
-                chart.Width,
-                chart.Height);
+                chartGridWidth,
+                chartGridHeight);
             dc.DrawImage(image, chartRect);
             if (bodyGridRect.Contains(chartRect))
                 AddPrintedChartTextOverlays(textOverlays, chart, workbookTheme, chartRect, viewport, pageCellLookup);

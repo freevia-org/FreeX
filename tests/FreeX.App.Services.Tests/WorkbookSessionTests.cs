@@ -8443,18 +8443,22 @@ public sealed class WorkbookSessionTests
             new WorkbookSheetTab(charts.Id, "Charts", IsActive: true));
         session.Viewport.Cells.Should().Contain(cell => cell.Row == 3 && cell.Col == 3);
 
+        // Undoing Hide must restore focus to Details -- the sheet whose visibility the undo just
+        // flipped back on -- exactly as Excel does, not silently leave the view on Charts (K9).
         var undo = session.UndoLastEdit();
 
         undo.Success.Should().BeTrue();
         details.IsHidden.Should().BeFalse();
         session.HiddenSheets.Should().BeEmpty();
-        session.ActiveSheet.Should().BeSameAs(charts);
+        session.ActiveSheet.Should().BeSameAs(details);
         session.SheetTabs.Should().Equal(
             new WorkbookSheetTab(summary.Id, "Sheet1", IsActive: false),
-            new WorkbookSheetTab(details.Id, "Details", IsActive: false),
-            new WorkbookSheetTab(charts.Id, "Charts", IsActive: true));
+            new WorkbookSheetTab(details.Id, "Details", IsActive: true),
+            new WorkbookSheetTab(charts.Id, "Charts", IsActive: false));
         session.CanRedo.Should().BeTrue();
 
+        // Redoing Hide must switch back away from Details (now hidden again) to the same visible
+        // survivor the original Hide selected.
         var redo = session.RedoLastEdit();
 
         redo.Success.Should().BeTrue();
@@ -8499,6 +8503,8 @@ public sealed class WorkbookSessionTests
             new WorkbookSheetTab(details.Id, "Details", IsActive: true));
         session.Viewport.Cells.Should().Contain(cell => cell.Row == 4 && cell.Col == 2);
 
+        // Undoing Unhide re-hides Details, so the view must fall back to a visible survivor
+        // (Summary), the same sheet HideActiveSheet's own forward path would have chosen.
         var undo = session.UndoLastEdit();
 
         undo.Success.Should().BeTrue();
@@ -8508,12 +8514,14 @@ public sealed class WorkbookSessionTests
         session.ActiveSheet.Should().BeSameAs(summary);
         session.CanRedo.Should().BeTrue();
 
+        // Redoing Unhide must restore focus to Details -- the sheet whose visibility the redo
+        // just flipped back on -- exactly as Excel does, not silently leave the view on Summary (K9).
         var redo = session.RedoLastEdit();
 
         redo.Success.Should().BeTrue();
         details.IsHidden.Should().BeFalse();
         session.HiddenSheets.Should().BeEmpty();
-        session.ActiveSheet.Should().BeSameAs(summary);
+        session.ActiveSheet.Should().BeSameAs(details);
     }
 
     [Fact]

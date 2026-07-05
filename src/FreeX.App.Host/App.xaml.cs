@@ -411,6 +411,91 @@ public partial class App : Application
     }
 
     /// <summary>
+    /// Collapses recovery candidates that all belong to the same underlying document down to a
+    /// single one, deleting the rest. A workbook shared across "New Window" views (View &gt; New
+    /// Window) gets one autosave snapshot PER WINDOW (see MainWindow.MultiWindow.cs's
+    /// ViewNewWindowBtn_Click / AttachAutosaveService — autosave ownership is per-window, not
+    /// per-document, so crash-recovery coverage survives closing any single sibling). If the
+    /// process crashes, that leaves multiple snapshot files with the same
+    /// <see cref="AutosaveSidecar.OriginalFilePath"/>/<see cref="AutosaveSidecar.DisplayName"/> on
+    /// disk for what was really one shared, dirtied document. Without this step,
+    /// <see cref="OfferStartupRecovery"/> would offer each one individually, and accepting more
+    /// than one would load the same document into two independent windows with disconnected
+    /// WorkbookRefs (see MainWindow.MultiWindow.cs's AdoptSharedWorkbook, which only reconnects a
+    /// secondary window constructed directly over an existing WorkbookRef — never a freshly
+    /// deserialized recovery snapshot) — edits in one would silently stop reaching the other.
+    /// Recovery only ever needs to restore ONE copy of a document, so we keep just the newest
+    /// snapshot per document identity (by <see cref="AutosaveSidecar.TimestampUtc"/>, falling back
+    /// to the file's last-write time when the sidecar timestamp is missing/unparseable) and delete
+    /// its siblings up front — mirroring how File &gt; Open already scopes one document per window.
+    /// </summary>
+    private static IReadOnlyList<AutosaveRecoveryCandidate> DeduplicateCandidatesByDocument(
+        IReadOnlyList<AutosaveRecoveryCandidate> candidates)
+    {
+        if (candidates.Count <= 1)
+            return candidates;
+
+        var newestByDocument = new Dictionary<string, AutosaveRecoveryCandidate>(StringComparer.OrdinalIgnoreCase);
+        var ordered = new List<string>();
+
+        foreach (var candidate in candidates)
+        {
+            var documentKey = GetDocumentIdentityKey(candidate);
+            if (!newestByDocument.TryGetValue(documentKey, out var existing))
+            {
+                newestByDocument[documentKey] = candidate;
+                ordered.Add(documentKey);
+                continue;
+            }
+
+            if (GetCandidateTimestamp(candidate) > GetCandidateTimestamp(existing))
+            {
+                AutosaveSnapshotStore.DeleteCandidate(existing);
+                newestByDocument[documentKey] = candidate;
+            }
+            else
+            {
+                AutosaveSnapshotStore.DeleteCandidate(candidate);
+            }
+        }
+
+        return ordered.Select(key => newestByDocument[key]).ToList();
+    }
+
+    /// <summary>
+    /// Identity key grouping candidates that are recovery snapshots of the same document.
+    /// A saved workbook is keyed by its original file path (case-insensitive, matching Windows
+    /// path semantics); an unsaved workbook has no file path, so we fall back to its display name.
+    /// Candidates that have neither (should not normally happen) each get their own unique key so
+    /// they are never incorrectly merged with an unrelated candidate.
+    /// </summary>
+    private static string GetDocumentIdentityKey(AutosaveRecoveryCandidate candidate)
+    {
+        if (!string.IsNullOrWhiteSpace(candidate.Sidecar.OriginalFilePath))
+            return "path:" + candidate.Sidecar.OriginalFilePath;
+
+        if (!string.IsNullOrWhiteSpace(candidate.Sidecar.DisplayName))
+            return "name:" + candidate.Sidecar.DisplayName;
+
+        return "snapshot:" + candidate.SnapshotPath;
+    }
+
+    private static DateTimeOffset GetCandidateTimestamp(AutosaveRecoveryCandidate candidate)
+    {
+        if (DateTimeOffset.TryParse(candidate.Sidecar.TimestampUtc, out var parsed))
+            return parsed;
+
+        try
+        {
+            return new DateTimeOffset(File.GetLastWriteTimeUtc(candidate.SnapshotPath), TimeSpan.Zero);
+        }
+        catch
+        {
+            return DateTimeOffset.MinValue;
+        }
+    }
+
+    /// <summary>
     /// Checks for recovery snapshots from previous crashed sessions and offers restore/discard.
     /// Must be called after the main window is shown (it owns any dialogs).
     /// Stale or corrupt snapshots are silently deleted.
@@ -422,6 +507,12 @@ public partial class App : Application
     /// deleted. The method never re-offers a declined candidate: once dismissed it is gone.
     /// This guarantees the loop always terminates and no snapshot is silently lost.
     /// </para>
+    /// <para>
+    /// Candidates are deduplicated by document identity before being offered (see
+    /// <see cref="DeduplicateCandidatesByDocument"/>), so a workbook that was shared across
+    /// multiple "New Window" views before the crash is only ever offered — and recovered — once
+    /// (K4).
+    /// </para>
     /// </summary>
     /// <returns>
     /// <c>true</c> if the user accepted at least one recovery; <c>false</c> otherwise.
@@ -432,7 +523,7 @@ public partial class App : Application
     {
         try
         {
-            var candidates = snapshotStore.EnumerateCandidates();
+            var candidates = DeduplicateCandidatesByDocument(snapshotStore.EnumerateCandidates());
             if (candidates.Count == 0)
                 return false;
 

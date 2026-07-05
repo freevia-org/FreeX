@@ -31,6 +31,9 @@ public sealed class ClearContentsCommand : IWorkbookCommand
             }
         }
 
+        if (CommandGuards.RejectIfSplitsArray(sheet, _range.AllCells()) is { } splitsArrayRejection)
+            return splitsArrayRejection;
+
         _snapshot = [];
         _hyperlinkSnapshot = sheet.Hyperlinks
             .Where(pair => _range.Contains(pair.Key))

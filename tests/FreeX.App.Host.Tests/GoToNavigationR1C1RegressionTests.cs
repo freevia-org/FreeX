@@ -27,88 +27,106 @@ public sealed class GoToNavigationR1C1RegressionTests
     [Fact]
     public void FindFormulasShortcut_FromSingleActiveCell_ExpandsSearchToWholeUsedRange()
     {
-        using var harness = MainWindowHarness.Create();
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
 
-        // A formula cell far away from the active cell -- only reachable if the search expands
-        // to the sheet's used range instead of staying pinned to the 1x1 active-cell selection.
-        harness.SetCellFormula(20, 5, "=1+1");
-        harness.SelectActiveCell(1, 1);
+            // A formula cell far away from the active cell -- only reachable if the search expands
+            // to the sheet's used range instead of staying pinned to the 1x1 active-cell selection.
+            harness.SetCellFormula(20, 5, "=1+1");
+            harness.SelectActiveCell(1, 1);
 
-        harness.InvokeFindFormulasMenuItem();
+            harness.InvokeFindFormulasMenuItem();
 
-        harness.SelectedRange.Should().Be(new GridRange(
-            new CellAddress(harness.CurrentSheetId, 20, 5),
-            new CellAddress(harness.CurrentSheetId, 20, 5)));
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 20, 5),
+                new CellAddress(harness.CurrentSheetId, 20, 5)));
+        });
     }
 
     [Fact]
     public void FindFormulasShortcut_FromExplicitMultiCellSelection_DoesNotExpandBeyondSelection()
     {
-        using var harness = MainWindowHarness.Create();
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
 
-        // A formula outside the explicit selection must NOT be picked up: real Excel honors an
-        // explicit multi-cell selection instead of silently widening it to the used range.
-        harness.SetCellFormula(20, 5, "=1+1");
-        harness.SelectRange(1, 1, 3, 3);
+            // A formula outside the explicit selection must NOT be picked up: real Excel honors an
+            // explicit multi-cell selection instead of silently widening it to the used range.
+            harness.SetCellFormula(20, 5, "=1+1");
+            harness.SelectRange(1, 1, 3, 3);
 
-        harness.InvokeFindFormulasMenuItem();
+            harness.InvokeFindFormulasMenuItem();
 
-        // No formula cell exists inside A1:C3, so nothing should be found/selected -- the selection
-        // stays exactly as the user set it.
-        harness.SelectedRange.Should().Be(new GridRange(
-            new CellAddress(harness.CurrentSheetId, 1, 1),
-            new CellAddress(harness.CurrentSheetId, 3, 3)));
+            // No formula cell exists inside A1:C3, so nothing should be found/selected -- the selection
+            // stays exactly as the user set it.
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 1, 1),
+                new CellAddress(harness.CurrentSheetId, 3, 3)));
+        });
     }
 
     [Fact]
     public void GoToDialogDefaultAddress_WhenR1C1ModeEnabled_UsesR1C1Notation()
     {
-        using var harness = MainWindowHarness.Create(useR1C1ReferenceStyle: true);
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create(useR1C1ReferenceStyle: true);
 
-        harness.SelectActiveCell(5, 2);
+            harness.SelectActiveCell(5, 2);
 
-        harness.ComputeGoToDefaultAddress().Should().Be("R5C2");
+            harness.ComputeGoToDefaultAddress().Should().Be("R5C2");
+        });
     }
 
     [Fact]
     public void GoToDialogDefaultAddress_WhenA1ModeActive_UsesA1Notation()
     {
-        using var harness = MainWindowHarness.Create(useR1C1ReferenceStyle: false);
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create(useR1C1ReferenceStyle: false);
 
-        harness.SelectActiveCell(5, 2);
+            harness.SelectActiveCell(5, 2);
 
-        harness.ComputeGoToDefaultAddress().Should().Be("B5");
+            harness.ComputeGoToDefaultAddress().Should().Be("B5");
+        });
     }
 
     [Fact]
     public void F4_InFormulaBar_WhenR1C1ModeEnabled_CyclesR1C1Reference()
     {
-        using var harness = MainWindowHarness.Create(useR1C1ReferenceStyle: true);
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create(useR1C1ReferenceStyle: true);
 
-        harness.SelectActiveCell(3, 3);
-        harness.SetFormulaEditCell(3, 3);
-        harness.FocusFormulaBar();
-        harness.SetFormulaBarText("=R[-2]C[-1]+R[1]C");
-        harness.SetFormulaBarCaretIndex(3);
+            harness.SelectActiveCell(3, 3);
+            harness.SetFormulaEditCell(3, 3);
+            harness.FocusFormulaBar();
+            harness.SetFormulaBarText("=R[-2]C[-1]+R[1]C");
+            harness.SetFormulaBarCaretIndex(3);
 
-        harness.PressFormulaBarKey(Key.F4).Should().BeTrue();
+            harness.PressFormulaBarKey(Key.F4).Should().BeTrue();
 
-        harness.FormulaBarText.Should().Be("=R1C2+R[1]C");
+            harness.FormulaBarText.Should().Be("=R1C2+R[1]C");
+        });
     }
 
     [Fact]
     public void F4_InInlineEditor_WhenR1C1ModeEnabled_CyclesR1C1Reference()
     {
-        using var harness = MainWindowHarness.Create(useR1C1ReferenceStyle: true);
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create(useR1C1ReferenceStyle: true);
 
-        harness.SelectActiveCell(3, 3);
-        harness.ShowInlineEditor(3, 3);
-        harness.SetInlineEditorText("=R[-2]C[-1]+R[1]C");
-        harness.SetInlineEditorCaretIndex(3);
+            harness.SelectActiveCell(3, 3);
+            harness.ShowInlineEditor(3, 3);
+            harness.SetInlineEditorText("=R[-2]C[-1]+R[1]C");
+            harness.SetInlineEditorCaretIndex(3);
 
-        harness.PressInlineEditorKey(Key.F4).Should().BeTrue();
+            harness.PressInlineEditorKey(Key.F4).Should().BeTrue();
 
-        harness.InlineEditorText.Should().Be("=R1C2+R[1]C");
+            harness.InlineEditorText.Should().Be("=R1C2+R[1]C");
+        });
     }
 
     [Theory]
@@ -152,6 +170,7 @@ public sealed class GoToNavigationR1C1RegressionTests
         private readonly MethodInfo _formulaBarKeyDown;
         private readonly MethodInfo _inlineEditorKeyDown;
         private readonly MethodInfo _findFormulasMenuItemClick;
+        private readonly MethodInfo _recalculateWorkbook;
         private readonly FieldInfo _inlineEditorField;
 
         private MainWindowHarness(MainWindow window)
@@ -178,6 +197,9 @@ public sealed class GoToNavigationR1C1RegressionTests
             _findFormulasMenuItemClick = typeof(MainWindow)
                 .GetMethod("FindFormulasMenuItem_Click", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "FindFormulasMenuItem_Click");
+            _recalculateWorkbook = typeof(MainWindow)
+                .GetMethod("RecalculateWorkbook", BindingFlags.Instance | BindingFlags.NonPublic, [])
+                ?? throw new MissingMethodException(nameof(MainWindow), "RecalculateWorkbook");
         }
 
         public SheetId CurrentSheetId => Workbook.Sheets[0].Id;
@@ -200,6 +222,11 @@ public sealed class GoToNavigationR1C1RegressionTests
         {
             var sheet = Workbook.Sheets[0];
             sheet.SetCell(new CellAddress(sheet.Id, row, col), Cell.FromFormula(formulaText));
+            // Go To Special > Formulas filters by the formula's *computed* value type (matching
+            // Excel's Numbers/Text/Logicals/Errors sub-filters), so a never-recalculated formula
+            // cell (still BlankValue) would not be found -- force a recalc so the cached value is
+            // populated before the test drives the Find-Formulas shortcut.
+            _recalculateWorkbook.Invoke(_window, []);
         }
 
         public void SelectActiveCell(uint row, uint col)

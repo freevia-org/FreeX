@@ -561,8 +561,18 @@ public partial class OptionsDialog : Window
             maxChange);
         // Only surface a workbook-level calculation change when the user actually changed
         // something in this panel — an unrelated Options edit (e.g. UserName) must never force
-        // -apply stale/unseen calc settings back onto the live workbook.
-        CalculationSettingsResult = editedCalcSettings == _calcSettings ? null : editedCalcSettings;
+        // -apply stale/unseen calc settings back onto the live workbook. The max-iterations/
+        // max-change text boxes always round-trip a concrete number (they're seeded from
+        // DefaultMaxCalculationIterations/DefaultMaxCalculationChange when the workbook had no
+        // explicit value yet), so comparing the raw records would spuriously treat every dialog
+        // open+OK as an edit whenever the workbook's iterative-calc bounds are still null; compare
+        // the *effective* (null-coalesced) values instead.
+        var unchanged =
+            editedCalcSettings.AutoCalculate == _calcSettings.AutoCalculate &&
+            editedCalcSettings.IterativeCalculation == _calcSettings.IterativeCalculation &&
+            editedCalcSettings.MaxCalculationIterations == (_calcSettings.MaxCalculationIterations ?? DefaultMaxCalculationIterations) &&
+            editedCalcSettings.MaxCalculationChange == (_calcSettings.MaxCalculationChange ?? DefaultMaxCalculationChange);
+        CalculationSettingsResult = unchanged ? null : editedCalcSettings;
 
         DialogResult = true;
     }

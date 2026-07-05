@@ -20,6 +20,7 @@ internal static class CommandGuards
     private const string ColumnRangeOutsideWorksheetBoundsMessage = "Column range is outside the worksheet bounds.";
     private const string AllowedEditRangeOnTargetSheetMessage = "Allowed edit range must be on the target sheet.";
     private const string CouldNotInsertSubtotalRowMessage = "Could not insert subtotal row.";
+    private const string CannotChangePartOfArrayMessage = "You cannot change part of an array.";
 
     public static CommandOutcome? RejectIfProtected(Sheet sheet)
     {
@@ -175,6 +176,41 @@ internal static class CommandGuards
             ?? StyleId.Default;
         var style = workbook.GetStyle(styleId);
         return !style.Locked;
+    }
+
+    /// <summary>
+    /// Rejects an edit/delete of <paramref name="addresses"/> if any of them belongs to a legacy CSE
+    /// array or a dynamic-array spill range whose full anchor+extent is not entirely included in
+    /// <paramref name="addresses"/>. Mirrors Excel's "You cannot change part of an array" rule: a
+    /// single member (or even just the anchor alone) cannot be edited or cleared in isolation, but
+    /// selecting and editing/clearing the whole array range at once is allowed.
+    /// </summary>
+    public static CommandOutcome? RejectIfSplitsArray(Sheet sheet, IEnumerable<CellAddress> addresses)
+    {
+        if (!sheet.HasArrayOrSpillMembers)
+            return null;
+
+        HashSet<CellAddress>? addressSet = null;
+
+        foreach (var address in addresses)
+        {
+            if (!sheet.TryGetArrayExtent(address, out var anchor, out var rows, out var cols))
+                continue;
+
+            addressSet ??= new HashSet<CellAddress>(addresses);
+
+            for (var r = 0u; r < rows; r++)
+            {
+                for (var c = 0u; c < cols; c++)
+                {
+                    var member = new CellAddress(anchor.Sheet, anchor.Row + r, anchor.Col + c);
+                    if (!addressSet.Contains(member))
+                        return new CommandOutcome(false, CannotChangePartOfArrayMessage);
+                }
+            }
+        }
+
+        return null;
     }
 
     public static CommandOutcome? RejectInvalidFilterRange(

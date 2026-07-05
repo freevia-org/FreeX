@@ -1398,7 +1398,7 @@ public partial class MainWindow
     private SheetTabContextMenuState BuildSheetTabContextMenuState(SheetTabViewModel? tab)
     {
         var visibleSheetCount = _workbook.Sheets.Count(sheet => !sheet.IsHidden);
-        var hiddenSheetCount = _workbook.Sheets.Count(sheet => sheet.IsHidden);
+        var hiddenSheetCount = _workbook.Sheets.Count(sheet => sheet.IsHidden && !sheet.IsVeryHidden);
         var selectedSheetIsVisible = tab is not null &&
                                      _workbook.Sheets.Any(sheet => sheet.Id == tab.Id && !sheet.IsHidden);
 
@@ -1598,22 +1598,39 @@ public partial class MainWindow
 
     private void SheetCtxDelete_Click(object sender, RoutedEventArgs e)
     {
-        if (_workbook.Sheets.Count(s => !s.IsHidden) <= 1)
+        var tab = GetContextMenuTab(sender);
+        if (tab == null) return;
+
+        var selectedSheetIds = _groupedSheetIds.Contains(tab.Id)
+            ? _workbook.Sheets.Select(sheet => sheet.Id).Where(_groupedSheetIds.Contains).ToList()
+            : [tab.Id];
+
+        var visibleSheetCount = _workbook.Sheets.Count(s => !s.IsHidden);
+        var visibleSelectedCount = _workbook.Sheets.Count(s => !s.IsHidden && selectedSheetIds.Contains(s.Id));
+        if (visibleSheetCount - visibleSelectedCount < 1)
         {
             _messageService.ShowWarning(
                 UiText.Get("MainWindowMessage_DeleteOnlyVisibleSheet"),
                 UiText.Get("MainWindowMessage_DeleteSheetTitle"));
             return;
         }
-        var tab = GetContextMenuTab(sender);
-        if (tab == null) return;
-        if (!_messageService.AskYesNo(
-                UiText.Format("MainWindowMessage_DeleteSheetPrompt", tab.Name),
-                UiText.Get("MainWindowMessage_DeleteSheetTitle"))) return;
-        if (!TryExecuteCommand(new RemoveSheetCommand(tab.Id), "Delete Sheet"))
+
+        var prompt = selectedSheetIds.Count > 1
+            ? UiText.Format("MainWindowMessage_DeleteSheetsPrompt", selectedSheetIds.Count)
+            : UiText.Format("MainWindowMessage_DeleteSheetPrompt", tab.Name);
+        if (!_messageService.AskYesNo(prompt, UiText.Get("MainWindowMessage_DeleteSheetTitle"))) return;
+
+        var deleteCommands = selectedSheetIds
+            .Select(sheetId => (IWorkbookCommand)new RemoveSheetCommand(sheetId))
+            .ToList();
+        var command = deleteCommands.Count == 1
+            ? deleteCommands[0]
+            : new CompositeWorkbookCommand("Delete Sheet", deleteCommands);
+        if (!TryExecuteCommand(command, "Delete Sheet"))
             return;
 
-        _worksheetSelections.Remove(tab.Id);
+        foreach (var sheetId in selectedSheetIds)
+            _worksheetSelections.Remove(sheetId);
         _currentSheetId = _workbook.Sheets[0].Id;
         _groupedSheetIds.Clear();
         _groupedSheetIds.Add(_currentSheetId);
@@ -1687,34 +1704,46 @@ public partial class MainWindow
 
         if (dialog.Result.CreateCopy)
         {
-            var sourceIndex = -1;
-            for (var index = 0; index < _workbook.Sheets.Count; index++)
-            {
-                if (_workbook.Sheets[index].Id != tab.Id)
-                    continue;
+            var selectedSheetIds = _groupedSheetIds.Contains(tab.Id)
+                ? _workbook.Sheets.Select(sheet => sheet.Id).Where(_groupedSheetIds.Contains).ToList()
+                : [tab.Id];
 
-                sourceIndex = index;
-                break;
-            }
+            // Resolve the dialog's InsertBeforeIndex (an index into the pre-duplication sheet
+            // order) to a stable target sheet id now, before duplication shifts every position
+            // after the source sheets. "InsertBeforeIndex == sheet count" means "move to end".
+            var targetSheetId = dialog.Result.InsertBeforeIndex < _workbook.Sheets.Count
+                ? _workbook.Sheets[dialog.Result.InsertBeforeIndex].Id
+                : (SheetId?)null;
 
-            var postCopySheetCount = _workbook.Sheets.Count + 1;
-            var copyIndex = Math.Min(sourceIndex + 1, postCopySheetCount - 1);
-            var targetIndex = dialog.Result.InsertBeforeIndex <= sourceIndex
-                ? dialog.Result.InsertBeforeIndex
-                : Math.Min(dialog.Result.InsertBeforeIndex, postCopySheetCount - 1);
+            var duplicateCommands = selectedSheetIds
+                .Select(sheetId => (IWorkbookCommand)new DuplicateSheetCommand(sheetId))
+                .ToList();
+            var command = duplicateCommands.Count == 1
+                ? duplicateCommands[0]
+                : new CompositeWorkbookCommand("Move or Copy Sheet", duplicateCommands);
 
-            IWorkbookCommand command = copyIndex == targetIndex
-                ? new DuplicateSheetCommand(tab.Id)
-                : new CompositeWorkbookCommand(
-                    "Move or Copy Sheet",
-                    [
-                        new DuplicateSheetCommand(tab.Id),
-                        new MoveSheetCommand(copyIndex, targetIndex)
-                    ]);
+            var preExistingIds = _workbook.Sheets.Select(sheet => sheet.Id).ToHashSet();
             if (!TryExecuteCommand(command, "Move or Copy Sheet"))
                 return;
 
-            _currentSheetId = _workbook.Sheets[Math.Clamp(targetIndex, 0, _workbook.Sheets.Count - 1)].Id;
+            var copySheetIds = _workbook.Sheets
+                .Select(sheet => sheet.Id)
+                .Where(id => !preExistingIds.Contains(id))
+                .ToList();
+
+            var targetIndex = targetSheetId is { } id
+                ? FindWorkbookSheetIndex(id)
+                : _workbook.Sheets.Count;
+            if (targetIndex < 0)
+                targetIndex = _workbook.Sheets.Count;
+
+            if (copySheetIds.Count > 0 &&
+                !TryExecuteCommand(new MoveSheetsCommand(copySheetIds, targetIndex), "Move or Copy Sheet"))
+                return;
+
+            _currentSheetId = copySheetIds.Count > 0
+                ? copySheetIds[^1]
+                : _workbook.Sheets[Math.Clamp(targetIndex, 0, _workbook.Sheets.Count - 1)].Id;
         }
         else
         {
@@ -1768,7 +1797,7 @@ public partial class MainWindow
 
     private void UnhideSheet()
     {
-        var hiddenSheets = _workbook.Sheets.Where(s => s.IsHidden).ToList();
+        var hiddenSheets = _workbook.Sheets.Where(s => s.IsHidden && !s.IsVeryHidden).ToList();
         if (hiddenSheets.Count == 0)
         {
             _messageService.ShowInfo(

@@ -118,7 +118,7 @@ internal static class XlsxWorkbookMetadataReader
             if (!isStructureProtected)
                 return WorkbookProtectionState.None;
 
-            var passwordHash = protection.Attribute("workbookPassword")?.Value;
+            var passwordHash = ReadWorkbookPasswordHash(protection);
 
             return new WorkbookProtectionState(true, passwordHash);
         }
@@ -404,9 +404,33 @@ internal static class XlsxWorkbookMetadataReader
         if (!isStructureProtected)
             return WorkbookProtectionState.None;
 
-        var passwordHash = protection.Attribute("workbookPassword")?.Value;
+        var passwordHash = ReadWorkbookPasswordHash(protection);
 
         return new WorkbookProtectionState(true, passwordHash);
+    }
+
+    /// <summary>
+    /// Reads the legacy 4-hex <c>workbookPassword</c> attribute when present, otherwise falls back to
+    /// the modern ISO 29500 salted/iterated hash (<c>algorithmName</c>/<c>hashValue</c>/<c>saltValue</c>/
+    /// <c>spinCount</c>) Excel writes by default since Excel 2013 — encoded so
+    /// <see cref="ProtectionPasswordHelper.VerifyStoredPassword"/> can verify against it. Returns null
+    /// when neither scheme is present (structure locked with no password at all).
+    /// </summary>
+    private static string? ReadWorkbookPasswordHash(XElement protection)
+    {
+        var legacyPassword = protection.Attribute("workbookPassword")?.Value;
+        if (!string.IsNullOrEmpty(legacyPassword))
+            return legacyPassword;
+
+        var hashValue = protection.Attribute("workbookHashValue")?.Value;
+        if (string.IsNullOrEmpty(hashValue))
+            return null;
+
+        return ProtectionPasswordHelper.EncodeIso29500Hash(
+            protection.Attribute("workbookAlgorithmName")?.Value,
+            protection.Attribute("workbookSpinCount")?.Value,
+            protection.Attribute("workbookSaltValue")?.Value,
+            hashValue);
     }
 
     private static NativeXmlPreserveBag? LoadProtectionMetadata(XDocument workbookXml)

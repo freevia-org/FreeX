@@ -4,6 +4,21 @@ public sealed record CommentReply(string Text, string Author = "FreeX")
 {
     public DateTimeOffset? CreatedAtUtc { get; init; }
     public DateTimeOffset? ModifiedAtUtc { get; init; }
+
+    /// <summary>
+    /// The stable threadedComment id (a GUID string, e.g. "{5A2F...}") this reply was loaded
+    /// with from the source XLSX, or null for a reply created in this session that has not
+    /// yet been saved. Preserved across saves so reply ids/parentId linkage do not churn when
+    /// unrelated content (e.g. the root comment's text) changes.
+    /// </summary>
+    public string? Id { get; init; }
+
+    /// <summary>
+    /// The raw, unparsed <c>&lt;extLst&gt;</c> XML fragment (if any) from the source
+    /// threadedComment element, e.g. Excel's @mention <c>mentions</c> extension. Round-tripped
+    /// verbatim on save since FreeX does not model @mention linkage.
+    /// </summary>
+    public string? MentionsXml { get; init; }
 }
 
 public sealed record ThreadedComment(string Text, string Author = "FreeX")
@@ -12,6 +27,21 @@ public sealed record ThreadedComment(string Text, string Author = "FreeX")
     public bool IsResolved { get; init; } = false;
     public DateTimeOffset? CreatedAtUtc { get; init; }
     public DateTimeOffset? ModifiedAtUtc { get; init; }
+
+    /// <summary>
+    /// The stable threadedComment id (a GUID string, e.g. "{5A2F...}") this root comment was
+    /// loaded with from the source XLSX, or null for a comment created in this session that has
+    /// not yet been saved. Preserved across saves so this id (and every reply's parentId, which
+    /// references it) does not regenerate/cascade-change when the comment's text is edited.
+    /// </summary>
+    public string? Id { get; init; }
+
+    /// <summary>
+    /// The raw, unparsed <c>&lt;extLst&gt;</c> XML fragment (if any) from the source
+    /// threadedComment element, e.g. Excel's @mention <c>mentions</c> extension. Round-tripped
+    /// verbatim on save since FreeX does not model @mention linkage.
+    /// </summary>
+    public string? MentionsXml { get; init; }
 }
 
 /// <summary>
@@ -142,6 +172,14 @@ public sealed partial class Sheet
 
     /// <summary>Saved active cell column from the worksheet view, when present.</summary>
     public uint? ActiveCol { get; set; }
+
+    /// <summary>
+    /// True when this sheet is authored right-to-left (OOXML <c>sheetView/@rightToLeft</c>), as Excel
+    /// sets via Page Layout &gt; Sheet Right-to-Left for Arabic/Hebrew workbooks. Mirrors column order
+    /// (column A on the right), header side, and scrollbar side; consumers that render the grid or
+    /// resolve cell alignment must consult this alongside <see cref="CellStyle.ReadingOrder"/>.
+    /// </summary>
+    public bool IsRightToLeft { get; set; }
 
     /// <summary>
     /// Optional worksheet print areas (Excel supports comma-separated ranges on the
@@ -848,6 +886,74 @@ public sealed partial class Sheet
             yield return new CellAddress(Id, row, col);
     }
 
+    /// <summary>
+    /// If <paramref name="address"/> is any cell belonging to a live dynamic-array spill range or a
+    /// legacy CSE array's declared range — whether the anchor itself or one of its covered members —
+    /// returns the anchor address and the array's full extent (rows × cols, including the anchor).
+    /// Covers provisional cached-spill cells loaded from an XLSX before the first recalculation has
+    /// run, as well as anchors/members produced by a live in-session <see cref="SetSpillRange"/>.
+    /// Returns false for cells with no array/spill membership at all.
+    /// Used to block edits/deletes that would split an array — Excel's "You cannot change part of
+    /// an array" rule — while still allowing the whole array to be edited as a unit.
+    /// </summary>
+    public bool TryGetArrayExtent(CellAddress address, out CellAddress anchor, out uint rows, out uint cols)
+    {
+        var key = (address.Row, address.Col);
+
+        // Address is itself a live spill anchor.
+        if (_spillAnchors.TryGetValue(key, out var ownExtent))
+        {
+            anchor = address;
+            rows = ownExtent.Rows;
+            cols = ownExtent.Cols;
+            return true;
+        }
+
+        // Address is a member covered by some other live spill anchor.
+        foreach (var (anchorKey, extent) in _spillAnchors)
+        {
+            if (address.Row < anchorKey.Row || address.Col < anchorKey.Col) continue;
+            if (address.Row >= anchorKey.Row + extent.Rows || address.Col >= anchorKey.Col + extent.Cols) continue;
+            anchor = new CellAddress(Id, anchorKey.Row, anchorKey.Col);
+            rows = extent.Rows;
+            cols = extent.Cols;
+            return true;
+        }
+
+        // Provisional cached-spill cell (legacy CSE array or dynamic array loaded from XLSX, not yet
+        // recalculated) — either the address is itself tagged as a member, or it is the anchor of one
+        // or more provisional members (the anchor itself is never a key in _provisionalSpillCells).
+        if (_provisionalSpillCells is { Count: > 0 })
+        {
+            (uint AnchorRow, uint AnchorCol) owningAnchor;
+            if (!_provisionalSpillCells.TryGetValue(key, out owningAnchor))
+                owningAnchor = (address.Row, address.Col);
+
+            rows = 0;
+            cols = 0;
+            var found = false;
+            foreach (var (memberKey, memberOwner) in _provisionalSpillCells)
+            {
+                if (memberOwner != owningAnchor) continue;
+                found = true;
+                rows = Math.Max(rows, memberKey.Row - owningAnchor.AnchorRow + 1);
+                cols = Math.Max(cols, memberKey.Col - owningAnchor.AnchorCol + 1);
+            }
+            if (found)
+            {
+                anchor = new CellAddress(Id, owningAnchor.AnchorRow, owningAnchor.AnchorCol);
+                rows = Math.Max(rows, 1);
+                cols = Math.Max(cols, 1);
+                return true;
+            }
+        }
+
+        anchor = default;
+        rows = 0;
+        cols = 0;
+        return false;
+    }
+
     /// <summary>Get the value at a cell address, returning BlankValue if no cell exists.</summary>
     public ScalarValue GetValue(uint row, uint col)
     {
@@ -917,6 +1023,14 @@ public sealed partial class Sheet
 
     /// <summary>Whether any spill values have been written to this sheet (i.e. at least one dynamic-array formula has spilled).</summary>
     public bool HasSpillValues => _spillValues.Count > 0;
+
+    /// <summary>
+    /// Whether this sheet has any live spill anchor or provisional cached-spill cell at all — i.e.
+    /// whether <see cref="TryGetArrayExtent"/> could possibly return true for any address. Lets
+    /// callers cheaply skip a per-cell array-membership scan over a large range when the sheet has
+    /// no arrays/spills whatsoever.
+    /// </summary>
+    public bool HasArrayOrSpillMembers => _spillAnchors.Count > 0 || _provisionalSpillCells is { Count: > 0 };
 
     /// <summary>Get all non-empty cells as a dictionary keyed by CellAddress.</summary>
     public Dictionary<CellAddress, Cell> GetUsedCells()

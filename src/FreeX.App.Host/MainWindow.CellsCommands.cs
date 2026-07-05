@@ -720,7 +720,7 @@ public partial class MainWindow
 
     private void OnAutofillRequested(GridRange sourceRange, GridRange fillRange)
     {
-        var cmd = new AutofillCommand(_currentSheetId, sourceRange, fillRange);
+        var cmd = new AutofillCommand(_currentSheetId, sourceRange, fillRange, _autofillCtrlHeld);
         if (!TryExecuteCommand(cmd, "Autofill", out var outcome))
             return;
 

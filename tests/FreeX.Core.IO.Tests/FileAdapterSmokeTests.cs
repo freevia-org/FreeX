@@ -3811,8 +3811,11 @@ public partial class FileAdapterSmokeTests
         BagAttr(loadedSheet.ProtectionMetadata, "sheetProtection", "hashValue").Should().Be("AQIDBA==");
         BagAttr(loadedSheet.ProtectionMetadata, "sheetProtection", "saltValue").Should().Be("BQYHCA==");
         BagAttr(loadedSheet.ProtectionMetadata, "sheetProtection", "spinCount").Should().Be("100000");
-        BagAttr(loadedSheet.ProtectionMetadata, "sheetProtection", "objects").Should().Be("1");
-        BagAttr(loadedSheet.ProtectionMetadata, "sheetProtection", "scenarios").Should().Be("1");
+        // objects/scenarios are no longer preserved as opaque metadata: they are now modeled via
+        // Sheet.ProtectionPermissions (see XlsxSheetProtectionPermissionMapper), which is what
+        // actually drives the "1" values re-emitted below.
+        loadedSheet.ProtectionPermissions.Should().NotContain(SheetProtectionPermission.EditObjects);
+        loadedSheet.ProtectionPermissions.Should().NotContain(SheetProtectionPermission.EditScenarios);
         BagChildren(loadedSheet.ProtectionMetadata, "sheetProtection").Should().BeEmpty();
         AddBagAttr(loadedSheet.ProtectionMetadata!, "sheetProtection", "invalid protection attr", "skip");
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));

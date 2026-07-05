@@ -104,7 +104,12 @@ public sealed class DefineNamedRangeCommand : IWorkbookCommand
 
 /// <summary>
 /// Command to remove a named range from the workbook, either workbook-global or scoped to a
-/// single sheet. Supports undo: restores the range (in its original scope) on Revert.
+/// single sheet. Supports undo: restores the range (in its original scope) on Revert. When no
+/// range by this name exists in the target scope, falls back to removing a named
+/// <em>formula</em> (<see cref="Workbook.NamedFormulas"/>/<see cref="Workbook.ScopedNamedFormulas"/>)
+/// of the same name/scope instead — the Name Manager's Delete action works on any defined name
+/// regardless of whether it resolves to a range or a formula/constant expression, and undo
+/// restores whichever kind was actually removed.
 /// </summary>
 public sealed class RemoveNamedRangeCommand : IWorkbookCommand
 {
@@ -113,6 +118,8 @@ public sealed class RemoveNamedRangeCommand : IWorkbookCommand
     private GridRange _previousRange;
     private NamedRangeMetadata? _previousMetadata;
     private bool _existed;
+    private bool _wasFormula;
+    private string? _previousFormulaText;
 
     public string Label => $"Remove Named Range '{_name}'";
 
@@ -130,22 +137,42 @@ public sealed class RemoveNamedRangeCommand : IWorkbookCommand
         if (_scopeSheetId is { } scopeSheetId)
         {
             _existed = ctx.Workbook.ScopedNamedRanges.TryGetValue((_name, scopeSheetId), out _previousRange);
-            if (!_existed)
-                return new CommandOutcome(false, $"Named range '{_name}' does not exist.");
+            if (_existed)
+            {
+                ctx.Workbook.TryGetScopedNamedRangeMetadata(_name, scopeSheetId, out _previousMetadata);
+                ctx.Workbook.RemoveScopedNamedRange(_name, scopeSheetId);
+                return new CommandOutcome(true);
+            }
 
-            ctx.Workbook.TryGetScopedNamedRangeMetadata(_name, scopeSheetId, out _previousMetadata);
-            ctx.Workbook.RemoveScopedNamedRange(_name, scopeSheetId);
-            return new CommandOutcome(true);
+            if (ctx.Workbook.ScopedNamedFormulas.TryGetValue((_name, scopeSheetId), out _previousFormulaText))
+            {
+                _existed = true;
+                _wasFormula = true;
+                ctx.Workbook.RemoveScopedNamedFormula(_name, scopeSheetId);
+                return new CommandOutcome(true);
+            }
+
+            return new CommandOutcome(false, $"Named range '{_name}' does not exist.");
         }
 
         _existed = ctx.Workbook.TryGetNamedRange(_name, out _previousRange);
-        if (!_existed)
-            return new CommandOutcome(false, $"Named range '{_name}' does not exist.");
+        if (_existed)
+        {
+            if (ctx.Workbook.TryGetNamedRangeMetadata(_name, out var metadata))
+                _previousMetadata = metadata;
+            ctx.Workbook.RemoveNamedRange(_name);
+            return new CommandOutcome(true);
+        }
 
-        if (ctx.Workbook.TryGetNamedRangeMetadata(_name, out var metadata))
-            _previousMetadata = metadata;
-        ctx.Workbook.RemoveNamedRange(_name);
-        return new CommandOutcome(true);
+        if (ctx.Workbook.NamedFormulas.TryGetValue(_name, out _previousFormulaText))
+        {
+            _existed = true;
+            _wasFormula = true;
+            ctx.Workbook.RemoveNamedFormula(_name);
+            return new CommandOutcome(true);
+        }
+
+        return new CommandOutcome(false, $"Named range '{_name}' does not exist.");
     }
 
     public void Revert(ICommandContext ctx)
@@ -153,10 +180,94 @@ public sealed class RemoveNamedRangeCommand : IWorkbookCommand
         if (!_existed)
             return;
 
+        if (_wasFormula)
+        {
+            if (_scopeSheetId is { } formulaScopeSheetId)
+                ctx.Workbook.DefineNamedFormula(_name, _previousFormulaText!, formulaScopeSheetId);
+            else
+                ctx.Workbook.NamedFormulas[_name] = _previousFormulaText!;
+            return;
+        }
+
         if (_scopeSheetId is { } scopeSheetId)
             ctx.Workbook.DefineNamedRange(_name, _previousRange, _previousMetadata, scopeSheetId);
         else
             ctx.Workbook.DefineNamedRange(_name, _previousRange, _previousMetadata);
+    }
+}
+
+/// <summary>
+/// Command to define (or replace) a named <em>formula</em> — a defined name whose refers-to is a
+/// formula/constant expression (e.g. <c>=1.05</c> or <c>=SUM(Sheet1!A:A)</c>) rather than a plain
+/// cell range — either workbook-global or scoped to a single sheet (Excel "localSheetId"). This is
+/// the formula counterpart to <see cref="DefineNamedRangeCommand"/>: the Define Name dialogs route
+/// here when the refers-to text does not resolve to a range/cell/existing-name reference but does
+/// parse as a formula expression, so a user can create or edit a named formula/constant from the
+/// UI instead of only being able to load one from a file. Supports undo: if the name previously
+/// existed in the target scope, its old formula text is restored on Revert; if newly created, it
+/// is removed on Revert.
+/// </summary>
+public sealed class DefineNamedFormulaCommand : IWorkbookCommand
+{
+    private readonly string _name;
+    private readonly string _formulaText;
+    private readonly SheetId? _scopeSheetId;
+
+    // Snapshot captured during Apply for undo
+    private bool _existed;
+    private string? _previousFormulaText;
+
+    public string Label => $"Define Named Formula '{_name}'";
+
+    /// <param name="name">The defined name.</param>
+    /// <param name="formulaText">The refers-to formula/constant text, without the leading '='.</param>
+    /// <param name="scopeSheetId">
+    ///   When set, the name is defined with sheet scope (Excel "localSheetId") on this sheet
+    ///   instead of workbook-global.
+    /// </param>
+    public DefineNamedFormulaCommand(string name, string formulaText, SheetId? scopeSheetId = null)
+    {
+        _name = name;
+        _formulaText = formulaText;
+        _scopeSheetId = scopeSheetId;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        if (CommandGuards.RejectIfWorkbookStructureProtected(ctx.Workbook) is { } protectedOutcome)
+            return protectedOutcome;
+
+        var validationError = ctx.Workbook.ValidateNamedRangeName(_name);
+        if (validationError is not null)
+            return new CommandOutcome(false, validationError);
+
+        if (_scopeSheetId is { } scopeSheetId)
+        {
+            _existed = ctx.Workbook.ScopedNamedFormulas.TryGetValue((_name, scopeSheetId), out _previousFormulaText);
+            ctx.Workbook.DefineNamedFormula(_name, _formulaText, scopeSheetId);
+            return new CommandOutcome(true);
+        }
+
+        _existed = ctx.Workbook.NamedFormulas.TryGetValue(_name, out _previousFormulaText);
+        ctx.Workbook.NamedFormulas[_name] = _formulaText;
+        return new CommandOutcome(true);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_scopeSheetId is { } scopeSheetId)
+        {
+            if (_existed)
+                ctx.Workbook.DefineNamedFormula(_name, _previousFormulaText!, scopeSheetId);
+            else
+                ctx.Workbook.RemoveScopedNamedFormula(_name, scopeSheetId);
+            return;
+        }
+
+        if (_existed)
+            ctx.Workbook.NamedFormulas[_name] = _previousFormulaText!;
+        else
+            ctx.Workbook.RemoveNamedFormula(_name);
     }
 }
 

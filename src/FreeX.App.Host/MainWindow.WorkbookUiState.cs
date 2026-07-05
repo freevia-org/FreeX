@@ -161,7 +161,12 @@ public partial class MainWindow
     }
 
     private string FormatFormulaBarText(Cell? cell, CellAddress address) =>
-        SpreadsheetDisplayFormatter.FormatFormulaBarText(cell, address, _options.UseR1C1ReferenceStyle);
+        SpreadsheetDisplayFormatter.FormatFormulaBarText(
+            cell,
+            address,
+            _options.UseR1C1ReferenceStyle,
+            _workbook.GetSheet(address.Sheet),
+            _workbook);
 
     private void InvalidateToolbarVisualState()
     {

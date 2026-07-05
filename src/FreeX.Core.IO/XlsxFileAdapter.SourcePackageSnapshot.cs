@@ -6458,8 +6458,8 @@ public sealed partial class XlsxFileAdapter
             var sheet = new Sheet(patch.SheetId, patch.WorksheetPath);
             patch.Current.ApplyTo(sheet);
             // XlsxWorksheetViewBaseline only tracks ViewMode/ShowGridlines/ShowHeadings/
-            // ShowRulers/ZoomPercent/ShowFormulas, so the synthetic Sheet built above never
-            // carries the scroll position (topLeftCell). Seed it from the worksheet's own
+            // ShowRulers/ZoomPercent/ShowFormulas/IsRightToLeft, so the synthetic Sheet built
+            // above never carries the scroll position (topLeftCell). Seed it from the worksheet's own
             // existing sheetView before rewriting, so patching an unrelated view attribute
             // (e.g. zoom) doesn't silently strip the user's real scroll position.
             var (existingTopRow, existingLeftCol) = ReadExistingTopLeftCell(worksheetXml);
@@ -8690,7 +8690,8 @@ public sealed partial class XlsxFileAdapter
         bool ShowHeadings,
         bool ShowRulers,
         int ZoomPercent,
-        bool ShowFormulas)
+        bool ShowFormulas,
+        bool IsRightToLeft)
     {
         public static XlsxWorksheetViewBaseline Capture(Sheet sheet) =>
             new(
@@ -8699,7 +8700,8 @@ public sealed partial class XlsxFileAdapter
                 sheet.ShowHeadings,
                 sheet.ShowRulers,
                 XlsxWorksheetValueSanitizer.ValidZoomPercentOrDefault(sheet.ZoomPercent),
-                sheet.ShowFormulas);
+                sheet.ShowFormulas,
+                sheet.IsRightToLeft);
 
         public int CountDifferences(XlsxWorksheetViewBaseline other)
         {
@@ -8716,6 +8718,8 @@ public sealed partial class XlsxFileAdapter
                 count++;
             if (ShowFormulas != other.ShowFormulas)
                 count++;
+            if (IsRightToLeft != other.IsRightToLeft)
+                count++;
 
             return count;
         }
@@ -8728,6 +8732,7 @@ public sealed partial class XlsxFileAdapter
             sheet.ShowRulers = ShowRulers;
             sheet.ZoomPercent = ZoomPercent;
             sheet.ShowFormulas = ShowFormulas;
+            sheet.IsRightToLeft = IsRightToLeft;
         }
     }
 

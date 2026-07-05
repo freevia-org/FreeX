@@ -16,6 +16,8 @@ public sealed partial class XlsxFileAdapter
         sheet.IsProtected = layout.IsProtected;
         sheet.ProtectionPassword = layout.ProtectionPasswordHash;
         sheet.ProtectionMetadata = layout.ProtectionMetadata;
+        sheet.ProtectionPermissions.Clear();
+        sheet.ProtectionPermissions.AddRange(layout.ProtectionPermissions);
         foreach (var range in layout.AllowEditRanges)
             sheet.AllowEditRanges.Add(new GridRange(
                 new CellAddress(sheet.Id, range.Start.Row, range.Start.Col),
@@ -30,6 +32,7 @@ public sealed partial class XlsxFileAdapter
         sheet.ShowRulers = layout.ShowRulers;
         sheet.ZoomPercent = layout.ZoomPercent;
         sheet.ShowFormulas = layout.ShowFormulas;
+        sheet.IsRightToLeft = layout.IsRightToLeft;
         if (layout.DefaultColumnWidth is { } defaultColumnWidth)
             sheet.DefaultColumnWidth = defaultColumnWidth;
         if (layout.DefaultRowHeight is { } defaultRowHeight)

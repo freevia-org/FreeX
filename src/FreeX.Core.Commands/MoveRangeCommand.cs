@@ -27,7 +27,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
     private Dictionary<Guid, string?>? _cfFormulaSnapshot;
     private Dictionary<(Guid Id, int Slot), string?>? _cfThresholdSnapshot;
     private Dictionary<(Guid Id, int Slot), string?>? _dvFormulaSnapshot;
-    private List<RowColumnShiftHelpers.ChartVerbatimSnapshot?>? _chartVerbatimSnapshot;
+    private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
 
     public string Label => "Move Cells";
 
@@ -115,8 +115,8 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         _cfThresholdSnapshot = [];
         _dvFormulaSnapshot = [];
         RowColumnShiftHelpers.RewriteRuleFormulas(sheet, moveOp, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
-        _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(sheet);
-        RowColumnShiftHelpers.RewriteChartVerbatimFormulas(sheet, moveOp, sheet.Name);
+        _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
+        RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, moveOp);
 
         var payloads = CaptureSourcePayloads(sheet, _sourceRange, _destination);
 
@@ -140,7 +140,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
             RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         if (_cfFormulaSnapshot is not null || _cfThresholdSnapshot is not null || _dvFormulaSnapshot is not null)
             RowColumnShiftHelpers.RestoreRuleFormulas(sheet, _cfFormulaSnapshot ?? [], _cfThresholdSnapshot ?? [], _dvFormulaSnapshot ?? []);
-        RowColumnShiftHelpers.RestoreChartVerbatimFormulas(sheet, _chartVerbatimSnapshot);
+        RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
 
         foreach (var snapshot in _snapshot)
             RestoreCellSnapshot(sheet, snapshot);

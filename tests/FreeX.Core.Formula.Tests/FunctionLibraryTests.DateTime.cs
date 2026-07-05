@@ -930,10 +930,12 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Yearfrac_Basis1_ReversedRange_ReturnsFiniteNegative()
+    public void Yearfrac_Basis1_ReversedRange_ReturnsFinitePositive()
     {
         // Previously the actual/actual denominator loop did not execute when
         // start.Year > end.Year, returning 0 and causing divide-by-zero.
+        // Excel's YEARFRAC always returns a non-negative fraction regardless
+        // of argument order, so a reversed range must match the forward range.
         double start = new DateTime(2024, 1, 1).ToOADate();
         double end   = new DateTime(2022, 1, 1).ToOADate();
         var sheet = MakeSheet((1, 1, new NumberValue(start)), (1, 2, new NumberValue(end)));
@@ -941,7 +943,7 @@ public partial class FunctionLibraryTests
         result.Should().BeOfType<NumberValue>();
         var value = ((NumberValue)result).Value;
         double.IsFinite(value).Should().BeTrue();
-        value.Should().BeApproximately(-2.0, 0.05);
+        value.Should().BeApproximately(2.0, 0.05);
     }
 
     // Q10 regression: YEARFRAC basis 1 ≤1-year denominator (Excel actual/actual)

@@ -58,6 +58,18 @@ public static class TextToColumnsValueConverter
                 TryParseFiniteNumberWithValidGrouping(text, CultureInfo.InvariantCulture, out number);
         }
 
+        // Excel's Text Import Wizard forbids identical Decimal/Thousands separators outright, because
+        // stripping the thousands separator first would also erase the decimal marker and silently
+        // truncate the value (e.g. "1,234" with both set to "," would parse as 1234 instead of 1.234).
+        // Treat that as an invalid configuration rather than risk 1000x data corruption.
+        if (!string.IsNullOrEmpty(advancedOptions.DecimalSeparator) &&
+            !string.IsNullOrEmpty(advancedOptions.ThousandsSeparator) &&
+            string.Equals(advancedOptions.DecimalSeparator, advancedOptions.ThousandsSeparator, StringComparison.Ordinal))
+        {
+            number = default;
+            return false;
+        }
+
         var normalized = text.Trim();
         if (advancedOptions.TrailingMinusNumbers && normalized.EndsWith("-", StringComparison.Ordinal))
             normalized = "-" + normalized[..^1];

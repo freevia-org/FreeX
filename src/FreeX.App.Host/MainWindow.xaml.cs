@@ -114,6 +114,10 @@ public partial class MainWindow : Window, IWorkbookWindow
     // Remembers each sheet's selection within this window so switching sheets restores it (Excel parity).
     private readonly FreeX.Core.Commands.WorksheetSelectionStore _worksheetSelections = new();
     private bool _endMode;
+    // Captured from GridView.AutofillModifiersResolved immediately before the paired
+    // AutofillRequested call, so OnAutofillRequested can pass Excel's Ctrl-flip state
+    // (copy<->series) into AutofillCommand.
+    private bool _autofillCtrlHeld;
     private bool _dragSelectActive;
     private bool _dragSelectAddsAdditionalRange;
     private bool _dragSelectionTransientOverlaysCleared;
@@ -344,6 +348,7 @@ public partial class MainWindow : Window, IWorkbookWindow
         SheetGrid.ColumnResizing += OnColumnResizing;
         SheetGrid.RowResizing    += OnRowResizing;
         SheetGrid.ResizeCanceled += OnResizeCanceled;
+        SheetGrid.AutofillModifiersResolved += ctrlHeld => _autofillCtrlHeld = ctrlHeld;
         SheetGrid.AutofillRequested += OnAutofillRequested;
         SheetGrid.AutofillEdgeScrollRequested += OnAutofillEdgeScrollRequested;
         SheetGrid.SelectionMoveRequested += OnSelectionMoveRequested;

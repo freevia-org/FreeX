@@ -50,3 +50,15 @@
 - If a build fails because another process locks output files, identify and clear the stale process before rerunning.
 - If a build or test command still fails because of stale build-server or shared-compiler state after clearing locks, rerun that command once with `--disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1` before treating it as a product failure.
 - Report exact verification commands and outcomes in the final response.
+
+## Process & Resource Hygiene
+
+Every session must leave the machine as clean as it found it. Leftover Windows helper and build processes (`find.exe`, `grep.exe`, `head.exe`, `sed.exe`, `awk.exe`, `conhost.exe`, orphaned `dotnet`/`MSBuild`/`VBCSCompiler`/`testhost` nodes) accumulate across parallel sessions and thrash the box — several sessions building at once has caused MSB4166/OutOfMemory build crashes and stalled hangs.
+
+- Prefer the harness's dedicated **Grep / Glob / Read** tools over shell `grep`/`find`/`head`/`cat`/`sed`/`awk`. On Windows/Git Bash each shell filter spawns a short-lived process wrapped in its own `conhost.exe`; a deep `... | grep | sort | head` pipeline spawns several per call and they pile up. Keep any unavoidable shell pipelines shallow (one filter, not a chain).
+- **Do not orphan background builds/tests.** A backgrounded `dotnet build`/`dotnet test` that is still running when the session pauses or ends leaves MSBuild nodes + `testhost` + `VBCSCompiler` alive. Either run verification in the foreground, or if backgrounded, actively confirm it finished and reap it before moving on. Do not launch a replacement build while a prior one you started is still running — wait for or cancel the first.
+- **Shut down build servers when done.** Before finishing a task, pausing, or handing off, run `dotnet build-server shutdown` to release this session's persistent MSBuild/Roslyn nodes.
+- **Never kill processes machine-wide.** Do NOT run `taskkill /F /IM dotnet.exe` (or any `/IM`-by-image kill) or otherwise kill processes you did not start — it aborts every other session's builds and tests. If you must clear a stale process, target the specific PID your own session spawned.
+- Kill stale `testhost.exe` from your own runs (they can hold `bin\...Tests.dll` and cause `MSB3027` file-locked failures) by PID, not by image name.
+- Subagents/implementers that build or test inherit all of the above; every prompt that grants build/test access must restate: no machine-wide kills, no orphaned background builds, prefer dedicated search tools over shell filters, and `build-server shutdown` when done.
+- Clean up temp/scratch files, throwaway probe projects, and stray app instances the session created, in addition to the branch/worktree cleanup covered above.

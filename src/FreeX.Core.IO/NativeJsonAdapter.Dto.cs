@@ -521,6 +521,7 @@ public sealed partial class NativeJsonAdapter
         public bool? ShowRulers { get; set; }
         public int? ZoomPercent { get; set; }
         public bool? ShowFormulas { get; set; }
+        public bool? IsRightToLeft { get; set; }
         public bool? ShowZeros { get; set; }
         public bool FullCalculationOnLoad { get; set; }
         public WorksheetPhoneticPropertiesDto? PhoneticProperties { get; set; }

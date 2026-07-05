@@ -52,10 +52,16 @@ public sealed class AvaloniaGridMergeShrinkFreezeSelectionTests
         // ResolveVisibleMergeSpan must feed the anchor's own summed dimensions into CreateCell so
         // alignment/ShrinkToFit measurement operates on the FULL merged rectangle, not just the
         // anchor's single row/column.
+        //
+        // Updated for K10 (review5): ResolveVisibleMergeSpan now takes explicit rowMetrics/colMetrics
+        // lists instead of a ViewportModel, so BuildSheetGrid can pass the split-pane-combined lists
+        // (see AvaloniaMainWindowSplitPaneRtlTests) instead of always the main pane's
+        // viewport.RowMetrics/ColMetrics. See AvaloniaMainWindowSplitPaneRtlTests for the split
+        // coverage this enables.
         var method = ExtractMethod("private static (int RowSpan, int ColSpan, double Height, double Width) ResolveVisibleMergeSpan(", "private Canvas BuildDrawingObjectOverlay(");
 
-        method.Should().Contain("height += GetDisplayedRowHeight(viewport.RowMetrics[nextRowIndex], zoomFactor);");
-        method.Should().Contain("width += GetDisplayedColumnWidth(viewport.ColMetrics[nextColIndex], zoomFactor);");
+        method.Should().Contain("height += GetDisplayedRowHeight(rowMetrics[nextRowIndex], zoomFactor);");
+        method.Should().Contain("width += GetDisplayedColumnWidth(colMetrics[nextColIndex], zoomFactor);");
         method.Should().Contain("return (rowSpan, colSpan, height, width);");
     }
 

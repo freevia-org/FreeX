@@ -26,6 +26,7 @@ public sealed partial class Sheet
             ViewLeftCol                   = ViewLeftCol,
             ActiveRow                     = ActiveRow,
             ActiveCol                     = ActiveCol,
+            IsRightToLeft                 = IsRightToLeft,
             ShowGridlines                 = ShowGridlines,
             ShowHeadings                  = ShowHeadings,
             ShowRulers                    = ShowRulers,

@@ -425,7 +425,9 @@ public sealed partial class MainWindow : Window
     private readonly AvaloniaGrid _statusZoomSliderHost = new();
     private readonly Border _statusZoomSliderThumb = new();
     private readonly Slider _statusZoomSlider = new();
-    private readonly TextBlock _cellAddressText = new();
+    private readonly TextBox _cellAddressText = new();
+    private readonly DropDownButton _cellAddressDropDownButton = new();
+    private bool _cellAddressBoxHasPendingEdit;
     private readonly TextBox _formulaBox = new();
     private TextBox? _inlineCellEditor;
     private CellAddress? _inlineCellEditAddress;
@@ -700,6 +702,32 @@ public sealed partial class MainWindow : Window
     /// used by production code paths.
     /// </summary>
     internal Control RebuildSheetGridForTest() => BuildSheetGrid();
+
+    /// <summary>
+    /// Test-only accessor for the Name Box's current text (K23 regression coverage), so headless
+    /// tests can seed typed input before driving <see cref="RaiseCellAddressBoxKeyDownForTest"/> and
+    /// assert the box's resulting displayed text. Not used by production code paths.
+    /// </summary>
+    internal string? CellAddressBoxTextForTest
+    {
+        get => _cellAddressText.Text;
+        set => _cellAddressText.Text = value;
+    }
+
+    /// <summary>
+    /// Test-only seam that drives the real Name Box KeyDown handling (Enter-to-navigate,
+    /// define-name-by-typing, Escape-to-restore) with a caller-supplied <see cref="KeyEventArgs"/>,
+    /// so assertions can run against the resulting <see cref="Session"/>/box-text state rather than
+    /// only a source-string proxy. Not used by production code paths.
+    /// </summary>
+    internal void RaiseCellAddressBoxKeyDownForTest(KeyEventArgs e) => CellAddressBox_KeyDown(_cellAddressText, e);
+
+    /// <summary>
+    /// Test-only seam exposing the Name Box's basic-autocomplete name list (the same list the
+    /// dropdown chevron's flyout populates on open), so headless tests can assert its contents
+    /// without needing to open a real Avalonia flyout. Not used by production code paths.
+    /// </summary>
+    internal IReadOnlyList<string> CellAddressAutocompleteNamesForTest() => BuildCellAddressAutocompleteNames();
 
     private readonly RecentColorsStore _recentColors = new();
     private MacOsLaunchSmokeDialogSnapshot _launchSmokeDialogEvidence = MacOsLaunchSmokeDialogSnapshot.Empty;
@@ -2951,9 +2979,19 @@ public sealed partial class MainWindow : Window
         _cellAddressText.TextAlignment = TextAlignment.Left;
         _cellAddressText.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
         _cellAddressText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _cellAddressText.Background = Brushes.Transparent;
+        _cellAddressText.BorderThickness = new Thickness(0);
+        _cellAddressText.Padding = new Thickness(0);
+        _cellAddressText.MinHeight = 0;
+        _cellAddressText.Focusable = true;
+        _cellAddressText.GotFocus += CellAddressBox_GotFocus;
+        _cellAddressText.LostFocus += CellAddressBox_LostFocus;
+        _cellAddressText.KeyDown += CellAddressBox_KeyDown;
         AutomationProperties.SetAutomationId(_cellAddressText, "CellAddressText");
         AutomationProperties.SetName(_cellAddressText, "Cell address");
-        AutomationProperties.SetHelpText(_cellAddressText, "Shows the active cell address.");
+        AutomationProperties.SetHelpText(
+            _cellAddressText,
+            "Type a cell reference, range, or defined name and press Enter to navigate, or type a new name to define it.");
 
         var collapsedFormulaBarPlan = FormulaBarChromePlanner.BuildExpansion(expanded: false);
         _formulaBox.MinWidth = 320;
@@ -2974,17 +3012,21 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetHelpText(_formulaBox, FormulaBarText(FormulaBarChromePlanner.FormulaBox.HelpTextResourceKey));
 
         var cellAddressChrome = new DockPanel { LastChildFill = true };
-        var cellAddressChevron = new TextBlock
-        {
-            Text = "\u25BE",
-            FontSize = 10,
-            Foreground = HeaderForeground,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            Margin = new Thickness(2, 0, 0, 0),
-        };
-        DockPanel.SetDock(cellAddressChevron, Dock.Right);
-        cellAddressChrome.Children.Add(cellAddressChevron);
+        _cellAddressDropDownButton.Content = "";
+        _cellAddressDropDownButton.Width = 16;
+        _cellAddressDropDownButton.MinWidth = 16;
+        _cellAddressDropDownButton.Foreground = HeaderForeground;
+        _cellAddressDropDownButton.Background = Brushes.Transparent;
+        _cellAddressDropDownButton.BorderThickness = new Thickness(0);
+        _cellAddressDropDownButton.Padding = new Thickness(0);
+        _cellAddressDropDownButton.HorizontalAlignment = AvaloniaHorizontalAlignment.Center;
+        _cellAddressDropDownButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _cellAddressDropDownButton.Flyout = CreateCellAddressAutocompleteFlyout();
+        AutomationProperties.SetAutomationId(_cellAddressDropDownButton, "CellAddressDropDownButton");
+        AutomationProperties.SetName(_cellAddressDropDownButton, "Name Box list");
+        AutomationProperties.SetHelpText(_cellAddressDropDownButton, "Shows defined names to navigate to.");
+        DockPanel.SetDock(_cellAddressDropDownButton, Dock.Right);
+        cellAddressChrome.Children.Add(_cellAddressDropDownButton);
         cellAddressChrome.Children.Add(_cellAddressText);
 
         var cellAddressBorder = new Border
@@ -3579,7 +3621,8 @@ public sealed partial class MainWindow : Window
         _sheetGridHost.Content = BuildSheetGrid();
         _sheetTabsHost.Content = BuildSheetTabs();
         UpdateSheetTabNavigationVisibility();
-        _cellAddressText.Text = FormatCellReference(_session.ActiveCell);
+        if (!_cellAddressBoxHasPendingEdit)
+            _cellAddressText.Text = FormatCellReference(_session.ActiveCell);
         _isApplyingFormulaBoxText = true;
         try
         {
@@ -4027,7 +4070,29 @@ public sealed partial class MainWindow : Window
         var showHeadings = _session.ActiveSheet.ShowHeadings;
         var zoomFactor = GetActiveZoomFactor();
         var headerOffset = showHeadings ? 1 : 0;
+
+        // Window ▸ Split (viewport.SplitPanes, distinct from Freeze Panes) pins extra rows/columns
+        // ahead of the main scrollable pane, exactly like BuildFrozenAwareRowMetrics/ColMetrics
+        // already pin frozen rows/columns into RowMetrics/ColMetrics themselves. Freeze panes need
+        // no special handling here because they're baked into RowMetrics/ColMetrics upstream; split
+        // panes are NOT (they're kept in the separate SplitPanes.TopRows/LeftColumns/Cells lists so
+        // each pane can eventually scroll independently), so this prepends them into the row/column
+        // sequence actually walked below — producing all four split quadrants (TopLeft/TopRight/
+        // BottomLeft/BottomRight) as one continuous, correctly-ordered grid. This mirrors WPF's
+        // SplitPaneCellLayoutPlanner in spirit (same source metrics/cells), adapted to Avalonia's
+        // single-Grid-of-rows/columns rendering model instead of DrawingContext painting.
+        var rowMetrics = CombineSplitRowMetrics(viewport);
+        var colMetrics = CombineSplitColumnMetrics(viewport);
+        var splitRowCount = viewport.SplitPanes?.TopRows?.Count ?? 0;
+        var splitColCount = viewport.SplitPanes?.LeftColumns?.Count ?? 0;
+
         var cellsByAddress = viewport.Cells.ToDictionary(cell => (cell.Row, cell.Col));
+        if (viewport.SplitPanes?.Cells is { Count: > 0 } splitCells)
+        {
+            foreach (var cell in splitCells)
+                cellsByAddress[(cell.Row, cell.Col)] = cell;
+        }
+
         _sparklinesByCell = BuildSparklineCellLookup(_session.ActiveSheet);
         BuildPivotAdornmentLookups(_session.Workbook, _session.ActiveSheet);
         var grid = new AvaloniaGrid
@@ -4037,22 +4102,22 @@ public sealed partial class MainWindow : Window
 
         if (showHeadings)
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(GetRowHeaderWidth(viewport, zoomFactor)) });
-        foreach (var metric in viewport.ColMetrics)
+        foreach (var metric in colMetrics)
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(GetDisplayedColumnWidth(metric, zoomFactor)) });
 
         if (showHeadings)
             grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(HeaderRowHeight * zoomFactor) });
-        foreach (var metric in viewport.RowMetrics)
+        foreach (var metric in rowMetrics)
             grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(GetDisplayedRowHeight(metric, zoomFactor)) });
 
         if (showHeadings)
         {
             AddGridChild(grid, CreateSelectAllCornerCell(zoomFactor), 0, 0);
-            for (var colIndex = 0; colIndex < viewport.ColMetrics.Count; colIndex++)
+            for (var colIndex = 0; colIndex < colMetrics.Count; colIndex++)
             {
-                var col = viewport.ColMetrics[colIndex].Col;
+                var col = colMetrics[colIndex].Col;
                 var selected = IsSelectedColumn(col);
-                AddGridChild(grid, CreateColumnHeaderCell(col, viewport.ColMetrics[colIndex], selected, zoomFactor), 0, colIndex + headerOffset);
+                AddGridChild(grid, CreateColumnHeaderCell(col, colMetrics[colIndex], selected, zoomFactor), 0, colIndex + headerOffset);
             }
         }
 
@@ -4060,16 +4125,16 @@ public sealed partial class MainWindow : Window
         // span the full merged rectangle (Grid.RowSpan/ColumnSpan) instead of rendering as separate
         // 1x1 slots. Non-anchor member cells are skipped entirely below — the anchor's spanned
         // Border paints over their slots, which suppresses inner gridlines/borders for free.
-        var rowIndexByRow = new Dictionary<uint, int>(viewport.RowMetrics.Count);
-        for (var i = 0; i < viewport.RowMetrics.Count; i++)
-            rowIndexByRow[viewport.RowMetrics[i].Row] = i;
-        var colIndexByCol = new Dictionary<uint, int>(viewport.ColMetrics.Count);
-        for (var i = 0; i < viewport.ColMetrics.Count; i++)
-            colIndexByCol[viewport.ColMetrics[i].Col] = i;
+        var rowIndexByRow = new Dictionary<uint, int>(rowMetrics.Count);
+        for (var i = 0; i < rowMetrics.Count; i++)
+            rowIndexByRow[rowMetrics[i].Row] = i;
+        var colIndexByCol = new Dictionary<uint, int>(colMetrics.Count);
+        for (var i = 0; i < colMetrics.Count; i++)
+            colIndexByCol[colMetrics[i].Col] = i;
 
-        for (var rowIndex = 0; rowIndex < viewport.RowMetrics.Count; rowIndex++)
+        for (var rowIndex = 0; rowIndex < rowMetrics.Count; rowIndex++)
         {
-            var rowMetric = viewport.RowMetrics[rowIndex];
+            var rowMetric = rowMetrics[rowIndex];
             var row = rowMetric.Row;
             var rowHeight = GetDisplayedRowHeight(rowMetric, zoomFactor);
             if (showHeadings)
@@ -4078,9 +4143,9 @@ public sealed partial class MainWindow : Window
                 AddGridChild(grid, CreateRowHeaderCell(row, rowMetric, selectedRow, zoomFactor), rowIndex + headerOffset, 0);
             }
 
-            for (var colIndex = 0; colIndex < viewport.ColMetrics.Count; colIndex++)
+            for (var colIndex = 0; colIndex < colMetrics.Count; colIndex++)
             {
-                var colMetric = viewport.ColMetrics[colIndex];
+                var colMetric = colMetrics[colIndex];
                 var col = colMetric.Col;
                 var address = new CellAddress(_session.ActiveSheet.Id, row, col);
                 var mergeRegion = _session.ActiveSheet.GetMergeRegion(address);
@@ -4127,7 +4192,7 @@ public sealed partial class MainWindow : Window
                 if (mergeRegion is { } anchorMerge)
                 {
                     (rowSpan, colSpan, rowHeight, colWidth) = ResolveVisibleMergeSpan(
-                        anchorMerge, rowIndex, colIndex, rowIndexByRow, colIndexByCol, viewport, zoomFactor, rowHeight, colWidth);
+                        anchorMerge, rowIndex, colIndex, rowIndexByRow, colIndexByCol, rowMetrics, colMetrics, zoomFactor, rowHeight, colWidth);
                 }
 
                 var cellControl = CreateCell(cell, row, col, zoomFactor, colWidth, rowHeight, mergeRegion);
@@ -4138,6 +4203,9 @@ public sealed partial class MainWindow : Window
                 AddGridChild(grid, cellControl, rowIndex + headerOffset, colIndex + headerOffset);
             }
         }
+
+        if (splitRowCount > 0 || splitColCount > 0)
+            AddSplitPaneDividerOverlayToGrid(grid, rowMetrics, colMetrics, splitRowCount, splitColCount, headerOffset);
 
         var overlay = BuildDrawingObjectOverlay(viewport);
         AddDataValidationDropdownOverlay(overlay, viewport, showHeadings, zoomFactor);
@@ -4163,6 +4231,109 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Prepends Window ▸ Split's pinned top rows (<see cref="SplitPaneState.TopRows"/>) ahead of the
+    /// main scrollable pane's <see cref="ViewportModel.RowMetrics"/>, producing one continuous,
+    /// correctly-ordered row sequence that covers all split quadrants. Returns
+    /// <c>viewport.RowMetrics</c> unchanged (no allocation) when the sheet has no row split, so the
+    /// common unsplit case is exactly as before.
+    /// </summary>
+    private static IReadOnlyList<RowMetric> CombineSplitRowMetrics(ViewportModel viewport)
+    {
+        var topRows = viewport.SplitPanes?.TopRows;
+        if (topRows is not { Count: > 0 })
+            return viewport.RowMetrics;
+
+        // The main (BottomRight) pane's own scroll position (sheet.ViewTopRow) is tracked
+        // independently of the split row and can still point above it (e.g. right after Window ▸
+        // Split is first applied at the active cell, before the user scrolls the bottom pane down).
+        // Excel always keeps the scrollable pane's first visible row at or below the split line, so
+        // defensively drop any main-pane row already covered by the pinned block — otherwise the same
+        // row number would appear twice (once pinned, once scrollable) and collide in rowIndexByRow.
+        var lastPinnedRow = topRows[^1].Row;
+        var combined = new List<RowMetric>(topRows.Count + viewport.RowMetrics.Count);
+        combined.AddRange(topRows);
+        foreach (var metric in viewport.RowMetrics)
+        {
+            if (metric.Row > lastPinnedRow)
+                combined.Add(metric);
+        }
+
+        return combined;
+    }
+
+    /// <summary>
+    /// Prepends Window ▸ Split's pinned left columns (<see cref="SplitPaneState.LeftColumns"/>) ahead
+    /// of the main scrollable pane's <see cref="ViewportModel.ColMetrics"/> — the column analogue of
+    /// <see cref="CombineSplitRowMetrics"/>.
+    /// </summary>
+    private static IReadOnlyList<ColMetric> CombineSplitColumnMetrics(ViewportModel viewport)
+    {
+        var leftColumns = viewport.SplitPanes?.LeftColumns;
+        if (leftColumns is not { Count: > 0 })
+            return viewport.ColMetrics;
+
+        // See CombineSplitRowMetrics for why the main pane's own columns are filtered against the
+        // pinned block rather than simply concatenated.
+        var lastPinnedCol = leftColumns[^1].Col;
+        var combined = new List<ColMetric>(leftColumns.Count + viewport.ColMetrics.Count);
+        combined.AddRange(leftColumns);
+        foreach (var metric in viewport.ColMetrics)
+        {
+            if (metric.Col > lastPinnedCol)
+                combined.Add(metric);
+        }
+
+        return combined;
+    }
+
+    /// <summary>
+    /// Draws the Window ▸ Split divider line(s) at the boundary between the pinned split rows/columns
+    /// prepended by <see cref="CombineSplitRowMetrics"/>/<see cref="CombineSplitColumnMetrics"/> and
+    /// the main scrollable pane — the split quadrants themselves are already laid out correctly by
+    /// virtue of being real grid rows/columns (see BuildSheetGrid), so this only needs to paint the
+    /// separating line(s), mirroring <see cref="AddFreezePaneDividerOverlay"/> and WPF's
+    /// GridView.Rendering.Headers.cs RenderSplitDivider.
+    /// </summary>
+    private void AddSplitPaneDividerOverlayToGrid(
+        AvaloniaGrid grid,
+        IReadOnlyList<RowMetric> rowMetrics,
+        IReadOnlyList<ColMetric> colMetrics,
+        int splitRowCount,
+        int splitColCount,
+        int headerOffset)
+    {
+        if (splitRowCount > 0)
+        {
+            var horizontalDivider = new Border
+            {
+                Background = FreezeDividerBrush,
+                Height = FreezeDividerThickness,
+                VerticalAlignment = AvaloniaVerticalAlignment.Bottom,
+                IsHitTestVisible = false,
+            };
+            AvaloniaGrid.SetRow(horizontalDivider, splitRowCount - 1 + headerOffset);
+            AvaloniaGrid.SetColumn(horizontalDivider, 0);
+            AvaloniaGrid.SetColumnSpan(horizontalDivider, colMetrics.Count + headerOffset);
+            grid.Children.Add(horizontalDivider);
+        }
+
+        if (splitColCount > 0)
+        {
+            var verticalDivider = new Border
+            {
+                Background = FreezeDividerBrush,
+                Width = FreezeDividerThickness,
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+                IsHitTestVisible = false,
+            };
+            AvaloniaGrid.SetColumn(verticalDivider, splitColCount - 1 + headerOffset);
+            AvaloniaGrid.SetRow(verticalDivider, 0);
+            AvaloniaGrid.SetRowSpan(verticalDivider, rowMetrics.Count + headerOffset);
+            grid.Children.Add(verticalDivider);
+        }
+    }
+
+    /// <summary>
     /// Computes how far a merge's rendered anchor cell (the true top-left anchor, or — when that
     /// anchor has scrolled out of the viewport — the topmost/leftmost visible substitute resolved
     /// by <see cref="ResolveVisibleMergeAnchor"/>) should span in grid rows/columns, clipped to the
@@ -4181,13 +4352,14 @@ public sealed partial class MainWindow : Window
         int colIndex,
         Dictionary<uint, int> rowIndexByRow,
         Dictionary<uint, int> colIndexByCol,
-        ViewportModel viewport,
+        IReadOnlyList<RowMetric> rowMetrics,
+        IReadOnlyList<ColMetric> colMetrics,
         double zoomFactor,
         double anchorHeight,
         double anchorWidth)
     {
-        var renderedRow = viewport.RowMetrics[rowIndex].Row;
-        var renderedCol = viewport.ColMetrics[colIndex].Col;
+        var renderedRow = rowMetrics[rowIndex].Row;
+        var renderedCol = colMetrics[colIndex].Col;
 
         var rowSpan = 1;
         var height = anchorHeight;
@@ -4195,7 +4367,7 @@ public sealed partial class MainWindow : Window
         {
             if (!rowIndexByRow.TryGetValue(r, out var nextRowIndex) || nextRowIndex != rowIndex + rowSpan)
                 break;
-            height += GetDisplayedRowHeight(viewport.RowMetrics[nextRowIndex], zoomFactor);
+            height += GetDisplayedRowHeight(rowMetrics[nextRowIndex], zoomFactor);
             rowSpan++;
         }
 
@@ -4205,7 +4377,7 @@ public sealed partial class MainWindow : Window
         {
             if (!colIndexByCol.TryGetValue(c, out var nextColIndex) || nextColIndex != colIndex + colSpan)
                 break;
-            width += GetDisplayedColumnWidth(viewport.ColMetrics[nextColIndex], zoomFactor);
+            width += GetDisplayedColumnWidth(colMetrics[nextColIndex], zoomFactor);
             colSpan++;
         }
 
@@ -5459,7 +5631,7 @@ public sealed partial class MainWindow : Window
     private static double CalculateDisplayedGridWidth(ViewportModel viewport, bool showHeadings, double zoomFactor)
     {
         var width = showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0;
-        foreach (var metric in viewport.ColMetrics)
+        foreach (var metric in CombineSplitColumnMetrics(viewport))
             width += GetDisplayedColumnWidth(metric, zoomFactor);
 
         return width;
@@ -5468,7 +5640,7 @@ public sealed partial class MainWindow : Window
     private static double CalculateDisplayedGridHeight(ViewportModel viewport, bool showHeadings, double zoomFactor)
     {
         var height = showHeadings ? HeaderRowHeight * zoomFactor : 0;
-        foreach (var metric in viewport.RowMetrics)
+        foreach (var metric in CombineSplitRowMetrics(viewport))
             height += GetDisplayedRowHeight(metric, zoomFactor);
 
         return height;
@@ -5831,7 +6003,7 @@ public sealed partial class MainWindow : Window
             return false;
 
         var left = GetRowHeaderWidth(_session.Viewport, zoomFactor);
-        foreach (var metric in _session.Viewport.ColMetrics)
+        foreach (var metric in CombineSplitColumnMetrics(_session.Viewport))
         {
             var right = left + GetDisplayedColumnWidth(metric, zoomFactor);
             if (pos.X >= left && pos.X <= right)
@@ -5858,7 +6030,7 @@ public sealed partial class MainWindow : Window
             return false;
 
         var top = HeaderRowHeight * zoomFactor;
-        foreach (var metric in _session.Viewport.RowMetrics)
+        foreach (var metric in CombineSplitRowMetrics(_session.Viewport))
         {
             var bottom = top + GetDisplayedRowHeight(metric, zoomFactor);
             if (pos.Y >= top && pos.Y <= bottom)
@@ -5886,7 +6058,7 @@ public sealed partial class MainWindow : Window
 
         uint? col = null;
         var currentLeft = left;
-        foreach (var metric in _session.Viewport.ColMetrics)
+        foreach (var metric in CombineSplitColumnMetrics(_session.Viewport))
         {
             var right = currentLeft + GetDisplayedColumnWidth(metric, zoomFactor);
             if (pos.X >= currentLeft && pos.X <= right)
@@ -5903,7 +6075,7 @@ public sealed partial class MainWindow : Window
 
         uint? row = null;
         var currentTop = top;
-        foreach (var metric in _session.Viewport.RowMetrics)
+        foreach (var metric in CombineSplitRowMetrics(_session.Viewport))
         {
             var bottom = currentTop + GetDisplayedRowHeight(metric, zoomFactor);
             if (pos.Y >= currentTop && pos.Y <= bottom)
@@ -6516,11 +6688,17 @@ public sealed partial class MainWindow : Window
             : null;
 
         if (!hasCell)
+        {
+            // Empty cell: still resolve the sheet's own reading order (no per-cell style exists yet)
+            // so a blank cell in a right-to-left sheet gets the same mirrored FlowDirection/alignment
+            // an Excel user would see the instant they start typing into it.
+            var emptyCellIsRtl = CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft(
+                CellReadingOrder.Context, _session.ActiveSheet.IsRightToLeft);
             return CreateInteractiveCellBorder(
                 "",
                 Brushes.White,
                 Brushes.Black,
-                TextAlignment.Left,
+                MapCellTextAlignment(CellHAlign.General, isNumericOrDate: false, emptyCellIsRtl),
                 AvaloniaVerticalAlignment.Center,
                 TextWrapping.NoWrap,
                 FontWeight.Normal,
@@ -6533,7 +6711,9 @@ public sealed partial class MainWindow : Window
                 cellWidth: cellWidth,
                 cellHeight: cellHeight,
                 sparklineLayer: sparklineLayer,
-                mergeRegion: mergeRegion);
+                mergeRegion: mergeRegion,
+                flowDirection: MapCellFlowDirection(emptyCellIsRtl));
+        }
 
         var style = cell.Style;
         IBrush background;
@@ -6553,7 +6733,10 @@ public sealed partial class MainWindow : Window
         var horizontalAlignment = style?.HorizontalAlignment ?? CellHAlign.General;
         var verticalAlignmentModel = style?.VerticalAlignment ?? CellVAlign.Bottom;
         var isNumeric = cell.RawValue is NumberValue or DateTimeValue;
-        var alignment = MapCellTextAlignment(horizontalAlignment, isNumeric);
+        var isEffectivelyRightToLeft = CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft(
+            style?.ReadingOrder ?? CellReadingOrder.Context, _session.ActiveSheet.IsRightToLeft);
+        var alignment = MapCellTextAlignment(horizontalAlignment, isNumeric, isEffectivelyRightToLeft);
+        var flowDirection = MapCellFlowDirection(isEffectivelyRightToLeft);
         var verticalAlignment = MapCellVerticalAlignment(verticalAlignmentModel);
         var textWrapping = style?.WrapText == true ? TextWrapping.Wrap : TextWrapping.NoWrap;
         var weight = style?.Bold == true ? FontWeight.Bold : FontWeight.Normal;
@@ -6606,7 +6789,8 @@ public sealed partial class MainWindow : Window
             sparklineLayer,
             patternBrush: patternBrush,
             richRuns: richRuns,
-            mergeRegion: mergeRegion);
+            mergeRegion: mergeRegion,
+            flowDirection: flowDirection);
     }
 
     private Border CreateInteractiveCellBorder(
@@ -6636,7 +6820,8 @@ public sealed partial class MainWindow : Window
         Control? sparklineLayer = null,
         IBrush? patternBrush = null,
         IReadOnlyList<ResolvedCellTextRun>? richRuns = null,
-        GridRange? mergeRegion = null)
+        GridRange? mergeRegion = null,
+        FlowDirection flowDirection = FlowDirection.LeftToRight)
     {
         var border = CreateCellBorder(
             text,
@@ -6664,7 +6849,8 @@ public sealed partial class MainWindow : Window
             conditionalIcon,
             sparklineLayer,
             patternBrush: patternBrush,
-            richRuns: richRuns);
+            richRuns: richRuns,
+            flowDirection: flowDirection);
         // Excel treats a merged region as a single unit for the fill handle: if the selection's
         // bottom-right corner lands anywhere inside this cell's merge (not just on the merge's own
         // anchor), the handle belongs on the merge's rendered Border — otherwise a selection whose
@@ -7476,7 +7662,8 @@ public sealed partial class MainWindow : Window
         Control? sparklineLayer = null,
         double horizontalPadding = 8,
         IBrush? patternBrush = null,
-        IReadOnlyList<ResolvedCellTextRun>? richRuns = null)
+        IReadOnlyList<ResolvedCellTextRun>? richRuns = null,
+        FlowDirection flowDirection = FlowDirection.LeftToRight)
     {
         var effectiveText = FormatTextForRotation(text, textRotation);
         var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;
@@ -7541,6 +7728,11 @@ public sealed partial class MainWindow : Window
                 : TextTrimming.CharacterEllipsis,
             VerticalAlignment = verticalAlignment,
             Margin = new Thickness(scaledHorizontalPadding + scaledIndentPadding, textMarginTop, scaledHorizontalPadding, 0),
+            // Base bidi (UAX #9) direction for shaping/reordering mixed-direction runs (e.g. Arabic
+            // text with embedded Latin words/digits) — resolved per-cell from the sheet's Right-to-left
+            // view flag and the cell's own Format Cells ▸ Alignment ▸ Text direction override. Was
+            // previously always the FlowDirection default (LeftToRight); see MapCellFlowDirection.
+            FlowDirection = flowDirection,
         };
 
         // Per-run rich text: populate Inlines (one Run per resolved run) when present.
@@ -8270,15 +8462,33 @@ public sealed partial class MainWindow : Window
         return decorations;
     }
 
-    private static TextAlignment MapCellTextAlignment(CellHAlign horizontalAlignment, bool isNumericOrDate) =>
+    /// <summary>
+    /// Maps a cell's horizontal alignment to an Avalonia <see cref="TextAlignment"/>. General
+    /// alignment resolves to the "end"/"start" of the cell's effective reading order rather than a
+    /// hardcoded Right/Left — matching Excel, where a right-to-left cell's General alignment mirrors
+    /// (numeric/date content general-aligns left, text content general-aligns right). Explicit
+    /// Left/Right/Center/Justify/Distributed do not mirror with reading order, matching
+    /// <see cref="CellTextOrientationLayoutPlanner.ResolveEffectiveHorizontalAlignment"/>.
+    /// </summary>
+    private static TextAlignment MapCellTextAlignment(CellHAlign horizontalAlignment, bool isNumericOrDate, bool isEffectivelyRightToLeft) =>
         horizontalAlignment switch
         {
             CellHAlign.Left => TextAlignment.Left,
             CellHAlign.Center or CellHAlign.Justify or CellHAlign.Distributed => TextAlignment.Center,
             CellHAlign.Right => TextAlignment.Right,
-            CellHAlign.General when isNumericOrDate => TextAlignment.Right,
+            CellHAlign.General when isNumericOrDate => isEffectivelyRightToLeft ? TextAlignment.Left : TextAlignment.Right,
+            CellHAlign.General => isEffectivelyRightToLeft ? TextAlignment.Right : TextAlignment.Left,
             _ => TextAlignment.Left
         };
+
+    /// <summary>
+    /// Maps a cell's effective reading order (<see cref="CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft"/>)
+    /// to the Avalonia <see cref="FlowDirection"/> used for that cell's <see cref="TextBlock"/>, so
+    /// bidi shaping/reordering (mixed Arabic/Hebrew + Latin/digit runs) matches Excel's base direction
+    /// instead of always being forced LeftToRight.
+    /// </summary>
+    private static FlowDirection MapCellFlowDirection(bool isEffectivelyRightToLeft) =>
+        isEffectivelyRightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
 
     private static AvaloniaVerticalAlignment MapCellVerticalAlignment(CellVAlign verticalAlignment) =>
         verticalAlignment switch
@@ -13680,6 +13890,150 @@ public sealed partial class MainWindow : Window
 
             e.Handled = true;
         }
+    }
+
+    // ── Name Box (cell-address box): click-to-edit, type a name/ref/cell + Enter to navigate, ──
+    // ── define-name-by-typing, and a basic autocomplete list of defined names. Mirrors the WPF ──
+    // ── host's editable CellAddressBox (MainWindow.Editing.cs). ──────────────────────────────────
+
+    private void CellAddressBox_GotFocus(object? sender, FocusChangedEventArgs e) =>
+        _cellAddressText.SelectAll();
+
+    private void CellAddressBox_LostFocus(object? sender, RoutedEventArgs e)
+    {
+        if (_cellAddressBoxHasPendingEdit)
+            return;
+
+        RestoreCellAddressBoxText();
+    }
+
+    private void CellAddressBox_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            RestoreCellAddressBoxText();
+            FocusShellRegion(ShellFocusTarget.Worksheet);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key != Key.Enter)
+        {
+            _cellAddressBoxHasPendingEdit = true;
+            return;
+        }
+
+        _cellAddressBoxHasPendingEdit = false;
+        var text = _cellAddressText.Text ?? "";
+        if (TryParseCellAddressBoxReferenceRange(text, out var selectedRange))
+        {
+            NavigateCellAddressBoxTo(selectedRange);
+            FocusShellRegion(ShellFocusTarget.Worksheet);
+            e.Handled = true;
+            return;
+        }
+
+        if (TryDefineNameFromCellAddressBox(text))
+        {
+            FocusShellRegion(ShellFocusTarget.Worksheet);
+            e.Handled = true;
+            return;
+        }
+
+        ShowEditIssue(UiText.Get("MainLoc_GoToFailed"));
+        _cellAddressBoxHasPendingEdit = true;
+        _cellAddressText.Focus();
+        _cellAddressText.SelectAll();
+        e.Handled = true;
+    }
+
+    // Sheet-scope-aware Name Box reference resolution, matching formula evaluation's precedence
+    // (Workbook.TryGetNamedRange(name, contextSheetId, ...): sheet-scoped names on the active sheet
+    // take precedence over a same-named workbook-global name).
+    private bool TryParseCellAddressBoxReferenceRange(string text, out GridRange range) =>
+        WorkbookReferenceNavigator.TryParseReferenceRange(
+            text,
+            _session.ActiveSheet.Id,
+            name => _session.Workbook.Sheets.FirstOrDefault(sheet =>
+                string.Equals(sheet.Name, name, StringComparison.OrdinalIgnoreCase))?.Id,
+            _session.Workbook.NamedRanges,
+            name => _session.Workbook.TryGetNamedRange(name, _session.ActiveSheet.Id, out var scoped) ? scoped : null,
+            out range);
+
+    private void NavigateCellAddressBoxTo(GridRange selectedRange)
+    {
+        var result = _session.GoToRange(selectedRange);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_GoToFailed"));
+            return;
+        }
+
+        RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(result.SelectedRange!.Value)));
+    }
+
+    private bool TryDefineNameFromCellAddressBox(string text)
+    {
+        var name = text.Trim();
+        if (_session.Workbook.ValidateNamedRangeName(name) is not null)
+            return false;
+
+        var command = new DefineNamedRangeCommand(name, _session.SelectedRange, NamedRangeMetadata.WorkbookScope);
+        var result = _session.ExecuteReviewCommand(command);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? UiText.Format("InsertLoc_CouldNotDefineName", name));
+            return false;
+        }
+
+        RefreshShell(UiText.Format("InsertLoc_DefinedName", name));
+        _cellAddressText.Text = name;
+        _cellAddressText.SelectAll();
+        return true;
+    }
+
+    private void RestoreCellAddressBoxText()
+    {
+        _cellAddressBoxHasPendingEdit = false;
+        _cellAddressText.Text = FormatCellReference(_session.ActiveCell);
+    }
+
+    // Basic Name Box autocomplete: the workbook's defined names, merged with names scoped to the
+    // active sheet, deduplicated and alphabetized — mirrors the WPF host's
+    // CellAddressBox_DropDownOpened (MainWindow.Editing.cs).
+    private IReadOnlyList<string> BuildCellAddressAutocompleteNames() =>
+        _session.Workbook.NamedRanges.Keys
+            .Concat(_session.Workbook.ScopedNamedRanges.Keys
+                .Where(key => key.Sheet.Equals(_session.ActiveSheet.Id))
+                .Select(key => key.Name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    private MenuFlyout CreateCellAddressAutocompleteFlyout()
+    {
+        var flyout = new MenuFlyout();
+        flyout.Opening += (_, _) =>
+        {
+            var names = BuildCellAddressAutocompleteNames();
+            flyout.ItemsSource = names.Count == 0
+                ? new[] { new MenuItem { Header = "(No defined names)", IsEnabled = false } }
+                : names.Select(name =>
+                {
+                    var item = new MenuItem { Header = name };
+                    item.Click += (_, _) =>
+                    {
+                        _cellAddressText.Text = name;
+                        if (TryParseCellAddressBoxReferenceRange(name, out var selectedRange))
+                            NavigateCellAddressBoxTo(selectedRange);
+
+                        FocusShellRegion(ShellFocusTarget.Worksheet);
+                    };
+                    return item;
+                }).ToArray();
+        };
+
+        return flyout;
     }
 
     private void ApplyFormulaBoxTextEdit(ExcelTextEdit edit)
@@ -20094,7 +20448,10 @@ public sealed partial class MainWindow : Window
             HasStatusTextAutomationId: string.Equals(AutomationProperties.GetAutomationId(_statusText), "StatusText", StringComparison.Ordinal),
             HasStatusTextValue: HasStatusBarAccessibleValue(),
             HasCellAddressAutomationName: string.Equals(AutomationProperties.GetName(_cellAddressText), "Cell address", StringComparison.Ordinal),
-            HasCellAddressAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_cellAddressText), "Shows the active cell address.", StringComparison.Ordinal),
+            HasCellAddressAutomationHelp: string.Equals(
+                AutomationProperties.GetHelpText(_cellAddressText),
+                "Type a cell reference, range, or defined name and press Enter to navigate, or type a new name to define it.",
+                StringComparison.Ordinal),
             HasCellAddressAutomationId: string.Equals(AutomationProperties.GetAutomationId(_cellAddressText), "CellAddressText", StringComparison.Ordinal),
             HasSelectionStatsAutomationName: string.Equals(AutomationProperties.GetName(_selectionStatsText), "Selection statistics", StringComparison.Ordinal),
             HasSelectionStatsAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_selectionStatsText), "Shows statistics for the current selection.", StringComparison.Ordinal),

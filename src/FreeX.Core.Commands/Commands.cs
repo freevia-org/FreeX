@@ -55,6 +55,9 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             }
         }
 
+        if (CommandGuards.RejectIfSplitsArray(sheet, _affectedCells) is { } splitsArrayRejection)
+            return splitsArrayRejection;
+
         _snapshot = [];
 
         foreach (var (addr, newCell) in _edits)

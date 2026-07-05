@@ -22,10 +22,27 @@ public static class SpreadsheetDisplayFormatter
                 ? FormatR1C1RangeReference(start, end)
                 : FormatA1RangeReference(start, end);
 
-    public static string FormatFormulaBarText(Cell? cell, CellAddress address, bool useR1C1ReferenceStyle)
+    public static string FormatFormulaBarText(Cell? cell, CellAddress address, bool useR1C1ReferenceStyle) =>
+        FormatFormulaBarText(cell, address, useR1C1ReferenceStyle, sheet: null, workbook: null);
+
+    /// <summary>
+    /// Formats the formula-bar text for a cell, honoring Excel's "Hidden" protection option: when the
+    /// containing <paramref name="sheet"/> is protected and the cell's effective style has
+    /// <see cref="CellStyle.Hidden"/> set, the formula text is suppressed and only the computed value
+    /// is shown (matching Excel's Format Cells &gt; Protection &gt; Hidden behavior).
+    /// </summary>
+    public static string FormatFormulaBarText(
+        Cell? cell,
+        CellAddress address,
+        bool useR1C1ReferenceStyle,
+        Sheet? sheet,
+        Workbook? workbook)
     {
         if (cell?.HasFormula == true && cell.FormulaText is not null)
         {
+            if (sheet is { IsProtected: true } && workbook is not null && IsHidden(cell, address, sheet, workbook))
+                return FormatCellValue(cell.Value);
+
             var formula = useR1C1ReferenceStyle
                 ? FormulaReferenceStyleService.ToR1C1(cell.FormulaText, address)
                 : cell.FormulaText;
@@ -33,6 +50,14 @@ public static class SpreadsheetDisplayFormatter
         }
 
         return FormatCellValue(cell?.Value);
+    }
+
+    private static bool IsHidden(Cell cell, CellAddress address, Sheet sheet, Workbook workbook)
+    {
+        var styleId = cell.StyleId != StyleId.Default
+            ? cell.StyleId
+            : sheet.GetStyleOnly(address.Row, address.Col) ?? StyleId.Default;
+        return workbook.GetStyle(styleId).Hidden;
     }
 
     public static string FormatCellValue(ScalarValue? value) => value switch

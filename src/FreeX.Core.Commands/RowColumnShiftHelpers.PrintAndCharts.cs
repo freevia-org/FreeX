@@ -31,42 +31,82 @@ internal static partial class RowColumnShiftHelpers
             .Where(r => r.HasValue).Select(r => r!.Value));
     }
 
-    internal static List<GridRange> CaptureChartDataRanges(Sheet sheet) =>
-        sheet.Charts.Select(c => c.DataRange).ToList();
+    // NOTE: chart hosting is per-sheet (Sheet.Charts) but a chart's DataRange/verbatim
+    // formulas may reference a *different* sheet (e.g. a chart on "Dashboard" plotting
+    // data on "Data"). All of the Capture/Restore/Shift/Rewrite helpers below therefore
+    // iterate every sheet in the workbook — not just the sheet being structurally edited —
+    // so a chart hosted anywhere still has its references corrected when the sheet its
+    // DataRange/verbatim formulas point at is edited. This mirrors the workbook-wide walk
+    // already used by RewriteAllFormulas and ShiftNamedRangeRowsUp/etc.
 
-    internal static void RestoreChartDataRanges(Sheet sheet, List<GridRange>? snapshot)
+    /// <summary>
+    /// Snapshot of a single sheet's charts' DataRange values, keyed by the hosting sheet
+    /// so <see cref="RestoreChartDataRanges(Workbook, List{ChartDataRangeWorkbookSnapshot}?)"/>
+    /// can restore each chart on its own sheet.
+    /// </summary>
+    internal sealed class ChartDataRangeWorkbookSnapshot
+    {
+        public required SheetId HostSheet { get; init; }
+        public required List<GridRange> Ranges { get; init; }
+    }
+
+    internal static List<ChartDataRangeWorkbookSnapshot> CaptureChartDataRanges(Workbook workbook)
+    {
+        var result = new List<ChartDataRangeWorkbookSnapshot>(workbook.Sheets.Count);
+        foreach (var s in workbook.Sheets)
+        {
+            if (s.Charts.Count == 0) continue;
+            result.Add(new ChartDataRangeWorkbookSnapshot
+            {
+                HostSheet = s.Id,
+                Ranges = s.Charts.Select(c => c.DataRange).ToList()
+            });
+        }
+        return result;
+    }
+
+    internal static void RestoreChartDataRanges(Workbook workbook, List<ChartDataRangeWorkbookSnapshot>? snapshot)
     {
         if (snapshot is null) return;
-        for (int i = 0; i < sheet.Charts.Count && i < snapshot.Count; i++)
-            sheet.Charts[i].DataRange = snapshot[i];
+        foreach (var entry in snapshot)
+        {
+            var sheet = workbook.GetSheet(entry.HostSheet);
+            if (sheet is null) continue;
+            for (int i = 0; i < sheet.Charts.Count && i < entry.Ranges.Count; i++)
+                sheet.Charts[i].DataRange = entry.Ranges[i];
+        }
     }
 
-    internal static void ShiftChartRowsUp(Sheet sheet, SheetId sheetId, uint start, uint count)
+    internal static void ShiftChartRowsUp(Workbook workbook, SheetId sheetId, uint start, uint count)
     {
-        foreach (var chart in sheet.Charts)
-            if (chart.DataRange.Start.Sheet == sheetId)
-                chart.DataRange = ShiftRangeRowsUp(chart.DataRange, start, count);
+        foreach (var s in workbook.Sheets)
+            foreach (var chart in s.Charts)
+                if (chart.DataRange.Start.Sheet == sheetId)
+                    chart.DataRange = ShiftRangeRowsUp(chart.DataRange, start, count);
     }
 
-    internal static void ShiftChartRowsDown(Sheet sheet, SheetId sheetId, uint start, uint count)
+    internal static void ShiftChartRowsDown(Workbook workbook, SheetId sheetId, uint start, uint count)
     {
-        foreach (var chart in sheet.Charts)
-            if (chart.DataRange.Start.Sheet == sheetId)
-                chart.DataRange = ShiftRangeRowsDown(chart.DataRange, start, count) ?? chart.DataRange;
+        foreach (var s in workbook.Sheets)
+            foreach (var chart in s.Charts)
+                if (chart.DataRange.Start.Sheet == sheetId)
+                    chart.DataRange = ShiftRangeRowsDown(chart.DataRange, start, count) ?? chart.DataRange;
     }
 
-    internal static void ShiftChartColumnsUp(Sheet sheet, SheetId sheetId, uint start, uint count)
+    internal static void ShiftChartColumnsUp(Workbook workbook, SheetId sheetId, uint start, uint count)
     {
-        foreach (var chart in sheet.Charts)
-            if (chart.DataRange.Start.Sheet == sheetId)
-                chart.DataRange = ShiftRangeColumnsUp(chart.DataRange, start, count);
+        foreach (var s in workbook.Sheets)
+            foreach (var chart in s.Charts)
+                if (chart.DataRange.Start.Sheet == sheetId)
+                    chart.DataRange = ShiftRangeColumnsUp(chart.DataRange, start, count);
     }
 
-    internal static void ShiftChartColumnsDown(Sheet sheet, SheetId sheetId, uint start, uint count)
+    internal static void ShiftChartColumnsDown(Workbook workbook, SheetId sheetId, uint start, uint count)
     {
-        foreach (var chart in sheet.Charts)
-            if (chart.DataRange.Start.Sheet == sheetId)
-                chart.DataRange = ShiftRangeColumnsDown(chart.DataRange, start, count) ?? chart.DataRange;
+        foreach (var s in workbook.Sheets)
+            foreach (var chart in s.Charts)
+                if (chart.DataRange.Start.Sheet == sheetId)
+                    chart.DataRange = ShiftRangeColumnsDown(chart.DataRange, start, count) ?? chart.DataRange;
     }
 
     // ── Verbatim series formula / data-label formula shifting ─────────────────
@@ -88,6 +128,17 @@ internal static partial class RowColumnShiftHelpers
         public List<ChartSeriesVerbatimFormulas>? VerbatimSeriesFormulas { get; init; }
         // Per-series data-label formula snapshot: (SeriesIndex, Formula?)
         public List<(int SeriesIndex, string? Formula)>? DataLabelFormulas { get; init; }
+    }
+
+    /// <summary>
+    /// Workbook-wide snapshot of <see cref="ChartVerbatimSnapshot"/>s, keyed by the
+    /// hosting sheet so <see cref="RestoreChartVerbatimFormulas(Workbook, List{ChartVerbatimWorkbookSnapshot}?)"/>
+    /// can restore each chart on its own sheet regardless of which sheet triggered the edit.
+    /// </summary>
+    internal sealed class ChartVerbatimWorkbookSnapshot
+    {
+        public required SheetId HostSheet { get; init; }
+        public required List<ChartVerbatimSnapshot?> Charts { get; init; }
     }
 
     /// <summary>
@@ -122,6 +173,25 @@ internal static partial class RowColumnShiftHelpers
                     DataLabelFormulas      = dlFormulas
                 }
                 : null);
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Captures the verbatim series/data-label formulas for every chart on every sheet
+    /// in the workbook (see <see cref="CaptureChartVerbatimFormulas(Sheet)"/>).
+    /// </summary>
+    internal static List<ChartVerbatimWorkbookSnapshot> CaptureChartVerbatimFormulas(Workbook workbook)
+    {
+        var result = new List<ChartVerbatimWorkbookSnapshot>(workbook.Sheets.Count);
+        foreach (var s in workbook.Sheets)
+        {
+            if (s.Charts.Count == 0) continue;
+            result.Add(new ChartVerbatimWorkbookSnapshot
+            {
+                HostSheet = s.Id,
+                Charts    = CaptureChartVerbatimFormulas(s)
+            });
         }
         return result;
     }
@@ -174,8 +244,22 @@ internal static partial class RowColumnShiftHelpers
     }
 
     /// <summary>
+    /// Rewrites verbatim series/data-label formulas for every chart on every sheet in the
+    /// workbook for a structural operation on <paramref name="op"/>'s sheet. Each chart's
+    /// own hosting sheet name (not necessarily the edited sheet) is passed as the
+    /// <c>hostSheetName</c> so unqualified refs inside a chart's verbatim formula — if any —
+    /// resolve relative to the sheet the chart actually lives on, matching how
+    /// <see cref="RewriteAllFormulas"/> uses each cell's own sheet.
+    /// </summary>
+    internal static void RewriteChartVerbatimFormulas(Workbook workbook, RewriteOperation op)
+    {
+        foreach (var s in workbook.Sheets)
+            RewriteChartVerbatimFormulas(s, op, s.Name);
+    }
+
+    /// <summary>
     /// Restores verbatim series formulas and data-label source formulas from a
-    /// snapshot captured by <see cref="CaptureChartVerbatimFormulas"/>.
+    /// snapshot captured by <see cref="CaptureChartVerbatimFormulas(Sheet)"/>.
     /// </summary>
     internal static void RestoreChartVerbatimFormulas(
         Sheet sheet, List<ChartVerbatimSnapshot?>? snapshot)
@@ -213,6 +297,21 @@ internal static partial class RowColumnShiftHelpers
                     }
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Restores verbatim series/data-label formulas for every chart on every sheet from
+    /// a snapshot captured by <see cref="CaptureChartVerbatimFormulas(Workbook)"/>.
+    /// </summary>
+    internal static void RestoreChartVerbatimFormulas(Workbook workbook, List<ChartVerbatimWorkbookSnapshot>? snapshot)
+    {
+        if (snapshot is null) return;
+        foreach (var entry in snapshot)
+        {
+            var sheet = workbook.GetSheet(entry.HostSheet);
+            if (sheet is null) continue;
+            RestoreChartVerbatimFormulas(sheet, entry.Charts);
         }
     }
 

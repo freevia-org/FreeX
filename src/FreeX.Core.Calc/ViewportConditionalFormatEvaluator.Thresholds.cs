@@ -483,18 +483,28 @@ internal static partial class ViewportConditionalFormatEvaluator
                 (minLength, maxLength) = (maxLength, minLength);
 
             // Negative-axis path: when the range straddles zero and axisPosition is not "none",
-            // place the axis proportionally at the zero crossing. Positive bars extend rightward
-            // from the axis; negative bars extend leftward from the axis using the negative fill color.
+            // place the axis. "Middle" pins the axis at Excel's fixed 50% position regardless of
+            // the min/max skew; "Automatic" (unset) places it proportionally at the zero crossing.
+            // Positive bars extend rightward from the axis; negative bars extend leftward from the
+            // axis using the negative fill color.
             var axisAtNone = string.Equals(cf.DataBarAxisPosition, "none", StringComparison.OrdinalIgnoreCase);
+            var axisAtMiddle = string.Equals(cf.DataBarAxisPosition, "middle", StringComparison.OrdinalIgnoreCase);
             if (!axisAtNone && min < 0 && max > 0)
             {
-                var axisFraction = (0d - min) / (max - min);
+                var axisFraction = axisAtMiddle ? 0.5d : (0d - min) / (max - min);
                 if (cellValue >= 0)
                 {
                     var t = Math.Clamp((cellValue - 0d) / (max - 0d), 0d, 1d);
                     var length = (minLength + (maxLength - minLength) * t) * (1d - axisFraction);
                     if (length <= 0)
-                        continue;
+                    {
+                        // This is the single highest-priority Data Bar rule that applies to this
+                        // cell; a zero-length bar is an authoritative "no bar" result, not a
+                        // "rule doesn't apply" signal — do not fall through to a lower-priority
+                        // overlapping Data Bar rule.
+                        return null;
+                    }
+
                     return new ConditionalFormatDataBar(
                         axisFraction,
                         axisFraction + length,
@@ -513,7 +523,12 @@ internal static partial class ViewportConditionalFormatEvaluator
                     var t = Math.Clamp((0d - cellValue) / (0d - min), 0d, 1d);
                     var length = (minLength + (maxLength - minLength) * t) * axisFraction;
                     if (length <= 0)
-                        continue;
+                    {
+                        // See comment above: this rule already applies to this cell, so a
+                        // zero-length bar must render as no bar rather than falling through.
+                        return null;
+                    }
+
                     var negColor = cf.DataBarNegativeFillColor ?? cf.DataBarColor;
                     // For negative bars use the negative border color when available, otherwise fall
                     // back to the positive border color.
@@ -536,7 +551,13 @@ internal static partial class ViewportConditionalFormatEvaluator
             var fraction = Math.Clamp((cellValue - min) / (max - min), 0d, 1d);
             var barLength = minLength + (maxLength - minLength) * fraction;
             if (barLength <= 0)
-                continue;
+            {
+                // This is the single highest-priority Data Bar rule that applies to this cell
+                // (e.g. cellValue == min with the default MinLength of 0%); a zero-length bar is
+                // an authoritative "no bar" result and must not fall through to a lower-priority
+                // overlapping Data Bar rule.
+                return null;
+            }
 
             return new ConditionalFormatDataBar(
                 0d,

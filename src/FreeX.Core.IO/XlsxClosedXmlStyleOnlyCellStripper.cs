@@ -21,7 +21,22 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
 
         try
         {
-            using (var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true))
+            ZipArchive sourceArchive;
+            try
+            {
+                sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+            }
+            catch (InvalidDataException)
+            {
+                // Not a valid zip archive at all (e.g. a truncated download or a non-OOXML file
+                // renamed to .xlsx). Reopening these same unreadable bytes here is guaranteed to
+                // fail identically to the caller's own attempt; surface the graceful, typed error
+                // instead of letting a raw low-level zip exception escape from this fallback path.
+                throw new WorkbookInvalidException(
+                    "The workbook could not be read because the file is not a valid .xlsx package (it may be corrupted, truncated, or not actually an Excel file).");
+            }
+
+            using (sourceArchive)
             {
                 var sourceEntries = sourceArchive.Entries;
                 for (var index = 0; index < sourceEntries.Count; index++)

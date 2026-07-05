@@ -206,6 +206,7 @@ public class ProtectionGuardCoverageTests
         ["ApplyCustomViewCommand"] = "Restores view bookmarks; not cell content; not protection-blocked.",
         ["DeleteCustomViewCommand"] = "Removes a custom view entry; not cell content; not protection-blocked.",
         ["SetCalculationModeCommand"] = "Workbook-global calc setting; not protection-blocked.",
+        ["DefineNamedFormulaCommand"] = "Workbook/sheet-scoped named-formula metadata edit; not cell content, not protection-blocked.",
         ["SetIterativeCalculationOptionsCommand"] = "Workbook-global calc setting (iterative calc); not protection-blocked.",
         ["SetWorkbookThemeCommand"] = "Workbook theme; not protection-blocked.",
         ["SetWorkbookWindowArrangementCommand"] = "Window layout metadata; not protection-blocked.",

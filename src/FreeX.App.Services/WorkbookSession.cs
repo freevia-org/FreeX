@@ -2776,22 +2776,24 @@ public sealed class WorkbookSession
     public WorkbookCellEditResult UndoLastEdit()
     {
         var sheetIdsBefore = CaptureSheetIds();
+        var hiddenStatesBefore = CaptureSheetHiddenStates();
         var result = _cellEditService.UndoLastEdit(Workbook);
         if (!result.Success)
             return result;
 
-        ApplySuccessfulHistoryResult(result, sheetIdsBefore);
+        ApplySuccessfulHistoryResult(result, sheetIdsBefore, hiddenStatesBefore);
         return result;
     }
 
     public WorkbookCellEditResult RedoLastEdit()
     {
         var sheetIdsBefore = CaptureSheetIds();
+        var hiddenStatesBefore = CaptureSheetHiddenStates();
         var result = _cellEditService.RedoLastEdit(Workbook);
         if (!result.Success)
             return result;
 
-        ApplySuccessfulHistoryResult(result, sheetIdsBefore);
+        ApplySuccessfulHistoryResult(result, sheetIdsBefore, hiddenStatesBefore);
         return result;
     }
 
@@ -2958,9 +2960,19 @@ public sealed class WorkbookSession
     private HashSet<SheetId> CaptureSheetIds() =>
         Workbook.Sheets.Select(sheet => sheet.Id).ToHashSet();
 
+    /// <summary>
+    /// Snapshots each sheet's <see cref="Sheet.IsHidden"/> flag before an Undo/Redo so the
+    /// dispatcher can tell whether the just-applied history entry was a Hide/Unhide Sheet
+    /// command (see <see cref="FindSheetWithFlippedHiddenState"/>), mirroring how
+    /// <see cref="CaptureSheetIds"/> lets it detect a structural add/remove.
+    /// </summary>
+    private Dictionary<SheetId, bool> CaptureSheetHiddenStates() =>
+        Workbook.Sheets.ToDictionary(sheet => sheet.Id, sheet => sheet.IsHidden);
+
     private void ApplySuccessfulHistoryResult(
         WorkbookCellEditResult result,
-        IReadOnlySet<SheetId> sheetIdsBefore)
+        IReadOnlySet<SheetId> sheetIdsBefore,
+        IReadOnlyDictionary<SheetId, bool>? hiddenStatesBefore = null)
     {
         if (FindNewSheetId(sheetIdsBefore) is { } newSheetId)
         {
@@ -2987,6 +2999,36 @@ public sealed class WorkbookSession
             return;
         }
 
+        // Undo/Redo of Hide/Unhide Sheet never adds or removes a Workbook.Sheets entry and never
+        // reports AffectedCells (SetSheetHiddenCommand implements only IWorkbookCommand), so
+        // without this check it would fall straight into the generic "re-select whatever is
+        // already active" branch below and leave the view on whatever sheet was active going in.
+        // Excel always re-activates the sheet whose visibility just changed: it switches to the
+        // sheet that just became visible again (undoing a Hide, or redoing an Unhide), and
+        // switches away to a visible survivor when a sheet just became hidden again (redoing a
+        // Hide, or undoing an Unhide). Detect that flip here and activate accordingly.
+        if (hiddenStatesBefore is not null &&
+            FindSheetWithFlippedHiddenState(hiddenStatesBefore) is { } flippedSheetId)
+        {
+            var flippedSheet = Workbook.GetSheet(flippedSheetId);
+            if (flippedSheet is { IsHidden: false })
+            {
+                // The sheet just became visible (Hide undone, or Unhide redone) — Excel selects it.
+                ApplySuccessfulWorkbookStructureResult(flippedSheetId);
+                return;
+            }
+
+            // The sheet just became hidden again (Hide redone, or Unhide undone) — it can no
+            // longer host the view, so fall back to a visible survivor, mirroring HideActiveSheet's
+            // own forward-path selection.
+            var survivorIndex = FindSheetIndex(flippedSheetId, notFoundIndex: -1);
+            var preferredSheetId = survivorIndex >= 0
+                ? FindPreferredVisibleSheetIdAfterHidden(survivorIndex, flippedSheetId)
+                : null;
+            ApplySuccessfulWorkbookStructureResult(preferredSheetId ?? ActiveSheet.Id);
+            return;
+        }
+
         if (Workbook.GetSheet(ActiveSheet.Id) is not null)
         {
             ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
@@ -2994,6 +3036,22 @@ public sealed class WorkbookSession
         }
 
         ApplySuccessfulWorkbookStructureResult(ActiveSheet.Id);
+    }
+
+    /// <summary>
+    /// Finds the single sheet whose <see cref="Sheet.IsHidden"/> flag differs from the pre-Undo/Redo
+    /// snapshot — i.e. the sheet a Hide/Unhide Sheet command's Apply/Revert just touched. Returns
+    /// <c>null</c> when no sheet's hidden flag changed (the ordinary case for every other command).
+    /// </summary>
+    private SheetId? FindSheetWithFlippedHiddenState(IReadOnlyDictionary<SheetId, bool> hiddenStatesBefore)
+    {
+        foreach (var sheet in Workbook.Sheets)
+        {
+            if (hiddenStatesBefore.TryGetValue(sheet.Id, out var wasHidden) && wasHidden != sheet.IsHidden)
+                return sheet.Id;
+        }
+
+        return null;
     }
 
     private SheetId? FindNewSheetId(IReadOnlySet<SheetId> sheetIdsBefore)
