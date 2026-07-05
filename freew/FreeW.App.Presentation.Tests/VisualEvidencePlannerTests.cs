@@ -24,6 +24,7 @@ public sealed class VisualEvidencePlannerTests
             "f2-section-landscape",
             "f2-tracked-changes",
             "f2-comments",
+            "review-proofing-visual-depth",
             "table-layout-complex",
             "table-pagination-repeat-header",
             "drawing-objects-complex",
@@ -53,6 +54,21 @@ public sealed class VisualEvidencePlannerTests
         commentsScenario.ExpectedFeatureTags.Should().Contain(["f2", "comments", "comment-anchors"]);
         commentsScenario.ExpectedOutputNamePattern.Should().Be("f2-comments_p{page}.png");
         commentsScenario.Composition.ExpectsComments.Should().BeTrue();
+
+        var reviewProofingScenario = FreeWVisualEvidencePlanner.ResolveScenario("review-proofing-visual-depth");
+        reviewProofingScenario.ExpectedFeatureTags.Should().Contain([
+            "review",
+            "proofing",
+            "tracked-changes",
+            "format-revisions",
+            "comment-replies",
+            "resolved-comments",
+            "table-comment-anchors",
+            "proofing-language",
+            "proofing-diagnostics"]);
+        reviewProofingScenario.ExpectedOutputNamePattern.Should().Be("review-proofing-visual-depth_p{page}.png");
+        reviewProofingScenario.Composition.ExpectsTrackedChanges.Should().BeTrue();
+        reviewProofingScenario.Composition.ExpectsComments.Should().BeTrue();
 
         var fieldScenario = FreeWVisualEvidencePlanner.ResolveScenario("field-page-number-variants");
         fieldScenario.ExpectedFeatureTags.Should().Contain([
@@ -322,6 +338,7 @@ public sealed class VisualEvidencePlannerTests
     {
         var tracked = FreeWVisualEvidenceDocumentFactory.BuildTrackedChangesReviewDocument();
         var comments = FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument();
+        var reviewProofing = FreeWVisualEvidenceDocumentFactory.BuildReviewProofingVisualDepthDocument();
 
         var revisions = tracked.Blocks
             .OfType<Paragraph>()
@@ -365,6 +382,56 @@ public sealed class VisualEvidencePlannerTests
             document: comments);
         commentsExpectation.ExpectedOutputName.Should().Be("f2-comments_p1.png");
         commentsExpectation.Composition.ExpectsComments.Should().BeTrue();
+
+        var reviewEntries = RevisionList.Enumerate(reviewProofing);
+        reviewEntries.Select(entry => entry.Kind).Should().Contain([
+            RevisionEntryKind.Insertion,
+            RevisionEntryKind.Deletion,
+            RevisionEntryKind.Formatting]);
+        reviewEntries.Select(entry => entry.Author).Should().Contain(["Maya", "Noah", "Priya"]);
+
+        reviewProofing.Comments.Keys.Should().BeEquivalentTo([10, 12, 20]);
+        reviewProofing.Comments[10].Resolved.Should().BeFalse();
+        reviewProofing.Comments[10].Replies.Should().ContainSingle();
+        reviewProofing.Comments[12].Resolved.Should().BeTrue();
+        reviewProofing.Comments[12].Replies.Should().HaveCount(2);
+        reviewProofing.Comments[20].Resolved.Should().BeTrue();
+        reviewProofing.Comments[20].Replies.Should().ContainSingle();
+
+        var commentReferenceIds = ParagraphsInDocument(reviewProofing)
+            .SelectMany(p => p.Runs)
+            .Where(r => r.IsCommentReference)
+            .Select(r => r.CommentId!.Value)
+            .ToList();
+        commentReferenceIds.Should().ContainInOrder(10, 12, 20);
+
+        var tableCommentIds = reviewProofing.Blocks
+            .OfType<Table>()
+            .SelectMany(t => t.Rows)
+            .SelectMany(r => r.Cells)
+            .SelectMany(c => c.Paragraphs)
+            .SelectMany(p => p.Runs)
+            .Where(r => r.CommentId is not null)
+            .Select(r => r.CommentId!.Value)
+            .ToList();
+        tableCommentIds.Should().Contain(20);
+
+        var proofingDiagnostics = ProofingDiagnosticPlanner.Build(reviewProofing, spellCheckEnabled: true);
+        proofingDiagnostics.Select(diagnostic => diagnostic.NormalizedWord)
+            .Should().Contain(["teh", "recieve", "acommodate"]);
+        proofingDiagnostics.Select(diagnostic => diagnostic.LanguageTag)
+            .Should().Contain(["en-US", "en-GB", "fr-FR"]);
+
+        var reviewProofingExpectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "review-proofing-visual-depth",
+            reviewProofing.Page,
+            pageNumber: 1,
+            pageCount: 1,
+            outputName: "review-proofing-visual-depth_p1.png",
+            document: reviewProofing);
+        reviewProofingExpectation.ExpectedOutputName.Should().Be("review-proofing-visual-depth_p1.png");
+        reviewProofingExpectation.Composition.ExpectsTrackedChanges.Should().BeTrue();
+        reviewProofingExpectation.Composition.ExpectsComments.Should().BeTrue();
     }
 
     [Fact]
@@ -752,12 +819,13 @@ public sealed class VisualEvidencePlannerTests
 
             plan.WordApplicationProgId.Should().Be("Word.Application");
             plan.MaxPagesPerDocument.Should().Be(3);
-            plan.ExpectedFixtureCount.Should().Be(21);
-            plan.ExpectedBaselinePngCount.Should().Be(63);
+            plan.ExpectedFixtureCount.Should().Be(22);
+            plan.ExpectedBaselinePngCount.Should().Be(66);
             plan.Fixtures.Select(f => f.DocumentName).Should().Contain([
                 "f2-hf-basic.docx",
                 "field-page-number-variants.docx",
                 "references-heavy-fields.docx",
+                "review-proofing-visual-depth.docx",
                 "table-layout-complex.docx",
                 "table-pagination-repeat-header.docx",
                 "drawing-objects-complex.docx",
@@ -777,6 +845,8 @@ public sealed class VisualEvidencePlannerTests
                 .ExpectedBaselinePaths.Should().Contain("field-page-number-variants/field-page-number-variants_p1.png");
             plan.Fixtures.Single(f => f.ScenarioId == "references-heavy-fields")
                 .ExpectedBaselinePaths.Should().Contain("references-heavy-fields/references-heavy-fields_p2.png");
+            plan.Fixtures.Single(f => f.ScenarioId == "review-proofing-visual-depth")
+                .ExpectedBaselinePaths.Should().Contain("review-proofing-visual-depth/review-proofing-visual-depth_p1.png");
             plan.Fixtures.Single(f => f.ScenarioId == "object-format-position-size-style")
                 .ExpectedBaselinePaths.Should().Contain("object-format-position-size-style/object-format-position-size-style_p1.png");
         }
@@ -3440,6 +3510,7 @@ public sealed class VisualEvidencePlannerTests
             "references-heavy-fields" => FreeWVisualEvidenceDocumentFactory.BuildReferencesHeavyFieldDocument(),
             "f2-tracked-changes" => FreeWVisualEvidenceDocumentFactory.BuildTrackedChangesReviewDocument(),
             "f2-comments" => FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument(),
+            "review-proofing-visual-depth" => FreeWVisualEvidenceDocumentFactory.BuildReviewProofingVisualDepthDocument(),
             "table-layout-complex" => FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument(),
             "table-pagination-repeat-header" => FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument(),
             "drawing-objects-complex" => FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument(),
@@ -3457,6 +3528,24 @@ public sealed class VisualEvidencePlannerTests
             "page-composition-floating-image" => BuildFloatingImageDocument(),
             _ => null
         };
+
+    private static IEnumerable<Paragraph> ParagraphsInDocument(TextDocument document)
+    {
+        foreach (var block in document.Blocks)
+        {
+            if (block is Paragraph paragraph)
+            {
+                yield return paragraph;
+            }
+            else if (block is Table table)
+            {
+                foreach (var row in table.Rows)
+                    foreach (var cell in row.Cells)
+                        foreach (var cellParagraph in cell.Paragraphs)
+                            yield return cellParagraph;
+            }
+        }
+    }
 
     private static TextDocument BuildFloatingImageDocument()
     {

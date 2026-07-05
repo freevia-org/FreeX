@@ -46,6 +46,7 @@ public static class FreeWWordBaselineEvidencePlanner
         "f2-section-landscape",
         "f2-tracked-changes",
         "f2-comments",
+        "review-proofing-visual-depth",
         "backstage-print-preview-fidelity",
         "backstage-pdf-export-fidelity"
     ];

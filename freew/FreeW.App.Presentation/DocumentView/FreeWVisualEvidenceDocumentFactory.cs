@@ -404,6 +404,98 @@ public static class FreeWVisualEvidenceDocumentFactory
         return doc;
     }
 
+    public static TextDocument BuildReviewProofingVisualDepthDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(StyledParagraph("Review And Proofing Visual Depth", "Heading1"));
+        doc.Blocks.Add(new Paragraph(
+            "This shared fixture combines visible review marks, threaded comments, table anchors, and proofing language diagnostics on one bounded first page."));
+
+        var revisions = new Paragraph();
+        revisions.Runs.Add(new Run("Review sentence keeps normal text, "));
+        revisions.Runs.Add(new Run("inserted wording")
+        {
+            Revision = RevisionKind.Inserted,
+            RevisionAuthor = "Maya",
+            RevisionDateXml = "2026-07-05T09:10:00Z"
+        });
+        revisions.Runs.Add(new Run(", "));
+        revisions.Runs.Add(new Run("removed wording")
+        {
+            Revision = RevisionKind.Deleted,
+            RevisionAuthor = "Noah",
+            RevisionDateXml = "2026-07-05T09:20:00Z"
+        });
+        revisions.Runs.Add(new Run(", and "));
+        revisions.Runs.Add(new Run("formatted emphasis")
+        {
+            Formatting = new RunFormatting
+            {
+                Bold = true,
+                Underline = true,
+                ColorHex = "#C00000",
+                HighlightColorHex = "#FFF2CC"
+            },
+            FormatRevision = new FormatRevision(
+                RunFormatting.Default,
+                "Priya",
+                "2026-07-05T09:35:00Z")
+        });
+        revisions.Runs.Add(new Run(" in the same line."));
+        doc.Blocks.Add(revisions);
+
+        var openComment = new Paragraph();
+        openComment.Runs.Add(new Run("Body comment anchor before "));
+        openComment.Runs.Add(new Run("open thread with reply") { CommentId = 10 });
+        openComment.Runs.Add(Run.CommentReference(10));
+        openComment.Runs.Add(new Run(" after the marked words."));
+        doc.Blocks.Add(openComment);
+        var comment10 = new Comment(10, "Open note: verify the body anchor highlight and balloon.", "Alice", "A")
+        {
+            DateXml = "2026-07-05T10:00:00Z"
+        };
+        comment10.AddReply(11, "Reply keeps the thread count visible.", "Ben", "B").DateXml = "2026-07-05T10:05:00Z";
+        doc.Comments[10] = comment10;
+
+        var resolvedComment = new Paragraph();
+        resolvedComment.Runs.Add(new Run("Resolved comment anchor before "));
+        resolvedComment.Runs.Add(new Run("completed reviewer thread") { CommentId = 12 });
+        resolvedComment.Runs.Add(Run.CommentReference(12));
+        resolvedComment.Runs.Add(new Run(" with replies retained."));
+        doc.Blocks.Add(resolvedComment);
+        var comment12 = new Comment(12, "Resolved note: wording was clarified.", "Casey", "C")
+        {
+            DateXml = "2026-07-05T10:15:00Z",
+            Resolved = true
+        };
+        comment12.AddReply(13, "Clarification accepted.", "Maya", "M").DateXml = "2026-07-05T10:17:00Z";
+        comment12.AddReply(14, "Leaving this resolved for visual evidence.", "Casey", "C").DateXml = "2026-07-05T10:19:00Z";
+        doc.Comments[12] = comment12;
+
+        var proofing = new Paragraph();
+        proofing.Runs.Add(new Run("Proofing diagnostics: "));
+        proofing.Runs.Add(new Run("teh ") { Formatting = new RunFormatting { LanguageTag = "en-US" } });
+        proofing.Runs.Add(new Run("recieve ") { Formatting = new RunFormatting { LanguageTag = "en-GB" } });
+        proofing.Runs.Add(new Run("acommodate ") { Formatting = new RunFormatting { LanguageTag = "fr-FR" } });
+        proofing.Runs.Add(new Run("tokens carry explicit proofing languages."));
+        doc.Blocks.Add(proofing);
+
+        doc.Blocks.Add(BuildReviewProofingTable());
+        doc.Blocks.Add(new Paragraph(
+            "End of bounded review/proofing fixture: both renderers should emit the shared manifest row for this page."));
+
+        var comment20 = new Comment(20, "Table note: anchor is inside table text.", "Devon", "D")
+        {
+            DateXml = "2026-07-05T10:30:00Z",
+            Resolved = true
+        };
+        comment20.AddReply(21, "Table reply retained.", "Eli", "E").DateXml = "2026-07-05T10:35:00Z";
+        doc.Comments[20] = comment20;
+
+        return doc;
+    }
+
     public static TextDocument BuildComplexTableLayoutDocument()
     {
         var doc = TextDocument.CreateEmpty();
@@ -705,6 +797,59 @@ public static class FreeWVisualEvidenceDocumentFactory
         paragraph.Runs.AddRange(runs);
         headerFooter.Paragraphs.Add(paragraph);
         return headerFooter;
+    }
+
+    private static Table BuildReviewProofingTable()
+    {
+        var table = new Table
+        {
+            Formatting = new TableFormatting
+            {
+                Borders = true,
+                HeaderRow = true,
+                BandedRows = true
+            },
+            TableStyleId = "GridTable1Light",
+            PreferredWidthPt = 468,
+            Alignment = TableAlignment.Center,
+            AutoFit = AutoFitMode.Fixed,
+            DefaultCellMargins = new TableCellMargins(TopPt: 3, LeftPt: 6, BottomPt: 3, RightPt: 6)
+        };
+        table.ColumnWidthsPt.AddRange([180, 288]);
+        table.Rows.Add(new TableRow
+        {
+            Cells =
+            {
+                HeaderCell("Location"),
+                HeaderCell("Review proofing evidence")
+            }
+        });
+        table.Rows.Add(new TableRow
+        {
+            Cells =
+            {
+                Cell("Body"),
+                Cell("Open and resolved comment threads include replies.")
+            }
+        });
+
+        var tableParagraph = new Paragraph();
+        tableParagraph.Runs.Add(new Run("Table anchor includes "));
+        tableParagraph.Runs.Add(new Run("commented cell text") { CommentId = 20 });
+        tableParagraph.Runs.Add(Run.CommentReference(20));
+        tableParagraph.Runs.Add(new Run(" for shared renderers."));
+        var tableCell = new TableCell();
+        tableCell.Paragraphs.Add(tableParagraph);
+        table.Rows.Add(new TableRow
+        {
+            Cells =
+            {
+                Cell("Table"),
+                tableCell
+            }
+        });
+
+        return table;
     }
 
     private static Table BuildComplexTable()

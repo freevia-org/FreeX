@@ -126,7 +126,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
     public static IReadOnlyList<string> ReviewRendererScenarioIds { get; } =
     [
         "f2-tracked-changes",
-        "f2-comments"
+        "f2-comments",
+        "review-proofing-visual-depth"
     ];
     public static IReadOnlyList<string> TableRendererScenarioIds { get; } =
     [
@@ -729,7 +730,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 BuildReferencesHeavyToaBlocker(
                     "semantic-toa-page-references-missing",
                     "trusted references-heavy rows with generated Table of Authorities page-reference metadata",
-                    "trusted references-heavy evidence did not record generated TOA page references; regenerate v17 evidence or fix shared TOA generation before treating this as a Word-baseline-only gap",
+                    "trusted references-heavy evidence did not record generated TOA page references; regenerate v18 evidence or fix shared TOA generation before treating this as a Word-baseline-only gap",
                     [],
                     [],
                     semanticEvidence,

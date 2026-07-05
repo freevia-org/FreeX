@@ -82,6 +82,7 @@ static int RenderAll(string outDir)
     var sectionLandscapeP2Path = VisualEvidenceOutputPath(outDir, "f2-section-landscape", 2);
     var trackedChangesPath = VisualEvidenceOutputPath(outDir, "f2-tracked-changes", 1);
     var commentsPath = VisualEvidenceOutputPath(outDir, "f2-comments", 1);
+    var reviewProofingDepthPath = VisualEvidenceOutputPath(outDir, "review-proofing-visual-depth", 1);
     var tableLayoutPath = VisualEvidenceOutputPath(outDir, "table-layout-complex", 1);
     var tablePaginationP1Path = VisualEvidenceOutputPath(outDir, "table-pagination-repeat-header", 1);
     var tablePaginationP2Path = VisualEvidenceOutputPath(outDir, "table-pagination-repeat-header", 2);
@@ -280,6 +281,16 @@ static int RenderAll(string outDir)
         scenarioId: "f2-comments",
         evidence: evidence,
         documentFactory: FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument,
+        pageNumber: 1,
+        pageCount: 1);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, reviewProofingDepthPath,
+        width: 960, height: 1400,
+        label: "Review Proofing Visual Depth",
+        scenarioId: "review-proofing-visual-depth",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildReviewProofingVisualDepthDocument,
         pageNumber: 1,
         pageCount: 1);
     if (rc != 0) return rc;

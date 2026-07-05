@@ -484,6 +484,29 @@ public static class FreeWVisualEvidencePlanner
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition with { ExpectsComments = true }),
         new(
+            "review-proofing-visual-depth",
+            "Shared Review and Proofing visual depth composition.",
+            [
+                "review",
+                "proofing",
+                "print-layout",
+                "tracked-changes",
+                "revision-marks",
+                "format-revisions",
+                "comments",
+                "comment-anchors",
+                "comment-replies",
+                "resolved-comments",
+                "table-comment-anchors",
+                "proofing-language",
+                "proofing-diagnostics",
+                "body-text"
+            ],
+            "review-proofing-visual-depth_p{page}.png",
+            1,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition with { ExpectsTrackedChanges = true, ExpectsComments = true }),
+        new(
             "table-layout-complex",
             "Complex Word-style table layout fidelity capture.",
             [
