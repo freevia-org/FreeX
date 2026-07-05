@@ -2144,7 +2144,8 @@ public sealed class SlideShowWindow : Window
         _inkExecutionState = SlideShowInkPersistencePlanner.ApplyRetentionOnExit(
             _presentation,
             _inkExecutionState,
-            _playbackRoute.GetSourceSlideIndex).State;
+            _playbackRoute.GetSourceSlideIndex,
+            _playbackRoute.CustomShowName).State;
         _autoAdvanceTimer.Stop();
         foreach (var sb in _pendingStoryboards)
         {

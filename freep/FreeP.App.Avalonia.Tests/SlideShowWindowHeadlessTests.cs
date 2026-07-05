@@ -128,6 +128,47 @@ public sealed class SlideShowWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlideShowWindow_custom_playback_route_persists_ink_with_route_metadata()
+    {
+        string? inkXml = null;
+        int targetInkCount = -1;
+        int firstSlideInkCount = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var pres = MakePresentation(3);
+            pres.Slides[0].Title = "Intro";
+            pres.Slides[1].Title = "Deep dive";
+            pres.Slides[2].Title = "Appendix";
+            pres.Slides[2].Id = "appendix-slide";
+
+            var route = SlideShowCustomShowPlanner.BuildCustomShowRoute(
+                pres,
+                new SlideShowCustomSlideSequence(
+                    "Executive review",
+                    new[] { pres.Slides[2].Id, pres.Slides[0].Id }),
+                startIndex: 0);
+            var window = new SlideShowWindow(pres, route);
+            window.ApplyPresenterToolIntent(
+                pointerMode: SlideShowPresenterPointerMode.Pen,
+                inkRetentionDecision: SlideShowInkRetentionDecision.KeepInk);
+            window.BeginPresenterInkStroke(10, 20);
+            window.EndPresenterInkStroke(30, 40);
+            window.Close();
+
+            var ink = pres.Slides[2].Shapes.Single(shape => shape.Kind == SlideShapeKind.Ink);
+            inkXml = Encoding.UTF8.GetString(ink.PreservedObject!.Parts.Single().Value);
+            targetInkCount = pres.Slides[2].Shapes.Count(shape => shape.Kind == SlideShapeKind.Ink);
+            firstSlideInkCount = pres.Slides[0].Shapes.Count(shape => shape.Kind == SlideShapeKind.Ink);
+        });
+
+        if (!ran) return;
+        targetInkCount.Should().Be(1);
+        firstSlideInkCount.Should().Be(0);
+        inkXml.Should().Contain("freep:sourceSlideId=\"appendix-slide\"");
+        inkXml.Should().Contain("freep:customShowName=\"Executive review\"");
+    }
+
+    [Fact]
     public async Task SlideShowWindow_create_presenter_state_uses_shared_planner_state()
     {
         SlideShowPresenterState? state = null;

@@ -434,6 +434,34 @@ public sealed class SlideShowWindowTests
     }
 
     [StaFact]
+    public void SlideShowWindow_CustomPlaybackRoute_PersistsInkWithRouteMetadata()
+    {
+        var pres = MakePresentation("Intro", "Deep dive", "Appendix");
+        pres.Slides[2].Id = "appendix-slide";
+        var route = SlideShowCustomShowPlanner.BuildCustomShowRoute(
+            pres,
+            new SlideShowCustomSlideSequence(
+                "Executive review",
+                new[] { pres.Slides[2].Id, pres.Slides[0].Id }),
+            startIndex: 0);
+
+        var window = new SlideShowWindow(pres, route);
+
+        window.ApplyPresenterToolIntent(
+            pointerMode: SlideShowPresenterPointerMode.Pen,
+            inkRetentionDecision: SlideShowInkRetentionDecision.KeepInk);
+        window.BeginPresenterInkStroke(10, 20);
+        window.EndPresenterInkStroke(30, 40);
+        window.Close();
+
+        var ink = pres.Slides[2].Shapes.Single(shape => shape.Kind == SlideShapeKind.Ink);
+        var inkXml = Encoding.UTF8.GetString(ink.PreservedObject!.Parts.Single().Value);
+        inkXml.Should().Contain("freep:sourceSlideId=\"appendix-slide\"");
+        inkXml.Should().Contain("freep:customShowName=\"Executive review\"");
+        pres.Slides[0].Shapes.Should().NotContain(shape => shape.Kind == SlideShapeKind.Ink);
+    }
+
+    [StaFact]
     public void SlideShowWindow_RecordingReviewPlan_ProjectsSharedSourceSlideEvidence()
     {
         var pres = MakePresentation("Intro", "Deep dive", "Appendix");
