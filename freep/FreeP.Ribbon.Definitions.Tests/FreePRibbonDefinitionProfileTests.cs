@@ -105,7 +105,7 @@ public sealed class FreePRibbonDefinitionProfileTests
                     item.CommandId?.Value == PresentationListGalleryPlanner.ImageBulletCommandId)
                 .IsEnabled
                 .Should()
-                .BeFalse("image bullet UI is visible but still deferred until import/render support lands");
+                .BeTrue("image bullet UI now routes through shared import/render and authoring support");
 
             var numbering = RequiredControl(definition, PresentationListGalleryPlanner.NumberingCommandId)
                 .Should()

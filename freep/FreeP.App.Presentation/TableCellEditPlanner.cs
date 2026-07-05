@@ -133,6 +133,7 @@ public sealed record InCanvasEditorParagraphStyle(
     AutoNumType? AutoNumType,
     int? AutoNumStartAt,
     bool BulletSuppressed,
+    ImagePart? BulletImage,
     int Level,
     long? MarginLeftEmu,
     long? IndentEmu)
@@ -1174,6 +1175,7 @@ public static class TableCellEditPlanner
                 paragraph.BulletKind == BulletKind.Auto ? paragraph.AutoNumType : null,
                 paragraph.BulletKind == BulletKind.Auto ? paragraph.AutoNumStartAt : null,
                 paragraph.BulletSuppressed,
+                paragraph.BulletKind == BulletKind.Image ? paragraph.BulletImage : null,
                 paragraph.Level,
                 paragraph.MarginLeftEmu,
                 paragraph.IndentEmu));
@@ -1314,9 +1316,22 @@ public static class TableCellEditPlanner
             paragraph.AutoNumType != first.AutoNumType ||
             paragraph.AutoNumStartAt != first.AutoNumStartAt ||
             paragraph.BulletSuppressed != first.BulletSuppressed ||
+            !ImagePartsEqual(paragraph.BulletImage, first.BulletImage) ||
             paragraph.Level != first.Level ||
             paragraph.MarginLeftEmu != first.MarginLeftEmu ||
             paragraph.IndentEmu != first.IndentEmu);
+    }
+
+    private static bool ImagePartsEqual(ImagePart? left, ImagePart? right)
+    {
+        if (ReferenceEquals(left, right))
+            return true;
+        if (left is null || right is null)
+            return false;
+        if (!StringComparer.Ordinal.Equals(left.ContentType, right.ContentType))
+            return false;
+
+        return left.Bytes.SequenceEqual(right.Bytes);
     }
 
     private static TableCellTextFormatPlan DisabledFormat(
@@ -1381,12 +1396,14 @@ public static class TableCellEditPlanner
                 paragraph.BulletChar = string.IsNullOrEmpty(paragraph.BulletChar)
                     ? DefaultBulletChar
                     : paragraph.BulletChar;
+                paragraph.BulletImage = null;
                 paragraph.BulletSuppressed = false;
             }
             else
             {
                 paragraph.BulletKind = BulletKind.None;
                 paragraph.BulletChar = null;
+                paragraph.BulletImage = null;
                 paragraph.BulletSuppressed = true;
             }
         }
@@ -1413,6 +1430,7 @@ public static class TableCellEditPlanner
             {
                 paragraph.BulletKind = BulletKind.Auto;
                 paragraph.BulletChar = null;
+                paragraph.BulletImage = null;
                 paragraph.AutoNumType = AutoNumType.ArabicPeriod;
                 paragraph.AutoNumStartAt = 1;
                 paragraph.BulletSuppressed = false;
@@ -1421,6 +1439,7 @@ public static class TableCellEditPlanner
             {
                 paragraph.BulletKind = BulletKind.None;
                 paragraph.BulletChar = null;
+                paragraph.BulletImage = null;
                 paragraph.BulletSuppressed = true;
             }
         }
@@ -1453,6 +1472,7 @@ public static class TableCellEditPlanner
         if (preset.BulletKind == BulletKind.Auto)
         {
             paragraph.BulletChar = null;
+            paragraph.BulletImage = null;
             paragraph.AutoNumType = preset.AutoNumType ?? AutoNumType.ArabicPeriod;
             paragraph.AutoNumStartAt = Math.Max(1, preset.StartAt);
             return;
@@ -1463,10 +1483,12 @@ public static class TableCellEditPlanner
             paragraph.BulletChar = string.IsNullOrEmpty(preset.BulletChar)
                 ? DefaultBulletChar
                 : preset.BulletChar;
+            paragraph.BulletImage = null;
             return;
         }
 
         paragraph.BulletChar = null;
+        paragraph.BulletImage = null;
         paragraph.BulletSuppressed = true;
     }
 
