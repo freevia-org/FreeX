@@ -502,6 +502,11 @@ public sealed class VisualEvidencePlannerTests
             "Complex:NUMPAGES",
             "Complex:TITLE",
             "Complex:AUTHOR"]);
+        fields.ComplexFieldResultSignatures.Should().Contain([
+            "AUTHOR=FreeW Visual Evidence",
+            "NUMPAGES=3",
+            "PAGE=1",
+            "TITLE=Field Page Number Evidence"]);
     }
 
     [Fact]
@@ -541,22 +546,39 @@ public sealed class VisualEvidencePlannerTests
         fields.HasComplexResultFields.Should().BeTrue();
         fields.ComplexFieldKeywords.Should().BeEquivalentTo(["BIBLIOGRAPHY", "CITATION", "TOA"]);
         fields.FieldKinds.Should().Contain(["Complex:BIBLIOGRAPHY", "Complex:CITATION", "Complex:TOA"]);
+        fields.ComplexFieldResultSignatures.Should().Contain([
+            "BIBLIOGRAPHY=References",
+            "TOA=Cases\\t1, 2"]);
         var toa = FreeWVisualEvidencePlanner.BuildTableOfAuthoritiesExpectation(document);
         toa.EntryCount.Should().Be(2);
         toa.EntryWithPageReferenceCount.Should().Be(2);
+        toa.CategoryCount.Should().Be(2);
+        toa.Categories.Should().BeEquivalentTo(["Cases", "Statutes"]);
         toa.HasGeneratedTable.Should().BeTrue();
         toa.HasPageReferences.Should().BeTrue();
         toa.HasExplicitPageNumbers.Should().BeTrue();
+        toa.PageReferenceSignatures.Should().BeEquivalentTo([
+            "category=Cases|entry=Example v. FreeW, 123 F.4th 456 (2026)|kind=explicit-page-numbers|pages=1,2|text=1, 2",
+            "category=Statutes|entry=Free Software Evidence Act, 42 U.S.C. 2026|kind=explicit-page-numbers|pages=1|text=1"
+        ]);
         var caseToa = toa.PageReferences.Should().ContainSingle(reference =>
             reference.Category == "Cases"
             && reference.EntryText == "Example v. FreeW, 123 F.4th 456 (2026)"
             && reference.PageReferenceText == "1, 2").Subject;
         caseToa.PageNumbers.Should().Equal(1, 2);
+        caseToa.PageReferenceKind.Should().Be("explicit-page-numbers");
+        caseToa.HasPageReferenceSentinel.Should().BeTrue();
+        caseToa.StableSignature.Should().Be(
+            "category=Cases|entry=Example v. FreeW, 123 F.4th 456 (2026)|kind=explicit-page-numbers|pages=1,2|text=1, 2");
         var statuteToa = toa.PageReferences.Should().ContainSingle(reference =>
             reference.Category == "Statutes"
             && reference.EntryText == "Free Software Evidence Act, 42 U.S.C. 2026"
             && reference.PageReferenceText == "1").Subject;
         statuteToa.PageNumbers.Should().Equal(1);
+        statuteToa.PageReferenceKind.Should().Be("explicit-page-numbers");
+        statuteToa.HasPageReferenceSentinel.Should().BeTrue();
+        statuteToa.StableSignature.Should().Be(
+            "category=Statutes|entry=Free Software Evidence Act, 42 U.S.C. 2026|kind=explicit-page-numbers|pages=1|text=1");
 
         var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
             "references-heavy-fields",
@@ -569,6 +591,7 @@ public sealed class VisualEvidencePlannerTests
         expectation.Fields.ComplexFieldKeywords.Should().Contain(["CITATION", "BIBLIOGRAPHY", "TOA"]);
         expectation.TableOfAuthorities.PageReferences.Select(reference => reference.PageReferenceText)
             .Should().BeEquivalentTo(["1, 2", "1"]);
+        expectation.TableOfAuthorities.PageReferenceSignatures.Should().BeEquivalentTo(toa.PageReferenceSignatures);
     }
 
     [Fact]
@@ -1941,6 +1964,173 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void BuildNormalizedSummaryFromFiles_RequiresReferencesHeavyToaPageReferenceSignatures()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "references-heavy-fields";
+            var wpfRows = Enumerable.Range(1, 2)
+                .Select(page => BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                    scenarioId,
+                    page,
+                    pageCount: 2))
+                .ToList();
+            wpfRows[0] = wpfRows[0] with
+            {
+                PageExpectation = wpfRows[0].PageExpectation with
+                {
+                    TableOfAuthorities = wpfRows[0].PageExpectation.TableOfAuthorities with
+                    {
+                        EntryWithPageReferenceCount = 0,
+                        HasPageReferences = false,
+                        HasExplicitPageNumbers = false,
+                        PageReferenceSignatures = [],
+                        PageReferences = []
+                    }
+                }
+            };
+            var avaloniaRows = Enumerable.Range(1, 2)
+                .Select(page => BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                    scenarioId,
+                    page,
+                    pageCount: 2))
+                .ToList();
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                wpfRows,
+                new DateTimeOffset(2026, 7, 5, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                avaloniaRows,
+                new DateTimeOffset(2026, 7, 5, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        2),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        2)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            var normalizedWpf = summary.Evidence.Single(row =>
+                row.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId
+                && row.ScenarioId == scenarioId
+                && row.PageNumber == 1);
+            normalizedWpf.Trust.Passed.Should().BeFalse();
+            normalizedWpf.Trust.Failures.Should().Contain(f =>
+                f.Contains("generated Table of Authorities page references", StringComparison.Ordinal));
+            normalizedWpf.Trust.Failures.Should().Contain(f =>
+                f.Contains("missing generated page-reference signature", StringComparison.Ordinal)
+                && f.Contains("Example v. FreeW", StringComparison.Ordinal));
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("references-heavy-fields", StringComparison.Ordinal)
+                && f.Contains("field renderer pair", StringComparison.Ordinal)
+                && f.Contains("missing WPF page", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RequiresMatchingReferencesHeavyToaSignatures()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "references-heavy-fields";
+            var wpfRows = Enumerable.Range(1, 2)
+                .Select(page => BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                    scenarioId,
+                    page,
+                    pageCount: 2))
+                .ToList();
+            var avaloniaRows = Enumerable.Range(1, 2)
+                .Select(page => BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                    scenarioId,
+                    page,
+                    pageCount: 2))
+                .ToList();
+            avaloniaRows[0] = avaloniaRows[0] with
+            {
+                PageExpectation = avaloniaRows[0].PageExpectation with
+                {
+                    TableOfAuthorities = avaloniaRows[0].PageExpectation.TableOfAuthorities with
+                    {
+                        PageReferenceSignatures =
+                        [
+                            .. avaloniaRows[0].PageExpectation.TableOfAuthorities.PageReferenceSignatures,
+                            "category=Cases|entry=Unexpected v. Drift|kind=explicit-page-numbers|pages=2|text=2"
+                        ]
+                    }
+                }
+            };
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                wpfRows,
+                new DateTimeOffset(2026, 7, 5, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                avaloniaRows,
+                new DateTimeOffset(2026, 7, 5, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        2),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        2)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Evidence.Should().OnlyContain(row => row.Trust.Passed);
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("field renderer pair 'references-heavy-fields' page 1", StringComparison.Ordinal)
+                && f.Contains("generated TOA page-reference signatures differ", StringComparison.Ordinal)
+                && f.Contains("Unexpected v. Drift", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void BuildNormalizedSummaryFromFiles_ReportsMissingExpectedScenario()
     {
         var root = CreateTempRoot();
@@ -3027,33 +3217,58 @@ public sealed class VisualEvidencePlannerTests
         try
         {
             var wpfDir = Path.Combine(root, "wpf");
-            var row = BuildFileBackedRow(
-                root,
-                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
-                "references-heavy-fields",
-                pageNumber: 1,
-                pageCount: 2);
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var wpfRows = Enumerable.Range(1, 2)
+                .Select(page => BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                    "references-heavy-fields",
+                    page,
+                    pageCount: 2))
+                .ToList();
+            var avaloniaRows = Enumerable.Range(1, 2)
+                .Select(page => BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                    "references-heavy-fields",
+                    page,
+                    pageCount: 2))
+                .ToList();
             FreeWVisualEvidencePlanner.WriteManifest(
                 wpfDir,
-                [row],
+                wpfRows,
+                new DateTimeOffset(2026, 7, 4, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                avaloniaRows,
                 new DateTimeOffset(2026, 7, 4, 12, 0, 0, TimeSpan.Zero));
             var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
-                [Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName)],
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
                 root,
                 [
                     new FreeWVisualEvidenceExpectedScenario(
                         FreeWVisualEvidenceManifestNormalizer.WpfHostId,
                         "references-heavy-fields",
-                        1)
+                        2),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        "references-heavy-fields",
+                        2)
                 ]);
 
-            var comparison = FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
-                summary.Evidence.Single(),
-                FreeWVisualBaselineComparisonTolerance.WordPngDefault,
-                "COM ProgID 'Word.Application' is not registered");
+            summary.Trust.Passed.Should().BeTrue();
+            var comparisons = summary.Evidence
+                .Select(row => FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
+                    row,
+                    FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+                    "COM ProgID 'Word.Application' is not registered"))
+                .ToList();
             var withBaseline = FreeWVisualEvidenceManifestNormalizer.WithBaselineComparisons(
                 summary,
-                [comparison]);
+                comparisons);
 
             withBaseline.Trust.Passed.Should().BeTrue();
             var blocker = withBaseline.RemainingEvidenceBlockers.Should().ContainSingle().Subject;
@@ -3064,9 +3279,11 @@ public sealed class VisualEvidencePlannerTests
             blocker.RequiredEvidence.Should().Contain("real MS Word PNG comparisons");
             blocker.Reason.Should().Contain("Word.Application");
             blocker.SemanticEvidence.Should().Contain(evidence =>
-                evidence.Contains("Example v. FreeW, 123 F.4th 456 (2026) -> 1, 2", StringComparison.Ordinal));
+                evidence.Contains("wpf-fidelity-render/p1", StringComparison.Ordinal)
+                && evidence.Contains("category=Cases|entry=Example v. FreeW, 123 F.4th 456 (2026)|kind=explicit-page-numbers|pages=1,2|text=1, 2", StringComparison.Ordinal));
             blocker.SemanticEvidence.Should().Contain(evidence =>
-                evidence.Contains("Free Software Evidence Act, 42 U.S.C. 2026 -> 1", StringComparison.Ordinal));
+                evidence.Contains("avalonia-page-layout-shot/p1", StringComparison.Ordinal)
+                && evidence.Contains("category=Statutes|entry=Free Software Evidence Act, 42 U.S.C. 2026|kind=explicit-page-numbers|pages=1|text=1", StringComparison.Ordinal));
             blocker.RequiresWordBaseline.Should().BeTrue();
             blocker.RelatedBaselineStatuses.Should().Contain(
                 FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus);
@@ -3080,7 +3297,7 @@ public sealed class VisualEvidencePlannerTests
                 .Should().Be("references-heavy-toa-page-number-fidelity");
             jsonBlocker.GetProperty("status").GetString()
                 .Should().Be("word-baseline-unavailable");
-            jsonBlocker.GetProperty("semanticEvidence").GetArrayLength().Should().Be(2);
+            jsonBlocker.GetProperty("semanticEvidence").GetArrayLength().Should().Be(8);
             jsonBlocker.GetProperty("requiresWordBaseline").GetBoolean().Should().BeTrue();
             jsonBlocker.GetProperty("trust").GetProperty("passed").GetBoolean()
                 .Should().BeTrue();
@@ -3089,7 +3306,7 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("## Remaining Evidence Blockers");
             markdown.Should().Contain("references-heavy-toa-page-number-fidelity");
             markdown.Should().Contain("TOA page-number fidelity");
-            markdown.Should().Contain("Example v. FreeW, 123 F.4th 456 (2026) -> 1, 2");
+            markdown.Should().Contain("category=Cases\\|entry=Example v. FreeW, 123 F.4th 456 (2026)\\|kind=explicit-page-numbers\\|pages=1,2\\|text=1, 2");
             markdown.Should().Contain("yes");
             markdown.Should().Contain("COM ProgID 'Word.Application' is not registered");
         }
