@@ -578,13 +578,89 @@ function New-DimensionMismatchClassification {
     param(
         [Parameter(Mandatory = $true)][string]$Bucket,
         [Parameter(Mandatory = $true)][string]$Reason,
-        [Parameter(Mandatory = $true)][string]$NextAction
+        [Parameter(Mandatory = $true)][string]$NextAction,
+        $PolicyAcceptance = $null
     )
 
     [pscustomobject]@{
         bucket = $Bucket
         reason = $Reason
         nextAction = $NextAction
+        policyAcceptance = $PolicyAcceptance
+    }
+}
+
+function New-NativeDifferencePolicyAcceptance {
+    param(
+        [Parameter(Mandatory = $true)][string]$Family,
+        [Parameter(Mandatory = $true)][string]$Rationale
+    )
+
+    [pscustomobject]@{
+        status = "policy-accepted"
+        policy = "expected platform/native control variance"
+        family = $Family
+        rationale = $Rationale
+        clearCriteria = "Clear only if both shells adopt an explicit shared fixed capture size and the paired screenshots remain content-equivalent."
+    }
+}
+
+function Get-NativeDifferencePolicyAcceptance {
+    param([Parameter(Mandatory = $true)][string]$SurfaceId)
+
+    if ($SurfaceId -eq "dialog.Options" -or
+        $SurfaceId.StartsWith("dialog.Options.", [System.StringComparison]::Ordinal)) {
+        return New-NativeDifferencePolicyAcceptance `
+            -Family "Options host frame" `
+            -Rationale "The paired screenshots show the same Options navigation/content contract; the remaining delta is the WPF options host frame versus the Avalonia host frame and default control spacing."
+    }
+
+    if ($SurfaceId -eq "dialog.FindReplace" -or
+        $SurfaceId.StartsWith("dialog.FindReplace.", [System.StringComparison]::Ordinal)) {
+        return New-NativeDifferencePolicyAcceptance `
+            -Family "Find/Replace native control stack" `
+            -Rationale "The paired screenshots show the same Find/Replace fields and actions; the remaining height delta is native textbox/button spacing and tab-host chrome."
+    }
+
+    switch ($SurfaceId) {
+        "dialog.ChangeChartType" {
+            return New-NativeDifferencePolicyAcceptance `
+                -Family "Chart type picker controls" `
+                -Rationale "The paired screenshots show the same chart-type list and preview state; the remaining delta is default list, preview, and dialog chrome metrics."
+        }
+        "dialog.ExportOptions" {
+            return New-NativeDifferencePolicyAcceptance `
+                -Family "Export options native spacing" `
+                -Rationale "The paired screenshots show the same export-option choices; the remaining height delta is platform label/control spacing."
+        }
+        "dialog.ProtectWorkbook" {
+            return New-NativeDifferencePolicyAcceptance `
+                -Family "Protection password prompt" `
+                -Rationale "The paired screenshots show the same password/confirmation workflow; the residual size delta is native password-box and button-row metrics."
+        }
+        "dialog.Sparkline" {
+            return New-NativeDifferencePolicyAcceptance `
+                -Family "Sparkline range picker controls" `
+                -Rationale "The paired screenshots show the same Sparkline range/location inputs and type selection; the residual delta is native text input, combo, and button spacing."
+        }
+    }
+
+    return $null
+}
+
+function ConvertTo-JsonPolicyAcceptance {
+    param($PolicyAcceptance)
+
+    if ($null -eq $PolicyAcceptance) {
+        return $null
+    }
+
+    [ordered]@{
+        status = [string]$PolicyAcceptance.status
+        policy = [string]$PolicyAcceptance.policy
+        family = [string]$PolicyAcceptance.family
+        rationale = [string]$PolicyAcceptance.rationale
+        clearCriteria = [string]$PolicyAcceptance.clearCriteria
     }
 }
 
@@ -668,10 +744,13 @@ function Get-DimensionMismatchClassification {
         $SurfaceId -eq "dialog.ExportOptions" -or
         $SurfaceId -eq "dialog.ProtectWorkbook" -or
         $SurfaceId -eq "dialog.Sparkline") {
+        $policyAcceptance = Get-NativeDifferencePolicyAcceptance -SurfaceId $SurfaceId
+        $reason = if ($null -eq $policyAcceptance) { "The PNGs show the same paired surface with small WPF/Avalonia control, chrome, or default-spacing differences." } else { [string]$policyAcceptance.rationale }
         return New-DimensionMismatchClassification `
             -Bucket "expected platform/native difference" `
-            -Reason "The PNGs show the same paired surface with small WPF/Avalonia control, chrome, or default-spacing differences." `
-            -NextAction "Keep as expected platform/native variance unless parity policy later requires exact control metrics."
+            -Reason $reason `
+            -NextAction "Policy accepted as native/control variance; keep tracked separately from content, evidence, or real logical-size mismatches." `
+            -PolicyAcceptance $policyAcceptance
     }
 
     $largestDelta = [math]::Max([math]::Abs($LogicalWidthDelta), [math]::Abs($LogicalHeightDelta))
@@ -802,6 +881,7 @@ function Compare-PngMetrics {
         dimensionMismatchBucket = if ($null -eq $dimensionMismatchClassification) { $null } else { [string]$dimensionMismatchClassification.bucket }
         dimensionMismatchReason = if ($null -eq $dimensionMismatchClassification) { $null } else { [string]$dimensionMismatchClassification.reason }
         dimensionMismatchNextAction = if ($null -eq $dimensionMismatchClassification) { $null } else { [string]$dimensionMismatchClassification.nextAction }
+        policyAcceptance = if ($null -eq $dimensionMismatchClassification) { $null } else { ConvertTo-JsonPolicyAcceptance $dimensionMismatchClassification.policyAcceptance }
     }
 }
 
@@ -891,10 +971,19 @@ $rawPixelDimensionMismatchRows = @($pairedRows | Where-Object { -not $_.comparis
 $captureScaleNormalizedDimensionRows = @($pairedRows | Where-Object { $_.comparison.captureScaleNormalizedDimensionMatch } | Sort-Object -Property id)
 $expectedSizeMismatchRows = @($pairedRows | Where-Object { $_.comparison.expectedSizeMismatch } | Sort-Object -Property id)
 $stalePromotedExpectedSizeRows = @($expectedSizeMismatchRows | Where-Object { Test-StalePromotedExpectedSizeEvidence -Row $_ } | Sort-Object -Property id)
+$policyAcceptedNativeDifferenceRows = @($dimensionMismatchRows | Where-Object {
+        $null -ne $_.comparison.policyAcceptance -and
+        $_.comparison.policyAcceptance.status -eq "policy-accepted"
+    } | Sort-Object -Property id)
 $topOutlierRows = @($pairedRows | Sort-Object @{ Expression = { $_.comparison.triageScore }; Descending = $true }, @{ Expression = { $_.id }; Ascending = $true } | Select-Object -First 10)
 $dimensionMismatchBucketGroups = @(
     $dimensionMismatchRows |
         Group-Object -Property { $_.comparison.dimensionMismatchBucket } |
+        Sort-Object -Property Name
+)
+$policyAcceptedNativeDifferenceGroups = @(
+    $policyAcceptedNativeDifferenceRows |
+        Group-Object -Property { $_.comparison.policyAcceptance.family } |
         Sort-Object -Property Name
 )
 
@@ -930,6 +1019,7 @@ $jsonModel = [ordered]@{
         pairedCaptureScaleNormalizedDimensionMatches = [int]$captureScaleNormalizedDimensionRows.Count
         pairedExpectedSizeMismatches = [int]$expectedSizeMismatchRows.Count
         stalePromotedExpectedSizeEvidence = [int]$stalePromotedExpectedSizeRows.Count
+        policyAcceptedNativeDifferences = [int]$policyAcceptedNativeDifferenceRows.Count
         dimensionMismatchBuckets = [ordered]@{}
     }
     pairedSurfaces = @(
@@ -965,6 +1055,7 @@ $jsonModel = [ordered]@{
                     dimensionMismatchBucket = $row.comparison.dimensionMismatchBucket
                     dimensionMismatchReason = $row.comparison.dimensionMismatchReason
                     dimensionMismatchNextAction = $row.comparison.dimensionMismatchNextAction
+                    policyAcceptance = $row.comparison.policyAcceptance
                 }
             }
         }
@@ -989,6 +1080,22 @@ $jsonModel = [ordered]@{
                 count = [int]$group.Count
                 topSurfaceIds = @($groupRows | Select-Object -First 5 | ForEach-Object { $_.id })
                 nextAction = [string]$groupRows[0].comparison.dimensionMismatchNextAction
+                policyAccepted = @($groupRows | Where-Object {
+                        $null -ne $_.comparison.policyAcceptance -and
+                        $_.comparison.policyAcceptance.status -eq "policy-accepted"
+                    }).Count -eq $groupRows.Count
+            }
+        }
+    )
+    policyAcceptedNativeDifferenceFamilies = @(
+        foreach ($group in $policyAcceptedNativeDifferenceGroups) {
+            $groupRows = @($group.Group | Sort-Object -Property id)
+            [ordered]@{
+                family = [string]$group.Name
+                count = [int]$group.Count
+                surfaceIds = @($groupRows | ForEach-Object { $_.id })
+                rationale = [string]$groupRows[0].comparison.policyAcceptance.rationale
+                clearCriteria = [string]$groupRows[0].comparison.policyAcceptance.clearCriteria
             }
         }
     )
@@ -999,6 +1106,7 @@ $jsonModel = [ordered]@{
                 bucket = $row.comparison.dimensionMismatchBucket
                 reason = $row.comparison.dimensionMismatchReason
                 nextAction = $row.comparison.dimensionMismatchNextAction
+                policyAcceptance = $row.comparison.policyAcceptance
                 wpfLogicalSize = "$(Format-LogicalSize $row.wpf.metrics)"
                 avaloniaLogicalSize = "$(Format-LogicalSize $row.avalonia.metrics)"
                 logicalWidthDelta = [math]::Round($row.comparison.logicalWidthDelta, 3)
@@ -1072,21 +1180,42 @@ $md = New-Object System.Text.StringBuilder
 [void]$md.AppendLine("| Raw PNG mismatches normalized by capture DPI | $($captureScaleNormalizedDimensionRows.Count) |")
 [void]$md.AppendLine("| Paired expected-size evidence mismatches | $($expectedSizeMismatchRows.Count) |")
 [void]$md.AppendLine("| Stale promoted expected-size evidence | $($stalePromotedExpectedSizeRows.Count) |")
+[void]$md.AppendLine("| Policy-accepted native/control differences | $($policyAcceptedNativeDifferenceRows.Count) |")
 [void]$md.AppendLine()
 
 [void]$md.AppendLine("## Scale-Aware Dimension Mismatch Classification")
 [void]$md.AppendLine()
-[void]$md.AppendLine("The $($dimensionMismatchRows.Count) scale-aware logical dimension mismatches are bucketed from committed PNG evidence and deterministic surface-id rules. Buckets describe the next review posture: align real layout sizes, fix content/state drift before comparing, accept expected platform/native control differences, or refresh limited evidence.")
+[void]$md.AppendLine("The $($dimensionMismatchRows.Count) scale-aware logical dimension mismatches are bucketed from committed PNG evidence and deterministic surface-id rules. Buckets describe the next review posture: align real layout sizes, fix content/state drift before comparing, accept policy-approved platform/native control differences, or refresh limited evidence. Policy-accepted native/control rows are explicit accepted variance, not incomplete parity work.")
 [void]$md.AppendLine()
-[void]$md.AppendLine("| Bucket | Count | Top surface ids | Top next action |")
-[void]$md.AppendLine("| --- | ---: | --- | --- |")
+[void]$md.AppendLine("| Bucket | Count | Policy accepted | Top surface ids | Top next action |")
+[void]$md.AppendLine("| --- | ---: | --- | --- | --- |")
 foreach ($group in $dimensionMismatchBucketGroups) {
     $groupRows = @($group.Group | Sort-Object @{ Expression = { $_.comparison.triageScore }; Descending = $true }, @{ Expression = { $_.id }; Ascending = $true })
     $topIds = @($groupRows | Select-Object -First 5 | ForEach-Object { $_.id })
     $nextAction = if ($groupRows.Count -eq 0) { "" } else { [string]$groupRows[0].comparison.dimensionMismatchNextAction }
-    [void]$md.AppendLine("| $(Escape-MarkdownCell ([string]$group.Name)) | $($group.Count) | $(Escape-MarkdownCell ($topIds -join '<br>')) | $(Escape-MarkdownCell $nextAction) |")
+    $policyAccepted = @($groupRows | Where-Object {
+            $null -ne $_.comparison.policyAcceptance -and
+            $_.comparison.policyAcceptance.status -eq "policy-accepted"
+        }).Count -eq $groupRows.Count
+    [void]$md.AppendLine("| $(Escape-MarkdownCell ([string]$group.Name)) | $($group.Count) | $policyAccepted | $(Escape-MarkdownCell ($topIds -join '<br>')) | $(Escape-MarkdownCell $nextAction) |")
 }
 [void]$md.AppendLine()
+
+if ($policyAcceptedNativeDifferenceGroups.Count -gt 0) {
+    [void]$md.AppendLine("## Policy-Accepted Native/Control Differences")
+    [void]$md.AppendLine()
+    [void]$md.AppendLine("These rows were reviewed against the committed WPF/Avalonia PNG pairs and are retained as intentional platform/native control variance. They do not count as content/visual mismatches, evidence limitations, or real logical-size mismatches.")
+    [void]$md.AppendLine()
+    [void]$md.AppendLine("| Family | Count | Surface ids | Rationale | Clear criteria |")
+    [void]$md.AppendLine("| --- | ---: | --- | --- | --- |")
+    foreach ($group in $policyAcceptedNativeDifferenceGroups) {
+        $groupRows = @($group.Group | Sort-Object -Property id)
+        $acceptance = $groupRows[0].comparison.policyAcceptance
+        $ids = @($groupRows | ForEach-Object { $_.id })
+        [void]$md.AppendLine("| $(Escape-MarkdownCell ([string]$group.Name)) | $($group.Count) | $(Escape-MarkdownCell ($ids -join '<br>')) | $(Escape-MarkdownCell ([string]$acceptance.rationale)) | $(Escape-MarkdownCell ([string]$acceptance.clearCriteria)) |")
+    }
+    [void]$md.AppendLine()
+}
 
 if ($blankEvidenceRows.Count -gt 0) {
     [void]$md.AppendLine("Nonblank check failures: $((@($blankEvidenceRows | ForEach-Object { $_.id }) | Sort-Object) -join ', ').")
@@ -1114,11 +1243,12 @@ foreach ($row in $topOutlierRows) {
 [void]$md.AppendLine()
 [void]$md.AppendLine("## Scale-Aware Dimension Mismatch Details")
 [void]$md.AppendLine()
-[void]$md.AppendLine("| Surface id | Bucket | WPF logical size | Avalonia logical size | Logical delta | Reason | Next action |")
-[void]$md.AppendLine("| --- | --- | ---: | ---: | ---: | --- | --- |")
+[void]$md.AppendLine("| Surface id | Bucket | Policy family | WPF logical size | Avalonia logical size | Logical delta | Reason | Next action |")
+[void]$md.AppendLine("| --- | --- | --- | ---: | ---: | ---: | --- | --- |")
 foreach ($row in $dimensionMismatchRows) {
     $logicalDelta = "$(Format-DisplayNumber $row.comparison.logicalWidthDelta)x$(Format-DisplayNumber $row.comparison.logicalHeightDelta)"
-    [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $(Escape-MarkdownCell $row.comparison.dimensionMismatchBucket) | $(Format-LogicalSize $row.wpf.metrics) | $(Format-LogicalSize $row.avalonia.metrics) | $logicalDelta | $(Escape-MarkdownCell $row.comparison.dimensionMismatchReason) | $(Escape-MarkdownCell $row.comparison.dimensionMismatchNextAction) |")
+    $policyFamily = if ($null -eq $row.comparison.policyAcceptance) { "" } else { [string]$row.comparison.policyAcceptance.family }
+    [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $(Escape-MarkdownCell $row.comparison.dimensionMismatchBucket) | $(Escape-MarkdownCell $policyFamily) | $(Format-LogicalSize $row.wpf.metrics) | $(Format-LogicalSize $row.avalonia.metrics) | $logicalDelta | $(Escape-MarkdownCell $row.comparison.dimensionMismatchReason) | $(Escape-MarkdownCell $row.comparison.dimensionMismatchNextAction) |")
 }
 
 [void]$md.AppendLine()
@@ -1211,6 +1341,7 @@ Write-Host "Raw PNG pixel dimension mismatches: $($rawPixelDimensionMismatchRows
 Write-Host "Raw PNG mismatches normalized by capture DPI: $($captureScaleNormalizedDimensionRows.Count)"
 Write-Host "Paired expected-size evidence mismatches: $($expectedSizeMismatchRows.Count)"
 Write-Host "Stale promoted expected-size evidence: $($stalePromotedExpectedSizeRows.Count)"
+Write-Host "Policy-accepted native/control differences: $($policyAcceptedNativeDifferenceRows.Count)"
 foreach ($group in $dimensionMismatchBucketGroups) {
     Write-Host "Dimension mismatch bucket '$($group.Name)': $($group.Count)"
 }

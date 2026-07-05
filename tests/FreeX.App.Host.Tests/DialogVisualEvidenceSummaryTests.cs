@@ -117,6 +117,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         result.Output.Should().Contain("Raw PNG mismatches normalized by capture DPI: 0");
         result.Output.Should().Contain("Paired expected-size evidence mismatches: 0");
         result.Output.Should().Contain("Stale promoted expected-size evidence: 0");
+        result.Output.Should().Contain("Policy-accepted native/control differences: 0");
         result.Output.Should().Contain("Dimension mismatch bucket 'real logical-size mismatch': 1");
 
         var markdown = File.ReadAllText(markdownPath);
@@ -127,8 +128,9 @@ public sealed class DialogVisualEvidenceSummaryTests
         markdown.Should().Contain("| Raw PNG mismatches normalized by capture DPI | 0 |");
         markdown.Should().Contain("| Paired expected-size evidence mismatches | 0 |");
         markdown.Should().Contain("| Stale promoted expected-size evidence | 0 |");
+        markdown.Should().Contain("| Policy-accepted native/control differences | 0 |");
         markdown.Should().Contain("## Scale-Aware Dimension Mismatch Classification");
-        markdown.Should().Contain("| real logical-size mismatch | 1 | dialog.Sample.Valid |");
+        markdown.Should().Contain("| real logical-size mismatch | 1 | False | dialog.Sample.Valid |");
         markdown.Should().Contain("| dialog.Sample.Valid | dialog.Sample.Valid.png | 3x2 | 3x2 px @ 96 DPI | True | dialog.Sample.Valid.png | 5x2 | 5x2 px @ 96 DPI | True | False |");
         markdown.Should().Contain("| dialog.Sample | 1 | dialog.Sample.Extra |");
         markdown.Should().Contain("dialog.Sample.Valid");
@@ -146,6 +148,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         summary.GetProperty("pairedCaptureScaleNormalizedDimensionMatches").GetInt32().Should().Be(0);
         summary.GetProperty("pairedExpectedSizeMismatches").GetInt32().Should().Be(0);
         summary.GetProperty("stalePromotedExpectedSizeEvidence").GetInt32().Should().Be(0);
+        summary.GetProperty("policyAcceptedNativeDifferences").GetInt32().Should().Be(0);
         summary.GetProperty("dimensionMismatchBuckets").GetProperty("real logical-size mismatch").GetInt32().Should().Be(1);
 
         var paired = json.RootElement.GetProperty("pairedSurfaces")[0];
@@ -158,6 +161,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         paired.GetProperty("comparison").GetProperty("expectedSizeMismatch").GetBoolean().Should().BeFalse();
         paired.GetProperty("comparison").GetProperty("dimensionMismatchBucket").GetString().Should().Be("real logical-size mismatch");
         paired.GetProperty("comparison").GetProperty("dimensionMismatchNextAction").GetString().Should().Contain("layout target");
+        paired.GetProperty("comparison").GetProperty("policyAcceptance").ValueKind.Should().Be(JsonValueKind.Null);
 
         var checkResult = PowerShellScriptRunner.RunToolScript(
             "Generate-DialogVisualEvidenceSummary.ps1",
@@ -253,15 +257,19 @@ public sealed class DialogVisualEvidenceSummaryTests
         result.Output.Should().Contain("Dimension mismatch bucket 'evidence limitation': 1");
         result.Output.Should().Contain("Dimension mismatch bucket 'expected platform/native difference': 1");
         result.Output.Should().Contain("Dimension mismatch bucket 'real logical-size mismatch': 1");
+        result.Output.Should().Contain("Policy-accepted native/control differences: 1");
 
         var markdown = File.ReadAllText(markdownPath);
-        markdown.Should().Contain("| content/visual mismatch | 1 | dialog.AutoFilter |");
-        markdown.Should().Contain("| evidence limitation | 1 | dialog.GoalSeekStatus |");
-        markdown.Should().Contain("| expected platform/native difference | 1 | dialog.FindReplace |");
-        markdown.Should().Contain("| real logical-size mismatch | 1 | dialog.ScenarioManager |");
+        markdown.Should().Contain("| content/visual mismatch | 1 | False | dialog.AutoFilter |");
+        markdown.Should().Contain("| evidence limitation | 1 | False | dialog.GoalSeekStatus |");
+        markdown.Should().Contain("| expected platform/native difference | 1 | True | dialog.FindReplace |");
+        markdown.Should().Contain("| real logical-size mismatch | 1 | False | dialog.ScenarioManager |");
+        markdown.Should().Contain("## Policy-Accepted Native/Control Differences");
+        markdown.Should().Contain("| Find/Replace native control stack | 1 | dialog.FindReplace |");
         markdown.Should().Contain("| dialog.AutoFilter | content/visual mismatch |");
         markdown.Should().Contain("| dialog.ScenarioManager | real logical-size mismatch |");
         markdown.Should().Contain("| dialog.GoalSeekStatus | evidence limitation |");
+        markdown.Should().Contain("| dialog.FindReplace | expected platform/native difference | Find/Replace native control stack |");
 
         using var json = JsonDocument.Parse(File.ReadAllText(jsonPath));
         var buckets = json.RootElement.GetProperty("summary").GetProperty("dimensionMismatchBuckets");
@@ -269,9 +277,19 @@ public sealed class DialogVisualEvidenceSummaryTests
         buckets.GetProperty("evidence limitation").GetInt32().Should().Be(1);
         buckets.GetProperty("expected platform/native difference").GetInt32().Should().Be(1);
         buckets.GetProperty("real logical-size mismatch").GetInt32().Should().Be(1);
+        json.RootElement.GetProperty("summary").GetProperty("policyAcceptedNativeDifferences").GetInt32().Should().Be(1);
 
         json.RootElement.GetProperty("dimensionMismatchClassification").GetArrayLength().Should().Be(4);
         json.RootElement.GetProperty("dimensionMismatchDetails").GetArrayLength().Should().Be(4);
+        var policyFamily = json.RootElement.GetProperty("policyAcceptedNativeDifferenceFamilies")[0];
+        policyFamily.GetProperty("family").GetString().Should().Be("Find/Replace native control stack");
+        policyFamily.GetProperty("count").GetInt32().Should().Be(1);
+        var findReplaceComparison = json.RootElement.GetProperty("pairedSurfaces")
+            .EnumerateArray()
+            .Single(row => row.GetProperty("id").GetString() == "dialog.FindReplace")
+            .GetProperty("comparison");
+        findReplaceComparison.GetProperty("policyAcceptance").GetProperty("status").GetString().Should().Be("policy-accepted");
+        findReplaceComparison.GetProperty("policyAcceptance").GetProperty("family").GetString().Should().Be("Find/Replace native control stack");
     }
 
     [Fact]
