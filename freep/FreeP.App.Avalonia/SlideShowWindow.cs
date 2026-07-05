@@ -1093,6 +1093,10 @@ public sealed class SlideShowWindow : Window
                 RandomBarsEffect(element, plan, onReveal);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Box:
+                BoxEffect(element, plan, onReveal);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Zoom:
                 ZoomEffect(element, plan, onReveal);
                 break;
@@ -1276,6 +1280,31 @@ public sealed class SlideShowWindow : Window
             DelayedAction(plan.DurationMs / 2, () => el.Opacity = 0.75);
             DelayedAction(plan.DurationMs, () => el.Opacity = plan.ToOpacity);
         });
+    }
+
+    private void BoxEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
+    {
+        double w = el.Width  > 0 ? el.Width  : 960;
+        double h = el.Height > 0 ? el.Height : 540;
+
+        var center = new Rect(w / 2, h / 2, 0, 0);
+        var full = new Rect(0, 0, w, h);
+        var from = plan.BoxExpandsFromCenter ? center : full;
+        var to = plan.BoxExpandsFromCenter ? full : center;
+
+        var clipRect = new RectangleGeometry(from);
+        el.Clip = clipRect;
+        el.Opacity = 1;
+        InvokeRevealAtStart(plan, onReveal);
+
+        DelayedAction(plan.DelayMs, () =>
+            AnimateRectClip(
+                el,
+                clipRect,
+                from,
+                to,
+                plan.DurationMs,
+                onComplete: CompleteReveal(plan, onReveal)));
     }
 
     private void AnimateRectClip(Control target, RectangleGeometry clipRect,

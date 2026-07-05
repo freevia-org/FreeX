@@ -82,6 +82,8 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SplitEffect(sb, element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.RandomBars:");
         source.Should().Contain("RandomBarsEffect(sb, element, plan);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Box:");
+        source.Should().Contain("BoxEffect(sb, element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Zoom:");
         source.Should().Contain("ZoomEffect(sb, element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Pulse:");

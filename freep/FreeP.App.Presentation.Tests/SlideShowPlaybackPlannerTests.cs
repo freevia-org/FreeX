@@ -163,10 +163,41 @@ public sealed class SlideShowPlaybackPlannerTests
         randomBars.WipeHorizontal.Should().BeTrue();
         randomBars.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.OnComplete);
 
+        var boxIn = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 7,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Box,
+                Direction = AnimationDirection.In,
+                DurationMs = 260
+            },
+            startDelayMs: 35);
+
+        boxIn.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Box);
+        boxIn.BoxExpandsFromCenter.Should().BeTrue();
+        boxIn.DurationMs.Should().Be(260);
+        boxIn.DelayMs.Should().Be(35);
+        boxIn.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.OnComplete);
+
+        var boxOut = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 8,
+                Kind = AnimationKind.Exit,
+                Preset = AnimationPreset.Box,
+                Direction = AnimationDirection.Out
+            },
+            startDelayMs: 0);
+
+        boxOut.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Box);
+        boxOut.BoxExpandsFromCenter.Should().BeFalse();
+        boxOut.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
+
         var growShrink = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
-                ShapeId = 6,
+                ShapeId = 9,
                 Kind = AnimationKind.Emphasis,
                 Preset = AnimationPreset.Grow,
                 DurationMs = 450
