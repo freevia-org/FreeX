@@ -123,6 +123,20 @@ public sealed class PptxRoundTripTests : IDisposable
             CapturedByHost: "Capture evidence",
             StatusText: "Capture evidence: Narration audio captured",
             PayloadBytes: payload));
+        var captionPayload = System.Text.Encoding.UTF8.GetBytes("WEBVTT\r\n\r\n00:00:00.000 --> 00:00:02.400\r\nIntro narration captured.\r\n");
+        var captionHash = Convert.ToHexString(SHA256.HashData(captionPayload)).ToLowerInvariant();
+        pres.RecordingMediaArtifacts.Add(new PresentationRecordingMediaArtifact(
+            PresentationRecordingMediaArtifactKind.NarrationCaption,
+            SlideIndex: 0,
+            SuggestedFileName: "slide-001-narration-captions.vtt",
+            ContentType: "text/vtt",
+            PackagePath: "ppt/media/recording-captions/slide-001-narration-captions.vtt",
+            ContentLengthBytes: captionPayload.Length,
+            ContentSha256: captionHash,
+            DurationMs: 2400,
+            CapturedByHost: "Capture evidence",
+            StatusText: "Capture evidence: Narration captions authored",
+            PayloadBytes: captionPayload));
 
         var path = WriteToPptx(pres);
 
@@ -132,6 +146,9 @@ public sealed class PptxRoundTripTests : IDisposable
             var mediaEntry = archive.GetEntry("ppt/media/recordings/slide-001-narration.m4a");
             mediaEntry.Should().NotBeNull();
             mediaEntry!.Length.Should().Be(payload.Length);
+            var captionEntry = archive.GetEntry("ppt/media/recording-captions/slide-001-narration-captions.vtt");
+            captionEntry.Should().NotBeNull();
+            captionEntry!.Length.Should().Be(captionPayload.Length);
 
             using var contentTypesStream = archive.GetEntry("[Content_Types].xml")!.Open();
             var contentTypes = XDocument.Load(contentTypesStream);
@@ -141,13 +158,21 @@ public sealed class PptxRoundTripTests : IDisposable
                     string.Equals(element.Attribute("Extension")?.Value, "m4a", StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(element.Attribute("ContentType")?.Value, "audio/mp4", StringComparison.OrdinalIgnoreCase));
             hasM4aContentType.Should().BeTrue();
+            var hasVttContentType = contentTypes.Root!.Elements(contentTypesNamespace + "Default")
+                .Any(element =>
+                    string.Equals(element.Attribute("Extension")?.Value, "vtt", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(element.Attribute("ContentType")?.Value, "text/vtt", StringComparison.OrdinalIgnoreCase));
+            hasVttContentType.Should().BeTrue();
         }
 
         var reloaded = PptxPackageReader.Read(path);
 
-        reloaded.RecordingMediaArtifacts.Should().ContainSingle().Which.Should()
-            .BeEquivalentTo(pres.RecordingMediaArtifacts.Single());
-        reloaded.RecordingMediaArtifacts.Single().PayloadBytes.Should().Equal(payload);
+        reloaded.RecordingMediaArtifacts.Should().HaveCount(2);
+        reloaded.RecordingMediaArtifacts.Should().BeEquivalentTo(pres.RecordingMediaArtifacts);
+        reloaded.RecordingMediaArtifacts.Single(artifact => artifact.Kind == PresentationRecordingMediaArtifactKind.NarrationAudio)
+            .PayloadBytes.Should().Equal(payload);
+        reloaded.RecordingMediaArtifacts.Single(artifact => artifact.Kind == PresentationRecordingMediaArtifactKind.NarrationCaption)
+            .PayloadBytes.Should().Equal(captionPayload);
     }
 
     // ─────────────────────────────────────────────────────────────────────────────

@@ -5,7 +5,9 @@ namespace FreeP.Core.Model;
 public enum PresentationRecordingMediaArtifactKind
 {
     NarrationAudio,
-    CameraVideo
+    CameraVideo,
+    NarrationCaption,
+    CameraCaption
 }
 
 public sealed record PresentationRecordingMediaArtifact(
