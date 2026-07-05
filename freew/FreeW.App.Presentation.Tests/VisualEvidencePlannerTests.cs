@@ -1832,6 +1832,19 @@ public sealed class VisualEvidencePlannerTests
                 scenarioId,
                 pageNumber: 1,
                 pageCount: 1);
+            var wpfTablePlan = wpfRow.PageExpectation.Tables.Tables.Single();
+            var wpfCells = wpfTablePlan.Cells.ToList();
+            wpfCells[0] = wpfCells[0] with { ShadingColorHex = null };
+            var wpfWithMissingHeaderShading = wpfRow with
+            {
+                PageExpectation = wpfRow.PageExpectation with
+                {
+                    Tables = wpfRow.PageExpectation.Tables with
+                    {
+                        Tables = [wpfTablePlan with { Cells = wpfCells }]
+                    }
+                }
+            };
             var avaloniaRow = BuildFileBackedRow(
                 root,
                 FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
@@ -1839,20 +1852,26 @@ public sealed class VisualEvidencePlannerTests
                 pageNumber: 1,
                 pageCount: 1);
             var avaloniaTablePlan = avaloniaRow.PageExpectation.Tables.Tables.Single();
+            var avaloniaCells = avaloniaTablePlan.Cells.ToList();
+            avaloniaCells[0] = avaloniaCells[0] with { ShadingColorHex = "#D9E2F3" };
             var avaloniaWithDifferentTablePlan = avaloniaRow with
             {
                 PageExpectation = avaloniaRow.PageExpectation with
                 {
                     Tables = avaloniaRow.PageExpectation.Tables with
                     {
-                        Tables = [avaloniaTablePlan with { TableStyleId = "AlteredTableStyle" }]
+                        Tables = [avaloniaTablePlan with
+                        {
+                            TableStyleId = "AlteredTableStyle",
+                            Cells = avaloniaCells
+                        }]
                     }
                 }
             };
 
             FreeWVisualEvidencePlanner.WriteManifest(
                 wpfDir,
-                [wpfRow],
+                [wpfWithMissingHeaderShading],
                 new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
             FreeWVisualEvidencePlanner.WriteManifest(
                 avaloniaDir,
@@ -1880,6 +1899,9 @@ public sealed class VisualEvidencePlannerTests
             summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("table renderer pair 'table-layout-complex' page 1", StringComparison.Ordinal)
                 && f.Contains("table plan signatures differ", StringComparison.Ordinal)
+                && f.Contains("table 0 style id differs: WPF 'GridTable4', Avalonia 'AlteredTableStyle'", StringComparison.Ordinal)
+                && f.Contains("table 0 cell r0c0g0 shading color differs: WPF '-'", StringComparison.Ordinal)
+                && f.Contains("Avalonia '#D9E2F3'", StringComparison.Ordinal)
                 && f.Contains("GridTable4", StringComparison.Ordinal)
                 && f.Contains("AlteredTableStyle", StringComparison.Ordinal));
         }

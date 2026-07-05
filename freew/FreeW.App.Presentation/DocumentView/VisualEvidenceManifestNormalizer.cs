@@ -2247,7 +2247,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         if (!wpfTableSignatures.SequenceEqual(avaloniaTableSignatures, StringComparer.Ordinal))
         {
             failures.Add(
-                $"{pairName} table plan signatures differ: WPF '{FormatSummaries(wpfTableSignatures)}', Avalonia '{FormatSummaries(avaloniaTableSignatures)}'");
+                $"{pairName} table plan signatures differ: {DescribeTablePlanDifferences(wpfTables.Tables, avaloniaTables.Tables)}; WPF '{FormatSummaries(wpfTableSignatures)}', Avalonia '{FormatSummaries(avaloniaTableSignatures)}'");
         }
 
         var wpfPaginationSignatures = BuildTablePaginationSignatures(wpfTables.PaginationPlans);
@@ -2336,6 +2336,168 @@ public static class FreeWVisualEvidenceManifestNormalizer
             failures.Add(
                 $"{pairName} SmartArt plan signatures differ: WPF '{FormatSummaries(wpfSmartArtSignatures)}', Avalonia '{FormatSummaries(avaloniaSmartArtSignatures)}'");
         }
+    }
+
+    private static string DescribeTablePlanDifferences(
+        IReadOnlyList<DocumentTableLayoutPlan> wpfTables,
+        IReadOnlyList<DocumentTableLayoutPlan> avaloniaTables)
+    {
+        const int maxDifferences = 8;
+        var differences = new List<string>();
+        var wpfByIndex = wpfTables.ToDictionary(t => t.TableIndex);
+        var avaloniaByIndex = avaloniaTables.ToDictionary(t => t.TableIndex);
+        var tableIndexes = wpfByIndex.Keys
+            .Concat(avaloniaByIndex.Keys)
+            .Distinct()
+            .Order()
+            .ToList();
+
+        foreach (var tableIndex in tableIndexes)
+        {
+            if (!wpfByIndex.TryGetValue(tableIndex, out var wpfTable))
+            {
+                differences.Add($"table {tableIndex.ToString(CultureInfo.InvariantCulture)} missing from WPF");
+                continue;
+            }
+
+            if (!avaloniaByIndex.TryGetValue(tableIndex, out var avaloniaTable))
+            {
+                differences.Add($"table {tableIndex.ToString(CultureInfo.InvariantCulture)} missing from Avalonia");
+                continue;
+            }
+
+            AddTablePropertyDifference(differences, tableIndex, "row count", wpfTable.RowCount, avaloniaTable.RowCount);
+            AddTablePropertyDifference(differences, tableIndex, "grid column count", wpfTable.GridColumnCount, avaloniaTable.GridColumnCount);
+            AddTablePropertyDifference(differences, tableIndex, "has header row", wpfTable.HasHeaderRow, avaloniaTable.HasHeaderRow);
+            AddTablePropertyDifference(differences, tableIndex, "repeats header row", wpfTable.RepeatsHeaderRow, avaloniaTable.RepeatsHeaderRow);
+            AddTablePropertyDifference(differences, tableIndex, "has banded rows", wpfTable.HasBandedRows, avaloniaTable.HasBandedRows);
+            AddTablePropertyDifference(differences, tableIndex, "has banded columns", wpfTable.HasBandedColumns, avaloniaTable.HasBandedColumns);
+            AddTablePropertyDifference(differences, tableIndex, "has merged cells", wpfTable.HasMergedCells, avaloniaTable.HasMergedCells);
+            AddTablePropertyDifference(differences, tableIndex, "has vertical merges", wpfTable.HasVerticalMerges, avaloniaTable.HasVerticalMerges);
+            AddTablePropertyDifference(differences, tableIndex, "has cell shading", wpfTable.HasCellShading, avaloniaTable.HasCellShading);
+            AddTablePropertyDifference(differences, tableIndex, "has custom cell borders", wpfTable.HasCustomCellBorders, avaloniaTable.HasCustomCellBorders);
+            AddTablePropertyDifference(differences, tableIndex, "has cell margins", wpfTable.HasCellMargins, avaloniaTable.HasCellMargins);
+            AddTablePropertyDifference(differences, tableIndex, "has cell spacing", wpfTable.HasCellSpacing, avaloniaTable.HasCellSpacing);
+            AddTablePropertyDifference(differences, tableIndex, "has vertical text", wpfTable.HasVerticalText, avaloniaTable.HasVerticalText);
+            AddTablePropertyDifference(differences, tableIndex, "has vertical alignment", wpfTable.HasVerticalAlignment, avaloniaTable.HasVerticalAlignment);
+            AddTablePropertyDifference(differences, tableIndex, "has preferred widths", wpfTable.HasPreferredWidths, avaloniaTable.HasPreferredWidths);
+            AddTablePropertyDifference(differences, tableIndex, "has named style", wpfTable.HasNamedStyle, avaloniaTable.HasNamedStyle);
+            AddTablePropertyDifference(differences, tableIndex, "alignment", wpfTable.Alignment, avaloniaTable.Alignment);
+            AddTablePropertyDifference(differences, tableIndex, "auto fit", wpfTable.AutoFit, avaloniaTable.AutoFit);
+            AddTablePropertyDifference(differences, tableIndex, "style id", wpfTable.TableStyleId, avaloniaTable.TableStyleId);
+            AddTablePropertyDifference(
+                differences,
+                tableIndex,
+                "column widths",
+                string.Join(",", wpfTable.ColumnWidthsDip.Select(FormatDouble)),
+                string.Join(",", avaloniaTable.ColumnWidthsDip.Select(FormatDouble)));
+
+            DescribeTableCellDifferences(differences, tableIndex, wpfTable.Cells, avaloniaTable.Cells);
+        }
+
+        return FormatDifferenceList(differences, maxDifferences);
+    }
+
+    private static void DescribeTableCellDifferences(
+        List<string> differences,
+        int tableIndex,
+        IReadOnlyList<DocumentTableCellLayoutPlan> wpfCells,
+        IReadOnlyList<DocumentTableCellLayoutPlan> avaloniaCells)
+    {
+        var wpfByKey = wpfCells.ToDictionary(TableCellKey, StringComparer.Ordinal);
+        var avaloniaByKey = avaloniaCells.ToDictionary(TableCellKey, StringComparer.Ordinal);
+        var cellKeys = wpfByKey.Keys
+            .Concat(avaloniaByKey.Keys)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(key => key, StringComparer.Ordinal)
+            .ToList();
+
+        foreach (var key in cellKeys)
+        {
+            if (!wpfByKey.TryGetValue(key, out var wpfCell))
+            {
+                differences.Add($"table {tableIndex.ToString(CultureInfo.InvariantCulture)} cell {key} missing from WPF");
+                continue;
+            }
+
+            if (!avaloniaByKey.TryGetValue(key, out var avaloniaCell))
+            {
+                differences.Add($"table {tableIndex.ToString(CultureInfo.InvariantCulture)} cell {key} missing from Avalonia");
+                continue;
+            }
+
+            AddTableCellDifference(differences, tableIndex, key, "grid span", wpfCell.GridSpan, avaloniaCell.GridSpan);
+            AddTableCellDifference(differences, tableIndex, key, "row span", wpfCell.RowSpan, avaloniaCell.RowSpan);
+            AddTableCellDifference(differences, tableIndex, key, "vertical merge continuation", wpfCell.IsVerticalMergeContinuation, avaloniaCell.IsVerticalMergeContinuation);
+            AddTableCellDifference(differences, tableIndex, key, "shading color", wpfCell.ShadingColorHex, avaloniaCell.ShadingColorHex);
+            AddTableCellDifference(differences, tableIndex, key, "custom borders", wpfCell.HasCustomBorders, avaloniaCell.HasCustomBorders);
+            AddTableCellDifference(differences, tableIndex, key, "text direction", wpfCell.TextDirection, avaloniaCell.TextDirection);
+            AddTableCellDifference(differences, tableIndex, key, "vertical alignment", wpfCell.VerticalAlignment, avaloniaCell.VerticalAlignment);
+            AddTableCellDifference(differences, tableIndex, key, "preferred width", wpfCell.PreferredWidthDip, avaloniaCell.PreferredWidthDip);
+            AddTableCellDifference(differences, tableIndex, key, "height", wpfCell.HeightDip, avaloniaCell.HeightDip);
+        }
+    }
+
+    private static string TableCellKey(DocumentTableCellLayoutPlan cell) =>
+        string.Concat(
+            "r",
+            cell.RowIndex.ToString(CultureInfo.InvariantCulture),
+            "c",
+            cell.CellIndex.ToString(CultureInfo.InvariantCulture),
+            "g",
+            cell.GridColumnIndex.ToString(CultureInfo.InvariantCulture));
+
+    private static void AddTablePropertyDifference<T>(
+        List<string> differences,
+        int tableIndex,
+        string name,
+        T wpfValue,
+        T avaloniaValue)
+    {
+        if (EqualityComparer<T>.Default.Equals(wpfValue, avaloniaValue))
+            return;
+
+        differences.Add(
+            $"table {tableIndex.ToString(CultureInfo.InvariantCulture)} {name} differs: WPF '{FormatDifferenceValue(wpfValue)}', Avalonia '{FormatDifferenceValue(avaloniaValue)}'");
+    }
+
+    private static void AddTableCellDifference<T>(
+        List<string> differences,
+        int tableIndex,
+        string cellKey,
+        string name,
+        T wpfValue,
+        T avaloniaValue)
+    {
+        if (EqualityComparer<T>.Default.Equals(wpfValue, avaloniaValue))
+            return;
+
+        differences.Add(
+            $"table {tableIndex.ToString(CultureInfo.InvariantCulture)} cell {cellKey} {name} differs: WPF '{FormatDifferenceValue(wpfValue)}', Avalonia '{FormatDifferenceValue(avaloniaValue)}'");
+    }
+
+    private static string FormatDifferenceValue<T>(T value) =>
+        value switch
+        {
+            null => "-",
+            bool boolValue => boolValue ? "true" : "false",
+            double doubleValue => FormatDouble(doubleValue),
+            _ => value.ToString() ?? "-"
+        };
+
+    private static string FormatDifferenceList(IReadOnlyList<string> differences, int maxDifferences)
+    {
+        if (differences.Count == 0)
+            return "no field-level differences isolated";
+
+        var visible = differences
+            .Take(Math.Max(1, maxDifferences))
+            .ToList();
+        var summary = string.Join("; ", visible);
+        var hidden = differences.Count - visible.Count;
+        return hidden > 0
+            ? summary + $"; +{hidden.ToString(CultureInfo.InvariantCulture)} more"
+            : summary;
     }
 
     private static List<string> BuildTablePlanSignatures(IEnumerable<DocumentTableLayoutPlan> tables) =>
