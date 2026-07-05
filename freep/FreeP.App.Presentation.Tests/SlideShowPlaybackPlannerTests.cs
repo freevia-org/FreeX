@@ -259,10 +259,43 @@ public sealed class SlideShowPlaybackPlannerTests
         verticalCheckerboard.CheckerboardHorizontal.Should().BeFalse();
         verticalCheckerboard.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
 
-        var diamondIn = SlideShowPlaybackPlanner.PlanShapeAnimation(
+        var circleIn = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
                 ShapeId = 11,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Circle,
+                Direction = AnimationDirection.In,
+                DurationMs = 285
+            },
+            startDelayMs: 25);
+
+        circleIn.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Circle);
+        circleIn.GeometricMaskKind.Should().Be(SlideShowGeometricMaskKind.Circle);
+        circleIn.GeometricMaskExpandsFromCenter.Should().BeTrue();
+        circleIn.DurationMs.Should().Be(285);
+        circleIn.DelayMs.Should().Be(25);
+        circleIn.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.OnComplete);
+
+        var circleOut = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 12,
+                Kind = AnimationKind.Exit,
+                Preset = AnimationPreset.Circle,
+                Direction = AnimationDirection.Out
+            },
+            startDelayMs: 0);
+
+        circleOut.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Circle);
+        circleOut.GeometricMaskKind.Should().Be(SlideShowGeometricMaskKind.Circle);
+        circleOut.GeometricMaskExpandsFromCenter.Should().BeFalse();
+        circleOut.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
+
+        var diamondIn = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 13,
                 Kind = AnimationKind.Entrance,
                 Preset = AnimationPreset.Diamond,
                 Direction = AnimationDirection.In,
@@ -280,7 +313,7 @@ public sealed class SlideShowPlaybackPlannerTests
         var diamondOut = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
-                ShapeId = 12,
+                ShapeId = 14,
                 Kind = AnimationKind.Exit,
                 Preset = AnimationPreset.Diamond,
                 Direction = AnimationDirection.Out
@@ -295,7 +328,7 @@ public sealed class SlideShowPlaybackPlannerTests
         var growShrink = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
-                ShapeId = 13,
+                ShapeId = 15,
                 Kind = AnimationKind.Emphasis,
                 Preset = AnimationPreset.Grow,
                 DurationMs = 450

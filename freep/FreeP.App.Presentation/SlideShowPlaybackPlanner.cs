@@ -27,6 +27,7 @@ public enum SlideShowShapeAnimationEffectKind
     Blinds,
     Box,
     Checkerboard,
+    Circle,
     Diamond,
     Zoom,
     Pulse,
@@ -50,6 +51,7 @@ public sealed record SlideShowMotionPathKeyFrame(
 public enum SlideShowGeometricMaskKind
 {
     None,
+    Circle,
     Diamond
 }
 
@@ -193,6 +195,7 @@ public static class SlideShowPlaybackPlanner
             AnimationPreset.Blinds => SlideShowShapeAnimationEffectKind.Blinds,
             AnimationPreset.Box => SlideShowShapeAnimationEffectKind.Box,
             AnimationPreset.Checkerboard => SlideShowShapeAnimationEffectKind.Checkerboard,
+            AnimationPreset.Circle => SlideShowShapeAnimationEffectKind.Circle,
             AnimationPreset.Diamond => SlideShowShapeAnimationEffectKind.Diamond,
             AnimationPreset.Zoom => SlideShowShapeAnimationEffectKind.Zoom,
             AnimationPreset.Pulse => SlideShowShapeAnimationEffectKind.Pulse,
@@ -273,9 +276,12 @@ public static class SlideShowPlaybackPlanner
         ExpandsFromCenter(animation);
 
     private static SlideShowGeometricMaskKind ResolveGeometricMaskKind(ShapeAnimation animation) =>
-        animation.Preset == AnimationPreset.Diamond
-            ? SlideShowGeometricMaskKind.Diamond
-            : SlideShowGeometricMaskKind.None;
+        animation.Preset switch
+        {
+            AnimationPreset.Circle => SlideShowGeometricMaskKind.Circle,
+            AnimationPreset.Diamond => SlideShowGeometricMaskKind.Diamond,
+            _ => SlideShowGeometricMaskKind.None
+        };
 
     private static bool GeometricMaskExpandsFromCenter(ShapeAnimation animation) =>
         ExpandsFromCenter(animation);

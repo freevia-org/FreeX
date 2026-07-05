@@ -162,6 +162,7 @@ public sealed partial class NativeJsonAdapter
                 ShowRulers = s.ShowRulers,
                 ZoomPercent = NativeJsonValueSanitizer.ValidZoomPercentOrDefault(s.ZoomPercent),
                 ShowFormulas = s.ShowFormulas,
+                IsRightToLeft = s.IsRightToLeft,
                 ShowZeros = s.ShowZeros,
                 FullCalculationOnLoad = s.FullCalculationOnLoad,
                 PhoneticProperties = ToWorksheetPhoneticPropertiesDto(s.PhoneticProperties),

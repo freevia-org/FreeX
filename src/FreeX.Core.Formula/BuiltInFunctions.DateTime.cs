@@ -724,6 +724,11 @@ public static partial class BuiltInFunctions
         if (!TrySerialToDateTime(endDate, uses1904DateSystem, out var endRaw)) return ErrorValue.Num;
         var startDt = startRaw.Date;
         var endDt   = endRaw.Date;
+        // Excel's YEARFRAC always returns a non-negative fraction regardless of
+        // which date is earlier — normalize order up front so every basis's
+        // day-count math (which is not symmetric under swap) yields the same
+        // magnitude as the argument order (start, end) would.
+        if (startDt > endDt) (startDt, endDt) = (endDt, startDt);
         double totalDays = DateToSerial(endDt, uses1904DateSystem) - DateToSerial(startDt, uses1904DateSystem);
         double result = basis switch
         {
@@ -738,10 +743,11 @@ public static partial class BuiltInFunctions
 
     private static double ActualActualDenominator(DateTime start, DateTime end)
     {
-        // Normalize order so the denominator is well-defined when callers pass
-        // a reversed range (Excel allows YEARFRAC(start > end) and returns a
-        // negative value — without this swap the loop is empty and we'd
-        // divide by zero, yielding ±infinity instead of a finite result).
+        // Defensive normalization: YearfracScalar already swaps reversed ranges
+        // before calling this helper, but keep this guard so the denominator
+        // stays well-defined for any other caller — without it, a reversed
+        // range would leave the averaging loop empty and divide by zero,
+        // yielding ±infinity instead of a finite result.
         if (start > end) (start, end) = (end, start);
 
         // Excel basis 1 special case: for a span of at most one year, the

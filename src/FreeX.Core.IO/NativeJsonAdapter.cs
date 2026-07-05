@@ -153,6 +153,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.ShowRulers = sDto.ShowRulers ?? true;
             sheet.ZoomPercent = NativeJsonValueSanitizer.ValidZoomPercentOrDefault(sDto.ZoomPercent);
             sheet.ShowFormulas = sDto.ShowFormulas ?? false;
+            sheet.IsRightToLeft = sDto.IsRightToLeft ?? false;
             sheet.ShowZeros = sDto.ShowZeros ?? true;
             sheet.FullCalculationOnLoad = sDto.FullCalculationOnLoad;
             sheet.PhoneticProperties = ToWorksheetPhoneticProperties(sDto.PhoneticProperties);

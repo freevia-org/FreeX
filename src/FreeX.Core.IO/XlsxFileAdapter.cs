@@ -11,6 +11,19 @@ using FreeX.Core.Model;
 namespace FreeX.Core.IO;
 
 /// <summary>
+/// Raised when an .xlsx file cannot be opened because it is an OLE/CFB-wrapped
+/// "Encrypt with Password" package (an EncryptedPackage stream inside an OLE compound file)
+/// rather than a plain OOXML zip. Distinguishes this common, user-actionable case from a
+/// generic corrupt-file error so the UI can tell the user the real reason.
+/// </summary>
+public sealed class WorkbookPasswordProtectedException : Exception
+{
+    public WorkbookPasswordProtectedException(string message) : base(message)
+    {
+    }
+}
+
+/// <summary>
 /// XLSX file adapter using ClosedXML.
 /// Supports standard .xlsx workbook files.
 /// </summary>
@@ -85,6 +98,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         var totalStopwatch = Stopwatch.StartNew();
         var (loadPackage, packageCopyDiagnostics) = MeasureLoadPhase(() => CreateLoadPackageStream(stream));
         using var packageStream = loadPackage.PackageStream;
+        ThrowIfPasswordEncrypted(packageStream);
         var packageParts = XlsxLoadPackageParts.Empty;
         var workbookTheme = WorkbookTheme.Office;
         var workbookMetadata = XlsxWorkbookMetadataSnapshot.Default;
@@ -1560,6 +1574,27 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
             destination.Write(buffer, 0, read);
         }
+    }
+
+    // OLE/CFB compound-file signature ("Encrypt with Password" wraps the real OOXML zip in an
+    // EncryptedPackage stream inside an OLE compound file). ZipArchive can't open this at all, so
+    // without an explicit check here the user only ever sees a low-level zip/ClosedXML format
+    // exception, never the actual reason ("this workbook is password protected").
+    private static readonly byte[] CompoundFileBinarySignature = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+
+    private static void ThrowIfPasswordEncrypted(MemoryStream packageStream)
+    {
+        if (!packageStream.TryGetBuffer(out var buffer) || buffer.Count < CompoundFileBinarySignature.Length)
+            return;
+
+        for (var i = 0; i < CompoundFileBinarySignature.Length; i++)
+        {
+            if (buffer.Array![buffer.Offset + i] != CompoundFileBinarySignature[i])
+                return;
+        }
+
+        throw new WorkbookPasswordProtectedException(
+            "This workbook is password-protected. Remove the password protection in Excel (File > Info > Protect Workbook > Encrypt with Password, then clear the password) and try again.");
     }
 
     private readonly record struct LoadPackageStream(

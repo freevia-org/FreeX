@@ -1,0 +1,286 @@
+using System.Threading;
+using System.Threading.Tasks;
+using Avalonia.Headless;
+using Avalonia.Input;
+using FluentAssertions;
+
+using FreeX.Core.Model;
+
+namespace FreeX.App.Avalonia.Tests;
+
+/// <summary>
+/// Regression guards for review5 finding K23 (group C-avalonia-mainwindow, stage 2 — interactive
+/// Name Box):
+///
+///   K23 — The Avalonia (Linux/macOS) shell's Name Box (<c>_cellAddressText</c>, automation id
+///         "CellAddressText") was a plain, non-interactive <c>TextBlock</c> with no
+///         PointerPressed/Tapped/GotFocus/KeyDown handler anywhere: a user could not click it, type
+///         a range/name/table reference, get autocomplete, or define a name by typing — the entire
+///         Name Box interaction surface the WPF host provides via its editable
+///         <c>CellAddressBox</c> ComboBox (MainWindow.Editing.cs) was simply absent on this
+///         platform. Fixed by making <c>_cellAddressText</c> a real, focusable <c>TextBox</c> wired
+///         with GotFocus (select-all), KeyDown (Enter-to-navigate / define-name-by-typing /
+///         Escape-to-restore), and a chevron <c>DropDownButton</c> flyout listing defined names
+///         (workbook-global + names scoped to the active sheet) for basic autocomplete-by-click —
+///         mirroring the WPF host's <c>CellAddressBox_KeyDown</c>/<c>_SelectionChanged</c>/
+///         <c>_DropDownOpened</c>/<c>TryDefineNameFromNameBox</c>.
+///
+/// These drive the real production code via the internal test seams
+/// (CellAddressBoxTextForTest / RaiseCellAddressBoxKeyDownForTest /
+/// CellAddressAutocompleteNamesForTest) added alongside the fix, so the resulting
+/// <see cref="MainWindow.Session"/> state and box text reflect actual runtime behavior rather than
+/// a source-string proxy.
+/// </summary>
+[Collection("AvaloniaHeadless")]
+public sealed class AvaloniaMainWindowNameBoxStage2Tests
+{
+    private static readonly HeadlessUnitTestSession Session =
+        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
+
+    // ── Enter-to-navigate: plain cell reference ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task Enter_WithCellReference_NavigatesActiveCellToThatAddress()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("CleanFixture");
+            window.Session.SelectSheet(sheet.Id);
+            window.Session.SelectCell(new CellAddress(sheet.Id, 1, 1));
+
+            window.CellAddressBoxTextForTest = "C5";
+            window.RaiseCellAddressBoxKeyDownForTest(new KeyEventArgs { Key = Key.Enter });
+
+            window.Session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 5, 3));
+            window.CellAddressBoxTextForTest.Should().Be("C5");
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    // ── Enter-to-navigate: a range reference selects the whole range ─────────────────────────
+
+    [Fact]
+    public async Task Enter_WithRangeReference_SelectsTheWholeRange()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("CleanFixture");
+            window.Session.SelectSheet(sheet.Id);
+
+            window.CellAddressBoxTextForTest = "B2:D4";
+            window.RaiseCellAddressBoxKeyDownForTest(new KeyEventArgs { Key = Key.Enter });
+
+            window.Session.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(sheet.Id, 2, 2),
+                new CellAddress(sheet.Id, 4, 4)));
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    // ── Enter-to-navigate: an existing defined name navigates to its range ───────────────────
+
+    [Fact]
+    public async Task Enter_WithDefinedNameText_NavigatesToTheNamedRange()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("CleanFixture");
+            window.Session.SelectSheet(sheet.Id);
+            var namedRange = new GridRange(new CellAddress(sheet.Id, 7, 2), new CellAddress(sheet.Id, 7, 2));
+            window.Session.Workbook.DefineNamedRange("Total", namedRange);
+
+            window.CellAddressBoxTextForTest = "Total";
+            window.RaiseCellAddressBoxKeyDownForTest(new KeyEventArgs { Key = Key.Enter });
+
+            window.Session.ActiveCell.Should().Be(namedRange.Start);
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    // ── Enter-to-navigate: sheet-scoped name precedence, matching formula evaluation ─────────
+
+    [Fact]
+    public async Task Enter_WithSheetScopedName_PrefersTheScopedRangeOverASameNamedGlobalName()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var globalSheet = window.Session.Workbook.AddSheet("Global");
+            var scopedSheet = window.Session.Workbook.AddSheet("Scoped");
+            var globalNamedRange = new GridRange(
+                new CellAddress(globalSheet.Id, 1, 1), new CellAddress(globalSheet.Id, 1, 1));
+            var scopedNamedRange = new GridRange(
+                new CellAddress(scopedSheet.Id, 9, 9), new CellAddress(scopedSheet.Id, 9, 9));
+            window.Session.Workbook.DefineNamedRange("Shadowed", globalNamedRange);
+            window.Session.Workbook.DefineNamedRange("Shadowed", scopedNamedRange, metadata: null, scopeSheetId: scopedSheet.Id);
+
+            window.Session.SelectSheet(scopedSheet.Id);
+            window.CellAddressBoxTextForTest = "Shadowed";
+            window.RaiseCellAddressBoxKeyDownForTest(new KeyEventArgs { Key = Key.Enter });
+
+            window.Session.ActiveCell.Should().Be(scopedNamedRange.Start);
+            window.Session.ActiveSheet.Id.Should().Be(scopedSheet.Id);
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    // ── Enter-to-navigate: cross-sheet reference switches the active sheet ───────────────────
+
+    [Fact]
+    public async Task Enter_WithCrossSheetReference_SwitchesTheActiveSheet()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheetOne = window.Session.Workbook.AddSheet("One");
+            var sheetTwo = window.Session.Workbook.AddSheet("Two");
+            window.Session.SelectSheet(sheetOne.Id);
+
+            window.CellAddressBoxTextForTest = "Two!B3";
+            window.RaiseCellAddressBoxKeyDownForTest(new KeyEventArgs { Key = Key.Enter });
+
+            window.Session.ActiveSheet.Id.Should().Be(sheetTwo.Id);
+            window.Session.ActiveCell.Should().Be(new CellAddress(sheetTwo.Id, 3, 2));
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    // ── Define-name-by-typing: a valid new name typed into the box defines it on the current selection ──
+
+    [Fact]
+    public async Task Enter_WithNewValidNameText_DefinesANameOverTheCurrentSelection()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("CleanFixture");
+            window.Session.SelectSheet(sheet.Id);
+            var selection = new GridRange(new CellAddress(sheet.Id, 3, 3), new CellAddress(sheet.Id, 4, 4));
+            window.Session.SelectRange(selection);
+
+            window.CellAddressBoxTextForTest = "MyRegion";
+            window.RaiseCellAddressBoxKeyDownForTest(new KeyEventArgs { Key = Key.Enter });
+
+            window.Session.Workbook.TryGetNamedRange("MyRegion", out var defined).Should().BeTrue();
+            defined.Should().Be(selection);
+            window.CellAddressBoxTextForTest.Should().Be("MyRegion");
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    // ── Invalid input: neither a parseable reference nor a definable name is rejected, not silently accepted ──
+
+    [Fact]
+    public async Task Enter_WithUnparseableText_IsRejectedAndDoesNotMoveTheActiveCellOrDefineAName()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("CleanFixture");
+            window.Session.SelectSheet(sheet.Id);
+            window.Session.SelectCell(new CellAddress(sheet.Id, 2, 2));
+
+            // Spaces are neither a valid A1/R1C1 reference token nor a valid defined-name character
+            // (Workbook.ValidateNamedRangeName rejects anything but letters/digits/underscore/period),
+            // so this text must be rejected outright rather than silently doing nothing useful,
+            // crashing, or being accepted as a name.
+            window.CellAddressBoxTextForTest = "not a valid ref";
+            window.RaiseCellAddressBoxKeyDownForTest(new KeyEventArgs { Key = Key.Enter });
+
+            window.Session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 2, 2));
+            window.Session.Workbook.NamedRanges.Should().NotContainKey("not a valid ref");
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    // ── Escape restores the box text to the active cell's address without navigating ─────────
+
+    [Fact]
+    public async Task Escape_RestoresBoxTextToActiveCellAddress()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("CleanFixture");
+            window.Session.SelectSheet(sheet.Id);
+            window.Session.SelectCell(new CellAddress(sheet.Id, 6, 1));
+
+            window.CellAddressBoxTextForTest = "garbage text the user typed";
+            window.RaiseCellAddressBoxKeyDownForTest(new KeyEventArgs { Key = Key.Escape });
+
+            window.CellAddressBoxTextForTest.Should().Be("A6");
+            window.Session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 6, 1));
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    // ── Basic autocomplete: the name list merges workbook-global and current-sheet-scoped names ──
+
+    [Fact]
+    public async Task AutocompleteNames_MergesGlobalAndActiveSheetScopedNames_DedupedAndSorted()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var activeSheet = window.Session.Workbook.AddSheet("Active");
+            var otherSheet = window.Session.Workbook.AddSheet("Other");
+            window.Session.SelectSheet(activeSheet.Id);
+
+            window.Session.Workbook.DefineNamedRange(
+                "Zebra", new GridRange(new CellAddress(activeSheet.Id, 1, 1), new CellAddress(activeSheet.Id, 1, 1)));
+            window.Session.Workbook.DefineNamedRange(
+                "Apple",
+                new GridRange(new CellAddress(activeSheet.Id, 2, 2), new CellAddress(activeSheet.Id, 2, 2)),
+                metadata: null,
+                scopeSheetId: activeSheet.Id);
+            // A name scoped to a different sheet must not leak into this sheet's autocomplete list.
+            window.Session.Workbook.DefineNamedRange(
+                "OtherSheetOnly",
+                new GridRange(new CellAddress(otherSheet.Id, 1, 1), new CellAddress(otherSheet.Id, 1, 1)),
+                metadata: null,
+                scopeSheetId: otherSheet.Id);
+
+            var names = window.CellAddressAutocompleteNamesForTest();
+
+            names.Should().Equal("Apple", "Zebra");
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    // ── Typing a name (case-insensitively) matches an autocomplete-listed defined name ────────
+
+    [Fact]
+    public async Task Enter_WithDifferentCasingOfADefinedName_StillNavigatesToItsRange()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("CleanFixture");
+            window.Session.SelectSheet(sheet.Id);
+            var namedRange = new GridRange(new CellAddress(sheet.Id, 8, 8), new CellAddress(sheet.Id, 8, 8));
+            window.Session.Workbook.DefineNamedRange("Picked", namedRange);
+
+            window.CellAddressAutocompleteNamesForTest().Should().Contain("Picked");
+
+            // Excel's Name Box (and its autocomplete) resolves defined names case-insensitively.
+            window.CellAddressBoxTextForTest = "picked";
+            window.RaiseCellAddressBoxKeyDownForTest(new KeyEventArgs { Key = Key.Enter });
+
+            window.Session.ActiveCell.Should().Be(namedRange.Start);
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+}

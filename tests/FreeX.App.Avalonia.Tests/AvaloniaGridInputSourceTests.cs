@@ -10,7 +10,10 @@ public sealed class AvaloniaGridInputSourceTests
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
-        source.Should().Contain("CreateColumnHeaderCell(col, viewport.ColMetrics[colIndex], selected, zoomFactor)");
+        // Split panes (K10) fold Window ▸ Split's pinned rows/columns ahead of the main pane's own
+        // viewport.ColMetrics into one combined `colMetrics` sequence (CombineSplitColumnMetrics), so
+        // headers are built from that combined local rather than viewport.ColMetrics directly.
+        source.Should().Contain("CreateColumnHeaderCell(col, colMetrics[colIndex], selected, zoomFactor)");
         source.Should().Contain("CreateRowHeaderCell(row, rowMetric, selectedRow, zoomFactor)");
         source.Should().Contain("AddColumnResizeHandle(header, col, metric, zoomFactor)");
         source.Should().Contain("AddRowResizeHandle(header, row, metric, zoomFactor)");
@@ -104,8 +107,11 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("TryResolveColumnHeaderPointerIndex(args, out var col)");
         source.Should().Contain("TryResolveRowHeaderPointerIndex(args, out var row)");
         source.Should().Contain("var pos = args.GetPosition(_sheetGridHost);");
-        source.Should().Contain("foreach (var metric in _session.Viewport.ColMetrics)");
-        source.Should().Contain("foreach (var metric in _session.Viewport.RowMetrics)");
+        // Split panes (K10): header pointer-drag resolution walks the combined split+main pane
+        // metrics (CombineSplitColumnMetrics/CombineSplitRowMetrics) so dragging across a pinned
+        // split header resolves correctly too, not just viewport.ColMetrics/RowMetrics (main pane).
+        source.Should().Contain("foreach (var metric in CombineSplitColumnMetrics(_session.Viewport))");
+        source.Should().Contain("foreach (var metric in CombineSplitRowMetrics(_session.Viewport))");
         source.Should().Contain("SelectEntireColumn(targetCol, extend: true);");
         source.Should().Contain("SelectEntireRow(targetRow, extend: true);");
     }

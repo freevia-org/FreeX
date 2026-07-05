@@ -9,9 +9,16 @@ internal static partial class RowColumnShiftHelpers
     /// Rewrites all NamedFormulas (defined names whose refers-to is a formula expression)
     /// for a structural insert/delete operation.  Entries that change are recorded in
     /// <paramref name="snapshot"/> so they can be restored by <see cref="RestoreNamedFormulas"/>.
-    /// The host-sheet name required by <see cref="FormulaRewriter"/> is taken from the first
-    /// sheet in the workbook (NamedFormulas are workbook-scoped, so any sheet name suffices
-    /// for absolute-reference rewriting).
+    /// The host-sheet name required by <see cref="FormulaRewriter"/> is the structural operation's
+    /// own target sheet (<see cref="RewriteOperationSheetName"/>) — <b>not</b> a fixed workbook
+    /// sheet — because a workbook-global NamedFormula has no single owning sheet: a
+    /// sheet-unqualified reference inside it is resolved by the evaluator and dependency tracker
+    /// relative to whichever sheet the calling cell lives on (<c>Workbook.TryGetNamedFormulaText</c>
+    /// takes the caller's <c>contextSheetId</c>; see <c>FormulaEvaluator.References.cs</c> and
+    /// <c>RecalcEngine.CollectReferences</c>'s <c>NamedRangeNode</c> case). So an unqualified
+    /// reference must be treated as belonging to whichever sheet is currently being edited — the
+    /// same convention <see cref="FormulaRewriter.Matches"/> already uses to decide whether an
+    /// unqualified <em>cell</em> reference needs shifting for a structural edit on that sheet.
     /// Also rewrites sheet-scoped named formulas; changes are recorded in
     /// <paramref name="scopedSnapshot"/> for undo.
     /// </summary>
@@ -21,7 +28,8 @@ internal static partial class RowColumnShiftHelpers
     {
         if (workbook.NamedFormulas.Count > 0)
         {
-            var hostSheetName = workbook.Sheets.Count > 0 ? workbook.Sheets[0].Name : string.Empty;
+            var hostSheetName = RewriteOperationSheetName(op) ??
+                (workbook.Sheets.Count > 0 ? workbook.Sheets[0].Name : string.Empty);
 
             foreach (var name in workbook.NamedFormulas.Keys.ToList())
             {
@@ -51,6 +59,28 @@ internal static partial class RowColumnShiftHelpers
             }
         }
     }
+
+    /// <summary>
+    /// The sheet a structural <see cref="RewriteOperation"/> targets, for the ops that carry one
+    /// (row/column insert-delete and the partial insert/delete-cells shift ops used for a
+    /// workbook-global NamedFormula's "host sheet" — see <see cref="RewriteNamedFormulas"/>).
+    /// Returns null for ops with no single target sheet (e.g. <c>PasteOffsetOp</c>, which always
+    /// adjusts regardless of host sheet, or rename/delete-sheet ops, which only ever touch
+    /// sheet-qualified references and so never consult the host sheet).
+    /// </summary>
+    private static string? RewriteOperationSheetName(RewriteOperation op) => op switch
+    {
+        InsertRowsOp ins => ins.SheetName,
+        DeleteRowsOp del => del.SheetName,
+        InsertColsOp ins => ins.SheetName,
+        DeleteColsOp del => del.SheetName,
+        MoveRangeOp move => move.SheetName,
+        InsertCellsShiftDownOp ins => ins.SheetName,
+        InsertCellsShiftRightOp ins => ins.SheetName,
+        DeleteCellsShiftUpOp del => del.SheetName,
+        DeleteCellsShiftLeftOp del => del.SheetName,
+        _ => null
+    };
 
     /// <summary>
     /// Restores NamedFormulas from a snapshot captured by <see cref="RewriteNamedFormulas"/>.

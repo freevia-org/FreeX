@@ -26,14 +26,17 @@ public sealed partial class ViewportService
             if (!bucketIndex.HasValue)
                 return null;
 
+            // Reverse Icon Order mirrors which bucket maps to which icon; apply it before picking
+            // an icon so it takes effect whether the bucket resolves to a per-threshold custom
+            // icon override or to the rule's default icon-set style.
+            if (rule.IconSetReverse)
+                bucketIndex = iconCount - 1 - bucketIndex.Value;
+
             if (rule.IconOverrides.Count == iconCount)
             {
                 var ovr = rule.IconOverrides[bucketIndex.Value];
                 return new ConditionalFormatIcon(ovr.IconSet, ovr.IconId, iconCount, rule.IconSetShowValue);
             }
-
-            if (rule.IconSetReverse)
-                bucketIndex = iconCount - 1 - bucketIndex.Value;
 
             return new ConditionalFormatIcon(style, bucketIndex.Value, iconCount, rule.IconSetShowValue);
         }

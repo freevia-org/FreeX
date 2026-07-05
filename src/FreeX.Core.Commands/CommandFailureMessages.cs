@@ -69,7 +69,8 @@ public static class CommandFailureMessages
         const string prefix = "Sheet ";
         const string suffix = " not found";
         if (!trimmed.StartsWith(prefix, StringComparison.Ordinal) ||
-            !trimmed.EndsWith(suffix, StringComparison.Ordinal))
+            !trimmed.EndsWith(suffix, StringComparison.Ordinal) ||
+            trimmed.Length < prefix.Length + suffix.Length)
             return false;
 
         var sheetId = trimmed[prefix.Length..^suffix.Length];

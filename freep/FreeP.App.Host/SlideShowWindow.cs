@@ -1111,8 +1111,12 @@ public sealed class SlideShowWindow : Window
                 CheckerboardEffect(sb, element, plan);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Circle:
+                GeometricMaskEffect(sb, element, plan);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Diamond:
-                DiamondEffect(sb, element, plan);
+                GeometricMaskEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Zoom:
@@ -1482,6 +1486,64 @@ public sealed class SlideShowWindow : Window
         sb.Children.Add(anim);
     }
 
+    private static void GeometricMaskEffect(Storyboard sb, FrameworkElement el,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        switch (plan.GeometricMaskKind)
+        {
+            case SlideShowGeometricMaskKind.Circle:
+                CircleEffect(sb, el, plan);
+                break;
+
+            case SlideShowGeometricMaskKind.Diamond:
+                DiamondEffect(sb, el, plan);
+                break;
+
+            default:
+                AppearEffect(sb, el, plan.DelayMs);
+                break;
+        }
+    }
+
+    private static void CircleEffect(Storyboard sb, FrameworkElement el,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        double w = el.Width  > 0 ? el.Width  : 960;
+        double h = el.Height > 0 ? el.Height : 540;
+
+        var fromProgress = plan.GeometricMaskExpandsFromCenter ? 0.0 : 1.0;
+        var toProgress = plan.GeometricMaskExpandsFromCenter ? 1.0 : 0.0;
+        var center = new Point(w / 2, h / 2);
+        var clip = new EllipseGeometry(
+            center,
+            w / 2 * fromProgress,
+            h / 2 * fromProgress);
+
+        el.Clip = clip;
+        el.Opacity = 1;
+
+        var dur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
+        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+        AddDoubleAnimation(
+            sb,
+            clip,
+            EllipseGeometry.RadiusXProperty,
+            w / 2 * fromProgress,
+            w / 2 * toProgress,
+            dur,
+            ease,
+            plan.DelayMs);
+        AddDoubleAnimation(
+            sb,
+            clip,
+            EllipseGeometry.RadiusYProperty,
+            h / 2 * fromProgress,
+            h / 2 * toProgress,
+            dur,
+            ease,
+            plan.DelayMs);
+    }
+
     private static void DiamondEffect(Storyboard sb, FrameworkElement el,
         SlideShowShapeAnimationPlaybackPlan plan)
     {
@@ -1602,6 +1664,26 @@ public sealed class SlideShowWindow : Window
         };
         Storyboard.SetTarget(anim, target);
         Storyboard.SetTargetProperty(anim, new PropertyPath(pointProperty));
+        storyboard.Children.Add(anim);
+    }
+
+    private static void AddDoubleAnimation(
+        Storyboard storyboard,
+        DependencyObject target,
+        DependencyProperty property,
+        double from,
+        double to,
+        Duration duration,
+        IEasingFunction easing,
+        int delayMs)
+    {
+        var anim = new DoubleAnimation(from, to, duration)
+        {
+            BeginTime = TimeSpan.FromMilliseconds(delayMs),
+            EasingFunction = easing
+        };
+        Storyboard.SetTarget(anim, target);
+        Storyboard.SetTargetProperty(anim, new PropertyPath(property));
         storyboard.Children.Add(anim);
     }
 

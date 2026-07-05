@@ -72,10 +72,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         reloadedComment.CreatedAtUtc.Should().Be(new DateTimeOffset(2026, 6, 2, 10, 0, 0, TimeSpan.Zero));
         reloadedComment.ModifiedAtUtc.Should().Be(new DateTimeOffset(2026, 6, 2, 10, 15, 0, TimeSpan.Zero));
         reloadedComment.IsResolved.Should().BeTrue();
+        reloadedComment.Id.Should().NotBeNullOrWhiteSpace();
+        reloadedComment.Replies.Should().ContainSingle().Which.Id.Should().NotBeNullOrWhiteSpace();
         reloadedComment.Replies.Should().Equal(new CommentReply("Adjusted after audit", "Codex")
         {
             CreatedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 15, 0, TimeSpan.Zero),
-            ModifiedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 15, 0, TimeSpan.Zero)
+            ModifiedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 15, 0, TimeSpan.Zero),
+            Id = reloadedComment.Replies[0].Id
         });
     }
 
@@ -292,17 +295,22 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         var address = new CellAddress(sheet.Id, 2, 3);
         sheet.ThreadedComments.Should().ContainKey(address);
-        sheet.ThreadedComments[address].Should().BeEquivalentTo(new ThreadedComment("Please review total", "Quinn")
+        var comment = sheet.ThreadedComments[address];
+        comment.Id.Should().NotBeNullOrWhiteSpace();
+        comment.Replies.Should().ContainSingle().Which.Id.Should().NotBeNullOrWhiteSpace();
+        comment.Should().BeEquivalentTo(new ThreadedComment("Please review total", "Quinn")
         {
             CreatedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 0, 0, TimeSpan.Zero),
             ModifiedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 15, 0, TimeSpan.Zero),
             IsResolved = true,
+            Id = comment.Id,
             Replies =
             [
                 new CommentReply("Adjusted after audit", "Codex")
                 {
                     CreatedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 15, 0, TimeSpan.Zero),
-                    ModifiedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 15, 0, TimeSpan.Zero)
+                    ModifiedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 15, 0, TimeSpan.Zero),
+                    Id = comment.Replies[0].Id
                 }
             ]
         });

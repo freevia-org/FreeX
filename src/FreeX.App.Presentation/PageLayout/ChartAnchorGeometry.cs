@@ -79,6 +79,36 @@ public static class ChartAnchorGeometry
     }
 
     /// <summary>
+    /// Converts a chart-anchor width (in <see cref="SumColumnPixels"/>'s <c>width-in-chars * 8</c>
+    /// convention) that starts at anchor-space offset <paramref name="anchorSpaceOffsetX"/> into the
+    /// equivalent extent in the print grid's pixel space. A chart's Width/Height (as derived by
+    /// <c>XlsxDrawingAnchorApplier</c>) are anchor-space extents, not absolute offsets, so they cannot be
+    /// converted with <see cref="ConvertColumnOffsetToGridSpace"/> directly (that would treat the extent
+    /// as if it started at the sheet origin). Instead this converts both the anchor's left edge and its
+    /// right edge (left + width) into grid space and returns their difference, so origin and extent stay
+    /// in one consistent coordinate space end-to-end.
+    /// </summary>
+    public static double ConvertColumnExtentToGridSpace(Sheet sheet, double anchorSpaceOffsetX, double anchorSpaceWidth)
+    {
+        var left = ConvertColumnOffsetToGridSpace(sheet, anchorSpaceOffsetX);
+        var right = ConvertColumnOffsetToGridSpace(sheet, anchorSpaceOffsetX + anchorSpaceWidth);
+        return right - left;
+    }
+
+    /// <summary>
+    /// Converts a chart-anchor height that starts at anchor-space offset <paramref name="anchorSpaceOffsetY"/>
+    /// into the print grid's row pixel space, by converting the top and bottom edges separately and
+    /// taking their difference. See <see cref="ConvertColumnExtentToGridSpace"/> for why an extent cannot
+    /// be converted the same way as an absolute offset.
+    /// </summary>
+    public static double ConvertRowExtentToGridSpace(Sheet sheet, double anchorSpaceOffsetY, double anchorSpaceHeight)
+    {
+        var top = ConvertRowOffsetToGridSpace(sheet, anchorSpaceOffsetY);
+        var bottom = ConvertRowOffsetToGridSpace(sheet, anchorSpaceOffsetY + anchorSpaceHeight);
+        return bottom - top;
+    }
+
+    /// <summary>
     /// Walks whole 1-based indexes (columns or rows) starting at 1, accumulating each index's size in
     /// the "anchor space" convention until <paramref name="anchorSpaceOffset"/> is consumed, then
     /// re-accumulates the same whole indexes plus the leftover fraction using each index's size in the

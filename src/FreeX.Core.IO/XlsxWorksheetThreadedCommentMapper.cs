@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -291,7 +292,8 @@ internal static class XlsxWorksheetThreadedCommentMapper
                     text,
                     author,
                     ParseDateTimeOffset(comment.Attribute("dT")?.Value),
-                    XlsxWorksheetXmlValueParser.IsTruthy(comment.Attribute("done")?.Value)));
+                    XlsxWorksheetXmlValueParser.IsTruthy(comment.Attribute("done")?.Value),
+                    comment.Element(ThreadedCommentNs + "extLst")?.ToString(SaveOptions.DisableFormatting)));
             }
 
             var repliesByParentId = parsedComments
@@ -313,7 +315,9 @@ internal static class XlsxWorksheetThreadedCommentMapper
                 {
                     CreatedAtUtc = root.TimestampUtc,
                     ModifiedAtUtc = GetThreadModifiedAt(root.TimestampUtc, replies),
-                    IsResolved = root.IsResolved
+                    IsResolved = root.IsResolved,
+                    Id = root.Id,
+                    MentionsXml = root.MentionsXml
                 };
                 if (replies.Count > 0)
                     threadedComment = threadedComment with { Replies = replies };
@@ -387,7 +391,11 @@ internal static class XlsxWorksheetThreadedCommentMapper
         ThreadedComment comment,
         IReadOnlyDictionary<string, string> authorsByName)
     {
-        var parentId = CreateStableGuid("comment", $"{sheet.Name}!{address.ToA1()}:{comment.Text}");
+        // Preserve the id this comment was loaded with so it (and every reply's parentId, which
+        // references it) stays stable across saves instead of cascade-changing whenever the
+        // comment's text is edited. Only a comment that has never been saved before (no source
+        // id) gets a freshly minted stable guid.
+        var parentId = comment.Id ?? CreateStableGuid("comment", $"{sheet.Name}!{address.ToA1()}:{comment.Text}");
         yield return ToThreadedCommentElement(address, comment, authorsByName, parentId);
 
         for (var replyIndex = 0; replyIndex < comment.Replies.Count; replyIndex++)
@@ -419,6 +427,7 @@ internal static class XlsxWorksheetThreadedCommentMapper
         SetDateTimeAttribute(element, comment.CreatedAtUtc ?? comment.ModifiedAtUtc);
         if (comment.IsResolved)
             element.SetAttributeValue("done", "1");
+        AppendMentionsXml(element, comment.MentionsXml);
 
         return element;
     }
@@ -432,18 +441,38 @@ internal static class XlsxWorksheetThreadedCommentMapper
         string parentId)
     {
         var author = NormalizeAuthor(reply.Author);
+        // Preserve the reply's own source id the same way the root comment's id is preserved
+        // above, so unrelated edits (e.g. to the root comment's text or to a sibling reply) do
+        // not regenerate this reply's id.
+        var id = reply.Id ?? CreateStableGuid(
+            "comment-reply",
+            $"{sheet.Name}!{address.ToA1()}:{parentId}:{replyIndex}:{author}:{reply.Text}");
         var element = new XElement(
             ThreadedCommentNs + "threadedComment",
             new XAttribute("ref", address.ToA1()),
             new XAttribute("personId", authorsByName[author]),
-            new XAttribute("id", CreateStableGuid(
-                "comment-reply",
-                $"{sheet.Name}!{address.ToA1()}:{parentId}:{replyIndex}:{author}:{reply.Text}")),
+            new XAttribute("id", id),
             new XAttribute("parentId", parentId),
             new XElement(ThreadedCommentNs + "text", reply.Text));
 
         SetDateTimeAttribute(element, reply.CreatedAtUtc ?? reply.ModifiedAtUtc);
+        AppendMentionsXml(element, reply.MentionsXml);
         return element;
+    }
+
+    private static void AppendMentionsXml(XElement element, string? mentionsXml)
+    {
+        if (string.IsNullOrWhiteSpace(mentionsXml))
+            return;
+
+        try
+        {
+            element.Add(XElement.Parse(mentionsXml, LoadOptions.PreserveWhitespace));
+        }
+        catch (XmlException)
+        {
+            // Keep saves resilient if the preserved extLst fragment is somehow malformed.
+        }
     }
 
     private static void EnsureWorksheetThreadedCommentRelationship(
@@ -579,7 +608,9 @@ internal static class XlsxWorksheetThreadedCommentMapper
         new(comment.Text, comment.Author)
         {
             CreatedAtUtc = comment.TimestampUtc,
-            ModifiedAtUtc = comment.TimestampUtc
+            ModifiedAtUtc = comment.TimestampUtc,
+            Id = comment.Id,
+            MentionsXml = comment.MentionsXml
         };
 
     private static DateTimeOffset? GetThreadModifiedAt(
@@ -611,5 +642,6 @@ internal static class XlsxWorksheetThreadedCommentMapper
         string Text,
         string Author,
         DateTimeOffset? TimestampUtc,
-        bool IsResolved);
+        bool IsResolved,
+        string? MentionsXml);
 }

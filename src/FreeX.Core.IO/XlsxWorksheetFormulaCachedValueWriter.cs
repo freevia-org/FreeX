@@ -102,6 +102,23 @@ internal static class XlsxWorksheetFormulaCachedValueWriter
                 cell.SetAttributeValue("t", "b");
                 formula.AddAfterSelf(new XElement(worksheetNs + "v", boolean.Value ? "1" : "0"));
                 return true;
+            // #SPILL!/#CALC! ARE valid OOXML error codes that real Excel writes verbatim as t="e"
+            // formula-cached values. ClosedXML's own XLError enum can't represent them (only the 7
+            // classic codes), so XLCell.Value/MapFormulaValue returns BlankValue for such a cell —
+            // but XlsxWorksheetCellLayoutReader.ReadCachedFormulaErrors raw-parses the <c t="e"><f/>
+            // <v>#SPILL!</v></c> XML directly (bypassing ClosedXML's enum) and XlsxFileAdapter falls
+            // back to that dictionary whenever MapFormulaValue comes back blank (see
+            // XlsxFileAdapter.cs's `xmlLayout?.CachedFormulaErrors` fallback), so this round-trips
+            // correctly today. #CIRCULAR! is a FreeX-only sentinel (RecalcEngine.AddCyclicCell), not
+            // a valid OOXML error code at all — real Excel never writes it: with iterative
+            // calculation off (the only path that stamps this value) Excel persists a plain 0 for a
+            // non-iterative circular reference. Mirrors MapValueInverse's identical decision for the
+            // non-formula path; the raw-XML fallback reader's `_ => new ErrorValue(rawValue)` branch
+            // would otherwise happily round-trip "#CIRCULAR!" itself, which is not what Excel does.
+            case ErrorValue error when error.Code.Equals("#CIRCULAR!", StringComparison.OrdinalIgnoreCase):
+                cell.Attribute("t")?.Remove();
+                formula.AddAfterSelf(new XElement(worksheetNs + "v", "0"));
+                return true;
             case ErrorValue error:
                 cell.SetAttributeValue("t", "e");
                 formula.AddAfterSelf(new XElement(worksheetNs + "v", error.Code));

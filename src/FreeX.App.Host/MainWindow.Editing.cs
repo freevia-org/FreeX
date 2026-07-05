@@ -742,6 +742,10 @@ public partial class MainWindow
     private void CellAddressBox_DropDownOpened(object sender, EventArgs e)
     {
         var names = _workbook.NamedRanges.Keys
+            .Concat(_workbook.ScopedNamedRanges.Keys
+                .Where(key => key.Sheet.Equals(_currentSheetId))
+                .Select(key => key.Name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -754,15 +758,10 @@ public partial class MainWindow
             return;
 
         CellAddressBox.Text = name;
-        if (!GoToDialog.TryParseReferenceRange(name, _currentSheetId, _workbook.NamedRanges, out var selectedRange))
+        if (!TryParseNameBoxReferenceRange(name, out var selectedRange))
             return;
 
-        _currentSheetId = selectedRange.Start.Sheet;
-        SetSelectionRange(selectedRange, selectedRange.Start);
-        EnsureCellVisible(selectedRange.Start);
-        UpdateViewport();
-        RefreshValidationDropdown();
-        RefreshDvInputMessage();
+        NavigateNameBoxTo(selectedRange);
         FocusSheetGridIfNeeded();
     }
 
@@ -779,11 +778,7 @@ public partial class MainWindow
         if (e.Key != Key.Enter || e.KeyboardDevice.Modifiers != ModifierKeys.None)
             return;
 
-        if (!GoToDialog.TryParseReferenceRange(
-                CellAddressBox.Text,
-                _currentSheetId,
-                _workbook.NamedRanges,
-                out var selectedRange))
+        if (!TryParseNameBoxReferenceRange(CellAddressBox.Text, out var selectedRange))
         {
             if (TryDefineNameFromNameBox())
             {
@@ -799,14 +794,38 @@ public partial class MainWindow
             return;
         }
 
+        NavigateNameBoxTo(selectedRange);
+        FocusSheetGridIfNeeded();
+        e.Handled = true;
+    }
+
+    // Sheet-scope-aware Name Box reference resolution, matching formula evaluation's precedence
+    // (Workbook.TryGetNamedRange(name, contextSheetId, ...): sheet-scoped names on the active sheet
+    // take precedence over a same-named workbook-global name).
+    private bool TryParseNameBoxReferenceRange(string text, out GridRange range) =>
+        WorkbookReferenceNavigator.TryParseReferenceRange(
+            text,
+            _currentSheetId,
+            static _ => null,
+            _workbook.NamedRanges,
+            name => _workbook.TryGetNamedRange(name, _currentSheetId, out var scoped) ? scoped : null,
+            out range);
+
+    // Cross-sheet Name Box navigation must refresh the sheet-tab strip (active-tab highlight)
+    // and the Protect-Sheet/Protect-Workbook ribbon state for the newly-active sheet, matching
+    // every other sheet-activation path (e.g. SheetTab_MouseLeftButtonDown).
+    private void NavigateNameBoxTo(GridRange selectedRange)
+    {
+        var previousSheetId = _currentSheetId;
         _currentSheetId = selectedRange.Start.Sheet;
         SetSelectionRange(selectedRange, selectedRange.Start);
         EnsureCellVisible(selectedRange.Start);
         UpdateViewport();
         RefreshValidationDropdown();
         RefreshDvInputMessage();
-        FocusSheetGridIfNeeded();
-        e.Handled = true;
+
+        if (!_currentSheetId.Equals(previousSheetId))
+            RefreshSheetTabs();
     }
 
     private bool TryDefineNameFromNameBox()

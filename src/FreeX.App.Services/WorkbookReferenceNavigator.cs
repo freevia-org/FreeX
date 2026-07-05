@@ -66,6 +66,21 @@ public static class WorkbookReferenceNavigator
         SheetId defaultSheetId,
         Func<string, SheetId?> resolveSheetId,
         IReadOnlyDictionary<string, GridRange>? definedNames,
+        out GridRange range) =>
+        TryParseReferenceRange(text, defaultSheetId, resolveSheetId, definedNames, resolveScopedName: null, out range);
+
+    /// <summary>
+    /// Sheet-scope-aware overload matching formula evaluation's name-resolution precedence
+    /// (<c>Workbook.TryGetNamedRange(name, contextSheetId, out range)</c>): a name scoped to
+    /// <paramref name="defaultSheetId"/> takes precedence over a same-named workbook-global name.
+    /// Pass <paramref name="resolveScopedName"/> as e.g. <c>n =&gt; workbook.TryGetNamedRange(n, defaultSheetId, out var r) ? r : null</c>.
+    /// </summary>
+    public static bool TryParseReferenceRange(
+        string text,
+        SheetId defaultSheetId,
+        Func<string, SheetId?> resolveSheetId,
+        IReadOnlyDictionary<string, GridRange>? definedNames,
+        Func<string, GridRange?>? resolveScopedName,
         out GridRange range)
     {
         if (TryParseAddress(text, defaultSheetId, out var address))
@@ -78,8 +93,16 @@ public static class WorkbookReferenceNavigator
             TryParseRange(defaultSheetId, text, resolveSheetId, out range))
             return true;
 
+        var trimmedName = text.Trim();
+
+        if (resolveScopedName?.Invoke(trimmedName) is { } scopedRange)
+        {
+            range = scopedRange;
+            return true;
+        }
+
         if (definedNames is not null &&
-            definedNames.TryGetValue(text.Trim(), out var namedRange))
+            definedNames.TryGetValue(trimmedName, out var namedRange))
         {
             range = namedRange;
             return true;

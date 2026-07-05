@@ -4344,9 +4344,12 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("RefreshShell($\"Aligned {rangeReference} {FormatHorizontalAlignmentStatus(alignment)}\");");
         source.Should().Contain("MapCellTextAlignment(");
         source.Should().Contain("style?.HorizontalAlignment ?? CellHAlign.General");
-        source.Should().Contain("private static TextAlignment MapCellTextAlignment(CellHAlign horizontalAlignment, bool isNumericOrDate)");
+        source.Should().Contain("private static TextAlignment MapCellTextAlignment(CellHAlign horizontalAlignment, bool isNumericOrDate, bool isEffectivelyRightToLeft)");
         source.Should().Contain("CellHAlign.Center or CellHAlign.Justify or CellHAlign.Distributed => TextAlignment.Center,");
-        source.Should().Contain("CellHAlign.General when isNumericOrDate => TextAlignment.Right,");
+        // K33 (RTL): General alignment now mirrors Left/Right based on the cell's effective reading
+        // order (CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft) instead of always
+        // resolving numeric/date content to the right and text to the left.
+        source.Should().Contain("CellHAlign.General when isNumericOrDate => isEffectivelyRightToLeft ? TextAlignment.Left : TextAlignment.Right,");
         source.Should().Contain("private static string FormatHorizontalAlignmentStatus(CellHAlign alignment)");
     }
 
@@ -4874,7 +4877,10 @@ public sealed class AvaloniaShellSourceTests
     [Fact]
     public void MainWindow_ExposesFormulaAndStatusAccessibilityMetadataToLaunchSmoke()
     {
-        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        // Normalize CRLF -> LF so multi-line pinned snippets match regardless of the checkout's
+        // line endings (the _cellAddressText help-text call below wraps across two lines).
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
 
         source.Should().Contain("AutomationProperties.SetAutomationId(_formulaBox, \"FormulaBox\");");
@@ -4885,7 +4891,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetHelpText(_statusText, \"Shows the current workbook status.\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(_cellAddressText, \"CellAddressText\");");
         source.Should().Contain("AutomationProperties.SetName(_cellAddressText, \"Cell address\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_cellAddressText, \"Shows the active cell address.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(\n            _cellAddressText,");
+        source.Should().Contain(
+            "\"Type a cell reference, range, or defined name and press Enter to navigate, or type a new name to define it.\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(_selectionStatsText, \"SelectionStatsText\");");
         source.Should().Contain("AutomationProperties.SetName(_selectionStatsText, \"Selection statistics\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_selectionStatsText, \"Shows statistics for the current selection.\");");
@@ -4900,7 +4908,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("HasStatusTextValue: HasStatusBarAccessibleValue()");
         source.Should().Contain("private bool HasStatusBarAccessibleValue() =>");
         source.Should().Contain("HasCellAddressAutomationName: string.Equals(AutomationProperties.GetName(_cellAddressText), \"Cell address\", StringComparison.Ordinal)");
-        source.Should().Contain("HasCellAddressAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_cellAddressText), \"Shows the active cell address.\", StringComparison.Ordinal)");
+        source.Should().Contain("HasCellAddressAutomationHelp: string.Equals(");
+        source.Should().Contain(
+            "\"Type a cell reference, range, or defined name and press Enter to navigate, or type a new name to define it.\",\n                StringComparison.Ordinal),");
         source.Should().Contain("HasCellAddressAutomationId: string.Equals(AutomationProperties.GetAutomationId(_cellAddressText), \"CellAddressText\", StringComparison.Ordinal)");
         source.Should().Contain("HasSelectionStatsAutomationName: string.Equals(AutomationProperties.GetName(_selectionStatsText), \"Selection statistics\", StringComparison.Ordinal)");
         source.Should().Contain("HasSelectionStatsAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_selectionStatsText), \"Shows statistics for the current selection.\", StringComparison.Ordinal)");

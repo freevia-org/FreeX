@@ -68,11 +68,15 @@ public sealed class NewWorkbookFactoryTests
         var appSource = DialogSourceTestSupport.ReadHostSources("App.xaml.cs");
         var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
-        appSource.Should().Contain("NewWorkbookFactory.Create(options)");
+        // K4: every MainWindow resolved from DI now gets its own document context, so the app-level
+        // factory call resolves FreeXOptions straight from the service provider at the call site
+        // rather than through a locally-bound "options" variable -- but it still routes the full
+        // FreeXOptions object into the factory, not just DefaultSheetCount.
+        appSource.Should().Contain("NewWorkbookFactory.Create(sp.GetRequiredService<FreeXOptions>())");
         // File > New now also threads the chosen workbook name through the factory, but still routes
         // the full options object (font, sheet count, user name) rather than only DefaultSheetCount.
         backstageSource.Should().Contain("NewWorkbookFactory.Create(_options, workbookName)");
-        appSource.Should().NotContain("NewWorkbookFactory.Create(options.DefaultSheetCount)");
+        appSource.Should().NotContain("NewWorkbookFactory.Create(sp.GetRequiredService<FreeXOptions>().DefaultSheetCount)");
         backstageSource.Should().NotContain("NewWorkbookFactory.Create(_options.DefaultSheetCount)");
     }
 }

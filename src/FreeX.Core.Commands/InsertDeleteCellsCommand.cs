@@ -38,7 +38,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     private readonly Dictionary<Guid, string?> _cfFormulaSnapshot = [];
     private readonly Dictionary<(Guid Id, int Slot), string?> _cfThresholdSnapshot = [];
     private readonly Dictionary<(Guid Id, int Slot), string?> _dvFormulaSnapshot = [];
-    private List<RowColumnShiftHelpers.ChartVerbatimSnapshot?>? _chartVerbatimSnapshot;
+    private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
 
     public string Label => "Insert Cells";
 
@@ -129,8 +129,8 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             _cfThresholdSnapshot.Clear();
             _dvFormulaSnapshot.Clear();
             RowColumnShiftHelpers.RewriteRuleFormulas(sheet, insertRightOp, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
-            _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(sheet);
-            RowColumnShiftHelpers.RewriteChartVerbatimFormulas(sheet, insertRightOp, sheet.Name);
+            _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
+            RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, insertRightOp);
         }
         else
         {
@@ -196,8 +196,8 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             _cfThresholdSnapshot.Clear();
             _dvFormulaSnapshot.Clear();
             RowColumnShiftHelpers.RewriteRuleFormulas(sheet, insertDownOp, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
-            _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(sheet);
-            RowColumnShiftHelpers.RewriteChartVerbatimFormulas(sheet, insertDownOp, sheet.Name);
+            _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
+            RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, insertDownOp);
         }
 
         return new CommandOutcome(
@@ -225,7 +225,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
         RowColumnShiftHelpers.RestoreRuleFormulas(sheet, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
-        RowColumnShiftHelpers.RestoreChartVerbatimFormulas(sheet, _chartVerbatimSnapshot);
+        RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
 
         _snapshot.Restore(ctx.GetSheet(_sheetId));
         _snapshot = null;
@@ -640,7 +640,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
     private readonly Dictionary<Guid, string?> _cfFormulaSnapshot = [];
     private readonly Dictionary<(Guid Id, int Slot), string?> _cfThresholdSnapshot = [];
     private readonly Dictionary<(Guid Id, int Slot), string?> _dvFormulaSnapshot = [];
-    private List<RowColumnShiftHelpers.ChartVerbatimSnapshot?>? _chartVerbatimSnapshot;
+    private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
 
     public string Label => "Delete Cells";
 
@@ -724,8 +724,8 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             _cfThresholdSnapshot.Clear();
             _dvFormulaSnapshot.Clear();
             RowColumnShiftHelpers.RewriteRuleFormulas(sheet, deleteLeftOp, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
-            _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(sheet);
-            RowColumnShiftHelpers.RewriteChartVerbatimFormulas(sheet, deleteLeftOp, sheet.Name);
+            _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
+            RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, deleteLeftOp);
         }
         else
         {
@@ -789,8 +789,8 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             _cfThresholdSnapshot.Clear();
             _dvFormulaSnapshot.Clear();
             RowColumnShiftHelpers.RewriteRuleFormulas(sheet, deleteUpOp, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
-            _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(sheet);
-            RowColumnShiftHelpers.RewriteChartVerbatimFormulas(sheet, deleteUpOp, sheet.Name);
+            _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
+            RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, deleteUpOp);
         }
 
         return new CommandOutcome(
@@ -808,7 +808,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
         RowColumnShiftHelpers.RestoreRuleFormulas(sheet, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
-        RowColumnShiftHelpers.RestoreChartVerbatimFormulas(sheet, _chartVerbatimSnapshot);
+        RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
 
         _snapshot.Restore(ctx.GetSheet(_sheetId));
         _snapshot = null;

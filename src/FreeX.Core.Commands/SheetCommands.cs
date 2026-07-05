@@ -52,6 +52,10 @@ public sealed class RenameSheetCommand : IWorkbookCommand
     // T7: CF/DV formula rewrites across ALL sheets for the rename
     private List<(Guid RuleId, string? OldValue, SheetId Sheet)>? _cfFormulaRenameSnapshot;
     private List<(Guid RuleId, int Slot, string? OldValue, SheetId Sheet)>? _dvFormulaRenameSnapshot;
+    // K16: chart verbatim series/data-label formulas (multi-area unions and "value from
+    // cells" data labels) hold sheet-qualified text refs just like CF/DV formulas above and
+    // must be rewritten the same way, or they keep saying the OLD sheet name after rename.
+    private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimRenameSnapshot;
 
     public string Label => $"Rename Sheet to '{_newName}'";
 
@@ -173,6 +177,12 @@ public sealed class RenameSheetCommand : IWorkbookCommand
             }
         }
 
+        // K16: rewrite chart verbatim series/data-label formulas across ALL sheets so any
+        // chart (same-sheet or cross-sheet) whose text refs name the renamed sheet keep
+        // pointing at it under its new name — mirrors the T7 CF/DV pass above.
+        _chartVerbatimRenameSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
+        RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, renameOp);
+
         return new CommandOutcome(true);
     }
 
@@ -184,6 +194,7 @@ public sealed class RenameSheetCommand : IWorkbookCommand
             s.Name = _oldName;
             RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
             RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
+            RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimRenameSnapshot);
 
             // T6 restore: string sheet-name refs
             if (_pivotCacheNameSnapshot is not null)
@@ -256,6 +267,10 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
     private List<(PivotCacheModel Cache, string OldValue)>? _pivotCacheNameDeleteSnapshot;
     private List<(SlicerModel Slicer, string OldValue)>? _slicerNameDeleteSnapshot;
     private List<(PictureModel Picture, string OldValue)>? _pictureNameDeleteSnapshot;
+    // K16: chart verbatim series/data-label formulas that reference the deleted sheet must
+    // become #REF! just like ordinary cell/CF/DV formulas do via DeleteSheetOp — otherwise
+    // they keep dangling text naming a sheet that no longer exists.
+    private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimDeleteSnapshot;
 
     public string Label => "Delete Sheet";
 
@@ -335,6 +350,11 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
             }
         }
 
+        // K16: rewrite chart verbatim series/data-label formulas across all surviving sheets
+        // that reference the deleted sheet, producing #REF! — mirrors the X3 CF/DV pass above.
+        _chartVerbatimDeleteSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
+        RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, deleteOp);
+
         // Charts on surviving sheets whose DataRange sources from the deleted sheet: GridRange
         // cannot express a sheetless/"cleared" reference (unlike the nullable string refs on
         // PivotCacheModel.SourceSheetName / SlicerModel.SourceSheetName / PictureModel
@@ -407,6 +427,7 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
             RowColumnShiftHelpers.RestoreScopedNamedRanges(ctx.Workbook, _scopedNamedRangeSnapshot);
             RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot);
             RestoreScopedNamedFormulas(ctx.Workbook, _scopedNamedFormulaSnapshot);
+            RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimDeleteSnapshot);
 
             // X3 restore: CF/DV formula text rewritten to #REF! must be restored
             if (_cfFormulaDeleteSnapshot is not null)

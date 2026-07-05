@@ -70,6 +70,11 @@ internal static class XlsxWorksheetLayoutMetadataReader
             attribute => !IsModeledPrimaryViewAttribute(attribute.Name.LocalName),
             element => !IsModeledPrimaryViewElement(element.Name.LocalName));
 
+    // rightToLeft is modeled on Sheet.IsRightToLeft (see XlsxFileAdapter.SheetXmlLayout.cs and
+    // XlsxWorksheetViewWriter) but, unlike the other modeled attributes here, it is also kept in
+    // PrimaryViewMetadata: XlsxWorksheetPrimaryViewMetadataWriter's write-side allowlist does not
+    // exclude it, so round-tripping it through the bag is intentional dual-tracking rather than a
+    // gap - tests assert it stays alongside showZeros in the preserved sheetView metadata.
     private static bool IsModeledPrimaryViewAttribute(string name) =>
         name is "workbookViewId" or "view" or "showGridLines" or "showRowColHeaders" or "showRuler" or
             "zoomScale" or "showFormulas" or "topLeftCell";
@@ -136,26 +141,11 @@ internal static class XlsxWorksheetLayoutMetadataReader
     public static NativeXmlPreserveBag? ReadWorksheetProtectionMetadata(XElement? protection)
         => ReadMetadata(protection, "sheetProtection", IsPreservableProtectionAttribute);
 
+    // Only the ISO 29500 modern-hash attributes remain opaque native metadata: "sheet"/"password"
+    // are modeled directly on Sheet, and every permission boolean (objects/scenarios/formatCells/
+    // .../selectUnlockedCells) is now modeled via Sheet.ProtectionPermissions/
+    // XlsxSheetProtectionPermissionMapper, so none of them are preserved as raw metadata anymore.
     private static bool IsPreservableProtectionAttribute(XAttribute attribute) =>
         attribute.Name.NamespaceName.Length == 0 &&
-        attribute.Name.LocalName is not "sheet" and not "password" &&
-        attribute.Name.LocalName is "algorithmName" or
-            "hashValue" or
-            "saltValue" or
-            "spinCount" or
-            "objects" or
-            "scenarios" or
-            "formatCells" or
-            "formatColumns" or
-            "formatRows" or
-            "insertColumns" or
-            "insertRows" or
-            "insertHyperlinks" or
-            "deleteColumns" or
-            "deleteRows" or
-            "selectLockedCells" or
-            "sort" or
-            "autoFilter" or
-            "pivotTables" or
-            "selectUnlockedCells";
+        attribute.Name.LocalName is "algorithmName" or "hashValue" or "saltValue" or "spinCount";
 }

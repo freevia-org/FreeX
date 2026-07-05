@@ -35,9 +35,14 @@ internal static class DefinedNamesShellGlue
     }
 
     /// <summary>
-    /// Projects the workbook's stored named ranges into Name Manager rows: each row carries the name, its
-    /// scope label (from the stored metadata, defaulting to the workbook scope), the sheet-qualified refers-to
-    /// text, and a value preview. The derived <see cref="DefinedNameKind"/> drives the kind/error filtering.
+    /// Projects the workbook's stored named ranges and named formulas into Name Manager rows: each row carries
+    /// the name, its scope label (from the stored metadata, defaulting to the workbook scope), the refers-to
+    /// text (sheet-qualified A1 text for range names, the raw formula/constant text for named formulas), and a
+    /// value preview. The derived <see cref="DefinedNameKind"/> drives the kind/error filtering. Both
+    /// range-valued names (<see cref="Workbook.NamedRanges"/>) and formula/constant-valued names
+    /// (<see cref="Workbook.NamedFormulas"/>) — plus their sheet-scoped counterparts
+    /// (<see cref="Workbook.ScopedNamedFormulas"/>) — must be listed here, or a formula-defined name is
+    /// invisible and unmanageable through the Name Manager even though the formula engine evaluates it.
     /// </summary>
     public static IReadOnlyList<DefinedNameRow> BuildRows(Workbook workbook)
     {
@@ -52,6 +57,25 @@ internal static class DefinedNamesShellGlue
             var comment = metadata?.Comment ?? "";
             var refersTo = FormatRefersTo(range, workbook);
             rows.Add(DefinedNameListProjector.CreateRow(name, scopeLabel, refersTo, refersTo, comment));
+        }
+
+        // Formula/constant-valued names (e.g. "TaxRate" = "=1.05" or "Total" = "=SUM(Sheet1!A:A)") are stored
+        // separately from NamedRanges — they carry no range and no metadata, only raw formula text — but they
+        // are just as real a defined name and must be listed so the user can see/edit/delete them.
+        foreach (var (name, formulaText) in workbook.NamedFormulas)
+        {
+            var refersTo = "=" + formulaText;
+            rows.Add(DefinedNameListProjector.CreateRow(name, DefinedNameScope.WorkbookLabel, refersTo, refersTo));
+        }
+
+        // Sheet-scoped named formulas (Excel "localSheetId") are stored separately from the workbook-global
+        // NamedFormulas dictionary and must also be listed, or they're invisible and unreachable through the
+        // Name Manager's Edit/Delete actions — the same requirement already applied to scoped named ranges.
+        foreach (var ((name, sheetId), formulaText) in workbook.ScopedNamedFormulas)
+        {
+            var scopeLabel = workbook.GetSheet(sheetId)?.Name ?? DefinedNameScope.WorkbookLabel;
+            var refersTo = "=" + formulaText;
+            rows.Add(DefinedNameListProjector.CreateRow(name, scopeLabel, refersTo, refersTo));
         }
 
         return rows;
@@ -95,6 +119,24 @@ internal static class DefinedNamesShellGlue
 
         var metadata = new NamedRangeMetadata(draft.Scope.Label, draft.Comment ?? "");
         return new DefineNamedRangeCommand(draft.Name, range, metadata);
+    }
+
+    /// <summary>
+    /// Maps a validated Define-Name <paramref name="draft"/> whose refers-to text did not resolve to a
+    /// range/cell/existing-name reference, but did parse as a formula expression, onto a
+    /// <see cref="DefineNamedFormulaCommand"/> — a named formula/constant (e.g. <c>=1.05</c> or
+    /// <c>=SUM(Sheet1!A:A)</c>). The leading '=' is stripped since <see cref="Workbook.NamedFormulas"/> stores
+    /// the raw formula text. Callers try <see cref="BuildDefineCommand"/> first and fall back to this only when
+    /// the refers-to text is not a resolvable range.
+    /// </summary>
+    public static DefineNamedFormulaCommand BuildDefineFormulaCommand(DefinedNameDraft draft)
+    {
+        ArgumentNullException.ThrowIfNull(draft);
+
+        var text = draft.RefersTo.Trim();
+        if (text.StartsWith('='))
+            text = text[1..].Trim();
+        return new DefineNamedFormulaCommand(draft.Name, text);
     }
 
     /// <summary>Maps a name deletion onto a <see cref="RemoveNamedRangeCommand"/>.</summary>

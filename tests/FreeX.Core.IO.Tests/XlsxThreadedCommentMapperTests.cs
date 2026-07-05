@@ -72,11 +72,19 @@ public sealed class XlsxThreadedCommentMapperTests
         var loadedAddress = new CellAddress(sheet.Id, 2, 3);
 
         sheet.ThreadedComments.Should().ContainKey(loadedAddress);
-        sheet.ThreadedComments[loadedAddress].Should().Be(new ThreadedComment("Please review total", "Quinn")
+        var loadedComment = sheet.ThreadedComments[loadedAddress];
+
+        // The comment was never saved before, so the mapper mints a fresh stable id on this
+        // first save; the loaded model must carry that id back (see K41 regression coverage in
+        // XlsxWorksheetThreadedCommentMapperIdAndMentionPreservationTests for the "does not
+        // regenerate on a later re-save" behavior this id is meant to enable).
+        loadedComment.Id.Should().NotBeNullOrWhiteSpace();
+        loadedComment.Should().Be(new ThreadedComment("Please review total", "Quinn")
         {
             CreatedAtUtc = createdAt,
             ModifiedAtUtc = createdAt,
-            IsResolved = true
+            IsResolved = true,
+            Id = loadedComment.Id
         });
     }
 
@@ -146,16 +154,22 @@ public sealed class XlsxThreadedCommentMapperTests
         comment.CreatedAtUtc.Should().Be(new DateTimeOffset(2026, 6, 2, 10, 0, 0, TimeSpan.Zero));
         comment.ModifiedAtUtc.Should().Be(new DateTimeOffset(2026, 6, 2, 10, 10, 0, TimeSpan.Zero));
         comment.IsResolved.Should().BeTrue();
+        comment.Id.Should().NotBeNullOrWhiteSpace();
+        comment.Replies.Should().HaveCount(2);
+        comment.Replies[0].Id.Should().NotBeNullOrWhiteSpace();
+        comment.Replies[1].Id.Should().NotBeNullOrWhiteSpace();
         comment.Replies.Should().Equal(
             new CommentReply("Looks high", "Codex")
             {
                 CreatedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 5, 0, TimeSpan.Zero),
-                ModifiedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 5, 0, TimeSpan.Zero)
+                ModifiedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 5, 0, TimeSpan.Zero),
+                Id = comment.Replies[0].Id
             },
             new CommentReply("Updated after audit", "Dana")
             {
                 CreatedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 10, 0, TimeSpan.Zero),
-                ModifiedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 10, 0, TimeSpan.Zero)
+                ModifiedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 10, 0, TimeSpan.Zero),
+                Id = comment.Replies[1].Id
             });
     }
 

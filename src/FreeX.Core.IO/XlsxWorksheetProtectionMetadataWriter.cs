@@ -5,9 +5,20 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxWorksheetProtectionMetadataWriter
 {
+    private static readonly SheetProtectionPermission[] DefaultProtectionPermissions =
+    [
+        SheetProtectionPermission.SelectLockedCells,
+        SheetProtectionPermission.SelectUnlockedCells
+    ];
+
     public static bool HasProtectionState(Sheet sheet) =>
         sheet.ProtectionMetadata is not null ||
-        sheet.IsProtected && !string.IsNullOrWhiteSpace(sheet.ProtectionPassword);
+        sheet.IsProtected &&
+            (!string.IsNullOrWhiteSpace(sheet.ProtectionPassword) || HasNonDefaultPermissions(sheet));
+
+    private static bool HasNonDefaultPermissions(Sheet sheet) =>
+        sheet.ProtectionPermissions.Count != DefaultProtectionPermissions.Length ||
+        !DefaultProtectionPermissions.All(sheet.ProtectionPermissions.Contains);
 
     public static void Save(Stream xlsxStream, Workbook workbook, XlsxWorkbookWorksheetPathMap? worksheetPathMap)
     {
@@ -25,12 +36,15 @@ internal static class XlsxWorksheetProtectionMetadataWriter
         foreach (var sheet in workbook.Sheets)
         {
             var metadata = sheet.ProtectionMetadata;
-            var hasProtectionPassword = !string.IsNullOrWhiteSpace(sheet.ProtectionPassword);
             if (metadata is null)
             {
-                if (!hasProtectionPassword)
+                if (!sheet.IsProtected)
+                    continue;
+                if (string.IsNullOrWhiteSpace(sheet.ProtectionPassword) && !HasNonDefaultPermissions(sheet))
                     continue;
             }
+
+            var hasProtectionPassword = !string.IsNullOrWhiteSpace(sheet.ProtectionPassword);
 
             if (!session.TryGetWorksheet(sheet, out var worksheetEdit))
                 continue;
@@ -53,21 +67,40 @@ internal static class XlsxWorksheetProtectionMetadataWriter
             if (metadata is not null)
             {
                 var (protAttrs, _) = XmlNativeBagSerializer.Deserialize(metadata.Get("sheetProtection"));
-                XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(protection, protAttrs, ["sheet", "password"]);
+                // "sheet"/"password" are modeled directly on Sheet; every permission boolean is
+                // modeled via Sheet.ProtectionPermissions (applied below by
+                // XlsxSheetProtectionPermissionMapper.Write) — none of those are sourced from the
+                // opaque metadata bag even if an old/foreign bag happens to still carry them.
+                XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(
+                    protection,
+                    protAttrs,
+                    ["sheet", "password", .. XlsxSheetProtectionPermissionMapper.AttributeNames]);
             }
 
             if (sheet.IsProtected)
+            {
                 protection.SetAttributeValue("sheet", "1");
+                XlsxSheetProtectionPermissionMapper.Write(protection, sheet.ProtectionPermissions);
+            }
 
             XlsxWorksheetProtectionNormalizer.NormalizeElement(protection);
 
             var hasAdvancedHash = protection.Attribute("hashValue") is not null;
             if (hasAdvancedHash)
+            {
+                // The modern ISO 29500 hash is authoritative (preserved verbatim from
+                // ProtectionMetadata above); sheet.ProtectionPassword only ever holds the encoded
+                // mirror of that same hash in this case (see
+                // ProtectionPasswordHelper.EncodeIso29500Hash), never a real legacy password to
+                // re-derive a hash from.
                 protection.Attribute("password")?.Remove();
-            else if (hasProtectionPassword)
+            }
+            else if (hasProtectionPassword && !ProtectionPasswordHelper.IsIso29500Hash(sheet.ProtectionPassword))
+            {
                 protection.SetAttributeValue(
                     "password",
                     XlsxWorkbookMetadataXmlHelper.ToLegacyPasswordHash(sheet.ProtectionPassword!));
+            }
 
             XlsxWorksheetProtectionNormalizer.NormalizeElement(protection);
             session.MarkDirty(worksheetEdit);

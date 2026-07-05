@@ -395,8 +395,18 @@ internal static class XlsxWorkbookMetadataWriter
 
         if (workbook.IsStructureProtected)
             protection.SetAttributeValue("lockStructure", "1");
-        if (!string.IsNullOrWhiteSpace(workbook.StructureProtectionPassword))
+
+        // StructureProtectionPassword is sometimes only the encoded mirror of a modern ISO 29500
+        // hash already preserved verbatim via ProtectionMetadata above (see
+        // ProtectionPasswordHelper.EncodeIso29500Hash) — there is no real legacy password in that
+        // case to (re-)derive a workbookPassword hash from, so leave whatever legacy attribute the
+        // metadata bag carried (if any) untouched.
+        if (!string.IsNullOrWhiteSpace(workbook.StructureProtectionPassword) &&
+            !ProtectionPasswordHelper.IsIso29500Hash(workbook.StructureProtectionPassword))
+        {
             protection.SetAttributeValue("workbookPassword", XlsxWorkbookMetadataXmlHelper.ToLegacyPasswordHash(workbook.StructureProtectionPassword));
+        }
+
         XlsxWorkbookProtectionNormalizer.NormalizeElement(protection);
 
         InsertWorkbookProtectionInOrder(root, protection);

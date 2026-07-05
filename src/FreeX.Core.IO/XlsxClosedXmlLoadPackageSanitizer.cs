@@ -85,7 +85,27 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         }
 
         sanitized.Position = 0;
-        using (var archive = new ZipArchive(sanitized, ZipArchiveMode.Update, leaveOpen: true))
+        ZipArchive archive;
+        try
+        {
+            archive = new ZipArchive(sanitized, ZipArchiveMode.Update, leaveOpen: true);
+        }
+        catch (InvalidDataException)
+        {
+            // The catch-all below in GetSanitizationRequirements forces every requirement flag to
+            // true whenever the source package couldn't even be scanned (e.g. it isn't a valid zip
+            // at all — a truncated download or a non-OOXML file renamed to .xlsx). Reopening those
+            // same unreadable bytes here for writing is guaranteed to fail identically; surface a
+            // clear, actionable error instead of letting a low-level zip exception propagate from a
+            // spot the caller's format-error fallback never reaches.
+            if (!ReferenceEquals(sanitized, sourcePackage))
+                sanitized.Dispose();
+
+            throw new WorkbookInvalidException(
+                "The workbook could not be read because the file is not a valid .xlsx package (it may be corrupted, truncated, or not actually an Excel file).");
+        }
+
+        using (archive)
         {
             if (hasRangeHyperlinks)
                 StripRangeHyperlinkRefs(archive);

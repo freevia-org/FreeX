@@ -91,6 +91,13 @@ public sealed class DbfFileAdapter : IFileAdapter
             for (var c = 0; c < fields.Count; c++)
             {
                 var field = fields[c];
+                // A crafted/corrupt file can declare field-descriptor widths whose sum exceeds the
+                // header's own recordLength, so the record-boundary guard above (recordStart +
+                // recordLength <= bytes.Length) doesn't protect this field-by-field walk. Bounds-check
+                // each field read individually so a bad descriptor can't run past the buffer.
+                if (fieldOffset + field.Length > bytes.Length)
+                    break;
+
                 if (c < CellAddress.MaxCol)
                 {
                     var raw = encoding.GetString(bytes, fieldOffset, field.Length);

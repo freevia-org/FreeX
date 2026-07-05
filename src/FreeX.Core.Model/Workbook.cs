@@ -392,6 +392,13 @@ public sealed class Workbook
         return _scopedNamedRanges.Remove(key);
     }
 
+    /// <summary>Remove a workbook-global named formula. Returns true if found and removed.</summary>
+    public bool RemoveNamedFormula(string name) => NamedFormulas.Remove(name);
+
+    /// <summary>Remove a sheet-scoped named formula. Returns true if found and removed.</summary>
+    public bool RemoveScopedNamedFormula(string name, SheetId scopeSheetId) =>
+        _scopedNamedFormulas is not null && _scopedNamedFormulas.Remove((name, scopeSheetId));
+
     // ── Keyed equality for (string, SheetId) dictionary keys ─────────────────
 
     private sealed class ScopedNameKeyComparer : IEqualityComparer<(string Name, SheetId Sheet)>

@@ -2053,6 +2053,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetProtectionSanitized(saved);
         AssertSheetProtectionReloadModel(saved);
+        // "objects" defaults to prevented (denied) when absent, so the workbook's granted
+        // EditObjects permission must be written explicitly as "0" - removing the attribute would
+        // silently revert to denied on reload (see XlsxSheetProtectionPermissionMapper.Write).
+        ReadWorksheetChildElement(saved, "sheetProtection").Attribute("objects")!.Value.Should().Be("0");
     }
 
     [Fact]
@@ -2131,6 +2135,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetProtectionSanitized(saved);
         AssertSheetProtectionReloadModel(saved);
+        // FullSave re-derives sheetProtection from the loaded Sheet.ProtectionPermissions model:
+        // the source's invalid objects="maybe" read as allowed (see
+        // XlsxSheetProtectionPermissionMapper.Read), and since "objects" defaults to denied when
+        // absent, the granted permission must be re-emitted explicitly as "0" to survive reload.
+        ReadWorksheetChildElement(saved, "sheetProtection").Attribute("objects")!.Value.Should().Be("0");
     }
 
     [Fact]
@@ -2156,6 +2165,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetProtectionSanitized(saved);
         AssertSheetProtectionReloadModel(saved);
+        // The cell-patch save path only sanitizes the existing raw sheetProtection XML in place
+        // (XlsxWorksheetProtectionNormalizer) - it never re-derives attributes from the model's
+        // Sheet.ProtectionPermissions - so the unrecognized objects="maybe" is simply dropped
+        // rather than re-emitted as "0". (Model-driven permission changes on this path are only
+        // guaranteed to round-trip via the FullSave path.)
+        ReadWorksheetChildElement(saved, "sheetProtection").Attribute("objects").Should().BeNull();
     }
 
     [Fact]
@@ -4973,12 +4988,16 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var workbook = CreateSheetProtectionSourceWorkbook();
         workbook.Name = "SheetProtectionInvalidSchema";
         var sheet = workbook.GetSheetAt(0);
+        // objects/scenarios are modeled via Sheet.ProtectionPermissions (see
+        // XlsxSheetProtectionPermissionMapper), not the native metadata bag, so the model - not
+        // this hand-authored bag - now drives their emitted attribute values.
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditObjects);
         sheet.ProtectionMetadata = new NativeXmlPreserveBag();
         sheet.ProtectionMetadata.Set(
             "sheetProtection",
             """
             <e algorithmName=" SHA-512 " hashValue="AQIDBA==" saltValue="BQYHCA==" spinCount="100000"
-               objects="maybe" scenarios="true" customAttr="protection-native">
+               customAttr="protection-native">
               <nativeSheetProtectionChild />
               <fx:sheetProtectionNativeChild xmlns:fx="urn:freex:test" id="authored" />
             </e>
@@ -5050,7 +5069,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         protection.Attribute("saltValue")!.Value.Should().Be("BQYHCA==");
         protection.Attribute("spinCount")!.Value.Should().Be("100000");
         protection.Attribute("scenarios")!.Value.Should().Be("1");
-        protection.Attribute("objects").Should().BeNull();
+        // "objects" defaults to prevented (denied) when absent. The FullSave path re-derives this
+        // attribute from the loaded Sheet.ProtectionPermissions model (which read the source's
+        // invalid "maybe" as allowed - see XlsxSheetProtectionPermissionMapper), so a granted
+        // EditObjects permission is written explicitly as "0"; a bare attribute-sanitization pass
+        // (no model available) would instead just drop the unrecognized value. Both are valid,
+        // schema-correct sanitizations - callers assert the one their save path actually produces.
         protection.Attribute("customAttr").Should().BeNull();
         protection.Element(worksheetNs + "nativeSheetProtectionChild").Should().BeNull();
         protection.Elements(freexNs + "sheetProtectionNativeChild").Should().BeEmpty();

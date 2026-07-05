@@ -26,26 +26,41 @@ public static class TextToColumnsSplitter
         var parts = new List<string>();
         var current = new StringBuilder();
         var inQualifiedText = false;
+        var atFieldStart = true;
         for (var index = 0; index < text.Length; index++)
         {
             var ch = text[index];
-            if (ch == qualifier)
+            if (inQualifiedText)
             {
-                if (inQualifiedText && index + 1 < text.Length && text[index + 1] == qualifier)
+                if (ch == qualifier)
                 {
-                    current.Append(qualifier);
-                    index++;
+                    if (index + 1 < text.Length && text[index + 1] == qualifier)
+                    {
+                        current.Append(qualifier);
+                        index++;
+                        continue;
+                    }
+
+                    inQualifiedText = false;
                     continue;
                 }
 
-                inQualifiedText = !inQualifiedText;
+                current.Append(ch);
                 continue;
             }
 
-            if (!inQualifiedText && IsDelimiter(ch, delimiters))
+            if (ch == qualifier && atFieldStart)
+            {
+                inQualifiedText = true;
+                atFieldStart = false;
+                continue;
+            }
+
+            if (IsDelimiter(ch, delimiters))
             {
                 parts.Add(current.ToString());
                 current.Clear();
+                atFieldStart = true;
 
                 if (treatConsecutiveDelimitersAsOne)
                 {
@@ -57,6 +72,7 @@ public static class TextToColumnsSplitter
             }
 
             current.Append(ch);
+            atFieldStart = false;
         }
 
         parts.Add(current.ToString());
