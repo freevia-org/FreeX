@@ -127,6 +127,46 @@ public sealed class SlideShowRecordingReviewPlannerTests
     }
 
     [Fact]
+    public void ApplyPersistableMediaArtifacts_WritesCorePresentationManifest()
+    {
+        var presentation = MakePresentation("Intro", "Demo");
+        var started = new DateTimeOffset(2026, 7, 5, 14, 0, 0, TimeSpan.Zero);
+        var presenterPlan = SlideShowPresenterToolPlanner.BuildPlan(
+            SlideShowTimingIntent.RecordTimings,
+            SlideShowRecordingMediaIntent.NarrationAndMedia);
+        var recording = SlideShowRecordingExecutionPlanner.CreateState(
+            presenterPlan,
+            currentSlideIndex: 0,
+            started,
+            new SlideShowDeterministicRecordingCaptureBackend("Capture evidence"));
+        recording = SlideShowRecordingExecutionPlanner.MoveToSlide(
+            recording,
+            slideIndex: 1,
+            started.AddMilliseconds(2400));
+        var plan = SlideShowRecordingReviewPlanner.BuildPlan(presentation, recording);
+
+        var applied = SlideShowRecordingReviewPlanner.ApplyPersistableMediaArtifacts(presentation, plan);
+
+        applied.Should().Be(2);
+        presentation.RecordingMediaArtifacts.Should().HaveCount(2);
+        presentation.RecordingMediaArtifacts.Select(artifact => artifact.Kind).Should().Equal(
+            PresentationRecordingMediaArtifactKind.NarrationAudio,
+            PresentationRecordingMediaArtifactKind.CameraVideo);
+        presentation.RecordingMediaArtifacts.Should().OnlyContain(artifact =>
+            artifact.SlideIndex == 0 &&
+            artifact.DurationMs == 2400 &&
+            artifact.CapturedByHost == "Capture evidence" &&
+            artifact.PackagePath.StartsWith("ppt/media/recordings/") &&
+            artifact.ContentLengthBytes > 0 &&
+            artifact.ContentSha256.Length == 64);
+
+        var reapplied = SlideShowRecordingReviewPlanner.ApplyPersistableMediaArtifacts(presentation, plan);
+
+        reapplied.Should().Be(2);
+        presentation.RecordingMediaArtifacts.Should().HaveCount(2);
+    }
+
+    [Fact]
     public void BuildPlan_RehearseTimingsReportsPreviewOnlyRows()
     {
         var presentation = MakePresentation("Intro");

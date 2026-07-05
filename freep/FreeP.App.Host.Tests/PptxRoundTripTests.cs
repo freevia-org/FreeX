@@ -48,6 +48,35 @@ public sealed class PptxRoundTripTests : IDisposable
         reloaded.SlideSizeCyEmu.Should().Be(6858000);
     }
 
+    [Fact]
+    public void RoundTrip_RecordingMediaArtifactManifest_Preserved()
+    {
+        var pres = Presentation.CreateEmpty();
+        pres.RecordingMediaArtifacts.Add(new PresentationRecordingMediaArtifact(
+            PresentationRecordingMediaArtifactKind.NarrationAudio,
+            SlideIndex: 0,
+            SuggestedFileName: "slide-001-narration.m4a",
+            ContentType: "audio/mp4",
+            PackagePath: "ppt/media/recordings/slide-001-narration.m4a",
+            ContentLengthBytes: 128,
+            ContentSha256: new string('a', 64),
+            DurationMs: 2400,
+            CapturedByHost: "Capture evidence",
+            StatusText: "Capture evidence: Narration audio captured"));
+
+        var path = WriteToPptx(pres);
+
+        using (var archive = System.IO.Compression.ZipFile.OpenRead(path))
+        {
+            archive.GetEntry("ppt/media/recordingArtifacts.xml").Should().NotBeNull();
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+
+        reloaded.RecordingMediaArtifacts.Should().ContainSingle().Which.Should()
+            .BeEquivalentTo(pres.RecordingMediaArtifacts.Single());
+    }
+
     // ─────────────────────────────────────────────────────────────────────────────
     // 2. Shape anchor / kind
     // ─────────────────────────────────────────────────────────────────────────────

@@ -415,6 +415,7 @@ public sealed class SlideShowWindowHeadlessTests
     public async Task SlideShowWindow_recording_review_plan_projects_shared_source_slide_evidence()
     {
         SlideShowRecordingReviewPlan? review = null;
+        int recordingArtifactCountAfterClose = -1;
         var started = new DateTimeOffset(2026, 7, 4, 11, 0, 0, TimeSpan.Zero);
         var ran = await OnUiThread(() =>
         {
@@ -437,6 +438,8 @@ public sealed class SlideShowWindowHeadlessTests
             window.ExecuteAdvance(started.AddMilliseconds(2400));
 
             review = window.RecordingReviewPlan;
+            window.Close();
+            recordingArtifactCountAfterClose = pres.RecordingMediaArtifacts.Count;
         });
 
         if (!ran) return;
@@ -452,6 +455,8 @@ public sealed class SlideShowWindowHeadlessTests
             row.TimingStatus == SlideShowRecordingReviewTimingStatus.AlreadyApplied);
         review.Rows.Single().MediaArtifacts.Select(artifact => artifact.SuggestedFileName)
             .Should().Equal("slide-003-narration.m4a", "slide-003-camera.mp4");
+        recordingArtifactCountAfterClose.Should().Be(0,
+            "the deferred Avalonia capture adapter must not persist fake recording artifacts");
     }
 
     [Fact]

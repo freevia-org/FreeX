@@ -2188,6 +2188,9 @@ public sealed class SlideShowWindow : Window
         _recordingExecutionState = SlideShowRecordingExecutionPlanner.EndSession(
             _recordingExecutionState,
             now);
+        SlideShowRecordingReviewPlanner.ApplyPersistableMediaArtifacts(
+            _presentation,
+            RecordingReviewPlan);
         _inkExecutionState = SlideShowInkPersistencePlanner.ApplyRetentionOnExit(
             _presentation,
             _inkExecutionState,

@@ -498,6 +498,10 @@ public sealed class SlideShowWindowTests
                 row.TimingStatus == SlideShowRecordingReviewTimingStatus.AlreadyApplied);
             review.Rows.Single().MediaArtifacts.Select(artifact => artifact.SuggestedFileName)
                 .Should().Equal("slide-003-narration.m4a", "slide-003-camera.mp4");
+
+            window.Close();
+            pres.RecordingMediaArtifacts.Should().BeEmpty(
+                "the deferred WPF capture adapter must not persist fake recording artifacts");
         }
         finally
         {

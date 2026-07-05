@@ -26,6 +26,8 @@ public static class PptxPackageReader
     private static readonly XNamespace A   = PptxColorReader.A;
     private static readonly XNamespace R   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace Adec = "http://schemas.microsoft.com/office/drawing/2017/decorative";
+    private static readonly XNamespace FreePRecording = "https://freex.local/freep/recording/2026";
+    private const string RecordingMediaArtifactsPath = "ppt/media/recordingArtifacts.xml";
 
     // ── Relationship type constants ───────────────────────────────────────────────
     private const string OfficeDocRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
@@ -227,6 +229,7 @@ public static class PptxPackageReader
         // Sections from p:extLst / p:ext[@uri="{521415D9-…}"] / p14:sectionLst
         ReadSections(presRoot, sldIdToRId, presentation);
         ReadCustomShows(presRoot, sldIdToRId, presentation);
+        ReadRecordingMediaArtifacts(archive, presentation);
 
         // Comment authors live in a single ppt/commentAuthors.xml part referenced from presRels.
         var cmAuthorsTarget = OpcRelationships.FirstTargetByType(presRels, CommentAuthorsRelType);
@@ -271,6 +274,41 @@ public static class PptxPackageReader
         }
 
         return presentation;
+    }
+
+    private static void ReadRecordingMediaArtifacts(ZipArchive archive, Presentation presentation)
+    {
+        var document = OpcXml.TryLoadXml(archive, RecordingMediaArtifactsPath);
+        if (document?.Root is null || document.Root.Name != FreePRecording + "recordingMediaArtifacts")
+        {
+            return;
+        }
+
+        foreach (var element in document.Root.Elements(FreePRecording + "artifact"))
+        {
+            if (!Enum.TryParse<PresentationRecordingMediaArtifactKind>(
+                    element.Attribute("kind")?.Value,
+                    ignoreCase: true,
+                    out var kind) ||
+                !int.TryParse(element.Attribute("slideIndex")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var slideIndex) ||
+                !long.TryParse(element.Attribute("contentLengthBytes")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var length) ||
+                !int.TryParse(element.Attribute("durationMs")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var durationMs))
+            {
+                continue;
+            }
+
+            presentation.RecordingMediaArtifacts.Add(new PresentationRecordingMediaArtifact(
+                kind,
+                slideIndex,
+                element.Attribute("suggestedFileName")?.Value ?? string.Empty,
+                element.Attribute("contentType")?.Value ?? string.Empty,
+                element.Attribute("packagePath")?.Value ?? string.Empty,
+                length,
+                element.Attribute("contentSha256")?.Value ?? string.Empty,
+                durationMs,
+                element.Attribute("capturedByHost")?.Value ?? string.Empty,
+                element.Attribute("statusText")?.Value ?? string.Empty));
+        }
     }
 
     private static PptxPackageSnapshot CapturePackageSnapshot(ZipArchive archive)
