@@ -161,6 +161,7 @@ internal static class FreePCommandInventory
             HostCoverage: "WPF/Avalonia shared planner plus thin slideshow-window adapters",
             EvidenceDocs:
             [
+                "docs/parity/freep-presenter-recording-backend-contract-2026-07-05.md",
                 "docs/parity/freep-presenter-recording-execution-2026-07-04.md",
                 "docs/parity/freep-presenter-recording-review-2026-07-04.md"
             ],
@@ -171,7 +172,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/SlideShowTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/SlideShowWindowHeadlessTests.cs"
             ],
-            RemainingWork: "Real narration/audio capture, camera/media capture backends, captured media persistence, subtitles, and PowerPoint COM recording baselines remain deferred."),
+            RemainingWork: "Shared recording capture backend contracts, deterministic no-device artifact evidence, review rows, and session-summary persistable counts are covered. Real microphone/camera adapters, PPTX media-part authoring, subtitles, and PowerPoint COM recording baselines remain deferred."),
         new(
             EvidenceId: "freep.presenter.ink.execution",
             Area: "Presenter ink, laser, and persistence execution",
