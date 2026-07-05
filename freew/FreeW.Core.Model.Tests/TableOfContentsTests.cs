@@ -43,11 +43,11 @@ public class TableOfContentsTests
         // Heading + one paragraph per outline entry, in document order.
         toc.Select(p => p.PlainText).Should().Equal(
             TableOfContents.HeadingText,
-            "My Title",
-            "Chapter One",
-            "Section A",
-            "Detail",
-            "Chapter Two");
+            "My Title\t1",
+            "Chapter One\t1",
+            "Section A\t1",
+            "Detail\t1",
+            "Chapter Two\t1");
 
         // The heading uses the TOC heading style; entries use TOC{level} (clamped at MaxStyledLevel).
         toc.Select(p => p.StyleId).Should().Equal(
@@ -69,6 +69,97 @@ public class TableOfContentsTests
     }
 
     [Fact]
+    public void Build_DefaultEntryParagraphsContainHeadingTabPageNumberAndDottedRightTabStop()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1" });
+
+        var toc = TableOfContents.Build(doc);
+
+        var entry = toc[1];
+        entry.Runs.Select(run => run.Text).Should().Equal("Chapter One", "\t", "1");
+        entry.PlainText.Should().Be("Chapter One\t1");
+        entry.Formatting.TabStops.Should().Equal(
+            new TabStop(
+                TableOfContents.DefaultEntryRightTabStopPt,
+                TabStopAlignment.Right,
+                TabLeader.Dots));
+    }
+
+    [Fact]
+    public void Build_EntryRightTabStopUsesWritablePageWidth()
+    {
+        var doc = new TextDocument();
+        doc.Page.WidthPt = 700;
+        doc.Page.MarginLeftPt = 80;
+        doc.Page.MarginRightPt = 120;
+        doc.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1" });
+
+        var entry = TableOfContents.Build(doc)[1];
+
+        entry.Formatting.TabStops.Should().ContainSingle()
+            .Which.Should().Be(new TabStop(500, TabStopAlignment.Right, TabLeader.Dots));
+    }
+
+    [Fact]
+    public void Build_ExplicitPageBreaksBeforeOrInsidePrecedingContentAdvanceLaterHeadingPageNumbers()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("First") { StyleId = "Heading1" });
+
+        var paragraphWithInlineBreak = new Paragraph("Body before break");
+        paragraphWithInlineBreak.Runs.Add(Run.PageBreak());
+        paragraphWithInlineBreak.Runs.Add(new Run("Body after break"));
+        doc.Blocks.Add(paragraphWithInlineBreak);
+        doc.Blocks.Add(new Paragraph("After inline break") { StyleId = "Heading1" });
+
+        doc.Blocks.Add(new Paragraph("Paged body")
+        {
+            Formatting = ParagraphFormatting.Default with { PageBreakBefore = true }
+        });
+        doc.Blocks.Add(new Paragraph("After page-break-before content") { StyleId = "Heading1" });
+
+        var entries = TableOfContents.Build(doc).Skip(1).Select(p => p.PlainText);
+
+        entries.Should().Equal(
+            "First\t1",
+            "After inline break\t2",
+            "After page-break-before content\t3");
+    }
+
+    [Fact]
+    public void Build_PageBreakBeforeHeadingAdvancesThatHeadingPageNumber()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("First") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("Second")
+        {
+            StyleId = "Heading1",
+            Formatting = ParagraphFormatting.Default with { PageBreakBefore = true }
+        });
+
+        var entries = TableOfContents.Build(doc).Skip(1).Select(p => p.PlainText);
+
+        entries.Should().Equal("First\t1", "Second\t2");
+    }
+
+    [Fact]
+    public void Build_SectionBreaksAdvanceLaterHeadingPageNumbers()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("First") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("Odd page section")
+        {
+            SectionBreak = new Section(new PageSettings(), SectionBreakKind.OddPage)
+        });
+        doc.Blocks.Add(new Paragraph("After odd break") { StyleId = "Heading1" });
+
+        var entries = TableOfContents.Build(doc).Skip(1).Select(p => p.PlainText);
+
+        entries.Should().Equal("First\t1", "After odd break\t3");
+    }
+
+    [Fact]
     public void Build_DeepHeading_IndentsByTrueLevelButClampsStyleId()
     {
         var doc = new TextDocument();
@@ -77,7 +168,7 @@ public class TableOfContentsTests
         var toc = TableOfContents.Build(doc);
 
         var entry = toc[1];
-        entry.PlainText.Should().Be("Deep");
+        entry.PlainText.Should().Be("Deep\t1");
         entry.Formatting.IndentLeftPt.Should().Be(6 * TableOfContents.IndentPerLevelPt);
         // The style id is clamped to the deepest registered level so it still resolves to a TOC style.
         entry.StyleId.Should().Be("TOC" + TableOfContents.MaxStyledLevel);
