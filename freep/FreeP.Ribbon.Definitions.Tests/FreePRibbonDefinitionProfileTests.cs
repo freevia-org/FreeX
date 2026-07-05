@@ -829,7 +829,7 @@ public sealed class FreePRibbonDefinitionProfileTests
         var workflowEvidence = root.GetProperty("workflowEvidence")
             .EnumerateArray()
             .ToArray();
-        workflowEvidence.Should().HaveCount(6);
+        workflowEvidence.Should().HaveCount(7);
         root.GetProperty("summary").GetProperty("workflowEvidenceRows").GetInt32()
             .Should()
             .Be(workflowEvidence.Length);
@@ -841,6 +841,7 @@ public sealed class FreePRibbonDefinitionProfileTests
                 "freep.presenter.session.summary",
                 "freep.review.comments.thread-depth",
                 "freep.review.accessibility.proofing-depth",
+                "freep.export.backstage.package-handoff",
                 "freep.table.inline-text.workflow-depth");
 
         workflowEvidence.Should().OnlyContain(row =>
