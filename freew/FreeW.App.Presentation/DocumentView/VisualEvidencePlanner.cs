@@ -216,21 +216,28 @@ public sealed record FreeWVisualFieldExpectation(
     bool HasHeaderFooterFields,
     IReadOnlyList<string> FieldKinds,
     IReadOnlyList<string> ComplexFieldKeywords,
+    IReadOnlyList<string> ComplexFieldResultSignatures,
     IReadOnlyList<string> HeaderFooterSlotNames);
 
 public sealed record FreeWVisualTableOfAuthoritiesPageReference(
     string Category,
     string EntryText,
     string PageReferenceText,
-    IReadOnlyList<int> PageNumbers);
+    IReadOnlyList<int> PageNumbers,
+    string PageReferenceKind,
+    bool HasPageReferenceSentinel,
+    string StableSignature);
 
 public sealed record FreeWVisualTableOfAuthoritiesExpectation(
     int EntryCount,
     int EntryWithPageReferenceCount,
+    int CategoryCount,
+    IReadOnlyList<string> Categories,
     bool HasGeneratedTable,
     bool HasPageReferences,
     bool HasExplicitPageNumbers,
     bool HasPassimReferences,
+    IReadOnlyList<string> PageReferenceSignatures,
     IReadOnlyList<FreeWVisualTableOfAuthoritiesPageReference> PageReferences);
 
 public sealed record FreeWVisualPageExpectation(
@@ -319,7 +326,7 @@ public static class FreeWVisualEvidencePlanner
 {
     public const string ManifestFileName = "freew_visual_evidence_manifest.json";
     public const string SchemaId = "freew.visual-evidence.v1";
-    public const int SchemaVersion = 10;
+    public const int SchemaVersion = 11;
     public const string SectionGeometryPageSurfaceRenderStatus = "section-page-surface";
 
     private const int MaxTrackedColorCount = 4096;
@@ -1590,6 +1597,12 @@ public static class FreeWVisualEvidencePlanner
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(keyword => keyword, StringComparer.OrdinalIgnoreCase)
             .ToList();
+        var complexResultSignatures = complexRuns
+            .Select(item => BuildComplexFieldResultSignature(item.Run.ComplexField!.Keyword, item.Run.Text))
+            .Where(signature => !string.IsNullOrWhiteSpace(signature))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(signature => signature, StringComparer.OrdinalIgnoreCase)
+            .ToList();
         var fieldKinds = simpleRuns
             .Select(item => item.Run.FieldKind.ToString())
             .Concat(complexKeywords.Select(keyword => "Complex:" + keyword))
@@ -1620,6 +1633,7 @@ public static class FreeWVisualEvidencePlanner
             HasHeaderFooterFields: fieldRuns.Any(item => item.HeaderFooter),
             FieldKinds: fieldKinds,
             ComplexFieldKeywords: complexKeywords,
+            ComplexFieldResultSignatures: complexResultSignatures,
             HeaderFooterSlotNames: fieldRuns
                 .Where(item => item.HeaderFooter && !string.IsNullOrWhiteSpace(item.HeaderFooterSlotName))
                 .Select(item => item.HeaderFooterSlotName!)
@@ -1635,12 +1649,19 @@ public static class FreeWVisualEvidencePlanner
 
         var entryCount = 0;
         var pageReferences = new List<FreeWVisualTableOfAuthoritiesPageReference>();
+        var categories = new List<string>();
         var currentCategory = string.Empty;
         foreach (var paragraph in document.Blocks.OfType<Paragraph>())
         {
             if (string.Equals(paragraph.StyleId, TableOfAuthorities.CategoryStyleId, StringComparison.Ordinal))
             {
                 currentCategory = paragraph.PlainText.Trim();
+                if (!string.IsNullOrWhiteSpace(currentCategory)
+                    && !categories.Contains(currentCategory, StringComparer.OrdinalIgnoreCase))
+                {
+                    categories.Add(currentCategory);
+                }
+
                 continue;
             }
 
@@ -1653,21 +1674,41 @@ public static class FreeWVisualEvidencePlanner
                 continue;
 
             var pageNumbers = ParsePageNumbers(extracted.Value.PageReferenceText);
-            pageReferences.Add(new FreeWVisualTableOfAuthoritiesPageReference(
-                string.IsNullOrWhiteSpace(currentCategory) ? "Uncategorized" : currentCategory,
+            var category = string.IsNullOrWhiteSpace(currentCategory) ? "Uncategorized" : currentCategory;
+            var referenceKind = ClassifyTableOfAuthoritiesPageReference(extracted.Value.PageReferenceText, pageNumbers);
+            var stableSignature = BuildTableOfAuthoritiesPageReferenceSignature(
+                category,
                 extracted.Value.EntryText,
                 extracted.Value.PageReferenceText,
-                pageNumbers));
+                pageNumbers,
+                referenceKind);
+            pageReferences.Add(new FreeWVisualTableOfAuthoritiesPageReference(
+                category,
+                extracted.Value.EntryText,
+                extracted.Value.PageReferenceText,
+                pageNumbers,
+                referenceKind,
+                IsStrongTableOfAuthoritiesPageReference(referenceKind, pageNumbers),
+                stableSignature));
         }
 
         return new FreeWVisualTableOfAuthoritiesExpectation(
             EntryCount: entryCount,
             EntryWithPageReferenceCount: pageReferences.Count,
+            CategoryCount: categories.Count,
+            Categories: categories
+                .OrderBy(category => category, StringComparer.OrdinalIgnoreCase)
+                .ToList(),
             HasGeneratedTable: entryCount > 0,
             HasPageReferences: pageReferences.Count > 0,
             HasExplicitPageNumbers: pageReferences.Any(reference => reference.PageNumbers.Count > 0),
             HasPassimReferences: pageReferences.Any(reference =>
                 string.Equals(reference.PageReferenceText, "passim", StringComparison.OrdinalIgnoreCase)),
+            PageReferenceSignatures: pageReferences
+                .Select(reference => reference.StableSignature)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(signature => signature, StringComparer.OrdinalIgnoreCase)
+                .ToList(),
             PageReferences: pageReferences);
     }
 
@@ -1930,15 +1971,19 @@ public static class FreeWVisualEvidencePlanner
         HasHeaderFooterFields: false,
         FieldKinds: [],
         ComplexFieldKeywords: [],
+        ComplexFieldResultSignatures: [],
         HeaderFooterSlotNames: []);
 
     private static FreeWVisualTableOfAuthoritiesExpectation EmptyTableOfAuthoritiesExpectation { get; } = new(
         EntryCount: 0,
         EntryWithPageReferenceCount: 0,
+        CategoryCount: 0,
+        Categories: [],
         HasGeneratedTable: false,
         HasPageReferences: false,
         HasExplicitPageNumbers: false,
         HasPassimReferences: false,
+        PageReferenceSignatures: [],
         PageReferences: []);
 
     private static IEnumerable<(Run Run, bool HeaderFooter, string? HeaderFooterSlotName)> EnumerateFieldRunSnapshots(
@@ -2069,6 +2114,66 @@ public static class FreeWVisualEvidencePlanner
 
     private static string ToHex(int rgb) =>
         "#" + (rgb & 0xFFFFFF).ToString("X6", CultureInfo.InvariantCulture);
+
+    private static string BuildComplexFieldResultSignature(string? keyword, string? resultText)
+    {
+        var normalizedKeyword = NormalizeEvidenceSignatureText(keyword).ToUpperInvariant();
+        var normalizedResult = NormalizeEvidenceSignatureText(resultText);
+        return string.IsNullOrWhiteSpace(normalizedKeyword) || string.IsNullOrWhiteSpace(normalizedResult)
+            ? string.Empty
+            : normalizedKeyword + "=" + normalizedResult;
+    }
+
+    private static string ClassifyTableOfAuthoritiesPageReference(
+        string pageReferenceText,
+        IReadOnlyList<int> pageNumbers)
+    {
+        if (pageNumbers.Count > 0)
+            return "explicit-page-numbers";
+        if (string.Equals(pageReferenceText.Trim(), "passim", StringComparison.OrdinalIgnoreCase))
+            return "passim";
+
+        return "weak-page-reference-text";
+    }
+
+    private static bool IsStrongTableOfAuthoritiesPageReference(
+        string referenceKind,
+        IReadOnlyList<int> pageNumbers) =>
+        pageNumbers.Count > 0
+        || string.Equals(referenceKind, "passim", StringComparison.OrdinalIgnoreCase);
+
+    private static string BuildTableOfAuthoritiesPageReferenceSignature(
+        string category,
+        string entryText,
+        string pageReferenceText,
+        IReadOnlyList<int> pageNumbers,
+        string referenceKind)
+    {
+        var pages = pageNumbers.Count == 0
+            ? "-"
+            : string.Join(",", pageNumbers.Select(page => page.ToString(CultureInfo.InvariantCulture)));
+        return string.Join(
+            "|",
+            "category=" + NormalizeEvidenceSignatureText(category),
+            "entry=" + NormalizeEvidenceSignatureText(entryText),
+            "kind=" + NormalizeEvidenceSignatureText(referenceKind),
+            "pages=" + pages,
+            "text=" + NormalizeEvidenceSignatureText(pageReferenceText));
+    }
+
+    private static string NormalizeEvidenceSignatureText(string? value)
+    {
+        var normalized = (value ?? string.Empty)
+            .Trim()
+            .Replace("\r", " ", StringComparison.Ordinal)
+            .Replace("\n", " ", StringComparison.Ordinal)
+            .Replace("\t", "\\t", StringComparison.Ordinal)
+            .Replace("|", "/", StringComparison.Ordinal);
+
+        return string.Join(
+            " ",
+            normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+    }
 
     private static (string EntryText, string PageReferenceText)? ExtractTableOfAuthoritiesPageReference(
         Paragraph paragraph)
