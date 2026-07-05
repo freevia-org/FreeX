@@ -385,7 +385,7 @@ public sealed partial class MainWindow
         var hiddenEmptyAction = SelectDataSourcePlanner.GetHiddenEmptyCellsAction();
 
         // ---- Range text box -------------------------------------------------------------------
-        var rangeBox = CreateChartTextBox(initialRange, 380, UiText.Get("ChartLoc_RangePlaceholder"));
+        var rangeBox = CreateChartTextBox(initialRange, 540, UiText.Get("ChartLoc_RangePlaceholder"));
         AutomationProperties.SetName(rangeBox, UiText.Get(rangeField.AutomationNameResourceKey!));
         AutomationProperties.SetAutomationId(rangeBox, rangeField.AutomationId);
 
@@ -413,7 +413,7 @@ public sealed partial class MainWindow
         var seriesList = new ListBox
         {
             Height = 80,
-            Width = 320,
+            Width = 500,
             SelectionMode = SelectionMode.Single,
         };
         AutomationProperties.SetName(seriesList, UiText.Get(seriesPanel.ListField.AutomationNameResourceKey!));
@@ -438,7 +438,7 @@ public sealed partial class MainWindow
         var axisLabelsList = new ListBox
         {
             Height = 80,
-            Width = 320,
+            Width = 500,
             SelectionMode = SelectionMode.Single,
         };
         AutomationProperties.SetName(axisLabelsList, UiText.Get(axisLabelsPanel.ListField.AutomationNameResourceKey!));
@@ -552,7 +552,11 @@ public sealed partial class MainWindow
         var dialog = NewChartDialog(
             UiText.Get(SelectDataSourcePlanner.DialogTitleResourceKey),
             SelectDataSourcePlanner.DialogAutomationId);
-        dialog.MinWidth = 460;
+        dialog.SizeToContent = SizeToContent.Manual;
+        dialog.Width = 620;
+        dialog.Height = 500;
+        dialog.MinWidth = 620;
+        dialog.MinHeight = 500;
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("SelectChartData");
         okButton.Click += (_, _) =>
@@ -583,7 +587,7 @@ public sealed partial class MainWindow
 
             var header = new StackPanel { Spacing = 2 };
             header.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get(panel.TitleResourceKey)), FontSize = 12, FontFamily = FormulaBarFontFamily, FontWeight = FontWeight.SemiBold });
-            header.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get(panel.ListField.HelpResourceKey!)), FontSize = 11, FontFamily = FormulaBarFontFamily, Foreground = Brush(96, 96, 96), TextWrapping = TextWrapping.Wrap, MaxWidth = 320 });
+            header.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get(panel.ListField.HelpResourceKey!)), FontSize = 11, FontFamily = FormulaBarFontFamily, Foreground = Brush(96, 96, 96), TextWrapping = TextWrapping.Wrap, MaxWidth = 500 });
             grid.Children.Add(header);
 
             Grid.SetRow(list, 1);
@@ -636,7 +640,7 @@ public sealed partial class MainWindow
         {
             Margin = new Thickness(16),
             Spacing = 8,
-            MinWidth = 420,
+            MinWidth = 588,
             Children =
             {
                 // Range label + ("...") picker button + text box

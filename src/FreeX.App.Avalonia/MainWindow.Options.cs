@@ -42,16 +42,21 @@ public sealed partial class MainWindow
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
 
+        const double optionsDialogWidth = 760;
+        const double optionsDialogHeight = 560;
+        const double optionsFormulasDialogWidth = 744;
+        const double optionsFormulasDialogHeight = 776.5;
+
         // Edit a snapshot loaded from the shared store so unmanaged fields round-trip untouched.
         var current = AppOptionsStore.Load();
 
         var dialog = new Window
         {
             Title = UiText.Get("Options_Title"),
-            Width = 760,
-            Height = 560,
-            MinWidth = 760,
-            MinHeight = 560,
+            Width = optionsDialogWidth,
+            Height = optionsDialogHeight,
+            MinWidth = optionsDialogWidth,
+            MinHeight = optionsDialogHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
             CanResize = false,
@@ -151,6 +156,20 @@ public sealed partial class MainWindow
         var errorCheckingBox = new CheckBox { Content = UiText.Get("Options_EnableErrorChecking"), IsChecked = current.ErrorCheckingEnabled };
         ApplyOptionsCheckBoxChrome(errorCheckingBox);
         AutomationProperties.SetAutomationId(errorCheckingBox, "OptionsEnableErrorCheckingCheckBox");
+        var errorRuleBoxes = new Dictionary<string, CheckBox>(StringComparer.OrdinalIgnoreCase);
+        var errorRulesPanel = new StackPanel { Spacing = 0 };
+        foreach (var rule in FormulaErrorCheckingRuleCatalog.SupportedRules)
+        {
+            var ruleBox = OptionsCheckBox(
+                rule.Label,
+                isChecked: !workbook.DisabledFormulaErrorCodes.Contains(rule.ErrorCode));
+            ToolTip.SetTip(ruleBox, rule.Description);
+            AutomationProperties.SetAutomationId(
+                ruleBox,
+                "OptionsFormulaErrorRule" + rule.ErrorCode.Replace("#", "", StringComparison.OrdinalIgnoreCase).Replace("/", "", StringComparison.OrdinalIgnoreCase).Replace("!", "", StringComparison.OrdinalIgnoreCase).Replace("?", "", StringComparison.OrdinalIgnoreCase));
+            errorRuleBoxes[rule.ErrorCode] = ruleBox;
+            errorRulesPanel.Children.Add(ruleBox);
+        }
 
         var formulasPanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_CalculationOptions")),
@@ -177,7 +196,8 @@ public sealed partial class MainWindow
             OptionsCheckBox(OptionsText("Options_EnableAutoCompleteForCellValues"), isChecked: true, isEnabled: false),
             OptionsSectionHeader(OptionsText("Options_ErrorCheckingRules")),
             OptionsDescription(OptionsText("Options_EnableBackgroundErrorChecksFor")),
-            errorCheckingBox);
+            errorCheckingBox,
+            errorRulesPanel);
 
         // ── Proofing ────────────────────────────────────────────────────────────
         var ignoreUppercaseBox = new CheckBox { Content = UiText.Get("Options_IgnoreUppercase"), IsChecked = current.ProofingIgnoreUppercase };
@@ -389,6 +409,7 @@ public sealed partial class MainWindow
                 return;
 
             selectedCategoryIndex = index;
+            ApplyOptionsDialogFrameForCategory(index);
             contentHost.Content = panels[index];
             for (var i = 0; i < categoryRows.Length; i++)
             {
@@ -396,6 +417,23 @@ public sealed partial class MainWindow
                 categoryRows[i].Background = selected ? Brushes.White : Brushes.Transparent;
                 categoryRows[i].BorderBrush = selected ? Brush(205, 205, 205) : Brushes.Transparent;
             }
+        }
+
+        void ApplyOptionsDialogFrameForCategory(int index)
+        {
+            if (index == 1)
+            {
+                dialog.Width = optionsFormulasDialogWidth;
+                dialog.Height = optionsFormulasDialogHeight;
+                dialog.MinWidth = optionsFormulasDialogWidth;
+                dialog.MinHeight = optionsFormulasDialogHeight;
+                return;
+            }
+
+            dialog.Width = optionsDialogWidth;
+            dialog.Height = optionsDialogHeight;
+            dialog.MinWidth = optionsDialogWidth;
+            dialog.MinHeight = optionsDialogHeight;
         }
 
         // ── Warning + buttons ─────────────────────────────────────────────────────
@@ -413,6 +451,31 @@ public sealed partial class MainWindow
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
         ApplyOptionsButtonChrome(cancelButton, 84);
         AutomationProperties.SetAutomationId(cancelButton, "OptionsCancelButton");
+
+        bool ApplyFormulaErrorCheckingOptions()
+        {
+            foreach (var rule in FormulaErrorCheckingRuleCatalog.SupportedRules)
+            {
+                if (!errorRuleBoxes.TryGetValue(rule.ErrorCode, out var box))
+                    continue;
+
+                var shouldDisable = box.IsChecked != true;
+                var isDisabled = workbook.DisabledFormulaErrorCodes.Contains(rule.ErrorCode);
+                if (shouldDisable == isDisabled)
+                    continue;
+
+                var result = _session.ExecuteReviewCommand(
+                    new SetFormulaErrorCheckingRuleCommand(rule.ErrorCode, enabled: !shouldDisable));
+                if (result.Success)
+                    continue;
+
+                warningText.Text = result.ErrorMessage ?? UiText.Get("Options_SaveFailed");
+                warningText.IsVisible = true;
+                return false;
+            }
+
+            return true;
+        }
 
         bool TryCommit()
         {
@@ -467,6 +530,9 @@ public sealed partial class MainWindow
             }
 
             current = projected;
+            if (!ApplyFormulaErrorCheckingOptions())
+                return false;
+
             ApplyLiveOptions(input);
             ApplyLiveIterativeCalculationOptions(iterativeEnabled, maxIterations, maxChange);
             return true;

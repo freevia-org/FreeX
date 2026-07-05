@@ -632,7 +632,7 @@ internal static class ParityCapture
             new LegalNoticesDialog());
 
         CaptureDialog(results, "dialog.SelectDataSource", outDir, () =>
-            new SelectDataSourceDialog("Sheet1!$A$1:$D$5", firstColumnIsCategories: true, sheetId: sheet.Id, resolveSheetId: ResolveSheetId(workbook)));
+            new SelectDataSourceDialog("A1:C6", firstColumnIsCategories: true, sheetId: sheet.Id, resolveSheetId: ResolveSheetId(workbook)));
 
         CaptureDialog(results, "dialog.ChangeChartType", outDir, () =>
             new ChangeChartTypeDialog(ChartType.Column));

@@ -897,7 +897,7 @@ public sealed partial class MainWindow
         await ShowUnhideSheetDialogAsync([new WorkbookHiddenSheet(_session.ActiveSheet.Id, "Archive")]);
 
     private async Task ShowSelectDataSourceParityDialogAsync() =>
-        await ShowSelectDataDialogAsync("Sheet1!$A$1:$D$4", firstColumnIsCategories: true);
+        await ShowSelectDataDialogAsync("A1:C6", firstColumnIsCategories: true);
 
     private async Task ShowChangeChartTypeParityDialogAsync() =>
         await ShowWithSelectedParityChartAsync(ShowChangeChartTypeDialog);
