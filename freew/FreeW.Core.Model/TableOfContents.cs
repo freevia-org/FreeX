@@ -7,8 +7,8 @@ namespace FreeW.Core.Model;
 /// <see cref="DocumentOutline"/>). Lives in the model project so it is unit-testable without any UI.
 /// <para>
 /// <see cref="Build"/> produces ordinary styled <see cref="Paragraph"/>s — a "Contents" heading
-/// followed by one entry per <see cref="OutlineEntry"/>, each carrying the heading's text and a
-/// left indent proportional to its outline level. The paragraphs use dedicated TOC style ids
+/// followed by one entry per <see cref="OutlineEntry"/>, each carrying the heading's text, a tab,
+/// a generated page reference, and a left indent proportional to its outline level. The paragraphs use dedicated TOC style ids
 /// (<see cref="HeadingStyleId"/> and <c>TOC1</c>/<c>TOC2</c>/…) so they:
 /// </para>
 /// <list type="bullet">
@@ -29,6 +29,12 @@ public static class TableOfContents
     /// <summary>Prefix of a per-entry TOC style id; the outline level is appended (e.g. <c>TOC2</c>).</summary>
     public const string EntryStylePrefix = "TOC";
 
+    /// <summary>
+    /// Default right-tab position for generated entries: Word's writable default letter-page width
+    /// (8.5in page with 1in left/right margins).
+    /// </summary>
+    public const double DefaultEntryRightTabStopPt = 468;
+
     /// <summary>Left indent applied per outline level (points). Level 0 has no indent.</summary>
     public const double IndentPerLevelPt = 18;
 
@@ -41,8 +47,9 @@ public static class TableOfContents
     /// <summary>
     /// Builds the Table of Contents paragraphs for <paramref name="document"/>: a "Contents" heading
     /// (<see cref="HeadingStyleId"/>) followed by one paragraph per heading in the document outline, in
-    /// document order. Each entry's text is the heading's text and its <see cref="ParagraphFormatting.IndentLeftPt"/>
-    /// is <c>level * </c><see cref="IndentPerLevelPt"/>; its style id is <c>TOC{level}</c> (clamped to
+    /// document order. Each entry's runs are the heading text, a tab, and an explicit-break-based page
+    /// reference; its <see cref="ParagraphFormatting.IndentLeftPt"/> is <c>level * </c><see cref="IndentPerLevelPt"/>
+    /// and it carries a right-aligned dotted leader tab stop at the writable page width. Its style id is <c>TOC{level}</c> (clamped to
     /// <see cref="MaxStyledLevel"/>). A document with no headings yields just the heading paragraph.
     /// Deterministic and side-effect free — it never mutates <paramref name="document"/>.
     /// </summary>
@@ -55,21 +62,83 @@ public static class TableOfContents
             new(HeadingText) { StyleId = HeadingStyleId }
         };
 
-        foreach (var entry in DocumentOutline.Of(document))
-        {
-            var styledLevel = Math.Clamp(entry.Level, 0, MaxStyledLevel);
-            paragraphs.Add(new Paragraph(entry.Text)
-            {
-                StyleId = EntryStyleId(styledLevel),
-                Formatting = ParagraphFormatting.Default with
-                {
-                    IndentLeftPt = entry.Level * IndentPerLevelPt
-                }
-            });
-        }
+        var outline = DocumentOutline.Of(document);
+        var pageReferences = BuildPageReferences(document, outline);
+        var entryRightTabStopPt = EntryRightTabStopPt(document.Page);
+
+        foreach (var entry in outline)
+            paragraphs.Add(CreateEntryParagraph(entry, pageReferences[entry.BlockIndex], entryRightTabStopPt));
 
         return paragraphs;
     }
+
+    private static Paragraph CreateEntryParagraph(
+        OutlineEntry entry,
+        int pageNumber,
+        double entryRightTabStopPt)
+    {
+        var styledLevel = Math.Clamp(entry.Level, 0, MaxStyledLevel);
+        var paragraph = new Paragraph
+        {
+            StyleId = EntryStyleId(styledLevel),
+            Formatting = ParagraphFormatting.Default with
+            {
+                IndentLeftPt = entry.Level * IndentPerLevelPt,
+                TabStops =
+                [
+                    new TabStop(
+                        Math.Max(0, entryRightTabStopPt),
+                        TabStopAlignment.Right,
+                        TabLeader.Dots)
+                ]
+            }
+        };
+        paragraph.Runs.Add(new Run(entry.Text));
+        paragraph.Runs.Add(new Run("\t"));
+        paragraph.Runs.Add(new Run(pageNumber.ToString(CultureInfo.InvariantCulture)));
+        return paragraph;
+    }
+
+    private static Dictionary<int, int> BuildPageReferences(
+        TextDocument document,
+        IReadOnlyList<OutlineEntry> outline)
+    {
+        var headingBlockIndexes = outline.Select(entry => entry.BlockIndex).ToHashSet();
+        var pageReferences = new Dictionary<int, int>();
+        var pageNumber = 1;
+
+        for (var i = 0; i < document.Blocks.Count; i++)
+        {
+            if (document.Blocks[i] is not Paragraph paragraph)
+                continue;
+
+            if (paragraph.Formatting.PageBreakBefore)
+                pageNumber++;
+
+            if (headingBlockIndexes.Contains(i))
+                pageReferences[i] = pageNumber;
+
+            foreach (var run in paragraph.Runs)
+                if (run.IsPageBreak)
+                    pageNumber++;
+
+            if (paragraph.SectionBreak is { } sectionBreak)
+                pageNumber = AdvanceForSectionBreak(pageNumber, sectionBreak.BreakKind);
+        }
+
+        return pageReferences;
+    }
+
+    private static int AdvanceForSectionBreak(int pageNumber, SectionBreakKind breakKind) => breakKind switch
+    {
+        SectionBreakKind.NextPage => pageNumber + 1,
+        SectionBreakKind.EvenPage => pageNumber % 2 == 0 ? pageNumber + 2 : pageNumber + 1,
+        SectionBreakKind.OddPage => pageNumber % 2 == 0 ? pageNumber + 1 : pageNumber + 2,
+        _ => pageNumber
+    };
+
+    private static double EntryRightTabStopPt(PageSettings page) =>
+        Math.Max(0, page.WidthPt - page.MarginLeftPt - page.MarginRightPt);
 
     /// <summary>The per-entry TOC style id for an outline <paramref name="level"/> (e.g. 2 → <c>TOC2</c>).</summary>
     public static string EntryStyleId(int level) =>

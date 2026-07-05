@@ -77,7 +77,7 @@ public sealed class NumericCitationEditorTests
             .Cast<Paragraph>()
             .Select(paragraph => paragraph.PlainText)
             .ToList();
-        tocText.Should().Contain("New Heading");
+        tocText.Should().Contain("New Heading\t1");
         tocText.Should().NotContain("Old Heading");
 
         var bibliographyText = view.Model.Blocks.Where(Citations.IsBibliographyParagraph)

@@ -116,7 +116,7 @@ public sealed class ReferencesTabTests
         var tocParas = view.Document.Blocks.Where(TableOfContents.IsTocParagraph).ToList();
         tocParas.Should().HaveCount(3, "a TOC heading plus one entry per document heading");
         tocParas.Select(b => ((Paragraph)b).PlainText).Should()
-            .Contain(new[] { TableOfContents.HeadingText, "Chapter One", "Section A" });
+            .Contain(new[] { TableOfContents.HeadingText, "Chapter One\t1", "Section A\t1" });
 
         view.Undo();
         view.Document.Blocks.Count.Should().Be(before, "undo removes the whole generated TOC");
@@ -136,7 +136,7 @@ public sealed class ReferencesTabTests
 
         var entries = view.Document.Blocks.Where(TableOfContents.IsTocParagraph)
             .Select(b => ((Paragraph)b).PlainText).ToList();
-        entries.Should().Contain("Second", "update picks up the newly added heading");
+        entries.Should().Contain("Second\t1", "update picks up the newly added heading");
         entries.Count(t => t != TableOfContents.HeadingText).Should().Be(2, "now two heading entries");
     }
 
@@ -159,7 +159,7 @@ public sealed class ReferencesTabTests
             .Cast<Paragraph>()
             .Select(paragraph => paragraph.PlainText)
             .ToList();
-        tocText.Should().Contain("New Heading");
+        tocText.Should().Contain("New Heading\t1");
         tocText.Should().NotContain("Old Heading");
 
         var bibliographyText = view.Document.Blocks.Where(Citations.IsBibliographyParagraph)
@@ -838,7 +838,7 @@ public sealed class ReferencesTabTests
         Execute(tocRegistry, "freew.toc-refresh");
         tocView.Document.Blocks.Where(TableOfContents.IsTocParagraph)
             .Select(block => ((Paragraph)block).PlainText)
-            .Should().Contain("Second", "executing the canonical refresh updates the TOC in place");
+            .Should().Contain("Second\t1", "executing the canonical refresh updates the TOC in place");
 
         var indexView = ViewWith(new Paragraph("Alpha"));
         var indexRegistry = FreeWRibbon.BuildRegistry(indexView, NoopCallbacks());
