@@ -91,6 +91,42 @@ public sealed class SlideShowRecordingReviewPlannerTests
     }
 
     [Fact]
+    public void BuildPlan_WithDeterministicBackend_ReportsCapturedMediaPersistenceEvidence()
+    {
+        var presentation = MakePresentation("Intro", "Demo");
+        var started = new DateTimeOffset(2026, 7, 5, 14, 0, 0, TimeSpan.Zero);
+        var presenterPlan = SlideShowPresenterToolPlanner.BuildPlan(
+            SlideShowTimingIntent.RecordTimings,
+            SlideShowRecordingMediaIntent.NarrationAndMedia);
+        var recording = SlideShowRecordingExecutionPlanner.CreateState(
+            presenterPlan,
+            currentSlideIndex: 0,
+            started,
+            new SlideShowDeterministicRecordingCaptureBackend("Capture evidence"));
+        recording = SlideShowRecordingExecutionPlanner.MoveToSlide(
+            recording,
+            slideIndex: 1,
+            started.AddMilliseconds(2400));
+
+        var plan = SlideShowRecordingReviewPlanner.BuildPlan(presentation, recording);
+
+        plan.DeferredMediaArtifactCount.Should().Be(0);
+        plan.CapturedMediaArtifactCount.Should().Be(2);
+        plan.PersistableMediaArtifactCount.Should().Be(2);
+        plan.EvidenceLines.Should().Contain(line => line.Contains("2 recording media artifact(s) ready for PPTX media persistence"));
+
+        var row = plan.Rows.Should().ContainSingle().Subject;
+        row.MediaArtifacts.Should().OnlyContain(artifact =>
+            artifact.IsCaptured &&
+            artifact.IsPersistable &&
+            artifact.PackagePath.StartsWith("ppt/media/recordings/") &&
+            artifact.ContentLengthBytes > 0 &&
+            artifact.ContentSha256.Length == 64);
+        row.EvidenceLines.Should().Contain(line => line.Contains("NarrationAudio ready for PPTX media persistence"));
+        row.EvidenceLines.Should().Contain(line => line.Contains("CameraVideo ready for PPTX media persistence"));
+    }
+
+    [Fact]
     public void BuildPlan_RehearseTimingsReportsPreviewOnlyRows()
     {
         var presentation = MakePresentation("Intro");

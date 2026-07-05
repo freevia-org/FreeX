@@ -1,3 +1,7 @@
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+
 namespace FreeP.App.Compositor;
 
 public enum SlideShowRecordingExecutionActionKind
@@ -46,7 +50,169 @@ public sealed record SlideShowRecordingMediaArtifact(
     bool IsDeferred,
     string SuggestedFileName,
     string ContentType,
-    string StatusText);
+    string StatusText,
+    string PackagePath = "",
+    long ContentLengthBytes = 0,
+    string ContentSha256 = "")
+{
+    public bool IsPersistable =>
+        IsCaptured &&
+        !string.IsNullOrWhiteSpace(PackagePath) &&
+        ContentLengthBytes > 0 &&
+        !string.IsNullOrWhiteSpace(ContentSha256);
+}
+
+public sealed record SlideShowRecordingCaptureRequest(
+    SlideShowRecordingMediaArtifactKind Kind,
+    int SlideIndex,
+    DateTimeOffset StartedAtUtc,
+    DateTimeOffset EndedAtUtc,
+    int DurationMs,
+    string SuggestedFileName,
+    string ContentType);
+
+public sealed record SlideShowRecordingCaptureResult(
+    bool IsCaptured,
+    bool IsDeferred,
+    string StatusText,
+    string PackagePath,
+    long ContentLengthBytes,
+    string ContentSha256)
+{
+    public static SlideShowRecordingCaptureResult Captured(
+        string statusText,
+        string packagePath = "",
+        long contentLengthBytes = 0,
+        string contentSha256 = "") =>
+        new(
+            IsCaptured: true,
+            IsDeferred: false,
+            statusText,
+            packagePath,
+            contentLengthBytes,
+            contentSha256);
+
+    public static SlideShowRecordingCaptureResult Deferred(string statusText) =>
+        new(
+            IsCaptured: false,
+            IsDeferred: true,
+            statusText,
+            PackagePath: string.Empty,
+            ContentLengthBytes: 0,
+            ContentSha256: string.Empty);
+}
+
+public interface ISlideShowRecordingCaptureBackend
+{
+    SlideShowRecordingHostCapabilities Capabilities { get; }
+
+    SlideShowRecordingCaptureResult CompleteCapture(SlideShowRecordingCaptureRequest request);
+}
+
+public sealed class SlideShowHostCapabilityRecordingCaptureBackend : ISlideShowRecordingCaptureBackend
+{
+    public SlideShowHostCapabilityRecordingCaptureBackend(SlideShowRecordingHostCapabilities capabilities)
+    {
+        Capabilities = capabilities ?? throw new ArgumentNullException(nameof(capabilities));
+    }
+
+    public SlideShowRecordingHostCapabilities Capabilities { get; }
+
+    public SlideShowRecordingCaptureResult CompleteCapture(SlideShowRecordingCaptureRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var isAvailable = request.Kind switch
+        {
+            SlideShowRecordingMediaArtifactKind.NarrationAudio => Capabilities.CanCaptureNarration,
+            SlideShowRecordingMediaArtifactKind.CameraVideo => Capabilities.CanCaptureCamera,
+            _ => false
+        };
+
+        if (!isAvailable)
+        {
+            return SlideShowRecordingCaptureResult.Deferred(
+                $"{Capabilities.HostName}: {Capabilities.UnavailableReason}");
+        }
+
+        return SlideShowRecordingCaptureResult.Captured(
+            $"{KindLabel(request.Kind)} captured for slide {request.SlideIndex + 1}");
+    }
+
+    public static SlideShowHostCapabilityRecordingCaptureBackend Deferred(string hostName) =>
+        new(SlideShowRecordingHostCapabilities.Deferred(hostName));
+
+    public static SlideShowHostCapabilityRecordingCaptureBackend FromCapabilities(
+        SlideShowRecordingHostCapabilities capabilities) =>
+        new(capabilities);
+
+    private static string KindLabel(SlideShowRecordingMediaArtifactKind kind) =>
+        kind == SlideShowRecordingMediaArtifactKind.NarrationAudio
+            ? "Narration audio"
+            : "Camera video";
+}
+
+public sealed class SlideShowDeterministicRecordingCaptureBackend : ISlideShowRecordingCaptureBackend
+{
+    private readonly string _packageRoot;
+
+    public SlideShowDeterministicRecordingCaptureBackend(
+        string hostName,
+        string packageRoot = "ppt/media/recordings")
+    {
+        var normalizedHostName = string.IsNullOrWhiteSpace(hostName)
+            ? "Deterministic recording backend"
+            : hostName.Trim();
+
+        Capabilities = new SlideShowRecordingHostCapabilities(
+            normalizedHostName,
+            CanCaptureNarration: true,
+            CanCaptureCamera: true,
+            UnavailableReason: string.Empty);
+        _packageRoot = NormalizePackageRoot(packageRoot);
+    }
+
+    public SlideShowRecordingHostCapabilities Capabilities { get; }
+
+    public SlideShowRecordingCaptureResult CompleteCapture(SlideShowRecordingCaptureRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var packagePath = $"{_packageRoot}/{request.SuggestedFileName}";
+        var payload = Encoding.UTF8.GetBytes(string.Join(
+            "|",
+            Capabilities.HostName,
+            request.Kind,
+            request.SlideIndex.ToString(CultureInfo.InvariantCulture),
+            request.DurationMs.ToString(CultureInfo.InvariantCulture),
+            request.StartedAtUtc.ToString("O", CultureInfo.InvariantCulture),
+            request.EndedAtUtc.ToString("O", CultureInfo.InvariantCulture),
+            packagePath));
+        var hash = Convert.ToHexString(SHA256.HashData(payload)).ToLowerInvariant();
+
+        return SlideShowRecordingCaptureResult.Captured(
+            $"{Capabilities.HostName}: {KindLabel(request.Kind)} captured to {packagePath}",
+            packagePath,
+            payload.Length,
+            hash);
+    }
+
+    private static string NormalizePackageRoot(string packageRoot)
+    {
+        var normalized = string.IsNullOrWhiteSpace(packageRoot)
+            ? "ppt/media/recordings"
+            : packageRoot.Trim().Replace('\\', '/').Trim('/');
+
+        return normalized.Length == 0
+            ? "ppt/media/recordings"
+            : normalized;
+    }
+
+    private static string KindLabel(SlideShowRecordingMediaArtifactKind kind) =>
+        kind == SlideShowRecordingMediaArtifactKind.NarrationAudio
+            ? "Narration audio"
+            : "Camera video";
+}
 
 public sealed record SlideShowRecordingSlideSegment(
     int SlideIndex,
@@ -67,8 +233,12 @@ public sealed record SlideShowRecordingExecutionState(
     SlideShowRecordingTimingPlan RecordingPlan,
     SlideShowRecordingHostCapabilities HostCapabilities,
     IReadOnlyList<SlideShowRecordingSlideSegment> Segments,
-    IReadOnlyList<SlideShowRecordingExecutionAction> LastActions)
+    IReadOnlyList<SlideShowRecordingExecutionAction> LastActions,
+    ISlideShowRecordingCaptureBackend? CaptureBackend = null)
 {
+    public ISlideShowRecordingCaptureBackend ActiveCaptureBackend =>
+        CaptureBackend ?? SlideShowHostCapabilityRecordingCaptureBackend.FromCapabilities(HostCapabilities);
+
     public bool IsNarrationCaptureActive =>
         IsSessionActive &&
         RecordingPlan.IsNarrationRequested &&
@@ -90,9 +260,26 @@ public static class SlideShowRecordingExecutionPlanner
     {
         ArgumentNullException.ThrowIfNull(toolPlan);
 
+        var backend = hostCapabilities is null
+            ? SlideShowHostCapabilityRecordingCaptureBackend.Deferred("Slideshow host")
+            : SlideShowHostCapabilityRecordingCaptureBackend.FromCapabilities(hostCapabilities);
+
+        return CreateState(toolPlan, currentSlideIndex, nowUtc, backend);
+    }
+
+    public static SlideShowRecordingExecutionState CreateState(
+        SlideShowPresenterToolPlan toolPlan,
+        int currentSlideIndex,
+        DateTimeOffset nowUtc,
+        ISlideShowRecordingCaptureBackend captureBackend)
+    {
+        ArgumentNullException.ThrowIfNull(toolPlan);
+        ArgumentNullException.ThrowIfNull(captureBackend);
+
         var state = EmptyState(
             toolPlan.Recording,
-            hostCapabilities ?? SlideShowRecordingHostCapabilities.Deferred("Slideshow host"));
+            captureBackend.Capabilities,
+            captureBackend);
 
         return StartSessionIfRequested(state, toolPlan.Recording, currentSlideIndex, nowUtc);
     }
@@ -109,7 +296,7 @@ public static class SlideShowRecordingExecutionPlanner
         var stopped = state.IsSessionActive
             ? EndSession(state, nowUtc)
             : state with { LastActions = Array.Empty<SlideShowRecordingExecutionAction>() };
-        var reset = EmptyState(toolPlan.Recording, state.HostCapabilities) with
+        var reset = EmptyState(toolPlan.Recording, state.HostCapabilities, state.ActiveCaptureBackend) with
         {
             Segments = stopped.Segments
         };
@@ -206,7 +393,8 @@ public static class SlideShowRecordingExecutionPlanner
 
     private static SlideShowRecordingExecutionState EmptyState(
         SlideShowRecordingTimingPlan recording,
-        SlideShowRecordingHostCapabilities hostCapabilities) =>
+        SlideShowRecordingHostCapabilities hostCapabilities,
+        ISlideShowRecordingCaptureBackend? captureBackend) =>
         new(
             IsSessionActive: false,
             CurrentSlideIndex: null,
@@ -214,7 +402,8 @@ public static class SlideShowRecordingExecutionPlanner
             recording,
             hostCapabilities,
             Array.Empty<SlideShowRecordingSlideSegment>(),
-            Array.Empty<SlideShowRecordingExecutionAction>());
+            Array.Empty<SlideShowRecordingExecutionAction>(),
+            captureBackend);
 
     private static SlideShowRecordingExecutionState StartSessionIfRequested(
         SlideShowRecordingExecutionState state,
@@ -256,22 +445,34 @@ public static class SlideShowRecordingExecutionPlanner
         SlideShowRecordingExecutionState state,
         int slideIndex,
         DateTimeOffset startedAtUtc,
-        DateTimeOffset endedAtUtc) =>
-        new(
+        DateTimeOffset endedAtUtc)
+    {
+        var durationMs = SlideShowTimingRecorderPlanner.ClampElapsedMilliseconds(endedAtUtc - startedAtUtc);
+        var mediaArtifacts = BuildMediaArtifacts(state, slideIndex, startedAtUtc, endedAtUtc, durationMs);
+
+        return new(
             slideIndex,
             startedAtUtc,
             endedAtUtc,
-            SlideShowTimingRecorderPlanner.ClampElapsedMilliseconds(endedAtUtc - startedAtUtc),
+            durationMs,
             state.RecordingPlan.MediaIntent,
             state.RecordingPlan.IsNarrationRequested,
             state.RecordingPlan.IsMediaCaptureRequested,
-            state.RecordingPlan.IsNarrationRequested && state.HostCapabilities.CanCaptureNarration,
-            state.RecordingPlan.IsMediaCaptureRequested && state.HostCapabilities.CanCaptureCamera,
-            BuildMediaArtifacts(state, slideIndex));
+            mediaArtifacts.Any(artifact =>
+                artifact.Kind == SlideShowRecordingMediaArtifactKind.NarrationAudio &&
+                artifact.IsCaptured),
+            mediaArtifacts.Any(artifact =>
+                artifact.Kind == SlideShowRecordingMediaArtifactKind.CameraVideo &&
+                artifact.IsCaptured),
+            mediaArtifacts);
+    }
 
     private static IReadOnlyList<SlideShowRecordingMediaArtifact> BuildMediaArtifacts(
         SlideShowRecordingExecutionState state,
-        int slideIndex)
+        int slideIndex,
+        DateTimeOffset startedAtUtc,
+        DateTimeOffset endedAtUtc,
+        int durationMs)
     {
         var artifacts = new List<SlideShowRecordingMediaArtifact>();
         if (state.RecordingPlan.IsNarrationRequested)
@@ -279,12 +480,13 @@ public static class SlideShowRecordingExecutionPlanner
             artifacts.Add(BuildMediaArtifact(
                 state,
                 slideIndex,
+                startedAtUtc,
+                endedAtUtc,
+                durationMs,
                 SlideShowRecordingMediaArtifactKind.NarrationAudio,
-                state.HostCapabilities.CanCaptureNarration,
                 "narration",
                 "m4a",
-                "audio/mp4",
-                "Narration audio"));
+                "audio/mp4"));
         }
 
         if (state.RecordingPlan.IsMediaCaptureRequested)
@@ -292,12 +494,13 @@ public static class SlideShowRecordingExecutionPlanner
             artifacts.Add(BuildMediaArtifact(
                 state,
                 slideIndex,
+                startedAtUtc,
+                endedAtUtc,
+                durationMs,
                 SlideShowRecordingMediaArtifactKind.CameraVideo,
-                state.HostCapabilities.CanCaptureCamera,
                 "camera",
                 "mp4",
-                "video/mp4",
-                "Camera video"));
+                "video/mp4"));
         }
 
         return artifacts;
@@ -306,31 +509,36 @@ public static class SlideShowRecordingExecutionPlanner
     private static SlideShowRecordingMediaArtifact BuildMediaArtifact(
         SlideShowRecordingExecutionState state,
         int slideIndex,
+        DateTimeOffset startedAtUtc,
+        DateTimeOffset endedAtUtc,
+        int durationMs,
         SlideShowRecordingMediaArtifactKind kind,
-        bool isCaptured,
         string fileStem,
         string extension,
-        string contentType,
-        string label)
+        string contentType)
     {
         var suggestedFileName = $"slide-{slideIndex + 1:000}-{fileStem}.{extension}";
-        return isCaptured
-            ? new(
+        var result = state.ActiveCaptureBackend.CompleteCapture(
+            new SlideShowRecordingCaptureRequest(
                 kind,
                 slideIndex,
-                IsCaptured: true,
-                IsDeferred: false,
+                startedAtUtc,
+                endedAtUtc,
+                durationMs,
                 suggestedFileName,
-                contentType,
-                $"{label} captured for slide {slideIndex + 1}")
-            : new(
-                kind,
-                slideIndex,
-                IsCaptured: false,
-                IsDeferred: true,
-                suggestedFileName,
-                contentType,
-                $"{state.HostCapabilities.HostName}: {state.HostCapabilities.UnavailableReason}");
+                contentType));
+
+        return new(
+            kind,
+            slideIndex,
+            result.IsCaptured,
+            result.IsDeferred,
+            suggestedFileName,
+            contentType,
+            result.StatusText,
+            result.PackagePath,
+            result.ContentLengthBytes,
+            result.ContentSha256);
     }
 
     private static IReadOnlyList<SlideShowRecordingExecutionAction> EnterSlideActions(

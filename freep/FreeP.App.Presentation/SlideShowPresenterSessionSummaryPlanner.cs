@@ -15,7 +15,8 @@ public sealed record SlideShowPresenterRecordingSessionSummary(
     int CameraCapturedSlideCount,
     int CameraDeferredSlideCount,
     int CapturedMediaArtifactCount,
-    int DeferredMediaArtifactCount);
+    int DeferredMediaArtifactCount,
+    int PersistableMediaArtifactCount);
 
 public sealed record SlideShowPresenterInkSessionSummary(
     SlideShowInkRetentionDecision RetentionDecision,
@@ -70,7 +71,8 @@ public static class SlideShowPresenterSessionSummaryPlanner
             segments.Count(segment => segment.CameraCaptured),
             segments.Count(segment => segment.CameraRequested && !segment.CameraCaptured),
             segments.Sum(segment => segment.MediaArtifacts.Count(artifact => artifact.IsCaptured)),
-            segments.Sum(segment => segment.MediaArtifacts.Count(artifact => artifact.IsDeferred)));
+            segments.Sum(segment => segment.MediaArtifacts.Count(artifact => artifact.IsDeferred)),
+            segments.Sum(segment => segment.MediaArtifacts.Count(artifact => artifact.IsPersistable)));
     }
 
     private static SlideShowPresenterInkSessionSummary BuildInkSummary(
@@ -120,6 +122,11 @@ public static class SlideShowPresenterSessionSummaryPlanner
         if (recording.CapturedMediaArtifactCount > 0)
         {
             lines.Add($"{hostName}: {recording.CapturedMediaArtifactCount} recording media artifact(s) captured");
+        }
+
+        if (recording.PersistableMediaArtifactCount > 0)
+        {
+            lines.Add($"{hostName}: {recording.PersistableMediaArtifactCount} recording media artifact(s) ready for PPTX media persistence");
         }
 
         lines.Add(
