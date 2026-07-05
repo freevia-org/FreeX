@@ -690,6 +690,62 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
+    public void ReviewTrackingAndChanges_CommandRoutesExecuteBackedActions()
+    {
+        var editor = new DocumentView();
+        var calls = new List<string>();
+        var reviewingPaneVisible = false;
+        var registry = FreeWRibbonCommands.Build(
+            editor,
+            new RibbonStateStore(),
+            onPrintPreview: null,
+            onToggleNavPane: null,
+            isNavPaneVisible: null,
+            onToggleReadMode: null,
+            isReadModeActive: null,
+            onTogglePrintLayout: null,
+            isPrintLayoutActive: null,
+            onToggleOutlineView: null,
+            isOutlineViewActive: null,
+            onZoomDialog: null,
+            onToggleReviewingPane: () =>
+            {
+                reviewingPaneVisible = !reviewingPaneVisible;
+                calls.Add("reviewing-pane");
+            },
+            isReviewingPaneVisible: () => reviewingPaneVisible,
+            onAcceptThisChange: () => calls.Add("accept-this"),
+            onRejectThisChange: () => calls.Add("reject-this"),
+            onPreviousChange: () => calls.Add("previous-change"),
+            onNextChange: () => calls.Add("next-change"));
+
+        registry.TryGet("freew.track-changes", out var trackChanges).Should().BeTrue();
+        var trackChangesState = trackChanges.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
+        trackChangesState.GetState().IsChecked.Should().BeFalse();
+
+        trackChanges!.Execute(RibbonCommandContext.Empty);
+
+        editor.TrackChangesEnabled.Should().BeTrue();
+        trackChangesState.GetState().IsChecked.Should().BeTrue();
+
+        foreach (var commandId in new[]
+        {
+            "freew.reviewing-pane",
+            "freew.accept-this",
+            "freew.reject-this",
+            "freew.previous-change",
+            "freew.next-change"
+        })
+        {
+            registry.TryGet(commandId, out var command).Should().BeTrue($"{commandId} must route to its host-backed Review action");
+            command!.Execute(RibbonCommandContext.Empty);
+        }
+
+        reviewingPaneVisible.Should().BeTrue();
+        calls.Should().Equal("reviewing-pane", "accept-this", "reject-this", "previous-change", "next-change");
+    }
+
+    [StaFact]
     public void DesignPageBackground_ExposesWordStyleWatermarkPageColorAndPageBorders()
     {
         var definition = FreeWRibbon.Build();
