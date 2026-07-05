@@ -16,6 +16,29 @@ public sealed class FreeWRibbonParityTests
             .Equal("home", "insert", "design", "layout", "references", "mailings", "review", "view", "help", "developer");
     }
 
+    [Fact]
+    public void Wpf_profile_uses_backstage_shell_instead_of_avalonia_file_command_strip()
+    {
+        var definition = FreeWRibbon.Build();
+        var allCommandIds = definition.Tabs
+            .SelectMany(CommandIds)
+            .Concat(definition.Tabs.SelectMany(MenuCommandIds))
+            .ToArray();
+
+        definition.VisibleTabs.Select(tab => tab.Id)
+            .Should()
+            .NotContain("file", "the WPF shell opens the Backstage/File surface outside the compiled command strip");
+
+        allCommandIds.Should().NotContain(new[]
+        {
+            "freew.backstage",
+            "freew.new",
+            "freew.open",
+            "freew.import-pdf-text",
+            "freew.save",
+        });
+    }
+
     [StaFact]
     public void HelpTab_ExposesOnlyBackedFreeWLocalSupportCommands()
     {

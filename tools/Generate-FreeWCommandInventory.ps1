@@ -229,6 +229,46 @@ internal static class FreeWCommandInventory
             "Routes the shared Print Layout command through WPF stateful view-mode commands and the Avalonia host callback so the Word-style page surface can be restored from print-family view changes."),
         ["freew.print-preview"] = BackstagePrintEvidence(
             "Routes the shared Print Preview command to host-backed WPF and Avalonia preview callbacks while the Backstage evidence contract retains paired fixed-layout renderer rows."),
+        ["freew.about"] = WpfHelpShellEvidence(
+            "WPF exposes About FreeW on the desktop Help/Product tab; Avalonia intentionally omits that desktop Help tab from its compact portable shell profile."),
+        ["freew.arrange-all"] = WindowShellEvidence(
+            "WPF exposes Arrange All for desktop multi-window tiling; Avalonia keeps the portable View > Window profile to New Window and Split only."),
+        ["freew.check-updates"] = WpfHelpShellEvidence(
+            "WPF exposes Check for Updates on the desktop Help/Product tab; Avalonia intentionally omits update orchestration from its compact portable shell profile."),
+        ["freew.copy-diagnostics"] = WpfHelpShellEvidence(
+            "WPF exposes Copy Diagnostics on the desktop Help tab; Avalonia intentionally omits that desktop diagnostics shortcut from its compact portable shell profile."),
+        ["freew.feedback"] = WpfHelpShellEvidence(
+            "WPF exposes Feedback on the desktop Help tab; Avalonia intentionally omits that desktop support shortcut from its compact portable shell profile."),
+        ["freew.help-online"] = WpfHelpShellEvidence(
+            "WPF exposes Help Online on the desktop Help tab; Avalonia intentionally omits that desktop Help tab from its compact portable shell profile."),
+        ["freew.legal-notices"] = WpfHelpShellEvidence(
+            "WPF exposes Legal Notices on the desktop Help/Product tab; Avalonia intentionally omits that desktop Help tab from its compact portable shell profile."),
+        ["freew.backstage"] = AvaloniaFileShellEvidence(
+            "Avalonia exposes a compact File entry for the portable shell; WPF routes file lifecycle through its Backstage/File surface instead of this generated command id."),
+        ["freew.import-pdf-text"] = AvaloniaPdfImportEvidence(
+            "Avalonia exposes PDF text import as an explicit portable File command; WPF carries PDF/import support through file workflow and document-persistence evidence rather than this generated command id."),
+        ["freew.new"] = AvaloniaFileShellEvidence(
+            "Avalonia exposes New as a compact File command; WPF routes the same lifecycle through its Backstage/File workflow rather than this generated command id."),
+        ["freew.open"] = AvaloniaFileShellEvidence(
+            "Avalonia exposes Open as a compact File command; WPF routes the same lifecycle through its Backstage/File workflow rather than this generated command id."),
+        ["freew.save"] = AvaloniaFileShellEvidence(
+            "Avalonia exposes Save as a compact File command; WPF routes the same lifecycle through its Backstage/File workflow rather than this generated command id."),
+    };
+
+    private static readonly Dictionary<string, string> PlatformOnlyNotes = new(StringComparer.Ordinal)
+    {
+        ["freew.about"] = "Accepted host variance: WPF desktop Help/Product command backed by local About dialog; Avalonia compact shell omits the desktop Help tab.",
+        ["freew.arrange-all"] = "Accepted host variance: WPF desktop multi-window tiling command; Avalonia portable shell intentionally exposes New Window and Split without Arrange All tiling.",
+        ["freew.backstage"] = "Accepted host variance: Avalonia compact File entry opens its portable shell file surface; WPF uses the Backstage/File surface instead of this generated command id.",
+        ["freew.check-updates"] = "Accepted host variance: WPF desktop Help/Product update command; Avalonia compact shell omits update orchestration from the ribbon profile.",
+        ["freew.copy-diagnostics"] = "Accepted host variance: WPF desktop diagnostics shortcut on Help; Avalonia compact shell omits the desktop Help tab.",
+        ["freew.feedback"] = "Accepted host variance: WPF desktop support shortcut on Help; Avalonia compact shell omits the desktop Help tab.",
+        ["freew.help-online"] = "Accepted host variance: WPF desktop Help shortcut; Avalonia compact shell omits the desktop Help tab.",
+        ["freew.import-pdf-text"] = "Accepted host variance: Avalonia compact File command makes PDF text import explicit; WPF covers PDF/import through file workflow and document-persistence evidence.",
+        ["freew.legal-notices"] = "Accepted host variance: WPF desktop Help/Product legal dialog; Avalonia compact shell omits the desktop Help tab.",
+        ["freew.new"] = "Accepted host variance: Avalonia compact File command; WPF routes New through Backstage/File lifecycle workflow instead of this generated command id.",
+        ["freew.open"] = "Accepted host variance: Avalonia compact File command; WPF routes Open through Backstage/File lifecycle workflow instead of this generated command id.",
+        ["freew.save"] = "Accepted host variance: Avalonia compact File command; WPF routes Save through Backstage/File lifecycle workflow instead of this generated command id.",
     };
 
     public static InventoryDocument Build(string repoRoot)
@@ -394,6 +434,54 @@ internal static class FreeWCommandInventory
                 Path: "freew/FreeW.App.Avalonia.Tests/ViewTabDepthTests.cs",
                 Test: "ViewTabDepthTests.Print_layout_command_invokes_host_callback"));
 
+    private static CommandBehaviorEvidence WpfHelpShellEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.platform-only.wpf-help-shell",
+            Slice: "WPF Help shell variance",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
+                Test: "FreeWRibbonParityTests.HelpTab_ExposesOnlyBackedFreeWLocalSupportCommands"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
+                Test: "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent"));
+
+    private static CommandBehaviorEvidence WindowShellEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.platform-only.window-shell",
+            Slice: "Window-management shell variance",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
+                Test: "FreeWRibbonParityTests.View_Window_NewWindowAndArrangeAll_AreBacked"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
+                Test: "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent"));
+
+    private static CommandBehaviorEvidence AvaloniaFileShellEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.platform-only.avalonia-file-shell",
+            Slice: "Avalonia compact File shell variance",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
+                Test: "FreeWRibbonParityTests.Wpf_profile_uses_backstage_shell_instead_of_avalonia_file_command_strip"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
+                Test: "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent"));
+
+    private static CommandBehaviorEvidence AvaloniaPdfImportEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.platform-only.pdf-import-shell",
+            Slice: "PDF import shell variance",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/DocumentPersistenceWorkflowTests.cs",
+                Test: "DocumentPersistenceWorkflowTests.ImportPdfText_UsesExplicitImportAdaptersOutsideNormalOpenSaveCatalog"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
+                Test: "RibbonAndDocumentTests.Import_pdf_ribbon_command_invokes_host_route"));
+
     private static IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> Collect(RibbonDefinition definition, string profile)
     {
         var locations = new Dictionary<string, List<CommandLocation>>(StringComparer.Ordinal);
@@ -528,7 +616,11 @@ internal static class FreeWCommandInventory
             return new GapClassification("command-id-alias", "command-id-alias", "Other profile exposes the same or closest command intent under a different generated command id.");
 
         if (IsPlatformOnly(commandId, locations))
-            return new GapClassification("platform-only", "platform-only", "Host, shell, or desktop-only command; track separately from shared Word behavior gaps.");
+            return new GapClassification(
+                "platform-only",
+                "platform-only",
+                PlatformOnlyNotes.GetValueOrDefault(commandId) ??
+                    "Host, shell, or desktop-only command; track separately from shared Word behavior gaps.");
 
         if (IsDeferred(commandId, locations))
             return new GapClassification("deferred", "deferred", "Known richer Word slice that is intentionally outside the current generated Avalonia profile surface.");

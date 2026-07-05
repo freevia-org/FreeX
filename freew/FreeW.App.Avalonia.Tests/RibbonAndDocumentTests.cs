@@ -44,6 +44,50 @@ public class RibbonAndDocumentTests
             .Select(id => id!.Value.Value)
             .Should().Contain(new[] { "freew.open", "freew.save", "freew.import-pdf-text" });
     }
+
+    [Fact]
+    public void Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent()
+    {
+        var definition = FreeWRibbon.BuildDefinition();
+        var registry = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), NoopCallbacks());
+        var commandIds = CommandIds(definition).Select(id => id.Value).ToArray();
+
+        commandIds.Should().Contain(new[]
+        {
+            "freew.backstage",
+            "freew.new",
+            "freew.open",
+            "freew.import-pdf-text",
+            "freew.save",
+        });
+
+        foreach (var id in new[]
+                 {
+                     "freew.backstage",
+                     "freew.new",
+                     "freew.open",
+                     "freew.import-pdf-text",
+                     "freew.save",
+                 })
+            registry.TryGet(new RibbonCommandId(id), out _)
+                .Should().BeTrue($"Avalonia compact File shell command '{id}' must be host-backed");
+
+        definition.Tabs.Select(tab => tab.Id)
+            .Should()
+            .NotContain("help", "the portable Avalonia shell intentionally omits WPF's desktop Help/Product tab");
+
+        commandIds.Should().NotContain(new[]
+        {
+            "freew.help-online",
+            "freew.feedback",
+            "freew.copy-diagnostics",
+            "freew.check-updates",
+            "freew.about",
+            "freew.legal-notices",
+            "freew.arrange-all",
+        });
+    }
+
     [Fact]
     public void Every_ribbon_command_id_is_registered()
     {

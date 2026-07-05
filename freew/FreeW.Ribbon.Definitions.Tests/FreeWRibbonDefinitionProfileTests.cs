@@ -436,6 +436,124 @@ public sealed class FreeWRibbonDefinitionProfileTests
         AssertGapClassification(commands, "freew.cc-combo", "shared-profile");
         AssertGapClassification(commands, "freew.add-to-dictionary", "shared-profile");
         AssertGapClassification(commands, "freew.split", "command-id-alias");
+        var platformOnlyRows = commands
+            .Where(command => command.GetProperty("gapClassification").GetString() == "platform-only")
+            .ToArray();
+        platformOnlyRows.Select(command => command.GetProperty("commandId").GetString()!)
+            .Should()
+            .BeEquivalentTo(new[]
+            {
+                "freew.about",
+                "freew.arrange-all",
+                "freew.backstage",
+                "freew.check-updates",
+                "freew.copy-diagnostics",
+                "freew.feedback",
+                "freew.help-online",
+                "freew.import-pdf-text",
+                "freew.legal-notices",
+                "freew.new",
+                "freew.open",
+                "freew.save",
+            });
+        foreach (var row in platformOnlyRows)
+        {
+            row.TryGetProperty("behaviorEvidence", out var _)
+                .Should()
+                .BeTrue("platform-only FreeW rows must carry command-specific evidence so they are not ambiguous parity blockers");
+        }
+        AssertPlatformOnlyNote(commands, "freew.about", "WPF desktop Help/Product command");
+        AssertPlatformOnlyNote(commands, "freew.arrange-all", "WPF desktop multi-window tiling command");
+        AssertPlatformOnlyNote(commands, "freew.backstage", "Avalonia compact File entry");
+        AssertPlatformOnlyNote(commands, "freew.check-updates", "WPF desktop Help/Product update command");
+        AssertPlatformOnlyNote(commands, "freew.copy-diagnostics", "WPF desktop diagnostics shortcut");
+        AssertPlatformOnlyNote(commands, "freew.feedback", "WPF desktop support shortcut");
+        AssertPlatformOnlyNote(commands, "freew.help-online", "WPF desktop Help shortcut");
+        AssertPlatformOnlyNote(commands, "freew.import-pdf-text", "Avalonia compact File command makes PDF text import explicit");
+        AssertPlatformOnlyNote(commands, "freew.legal-notices", "WPF desktop Help/Product legal dialog");
+        AssertPlatformOnlyNote(commands, "freew.new", "Avalonia compact File command");
+        AssertPlatformOnlyNote(commands, "freew.open", "Avalonia compact File command");
+        AssertPlatformOnlyNote(commands, "freew.save", "Avalonia compact File command");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.about",
+            "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
+            "FreeWRibbonParityTests.HelpTab_ExposesOnlyBackedFreeWLocalSupportCommands",
+            "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
+            "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent",
+            "freew.platform-only.wpf-help-shell",
+            "WPF Help shell variance",
+            "platform-only");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.check-updates",
+            "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
+            "FreeWRibbonParityTests.HelpTab_ExposesOnlyBackedFreeWLocalSupportCommands",
+            "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
+            "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent",
+            "freew.platform-only.wpf-help-shell",
+            "WPF Help shell variance",
+            "platform-only");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.help-online",
+            "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
+            "FreeWRibbonParityTests.HelpTab_ExposesOnlyBackedFreeWLocalSupportCommands",
+            "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
+            "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent",
+            "freew.platform-only.wpf-help-shell",
+            "WPF Help shell variance",
+            "platform-only");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.arrange-all",
+            "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
+            "FreeWRibbonParityTests.View_Window_NewWindowAndArrangeAll_AreBacked",
+            "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
+            "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent",
+            "freew.platform-only.window-shell",
+            "Window-management shell variance",
+            "platform-only");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.backstage",
+            "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
+            "FreeWRibbonParityTests.Wpf_profile_uses_backstage_shell_instead_of_avalonia_file_command_strip",
+            "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
+            "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent",
+            "freew.platform-only.avalonia-file-shell",
+            "Avalonia compact File shell variance",
+            "platform-only");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.import-pdf-text",
+            "freew/FreeW.App.Presentation.Tests/DocumentPersistenceWorkflowTests.cs",
+            "DocumentPersistenceWorkflowTests.ImportPdfText_UsesExplicitImportAdaptersOutsideNormalOpenSaveCatalog",
+            "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
+            "RibbonAndDocumentTests.Import_pdf_ribbon_command_invokes_host_route",
+            "freew.platform-only.pdf-import-shell",
+            "PDF import shell variance",
+            "platform-only");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.new",
+            "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
+            "FreeWRibbonParityTests.Wpf_profile_uses_backstage_shell_instead_of_avalonia_file_command_strip",
+            "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
+            "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent",
+            "freew.platform-only.avalonia-file-shell",
+            "Avalonia compact File shell variance",
+            "platform-only");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.save",
+            "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
+            "FreeWRibbonParityTests.Wpf_profile_uses_backstage_shell_instead_of_avalonia_file_command_strip",
+            "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
+            "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent",
+            "freew.platform-only.avalonia-file-shell",
+            "Avalonia compact File shell variance",
+            "platform-only");
         AssertBehaviorEvidence(
             commands,
             "freew.delete-comment",
@@ -1317,6 +1435,20 @@ public sealed class FreeWRibbonDefinitionProfileTests
         command.GetProperty("gapClassification").GetString().Should().Be(expectedClassification);
     }
 
+    private static void AssertPlatformOnlyNote(
+        IReadOnlyList<JsonElement> commands,
+        string commandId,
+        string expectedNoteFragment)
+    {
+        var command = commands.Single(candidate =>
+            candidate.GetProperty("commandId").GetString() == commandId);
+
+        command.GetProperty("gapClassification").GetString().Should().Be("platform-only");
+        command.GetProperty("notes").GetString().Should().Contain(expectedNoteFragment);
+        command.GetProperty("notes").GetString().Should().NotBe(
+            "Host, shell, or desktop-only command; track separately from shared Word behavior gaps.");
+    }
+
     private static void AssertBehaviorEvidence(
         IReadOnlyList<JsonElement> commands,
         string commandId,
@@ -1325,11 +1457,12 @@ public sealed class FreeWRibbonDefinitionProfileTests
         string expectedAvaloniaPath,
         string expectedAvaloniaTest,
         string expectedEvidenceId = "freew.review-comments.shared-behavior",
-        string expectedSlice = "Review comments")
+        string expectedSlice = "Review comments",
+        string expectedGapClassification = "shared-profile")
     {
         var command = commands.Single(candidate =>
             candidate.GetProperty("commandId").GetString() == commandId);
-        command.GetProperty("gapClassification").GetString().Should().Be("shared-profile");
+        command.GetProperty("gapClassification").GetString().Should().Be(expectedGapClassification);
 
         var evidence = command.GetProperty("behaviorEvidence");
         evidence.GetProperty("evidenceId").GetString().Should().Be(expectedEvidenceId);
