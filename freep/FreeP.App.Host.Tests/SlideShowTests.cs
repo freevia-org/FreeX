@@ -540,6 +540,62 @@ public sealed class SlideShowWindowTests
     }
 
     [StaFact]
+    public void SlideShowWindow_RecordingCaptureBackend_UsesInjectedWpfAdapter()
+    {
+        var pres = MakePresentation("Intro", "Next");
+        var backend = new SlideShowDeterministicRecordingCaptureBackend(
+            "WPF deterministic capture adapter",
+            "ppt/media/freep-recordings/wpf");
+        var started = new DateTimeOffset(2026, 7, 6, 9, 0, 0, TimeSpan.Zero);
+
+        var window = new SlideShowWindow(pres, startIndex: 0, backend);
+        try
+        {
+            window.RecordingCaptureAdapterReadiness.HostName.Should()
+                .Be("WPF deterministic capture adapter");
+
+            window.ApplyPresenterToolIntent(
+                SlideShowTimingIntent.RecordTimings,
+                SlideShowRecordingMediaIntent.NarrationAndMedia,
+                nowUtc: started);
+            window.ExecuteAdvance(started.AddMilliseconds(1800));
+
+            var review = window.RecordingReviewPlan;
+
+            review.HostName.Should().Be("WPF deterministic capture adapter");
+            review.CapturedMediaArtifactCount.Should().Be(2);
+            review.DeferredMediaArtifactCount.Should().Be(0);
+            review.PersistableMediaArtifactCount.Should().Be(2);
+            review.Rows.Single().MediaArtifacts.Should().OnlyContain(artifact =>
+                artifact.IsCaptured &&
+                !artifact.IsDeferred &&
+                artifact.IsPersistable &&
+                artifact.PackagePath.StartsWith("ppt/media/freep-recordings/wpf/", StringComparison.Ordinal));
+
+            window.ApplyPresenterToolIntent(nowUtc: started.AddMilliseconds(1800));
+            window.Close();
+
+            var mediaArtifacts = pres.RecordingMediaArtifacts
+                .Where(artifact => artifact.Kind is
+                    PresentationRecordingMediaArtifactKind.NarrationAudio or
+                    PresentationRecordingMediaArtifactKind.CameraVideo)
+                .ToArray();
+            mediaArtifacts.Should().HaveCount(4);
+            mediaArtifacts.Select(artifact => artifact.PackagePath)
+                .Should().Contain("ppt/media/freep-recordings/wpf/slide-001-narration.m4a");
+            mediaArtifacts.Select(artifact => artifact.PackagePath)
+                .Should().Contain("ppt/media/freep-recordings/wpf/slide-001-camera.mp4");
+        }
+        finally
+        {
+            if (!window.IsPresenterSessionClosed)
+            {
+                window.Close();
+            }
+        }
+    }
+
+    [StaFact]
     public void SlideShowWindow_Advance_PastLastSlide_DoesNotThrow()
     {
         var pres = Presentation.CreateEmpty();

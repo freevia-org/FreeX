@@ -484,6 +484,52 @@ public sealed class SlideShowWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlideShowWindow_recording_capture_backend_uses_injected_avalonia_adapter()
+    {
+        SlideShowRecordingReviewPlan? review = null;
+        string? readinessHost = null;
+        int persistedMediaArtifactCount = -1;
+        var started = new DateTimeOffset(2026, 7, 6, 9, 0, 0, TimeSpan.Zero);
+        var ran = await OnUiThread(() =>
+        {
+            var pres = MakePresentation(2);
+            var backend = new SlideShowDeterministicRecordingCaptureBackend(
+                "Avalonia deterministic capture adapter",
+                "ppt/media/freep-recordings/avalonia");
+            var window = new SlideShowWindow(pres, startIndex: 0, backend);
+            readinessHost = window.RecordingCaptureAdapterReadiness.HostName;
+
+            window.ApplyPresenterToolIntent(
+                SlideShowTimingIntent.RecordTimings,
+                SlideShowRecordingMediaIntent.NarrationAndMedia,
+                nowUtc: started);
+            window.ExecuteAdvance(started.AddMilliseconds(1800));
+
+            review = window.RecordingReviewPlan;
+            window.ApplyPresenterToolIntent(nowUtc: started.AddMilliseconds(1800));
+            window.Close();
+            persistedMediaArtifactCount = pres.RecordingMediaArtifacts.Count(artifact =>
+                artifact.Kind is
+                    PresentationRecordingMediaArtifactKind.NarrationAudio or
+                    PresentationRecordingMediaArtifactKind.CameraVideo);
+        });
+
+        if (!ran) return;
+        readinessHost.Should().Be("Avalonia deterministic capture adapter");
+        review.Should().NotBeNull();
+        review!.HostName.Should().Be("Avalonia deterministic capture adapter");
+        review.CapturedMediaArtifactCount.Should().Be(2);
+        review.DeferredMediaArtifactCount.Should().Be(0);
+        review.PersistableMediaArtifactCount.Should().Be(2);
+        review.Rows.Single().MediaArtifacts.Should().OnlyContain(artifact =>
+            artifact.IsCaptured &&
+            !artifact.IsDeferred &&
+            artifact.IsPersistable &&
+            artifact.PackagePath.StartsWith("ppt/media/freep-recordings/avalonia/", StringComparison.Ordinal));
+        persistedMediaArtifactCount.Should().Be(4);
+    }
+
+    [Fact]
     public async Task SlideShowWindow_InkClear_uses_shared_clear_plan()
     {
         SlideShowInkExecutionResult? clear = null;
