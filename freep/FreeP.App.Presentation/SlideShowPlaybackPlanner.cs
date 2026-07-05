@@ -303,7 +303,9 @@ public static class SlideShowPlaybackPlanner
 
     private static int ResolveGeometricMaskSpokeCount(ShapeAnimation animation) =>
         animation.Preset == AnimationPreset.Wheel
-            ? WheelSpokeCount
+            ? animation.WheelSpokeCount is > 0
+                ? animation.WheelSpokeCount.Value
+                : WheelSpokeCount
             : 0;
 
     private static bool ExpandsFromCenter(ShapeAnimation animation) =>

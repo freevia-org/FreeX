@@ -1955,6 +1955,52 @@ public sealed class Shape3dAndMotionRegressionTests
             "AfterPrevious trigger must survive round-trip");
     }
 
+    // Wheel spoke metadata writes and reads through the PPTX timing tree.
+
+    [Fact]
+    public void WheelAnimation_SpokeCount_RoundTripsAndWritesFilter()
+    {
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 2,
+            Name = "WheelTarget",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 914400,
+        });
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 2,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Wheel,
+            DurationMs = 700,
+            WheelSpokeCount = 8,
+        });
+
+        var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+
+        using (var archive = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var slideXmlEntry = archive.GetEntry("ppt/slides/slide1.xml");
+            slideXmlEntry.Should().NotBeNull();
+            using var reader = new StreamReader(slideXmlEntry!.Open());
+            var slideXml = reader.ReadToEnd();
+            slideXml.Should().Contain("wheel(spokes=8)");
+        }
+
+        ms.Position = 0;
+        var loaded = PptxPackageReader.Read(ms);
+
+        var anim = loaded.Slides[0].Animations.Single(a => a.Preset == AnimationPreset.Wheel);
+        anim.WheelSpokeCount.Should().Be(8);
+        anim.DurationMs.Should().Be(700);
+    }
+
     // ── U4: packed path strings ("M0 0 L.5 0 E") parse to correct segments ───────
 
     [Fact]

@@ -398,6 +398,7 @@ public sealed class SlideShowPlaybackPlannerTests
                 Kind = AnimationKind.Entrance,
                 Preset = AnimationPreset.Wheel,
                 Direction = AnimationDirection.In,
+                WheelSpokeCount = 8,
                 DurationMs = 285
             },
             startDelayMs: 25);
@@ -405,7 +406,7 @@ public sealed class SlideShowPlaybackPlannerTests
         wheelIn.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Wheel);
         wheelIn.GeometricMaskKind.Should().Be(SlideShowGeometricMaskKind.Wheel);
         wheelIn.GeometricMaskExpandsFromCenter.Should().BeTrue();
-        wheelIn.GeometricMaskSpokeCount.Should().Be(SlideShowPlaybackPlanner.WheelSpokeCount);
+        wheelIn.GeometricMaskSpokeCount.Should().Be(8);
         wheelIn.DurationMs.Should().Be(285);
         wheelIn.DelayMs.Should().Be(25);
         wheelIn.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.OnComplete);
@@ -416,7 +417,8 @@ public sealed class SlideShowPlaybackPlannerTests
                 ShapeId = 20,
                 Kind = AnimationKind.Exit,
                 Preset = AnimationPreset.Wheel,
-                Direction = AnimationDirection.Out
+                Direction = AnimationDirection.Out,
+                WheelSpokeCount = 0
             },
             startDelayMs: 0);
 

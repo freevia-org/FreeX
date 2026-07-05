@@ -628,6 +628,53 @@ public class TransitionAnimationTests
     // ── AF1: import from real PowerPoint — dur lives inside p:cBhvr, not bare p:cTn ──────────
 
     /// <summary>
+    /// Wheel preset metadata emitted by PowerPoint on p:animEffect/filter must flow into ShapeAnimation.
+    /// </summary>
+    [Fact]
+    public void Import_RealPowerPoint_WheelAnimation_SpokeCount_ReadFromAnimEffectFilter()
+    {
+        const string presNs = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        XNamespace pNs = presNs;
+
+        var buildPar = new XElement(pNs + "par",
+            new XElement(pNs + "cTn",
+                new XAttribute("presetClass", "entr"),
+                new XAttribute("presetID", "19"),
+                new XAttribute("presetSubtype", "0"),
+                new XAttribute("fill", "hold"),
+                new XAttribute("grpId", "0"),
+                new XAttribute("nodeType", "withEffect"),
+                new XElement(pNs + "stCondLst",
+                    new XElement(pNs + "cond", new XAttribute("delay", "indefinite"))),
+                new XElement(pNs + "childTnLst",
+                    new XElement(pNs + "par",
+                        new XElement(pNs + "cTn",
+                            new XAttribute("fill", "hold"),
+                            new XElement(pNs + "stCondLst",
+                                new XElement(pNs + "cond", new XAttribute("delay", "0"))),
+                            new XElement(pNs + "childTnLst",
+                                new XElement(pNs + "animEffect",
+                                    new XAttribute("filter", "wheel(spokes=8)"),
+                                    new XElement(pNs + "cBhvr",
+                                        new XElement(pNs + "cTn",
+                                            new XAttribute("dur", "2000")),
+                                        new XElement(pNs + "tgtEl",
+                                            new XElement(pNs + "spTgt",
+                                                new XAttribute("spid", "1")))))))))));
+
+        var timingEl = BuildMinimalTimingWithBuildPar(pNs, buildPar);
+        var pptxBytes = BuildMinimalPptxWithTiming(timingEl);
+        using var ms = new MemoryStream(pptxBytes);
+
+        var loaded = PptxPackageReader.Read(ms);
+
+        Assert.Single(loaded.Slides[0].Animations);
+        var anim = loaded.Slides[0].Animations[0];
+        Assert.Equal(AnimationPreset.Wheel, anim.Preset);
+        Assert.Equal(8, anim.WheelSpokeCount);
+    }
+
+    /// <summary>
     /// AF1: ReadBuildItem must read DurationMs from a real-PowerPoint-shaped preset animation where
     /// the inner childTnLst contains p:animEffect (not a bare p:cTn), and the actual duration is on
     /// the p:cTn inside p:animEffect &gt; p:cBhvr. The AC2 structural-primary path finds no direct
