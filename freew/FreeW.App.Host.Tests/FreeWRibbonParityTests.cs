@@ -628,6 +628,39 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
+    public void ReviewProofing_CommandsRouteToBackedActions()
+    {
+        var definition = FreeWRibbon.Build();
+        var proofing = definition.FindTab("review")!.FindGroup("proofing");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        CommandIds(proofing!)
+            .Should()
+            .Equal(
+                "freew.statistics",
+                "freew.spellcheck-toggle",
+                "freew.add-to-dictionary",
+                "freew.thesaurus",
+                "freew.set-proofing-language");
+
+        Labels(proofing!)
+            .Should()
+            .Equal(
+                "Word Count",
+                "Spelling & Grammar",
+                "Add to Dictionary",
+                "Thesaurus",
+                "Set Proofing Language");
+
+        foreach (var commandId in CommandIds(proofing!))
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from Review > Proofing");
+
+        registry.TryGet("freew.spellcheck-toggle", out var spellcheck).Should().BeTrue();
+        spellcheck.Should().BeAssignableTo<IRibbonStatefulCommand>();
+    }
+
+    [StaFact]
     public void ReviewTab_GroupsBackedCommandsLikeWord()
     {
         var definition = FreeWRibbon.Build();
