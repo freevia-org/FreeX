@@ -166,6 +166,8 @@ public sealed class SlideShowWindowHeadlessTests
         firstSlideInkCount.Should().Be(0);
         inkXml.Should().Contain("freep:sourceSlideId=\"appendix-slide\"");
         inkXml.Should().Contain("freep:customShowName=\"Executive review\"");
+        inkXml.Should().Contain("freep:playbackSlideCount=\"2\"");
+        inkXml.Should().Contain("freep:sourceSlideOccurrenceIndex=\"0\"");
     }
 
     [Fact]

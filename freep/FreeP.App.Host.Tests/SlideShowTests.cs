@@ -458,6 +458,8 @@ public sealed class SlideShowWindowTests
         var inkXml = Encoding.UTF8.GetString(ink.PreservedObject!.Parts.Single().Value);
         inkXml.Should().Contain("freep:sourceSlideId=\"appendix-slide\"");
         inkXml.Should().Contain("freep:customShowName=\"Executive review\"");
+        inkXml.Should().Contain("freep:playbackSlideCount=\"2\"");
+        inkXml.Should().Contain("freep:sourceSlideOccurrenceIndex=\"0\"");
         pres.Slides[0].Shapes.Should().NotContain(shape => shape.Kind == SlideShapeKind.Ink);
     }
 
