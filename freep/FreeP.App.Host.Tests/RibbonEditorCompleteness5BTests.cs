@@ -385,6 +385,12 @@ public class RibbonEditorCompleteness5BTests
         Exec(reg, HeaderFooterCommandPlanner.SlideNumberCommandId);
 
         Assert.True(pres.Slides[0].HfVisibility!.ShowSlideNum);
+        var slideNumber = Assert.Single(
+            pres.Slides[0].Shapes,
+            shape => shape.Placeholder?.Type == PlaceholderType.SlideNumber);
+        Assert.Equal("slidenum", slideNumber.TextBody?.Paragraphs
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single().Field?.FieldType);
     }
 
     // ── Command: insert table ─────────────────────────────────────────────────────

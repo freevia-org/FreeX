@@ -54,7 +54,6 @@ public sealed class HeaderFooterCommandRoutingTests
         var ran = await OnUiThread(() =>
         {
             var window = new MainWindow(Array.Empty<string>());
-            window.Editor.Presentation.Slides[0].Shapes.Add(FooterShape("Old"));
 
             Execute(window.BuildCommandRegistry(), HeaderFooterCommandPlanner.HeaderFooterCommandId);
             window.ApplyHeaderFooterForTests(
@@ -67,6 +66,7 @@ public sealed class HeaderFooterCommandRoutingTests
             var slide = window.Editor.Presentation.Slides[0];
             flags = slide.HfVisibility;
             footer = slide.Shapes
+                .Where(shape => shape.Placeholder?.Type == PlaceholderType.Footer)
                 .SelectMany(shape => shape.TextBody?.Paragraphs ?? [])
                 .SelectMany(paragraph => paragraph.Runs)
                 .Single(run => run.Field?.FieldType == "footer")
@@ -152,23 +152,4 @@ public sealed class HeaderFooterCommandRoutingTests
         command!.Execute(context ?? RibbonCommandContext.Empty);
     }
 
-    private static SlideShape FooterShape(string text)
-    {
-        var body = new TextBody();
-        var paragraph = new Paragraph();
-        paragraph.Runs.Add(new Run
-        {
-            Text = text,
-            Field = new FieldRun { FieldType = "footer", CachedText = text },
-        });
-        body.Paragraphs.Add(paragraph);
-
-        return new SlideShape
-        {
-            Id = 500,
-            Kind = SlideShapeKind.AutoShape,
-            Placeholder = new Placeholder { Type = PlaceholderType.Footer },
-            TextBody = body,
-        };
-    }
 }

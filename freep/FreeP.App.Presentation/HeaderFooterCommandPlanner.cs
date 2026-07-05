@@ -1,3 +1,4 @@
+using Free.Shared.Drawing;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -44,8 +45,8 @@ public static class HeaderFooterCommandPlanner
     public const string DateTimeCommandId = "freep.date-time";
     public const string SlideNumberCommandId = "freep.slide-number";
 
-    public const string ExistingPlaceholderLimitation =
-        "Applies visibility and updates existing footer/date/slide-number placeholders; missing placeholders are not inserted in this slice.";
+    public const string PlaceholderCreationEvidence =
+        "Creates missing slide footer/date/slide-number placeholders with shared fallback geometry; PowerPoint-authoritative visual/layout baselines remain deferred.";
 
     public static HeaderFooterState BuildState(EditingSession editor)
     {
@@ -122,7 +123,7 @@ public static class HeaderFooterCommandPlanner
             targets.Count > 0,
             options with { FooterText = options.FooterText ?? string.Empty },
             targets,
-            ExistingPlaceholderLimitation);
+            null);
     }
 
     public static bool TryApply(
@@ -181,7 +182,7 @@ public static class HeaderFooterCommandPlanner
             : Array.Empty<int>();
     }
 
-    private static void ApplyToSlide(Slide slide, HeaderFooterApplyOptions options)
+    private static void ApplyToSlide(Presentation presentation, Slide slide, HeaderFooterApplyOptions options)
     {
         slide.HfVisibility = new HfFlags
         {
@@ -190,6 +191,37 @@ public static class HeaderFooterCommandPlanner
             ShowSlideNum = options.ShowSlideNumber,
             ShowHeader = slide.HfVisibility?.ShowHeader ?? false
         };
+
+        var nextShapeId = NextShapeId(slide);
+        if (options.ShowDateTime)
+        {
+            var dateShape = EnsureHeaderFooterShape(
+                presentation,
+                slide,
+                HeaderFooterFieldKind.DateTime,
+                ref nextShapeId);
+            EnsureSingleFieldRun(dateShape, "datetime1", string.Empty);
+        }
+
+        if (options.ShowFooter)
+        {
+            var footerShape = EnsureHeaderFooterShape(
+                presentation,
+                slide,
+                HeaderFooterFieldKind.Footer,
+                ref nextShapeId);
+            ApplyFooterText(footerShape, options.FooterText);
+        }
+
+        if (options.ShowSlideNumber)
+        {
+            var slideNumberShape = EnsureHeaderFooterShape(
+                presentation,
+                slide,
+                HeaderFooterFieldKind.SlideNumber,
+                ref nextShapeId);
+            EnsureSingleFieldRun(slideNumberShape, "slidenum", string.Empty);
+        }
 
         foreach (var shape in Flatten(slide.Shapes))
         {
@@ -206,6 +238,131 @@ public static class HeaderFooterCommandPlanner
                     break;
             }
         }
+    }
+
+    private static SlideShape EnsureHeaderFooterShape(
+        Presentation presentation,
+        Slide slide,
+        HeaderFooterFieldKind kind,
+        ref uint nextShapeId)
+    {
+        var existing = FindHeaderFooterShape(slide, kind);
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        var shape = CreateHeaderFooterShape(
+            presentation,
+            slide,
+            kind,
+            nextShapeId);
+        slide.Shapes.Add(shape);
+        nextShapeId = nextShapeId >= uint.MaxValue ? uint.MaxValue : nextShapeId + 1;
+        return shape;
+    }
+
+    private static SlideShape CreateHeaderFooterShape(
+        Presentation presentation,
+        Slide slide,
+        HeaderFooterFieldKind kind,
+        uint shapeId)
+    {
+        var shape = new SlideShape
+        {
+            Id = shapeId,
+            Name = HeaderFooterShapeName(kind, shapeId),
+            Kind = SlideShapeKind.AutoShape,
+            Placeholder = new Placeholder
+            {
+                Type = ToPlaceholderType(kind),
+                Idx = HeaderFooterPlaceholderIndex(kind)
+            },
+            TextBody = new TextBody()
+        };
+
+        if (!HasInheritedHeaderFooterGeometry(presentation, slide, shape.Placeholder))
+        {
+            ApplyFallbackGeometry(presentation, kind, shape);
+        }
+
+        return shape;
+    }
+
+    private static bool HasInheritedHeaderFooterGeometry(
+        Presentation presentation,
+        Slide slide,
+        Placeholder placeholder)
+    {
+        var layoutShape = PlaceholderResolver.FindLayoutPlaceholder(placeholder, slide, presentation);
+        if (layoutShape is not null && (layoutShape.ExtentCxEmu > 0 || layoutShape.ExtentCyEmu > 0))
+        {
+            return true;
+        }
+
+        var masterShape = PlaceholderResolver.FindMasterPlaceholder(placeholder, slide, presentation);
+        return masterShape is not null && (masterShape.ExtentCxEmu > 0 || masterShape.ExtentCyEmu > 0);
+    }
+
+    private static void ApplyFallbackGeometry(
+        Presentation presentation,
+        HeaderFooterFieldKind kind,
+        SlideShape shape)
+    {
+        var slideWidth = Math.Max(1, presentation.SlideSizeCxEmu);
+        var slideHeight = Math.Max(1, presentation.SlideSizeCyEmu);
+        var marginX = Math.Max(1, slideWidth / 20);
+        var marginBottom = Math.Max(1, slideHeight / 18);
+        var height = Math.Max(1, slideHeight / 18);
+        var footerTop = Math.Max(0, slideHeight - marginBottom - height);
+        var columnGap = Math.Max(1, slideWidth / 80);
+        var sideWidth = Math.Max(1, slideWidth / 4);
+        var centerWidth = Math.Max(1, slideWidth - (marginX * 2) - (sideWidth * 2) - (columnGap * 2));
+
+        shape.OffsetYEmu = footerTop;
+        shape.ExtentCyEmu = height;
+
+        switch (kind)
+        {
+            case HeaderFooterFieldKind.DateTime:
+                shape.OffsetXEmu = marginX;
+                shape.ExtentCxEmu = sideWidth;
+                break;
+            case HeaderFooterFieldKind.SlideNumber:
+                shape.OffsetXEmu = Math.Max(0, slideWidth - marginX - sideWidth);
+                shape.ExtentCxEmu = sideWidth;
+                break;
+            case HeaderFooterFieldKind.Footer:
+                shape.OffsetXEmu = marginX + sideWidth + columnGap;
+                shape.ExtentCxEmu = centerWidth;
+                break;
+        }
+    }
+
+    private static uint NextShapeId(Slide slide)
+    {
+        var max = MaxShapeId(slide.Shapes);
+        return max >= uint.MaxValue ? uint.MaxValue : max + 1;
+    }
+
+    private static uint MaxShapeId(IEnumerable<SlideShape> shapes)
+    {
+        uint max = 0;
+        foreach (var shape in shapes)
+        {
+            if (shape.Id > max)
+            {
+                max = shape.Id;
+            }
+
+            var childMax = MaxShapeId(shape.Children);
+            if (childMax > max)
+            {
+                max = childMax;
+            }
+        }
+
+        return max;
     }
 
     private static void ApplyFooterText(SlideShape shape, string footerText)
@@ -278,6 +435,33 @@ public static class HeaderFooterCommandPlanner
 
     private static bool HasHeaderFooterShape(Slide slide, HeaderFooterFieldKind kind) =>
         Flatten(slide.Shapes).Any(shape => GetHeaderFooterKind(shape) == kind);
+
+    private static SlideShape? FindHeaderFooterShape(Slide slide, HeaderFooterFieldKind kind) =>
+        Flatten(slide.Shapes).FirstOrDefault(shape => GetHeaderFooterKind(shape) == kind);
+
+    private static PlaceholderType ToPlaceholderType(HeaderFooterFieldKind kind) => kind switch
+    {
+        HeaderFooterFieldKind.DateTime => PlaceholderType.DateTime,
+        HeaderFooterFieldKind.Footer => PlaceholderType.Footer,
+        HeaderFooterFieldKind.SlideNumber => PlaceholderType.SlideNumber,
+        _ => PlaceholderType.Body
+    };
+
+    private static int HeaderFooterPlaceholderIndex(HeaderFooterFieldKind kind) => kind switch
+    {
+        HeaderFooterFieldKind.DateTime => 10,
+        HeaderFooterFieldKind.Footer => 11,
+        HeaderFooterFieldKind.SlideNumber => 12,
+        _ => 0
+    };
+
+    private static string HeaderFooterShapeName(HeaderFooterFieldKind kind, uint shapeId) => kind switch
+    {
+        HeaderFooterFieldKind.DateTime => $"Date Placeholder {shapeId}",
+        HeaderFooterFieldKind.Footer => $"Footer Placeholder {shapeId}",
+        HeaderFooterFieldKind.SlideNumber => $"Slide Number Placeholder {shapeId}",
+        _ => $"Placeholder {shapeId}"
+    };
 
     private static HeaderFooterFieldKind GetHeaderFooterKind(SlideShape shape)
     {
@@ -377,7 +561,7 @@ public static class HeaderFooterCommandPlanner
                 {
                     _before[index] = SlideCloner.CloneSlide(presentation.Slides[index]);
                     var updated = SlideCloner.CloneSlide(presentation.Slides[index]);
-                    ApplyToSlide(updated, _plan.Options);
+                    ApplyToSlide(presentation, updated, _plan.Options);
                     _after[index] = updated;
                 }
 
