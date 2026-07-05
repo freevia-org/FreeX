@@ -1070,6 +1070,81 @@ public sealed class SourceManagementDialogPlannerTests
     }
 
     [Fact]
+    public void EditMasterSource_ReplacesSelectedItemAndRemovesDuplicateCanonicalTags()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources: [],
+            masterSources:
+            [
+                new Source { Tag = "Keep", Author = "Keep" },
+                new Source { Tag = "Smith2020", Author = "Old Smith" },
+                new Source
+                {
+                    Tag = " Smith2020 ",
+                    Type = SourceType.Report,
+                    Author = "Duplicate Smith",
+                    Title = "Original Report",
+                    Institution = "Analytical Society"
+                },
+                new Source { Tag = "Tail", Author = "Tail" }
+            ]);
+
+        var entry = SourceManagementDialogPlanner.ProjectEntry(state.MasterSources[2]) with
+        {
+            Author = "Updated Smith",
+            Title = "Updated Report"
+        };
+        var plan = SourceManagementDialogPlanner.EditMasterSource(state, selectedIndex: 2, entry);
+
+        plan.Validation.Should().BeNull();
+        plan.State.MasterSources.Select(source => source.Tag).Should().Equal("Keep", "Smith2020", "Tail");
+        plan.State.MasterSources[1].Author.Should().Be("Updated Smith");
+        plan.State.MasterSources[1].Title.Should().Be("Updated Report");
+        plan.State.MasterSources[1].Type.Should().Be(SourceType.Report);
+        plan.State.MasterSources[1].Institution.Should().Be("Analytical Society");
+        plan.SelectedIndex.Should().Be(1);
+    }
+
+    [Fact]
+    public void EditMasterSource_InvalidIndexIsNoOp()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources: [],
+            masterSources: [new Source { Tag = "A", Author = "A" }]);
+
+        var plan = SourceManagementDialogPlanner.EditMasterSource(
+            state,
+            selectedIndex: -1,
+            new SourceManagementSourceEntry("B", "B", string.Empty, string.Empty, string.Empty));
+
+        plan.State.Should().BeSameAs(state);
+        plan.Validation.Should().BeNull();
+        plan.SelectedIndex.Should().Be(-1);
+        plan.State.MasterSources.Should().ContainSingle().Which.Tag.Should().Be("A");
+    }
+
+    [Fact]
+    public void EditMasterSource_ValidationFailureKeepsListsUnchanged()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources: [new Source { Tag = "Doc", Author = "Doc" }],
+            masterSources: [new Source { Tag = "Master", Author = "Master" }]);
+
+        var plan = SourceManagementDialogPlanner.EditMasterSource(
+            state,
+            selectedIndex: 0,
+            new SourceManagementSourceEntry(string.Empty, string.Empty, string.Empty, string.Empty, string.Empty));
+
+        plan.State.Should().BeSameAs(state);
+        plan.Validation.Should().Be(new SourceManagementValidation(
+            SourceManagementValidationTarget.SourceFields,
+            SourceManagementDialogPlanner.MissingManagedSourceDataMessage));
+        plan.SelectedIndex.Should().Be(0);
+        plan.State.CurrentSources.Should().ContainSingle().Which.Tag.Should().Be("Doc");
+        plan.State.MasterSources.Should().ContainSingle().Which.Tag.Should().Be("Master");
+    }
+
+    [Fact]
     public void AddCitationSource_AddsNewSourceToCurrentAndMasterSources()
     {
         var state = SourceManagementDialogPlanner.BuildInitialState(
@@ -1221,6 +1296,90 @@ public sealed class SourceManagementDialogPlannerTests
         distinctCase.State.CurrentSources[1].Tag.Should().Be("smith2020");
         distinctCase.State.CurrentSources[1].Author.Should().Be("Lowercase Smith");
         distinctCase.SelectedIndex.Should().Be(1);
+    }
+
+    [Fact]
+    public void CopyCurrentToMaster_AppendsDocumentSourceAndPreservesFields()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources:
+            [
+                new Source
+                {
+                    Tag = "DocReport",
+                    Type = SourceType.Report,
+                    Author = "Ada",
+                    Title = "Document Report",
+                    Institution = "Analytical Society",
+                    City = "London",
+                    StandardNumber = "NBS-1"
+                }
+            ],
+            masterSources: [new Source { Tag = "Master", Author = "Master" }]);
+
+        var plan = SourceManagementDialogPlanner.CopyCurrentToMaster(
+            state,
+            currentSelectedIndex: 0,
+            masterSelectedIndex: 0);
+
+        plan.State.MasterSources.Should().HaveCount(2);
+        plan.State.MasterSources[1].Should().NotBeSameAs(state.CurrentSources[0]);
+        plan.State.MasterSources[1].Tag.Should().Be("DocReport");
+        plan.State.MasterSources[1].Type.Should().Be(SourceType.Report);
+        plan.State.MasterSources[1].Institution.Should().Be("Analytical Society");
+        plan.State.MasterSources[1].City.Should().Be("London");
+        plan.State.MasterSources[1].StandardNumber.Should().Be("NBS-1");
+        plan.SelectedIndex.Should().Be(1);
+    }
+
+    [Fact]
+    public void CopyCurrentToMaster_UpsertsCanonicalTagAndDoesNotCopyDuplicatesTwice()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources: [new Source { Tag = " Existing ", Author = "Current Existing", Title = "Updated" }],
+            masterSources:
+            [
+                new Source { Tag = "Existing", Author = "Old Existing" },
+                new Source { Tag = "Other", Author = "Other" },
+                new Source { Tag = " Existing ", Author = "Duplicate Existing" }
+            ]);
+
+        var plan = SourceManagementDialogPlanner.CopyCurrentToMaster(
+            state,
+            currentSelectedIndex: 0,
+            masterSelectedIndex: 1);
+
+        plan.State.MasterSources.Select(source => source.Tag).Should().Equal("Existing", "Other");
+        plan.State.MasterSources[0].Author.Should().Be("Current Existing");
+        plan.State.MasterSources[0].Title.Should().Be("Updated");
+        plan.SelectedIndex.Should().Be(0);
+
+        var duplicate = SourceManagementDialogPlanner.CopyCurrentToMaster(
+            plan.State,
+            currentSelectedIndex: 0,
+            masterSelectedIndex: plan.SelectedIndex);
+
+        duplicate.State.MasterSources.Select(source => source.Tag).Should().Equal("Existing", "Other");
+        duplicate.State.MasterSources[0].Author.Should().Be("Current Existing");
+        duplicate.SelectedIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public void CopyCurrentToMaster_InvalidIndexIsNoOp()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources: [new Source { Tag = "Doc", Author = "Doc" }],
+            masterSources: [new Source { Tag = "Master", Author = "Master" }]);
+
+        var plan = SourceManagementDialogPlanner.CopyCurrentToMaster(
+            state,
+            currentSelectedIndex: 1,
+            masterSelectedIndex: 0);
+
+        plan.State.Should().BeSameAs(state);
+        plan.Validation.Should().BeNull();
+        plan.SelectedIndex.Should().Be(0);
+        plan.State.MasterSources.Should().ContainSingle().Which.Tag.Should().Be("Master");
     }
 
     [Fact]
