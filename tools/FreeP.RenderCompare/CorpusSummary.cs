@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Xml.Linq;
 
 namespace FreeP.RenderCompare;
@@ -44,7 +46,92 @@ internal sealed record CorpusSummary(
             $"refs-missing={Decks.Count(d => d.Status == CorpusDeckReferenceStatus.MissingReferences)}; " +
             $"slide-count-unknown={Decks.Count(d => d.ExpectedSlides is null)}");
     }
+
+    internal bool HasCompleteReferences =>
+        Decks.All(deck => deck.Status == CorpusDeckReferenceStatus.ReferenceReady);
+
+    internal CorpusBaselineManifest CreateManifest(PowerPointComAvailability powerPoint) =>
+        new(
+            GeneratedAtUtc: powerPoint.CheckedAtUtc,
+            MachineName: powerPoint.MachineName,
+            PowerPoint: powerPoint,
+            CorpusDirectory: CorpusDirectory,
+            ReferenceDirectory: ReferenceDirectory,
+            TotalDecks: Decks.Count,
+            ReferenceReadyCount: Decks.Count(d => d.Status == CorpusDeckReferenceStatus.ReferenceReady),
+            IncompleteReferenceCount: Decks.Count(d => d.Status == CorpusDeckReferenceStatus.IncompleteReferences),
+            MissingReferenceCount: Decks.Count(d => d.Status == CorpusDeckReferenceStatus.MissingReferences),
+            SlideCountUnknownCount: Decks.Count(d => d.ExpectedSlides is null),
+            Decks: Decks);
+
+    internal int GetBaselineVerificationExitCode(
+        PowerPointComAvailability powerPoint,
+        bool requireCompleteReferences,
+        bool allowMissingPowerPoint)
+    {
+        if (!requireCompleteReferences || HasCompleteReferences)
+            return 0;
+
+        return allowMissingPowerPoint && !powerPoint.IsRegistered
+            ? 0
+            : 1;
+    }
+
+    internal void PrintBaselineVerification(
+        TextWriter writer,
+        PowerPointComAvailability powerPoint,
+        bool requireCompleteReferences,
+        bool allowMissingPowerPoint)
+    {
+        writer.WriteLine();
+        writer.WriteLine("PowerPoint baseline verifier");
+        writer.WriteLine($"  COM ProgID registered : {powerPoint.IsRegistered}");
+        if (!powerPoint.IsRegistered)
+            writer.WriteLine($"  skip reason           : {powerPoint.UnavailableReason}");
+
+        if (!requireCompleteReferences)
+        {
+            writer.WriteLine("  policy                : report only");
+            return;
+        }
+
+        if (HasCompleteReferences)
+        {
+            writer.WriteLine("  policy                : complete references required; all references present");
+            return;
+        }
+
+        if (allowMissingPowerPoint && !powerPoint.IsRegistered)
+        {
+            writer.WriteLine("  policy                : complete references required; missing refs allowed because PowerPoint COM is unavailable");
+            return;
+        }
+
+        writer.WriteLine("  policy                : complete references required; missing refs fail this run");
+    }
+
+    internal static void WriteManifest(string path, CorpusBaselineManifest manifest)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+        var options = new JsonSerializerOptions { WriteIndented = true };
+        options.Converters.Add(new JsonStringEnumConverter());
+        var json = JsonSerializer.Serialize(manifest, options);
+        File.WriteAllText(path, json);
+    }
 }
+
+internal sealed record CorpusBaselineManifest(
+    DateTimeOffset GeneratedAtUtc,
+    string MachineName,
+    PowerPointComAvailability PowerPoint,
+    string CorpusDirectory,
+    string ReferenceDirectory,
+    int TotalDecks,
+    int ReferenceReadyCount,
+    int IncompleteReferenceCount,
+    int MissingReferenceCount,
+    int SlideCountUnknownCount,
+    IReadOnlyList<CorpusDeckStatus> Decks);
 
 internal sealed record CorpusDeckStatus(
     string DeckPath,

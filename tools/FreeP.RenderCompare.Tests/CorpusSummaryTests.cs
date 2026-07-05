@@ -60,6 +60,81 @@ public sealed class CorpusSummaryTests
         writer.ToString().Should().Contain("total=4; refs-ready=2; refs-incomplete=1; refs-missing=1; slide-count-unknown=1");
     }
 
+    [Fact]
+    public void CreateManifestIncludesPowerPointComGuardAndDeckTotals()
+    {
+        var summary = new CorpusSummary(
+            "corpus",
+            "refs",
+            new[]
+            {
+                new CorpusDeckStatus("a.pptx", "a.pptx", 1, 1, CorpusDeckReferenceStatus.ReferenceReady),
+                new CorpusDeckStatus("b.pptx", "b.pptx", 2, 1, CorpusDeckReferenceStatus.IncompleteReferences),
+                new CorpusDeckStatus("c.pptx", "c.pptx", 1, 0, CorpusDeckReferenceStatus.MissingReferences),
+            });
+        var powerPoint = PowerPointComAvailability.Unavailable(
+            PowerPointInterop.ProgId,
+            new DateTimeOffset(2026, 7, 5, 12, 0, 0, TimeSpan.Zero),
+            "TESTBOX",
+            "PowerPoint COM unavailable in test");
+
+        var manifest = summary.CreateManifest(powerPoint);
+
+        manifest.GeneratedAtUtc.Should().Be(powerPoint.CheckedAtUtc);
+        manifest.MachineName.Should().Be("TESTBOX");
+        manifest.PowerPoint.Should().Be(powerPoint);
+        manifest.TotalDecks.Should().Be(3);
+        manifest.ReferenceReadyCount.Should().Be(1);
+        manifest.IncompleteReferenceCount.Should().Be(1);
+        manifest.MissingReferenceCount.Should().Be(1);
+        manifest.Decks.Should().ContainSingle(deck => deck.DeckName == "b.pptx" && deck.Status == CorpusDeckReferenceStatus.IncompleteReferences);
+    }
+
+    [Theory]
+    [InlineData(false, false, true, 0)]
+    [InlineData(true, false, true, 1)]
+    [InlineData(true, true, false, 0)]
+    [InlineData(true, true, true, 1)]
+    public void GetBaselineVerificationExitCode_RequiresCompleteRefsUnlessMissingComIsAllowed(
+        bool requireCompleteReferences,
+        bool allowMissingPowerPoint,
+        bool powerPointRegistered,
+        int expected)
+    {
+        var summary = new CorpusSummary(
+            "corpus",
+            "refs",
+            new[]
+            {
+                new CorpusDeckStatus("a.pptx", "a.pptx", 1, 1, CorpusDeckReferenceStatus.ReferenceReady),
+                new CorpusDeckStatus("b.pptx", "b.pptx", 1, 0, CorpusDeckReferenceStatus.MissingReferences),
+            });
+        var powerPoint = powerPointRegistered
+            ? PowerPointComAvailability.Available(PowerPointInterop.ProgId, DateTimeOffset.UtcNow, "TESTBOX")
+            : PowerPointComAvailability.Unavailable(PowerPointInterop.ProgId, DateTimeOffset.UtcNow, "TESTBOX", "missing");
+
+        summary.GetBaselineVerificationExitCode(
+                powerPoint,
+                requireCompleteReferences,
+                allowMissingPowerPoint)
+            .Should()
+            .Be(expected);
+    }
+
+    [Fact]
+    public void CheckAvailabilityReportsMissingProgIdWithoutLaunchingPowerPoint()
+    {
+        var availability = PowerPointInterop.CheckAvailability(
+            _ => null,
+            new DateTimeOffset(2026, 7, 5, 12, 0, 0, TimeSpan.Zero),
+            "TESTBOX");
+
+        availability.IsRegistered.Should().BeFalse();
+        availability.ProgId.Should().Be(PowerPointInterop.ProgId);
+        availability.MachineName.Should().Be("TESTBOX");
+        availability.UnavailableReason.Should().Contain("is not registered");
+    }
+
     private static void CreateRef(string refs, string deckStem, string fileName)
     {
         var directory = Path.Combine(refs, deckStem);
