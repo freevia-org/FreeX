@@ -283,10 +283,13 @@ public static class PptxPackageWriter
 
         foreach (var artifact in presentation.RecordingMediaArtifacts)
         {
-            if (artifact.PayloadBytes is not { Length: > 0 })
+            if (artifact.PayloadBytes is not { Length: > 0 } ||
+                !TryNormalizeRecordingMediaPackagePath(artifact.PackagePath, out var packagePath))
+            {
                 continue;
+            }
 
-            var extension = GetPackagePathExtension(artifact.PackagePath);
+            var extension = GetPackagePathExtension(packagePath);
             if (!string.IsNullOrWhiteSpace(extension))
                 mediaExtensions.Add(extension);
         }
@@ -704,13 +707,17 @@ public static class PptxPackageWriter
 
         foreach (var artifact in presentation.RecordingMediaArtifacts)
         {
+            var packagePath = TryNormalizeRecordingMediaPackagePath(artifact.PackagePath, out var normalizedPackagePath)
+                ? normalizedPackagePath
+                : artifact.PackagePath;
+
             root.Add(new XElement(
                 FreePRecording + "artifact",
                 new XAttribute("kind", artifact.Kind.ToString()),
                 new XAttribute("slideIndex", artifact.SlideIndex),
                 new XAttribute("suggestedFileName", artifact.SuggestedFileName),
                 new XAttribute("contentType", artifact.ContentType),
-                new XAttribute("packagePath", artifact.PackagePath),
+                new XAttribute("packagePath", packagePath),
                 new XAttribute("contentLengthBytes", artifact.ContentLengthBytes),
                 new XAttribute("contentSha256", artifact.ContentSha256),
                 new XAttribute("durationMs", artifact.DurationMs),
@@ -729,14 +736,11 @@ public static class PptxPackageWriter
         foreach (var artifact in presentation.RecordingMediaArtifacts)
         {
             if (artifact.PayloadBytes is not { Length: > 0 } ||
-                string.IsNullOrWhiteSpace(artifact.PackagePath))
+                !TryNormalizeRecordingMediaPackagePath(artifact.PackagePath, out var normalizedPath) ||
+                !writtenPaths.Add(normalizedPath))
             {
                 continue;
             }
-
-            var normalizedPath = NormalizeZipPath(artifact.PackagePath);
-            if (!writtenPaths.Add(normalizedPath))
-                continue;
 
             WriteRawEntry(archive, normalizedPath, artifact.PayloadBytes);
         }
@@ -756,6 +760,23 @@ public static class PptxPackageWriter
 
     private static string NormalizeZipPath(string packagePath) =>
         packagePath.Replace('\\', '/').TrimStart('/');
+
+    private static bool TryNormalizeRecordingMediaPackagePath(string packagePath, out string normalizedPath)
+    {
+        normalizedPath = NormalizeZipPath(packagePath);
+        if (string.IsNullOrWhiteSpace(normalizedPath) ||
+            !normalizedPath.StartsWith("ppt/media/", StringComparison.OrdinalIgnoreCase) ||
+            normalizedPath.EndsWith("/", StringComparison.Ordinal) ||
+            string.Equals(normalizedPath, RecordingMediaArtifactsPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return normalizedPath.Split(["/"], StringSplitOptions.None).All(segment =>
+            !string.IsNullOrWhiteSpace(segment) &&
+            segment != "." &&
+            segment != "..");
+    }
 
     private static XDocument BuildContentTypesXml(
         Presentation p, List<SlideMaster> masters, List<SlideLayout> layouts,

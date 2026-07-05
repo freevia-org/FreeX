@@ -1,4 +1,6 @@
 using System.IO;
+using System.Security.Cryptography;
+using System.Xml.Linq;
 using Free.Shared.Drawing;
 using Free.Shared.Opc;
 using FreeP.Core.IO;
@@ -53,6 +55,7 @@ public sealed class PptxRoundTripTests : IDisposable
     {
         var pres = Presentation.CreateEmpty();
         var payload = System.Text.Encoding.UTF8.GetBytes("deterministic narration payload");
+        var payloadHash = Convert.ToHexString(SHA256.HashData(payload)).ToLowerInvariant();
         pres.RecordingMediaArtifacts.Add(new PresentationRecordingMediaArtifact(
             PresentationRecordingMediaArtifactKind.NarrationAudio,
             SlideIndex: 0,
@@ -60,7 +63,7 @@ public sealed class PptxRoundTripTests : IDisposable
             ContentType: "audio/mp4",
             PackagePath: "ppt/media/recordings/slide-001-narration.m4a",
             ContentLengthBytes: payload.Length,
-            ContentSha256: new string('a', 64),
+            ContentSha256: payloadHash,
             DurationMs: 2400,
             CapturedByHost: "Capture evidence",
             StatusText: "Capture evidence: Narration audio captured",
@@ -74,9 +77,15 @@ public sealed class PptxRoundTripTests : IDisposable
             var mediaEntry = archive.GetEntry("ppt/media/recordings/slide-001-narration.m4a");
             mediaEntry.Should().NotBeNull();
             mediaEntry!.Length.Should().Be(payload.Length);
+
             using var contentTypesStream = archive.GetEntry("[Content_Types].xml")!.Open();
-            using var reader = new StreamReader(contentTypesStream);
-            reader.ReadToEnd().Should().Contain("Extension=\"m4a\"");
+            var contentTypes = XDocument.Load(contentTypesStream);
+            var contentTypesNamespace = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/content-types");
+            var hasM4aContentType = contentTypes.Root!.Elements(contentTypesNamespace + "Default")
+                .Any(element =>
+                    string.Equals(element.Attribute("Extension")?.Value, "m4a", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(element.Attribute("ContentType")?.Value, "audio/mp4", StringComparison.OrdinalIgnoreCase));
+            hasM4aContentType.Should().BeTrue();
         }
 
         var reloaded = PptxPackageReader.Read(path);

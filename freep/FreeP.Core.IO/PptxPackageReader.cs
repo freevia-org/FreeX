@@ -298,14 +298,17 @@ public static class PptxPackageReader
             }
 
             var packagePath = element.Attribute("packagePath")?.Value ?? string.Empty;
-            var payloadBytes = ReadEntryBytes(archive, packagePath);
+            var normalizedPackagePath = NormalizeZipPath(packagePath);
+            var payloadBytes = string.IsNullOrWhiteSpace(normalizedPackagePath)
+                ? null
+                : ReadEntryBytes(archive, normalizedPackagePath);
 
             presentation.RecordingMediaArtifacts.Add(new PresentationRecordingMediaArtifact(
                 kind,
                 slideIndex,
                 element.Attribute("suggestedFileName")?.Value ?? string.Empty,
                 element.Attribute("contentType")?.Value ?? string.Empty,
-                packagePath,
+                normalizedPackagePath,
                 length,
                 element.Attribute("contentSha256")?.Value ?? string.Empty,
                 durationMs,
@@ -314,6 +317,9 @@ public static class PptxPackageReader
                 payloadBytes));
         }
     }
+
+    private static string NormalizeZipPath(string packagePath) =>
+        packagePath.Replace('\\', '/').TrimStart('/');
 
     private static PptxPackageSnapshot CapturePackageSnapshot(ZipArchive archive)
     {
