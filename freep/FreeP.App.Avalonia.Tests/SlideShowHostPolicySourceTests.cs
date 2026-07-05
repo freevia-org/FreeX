@@ -88,8 +88,12 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("BoxEffect(element, plan, onReveal);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Checkerboard:");
         source.Should().Contain("CheckerboardEffect(element, plan, onReveal);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Circle:");
+        source.Should().Contain("GeometricMaskEffect(element, plan, onReveal);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Diamond:");
-        source.Should().Contain("DiamondEffect(element, plan, onReveal);");
+        source.Should().Contain("case SlideShowGeometricMaskKind.Circle:");
+        source.Should().Contain("case SlideShowGeometricMaskKind.Diamond:");
+        source.Should().Contain("GeometricMaskClipEffect(el, plan, onReveal);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Zoom:");
         source.Should().Contain("ZoomEffect(element, plan, onReveal);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Pulse:");
