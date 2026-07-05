@@ -119,6 +119,9 @@ public sealed class SlideShowRecordingReviewPlannerTests
         row.MediaArtifacts.Should().OnlyContain(artifact =>
             artifact.IsCaptured &&
             artifact.IsPersistable &&
+            artifact.PayloadBytes != null &&
+            artifact.PayloadBytes.Length > 0 &&
+            artifact.PayloadBytes.Length == artifact.ContentLengthBytes &&
             artifact.PackagePath.StartsWith("ppt/media/recordings/") &&
             artifact.ContentLengthBytes > 0 &&
             artifact.ContentSha256.Length == 64);
@@ -156,6 +159,10 @@ public sealed class SlideShowRecordingReviewPlannerTests
             artifact.SlideIndex == 0 &&
             artifact.DurationMs == 2400 &&
             artifact.CapturedByHost == "Capture evidence" &&
+            artifact.HasPayload &&
+            artifact.PayloadBytes != null &&
+            artifact.PayloadBytes.Length > 0 &&
+            artifact.PayloadBytes.Length == artifact.ContentLengthBytes &&
             artifact.PackagePath.StartsWith("ppt/media/recordings/") &&
             artifact.ContentLengthBytes > 0 &&
             artifact.ContentSha256.Length == 64);

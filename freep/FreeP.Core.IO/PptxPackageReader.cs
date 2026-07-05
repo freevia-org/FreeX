@@ -297,17 +297,21 @@ public static class PptxPackageReader
                 continue;
             }
 
+            var packagePath = element.Attribute("packagePath")?.Value ?? string.Empty;
+            var payloadBytes = ReadEntryBytes(archive, packagePath);
+
             presentation.RecordingMediaArtifacts.Add(new PresentationRecordingMediaArtifact(
                 kind,
                 slideIndex,
                 element.Attribute("suggestedFileName")?.Value ?? string.Empty,
                 element.Attribute("contentType")?.Value ?? string.Empty,
-                element.Attribute("packagePath")?.Value ?? string.Empty,
+                packagePath,
                 length,
                 element.Attribute("contentSha256")?.Value ?? string.Empty,
                 durationMs,
                 element.Attribute("capturedByHost")?.Value ?? string.Empty,
-                element.Attribute("statusText")?.Value ?? string.Empty));
+                element.Attribute("statusText")?.Value ?? string.Empty,
+                payloadBytes));
         }
     }
 
