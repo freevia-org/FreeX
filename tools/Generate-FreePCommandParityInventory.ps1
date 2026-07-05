@@ -179,6 +179,7 @@ internal static class FreePCommandInventory
             HostCoverage: "WPF/Avalonia shared planner, overlay render primitives, and retention planning",
             EvidenceDocs:
             [
+                "docs/parity/freep-presenter-ink-custom-show-persistence-2026-07-05.md",
                 "docs/planning/freep-powerpoint-parity-status-2026-06-27.md"
             ],
             Verification:
@@ -188,7 +189,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/SlideShowTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/SlideShowWindowHeadlessTests.cs"
             ],
-            RemainingWork: "Authored PPTX ink package baselines, PowerPoint-authoritative presenter UI baselines, and PowerPoint visual baselines remain deferred."),
+            RemainingWork: "Retained presenter ink now carries source slide and custom-show route metadata through the shared WPF/Avalonia planner. Authored PPTX ink package baselines, PowerPoint-authoritative presenter UI baselines, and PowerPoint visual baselines remain deferred."),
         new(
             EvidenceId: "freep.presenter.session.summary",
             Area: "Presenter recording plus ink session summary",
@@ -243,7 +244,27 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/ReviewWorkflowAdapterTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "PowerPoint-authoritative accessibility checker baselines, grammar-scale proofing, remediation-pane baselines, and reading-order pane visual baselines remain deferred.")
+            RemainingWork: "PowerPoint-authoritative accessibility checker baselines, grammar-scale proofing, remediation-pane baselines, and reading-order pane visual baselines remain deferred."),
+        new(
+            EvidenceId: "freep.table.inline-text.workflow-depth",
+            Area: "Rich inline table-cell text editing, paragraph formatting, selection, and persistence",
+            Status: "shared-planner-and-host-evidence",
+            HostCoverage: "WPF/Avalonia shared TableCellEditPlanner routes with thin WPF RichTextBox and Avalonia overlay adapters",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-table-cell-rich-editor-fidelity-2026-07-03.md",
+                "docs/planning/freep-powerpoint-parity-status-2026-06-27.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/TableCellEditPlannerTests.cs",
+                "freep/FreeP.App.Presentation.Tests/TableEditCommandTests.cs",
+                "freep/FreeP.App.Host.Tests/CanvasEditingTests.cs",
+                "freep/FreeP.App.Host.Tests/RibbonEditorCompleteness5BTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasAvaloniaTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
+            ],
+            RemainingWork: "Avalonia still lacks a true editable rich-text widget equivalent to WPF RichTextBox; visible PowerPoint-style list galleries, image bullets, and PowerPoint-authoritative rich-editor visual baselines remain deferred.")
     ];
 
     private static IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> Collect(RibbonDefinition definition, string profile)

@@ -17,6 +17,8 @@ public sealed record SlideShowInkPersistenceStrokePlan(
 public sealed record SlideShowInkPersistenceSlidePlan(
     int RouteSlideIndex,
     int PresentationSlideIndex,
+    string SourceSlideId,
+    string? CustomShowName,
     uint ShapeId,
     string ShapeName,
     string RelationshipId,
@@ -59,7 +61,8 @@ public static class SlideShowInkPersistencePlanner
     public static SlideShowInkPersistenceResult ApplyRetentionOnExit(
         Presentation presentation,
         SlideShowInkExecutionState state,
-        Func<int, int>? mapRouteSlideToPresentationSlide = null)
+        Func<int, int>? mapRouteSlideToPresentationSlide = null,
+        string? customShowName = null)
     {
         ArgumentNullException.ThrowIfNull(presentation);
         ArgumentNullException.ThrowIfNull(state);
@@ -68,7 +71,11 @@ public static class SlideShowInkPersistencePlanner
         {
             LaserOverlayPoint = null,
         };
-        var plan = BuildPlan(presentation, retainedState, mapRouteSlideToPresentationSlide);
+        var plan = BuildPlan(
+            presentation,
+            retainedState,
+            mapRouteSlideToPresentationSlide,
+            customShowName);
         ApplyPlan(presentation, plan);
 
         return new SlideShowInkPersistenceResult(retainedState, plan);
@@ -77,7 +84,8 @@ public static class SlideShowInkPersistencePlanner
     public static SlideShowInkPersistencePlan BuildPlan(
         Presentation presentation,
         SlideShowInkExecutionState retainedState,
-        Func<int, int>? mapRouteSlideToPresentationSlide = null)
+        Func<int, int>? mapRouteSlideToPresentationSlide = null,
+        string? customShowName = null)
     {
         ArgumentNullException.ThrowIfNull(presentation);
         ArgumentNullException.ThrowIfNull(retainedState);
@@ -107,9 +115,10 @@ public static class SlideShowInkPersistencePlanner
                 continue;
             }
 
+            var slide = presentation.Slides[presentationSlideIndex];
             if (!nextShapeIds.TryGetValue(presentationSlideIndex, out var shapeId))
             {
-                shapeId = NextShapeId(presentation.Slides[presentationSlideIndex]);
+                shapeId = NextShapeId(slide);
             }
 
             var strokes = routeGroup
@@ -131,11 +140,23 @@ public static class SlideShowInkPersistencePlanner
                 relationshipId,
                 presentation.SlideSizeCxEmu,
                 presentation.SlideSizeCyEmu);
-            var inkXml = BuildInkXml(routeGroup.Key, presentationSlideIndex, shapeId, strokes);
+            var sourceSlideId = string.IsNullOrWhiteSpace(slide.Id)
+                ? string.Empty
+                : slide.Id.Trim();
+            var normalizedCustomShowName = NormalizeOptional(customShowName);
+            var inkXml = BuildInkXml(
+                routeGroup.Key,
+                presentationSlideIndex,
+                sourceSlideId,
+                normalizedCustomShowName,
+                shapeId,
+                strokes);
 
             slidePlans.Add(new SlideShowInkPersistenceSlidePlan(
                 routeGroup.Key,
                 presentationSlideIndex,
+                sourceSlideId,
+                normalizedCustomShowName,
                 shapeId,
                 shapeName,
                 relationshipId,
@@ -252,18 +273,34 @@ public static class SlideShowInkPersistencePlanner
     private static string BuildInkXml(
         int routeSlideIndex,
         int presentationSlideIndex,
+        string sourceSlideId,
+        string? customShowName,
         uint shapeId,
         IReadOnlyList<SlideShowInkPersistenceStrokePlan> strokes)
     {
+        var attributes = new List<XAttribute>
+        {
+            new(XNamespace.Xmlns + "inkml", InkMl.NamespaceName),
+            new(XNamespace.Xmlns + "freep", FreePInk.NamespaceName),
+            new(FreePInk + "format", "freep-slideshow-ink"),
+            new(FreePInk + "shapeId", shapeId.ToString(CultureInfo.InvariantCulture)),
+            new(FreePInk + "routeSlideIndex", routeSlideIndex.ToString(CultureInfo.InvariantCulture)),
+            new(FreePInk + "presentationSlideIndex", presentationSlideIndex.ToString(CultureInfo.InvariantCulture))
+        };
+        if (!string.IsNullOrWhiteSpace(sourceSlideId))
+        {
+            attributes.Add(new XAttribute(FreePInk + "sourceSlideId", sourceSlideId.Trim()));
+        }
+
+        if (!string.IsNullOrWhiteSpace(customShowName))
+        {
+            attributes.Add(new XAttribute(FreePInk + "customShowName", customShowName.Trim()));
+        }
+
         var doc = new XDocument(
             new XDeclaration("1.0", "utf-8", "yes"),
             new XElement(InkMl + "ink",
-                new XAttribute(XNamespace.Xmlns + "inkml", InkMl.NamespaceName),
-                new XAttribute(XNamespace.Xmlns + "freep", FreePInk.NamespaceName),
-                new XAttribute(FreePInk + "format", "freep-slideshow-ink"),
-                new XAttribute(FreePInk + "shapeId", shapeId.ToString(CultureInfo.InvariantCulture)),
-                new XAttribute(FreePInk + "routeSlideIndex", routeSlideIndex.ToString(CultureInfo.InvariantCulture)),
-                new XAttribute(FreePInk + "presentationSlideIndex", presentationSlideIndex.ToString(CultureInfo.InvariantCulture)),
+                attributes,
                 strokes.Select((stroke, index) =>
                     new XElement(InkMl + "trace",
                         new XAttribute("id", StableStrokeId(stroke.StrokeId, index)),
@@ -295,4 +332,9 @@ public static class SlideShowInkPersistencePlanner
         var trimmed = colorHex.Trim();
         return trimmed.StartsWith('#') ? trimmed.ToUpperInvariant() : ("#" + trimmed).ToUpperInvariant();
     }
+
+    private static string? NormalizeOptional(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim();
 }
