@@ -40,6 +40,10 @@ namespace FreeP.RenderCompare;
 ///       Print compact per-deck status, PowerPoint reference PNG availability,
 ///       and the local PowerPoint COM prerequisite state.
 ///
+///   --export-backstage-evidence &lt;deck.pptx&gt; &lt;outDir&gt;
+///       Build shared Backstage export/print evidence rows for WPF/Avalonia
+///       package handoff paths and mark PowerPoint baselines n/a/deferred.
+///
 ///   --generate-corpus &lt;outDir&gt;
 ///       Author four deterministic test decks via PowerPoint COM and save them to
 ///       outDir as *.pptx.  Also exports PowerPoint's own PNGs next to each deck.
@@ -75,6 +79,7 @@ internal static class Program
                 "--avalonia-compare"  => RunAvaloniaCompare(args[1..]),
                 "--slide-pane-thumbnail-compare" => RunSlidePaneThumbnailCompare(args[1..]),
                 "--notes-page-preview-evidence" => RunNotesPagePreviewEvidence(args[1..]),
+                "--export-backstage-evidence" => RunExportBackstageEvidence(args[1..]),
                 "--corpus-summary"    => RunCorpusSummary(args[1..]),
                 "--generate-corpus"           => RunGenerateCorpus(args[1..]),
                 "--patch-chart-labels-19"     => RunPatchChartLabels19(args[1..]),
@@ -456,6 +461,20 @@ internal static class Program
     }
 
     // -----------------------------------------------------------------------
+    // Mode: --export-backstage-evidence
+    // -----------------------------------------------------------------------
+    private static int RunExportBackstageEvidence(string[] args)
+    {
+        if (args.Length < 2)
+        {
+            Console.Error.WriteLine("usage: --export-backstage-evidence <deck.pptx> <outDir>");
+            return 2;
+        }
+
+        return ExportBackstageEvidence.Run(args[0], args[1]);
+    }
+
+    // -----------------------------------------------------------------------
     // Mode: --generate-corpus
     // -----------------------------------------------------------------------
     private static int RunGenerateCorpus(string[] args)
@@ -625,6 +644,9 @@ internal static class Program
         Console.WriteLine();
         Console.WriteLine("  --notes-page-preview-evidence <deck.pptx> <outDir>");
         Console.WriteLine("      Shared notes-page PDF render plan + portable PDF/CSV evidence; no PowerPoint COM required.");
+        Console.WriteLine();
+        Console.WriteLine("  --export-backstage-evidence <deck.pptx> <outDir>");
+        Console.WriteLine("      Shared Backstage export/print evidence rows; PowerPoint COM baselines stay n/a/deferred.");
         Console.WriteLine();
         Console.WriteLine("  --corpus-summary <corpusDir> [--refs <refsDir>] [--manifest <out.json>] [--require-complete-refs] [--allow-missing-powerpoint]");
         Console.WriteLine("      Print compact per-deck status and PowerPoint reference PNG availability.");
