@@ -460,6 +460,30 @@ public sealed class SlideShowWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlideShowWindow_recording_capture_adapter_readiness_exposes_avalonia_contract()
+    {
+        SlideShowRecordingCaptureAdapterReadiness? readiness = null;
+        var ran = await OnUiThread(() =>
+        {
+            var pres = MakePresentation(1);
+            var window = new SlideShowWindow(pres, 0);
+            readiness = window.RecordingCaptureAdapterReadiness;
+        });
+
+        if (!ran) return;
+        readiness.Should().NotBeNull();
+        readiness!.HostName.Should().Be("Avalonia slideshow");
+        readiness.AdapterName.Should().Be("Avalonia microphone/camera capture adapter");
+        readiness.Devices.Should().BeEmpty();
+        readiness.CanCaptureNarration.Should().BeFalse();
+        readiness.CanCaptureCamera.Should().BeFalse();
+        readiness.MissingStreams.Should().Equal(
+            SlideShowRecordingCaptureStreamKind.NarrationAudio,
+            SlideShowRecordingCaptureStreamKind.CameraVideo);
+        readiness.StatusText.Should().Contain("Recording capture adapter is not registered");
+    }
+
+    [Fact]
     public async Task SlideShowWindow_InkClear_uses_shared_clear_plan()
     {
         SlideShowInkExecutionResult? clear = null;

@@ -21,14 +21,53 @@ public sealed record SlideShowRecordingHostCapabilities(
     string HostName,
     bool CanCaptureNarration,
     bool CanCaptureCamera,
-    string UnavailableReason)
+    string UnavailableReason,
+    SlideShowRecordingCaptureAdapterReadiness? CaptureAdapterReadiness = null)
 {
     public static SlideShowRecordingHostCapabilities Deferred(string hostName) =>
-        new(
-            string.IsNullOrWhiteSpace(hostName) ? "Slideshow host" : hostName.Trim(),
-            CanCaptureNarration: false,
-            CanCaptureCamera: false,
-            "Recording capture adapter is not registered for this host.");
+        SlideShowRecordingCaptureAdapterPlanner.BuildCapabilities(
+            SlideShowRecordingCaptureAdapterReadiness.Deferred(
+                string.IsNullOrWhiteSpace(hostName) ? "Slideshow host" : hostName.Trim(),
+                "Recording capture adapter"));
+
+    public SlideShowRecordingCaptureAdapterReadiness EffectiveCaptureAdapterReadiness =>
+        CaptureAdapterReadiness ??
+        (CanCaptureNarration || CanCaptureCamera
+            ? SlideShowRecordingCaptureAdapterReadiness.FromDevices(
+                HostName,
+                "Legacy recording capture adapter",
+                LegacyDevices(),
+                requiresUserPermission: false,
+                UnavailableReason)
+            : SlideShowRecordingCaptureAdapterReadiness.Deferred(
+                HostName,
+                "Recording capture adapter",
+                UnavailableReason));
+
+    private IEnumerable<SlideShowRecordingCaptureDeviceDescriptor> LegacyDevices()
+    {
+        if (CanCaptureNarration)
+        {
+            yield return new SlideShowRecordingCaptureDeviceDescriptor(
+                SlideShowRecordingCaptureDeviceKind.Microphone,
+                "legacy-microphone",
+                "Host microphone",
+                IsDefault: true,
+                IsAvailable: true,
+                "audio/mp4");
+        }
+
+        if (CanCaptureCamera)
+        {
+            yield return new SlideShowRecordingCaptureDeviceDescriptor(
+                SlideShowRecordingCaptureDeviceKind.Camera,
+                "legacy-camera",
+                "Host camera",
+                IsDefault: true,
+                IsAvailable: true,
+                "video/mp4");
+        }
+    }
 }
 
 public sealed record SlideShowRecordingExecutionAction(
@@ -111,6 +150,8 @@ public interface ISlideShowRecordingCaptureBackend
 {
     SlideShowRecordingHostCapabilities Capabilities { get; }
 
+    SlideShowRecordingCaptureAdapterReadiness AdapterReadiness { get; }
+
     SlideShowRecordingCaptureResult CompleteCapture(SlideShowRecordingCaptureRequest request);
 }
 
@@ -122,6 +163,9 @@ public sealed class SlideShowHostCapabilityRecordingCaptureBackend : ISlideShowR
     }
 
     public SlideShowRecordingHostCapabilities Capabilities { get; }
+
+    public SlideShowRecordingCaptureAdapterReadiness AdapterReadiness =>
+        Capabilities.EffectiveCaptureAdapterReadiness;
 
     public SlideShowRecordingCaptureResult CompleteCapture(SlideShowRecordingCaptureRequest request)
     {
@@ -173,11 +217,35 @@ public sealed class SlideShowDeterministicRecordingCaptureBackend : ISlideShowRe
             normalizedHostName,
             CanCaptureNarration: true,
             CanCaptureCamera: true,
-            UnavailableReason: string.Empty);
+            UnavailableReason: string.Empty,
+            SlideShowRecordingCaptureAdapterReadiness.FromDevices(
+                normalizedHostName,
+                "Deterministic recording capture adapter",
+                new[]
+                {
+                    new SlideShowRecordingCaptureDeviceDescriptor(
+                        SlideShowRecordingCaptureDeviceKind.Microphone,
+                        "deterministic-microphone",
+                        "Deterministic microphone",
+                        IsDefault: true,
+                        IsAvailable: true,
+                        "audio/mp4"),
+                    new SlideShowRecordingCaptureDeviceDescriptor(
+                        SlideShowRecordingCaptureDeviceKind.Camera,
+                        "deterministic-camera",
+                        "Deterministic camera",
+                        IsDefault: true,
+                        IsAvailable: true,
+                        "video/mp4")
+                },
+                requiresUserPermission: false));
         _packageRoot = NormalizePackageRoot(packageRoot);
     }
 
     public SlideShowRecordingHostCapabilities Capabilities { get; }
+
+    public SlideShowRecordingCaptureAdapterReadiness AdapterReadiness =>
+        Capabilities.EffectiveCaptureAdapterReadiness;
 
     public SlideShowRecordingCaptureResult CompleteCapture(SlideShowRecordingCaptureRequest request)
     {
@@ -271,6 +339,22 @@ public static class SlideShowRecordingExecutionPlanner
             : SlideShowHostCapabilityRecordingCaptureBackend.FromCapabilities(hostCapabilities);
 
         return CreateState(toolPlan, currentSlideIndex, nowUtc, backend);
+    }
+
+    public static SlideShowRecordingExecutionState CreateState(
+        SlideShowPresenterToolPlan toolPlan,
+        int currentSlideIndex,
+        DateTimeOffset nowUtc,
+        SlideShowRecordingCaptureAdapterReadiness captureAdapterReadiness)
+    {
+        ArgumentNullException.ThrowIfNull(captureAdapterReadiness);
+
+        return CreateState(
+            toolPlan,
+            currentSlideIndex,
+            nowUtc,
+            SlideShowHostCapabilityRecordingCaptureBackend.FromCapabilities(
+                SlideShowRecordingCaptureAdapterPlanner.BuildCapabilities(captureAdapterReadiness)));
     }
 
     public static SlideShowRecordingExecutionState CreateState(

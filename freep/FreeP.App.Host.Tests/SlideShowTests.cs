@@ -513,6 +513,33 @@ public sealed class SlideShowWindowTests
     }
 
     [StaFact]
+    public void SlideShowWindow_RecordingCaptureAdapterReadiness_ExposesWpfContract()
+    {
+        var pres = MakePresentation("Intro");
+        var window = new SlideShowWindow(pres, 0);
+        try
+        {
+            var readiness = window.RecordingCaptureAdapterReadiness;
+
+            readiness.HostName.Should().Be("WPF slideshow");
+            readiness.AdapterName.Should().Be("WPF microphone/camera capture adapter");
+            readiness.Devices.Should().BeEmpty();
+            readiness.CanCaptureNarration.Should().BeFalse();
+            readiness.CanCaptureCamera.Should().BeFalse();
+            readiness.MissingStreams.Should().Equal(
+                SlideShowRecordingCaptureStreamKind.NarrationAudio,
+                SlideShowRecordingCaptureStreamKind.CameraVideo);
+            readiness.StatusText.Should().Contain("Recording capture adapter is not registered");
+            window.RecordingExecutionState.HostCapabilities.EffectiveCaptureAdapterReadiness
+                .Should().BeSameAs(readiness);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void SlideShowWindow_Advance_PastLastSlide_DoesNotThrow()
     {
         var pres = Presentation.CreateEmpty();

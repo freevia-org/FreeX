@@ -123,7 +123,7 @@ public sealed class SlideShowWindow : Window
             _presenterToolPlan,
             CurrentPresentationSlideIndex,
             _presenterStartedAtUtc,
-            SlideShowRecordingHostCapabilities.Deferred("Avalonia slideshow"));
+            CreateRecordingCaptureAdapterReadiness());
         _inkExecutionState = SlideShowInkExecutionPlanner.CreateState(
             _controller.CurrentSlideIndex,
             _presenterToolPlan.PointerInk);
@@ -246,6 +246,9 @@ public sealed class SlideShowWindow : Window
 
     public SlideShowRecordingExecutionState RecordingExecutionState => _recordingExecutionState;
 
+    public SlideShowRecordingCaptureAdapterReadiness RecordingCaptureAdapterReadiness =>
+        _recordingExecutionState.HostCapabilities.EffectiveCaptureAdapterReadiness;
+
     public IReadOnlyList<SlideShowRecordingExecutionAction> RecordingExecutionActions =>
         _recordingExecutionState.LastActions;
 
@@ -341,6 +344,11 @@ public sealed class SlideShowWindow : Window
 
     public SlideShowInkExecutionResult UndoLastPresenterInkStroke() =>
         ApplyInkExecution(SlideShowInkExecutionPlanner.UndoLastStroke(_inkExecutionState));
+
+    private static SlideShowRecordingCaptureAdapterReadiness CreateRecordingCaptureAdapterReadiness() =>
+        SlideShowRecordingCaptureAdapterPlanner.BuildDeferredReadiness(
+            "Avalonia slideshow",
+            "Avalonia microphone/camera capture adapter");
 
     /// <summary>Exposes the slide canvas for test assertions (DA1 suppression).</summary>
     internal SlideCanvas CanvasForTest => _slideCanvas;
