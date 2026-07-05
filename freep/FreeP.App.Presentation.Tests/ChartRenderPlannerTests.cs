@@ -116,9 +116,35 @@ public sealed class ChartRenderPlannerTests
     [InlineData(-1234.5, "#,##0.0;(#,##0.0)", "(1,234.5)")]
     [InlineData(12.34, "#,##0.0 \"kg\"", "12.3 kg")]
     [InlineData(42, "[Red]#,##0", "42")]
+    [InlineData(1234.5, "#,##0.0,", "1.2")]
+    [InlineData(1234567, "0.0,,\"M\"", "1.2M")]
+    [InlineData(1234, "[>=1000000]0.0,,\"M\";[>=1000]0.0,\"K\";0", "1.2K")]
+    [InlineData(1234567, "[>=1000000]0.0,,\"M\";[>=1000]0.0,\"K\";0", "1.2M")]
+    [InlineData(42, "[>=1000000]0.0,,\"M\";[>=1000]0.0,\"K\";0", "42")]
     public void FormatWithCode_UsesPowerPointStyleNumericCodes(double value, string code, string expected)
     {
         ChartRenderPlanner.FormatWithCode(value, code).Should().Be(expected);
+    }
+
+    [Fact]
+    public void AxisLabelPlans_ApplyConditionalScaledCustomFormatSections()
+    {
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange(new double?[] { 250000, 1250000 });
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Series.Add(series);
+        chart.ValueAxis.NumberFormatCode = "[>=1000000]0.0,,\"M\";[>=1000]0.0,\"K\";0";
+        chart.ValueAxis.NumberFormatSourceLinked = false;
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var valueLabels = ChartRenderPlanner.BuildValueAxisLabelPlans(chart, frame);
+
+        valueLabels.Select(label => label.Text)
+            .Should().Equal("0", "250.0K", "500.0K", "750.0K", "1.0M", "1.3M", "1.5M");
+        valueLabels.Should().OnlyContain(label =>
+            label.AxisLabelFormat == new ChartAxisLabelFormatPlan(
+                "[>=1000000]0.0,,\"M\";[>=1000]0.0,\"K\";0",
+                false));
     }
 
     [Fact]
@@ -200,6 +226,19 @@ public sealed class ChartRenderPlannerTests
 
         ChartRenderPlanner.FormatDataLabel(labels, 0.25, 1.0, "Q1", "Sales")
             .Should().Be("Sales Q1 25.0% 25%");
+    }
+
+    [Fact]
+    public void FormatDataLabel_UsesConditionalScaledNumberFormat()
+    {
+        var labels = new ChartDataLabels
+        {
+            ShowValue = true,
+            NumberFormat = "[>=1000000]0.0,,\"M\";[>=1000]0.0,\"K\";0"
+        };
+
+        ChartRenderPlanner.FormatDataLabel(labels, 1250000, 1250000, "Q1", "Sales")
+            .Should().Be("1.3M");
     }
 
     [Fact]

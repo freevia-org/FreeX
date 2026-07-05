@@ -2220,7 +2220,10 @@ public static partial class ChartRenderPlanner
         var numericPattern = section[placeholderStart..(placeholderEnd + 1)];
         var suffix = section[(placeholderEnd + 1)..];
         bool asPercent = section.Contains('%', StringComparison.Ordinal);
+        int scaleCommaCount = CountScaleCommas(ref suffix);
         double scaled = asPercent ? value * 100.0 : value;
+        for (int count = 0; count < scaleCommaCount; count++)
+            scaled /= 1000.0;
         suffix = suffix.Replace("%", string.Empty, StringComparison.Ordinal);
 
         var number = FormatNumberWithPattern(scaled, numericPattern);
@@ -2250,6 +2253,10 @@ public static partial class ChartRenderPlanner
     private static string SelectNumberFormatSection(double value, string code)
     {
         var sections = code.Split(';');
+        var conditionalSection = SelectConditionalNumberFormatSection(value, sections);
+        if (conditionalSection is not null)
+            return conditionalSection;
+
         if (sections.Length == 1)
             return sections[0];
 
@@ -2260,6 +2267,47 @@ public static partial class ChartRenderPlanner
             return sections.Length > 1 ? sections[1] : sections[0];
 
         return sections.Length > 2 ? sections[2] : sections[0];
+    }
+
+    private static string? SelectConditionalNumberFormatSection(double value, IReadOnlyList<string> sections)
+    {
+        bool hasConditionalSection = false;
+        foreach (var section in sections)
+        {
+            if (!TryReadNumberFormatCondition(section, out var condition))
+                continue;
+
+            hasConditionalSection = true;
+            if (condition.Matches(value))
+                return section;
+        }
+
+        return hasConditionalSection ? sections.LastOrDefault(section => !TryReadNumberFormatCondition(section, out _)) : null;
+    }
+
+    private static bool TryReadNumberFormatCondition(string section, out NumberFormatCondition condition)
+    {
+        for (int index = 0; index < section.Length; index++)
+        {
+            if (char.IsWhiteSpace(section[index]))
+                continue;
+
+            if (section[index] != '[')
+                break;
+
+            var end = section.IndexOf(']', index + 1);
+            if (end < 0)
+                break;
+
+            var token = section[(index + 1)..end].Trim();
+            if (NumberFormatCondition.TryParse(token, out condition))
+                return true;
+
+            index = end;
+        }
+
+        condition = default;
+        return false;
     }
 
     private static string NormalizeNumberFormatSection(string section)
@@ -2302,6 +2350,18 @@ public static partial class ChartRenderPlanner
         }
 
         return builder.ToString().Trim();
+    }
+
+    private static int CountScaleCommas(ref string suffix)
+    {
+        int count = 0;
+        while (count < suffix.Length && suffix[count] == ',')
+            count++;
+
+        if (count > 0)
+            suffix = suffix[count..];
+
+        return count;
     }
 
     private static string FormatNumberWithPattern(double value, string pattern)
@@ -2416,6 +2476,45 @@ public static partial class ChartRenderPlanner
         }
 
         return -1;
+    }
+
+    private readonly record struct NumberFormatCondition(string Operator, double Threshold)
+    {
+        public static bool TryParse(string token, out NumberFormatCondition condition)
+        {
+            string[] operators = [">=", "<=", "<>", ">", "<", "="];
+            foreach (var op in operators)
+            {
+                if (!token.StartsWith(op, StringComparison.Ordinal))
+                    continue;
+
+                var thresholdText = token[op.Length..].Trim();
+                if (double.TryParse(
+                    thresholdText,
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out var threshold))
+                {
+                    condition = new NumberFormatCondition(op, threshold);
+                    return true;
+                }
+            }
+
+            condition = default;
+            return false;
+        }
+
+        public bool Matches(double value) =>
+            Operator switch
+            {
+                ">=" => value >= Threshold,
+                "<=" => value <= Threshold,
+                "<>" => value != Threshold,
+                ">" => value > Threshold,
+                "<" => value < Threshold,
+                "=" => value == Threshold,
+                _ => false
+            };
     }
 
     private static IReadOnlyList<ChartPieSlicePrimitive> BuildSlicePrimitivesForSeries(

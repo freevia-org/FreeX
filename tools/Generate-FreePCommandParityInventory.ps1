@@ -325,7 +325,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/ChartDataLabelsTests.cs",
                 "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasAvaloniaTests.cs"
             ],
-            RemainingWork: "Shared chart label planning now applies preserved PowerPoint-style number/date format codes for common axis and category label cases. Full Excel custom number-format semantics, exact locale behavior, and PowerPoint-authoritative chart visual baselines remain deferred.")
+            RemainingWork: "Shared chart label planning now applies preserved PowerPoint-style number/date format codes for common axis and category label cases, including conditional threshold sections and scaled display-unit commas. Broader Excel custom-format semantics, exact locale behavior, and PowerPoint-authoritative chart visual baselines remain deferred.")
       ];
 
     private static IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> Collect(RibbonDefinition definition, string profile)
