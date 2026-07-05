@@ -995,6 +995,33 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
+    public void MailingsRulesSpecialFields_InsertSharedInstructionsThroughRegistry()
+    {
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        foreach (var commandId in new[]
+                 {
+                     "freew.merge-next-record",
+                     "freew.merge-record-number",
+                     "freew.merge-sequence-number"
+                 })
+        {
+            registry.TryGet(commandId, out var command).Should().BeTrue($"{commandId} must be backed by WPF");
+            command!.Execute(RibbonCommandContext.Empty);
+        }
+
+        editor.CommitToModel();
+
+        var text = string.Join(
+            "\n",
+            editor.Model.Blocks.OfType<Paragraph>().Select(paragraph => paragraph.PlainText));
+        text.Should().Contain($"{MailMerge.FieldOpen}{MailMerge.NextRecordField}{MailMerge.FieldClose}");
+        text.Should().Contain($"{MailMerge.FieldOpen}{MailMerge.MergeRecordNumberField}{MailMerge.FieldClose}");
+        text.Should().Contain($"{MailMerge.FieldOpen}{MailMerge.MergeSequenceNumberField}{MailMerge.FieldClose}");
+    }
+
+    [StaFact]
     public void ViewShow_ExposesWordStyleRulerToggle()
     {
         var definition = FreeWRibbon.Build();
