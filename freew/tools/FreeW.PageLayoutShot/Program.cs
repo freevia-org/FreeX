@@ -86,6 +86,7 @@ static int RenderAll(string outDir)
     var tablePaginationP1Path = VisualEvidenceOutputPath(outDir, "table-pagination-repeat-header", 1);
     var tablePaginationP2Path = VisualEvidenceOutputPath(outDir, "table-pagination-repeat-header", 2);
     var drawingObjectsPath = VisualEvidenceOutputPath(outDir, "drawing-objects-complex", 1);
+    var objectFormatPath = VisualEvidenceOutputPath(outDir, "object-format-position-size-style", 1);
     var chartSmartArtPath = VisualEvidenceOutputPath(outDir, "chart-smartart-complex", 1);
     var wordArtWatermarkPath = VisualEvidenceOutputPath(outDir, "wordart-watermark-stress", 1);
     var wordArtPictureWatermarkPath = VisualEvidenceOutputPath(outDir, "wordart-picture-watermark-layout", 1);
@@ -318,6 +319,14 @@ static int RenderAll(string outDir)
         scenarioId: "drawing-objects-complex",
         evidence: evidence,
         documentFactory: FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, objectFormatPath,
+        width: 960, height: 1700,
+        label: "Object Format",
+        scenarioId: "object-format-position-size-style",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildObjectFormatPositionSizeStyleDocument);
     if (rc != 0) return rc;
 
     rc = RenderMode(DocumentViewMode.PrintLayout, chartSmartArtPath,

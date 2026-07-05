@@ -38,6 +38,8 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument");
         source.Should().Contain("drawing-objects-complex.docx");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument");
+        source.Should().Contain("object-format-position-size-style.docx");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildObjectFormatPositionSizeStyleDocument");
         source.Should().Contain("chart-smartart-complex.docx");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildChartSmartArtCompositionDocument");
         source.Should().Contain("wordart-watermark-stress.docx");

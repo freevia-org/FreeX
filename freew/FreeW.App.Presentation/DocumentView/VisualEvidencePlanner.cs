@@ -150,6 +150,8 @@ public sealed record FreeWVisualDrawingObjectExpectation(
     bool HasSquareWrap,
     bool HasTopAndBottomWrap,
     bool HasZOrder,
+    int AltTextObjectCount,
+    IReadOnlyList<string> AltTextSummaries,
     FreeWVisualDrawingObjectEffectExpectation Effects,
     IReadOnlyList<DocumentFloatingObjectSnapshot> Objects);
 
@@ -576,6 +578,40 @@ public static class FreeWVisualEvidencePlanner
                 "z-order"
             ],
             "drawing-objects-complex_p{page}.png",
+            1,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition with { ExpectsFloatingObjects = true }),
+        new(
+            "object-format-position-size-style",
+            "Selected drawing-object position, size, style, alt-text, wrap, and z-order fidelity capture.",
+            [
+                "drawing-objects",
+                "object-format",
+                "floating-objects",
+                "print-layout",
+                "body-text",
+                "position-size",
+                "alt-text",
+                "drawing-effects",
+                "shapes",
+                "images",
+                "wordart",
+                "shape-effects",
+                "image-effects",
+                "wordart-effects",
+                "shadow",
+                "glow",
+                "reflection",
+                "soft-edge",
+                "bevel",
+                "artistic-effect",
+                "square-wrap",
+                "top-bottom-wrap",
+                "behind-text",
+                "in-front",
+                "z-order"
+            ],
+            "object-format-position-size-style_p{page}.png",
             1,
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition with { ExpectsFloatingObjects = true }),
@@ -1147,6 +1183,7 @@ public static class FreeWVisualEvidencePlanner
         if (objects.Count == 0)
             return EmptyDrawingObjectExpectation;
 
+        var altTextSummaries = BuildDrawingObjectAltTextSummaries(document, objects);
         return new FreeWVisualDrawingObjectExpectation(
             FloatingObjectCount: objects.Count,
             BehindTextCount: objects.Count(o => o.BehindText),
@@ -1160,8 +1197,38 @@ public static class FreeWVisualEvidencePlanner
             HasSquareWrap: objects.Any(o => o.Wrapping == ImageWrapping.Square),
             HasTopAndBottomWrap: objects.Any(o => o.Wrapping == ImageWrapping.TopAndBottom),
             HasZOrder: objects.Select(o => o.ZOrderIndex).Distinct().Count() > 1,
+            AltTextObjectCount: altTextSummaries.Count,
+            AltTextSummaries: altTextSummaries,
             Effects: BuildDrawingObjectEffectExpectation(document, objects),
             Objects: objects);
+    }
+
+    private static IReadOnlyList<string> BuildDrawingObjectAltTextSummaries(
+        TextDocument document,
+        IReadOnlyList<DocumentFloatingObjectSnapshot> objects)
+    {
+        var summaries = new List<string>();
+        foreach (var snapshot in objects)
+        {
+            if (!TryGetRun(document, snapshot, out var run))
+                continue;
+
+            var altText = snapshot.Kind switch
+            {
+                DocumentFloatingObjectKind.Image => run.Image?.AltText,
+                DocumentFloatingObjectKind.Shape => run.Shape?.AltText,
+                DocumentFloatingObjectKind.WordArt => run.WordArt?.AltText,
+                _ => null
+            };
+            if (string.IsNullOrWhiteSpace(altText))
+                continue;
+
+            summaries.Add(snapshot.TypeTag + ":" + altText.Trim());
+        }
+
+        return summaries
+            .OrderBy(summary => summary, StringComparer.Ordinal)
+            .ToList();
     }
 
     private static FreeWVisualDrawingObjectEffectExpectation BuildDrawingObjectEffectExpectation(
@@ -1743,6 +1810,8 @@ public static class FreeWVisualEvidencePlanner
         HasSquareWrap: false,
         HasTopAndBottomWrap: false,
         HasZOrder: false,
+        AltTextObjectCount: 0,
+        AltTextSummaries: [],
         Effects: new FreeWVisualDrawingObjectEffectExpectation(
             EffectObjectCount: 0,
             ShapeEffectObjectCount: 0,

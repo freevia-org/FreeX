@@ -1805,6 +1805,12 @@ static void GenerateF2FlowCorpus(string outDir)
     }
 
     {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildObjectFormatPositionSizeStyleDocument();
+        DocxWriter.Write(doc, Path.Combine(outDir, "object-format-position-size-style.docx"));
+        Console.WriteLine("  wrote object-format-position-size-style.docx");
+    }
+
+    {
         var doc = FreeWVisualEvidenceDocumentFactory.BuildChartSmartArtCompositionDocument();
         DocxWriter.Write(doc, Path.Combine(outDir, "chart-smartart-complex.docx"));
         Console.WriteLine("  wrote chart-smartart-complex.docx");
