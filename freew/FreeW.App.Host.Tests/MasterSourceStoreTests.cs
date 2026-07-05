@@ -341,6 +341,36 @@ public sealed class MasterSourceStoreTests
     }
 
     [Fact]
+    public void MasterStore_AddOrUpdateAndRemove_UseTrimmedTagIdentity()
+    {
+        var store = new MasterSourceStore();
+        store.AddOrUpdate(new Source { Tag = " Smith2020 ", Author = "Old Author", Title = "Old", Year = "2020" });
+        store.AddOrUpdate(new Source { Tag = "Smith2020", Author = "New Author", Title = "New", Year = "2024" });
+
+        store.Sources.Should().ContainSingle();
+        store.Sources[0].Tag.Should().Be("Smith2020");
+        store.Sources[0].Author.Should().Be("New Author");
+
+        store.Remove(" Smith2020 ").Should().BeTrue();
+        store.Sources.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void MasterStore_AddOrUpdateAndRemove_DoNotCollapseBlankTags()
+    {
+        var store = new MasterSourceStore();
+        store.AddOrUpdate(new Source { Tag = " ", Author = "First Author", Title = "First", Year = "2020" });
+        store.AddOrUpdate(new Source { Tag = string.Empty, Author = "Second Author", Title = "Second", Year = "2024" });
+
+        store.Sources.Should().HaveCount(2);
+        store.Sources.Select(source => source.Tag).Should().Equal(string.Empty, string.Empty);
+        store.Sources.Select(source => source.Author).Should().Equal("First Author", "Second Author");
+
+        store.Remove(" ").Should().BeFalse();
+        store.Sources.Should().HaveCount(2);
+    }
+
+    [Fact]
     public void MasterStore_Remove_DeletesByTag()
     {
         var store = new MasterSourceStore();

@@ -1012,6 +1012,74 @@ public sealed class SourceManagementDialogPlannerTests
     }
 
     [Fact]
+    public void CopyMasterToCurrent_UsesTrimmedTagIdentityAndKeepsCurrentSelection()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources: [new Source { Tag = "Smith2020", Author = "Current Smith" }],
+            masterSources:
+            [
+                new Source { Tag = " Smith2020 ", Author = "Master Smith" },
+                new Source { Tag = "smith2020", Author = "Lowercase Smith" }
+            ]);
+
+        var duplicate = SourceManagementDialogPlanner.CopyMasterToCurrent(
+            state,
+            masterSelectedIndex: 0,
+            currentSelectedIndex: 0);
+
+        duplicate.State.CurrentSources.Should().ContainSingle();
+        duplicate.State.CurrentSources[0].Tag.Should().Be("Smith2020");
+        duplicate.State.CurrentSources[0].Author.Should().Be("Current Smith");
+        duplicate.SelectedIndex.Should().Be(0);
+
+        var distinctCase = SourceManagementDialogPlanner.CopyMasterToCurrent(
+            duplicate.State,
+            masterSelectedIndex: 1,
+            currentSelectedIndex: duplicate.SelectedIndex);
+
+        distinctCase.State.CurrentSources.Should().HaveCount(2);
+        distinctCase.State.CurrentSources[1].Tag.Should().Be("smith2020");
+        distinctCase.State.CurrentSources[1].Author.Should().Be("Lowercase Smith");
+        distinctCase.SelectedIndex.Should().Be(1);
+    }
+
+    [Fact]
+    public void CurrentSourceMutations_DoNotCollapseBlankTags()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources: [],
+            masterSources:
+            [
+                new Source { Tag = string.Empty, Author = "Master Untagged" },
+                new Source { Tag = " ", Author = "Second Master Untagged" }
+            ]);
+
+        var first = SourceManagementDialogPlanner.AddCurrentSource(
+            state,
+            new SourceManagementSourceEntry(string.Empty, "First Untagged", "First", string.Empty, string.Empty));
+        var second = SourceManagementDialogPlanner.AddCurrentSource(
+            first.State,
+            new SourceManagementSourceEntry(" ", "Second Untagged", "Second", string.Empty, string.Empty));
+
+        second.State.CurrentSources.Should().HaveCount(2);
+        second.State.CurrentSources.Select(source => source.Tag).Should().Equal(string.Empty, string.Empty);
+        second.State.CurrentSources.Select(source => source.Author).Should().Equal("First Untagged", "Second Untagged");
+
+        var copiedBlank = SourceManagementDialogPlanner.CopyMasterToCurrent(
+            second.State,
+            masterSelectedIndex: 0,
+            currentSelectedIndex: second.SelectedIndex);
+
+        copiedBlank.State.CurrentSources.Should().HaveCount(3);
+        copiedBlank.State.CurrentSources[2].Author.Should().Be("Master Untagged");
+
+        var deleted = SourceManagementDialogPlanner.DeleteCurrentSource(copiedBlank.State, selectedIndex: 1);
+
+        deleted.State.CurrentSources.Should().HaveCount(2);
+        deleted.State.CurrentSources.Select(source => source.Author).Should().Equal("First Untagged", "Master Untagged");
+    }
+
+    [Fact]
     public void EditAndDeleteCurrentSource_PreserveSelectionThroughPlanner()
     {
         var state = SourceManagementDialogPlanner.BuildInitialState(
