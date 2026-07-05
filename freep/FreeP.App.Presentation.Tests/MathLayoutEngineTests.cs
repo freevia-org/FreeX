@@ -319,6 +319,16 @@ public sealed class MathLayoutEngineTests
                     yield return g2;
     }
 
+    private static IEnumerable<MathBox.Bracket> AllBrackets(MathBox box)
+    {
+        if (box is MathBox.Bracket b)
+            yield return b;
+        if (box is MathBox.Container c)
+            foreach (var child in c.Children)
+                foreach (var b2 in AllBrackets(child))
+                    yield return b2;
+    }
+
     [Fact]
     public void Delim_TwoElements_ExplicitPipeSepChr_RendersPipeBetweenElements()
     {
@@ -361,6 +371,26 @@ public sealed class MathLayoutEngineTests
     }
 
     // ── HA6: m:f fPr/type — fraction bar style ──────────────────────────────
+
+    [Fact]
+    public void Delim_WithGrowFalse_UsesNormalBracketHeightWithoutClippingTallInnerExpression()
+    {
+        var grow = MathLayoutEngine.Layout(
+            new MathNode.Delim("(", ")", new MathNode[] { TallFraction() }),
+            "Cambria Math",
+            FontSizePt);
+        var noGrow = MathLayoutEngine.Layout(
+            new MathNode.Delim("(", ")", new MathNode[] { TallFraction() }, grow: false),
+            "Cambria Math",
+            FontSizePt);
+
+        var growBracket = AllBrackets(grow).First();
+        var noGrowBracket = AllBrackets(noGrow).First();
+
+        noGrowBracket.ScaledHeight.Should().BeLessThan(growBracket.ScaledHeight);
+        noGrow.Metrics.Height.Should().BeGreaterThan(noGrowBracket.ScaledHeight);
+        noGrow.Metrics.Height.Should().BeApproximately(grow.Metrics.Height / 1.10, 0.01);
+    }
 
     [Fact]
     public void EqArray_StacksRowsAndReportsFullHeight()
