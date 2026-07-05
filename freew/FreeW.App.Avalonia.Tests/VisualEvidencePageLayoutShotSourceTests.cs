@@ -73,6 +73,9 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument");
         source.Should().Contain("drawing-objects-complex");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument");
+        source.Should().Contain("object-format-position-size-style");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"object-format-position-size-style\", 1)");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildObjectFormatPositionSizeStyleDocument");
         source.Should().Contain("chart-smartart-complex");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildChartSmartArtCompositionDocument");
         source.Should().Contain("wordart-watermark-stress");

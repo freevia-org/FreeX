@@ -104,7 +104,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 17;
+    public const int SummarySchemaVersion = 18;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -136,6 +136,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
     public static IReadOnlyList<string> DrawingObjectRendererScenarioIds { get; } =
     [
         "drawing-objects-complex",
+        "object-format-position-size-style",
         "wordart-watermark-stress"
     ];
     public static IReadOnlyList<string> GroupedChildEffectRendererScenarioIds { get; } =
@@ -1084,6 +1085,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("drawing-object evidence expects top-and-bottom wrapping but the object plan records none");
         if (tags.Contains("z-order", StringComparer.OrdinalIgnoreCase) && !objects.HasZOrder)
             rowFailures.Add("drawing-object evidence expects z-order depth but the object plan records a single layer");
+        if (tags.Contains("alt-text", StringComparer.OrdinalIgnoreCase) && objects.AltTextObjectCount <= 0)
+            rowFailures.Add("drawing-object evidence expects alt text but the object plan records none");
         if (tags.Contains("drawing-effects", StringComparer.OrdinalIgnoreCase) && !objects.Effects.HasAny)
             rowFailures.Add("drawing-object evidence expects effect metadata but the object plan records no effects");
         if (tags.Contains("shape-effects", StringComparer.OrdinalIgnoreCase) && objects.Effects.ShapeEffectObjectCount <= 0)
@@ -1528,7 +1531,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,
         List<string> failures)
     {
-        foreach (var scenarioId in GroupedChildEffectRendererScenarioIds)
+        foreach (var scenarioId in DrawingObjectRendererScenarioIds)
         {
             var wpfRows = TrustedRowsForHostScenario(rows, WpfHostId, scenarioId);
             var avaloniaRows = TrustedRowsForHostScenario(rows, AvaloniaHostId, scenarioId);
@@ -1563,7 +1566,9 @@ public static class FreeWVisualEvidenceManifestNormalizer
                     continue;
 
                 ValidateRendererPairRow("drawing-object renderer pair", scenarioId, pageNumber, wpf, avalonia, failures);
-                ValidateGroupedChildEffectPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+                ValidateDrawingObjectPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+                if (GroupedChildEffectRendererScenarioIds.Contains(scenarioId, StringComparer.OrdinalIgnoreCase))
+                    ValidateGroupedChildEffectPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
             }
         }
     }
@@ -1761,6 +1766,59 @@ public static class FreeWVisualEvidenceManifestNormalizer
         {
             failures.Add(
                 $"{pairName} rendered grouped child effect summaries differ: WPF '{FormatSummaries(wpfSummaries)}', Avalonia '{FormatSummaries(avaloniaSummaries)}'");
+        }
+    }
+
+    private static void ValidateDrawingObjectPairRow(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia,
+        List<string> failures)
+    {
+        var pairName = $"drawing-object renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        var wpfObjects = wpf.DrawingObjects;
+        var avaloniaObjects = avalonia.DrawingObjects;
+        if (wpfObjects.FloatingObjectCount != avaloniaObjects.FloatingObjectCount)
+        {
+            failures.Add(
+                $"{pairName} floating object counts differ: WPF {wpfObjects.FloatingObjectCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaObjects.FloatingObjectCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (wpfObjects.BehindTextCount != avaloniaObjects.BehindTextCount)
+        {
+            failures.Add(
+                $"{pairName} behind-text counts differ: WPF {wpfObjects.BehindTextCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaObjects.BehindTextCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (wpfObjects.InFrontCount != avaloniaObjects.InFrontCount)
+        {
+            failures.Add(
+                $"{pairName} in-front counts differ: WPF {wpfObjects.InFrontCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaObjects.InFrontCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        var wpfDrawingSignatures = BuildFloatingObjectSignatures(wpfObjects.Objects);
+        var avaloniaDrawingSignatures = BuildFloatingObjectSignatures(avaloniaObjects.Objects);
+        if (!wpfDrawingSignatures.SequenceEqual(avaloniaDrawingSignatures, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} floating object signatures differ: WPF '{FormatSummaries(wpfDrawingSignatures)}', Avalonia '{FormatSummaries(avaloniaDrawingSignatures)}'");
+        }
+
+        var wpfAltTextSummaries = OrderedSummaries(wpfObjects.AltTextSummaries ?? []);
+        var avaloniaAltTextSummaries = OrderedSummaries(avaloniaObjects.AltTextSummaries ?? []);
+        if (!wpfAltTextSummaries.SequenceEqual(avaloniaAltTextSummaries, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} alt text summaries differ: WPF '{FormatSummaries(wpfAltTextSummaries)}', Avalonia '{FormatSummaries(avaloniaAltTextSummaries)}'");
+        }
+
+        var wpfEffectSummaries = OrderedSummaries(wpfObjects.Effects.EffectSummaries);
+        var avaloniaEffectSummaries = OrderedSummaries(avaloniaObjects.Effects.EffectSummaries);
+        if (!wpfEffectSummaries.SequenceEqual(avaloniaEffectSummaries, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} drawing effect summaries differ: WPF '{FormatSummaries(wpfEffectSummaries)}', Avalonia '{FormatSummaries(avaloniaEffectSummaries)}'");
         }
     }
 

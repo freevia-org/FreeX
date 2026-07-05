@@ -27,6 +27,7 @@ public sealed class VisualEvidencePlannerTests
             "table-layout-complex",
             "table-pagination-repeat-header",
             "drawing-objects-complex",
+            "object-format-position-size-style",
             "chart-smartart-complex",
             "wordart-watermark-stress",
             "wordart-picture-watermark-layout",
@@ -141,6 +142,22 @@ public sealed class VisualEvidencePlannerTests
             "artistic-effect"]);
         drawingScenario.ExpectedOutputNamePattern.Should().Be("drawing-objects-complex_p{page}.png");
         drawingScenario.Composition.ExpectsFloatingObjects.Should().BeTrue();
+
+        var objectFormatScenario = FreeWVisualEvidencePlanner.ResolveScenario("object-format-position-size-style");
+        objectFormatScenario.ExpectedFeatureTags.Should().Contain([
+            "object-format",
+            "position-size",
+            "alt-text",
+            "shapes",
+            "images",
+            "wordart",
+            "square-wrap",
+            "top-bottom-wrap",
+            "behind-text",
+            "in-front",
+            "z-order"]);
+        objectFormatScenario.ExpectedOutputNamePattern.Should().Be("object-format-position-size-style_p{page}.png");
+        objectFormatScenario.Composition.ExpectsFloatingObjects.Should().BeTrue();
 
         var chartSmartArtScenario = FreeWVisualEvidencePlanner.ResolveScenario("chart-smartart-complex");
         chartSmartArtScenario.ExpectedFeatureTags.Should().Contain(["chart-smartart", "chart-palette", "scatter-markers", "smartart-style"]);
@@ -735,8 +752,8 @@ public sealed class VisualEvidencePlannerTests
 
             plan.WordApplicationProgId.Should().Be("Word.Application");
             plan.MaxPagesPerDocument.Should().Be(3);
-            plan.ExpectedFixtureCount.Should().Be(20);
-            plan.ExpectedBaselinePngCount.Should().Be(60);
+            plan.ExpectedFixtureCount.Should().Be(21);
+            plan.ExpectedBaselinePngCount.Should().Be(63);
             plan.Fixtures.Select(f => f.DocumentName).Should().Contain([
                 "f2-hf-basic.docx",
                 "field-page-number-variants.docx",
@@ -744,6 +761,7 @@ public sealed class VisualEvidencePlannerTests
                 "table-layout-complex.docx",
                 "table-pagination-repeat-header.docx",
                 "drawing-objects-complex.docx",
+                "object-format-position-size-style.docx",
                 "chart-smartart-complex.docx",
                 "wordart-watermark-stress.docx",
                 "wordart-picture-watermark-layout.docx",
@@ -759,6 +777,8 @@ public sealed class VisualEvidencePlannerTests
                 .ExpectedBaselinePaths.Should().Contain("field-page-number-variants/field-page-number-variants_p1.png");
             plan.Fixtures.Single(f => f.ScenarioId == "references-heavy-fields")
                 .ExpectedBaselinePaths.Should().Contain("references-heavy-fields/references-heavy-fields_p2.png");
+            plan.Fixtures.Single(f => f.ScenarioId == "object-format-position-size-style")
+                .ExpectedBaselinePaths.Should().Contain("object-format-position-size-style/object-format-position-size-style_p1.png");
         }
         finally
         {
@@ -1063,6 +1083,64 @@ public sealed class VisualEvidencePlannerTests
         expectation.DrawingObjects.Effects.RenderedGroupChildEffectSummaries.Should().Contain(
             "GroupChild0:Shape:glow");
         expectation.DrawingObjects.Effects.PlannedGroupChildEffectSummaries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void BuildPageExpectation_RecordsSharedObjectFormatPositionSizeStyle()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildObjectFormatPositionSizeStyleDocument();
+        var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "object-format-position-size-style",
+            document.Page,
+            pageNumber: 1,
+            pageCount: 1,
+            outputName: "object-format-position-size-style_p1.png",
+            availableWidthDip: 960,
+            document: document);
+
+        expectation.Composition.ExpectsFloatingObjects.Should().BeTrue();
+        expectation.DrawingObjects.FloatingObjectCount.Should().Be(3);
+        expectation.DrawingObjects.BehindTextCount.Should().Be(1);
+        expectation.DrawingObjects.InFrontCount.Should().Be(2);
+        expectation.DrawingObjects.HasImages.Should().BeTrue();
+        expectation.DrawingObjects.HasShapes.Should().BeTrue();
+        expectation.DrawingObjects.HasWordArt.Should().BeTrue();
+        expectation.DrawingObjects.HasSquareWrap.Should().BeTrue();
+        expectation.DrawingObjects.HasTopAndBottomWrap.Should().BeTrue();
+        expectation.DrawingObjects.HasZOrder.Should().BeTrue();
+        expectation.DrawingObjects.AltTextObjectCount.Should().Be(3);
+        expectation.DrawingObjects.AltTextSummaries.Should().Contain([
+            "Image:Square wrapped sample picture with glow reflection soft edge and artistic effect",
+            "Shape:Behind text callout with shadow and bevel",
+            "WordArt:Top and bottom wrapped WordArt format label"]);
+
+        var image = expectation.DrawingObjects.Objects.Single(o => o.Kind == DocumentFloatingObjectKind.Image);
+        image.Wrapping.Should().Be(ImageWrapping.Square);
+        image.ZOrderIndex.Should().Be(5);
+        image.Rect.WidthDip.Should().BeApproximately(176, 0.001);
+        image.Rect.HeightDip.Should().BeApproximately(112, 0.001);
+
+        var shape = expectation.DrawingObjects.Objects.Single(o => o.Kind == DocumentFloatingObjectKind.Shape);
+        shape.BehindText.Should().BeTrue();
+        shape.ZOrderIndex.Should().Be(1);
+
+        var wordArt = expectation.DrawingObjects.Objects.Single(o => o.Kind == DocumentFloatingObjectKind.WordArt);
+        wordArt.Wrapping.Should().Be(ImageWrapping.TopAndBottom);
+        wordArt.ZOrderIndex.Should().Be(9);
+
+        expectation.DrawingObjects.Effects.ShapeEffectObjectCount.Should().Be(1);
+        expectation.DrawingObjects.Effects.ImageEffectObjectCount.Should().Be(1);
+        expectation.DrawingObjects.Effects.WordArtEffectObjectCount.Should().Be(1);
+        expectation.DrawingObjects.Effects.HasShadow.Should().BeTrue();
+        expectation.DrawingObjects.Effects.HasGlow.Should().BeTrue();
+        expectation.DrawingObjects.Effects.HasReflection.Should().BeTrue();
+        expectation.DrawingObjects.Effects.HasSoftEdge.Should().BeTrue();
+        expectation.DrawingObjects.Effects.HasBevel.Should().BeTrue();
+        expectation.DrawingObjects.Effects.HasArtisticEffect.Should().BeTrue();
+        expectation.DrawingObjects.Effects.EffectSummaries.Should().Contain([
+            "Shape:shadow+bevel",
+            "Image:shadow+glow+reflection+soft-edge+bevel+artistic:GlowDiffused",
+            "WordArt:glow"]);
     }
 
     [Fact]
@@ -1411,6 +1489,76 @@ public sealed class VisualEvidencePlannerTests
                 && f.Contains("rendered grouped child effect summaries differ", StringComparison.Ordinal)
                 && f.Contains("WPF 'GroupChild0:Shape:glow'", StringComparison.Ordinal)
                 && f.Contains("Avalonia 'GroupChild0:Shape:shadow'", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RequiresMatchingObjectFormatAltTextEvidence()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "object-format-position-size-style";
+            var wpfRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaWithDifferentAltText = avaloniaRow with
+            {
+                PageExpectation = avaloniaRow.PageExpectation with
+                {
+                    DrawingObjects = avaloniaRow.PageExpectation.DrawingObjects with
+                    {
+                        AltTextSummaries = ["Image:stale object-format alt text"]
+                    }
+                }
+            };
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [wpfRow],
+                new DateTimeOffset(2026, 7, 5, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [avaloniaWithDifferentAltText],
+                new DateTimeOffset(2026, 7, 5, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("drawing-object renderer pair 'object-format-position-size-style' page 1", StringComparison.Ordinal)
+                && f.Contains("alt text summaries differ", StringComparison.Ordinal)
+                && f.Contains("stale object-format alt text", StringComparison.Ordinal));
         }
         finally
         {
@@ -3295,6 +3443,7 @@ public sealed class VisualEvidencePlannerTests
             "table-layout-complex" => FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument(),
             "table-pagination-repeat-header" => FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument(),
             "drawing-objects-complex" => FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument(),
+            "object-format-position-size-style" => FreeWVisualEvidenceDocumentFactory.BuildObjectFormatPositionSizeStyleDocument(),
             "chart-smartart-complex" => FreeWVisualEvidenceDocumentFactory.BuildChartSmartArtCompositionDocument(),
             "wordart-watermark-stress" => FreeWVisualEvidenceDocumentFactory.BuildWordArtWatermarkStressDocument(),
             "wordart-picture-watermark-layout" => FreeWVisualEvidenceDocumentFactory.BuildWordArtPictureWatermarkLayoutDocument(),

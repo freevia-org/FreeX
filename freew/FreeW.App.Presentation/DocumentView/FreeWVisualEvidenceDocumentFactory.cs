@@ -516,6 +516,34 @@ public static class FreeWVisualEvidenceDocumentFactory
         return doc;
     }
 
+    public static TextDocument BuildObjectFormatPositionSizeStyleDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Object Format Position Size Style") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph(
+            "This shared fixture records selected drawing-object formatting: explicit position, size, " +
+            "style effects, alt text, text wrapping, and z-order across WPF and Avalonia evidence."));
+
+        var anchor = new Paragraph();
+        anchor.Runs.Add(new Run(
+            "The three selected objects should retain their object-format metadata while surrounding " +
+            "text gives square and top-and-bottom wrapping real page context. "));
+        anchor.Runs.Add(Run.FromShape(BuildObjectFormatBehindTextShape()));
+        anchor.Runs.Add(Run.FromImage(BuildObjectFormatSquareImage()));
+        anchor.Runs.Add(Run.FromWordArt(BuildObjectFormatWordArt()));
+        doc.Blocks.Add(anchor);
+
+        for (var i = 1; i <= 8; i++)
+        {
+            doc.Blocks.Add(new Paragraph(
+                $"Object format body paragraph {i}: this text surrounds selected drawing objects so wrap, " +
+                "behind-text placement, in-front layering, and z-order remain visible in the capture."));
+        }
+
+        return doc;
+    }
+
     public static TextDocument BuildChartSmartArtCompositionDocument()
     {
         var doc = TextDocument.CreateEmpty();
@@ -774,6 +802,23 @@ public static class FreeWVisualEvidenceDocumentFactory
         return shape;
     }
 
+    private static Shape BuildObjectFormatBehindTextShape()
+    {
+        var shape = Shape.TextBoxWith("Behind text\n150 x 64 pt", widthPt: 150, heightPt: 64, fillColorHex: "#FCE4D6");
+        shape.OutlineColorHex = "#C55A11";
+        shape.OutlineWidthPt = 1.75;
+        shape.OutlineDash = "dash";
+        shape.AltText = "Behind text callout with shadow and bevel";
+        shape.Placement = Placement(ImageWrapping.Behind, xPt: 24, yPt: 42, zOrder: 1);
+        shape.Effects = new ShapeEffectLst
+        {
+            HasShadow = true,
+            ShadowAlpha = 32000,
+            HasBevel = true
+        };
+        return shape;
+    }
+
     private static InlineImage BuildFloatingEffectImage() =>
         new(BuildGeneratedWatermarkPngBytes(), widthPt: 126, heightPt: 72)
         {
@@ -786,6 +831,25 @@ public static class FreeWVisualEvidenceDocumentFactory
             GlowSizePt = 5,
             GlowColorHex = "5B9BD5",
             ReflectionPreset = 1,
+            ArtisticEffect = ImageArtisticEffect.GlowDiffused
+        };
+
+    private static InlineImage BuildObjectFormatSquareImage() =>
+        new(BuildGeneratedWatermarkPngBytes(), widthPt: 132, heightPt: 84)
+        {
+            AltText = "Square wrapped sample picture with glow reflection soft edge and artistic effect",
+            Wrapping = ImageWrapping.Square,
+            HorizontalAnchor = HorizontalAnchor.Margin,
+            VerticalAnchor = VerticalAnchor.Paragraph,
+            HorizontalOffsetPt = 174,
+            VerticalOffsetPt = 60,
+            ZOrderIndex = 5,
+            ShadowPreset = 3,
+            GlowSizePt = 6,
+            GlowColorHex = "70AD47",
+            ReflectionPreset = 2,
+            SoftEdgePt = 2,
+            BevelPreset = 1,
             ArtisticEffect = ImageArtisticEffect.GlowDiffused
         };
 
@@ -874,6 +938,14 @@ public static class FreeWVisualEvidenceDocumentFactory
             AltText = "Floating WordArt",
             Warp = WordArtWarp.Wave1,
             Placement = Placement(ImageWrapping.InFront, xPt: 300, yPt: 30, zOrder: 8)
+        };
+
+    private static WordArt BuildObjectFormatWordArt() =>
+        new("FORMAT", WordArtStyle.GlowGold, fontSizePt: 28)
+        {
+            AltText = "Top and bottom wrapped WordArt format label",
+            Warp = WordArtWarp.ArchUp,
+            Placement = Placement(ImageWrapping.TopAndBottom, xPt: 292, yPt: 146, zOrder: 9)
         };
 
     private static Shape BuildWatermarkStressBackingShape()

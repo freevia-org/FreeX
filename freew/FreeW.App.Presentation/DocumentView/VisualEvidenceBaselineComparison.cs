@@ -108,6 +108,7 @@ public static class FreeWVisualBaselineComparisonPlanner
             "table-layout-complex",
             "table-pagination-repeat-header",
             "drawing-objects-complex",
+            "object-format-position-size-style",
             "chart-smartart-complex",
             "wordart-watermark-stress",
             "wordart-picture-watermark-layout",
