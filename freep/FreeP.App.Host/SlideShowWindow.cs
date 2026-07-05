@@ -1119,6 +1119,10 @@ public sealed class SlideShowWindow : Window
                 GeometricMaskEffect(sb, element, plan);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Plus:
+                GeometricMaskEffect(sb, element, plan);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Zoom:
                 ZoomEffect(sb, element, plan);
                 break;
@@ -1499,6 +1503,10 @@ public sealed class SlideShowWindow : Window
                 DiamondEffect(sb, el, plan);
                 break;
 
+            case SlideShowGeometricMaskKind.Plus:
+                PlusEffect(sb, el, plan);
+                break;
+
             default:
                 AppearEffect(sb, el, plan.DelayMs);
                 break;
@@ -1645,6 +1653,61 @@ public sealed class SlideShowWindow : Window
         return new Point(
             center.X + (full.X - center.X) * progress,
             center.Y + (full.Y - center.Y) * progress);
+    }
+
+    private static void PlusEffect(Storyboard sb, FrameworkElement el,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        double w = el.Width  > 0 ? el.Width  : 960;
+        double h = el.Height > 0 ? el.Height : 540;
+
+        var fromProgress = plan.GeometricMaskExpandsFromCenter ? 0.0 : 1.0;
+        var toProgress = plan.GeometricMaskExpandsFromCenter ? 1.0 : 0.0;
+        var (fromVertical, fromHorizontal) = BuildPlusRects(w, h, fromProgress);
+        var (toVertical, toHorizontal) = BuildPlusRects(w, h, toProgress);
+
+        var clip = new GeometryGroup { FillRule = FillRule.Nonzero };
+        var vertical = new RectangleGeometry(fromVertical);
+        var horizontal = new RectangleGeometry(fromHorizontal);
+        clip.Children.Add(vertical);
+        clip.Children.Add(horizontal);
+
+        el.Clip = clip;
+        el.Opacity = 1;
+
+        var dur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
+        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+        AddRectAnimation(sb, vertical, fromVertical, toVertical, dur, ease, plan.DelayMs);
+        AddRectAnimation(sb, horizontal, fromHorizontal, toHorizontal, dur, ease, plan.DelayMs);
+    }
+
+    private static (Rect Vertical, Rect Horizontal) BuildPlusRects(double width, double height, double progress)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        var verticalWidth = width * progress;
+        var horizontalHeight = height * progress;
+        return (
+            new Rect((width - verticalWidth) / 2, 0, verticalWidth, height),
+            new Rect(0, (height - horizontalHeight) / 2, width, horizontalHeight));
+    }
+
+    private static void AddRectAnimation(
+        Storyboard storyboard,
+        RectangleGeometry target,
+        Rect from,
+        Rect to,
+        Duration duration,
+        IEasingFunction easing,
+        int delayMs)
+    {
+        var anim = new RectAnimation(from, to, duration)
+        {
+            BeginTime = TimeSpan.FromMilliseconds(delayMs),
+            EasingFunction = easing
+        };
+        Storyboard.SetTarget(anim, target);
+        Storyboard.SetTargetProperty(anim, new PropertyPath(RectangleGeometry.RectProperty));
+        storyboard.Children.Add(anim);
     }
 
     private static void AddDiamondPointAnimation(

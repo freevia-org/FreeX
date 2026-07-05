@@ -1113,6 +1113,10 @@ public sealed class SlideShowWindow : Window
                 GeometricMaskEffect(element, plan, onReveal);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Plus:
+                GeometricMaskEffect(element, plan, onReveal);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Zoom:
                 ZoomEffect(element, plan, onReveal);
                 break;
@@ -1547,6 +1551,7 @@ public sealed class SlideShowWindow : Window
         {
             case SlideShowGeometricMaskKind.Circle:
             case SlideShowGeometricMaskKind.Diamond:
+            case SlideShowGeometricMaskKind.Plus:
                 GeometricMaskClipEffect(el, plan, onReveal);
                 break;
 
@@ -1631,6 +1636,7 @@ public sealed class SlideShowWindow : Window
         {
             SlideShowGeometricMaskKind.Circle => BuildCircleGeometry(width, height, progress),
             SlideShowGeometricMaskKind.Diamond => BuildDiamondGeometry(width, height, progress),
+            SlideShowGeometricMaskKind.Plus => BuildPlusGeometry(width, height, progress),
             _ => new RectangleGeometry(new Rect(0, 0, width, height))
         };
 
@@ -1675,6 +1681,25 @@ public sealed class SlideShowWindow : Window
         return new Point(
             center.X + (full.X - center.X) * progress,
             center.Y + (full.Y - center.Y) * progress);
+    }
+
+    private static GeometryGroup BuildPlusGeometry(double width, double height, double progress)
+    {
+        var (vertical, horizontal) = BuildPlusRects(width, height, progress);
+        var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
+        geometry.Children.Add(new RectangleGeometry(vertical));
+        geometry.Children.Add(new RectangleGeometry(horizontal));
+        return geometry;
+    }
+
+    private static (Rect Vertical, Rect Horizontal) BuildPlusRects(double width, double height, double progress)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        var verticalWidth = width * progress;
+        var horizontalHeight = height * progress;
+        return (
+            new Rect((width - verticalWidth) / 2, 0, verticalWidth, height),
+            new Rect(0, (height - horizontalHeight) / 2, width, horizontalHeight));
     }
 
     private void AnimateRectClip(Control target, RectangleGeometry clipRect,

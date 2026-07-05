@@ -325,10 +325,43 @@ public sealed class SlideShowPlaybackPlannerTests
         diamondOut.GeometricMaskExpandsFromCenter.Should().BeFalse();
         diamondOut.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
 
-        var growShrink = SlideShowPlaybackPlanner.PlanShapeAnimation(
+        var plusIn = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
                 ShapeId = 15,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Plus,
+                Direction = AnimationDirection.In,
+                DurationMs = 285
+            },
+            startDelayMs: 25);
+
+        plusIn.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Plus);
+        plusIn.GeometricMaskKind.Should().Be(SlideShowGeometricMaskKind.Plus);
+        plusIn.GeometricMaskExpandsFromCenter.Should().BeTrue();
+        plusIn.DurationMs.Should().Be(285);
+        plusIn.DelayMs.Should().Be(25);
+        plusIn.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.OnComplete);
+
+        var plusOut = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 16,
+                Kind = AnimationKind.Exit,
+                Preset = AnimationPreset.Plus,
+                Direction = AnimationDirection.Out
+            },
+            startDelayMs: 0);
+
+        plusOut.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Plus);
+        plusOut.GeometricMaskKind.Should().Be(SlideShowGeometricMaskKind.Plus);
+        plusOut.GeometricMaskExpandsFromCenter.Should().BeFalse();
+        plusOut.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
+
+        var growShrink = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 17,
                 Kind = AnimationKind.Emphasis,
                 Preset = AnimationPreset.Grow,
                 DurationMs = 450

@@ -29,6 +29,7 @@ public enum SlideShowShapeAnimationEffectKind
     Checkerboard,
     Circle,
     Diamond,
+    Plus,
     Zoom,
     Pulse,
     GrowShrink,
@@ -52,7 +53,8 @@ public enum SlideShowGeometricMaskKind
 {
     None,
     Circle,
-    Diamond
+    Diamond,
+    Plus
 }
 
 public sealed record SlideShowShapeAnimationPlaybackPlan(
@@ -197,6 +199,7 @@ public static class SlideShowPlaybackPlanner
             AnimationPreset.Checkerboard => SlideShowShapeAnimationEffectKind.Checkerboard,
             AnimationPreset.Circle => SlideShowShapeAnimationEffectKind.Circle,
             AnimationPreset.Diamond => SlideShowShapeAnimationEffectKind.Diamond,
+            AnimationPreset.Plus => SlideShowShapeAnimationEffectKind.Plus,
             AnimationPreset.Zoom => SlideShowShapeAnimationEffectKind.Zoom,
             AnimationPreset.Pulse => SlideShowShapeAnimationEffectKind.Pulse,
             AnimationPreset.Grow or AnimationPreset.Shrink => SlideShowShapeAnimationEffectKind.GrowShrink,
@@ -280,6 +283,7 @@ public static class SlideShowPlaybackPlanner
         {
             AnimationPreset.Circle => SlideShowGeometricMaskKind.Circle,
             AnimationPreset.Diamond => SlideShowGeometricMaskKind.Diamond,
+            AnimationPreset.Plus => SlideShowGeometricMaskKind.Plus,
             _ => SlideShowGeometricMaskKind.None
         };
 
