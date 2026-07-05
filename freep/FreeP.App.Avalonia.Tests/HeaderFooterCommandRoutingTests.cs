@@ -81,6 +81,78 @@ public sealed class HeaderFooterCommandRoutingTests
     }
 
     [Fact]
+    public async Task HeaderFooter_apply_forwards_fixed_date_options()
+    {
+        HeaderFooterApplyPlan? plan = null;
+        Run? dateRun = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+
+            Execute(window.BuildCommandRegistry(), HeaderFooterCommandPlanner.DateTimeCommandId);
+            window.ApplyHeaderFooterForTests(
+                showDateTime: true,
+                showFooter: false,
+                showSlideNumber: false,
+                footerText: string.Empty,
+                scope: HeaderFooterApplyScope.CurrentSlide,
+                dateTimeMode: HeaderFooterDateTimeMode.Fixed,
+                fixedDateTimeText: "Issued");
+
+            plan = window.LastHeaderFooterApplyPlan;
+            dateRun = window.Editor.Presentation.Slides[0].Shapes
+                .Single(shape => shape.Placeholder?.Type == PlaceholderType.DateTime)
+                .TextBody!.Paragraphs.Single().Runs.Single();
+        });
+
+        if (!ran) return;
+        plan!.Options.DateTimeMode.Should().Be(HeaderFooterDateTimeMode.Fixed);
+        dateRun!.Field.Should().BeNull();
+        dateRun.Text.Should().Be("Issued");
+    }
+
+    [Fact]
+    public async Task HeaderFooter_apply_all_can_suppress_title_slide_through_shared_planner()
+    {
+        HfFlags? titleFlags = null;
+        HfFlags? contentFlags = null;
+        HeaderFooterApplyPlan? plan = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.Presentation.Layouts.Add(new SlideLayout
+            {
+                Id = "content",
+                Name = "Title and Content",
+                LayoutType = SlideLayoutType.TitleContent,
+            });
+            window.Editor.Presentation.Slides.Add(new Slide { LayoutId = "content" });
+
+            Execute(window.BuildCommandRegistry(), HeaderFooterCommandPlanner.HeaderFooterCommandId);
+            window.ApplyHeaderFooterForTests(
+                showDateTime: true,
+                showFooter: true,
+                showSlideNumber: true,
+                footerText: "Deck footer",
+                scope: HeaderFooterApplyScope.AllSlides,
+                suppressOnTitleSlide: true);
+
+            plan = window.LastHeaderFooterApplyPlan;
+            titleFlags = window.Editor.Presentation.Slides[0].HfVisibility;
+            contentFlags = window.Editor.Presentation.Slides[1].HfVisibility;
+        });
+
+        if (!ran) return;
+        plan!.Options.SuppressOnTitleSlide.Should().BeTrue();
+        titleFlags!.ShowDate.Should().BeFalse();
+        titleFlags.ShowFooter.Should().BeFalse();
+        titleFlags.ShowSlideNum.Should().BeFalse();
+        contentFlags!.ShowDate.Should().BeTrue();
+        contentFlags.ShowFooter.Should().BeTrue();
+        contentFlags.ShowSlideNum.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task View_show_commands_toggle_shared_state_and_gesture_snap_flags()
     {
         PresentationViewShowState state = default;

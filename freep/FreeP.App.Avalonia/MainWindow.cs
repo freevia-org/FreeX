@@ -125,9 +125,13 @@ public sealed class MainWindow : Window
     private SlideSizeDialogUnit _slideSizeUnit = SlideSizeDialogUnit.Inches;
     private Border _headerFooterPaneHost = null!;
     private CheckBox _headerFooterDateTimeCheck = null!;
+    private ComboBox _headerFooterDateFormatCombo = null!;
+    private CheckBox _headerFooterFixedDateCheck = null!;
+    private TextBox _headerFooterFixedDateBox = null!;
     private CheckBox _headerFooterFooterCheck = null!;
     private TextBox _headerFooterFooterBox = null!;
     private CheckBox _headerFooterSlideNumberCheck = null!;
+    private CheckBox _headerFooterDontShowOnTitleSlideCheck = null!;
     private Border _reviewCommentsPaneHost = null!;
     private StackPanel _reviewCommentsPanePanel = null!;
     private int? _selectedCommentIndex;
@@ -1088,7 +1092,24 @@ public sealed class MainWindow : Window
         _headerFooterDateTimeCheck = new CheckBox
         {
             Content = "Date and time",
-            Margin = new Thickness(12, 4, 12, 8),
+            Margin = new Thickness(12, 4, 12, 4),
+        };
+        _headerFooterDateFormatCombo = new ComboBox
+        {
+            ItemsSource = HeaderFooterCommandPlanner.DateFormatOptions,
+            SelectedIndex = 0,
+            Margin = new Thickness(28, 0, 12, 4),
+            MinWidth = 180,
+        };
+        _headerFooterFixedDateCheck = new CheckBox
+        {
+            Content = "Fixed",
+            Margin = new Thickness(28, 0, 12, 4),
+        };
+        _headerFooterFixedDateBox = new TextBox
+        {
+            Margin = new Thickness(44, 0, 12, 8),
+            MinWidth = 164,
         };
         _headerFooterFooterCheck = new CheckBox
         {
@@ -1103,10 +1124,17 @@ public sealed class MainWindow : Window
         _headerFooterSlideNumberCheck = new CheckBox
         {
             Content = "Slide number",
+            Margin = new Thickness(12, 4, 12, 8),
+        };
+        _headerFooterDontShowOnTitleSlideCheck = new CheckBox
+        {
+            Content = "Don't show on title slide",
             Margin = new Thickness(12, 4, 12, 12),
         };
         _headerFooterFooterCheck.IsCheckedChanged += (_, _) =>
             _headerFooterFooterBox.IsEnabled = _headerFooterFooterCheck.IsChecked == true;
+        _headerFooterDateTimeCheck.IsCheckedChanged += (_, _) => UpdateHeaderFooterDateControls();
+        _headerFooterFixedDateCheck.IsCheckedChanged += (_, _) => UpdateHeaderFooterDateControls();
 
         var apply = new Button
         {
@@ -1151,9 +1179,13 @@ public sealed class MainWindow : Window
                         Margin = new Thickness(12, 12, 12, 4),
                     },
                     _headerFooterDateTimeCheck,
+                    _headerFooterDateFormatCombo,
+                    _headerFooterFixedDateCheck,
+                    _headerFooterFixedDateBox,
                     _headerFooterFooterCheck,
                     _headerFooterFooterBox,
                     _headerFooterSlideNumberCheck,
+                    _headerFooterDontShowOnTitleSlideCheck,
                     new StackPanel
                     {
                         Orientation = Orientation.Horizontal,
@@ -2081,10 +2113,17 @@ public sealed class MainWindow : Window
         var options = HeaderFooterCommandPlanner.BuildDefaultOptions(LastHeaderFooterState, focus);
 
         _headerFooterDateTimeCheck.IsChecked = options.ShowDateTime;
+        _headerFooterDateFormatCombo.SelectedItem = HeaderFooterCommandPlanner.DateFormatOptions.FirstOrDefault(option =>
+            StringComparer.Ordinal.Equals(option.FieldType, options.DateTimeFieldType)) ??
+            HeaderFooterCommandPlanner.DateFormatOptions[0];
+        _headerFooterFixedDateCheck.IsChecked = options.DateTimeMode == HeaderFooterDateTimeMode.Fixed;
+        _headerFooterFixedDateBox.Text = options.FixedDateTimeText;
         _headerFooterFooterCheck.IsChecked = options.ShowFooter;
         _headerFooterFooterBox.Text = options.FooterText;
         _headerFooterFooterBox.IsEnabled = options.ShowFooter;
         _headerFooterSlideNumberCheck.IsChecked = options.ShowSlideNumber;
+        _headerFooterDontShowOnTitleSlideCheck.IsChecked = options.SuppressOnTitleSlide;
+        UpdateHeaderFooterDateControls();
 
         HideLayoutPicker();
         HideTablePicker();
@@ -2104,23 +2143,42 @@ public sealed class MainWindow : Window
         bool showFooter,
         bool showSlideNumber,
         string footerText,
-        HeaderFooterApplyScope scope)
+        HeaderFooterApplyScope scope,
+        bool suppressOnTitleSlide = false,
+        HeaderFooterDateTimeMode dateTimeMode = HeaderFooterDateTimeMode.AutoUpdate,
+        string dateTimeFieldType = "datetime1",
+        string fixedDateTimeText = "")
     {
         _headerFooterDateTimeCheck.IsChecked = showDateTime;
+        _headerFooterDateFormatCombo.SelectedItem = HeaderFooterCommandPlanner.DateFormatOptions.FirstOrDefault(option =>
+            StringComparer.Ordinal.Equals(option.FieldType, dateTimeFieldType)) ??
+            HeaderFooterCommandPlanner.DateFormatOptions[0];
+        _headerFooterFixedDateCheck.IsChecked = dateTimeMode == HeaderFooterDateTimeMode.Fixed;
+        _headerFooterFixedDateBox.Text = fixedDateTimeText;
         _headerFooterFooterCheck.IsChecked = showFooter;
         _headerFooterFooterBox.Text = footerText;
         _headerFooterSlideNumberCheck.IsChecked = showSlideNumber;
+        _headerFooterDontShowOnTitleSlideCheck.IsChecked = suppressOnTitleSlide;
+        UpdateHeaderFooterDateControls();
         return ApplyHeaderFooter(scope);
     }
 
     internal bool ApplyHeaderFooter(HeaderFooterApplyScope scope)
     {
+        var dateFormat = _headerFooterDateFormatCombo.SelectedItem as HeaderFooterDateFormatOption ??
+            HeaderFooterCommandPlanner.DateFormatOptions[0];
         var options = new HeaderFooterApplyOptions(
             _headerFooterDateTimeCheck.IsChecked == true,
             _headerFooterFooterCheck.IsChecked == true,
             _headerFooterSlideNumberCheck.IsChecked == true,
             _headerFooterFooterBox.Text ?? string.Empty,
-            scope);
+            scope,
+            _headerFooterDontShowOnTitleSlideCheck.IsChecked == true,
+            _headerFooterFixedDateCheck.IsChecked == true
+                ? HeaderFooterDateTimeMode.Fixed
+                : HeaderFooterDateTimeMode.AutoUpdate,
+            dateFormat.FieldType,
+            _headerFooterFixedDateBox.Text ?? string.Empty);
 
         if (!HeaderFooterCommandPlanner.TryApply(Editor, options, out var plan))
         {
@@ -2132,6 +2190,15 @@ public sealed class MainWindow : Window
         UpdateStatus();
         HideHeaderFooterPane();
         return true;
+    }
+
+    private void UpdateHeaderFooterDateControls()
+    {
+        var showDateTime = _headerFooterDateTimeCheck.IsChecked == true;
+        var fixedDate = _headerFooterFixedDateCheck.IsChecked == true;
+        _headerFooterDateFormatCombo.IsEnabled = showDateTime && !fixedDate;
+        _headerFooterFixedDateCheck.IsEnabled = showDateTime;
+        _headerFooterFixedDateBox.IsEnabled = showDateTime && fixedDate;
     }
 
     private void OnSlideSizePresetChanged(object? sender, SelectionChangedEventArgs e)

@@ -17,6 +17,19 @@ public enum HeaderFooterApplyScope
     AllSlides
 }
 
+public enum HeaderFooterDateTimeMode
+{
+    AutoUpdate,
+    Fixed
+}
+
+public sealed record HeaderFooterDateFormatOption(
+    string FieldType,
+    string DisplayName)
+{
+    public override string ToString() => DisplayName;
+}
+
 public sealed record HeaderFooterState(
     bool ShowDateTime,
     bool ShowFooter,
@@ -24,14 +37,22 @@ public sealed record HeaderFooterState(
     string FooterText,
     bool HasDateTimePlaceholder,
     bool HasFooterPlaceholder,
-    bool HasSlideNumberPlaceholder);
+    bool HasSlideNumberPlaceholder,
+    bool IsTitleSlide = false,
+    HeaderFooterDateTimeMode DateTimeMode = HeaderFooterDateTimeMode.AutoUpdate,
+    string DateTimeFieldType = "datetime1",
+    string FixedDateTimeText = "");
 
 public sealed record HeaderFooterApplyOptions(
     bool ShowDateTime,
     bool ShowFooter,
     bool ShowSlideNumber,
     string FooterText,
-    HeaderFooterApplyScope Scope);
+    HeaderFooterApplyScope Scope,
+    bool SuppressOnTitleSlide = false,
+    HeaderFooterDateTimeMode DateTimeMode = HeaderFooterDateTimeMode.AutoUpdate,
+    string DateTimeFieldType = "datetime1",
+    string FixedDateTimeText = "");
 
 public sealed record HeaderFooterApplyPlan(
     bool ShouldApply,
@@ -47,6 +68,14 @@ public static class HeaderFooterCommandPlanner
 
     public const string PlaceholderCreationEvidence =
         "Creates missing slide footer/date/slide-number placeholders with shared fallback geometry; PowerPoint-authoritative visual/layout baselines remain deferred.";
+
+    public static IReadOnlyList<HeaderFooterDateFormatOption> DateFormatOptions { get; } =
+    [
+        new("datetime1", "7/6/2026"),
+        new("datetime2", "Monday, July 6, 2026"),
+        new("datetime3", "6 July 2026"),
+        new("datetime4", "July 6, 2026"),
+    ];
 
     public static HeaderFooterState BuildState(EditingSession editor)
     {
@@ -68,6 +97,7 @@ public static class HeaderFooterCommandPlanner
         var hasFooter = HasHeaderFooterShape(slide, HeaderFooterFieldKind.Footer);
         var hasSlideNumber = HasHeaderFooterShape(slide, HeaderFooterFieldKind.SlideNumber);
         var flags = slide.HfVisibility;
+        var dateSettings = FindDateTimeSettings(slide);
 
         return new(
             flags?.ShowDate ?? hasDate,
@@ -76,7 +106,11 @@ public static class HeaderFooterCommandPlanner
             FindFooterText(slide),
             hasDate,
             hasFooter,
-            hasSlideNumber);
+            hasSlideNumber,
+            IsTitleSlide(presentation, slide),
+            dateSettings.Mode,
+            dateSettings.FieldType,
+            dateSettings.FixedText);
     }
 
     public static HeaderFooterApplyOptions BuildDefaultOptions(
@@ -90,25 +124,37 @@ public static class HeaderFooterCommandPlanner
                 state.ShowFooter,
                 state.ShowSlideNumber,
                 state.FooterText,
-                HeaderFooterApplyScope.CurrentSlide),
+                HeaderFooterApplyScope.CurrentSlide,
+                DateTimeMode: state.DateTimeMode,
+                DateTimeFieldType: state.DateTimeFieldType,
+                FixedDateTimeText: state.FixedDateTimeText),
             HeaderFooterCommandFocus.SlideNumber => new(
                 state.ShowDateTime,
                 state.ShowFooter,
                 ShowSlideNumber: true,
                 state.FooterText,
-                HeaderFooterApplyScope.CurrentSlide),
+                HeaderFooterApplyScope.CurrentSlide,
+                DateTimeMode: state.DateTimeMode,
+                DateTimeFieldType: state.DateTimeFieldType,
+                FixedDateTimeText: state.FixedDateTimeText),
             HeaderFooterCommandFocus.Footer => new(
                 state.ShowDateTime,
                 ShowFooter: true,
                 state.ShowSlideNumber,
                 state.FooterText,
-                HeaderFooterApplyScope.CurrentSlide),
+                HeaderFooterApplyScope.CurrentSlide,
+                DateTimeMode: state.DateTimeMode,
+                DateTimeFieldType: state.DateTimeFieldType,
+                FixedDateTimeText: state.FixedDateTimeText),
             _ => new(
                 state.ShowDateTime,
                 state.ShowFooter,
                 state.ShowSlideNumber,
                 state.FooterText,
-                HeaderFooterApplyScope.CurrentSlide)
+                HeaderFooterApplyScope.CurrentSlide,
+                DateTimeMode: state.DateTimeMode,
+                DateTimeFieldType: state.DateTimeFieldType,
+                FixedDateTimeText: state.FixedDateTimeText)
         };
     }
 
@@ -119,9 +165,15 @@ public static class HeaderFooterCommandPlanner
     {
         ArgumentNullException.ThrowIfNull(presentation);
         var targets = ResolveTargets(presentation, currentSlideIndex, options.Scope);
+        var normalizedOptions = options with
+        {
+            FooterText = options.FooterText ?? string.Empty,
+            DateTimeFieldType = NormalizeDateTimeFieldType(options.DateTimeFieldType),
+            FixedDateTimeText = options.FixedDateTimeText ?? string.Empty
+        };
         return new(
             targets.Count > 0,
-            options with { FooterText = options.FooterText ?? string.Empty },
+            normalizedOptions,
             targets,
             null);
     }
@@ -184,36 +236,45 @@ public static class HeaderFooterCommandPlanner
 
     private static void ApplyToSlide(Presentation presentation, Slide slide, HeaderFooterApplyOptions options)
     {
+        var effectiveOptions = options.SuppressOnTitleSlide && IsTitleSlide(presentation, slide)
+            ? options with
+            {
+                ShowDateTime = false,
+                ShowFooter = false,
+                ShowSlideNumber = false
+            }
+            : options;
+
         slide.HfVisibility = new HfFlags
         {
-            ShowDate = options.ShowDateTime,
-            ShowFooter = options.ShowFooter,
-            ShowSlideNum = options.ShowSlideNumber,
+            ShowDate = effectiveOptions.ShowDateTime,
+            ShowFooter = effectiveOptions.ShowFooter,
+            ShowSlideNum = effectiveOptions.ShowSlideNumber,
             ShowHeader = slide.HfVisibility?.ShowHeader ?? false
         };
 
         var nextShapeId = NextShapeId(slide);
-        if (options.ShowDateTime)
+        if (effectiveOptions.ShowDateTime)
         {
             var dateShape = EnsureHeaderFooterShape(
                 presentation,
                 slide,
                 HeaderFooterFieldKind.DateTime,
                 ref nextShapeId);
-            EnsureSingleFieldRun(dateShape, "datetime1", string.Empty);
+            ApplyDateTime(dateShape, effectiveOptions);
         }
 
-        if (options.ShowFooter)
+        if (effectiveOptions.ShowFooter)
         {
             var footerShape = EnsureHeaderFooterShape(
                 presentation,
                 slide,
                 HeaderFooterFieldKind.Footer,
                 ref nextShapeId);
-            ApplyFooterText(footerShape, options.FooterText);
+            ApplyFooterText(footerShape, effectiveOptions.FooterText);
         }
 
-        if (options.ShowSlideNumber)
+        if (effectiveOptions.ShowSlideNumber)
         {
             var slideNumberShape = EnsureHeaderFooterShape(
                 presentation,
@@ -227,17 +288,44 @@ public static class HeaderFooterCommandPlanner
         {
             switch (GetHeaderFooterKind(shape))
             {
-                case HeaderFooterFieldKind.DateTime when options.ShowDateTime:
-                    EnsureSingleFieldRun(shape, "datetime1", string.Empty);
+                case HeaderFooterFieldKind.DateTime when effectiveOptions.ShowDateTime:
+                    ApplyDateTime(shape, effectiveOptions);
                     break;
                 case HeaderFooterFieldKind.Footer:
-                    ApplyFooterText(shape, options.FooterText);
+                    ApplyFooterText(shape, effectiveOptions.FooterText);
                     break;
-                case HeaderFooterFieldKind.SlideNumber when options.ShowSlideNumber:
+                case HeaderFooterFieldKind.SlideNumber when effectiveOptions.ShowSlideNumber:
                     EnsureSingleFieldRun(shape, "slidenum", string.Empty);
                     break;
             }
         }
+    }
+
+    private static void ApplyDateTime(SlideShape shape, HeaderFooterApplyOptions options)
+    {
+        if (options.DateTimeMode == HeaderFooterDateTimeMode.Fixed)
+        {
+            EnsureSingleLiteralRun(shape, options.FixedDateTimeText);
+            return;
+        }
+
+        EnsureSingleFieldRun(shape, NormalizeDateTimeFieldType(options.DateTimeFieldType), string.Empty);
+    }
+
+    private static bool IsTitleSlide(Presentation presentation, Slide slide)
+    {
+        var layout = presentation.Layouts.FirstOrDefault(layout =>
+            StringComparer.Ordinal.Equals(layout.Id, slide.LayoutId));
+        if (layout?.LayoutType == SlideLayoutType.Title)
+        {
+            return true;
+        }
+
+        var hasCenteredTitle = Flatten(slide.Shapes).Any(shape =>
+            shape.Placeholder?.Type == PlaceholderType.CenteredTitle);
+        var hasSubtitle = Flatten(slide.Shapes).Any(shape =>
+            shape.Placeholder?.Type == PlaceholderType.SubTitle);
+        return hasCenteredTitle && hasSubtitle;
     }
 
     private static SlideShape EnsureHeaderFooterShape(
@@ -402,6 +490,56 @@ public static class HeaderFooterCommandPlanner
                 CachedText = cachedText
             }
         });
+    }
+
+    private static void EnsureSingleLiteralRun(SlideShape shape, string text)
+    {
+        shape.TextBody ??= new TextBody();
+        if (shape.TextBody.Paragraphs.Count == 0)
+        {
+            shape.TextBody.Paragraphs.Add(new Paragraph());
+        }
+
+        var paragraph = shape.TextBody.Paragraphs[0];
+        paragraph.Runs.Clear();
+        paragraph.Runs.Add(new Run
+        {
+            Text = text
+        });
+    }
+
+    private static (HeaderFooterDateTimeMode Mode, string FieldType, string FixedText) FindDateTimeSettings(Slide slide)
+    {
+        var shape = FindHeaderFooterShape(slide, HeaderFooterFieldKind.DateTime);
+        if (shape?.TextBody is null)
+        {
+            return (HeaderFooterDateTimeMode.AutoUpdate, "datetime1", string.Empty);
+        }
+
+        foreach (var run in shape.TextBody.Paragraphs.SelectMany(paragraph => paragraph.Runs))
+        {
+            if (run.Field is { } field && ClassifyFieldType(field.FieldType) == HeaderFooterFieldKind.DateTime)
+            {
+                return (HeaderFooterDateTimeMode.AutoUpdate, NormalizeDateTimeFieldType(field.FieldType), string.Empty);
+            }
+        }
+
+        var fixedText = string.Concat(shape.TextBody.Paragraphs
+            .SelectMany(paragraph => paragraph.Runs)
+            .Select(run => run.Text ?? run.Field?.CachedText ?? string.Empty));
+        return string.IsNullOrWhiteSpace(fixedText)
+            ? (HeaderFooterDateTimeMode.AutoUpdate, "datetime1", string.Empty)
+            : (HeaderFooterDateTimeMode.Fixed, "datetime1", fixedText);
+    }
+
+    private static string NormalizeDateTimeFieldType(string? fieldType)
+    {
+        var normalized = (fieldType ?? string.Empty).Trim();
+        return DateFormatOptions.Any(option =>
+            StringComparer.OrdinalIgnoreCase.Equals(option.FieldType, normalized))
+            ? DateFormatOptions.First(option =>
+                StringComparer.OrdinalIgnoreCase.Equals(option.FieldType, normalized)).FieldType
+            : "datetime1";
     }
 
     private static string FindFooterText(Slide slide)

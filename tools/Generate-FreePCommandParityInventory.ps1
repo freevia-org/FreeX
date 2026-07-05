@@ -296,7 +296,8 @@ internal static class FreePCommandInventory
             HostCoverage: "WPF/Avalonia route Header & Footer options into the shared planner; no renderer-local placeholder policy",
             EvidenceDocs:
             [
-                "docs/parity/freep-header-footer-placeholder-creation-2026-07-05.md"
+                "docs/parity/freep-header-footer-placeholder-creation-2026-07-05.md",
+                "docs/parity/freep-header-footer-options-2026-07-06.md"
             ],
             Verification:
             [
@@ -305,7 +306,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/HeaderFooterDialogTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/HeaderFooterCommandRoutingTests.cs"
             ],
-            RemainingWork: "Shared Header/Footer application now creates missing date, footer, and slide-number placeholders with inherited layout/master geometry when available and shared fallback geometry otherwise. PowerPoint-authoritative header/footer visual baselines, title-slide suppression UX, fixed/auto date-format choices, and exact fallback layout heuristics remain deferred."),
+            RemainingWork: "Shared Header/Footer application now creates missing date, footer, and slide-number placeholders, supports title-slide suppression for apply-all, and distinguishes auto-updating date fields from fixed literal date text through WPF/Avalonia thin host options. PowerPoint-authoritative header/footer visual baselines and exact fallback layout heuristics remain deferred."),
         new(
             EvidenceId: "freep.chart.number-format-rendering",
             Area: "Chart axis number/date format rendering",

@@ -89,6 +89,55 @@ public sealed class HeaderFooterCommandPlannerTests
     }
 
     [Fact]
+    public void TryApply_AutoDateTime_UsesSelectedSharedFieldType()
+    {
+        var editor = MakeEditor();
+
+        HeaderFooterCommandPlanner.TryApply(
+            editor,
+            new HeaderFooterApplyOptions(
+                ShowDateTime: true,
+                ShowFooter: false,
+                ShowSlideNumber: false,
+                FooterText: string.Empty,
+                Scope: HeaderFooterApplyScope.CurrentSlide,
+                DateTimeFieldType: "datetime3"),
+            out var plan).Should().BeTrue();
+
+        plan.Options.DateTimeFieldType.Should().Be("datetime3");
+        var date = SinglePlaceholder(editor.Presentation.Slides[0], PlaceholderType.DateTime);
+        FieldType(date).Should().Be("datetime3");
+        FieldText(date).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TryApply_FixedDateTime_WritesLiteralTextWithoutAutoField()
+    {
+        var editor = MakeEditor();
+
+        HeaderFooterCommandPlanner.TryApply(
+            editor,
+            new HeaderFooterApplyOptions(
+                ShowDateTime: true,
+                ShowFooter: false,
+                ShowSlideNumber: false,
+                FooterText: string.Empty,
+                Scope: HeaderFooterApplyScope.CurrentSlide,
+                DateTimeMode: HeaderFooterDateTimeMode.Fixed,
+                FixedDateTimeText: "Board approved"),
+            out var plan).Should().BeTrue();
+
+        plan.Options.DateTimeMode.Should().Be(HeaderFooterDateTimeMode.Fixed);
+        var date = SinglePlaceholder(editor.Presentation.Slides[0], PlaceholderType.DateTime);
+        FieldType(date).Should().BeNull();
+        FieldText(date).Should().Be("Board approved");
+
+        var state = HeaderFooterCommandPlanner.BuildState(editor.Presentation, 0);
+        state.DateTimeMode.Should().Be(HeaderFooterDateTimeMode.Fixed);
+        state.FixedDateTimeText.Should().Be("Board approved");
+    }
+
+    [Fact]
     public void TryApply_AllSlides_UpdatesEachSlideAndIsUndoable()
     {
         var editor = MakeEditor();
@@ -127,6 +176,43 @@ public sealed class HeaderFooterCommandPlannerTests
         editor.Undo();
         editor.Presentation.Slides.Should()
             .AllSatisfy(slide => HeaderFooterPlaceholders(slide).Should().BeEmpty());
+    }
+
+    [Fact]
+    public void TryApply_AllSlides_SuppressesHeaderFooterOnTitleSlides()
+    {
+        var editor = MakeEditor();
+        editor.Presentation.Layouts.Add(new SlideLayout
+        {
+            Id = "content",
+            Name = "Title and Content",
+            LayoutType = SlideLayoutType.TitleContent,
+        });
+        editor.Presentation.Slides.Add(new Slide { LayoutId = "content" });
+
+        HeaderFooterCommandPlanner.TryApply(
+            editor,
+            new HeaderFooterApplyOptions(
+                ShowDateTime: true,
+                ShowFooter: true,
+                ShowSlideNumber: true,
+                FooterText: "All except title",
+                Scope: HeaderFooterApplyScope.AllSlides,
+                SuppressOnTitleSlide: true),
+            out var plan).Should().BeTrue();
+
+        plan.Options.SuppressOnTitleSlide.Should().BeTrue();
+        var titleSlide = editor.Presentation.Slides[0];
+        titleSlide.HfVisibility!.ShowDate.Should().BeFalse();
+        titleSlide.HfVisibility.ShowFooter.Should().BeFalse();
+        titleSlide.HfVisibility.ShowSlideNum.Should().BeFalse();
+        HeaderFooterPlaceholders(titleSlide).Should().BeEmpty();
+
+        var contentSlide = editor.Presentation.Slides[1];
+        contentSlide.HfVisibility!.ShowDate.Should().BeTrue();
+        contentSlide.HfVisibility.ShowFooter.Should().BeTrue();
+        contentSlide.HfVisibility.ShowSlideNum.Should().BeTrue();
+        FieldText(SinglePlaceholder(contentSlide, PlaceholderType.Footer)).Should().Be("All except title");
     }
 
     [Fact]
