@@ -24,6 +24,7 @@ public enum SlideShowShapeAnimationEffectKind
     Wipe,
     Split,
     RandomBars,
+    Blinds,
     Box,
     Zoom,
     Pulse,
@@ -59,6 +60,8 @@ public sealed record SlideShowShapeAnimationPlaybackPlan(
     double OffsetXFactor,
     double OffsetYFactor,
     bool WipeHorizontal,
+    bool BlindsHorizontal,
+    int BlindsBandCount,
     bool BoxExpandsFromCenter,
     IReadOnlyList<SlideShowMotionPathKeyFrame> MotionKeyFrames);
 
@@ -74,6 +77,7 @@ public static class SlideShowPlaybackPlanner
     public const int MinShapeAnimationDurationMs = 50;
     public const int MinFallbackAnimationDurationMs = 100;
     public const int MotionPathFrameCount = 30;
+    public const int BlindsBandCount = 8;
 
     public static SlideShowTransitionPlaybackPlan PlanTransition(SlideTransition transition)
     {
@@ -130,6 +134,8 @@ public static class SlideShowPlaybackPlanner
             offsetX,
             offsetY,
             IsHorizontalWipe(animation.Direction),
+            IsHorizontalBlinds(animation.Direction),
+            BlindsBandCount,
             BoxExpandsFromCenter(animation),
             BuildMotionKeyFrames(animation.Motion));
     }
@@ -164,6 +170,7 @@ public static class SlideShowPlaybackPlanner
             AnimationPreset.Wipe => SlideShowShapeAnimationEffectKind.Wipe,
             AnimationPreset.Split => SlideShowShapeAnimationEffectKind.Split,
             AnimationPreset.RandomBars => SlideShowShapeAnimationEffectKind.RandomBars,
+            AnimationPreset.Blinds => SlideShowShapeAnimationEffectKind.Blinds,
             AnimationPreset.Box => SlideShowShapeAnimationEffectKind.Box,
             AnimationPreset.Zoom => SlideShowShapeAnimationEffectKind.Zoom,
             AnimationPreset.Pulse => SlideShowShapeAnimationEffectKind.Pulse,
@@ -233,6 +240,9 @@ public static class SlideShowPlaybackPlanner
             or AnimationDirection.FromRight
             or AnimationDirection.Horizontal
             or null;
+
+    private static bool IsHorizontalBlinds(AnimationDirection? direction) =>
+        direction is not AnimationDirection.Vertical;
 
     private static bool BoxExpandsFromCenter(ShapeAnimation animation) =>
         animation.Direction switch
