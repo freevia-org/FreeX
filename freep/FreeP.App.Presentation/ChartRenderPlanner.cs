@@ -654,7 +654,7 @@ public static partial class ChartRenderPlanner
             return Array.Empty<ChartLegendItemPlan>();
 
         bool verticalLegend = frame.LegendRight;
-        if (chart.LegendManualLayout?.IsCompleteFactorRectangle == true &&
+        if (TryResolveManualLayoutRect(chart.LegendManualLayout, frame.Bounds, out _) &&
             legendBounds.Height < LegendHeight * 1.5 &&
             legendBounds.Width >= 80.0)
         {
@@ -741,15 +741,19 @@ public static partial class ChartRenderPlanner
         out ChartPlanRect rect)
     {
         rect = default;
-        if (layout?.IsCompleteFactorRectangle != true)
+        if (!HasResolvableManualLayout(layout))
             return false;
 
-        double x = parent.X + parent.Width * ClampFactor(layout.X!.Value);
-        double y = parent.Y + parent.Height * ClampFactor(layout.Y!.Value);
-        double width = parent.Width * ClampFactor(layout.Width!.Value);
-        double height = parent.Height * ClampFactor(layout.Height!.Value);
-        double right = Math.Min(parent.Right, x + width);
-        double bottom = Math.Min(parent.Bottom, y + height);
+        double x = ResolveManualLayoutStart(parent.X, parent.Width, layout!.X!.Value);
+        double y = ResolveManualLayoutStart(parent.Y, parent.Height, layout.Y!.Value);
+        double right = layout.WidthMode == ChartManualLayoutMode.Edge
+            ? ResolveManualLayoutEdge(parent.X, parent.Width, layout.Width!.Value)
+            : x + parent.Width * ClampFactor(layout.Width!.Value);
+        double bottom = layout.HeightMode == ChartManualLayoutMode.Edge
+            ? ResolveManualLayoutEdge(parent.Y, parent.Height, layout.Height!.Value)
+            : y + parent.Height * ClampFactor(layout.Height!.Value);
+        right = Math.Clamp(right, parent.X, parent.Right);
+        bottom = Math.Clamp(bottom, parent.Y, parent.Bottom);
         rect = new ChartPlanRect(
             x,
             y,
@@ -758,6 +762,26 @@ public static partial class ChartRenderPlanner
 
         return rect.HasPositiveArea;
     }
+
+    private static bool HasResolvableManualLayout(ChartManualLayout? layout) =>
+        layout is not null &&
+        layout.X.HasValue &&
+        layout.Y.HasValue &&
+        layout.Width.HasValue &&
+        layout.Height.HasValue &&
+        IsResolvableManualLayoutMode(layout.XMode) &&
+        IsResolvableManualLayoutMode(layout.YMode) &&
+        IsResolvableManualLayoutMode(layout.WidthMode) &&
+        IsResolvableManualLayoutMode(layout.HeightMode);
+
+    private static bool IsResolvableManualLayoutMode(ChartManualLayoutMode mode) =>
+        mode is ChartManualLayoutMode.Factor or ChartManualLayoutMode.Edge;
+
+    private static double ResolveManualLayoutStart(double origin, double extent, double value) =>
+        origin + extent * ClampFactor(value);
+
+    private static double ResolveManualLayoutEdge(double origin, double extent, double value) =>
+        origin + extent * ClampFactor(value);
 
     private static double ClampFactor(double value) =>
         double.IsFinite(value) ? Math.Clamp(value, 0.0, 1.0) : 0.0;

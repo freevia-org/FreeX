@@ -789,6 +789,70 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildFramePlan_ManualPlotLayout_UsesEdgeRightAndBottomCoordinates()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.PlotAreaManualLayout = new ChartManualLayout
+        {
+            LayoutTarget = "inner",
+            XMode = ChartManualLayoutMode.Edge,
+            YMode = ChartManualLayoutMode.Edge,
+            WidthMode = ChartManualLayoutMode.Edge,
+            HeightMode = ChartManualLayoutMode.Edge,
+            X = 0.10,
+            Y = 0.20,
+            Width = 0.90,
+            Height = 0.75
+        };
+
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        frame.Plot.Should().Be(new ChartPlanRect(40, 60, 320, 165));
+    }
+
+    [Fact]
+    public void BuildFramePlan_ManualPlotLayout_MixesFactorSizesWithEdgeBounds()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.PlotAreaManualLayout = new ChartManualLayout
+        {
+            XMode = ChartManualLayoutMode.Edge,
+            YMode = ChartManualLayoutMode.Factor,
+            WidthMode = ChartManualLayoutMode.Factor,
+            HeightMode = ChartManualLayoutMode.Edge,
+            X = 0.10,
+            Y = 0.20,
+            Width = 0.50,
+            Height = 0.80
+        };
+
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        frame.Plot.Should().Be(new ChartPlanRect(40, 60, 200, 180));
+    }
+
+    [Fact]
+    public void BuildFramePlan_ManualPlotLayout_ClampsEdgeCoordinatesToParent()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.PlotAreaManualLayout = new ChartManualLayout
+        {
+            XMode = ChartManualLayoutMode.Edge,
+            YMode = ChartManualLayoutMode.Edge,
+            WidthMode = ChartManualLayoutMode.Edge,
+            HeightMode = ChartManualLayoutMode.Edge,
+            X = -0.25,
+            Y = 0.10,
+            Width = 1.25,
+            Height = 0.60
+        };
+
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        frame.Plot.Should().Be(new ChartPlanRect(0, 30, 400, 150));
+    }
+
+    [Fact]
     public void BuildFramePlan_LegendOverlay_DoesNotReservePlotArea()
     {
         var reserving = MakeTwoSeriesChart(ChartType.ColumnClustered);
@@ -839,6 +903,39 @@ public sealed class ChartRenderPlannerTests
         items[1].SwatchBounds.X.Should().BeApproximately(220, 0.0001);
         items[1].SwatchBounds.Y.Should().BeApproximately(77, 0.0001);
         items[1].Label.Text.Should().Be("Forecast");
+    }
+
+    [Fact]
+    public void BuildLegendItemPlans_ManualLegendEdgeLayout_DrivesItemPlacement()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.Legend = LegendPosition.Right;
+        chart.LegendOverlay = true;
+        chart.LegendManualLayout = new ChartManualLayout
+        {
+            XMode = ChartManualLayoutMode.Edge,
+            YMode = ChartManualLayoutMode.Edge,
+            WidthMode = ChartManualLayoutMode.Edge,
+            HeightMode = ChartManualLayoutMode.Edge,
+            X = 0.70,
+            Y = 0.10,
+            Width = 0.95,
+            Height = 0.45
+        };
+        var colors = new[]
+        {
+            new SrgbColor(0x11, 0x22, 0x33),
+            new SrgbColor(0x44, 0x55, 0x66)
+        };
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var items = ChartRenderPlanner.BuildLegendItemPlans(chart, frame, colors);
+
+        items.Should().HaveCount(2);
+        items[0].SwatchBounds.Should().Be(new ChartPlanRect(280, 33, 8, 8));
+        items[0].Label.Bounds.Should().Be(new ChartPlanRect(290, 30, 90, ChartRenderPlanner.LegendHeight));
+        items[1].SwatchBounds.Should().Be(new ChartPlanRect(280, 47, 8, 8));
+        items[1].Label.Bounds.Should().Be(new ChartPlanRect(290, 44, 90, ChartRenderPlanner.LegendHeight));
     }
 
     [Fact]
