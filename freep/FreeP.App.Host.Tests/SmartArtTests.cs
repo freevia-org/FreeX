@@ -1101,6 +1101,25 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesGearCycleAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/gearCycle",
+            nodes: [("id1", "Initiate"), ("id2", "Coordinate"), ("id3", "Deliver"), ("id4", "Improve")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle,
+            "gearCycle is a cycle-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "gearCycle is in the bounded shared live-layout planner as a cycle approximation");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Initiate", "Coordinate", "Deliver", "Improve");
+    }
+
+    [Fact]
     public void Reader_ParsesBasicHierarchyAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -1184,7 +1203,7 @@ public sealed class SmartArtTests : IDisposable
     public void Reader_ParsesKnownCycleFamilyButDisablesLiveLayoutForUnsupportedSibling()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
-            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/gearCycle",
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/textCycle",
             nodes: [("id1", "Phase 1"), ("id2", "Phase 2"), ("id3", "Phase 3")],
             parOfConnections: []);
 
@@ -1474,6 +1493,34 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_GearCycleSmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/gearCycle",
+            nodes: [("n1", "Initiate"), ("n2", "Coordinate"), ("n3", "Deliver"), ("n4", "Improve")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(8, "four gear-cycle boxes plus four connectors should render from shared live data");
+        var renderedText = liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Initiate");
+        renderedText.Should().Contain("Improve");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(4, "WPF and Avalonia hosts consume shared gear-cycle connector DrawOps");
+    }
+
+    [Fact]
     public void Compositor_BasicHierarchySmartArt_RendersSharedLiveShapes()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -1592,7 +1639,7 @@ public sealed class SmartArtTests : IDisposable
         var data = new SmartArtData
         {
             Family = SmartArtFamily.Cycle,
-            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/gearCycle",
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/textCycle",
             IsLiveLayoutSupported = false
         };
         data.Nodes.Add(new SmartArtNode { Text = "Live A", Level = 0 });
