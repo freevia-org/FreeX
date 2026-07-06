@@ -616,6 +616,14 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     g.Button("freew.header", "Header");
                     g.Button("freew.footer", "Footer");
+                    g.Dropdown("freew.page-number", "Page Number", new RibbonMenu(new[]
+                    {
+                        new RibbonMenuItem("Top of Page", new RibbonCommandId("freew.page-number-top")),
+                        new RibbonMenuItem("Bottom of Page", new RibbonCommandId("freew.page-number-bottom")),
+                        new RibbonMenuItem("Current Position", new RibbonCommandId("freew.page-number-current")),
+                        RibbonMenuItem.Separator(),
+                        new RibbonMenuItem("Format Page Numbers...", new RibbonCommandId("freew.page-number-format")),
+                    }));
                 });
                 // AV-INSERT2: Text group — Quick Parts (document-property fields + snippet), Drop Cap,
                 // Text from File.

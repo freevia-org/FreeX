@@ -689,6 +689,10 @@ public sealed class VisualEvidencePlannerTests
     public void SharedSectionGeometrySurfacePlans_BuildPageSizedSectionSlices()
     {
         var document = FreeWVisualEvidenceDocumentFactory.BuildSectionGeometryDocument();
+        document.Sections[0].Page.PageNumberFormat = PageNumberFormat.LowerRoman;
+        document.Sections[0].Page.PageNumberStartAt = 3;
+        document.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
+        document.Page.PageNumberStartAt = 10;
 
         var surfacePlans = FreeWVisualEvidencePlanner.BuildSectionGeometrySurfacePlans(document, pageCount: 2);
 
@@ -699,6 +703,8 @@ public sealed class VisualEvidencePlannerTests
         surfacePlans[0].Document.Page.WidthPt.Should().Be(612);
         surfacePlans[0].Document.Page.HeightPt.Should().Be(792);
         surfacePlans[0].Document.Page.Landscape.Should().BeFalse();
+        surfacePlans[0].Document.Page.PageNumberFormat.Should().Be(PageNumberFormat.LowerRoman);
+        surfacePlans[0].Document.Page.PageNumberStartAt.Should().Be(3);
         surfacePlans[0].CaptureWidthDip.Should().BeApproximately(864, 0.01);
         surfacePlans[0].CaptureHeightDip.Should().BeApproximately(1104, 0.01);
 
@@ -707,6 +713,8 @@ public sealed class VisualEvidencePlannerTests
         surfacePlans[1].Document.Page.WidthPt.Should().Be(792);
         surfacePlans[1].Document.Page.HeightPt.Should().Be(612);
         surfacePlans[1].Document.Page.Landscape.Should().BeTrue();
+        surfacePlans[1].Document.Page.PageNumberFormat.Should().Be(PageNumberFormat.UpperRoman);
+        surfacePlans[1].Document.Page.PageNumberStartAt.Should().Be(10);
         surfacePlans[1].CaptureWidthDip.Should().BeApproximately(1104, 0.01);
         surfacePlans[1].CaptureHeightDip.Should().BeApproximately(864, 0.01);
         surfacePlans[1].Document.Blocks.OfType<Paragraph>().First().PlainText.Should().Contain("Section 2");

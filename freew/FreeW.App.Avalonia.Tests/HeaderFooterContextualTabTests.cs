@@ -1,6 +1,7 @@
 using System.Linq;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 
@@ -126,6 +127,34 @@ public sealed class HeaderFooterContextualTabTests
 
         view.Document.Page.HeaderDistancePt.Should().Be(54);
         view.Document.Page.FooterDistancePt.Should().Be(72);
+    }
+
+    [Fact]
+    public void Insert_page_number_format_command_updates_page_settings()
+    {
+        var view = new DocumentView();
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        Execute(registry, "freew.page-number-format", RibbonCommandContext.ForSelectedValue(
+            PageNumberFormatDialogPlanner.BuildCommandValue(PageNumberFormat.UpperLetter, 5)));
+
+        view.Document.Page.PageNumberFormat.Should().Be(PageNumberFormat.UpperLetter);
+        view.Document.Page.PageNumberStartAt.Should().Be(5);
+    }
+
+    [Fact]
+    public void Insert_page_number_current_position_uses_formatted_page_number()
+    {
+        var view = new DocumentView();
+        view.Document.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
+        view.Document.Page.PageNumberStartAt = 4;
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        Execute(registry, "freew.page-number-current");
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Should().Contain(r => r.FieldKind == RunFieldKind.PageNumber && r.Text == "IV");
     }
 
     private static void Execute(RibbonCommandRegistry registry, string id) =>

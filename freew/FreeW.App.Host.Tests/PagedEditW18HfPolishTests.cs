@@ -58,6 +58,29 @@ public sealed class PagedEditW18HfPolishTests
             "PAGE field in footer must display the actual page number (1) in paged-edit view");
     }
 
+    [StaFact]
+    public void PageField_InFooter_UsesSectionStartAtAndNumberFormat()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new FreeW.Core.Model.Paragraph("Body text"));
+        doc.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
+        doc.Page.PageNumberStartAt = 4;
+
+        var footer = new HeaderFooter();
+        var footerPara = new FreeW.Core.Model.Paragraph();
+        footerPara.Runs.Add(Run.PageNumberField());
+        footer.Paragraphs.Add(footerPara);
+        doc.Footer = footer;
+
+        var (panel, _) = BuildPanel(doc);
+
+        var box = panel.PageBoxes[0];
+        box.FooterSubEditor.Should().NotBeNull("page box must have a footer sub-editor");
+        GetSubEditorBodyText(box.FooterSubEditor!).Should().Be("IV",
+            "PAGE field rendering must use section start-at and upper-Roman format");
+    }
+
     /// <summary>
     /// In a 2-page document (forced by explicit page break), the second page's footer sub-editor
     /// must display "2" for the PAGE field.

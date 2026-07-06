@@ -939,6 +939,9 @@ public static class DocxReader
         // Line numbering (w:lnNumType): recover the mode + interval.
         ReadLineNumbering(sectPr.Element(W + "lnNumType"), page);
 
+        // Page numbering (w:pgNumType): recover section PAGE field style + optional start-at value.
+        ReadPageNumbering(sectPr.Element(W + "pgNumType"), page);
+
         // Page vertical alignment (w:vAlign): map the val token back ("both"→Justified); absent → Top.
         page.VerticalAlignment =
             VerticalAlignmentFromToken(sectPr.Element(W + "vAlign")?.Attribute(W + "val")?.Value);
@@ -4164,6 +4167,27 @@ public static class DocxReader
         if (int.TryParse(lnNumType.Attribute(W + "start")?.Value, out var startAt) && startAt >= 1)
             page.LineNumberStartAt = startAt;
     }
+
+    private static void ReadPageNumbering(XElement? pgNumType, PageSettings page)
+    {
+        if (pgNumType is null)
+            return;
+
+        page.PageNumberFormat = PageNumberFormatFromToken(pgNumType.Attribute(W + "fmt")?.Value);
+        page.PageNumberStartAt = int.TryParse(pgNumType.Attribute(W + "start")?.Value, out var startAt)
+            && startAt >= 1
+                ? startAt
+                : null;
+    }
+
+    private static PageNumberFormat PageNumberFormatFromToken(string? token) => token switch
+    {
+        "lowerRoman" => PageNumberFormat.LowerRoman,
+        "upperRoman" => PageNumberFormat.UpperRoman,
+        "lowerLetter" => PageNumberFormat.LowerLetter,
+        "upperLetter" => PageNumberFormat.UpperLetter,
+        _ => PageNumberFormat.Decimal
+    };
 
     /// <summary>
     /// Maps a w:vAlign/@w:val token back to a <see cref="PageVerticalAlignment"/> ("both"→Justified).

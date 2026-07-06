@@ -2247,6 +2247,23 @@ public enum PageVerticalAlignment
     Bottom
 }
 
+/// <summary>
+/// Number format for PAGE fields in a section. Maps to w:sectPr/w:pgNumType/@w:fmt.
+/// </summary>
+public enum PageNumberFormat
+{
+    /// <summary>Arabic numerals: 1, 2, 3 (w:fmt="decimal", the Word default).</summary>
+    Decimal,
+    /// <summary>Lower-case Roman numerals: i, ii, iii (w:fmt="lowerRoman").</summary>
+    LowerRoman,
+    /// <summary>Upper-case Roman numerals: I, II, III (w:fmt="upperRoman").</summary>
+    UpperRoman,
+    /// <summary>Lower-case letters: a, b, c (w:fmt="lowerLetter").</summary>
+    LowerLetter,
+    /// <summary>Upper-case letters: A, B, C (w:fmt="upperLetter").</summary>
+    UpperLetter
+}
+
 /// <summary>Page geometry for a section (points; US Letter with 1in margins by default).</summary>
 public sealed class PageSettings
 {
@@ -2379,6 +2396,18 @@ public sealed class PageSettings
     public int LineNumberStartAt { get; set; } = 1;
 
     /// <summary>
+    /// Number style used by PAGE fields in this section (w:sectPr/w:pgNumType/@w:fmt). Defaults to
+    /// <see cref="PageNumberFormat.Decimal"/>, matching Word.
+    /// </summary>
+    public PageNumberFormat PageNumberFormat { get; set; } = PageNumberFormat.Decimal;
+
+    /// <summary>
+    /// Optional first PAGE value for this section (w:sectPr/w:pgNumType/@w:start). Null means continue
+    /// numbering from the previous section; for the first section, continue starts at 1.
+    /// </summary>
+    public int? PageNumberStartAt { get; set; }
+
+    /// <summary>
     /// Whether automatic hyphenation is enabled for the document (word/settings.xml's
     /// w:autoHyphenation toggle). Defaults to false so existing documents are unaffected — no
     /// w:autoHyphenation is emitted (and the settings part is only emitted when something needs it).
@@ -2486,6 +2515,8 @@ public sealed class PageSettings
         LineNumberMode = LineNumberMode,
         LineNumberCountBy = LineNumberCountBy,
         LineNumberStartAt = LineNumberStartAt,
+        PageNumberFormat = PageNumberFormat,
+        PageNumberStartAt = PageNumberStartAt,
         AutoHyphenation = AutoHyphenation,
         HyphenationZonePt = HyphenationZonePt,
         ConsecutiveHyphenLimit = ConsecutiveHyphenLimit,

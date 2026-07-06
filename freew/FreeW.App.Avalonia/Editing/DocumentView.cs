@@ -3266,6 +3266,7 @@ public sealed class DocumentView : Control
 
         // Build a true page-to-section map from Avalonia's placed block positions.
         var pageToSection = ComputePageSectionMap(_pageCount);
+        var pageNumberDisplay = PageNumberFormatDialogPlanner.BuildDisplayPlans(pageToSection);
 
         for (var pi = 0; pi < _pageCount; pi++)
         {
@@ -3277,8 +3278,7 @@ public sealed class DocumentView : Control
             var sectionHf = pageSection.HeadersFooters;
             var sectionPage = pageSection.PageSettings;
 
-            // 1-based page number for this page (pi is 0-based).
-            var pageNumber = pi + 1;
+            var pageNumberText = pageNumberDisplay[pi].Text;
 
             // Resolve header/footer slots through the shared Presentation planner.
             var slots = HeaderFooterPagePlanner.ResolveSlots(
@@ -3315,7 +3315,7 @@ public sealed class DocumentView : Control
             if (headerActive)
             {
                 var hfY = pageTop + headerDistDip;
-                EmitHfParagraphs(header!, hfY, hfWidth, pageNumber, _pageCount,
+                EmitHfParagraphs(header!, hfY, hfWidth, pageNumberText, _pageCount,
                     pi => MakeHfTarget(sectionHf, headerSlot, pi));
             }
 
@@ -3326,7 +3326,7 @@ public sealed class DocumentView : Control
                 // starts at: pageBottom - footerDistDip (+ a line-height offset per line).
                 var pageBottom = pageTop + _pageHeightPx;
                 var hfY = pageBottom - footerDistDip;
-                EmitHfParagraphs(footer!, hfY, hfWidth, pageNumber, _pageCount,
+                EmitHfParagraphs(footer!, hfY, hfWidth, pageNumberText, _pageCount,
                     pi => MakeHfTarget(sectionHf, footerSlot, pi));
             }
         }
@@ -3340,7 +3340,7 @@ public sealed class DocumentView : Control
     /// defaults when present. Each tab-separated segment is emitted as a separate HfRenderItem at the
     /// computed X position so the draw loop does not need tab-aware logic.
     /// </summary>
-    private void EmitHfParagraphs(HeaderFooter hf, double startY, double availWidth, int pageNumber, int pageCount,
+    private void EmitHfParagraphs(HeaderFooter hf, double startY, double availWidth, string pageNumberText, int pageCount,
         Func<int, HfTarget>? targetFactory = null)
     {
         var y = startY;
@@ -3372,7 +3372,7 @@ public sealed class DocumentView : Control
 
             foreach (var run in para.Runs)
             {
-                var fieldText = ResolveHfField(run, pageNumber, pageCount);
+                var fieldText = ResolveHfField(run, pageNumberText, pageCount);
                 var isField = fieldText is not null;
                 var text = fieldText ?? run.Text;
                 if (run.Formatting.FontSizePt.HasValue)
@@ -3517,13 +3517,13 @@ public sealed class DocumentView : Control
     /// Handles both <see cref="RunFieldKind"/> simple fields and <see cref="ComplexField"/>
     /// instructions that contain PAGE / NUMPAGES / DATE / FILENAME / AUTHOR keywords.
     /// </summary>
-    private string? ResolveHfField(Run run, int pageNumber, int pageCount)
+    private string? ResolveHfField(Run run, string pageNumberText, int pageCount)
     {
         // Simple RunFieldKind fields.
         switch (run.FieldKind)
         {
             case RunFieldKind.PageNumber:
-                return pageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                return pageNumberText;
             case RunFieldKind.NumPages:
                 return pageCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
             case RunFieldKind.Date:
@@ -3550,7 +3550,7 @@ public sealed class DocumentView : Control
             var keyword = instr.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
             return keyword.ToUpperInvariant() switch
             {
-                "PAGE"     => pageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "PAGE"     => pageNumberText,
                 "NUMPAGES" => pageCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 "DATE"     => DateTime.Now.ToString("M/d/yyyy", System.Globalization.CultureInfo.InvariantCulture),
                 "TIME"     => DateTime.Now.ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture),
@@ -10259,6 +10259,9 @@ public sealed class DocumentView : Control
         SetPageSettings(settings);
     }
 
+    public void ApplyPageNumberFormat(PageNumberFormatDialogResult result) =>
+        ApplyPageSettings(page => PageNumberFormatDialogPlanner.ApplyResult(page, result));
+
     public void ToggleDifferentFirstPage() =>
         ApplyPageSettings(settings => settings.DifferentFirstPage = !settings.DifferentFirstPage);
 
@@ -11592,7 +11595,8 @@ public sealed class DocumentView : Control
             "AUTHOR" => _doc.Properties.Author ?? string.Empty,
             "TITLE" => _doc.Properties.Title ?? string.Empty,
             "FILENAME" => string.Empty,
-            "PAGE" or "NUMPAGES" => "1",
+            "PAGE" => ResolvePageNumberFieldText(),
+            "NUMPAGES" => "1",
             _ => fallback,
         };
 
@@ -11607,9 +11611,16 @@ public sealed class DocumentView : Control
         RunFieldKind.Subject     => _doc.Properties.Subject ?? string.Empty,
         RunFieldKind.Keywords    => _doc.Properties.Keywords ?? string.Empty,
         RunFieldKind.DocComments => _doc.Properties.Comments ?? string.Empty,
-        RunFieldKind.PageNumber or RunFieldKind.NumPages => "1",
+        RunFieldKind.PageNumber  => ResolvePageNumberFieldText(),
+        RunFieldKind.NumPages    => "1",
         _ => string.Empty,
     };
+
+    private string ResolvePageNumberFieldText()
+    {
+        var firstValue = Math.Max(1, _doc.Page.PageNumberStartAt ?? 1);
+        return PageNumberFormatDialogPlanner.FormatPageNumber(firstValue, _doc.Page.PageNumberFormat);
+    }
 
     /// <summary>
     /// AV-INSERT2: Insert an inline equation at the caret (Word's Insert &gt; Equation). The equation is
