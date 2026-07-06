@@ -1277,6 +1277,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("drawing-object evidence expects rendered grouped child effects but the object plan records none");
         if (tags.Contains("grouped-child-shape-effects", StringComparer.OrdinalIgnoreCase) && objects.Effects.RenderedGroupChildShapeEffectObjectCount <= 0)
             rowFailures.Add("drawing-object evidence expects rendered grouped child shape effects but the object plan records none");
+        if (tags.Contains("grouped-child-wordart-effects", StringComparer.OrdinalIgnoreCase) && objects.Effects.RenderedGroupChildWordArtEffectObjectCount <= 0)
+            rowFailures.Add("drawing-object evidence expects rendered grouped child WordArt effects but the object plan records none");
         if (tags.Contains("shadow", StringComparer.OrdinalIgnoreCase) && !objects.Effects.HasShadow)
             rowFailures.Add("drawing-object evidence expects shadow effects but the object plan records none");
         if (tags.Contains("glow", StringComparer.OrdinalIgnoreCase) && !objects.Effects.HasGlow)

@@ -1760,6 +1760,66 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void BuildNormalizedSummaryFromFiles_RequiresRenderedGroupedChildWordArtEffectEvidence()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "drawing-objects-complex";
+            var wpfRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var wpfWithoutWordArtChildEffect = RemoveRenderedGroupChildWordArtEffect(wpfRow);
+            var avaloniaWithoutWordArtChildEffect = RemoveRenderedGroupChildWordArtEffect(avaloniaRow);
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [wpfWithoutWordArtChildEffect],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [avaloniaWithoutWordArtChildEffect],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("drawing-object evidence expects rendered grouped child WordArt effects but the object plan records none", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void BuildNormalizedSummaryFromFiles_RequiresMatchingObjectFormatAltTextEvidence()
     {
         var root = CreateTempRoot();
@@ -4548,6 +4608,24 @@ public sealed class VisualEvidencePlannerTests
 
         return FreeWVisualEvidencePlanner.BuildEvidenceRow(capture);
     }
+
+    private static FreeWVisualEvidenceRow RemoveRenderedGroupChildWordArtEffect(FreeWVisualEvidenceRow row) =>
+        row with
+        {
+            PageExpectation = row.PageExpectation with
+            {
+                DrawingObjects = row.PageExpectation.DrawingObjects with
+                {
+                    Effects = row.PageExpectation.DrawingObjects.Effects with
+                    {
+                        RenderedGroupChildEffectObjectCount = 1,
+                        RenderedGroupChildShapeEffectObjectCount = 1,
+                        RenderedGroupChildWordArtEffectObjectCount = 0,
+                        RenderedGroupChildEffectSummaries = ["GroupChild0:Shape:glow"]
+                    }
+                }
+            }
+        };
 
     private static FreeWVisualEvidenceRow BuildFileBackedRow(
         string root,
