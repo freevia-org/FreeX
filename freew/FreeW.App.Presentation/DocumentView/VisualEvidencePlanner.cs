@@ -243,6 +243,29 @@ public sealed record FreeWVisualTableOfAuthoritiesExpectation(
     IReadOnlyList<string> PageReferenceSignatures,
     IReadOnlyList<FreeWVisualTableOfAuthoritiesPageReference> PageReferences);
 
+public sealed record FreeWVisualProofingDiagnosticSignature(
+    string Kind,
+    string Word,
+    string NormalizedWord,
+    string? LanguageTag,
+    int BlockIndex,
+    int RunIndex,
+    int RunOffset,
+    int ParagraphOffset,
+    int Length,
+    string StableSignature);
+
+public sealed record FreeWVisualProofingDiagnosticExpectation(
+    int DiagnosticCount,
+    int SpellingCount,
+    int GrammarCount,
+    bool HasSpelling,
+    bool HasGrammar,
+    IReadOnlyList<string> Kinds,
+    IReadOnlyList<string> LanguageTags,
+    IReadOnlyList<string> StableSignatures,
+    IReadOnlyList<FreeWVisualProofingDiagnosticSignature> Diagnostics);
+
 public sealed record FreeWVisualPageExpectation(
     int PageNumber,
     int PageCount,
@@ -256,6 +279,7 @@ public sealed record FreeWVisualPageExpectation(
     FreeWVisualChartSmartArtExpectation ChartSmartArt,
     FreeWVisualFieldExpectation Fields,
     FreeWVisualTableOfAuthoritiesExpectation TableOfAuthorities,
+    FreeWVisualProofingDiagnosticExpectation ProofingDiagnostics,
     string? HeaderSlotName,
     string? FooterSlotName,
     bool HasFootnotes,
@@ -329,7 +353,7 @@ public static class FreeWVisualEvidencePlanner
 {
     public const string ManifestFileName = "freew_visual_evidence_manifest.json";
     public const string SchemaId = "freew.visual-evidence.v1";
-    public const int SchemaVersion = 14;
+    public const int SchemaVersion = 15;
     public const string SectionGeometryPageSurfaceRenderStatus = "section-page-surface";
 
     private const int MaxTrackedColorCount = 4096;
@@ -908,6 +932,7 @@ public static class FreeWVisualEvidencePlanner
         var chartSmartArt = BuildChartSmartArtExpectation(document);
         var fields = BuildFieldExpectation(document);
         var tableOfAuthorities = BuildTableOfAuthoritiesExpectation(document);
+        var proofingDiagnostics = BuildProofingDiagnosticExpectation(document);
 
         var expectedOutputName = ExpectedOutputName(scenario.ScenarioId, pageNumber, outputName);
         return new FreeWVisualPageExpectation(
@@ -923,6 +948,7 @@ public static class FreeWVisualEvidencePlanner
             chartSmartArt,
             fields,
             tableOfAuthorities,
+            proofingDiagnostics,
             headerSlotName,
             footerSlotName,
             hasFootnotes,
@@ -1740,6 +1766,80 @@ public static class FreeWVisualEvidencePlanner
             PageReferences: pageReferences);
     }
 
+    public static FreeWVisualProofingDiagnosticExpectation BuildProofingDiagnosticExpectation(TextDocument? document)
+    {
+        if (document is null)
+            return EmptyProofingDiagnosticExpectation;
+
+        var diagnostics = ProofingDiagnosticPlanner.Build(document, spellCheckEnabled: true);
+        if (diagnostics.Count == 0)
+            return EmptyProofingDiagnosticExpectation;
+
+        var signatures = diagnostics
+            .Select(BuildProofingDiagnosticSignature)
+            .OrderBy(signature => signature.StableSignature, StringComparer.Ordinal)
+            .ToList();
+        var kinds = signatures
+            .Select(signature => signature.Kind)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(kind => kind, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var languageTags = signatures
+            .Select(signature => signature.LanguageTag)
+            .Where(tag => !string.IsNullOrWhiteSpace(tag))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(tag => tag, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return new FreeWVisualProofingDiagnosticExpectation(
+            DiagnosticCount: signatures.Count,
+            SpellingCount: signatures.Count(signature =>
+                string.Equals(signature.Kind, nameof(ProofingDiagnosticKind.Spelling), StringComparison.Ordinal)),
+            GrammarCount: signatures.Count(signature =>
+                string.Equals(signature.Kind, nameof(ProofingDiagnosticKind.Grammar), StringComparison.Ordinal)),
+            HasSpelling: signatures.Any(signature =>
+                string.Equals(signature.Kind, nameof(ProofingDiagnosticKind.Spelling), StringComparison.Ordinal)),
+            HasGrammar: signatures.Any(signature =>
+                string.Equals(signature.Kind, nameof(ProofingDiagnosticKind.Grammar), StringComparison.Ordinal)),
+            Kinds: kinds,
+            LanguageTags: languageTags,
+            StableSignatures: signatures.Select(signature => signature.StableSignature).ToList(),
+            Diagnostics: signatures);
+    }
+
+    private static FreeWVisualProofingDiagnosticSignature BuildProofingDiagnosticSignature(
+        ProofingDiagnostic diagnostic)
+    {
+        var kind = diagnostic.Kind.ToString();
+        var languageTag = string.IsNullOrWhiteSpace(diagnostic.LanguageTag)
+            ? null
+            : diagnostic.LanguageTag.Trim();
+        var stableSignature = string.Join(
+            "|",
+            "kind=" + kind,
+            "word=" + diagnostic.Word,
+            "normalized=" + diagnostic.NormalizedWord,
+            "language=" + (languageTag ?? string.Empty),
+            "block=" + diagnostic.BlockIndex.ToString(CultureInfo.InvariantCulture),
+            "run=" + diagnostic.RunIndex.ToString(CultureInfo.InvariantCulture),
+            "runOffset=" + diagnostic.RunOffset.ToString(CultureInfo.InvariantCulture),
+            "paragraphOffset=" + diagnostic.ParagraphOffset.ToString(CultureInfo.InvariantCulture),
+            "length=" + diagnostic.Length.ToString(CultureInfo.InvariantCulture));
+
+        return new FreeWVisualProofingDiagnosticSignature(
+            Kind: kind,
+            Word: diagnostic.Word,
+            NormalizedWord: diagnostic.NormalizedWord,
+            LanguageTag: languageTag,
+            BlockIndex: diagnostic.BlockIndex,
+            RunIndex: diagnostic.RunIndex,
+            RunOffset: diagnostic.RunOffset,
+            ParagraphOffset: diagnostic.ParagraphOffset,
+            Length: diagnostic.Length,
+            StableSignature: stableSignature);
+    }
+
     public static void EnsureTrusted(FreeWVisualEvidenceRow row)
     {
         ArgumentNullException.ThrowIfNull(row);
@@ -2016,6 +2116,17 @@ public static class FreeWVisualEvidencePlanner
         HasPassimReferences: false,
         PageReferenceSignatures: [],
         PageReferences: []);
+
+    private static FreeWVisualProofingDiagnosticExpectation EmptyProofingDiagnosticExpectation { get; } = new(
+        DiagnosticCount: 0,
+        SpellingCount: 0,
+        GrammarCount: 0,
+        HasSpelling: false,
+        HasGrammar: false,
+        Kinds: [],
+        LanguageTags: [],
+        StableSignatures: [],
+        Diagnostics: []);
 
     private static IEnumerable<(Run Run, bool HeaderFooter, string? HeaderFooterSlotName)> EnumerateFieldRunSnapshots(
         TextDocument document)
