@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Headless;
 using FreeP.App.Avalonia;
+using FreeP.App.Avalonia.Recording;
 using FreeP.App.Compositor;
 using FreeP.App.Rendering.Avalonia;
 using FreeP.Core.Model;
@@ -182,7 +183,7 @@ public sealed class SlideShowWindowHeadlessTests
             pres.Slides[0].Notes = MakeTextBody("speaker note");
             pres.Slides[1].Title = "Details";
 
-            var window = new SlideShowWindow(pres, 0);
+            var window = new SlideShowWindow(pres, 0, CreateDeferredRecordingCaptureBackend());
             displayIntent = new SlideShowPresenterDisplayIntent(
                 IsFullScreenRequested: true,
                 MonitorIndex: 2,
@@ -213,7 +214,7 @@ public sealed class SlideShowWindowHeadlessTests
         var ran = await OnUiThread(() =>
         {
             var pres = MakePresentation(1);
-            var window = new SlideShowWindow(pres, 0);
+            var window = new SlideShowWindow(pres, 0, CreateDeferredRecordingCaptureBackend());
 
             plan = window.ApplyPresenterToolIntent(
                 SlideShowTimingIntent.RecordTimings,
@@ -429,7 +430,7 @@ public sealed class SlideShowWindowHeadlessTests
                     "Executive review",
                     new[] { pres.Slides[2].Id, pres.Slides[0].Id }),
                 startIndex: 0);
-            var window = new SlideShowWindow(pres, route);
+            var window = new SlideShowWindow(pres, route, CreateDeferredRecordingCaptureBackend());
             window.ApplyPresenterToolIntent(
                 SlideShowTimingIntent.RecordTimings,
                 SlideShowRecordingMediaIntent.NarrationAndMedia,
@@ -473,14 +474,22 @@ public sealed class SlideShowWindowHeadlessTests
         if (!ran) return;
         readiness.Should().NotBeNull();
         readiness!.HostName.Should().Be("Avalonia slideshow");
-        readiness.AdapterName.Should().Be("Avalonia microphone/camera capture adapter");
-        readiness.Devices.Should().BeEmpty();
-        readiness.CanCaptureNarration.Should().BeFalse();
+        readiness.AdapterName.Should().Be("Avalonia Windows microphone capture adapter");
+        readiness.StatusText.Should().NotContain("not registered");
         readiness.CanCaptureCamera.Should().BeFalse();
-        readiness.MissingStreams.Should().Equal(
-            SlideShowRecordingCaptureStreamKind.NarrationAudio,
-            SlideShowRecordingCaptureStreamKind.CameraVideo);
-        readiness.StatusText.Should().Contain("Recording capture adapter is not registered");
+        readiness.MissingStreams.Should().Contain(SlideShowRecordingCaptureStreamKind.CameraVideo);
+        if (readiness.Devices.Any(device =>
+                device.Kind == SlideShowRecordingCaptureDeviceKind.Microphone &&
+                device.IsAvailable))
+        {
+            readiness.CanCaptureNarration.Should().BeTrue();
+            readiness.ReadyStreams.Should().Contain(SlideShowRecordingCaptureStreamKind.NarrationAudio);
+        }
+        else
+        {
+            readiness.CanCaptureNarration.Should().BeFalse();
+            readiness.MissingStreams.Should().Contain(SlideShowRecordingCaptureStreamKind.NarrationAudio);
+        }
     }
 
     [Fact]
@@ -1296,4 +1305,11 @@ public sealed class SlideShowWindowHeadlessTests
 
         throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
     }
+
+    private static ISlideShowRecordingCaptureBackend CreateDeferredRecordingCaptureBackend() =>
+        SlideShowHostCapabilityRecordingCaptureBackend.FromCapabilities(
+            SlideShowRecordingCaptureAdapterPlanner.BuildCapabilities(
+                SlideShowRecordingCaptureAdapterPlanner.BuildDeferredReadiness(
+                    AvaloniaWindowsRecordingCaptureBackend.HostName,
+                    "Avalonia microphone/camera capture adapter")));
 }
