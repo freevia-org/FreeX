@@ -234,6 +234,60 @@ public class PresentationPdfExporterTests
     }
 
     [Fact]
+    public void BuildDocument_ExportsPictureShapesAsPdfImages()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Kind = SlideShapeKind.Picture,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Picture = new ImagePart { Bytes = MinimalPngBytes(), ContentType = "image/png" },
+        });
+        deck.Slides.Add(slide);
+
+        var ops = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops;
+
+        ops.OfType<PdfImage>().Should().ContainSingle(image =>
+            image.X == 72 &&
+            image.Y == 378 &&
+            image.Width == 144 &&
+            image.Height == 72 &&
+            image.ContentType == "image/png");
+        ops.OfType<PdfText>().Select(text => text.Text)
+            .Should().NotContain("[Picture]", "exported picture images should not retain the placeholder fallback label");
+    }
+
+    [Fact]
+    public void ExportToBytes_EmbedsPictureImageXObject()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Kind = SlideShapeKind.Picture,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Picture = new ImagePart { Bytes = MinimalPngBytes(), ContentType = "image/png" },
+        });
+        deck.Slides.Add(slide);
+
+        var pdf = Encoding.Latin1.GetString(PresentationPdfExporter.ExportToBytes(deck));
+
+        pdf.Should().Contain("/Subtype /Image");
+        pdf.Should().Contain("/Im1 Do");
+        pdf.Should().Contain("144 0 0 72 72 378 cm");
+        pdf.Should().NotContain("[Picture]");
+    }
+
+    [Fact]
     public void TitleOp_IsBold()
     {
         var doc = PresentationPdfExporter.BuildDocument(SampleDeck());
@@ -252,4 +306,17 @@ public class PresentationPdfExporterTests
         props.Title.Should().Be("My Deck");
         props.Author.Should().Be("Tester");
     }
+
+    private static byte[] MinimalPngBytes() =>
+    [
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+        0x42, 0x60, 0x82
+    ];
 }

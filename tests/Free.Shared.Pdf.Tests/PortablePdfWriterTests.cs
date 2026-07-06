@@ -109,4 +109,90 @@ public sealed class PortablePdfWriterTests
         pdf.Should().Contain("10 20 m",    "moveto x1 y1");
         pdf.Should().Contain("100 200 l S","lineto x2 y2 then stroke");
     }
+
+    [Fact]
+    public void Write_EmitsPngImageXObjectAndPlacement()
+    {
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfImage(10, 30, 20, 10, MinimalPngBytes(), "image/png"),
+        });
+
+        var pdf = Encoding.Latin1.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument(new[] { page })));
+
+        pdf.Should().Contain("/XObject << /Im1 ");
+        pdf.Should().Contain("/Subtype /Image");
+        pdf.Should().Contain("/Width 1 /Height 1");
+        pdf.Should().Contain("/ColorSpace /DeviceRGB");
+        pdf.Should().Contain("/Filter /FlateDecode");
+        pdf.Should().Contain("20 0 0 10 10 30 cm");
+        pdf.Should().Contain("/Im1 Do");
+    }
+
+    [Fact]
+    public void Write_EmbedsJpegImageWithDctDecode()
+    {
+        var page = new PdfContentPage(120, 90, new PdfDrawOp[]
+        {
+            new PdfImage(12, 20, 48, 36, MinimalJpegBytes(), "image/jpeg"),
+        });
+
+        var pdf = Encoding.Latin1.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument(new[] { page })));
+
+        pdf.Should().Contain("/Subtype /Image");
+        pdf.Should().Contain("/Width 16 /Height 16");
+        pdf.Should().Contain("/ColorSpace /DeviceRGB");
+        pdf.Should().Contain("/Filter /DCTDecode");
+        pdf.Should().Contain("48 0 0 36 12 20 cm");
+        pdf.Should().Contain("/Im1 Do");
+    }
+
+    [Fact]
+    public void Write_SkipsUnsupportedImageContentTypes()
+    {
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfImage(10, 30, 20, 10, new byte[] { 1, 2, 3, 4 }, "image/gif"),
+        });
+
+        var pdf = Encoding.Latin1.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument(new[] { page })));
+
+        pdf.Should().NotContain("/Subtype /Image");
+        pdf.Should().NotContain("/XObject");
+        pdf.Should().NotContain("/Im1 Do");
+    }
+
+    [Fact]
+    public void Write_SkipsMalformedSupportedImageBytes()
+    {
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfImage(10, 30, 20, 10, new byte[] { 0x89, 0x50, 0x4E, 0x47 }, "image/png"),
+            new PdfImage(40, 30, 20, 10, new byte[] { 0xFF, 0xD8, 0xFF }, "image/jpeg"),
+            new PdfText(10, 10, 10, PdfFontFace.Regular, PdfColor.Black, "Still exports"),
+        });
+
+        var pdf = Encoding.Latin1.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument(new[] { page })));
+
+        pdf.Should().NotContain("/Subtype /Image");
+        pdf.Should().NotContain("/XObject");
+        pdf.Should().NotContain("/Im1 Do");
+        pdf.Should().Contain("(Still exports) Tj");
+    }
+
+    private static byte[] MinimalPngBytes() =>
+    [
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+        0x42, 0x60, 0x82
+    ];
+
+    private static byte[] MinimalJpegBytes() => Convert.FromBase64String(
+        "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wAARCAAQABADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD9U6KKKAP/2Q==");
 }

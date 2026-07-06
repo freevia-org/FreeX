@@ -99,7 +99,7 @@ public static class PresentationPdfExporter
 
             if (shapeBox is { } box)
             {
-                if (hasText || !IsConnectorLike(shape))
+                if (hasText || (!IsConnectorLike(shape) && !IsPictureLike(shape)))
                     AppendShapeText(ops, box, content);
                 continue;
             }
@@ -126,6 +126,9 @@ public static class PresentationPdfExporter
         var x = EmuToPoints(shape.OffsetXEmu);
         var y = slideHeightPoints - EmuToPoints(shape.OffsetYEmu) - height;
 
+        if (TryAppendPictureImage(ops, shape, x, y, width, height))
+            return new ShapeBox(x, y, width, height);
+
         if (TryAppendConnectorGeometry(ops, shape, x, y, width, height, slideHeightPoints))
             return new ShapeBox(x, y, width, height);
 
@@ -136,6 +139,23 @@ public static class PresentationPdfExporter
             ops.Add(new PdfStrokeRect(x, y, width, height, stroke, strokeWidth));
 
         return new ShapeBox(x, y, width, height);
+    }
+
+    private static bool TryAppendPictureImage(
+        List<PdfDrawOp> ops,
+        SlideShape shape,
+        double x,
+        double y,
+        double width,
+        double height)
+    {
+        if (!IsPictureLike(shape) || shape.Picture is not { Bytes.Length: > 0 } picture)
+            return false;
+        if (!IsSupportedImageContentType(picture.ContentType))
+            return false;
+
+        ops.Add(new PdfImage(x, y, width, height, picture.Bytes, picture.ContentType, shape.RotationDeg));
+        return true;
     }
 
     private static bool TryAppendConnectorGeometry(
@@ -176,6 +196,22 @@ public static class PresentationPdfExporter
         || shape.AutoShapeKind is DrawingShapeKind.Line
             or DrawingShapeKind.ElbowConnector
             or DrawingShapeKind.CurvedConnector;
+
+    private static bool IsPictureLike(SlideShape shape) =>
+        shape.Kind is SlideShapeKind.Picture
+            or SlideShapeKind.Media
+            or SlideShapeKind.Ole
+            or SlideShapeKind.PreservedObject
+        || shape.Picture is not null;
+
+    private static bool IsSupportedImageContentType(string? contentType)
+    {
+        var normalized = contentType?.Split(';', 2)[0].Trim();
+        return normalized is not null &&
+               (normalized.Equals("image/png", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("image/jpg", StringComparison.OrdinalIgnoreCase));
+    }
 
     private static (double X1, double Y1, double X2, double Y2) GetLineEndpoints(
         SlideShape shape,

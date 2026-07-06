@@ -1,4 +1,6 @@
+using System.Buffers.Binary;
 using System.Globalization;
+using System.IO.Compression;
 using System.Text;
 
 namespace Free.Shared.Pdf;
@@ -20,6 +22,7 @@ namespace Free.Shared.Pdf;
 public static class PortablePdfWriter
 {
     private static readonly Encoding PdfEncoding = Encoding.ASCII;
+    private static readonly byte[] PngSignature = [137, 80, 78, 71, 13, 10, 26, 10];
     private const string DeferredUnicodePdfPathRequirements =
         PdfWinAnsiTextCapability.DeferredUnicodePdfPathRequirements;
 
@@ -47,10 +50,11 @@ public static class PortablePdfWriter
         }
 
         var fontResources = BuildFontResources(document);
+        var imageResources = BuildImageResources(document);
         var pages = document.Pages
-            .Select(page => (Content: RenderContentStream(page.Ops), page.WidthPoints, page.HeightPoints))
+            .Select(page => (Content: RenderContentStream(page.Ops, imageResources.ByOp), page.WidthPoints, page.HeightPoints))
             .ToArray();
-        WritePdf(stream, pages, fontResources, headerComment);
+        WritePdf(stream, pages, fontResources, imageResources.Resources, headerComment);
     }
 
     /// <summary>Serializes <paramref name="document"/> to an in-memory byte array.</summary>
@@ -61,7 +65,9 @@ public static class PortablePdfWriter
         return stream.ToArray();
     }
 
-    private static string RenderContentStream(IReadOnlyList<PdfDrawOp> ops)
+    private static string RenderContentStream(
+        IReadOnlyList<PdfDrawOp> ops,
+        IReadOnlyDictionary<PdfImage, PdfImageResource> imageResources)
     {
         var content = new StringBuilder();
         foreach (var op in ops)
@@ -79,6 +85,9 @@ public static class PortablePdfWriter
                     break;
                 case PdfLine line:
                     AppendLine(content, line.X1, line.Y1, line.X2, line.Y2, line.Color, line.LineWidth);
+                    break;
+                case PdfImage image when imageResources.TryGetValue(image, out var resource):
+                    AppendImage(content, image, resource.ResourceName);
                     break;
             }
         }
@@ -98,34 +107,44 @@ public static class PortablePdfWriter
         Stream stream,
         IReadOnlyList<(string Content, double Width, double Height)> pages,
         IReadOnlyList<(string ResourceName, string BaseFont)> fontResources,
+        IReadOnlyList<PdfImageResource> imageResources,
         string headerComment)
     {
-        var objects = new List<string>();
-        var firstPageObjectId = 3 + fontResources.Count;
+        var objects = new List<PdfObject>();
+        var firstPageObjectId = 3 + fontResources.Count + imageResources.Count;
         var pageObjectIds = Enumerable.Range(0, pages.Count)
             .Select(index => firstPageObjectId + (index * 2))
             .ToArray();
 
-        objects.Add("<< /Type /Catalog /Pages 2 0 R >>");
-        objects.Add($"<< /Type /Pages /Kids [{string.Join(" ", pageObjectIds.Select(id => $"{id} 0 R"))}] /Count {pages.Count} >>");
+        objects.Add(PdfObject.Ascii("<< /Type /Catalog /Pages 2 0 R >>"));
+        objects.Add(PdfObject.Ascii($"<< /Type /Pages /Kids [{string.Join(" ", pageObjectIds.Select(id => $"{id} 0 R"))}] /Count {pages.Count} >>"));
         foreach (var font in fontResources)
-            objects.Add($"<< /Type /Font /Subtype /Type1 /BaseFont /{font.BaseFont} /Encoding /WinAnsiEncoding >>");
+            objects.Add(PdfObject.Ascii($"<< /Type /Font /Subtype /Type1 /BaseFont /{font.BaseFont} /Encoding /WinAnsiEncoding >>"));
+
+        foreach (var image in imageResources)
+            objects.Add(CreateImageObject(image));
 
         var fontResourceDictionary = string.Join(
             " ",
             fontResources.Select((font, index) => $"/{font.ResourceName} {index + 3} 0 R"));
+        var imageResourceDictionary = string.Join(
+            " ",
+            imageResources.Select((image, index) => $"/{image.ResourceName} {index + 3 + fontResources.Count} 0 R"));
+        var xObjectResources = imageResources.Count == 0
+            ? string.Empty
+            : $" /XObject << {imageResourceDictionary} >>";
 
         for (var index = 0; index < pages.Count; index++)
         {
             var pageObjectId = pageObjectIds[index];
             var contentObjectId = pageObjectId + 1;
-            objects.Add(
-                $"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {FormatNumber(pages[index].Width)} {FormatNumber(pages[index].Height)}] /Resources << /Font << {fontResourceDictionary} >> >> /Contents {contentObjectId} 0 R >>");
+            objects.Add(PdfObject.Ascii(
+                $"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {FormatNumber(pages[index].Width)} {FormatNumber(pages[index].Height)}] /Resources << /Font << {fontResourceDictionary} >>{xObjectResources} >> /Contents {contentObjectId} 0 R >>"));
 
             var pageStream = pages[index].Content.EndsWith("\n", StringComparison.Ordinal)
                 ? pages[index].Content
                 : pages[index].Content + "\n";
-            objects.Add($"<< /Length {PdfEncoding.GetByteCount(pageStream)} >>\nstream\n{pageStream}endstream");
+            objects.Add(PdfObject.Ascii($"<< /Length {PdfEncoding.GetByteCount(pageStream)} >>\nstream\n{pageStream}endstream"));
         }
 
         WriteAscii(stream, $"%PDF-1.7\n% {headerComment}\n");
@@ -133,7 +152,9 @@ public static class PortablePdfWriter
         for (var objectIndex = 0; objectIndex < objects.Count; objectIndex++)
         {
             offsets.Add(stream.Position);
-            WriteAscii(stream, $"{objectIndex + 1} 0 obj\n{objects[objectIndex]}\nendobj\n");
+            WriteAscii(stream, $"{objectIndex + 1} 0 obj\n");
+            stream.Write(objects[objectIndex].Bytes);
+            WriteAscii(stream, "\nendobj\n");
         }
 
         var xrefOffset = stream.Position;
@@ -165,6 +186,329 @@ public static class PortablePdfWriter
                 ("F1", "Helvetica"),
                 ("F2", "Helvetica-Bold"),
             ];
+    }
+
+    private static ImageResourceSet BuildImageResources(PdfContentDocument document)
+    {
+        var byOp = new Dictionary<PdfImage, PdfImageResource>(ReferenceEqualityComparer.Instance);
+        var resources = new List<PdfImageResource>();
+
+        foreach (var image in document.Pages.SelectMany(page => page.Ops).OfType<PdfImage>())
+        {
+            if (byOp.ContainsKey(image))
+                continue;
+            if (!TryCreateImageResource($"Im{resources.Count + 1}", image, out var resource))
+                continue;
+
+            resources.Add(resource);
+            byOp.Add(image, resource);
+        }
+
+        return new ImageResourceSet(resources, byOp);
+    }
+
+    private static bool TryCreateImageResource(string resourceName, PdfImage image, out PdfImageResource resource)
+    {
+        resource = default!;
+        if (image.Width <= 0 || image.Height <= 0 || image.ImageBytes.Length == 0)
+            return false;
+
+        try
+        {
+            var contentType = NormalizeContentType(image.ContentType);
+            resource = contentType switch
+            {
+                "image/png" => DecodePng(resourceName, image.ImageBytes),
+                "image/jpeg" or "image/jpg" => DecodeJpeg(resourceName, image.ImageBytes),
+                _ => null!,
+            };
+        }
+        catch (Exception ex) when (IsRecoverableImageDecodeException(ex))
+        {
+            return false;
+        }
+
+        return resource is not null;
+    }
+
+    private static PdfObject CreateImageObject(PdfImageResource image)
+    {
+        var header =
+            $"<< /Type /XObject /Subtype /Image /Width {image.PixelWidth} /Height {image.PixelHeight} " +
+            $"/ColorSpace /{image.ColorSpace} /BitsPerComponent 8 /Filter /{image.Filter} /Length {image.Data.Length} >>\nstream\n";
+        const string footer = "\nendstream";
+
+        using var stream = new MemoryStream(PdfEncoding.GetByteCount(header) + image.Data.Length + PdfEncoding.GetByteCount(footer));
+        stream.Write(PdfEncoding.GetBytes(header));
+        stream.Write(image.Data);
+        stream.Write(PdfEncoding.GetBytes(footer));
+        return new PdfObject(stream.ToArray());
+    }
+
+    private static PdfImageResource DecodeJpeg(string resourceName, byte[] bytes)
+    {
+        var (width, height, components) = ReadJpegSize(bytes);
+        var colorSpace = components switch
+        {
+            1 => "DeviceGray",
+            3 => "DeviceRGB",
+            _ => throw new NotSupportedException("Portable PDF image export supports grayscale and RGB JPEG images."),
+        };
+
+        return new PdfImageResource(resourceName, width, height, colorSpace, "DCTDecode", bytes);
+    }
+
+    private static PdfImageResource DecodePng(string resourceName, byte[] bytes)
+    {
+        var decoded = DecodePngToPdfPixels(bytes);
+        return new PdfImageResource(
+            resourceName,
+            decoded.Width,
+            decoded.Height,
+            decoded.ColorSpace,
+            "FlateDecode",
+            Deflate(decoded.Pixels));
+    }
+
+    private static PngPdfPixels DecodePngToPdfPixels(byte[] data)
+    {
+        if (data.Length < PngSignature.Length || !data.AsSpan(0, PngSignature.Length).SequenceEqual(PngSignature))
+            throw new FormatException("Not a PNG image.");
+
+        var position = PngSignature.Length;
+        var width = 0;
+        var height = 0;
+        var bitDepth = 0;
+        var colorType = 0;
+        var interlace = 0;
+        byte[]? palette = null;
+        using var idat = new MemoryStream();
+
+        while (position + 8 <= data.Length)
+        {
+            var length = BinaryPrimitives.ReadInt32BigEndian(data.AsSpan(position, 4));
+            position += 4;
+            var chunkType = PdfEncoding.GetString(data, position, 4);
+            position += 4;
+            if (length < 0 || position + length > data.Length)
+                throw new FormatException($"PNG chunk '{chunkType}' overruns the file.");
+
+            switch (chunkType)
+            {
+                case "IHDR":
+                    width = BinaryPrimitives.ReadInt32BigEndian(data.AsSpan(position, 4));
+                    height = BinaryPrimitives.ReadInt32BigEndian(data.AsSpan(position + 4, 4));
+                    bitDepth = data[position + 8];
+                    colorType = data[position + 9];
+                    interlace = data[position + 12];
+                    break;
+                case "PLTE":
+                    palette = data.AsSpan(position, length).ToArray();
+                    break;
+                case "IDAT":
+                    idat.Write(data, position, length);
+                    break;
+            }
+
+            position += length + 4;
+            if (chunkType == "IEND")
+                break;
+        }
+
+        if (width <= 0 || height <= 0)
+            throw new FormatException("PNG image is missing valid dimensions.");
+        if (bitDepth != 8)
+            throw new NotSupportedException("Portable PDF image export supports only 8-bit PNG images.");
+        if (interlace != 0)
+            throw new NotSupportedException("Portable PDF image export does not support interlaced PNG images.");
+
+        var channels = colorType switch
+        {
+            0 => 1,
+            2 => 3,
+            3 => 1,
+            4 => 2,
+            6 => 4,
+            _ => throw new NotSupportedException($"Portable PDF image export does not support PNG color type {colorType}."),
+        };
+
+        idat.Position = 0;
+        var raw = Inflate(idat);
+        var pixels = UnfilterPng(raw, width, height, channels);
+        return ConvertPngPixelsToPdfPixels(pixels, width, height, colorType, channels, palette);
+    }
+
+    private static PngPdfPixels ConvertPngPixelsToPdfPixels(
+        byte[] pixels,
+        int width,
+        int height,
+        int colorType,
+        int channels,
+        byte[]? palette)
+    {
+        var pixelCount = width * height;
+        if (colorType is 0 or 4)
+        {
+            var gray = new byte[pixelCount];
+            for (var i = 0; i < pixelCount; i++)
+                gray[i] = pixels[i * channels];
+            return new PngPdfPixels(width, height, "DeviceGray", gray);
+        }
+
+        var rgb = new byte[pixelCount * 3];
+        for (var i = 0; i < pixelCount; i++)
+        {
+            var source = i * channels;
+            var target = i * 3;
+            switch (colorType)
+            {
+                case 2:
+                case 6:
+                    rgb[target] = pixels[source];
+                    rgb[target + 1] = pixels[source + 1];
+                    rgb[target + 2] = pixels[source + 2];
+                    break;
+                case 3:
+                    var paletteIndex = pixels[source] * 3;
+                    if (palette is null || paletteIndex + 2 >= palette.Length)
+                        throw new FormatException("PNG palette index is out of range.");
+                    rgb[target] = palette[paletteIndex];
+                    rgb[target + 1] = palette[paletteIndex + 1];
+                    rgb[target + 2] = palette[paletteIndex + 2];
+                    break;
+                default:
+                    throw new NotSupportedException();
+            }
+        }
+
+        return new PngPdfPixels(width, height, "DeviceRGB", rgb);
+    }
+
+    private static byte[] Inflate(Stream zlib)
+    {
+        using var output = new MemoryStream();
+        using (var stream = new ZLibStream(zlib, CompressionMode.Decompress, leaveOpen: true))
+            stream.CopyTo(output);
+        return output.ToArray();
+    }
+
+    private static byte[] Deflate(byte[] data)
+    {
+        using var output = new MemoryStream();
+        using (var stream = new ZLibStream(output, CompressionLevel.Optimal, leaveOpen: true))
+            stream.Write(data, 0, data.Length);
+        return output.ToArray();
+    }
+
+    private static byte[] UnfilterPng(byte[] raw, int width, int height, int channels)
+    {
+        var stride = width * channels;
+        var expected = height * (stride + 1);
+        if (raw.Length < expected)
+            throw new FormatException("PNG image data is truncated.");
+
+        var output = new byte[height * stride];
+        var input = 0;
+        for (var row = 0; row < height; row++)
+        {
+            var filter = raw[input++];
+            var rowStart = row * stride;
+            for (var column = 0; column < stride; column++)
+            {
+                var rawValue = raw[input++];
+                var left = column >= channels ? output[rowStart + column - channels] : 0;
+                var up = row > 0 ? output[rowStart - stride + column] : 0;
+                var upLeft = column >= channels && row > 0 ? output[rowStart - stride + column - channels] : 0;
+                var value = filter switch
+                {
+                    0 => rawValue,
+                    1 => rawValue + left,
+                    2 => rawValue + up,
+                    3 => rawValue + ((left + up) >> 1),
+                    4 => rawValue + Paeth(left, up, upLeft),
+                    _ => throw new FormatException($"PNG image uses unknown filter type {filter}."),
+                };
+                output[rowStart + column] = (byte)(value & 0xFF);
+            }
+        }
+
+        return output;
+    }
+
+    private static int Paeth(int left, int up, int upLeft)
+    {
+        var prediction = left + up - upLeft;
+        var leftDistance = Math.Abs(prediction - left);
+        var upDistance = Math.Abs(prediction - up);
+        var upLeftDistance = Math.Abs(prediction - upLeft);
+        if (leftDistance <= upDistance && leftDistance <= upLeftDistance)
+            return left;
+        return upDistance <= upLeftDistance ? up : upLeft;
+    }
+
+    private static (int Width, int Height, int Components) ReadJpegSize(byte[] bytes)
+    {
+        if (bytes.Length < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8)
+            throw new FormatException("Not a JPEG image.");
+
+        var position = 2;
+        while (position + 4 <= bytes.Length)
+        {
+            while (position < bytes.Length && bytes[position] == 0xFF)
+                position++;
+            if (position >= bytes.Length)
+                break;
+
+            var marker = bytes[position++];
+            if (marker is 0xD9 or 0xDA)
+                break;
+            if (position + 2 > bytes.Length)
+                break;
+
+            var length = BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(position, 2));
+            if (length < 2 || position + length > bytes.Length)
+                throw new FormatException("JPEG segment overruns the file.");
+
+            if (IsJpegStartOfFrame(marker))
+            {
+                if (length < 8)
+                    throw new FormatException("JPEG start-of-frame segment is truncated.");
+                var precision = bytes[position + 2];
+                if (precision != 8)
+                    throw new NotSupportedException("Portable PDF image export supports only 8-bit JPEG images.");
+
+                var height = BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(position + 3, 2));
+                var width = BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(position + 5, 2));
+                var components = bytes[position + 7];
+                return (width, height, components);
+            }
+
+            position += length;
+        }
+
+        throw new FormatException("JPEG image is missing a start-of-frame segment.");
+    }
+
+    private static bool IsJpegStartOfFrame(byte marker) =>
+        marker is 0xC0 or 0xC1 or 0xC2 or 0xC3 or 0xC5 or 0xC6 or 0xC7 or 0xC9 or 0xCA or 0xCB or 0xCD or 0xCE or 0xCF;
+
+    private static void AppendImage(StringBuilder content, PdfImage image, string resourceName)
+    {
+        content.AppendLine("q");
+        var rotation = -image.RotationDegrees * Math.PI / 180d;
+        var cos = Math.Cos(rotation);
+        var sin = Math.Sin(rotation);
+        var centerX = image.X + image.Width / 2d;
+        var centerY = image.Y + image.Height / 2d;
+        var a = cos * image.Width;
+        var b = sin * image.Width;
+        var c = -sin * image.Height;
+        var d = cos * image.Height;
+        var e = centerX - (cos * image.Width / 2d) + (sin * image.Height / 2d);
+        var f = centerY - (sin * image.Width / 2d) - (cos * image.Height / 2d);
+        content.AppendLine($"{FormatNumber(a)} {FormatNumber(b)} {FormatNumber(c)} {FormatNumber(d)} {FormatNumber(e)} {FormatNumber(f)} cm");
+        content.AppendLine($"/{resourceName} Do");
+        content.AppendLine("Q");
     }
 
     private static void AppendFilledRectangle(
@@ -300,8 +644,41 @@ public static class PortablePdfWriter
     }
 
     private static string FormatNumber(double value) =>
-        value.ToString("0.###", CultureInfo.InvariantCulture);
+        (Math.Abs(value) < 0.0005 ? 0d : value).ToString("0.###", CultureInfo.InvariantCulture);
 
     private static void WriteAscii(Stream stream, string text) =>
         stream.Write(PdfEncoding.GetBytes(text));
+
+    private static string NormalizeContentType(string? contentType) =>
+        contentType?.Split(';', 2)[0].Trim().ToLowerInvariant() ?? string.Empty;
+
+    private static bool IsRecoverableImageDecodeException(Exception ex) =>
+        ex is FormatException
+            or InvalidDataException
+            or NotSupportedException
+            or ArgumentException
+            or IOException;
+
+    private sealed record ImageResourceSet(
+        IReadOnlyList<PdfImageResource> Resources,
+        IReadOnlyDictionary<PdfImage, PdfImageResource> ByOp);
+
+    private sealed record PdfImageResource(
+        string ResourceName,
+        int PixelWidth,
+        int PixelHeight,
+        string ColorSpace,
+        string Filter,
+        byte[] Data);
+
+    private sealed record PngPdfPixels(
+        int Width,
+        int Height,
+        string ColorSpace,
+        byte[] Pixels);
+
+    private sealed record PdfObject(byte[] Bytes)
+    {
+        public static PdfObject Ascii(string text) => new(PdfEncoding.GetBytes(text));
+    }
 }

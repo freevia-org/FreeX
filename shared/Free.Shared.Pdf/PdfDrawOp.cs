@@ -55,3 +55,17 @@ public sealed record PdfLine(
     double Y2,
     PdfColor Color,
     double LineWidth) : PdfDrawOp;
+
+/// <summary>
+/// Draws an encoded bitmap image into a rectangular PDF user-space bounds. Supported portable
+/// content types are PNG and JPEG; unsupported content types are skipped by the dependency-free
+/// writer instead of emitting a corrupt image stream.
+/// </summary>
+public sealed record PdfImage(
+    double X,
+    double Y,
+    double Width,
+    double Height,
+    byte[] ImageBytes,
+    string ContentType,
+    double RotationDegrees = 0) : PdfDrawOp;

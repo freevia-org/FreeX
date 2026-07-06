@@ -141,11 +141,50 @@ public static class SkiaPdfWriter
                         strokePaint);
                     break;
                 }
+
+                case PdfImage image:
+                {
+                    if (!IsSupportedImageContentType(image.ContentType) || image.ImageBytes.Length == 0)
+                        break;
+
+                    using var data = SKData.CreateCopy(image.ImageBytes);
+                    using var skImage = SKImage.FromEncodedData(data);
+                    if (skImage is null)
+                        break;
+
+                    var top = pageHeight - (float)(image.Y + image.Height);
+                    var left = (float)image.X;
+                    var width = (float)image.Width;
+                    var height = (float)image.Height;
+                    canvas.Save();
+                    if (Math.Abs(image.RotationDegrees) > 0.001)
+                    {
+                        canvas.Translate(left + width / 2f, top + height / 2f);
+                        canvas.RotateDegrees((float)image.RotationDegrees);
+                        canvas.DrawImage(skImage, new SKRect(-width / 2f, -height / 2f, width / 2f, height / 2f));
+                    }
+                    else
+                    {
+                        canvas.DrawImage(skImage, new SKRect(left, top, left + width, top + height));
+                    }
+
+                    canvas.Restore();
+                    break;
+                }
             }
         }
     }
 
     private static SKColor ToSkColor(PdfColor color) => new(color.R, color.G, color.B);
+
+    private static bool IsSupportedImageContentType(string? contentType)
+    {
+        var normalized = contentType?.Split(';', 2)[0].Trim();
+        return normalized is not null &&
+               (normalized.Equals("image/png", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("image/jpg", StringComparison.OrdinalIgnoreCase));
+    }
 
     /// <summary>
     /// Draws text with per-codepoint font fallback: characters the base typeface cannot render
