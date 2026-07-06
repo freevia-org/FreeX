@@ -520,9 +520,19 @@ internal static class ParityCapture
             {
                 CaptureDialog(results, "dialog.GoalSeek", outDir, () => CreateGoalSeekParityDialog(sheet.Id));
             }
+            else if (string.Equals(targetSurfaceId, "dialog.PivotTableOptions", StringComparison.Ordinal) ||
+                targetSurfaceId.StartsWith("dialog.PivotTableOptions.", StringComparison.Ordinal))
+            {
+                CaptureDialogTabs(results, "dialog.PivotTableOptions", outDir, () =>
+                {
+                    var (pivot, cache, _) = CreatePivotModels(sheet.Id);
+                    return new PivotTableOptionsDialog(pivot, cache);
+                },
+                    ["LayoutAndFormat", "TotalsAndFilters", "Display", "Printing", "Data", "AltText"]);
+            }
             else
             {
-                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, and dialog.GoalSeek in this lane.");
+                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, and dialog.PivotTableOptions in this lane.");
             }
 
             return;
