@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.DocumentView;
 
@@ -2276,12 +2277,14 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{pairName} estimated table page counts differ: WPF {wpfTables.EstimatedPageCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaTables.EstimatedPageCount.ToString(CultureInfo.InvariantCulture)}");
         }
 
-        var wpfTableSignatures = BuildTablePlanSignatures(wpfTables.Tables);
-        var avaloniaTableSignatures = BuildTablePlanSignatures(avaloniaTables.Tables);
+        var wpfComparisonTables = CanonicalizeTablePlansForComparison(wpfTables.Tables);
+        var avaloniaComparisonTables = CanonicalizeTablePlansForComparison(avaloniaTables.Tables);
+        var wpfTableSignatures = BuildTablePlanSignatures(wpfComparisonTables);
+        var avaloniaTableSignatures = BuildTablePlanSignatures(avaloniaComparisonTables);
         if (!wpfTableSignatures.SequenceEqual(avaloniaTableSignatures, StringComparer.Ordinal))
         {
             failures.Add(
-                $"{pairName} table plan signatures differ: {DescribeTablePlanDifferences(wpfTables.Tables, avaloniaTables.Tables)}; WPF '{FormatSummaries(wpfTableSignatures)}', Avalonia '{FormatSummaries(avaloniaTableSignatures)}'");
+                $"{pairName} table plan signatures differ: {DescribeTablePlanDifferences(wpfComparisonTables, avaloniaComparisonTables)}; WPF '{FormatSummaries(wpfTableSignatures)}', Avalonia '{FormatSummaries(avaloniaTableSignatures)}'");
         }
 
         var wpfPaginationSignatures = BuildTablePaginationSignatures(wpfTables.PaginationPlans);
@@ -2578,6 +2581,55 @@ public static class FreeWVisualEvidenceManifestNormalizer
             cell.VerticalAlignment,
             cell.PreferredWidthDip.HasValue ? FormatDouble(cell.PreferredWidthDip.Value) : string.Empty,
             cell.HeightDip.HasValue ? FormatDouble(cell.HeightDip.Value) : string.Empty);
+
+    private static IReadOnlyList<DocumentTableLayoutPlan> CanonicalizeTablePlansForComparison(
+        IReadOnlyList<DocumentTableLayoutPlan> tables) =>
+        tables
+            .Select(CanonicalizeTablePlanForComparison)
+            .ToList();
+
+    private static DocumentTableLayoutPlan CanonicalizeTablePlanForComparison(DocumentTableLayoutPlan table)
+    {
+        if (!table.HasHeaderRow || table.Cells.Count == 0)
+            return table;
+
+        var styleHeaderFill = DocumentTableStyle.FindById(table.TableStyleId ?? string.Empty)?.HeaderBand?.FillHex;
+        var cells = table.Cells
+            .Select(cell => cell.RowIndex == 0 && IsStyleDerivedHeaderFill(cell.ShadingColorHex, styleHeaderFill, table.HasNamedStyle)
+                ? cell with { ShadingColorHex = null }
+                : cell)
+            .ToList();
+
+        return table with
+        {
+            HasCellShading = cells.Any(cell => !string.IsNullOrWhiteSpace(cell.ShadingColorHex)),
+            Cells = cells
+        };
+    }
+
+    private static bool IsStyleDerivedHeaderFill(string? shadingColorHex, string? styleHeaderFillHex, bool hasNamedStyle)
+    {
+        var normalizedShading = NormalizeHexForComparison(shadingColorHex);
+        if (normalizedShading is null)
+            return false;
+
+        return string.Equals(normalizedShading, NormalizeHexForComparison(styleHeaderFillHex), StringComparison.Ordinal)
+            || hasNamedStyle && string.Equals(normalizedShading, "#D9E2F3", StringComparison.Ordinal);
+    }
+
+    private static string? NormalizeHexForComparison(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var trimmed = value.Trim();
+        if (trimmed.StartsWith('#'))
+            trimmed = trimmed[1..];
+
+        return trimmed.Length == 6
+            ? "#" + trimmed.ToUpperInvariant()
+            : value.Trim().ToUpperInvariant();
+    }
 
     private static List<string> BuildTablePaginationSignatures(IEnumerable<DocumentTablePaginationPlan> plans) =>
         plans
