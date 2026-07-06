@@ -286,6 +286,28 @@ public sealed class SmartArtLayoutTests
             .Should().BeEquivalentTo(new[] { "Identify", "Analyze", "Act", "Review" });
     }
 
+    [Fact]
+    public void GearCycle_ReturnsLiveCircularBoxesAndConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Cycle, "Initiate", "Coordinate", "Deliver", "Improve");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/gearCycle";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("gearCycle is admitted as a bounded shared cycle-family approximation");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(4, "one live box should be emitted per gear-cycle node");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(4, "gearCycle should reuse the shared circular connector planner");
+        shapes.Should().OnlyContain(
+            s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle || s.AutoShapeKind == DrawingShapeKind.Line,
+            "the current shared planner is honest renderer-neutral cycle geometry, not true gear-tooth geometry");
+
+        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().BeEquivalentTo(new[] { "Initiate", "Coordinate", "Deliver", "Improve" });
+    }
+
     // ── Hierarchy layout ──────────────────────────────────────────────────────────
 
     [Fact]
@@ -341,6 +363,24 @@ public sealed class SmartArtLayoutTests
             .Should().HaveCount(3, "root plus two child boxes should be emitted from the hierarchy tree");
         shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
             .Should().HaveCount(2, "basicHierarchy should reuse shared parent-child connector geometry");
+    }
+
+    [Fact]
+    public void OrgChart_ReturnsLiveTreeBoxesAndConnectors()
+    {
+        var data = MakeHierarchyData("CEO", "Sales", "Engineering");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/orgChart";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("orgChart is admitted as a bounded shared hierarchy-family approximation");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(3, "root plus two report boxes should be emitted from the hierarchy tree");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(2, "orgChart should reuse shared parent-child connector geometry");
+        shapes.Should().OnlyContain(
+            s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle || s.AutoShapeKind == DrawingShapeKind.Line,
+            "the shared planner emits renderer-neutral tree boxes and connectors, not org-chart-specific geometry");
     }
 
     [Fact]
@@ -523,7 +563,7 @@ public sealed class SmartArtLayoutTests
     public void UnsupportedCycleSibling_ReturnsNull()
     {
         var data = MakeData(SmartArtFamily.Cycle, "A", "B", "C");
-        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/gearCycle";
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/textCycle";
         data.IsLiveLayoutSupported = false;
 
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
@@ -535,7 +575,7 @@ public sealed class SmartArtLayoutTests
     public void UnsupportedHierarchySibling_ReturnsNull()
     {
         var data = MakeHierarchyData("Root", "Child");
-        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/orgChart";
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/horizontalHierarchy";
         data.IsLiveLayoutSupported = false;
 
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
@@ -1239,6 +1279,63 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void Compositor_GearCycle_UsesLiveLayoutOverCachedDrawing()
+    {
+        var data = MakeData(SmartArtFamily.Cycle, "Live A", "Live B", "Live C", "Live D");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/gearCycle";
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id            = 18,
+            Kind          = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu    = FrameX,
+            OffsetYEmu    = FrameY,
+            ExtentCxEmu   = FrameCx / 2,
+            ExtentCyEmu   = FrameCy / 2,
+            TextBody      = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached gear cycle fallback" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id          = 71,
+            Kind        = SlideShapeKind.SmartArt,
+            OffsetXEmu  = FrameX,
+            OffsetYEmu  = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt    = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        shapeOps.Should().HaveCount(8, "gearCycle should render four live boxes plus four connectors through the shared cycle approximation");
+        var renderedText = shapeOps
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Live A");
+        renderedText.Should().Contain("Live D");
+        renderedText.Should().NotContain("Cached gear cycle fallback");
+        shapeOps.Where(op => op.Text is null)
+            .Should().HaveCount(4, "hosts consume shared gear-cycle connector DrawOps without renderer-local SmartArt policy");
+    }
+
+    [Fact]
     public void Compositor_BasicHierarchy_UsesLiveLayoutOverCachedDrawing()
     {
         var data = MakeHierarchyData("CEO", "Sales", "Engineering");
@@ -1294,6 +1391,64 @@ public sealed class SmartArtLayoutTests
         renderedText.Should().NotContain("Cached hierarchy fallback");
         shapeOps.Where(op => op.Text is null)
             .Should().HaveCount(2, "hosts consume the shared hierarchy connector DrawOps");
+    }
+
+    [Fact]
+    public void Compositor_OrgChart_UsesLiveLayoutOverCachedDrawing()
+    {
+        var data = MakeHierarchyData("CEO", "Sales", "Engineering");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/orgChart";
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id            = 18,
+            Kind          = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu    = FrameX,
+            OffsetYEmu    = FrameY,
+            ExtentCxEmu   = FrameCx / 2,
+            ExtentCyEmu   = FrameCy / 2,
+            TextBody      = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached org chart fallback" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id          = 71,
+            Kind        = SlideShapeKind.SmartArt,
+            OffsetXEmu  = FrameX,
+            OffsetYEmu  = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt    = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        shapeOps.Should().HaveCount(5, "orgChart should render three live boxes plus two connectors");
+        var renderedText = shapeOps
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("CEO");
+        renderedText.Should().Contain("Sales");
+        renderedText.Should().Contain("Engineering");
+        renderedText.Should().NotContain("Cached org chart fallback");
+        shapeOps.Where(op => op.Text is null)
+            .Should().HaveCount(2, "hosts consume shared orgChart connector DrawOps");
     }
 
     [Fact]
@@ -1410,7 +1565,7 @@ public sealed class SmartArtLayoutTests
     public void Compositor_FallsBackToCachedDrawing_WhenHierarchyFamilyLayoutIsUnsupported()
     {
         var data = MakeHierarchyData("Root", "Child");
-        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/orgChart";
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/horizontalHierarchy";
         data.IsLiveLayoutSupported = false;
 
         var smart = new SmartArtShape { Data = data };
