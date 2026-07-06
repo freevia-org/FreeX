@@ -42,6 +42,19 @@ public sealed class SmartArtLayoutTests
         return data;
     }
 
+    private static byte[] Minimal1x1Png() =>
+    [
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9C, 0x63, 0x60, 0x00, 0x00, 0x00,
+        0x02, 0x00, 0x01, 0xE2, 0x21, 0xBC, 0x33, 0x00,
+        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+        0x42, 0x60, 0x82
+    ];
+
     private static SrgbColor SolidFill(SlideShape shape) =>
         ((ShapeFill.Solid)shape.Fill!).Color.Resolved;
 
@@ -219,6 +232,37 @@ public sealed class SmartArtLayoutTests
     }
 
     // ── Cycle layout ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void PictureCaptionList_WithNodePictures_ProducesPicturesAndCaptions()
+    {
+        var data = MakeData(SmartArtFamily.List, "Alpha", "Beta");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/pictureCaptionList";
+        data.IsLiveLayoutSupported = true;
+        foreach (var node in data.Nodes)
+            node.Picture = new ImagePart { Bytes = Minimal1x1Png(), ContentType = "image/png" };
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("pictureCaptionList is supported only when every node has image bytes");
+        shapes!.Should().HaveCount(4, "each node emits one shared picture shape and one shared caption shape");
+        shapes.Where(s => s.Kind == SlideShapeKind.Picture).Should().HaveCount(2);
+        shapes.Where(s => s.Kind == SlideShapeKind.AutoShape)
+            .Select(s => s.PlainText)
+            .Should().Equal("Alpha", "Beta");
+    }
+
+    [Fact]
+    public void PictureCaptionList_WithoutNodePictures_ReturnsNullForCachedFallback()
+    {
+        var data = MakeData(SmartArtFamily.List, "Alpha");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/pictureCaptionList";
+        data.IsLiveLayoutSupported = true;
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().BeNull("missing node images must keep cached drawing fallback in control");
+    }
 
     [Fact]
     public void Cycle_FiveNodes_ProducesFiveBoxesPlusFiveConnectors()
@@ -1508,6 +1552,63 @@ public sealed class SmartArtLayoutTests
         renderedText.Should().NotContain("Cached vertical bullet fallback");
         shapeOps.Where(op => op.Text is null)
             .Should().HaveCount(3, "hosts consume the shared hierarchy connector DrawOps");
+    }
+
+    [Fact]
+    public void Compositor_PictureCaptionList_EmitsSharedPictureAndCaptionOps()
+    {
+        var data = MakeData(SmartArtFamily.List, "Live A", "Live B");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/pictureCaptionList";
+        data.IsLiveLayoutSupported = true;
+        foreach (var node in data.Nodes)
+            node.Picture = new ImagePart { Bytes = Minimal1x1Png(), ContentType = "image/png" };
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id = 12,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx / 2,
+            ExtentCyEmu = FrameCy / 2,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached picture caption fallback" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id = 65,
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        ops.OfType<DrawOp.Picture>().Should().HaveCount(2);
+        ops.OfType<DrawOp.Shape>()
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Contain(["Live A", "Live B"]);
+        ops.OfType<DrawOp.Shape>()
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().NotContain("Cached picture caption fallback");
     }
 
     [Fact]

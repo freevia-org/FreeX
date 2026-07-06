@@ -77,6 +77,9 @@ public static class SmartArtLayoutEngine
 
         var stylePlan = SmartArtStylePlanner.Build(data.Family, quickStyle, colors, theme, effectiveClrMap);
 
+        if (IsPictureCaptionListLayout(data.LayoutUniqueId))
+            return LayoutPictureCaptionList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         return data.Family switch
         {
             SmartArtFamily.Process   => LayoutProcess  (nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan),
@@ -183,6 +186,36 @@ public static class SmartArtLayoutEngine
         };
     }
 
+    private static SlideShape MakeCaption(
+        uint id, string text, SmartArtNodeStyle style,
+        long x, long y, long cx, long cy)
+    {
+        var run = new Run { Text = text, Color = style.Text, Bold = true, FontSizePt = NodeFontSizePt };
+        var para = new Paragraph();
+        para.Runs.Add(run);
+        para.Align = TextAlign.Left;
+
+        var body = new TextBody();
+        body.Paragraphs.Add(para);
+        body.Anchor = VerticalAnchor.Middle;
+        body.Wrap = true;
+
+        return new SlideShape
+        {
+            Id = id,
+            Name = $"SmartArt_Caption_{id}",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = x,
+            OffsetYEmu = y,
+            ExtentCxEmu = cx,
+            ExtentCyEmu = cy,
+            Fill = ShapeFill.None.Instance,
+            Outline = ShapeOutline.None.Instance,
+            TextBody = body
+        };
+    }
+
     // ── Process layout ─────────────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -285,6 +318,64 @@ public static class SmartArtLayoutEngine
     /// <summary>
     /// Boxes arranged on a circle with arrow connectors between adjacent boxes.
     /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutPictureCaptionList(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        if (nodes.Any(n => n.Picture is not { Bytes.Length: > 0 }))
+            return null;
+
+        int n = nodes.Count;
+        var shapes = new List<SlideShape>();
+
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * OuterPaddingFrac);
+        long gapY = (long)(fcy * GapFrac);
+        long gapX = (long)(fcx * GapFrac);
+
+        long rowW = fcx - 2 * outerPadX;
+        long availH = fcy - 2 * outerPadY - (n - 1) * gapY;
+        long rowH = n > 0 ? Math.Max(availH / n, 1L) : 1L;
+        long pictureW = Math.Min((long)(rowW * 0.34), rowH);
+        pictureW = Math.Max(pictureW, 1L);
+        long captionW = Math.Max(rowW - pictureW - gapX, 1L);
+
+        uint idCounter = 260;
+        long curY = fy + outerPadY;
+        long leftX = fx + outerPadX;
+
+        for (int i = 0; i < n; i++)
+        {
+            var node = nodes[i];
+            shapes.Add(new SlideShape
+            {
+                Id = idCounter++,
+                Name = $"SmartArt_Picture_{idCounter}",
+                Kind = SlideShapeKind.Picture,
+                OffsetXEmu = leftX,
+                OffsetYEmu = curY,
+                ExtentCxEmu = pictureW,
+                ExtentCyEmu = rowH,
+                Picture = node.Picture
+            });
+
+            var nodeStyle = stylePlan.GetNodeStyle(i, node.Level, SmartArtFamily.List);
+            shapes.Add(MakeCaption(
+                idCounter++,
+                node.Text,
+                nodeStyle,
+                leftX + pictureW + gapX,
+                curY,
+                captionW,
+                rowH));
+
+            curY += rowH + gapY;
+        }
+
+        return shapes;
+    }
+
     private static IReadOnlyList<SlideShape> LayoutCycle(
         List<SmartArtNode> nodes,
         long fx, long fy, long fcx, long fcy,
@@ -495,5 +586,14 @@ public static class SmartArtLayoutEngine
     {
         if (node.Children.Count == 0) return 1;
         return node.Children.Sum(GetTreeWidth);
+    }
+
+    private static bool IsPictureCaptionListLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "picturecaptionlist", StringComparison.Ordinal);
     }
 }

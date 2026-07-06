@@ -35,6 +35,13 @@ public sealed class SmartArtNode
 
     /// <summary>True when the node is typed "asst" (assistant box in org-chart).</summary>
     public bool IsAssistant { get; set; }
+
+    /// <summary>
+    /// Optional node-level image for bounded picture-backed SmartArt layouts.
+    /// Populated only when the reader can deterministically map cached diagram pictures
+    /// to parsed data nodes; null keeps the cached drawing fallback path in control.
+    /// </summary>
+    public ImagePart? Picture { get; set; }
 }
 
 /// <summary>

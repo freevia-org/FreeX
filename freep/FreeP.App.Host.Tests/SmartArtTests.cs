@@ -37,7 +37,10 @@ public sealed class SmartArtTests : IDisposable
     /// Builds a minimal but self-consistent in-memory .pptx archive with one SmartArt shape.
     /// Writes it to disk and returns the path.
     /// </summary>
-    private string MakeSmartArtPptx(string[] nodeTexts)
+    private string MakeSmartArtPptx(
+        string[] nodeTexts,
+        bool pictureCaptionList = false,
+        bool includeNodeImage = false)
     {
         var path = Path.Combine(_tempDir, $"smartart_{Guid.NewGuid():N}.pptx");
 
@@ -63,10 +66,28 @@ public sealed class SmartArtTests : IDisposable
 
         // Build dsp:drawing XML with fallback shapes
         int shapeIdx = 1;
-        var fallbackSpEls = nodeTexts.Select(text =>
+        var fallbackEls = new List<XElement>();
+        foreach (var text in nodeTexts)
         {
             int idx = shapeIdx++;
-            return new XElement(dspNs + "sp",
+            if (pictureCaptionList && includeNodeImage)
+            {
+                fallbackEls.Add(new XElement(dspNs + "pic",
+                    new XElement(dspNs + "nvPicPr",
+                        new XElement(dspNs + "cNvPr", new XAttribute("id", idx), new XAttribute("name", $"Picture{idx}")),
+                        new XElement(dspNs + "cNvPicPr")),
+                    new XElement(dspNs + "blipFill",
+                        new XElement(aNs + "blip", new XAttribute(rNs + "embed", "rIdImg1")),
+                        new XElement(aNs + "stretch", new XElement(aNs + "fillRect"))),
+                    new XElement(dspNs + "spPr",
+                        new XElement(aNs + "xfrm",
+                            new XElement(aNs + "off", new XAttribute("x", (idx - 1) * 914400L), new XAttribute("y", "457200")),
+                            new XElement(aNs + "ext", new XAttribute("cx", "457200"), new XAttribute("cy", "457200"))),
+                        new XElement(aNs + "prstGeom", new XAttribute("prst", "rect"), new XElement(aNs + "avLst")))));
+                idx = shapeIdx++;
+            }
+
+            fallbackEls.Add(new XElement(dspNs + "sp",
                 new XElement(dspNs + "nvSpPr",
                     new XElement(dspNs + "cNvPr", new XAttribute("id", idx), new XAttribute("name", $"Node{idx}")),
                     new XElement(dspNs + "cNvSpPr")),
@@ -83,23 +104,42 @@ public sealed class SmartArtTests : IDisposable
                     new XElement(aNs + "p",
                         new XElement(aNs + "r",
                             new XElement(aNs + "rPr", new XAttribute("lang", "en-US")),
-                            new XElement(aNs + "t", text)))));
-        }).ToArray();
+                            new XElement(aNs + "t", text))))));
+        }
 
         var dspDrawingXml = new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(dspNs + "drawing",
                 new XAttribute(XNamespace.Xmlns + "dsp", dspNs.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "a", aNs.NamespaceName),
-                new XElement(dspNs + "spTree", fallbackSpEls)));
+                new XAttribute(XNamespace.Xmlns + "r", rNs.NamespaceName),
+                new XElement(dspNs + "spTree", fallbackEls)));
 
         // Build minimal diagram data XML (just a root element)
-        var dataXml = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(dgmNs + "dataModel",
-                new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
+        var dataXml = pictureCaptionList
+            ? new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
+                new XElement(dgmNs + "dataModel",
+                    new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
+                    new XElement(dgmNs + "ptLst",
+                        nodeTexts.Select((text, i) =>
+                            new XElement(dgmNs + "pt",
+                                new XAttribute("modelId", $"n{i + 1}"),
+                                new XAttribute("type", "node"),
+                                new XElement(dgmNs + "t",
+                                    new XElement(aNs + "p",
+                                        new XElement(aNs + "r",
+                                            new XElement(aNs + "t", text)))))))))
+            : new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
+                new XElement(dgmNs + "dataModel",
+                    new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
 
         // Minimal layout, quickStyle, colors XML
-        var layoutXml  = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), new XElement(dgmNs + "layoutDef",  new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
+        var layoutXml  = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(dgmNs + "layoutDef",
+                new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
+                pictureCaptionList
+                    ? new XAttribute("uniqueId", "urn:microsoft.com/office/officeart/2005/8/layout/pictureCaptionList")
+                    : null));
         var qsXml      = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), new XElement(dgmNs + "styleDef",   new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
         var colorsXml  = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), new XElement(dgmNs + "colorsDef", new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
 
@@ -178,9 +218,12 @@ public sealed class SmartArtTests : IDisposable
         // [Content_Types].xml
         var ctNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/content-types");
         WriteXml("[Content_Types].xml", new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(ctNs + "Types",
+                new XElement(ctNs + "Types",
                 new XElement(ctNs + "Default", new XAttribute("Extension", "rels"),  new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
                 new XElement(ctNs + "Default", new XAttribute("Extension", "xml"),   new XAttribute("ContentType", "application/xml")),
+                includeNodeImage
+                    ? new XElement(ctNs + "Default", new XAttribute("Extension", "png"), new XAttribute("ContentType", "image/png"))
+                    : null,
                 new XElement(ctNs + "Override", new XAttribute("PartName", "/ppt/presentation.xml"), new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml")),
                 new XElement(ctNs + "Override", new XAttribute("PartName", "/ppt/slides/slide1.xml"), new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.presentationml.slide+xml")),
                 new XElement(ctNs + "Override", new XAttribute("PartName", "/ppt/theme/theme1.xml"), new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.theme+xml")),
@@ -296,6 +339,12 @@ public sealed class SmartArtTests : IDisposable
         WriteXml("ppt/diagrams/quickStyle1.xml", qsXml);
         WriteXml("ppt/diagrams/colors1.xml",     colorsXml);
         WriteXml("ppt/diagrams/drawing1.xml",    dspDrawingXml);
+        if (includeNodeImage)
+        {
+            WriteEntry("ppt/media/image1.png", Minimal1x1Png());
+            WriteEntry("ppt/diagrams/_rels/drawing1.xml.rels", MakeRels(pkgNs,
+                ("rIdImg1", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image", "../media/image1.png")));
+        }
 
         // data1.xml rels: points to drawing1.xml
         WriteEntry("ppt/diagrams/_rels/data1.xml.rels", MakeRels(pkgNs,
@@ -303,6 +352,19 @@ public sealed class SmartArtTests : IDisposable
 
         return path;
     }
+
+    private static byte[] Minimal1x1Png() =>
+    [
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9C, 0x63, 0x60, 0x00, 0x00, 0x00,
+        0x02, 0x00, 0x01, 0xE2, 0x21, 0xBC, 0x33, 0x00,
+        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+        0x42, 0x60, 0x82
+    ];
 
     // ── Model unit tests ─────────────────────────────────────────────────────────
 
@@ -390,6 +452,47 @@ public sealed class SmartArtTests : IDisposable
             shape.Kind.Should().Be(SlideShapeKind.AutoShape);
             shape.PlainText.Should().Be(text);
         }
+    }
+
+    [Fact]
+    public void Reader_SmartArt_PictureCaptionList_ImportsNodePictures()
+    {
+        var nodeTexts = new[] { "Alpha caption", "Beta caption" };
+        var pptxPath = MakeSmartArtPptx(nodeTexts, pictureCaptionList: true, includeNodeImage: true);
+        var pres = PptxPackageReader.Read(pptxPath);
+
+        var smart = pres.Slides[0].Shapes
+            .First(s => s.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smart.Data.Should().NotBeNull();
+        smart.Data!.LayoutUniqueId.Should().EndWith("/pictureCaptionList");
+        smart.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "the fixture has a deterministic one-to-one ordered node/picture mapping");
+        smart.Data.Nodes.Should().HaveCount(nodeTexts.Length);
+        smart.Data.Nodes.Select(n => n.Text).Should().Equal(nodeTexts);
+        smart.Data.Nodes.Select(n => n.Picture?.ContentType).Should().OnlyContain(contentType => contentType == "image/png");
+        smart.Data.Nodes.Select(n => n.Picture?.Bytes.Length ?? 0).Should().OnlyContain(length => length > 0);
+        smart.FallbackShapes.Should().Contain(s => s.Kind == SlideShapeKind.Picture,
+            "the cached dsp:pic is still parsed as an ordinary fallback picture shape");
+    }
+
+    [Fact]
+    public void Reader_SmartArt_PictureCaptionList_WithoutImage_KeepsLiveLayoutDisabled()
+    {
+        var pptxPath = MakeSmartArtPptx(["Caption only"], pictureCaptionList: true, includeNodeImage: false);
+        var pres = PptxPackageReader.Read(pptxPath);
+
+        var smart = pres.Slides[0].Shapes
+            .First(s => s.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smart.Data.Should().NotBeNull();
+        smart.Data!.IsLiveLayoutSupported.Should().BeFalse(
+            "pictureCaptionList must not claim live layout when node images cannot be resolved");
+        smart.Data.Nodes.Should().ContainSingle();
+        smart.Data.Nodes[0].Picture.Should().BeNull();
+        smart.FallbackShapes.Should().NotBeEmpty("cached drawing remains the render fallback");
     }
 
     [Fact]
