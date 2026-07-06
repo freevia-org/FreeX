@@ -10,6 +10,37 @@ public sealed class ScenarioManagerDialogPlannerTests
     public void BuildItems_ProjectsScenarioFieldsAndFormattedChangingCells()
     {
         var workbook = CreateWorkbook(out var sheet);
+        // A contiguous single-column block must still collapse to one readable range.
+        var first = new CellAddress(sheet.Id, 2, 2);
+        var second = new CellAddress(sheet.Id, 3, 2);
+        var third = new CellAddress(sheet.Id, 4, 2);
+        workbook.Scenarios.Add(new WorkbookScenario(
+            "Best Case",
+            [
+                new ScenarioCellValue(first, new NumberValue(10)),
+                new ScenarioCellValue(second, new NumberValue(15)),
+                new ScenarioCellValue(third, new NumberValue(20))
+            ],
+            "Revenue lift",
+            Hidden: true,
+            Locked: true));
+
+        var item = ScenarioManagerDialogPlanner.BuildItems(workbook).Single();
+
+        item.Name.Should().Be("Best Case");
+        item.ChangingCellsText.Should().Be("B2:B4");
+        item.Comment.Should().Be("Revenue lift");
+        item.Hidden.Should().BeTrue();
+        item.Locked.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildItems_DoesNotAbsorbExtraCellsForNonContiguousChangingCells()
+    {
+        // Regression for P15: B2 and C4 do NOT form a contiguous block, so formatting them as
+        // the bounding rectangle "B2:C4" would silently include B3, B4, C2 and C3 - cells that
+        // were never part of the scenario - the next time the dialog recaptures changing cells.
+        var workbook = CreateWorkbook(out var sheet);
         var first = new CellAddress(sheet.Id, 2, 2);
         var second = new CellAddress(sheet.Id, 4, 3);
         workbook.Scenarios.Add(new WorkbookScenario(
@@ -24,16 +55,19 @@ public sealed class ScenarioManagerDialogPlannerTests
 
         var item = ScenarioManagerDialogPlanner.BuildItems(workbook).Single();
 
-        item.Name.Should().Be("Best Case");
-        item.ChangingCellsText.Should().Be("B2:C4");
-        item.Comment.Should().Be("Revenue lift");
-        item.Hidden.Should().BeTrue();
-        item.Locked.Should().BeTrue();
+        item.ChangingCellsText.Should().Be("B2:B2,C4:C4");
+        WorkbookRangeTextCodec.TryParseMany(sheet.Id, item.ChangingCellsText, _ => sheet.Id, out var ranges)
+            .Should().BeTrue();
+        ranges.SelectMany(range => range.AllCells()).Should().BeEquivalentTo([first, second]);
     }
 
     [Fact]
-    public void FormatChangingCells_ReturnsBlankForMixedSheetScenarios()
+    public void FormatChangingCells_QualifiesEachSheetInsteadOfGoingBlankForMixedSheetScenarios()
     {
+        // Regression for P15: a blank projection here means the WPF Edit round-trip falls
+        // through to whatever is currently selected in the grid, silently replacing the
+        // scenario's real (cross-sheet) changing cells. The exact per-sheet cell set must
+        // survive the round-trip instead.
         var workbook = CreateWorkbook(out var firstSheet);
         var secondSheet = workbook.AddSheet("Sheet2");
         var scenario = new WorkbookScenario(
@@ -43,7 +77,20 @@ public sealed class ScenarioManagerDialogPlannerTests
                 new ScenarioCellValue(new CellAddress(secondSheet.Id, 1, 1), new NumberValue(2))
             ]);
 
-        ScenarioManagerDialogPlanner.FormatChangingCells(workbook, scenario).Should().Be("");
+        var text = ScenarioManagerDialogPlanner.FormatChangingCells(workbook, scenario);
+
+        text.Should().Be("A1:A1,Sheet2!A1:A1");
+        WorkbookRangeTextCodec.TryParseMany(
+                firstSheet.Id,
+                text,
+                name => name == secondSheet.Name ? secondSheet.Id : (name == firstSheet.Name ? firstSheet.Id : null),
+                out var roundTripped)
+            .Should().BeTrue();
+        roundTripped.SelectMany(range => range.AllCells()).Should().BeEquivalentTo(
+        [
+            new CellAddress(firstSheet.Id, 1, 1),
+            new CellAddress(secondSheet.Id, 1, 1)
+        ]);
     }
 
     [Theory]

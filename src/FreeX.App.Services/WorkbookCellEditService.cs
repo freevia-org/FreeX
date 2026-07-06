@@ -116,9 +116,23 @@ public sealed class WorkbookCellEditService
             workbook,
             new GoalSeekCommand(request.ChangingCell, seekResult.FoundValue));
 
-        return editResult.Success
-            ? WorkbookGoalSeekResult.AppliedResult(request, seekResult, editResult)
-            : WorkbookGoalSeekResult.ApplyFailed(request, seekResult, editResult);
+        if (!editResult.Success)
+            return WorkbookGoalSeekResult.ApplyFailed(request, seekResult, editResult);
+
+        // Excel always refreshes the set cell (and the rest of the dependency chain from the
+        // changing cell) once Goal Seek applies its result, even when the workbook is in Manual
+        // calculation mode — Goal Seek's recalculation is a deliberate one-time action, not subject
+        // to the "only recalc on F9" rule that otherwise governs Manual mode. ApplyHistoryOutcome
+        // above already ran RecalculateIfAutomatic, which is a no-op outside Automatic mode, so
+        // force the recalculation here when it was skipped, or the set cell would keep displaying
+        // its pre-seek value until the user manually recalculates.
+        if (workbook.CalculationMode != WorkbookCalculationMode.Automatic)
+        {
+            var manualRecalcReport = _recalcEngine.Recalculate(workbook, [request.ChangingCell]);
+            editResult = editResult with { RecalcReport = manualRecalcReport };
+        }
+
+        return WorkbookGoalSeekResult.AppliedResult(request, seekResult, editResult);
     }
 
     public WorkbookCellEditResult CommitCellText(

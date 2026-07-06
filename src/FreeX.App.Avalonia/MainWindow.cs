@@ -1149,7 +1149,7 @@ public sealed partial class MainWindow : Window
                     // Home ▸ Styles: Cell Styles gallery.
                     ["home.cellStyles"] = () => _ = ShowCellStylesGalleryAsync(),
                     // Review ▸ Delete Comment; View ▸ Split / Normal.
-                    ["review.deleteComment"] = DeleteActiveCellComment,
+                    ["review.deleteComment"] = DeleteActiveCellThreadedComment,
                     ["view.split"] = SplitPanesAtActiveCell,
                     ["view.normal"] = SetNormalView,
                     // Insert ▸ Comment (reuse New Comment); Insert ▸ Header & Footer (Page Setup).
@@ -1301,7 +1301,7 @@ public sealed partial class MainWindow : Window
                     ["Previous Comment"] = () => NavigateReviewThreadedComment(previous: true),
                     ["Show Comments"] = () => _ = ShowNotesListAsync(),
                     ["Edit Note"] = () => _ = ShowEditNoteDialogAsync(),
-                    ["Delete Note"] = DeleteActiveCellComment,
+                    ["Delete Note"] = DeleteActiveCellNote,
                     ["Share"] = () => _ = ShareWorkbookAsync(),
 
                     // View ▸ Show ▸ Ruler.
@@ -6917,7 +6917,8 @@ public sealed partial class MainWindow : Window
             patternBrush: patternBrush,
             richRuns: richRuns,
             mergeRegion: mergeRegion,
-            flowDirection: flowDirection);
+            flowDirection: flowDirection,
+            commentDisplay: cell.CommentDisplay);
     }
 
     private Border CreateInteractiveCellBorder(
@@ -6948,7 +6949,8 @@ public sealed partial class MainWindow : Window
         IBrush? patternBrush = null,
         IReadOnlyList<ResolvedCellTextRun>? richRuns = null,
         GridRange? mergeRegion = null,
-        FlowDirection flowDirection = FlowDirection.LeftToRight)
+        FlowDirection flowDirection = FlowDirection.LeftToRight,
+        CellCommentDisplay? commentDisplay = null)
     {
         var border = CreateCellBorder(
             text,
@@ -6977,7 +6979,18 @@ public sealed partial class MainWindow : Window
             sparklineLayer,
             patternBrush: patternBrush,
             richRuns: richRuns,
-            flowDirection: flowDirection);
+            flowDirection: flowDirection,
+            commentDisplay: commentDisplay);
+
+        // Comment/note corner indicator + hover card: mirrors WPF's GridView.Rendering.cs
+        // DrawCommentIndicator (small top-right triangle, red for a legacy note, purple for a
+        // threaded comment or a cell that mixes both) and GridView.CommentPreview.cs (hover shows
+        // the thread's title/body). Without this a Linux/macOS reviewer has no way to tell which
+        // cells carry comments except by navigating Review ▸ Next/Previous Comment.
+        if (commentDisplay is { } comment)
+        {
+            ToolTip.SetTip(border, FormatCommentTooltip(comment));
+        }
 
         // Per-cell accessible name/id so a screen reader (Orca/AT-SPI on Linux, VoiceOver on macOS)
         // can announce which cell has focus, its address, and its value while navigating the grid —
@@ -7739,8 +7752,10 @@ public sealed partial class MainWindow : Window
                 ResolveActiveCellThreadedComment(resolved: false);
                 break;
             case WorksheetContextMenuAction.DeleteComment:
+                DeleteActiveCellThreadedComment();
+                break;
             case WorksheetContextMenuAction.DeleteNote:
-                DeleteActiveCellComment();
+                DeleteActiveCellNote();
                 break;
             case WorksheetContextMenuAction.ShowNotes:
                 _ = ShowNotesListAsync();
@@ -7801,7 +7816,8 @@ public sealed partial class MainWindow : Window
         double horizontalPadding = 8,
         IBrush? patternBrush = null,
         IReadOnlyList<ResolvedCellTextRun>? richRuns = null,
-        FlowDirection flowDirection = FlowDirection.LeftToRight)
+        FlowDirection flowDirection = FlowDirection.LeftToRight,
+        CellCommentDisplay? commentDisplay = null)
     {
         var effectiveText = FormatTextForRotation(text, textRotation);
         var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;
@@ -7918,6 +7934,17 @@ public sealed partial class MainWindow : Window
                 IsHitTestVisible = false,
             });
             cellContent = overlayHost;
+        }
+
+        // Comment/note corner indicator: small top-right triangle, drawn above selection wash so it
+        // stays visible on a selected cell too. Color mirrors WPF's CommentIndicatorBrush — red for a
+        // legacy note, purple (#7C379E) for a threaded comment or a cell that mixes both kinds.
+        if (commentDisplay is { } indicatorComment)
+        {
+            var indicatorHost = new AvaloniaGrid { ClipToBounds = true };
+            indicatorHost.Children.Add(cellContent);
+            indicatorHost.Children.Add(CreateCommentIndicatorLayer(indicatorComment.Kind, zoomFactor));
+            cellContent = indicatorHost;
         }
 
         // Gridline/selection border thickness scales with zoom so it grows together with cell
@@ -8050,6 +8077,54 @@ public sealed partial class MainWindow : Window
                 Child = glyph,
             },
         };
+    }
+
+    /// <summary>
+    /// Small filled top-right corner triangle marking a cell that carries a legacy note and/or a
+    /// threaded comment — the Avalonia counterpart of WPF's DrawCommentIndicator
+    /// (GridView.Rendering.cs). Colors match CommentIndicatorBrush exactly: red for a Note-only
+    /// cell, purple #7C379E for ThreadedComment or Mixed (Excel suppresses the note color once a
+    /// thread coexists on the same cell).
+    /// </summary>
+    private static Control CreateCommentIndicatorLayer(CellCommentDisplayKind kind, double zoomFactor)
+    {
+        const double size = 7;
+        var scaledSize = size * zoomFactor;
+        var brush = kind == CellCommentDisplayKind.Note
+            ? Brushes.Red
+            : Brush(0x7C, 0x37, 0x9E);
+
+        var geometry = new StreamGeometry();
+        using (var context = geometry.Open())
+        {
+            context.BeginFigure(new Point(scaledSize, 0), isFilled: true);
+            context.LineTo(new Point(scaledSize, scaledSize));
+            context.LineTo(new Point(0, 0));
+            context.EndFigure(isClosed: true);
+        }
+
+        return new global::Avalonia.Controls.Shapes.Path
+        {
+            Data = geometry,
+            Fill = brush,
+            Stretch = Stretch.None,
+            Width = scaledSize,
+            Height = scaledSize,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
+            IsHitTestVisible = false,
+        };
+    }
+
+    /// <summary>
+    /// Hover-card text for a cell's comment/note, mirroring WPF's GridView.CommentPreview.cs
+    /// (title on the first line, body below).
+    /// </summary>
+    private static string FormatCommentTooltip(CellCommentDisplay comment)
+    {
+        var title = comment.Title;
+        var body = comment.Body;
+        return string.IsNullOrEmpty(title) ? body : $"{title}{Environment.NewLine}{body}";
     }
 
     private static AvaloniaGrid CreateOrientedCellContent(

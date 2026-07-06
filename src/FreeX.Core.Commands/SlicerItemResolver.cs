@@ -127,9 +127,19 @@ public static class SlicerItemResolver
 
     private static IReadOnlyList<string> ResolvePivotCacheItems(Workbook workbook, SlicerModel slicer)
     {
-        var sharedItems = ResolveSharedItems(workbook, slicer);
-        if (sharedItems is null || sharedItems.Count == 0)
+        var field = ResolveSharedItemsField(workbook, slicer);
+        if (field?.SharedItems is not { Count: > 0 } sharedItems)
             return [];
+
+        // P13: the pivot cache stores shared items as raw OOXML attribute strings (e.g. a <d v=.../>
+        // date is "2026-01-05T00:00:00", untouched by locale or grouping) but the refresh filter
+        // (PivotTableRefreshService.MatchesFieldSelections) compares a clicked caption against
+        // GroupKeyText(row), which for an ungrouped date is CurrentCulture ToShortDateString() and for
+        // a number is CurrentCulture ToString() — never equal to the raw attribute string, so clicking
+        // a date/number tile filtered every row out. Normalize each caption the same way GroupKeyText
+        // would format that shared item before it becomes a selectable/comparable caption, so the
+        // tile the user clicks and the row key the filter compares it against agree.
+        var kinds = field.SharedItemKinds;
 
         // De-dup while preserving order: two cache items can resolve to the same caption, and the
         // "all-selected => cleared" heuristic below compares selected vs available COUNTS, so a
@@ -142,7 +152,11 @@ public static class SlicerItemResolver
         {
             if (item.Index < 0 || item.Index >= sharedItems.Count)
                 continue;
-            var caption = sharedItems[item.Index];
+            var raw = sharedItems[item.Index];
+            if (string.IsNullOrEmpty(raw))
+                continue;
+            var kind = kinds is not null && item.Index < kinds.Count ? kinds[item.Index] : (char?)null;
+            var caption = NormalizeSharedItemCaption(raw, kind, field);
             if (string.IsNullOrEmpty(caption))
                 continue;
             if (availableSeen.Add(caption))
@@ -164,7 +178,42 @@ public static class SlicerItemResolver
         return available;
     }
 
-    private static IReadOnlyList<string>? ResolveSharedItems(Workbook workbook, SlicerModel slicer)
+    /// <summary>
+    /// Reformats a raw pivot-cache shared-item attribute string into the same text
+    /// <c>PivotTableRefreshService.GroupKeyText</c>/<c>KeyText</c> would compute for that value, so a
+    /// caption built here matches the row key the refresh filter compares it against.
+    /// </summary>
+    private static string NormalizeSharedItemCaption(string raw, char? kind, PivotCacheFieldModel field)
+    {
+        if (kind == 'd' || (kind is null && field.ContainsDate && !field.ContainsString && !field.ContainsNumber))
+        {
+            if (!DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+                return raw;
+
+            return field.Grouping switch
+            {
+                PivotFieldGrouping.Year => date.Year.ToString(CultureInfo.InvariantCulture),
+                PivotFieldGrouping.Quarter => $"{date.Year}-Q{((date.Month - 1) / 3) + 1}",
+                PivotFieldGrouping.Month => date.ToString("yyyy-MM", CultureInfo.InvariantCulture),
+                PivotFieldGrouping.Day => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                _ => date.ToShortDateString()
+            };
+        }
+
+        if (kind == 'n' || (kind is null && field.ContainsNumber && !field.ContainsString && !field.ContainsDate))
+        {
+            // Shared-item numbers are always stored with an invariant (dot-decimal) "v" attribute
+            // regardless of locale — reparse invariant, then reformat with CurrentCulture to match
+            // KeyText(NumberValue) (e.g. "1234.5" -> "1234,5" in a comma-decimal locale).
+            return double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+                ? number.ToString(CultureInfo.CurrentCulture)
+                : raw;
+        }
+
+        return raw;
+    }
+
+    private static PivotCacheFieldModel? ResolveSharedItemsField(Workbook workbook, SlicerModel slicer)
     {
         var fieldName = slicer.SourceFieldName;
         if (string.IsNullOrWhiteSpace(fieldName))
@@ -180,7 +229,7 @@ public static class SlicerItemResolver
                 if (string.Equals(field.Name, fieldName, StringComparison.OrdinalIgnoreCase) &&
                     field.SharedItems is { Count: > 0 })
                 {
-                    return field.SharedItems;
+                    return field;
                 }
             }
         }

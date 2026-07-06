@@ -95,7 +95,21 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
 
         timeline.SelectedStartDate = NormalizeSelectedDate(_selectedStartDate);
         timeline.SelectedEndDate = NormalizeSelectedDate(_selectedEndDate);
-        var selectedItems = PivotTimelineSelectionPlanner.ReadSelectedItems(sourceSheet, pivotTable, sourceFieldIndex, startDate, endDate);
+
+        // P9: a null/null range (both bounds cleared, e.g. clicking the timeline's clear icon) means
+        // "remove the filter", not "select every date currently in the source range". The previous
+        // code always called ReadSelectedItems(MinValue, MaxValue), which enumerates only the DateTimeValue
+        // rows that exist RIGHT NOW and installs that as an explicit SelectedItems list — rows with
+        // blank/text values in the field (which Excel keys to "(blank)"/text and which a real clear
+        // must restore) stay excluded, and rows added by a later refresh with dates outside today's
+        // snapshot also stay filtered out, even though HasActiveTimelineFilter/SelectedStartDate/
+        // SelectedEndDate all read back as "no filter" — an invisible, un-clearable stale filter.
+        // Passing an empty list makes ReplaceSelectedItems null out SelectedItem/SelectedItems (the
+        // same "genuinely cleared" path SetSlicerSelectionCommand's clear button already uses), so
+        // MatchesFieldSelections stops filtering the field entirely, matching Excel.
+        var selectedItems = timeline.SelectedStartDate is null && timeline.SelectedEndDate is null
+            ? []
+            : PivotTimelineSelectionPlanner.ReadSelectedItems(sourceSheet, pivotTable, sourceFieldIndex, startDate, endDate);
         // H10: identical fix as SetSlicerSelectionCommand — a timeline can be connected to a date field
         // that was never dragged into Row/Column/PageFields. Without ensuring it's in one of those
         // lists, ReplaceSelectedItems below is a no-op and the range selection never filters anything.
