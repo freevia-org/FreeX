@@ -14,6 +14,7 @@ public sealed class CrossReferenceDialogPlannerTests
             CrossRefType.Bookmark,
             CrossRefType.Figure,
             CrossRefType.Table,
+            CrossRefType.Equation,
             CrossRefType.Footnote,
             CrossRefType.Endnote,
             CrossRefType.NumberedItem);

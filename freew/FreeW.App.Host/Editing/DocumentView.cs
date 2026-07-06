@@ -8945,6 +8945,12 @@ public sealed class DocumentView : RichTextBox
             refreshedGeneratedRegion = true;
         }
 
+        if (_model.Blocks.Any(TableOfFigures.IsTableOfFiguresParagraph))
+        {
+            RefreshTableOfFigures(TableOfFigures.ExistingLabelText(_model) ?? Captions.FigureLabelText);
+            refreshedGeneratedRegion = true;
+        }
+
         if (TableOfAuthoritiesRegionPlanner.ContainsRegion(_model))
         {
             ApplyTableOfAuthoritiesPlan(TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(_model));
@@ -11703,8 +11709,14 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void InsertTableOfFigures(CaptionLabel label = CaptionLabel.Figure)
     {
+        InsertTableOfFigures(Captions.LabelText(label));
+    }
+
+    public void InsertTableOfFigures(string labelText)
+    {
         // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
+        labelText = Captions.NormalizeLabelText(labelText);
         TableOfFigures.EnsureStyles(_model);
 
         // Insert at the caret's block (a table of figures reads as front-/back-matter); fall back to the end.
@@ -11712,7 +11724,7 @@ public sealed class DocumentView : RichTextBox
         if (index < 0 || index > _model.Blocks.Count)
             index = _model.Blocks.Count;
 
-        InsertTableOfFiguresAt(index, label);
+        InsertTableOfFiguresAt(index, labelText);
     }
 
     /// <summary>
@@ -11724,7 +11736,13 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void RefreshTableOfFigures(CaptionLabel label = CaptionLabel.Figure)
     {
+        RefreshTableOfFigures(Captions.LabelText(label));
+    }
+
+    public void RefreshTableOfFigures(string labelText)
+    {
         CommitToModel();
+        labelText = Captions.NormalizeLabelText(labelText);
         TableOfFigures.EnsureStyles(_model);
 
         // Find the first existing table-of-figures paragraph (the marker region anchor).
@@ -11751,14 +11769,14 @@ public sealed class DocumentView : RichTextBox
         for (var i = indices.Count - 1; i >= 0; i--)
             _commands.Execute(new DeleteParagraphCommand(indices[i]));
 
-        InsertTableOfFiguresAt(insertAt, label);
+        InsertTableOfFiguresAt(insertAt, labelText);
     }
 
     // Insert the freshly built table-of-figures paragraphs starting at block index `at`, one reversible
     // InsertParagraphCommand each (kept in order). The bus's Changed event redraws.
-    private void InsertTableOfFiguresAt(int at, CaptionLabel label)
+    private void InsertTableOfFiguresAt(int at, string labelText)
     {
-        var entries = TableOfFigures.Build(_model, label);
+        var entries = TableOfFigures.Build(_model, labelText);
         var index = Math.Clamp(at, 0, _model.Blocks.Count);
         foreach (var paragraph in entries)
             _commands.Execute(new InsertParagraphCommand(index++, paragraph));
@@ -11779,12 +11797,18 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void InsertCaption(CaptionLabel label, string text)
     {
+        InsertCaption(Captions.LabelText(label), text);
+    }
+
+    public void InsertCaption(string labelText, string text)
+    {
         // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
+        labelText = Captions.NormalizeLabelText(labelText);
         Captions.EnsureStyles(_model);
 
-        var number = Captions.NextCaptionNumber(_model, label);
-        var caption = Captions.BuildCaption(label, number, text);
+        var number = Captions.NextCaptionNumber(_model, labelText);
+        var caption = Captions.BuildCaption(labelText, number, text);
 
         // Insert after the caret's block so the caption sits under the selected image/table.
         var index = CaretBlockIndex() + 1;

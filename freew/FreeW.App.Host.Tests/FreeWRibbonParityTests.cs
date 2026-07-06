@@ -303,6 +303,56 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
+    public void ReferencesCaptions_ExposeLabelMenusAndUpdateFieldsRefreshesTableOfFigures()
+    {
+        var definition = FreeWRibbon.Build();
+        var captions = definition.FindTab("references")!.FindGroup("captions");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        var visibleAndMenuIds = CommandIds(captions!).Concat(MenuCommandIds(captions!)).ToArray();
+        visibleAndMenuIds.Should().Contain(new[]
+        {
+            "freew.caption",
+            "freew.insert-caption.figure",
+            "freew.insert-caption.table",
+            "freew.insert-caption.equation",
+            "freew.tof",
+            "freew.tof.figure",
+            "freew.tof.table",
+            "freew.tof.equation",
+            "freew.tof-refresh"
+        });
+
+        foreach (var id in new[]
+        {
+            "freew.insert-caption.equation",
+            "freew.tof.table",
+            "freew.tof.equation",
+            "freew.tof-refresh.table",
+            "freew.tof-refresh.equation"
+        })
+        {
+            registry.TryGet(id, out _).Should().BeTrue($"{id} must be registered");
+        }
+
+        editor.Model.Blocks.Clear();
+        editor.Model.Blocks.Add(new Paragraph("Body"));
+        editor.InsertCaption(CaptionLabel.Equation, "First");
+        editor.InsertTableOfFigures(CaptionLabel.Equation);
+        editor.InsertCaption(CaptionLabel.Equation, "Second");
+
+        editor.UpdateFields();
+
+        var tableText = editor.Model.Blocks.OfType<Paragraph>()
+            .Where(TableOfFigures.IsTableOfFiguresParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .ToList();
+        tableText.Should().StartWith("Table of Equations");
+        tableText.Skip(1).Should().BeEquivalentTo("Equation 1: First", "Equation 2: Second");
+    }
+
+    [StaFact]
     public void ReferencesIndex_ExposesBackedWordStyleUpdateIndex()
     {
         var definition = FreeWRibbon.Build();

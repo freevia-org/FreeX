@@ -30,8 +30,22 @@ public static class TableOfFigures
     {
         CaptionLabel.Figure => "Table of Figures",
         CaptionLabel.Table => "Table of Tables",
+        CaptionLabel.Equation => "Table of Equations",
         _ => "Table of " + Captions.LabelText(label) + "s"
     };
+
+    /// <summary>The heading text for a table of captions with a built-in or custom label.</summary>
+    public static string HeadingText(string labelText)
+    {
+        var label = Captions.NormalizeLabelText(labelText);
+        if (string.Equals(label, Captions.FigureLabelText, StringComparison.OrdinalIgnoreCase))
+            return "Table of Figures";
+        if (string.Equals(label, Captions.TableLabelText, StringComparison.OrdinalIgnoreCase))
+            return "Table of Tables";
+        if (string.Equals(label, Captions.EquationLabelText, StringComparison.OrdinalIgnoreCase))
+            return "Table of Equations";
+        return "Table of " + PluralizeLabel(label);
+    }
 
     /// <summary>
     /// Builds the table-of-figures paragraphs for <paramref name="document"/>: a heading
@@ -42,25 +56,64 @@ public static class TableOfFigures
     /// </summary>
     public static IReadOnlyList<Paragraph> Build(TextDocument document, CaptionLabel label = CaptionLabel.Figure)
     {
+        return Build(document, Captions.LabelText(label));
+    }
+
+    /// <summary>
+    /// Builds the table-of-figures paragraphs for a built-in or custom caption label.
+    /// </summary>
+    public static IReadOnlyList<Paragraph> Build(TextDocument document, string labelText)
+    {
         ArgumentNullException.ThrowIfNull(document);
+        var label = Captions.NormalizeLabelText(labelText);
 
         var paragraphs = new List<Paragraph>
         {
             new(HeadingText(label)) { StyleId = HeadingStyleId }
         };
 
-        var prefix = Captions.LabelText(label) + " ";
         foreach (var block in document.Blocks)
         {
             if (block is Paragraph paragraph
-                && Captions.IsCaptionParagraph(paragraph)
-                && paragraph.PlainText.StartsWith(prefix, StringComparison.Ordinal))
+                && Captions.IsCaptionOf(paragraph, label))
             {
                 paragraphs.Add(new Paragraph(paragraph.PlainText) { StyleId = EntryStyleId });
             }
         }
 
         return paragraphs;
+    }
+
+    /// <summary>
+    /// Infers the caption label from an existing generated table heading so Update Fields preserves the
+    /// user's selected label instead of rebuilding every table as a figure table.
+    /// </summary>
+    public static string? ExistingLabelText(TextDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        foreach (var block in document.Blocks)
+        {
+            if (block is not Paragraph paragraph
+                || !string.Equals(paragraph.StyleId, HeadingStyleId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var heading = paragraph.PlainText.Trim();
+            if (string.Equals(heading, "Table of Figures", StringComparison.Ordinal))
+                return Captions.FigureLabelText;
+            if (string.Equals(heading, "Table of Tables", StringComparison.Ordinal))
+                return Captions.TableLabelText;
+            if (string.Equals(heading, "Table of Equations", StringComparison.Ordinal))
+                return Captions.EquationLabelText;
+
+            const string prefix = "Table of ";
+            if (heading.StartsWith(prefix, StringComparison.Ordinal) && heading.Length > prefix.Length)
+                return SingularizeHeadingLabel(heading[prefix.Length..]);
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -108,5 +161,36 @@ public static class TableOfFigures
             BasedOnStyleId = "Normal",
             Paragraph = new ParagraphFormatting { SpaceAfterPt = 2 }
         });
+    }
+
+    private static string PluralizeLabel(string label)
+    {
+        if (label.EndsWith("s", StringComparison.OrdinalIgnoreCase))
+            return label;
+        if (label.EndsWith("y", StringComparison.OrdinalIgnoreCase)
+            && label.Length > 1
+            && !"aeiou".Contains(char.ToLowerInvariant(label[^2])))
+            return label[..^1] + "ies";
+        if (label.EndsWith("ch", StringComparison.OrdinalIgnoreCase)
+            || label.EndsWith("sh", StringComparison.OrdinalIgnoreCase)
+            || label.EndsWith("x", StringComparison.OrdinalIgnoreCase)
+            || label.EndsWith("z", StringComparison.OrdinalIgnoreCase))
+            return label + "es";
+        return label + "s";
+    }
+
+    private static string SingularizeHeadingLabel(string label)
+    {
+        if (label.EndsWith("ies", StringComparison.OrdinalIgnoreCase) && label.Length > 3)
+            return label[..^3] + "y";
+        if (label.EndsWith("es", StringComparison.OrdinalIgnoreCase)
+            && (label.EndsWith("ches", StringComparison.OrdinalIgnoreCase)
+                || label.EndsWith("shes", StringComparison.OrdinalIgnoreCase)
+                || label.EndsWith("xes", StringComparison.OrdinalIgnoreCase)
+                || label.EndsWith("zes", StringComparison.OrdinalIgnoreCase)))
+            return label[..^2];
+        if (label.EndsWith("s", StringComparison.OrdinalIgnoreCase) && label.Length > 1)
+            return label[..^1];
+        return label;
     }
 }

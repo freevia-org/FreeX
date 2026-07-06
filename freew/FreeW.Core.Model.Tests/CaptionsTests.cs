@@ -9,6 +9,7 @@ public class CaptionsTests
 
         Captions.NextCaptionNumber(doc, CaptionLabel.Figure).Should().Be(1);
         Captions.NextCaptionNumber(doc, CaptionLabel.Table).Should().Be(1);
+        Captions.NextCaptionNumber(doc, CaptionLabel.Equation).Should().Be(1);
     }
 
     [Fact]
@@ -25,6 +26,19 @@ public class CaptionsTests
         // Figures counted separately from tables.
         Captions.NextCaptionNumber(doc, CaptionLabel.Figure).Should().Be(3);
         Captions.NextCaptionNumber(doc, CaptionLabel.Table).Should().Be(2);
+    }
+
+    [Fact]
+    public void NextCaptionNumber_IncrementsCustomLabelsIndependently()
+    {
+        var doc = new TextDocument();
+
+        doc.Blocks.Add(Captions.BuildCaption("Scheme", 1, "Flow"));
+        doc.Blocks.Add(Captions.BuildCaption(CaptionLabel.Equation, 1, "Energy"));
+        doc.Blocks.Add(Captions.BuildCaption("Scheme", 2, "State"));
+
+        Captions.NextCaptionNumber(doc, "Scheme").Should().Be(3);
+        Captions.NextCaptionNumber(doc, CaptionLabel.Equation).Should().Be(2);
     }
 
     [Fact]
@@ -45,6 +59,16 @@ public class CaptionsTests
 
         caption.PlainText.Should().Be("Figure 1: My diagram");
         caption.StyleId.Should().Be(Captions.StyleId);
+    }
+
+    [Fact]
+    public void BuildCaption_CustomLabel_ProducesLabelNumberColonText()
+    {
+        var caption = Captions.BuildCaption("Scheme", 3, "State machine");
+
+        caption.PlainText.Should().Be("Scheme 3: State machine");
+        caption.StyleId.Should().Be(Captions.StyleId);
+        Captions.IsCaptionOf(caption, "Scheme").Should().BeTrue();
     }
 
     [Fact]

@@ -208,6 +208,15 @@ internal static class FreeWAvaloniaRibbonDefinition
         {
             new("Figure", new RibbonCommandId("freew.insert-caption.figure")),
             new("Table",  new RibbonCommandId("freew.insert-caption.table")),
+            new("Equation", new RibbonCommandId("freew.insert-caption.equation")),
+        });
+
+    private static RibbonMenu BuildTableOfFiguresMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Figure", new RibbonCommandId("freew.tof.figure")),
+            new("Table", new RibbonCommandId("freew.tof.table")),
+            new("Equation", new RibbonCommandId("freew.tof.equation")),
         });
 
     private static RibbonMenu BuildMultilevelListMenu() =>
@@ -869,7 +878,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                 tab.Group("captions", "Captions", null, 80, g =>
                 {
                     g.Dropdown("freew.caption", "Insert Caption", BuildCaptionMenu());
-                    g.Button("freew.tof", "Insert Table of Figures");
+                    g.Dropdown("freew.tof", "Insert Table of Figures", BuildTableOfFiguresMenu());
                     g.Button("freew.tof-refresh", "Update Table");
                     g.Button("freew.cross-reference", "Cross-reference");
                 });

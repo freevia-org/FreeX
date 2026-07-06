@@ -1074,6 +1074,7 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.insert-caption", caption);
         r.Register("freew.insert-caption.figure", new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Figure)));
         r.Register("freew.insert-caption.table",  new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Table)));
+        r.Register("freew.insert-caption.equation", new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Equation)));
 
         // Dialog-backed commands no-op without a shell callback instead of silently choosing defaults.
         r.Register("freew.cross-reference", new ActionRibbonCommand(callbacks.OpenCrossReferenceDialog ?? (() => { })));
@@ -1086,7 +1087,13 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.bibliography", new ActionRibbonCommand(editor.InsertBibliography));
 
         r.Register("freew.tof", new ActionRibbonCommand(() => editor.InsertTableOfFigures()));
+        r.Register("freew.tof.figure", new ActionRibbonCommand(() => editor.InsertTableOfFigures(CaptionLabel.Figure)));
+        r.Register("freew.tof.table", new ActionRibbonCommand(() => editor.InsertTableOfFigures(CaptionLabel.Table)));
+        r.Register("freew.tof.equation", new ActionRibbonCommand(() => editor.InsertTableOfFigures(CaptionLabel.Equation)));
         r.Register("freew.tof-refresh", new ActionRibbonCommand(() => editor.RefreshTableOfFigures()));
+        r.Register("freew.tof-refresh.figure", new ActionRibbonCommand(() => editor.RefreshTableOfFigures(CaptionLabel.Figure)));
+        r.Register("freew.tof-refresh.table", new ActionRibbonCommand(() => editor.RefreshTableOfFigures(CaptionLabel.Table)));
+        r.Register("freew.tof-refresh.equation", new ActionRibbonCommand(() => editor.RefreshTableOfFigures(CaptionLabel.Equation)));
         r.Register("freew.index-mark", new ActionRibbonCommand(() => editor.MarkIndexEntry()));
         r.Register("freew.index-insert", new ActionRibbonCommand(editor.InsertIndex));
         r.Register("freew.index-refresh", new ActionRibbonCommand(editor.RefreshIndex));
