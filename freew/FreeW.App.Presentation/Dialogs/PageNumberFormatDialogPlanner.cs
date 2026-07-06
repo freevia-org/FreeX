@@ -6,26 +6,40 @@ using FreeW.Core.Model;
 namespace FreeW.App.Presentation.Dialogs;
 
 public sealed record PageNumberFormatChoice(string Label, PageNumberFormat Format);
+public sealed record PageNumberChapterStyleChoice(string Label, int Level);
+public sealed record PageNumberChapterSeparatorChoice(
+    string Label,
+    PageNumberChapterSeparator Separator,
+    string Text);
 
 public sealed record PageNumberFormatDialogState(
     int FormatIndex,
     bool ContinueFromPreviousSection,
-    string StartAtText);
+    string StartAtText,
+    bool IncludeChapterNumber = false,
+    int ChapterStyleIndex = 0,
+    int ChapterSeparatorIndex = 0);
 
 public sealed record PageNumberFormatDialogInput(
     int FormatIndex,
     bool ContinueFromPreviousSection,
-    string? StartAtText);
+    string? StartAtText,
+    bool IncludeChapterNumber = false,
+    int ChapterStyleIndex = 0,
+    int ChapterSeparatorIndex = 0);
 
 public sealed record PageNumberFormatDialogResult(
     PageNumberFormat Format,
-    int? StartAt);
+    int? StartAt,
+    int? ChapterStyleLevel = null,
+    PageNumberChapterSeparator ChapterSeparator = PageNumberChapterSeparator.Hyphen);
 
 public sealed record PageNumberDisplayPlan(
     int PageIndex,
     int SectionIndex,
     int LogicalPageNumber,
-    string Text);
+    string Text,
+    string? ChapterNumber = null);
 
 public static class PageNumberFormatDialogPlanner
 {
@@ -34,9 +48,13 @@ public static class PageNumberFormatDialogPlanner
     public const string PageNumberingLabel = "Page numbering";
     public const string ContinueLabel = "Continue from previous section";
     public const string StartAtLabel = "Start at:";
-    public const string ChapterNumberingDeferredLabel = "Chapter numbering is deferred for this pass.";
+    public const string IncludeChapterNumberLabel = "Include chapter number";
+    public const string ChapterStartsWithStyleLabel = "Chapter starts with style:";
+    public const string ChapterSeparatorLabel = "Use separator:";
     public const string InvalidStartAtMessage = "Start at must be a whole number of 1 or greater.";
     public const string InvalidFormatMessage = "Choose a supported page number format.";
+    public const string InvalidChapterStyleMessage = "Choose a heading style for chapter numbering.";
+    public const string InvalidChapterSeparatorMessage = "Choose a supported chapter separator.";
 
     public static readonly IReadOnlyList<PageNumberFormatChoice> FormatItems =
     [
@@ -47,6 +65,22 @@ public static class PageNumberFormatDialogPlanner
         new("A, B, C, ...", PageNumberFormat.UpperLetter),
     ];
 
+    public static readonly IReadOnlyList<PageNumberChapterStyleChoice> ChapterStyleItems =
+        Enumerable.Range(1, 9)
+            .Select(level => new PageNumberChapterStyleChoice(
+                "Heading " + level.ToString(CultureInfo.InvariantCulture),
+                level))
+            .ToList();
+
+    public static readonly IReadOnlyList<PageNumberChapterSeparatorChoice> ChapterSeparatorItems =
+    [
+        new("Hyphen", PageNumberChapterSeparator.Hyphen, "-"),
+        new("Period", PageNumberChapterSeparator.Period, "."),
+        new("Colon", PageNumberChapterSeparator.Colon, ":"),
+        new("Em dash", PageNumberChapterSeparator.EmDash, "--"),
+        new("En dash", PageNumberChapterSeparator.EnDash, "-")
+    ];
+
     public static PageNumberFormatDialogState BuildInitialState(PageSettings page)
     {
         ArgumentNullException.ThrowIfNull(page);
@@ -54,7 +88,10 @@ public static class PageNumberFormatDialogPlanner
         return new PageNumberFormatDialogState(
             FormatIndex: IndexOf(page.PageNumberFormat),
             ContinueFromPreviousSection: page.PageNumberStartAt is null,
-            StartAtText: Math.Max(1, page.PageNumberStartAt ?? 1).ToString(CultureInfo.InvariantCulture));
+            StartAtText: Math.Max(1, page.PageNumberStartAt ?? 1).ToString(CultureInfo.InvariantCulture),
+            IncludeChapterNumber: page.PageNumberChapterStyleLevel is >= 1 and <= 9,
+            ChapterStyleIndex: ChapterStyleIndexOf(page.PageNumberChapterStyleLevel),
+            ChapterSeparatorIndex: ChapterSeparatorIndexOf(page.PageNumberChapterSeparator));
     }
 
     public static bool TryBuildResult(
@@ -72,9 +109,29 @@ public static class PageNumberFormatDialogPlanner
         }
 
         var format = FormatItems[input.FormatIndex].Format;
+        int? chapterStyleLevel = null;
+        var chapterSeparator = PageNumberChapterSeparator.Hyphen;
+        if (input.IncludeChapterNumber)
+        {
+            if (input.ChapterStyleIndex < 0 || input.ChapterStyleIndex >= ChapterStyleItems.Count)
+            {
+                errorMessage = InvalidChapterStyleMessage;
+                return false;
+            }
+
+            if (input.ChapterSeparatorIndex < 0 || input.ChapterSeparatorIndex >= ChapterSeparatorItems.Count)
+            {
+                errorMessage = InvalidChapterSeparatorMessage;
+                return false;
+            }
+
+            chapterStyleLevel = ChapterStyleItems[input.ChapterStyleIndex].Level;
+            chapterSeparator = ChapterSeparatorItems[input.ChapterSeparatorIndex].Separator;
+        }
+
         if (input.ContinueFromPreviousSection)
         {
-            result = new PageNumberFormatDialogResult(format, StartAt: null);
+            result = new PageNumberFormatDialogResult(format, StartAt: null, chapterStyleLevel, chapterSeparator);
             return true;
         }
 
@@ -85,7 +142,7 @@ public static class PageNumberFormatDialogPlanner
             return false;
         }
 
-        result = new PageNumberFormatDialogResult(format, startAt);
+        result = new PageNumberFormatDialogResult(format, startAt, chapterStyleLevel, chapterSeparator);
         return true;
     }
 
@@ -95,12 +152,25 @@ public static class PageNumberFormatDialogPlanner
 
         page.PageNumberFormat = result.Format;
         page.PageNumberStartAt = result.StartAt is > 0 ? result.StartAt : null;
+        page.PageNumberChapterStyleLevel = result.ChapterStyleLevel is >= 1 and <= 9
+            ? result.ChapterStyleLevel
+            : null;
+        page.PageNumberChapterSeparator = result.ChapterSeparator;
     }
 
-    public static string BuildCommandValue(PageNumberFormat format, int? startAt) =>
-        startAt is > 0
+    public static string BuildCommandValue(
+        PageNumberFormat format,
+        int? startAt,
+        int? chapterStyleLevel = null,
+        PageNumberChapterSeparator chapterSeparator = PageNumberChapterSeparator.Hyphen)
+    {
+        var value = startAt is > 0
             ? $"{format}|start={startAt.Value.ToString(CultureInfo.InvariantCulture)}"
             : $"{format}|continue";
+        return chapterStyleLevel is >= 1 and <= 9
+            ? value + $"|chapter={chapterStyleLevel.Value.ToString(CultureInfo.InvariantCulture)},sep={chapterSeparator}"
+            : value;
+    }
 
     public static bool TryBuildResultFromCommandValue(
         string? value,
@@ -111,12 +181,20 @@ public static class PageNumberFormatDialogPlanner
             return false;
 
         var parts = value.Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 2 || !Enum.TryParse<PageNumberFormat>(parts[0], ignoreCase: true, out var format))
+        if (parts.Length is < 2 or > 3 || !Enum.TryParse<PageNumberFormat>(parts[0], ignoreCase: true, out var format))
             return false;
+
+        var chapterStyleLevel = (int?)null;
+        var chapterSeparator = PageNumberChapterSeparator.Hyphen;
+        if (parts.Length == 3
+            && !TryParseChapterCommandPart(parts[2], out chapterStyleLevel, out chapterSeparator))
+        {
+            return false;
+        }
 
         if (string.Equals(parts[1], "continue", StringComparison.OrdinalIgnoreCase))
         {
-            result = new PageNumberFormatDialogResult(format, StartAt: null);
+            result = new PageNumberFormatDialogResult(format, StartAt: null, chapterStyleLevel, chapterSeparator);
             return true;
         }
 
@@ -131,16 +209,56 @@ public static class PageNumberFormatDialogPlanner
             return false;
         }
 
-        result = new PageNumberFormatDialogResult(format, startAt);
+        result = new PageNumberFormatDialogResult(format, startAt, chapterStyleLevel, chapterSeparator);
+        return true;
+    }
+
+    private static bool TryParseChapterCommandPart(
+        string part,
+        out int? chapterStyleLevel,
+        out PageNumberChapterSeparator chapterSeparator)
+    {
+        chapterStyleLevel = null;
+        chapterSeparator = PageNumberChapterSeparator.Hyphen;
+        const string ChapterPrefix = "chapter=";
+        const string SeparatorPrefix = "sep=";
+        if (!part.StartsWith(ChapterPrefix, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var pieces = part.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (pieces.Length is < 1 or > 2)
+            return false;
+
+        var rawLevel = pieces[0][ChapterPrefix.Length..];
+        if (!int.TryParse(rawLevel, NumberStyles.None, CultureInfo.InvariantCulture, out var level)
+            || level is < 1 or > 9)
+            return false;
+
+        if (pieces.Length == 2)
+        {
+            if (!pieces[1].StartsWith(SeparatorPrefix, StringComparison.OrdinalIgnoreCase)
+                || !Enum.TryParse<PageNumberChapterSeparator>(
+                    pieces[1][SeparatorPrefix.Length..],
+                    ignoreCase: true,
+                    out chapterSeparator))
+            {
+                return false;
+            }
+        }
+
+        chapterStyleLevel = level;
         return true;
     }
 
     public static IReadOnlyList<PageNumberDisplayPlan> BuildDisplayPlans(
-        IReadOnlyList<HeaderFooterPageSectionPlan> pageSections)
+        IReadOnlyList<HeaderFooterPageSectionPlan> pageSections,
+        TextDocument? document = null,
+        IReadOnlyList<int>? blockPageAssignments = null)
     {
         ArgumentNullException.ThrowIfNull(pageSections);
 
         var result = new List<PageNumberDisplayPlan>(pageSections.Count);
+        var chapterNumbers = BuildChapterNumbersByPage(document, blockPageAssignments, pageSections.Count);
         var currentSection = -1;
         var currentSectionStart = 1;
         var nextContinueValue = 1;
@@ -157,15 +275,103 @@ public static class PageNumberFormatDialogPlanner
 
             var logical = currentSectionStart + Math.Max(1, page.SectionRelativePageNumber) - 1;
             nextContinueValue = logical + 1;
+            var pageNumberText = FormatPageNumber(logical, page.PageSettings.PageNumberFormat);
+            var chapterNumber = ResolveChapterNumber(chapterNumbers, page.PageSettings, pageIndex);
             result.Add(new PageNumberDisplayPlan(
                 pageIndex,
                 page.SectionIndex,
                 logical,
-                FormatPageNumber(logical, page.PageSettings.PageNumberFormat)));
+                chapterNumber is null
+                    ? pageNumberText
+                    : chapterNumber + SeparatorText(page.PageSettings.PageNumberChapterSeparator) + pageNumberText,
+                chapterNumber));
         }
 
         return result;
     }
+
+    private static IReadOnlyDictionary<int, IReadOnlyList<string?>> BuildChapterNumbersByPage(
+        TextDocument? document,
+        IReadOnlyList<int>? blockPageAssignments,
+        int pageCount)
+    {
+        if (document is null || blockPageAssignments is null || pageCount <= 0)
+            return new Dictionary<int, IReadOnlyList<string?>>();
+
+        var headingEntries = DocumentOutline.Of(document)
+            .Where(entry => entry.Level is >= 1 and <= 9
+                && entry.BlockIndex >= 0
+                && entry.BlockIndex < blockPageAssignments.Count
+                && blockPageAssignments[entry.BlockIndex] >= 0)
+            .Select(entry => (
+                entry.Level,
+                PageIndex: Math.Clamp(blockPageAssignments[entry.BlockIndex], 0, pageCount - 1),
+                entry.BlockIndex))
+            .OrderBy(entry => entry.PageIndex)
+            .ThenBy(entry => entry.BlockIndex)
+            .ToList();
+
+        if (headingEntries.Count == 0)
+            return new Dictionary<int, IReadOnlyList<string?>>();
+
+        var perLevel = Enumerable.Range(1, 9)
+            .ToDictionary(
+                level => level,
+                _ => (IReadOnlyList<string?>)new string?[pageCount]);
+        var counters = new List<int>();
+        var currentByLevel = new string?[10];
+        var headingIndex = 0;
+        for (var pageIndex = 0; pageIndex < pageCount; pageIndex++)
+        {
+            while (headingIndex < headingEntries.Count
+                && headingEntries[headingIndex].PageIndex <= pageIndex)
+            {
+                var level = headingEntries[headingIndex].Level;
+                while (counters.Count < level)
+                    counters.Add(0);
+                while (counters.Count > level)
+                    counters.RemoveAt(counters.Count - 1);
+                counters[level - 1]++;
+                for (var reset = level + 1; reset < currentByLevel.Length; reset++)
+                    currentByLevel[reset] = null;
+                currentByLevel[level] = string.Join('.', counters);
+                headingIndex++;
+            }
+
+            for (var level = 1; level <= 9; level++)
+                ((string?[])perLevel[level])[pageIndex] = currentByLevel[level];
+        }
+
+        return perLevel;
+    }
+
+    private static string? ResolveChapterNumber(
+        IReadOnlyDictionary<int, IReadOnlyList<string?>> chapterNumbers,
+        PageSettings page,
+        int pageIndex)
+    {
+        if (page.PageNumberChapterStyleLevel is not { } level
+            || level is < 1 or > 9
+            || !chapterNumbers.TryGetValue(level, out var numbers)
+            || pageIndex < 0
+            || pageIndex >= numbers.Count)
+        {
+            return null;
+        }
+
+        return string.IsNullOrWhiteSpace(numbers[pageIndex])
+            ? null
+            : numbers[pageIndex];
+    }
+
+    public static string SeparatorText(PageNumberChapterSeparator separator) => separator switch
+    {
+        PageNumberChapterSeparator.Period => ".",
+        PageNumberChapterSeparator.Colon => ":",
+        PageNumberChapterSeparator.EmDash => "--",
+        PageNumberChapterSeparator.EnDash => "-",
+        _ => "-"
+    };
 
     public static string FormatPageNumber(int value, PageNumberFormat format)
     {
@@ -186,6 +392,27 @@ public static class PageNumberFormatDialogPlanner
     {
         for (var i = 0; i < FormatItems.Count; i++)
             if (FormatItems[i].Format == format)
+                return i;
+
+        return 0;
+    }
+
+    private static int ChapterStyleIndexOf(int? level)
+    {
+        if (level is null)
+            return 0;
+
+        for (var i = 0; i < ChapterStyleItems.Count; i++)
+            if (ChapterStyleItems[i].Level == level)
+                return i;
+
+        return 0;
+    }
+
+    private static int ChapterSeparatorIndexOf(PageNumberChapterSeparator separator)
+    {
+        for (var i = 0; i < ChapterSeparatorItems.Count; i++)
+            if (ChapterSeparatorItems[i].Separator == separator)
                 return i;
 
         return 0;

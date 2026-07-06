@@ -183,7 +183,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         // Phase 4 + W18: resolve header/footer slots per page, routing to the correct section's
         // SectionHeadersFooters (per-section tracking) and passing pageCount for live page numbers.
         var pageToSection = HeaderFooterPagePlanner.MapPagesToSections(model, assignment, pageCount);
-        var pageNumberDisplay = PageNumberFormatDialogPlanner.BuildDisplayPlans(pageToSection);
+        var pageNumberDisplay = PageNumberFormatDialogPlanner.BuildDisplayPlans(pageToSection, model, assignment);
         var differentOddEvenPages = HeaderFooterPagePlanner.UsesDifferentOddEvenPages(model);
         // Endnotes page is appended after body pages when the document has endnotes.
         var hasEndnotes = model.Endnotes.Count > 0;
@@ -606,7 +606,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         var hasEndnotesRep = model.Endnotes.Count > 0;
         var totalBoxCountRep = hasEndnotesRep ? pageCount + 1 : pageCount;
         var pageToSectionRep = HeaderFooterPagePlanner.MapPagesToSections(model, assignment, pageCount);
-        var pageNumberDisplayRep = PageNumberFormatDialogPlanner.BuildDisplayPlans(pageToSectionRep);
+        var pageNumberDisplayRep = PageNumberFormatDialogPlanner.BuildDisplayPlans(pageToSectionRep, model, assignment);
         var differentOddEvenPagesRep = HeaderFooterPagePlanner.UsesDifferentOddEvenPages(model);
         for (var i = 0; i < pageCount; i++)
         {
@@ -741,7 +741,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         var hasEndnotesReb = model.Endnotes.Count > 0;
         var totalBoxCountReb = hasEndnotesReb ? pageCount + 1 : pageCount;
         var pageToSectionReb = HeaderFooterPagePlanner.MapPagesToSections(model, assignment, pageCount);
-        var pageNumberDisplayReb = PageNumberFormatDialogPlanner.BuildDisplayPlans(pageToSectionReb);
+        var pageNumberDisplayReb = PageNumberFormatDialogPlanner.BuildDisplayPlans(pageToSectionReb, model, assignment);
         var differentOddEvenPagesReb = HeaderFooterPagePlanner.UsesDifferentOddEvenPages(model);
         for (var i = 0; i < pageCount; i++)
         {

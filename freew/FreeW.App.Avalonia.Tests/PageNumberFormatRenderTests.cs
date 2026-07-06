@@ -38,4 +38,35 @@ public sealed class PageNumberFormatRenderTests
         items.Should().NotBeNull();
         items!.Select(item => item.Text).Should().Contain("IV");
     }
+
+    [Fact]
+    public async Task HeaderFooterPageNumber_IncludesChapterPrefix()
+    {
+        IReadOnlyList<(string Text, double X, double Y, TextAlignment Alignment, double AvailableWidth)>? items = null;
+        await Session.Dispatch(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1" });
+            doc.Blocks.Add(new Paragraph("Body text"));
+            doc.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
+            doc.Page.PageNumberStartAt = 4;
+            doc.Page.PageNumberChapterStyleLevel = 1;
+            doc.Page.PageNumberChapterSeparator = PageNumberChapterSeparator.Hyphen;
+
+            var footer = new HeaderFooter();
+            var para = new Paragraph();
+            para.Runs.Add(Run.PageNumberField());
+            footer.Paragraphs.Add(para);
+            doc.Footer = footer;
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+            items = view.HeaderFooterItemsFull;
+        }, CancellationToken.None);
+
+        items.Should().NotBeNull();
+        items!.Select(item => item.Text).Should().Contain("1-IV");
+    }
 }

@@ -4178,6 +4178,12 @@ public static class DocxReader
             && startAt >= 1
                 ? startAt
                 : null;
+        page.PageNumberChapterStyleLevel = int.TryParse(pgNumType.Attribute(W + "chapStyle")?.Value, out var chapterStyle)
+            && chapterStyle is >= 1 and <= 9
+                ? chapterStyle
+                : null;
+        page.PageNumberChapterSeparator = PageNumberChapterSeparatorFromToken(
+            pgNumType.Attribute(W + "chapSep")?.Value);
     }
 
     private static PageNumberFormat PageNumberFormatFromToken(string? token) => token switch
@@ -4187,6 +4193,15 @@ public static class DocxReader
         "lowerLetter" => PageNumberFormat.LowerLetter,
         "upperLetter" => PageNumberFormat.UpperLetter,
         _ => PageNumberFormat.Decimal
+    };
+
+    private static PageNumberChapterSeparator PageNumberChapterSeparatorFromToken(string? token) => token switch
+    {
+        "period" => PageNumberChapterSeparator.Period,
+        "colon" => PageNumberChapterSeparator.Colon,
+        "emDash" => PageNumberChapterSeparator.EmDash,
+        "enDash" => PageNumberChapterSeparator.EnDash,
+        _ => PageNumberChapterSeparator.Hyphen
     };
 
     /// <summary>

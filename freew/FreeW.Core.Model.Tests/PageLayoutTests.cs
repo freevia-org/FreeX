@@ -157,9 +157,13 @@ public class PageLayoutTests
         var doc = TextDocument.CreateEmpty();
         doc.Page.PageNumberFormat = PageNumberFormat.Decimal;
         doc.Page.PageNumberStartAt = null;
+        doc.Page.PageNumberChapterStyleLevel = null;
+        doc.Page.PageNumberChapterSeparator = PageNumberChapterSeparator.Period;
         var settings = doc.Page.Clone();
         settings.PageNumberFormat = PageNumberFormat.UpperRoman;
         settings.PageNumberStartAt = 4;
+        settings.PageNumberChapterStyleLevel = 2;
+        settings.PageNumberChapterSeparator = PageNumberChapterSeparator.Colon;
         var command = new SetPageSettingsCommand(settings);
         var context = new CommandContext(doc);
 
@@ -167,11 +171,15 @@ public class PageLayoutTests
 
         doc.Page.PageNumberFormat.Should().Be(PageNumberFormat.UpperRoman);
         doc.Page.PageNumberStartAt.Should().Be(4);
+        doc.Page.PageNumberChapterStyleLevel.Should().Be(2);
+        doc.Page.PageNumberChapterSeparator.Should().Be(PageNumberChapterSeparator.Colon);
 
         command.Revert(context);
 
         doc.Page.PageNumberFormat.Should().Be(PageNumberFormat.Decimal);
         doc.Page.PageNumberStartAt.Should().BeNull();
+        doc.Page.PageNumberChapterStyleLevel.Should().BeNull();
+        doc.Page.PageNumberChapterSeparator.Should().Be(PageNumberChapterSeparator.Period);
     }
 
     [Fact]

@@ -60,6 +60,28 @@ public sealed class PageNumberFormatRoundTripTests
         pgNumTypes[1].Attribute(W + "start").Should().BeNull();
     }
 
+    [Fact]
+    public void FinalSection_PageNumberChapterNumbering_RoundTripsThroughPgNumType()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Chapter") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("Body"));
+        doc.Page.PageNumberChapterStyleLevel = 1;
+        doc.Page.PageNumberChapterSeparator = PageNumberChapterSeparator.Colon;
+        doc.Footer = FooterWithPageNumber();
+
+        var read = RoundTrip(doc);
+        var xml = DocumentXml(doc);
+        var pgNumType = xml.Descendants(W + "sectPr").Last().Element(W + "pgNumType");
+
+        read.Page.PageNumberChapterStyleLevel.Should().Be(1);
+        read.Page.PageNumberChapterSeparator.Should().Be(PageNumberChapterSeparator.Colon);
+        pgNumType.Should().NotBeNull();
+        pgNumType!.Attribute(W + "chapStyle")!.Value.Should().Be("1");
+        pgNumType.Attribute(W + "chapSep")!.Value.Should().Be("colon");
+    }
+
     private static TextDocument RoundTrip(TextDocument document)
     {
         using var stream = new MemoryStream();

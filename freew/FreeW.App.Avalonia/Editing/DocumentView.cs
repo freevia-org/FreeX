@@ -3188,6 +3188,12 @@ public sealed class DocumentView : Control
     /// </summary>
     private IReadOnlyList<HeaderFooterPageSectionPlan> ComputePageSectionMap(int pageCount)
     {
+        var blockPageAssignments = ComputeBlockPageAssignments(pageCount);
+        return HeaderFooterPagePlanner.MapPagesToSections(_doc, blockPageAssignments, pageCount);
+    }
+
+    private int[] ComputeBlockPageAssignments(int pageCount)
+    {
         var blocks = _doc.Blocks;
         var blockPageAssignments = Enumerable
             .Repeat(HeaderFooterPagePlanner.UnassignedBlockPageIndex, blocks.Count)
@@ -3204,7 +3210,7 @@ public sealed class DocumentView : Control
             blockPageAssignments[b] = Math.Clamp(pg, 0, pageCount - 1);
         }
 
-        return HeaderFooterPagePlanner.MapPagesToSections(_doc, blockPageAssignments, pageCount);
+        return blockPageAssignments;
     }
 
     /// <summary>Maps the shared planner slot kind to Avalonia's edit-target slot enum.</summary>
@@ -3263,8 +3269,12 @@ public sealed class DocumentView : Control
         var diffOddEven = HeaderFooterPagePlanner.UsesDifferentOddEvenPages(_doc);
 
         // Build a true page-to-section map from Avalonia's placed block positions.
-        var pageToSection = ComputePageSectionMap(_pageCount);
-        var pageNumberDisplay = PageNumberFormatDialogPlanner.BuildDisplayPlans(pageToSection);
+        var blockPageAssignments = ComputeBlockPageAssignments(_pageCount);
+        var pageToSection = HeaderFooterPagePlanner.MapPagesToSections(_doc, blockPageAssignments, _pageCount);
+        var pageNumberDisplay = PageNumberFormatDialogPlanner.BuildDisplayPlans(
+            pageToSection,
+            _doc,
+            blockPageAssignments);
 
         for (var pi = 0; pi < _pageCount; pi++)
         {
