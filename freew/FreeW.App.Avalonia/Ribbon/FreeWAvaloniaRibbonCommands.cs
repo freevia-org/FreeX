@@ -133,9 +133,15 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.multilevel-list", new ActionRibbonCommand(() => ApplyMultiLevelList(editor)));
         r.Register("freew.multilevel-demote", new ActionRibbonCommand(() => ChangeListLevel(editor, demote: true)));
         r.Register("freew.multilevel-promote", new ActionRibbonCommand(() => ChangeListLevel(editor, demote: false)));
-        r.Register("freew.multilevel-preset-0", new ActionRibbonCommand(editor.ApplyMultiLevelListToSelection));
-        r.Register("freew.multilevel-preset-1", new ActionRibbonCommand(editor.ApplyMultiLevelListToSelection));
-        r.Register("freew.multilevel-preset-2", new ActionRibbonCommand(editor.ApplyMultiLevelHeadingPreset));
+        r.Register("freew.multilevel-preset-0", new ActionRibbonCommand(() =>
+            ApplyMultiLevelPreset(editor, MultiLevelListFormat.DecimalNumberFormats)));
+        r.Register("freew.multilevel-preset-1", new ActionRibbonCommand(() =>
+            ApplyMultiLevelPreset(editor, MultiLevelListFormat.DecimalLowerLetterLowerRomanNumberFormats)));
+        r.Register("freew.multilevel-preset-2", new ActionRibbonCommand(() =>
+        {
+            editor.ApplyMultiLevelHeadingPreset();
+            editor.ApplyMultiLevelNumberFormats(MultiLevelListFormat.DecimalNumberFormats);
+        }));
         r.Register("freew.multilevel-define", new ActionRibbonCommand(() =>
         {
             editor.ApplyMultiLevelListToSelection();
@@ -526,6 +532,13 @@ internal static class FreeWAvaloniaRibbonCommands
     {
         if (editor.GetCaretFormatting().Paragraph.ListKind != ListKind.MultiLevel)
             editor.ApplyMultiLevelListToSelection();
+        editor.ApplyMultiLevelNumberFormats(MultiLevelListFormat.DecimalNumberFormats);
+    }
+
+    private static void ApplyMultiLevelPreset(DocumentView editor, IReadOnlyList<ListNumberFormat> numberFormats)
+    {
+        editor.ApplyMultiLevelListToSelection();
+        editor.ApplyMultiLevelNumberFormats(numberFormats);
     }
 
     private static void ChangeListLevel(DocumentView editor, bool demote)

@@ -40,6 +40,18 @@ public sealed class MultiLevelMarkerTests
     }
 
     [Fact]
+    public void Nesting_UsesPerLevelNumberFormats()
+    {
+        var levels = new[] { 0, 1, 2, 1, 0 };
+
+        var markers = DocumentView.MultiLevelMarkerSequence(
+            levels,
+            MultiLevelListFormat.DecimalLowerLetterLowerRomanNumberFormats);
+
+        markers.Should().Equal("1.", "1.a.", "1.a.i.", "1.b.", "2.");
+    }
+
+    [Fact]
     public void DeeperLevel_ResetsAllDescendantCounters()
     {
         // 1.
@@ -115,6 +127,19 @@ public sealed class MultiLevelMarkerTests
         rendered.Should().Contain("1.1.");
         rendered.Should().Contain("1.1.1.");
         rendered.Should().Contain("2."); // the final level-0 item restarts the top counter at 2
+    }
+
+    [StaFact]
+    public void StyledMarkersAppearInTheRenderedSurface()
+    {
+        var view = new DocumentView();
+        view.LoadModel(BuildMultiLevelDoc());
+        view.ApplyMultiLevelNumberFormats(MultiLevelListFormat.DecimalLowerLetterLowerRomanNumberFormats);
+
+        var rendered = new TextRange(view.Document.ContentStart, view.Document.ContentEnd).Text;
+
+        rendered.Should().Contain("1.a.");
+        rendered.Should().Contain("1.a.i.");
     }
 
     [StaFact]

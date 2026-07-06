@@ -520,6 +520,13 @@ public sealed class CommandRegistryTests
         paragraph.Formatting.ListKind.Should().Be(ListKind.MultiLevel);
         paragraph.Formatting.ListLevel.Should().Be(2, "presets preserve the selected outline depth");
 
+        Execute(registry, "freew.multilevel-preset-1");
+        view.Document.MultiLevelList.NumberFormats.Take(3).Should().Equal(
+            ListNumberFormat.Decimal,
+            ListNumberFormat.LowerLetter,
+            ListNumberFormat.LowerRoman);
+        paragraph.Formatting.ListKind.Should().Be(ListKind.MultiLevel);
+
         Execute(registry, "freew.multilevel-define");
         paragraph.Formatting.ListStartOverride.Should().BeNull("the backed define slice only sets level 0/1 start-at overrides");
 

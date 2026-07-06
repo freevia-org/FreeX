@@ -4240,6 +4240,7 @@ public static class DocxReader
 
         // abstractNumId -> ListKind, taken from the format of its lowest level.
         var abstractKinds = new Dictionary<int, ListKind>();
+        var abstractMultiLevelFormats = new Dictionary<int, IReadOnlyList<ListNumberFormat>>();
         foreach (var abstractNum in root.Elements(W + "abstractNum"))
         {
             var abstractNumId = ParseInt(abstractNum.Attribute(W + "abstractNumId")?.Value);
@@ -4251,17 +4252,30 @@ public static class DocxReader
             // MultiLevel, not Bullet — the deeper levels carry decimal/letter formats that the model
             // must expose for correct display/editing of sub-levels.
             var numFmt = levels.FirstOrDefault()?.Element(W + "numFmt")?.Attribute(W + "val")?.Value;
-            abstractKinds[abstractNumId] = IsMultiLevel(abstractNum, levels)
+            var isMultiLevel = IsMultiLevel(abstractNum, levels);
+            if (isMultiLevel)
+                abstractMultiLevelFormats[abstractNumId] = ReadMultiLevelNumberFormats(levels);
+            abstractKinds[abstractNumId] = isMultiLevel
                 ? ListKind.MultiLevel
                 : numFmt == "bullet" ? ListKind.Bullet : ListKind.Number;
         }
 
+        var appliedMultiLevelFormats = false;
         foreach (var num in root.Elements(W + "num"))
         {
             var numId = ParseInt(num.Attribute(W + "numId")?.Value);
             var abstractNumId = ParseInt(num.Element(W + "abstractNumId")?.Attribute(W + "val")?.Value);
             if (abstractKinds.TryGetValue(abstractNumId, out var kind))
+            {
                 map[numId] = kind;
+                if (!appliedMultiLevelFormats
+                    && kind == ListKind.MultiLevel
+                    && abstractMultiLevelFormats.TryGetValue(abstractNumId, out var numberFormats))
+                {
+                    document.MultiLevelList.SetNumberFormats(numberFormats);
+                    appliedMultiLevelFormats = true;
+                }
+            }
 
             // Detect restart-override w:num elements: each w:lvlOverride/w:startOverride pair is a
             // counter-reset override for one list level, emitted by FreeW or by Word for the same purpose.
@@ -4295,6 +4309,21 @@ public static class DocxReader
 
         var level1Text = levels.ElementAtOrDefault(1)?.Element(W + "lvlText")?.Attribute(W + "val")?.Value;
         return level1Text is not null && level1Text.Contains("%1") && level1Text.Contains("%2");
+    }
+
+    private static IReadOnlyList<ListNumberFormat> ReadMultiLevelNumberFormats(IReadOnlyList<XElement> levels)
+    {
+        var formats = Enumerable.Repeat(ListNumberFormat.Decimal, MultiLevelListFormat.LevelCount).ToArray();
+        foreach (var level in levels)
+        {
+            var index = ParseInt(level.Attribute(W + "ilvl")?.Value);
+            if (index < 0 || index >= formats.Length)
+                continue;
+
+            formats[index] = MultiLevelListMarkerFormatter.FromOoxmlToken(
+                level.Element(W + "numFmt")?.Attribute(W + "val")?.Value);
+        }
+        return formats;
     }
 
     /// <summary>
