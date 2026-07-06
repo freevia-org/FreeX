@@ -69,6 +69,17 @@ public sealed record PdfFilledTriangle(
     PdfColor Color) : PdfDrawOp;
 
 /// <summary>
+/// Applies a rotation transform around a fixed PDF user-space center to a child draw-op list.
+/// Positive degrees follow Office's visual coordinate convention; writers map that to their
+/// backend coordinate system.
+/// </summary>
+public sealed record PdfRotationGroup(
+    double CenterX,
+    double CenterY,
+    double RotationDegrees,
+    IReadOnlyList<PdfDrawOp> Ops) : PdfDrawOp;
+
+/// <summary>
 /// Draws an encoded bitmap image into a rectangular PDF user-space bounds. Supported portable
 /// content types are PNG and JPEG; unsupported content types are skipped by the dependency-free
 /// writer instead of emitting a corrupt image stream.

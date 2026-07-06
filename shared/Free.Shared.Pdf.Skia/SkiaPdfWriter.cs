@@ -96,93 +96,122 @@ public static class SkiaPdfWriter
         using var textPaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
 
         foreach (var op in page.Ops)
+            RenderDrawOp(canvas, op, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
+    }
+
+    private static void RenderDrawOp(
+        SKCanvas canvas,
+        PdfDrawOp op,
+        float pageHeight,
+        SKTypeface regular,
+        SKTypeface bold,
+        SKPaint fillPaint,
+        SKPaint strokePaint,
+        SKPaint textPaint,
+        FallbackTextRenderer textRenderer)
+    {
+        switch (op)
         {
-            switch (op)
+            case PdfFillRect fill:
             {
-                case PdfFillRect fill:
-                {
-                    // PDF y-up rect (x,y = bottom-left) -> Skia y-down rect.
-                    var top = pageHeight - (float)(fill.Y + fill.Height);
-                    fillPaint.Color = ToSkColor(fill.Color);
-                    canvas.DrawRect(new SKRect((float)fill.X, top, (float)(fill.X + fill.Width), top + (float)fill.Height), fillPaint);
+                // PDF y-up rect (x,y = bottom-left) -> Skia y-down rect.
+                var top = pageHeight - (float)(fill.Y + fill.Height);
+                fillPaint.Color = ToSkColor(fill.Color);
+                canvas.DrawRect(new SKRect((float)fill.X, top, (float)(fill.X + fill.Width), top + (float)fill.Height), fillPaint);
+                break;
+            }
+
+            case PdfStrokeRect stroke:
+            {
+                var top = pageHeight - (float)(stroke.Y + stroke.Height);
+                strokePaint.Color = ToSkColor(stroke.Color);
+                strokePaint.StrokeWidth = (float)stroke.LineWidth;
+                canvas.DrawRect(new SKRect((float)stroke.X, top, (float)(stroke.X + stroke.Width), top + (float)stroke.Height), strokePaint);
+                break;
+            }
+
+            case PdfText text:
+            {
+                if (string.IsNullOrEmpty(text.Text))
                     break;
+
+                // PDF text origin is the baseline (y-up). Skia DrawText baseline is y-down.
+                var baseline = pageHeight - (float)text.Y;
+                textPaint.Color = ToSkColor(text.Color);
+                var typeface = text.Face == PdfFontFace.Bold ? bold : regular;
+                textRenderer.DrawText(canvas, text.Text, (float)text.X, baseline, typeface, (float)text.FontSize, textPaint);
+                break;
+            }
+
+            case PdfLine line:
+            {
+                // PDF coordinates are y-up; flip y for Skia's y-down canvas.
+                strokePaint.Color = ToSkColor(line.Color);
+                strokePaint.StrokeWidth = (float)line.LineWidth;
+                canvas.DrawLine(
+                    (float)line.X1, pageHeight - (float)line.Y1,
+                    (float)line.X2, pageHeight - (float)line.Y2,
+                    strokePaint);
+                break;
+            }
+
+            case PdfFilledTriangle triangle:
+            {
+                fillPaint.Color = ToSkColor(triangle.Color);
+                using var path = new SKPath();
+                path.MoveTo((float)triangle.X1, pageHeight - (float)triangle.Y1);
+                path.LineTo((float)triangle.X2, pageHeight - (float)triangle.Y2);
+                path.LineTo((float)triangle.X3, pageHeight - (float)triangle.Y3);
+                path.Close();
+                canvas.DrawPath(path, fillPaint);
+                break;
+            }
+
+            case PdfRotationGroup group:
+            {
+                if (group.Ops.Count == 0)
+                    break;
+
+                var centerX = (float)group.CenterX;
+                var centerY = pageHeight - (float)group.CenterY;
+                canvas.Save();
+                canvas.Translate(centerX, centerY);
+                canvas.RotateDegrees((float)group.RotationDegrees);
+                canvas.Translate(-centerX, -centerY);
+                foreach (var child in group.Ops)
+                    RenderDrawOp(canvas, child, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
+                canvas.Restore();
+                break;
+            }
+
+            case PdfImage image:
+            {
+                if (!IsSupportedImageContentType(image.ContentType) || image.ImageBytes.Length == 0)
+                    break;
+
+                using var data = SKData.CreateCopy(image.ImageBytes);
+                using var skImage = SKImage.FromEncodedData(data);
+                if (skImage is null)
+                    break;
+
+                var top = pageHeight - (float)(image.Y + image.Height);
+                var left = (float)image.X;
+                var width = (float)image.Width;
+                var height = (float)image.Height;
+                canvas.Save();
+                if (Math.Abs(image.RotationDegrees) > 0.001)
+                {
+                    canvas.Translate(left + width / 2f, top + height / 2f);
+                    canvas.RotateDegrees((float)image.RotationDegrees);
+                    canvas.DrawImage(skImage, new SKRect(-width / 2f, -height / 2f, width / 2f, height / 2f));
+                }
+                else
+                {
+                    canvas.DrawImage(skImage, new SKRect(left, top, left + width, top + height));
                 }
 
-                case PdfStrokeRect stroke:
-                {
-                    var top = pageHeight - (float)(stroke.Y + stroke.Height);
-                    strokePaint.Color = ToSkColor(stroke.Color);
-                    strokePaint.StrokeWidth = (float)stroke.LineWidth;
-                    canvas.DrawRect(new SKRect((float)stroke.X, top, (float)(stroke.X + stroke.Width), top + (float)stroke.Height), strokePaint);
-                    break;
-                }
-
-                case PdfText text:
-                {
-                    if (string.IsNullOrEmpty(text.Text))
-                        break;
-
-                    // PDF text origin is the baseline (y-up). Skia DrawText baseline is y-down.
-                    var baseline = pageHeight - (float)text.Y;
-                    textPaint.Color = ToSkColor(text.Color);
-                    var typeface = text.Face == PdfFontFace.Bold ? bold : regular;
-                    textRenderer.DrawText(canvas, text.Text, (float)text.X, baseline, typeface, (float)text.FontSize, textPaint);
-                    break;
-                }
-
-                case PdfLine line:
-                {
-                    // PDF coordinates are y-up; flip y for Skia's y-down canvas.
-                    strokePaint.Color = ToSkColor(line.Color);
-                    strokePaint.StrokeWidth = (float)line.LineWidth;
-                    canvas.DrawLine(
-                        (float)line.X1, pageHeight - (float)line.Y1,
-                        (float)line.X2, pageHeight - (float)line.Y2,
-                        strokePaint);
-                    break;
-                }
-
-                case PdfFilledTriangle triangle:
-                {
-                    fillPaint.Color = ToSkColor(triangle.Color);
-                    using var path = new SKPath();
-                    path.MoveTo((float)triangle.X1, pageHeight - (float)triangle.Y1);
-                    path.LineTo((float)triangle.X2, pageHeight - (float)triangle.Y2);
-                    path.LineTo((float)triangle.X3, pageHeight - (float)triangle.Y3);
-                    path.Close();
-                    canvas.DrawPath(path, fillPaint);
-                    break;
-                }
-
-                case PdfImage image:
-                {
-                    if (!IsSupportedImageContentType(image.ContentType) || image.ImageBytes.Length == 0)
-                        break;
-
-                    using var data = SKData.CreateCopy(image.ImageBytes);
-                    using var skImage = SKImage.FromEncodedData(data);
-                    if (skImage is null)
-                        break;
-
-                    var top = pageHeight - (float)(image.Y + image.Height);
-                    var left = (float)image.X;
-                    var width = (float)image.Width;
-                    var height = (float)image.Height;
-                    canvas.Save();
-                    if (Math.Abs(image.RotationDegrees) > 0.001)
-                    {
-                        canvas.Translate(left + width / 2f, top + height / 2f);
-                        canvas.RotateDegrees((float)image.RotationDegrees);
-                        canvas.DrawImage(skImage, new SKRect(-width / 2f, -height / 2f, width / 2f, height / 2f));
-                    }
-                    else
-                    {
-                        canvas.DrawImage(skImage, new SKRect(left, top, left + width, top + height));
-                    }
-
-                    canvas.Restore();
-                    break;
-                }
+                canvas.Restore();
+                break;
             }
         }
     }

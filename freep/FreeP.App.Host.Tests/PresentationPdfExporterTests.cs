@@ -312,6 +312,84 @@ public class PresentationPdfExporterTests
     }
 
     [Fact]
+    public void BuildDocument_ExportsRotatedRectangleAndTextThroughPdfRotationGroup()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            RotationDeg = 30,
+            Fill = new ShapeFill.Solid(SrgbColor.FromRgb(0x4472C4)),
+            Outline = new ShapeOutline.Visible(SrgbColor.Black, widthPt: 1.5),
+            Text = "Rotated text",
+        });
+        deck.Slides.Add(slide);
+
+        var group = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops
+            .OfType<PdfRotationGroup>()
+            .Should().ContainSingle()
+            .Subject;
+
+        group.CenterX.Should().Be(144);
+        group.CenterY.Should().Be(414);
+        group.RotationDegrees.Should().Be(30);
+        group.Ops.OfType<PdfFillRect>().Should().ContainSingle(fill =>
+            fill.X == 72 &&
+            fill.Y == 378 &&
+            fill.Width == 144 &&
+            fill.Height == 72);
+        group.Ops.OfType<PdfStrokeRect>().Should().ContainSingle(stroke =>
+            stroke.X == 72 &&
+            stroke.Y == 378 &&
+            stroke.Width == 144 &&
+            stroke.Height == 72);
+        group.Ops.OfType<PdfText>().Should().ContainSingle(text =>
+            text.X == 80 &&
+            text.Y == 424 &&
+            text.Text == "Rotated text");
+    }
+
+    [Fact]
+    public void BuildDocument_ExportsRotatedConnectorThroughPdfRotationGroup()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Kind = SlideShapeKind.Connector,
+            AutoShapeKind = DrawingShapeKind.Line,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            RotationDeg = 45,
+            Outline = new ShapeOutline.Visible(SrgbColor.FromRgb(0xC00000), widthPt: 2.25),
+        });
+        deck.Slides.Add(slide);
+
+        var pageOps = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops;
+        var group = pageOps.OfType<PdfRotationGroup>().Should().ContainSingle().Subject;
+
+        pageOps.OfType<PdfLine>().Should().BeEmpty("rotated connectors should be grouped instead of emitted as top-level unrotated lines");
+        group.CenterX.Should().Be(144);
+        group.CenterY.Should().Be(414);
+        group.RotationDegrees.Should().Be(45);
+        group.Ops.OfType<PdfLine>().Should().ContainSingle(line =>
+            line.X1 == 72 &&
+            line.Y1 == 450 &&
+            line.X2 == 216 &&
+            line.Y2 == 378 &&
+            line.LineWidth == 2.25 &&
+            line.Color == new PdfColor(0xC0, 0x00, 0x00));
+    }
+
+    [Fact]
     public void BuildDocument_ExportsPictureShapesAsPdfImages()
     {
         var deck = Presentation.CreateEmpty();
@@ -324,6 +402,7 @@ public class PresentationPdfExporterTests
             OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
             ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
             ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            RotationDeg = 33,
             Picture = new ImagePart { Bytes = MinimalPngBytes(), ContentType = "image/png" },
         });
         deck.Slides.Add(slide);
@@ -335,7 +414,9 @@ public class PresentationPdfExporterTests
             image.Y == 378 &&
             image.Width == 144 &&
             image.Height == 72 &&
+            image.RotationDegrees == 33 &&
             image.ContentType == "image/png");
+        ops.OfType<PdfRotationGroup>().Should().BeEmpty("picture rotation remains on PdfImage.RotationDegrees");
         ops.OfType<PdfText>().Select(text => text.Text)
             .Should().NotContain("[Picture]", "exported picture images should not retain the placeholder fallback label");
     }

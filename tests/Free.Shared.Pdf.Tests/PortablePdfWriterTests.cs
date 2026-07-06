@@ -127,6 +127,31 @@ public sealed class PortablePdfWriterTests
     }
 
     [Fact]
+    public void Write_EmitsRotationGroupSaveTransformAndRestore()
+    {
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfRotationGroup(
+                20,
+                20,
+                90,
+                new PdfDrawOp[]
+                {
+                    new PdfFillRect(10, 15, 20, 10, new PdfColor(0x11, 0x22, 0x33)),
+                    new PdfText(12, 18, 8, PdfFontFace.Bold, PdfColor.Black, "Rotated"),
+                }),
+        });
+
+        var pdf = Encoding.ASCII.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument(new[] { page })))
+            .Replace("\r\n", "\n");
+
+        pdf.Should().Contain("q\n0 -1 1 0 0 40 cm\nq");
+        pdf.Should().Contain("10 15 20 10 re f");
+        pdf.Should().Contain("(Rotated) Tj");
+        pdf.Should().Contain("Q\nendstream", "the grouped content must restore the graphics state before closing the stream");
+    }
+
+    [Fact]
     public void Write_EmitsPngImageXObjectAndPlacement()
     {
         var page = new PdfContentPage(100, 80, new PdfDrawOp[]
@@ -142,6 +167,20 @@ public sealed class PortablePdfWriterTests
         pdf.Should().Contain("/ColorSpace /DeviceRGB");
         pdf.Should().Contain("/Filter /FlateDecode");
         pdf.Should().Contain("20 0 0 10 10 30 cm");
+        pdf.Should().Contain("/Im1 Do");
+    }
+
+    [Fact]
+    public void Write_EmitsRotatedImagePlacement()
+    {
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfImage(10, 30, 20, 10, MinimalPngBytes(), "image/png", RotationDegrees: 90),
+        });
+
+        var pdf = Encoding.Latin1.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument(new[] { page })));
+
+        pdf.Should().Contain("0 -20 10 0 15 45 cm");
         pdf.Should().Contain("/Im1 Do");
     }
 

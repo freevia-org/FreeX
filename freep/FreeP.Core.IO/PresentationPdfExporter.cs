@@ -96,14 +96,17 @@ public static class PresentationPdfExporter
         // Skip placeholder shapes (title already rendered above; body placeholders have no freestanding text).
         foreach (var shape in slide.Shapes.Where(s => s.Placeholder is null))
         {
-            var shapeBox = TryAppendShapeGeometry(ops, shape, slideHeightPoints);
+            var shapeOps = new List<PdfDrawOp>();
+            var shapeBox = TryAppendShapeGeometry(shapeOps, shape, slideHeightPoints);
             var hasText = !string.IsNullOrEmpty(shape.Text);
             var content = hasText ? shape.Text : $"[{shape.Kind}]";
 
             if (shapeBox is { } box)
             {
                 if (hasText || (!IsConnectorLike(shape) && !IsPictureLike(shape)))
-                    AppendShapeText(ops, box, content);
+                    AppendShapeText(shapeOps, box, content);
+
+                AppendShapeOps(ops, shapeOps, box, shape.RotationDeg);
                 continue;
             }
 
@@ -117,6 +120,28 @@ public static class PresentationPdfExporter
         }
 
         return new PdfContentPage(slideWidthPoints, slideHeightPoints, ops);
+    }
+
+    private static void AppendShapeOps(
+        List<PdfDrawOp> ops,
+        IReadOnlyList<PdfDrawOp> shapeOps,
+        ShapeBox box,
+        double rotationDegrees)
+    {
+        if (shapeOps.Count == 0)
+            return;
+
+        if (shapeOps.Any(op => op is PdfImage) || Math.Abs(rotationDegrees) <= 0.001)
+        {
+            ops.AddRange(shapeOps);
+            return;
+        }
+
+        ops.Add(new PdfRotationGroup(
+            box.X + box.Width / 2.0,
+            box.Y + box.Height / 2.0,
+            rotationDegrees,
+            shapeOps));
     }
 
     private static ShapeBox? TryAppendShapeGeometry(List<PdfDrawOp> ops, SlideShape shape, double slideHeightPoints)

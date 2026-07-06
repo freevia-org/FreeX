@@ -71,39 +71,48 @@ public static class PortablePdfWriter
     {
         var content = new StringBuilder();
         foreach (var op in ops)
-        {
-            switch (op)
-            {
-                case PdfFillRect fill:
-                    AppendFilledRectangle(content, fill.X, fill.Y, fill.Width, fill.Height, fill.Color);
-                    break;
-                case PdfStrokeRect stroke:
-                    AppendStrokedRectangle(content, stroke.X, stroke.Y, stroke.Width, stroke.Height, stroke.Color, stroke.LineWidth);
-                    break;
-                case PdfText text:
-                    AppendText(content, text.X, text.Y, text.FontSize, FontResource(text.Face), text.Color, text.Text);
-                    break;
-                case PdfLine line:
-                    AppendLine(content, line.X1, line.Y1, line.X2, line.Y2, line.Color, line.LineWidth);
-                    break;
-                case PdfFilledTriangle triangle:
-                    AppendFilledTriangle(
-                        content,
-                        triangle.X1,
-                        triangle.Y1,
-                        triangle.X2,
-                        triangle.Y2,
-                        triangle.X3,
-                        triangle.Y3,
-                        triangle.Color);
-                    break;
-                case PdfImage image when imageResources.TryGetValue(image, out var resource):
-                    AppendImage(content, image, resource.ResourceName);
-                    break;
-            }
-        }
+            AppendDrawOp(content, op, imageResources);
 
         return content.ToString();
+    }
+
+    private static void AppendDrawOp(
+        StringBuilder content,
+        PdfDrawOp op,
+        IReadOnlyDictionary<PdfImage, PdfImageResource> imageResources)
+    {
+        switch (op)
+        {
+            case PdfFillRect fill:
+                AppendFilledRectangle(content, fill.X, fill.Y, fill.Width, fill.Height, fill.Color);
+                break;
+            case PdfStrokeRect stroke:
+                AppendStrokedRectangle(content, stroke.X, stroke.Y, stroke.Width, stroke.Height, stroke.Color, stroke.LineWidth);
+                break;
+            case PdfText text:
+                AppendText(content, text.X, text.Y, text.FontSize, FontResource(text.Face), text.Color, text.Text);
+                break;
+            case PdfLine line:
+                AppendLine(content, line.X1, line.Y1, line.X2, line.Y2, line.Color, line.LineWidth);
+                break;
+            case PdfFilledTriangle triangle:
+                AppendFilledTriangle(
+                    content,
+                    triangle.X1,
+                    triangle.Y1,
+                    triangle.X2,
+                    triangle.Y2,
+                    triangle.X3,
+                    triangle.Y3,
+                    triangle.Color);
+                break;
+            case PdfRotationGroup group:
+                AppendRotationGroup(content, group, imageResources);
+                break;
+            case PdfImage image when imageResources.TryGetValue(image, out var resource):
+                AppendImage(content, image, resource.ResourceName);
+                break;
+        }
     }
 
     private static string FontResource(PdfFontFace face) => face switch
@@ -183,6 +192,7 @@ public static class PortablePdfWriter
     {
         var hasItalicText = document.Pages
             .SelectMany(page => page.Ops)
+            .SelectMany(EnumerateOps)
             .OfType<PdfText>()
             .Any(text => text.Face is PdfFontFace.Italic or PdfFontFace.BoldItalic);
 
@@ -204,7 +214,7 @@ public static class PortablePdfWriter
         var byOp = new Dictionary<PdfImage, PdfImageResource>(ReferenceEqualityComparer.Instance);
         var resources = new List<PdfImageResource>();
 
-        foreach (var image in document.Pages.SelectMany(page => page.Ops).OfType<PdfImage>())
+        foreach (var image in document.Pages.SelectMany(page => page.Ops).SelectMany(EnumerateOps).OfType<PdfImage>())
         {
             if (byOp.ContainsKey(image))
                 continue;
@@ -240,6 +250,17 @@ public static class PortablePdfWriter
         }
 
         return resource is not null;
+    }
+
+    private static IEnumerable<PdfDrawOp> EnumerateOps(PdfDrawOp op)
+    {
+        yield return op;
+
+        if (op is PdfRotationGroup group)
+        {
+            foreach (var child in group.Ops.SelectMany(EnumerateOps))
+                yield return child;
+        }
     }
 
     private static PdfObject CreateImageObject(PdfImageResource image)
@@ -519,6 +540,29 @@ public static class PortablePdfWriter
         var f = centerY - (sin * image.Width / 2d) - (cos * image.Height / 2d);
         content.AppendLine($"{FormatNumber(a)} {FormatNumber(b)} {FormatNumber(c)} {FormatNumber(d)} {FormatNumber(e)} {FormatNumber(f)} cm");
         content.AppendLine($"/{resourceName} Do");
+        content.AppendLine("Q");
+    }
+
+    private static void AppendRotationGroup(
+        StringBuilder content,
+        PdfRotationGroup group,
+        IReadOnlyDictionary<PdfImage, PdfImageResource> imageResources)
+    {
+        if (group.Ops.Count == 0)
+            return;
+
+        content.AppendLine("q");
+        var rotation = -group.RotationDegrees * Math.PI / 180d;
+        var cos = Math.Cos(rotation);
+        var sin = Math.Sin(rotation);
+        var e = group.CenterX - (cos * group.CenterX) + (sin * group.CenterY);
+        var f = group.CenterY - (sin * group.CenterX) - (cos * group.CenterY);
+        content.AppendLine(
+            $"{FormatNumber(cos)} {FormatNumber(sin)} {FormatNumber(-sin)} {FormatNumber(cos)} {FormatNumber(e)} {FormatNumber(f)} cm");
+
+        foreach (var op in group.Ops)
+            AppendDrawOp(content, op, imageResources);
+
         content.AppendLine("Q");
     }
 
