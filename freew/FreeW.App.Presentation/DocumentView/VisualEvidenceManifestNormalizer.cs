@@ -49,6 +49,7 @@ public sealed record FreeWVisualEvidenceNormalizedRow(
     FreeWVisualChartSmartArtExpectation ChartSmartArt,
     FreeWVisualFieldExpectation Fields,
     FreeWVisualTableOfAuthoritiesExpectation TableOfAuthorities,
+    FreeWVisualProofingDiagnosticExpectation ProofingDiagnostics,
     FreeWVisualEvidenceTrust Trust);
 
 public sealed record FreeWVisualEvidenceNormalizedSummary(
@@ -105,7 +106,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 22;
+    public const int SummarySchemaVersion = 23;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -1055,6 +1056,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             row.PageExpectation.ChartSmartArt,
             row.PageExpectation.Fields,
             row.PageExpectation.TableOfAuthorities,
+            row.PageExpectation.ProofingDiagnostics,
             trust);
     }
 
@@ -1086,6 +1088,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         ValidateDrawingObjectFeatureTags(row, rowFailures);
         ValidateChartSmartArtFeatureTags(row, rowFailures);
         ValidateFieldFeatureTags(row, rowFailures);
+        ValidateProofingFeatureTags(row, rowFailures);
         if (features.Section.SectionOrdinal <= 0)
             rowFailures.Add("section ordinal must be positive");
         if (features.Section.SectionRelativePageNumber <= 0)
@@ -1384,6 +1387,28 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("field evidence expects cached complex field results but the field expectation records none");
         if (tags.Contains("header-footer-fields", StringComparer.OrdinalIgnoreCase) && !fields.HasHeaderFooterFields)
             rowFailures.Add("field evidence expects header/footer fields but the field expectation records none");
+    }
+
+    private static void ValidateProofingFeatureTags(
+        FreeWVisualEvidenceRow row,
+        List<string> rowFailures)
+    {
+        var tags = row.ExpectedFeatureTags;
+        if (!tags.Contains("proofing-diagnostics", StringComparer.OrdinalIgnoreCase))
+            return;
+
+        var proofing = row.PageExpectation.ProofingDiagnostics;
+        if (proofing.DiagnosticCount <= 0)
+            rowFailures.Add("scenario expects proofing diagnostics but the page expectation records none");
+        if (!proofing.HasSpelling)
+            rowFailures.Add("scenario expects spelling diagnostic evidence but the page expectation records none");
+        if (!proofing.HasGrammar)
+            rowFailures.Add("scenario expects grammar diagnostic evidence but the page expectation records none");
+        if (tags.Contains("proofing-language", StringComparer.OrdinalIgnoreCase)
+            && proofing.LanguageTags.Count == 0)
+        {
+            rowFailures.Add("scenario expects proofing language evidence but the proofing diagnostics record no language tags");
+        }
     }
 
     private static void ValidateBackstageCaptureSource(
@@ -1738,6 +1763,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
                     continue;
 
                 ValidateRendererPairRow("review renderer pair", scenarioId, pageNumber, wpf, avalonia, failures);
+                ValidateReviewProofingPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
             }
         }
     }
@@ -2203,6 +2229,63 @@ public static class FreeWVisualEvidenceManifestNormalizer
         {
             failures.Add(
                 $"{pairName} header/footer field slots differ: WPF '{FormatSummaries(wpfSlots)}', Avalonia '{FormatSummaries(avaloniaSlots)}'");
+        }
+    }
+
+    private static void ValidateReviewProofingPairRow(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia,
+        List<string> failures)
+    {
+        if (!string.Equals(scenarioId, "review-proofing-visual-depth", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var pairName = $"review renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        var wpfProofing = wpf.ProofingDiagnostics;
+        var avaloniaProofing = avalonia.ProofingDiagnostics;
+
+        if (wpfProofing.DiagnosticCount != avaloniaProofing.DiagnosticCount)
+        {
+            failures.Add(
+                $"{pairName} proofing diagnostic counts differ: WPF {wpfProofing.DiagnosticCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaProofing.DiagnosticCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (wpfProofing.SpellingCount != avaloniaProofing.SpellingCount)
+        {
+            failures.Add(
+                $"{pairName} spelling diagnostic counts differ: WPF {wpfProofing.SpellingCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaProofing.SpellingCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (wpfProofing.GrammarCount != avaloniaProofing.GrammarCount)
+        {
+            failures.Add(
+                $"{pairName} grammar diagnostic counts differ: WPF {wpfProofing.GrammarCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaProofing.GrammarCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        var wpfKinds = OrderedSummaries(wpfProofing.Kinds);
+        var avaloniaKinds = OrderedSummaries(avaloniaProofing.Kinds);
+        if (!wpfKinds.SequenceEqual(avaloniaKinds, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} proofing diagnostic kinds differ: WPF '{FormatSummaries(wpfKinds)}', Avalonia '{FormatSummaries(avaloniaKinds)}'");
+        }
+
+        var wpfLanguages = OrderedSummaries(wpfProofing.LanguageTags);
+        var avaloniaLanguages = OrderedSummaries(avaloniaProofing.LanguageTags);
+        if (!wpfLanguages.SequenceEqual(avaloniaLanguages, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} proofing diagnostic language tags differ: WPF '{FormatSummaries(wpfLanguages)}', Avalonia '{FormatSummaries(avaloniaLanguages)}'");
+        }
+
+        var wpfSignatures = OrderedSummaries(wpfProofing.StableSignatures);
+        var avaloniaSignatures = OrderedSummaries(avaloniaProofing.StableSignatures);
+        if (!wpfSignatures.SequenceEqual(avaloniaSignatures, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} proofing diagnostic signatures differ: WPF '{FormatSummaries(wpfSignatures)}', Avalonia '{FormatSummaries(avaloniaSignatures)}'");
         }
     }
 
@@ -2877,6 +2960,13 @@ public static class FreeWVisualEvidenceManifestNormalizer
             parts.Add(
                 $"{row.ChartSmartArt.ChartCount.ToString(CultureInfo.InvariantCulture)} chart(s), " +
                 $"{row.ChartSmartArt.SmartArtCount.ToString(CultureInfo.InvariantCulture)} SmartArt");
+        }
+        if (row.ProofingDiagnostics.DiagnosticCount > 0)
+        {
+            parts.Add(
+                $"{row.ProofingDiagnostics.DiagnosticCount.ToString(CultureInfo.InvariantCulture)} proofing diagnostic(s), " +
+                $"{row.ProofingDiagnostics.SpellingCount.ToString(CultureInfo.InvariantCulture)} spelling, " +
+                $"{row.ProofingDiagnostics.GrammarCount.ToString(CultureInfo.InvariantCulture)} grammar");
         }
 
         return string.Join(", ", parts);

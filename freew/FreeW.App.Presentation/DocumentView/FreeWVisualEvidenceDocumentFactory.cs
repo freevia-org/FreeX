@@ -478,6 +478,8 @@ public static class FreeWVisualEvidenceDocumentFactory
         proofing.Runs.Add(new Run("teh ") { Formatting = new RunFormatting { LanguageTag = "en-US" } });
         proofing.Runs.Add(new Run("recieve ") { Formatting = new RunFormatting { LanguageTag = "en-GB" } });
         proofing.Runs.Add(new Run("acommodate ") { Formatting = new RunFormatting { LanguageTag = "fr-FR" } });
+        proofing.Runs.Add(new Run("the ") { Formatting = new RunFormatting { LanguageTag = "en-US" } });
+        proofing.Runs.Add(new Run("the ") { Formatting = new RunFormatting { LanguageTag = "en-US" } });
         proofing.Runs.Add(new Run("tokens carry explicit proofing languages."));
         doc.Blocks.Add(proofing);
 

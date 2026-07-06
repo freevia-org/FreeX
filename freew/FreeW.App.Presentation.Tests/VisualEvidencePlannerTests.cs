@@ -455,7 +455,9 @@ public sealed class VisualEvidencePlannerTests
 
         var proofingDiagnostics = ProofingDiagnosticPlanner.Build(reviewProofing, spellCheckEnabled: true);
         proofingDiagnostics.Select(diagnostic => diagnostic.NormalizedWord)
-            .Should().Contain(["teh", "recieve", "acommodate"]);
+            .Should().Contain(["teh", "recieve", "acommodate", "the"]);
+        proofingDiagnostics.Select(diagnostic => diagnostic.Kind)
+            .Should().Contain([ProofingDiagnosticKind.Spelling, ProofingDiagnosticKind.Grammar]);
         proofingDiagnostics.Select(diagnostic => diagnostic.LanguageTag)
             .Should().Contain(["en-US", "en-GB", "fr-FR"]);
 
@@ -469,6 +471,19 @@ public sealed class VisualEvidencePlannerTests
         reviewProofingExpectation.ExpectedOutputName.Should().Be("review-proofing-visual-depth_p1.png");
         reviewProofingExpectation.Composition.ExpectsTrackedChanges.Should().BeTrue();
         reviewProofingExpectation.Composition.ExpectsComments.Should().BeTrue();
+        reviewProofingExpectation.ProofingDiagnostics.DiagnosticCount.Should().Be(4);
+        reviewProofingExpectation.ProofingDiagnostics.SpellingCount.Should().Be(3);
+        reviewProofingExpectation.ProofingDiagnostics.GrammarCount.Should().Be(1);
+        reviewProofingExpectation.ProofingDiagnostics.HasSpelling.Should().BeTrue();
+        reviewProofingExpectation.ProofingDiagnostics.HasGrammar.Should().BeTrue();
+        reviewProofingExpectation.ProofingDiagnostics.Kinds.Should().BeEquivalentTo(["Grammar", "Spelling"]);
+        reviewProofingExpectation.ProofingDiagnostics.LanguageTags.Should().BeEquivalentTo(["en-GB", "en-US", "fr-FR"]);
+        reviewProofingExpectation.ProofingDiagnostics.StableSignatures.Should().Contain([
+            "kind=Spelling|word=teh|normalized=teh|language=en-US|block=5|run=1|runOffset=0|paragraphOffset=22|length=3",
+            "kind=Spelling|word=recieve|normalized=recieve|language=en-GB|block=5|run=2|runOffset=0|paragraphOffset=26|length=7",
+            "kind=Spelling|word=acommodate|normalized=acommodate|language=fr-FR|block=5|run=3|runOffset=0|paragraphOffset=34|length=10",
+            "kind=Grammar|word=the|normalized=the|language=en-US|block=5|run=5|runOffset=0|paragraphOffset=49|length=3"
+        ]);
     }
 
     [Fact]
@@ -1584,6 +1599,8 @@ public sealed class VisualEvidencePlannerTests
         evidence.GetProperty("pageExpectation").GetProperty("fields").GetProperty("simpleFieldCount")
             .GetInt32().Should().Be(0);
         evidence.GetProperty("pageExpectation").GetProperty("tableOfAuthorities").GetProperty("entryCount")
+            .GetInt32().Should().Be(0);
+        evidence.GetProperty("pageExpectation").GetProperty("proofingDiagnostics").GetProperty("diagnosticCount")
             .GetInt32().Should().Be(0);
     }
 
@@ -3292,6 +3309,150 @@ public sealed class VisualEvidencePlannerTests
             summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("review renderer pair 'f2-comments'", StringComparison.Ordinal)
                 && f.Contains("missing Avalonia page(s): p1", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_ValidatesReviewProofingDiagnosticSignatures()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            const string scenarioId = "review-proofing-visual-depth";
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        pageNumber: 1,
+                        pageCount: 1)
+                ],
+                new DateTimeOffset(2026, 7, 6, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        pageNumber: 1,
+                        pageCount: 1)
+                ],
+                new DateTimeOffset(2026, 7, 6, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeTrue();
+            summary.Evidence.Should().OnlyContain(row => row.ProofingDiagnostics.DiagnosticCount == 4);
+            summary.Evidence.Should().OnlyContain(row => row.ProofingDiagnostics.SpellingCount == 3);
+            summary.Evidence.Should().OnlyContain(row => row.ProofingDiagnostics.GrammarCount == 1);
+            summary.Evidence.Should().OnlyContain(row => row.ProofingDiagnostics.HasSpelling);
+            summary.Evidence.Should().OnlyContain(row => row.ProofingDiagnostics.HasGrammar);
+            summary.Evidence.SelectMany(row => row.ProofingDiagnostics.StableSignatures)
+                .Should().Contain(signature => signature.Contains("kind=Grammar", StringComparison.Ordinal)
+                    && signature.Contains("normalized=the", StringComparison.Ordinal)
+                    && signature.Contains("language=en-US", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RejectsCrossHostReviewProofingDiagnosticDrift()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            const string scenarioId = "review-proofing-visual-depth";
+            var wpfRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var driftedAvaloniaRow = avaloniaRow with
+            {
+                PageExpectation = avaloniaRow.PageExpectation with
+                {
+                    ProofingDiagnostics = avaloniaRow.PageExpectation.ProofingDiagnostics with
+                    {
+                        StableSignatures = avaloniaRow.PageExpectation.ProofingDiagnostics.StableSignatures
+                            .Select(signature => signature.Contains("kind=Grammar", StringComparison.Ordinal)
+                                ? signature.Replace("language=en-US", "language=de-DE", StringComparison.Ordinal)
+                                : signature)
+                            .ToList(),
+                        GrammarCount = 2
+                    }
+                }
+            };
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [wpfRow],
+                new DateTimeOffset(2026, 7, 6, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [driftedAvaloniaRow],
+                new DateTimeOffset(2026, 7, 6, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("review renderer pair 'review-proofing-visual-depth' page 1", StringComparison.Ordinal)
+                && f.Contains("grammar diagnostic counts differ", StringComparison.Ordinal));
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("review renderer pair 'review-proofing-visual-depth' page 1", StringComparison.Ordinal)
+                && f.Contains("proofing diagnostic signatures differ", StringComparison.Ordinal)
+                && f.Contains("kind=Grammar", StringComparison.Ordinal));
         }
         finally
         {
