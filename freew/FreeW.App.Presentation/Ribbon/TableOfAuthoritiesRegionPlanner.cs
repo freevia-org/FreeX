@@ -23,7 +23,8 @@ public static class TableOfAuthoritiesRegionPlanner
     public static TableOfAuthoritiesRegionPlan BuildInsertPlan(
         TextDocument document,
         int insertAt,
-        ToaOptions? options = null)
+        ToaOptions? options = null,
+        ToaCitationPageResolver? pageResolver = null)
     {
         ArgumentNullException.ThrowIfNull(document);
 
@@ -33,12 +34,13 @@ public static class TableOfAuthoritiesRegionPlanner
         return new TableOfAuthoritiesRegionPlan(
             DeleteIndicesDescending: [],
             InsertIndex: Math.Clamp(insertAt, 0, document.Blocks.Count),
-            Paragraphs: TableOfAuthorities.Build(document, resolvedOptions));
+            Paragraphs: TableOfAuthorities.Build(document, resolvedOptions, pageResolver));
     }
 
     public static TableOfAuthoritiesRegionPlan BuildRefreshPlan(
         TextDocument document,
-        ToaOptions? options = null)
+        ToaOptions? options = null,
+        ToaCitationPageResolver? pageResolver = null)
     {
         ArgumentNullException.ThrowIfNull(document);
 
@@ -59,6 +61,6 @@ public static class TableOfAuthoritiesRegionPlanner
         return new TableOfAuthoritiesRegionPlan(
             DeleteIndicesDescending: existingIndices,
             InsertIndex: Math.Clamp(insertAt, 0, document.Blocks.Count),
-            Paragraphs: TableOfAuthorities.Build(document, resolvedOptions));
+            Paragraphs: TableOfAuthorities.Build(document, resolvedOptions, pageResolver));
     }
 }

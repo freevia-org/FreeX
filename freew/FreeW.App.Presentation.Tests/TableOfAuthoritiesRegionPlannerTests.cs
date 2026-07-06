@@ -42,6 +42,26 @@ public sealed class TableOfAuthoritiesRegionPlannerTests
     }
 
     [Fact]
+    public void BuildInsertPlan_PassesHostPageResolverIntoSharedTableBuilder()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(CitationMarkParagraph("Brown v. Board"));
+        document.Blocks.Add(new Paragraph("Overflow body"));
+        document.Blocks.Add(CitationMarkParagraph("Brown v. Board"));
+
+        var plan = TableOfAuthoritiesRegionPlanner.BuildInsertPlan(
+            document,
+            insertAt: 1,
+            pageResolver: (_, blockIndex, _, _) => new ToaCitationPageReference(
+                blockIndex == 2 ? 2 : 1,
+                blockIndex == 2 ? "2" : "1"));
+
+        plan.Paragraphs.Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Table of Authorities", "Cases", "Brown v. Board\t1, 2");
+    }
+
+    [Fact]
     public void BuildRefreshPlan_WithExistingRegion_DeletesGeneratedParagraphsDescendingAndReusesFirstPosition()
     {
         var document = TextDocument.CreateEmpty();
@@ -89,6 +109,30 @@ public sealed class TableOfAuthoritiesRegionPlannerTests
         document.Blocks.Add(new Paragraph("After"));
 
         var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(document);
+
+        plan.DeleteIndicesDescending.Should().Equal(6, 5, 4);
+        plan.InsertIndex.Should().Be(4);
+        plan.Paragraphs.Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Table of Authorities", "Cases", "New Case\t1, 2");
+    }
+
+    [Fact]
+    public void BuildRefreshPlan_PassesHostPageResolverIntoSharedTableBuilder()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Before"));
+        document.Blocks.Add(CitationMarkParagraph("New Case"));
+        document.Blocks.Add(new Paragraph("Overflow body"));
+        document.Blocks.Add(CitationMarkParagraph("New Case"));
+        document.Blocks.AddRange(TableOfAuthorities.Build(
+            new[] { new Citation("Old Case", CitationCategory.Cases) }));
+
+        var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(
+            document,
+            pageResolver: (_, blockIndex, _, _) => new ToaCitationPageReference(
+                blockIndex == 3 ? 2 : 1,
+                blockIndex == 3 ? "2" : "1"));
 
         plan.DeleteIndicesDescending.Should().Equal(6, 5, 4);
         plan.InsertIndex.Should().Be(4);

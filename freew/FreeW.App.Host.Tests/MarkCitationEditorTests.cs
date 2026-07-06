@@ -157,6 +157,30 @@ public sealed class MarkCitationEditorTests
     }
 
     [StaFact]
+    public void UpdateFields_RefreshesExistingTableOfAuthoritiesWithOverflowPageReferences()
+    {
+        var model = TextDocument.CreateEmpty();
+        model.Blocks.Clear();
+        model.Blocks.Add(CitationMarkParagraph("Overflow Case", formatted: false));
+        for (var i = 0; i < 120; i++)
+            model.Blocks.Add(new Paragraph($"Overflow filler {i + 1}: The quick brown fox jumps over the lazy dog."));
+        model.Blocks.Add(CitationMarkParagraph("Overflow Case", formatted: false));
+        model.Blocks.AddRange(TableOfAuthorities.Build(
+            new[] { new Citation("Old Case", CitationCategory.Cases) }));
+
+        var view = new DocumentView();
+        view.LoadModel(model);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        var entry = view.Model.Blocks.OfType<Paragraph>()
+            .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
+        entry.PlainText.Should().MatchRegex(@"^Overflow Case\t1, [2-9][0-9]*$");
+        entry.Runs.Select(run => run.Text).Should().HaveCount(3);
+    }
+
+    [StaFact]
     public void RefreshTableOfAuthorities_ConsumesSharedRenderPlanInWpfHost()
     {
         var model = TextDocument.CreateEmpty();

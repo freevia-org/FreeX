@@ -8979,7 +8979,10 @@ public sealed class DocumentView : RichTextBox
 
         if (TableOfAuthoritiesRegionPlanner.ContainsRegion(_model))
         {
-            ApplyTableOfAuthoritiesPlan(TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(_model));
+            ApplyTableOfAuthoritiesPlan(
+                TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(
+                    _model,
+                    pageResolver: BuildTableOfAuthoritiesPageResolver()));
             refreshedGeneratedRegion = true;
         }
 
@@ -11927,7 +11930,12 @@ public sealed class DocumentView : RichTextBox
         if (index < 0 || index > _model.Blocks.Count)
             index = _model.Blocks.Count;
 
-        ApplyTableOfAuthoritiesPlan(TableOfAuthoritiesRegionPlanner.BuildInsertPlan(_model, index, options));
+        ApplyTableOfAuthoritiesPlan(
+            TableOfAuthoritiesRegionPlanner.BuildInsertPlan(
+                _model,
+                index,
+                options,
+                BuildTableOfAuthoritiesPageResolver()));
     }
 
     /// <summary>
@@ -11946,7 +11954,72 @@ public sealed class DocumentView : RichTextBox
     {
         ArgumentNullException.ThrowIfNull(options);
         CommitToModel();
-        ApplyTableOfAuthoritiesPlan(TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(_model, options));
+        ApplyTableOfAuthoritiesPlan(
+            TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(
+                _model,
+                options,
+                BuildTableOfAuthoritiesPageResolver()));
+    }
+
+    private ToaCitationPageResolver? BuildTableOfAuthoritiesPageResolver()
+    {
+        try
+        {
+            var pagination = PaginationEngine.Compute(this);
+            if (pagination.PageCount <= 1 || pagination.PageBreakYsDip.Count == 0)
+                return null;
+
+            var firstRect = Document.ContentStart.GetCharacterRect(LogicalDirection.Forward);
+            if (firstRect.IsEmpty)
+                return null;
+
+            var topY = firstRect.Top;
+            return (_, blockIndex, runIndex, _) =>
+            {
+                var offset = ModelRunStartOffset(blockIndex, runIndex);
+                var pointer = TextPointerAtModelTextOffset(blockIndex, offset);
+                if (pointer is null)
+                    return null;
+
+                var rect = pointer.GetCharacterRect(LogicalDirection.Forward);
+                if (rect.IsEmpty)
+                    return null;
+
+                var y = rect.Top - topY;
+                var pageIndex = 0;
+                foreach (var breakY in pagination.PageBreakYsDip)
+                {
+                    if (y + 0.5 < breakY)
+                        break;
+                    pageIndex++;
+                }
+
+                var pageNumber = Math.Min(Math.Max(1, pageIndex + 1), Math.Max(1, pagination.PageCount));
+                return new ToaCitationPageReference(
+                    pageNumber,
+                    pageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            };
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private int ModelRunStartOffset(int modelBlockIndex, int runIndex)
+    {
+        if (modelBlockIndex < 0
+            || modelBlockIndex >= _model.Blocks.Count
+            || _model.Blocks[modelBlockIndex] is not ModelParagraph paragraph)
+        {
+            return 0;
+        }
+
+        var offset = 0;
+        var limit = Math.Clamp(runIndex, 0, paragraph.Runs.Count);
+        for (var i = 0; i < limit; i++)
+            offset += paragraph.Runs[i].Text.Length;
+        return offset;
     }
 
     private void ApplyTableOfAuthoritiesPlan(TableOfAuthoritiesRegionPlan plan)
