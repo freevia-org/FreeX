@@ -389,6 +389,7 @@ public static class ChartLayoutEngine
 
         AttachTrendline(request, seriesLayouts, x => categoryScale.Transform(x), valueScale, secondaryScale, useSecondary);
         AttachErrorBars(request, seriesLayouts, x => categoryScale.Transform(x), valueScale, secondaryScale, useSecondary);
+        AddRangeDataLabels(request, dataLabels, categoryScale, valueScale);
 
         return new ChartLayout
         {
@@ -403,6 +404,64 @@ public static class ChartLayoutEngine
             Legend = legend,
             DataLabels = dataLabels,
         };
+    }
+
+    /// <summary>
+    /// Draws Excel's "Value From Cells" data labels (<c>c15:datalabelsRange</c>,
+    /// <see cref="ChartModel.RangeDataLabels"/>) as extra label boxes positioned above the tallest
+    /// plotted value at each category (point) index, independent of <see cref="ChartModel.ShowDataLabels"/>
+    /// — mirroring the WPF renderer's AddRangeDataLabelAnnotations (ChartRenderer.DeviationOverlay.cs),
+    /// which floats the literal cached label text over the taller of the clustered column series for
+    /// that category regardless of whether ordinary value/series/category data labels are on. When two
+    /// series both label the same point, the first one wins (same precedence as the WPF path). No-op
+    /// when the chart has no range data labels or no plotted values.
+    /// </summary>
+    private static void AddRangeDataLabels(
+        ChartLayoutRequest request,
+        List<DataLabelBox> dataLabels,
+        AxisScale categoryScale,
+        AxisScale valueScale)
+    {
+        var chart = request.Chart;
+        if (chart.RangeDataLabels.Count == 0 || request.Series.Count == 0)
+            return;
+
+        // Merge labels per category (point index): mirrors the WPF path's byPoint.TryAdd, which keeps
+        // the first series' label when two series both label the same point.
+        var byPoint = new Dictionary<int, string>();
+        foreach (var label in chart.RangeDataLabels)
+        {
+            if (string.IsNullOrEmpty(label.Text))
+                continue;
+            byPoint.TryAdd(label.PointIndex, label.Text);
+        }
+
+        if (byPoint.Count == 0)
+            return;
+
+        foreach (var (pointIndex, text) in byPoint)
+        {
+            if (CategoryTopValue(request.Series, pointIndex) is not { } top)
+                continue;
+
+            var position = new LayoutPoint(categoryScale.Transform(pointIndex), valueScale.Transform(top));
+            var size = request.TextMeasurer.Measure(text, null, chart.DataLabelFontSize, false, false);
+            dataLabels.Add(new DataLabelBox(-1, pointIndex, text, position, CenteredRect(position, size)));
+        }
+    }
+
+    /// <summary>Returns the tallest plotted value across all series at <paramref name="pointIndex"/>.</summary>
+    private static double? CategoryTopValue(IReadOnlyList<ChartSeriesData> series, int pointIndex)
+    {
+        double? top = null;
+        foreach (var s in series)
+        {
+            if (pointIndex < 0 || pointIndex >= s.Values.Count || s.Values[pointIndex] is not { } v)
+                continue;
+            top = top is { } existing ? Math.Max(existing, v) : v;
+        }
+
+        return top;
     }
 
     private static SeriesLayout LayoutColumnSeries(

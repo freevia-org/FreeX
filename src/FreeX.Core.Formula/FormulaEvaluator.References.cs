@@ -17,6 +17,31 @@ public sealed partial class FormulaEvaluator
         var binding = context.TryResolveLambdaBinding(node.Name);
         if (binding is not null) return binding;
 
+        // Excel scope precedence: a name scoped to the current sheet always wins over a
+        // same-named workbook-global name, regardless of whether either name is a plain
+        // range or a formula expression (§18.2.6). So a sheet-scoped named FORMULA must
+        // take priority over a workbook-global named RANGE, not just over a workbook-global
+        // named formula. Resolve sheet-scoped candidates (either kind) before falling back
+        // to the workbook-global tier.
+        if (IsSheetScopedName(node.Name, context, out var sheetScopedIsFormula))
+        {
+            if (sheetScopedIsFormula)
+            {
+                return TryEvaluateNamedFormula(node.Name, context, out var scopedFormulaValue)
+                    ? scopedFormulaValue
+                    : ErrorValue.Name;
+            }
+
+            var scopedRange = context.TryResolveNamedRange(node.Name);
+            if (scopedRange is not null)
+            {
+                // Bare named range reference outside a function: return top-left cell value.
+                // For 2D named ranges this is intentionally lossy — full implicit-intersection
+                // semantics (Excel 365 spill behaviour) are a Phase 5 enhancement.
+                return BuildRangeValueOrError(scopedRange.Value, context);
+            }
+        }
+
         var range = context.TryResolveNamedRange(node.Name);
         if (range is not null)
         {
@@ -30,6 +55,30 @@ public sealed partial class FormulaEvaluator
         return TryEvaluateNamedFormula(node.Name, context, out var formulaValue)
             ? formulaValue
             : ErrorValue.Name;
+    }
+
+    /// <summary>
+    /// Determines whether <paramref name="name"/> has an explicit sheet-scoped definition
+    /// (range or formula kind) on the context's current sheet, which must take precedence
+    /// over any workbook-global name of either kind. Excel's scope resolution is per-name,
+    /// not per-kind: a sheet-scoped formula named "Foo" outranks a workbook-global range
+    /// named "Foo" on that sheet, even though a naive range-then-formula fallback would
+    /// resolve the global range first.
+    /// </summary>
+    private static bool IsSheetScopedName(string name, IEvalContext context, out bool isFormula)
+    {
+        isFormula = false;
+        var workbook = context.CurrentWorkbook;
+        var sheet = context.CurrentSheet;
+        if (workbook is null || sheet is null) return false;
+
+        if (workbook.ScopedNamedFormulas.ContainsKey((name, sheet.Id)))
+        {
+            isFormula = true;
+            return true;
+        }
+
+        return workbook.ScopedNamedRanges.ContainsKey((name, sheet.Id));
     }
 
     /// <summary>
@@ -127,6 +176,22 @@ public sealed partial class FormulaEvaluator
             var binding = context.TryResolveLambdaBinding(named.Name);
             if (binding is not null)
                 return binding;
+
+            // Sheet-scoped names (either kind) win over a same-named workbook-global name —
+            // see IsSheetScopedName / EvaluateNamedRange for the full Excel-scope-precedence rationale.
+            if (IsSheetScopedName(named.Name, context, out var sheetScopedIsFormula))
+            {
+                if (sheetScopedIsFormula)
+                {
+                    return TryEvaluateNamedFormula(named.Name, context, out var scopedFormulaValue)
+                        ? scopedFormulaValue
+                        : ErrorValue.Name;
+                }
+
+                var scopedRange = context.TryResolveNamedRange(named.Name);
+                if (scopedRange is not null)
+                    return BuildRangeValueOrError(scopedRange.Value, context);
+            }
 
             var resolvedRange = context.TryResolveNamedRange(named.Name);
             if (resolvedRange is not null)
@@ -874,7 +939,7 @@ public sealed partial class FormulaEvaluator
                 width = (int)Math.Truncate(dw);
             }
         }
-        if (height < 0 || width < 0) return ErrorValue.Value;
+        if (height < 0 || width < 0) return ErrorValue.Ref;
         if (height == 0 || width == 0) return ErrorValue.Ref;
 
         long startRow = (long)baseRow + rowsOff;

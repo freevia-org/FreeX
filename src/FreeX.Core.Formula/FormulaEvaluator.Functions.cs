@@ -242,8 +242,23 @@ public sealed partial class FormulaEvaluator
                 }
                 else
                 {
-                    var resolvedRange = context.TryResolveNamedRange(named.Name);
-                    if (resolvedRange is not null)
+                    // Excel scope precedence: a sheet-scoped name (either kind) always wins over a
+                    // same-named workbook-global name, so a sheet-scoped named FORMULA must be
+                    // preferred over a workbook-global named RANGE here too — matching the bare-name
+                    // resolution in EvaluateNamedRange/EvaluateArrayOperand (see IsSheetScopedName).
+                    FreeX.Core.Model.GridRange? resolvedRange;
+                    bool preferScopedFormula = false;
+                    if (IsSheetScopedName(named.Name, context, out var sheetScopedIsFormula) && sheetScopedIsFormula)
+                    {
+                        preferScopedFormula = true;
+                        resolvedRange = null;
+                    }
+                    else
+                    {
+                        resolvedRange = context.TryResolveNamedRange(named.Name);
+                    }
+
+                    if (!preferScopedFormula && resolvedRange is not null)
                     {
                         var r = resolvedRange.Value;
                         if (isStructured)

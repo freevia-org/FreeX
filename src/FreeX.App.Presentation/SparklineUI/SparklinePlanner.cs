@@ -22,6 +22,13 @@ public enum SparklineRangeSelectionTarget
 
 public sealed record SparklineDialogResult(string DataRangeText, string LocationText, SparklineKind Kind);
 
+/// <summary>
+/// One member of a multi-sparkline group: the data range feeding a single sparkline and the single
+/// cell it is drawn into. <see cref="SparklinePlanner.ValidateInsertGroup"/> expands a multi-row/column
+/// Location Range into one of these per row (or column), matching Excel's "Insert Sparklines" dialog.
+/// </summary>
+public readonly record struct SparklineGroupMember(GridRange DataRange, CellAddress Location);
+
 public sealed record SparklineRangeSelectionRequest(
     SparklineRangeSelectionTarget Target,
     string CurrentText,
@@ -147,6 +154,95 @@ public static class SparklinePlanner
         return CellReferenceInputParser.TryParseCell((locationText ?? string.Empty).Trim(), sheetId, out location)
             ? SparklineInputValidation.Valid
             : SparklineInputValidation.InvalidLocation;
+    }
+
+    /// <summary>
+    /// Validates the Insert Sparkline inputs allowing a multi-cell Location Range, expanding it into one
+    /// sparkline per row (or per column) of the data range -- matching Excel's "Insert Sparklines"
+    /// dialog, where a data range of B2:D6 with a location range of E2:E6 creates a 5-member sparkline
+    /// group, one sparkline per row. The location must have the same row count as the data range (one
+    /// sparkline per row, laid out down a single column) or the same column count (one sparkline per
+    /// column, laid out across a single row); a plain single-cell location still yields a single-member
+    /// group anchored at that cell, matching <see cref="ValidateInsert"/>.
+    /// </summary>
+    public static SparklineInputValidation ValidateInsertGroup(
+        string dataRangeText,
+        string locationText,
+        SheetId sheetId,
+        out IReadOnlyList<SparklineGroupMember> members)
+    {
+        members = [];
+
+        if (!TryParseDataRange(dataRangeText, sheetId, out var dataRange))
+            return SparklineInputValidation.InvalidDataRange;
+
+        var trimmedLocation = (locationText ?? string.Empty).Trim();
+
+        // Single-cell location: one sparkline over the whole data range, anchored at that cell.
+        if (CellReferenceInputParser.TryParseCell(trimmedLocation, sheetId, out var singleLocation))
+        {
+            members = [new SparklineGroupMember(dataRange, singleLocation)];
+            return SparklineInputValidation.Valid;
+        }
+
+        if (!TryParseLocationRange(trimmedLocation, sheetId, out var locationRange))
+            return SparklineInputValidation.InvalidLocation;
+
+        var dataRows = dataRange.RowCount;
+        var dataCols = dataRange.ColCount;
+        var locationRows = locationRange.RowCount;
+        var locationCols = locationRange.ColCount;
+
+        List<SparklineGroupMember> group;
+        if (locationCols == 1 && locationRows == dataRows && dataRows > 1)
+        {
+            // One sparkline per data row, stacked down a single location column.
+            group = new List<SparklineGroupMember>((int)dataRows);
+            for (uint i = 0; i < dataRows; i++)
+            {
+                var rowRange = new GridRange(
+                    new CellAddress(sheetId, dataRange.Start.Row + i, dataRange.Start.Col),
+                    new CellAddress(sheetId, dataRange.Start.Row + i, dataRange.End.Col));
+                var location = new CellAddress(sheetId, locationRange.Start.Row + i, locationRange.Start.Col);
+                group.Add(new SparklineGroupMember(rowRange, location));
+            }
+        }
+        else if (locationRows == 1 && locationCols == dataCols && dataCols > 1)
+        {
+            // One sparkline per data column, spread across a single location row.
+            group = new List<SparklineGroupMember>((int)dataCols);
+            for (uint i = 0; i < dataCols; i++)
+            {
+                var colRange = new GridRange(
+                    new CellAddress(sheetId, dataRange.Start.Row, dataRange.Start.Col + i),
+                    new CellAddress(sheetId, dataRange.End.Row, dataRange.Start.Col + i));
+                var location = new CellAddress(sheetId, locationRange.Start.Row, locationRange.Start.Col + i);
+                group.Add(new SparklineGroupMember(colRange, location));
+            }
+        }
+        else
+        {
+            // Location range shape doesn't correspond to the data range's rows or columns.
+            return SparklineInputValidation.InvalidLocation;
+        }
+
+        members = group;
+        return SparklineInputValidation.Valid;
+    }
+
+    /// <summary>Parses a sparkline location, accepting a multi-cell range (for a sparkline group).</summary>
+    private static bool TryParseLocationRange(string? input, SheetId sheetId, out GridRange range)
+    {
+        range = default;
+        try
+        {
+            range = GridRange.Parse((input ?? string.Empty).Trim(), sheetId);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>Maps toolbar / command identifiers to the core sparkline kind.</summary>

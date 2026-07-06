@@ -157,6 +157,19 @@ public sealed partial class MainWindow
         ApplyDataOpsComboBoxChrome(formatBox);
         AutomationProperties.SetAutomationId(formatBox, "TextToColumnsFormatBox");
 
+        // Advanced options (WPF parity: TextToColumnsDialog.ColumnFormats.cs's CreateAdvancedOptionsPanel) --
+        // decimal/thousands separator overrides and trailing-minus negatives, so locale-mismatched or
+        // mainframe-style numeric text can still import as numbers instead of silently staying text.
+        var decimalSeparatorBox = new TextBox { Text = ".", Width = 42 };
+        ApplyDataOpsTextBoxChrome(decimalSeparatorBox);
+        AutomationProperties.SetAutomationId(decimalSeparatorBox, "TextToColumnsDecimalSeparatorBox");
+        var thousandsSeparatorBox = new TextBox { Text = ",", Width = 42 };
+        ApplyDataOpsTextBoxChrome(thousandsSeparatorBox);
+        AutomationProperties.SetAutomationId(thousandsSeparatorBox, "TextToColumnsThousandsSeparatorBox");
+        var trailingMinusBox = new CheckBox { Content = UiText.Get("TextToColumns_TrailingMinusForNegativeNumbers") };
+        ApplyDataOpsCheckBoxChrome(trailingMinusBox);
+        AutomationProperties.SetAutomationId(trailingMinusBox, "TextToColumnsTrailingMinusBox");
+
         var previewHost = new Border
         {
             BorderBrush = HeaderForeground,
@@ -365,8 +378,27 @@ public sealed partial class MainWindow
                 return;
             }
 
+            if (!TextToColumnsDialogPlanner.TryParseAdvancedSeparator(decimalSeparatorBox.Text, out var decimalSeparator))
+            {
+                warningText.Text = UiText.Get("TextToColumns_EnterASingleDecimalSeparator");
+                warningText.IsVisible = true;
+                return;
+            }
+
+            if (!TextToColumnsDialogPlanner.TryParseAdvancedSeparator(thousandsSeparatorBox.Text, out var thousandsSeparator))
+            {
+                warningText.Text = UiText.Get("TextToColumns_EnterASingleThousandsSeparator");
+                warningText.IsVisible = true;
+                return;
+            }
+
+            var advancedOptions = new TextToColumnsAdvancedOptions(
+                decimalSeparator,
+                thousandsSeparator,
+                trailingMinusBox.IsChecked == true);
+
             var result = TextToColumnsPlanner.Plan(sources, options);
-            var edits = TextToColumnsDialogPlanner.MapToEdits(sheet.Id, result, range);
+            var edits = TextToColumnsDialogPlanner.MapToEdits(sheet.Id, result, range, advancedOptions);
             if (edits.Count == 0)
             {
                 warningText.Text = UiText.Get("TableLoc_TtcNoColumnsToWrite");
@@ -455,6 +487,33 @@ public sealed partial class MainWindow
             },
         };
 
+        // Advanced options group (WPF parity: TextToColumnsDialog.ColumnFormats.cs's
+        // CreateAdvancedOptionsPanel) -- decimal/thousands separator overrides + trailing-minus checkbox.
+        var advancedSeparatorsRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = UiText.Get("TextToColumns_DecimalSeparatorLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                decimalSeparatorBox,
+                new TextBlock { Text = UiText.Get("TextToColumns_ThousandsSeparatorLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                thousandsSeparatorBox,
+            },
+        };
+
+        var advancedOptionsGroup = new GroupBox
+        {
+            Header = UiText.Get("TextToColumns_AdvancedGroup"),
+            Content = new StackPanel
+            {
+                Spacing = 8,
+                Margin = new Thickness(4),
+                Children = { advancedSeparatorsRow, trailingMinusBox },
+            },
+            Margin = new Thickness(0, 8, 0, 0),
+        };
+
         // Step 1: Choose the file type / original data type + preview (assigns forward-declared var)
         step1Content = new StackPanel
         {
@@ -527,6 +586,7 @@ public sealed partial class MainWindow
             Children =
             {
                 formatRow,
+                advancedOptionsGroup,
                 statusText,
                 warningText,
             },

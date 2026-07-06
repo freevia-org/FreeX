@@ -322,7 +322,16 @@ public partial class GridView
 
     private void RenderWorksheetViewOverlay(DrawingContext dc)
     {
-        if (Viewport == null || WorksheetViewMode == WorksheetViewMode.Normal) return;
+        if (Viewport == null) return;
+
+        // Excel draws the manual (dashed blue) page-break lines in every view mode, including
+        // Normal, once the sheet has at least one manual break - not just in Page Layout /
+        // Page Break Preview. The page/margin chrome below is specific to those two views.
+        if (WorksheetViewMode == WorksheetViewMode.Normal)
+        {
+            RenderManualPageBreaks(dc);
+            return;
+        }
 
         var logicalWidth = GetLogicalViewportWidth();
         var logicalHeight = GetLogicalViewportHeight();

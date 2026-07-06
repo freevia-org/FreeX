@@ -80,7 +80,7 @@ public sealed partial class XlsxFileAdapter
             if (patchSucceeded)
             {
                 XlsxNamedRangeMapper.SaveToPackage(workbook, stream, warnings);
-                sourcePackage.RestoreWorkbookDefinedNames(stream);
+                sourcePackage.RestoreWorkbookDefinedNames(stream, workbook);
                 LastSaveDiagnostics = patchDiagnostics;
                 return;
             }
@@ -119,6 +119,12 @@ public sealed partial class XlsxFileAdapter
             if (sheet.TabColor is { } tabColor)
                 xlSheet.TabColor = XLColor.FromArgb(tabColor.R, tabColor.G, tabColor.B);
 
+            // Cells claimed as non-anchor members of an array-formula range written below (via
+            // FormulaArrayA1 over the full extent). These are skipped when the outer loop reaches
+            // them so their provisional cached scalar (loaded into _cells by SetProvisionalSpillCell)
+            // does not overwrite the array-formula member cell ClosedXML just wrote for that address.
+            HashSet<(uint Row, uint Col)>? arrayMemberCellsWritten = null;
+
             foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
             {
                 // Skip blank cells that carry no style
@@ -129,18 +135,64 @@ public sealed partial class XlsxFileAdapter
 
                 var xlCell = xlSheet.Cell((int)row, (int)col);
 
-                if (cell.HasFormula)
+                // A non-anchor member of an array-formula range already written below via
+                // FormulaArrayA1 over the full extent. Skip re-writing its value/formula (that would
+                // stomp the array-formula member cell ClosedXML just wrote for this address), but
+                // still apply its style like any other occupied cell.
+                var isHandledArrayMember = arrayMemberCellsWritten is not null && arrayMemberCellsWritten.Contains((row, col));
+
+                if (isHandledArrayMember)
+                {
+                    // no-op: value/formula already represented by the array range write.
+                }
+                else if (cell.HasFormula)
                 {
                     var formula = XlsxClosedXmlCellMapper.NormalizeFormulaText(cell.FormulaText!);
-                    if (cell.ArrayMode == FormulaArrayMode.Dynamic &&
-                        sheet.TryGetSpillExtent(new CellAddress(sheet.Id, row, col), out var spillRows, out var spillCols) &&
-                        (long)spillRows * spillCols > 1)
+                    var anchorAddr = new CellAddress(sheet.Id, row, col);
+                    // Prefer the live spill extent (populated by RecalcEngine.SetSpillRange once the
+                    // workbook has been recalculated), but fall back to TryGetArrayExtent so an
+                    // unrecalculated CSE/dynamic array formula — which only exists as "provisional
+                    // spill cells" registered by the loader (Sheet._provisionalSpillCells) — is still
+                    // recognised and its array-ness preserved on a full (ClosedXML) save. Without this
+                    // fallback, TryGetSpillExtent alone (which only consults _spillAnchors) misses any
+                    // array formula that was loaded but never recalculated, and the anchor gets written
+                    // as a plain single-cell formula while its member cells are dropped to dead statics.
+                    uint spillRows = 0, spillCols = 0;
+                    var hasExtent = cell.ArrayMode == FormulaArrayMode.Dynamic &&
+                        sheet.TryGetSpillExtent(anchorAddr, out spillRows, out spillCols);
+                    if (!hasExtent && cell.ArrayMode == FormulaArrayMode.Dynamic &&
+                        sheet.TryGetArrayExtent(anchorAddr, out var arrayAnchor, out var arrayRows, out var arrayCols) &&
+                        arrayAnchor.Row == row && arrayAnchor.Col == col)
                     {
-                        // A dynamic array that spills is written as an array formula over its spill range, so it
-                        // reloads as Dynamic (spilling) instead of being mis-detected as a legacy
-                        // implicit-intersection (plain) formula.
+                        hasExtent = true;
+                        spillRows = arrayRows;
+                        spillCols = arrayCols;
+                    }
+
+                    if (hasExtent &&
+                        (long)spillRows * spillCols > 1 &&
+                        IsValidWorksheetRow(row + spillRows - 1) && IsValidWorksheetColumn(col + spillCols - 1))
+                    {
+                        // A dynamic array (or legacy CSE array) that spills/covers a range is written as
+                        // an array formula over its full extent, so it reloads as Dynamic (spilling) —
+                        // or, for CSE arrays, at least keeps every member cell tied to the shared formula
+                        // — instead of being mis-detected as a legacy implicit-intersection (plain) formula.
                         xlSheet.Range((int)row, (int)col, (int)(row + spillRows - 1), (int)(col + spillCols - 1))
                             .FormulaArrayA1 = formula;
+
+                        // Remember every non-anchor member address so the outer loop's later visit to
+                        // that occupied cell (a provisional cached value loaded by the XLSX reader)
+                        // does not stomp the array-formula cell ClosedXML just wrote there.
+                        if (spillRows > 1 || spillCols > 1)
+                        {
+                            arrayMemberCellsWritten ??= [];
+                            for (var r = 0u; r < spillRows; r++)
+                                for (var c = 0u; c < spillCols; c++)
+                                {
+                                    if (r == 0 && c == 0) continue;
+                                    arrayMemberCellsWritten.Add((row + r, col + c));
+                                }
+                        }
                     }
                     else
                     {
@@ -430,7 +482,7 @@ public sealed partial class XlsxFileAdapter
                 stream,
                 currentModelFingerprint,
                 removeSourceCalcChain: patchDiagnostics.InvalidatesCalcChain);
-            sourcePackage?.RestoreWorkbookDefinedNames(stream);
+            sourcePackage?.RestoreWorkbookDefinedNames(stream, workbook);
             stream.Position = stream.Length;
             return;
         }
@@ -442,7 +494,7 @@ public sealed partial class XlsxFileAdapter
             packageStream,
             currentModelFingerprint,
             removeSourceCalcChain: patchDiagnostics.InvalidatesCalcChain);
-        sourcePackage?.RestoreWorkbookDefinedNames(packageStream);
+        sourcePackage?.RestoreWorkbookDefinedNames(packageStream, workbook);
         packageStream.Position = 0;
         packageStream.CopyTo(stream);
         SaveStreamPreparer.TruncateFromCurrentPosition(stream);

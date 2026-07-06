@@ -36,6 +36,12 @@ internal static class XlsxCustomViewMapper
                 .Select(selection => selection.Attribute("activeCell")?.Value ?? selection.Attribute("sqref")?.Value)
                 .FirstOrDefault(reference => !string.IsNullOrWhiteSpace(reference));
 
+            var pageMargins = customSheetView.Element(worksheetNs + "pageMargins");
+            var pageSetup = customSheetView.Element(worksheetNs + "pageSetup");
+            var printOptions = customSheetView.Element(worksheetNs + "printOptions");
+            var autoFilter = XlsxWorksheetAutoFilterXmlMapper.Read(customSheetView.Element(worksheetNs + "autoFilter"));
+            var paperSizeCode = ParsePaperSizeCode(pageSetup);
+
             customViews.Add(new XlsxWorksheetCustomViewState(
                 id,
                 new WorksheetCustomViewState(
@@ -53,10 +59,75 @@ internal static class XlsxCustomViewMapper
                     ActiveRow: ParseCellRow(activeCell),
                     ActiveCol: ParseCellColumn(activeCell),
                     ViewTopRow: ParseCellRow(topLeftCell),
-                    ViewLeftCol: ParseCellColumn(topLeftCell))));
+                    ViewLeftCol: ParseCellColumn(topLeftCell),
+                    // N13: hidden-rows/cols/filter state and the fit-to-page flag have no dedicated
+                    // slot in CT_CustomSheetView (ECMA-376 §18.3.1.90) — Excel itself does not
+                    // snapshot per-view hidden-row/column lists there (only the live sheetData
+                    // row/col hidden attributes), and FitToPage is a worksheet-level sheetPr/
+                    // pageSetUpPr/@fitToPage flag, not a customSheetView attribute. AutoFilter and
+                    // the rest of the print settings DO have schema support (nested autoFilter/
+                    // pageMargins/pageSetup/printOptions elements) so those round-trip; the others
+                    // are left null here (not captured) rather than guessing at a non-standard
+                    // extension.
+                    AutoFilter: autoFilter,
+                    PageOrientation: ParseOrientation(pageSetup?.Attribute("orientation")?.Value),
+                    PaperSize: paperSizeCode is { } code && PaperSizeCodes.TryGetEnum(code, out var paperSize) ? paperSize : null,
+                    PaperSizeCode: paperSizeCode,
+                    PageMargins: ParsePageMargins(pageMargins),
+                    HeaderMargin: ParseNullableDouble(pageMargins, "header"),
+                    FooterMargin: ParseNullableDouble(pageMargins, "footer"),
+                    PrintGridlines: XlsxXmlAttributeReader.ReadNullableBoolAttribute(printOptions, "gridLines"),
+                    PrintHeadings: XlsxXmlAttributeReader.ReadNullableBoolAttribute(printOptions, "headings"),
+                    ScaleToFit: ParseScaleToFit(pageSetup))));
         }
 
         return customViews;
+    }
+
+    private static WorksheetPageOrientation? ParseOrientation(string? value) => value switch
+    {
+        "landscape" => WorksheetPageOrientation.Landscape,
+        "portrait" => WorksheetPageOrientation.Portrait,
+        _ => null
+    };
+
+    private static int? ParsePaperSizeCode(XElement? pageSetup) =>
+        pageSetup is null ? null : XlsxXmlAttributeReader.ReadIntAttribute(pageSetup, "paperSize");
+
+    private static double? ParseNullableDouble(XElement? element, string attributeName) =>
+        element is null ? null : XlsxXmlAttributeReader.ReadDoubleAttribute(element, attributeName);
+
+    private static WorksheetPageMargins? ParsePageMargins(XElement? pageMargins)
+    {
+        if (pageMargins is null)
+            return null;
+
+        var left = XlsxXmlAttributeReader.ReadDoubleAttribute(pageMargins, "left");
+        var right = XlsxXmlAttributeReader.ReadDoubleAttribute(pageMargins, "right");
+        var top = XlsxXmlAttributeReader.ReadDoubleAttribute(pageMargins, "top");
+        var bottom = XlsxXmlAttributeReader.ReadDoubleAttribute(pageMargins, "bottom");
+        if (left is null || right is null || top is null || bottom is null)
+            return null;
+
+        return XlsxWorksheetValueSanitizer.ValidPageMarginsOrDefault(
+            new WorksheetPageMargins(left.Value, right.Value, top.Value, bottom.Value),
+            WorksheetPageMargins.Narrow);
+    }
+
+    private static WorksheetScaleToFit? ParseScaleToFit(XElement? pageSetup)
+    {
+        if (pageSetup is null)
+            return null;
+
+        var scale = XlsxXmlAttributeReader.ReadIntAttribute(pageSetup, "scale");
+        var fitToWidth = XlsxXmlAttributeReader.ReadIntAttribute(pageSetup, "fitToWidth");
+        var fitToHeight = XlsxXmlAttributeReader.ReadIntAttribute(pageSetup, "fitToHeight");
+        if (scale is null && fitToWidth is null && fitToHeight is null)
+            return null;
+
+        return XlsxWorksheetValueSanitizer.ValidScaleToFitOrDefault(
+            new WorksheetScaleToFit(scale, fitToWidth, fitToHeight),
+            WorksheetScaleToFit.Default);
     }
 
     public static void Save(Stream packageStream, Workbook workbook)
@@ -214,7 +285,102 @@ internal static class XlsxCustomViewMapper
                 new XAttribute("sqref", activeCell)));
         }
 
+        // N13: print settings and AutoFilter have dedicated slots in CT_CustomSheetView
+        // (ECMA-376 §18.3.1.90, sequence: pane?, selection*, pageMargins?, printOptions?,
+        // pageSetup?, headerFooter?, autoFilter?, extLst?) — hidden-rows/cols/FilterHiddenRows and
+        // FitToPage do not (Excel keeps those on the live sheetData row/col elements and the
+        // worksheet-level sheetPr/pageSetUpPr/@fitToPage flag respectively), so those fields are
+        // intentionally not written here; see the matching read-side comment above.
+        if (ToPageMarginsXml(workbookNs, state) is { } pageMarginsXml)
+            customSheetView.Add(pageMarginsXml);
+        if (ToPrintOptionsXml(workbookNs, state) is { } printOptionsXml)
+            customSheetView.Add(printOptionsXml);
+        if (ToPageSetupXml(workbookNs, state) is { } pageSetupXml)
+            customSheetView.Add(pageSetupXml);
+        if (ToAutoFilterXml(workbookNs, state.AutoFilter) is { } autoFilterXml)
+            customSheetView.Add(autoFilterXml);
+
         return customSheetView;
+    }
+
+    private static XElement? ToPageMarginsXml(XNamespace workbookNs, WorksheetCustomViewState state)
+    {
+        var margins = state.PageMargins;
+        var header = state.HeaderMargin;
+        var footer = state.FooterMargin;
+        if (margins is null && header is null && footer is null)
+            return null;
+
+        var resolvedMargins = XlsxWorksheetValueSanitizer.ValidPageMarginsOrDefault(
+            margins ?? WorksheetPageMargins.Narrow, WorksheetPageMargins.Narrow);
+        return new XElement(
+            workbookNs + "pageMargins",
+            new XAttribute("left", resolvedMargins.Left),
+            new XAttribute("right", resolvedMargins.Right),
+            new XAttribute("top", resolvedMargins.Top),
+            new XAttribute("bottom", resolvedMargins.Bottom),
+            new XAttribute("header", header ?? 0.3),
+            new XAttribute("footer", footer ?? 0.3));
+    }
+
+    private static XElement? ToPrintOptionsXml(XNamespace workbookNs, WorksheetCustomViewState state)
+    {
+        if (state.PrintGridlines is null && state.PrintHeadings is null)
+            return null;
+
+        return new XElement(
+            workbookNs + "printOptions",
+            state.PrintGridlines is true ? new XAttribute("gridLines", "1") : null,
+            state.PrintHeadings is true ? new XAttribute("headings", "1") : null);
+    }
+
+    private static XElement? ToPageSetupXml(XNamespace workbookNs, WorksheetCustomViewState state)
+    {
+        if (state.PageOrientation is null && state.PaperSizeCode is null && state.PaperSize is null && state.ScaleToFit is null)
+            return null;
+
+        var paperSizeCode = state.PaperSizeCode ?? (state.PaperSize is { } paperSize ? PaperSizeCodes.GetCode(paperSize) : (int?)null);
+        var scaleToFit = XlsxWorksheetValueSanitizer.ValidScaleToFitOrDefault(
+            state.ScaleToFit ?? WorksheetScaleToFit.Default, WorksheetScaleToFit.Default);
+
+        return new XElement(
+            workbookNs + "pageSetup",
+            paperSizeCode is { } code ? new XAttribute("paperSize", code) : null,
+            state.PageOrientation is { } orientation
+                ? new XAttribute("orientation", orientation == WorksheetPageOrientation.Landscape ? "landscape" : "portrait")
+                : null,
+            scaleToFit.FitToPagesWide is null && scaleToFit.FitToPagesTall is null
+                ? new XAttribute("scale", scaleToFit.ScalePercent ?? 100)
+                : null,
+            scaleToFit.FitToPagesWide is { } fitToPagesWide ? new XAttribute("fitToWidth", fitToPagesWide) : null,
+            scaleToFit.FitToPagesTall is { } fitToPagesTall ? new XAttribute("fitToHeight", fitToPagesTall) : null);
+    }
+
+    private static XElement? ToAutoFilterXml(XNamespace workbookNs, WorksheetAutoFilterModel? autoFilter)
+    {
+        if (autoFilter is null)
+            return null;
+
+        // Prefer replaying the exact captured XML (round-trips native attributes/child elements
+        // this mapper doesn't model) and fall back to a minimal reference-only element so a
+        // programmatically-created AutoFilter (no NativeXml yet) still survives the round-trip.
+        if (!string.IsNullOrWhiteSpace(autoFilter.NativeXml))
+        {
+            try
+            {
+                var native = XElement.Parse(autoFilter.NativeXml);
+                if (native.Name == workbookNs + "autoFilter")
+                    return native;
+            }
+            catch (System.Xml.XmlException)
+            {
+                // Fall through to the minimal element below.
+            }
+        }
+
+        return string.IsNullOrWhiteSpace(autoFilter.Reference)
+            ? null
+            : new XElement(workbookNs + "autoFilter", new XAttribute("ref", autoFilter.Reference));
     }
 
     private static int GetActiveSheetId(Workbook workbook, WorkbookCustomView view)

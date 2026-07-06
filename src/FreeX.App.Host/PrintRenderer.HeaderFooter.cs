@@ -196,16 +196,17 @@ public static partial class PrintRenderer
             // end of sheet" mode already uses via PrintCommentSummaryPlanner) and fold the result
             // into the plain-notes dictionary here, so "As displayed on sheet" shows the identical,
             // complete text (all replies + resolved state) instead of silently dropping them (M28).
-            // Passing an empty threaded-comments map onward avoids double-handling: the merge logic
-            // downstream only ever adds a threaded entry when its address is absent from `comments`.
+            // A threaded comment always wins over any legacy/compat placeholder at the same address
+            // (the placeholder is only a stand-in for the richer threaded content), so this overwrites
+            // rather than skips existing keys. Passing an empty threaded-comments map onward avoids
+            // double-handling downstream.
             var displayedComments = comments;
             if (threadedComments.Count > 0)
             {
                 var merged = new Dictionary<CellAddress, string>(comments);
                 foreach (var pair in threadedComments)
                 {
-                    if (!merged.ContainsKey(pair.Key))
-                        merged[pair.Key] = CommentNavigationPlanner.FormatThreadedComment(pair.Value);
+                    merged[pair.Key] = CommentNavigationPlanner.FormatThreadedComment(pair.Value);
                 }
                 displayedComments = merged;
             }

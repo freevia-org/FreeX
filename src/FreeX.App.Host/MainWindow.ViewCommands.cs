@@ -342,10 +342,11 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
+        var wasSplit = sheet.SplitRow is not null || sheet.SplitColumn is not null;
+
         uint? splitRow = null;
         uint? splitColumn = null;
-        if (sheet.SplitRow is null && sheet.SplitColumn is null &&
-            SheetGrid.SelectedRange is { } range)
+        if (!wasSplit && SheetGrid.SelectedRange is { } range)
         {
             splitRow = range.Start.Row > 1 ? range.Start.Row : null;
             splitColumn = range.Start.Col > 1 ? range.Start.Col : null;
@@ -355,6 +356,15 @@ public partial class MainWindow
                 "Split",
                 sheetId => new SetSplitPanesCommand(sheetId, splitRow, splitColumn)))
             return;
+
+        // Toggling the split off (or recreating it fresh) must not leak the previous split's
+        // per-pane scroll offsets into whatever split comes next -- otherwise a brand-new split
+        // inherits stale TopRightLeftCol/BottomLeftTopRow and renders scrolled deep into the sheet
+        // instead of starting at the split origin the way Excel does (see GetSplitPaneViewportOffsets
+        // in MainWindow.Viewport.cs). OnSplitDividerMoved already clears this for drag-resizes; the
+        // ribbon-driven create/clear/recreate cycle needs the same treatment.
+        if (wasSplit)
+            _splitPaneViewportOffsets.Remove(_currentSheetId);
 
         UpdateViewport();
     }

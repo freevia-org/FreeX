@@ -126,14 +126,26 @@ internal static class XlsxNamedRangeMapper
                     continue;
                 }
 
-                // Plain range reference: resolve through ClosedXML.
+                // Plain range reference: resolve through ClosedXML. A defined name's RefersTo may be
+                // a multi-area (union) reference — one comma-separated area per entry in
+                // namedRange.Ranges (e.g. Sheet1!$A$1,Sheet1!$C$1 created via Ctrl-click in Excel's
+                // Name Manager). The in-memory model (GridRange) can only represent a single
+                // rectangle, so we keep the first area (the one Excel itself treats as primary for
+                // Name Box navigation) and surface a warning naming every area that had to be
+                // dropped, instead of discarding them silently.
                 IXLRange? xlRange = null;
+                var extraAreaCount = 0;
                 try
                 {
                     foreach (var candidateRange in namedRange.Ranges)
                     {
-                        xlRange = candidateRange;
-                        break;
+                        if (xlRange is null)
+                        {
+                            xlRange = candidateRange;
+                            continue;
+                        }
+
+                        extraAreaCount++;
                     }
                 }
                 catch (Exception ex)
@@ -144,6 +156,16 @@ internal static class XlsxNamedRangeMapper
 
                 if (xlRange is null)
                     continue;
+
+                if (extraAreaCount > 0)
+                {
+                    var extraAreaNoun = extraAreaCount == 1 ? "area was" : "areas were";
+                    warnings?.Add(
+                        $"[named-ranges] Named range '{namedRange.Name}' refers to a multi-area (union) reference " +
+                        $"('{refersToBody}'); only the first area ('{xlRange.RangeAddress}') was kept and " +
+                        $"{extraAreaCount} additional {extraAreaNoun} dropped " +
+                        "because multi-area named ranges are not yet supported.");
+                }
 
                 var firstCell = xlRange.FirstCell();
                 var lastCell = xlRange.LastCell();
@@ -251,12 +273,13 @@ internal static class XlsxNamedRangeMapper
 
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
             var entries = CreateDefinedNameEntries(workbook).ToList();
-            if (entries.Count == 0)
-                return;
 
             var definedNames = root.Element(workbookNs + "definedNames");
             if (definedNames is null)
             {
+                if (entries.Count == 0)
+                    return;
+
                 definedNames = new XElement(workbookNs + "definedNames");
                 InsertDefinedNamesElement(root, workbookNs, definedNames);
             }
@@ -267,9 +290,11 @@ internal static class XlsxNamedRangeMapper
                 .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
 
             var changed = false;
+            var liveKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var entry in entries)
             {
                 var key = DefinedNameKey(entry.Name, entry.LocalSheetId);
+                liveKeys.Add(key);
                 if (existingByKey.TryGetValue(key, out var existing))
                 {
                     if (!string.Equals(existing.Value, entry.Text, StringComparison.Ordinal))
@@ -288,6 +313,23 @@ internal static class XlsxNamedRangeMapper
                 changed = true;
             }
 
+            // Remove any on-disk defined name that is no longer present in the live model (e.g. the
+            // user deleted it via the Name Manager). Reserved/Excel-internal names (Print_Area, etc.)
+            // and unrecognized entries with a malformed name are left untouched since CreateDefinedNameEntries
+            // never yields them and they are not owned by the model round-trip.
+            foreach (var (key, existing) in existingByKey)
+            {
+                if (liveKeys.Contains(key))
+                    continue;
+
+                var existingName = existing.Attribute("name")?.Value;
+                if (IsExcelReservedDefinedName(existingName))
+                    continue;
+
+                existing.Remove();
+                changed = true;
+            }
+
             if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
         }
@@ -296,6 +338,21 @@ internal static class XlsxNamedRangeMapper
             System.Diagnostics.Debug.WriteLine($"[XlsxNamedRangeMapper] Defined names package post-processing failed: {ex.Message}");
             warnings?.Add("[defined-names] Defined names could not be post-processed.");
         }
+    }
+
+    /// <summary>
+    /// Returns the set of defined-name keys (name + local-sheet-scope, in the same
+    /// "<c>namelocalSheetId</c>" format used by <see cref="SaveToPackage"/>) that are currently
+    /// live in the workbook model. Used by the patch-save defined-name restoration path
+    /// (<c>XlsxFileAdapter.SourcePackageSnapshot.RestorePatchWorkbookDefinedNames</c>) so a defined
+    /// name the user deleted from the model is not resurrected from the pristine source snapshot.
+    /// </summary>
+    public static HashSet<string> GetLiveDefinedNameKeys(Workbook workbook)
+    {
+        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in CreateDefinedNameEntries(workbook))
+            keys.Add(DefinedNameKey(entry.Name, entry.LocalSheetId));
+        return keys;
     }
 
     private static IEnumerable<DefinedNameEntry> CreateDefinedNameEntries(Workbook workbook)
@@ -514,7 +571,7 @@ internal static class XlsxNamedRangeMapper
 
     private sealed record DefinedNameEntry(string Name, int? LocalSheetId, string Text);
 
-    private static bool IsExcelReservedDefinedName(string? name)
+    internal static bool IsExcelReservedDefinedName(string? name)
     {
         if (string.IsNullOrWhiteSpace(name))
             return true;

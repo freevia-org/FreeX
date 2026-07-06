@@ -88,7 +88,10 @@ public sealed class ProtectionShellGlueTests
 
         outcome.Success.Should().BeTrue();
         sheet.IsProtected.Should().BeTrue();
-        sheet.ProtectionPassword.Should().Be("hunter2");
+        // N57: the command hashes the typed password at Apply-time rather than storing it raw, so
+        // the stored value must be verified via the helper, not compared to the plaintext directly.
+        sheet.ProtectionPassword.Should().NotBe("hunter2");
+        ProtectionPasswordHelper.VerifyStoredPassword(sheet.ProtectionPassword, "hunter2").Should().BeTrue();
         sheet.ProtectionPermissions.Should().Equal(
             SheetProtectionPermission.SelectLockedCells,
             SheetProtectionPermission.FormatCells);
@@ -152,7 +155,10 @@ public sealed class ProtectionShellGlueTests
 
         outcome.Success.Should().BeTrue();
         workbook.IsStructureProtected.Should().BeTrue();
-        workbook.StructureProtectionPassword.Should().Be("pw");
+        // N57: the command hashes the typed password at Apply-time rather than storing it raw, so
+        // the stored value must be verified via the helper, not compared to the plaintext directly.
+        workbook.StructureProtectionPassword.Should().NotBe("pw");
+        ProtectionPasswordHelper.VerifyStoredPassword(workbook.StructureProtectionPassword, "pw").Should().BeTrue();
     }
 
     [Fact]

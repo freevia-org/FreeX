@@ -62,6 +62,9 @@ internal static class XlsxSparklineMapper
             var highColor     = ReadColorElement(group, "colorHigh");
             var lowColor      = ReadColorElement(group, "colorLow");
 
+            // ── date axis ──────────────────────────────────────────────────────
+            var dateAxisRange = ReadDateAxisRange(group, tempSheet);
+
             foreach (var sparkline in group.Descendants().Where(element =>
                          string.Equals(element.Name.LocalName, "sparkline", StringComparison.OrdinalIgnoreCase)))
             {
@@ -105,6 +108,7 @@ internal static class XlsxSparklineMapper
                         LowPointColor    = lowColor,
                         FirstPointColor  = firstColor,
                         LastPointColor   = lastColor,
+                        DateAxisRange    = dateAxisRange,
                     });
                 }
                 catch
@@ -329,6 +333,14 @@ internal static class XlsxSparklineMapper
         AddColorElement(el, x14Ns, "colorHigh",      representative.HighPointColor);
         AddColorElement(el, x14Ns, "colorLow",       representative.LowPointColor);
 
+        // dateAxis (schema order: after the color elements, before the sparklines list)
+        if (representative.DateAxisRange is { } dateAxisRange)
+        {
+            el.Add(new XElement(
+                x14Ns + "dateAxis",
+                new XElement(xmNs + "f", $"{SheetNameFormatter.QuoteIfNeeded(sheet.Name)}!{dateAxisRange}")));
+        }
+
         // sparklines list
         el.Add(new XElement(
             x14Ns + "sparklines",
@@ -346,6 +358,33 @@ internal static class XlsxSparklineMapper
             return;
         parent.Add(new XElement(x14Ns + localName,
             new XAttribute("rgb", $"FF{color.Value.R:X2}{color.Value.G:X2}{color.Value.B:X2}")));
+    }
+
+    /// <summary>
+    /// Reads the group's optional &lt;x14:dateAxis&gt;&lt;xm:f&gt;range&lt;/xm:f&gt;&lt;/x14:dateAxis&gt;
+    /// (Excel's sparkline "Date Axis Type" setting). The formula may be sheet-qualified
+    /// (e.g. "Sheet1!$A$1:$A$5"); only the range portion is kept, resolved against
+    /// <paramref name="sheet"/> like the sparkline data-range/location references.
+    /// </summary>
+    private static GridRange? ReadDateAxisRange(XElement group, SheetId sheet)
+    {
+        var dateAxis = group.Elements().FirstOrDefault(e =>
+            string.Equals(e.Name.LocalName, "dateAxis", StringComparison.OrdinalIgnoreCase));
+        var formula = FindChildByLocalName(dateAxis, "f")?.Value;
+        if (string.IsNullOrWhiteSpace(formula))
+            return null;
+
+        var bang = formula.LastIndexOf('!');
+        var rangeText = bang >= 0 ? formula[(bang + 1)..] : formula;
+        rangeText = rangeText.Replace("$", "", StringComparison.Ordinal);
+        try
+        {
+            return GridRange.ParseCellOrRange(rangeText, sheet);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static CellColor? ReadColorElement(XElement group, string localName)

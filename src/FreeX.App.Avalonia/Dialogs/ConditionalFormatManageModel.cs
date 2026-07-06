@@ -44,7 +44,7 @@ public static class ConditionalFormatManageModel
         ArgumentNullException.ThrowIfNull(sheetRules);
 
         return sheetRules
-            .Where(rule => selection is not { } sel || RangesOverlap(rule.AppliesTo, sel))
+            .Where(rule => selection is not { } sel || rule.AllRanges.Any(range => RangesOverlap(range, sel)))
             .OrderBy(rule => rule.Priority)
             .Select(rule => new ConditionalFormatRuleListItem(rule, Describe(rule)))
             .ToList();

@@ -33,7 +33,7 @@ public static partial class ChartRenderer
         int n = values.Count;
         var bars = new RectangleBarSeries { FillColor = OxyColors.Transparent };
         var connectors = chart.ShowSeriesLines
-            ? CreateWaterfallConnectorSeries(chart, theme)
+            ? CreateSeriesLineConnectorSeries(chart, theme)
             : null;
 
         // Column geometry/classification (increase / decrease / total anchor) is decided by the pure,
@@ -78,7 +78,15 @@ public static partial class ChartRenderer
         return model;
     }
 
-    private static LineSeries CreateWaterfallConnectorSeries(ChartModel chart, WorkbookTheme theme)
+    /// <summary>
+    /// Builds a <see cref="LineSeries"/> styled from the chart's Series Lines formatting
+    /// (<see cref="ChartModel.SeriesLineColor"/>/<see cref="ChartModel.SeriesLineThemeColor"/>/
+    /// <see cref="ChartModel.SeriesLineThickness"/>/<see cref="ChartModel.SeriesLineDashStyle"/>).
+    /// Shared by the Waterfall "connector" lines and the Stacked Column/Bar "series lines" feature
+    /// (<see cref="ChartTypeSupport.SupportsSeriesLines"/>) -- both are the same Excel primitive
+    /// (<c>&lt;c:serLines&gt;</c>) applied to different chart shapes.
+    /// </summary>
+    private static LineSeries CreateSeriesLineConnectorSeries(ChartModel chart, WorkbookTheme theme)
     {
         var color = chart.SeriesLineThemeColor?.Resolve(theme) ?? chart.SeriesLineColor;
         return new LineSeries
@@ -90,6 +98,48 @@ public static partial class ChartRenderer
             LineStyle = ToOxyLineStyle(chart.SeriesLineDashStyle),
             MarkerType = MarkerType.None
         };
+    }
+
+    /// <summary>
+    /// Renders Excel's "Series Lines" for Stacked/100%-Stacked Column and Bar charts: a connector
+    /// line tracing each series' segment boundary across adjacent categories, so the eye can follow
+    /// one series' contribution across the whole stack (<c>&lt;c:serLines&gt;</c> under the chart's
+    /// bar-chart plot element). Only called when <see cref="ChartModel.ShowSeriesLines"/> is set and
+    /// <see cref="ChartTypeSupport.SupportsSeriesLines"/> allows the chart's type.
+    /// </summary>
+    /// <param name="isBar">True for horizontal Stacked/100%-Stacked Bar (value axis is X); false for
+    /// vertical Stacked/100%-Stacked Column (value axis is Y).</param>
+    internal static void AddStackedSeriesLines(PlotModel model, ChartModel chart, WorkbookTheme theme, bool isBar)
+    {
+        if (!chart.ShowSeriesLines)
+            return;
+
+        var rectangleSeries = model.Series.OfType<RectangleBarSeries>().ToList();
+        if (rectangleSeries.Count == 0)
+            return;
+
+        // One connector line per stacked series, tracing that series' own segment boundary
+        // (the edge furthest from the baseline) across categories -- matches Excel's rendering
+        // of a single, uniformly-styled series line per series.
+        foreach (var series in rectangleSeries)
+        {
+            if (series.Items.Count < 2)
+                continue;
+
+            var connector = CreateSeriesLineConnectorSeries(chart, theme);
+            foreach (var item in series.Items)
+            {
+                // Bar: value axis is X (bottom), category axis is Y (left) -- the segment's
+                // outer edge is X1, and the category slot centre is the midpoint of Y0/Y1.
+                // Column: value axis is Y (left), category axis is X (bottom) -- mirrored.
+                var point = isBar
+                    ? new DataPoint(item.X1, (item.Y0 + item.Y1) / 2)
+                    : new DataPoint((item.X0 + item.X1) / 2, item.Y1);
+                connector.Points.Add(point);
+            }
+
+            model.Series.Add(connector);
+        }
     }
 
     private static void AddWaterfallConnector(LineSeries? connectors, int index, double y)

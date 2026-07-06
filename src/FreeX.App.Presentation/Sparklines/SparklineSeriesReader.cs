@@ -29,7 +29,11 @@ public static class SparklineSeriesReader
     /// Reads a single sparkline's data range into its numeric series. Hidden rows and columns are
     /// skipped unless <see cref="SparklineModel.DisplayHidden"/> is set (Excel's "Show data in
     /// hidden rows and columns"), in which case hidden cells contribute to the series like any
-    /// other; non-numeric cells are ignored.
+    /// other; non-numeric (text) cells are always treated as blank. Blank cells are handled per
+    /// <see cref="SparklineModel.DisplayEmptyCellsAs"/>: <c>Gap</c> and <c>Zero</c> keep the cell's
+    /// position in the series (as <see cref="double.NaN"/> so the layout engine breaks the line, or
+    /// as <c>0</c>), while <c>Span</c> drops the position entirely so the surrounding points connect
+    /// across it, matching Excel's "Connect data points with line" option.
     /// </summary>
     public static IReadOnlyList<double> ReadSeries(Sheet sheet, SparklineModel sparkline)
     {
@@ -51,16 +55,31 @@ public static class SparklineSeriesReader
                 if (!sparkline.DisplayHidden && sheet.IsColEffectivelyHidden(col))
                     continue;
 
-                switch (sheet.GetValue(row, col))
+                double? value = sheet.GetValue(row, col) switch
                 {
-                    case NumberValue number:
-                        series.Add(number.Value);
+                    NumberValue number => number.Value,
+                    DateTimeValue date => date.Value,
+                    BoolValue boolean => boolean.Value ? 1 : 0,
+                    _ => null,
+                };
+
+                if (value is { } v)
+                {
+                    series.Add(v);
+                    continue;
+                }
+
+                switch (sparkline.DisplayEmptyCellsAs)
+                {
+                    case SparklineEmptyCellDisplay.Zero:
+                        series.Add(0);
                         break;
-                    case DateTimeValue date:
-                        series.Add(date.Value);
+                    case SparklineEmptyCellDisplay.Span:
+                        // Drop the position so the line connects across the blank cell.
                         break;
-                    case BoolValue boolean:
-                        series.Add(boolean.Value ? 1 : 0);
+                    case SparklineEmptyCellDisplay.Gap:
+                    default:
+                        series.Add(double.NaN);
                         break;
                 }
             }

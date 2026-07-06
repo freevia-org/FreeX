@@ -100,7 +100,10 @@ public sealed class SparklineDialog : Window
 
     private bool ValidateInputs()
     {
-        return SparklinePlanner.ValidateDialogInputs(_dataRangeBox.Text, _locationBox.Text, _sheetId) switch
+        // Location accepts either a single cell (one sparkline) or a multi-row/column range that
+        // expands into a sparkline group (Excel's "Insert Sparklines" dialog behavior) — use the
+        // group-aware validation path so a range Location is not rejected here.
+        return SparklinePlanner.ValidateInsertGroup(_dataRangeBox.Text, _locationBox.Text, _sheetId, out _) switch
         {
             SparklineInputValidation.InvalidDataRange =>
                 ShowInvalidInputWarning(UiText.Get("Sparkline_InvalidDataRange"), _dataRangeBox),

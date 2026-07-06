@@ -2659,9 +2659,10 @@ public sealed class WorkbookSession
         }
 
         var targetRange = SelectedRange;
+        var targetRanges = GetCurrentSelectedRanges();
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            CreateFormatPainterCommand(sourceSheet, sourceRange, targetRange));
+            CreateFormatPainterCommand(sourceSheet, sourceRange, targetRanges));
         if (!result.Success)
         {
             if (!_formatPainterPersistent)
@@ -3411,20 +3412,21 @@ public sealed class WorkbookSession
         return commands;
     }
 
-    private IWorkbookCommand CreateFormatPainterCommand(Sheet sourceSheet, GridRange sourceRange, GridRange targetRange)
+    private IWorkbookCommand CreateFormatPainterCommand(
+        Sheet sourceSheet,
+        GridRange sourceRange,
+        IReadOnlyList<GridRange> targetRanges)
     {
         var targetSheetIds = CurrentGroupedEditSheetIds();
-        var commands = new List<IWorkbookCommand>(targetSheetIds.Count);
-        foreach (var sheetId in targetSheetIds)
-        {
-            commands.Add(FormatPainterCommandFactory.Create(
+        return SelectionStyleCommandPlanner.CreateRangeCommand(
+            targetSheetIds,
+            targetRanges,
+            (sheetId, sheetTargetRange) => FormatPainterCommandFactory.Create(
                 Workbook,
                 sourceSheet,
                 sourceRange,
-                RemapRangeToSheet(targetRange, sheetId)));
-        }
-
-        return ToCommand("Format Painter", commands);
+                sheetTargetRange),
+            "Format Painter");
     }
 
     private IWorkbookCommand CreateClearAllCommand(GridRange range)

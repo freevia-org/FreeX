@@ -37,6 +37,32 @@ public static class SparklineRangeLimits
         range.CellCount <= MaxDataCellCount;
 }
 
+/// <summary>
+/// Allocates the nonzero <see cref="SparklineModel.GroupId"/> values shared by every member of a
+/// multi-sparkline group created in-app (Excel's "Insert Sparklines" dialog with a multi-row/column
+/// Location Range, or the Quick Analysis Sparklines gesture). <see cref="SparklineModel.GroupId"/> == 0
+/// means "ungrouped" (each such sparkline becomes its own singleton group on save), so a freshly
+/// inserted group must be assigned an id that is both nonzero and not already in use on the sheet.
+/// </summary>
+public static class SparklineGroupIdAllocator
+{
+    /// <summary>
+    /// Returns a group id guaranteed not to collide with any <see cref="SparklineModel.GroupId"/>
+    /// already present on <paramref name="existingSparklines"/>.
+    /// </summary>
+    public static int NextGroupId(IEnumerable<SparklineModel> existingSparklines)
+    {
+        var maxExisting = 0;
+        foreach (var sparkline in existingSparklines)
+        {
+            if (sparkline.GroupId > maxExisting)
+                maxExisting = sparkline.GroupId;
+        }
+
+        return maxExisting + 1;
+    }
+}
+
 public sealed class SparklineModel
 {
     public Guid Id { get; init; } = Guid.NewGuid();
@@ -131,4 +157,15 @@ public sealed class SparklineModel
 
     /// <summary>How blank/empty cells are displayed. Default is Gap.</summary>
     public SparklineEmptyCellDisplay DisplayEmptyCellsAs { get; set; } = SparklineEmptyCellDisplay.Gap;
+
+    // ── Date axis ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The optional date axis range (Excel's "Date Axis Type" sparkline group setting), spacing data
+    /// points along a time axis instead of evenly. A group-level setting like <see cref="MinAxisType"/>
+    /// and the color properties: every member of a group shares the same value, and
+    /// <c>XlsxSparklineMapper</c> reads/writes it once per &lt;x14:sparklineGroup&gt; from the
+    /// group's representative sparkline. Null when the group has no date axis (the common case).
+    /// </summary>
+    public GridRange? DateAxisRange { get; set; }
 }

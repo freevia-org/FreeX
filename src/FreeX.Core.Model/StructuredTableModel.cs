@@ -30,6 +30,36 @@ public sealed class StructuredTableModel
     public IReadOnlyList<string>? NativeStyleInfoChildXmls { get; init; }
     public List<StructuredTableColumnModel> Columns { get; } = [];
     public List<StructuredTableFilterColumnModel> FilterColumns { get; } = [];
+
+    /// <summary>
+    /// Sets (or clears) <see cref="StructuredTableColumnModel.CalculatedColumnFormula"/> for the
+    /// column identified by <paramref name="columnId"/>, replacing the immutable record in
+    /// <see cref="Columns"/> in place. This is the model-layer plumbing that lets edit-time
+    /// detection of a calculated column (the editing/command layer noticing the same formula was
+    /// entered across a table column's data rows, the way Excel auto-fills calculated columns)
+    /// persist the formula so <c>ResizeStructuredTableCommand.FillGrownCalculatedColumns</c> can
+    /// propagate it into newly added rows. Native XLSX loads that already populate
+    /// <see cref="StructuredTableColumnModel.CalculatedColumnFormula"/> from
+    /// <c>&lt;calculatedColumnFormula&gt;</c> continue to flow through the reader and never need
+    /// this method. Returns true if the column was found and updated.
+    /// </summary>
+    public bool SetCalculatedColumnFormula(int columnId, string? formula, bool isArrayFormula = false)
+    {
+        for (var i = 0; i < Columns.Count; i++)
+        {
+            if (Columns[i].Id != columnId)
+                continue;
+
+            Columns[i] = Columns[i] with
+            {
+                CalculatedColumnFormula = formula,
+                IsCalculatedColumnFormulaArray = !string.IsNullOrWhiteSpace(formula) && isArrayFormula
+            };
+            return true;
+        }
+
+        return false;
+    }
 }
 
 public sealed record StructuredTableColumnModel(

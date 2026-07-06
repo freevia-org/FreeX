@@ -16,6 +16,15 @@ public static class QuickAnalysisSparklinePlanner
     /// empty list when the selection is degenerate (single column, or no data rows), since a sparkline needs
     /// at least two points and a target column inside the sheet.
     /// </summary>
+    /// <remarks>
+    /// KNOWN GAP: every command built here constructs an independent <see cref="FreeX.Core.Model.SparklineModel"/>
+    /// whose <see cref="FreeX.Core.Model.SparklineModel.GroupId"/> defaults to 0, so on save
+    /// (<c>XlsxSparklineMapper.Save</c>, which groups by <c>GroupId == 0 ? Id : GroupId</c>) each row becomes its
+    /// own singleton sparkline group instead of one shared group spanning the whole selection, unlike Excel's
+    /// Quick Analysis gesture. <see cref="AddSparklineCommand"/> (src/FreeX.Core.Commands/SparklineCommands.cs)
+    /// has no constructor parameter or public surface to assign a shared <c>GroupId</c> to the sparklines it
+    /// creates; giving this planner's rows a real shared group requires adding that there first.
+    /// </remarks>
     public static IReadOnlyList<AddSparklineCommand> BuildCommands(
         SheetId sheetId,
         GridRange range,

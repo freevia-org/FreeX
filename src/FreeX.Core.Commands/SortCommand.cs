@@ -1,3 +1,4 @@
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -199,11 +200,16 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
             if (rows[ri].IsValueFilterHidden)
                 sheet.ValueFilterHiddenRows.Add(row);
 
+            // N37: rows are permuted from OriginalIndex to ri — Excel rewrites each moved
+            // formula's relative references the same way a cut/paste to the new row would,
+            // so the row delta a cell actually moved must be applied to its formula text.
+            int rowDelta = ri - rows[ri].OriginalIndex;
+
             for (int ci = 0; ci < colCount; ci++)
             {
                 uint col  = startCol + (uint)ci;
                 var addr  = new CellAddress(_sheetId, row, col);
-                WriteCellPayload(sheet, addr, rows[ri].Payloads[ci]);
+                WriteCellPayload(sheet, addr, rows[ri].Payloads[ci], rowDelta, 0, sheet.Name);
                 affected.Add(addr);
             }
         }
@@ -270,11 +276,15 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         for (int ci = 0; ci < colCount; ci++)
         {
             uint col = startCol + (uint)ci;
+            // N37: columns are permuted from OriginalIndex to ci for a left-to-right sort —
+            // rewrite each moved formula's relative references by the column delta it moved,
+            // mirroring the row-delta rewrite the top-to-bottom sort applies below.
+            int colDelta = ci - columns[ci].OriginalIndex;
             for (int ri = 0; ri < rowCount; ri++)
             {
                 uint row = startRow + (uint)ri;
                 var addr = new CellAddress(_sheetId, row, col);
-                WriteCellPayload(sheet, addr, columns[ci].Payloads[ri]);
+                WriteCellPayload(sheet, addr, columns[ci].Payloads[ri], 0, colDelta, sheet.Name);
                 affected.Add(addr);
             }
         }
@@ -430,9 +440,11 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         return column;
     }
 
-    private static void WriteCellPayload(Sheet sheet, CellAddress address, SortCellPayload payload)
+    private static void WriteCellPayload(
+        Sheet sheet, CellAddress address, SortCellPayload payload,
+        int rowDelta = 0, int colDelta = 0, string? sheetName = null)
     {
-        WriteCellClone(sheet, address, payload.Cell, payload.StyleOnly);
+        WriteCellClone(sheet, address, payload.Cell, payload.StyleOnly, rowDelta, colDelta, sheetName);
 
         sheet.Comments.Remove(address);
         if (payload.Comment is not null)
@@ -463,7 +475,9 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
             sheet.RichTextRuns[address] = payload.RichTextRuns;
     }
 
-    private static void WriteCellClone(Sheet sheet, CellAddress address, Cell? cell, StyleId? styleOnly = null)
+    private static void WriteCellClone(
+        Sheet sheet, CellAddress address, Cell? cell, StyleId? styleOnly = null,
+        int rowDelta = 0, int colDelta = 0, string? sheetName = null)
     {
         if (cell is null)
         {
@@ -475,7 +489,20 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         }
         else
         {
-            sheet.SetCell(address, cell.Clone());
+            var clone = cell.Clone();
+            // N37: a sort permutes each cell to a new row (or column, for a left-to-right sort) —
+            // Excel treats that exactly like a per-cell cut/paste and rewrites the formula's
+            // relative references by the distance it moved (absolute $ references are unaffected,
+            // same as FillCellsCommand.CloneForTarget's PasteOffsetOp usage). Only rewrite when a
+            // delta and host sheet name were actually supplied (undo/restore always passes the
+            // defaults, since cells there return to their exact original address/text).
+            if ((rowDelta != 0 || colDelta != 0) && sheetName is not null &&
+                clone.HasFormula && clone.FormulaText is { } formula)
+            {
+                clone.FormulaText = FormulaRewriter.Rewrite(
+                    formula, new PasteOffsetOp(rowDelta, colDelta), sheetName) ?? formula;
+            }
+            sheet.SetCell(address, clone);
         }
     }
 

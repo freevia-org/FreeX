@@ -120,6 +120,11 @@ public sealed class InsertCellsCommand : IWorkbookCommand
                 _range.Start.Row, _range.End.Row,
                 _range.Start.Col, CellAddress.MaxCol,
                 _range.Start.Col, width);
+            // O34: rewrite in-document hyperlink bookmark CONTENT (not just the dictionary key,
+            // already shifted above by ShiftAnnotationsInBandRight) so a "Place in This Document"
+            // link whose Bookmark text points at a cell inside the shifted band keeps pointing at
+            // the same logical cell, matching whole-row/whole-column insert.
+            RowColumnShiftHelpers.ShiftHyperlinkBookmarks(sheet, insertRightOp, sheet.Name);
             _formulaSnapshot.Clear();
             RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, insertRightOp, _formulaSnapshot);
             _namedFormulaSnapshot.Clear();
@@ -187,6 +192,11 @@ public sealed class InsertCellsCommand : IWorkbookCommand
                 _range.Start.Row, CellAddress.MaxRow,
                 _range.Start.Col, _range.End.Col,
                 _range.Start.Row, height);
+            // O34: rewrite in-document hyperlink bookmark CONTENT (not just the dictionary key,
+            // already shifted above by ShiftAnnotationsInBandDown) so a "Place in This Document"
+            // link whose Bookmark text points at a cell inside the shifted band keeps pointing at
+            // the same logical cell, matching whole-row/whole-column insert.
+            RowColumnShiftHelpers.ShiftHyperlinkBookmarks(sheet, insertDownOp, sheet.Name);
             _formulaSnapshot.Clear();
             RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, insertDownOp, _formulaSnapshot);
             _namedFormulaSnapshot.Clear();
@@ -715,6 +725,11 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
                 _range.Start.Row, _range.End.Row,
                 _range.Start.Col, _range.End.Col,
                 CellAddress.MaxCol, width);
+            // O34: rewrite in-document hyperlink bookmark CONTENT (not just the dictionary key,
+            // already shifted/removed above by DeleteAnnotationsInBandLeft) so a surviving "Place in
+            // This Document" link whose Bookmark text points at a cell after the deleted band keeps
+            // pointing at the same logical cell, matching whole-row/whole-column delete.
+            RowColumnShiftHelpers.ShiftHyperlinkBookmarks(sheet, deleteLeftOp, sheet.Name);
             _formulaSnapshot.Clear();
             RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, deleteLeftOp, _formulaSnapshot);
             _namedFormulaSnapshot.Clear();
@@ -780,6 +795,11 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
                 _range.Start.Row, _range.End.Row, CellAddress.MaxRow,
                 _range.Start.Col, _range.End.Col,
                 height);
+            // O34: rewrite in-document hyperlink bookmark CONTENT (not just the dictionary key,
+            // already shifted/removed above by DeleteAnnotationsInBandUp) so a surviving "Place in
+            // This Document" link whose Bookmark text points at a cell after the deleted band keeps
+            // pointing at the same logical cell, matching whole-row/whole-column delete.
+            RowColumnShiftHelpers.ShiftHyperlinkBookmarks(sheet, deleteUpOp, sheet.Name);
             _formulaSnapshot.Clear();
             RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, deleteUpOp, _formulaSnapshot);
             _namedFormulaSnapshot.Clear();

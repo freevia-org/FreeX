@@ -286,6 +286,16 @@ public sealed partial class FormulaEvaluator
                 return DirectRangeFastPathState.Unsupported;
             }
 
+            // Excel scope precedence: a sheet-scoped named FORMULA outranks a same-named
+            // workbook-global named RANGE. Defer to the general (slow) argument-expansion path,
+            // which resolves that precedence correctly, instead of summing the wrong global range.
+            if (IsSheetScopedName(named.Name, context, out var sheetScopedIsFormula) && sheetScopedIsFormula)
+            {
+                range = default;
+                result = BlankValue.Instance;
+                return DirectRangeFastPathState.Unsupported;
+            }
+
             var resolved = context.TryResolveNamedRange(named.Name);
             if (resolved is null)
             {

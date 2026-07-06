@@ -140,6 +140,8 @@ public sealed partial class Sheet
             copy.ProtectionPermissions.Add(permission);
         foreach (var range in AllowEditRanges)
             copy.AllowEditRanges.Add(RemapRange(range, newId));
+        foreach (var (range, password) in AllowEditRangePasswords)
+            copy.AllowEditRangePasswords[RemapRange(range, newId)] = password;
         foreach (var property in CustomProperties)
             copy.CustomProperties.Add(property);
 

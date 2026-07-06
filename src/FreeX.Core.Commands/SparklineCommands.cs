@@ -15,13 +15,31 @@ public sealed class AddSparklineCommand : IWorkbookCommand
         GridRange dataRange,
         CellAddress location,
         SparklineKind kind)
+        : this(sheetId, dataRange, location, kind, groupId: 0)
+    {
+    }
+
+    /// <summary>
+    /// Creates a sparkline that is a member of a multi-sparkline group (Excel's "Insert Sparklines"
+    /// dialog with a multi-row/column Location Range). Every member of the group must share the same
+    /// nonzero <paramref name="groupId"/> so <c>XlsxSparklineMapper.Save</c> (which groups sparklines by
+    /// <c>GroupId</c>) round-trips them as a single &lt;x14:sparklineGroup&gt; instead of one singleton
+    /// group per sparkline.
+    /// </summary>
+    public AddSparklineCommand(
+        SheetId sheetId,
+        GridRange dataRange,
+        CellAddress location,
+        SparklineKind kind,
+        int groupId)
     {
         _sheetId = sheetId;
         _sparkline = new SparklineModel
         {
             DataRange = dataRange,
             Location = location,
-            Kind = kind
+            Kind = kind,
+            GroupId = groupId
         };
     }
 

@@ -5342,9 +5342,18 @@ public sealed partial class MainWindow : Window
         var columnCount = Math.Max(1u, pictureGrid.ColumnCount);
         var cellWidth = frameWidth / columnCount;
         var cellHeight = frameHeight / rowCount;
-        var cellLookup = pictureGrid.Cells
-            .Where(cell => cell.RowOffset < rowCount && cell.ColumnOffset < columnCount)
-            .ToDictionary(cell => (cell.RowOffset, cell.ColumnOffset));
+        // Built as a manual last-wins loop rather than .ToDictionary(...): PictureModel.Cells is a
+        // plain List<PictureCellSnapshot> with no uniqueness constraint on (RowOffset, ColumnOffset),
+        // and a hand-edited or adversarial .fxl file can legitimately contain duplicate offsets. A
+        // straight ToDictionary throws ArgumentException on the second duplicate and crashes the
+        // render; last-wins keeps the render resilient and picks the later (later-drawn) entry,
+        // matching normal "last write wins" dictionary-assignment semantics.
+        var cellLookup = new Dictionary<(uint RowOffset, uint ColumnOffset), PictureCellSnapshot>();
+        foreach (var cell in pictureGrid.Cells)
+        {
+            if (cell.RowOffset < rowCount && cell.ColumnOffset < columnCount)
+                cellLookup[(cell.RowOffset, cell.ColumnOffset)] = cell;
+        }
 
         // Fills/patterns render first so grid separator lines, text, and cell borders sit above
         // them — mirroring WPF's RenderPicture draw order (DrawPictureCellStyle before the grid
@@ -23624,17 +23633,45 @@ public sealed partial class MainWindow : Window
             _session.Workbook.GetSheet(address.Sheet),
             _session.Workbook);
 
+    // Cache for UseR1C1ReferenceStyle: avoids a File.ReadAllText + JsonSerializer.Deserialize round
+    // trip through AppOptionsStore.Load() on every RefreshShell (selecting a cell, typing, pasting,
+    // undo/redo all funnel through FormatEditText -> UseR1C1ReferenceStyle). We still need to notice
+    // when the Options dialog (MainWindow.Options.cs) persists a change via AppOptionsStore.Save, so
+    // the cache is keyed on the options file's last-write time: a cheap File.Exists/GetLastWriteTimeUtc
+    // stat call is orders of magnitude cheaper than re-reading and re-parsing the whole JSON document,
+    // and only the read+parse work is redone when the timestamp actually moves (i.e. right after a
+    // save). Mirrors WPF's live <c>_options.UseR1C1ReferenceStyle</c> field (MainWindow.Editing.cs,
+    // MainWindow.FormulaReferenceEditing.cs), which is populated once and updated in place on save.
+    private static bool? _cachedUseR1C1ReferenceStyle;
+    private static DateTime _cachedUseR1C1ReferenceStyleWriteTimeUtc;
+    private static string? _cachedUseR1C1ReferenceStyleStorePath;
+
     /// <summary>
-    /// Reads the persisted "R1C1 Reference Style" toggle (Options ▸ Formulas) directly from disk on
-    /// every call rather than caching it on a field: the Options dialog (MainWindow.Options.cs) already
-    /// persists the flag via <see cref="AppOptionsStore.Save"/> as soon as the user clicks OK, and this
-    /// keeps every R1C1-aware call site (formula-bar display, cell-text commit, name-box commit) in
-    /// sync with that persisted value without needing a second, easily-stale in-memory copy. Mirrors
-    /// WPF's live <c>_options.UseR1C1ReferenceStyle</c> field (MainWindow.Editing.cs,
-    /// MainWindow.FormulaReferenceEditing.cs) but sourced from the shared options store instead of a
-    /// per-window field, since the Avalonia shell does not keep one.
+    /// Reads the persisted "R1C1 Reference Style" toggle (Options ▸ Formulas), caching the parsed value
+    /// and only re-loading from disk when the underlying options file's last-write time changes (see the
+    /// cache fields above for why).
     /// </summary>
-    private static bool UseR1C1ReferenceStyle => AppOptionsStore.Load().UseR1C1ReferenceStyle;
+    private static bool UseR1C1ReferenceStyle
+    {
+        get
+        {
+            var storePath = AppOptionsStore.StorePath;
+            var writeTimeUtc = File.Exists(storePath) ? File.GetLastWriteTimeUtc(storePath) : DateTime.MinValue;
+
+            if (_cachedUseR1C1ReferenceStyle is { } cached &&
+                _cachedUseR1C1ReferenceStyleStorePath == storePath &&
+                _cachedUseR1C1ReferenceStyleWriteTimeUtc == writeTimeUtc)
+            {
+                return cached;
+            }
+
+            var value = AppOptionsStore.Load().UseR1C1ReferenceStyle;
+            _cachedUseR1C1ReferenceStyle = value;
+            _cachedUseR1C1ReferenceStyleStorePath = storePath;
+            _cachedUseR1C1ReferenceStyleWriteTimeUtc = writeTimeUtc;
+            return value;
+        }
+    }
 
     private static string FormatScalarValue(ScalarValue? value) => value switch
     {

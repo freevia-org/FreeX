@@ -274,13 +274,18 @@ public sealed class CustomViewCommandTests
     [Fact]
     public void CustomViewCommands_DelegateStatePlanning()
     {
+        // N13/N14: CustomViewCommands.CaptureWorkbookState is no longer a bare pass-through to
+        // CustomViewStatePlanner.CaptureWorkbookState(workbook) — it now takes the
+        // includePrintSettings / includeHiddenRowsColumnsAndFilterSettings flags and augments each
+        // sheet's base-captured state (via CustomViewStatePlanner.CaptureSheetState(sheet) per
+        // sheet) with the extra hidden-rows/cols/filter and print-setting fields those flags gate.
+        // The remaining delegation points to the planner are unchanged.
         var source = ModelSourceTestSupport.ReadCommandsSource("CustomViewCommands.cs");
 
         source.Should().Contain("CustomViewStatePlanner.FindViewIndex(workbook, name)");
         source.Should().Contain("CustomViewStatePlanner.CaptureSheetState(sheet)");
         source.Should().Contain("CustomViewStatePlanner.CaptureActiveSheetIndex(workbook)");
         source.Should().Contain("CustomViewStatePlanner.SanitizePaneState(state)");
-        source.Should().Contain("CustomViewStatePlanner.CaptureWorkbookState(workbook)");
         source.Should().Contain("CustomViewStatePlanner.ApplyState(sheet, state)");
     }
 

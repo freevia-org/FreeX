@@ -56,12 +56,14 @@ public partial class PhaseA2FunctionTests
     }
 
     [Fact]
-    public void Offset_NegativeHeightOrWidth_ReturnsValueError()
+    public void Offset_NegativeHeightOrWidth_ReturnsRefError()
     {
         var (wb, sheet) = MakeWb((1, 1, new NumberValue(42)));
 
-        _eval.Evaluate("=OFFSET(A1,0,0,-1,1)", sheet, wb).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=OFFSET(A1,0,0,1,-1)", sheet, wb).Should().Be(ErrorValue.Value);
+        // Excel returns #REF! (not #VALUE!) for a negative height/width in OFFSET, consistent with
+        // the zero height/width case below (round-9 finding O31).
+        _eval.Evaluate("=OFFSET(A1,0,0,-1,1)", sheet, wb).Should().Be(ErrorValue.Ref);
+        _eval.Evaluate("=OFFSET(A1,0,0,1,-1)", sheet, wb).Should().Be(ErrorValue.Ref);
     }
 
     [Fact]

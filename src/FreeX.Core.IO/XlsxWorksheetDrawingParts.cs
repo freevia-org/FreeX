@@ -344,7 +344,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
         var rotation = ReadDrawingRotation(transform);
         var flipHorizontal = ReadDrawingFlipHorizontal(transform);
         var flipVertical = ReadDrawingFlipVertical(transform);
-        var (xfrmWidthPixels, xfrmHeightPixels) = ReadDrawingXfrmExtent(transform, drawingNs);
+        var groupTransform = ComputeGroupTransform(shapeElement, spreadsheetDrawingNs, drawingNs);
+        var (xfrmWidthPixels, xfrmHeightPixels) = ReadDrawingXfrmExtent(transform, drawingNs, groupTransform);
         var (gradFillStartColor, _, gradFillEndColor, _, gradFillDirection, _) =
             ReadDrawingGradientFillColors(spPr?.Element(drawingNs + "gradFill"), drawingNs);
         var solidFill = spPr?.Element(drawingNs + "solidFill");
@@ -376,7 +377,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
             .Attribute("txBox")?.Value == "1";
 
         var txBodyElement = shapeElement.Element(spreadsheetDrawingNs + "txBody");
-        var text = string.Concat(txBodyElement?.Descendants(drawingNs + "t").Select(t => t.Value) ?? []);
+        var text = ReadShapeTextBodyPlainText(txBodyElement, drawingNs);
 
         if (isTxBox && !string.IsNullOrEmpty(text))
         {
@@ -386,7 +387,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 name,
                 title,
                 altText,
-                ReadNearestAnchor(shapeElement),
+                ReadNearestAnchor(shapeElement, transform, groupTransform),
                 rotation,
                 flipHorizontal,
                 flipVertical,
@@ -420,7 +421,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
             name,
             title,
             altText,
-            ReadNearestAnchor(shapeElement),
+            ReadNearestAnchor(shapeElement, transform, groupTransform),
             rotation,
             flipHorizontal,
             flipVertical,
@@ -460,6 +461,52 @@ internal static partial class XlsxWorksheetDrawingPartReader
             textOutlineColor,
             textOutlineThemeColor,
             textOutlineWidthPt));
+    }
+
+    /// <summary>
+    /// Flattens a shape <c>&lt;txBody&gt;</c> element to a single plain-text string, preserving
+    /// paragraph boundaries as <c>\n</c> so multi-paragraph shape/text-box text (e.g. a text box
+    /// with several lines) round-trips as distinct lines instead of being run together with no
+    /// separator.  Runs within the same paragraph are concatenated directly (a run boundary is a
+    /// formatting split, not a line break); an explicit <c>&lt;a:br/&gt;</c> line break within a
+    /// paragraph is also mapped to <c>\n</c>.
+    /// <para>
+    /// Per-run formatting beyond the first run is still simplified away — see
+    /// <see cref="ReadShapeTextFormatting"/> — because <c>DrawingShapeModel</c> only carries a
+    /// single flat <c>ShapeText</c> string with one set of formatting fields, not a per-run model.
+    /// </para>
+    /// </summary>
+    private static string ReadShapeTextBodyPlainText(XElement? txBody, XNamespace drawingNs)
+    {
+        if (txBody is null)
+            return "";
+
+        var paragraphs = txBody.Elements(drawingNs + "p").ToList();
+        if (paragraphs.Count == 0)
+            return "";
+
+        var paragraphTexts = new List<string>(paragraphs.Count);
+        foreach (var paragraph in paragraphs)
+        {
+            var builder = new System.Text.StringBuilder();
+            foreach (var node in paragraph.Elements())
+            {
+                if (node.Name == drawingNs + "br")
+                {
+                    builder.Append('\n');
+                }
+                else if (node.Name == drawingNs + "r" || node.Name == drawingNs + "fld")
+                {
+                    var t = node.Element(drawingNs + "t");
+                    if (t is not null)
+                        builder.Append(t.Value);
+                }
+            }
+
+            paragraphTexts.Add(builder.ToString());
+        }
+
+        return string.Join("\n", paragraphTexts);
     }
 
     /// <summary>
@@ -616,7 +663,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
         var rotation = ReadDrawingRotation(transform);
         var flipHorizontal = ReadDrawingFlipHorizontal(transform);
         var flipVertical = ReadDrawingFlipVertical(transform);
-        var (xfrmWidthPixels, xfrmHeightPixels) = ReadDrawingXfrmExtent(transform, drawingNs);
+        var groupTransform = ComputeGroupTransform(cxnSpElement, spreadsheetDrawingNs, drawingNs);
+        var (xfrmWidthPixels, xfrmHeightPixels) = ReadDrawingXfrmExtent(transform, drawingNs, groupTransform);
         var lnElement = spPr?.Element(drawingNs + "ln");
         var outlineFill = lnElement?.Element(drawingNs + "solidFill");
         var outlineColor = ReadDrawingSolidFillColor(outlineFill, drawingNs);
@@ -640,7 +688,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
             name,
             title,
             altText,
-            ReadNearestAnchor(cxnSpElement),
+            ReadNearestAnchor(cxnSpElement, transform, groupTransform),
             rotation,
             flipHorizontal,
             flipVertical,
@@ -797,11 +845,16 @@ internal static partial class XlsxWorksheetDrawingPartReader
         XlsxWorksheetXmlValueParser.IsTruthy(transform?.Attribute("flipV")?.Value);
 
     /// <summary>
-    /// Reads the pre-rotation shape size from <c>&lt;a:xfrm&gt;&lt;a:ext cx cy/&gt;</c>.
+    /// Reads the pre-rotation shape size from <c>&lt;a:xfrm&gt;&lt;a:ext cx cy/&gt;</c>, scaled by
+    /// <paramref name="groupTransform"/> so a shape nested inside one or more groups reports the
+    /// size it actually renders at once the group's chOff/chExt child-to-parent scale is applied
+    /// (the group may stretch or shrink its children relative to their authored local size).
     /// Returns (null, null) when the element is absent.
     /// </summary>
-    private static (double? WidthPixels, double? HeightPixels) ReadDrawingXfrmExtent(XElement? transform, XNamespace drawingNs)
+    private static (double? WidthPixels, double? HeightPixels) ReadDrawingXfrmExtent(
+        XElement? transform, XNamespace drawingNs, DrawingGroupTransform? groupTransform = null)
     {
+        var effectiveGroupTransform = groupTransform ?? DrawingGroupTransform.Identity;
         var ext = transform?.Element(drawingNs + "ext");
         if (ext is null)
             return (null, null);
@@ -821,8 +874,136 @@ internal static partial class XlsxWorksheetDrawingPartReader
         if (cxEmu <= 0 && cyEmu <= 0)
             return (null, null);
 
-        return (DrawingMlUnits.EmuToPixels(cxEmu), DrawingMlUnits.EmuToPixels(cyEmu));
+        var scaleX = effectiveGroupTransform.ScaleX;
+        var scaleY = effectiveGroupTransform.ScaleY;
+        return (DrawingMlUnits.EmuToPixels(cxEmu * scaleX), DrawingMlUnits.EmuToPixels(cyEmu * scaleY));
     }
+
+    /// <summary>
+    /// Composed child-space-to-anchor-space transform accumulated from the chain of ancestor
+    /// <c>&lt;xdr:grpSp&gt;</c> group transforms enclosing a shape.  Identity (<c>OffsetXEmu</c>/
+    /// <c>OffsetYEmu</c> = 0, <c>ScaleX</c>/<c>ScaleY</c> = 1) when the shape is not inside a group.
+    /// See <see cref="ComputeGroupTransform"/>.
+    /// </summary>
+    private readonly record struct DrawingGroupTransform(double OffsetXEmu, double OffsetYEmu, double ScaleX, double ScaleY)
+    {
+        public static readonly DrawingGroupTransform Identity = new(0, 0, 1, 1);
+    }
+
+    /// <summary>
+    /// Composes the chain of ancestor <c>&lt;xdr:grpSp&gt;</c> group transforms (innermost first)
+    /// enclosing <paramref name="element"/> into a single transform that maps the element's own
+    /// local <c>&lt;a:xfrm&gt;&lt;a:off&gt;</c> (expressed in the innermost group's child
+    /// coordinate space, <c>chOff</c>/<c>chExt</c>) into the outermost group's child space — which
+    /// is exactly the space the worksheet anchor (<c>twoCellAnchor</c>/<c>oneCellAnchor</c>/
+    /// <c>absoluteAnchor</c>) positions the whole group tree in.
+    /// <para>
+    /// Each group's own <c>&lt;a:xfrm&gt;</c> carries both <c>off</c>/<c>ext</c> (its position and
+    /// size in its parent's space) and <c>chOff</c>/<c>chExt</c> (the origin and extent of the
+    /// coordinate space its direct children are authored in, which can differ in scale from
+    /// <c>ext</c> — the group can stretch its contents). A child's local coordinate <c>(x, y)</c>
+    /// maps to the parent space as <c>off + (x - chOff) * (ext / chExt)</c>.
+    /// </para>
+    /// Returns <see cref="DrawingGroupTransform.Identity"/> when the element has no enclosing
+    /// group or any ancestor group lacks a usable <c>chOff</c>/<c>chExt</c>.
+    /// </summary>
+    private static DrawingGroupTransform ComputeGroupTransform(XElement element, XNamespace spreadsheetDrawingNs, XNamespace drawingNs)
+    {
+        double offsetX = 0, offsetY = 0, scaleX = 1, scaleY = 1;
+        foreach (var group in element.Ancestors(spreadsheetDrawingNs + "grpSp"))
+        {
+            var groupXfrm = group.Element(spreadsheetDrawingNs + "grpSpPr")?.Element(drawingNs + "xfrm");
+            if (!TryReadGroupXfrm(groupXfrm, drawingNs, out var groupOffX, out var groupOffY,
+                    out var groupExtCx, out var groupExtCy,
+                    out var groupChOffX, out var groupChOffY,
+                    out var groupChExtCx, out var groupChExtCy))
+            {
+                continue;
+            }
+
+            var groupScaleX = groupChExtCx != 0 ? groupExtCx / groupChExtCx : 1;
+            var groupScaleY = groupChExtCy != 0 ? groupExtCy / groupChExtCy : 1;
+
+            offsetX = groupOffX + (offsetX - groupChOffX) * groupScaleX;
+            offsetY = groupOffY + (offsetY - groupChOffY) * groupScaleY;
+            scaleX *= groupScaleX;
+            scaleY *= groupScaleY;
+        }
+
+        return new DrawingGroupTransform(offsetX, offsetY, scaleX, scaleY);
+    }
+
+    private static bool TryReadGroupXfrm(
+        XElement? groupXfrm, XNamespace drawingNs,
+        out double offX, out double offY, out double extCx, out double extCy,
+        out double chOffX, out double chOffY, out double chExtCx, out double chExtCy)
+    {
+        offX = offY = extCx = extCy = chOffX = chOffY = chExtCx = chExtCy = 0;
+        if (groupXfrm is null)
+            return false;
+
+        var off = groupXfrm.Element(drawingNs + "off");
+        var ext = groupXfrm.Element(drawingNs + "ext");
+        var chOff = groupXfrm.Element(drawingNs + "chOff");
+        var chExt = groupXfrm.Element(drawingNs + "chExt");
+        if (off is null || ext is null || chOff is null || chExt is null)
+            return false;
+
+        return TryParseEmuAttribute(off, "x", out offX) &&
+               TryParseEmuAttribute(off, "y", out offY) &&
+               TryParseEmuAttribute(ext, "cx", out extCx) &&
+               TryParseEmuAttribute(ext, "cy", out extCy) &&
+               TryParseEmuAttribute(chOff, "x", out chOffX) &&
+               TryParseEmuAttribute(chOff, "y", out chOffY) &&
+               TryParseEmuAttribute(chExt, "cx", out chExtCx) &&
+               TryParseEmuAttribute(chExt, "cy", out chExtCy);
+    }
+
+    private static bool TryParseEmuAttribute(XElement element, string attributeName, out double value) =>
+        double.TryParse(element.Attribute(attributeName)?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+
+    /// <summary>
+    /// Reads the nearest enclosing worksheet anchor for <paramref name="element"/> and, when the
+    /// element is nested inside one or more groups (<paramref name="groupTransform"/> is not
+    /// identity), translates the anchor's from-cell sub-cell offset by the shape's own local
+    /// <c>&lt;a:xfrm&gt;&lt;a:off&gt;</c> composed through the group chain — so a grouped shape is
+    /// positioned at its true worksheet location instead of collapsing onto the whole group's
+    /// outer anchor (see <see cref="ComputeGroupTransform"/>).
+    /// </summary>
+    private static XlsxDrawingAnchor? ReadNearestAnchor(XElement element, XElement? transform, DrawingGroupTransform groupTransform)
+    {
+        var anchor = ReadNearestAnchor(element);
+        if (anchor is null || (groupTransform.OffsetXEmu == 0 && groupTransform.OffsetYEmu == 0 &&
+                                groupTransform.ScaleX == 1 && groupTransform.ScaleY == 1))
+        {
+            return anchor;
+        }
+
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var off = transform?.Element(drawingNs + "off");
+        var localOffXEmu = ReadEmuAttributeOrZero(off, "x");
+        var localOffYEmu = ReadEmuAttributeOrZero(off, "y");
+
+        // Map the shape's own local off (in the innermost group's child space) through the
+        // composed group transform into the outermost group's child space, which is the same
+        // space the worksheet anchor positions the group tree in.
+        var absoluteOffXEmu = groupTransform.OffsetXEmu + localOffXEmu * groupTransform.ScaleX;
+        var absoluteOffYEmu = groupTransform.OffsetYEmu + localOffYEmu * groupTransform.ScaleY;
+
+        var deltaXPixels = DrawingMlUnits.EmuToPixels(absoluteOffXEmu);
+        var deltaYPixels = DrawingMlUnits.EmuToPixels(absoluteOffYEmu);
+
+        return anchor with
+        {
+            FromColumnOffset = anchor.FromColumnOffset + deltaXPixels,
+            FromRowOffset = anchor.FromRowOffset + deltaYPixels,
+        };
+    }
+
+    private static double ReadEmuAttributeOrZero(XElement? element, string attributeName) =>
+        double.TryParse(element?.Attribute(attributeName)?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : 0;
 
     /// <summary>
     /// Reads the outline width in points from <c>&lt;a:ln w="..."/&gt;</c>.

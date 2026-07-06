@@ -436,7 +436,12 @@ internal static class XlsxWorksheetDrawingObjectWriter
 
     /// <summary>
     /// Builds a minimal <c>&lt;xdr:txBody&gt;</c> element that round-trips shape text with
-    /// font properties.  Multi-run rich text is not supported — a single run is emitted.
+    /// font properties.  <see cref="DrawingShapeModel.ShapeText"/> stores multi-line text as a
+    /// single string with <c>\n</c> paragraph separators (see
+    /// <c>XlsxWorksheetDrawingParts.ReadShapeTextBodyPlainText</c>); each line is emitted as its
+    /// own <c>&lt;a:p&gt;</c> so multi-line shape/text-box text round-trips as distinct lines
+    /// instead of collapsing into one paragraph.  Multi-run rich text within a single line is
+    /// still not supported — every paragraph carries the shape's one formatting set as a single run.
     /// </summary>
     private static XElement ToShapeTxBody(
         DrawingShapeModel shape,
@@ -520,15 +525,25 @@ internal static class XlsxWorksheetDrawingObjectWriter
             bodyPrElement.Add(new XElement(drawingNs + "prstTxWarp",
                 new XAttribute("prst", shape.WarpPreset)));
 
-        return new XElement(spreadsheetDrawingNs + "txBody",
-            bodyPrElement,
-            new XElement(drawingNs + "lstStyle"),
-            new XElement(drawingNs + "p",
+        // Split on the \n paragraph separators the reader joins lines with (see
+        // ReadShapeTextBodyPlainText) so each line becomes its own <a:p>, preserving multi-line
+        // shape text across a save/reload round-trip instead of collapsing it into one paragraph.
+        var lines = (shape.ShapeText ?? "").Split('\n');
+        var paragraphElements = new XElement[lines.Length];
+        for (var i = 0; i < lines.Length; i++)
+        {
+            paragraphElements[i] = new XElement(drawingNs + "p",
                 new XElement(drawingNs + "pPr",
                     new XAttribute("algn", algnValue)),
                 new XElement(drawingNs + "r",
-                    rPr,
-                    new XElement(drawingNs + "t", shape.ShapeText ?? ""))));
+                    new XElement(rPr),
+                    new XElement(drawingNs + "t", lines[i])));
+        }
+
+        return new XElement(spreadsheetDrawingNs + "txBody",
+            bodyPrElement,
+            new XElement(drawingNs + "lstStyle"),
+            paragraphElements);
     }
 
     private static XElement ToDrawingAnchorFrom(CellAddress anchor, XNamespace spreadsheetDrawingNs) =>
