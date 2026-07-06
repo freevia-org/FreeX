@@ -987,6 +987,44 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesBasicBlockListAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/basicBlockList",
+            nodes: [("id1", "Item 1"), ("id2", "Item 2"), ("id3", "Item 3")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.List,
+            "basicBlockList is a list-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "basicBlockList is in the bounded shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Item 1", "Item 2", "Item 3");
+    }
+
+    [Fact]
+    public void Reader_ParsesKnownListFamilyButDisablesLiveLayoutForUnsupportedSibling()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/stackedList",
+            nodes: [("id1", "Item 1"), ("id2", "Item 2")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.List,
+            "unsupported list siblings still retain broad family metadata for future layout slices");
+        sa.Data.IsLiveLayoutSupported.Should().BeFalse(
+            "list-family layouts outside the bounded allow-list should keep cached-drawing fallback");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Item 1", "Item 2");
+    }
+
+    [Fact]
     public void Reader_ParsesKnownFamilyButDisablesLiveLayoutForUnsupportedVariant()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
