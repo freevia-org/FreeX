@@ -1875,7 +1875,7 @@ public static class PptxPackageReader
                     // Parse dsp:drawing shapes into FallbackShapes
                     try
                     {
-                        ReadDspDrawing(drawingBytes, smart, scheme);
+                        ReadDspDrawing(drawingBytes, smart, scheme, archive, drawingPath);
                     }
                     catch
                     {
@@ -1889,6 +1889,7 @@ public static class PptxPackageReader
         try
         {
             smart.Data = ReadSmartArtData(smart);
+            TryAttachPictureCaptionListNodePictures(smart, archive);
         }
         catch
         {
@@ -2377,6 +2378,94 @@ public static class PptxPackageReader
         return data;
     }
 
+    private static void TryAttachPictureCaptionListNodePictures(SmartArtShape smart, ZipArchive archive)
+    {
+        var data = smart.Data;
+        if (data is null || !IsPictureCaptionListLayout(data.LayoutUniqueId))
+            return;
+
+        var nodes = FlattenSmartArtNodes(data);
+        if (nodes.Count == 0)
+        {
+            data.IsLiveLayoutSupported = false;
+            return;
+        }
+
+        var pictures = ReadSmartArtDrawingPictures(smart, archive)
+            .Where(p => p.Bytes.Length > 0)
+            .ToList();
+
+        // This bounded slice maps cached drawing pictures to data nodes by document order only
+        // when the fixture/deck supplies a one-to-one mapping. Anything ambiguous keeps fallback.
+        if (pictures.Count != nodes.Count)
+        {
+            data.IsLiveLayoutSupported = false;
+            return;
+        }
+
+        for (var i = 0; i < nodes.Count; i++)
+            nodes[i].Picture = pictures[i];
+
+        data.IsLiveLayoutSupported = true;
+    }
+
+    private static List<SmartArtNode> FlattenSmartArtNodes(SmartArtData data)
+    {
+        var nodes = new List<SmartArtNode>();
+        foreach (var root in data.Nodes)
+            Collect(root);
+        return nodes;
+
+        void Collect(SmartArtNode node)
+        {
+            nodes.Add(node);
+            foreach (var child in node.Children)
+                Collect(child);
+        }
+    }
+
+    private static List<ImagePart> ReadSmartArtDrawingPictures(SmartArtShape smart, ZipArchive archive)
+    {
+        var pictures = new List<ImagePart>();
+        if (string.IsNullOrWhiteSpace(smart.DrawingPartPath))
+            return pictures;
+
+        if (!smart.Parts.TryGetValue(smart.DrawingPartPath, out var drawingPart))
+            return pictures;
+
+        XDocument doc;
+        using (var ms = new MemoryStream(drawingPart.Bytes))
+            doc = OpcXml.LoadXml(ms);
+
+        var root = doc.Root;
+        if (root is null) return pictures;
+
+        var rels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(smart.DrawingPartPath));
+        var drawingDir = GetDirectoryName(smart.DrawingPartPath);
+
+        foreach (var el in root.Descendants().Where(e => e.Name.LocalName is "pic" or "sp"))
+        {
+            var blipFill = el.Elements().FirstOrDefault(e => e.Name.LocalName == "blipFill")
+                ?? el.Elements().FirstOrDefault(e => e.Name.LocalName == "spPr")
+                    ?.Elements().FirstOrDefault(e => e.Name.LocalName == "blipFill");
+            var blip = blipFill?.Descendants().FirstOrDefault(e => e.Name == A + "blip" || e.Name.LocalName == "blip");
+            var image = LoadImageFromBlip(blip, rels, drawingDir, archive);
+            if (image is not null)
+                pictures.Add(image);
+        }
+
+        return pictures;
+    }
+
+    private static bool IsPictureCaptionListLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "picturecaptionlist", StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// Classifies a layoutDef @uniqueId string into a <see cref="SmartArtFamily"/>.
     /// The uniqueId is a URN like "urn:microsoft.com/office/officeart/2005/8/layout/process1".
@@ -2434,7 +2523,12 @@ public static class PptxPackageReader
     /// Parses a dsp:drawing XML (SmartArt cached render) into FallbackShapes on the SmartArtShape.
     /// dsp:sp elements are structurally like p:sp (spPr + txBody); dsp:grpSp like p:grpSp.
     /// </summary>
-    private static void ReadDspDrawing(byte[] bytes, SmartArtShape smart, PresentationColorScheme scheme)
+    private static void ReadDspDrawing(
+        byte[] bytes,
+        SmartArtShape smart,
+        PresentationColorScheme scheme,
+        ZipArchive? archive = null,
+        string? drawingPartPath = null)
     {
         XDocument doc;
         using (var ms = new MemoryStream(bytes))
@@ -2449,7 +2543,7 @@ public static class PptxPackageReader
 
         foreach (var el in spTree.Elements())
         {
-            var shape = ReadDspElement(el, scheme);
+            var shape = ReadDspElement(el, scheme, archive, drawingPartPath);
             if (shape is not null)
                 smart.FallbackShapes.Add(shape);
         }
@@ -2458,20 +2552,30 @@ public static class PptxPackageReader
     /// <summary>
     /// Reads a dsp:sp or dsp:grpSp element into a SlideShape using the existing spPr/txBody helpers.
     /// </summary>
-    private static SlideShape? ReadDspElement(XElement el, PresentationColorScheme scheme)
+    private static SlideShape? ReadDspElement(
+        XElement el,
+        PresentationColorScheme scheme,
+        ZipArchive? archive = null,
+        string? drawingPartPath = null)
     {
         switch (el.Name.LocalName)
         {
             case "sp":
-                return ReadDspSp(el, scheme);
+                return ReadDspSp(el, scheme, archive, drawingPartPath);
+            case "pic":
+                return ReadDspPic(el, scheme, archive, drawingPartPath);
             case "grpSp":
-                return ReadDspGrpSp(el, scheme);
+                return ReadDspGrpSp(el, scheme, archive, drawingPartPath);
             default:
                 return null;
         }
     }
 
-    private static SlideShape ReadDspSp(XElement sp, PresentationColorScheme scheme)
+    private static SlideShape ReadDspSp(
+        XElement sp,
+        PresentationColorScheme scheme,
+        ZipArchive? archive = null,
+        string? drawingPartPath = null)
     {
         // dsp:sp has dsp:nvSpPr/dsp:cNvPr (id, name), dsp:spPr (a: children), dsp:txBody (a: children)
         var cNvPrEl = sp.Elements().FirstOrDefault(e => e.Name.LocalName == "nvSpPr")
@@ -2493,7 +2597,10 @@ public static class PptxPackageReader
         {
             // Build a synthetic a:spPr element so we can reuse ReadSpPr (it uses the A namespace)
             var aSpPr = new XElement(A + "spPr", spPrEl.Attributes(), spPrEl.Elements());
-            ReadSpPr(aSpPr, shape, scheme);
+            var blipResolver = (archive is not null && !string.IsNullOrWhiteSpace(drawingPartPath))
+                ? BuildBlipResolver(archive, OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(drawingPartPath)), drawingPartPath)
+                : null;
+            ReadSpPr(aSpPr, shape, scheme, blipResolver);
 
             var prst = aSpPr.Element(A + "prstGeom")?.Attribute("prst")?.Value;
             shape.AutoShapeKind = PptxShapeKindMap.FromPreset(prst);
@@ -2511,7 +2618,55 @@ public static class PptxPackageReader
         return shape;
     }
 
-    private static SlideShape ReadDspGrpSp(XElement grpSp, PresentationColorScheme scheme)
+    private static SlideShape ReadDspPic(
+        XElement pic,
+        PresentationColorScheme scheme,
+        ZipArchive? archive = null,
+        string? drawingPartPath = null)
+    {
+        var cNvPrEl = pic.Elements().FirstOrDefault(e => e.Name.LocalName == "nvPicPr")
+                        ?.Elements().FirstOrDefault(e => e.Name.LocalName == "cNvPr");
+
+        var shape = new SlideShape
+        {
+            Id = ParseUint(cNvPrEl?.Attribute("id")?.Value),
+            Name = cNvPrEl?.Attribute("name")?.Value ?? string.Empty,
+            AlternativeTextTitle = ReadAlternativeTextTitle(cNvPrEl),
+            AlternativeText = ReadAlternativeText(cNvPrEl),
+            IsDecorative = ReadDecorative(cNvPrEl),
+            Kind = SlideShapeKind.Picture
+        };
+
+        var spPrEl = pic.Elements().FirstOrDefault(e => e.Name.LocalName == "spPr");
+        if (spPrEl is not null)
+        {
+            var aSpPr = new XElement(A + "spPr", spPrEl.Attributes(), spPrEl.Elements());
+            ReadSpPr(aSpPr, shape, scheme);
+
+            var prst = aSpPr.Element(A + "prstGeom")?.Attribute("prst")?.Value;
+            if (!string.IsNullOrEmpty(prst) && prst != "rect")
+                shape.PictureFrameGeometry = prst;
+        }
+
+        var blipFillEl = pic.Elements().FirstOrDefault(e => e.Name.LocalName == "blipFill");
+        var blip = blipFillEl?.Elements().FirstOrDefault(e => e.Name == A + "blip" || e.Name.LocalName == "blip");
+        if (archive is not null && !string.IsNullOrWhiteSpace(drawingPartPath))
+        {
+            var rels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(drawingPartPath));
+            shape.Picture = LoadImageFromBlip(blip, rels, GetDirectoryName(drawingPartPath), archive);
+        }
+
+        if (blipFillEl is not null || blip is not null)
+            shape.PictureFormat = ReadPictureFormat(blipFillEl, blip);
+
+        return shape;
+    }
+
+    private static SlideShape ReadDspGrpSp(
+        XElement grpSp,
+        PresentationColorScheme scheme,
+        ZipArchive? archive = null,
+        string? drawingPartPath = null)
     {
         var cNvPrEl = grpSp.Elements().FirstOrDefault(e => e.Name.LocalName == "nvGrpSpPr")
                            ?.Elements().FirstOrDefault(e => e.Name.LocalName == "cNvPr");
@@ -2538,7 +2693,7 @@ public static class PptxPackageReader
                      ?? grpSp; // some encoders put children directly inside grpSp
         foreach (var child in spTreeEl.Elements())
         {
-            var childShape = ReadDspElement(child, scheme);
+            var childShape = ReadDspElement(child, scheme, archive, drawingPartPath);
             if (childShape is not null)
                 shape.Children.Add(childShape);
         }

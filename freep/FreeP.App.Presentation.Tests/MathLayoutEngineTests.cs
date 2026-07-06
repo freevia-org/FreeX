@@ -928,6 +928,76 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void Row_TransparentZeroWidthLargeOperatorPhantom_AddsSharedSpacingAdvance()
+    {
+        var transparentRow = new MathNode.Row(new MathNode[]
+        {
+            Run("a"),
+            new MathNode.Phantom(Run("\u2211"), show: false, zeroWidth: true, transparentSpacing: true),
+            Run("b")
+        });
+        var packedRow = new MathNode.Row(new MathNode[]
+        {
+            Run("a"),
+            new MathNode.Phantom(Run("\u2211"), show: false, zeroWidth: true),
+            Run("b")
+        });
+
+        var transparentLayout = MathLayoutEngine.Layout(transparentRow, "Cambria Math", FontSizePt);
+        var packedLayout = MathLayoutEngine.Layout(packedRow, "Cambria Math", FontSizePt);
+
+        var transparentContainer = Assert.IsType<MathBox.Container>(transparentLayout.Children[0]);
+        var packedContainer = Assert.IsType<MathBox.Container>(packedLayout.Children[0]);
+
+        transparentLayout.Metrics.Width.Should().BeGreaterThan(packedLayout.Metrics.Width,
+            "m:transp should preserve deterministic spacing for simple large-operator phantom runs");
+        transparentContainer.Children[2].X.Should().BeGreaterThan(packedContainer.Children[2].X,
+            "the following sibling should advance past the transparent large-operator spacing");
+
+        var ops = MathBoxRenderPlanner.Plan(transparentLayout, 10, 20, SrgbColor.Black, "Cambria Math");
+        ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text)
+            .Should().Equal(new[] { "a", "b" },
+                "transparent large-operator spacing affects advance only and must not reintroduce hidden glyph draw ops");
+    }
+
+    [Fact]
+    public void Row_TransparentZeroWidthPunctuationPhantom_AddsAfterSpacingOnly()
+    {
+        var punctuationLayout = MathLayoutEngine.Layout(
+            new MathNode.Row(new MathNode[]
+            {
+                Run("a"),
+                new MathNode.Phantom(Run(";"), show: false, zeroWidth: true, transparentSpacing: true),
+                Run("b")
+            }),
+            "Cambria Math",
+            FontSizePt);
+        var packedLayout = MathLayoutEngine.Layout(
+            new MathNode.Row(new MathNode[]
+            {
+                Run("a"),
+                new MathNode.Phantom(Run(";"), show: false, zeroWidth: true),
+                Run("b")
+            }),
+            "Cambria Math",
+            FontSizePt);
+        var binaryLayout = MathLayoutEngine.Layout(
+            new MathNode.Row(new MathNode[]
+            {
+                Run("a"),
+                new MathNode.Phantom(Run("+"), show: false, zeroWidth: true, transparentSpacing: true),
+                Run("b")
+            }),
+            "Cambria Math",
+            FontSizePt);
+
+        punctuationLayout.Metrics.Width.Should().BeGreaterThan(packedLayout.Metrics.Width,
+            "punctuation-class m:transp should still advance following content");
+        punctuationLayout.Metrics.Width.Should().BeLessThan(binaryLayout.Metrics.Width,
+            "the punctuation class is intentionally directional and narrower than symmetric binary spacing");
+    }
+
+    [Fact]
     public void Row_TransparentZeroWidthPhantomNonOperator_DoesNotAddOperatorSpacing()
     {
         var transparentLayout = MathLayoutEngine.Layout(
@@ -950,7 +1020,33 @@ public sealed class MathLayoutEngineTests
             FontSizePt);
 
         transparentLayout.Metrics.Width.Should().BeApproximately(packedLayout.Metrics.Width, 0.01,
-            "m:transp is consumed only for simple operator-class phantom runs in this bounded slice");
+            "m:transp is consumed only for simple spacing-class phantom runs in this bounded slice");
+    }
+
+    [Fact]
+    public void Row_TransparentZeroWidthPhantomAmbiguousMultiCharacterRun_DoesNotAddSpacing()
+    {
+        var transparentLayout = MathLayoutEngine.Layout(
+            new MathNode.Row(new MathNode[]
+            {
+                Run("x"),
+                new MathNode.Phantom(Run("->"), show: false, zeroWidth: true, transparentSpacing: true),
+                Run("y")
+            }),
+            "Cambria Math",
+            FontSizePt);
+        var packedLayout = MathLayoutEngine.Layout(
+            new MathNode.Row(new MathNode[]
+            {
+                Run("x"),
+                new MathNode.Phantom(Run("->"), show: false, zeroWidth: true),
+                Run("y")
+            }),
+            "Cambria Math",
+            FontSizePt);
+
+        transparentLayout.Metrics.Width.Should().BeApproximately(packedLayout.Metrics.Width, 0.01,
+            "multi-character operator text remains ambiguous without PowerPoint-authoritative class evidence");
     }
 
     [Fact]

@@ -276,7 +276,7 @@ public abstract class MathNode
         public bool ZeroDescent { get; }
 
         /// <summary>
-        /// Parsed <c>m:transp</c> flag. Spacing-class behavior is deferred; layout currently preserves the flag only.
+        /// Parsed <c>m:transp</c> flag consumed by bounded shared row spacing-class layout.
         /// </summary>
         public bool TransparentSpacing { get; }
 

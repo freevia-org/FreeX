@@ -359,6 +359,23 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Shared chart planning now resolves edge and mixed factor/edge manual layout modes for plot-area and legend rectangles, clamping non-negative bounds inside the chart base rectangle. PowerPoint-authoritative chart visual baselines and nuanced layoutTarget tuning remain deferred."),
         new(
+            EvidenceId: "freep.omml.transparent-phantom-spacing",
+            Area: "OMML transparent phantom spacing classes",
+            Status: "shared-layout-evidence",
+            HostCoverage: "WPF/Avalonia consume shared MathLayoutEngine row advances and MathBoxRenderPlanner draw ops with no renderer-local math policy",
+            EvidenceDocs:
+            [
+                "docs/planning/freep-powerpoint-parity-status-2026-06-27.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/MathLayoutEngineTests.cs",
+                "freep/FreeP.App.Presentation.Tests/OmmlParserTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideCanvasMathBaselineTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
+            ],
+            RemainingWork: "Shared row layout now consumes m:phantPr/m:transp for bounded single-token binary, relation, large-operator, and punctuation spacing classes while ambiguous multi-character and structured phantom bases stay packed. PowerPoint-authoritative visual baselines and full OfficeMath spacing-table typography remain deferred."),
+        new(
             EvidenceId: "freep.smartart.continuous-block-process",
             Area: "SmartArt continuous block process live layout",
             Status: "shared-render-planner-evidence",
@@ -463,6 +480,21 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
             ],
             RemainingWork: "stackedList now uses the bounded shared list-family live-layout path for parsed nodes while other unsupported list siblings remain on cached drawing fallback. Broader SmartArt geometry families, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
+        new(
+            EvidenceId: "freep.smartart.picture-caption-list",
+            Area: "SmartArt pictureCaptionList bounded live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume ordinary shared picture and caption shape ops emitted by the SmartArt layout planner; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-smartart-picture-caption-list-2026-07-07.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
+            ],
+            RemainingWork: "pictureCaptionList now uses a bounded shared live-layout path only when reader-imported node images are deterministically mapped one-to-one from the cached diagram drawing. Missing or ambiguous image mapping keeps cached drawing fallback. PowerPoint-authored visual baselines, broader SmartArt picture layouts, and SmartArt authoring/editing remain deferred."),
         new(
             EvidenceId: "freep.smartart.basic-cycle",
             Area: "SmartArt basic cycle live layout",
