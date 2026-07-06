@@ -42,6 +42,9 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         source.Should().Contain("SourceManagementDialogPlanner.DeleteMasterSource(");
         source.Should().Contain("SourceManagementDialogPlanner.CopyMasterToCurrent(");
         source.Should().Contain("SourceManagementDialogPlanner.CopyCurrentToMaster(");
+        source.Should().Contain("SourceManagementDialogPlanner.BuildSourceConflictMessage(");
+        source.Should().Contain("SourceManagementDialogPlanner.BuildSourceConflictResolutionChoices(");
+        source.Should().Contain("SourceManagementDialogPlanner.ResolveSourceConflict(");
         source.Should().Contain("SourceManagementDialogPlanner.AddCurrentSource(");
         source.Should().Contain("SourceManagementDialogPlanner.EditCurrentSource(");
         source.Should().Contain("SourceManagementDialogPlanner.DeleteCurrentSource(");
@@ -49,7 +52,7 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
     }
 
     [Fact]
-    public void ReferencesDialogs_DoesNotOwnSourceAuthorParsingPolicy()
+    public void ReferencesDialogs_DoesNotOwnSourceAuthorOrConflictPolicy()
     {
         var source = ReadReferencesDialogsSource();
 
@@ -57,6 +60,11 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         source.Should().NotContain("PersonalAuthors =");
         source.Should().NotContain("CorporateAuthor =");
         source.Should().NotContain("SourceAuthorPerson.Create(");
+        source.Should().NotContain("SourcePayloadEquals(");
+        source.Should().NotContain("SourcePeopleEqual(");
+        source.Should().NotContain("SourceValueEquals(");
+        source.Should().NotContain("SourceManagementTagIdentity");
+        source.Should().NotContain("FindSourceIndexByTag(");
     }
 
     private static string ReadReferencesDialogsSource()

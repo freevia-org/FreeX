@@ -160,10 +160,30 @@ public sealed record SourceManagementDialogState(
     IReadOnlyList<Source> CurrentSources,
     IReadOnlyList<Source> MasterSources);
 
+public enum SourceManagementSourceConflictResolutionAction
+{
+    KeepCurrent,
+    ReplaceCurrentFromMaster,
+    KeepMaster,
+    ReplaceMasterFromCurrent
+}
+
+public sealed record SourceManagementSourceConflict(
+    string Tag,
+    Source CurrentSource,
+    Source MasterSource,
+    SourceManagementSourceConflictResolutionAction KeepAction,
+    SourceManagementSourceConflictResolutionAction ReplaceAction);
+
+public sealed record SourceManagementSourceConflictResolutionChoice(
+    SourceManagementSourceConflictResolutionAction Action,
+    string Label);
+
 public sealed record SourceManagementListMutationPlan(
     SourceManagementDialogState State,
     int SelectedIndex,
-    SourceManagementValidation? Validation = null);
+    SourceManagementValidation? Validation = null,
+    SourceManagementSourceConflict? Conflict = null);
 
 public sealed record SourceManagementDialogResult(
     IReadOnlyList<Source> CurrentSources,
@@ -214,6 +234,11 @@ public static class SourceManagementDialogPlanner
     public const string CorporateAuthorLabel = "Corporate Author:";
     public const string AddAuthorRowButtonLabel = "Add";
     public const string RemoveAuthorRowButtonLabel = "Remove";
+    public const string SourceConflictDialogTitle = "Source Conflict";
+    public const string SourceConflictKeepCurrentLabel = "Keep Current Document";
+    public const string SourceConflictReplaceCurrentLabel = "Replace Current Document";
+    public const string SourceConflictKeepMasterLabel = "Keep Master List";
+    public const string SourceConflictReplaceMasterLabel = "Replace Master List";
 
     private static readonly IReadOnlyList<SourceManagementSourceTypeChoice> SourceTypeChoices =
     [
@@ -859,8 +884,22 @@ public static class SourceManagementDialogPlanner
             return new SourceManagementListMutationPlan(state, currentSelectedIndex);
 
         var source = state.MasterSources[masterSelectedIndex];
-        if (ContainsSourceTag(state.CurrentSources, source.Tag))
-            return new SourceManagementListMutationPlan(state, currentSelectedIndex);
+        var matchingCurrentIndex = FindSourceIndexByTag(state.CurrentSources, source.Tag);
+        if (matchingCurrentIndex >= 0)
+        {
+            var currentSource = state.CurrentSources[matchingCurrentIndex];
+            if (SourcePayloadEquals(currentSource, source))
+                return new SourceManagementListMutationPlan(state, matchingCurrentIndex);
+
+            return new SourceManagementListMutationPlan(
+                state,
+                matchingCurrentIndex,
+                Conflict: CreateSourceConflict(
+                    currentSource,
+                    source,
+                    SourceManagementSourceConflictResolutionAction.KeepCurrent,
+                    SourceManagementSourceConflictResolutionAction.ReplaceCurrentFromMaster));
+        }
 
         var currentSources = state.CurrentSources.Select(CloneSource).ToList();
         currentSources.Add(CloneSource(source));
@@ -879,11 +918,79 @@ public static class SourceManagementDialogPlanner
         if (!IsValidIndex(currentSelectedIndex, state.CurrentSources.Count))
             return new SourceManagementListMutationPlan(state, masterSelectedIndex);
 
+        var source = state.CurrentSources[currentSelectedIndex];
+        var matchingMasterIndex = FindSourceIndexByTag(state.MasterSources, source.Tag);
+        if (matchingMasterIndex >= 0)
+        {
+            var masterSource = state.MasterSources[matchingMasterIndex];
+            if (SourcePayloadEquals(source, masterSource))
+                return new SourceManagementListMutationPlan(state, matchingMasterIndex);
+
+            return new SourceManagementListMutationPlan(
+                state,
+                matchingMasterIndex,
+                Conflict: CreateSourceConflict(
+                    source,
+                    masterSource,
+                    SourceManagementSourceConflictResolutionAction.KeepMaster,
+                    SourceManagementSourceConflictResolutionAction.ReplaceMasterFromCurrent));
+        }
+
         var masterSources = state.MasterSources.Select(CloneSource).ToList();
-        var selectedIndex = UpsertSourceByTag(masterSources, state.CurrentSources[currentSelectedIndex]);
+        var selectedIndex = UpsertSourceByTag(masterSources, source);
 
         var nextState = state with { MasterSources = masterSources };
         return new SourceManagementListMutationPlan(nextState, selectedIndex);
+    }
+
+    public static SourceManagementListMutationPlan ResolveSourceConflict(
+        SourceManagementDialogState state,
+        SourceManagementSourceConflict conflict,
+        SourceManagementSourceConflictResolutionAction action)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(conflict);
+
+        if (action != conflict.KeepAction && action != conflict.ReplaceAction)
+            throw new ArgumentException("The conflict does not expose the requested resolution action.", nameof(action));
+
+        return action switch
+        {
+            SourceManagementSourceConflictResolutionAction.KeepCurrent => new SourceManagementListMutationPlan(
+                state,
+                FindSourceIndexByTag(state.CurrentSources, conflict.Tag)),
+
+            SourceManagementSourceConflictResolutionAction.ReplaceCurrentFromMaster =>
+                ReplaceCurrentFromMaster(state, conflict),
+
+            SourceManagementSourceConflictResolutionAction.KeepMaster => new SourceManagementListMutationPlan(
+                state,
+                FindSourceIndexByTag(state.MasterSources, conflict.Tag)),
+
+            SourceManagementSourceConflictResolutionAction.ReplaceMasterFromCurrent =>
+                ReplaceMasterFromCurrent(state, conflict),
+
+            _ => throw new ArgumentOutOfRangeException(nameof(action), action, null)
+        };
+    }
+
+    public static string BuildSourceConflictMessage(SourceManagementSourceConflict conflict)
+    {
+        ArgumentNullException.ThrowIfNull(conflict);
+
+        return $"The Master List and Current Document both contain the source tag \"{conflict.Tag}\", but their source details are different. Choose which version to keep.";
+    }
+
+    public static IReadOnlyList<SourceManagementSourceConflictResolutionChoice> BuildSourceConflictResolutionChoices(
+        SourceManagementSourceConflict conflict)
+    {
+        ArgumentNullException.ThrowIfNull(conflict);
+
+        return
+        [
+            new(conflict.KeepAction, SourceConflictResolutionLabel(conflict.KeepAction)),
+            new(conflict.ReplaceAction, SourceConflictResolutionLabel(conflict.ReplaceAction))
+        ];
     }
 
     public static SourceManagementListMutationPlan AddCurrentSource(
@@ -970,8 +1077,113 @@ public static class SourceManagementDialogPlanner
             CloneSources(state.MasterSources));
     }
 
-    private static bool ContainsSourceTag(IReadOnlyList<Source> sources, string tag) =>
-        sources.Any(source => SourceManagementTagIdentity.Equals(source.Tag, tag));
+    private static SourceManagementListMutationPlan ReplaceCurrentFromMaster(
+        SourceManagementDialogState state,
+        SourceManagementSourceConflict conflict)
+    {
+        var currentSources = state.CurrentSources.Select(CloneSource).ToList();
+        var selectedIndex = UpsertSourceByTag(currentSources, conflict.MasterSource);
+
+        return new SourceManagementListMutationPlan(
+            state with { CurrentSources = currentSources },
+            selectedIndex);
+    }
+
+    private static SourceManagementListMutationPlan ReplaceMasterFromCurrent(
+        SourceManagementDialogState state,
+        SourceManagementSourceConflict conflict)
+    {
+        var masterSources = state.MasterSources.Select(CloneSource).ToList();
+        var selectedIndex = UpsertSourceByTag(masterSources, conflict.CurrentSource);
+
+        return new SourceManagementListMutationPlan(
+            state with { MasterSources = masterSources },
+            selectedIndex);
+    }
+
+    private static SourceManagementSourceConflict CreateSourceConflict(
+        Source currentSource,
+        Source masterSource,
+        SourceManagementSourceConflictResolutionAction keepAction,
+        SourceManagementSourceConflictResolutionAction replaceAction)
+    {
+        var tag = SourceManagementTagIdentity.Canonicalize(currentSource.Tag);
+        if (tag.Length == 0)
+            tag = SourceManagementTagIdentity.Canonicalize(masterSource.Tag);
+
+        return new SourceManagementSourceConflict(
+            tag,
+            CloneSource(currentSource),
+            CloneSource(masterSource),
+            keepAction,
+            replaceAction);
+    }
+
+    private static string SourceConflictResolutionLabel(SourceManagementSourceConflictResolutionAction action) =>
+        action switch
+        {
+            SourceManagementSourceConflictResolutionAction.KeepCurrent => SourceConflictKeepCurrentLabel,
+            SourceManagementSourceConflictResolutionAction.ReplaceCurrentFromMaster => SourceConflictReplaceCurrentLabel,
+            SourceManagementSourceConflictResolutionAction.KeepMaster => SourceConflictKeepMasterLabel,
+            SourceManagementSourceConflictResolutionAction.ReplaceMasterFromCurrent => SourceConflictReplaceMasterLabel,
+            _ => throw new ArgumentOutOfRangeException(nameof(action), action, null)
+        };
+
+    private static bool SourcePayloadEquals(Source left, Source right) =>
+        SourceManagementTagIdentity.Equals(left.Tag, right.Tag)
+        && left.Type == right.Type
+        && SourceValueEquals(left.Author, right.Author)
+        && SourcePeopleEqual(left.PersonalAuthors, right.PersonalAuthors)
+        && SourceValueEquals(left.CorporateAuthor, right.CorporateAuthor)
+        && SourcePeopleEqual(left.Editors, right.Editors)
+        && SourcePeopleEqual(left.Translators, right.Translators)
+        && SourceValueEquals(left.Title, right.Title)
+        && SourceValueEquals(left.BookTitle, right.BookTitle)
+        && SourceValueEquals(left.ConferenceName, right.ConferenceName)
+        && SourceValueEquals(left.Year, right.Year)
+        && SourceValueEquals(left.Institution, right.Institution)
+        && SourceValueEquals(left.Publisher, right.Publisher)
+        && SourceValueEquals(left.City, right.City)
+        && SourceValueEquals(left.Edition, right.Edition)
+        && SourceValueEquals(left.StandardNumber, right.StandardNumber)
+        && SourceValueEquals(left.ChapterNumber, right.ChapterNumber)
+        && SourceValueEquals(left.ShortTitle, right.ShortTitle)
+        && SourceValueEquals(left.Comments, right.Comments)
+        && SourceValueEquals(left.Journal, right.Journal)
+        && SourceValueEquals(left.Volume, right.Volume)
+        && SourceValueEquals(left.Issue, right.Issue)
+        && SourceValueEquals(left.Pages, right.Pages)
+        && SourceValueEquals(left.Url, right.Url)
+        && SourceValueEquals(left.Accessed, right.Accessed)
+        && SourceValueEquals(left.AccessedDay, right.AccessedDay)
+        && SourceValueEquals(left.AccessedMonth, right.AccessedMonth)
+        && SourceValueEquals(left.AccessedYear, right.AccessedYear);
+
+    private static bool SourcePeopleEqual(
+        IReadOnlyList<SourceAuthorPerson> left,
+        IReadOnlyList<SourceAuthorPerson> right)
+    {
+        var leftPeople = ClonePersonalAuthors(left);
+        var rightPeople = ClonePersonalAuthors(right);
+        if (leftPeople.Count != rightPeople.Count)
+            return false;
+
+        for (var index = 0; index < leftPeople.Count; index++)
+        {
+            if (!SourceValueEquals(leftPeople[index].First, rightPeople[index].First)
+                || !SourceValueEquals(leftPeople[index].Middle, rightPeople[index].Middle)
+                || !SourceValueEquals(leftPeople[index].Last, rightPeople[index].Last))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool SourceValueEquals(string? left, string? right) =>
+        string.Equals(
+            left?.Trim() ?? string.Empty,
+            right?.Trim() ?? string.Empty,
+            StringComparison.Ordinal);
 
     private static int UpsertSourceByTag(List<Source> sources, Source source)
     {

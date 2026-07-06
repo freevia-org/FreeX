@@ -5929,6 +5929,52 @@ internal static class FreeWRibbonCommands
             void ShowValidation(SourceManagementValidation validation) =>
                 DialogMessageHelper.ShowWarning(dialog, validation.Message, dialog.Title);
 
+            bool ApplyCopyPlan(SourceManagementListMutationPlan plan, Action<int?> refresh)
+            {
+                if (plan.Conflict is not null)
+                {
+                    var action = AskConflictResolution(plan.Conflict);
+                    if (action is null)
+                        return false;
+
+                    plan = SourceManagementDialogPlanner.ResolveSourceConflict(
+                        state,
+                        plan.Conflict,
+                        action.Value);
+                }
+
+                state = plan.State;
+                refresh(plan.SelectedIndex);
+                return true;
+            }
+
+            SourceManagementSourceConflictResolutionAction? AskConflictResolution(
+                SourceManagementSourceConflict conflict)
+            {
+                var choices = SourceManagementDialogPlanner.BuildSourceConflictResolutionChoices(conflict);
+                var message = string.Join(
+                    Environment.NewLine,
+                    SourceManagementDialogPlanner.BuildSourceConflictMessage(conflict),
+                    string.Empty,
+                    $"Yes: {choices[0].Label}",
+                    $"No: {choices[1].Label}",
+                    "Cancel: Do nothing");
+                var answer = MessageBox.Show(
+                    dialog,
+                    message,
+                    SourceManagementDialogPlanner.SourceConflictDialogTitle,
+                    MessageBoxButton.YesNoCancel,
+                    MessageBoxImage.Warning,
+                    MessageBoxResult.Cancel);
+
+                return answer switch
+                {
+                    MessageBoxResult.Yes => choices[0].Action,
+                    MessageBoxResult.No => choices[1].Action,
+                    _ => null
+                };
+            }
+
             void SelectIndex(System.Windows.Controls.ListBox list, int selectedIndex, int count)
             {
                 list.SelectedIndex = count == 0 ? -1 : Math.Clamp(selectedIndex, 0, count - 1);
@@ -5986,8 +6032,7 @@ internal static class FreeWRibbonCommands
                     state,
                     masterList.SelectedIndex,
                     docList.SelectedIndex);
-                state = plan.State;
-                RefreshDocList(plan.SelectedIndex);
+                ApplyCopyPlan(plan, selectedIndex => RefreshDocList(selectedIndex));
             }
 
             void CopyToMaster()
@@ -5996,8 +6041,7 @@ internal static class FreeWRibbonCommands
                     state,
                     docList.SelectedIndex,
                     masterList.SelectedIndex);
-                state = plan.State;
-                RefreshMasterList(plan.SelectedIndex);
+                ApplyCopyPlan(plan, selectedIndex => RefreshMasterList(selectedIndex));
             }
 
             // ── current-doc actions ───────────────────────────────────────────────────────────

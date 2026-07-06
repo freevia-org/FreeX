@@ -1347,13 +1347,13 @@ public sealed class SourceManagementDialogPlannerTests
     }
 
     [Fact]
-    public void CopyMasterToCurrent_AppendsNonDuplicateAndSkipsDuplicateTags()
+    public void CopyMasterToCurrent_AppendsNonDuplicateAndNoOpsIdenticalSameTagSource()
     {
         var state = SourceManagementDialogPlanner.BuildInitialState(
-            currentSources: [new Source { Tag = "Existing" }],
+            currentSources: [new Source { Tag = "Existing", Author = "Shared", Title = "Same" }],
             masterSources:
             [
-                new Source { Tag = "Existing", Author = "Master Existing" },
+                new Source { Tag = " Existing ", Author = "Shared", Title = "Same" },
                 new Source { Tag = "New", Author = "Master New" }
             ]);
 
@@ -1363,6 +1363,8 @@ public sealed class SourceManagementDialogPlannerTests
             currentSelectedIndex: 0);
 
         duplicate.State.CurrentSources.Should().HaveCount(1);
+        duplicate.State.CurrentSources[0].Author.Should().Be("Shared");
+        duplicate.Conflict.Should().BeNull();
         duplicate.SelectedIndex.Should().Be(0);
 
         var added = SourceManagementDialogPlanner.CopyMasterToCurrent(
@@ -1377,13 +1379,132 @@ public sealed class SourceManagementDialogPlannerTests
     }
 
     [Fact]
+    public void CopyMasterToCurrent_WhitespaceOnlyPayloadDifferencesAreSafeNoOp()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources:
+            [
+                new Source
+                {
+                    Tag = "Existing",
+                    Author = "Shared",
+                    Title = "Same",
+                    Publisher = "Test Press",
+                    PersonalAuthors = [SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace")]
+                }
+            ],
+            masterSources:
+            [
+                new Source
+                {
+                    Tag = " Existing ",
+                    Author = " Shared ",
+                    Title = " Same ",
+                    Publisher = " Test Press ",
+                    PersonalAuthors = [new SourceAuthorPerson(" Ada ", string.Empty, " Lovelace ")]
+                }
+            ]);
+
+        var plan = SourceManagementDialogPlanner.CopyMasterToCurrent(
+            state,
+            masterSelectedIndex: 0,
+            currentSelectedIndex: 0);
+
+        plan.Conflict.Should().BeNull();
+        plan.State.Should().BeSameAs(state);
+        plan.State.CurrentSources.Should().ContainSingle().Which.Author.Should().Be("Shared");
+        plan.SelectedIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public void CopyMasterToCurrent_SameCanonicalTagDifferentPayloadReturnsConflict()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources: [new Source { Tag = "Existing", Author = "Current Existing", Title = "Current Title" }],
+            masterSources: [new Source { Tag = " Existing ", Author = "Master Existing", Title = "Master Title" }]);
+
+        var plan = SourceManagementDialogPlanner.CopyMasterToCurrent(
+            state,
+            masterSelectedIndex: 0,
+            currentSelectedIndex: 0);
+
+        plan.State.Should().BeSameAs(state);
+        plan.State.CurrentSources.Should().ContainSingle().Which.Author.Should().Be("Current Existing");
+        plan.SelectedIndex.Should().Be(0);
+        plan.Conflict.Should().NotBeNull();
+        plan.Conflict!.Tag.Should().Be("Existing");
+        plan.Conflict.CurrentSource.Author.Should().Be("Current Existing");
+        plan.Conflict.MasterSource.Author.Should().Be("Master Existing");
+        plan.Conflict.KeepAction.Should().Be(SourceManagementSourceConflictResolutionAction.KeepCurrent);
+        plan.Conflict.ReplaceAction.Should().Be(
+            SourceManagementSourceConflictResolutionAction.ReplaceCurrentFromMaster);
+        SourceManagementDialogPlanner.BuildSourceConflictResolutionChoices(plan.Conflict)
+            .Select(choice => choice.Action)
+            .Should()
+            .Equal(
+                SourceManagementSourceConflictResolutionAction.KeepCurrent,
+                SourceManagementSourceConflictResolutionAction.ReplaceCurrentFromMaster);
+    }
+
+    [Fact]
+    public void ResolveSourceConflict_CanKeepCurrent()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources: [new Source { Tag = "Existing", Author = "Current Existing" }],
+            masterSources: [new Source { Tag = "Existing", Author = "Master Existing" }]);
+        var conflict = SourceManagementDialogPlanner.CopyMasterToCurrent(
+            state,
+            masterSelectedIndex: 0,
+            currentSelectedIndex: 0).Conflict!;
+
+        var resolved = SourceManagementDialogPlanner.ResolveSourceConflict(
+            state,
+            conflict,
+            SourceManagementSourceConflictResolutionAction.KeepCurrent);
+
+        resolved.Conflict.Should().BeNull();
+        resolved.State.Should().BeSameAs(state);
+        resolved.State.CurrentSources.Should().ContainSingle().Which.Author.Should().Be("Current Existing");
+        resolved.SelectedIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public void ResolveSourceConflict_CanReplaceCurrentFromMaster()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources:
+            [
+                new Source { Tag = "Existing", Author = "Current Existing" },
+                new Source { Tag = "Other", Author = "Other" },
+                new Source { Tag = " Existing ", Author = "Duplicate Current" }
+            ],
+            masterSources: [new Source { Tag = " Existing ", Author = "Master Existing", Title = "Master Title" }]);
+        var conflict = SourceManagementDialogPlanner.CopyMasterToCurrent(
+            state,
+            masterSelectedIndex: 0,
+            currentSelectedIndex: 0).Conflict!;
+
+        var resolved = SourceManagementDialogPlanner.ResolveSourceConflict(
+            state,
+            conflict,
+            SourceManagementSourceConflictResolutionAction.ReplaceCurrentFromMaster);
+
+        resolved.Conflict.Should().BeNull();
+        resolved.State.CurrentSources.Select(source => source.Tag).Should().Equal("Existing", "Other");
+        resolved.State.CurrentSources[0].Author.Should().Be("Master Existing");
+        resolved.State.CurrentSources[0].Title.Should().Be("Master Title");
+        resolved.State.MasterSources.Should().ContainSingle().Which.Author.Should().Be("Master Existing");
+        resolved.SelectedIndex.Should().Be(0);
+    }
+
+    [Fact]
     public void CopyMasterToCurrent_UsesTrimmedTagIdentityAndKeepsCurrentSelection()
     {
         var state = SourceManagementDialogPlanner.BuildInitialState(
             currentSources: [new Source { Tag = "Smith2020", Author = "Current Smith" }],
             masterSources:
             [
-                new Source { Tag = " Smith2020 ", Author = "Master Smith" },
+                new Source { Tag = " Smith2020 ", Author = "Current Smith" },
                 new Source { Tag = "smith2020", Author = "Lowercase Smith" }
             ]);
 
@@ -1395,6 +1516,7 @@ public sealed class SourceManagementDialogPlannerTests
         duplicate.State.CurrentSources.Should().ContainSingle();
         duplicate.State.CurrentSources[0].Tag.Should().Be("Smith2020");
         duplicate.State.CurrentSources[0].Author.Should().Be("Current Smith");
+        duplicate.Conflict.Should().BeNull();
         duplicate.SelectedIndex.Should().Be(0);
 
         var distinctCase = SourceManagementDialogPlanner.CopyMasterToCurrent(
@@ -1443,13 +1565,36 @@ public sealed class SourceManagementDialogPlannerTests
     }
 
     [Fact]
-    public void CopyCurrentToMaster_UpsertsCanonicalTagAndDoesNotCopyDuplicatesTwice()
+    public void CopyCurrentToMaster_IdenticalSameTagSourceIsSafeNoOp()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources: [new Source { Tag = " Existing ", Author = "Shared Existing", Title = "Same" }],
+            masterSources:
+            [
+                new Source { Tag = "Existing", Author = "Shared Existing", Title = "Same" },
+                new Source { Tag = "Other", Author = "Other" }
+            ]);
+
+        var plan = SourceManagementDialogPlanner.CopyCurrentToMaster(
+            state,
+            currentSelectedIndex: 0,
+            masterSelectedIndex: 1);
+
+        plan.State.Should().BeSameAs(state);
+        plan.State.MasterSources.Select(source => source.Tag).Should().Equal("Existing", "Other");
+        plan.State.MasterSources[0].Author.Should().Be("Shared Existing");
+        plan.Conflict.Should().BeNull();
+        plan.SelectedIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public void CopyCurrentToMaster_SameCanonicalTagDifferentPayloadReturnsConflict()
     {
         var state = SourceManagementDialogPlanner.BuildInitialState(
             currentSources: [new Source { Tag = " Existing ", Author = "Current Existing", Title = "Updated" }],
             masterSources:
             [
-                new Source { Tag = "Existing", Author = "Old Existing" },
+                new Source { Tag = "Existing", Author = "Old Existing", Title = "Old" },
                 new Source { Tag = "Other", Author = "Other" },
                 new Source { Tag = " Existing ", Author = "Duplicate Existing" }
             ]);
@@ -1459,19 +1604,69 @@ public sealed class SourceManagementDialogPlannerTests
             currentSelectedIndex: 0,
             masterSelectedIndex: 1);
 
-        plan.State.MasterSources.Select(source => source.Tag).Should().Equal("Existing", "Other");
-        plan.State.MasterSources[0].Author.Should().Be("Current Existing");
-        plan.State.MasterSources[0].Title.Should().Be("Updated");
+        plan.State.Should().BeSameAs(state);
+        plan.State.MasterSources.Select(source => source.Author)
+            .Should()
+            .Equal("Old Existing", "Other", "Duplicate Existing");
         plan.SelectedIndex.Should().Be(0);
+        plan.Conflict.Should().NotBeNull();
+        plan.Conflict!.Tag.Should().Be("Existing");
+        plan.Conflict.CurrentSource.Author.Should().Be("Current Existing");
+        plan.Conflict.MasterSource.Author.Should().Be("Old Existing");
+        plan.Conflict.KeepAction.Should().Be(SourceManagementSourceConflictResolutionAction.KeepMaster);
+        plan.Conflict.ReplaceAction.Should().Be(
+            SourceManagementSourceConflictResolutionAction.ReplaceMasterFromCurrent);
+    }
 
-        var duplicate = SourceManagementDialogPlanner.CopyCurrentToMaster(
-            plan.State,
+    [Fact]
+    public void ResolveSourceConflict_CanKeepMaster()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources: [new Source { Tag = "Existing", Author = "Current Existing" }],
+            masterSources: [new Source { Tag = "Existing", Author = "Master Existing" }]);
+        var conflict = SourceManagementDialogPlanner.CopyCurrentToMaster(
+            state,
             currentSelectedIndex: 0,
-            masterSelectedIndex: plan.SelectedIndex);
+            masterSelectedIndex: 0).Conflict!;
 
-        duplicate.State.MasterSources.Select(source => source.Tag).Should().Equal("Existing", "Other");
-        duplicate.State.MasterSources[0].Author.Should().Be("Current Existing");
-        duplicate.SelectedIndex.Should().Be(0);
+        var resolved = SourceManagementDialogPlanner.ResolveSourceConflict(
+            state,
+            conflict,
+            SourceManagementSourceConflictResolutionAction.KeepMaster);
+
+        resolved.Conflict.Should().BeNull();
+        resolved.State.Should().BeSameAs(state);
+        resolved.State.MasterSources.Should().ContainSingle().Which.Author.Should().Be("Master Existing");
+        resolved.SelectedIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public void ResolveSourceConflict_CanReplaceMasterFromCurrent()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources: [new Source { Tag = " Existing ", Author = "Current Existing", Title = "Updated" }],
+            masterSources:
+            [
+                new Source { Tag = "Existing", Author = "Old Existing" },
+                new Source { Tag = "Other", Author = "Other" },
+                new Source { Tag = " Existing ", Author = "Duplicate Existing" }
+            ]);
+        var conflict = SourceManagementDialogPlanner.CopyCurrentToMaster(
+            state,
+            currentSelectedIndex: 0,
+            masterSelectedIndex: 1).Conflict!;
+
+        var resolved = SourceManagementDialogPlanner.ResolveSourceConflict(
+            state,
+            conflict,
+            SourceManagementSourceConflictResolutionAction.ReplaceMasterFromCurrent);
+
+        resolved.Conflict.Should().BeNull();
+        resolved.State.MasterSources.Select(source => source.Tag).Should().Equal("Existing", "Other");
+        resolved.State.MasterSources[0].Author.Should().Be("Current Existing");
+        resolved.State.MasterSources[0].Title.Should().Be("Updated");
+        resolved.State.CurrentSources.Should().ContainSingle().Which.Author.Should().Be("Current Existing");
+        resolved.SelectedIndex.Should().Be(0);
     }
 
     [Fact]

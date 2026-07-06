@@ -403,18 +403,16 @@ public sealed class MasterSourceStoreTests
             Year   = "2023"
         });
 
-        // Simulate document-level source list (mutable list as document keeps internally).
-        var docSources = new System.Collections.Generic.List<Source>();
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources: [],
+            masterSources: masterStore.ToSources());
+        var plan = SourceManagementDialogPlanner.CopyMasterToCurrent(
+            state,
+            masterSelectedIndex: 0,
+            currentSelectedIndex: -1);
 
-        // Perform copy: take all master sources and add to doc (simulate dialog Copy→ action).
-        var masterSources = masterStore.ToSources();
-        foreach (var src in masterSources)
-        {
-            if (!docSources.Any(s => s.Tag == src.Tag))
-                docSources.Add(src);
-        }
-
-        docSources.Should().HaveCount(1);
-        docSources[0].Tag.Should().Be("Copy1");
+        plan.Conflict.Should().BeNull();
+        plan.State.CurrentSources.Should().HaveCount(1);
+        plan.State.CurrentSources[0].Tag.Should().Be("Copy1");
     }
 }
