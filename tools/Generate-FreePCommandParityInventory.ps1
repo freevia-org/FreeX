@@ -481,6 +481,22 @@ internal static class FreePCommandInventory
             RemainingWork: "radialCycle now uses the bounded shared cycle-family live-layout path for parsed nodes while other unsupported cycle siblings remain on cached drawing fallback. Broader SmartArt geometry families, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred.")
         ,
         new(
+            EvidenceId: "freep.smartart.vertical-bullet-list",
+            Area: "SmartArt vertical bullet list live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume ordinary shared slide shape and connector ops emitted by the SmartArt hierarchy-family layout planner; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-smartart-vertical-bullet-list-2026-07-07.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
+            ],
+            RemainingWork: "verticalBulletList now uses the bounded shared hierarchy-family live-layout path for parsed root/child nodes while other unsupported hierarchy siblings remain on cached drawing fallback. Broader SmartArt geometry families, exact bullet styling, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred.")
+        ,
+        new(
             EvidenceId: "freep.smartart.basic-hierarchy",
             Area: "SmartArt basic hierarchy live layout",
             Status: "shared-render-planner-evidence",

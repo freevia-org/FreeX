@@ -1103,6 +1103,27 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesVerticalBulletListAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/verticalBulletList",
+            nodes: [("R", "Project"), ("C1", "Scope"), ("C2", "Timeline"), ("C3", "Risks")],
+            parOfConnections: [("R", "C1"), ("R", "C2"), ("R", "C3")]);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Hierarchy,
+            "verticalBulletList is a hierarchy-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "verticalBulletList is in the bounded shared live-layout planner");
+        sa.Data.Nodes.Should().ContainSingle();
+        sa.Data.Nodes[0].Text.Should().Be("Project");
+        sa.Data.Nodes[0].Children.Select(n => n.Text).Should().BeEquivalentTo(new[] { "Scope", "Timeline", "Risks" });
+    }
+
+    [Fact]
     public void Reader_ParsesStackedListAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -1163,7 +1184,7 @@ public sealed class SmartArtTests : IDisposable
     public void Reader_ParsesKnownHierarchyFamilyButDisablesLiveLayoutForUnsupportedSibling()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
-            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/verticalBulletList",
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/orgChart",
             nodes: [("R", "Root"), ("C", "Child")],
             parOfConnections: [("R", "C")]);
 
@@ -1434,6 +1455,36 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_VerticalBulletListSmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/verticalBulletList",
+            nodes: [("R", "Project"), ("C1", "Scope"), ("C2", "Timeline"), ("C3", "Risks")],
+            parOfConnections: [("R", "C1"), ("R", "C2"), ("R", "C3")]);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Hierarchy);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(7, "four vertical-bullet-list boxes plus three connectors should render from shared live data");
+        var renderedText = liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Project");
+        renderedText.Should().Contain("Scope");
+        renderedText.Should().Contain("Timeline");
+        renderedText.Should().Contain("Risks");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(3, "WPF and Avalonia hosts consume shared connector DrawOps");
+    }
+
+    [Fact]
     public void Compositor_UnsupportedProcessSibling_UsesCachedFallbackShapes()
     {
         var data = new SmartArtData
@@ -1548,7 +1599,7 @@ public sealed class SmartArtTests : IDisposable
         var data = new SmartArtData
         {
             Family = SmartArtFamily.Hierarchy,
-            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/verticalBulletList",
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/orgChart",
             IsLiveLayoutSupported = false
         };
         var root = new SmartArtNode { Text = "Root", Level = 0 };

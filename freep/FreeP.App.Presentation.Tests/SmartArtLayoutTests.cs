@@ -343,6 +343,25 @@ public sealed class SmartArtLayoutTests
             .Should().HaveCount(2, "basicHierarchy should reuse shared parent-child connector geometry");
     }
 
+    [Fact]
+    public void VerticalBulletList_ReturnsLiveTreeBoxesAndConnectors()
+    {
+        var data = MakeHierarchyData("Project", "Scope", "Timeline", "Risks");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/verticalBulletList";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("verticalBulletList is a bounded shared hierarchy-family layout");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(4, "root plus three bullet child boxes should be emitted from the hierarchy tree");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(3, "verticalBulletList should reuse shared parent-child connector geometry");
+
+        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().BeEquivalentTo(new[] { "Project", "Scope", "Timeline", "Risks" });
+    }
+
     // ── Unknown family → null ──────────────────────────────────────────────────────
 
     [Fact]
@@ -495,7 +514,7 @@ public sealed class SmartArtLayoutTests
     public void UnsupportedHierarchySibling_ReturnsNull()
     {
         var data = MakeHierarchyData("Root", "Child");
-        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/verticalBulletList";
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/orgChart";
         data.IsLiveLayoutSupported = false;
 
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
@@ -1200,6 +1219,65 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void Compositor_VerticalBulletList_UsesLiveLayoutOverCachedDrawing()
+    {
+        var data = MakeHierarchyData("Project", "Scope", "Timeline", "Risks");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/verticalBulletList";
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id            = 17,
+            Kind          = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu    = FrameX,
+            OffsetYEmu    = FrameY,
+            ExtentCxEmu   = FrameCx / 2,
+            ExtentCyEmu   = FrameCy / 2,
+            TextBody      = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached vertical bullet fallback" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id          = 69,
+            Kind        = SlideShapeKind.SmartArt,
+            OffsetXEmu  = FrameX,
+            OffsetYEmu  = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt    = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        shapeOps.Should().HaveCount(7, "verticalBulletList should render four live boxes plus three connectors");
+        var renderedText = shapeOps
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Project");
+        renderedText.Should().Contain("Scope");
+        renderedText.Should().Contain("Timeline");
+        renderedText.Should().Contain("Risks");
+        renderedText.Should().NotContain("Cached vertical bullet fallback");
+        shapeOps.Where(op => op.Text is null)
+            .Should().HaveCount(3, "hosts consume the shared hierarchy connector DrawOps");
+    }
+
+    [Fact]
     public void Compositor_FallsBackToCachedDrawing_WhenListFamilyLayoutIsUnsupported()
     {
         var data = MakeData(SmartArtFamily.List, "Live A", "Live B");
@@ -1254,7 +1332,7 @@ public sealed class SmartArtLayoutTests
     public void Compositor_FallsBackToCachedDrawing_WhenHierarchyFamilyLayoutIsUnsupported()
     {
         var data = MakeHierarchyData("Root", "Child");
-        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/verticalBulletList";
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/orgChart";
         data.IsLiveLayoutSupported = false;
 
         var smart = new SmartArtShape { Data = data };
