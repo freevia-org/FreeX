@@ -8409,18 +8409,19 @@ public sealed class DocumentView : Control
                 return;
             var offset = cc.Offset;
             var fmt = ActiveFormatting(para, offset);
-            // AV-TRACKEDIT: record cell typing as a tracked insertion too when Track Changes is on.
-            var cellInsRevision = TrackChangesEnabled ? RevisionKind.Inserted : RevisionKind.None;
-            var cellInsAuthor = TrackChangesEnabled ? RevisionAuthor : null;
-            var cellInsDate = TrackChangesEnabled ? CurrentRevisionDateXml() : null;
             _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
             {
-                var chars = ParaCells(p);
-                // BE4: insert at incrementing position so multi-char paste/IME inserts in order.
-                var at = Math.Clamp(offset, 0, chars.Count);
-                foreach (var ch in text)
-                    chars.Insert(at++, new Cell(ch, fmt, null, cellInsRevision, cellInsAuthor, cellInsDate));
-                SetRuns(p, chars);
+                RevisionEditPlanner.InsertText(
+                    p,
+                    offset,
+                    text,
+                    fmt,
+                    TrackChangesEnabled
+                        ? new RevisionEditPlanner.InsertOptions(
+                            RevisionKind.Inserted,
+                            RevisionAuthor,
+                            CurrentRevisionDateXml())
+                        : default);
             }));
             _cellCaret = cc with { Offset = offset + text.Length };
             _cellAnchor = _cellCaret;
@@ -8444,9 +8445,6 @@ public sealed class DocumentView : Control
         var bodyFmt = pendingFmt ?? ActiveFormatting(paragraph, bodyOffset);
         // AV-TRACKEDIT: when Track Changes is on, typed characters are recorded as a tracked insertion
         // (author + date) so they render underlined/coloured and round-trip as w:ins. OFF behaves as before.
-        var insRevision = TrackChangesEnabled ? RevisionKind.Inserted : RevisionKind.None;
-        var insAuthor = TrackChangesEnabled ? RevisionAuthor : null;
-        var insDate = TrackChangesEnabled ? CurrentRevisionDateXml() : null;
         // AV-LINK: typing strictly inside a hyperlink span extends that link (Word's behaviour); typing at a
         // link's edge or outside a link inserts plain (un-linked) text.
         var insLink = ActiveLink(paragraph, bodyOffset);
@@ -8456,10 +8454,18 @@ public sealed class DocumentView : Control
             // BE4 (body parity): insert at an incrementing position so multi-char text (paste / IME /
             // model inserts like a citation string) keeps its order — a fixed insert index would reverse it.
             // Cells carry the tracked-insertion revision tags when Track Changes is on (null otherwise).
-            var at = Math.Clamp(bodyOffset, 0, cells.Count);
-            foreach (var ch in text)
-                cells.Insert(at++, new Cell(ch, bodyFmt, null, insRevision, insAuthor, insDate, insLink));
-            SetRuns(p, cells);
+            RevisionEditPlanner.InsertText(
+                p,
+                bodyOffset,
+                text,
+                bodyFmt,
+                new RevisionEditPlanner.InsertOptions(
+                    TrackChangesEnabled ? RevisionKind.Inserted : RevisionKind.None,
+                    TrackChangesEnabled ? RevisionAuthor : null,
+                    TrackChangesEnabled ? CurrentRevisionDateXml() : null,
+                    insLink?.Url,
+                    insLink?.Anchor,
+                    insLink?.Tooltip));
         }));
         _caret = new DocPosition(block, bodyOffset + text.Length);
         _selectionAnchor = _caret;
@@ -9577,36 +9583,15 @@ public sealed class DocumentView : Control
     /// </summary>
     private (List<Cell> Cells, int Caret) MarkCellsDeleted(List<Cell> cells, int lo, int hi)
     {
-        lo = Math.Clamp(lo, 0, cells.Count);
-        hi = Math.Clamp(hi, 0, cells.Count);
-        if (hi <= lo)
-            return (cells, lo);
-
-        var result = new List<Cell>(cells.Count);
-        result.AddRange(cells.Take(lo));
-        for (var k = lo; k < hi; k++)
-        {
-            var cell = cells[k];
-            // Deleting one's own still-pending insertion removes it outright (Word: it never "existed").
-            if (cell.Revision == RevisionKind.Inserted &&
-                string.Equals(cell.RevisionAuthor, RevisionAuthor, StringComparison.Ordinal))
-                continue;
-            // Already a tracked deletion → keep as-is (deleting struck text is a no-op).
-            if (cell.Revision == RevisionKind.Deleted)
-            {
-                result.Add(cell);
-                continue;
-            }
-            // Otherwise mark the (ordinary, or other-author-inserted) character as a tracked deletion: keep it.
-            result.Add(cell with
-            {
-                Revision = RevisionKind.Deleted,
-                RevisionAuthor = RevisionAuthor,
-                RevisionDateXml = CurrentRevisionDateXml(),
-            });
-        }
-        result.AddRange(cells.Skip(hi));
-        return (result, lo);
+        var paragraph = new Paragraph();
+        SetRuns(paragraph, cells);
+        var sharedResult = RevisionEditPlanner.DeleteRangeAsRevision(
+            paragraph,
+            lo,
+            hi,
+            RevisionAuthor,
+            CurrentRevisionDateXml());
+        return (ParaCells(paragraph), sharedResult.CaretOffset);
     }
 
     /// <summary>

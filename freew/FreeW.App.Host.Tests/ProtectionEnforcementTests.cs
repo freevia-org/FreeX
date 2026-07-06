@@ -148,6 +148,8 @@ public sealed class ProtectionEnforcementTests
 
         view.InsertText("X");
         PlainText(view).Should().Contain("X");
+        var paragraph = (Paragraph)view.Model.Blocks[0];
+        paragraph.Runs.Should().Contain(run => run.Text == "X" && run.Revision == RevisionKind.Inserted);
     }
 
     [StaFact]

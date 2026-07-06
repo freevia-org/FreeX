@@ -576,6 +576,13 @@ public sealed class DocumentView : RichTextBox
             e.Handled = true;
             return;
         }
+        if (TrackChangesEnabled
+            && !string.IsNullOrEmpty(e.Text)
+            && TryRecordTrackedTextInput(e.Text))
+        {
+            e.Handled = true;
+            return;
+        }
         base.OnPreviewTextInput(e);
     }
 
@@ -592,6 +599,20 @@ public sealed class DocumentView : RichTextBox
         {
             e.Handled = true;
             return;
+        }
+
+        if (TrackChangesEnabled
+            && Keyboard.Modifiers == ModifierKeys.None
+            && (e.Key == Key.Back || e.Key == Key.Delete))
+        {
+            var handled = e.Key == Key.Back
+                ? TryRecordTrackedBackspace()
+                : TryRecordTrackedDeleteForward();
+            if (handled)
+            {
+                e.Handled = true;
+                return;
+            }
         }
 
         base.OnPreviewKeyDown(e);
@@ -611,6 +632,11 @@ public sealed class DocumentView : RichTextBox
 
         if (AutoCorrectEnabled && Selection.IsEmpty && TryAutoCorrect(c))
             return true;
+        if (TrackChangesEnabled)
+        {
+            InsertText(c.ToString());
+            return false;
+        }
         // No rule fired: insert the literal character at the caret (mirroring the RichTextBox's own insert).
         CaretPosition.InsertTextInRun(c.ToString());
         CaretPosition = CaretPosition.GetPositionAtOffset(1, LogicalDirection.Forward) ?? CaretPosition;
@@ -10586,6 +10612,9 @@ public sealed class DocumentView : RichTextBox
             return;
 
         Focus();
+        if (TrackChangesEnabled && TryRecordTrackedTextInput(text))
+            return;
+
         var selection = Selection;
         if (!selection.IsEmpty)
         {
@@ -10599,6 +10628,230 @@ public sealed class DocumentView : RichTextBox
         CaretPosition = caret.GetPositionAtOffset(text.Length) ?? caret;
         CommitToModel();
         Render();
+    }
+
+    private bool TryRecordTrackedTextInput(string text)
+    {
+        if (!TrackChangesEnabled
+            || string.IsNullOrEmpty(text)
+            || !AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit)
+            || !TryGetCurrentBodyTextTarget(out var paragraphIndex, out var startOffset, out var endOffset, out var hasSelection))
+        {
+            return false;
+        }
+
+        var insertOffset = Math.Min(startOffset, endOffset);
+        var author = CurrentRevisionAuthor();
+        var dateXml = CurrentRevisionDateXml();
+
+        CommitToModel();
+        if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph)
+            return false;
+
+        _commands.Execute(new ReplaceParagraphRunsCommand(paragraphIndex, paragraph =>
+        {
+            if (hasSelection)
+                RevisionEditPlanner.DeleteRangeAsRevision(paragraph, startOffset, endOffset, author, dateXml);
+
+            var formatting = RevisionEditPlanner.FormattingAtOffset(paragraph, insertOffset);
+            var link = RevisionEditPlanner.LinkAtOffset(paragraph, insertOffset);
+            RevisionEditPlanner.InsertText(
+                paragraph,
+                insertOffset,
+                text,
+                formatting,
+                new RevisionEditPlanner.InsertOptions(
+                    RevisionKind.Inserted,
+                    author,
+                    dateXml,
+                    link.HyperlinkUrl,
+                    link.HyperlinkAnchor,
+                    link.HyperlinkTooltip));
+        }));
+        PlaceCaretAtModelTextOffset(paragraphIndex, insertOffset + text.Length);
+        return true;
+    }
+
+    private bool TryRecordTrackedBackspace()
+    {
+        if (!TrackChangesEnabled || !AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return false;
+        if (!TryGetCurrentBodyTextTarget(out var paragraphIndex, out var startOffset, out var endOffset, out var hasSelection))
+            return false;
+        if (hasSelection)
+            return TryRecordTrackedDeletion(paragraphIndex, startOffset, endOffset, placeAfterKeptForwardDelete: false);
+        if (startOffset <= 0)
+            return false;
+        return TryRecordTrackedDeletion(paragraphIndex, startOffset - 1, startOffset, placeAfterKeptForwardDelete: false);
+    }
+
+    private bool TryRecordTrackedDeleteForward()
+    {
+        if (!TrackChangesEnabled || !AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return false;
+        if (!TryGetCurrentBodyTextTarget(out var paragraphIndex, out var startOffset, out var endOffset, out var hasSelection))
+            return false;
+        if (hasSelection)
+            return TryRecordTrackedDeletion(paragraphIndex, startOffset, endOffset, placeAfterKeptForwardDelete: false);
+        CommitToModel();
+        if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph paragraph)
+            return false;
+        if (startOffset >= paragraph.PlainText.Length)
+            return false;
+        return TryRecordTrackedDeletion(paragraphIndex, startOffset, startOffset + 1, placeAfterKeptForwardDelete: true);
+    }
+
+    private bool TryRecordTrackedDeletion(int paragraphIndex, int startOffset, int endOffset, bool placeAfterKeptForwardDelete)
+    {
+        var author = CurrentRevisionAuthor();
+        var dateXml = CurrentRevisionDateXml();
+        RevisionEditPlanner.DeleteResult result = default;
+
+        CommitToModel();
+        if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph)
+            return false;
+
+        _commands.Execute(new ReplaceParagraphRunsCommand(paragraphIndex, paragraph =>
+        {
+            result = RevisionEditPlanner.DeleteRangeAsRevision(paragraph, startOffset, endOffset, author, dateXml);
+        }));
+
+        var caretOffset = placeAfterKeptForwardDelete && result.KeptDeletedText
+            ? Math.Max(startOffset, endOffset)
+            : result.CaretOffset;
+        PlaceCaretAtModelTextOffset(paragraphIndex, caretOffset);
+        return true;
+    }
+
+    private bool TryGetCurrentBodyTextTarget(
+        out int paragraphIndex,
+        out int startOffset,
+        out int endOffset,
+        out bool hasSelection)
+    {
+        paragraphIndex = -1;
+        startOffset = 0;
+        endOffset = 0;
+        hasSelection = false;
+
+        WpfParagraph? paragraph;
+        if (!Selection.IsEmpty)
+        {
+            paragraph = Selection.Start.Paragraph;
+            if (paragraph is null || !ReferenceEquals(paragraph, Selection.End.Paragraph))
+                return false;
+            startOffset = OffsetInParagraph(paragraph, Selection.Start);
+            endOffset = OffsetInParagraph(paragraph, Selection.End);
+            hasSelection = startOffset != endOffset;
+        }
+        else
+        {
+            paragraph = CaretPosition?.Paragraph;
+            if (paragraph is null || CaretPosition is null)
+                return false;
+            startOffset = OffsetInParagraph(paragraph, CaretPosition);
+            endOffset = startOffset;
+        }
+
+        var indexOf = new Dictionary<WpfParagraph, int>();
+        var modelIndex = 0;
+        foreach (var block in Document.Blocks)
+            NumberLeafBlocks(block, indexOf, ref modelIndex);
+        if (!indexOf.TryGetValue(paragraph, out var visibleIndex))
+            return false;
+
+        paragraphIndex = ModelIndexFromVisible(visibleIndex);
+        return true;
+    }
+
+    private string CurrentRevisionAuthor()
+    {
+        var author = string.IsNullOrWhiteSpace(RevisionAuthor)
+            ? _model.Properties.Author
+            : RevisionAuthor;
+        if (string.IsNullOrWhiteSpace(author))
+            author = Environment.UserName;
+        return string.IsNullOrWhiteSpace(author) ? "FreeW User" : author.Trim();
+    }
+
+    private static string CurrentRevisionDateXml() =>
+        DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
+
+    private void PlaceCaretAtModelTextOffset(int modelBlockIndex, int offset)
+    {
+        if (TextPointerAtModelTextOffset(modelBlockIndex, offset) is { } pointer)
+        {
+            CaretPosition = pointer;
+            Focus();
+        }
+    }
+
+    private TextPointer? TextPointerAtModelTextOffset(int modelBlockIndex, int offset)
+    {
+        if (LeafBlockAtModelIndex(modelBlockIndex) is not WpfParagraph paragraph)
+            return null;
+        return TextPointerAtParagraphOffset(paragraph, offset);
+    }
+
+    private static TextPointer TextPointerAtParagraphOffset(WpfParagraph paragraph, int offset)
+    {
+        var remaining = Math.Max(0, offset);
+        foreach (var inline in paragraph.Inlines)
+        {
+            if (TryTextPointerInInline(inline, ref remaining, out var pointer))
+                return pointer;
+        }
+
+        return paragraph.ContentEnd.GetInsertionPosition(LogicalDirection.Backward) ?? paragraph.ContentEnd;
+    }
+
+    private static bool TryTextPointerInInline(Inline inline, ref int remaining, out TextPointer pointer)
+    {
+        switch (inline)
+        {
+            case WpfRun run:
+                if (remaining <= run.Text.Length)
+                {
+                    pointer = run.ContentStart.GetPositionAtOffset(remaining, LogicalDirection.Forward)
+                        ?? run.ContentStart;
+                    return true;
+                }
+                remaining -= run.Text.Length;
+                break;
+            case Span span:
+                foreach (var child in span.Inlines)
+                {
+                    if (TryTextPointerInInline(child, ref remaining, out pointer))
+                        return true;
+                }
+                break;
+        }
+
+        pointer = inline.ContentEnd;
+        return false;
+    }
+
+    internal void MoveCaretToBlockForTest(int modelBlockIndex, int offset) =>
+        PlaceCaretAtModelTextOffset(modelBlockIndex, offset);
+
+    internal void SetSelectionRangeForTest(int anchorBlock, int anchorOffset, int caretBlock, int caretOffset)
+    {
+        var anchor = TextPointerAtModelTextOffset(anchorBlock, anchorOffset);
+        var caret = TextPointerAtModelTextOffset(caretBlock, caretOffset);
+        if (anchor is not null && caret is not null)
+            Selection.Select(anchor, caret);
+    }
+
+    internal void BackspaceForTest()
+    {
+        if (!TryRecordTrackedBackspace())
+            EditingCommands.Backspace.Execute(null, this);
+    }
+
+    internal void DeleteForwardForTest()
+    {
+        if (!TryRecordTrackedDeleteForward())
+            EditingCommands.Delete.Execute(null, this);
     }
 
     /// <summary>
@@ -11891,12 +12144,14 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// When true, the editor is in Track Changes mode. Live keystroke-level tracking is not attempted
-    /// (it is brittle in a RichTextBox); the flag is a model/UI state that the ribbon toggle reflects and
-    /// that gates <see cref="MarkSelectionAsRevision"/> (used to mark the selection as an insertion or
-    /// deletion). Accept-All / Reject-All operate regardless of this flag.
+    /// When true, the editor is in Track Changes mode. Body text typing and Backspace/Delete are recorded
+    /// as tracked insertions/deletions through the shared revision edit planner; selection-marking and
+    /// accept/reject operate regardless of this flag.
     /// </summary>
     public bool TrackChangesEnabled { get; set; }
+
+    /// <summary>The default revision author stamped on tracked changes this editor records.</summary>
+    public string RevisionAuthor { get; set; } = "FreeW User";
 
     // ── Review > Tracking display controls ────────────────────────────────────────────────────────
     // These are view-only flags: they affect how the document renders but never touch the model.
@@ -12055,7 +12310,7 @@ public sealed class DocumentView : RichTextBox
         if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph modelParagraph)
             return;
 
-        MarkRevisionRange(modelParagraph, startOffset, endOffset, kind, author, dateXml);
+        RevisionEditPlanner.MarkRevisionRange(modelParagraph, startOffset, endOffset, kind, author, dateXml);
         Render();
     }
 
