@@ -9793,27 +9793,33 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     private static InlineUIContainer BuildWordArtRun(WordArt wordArt, DocumentEffectSet effectSet)
     {
-        // Derive foreground colour and optional WPF effect from the style preset.
-        var (foreground, wpfEffect) = WordArtRenderStyle(wordArt.Style, effectSet);
+        var plan = DrawingObjectVisualPlanner.BuildInlineWordArtPlan(wordArt);
+        var wordArtPlan = plan.WordArt;
+        // Derive foreground colour and optional WPF effect from the shared style preset.
+        var (foreground, wpfEffect) = WordArtRenderStyle(plan, effectSet);
 
         // Warp hint: when a warp is set, add a slight italic skew as a best-effort visual cue
         // (WPF has no built-in text-path warp; full geometry warp is deferred).
         var element = new TextBlock
         {
-            Text       = wordArt.Text,
-            FontSize   = wordArt.FontSizePt * PxPerPoint,
+            Text       = wordArtPlan.Text,
+            FontSize   = wordArtPlan.FontSizeDip,
             FontWeight = FontWeights.Bold,
             Foreground = foreground,
             Effect     = wpfEffect,
             Tag        = wordArt, // carries the model WordArt so CommitToModel can round-trip it
         };
         // Apply warp visual hint
-        if (wordArt.Warp != WordArtWarp.None)
-            element.FontStyle = wordArt.Warp is WordArtWarp.ArchUp or WordArtWarp.Inflate or WordArtWarp.Wave1
+        if (wordArtPlan.Warp != WordArtWarp.None)
+            element.FontStyle = wordArtPlan.Warp is WordArtWarp.ArchUp or WordArtWarp.Inflate or WordArtWarp.Wave1
                 ? FontStyles.Normal : FontStyles.Italic;
 
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Center };
     }
+
+    private static (System.Windows.Media.Brush Foreground, System.Windows.Media.Effects.Effect? Effect)
+        WordArtRenderStyle(DrawingObjectInlineWordArtPlan plan, DocumentEffectSet effectSet) =>
+        WordArtRenderStyle(plan.WordArt.Style, effectSet);
 
     /// <summary>
     /// Returns the foreground brush + optional WPF effect for a given <see cref="WordArtStyle"/> preset.

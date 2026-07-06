@@ -63,6 +63,17 @@ public sealed class DocumentEffectRenderingTests
         wordArt.Effect.Should().BeOfType<DropShadowEffect>();
     }
 
+    [StaFact]
+    public void OfficeEffectSet_RendersInlineWordArtPresetGlow()
+    {
+        var view = RenderWithEffectSet(
+            "Office",
+            ModelRun.FromWordArt(new WordArt("Glow", WordArtStyle.GlowGold, fontSizePt: 24)));
+
+        var wordArt = SingleTagged<TextBlock, WordArt>(view);
+        wordArt.Effect.Should().BeOfType<DropShadowEffect>();
+    }
+
     private static DocumentView RenderWithEffectSet(string effectSetName, params ModelRun[] runs)
     {
         var document = TextDocument.CreateEmpty();

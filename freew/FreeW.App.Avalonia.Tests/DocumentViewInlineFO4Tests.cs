@@ -372,6 +372,23 @@ public sealed class DocumentViewInlineFO4Tests
     // ── Inline SmartArt tests ─────────────────────────────────────────────────────────────────────
 
     [Fact]
+    public async Task Inline_wordart_effect_summary_uses_shared_visual_planner()
+    {
+        string[] summaries = [];
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithInlineWordArt(WordArtStyle.GlowGold, text: "FreeW!");
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            summaries = view.InlineWordArtEffectSummaries.ToArray();
+        });
+
+        if (!ran) return;
+        summaries.Should().ContainSingle().Which.Should().Be("glow");
+    }
+
+    [Fact]
     public async Task Inline_smartart_is_collected_in_inline_list()
     {
         int count = -1;

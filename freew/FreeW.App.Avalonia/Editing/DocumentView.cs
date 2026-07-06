@@ -2523,6 +2523,19 @@ public sealed class DocumentView : Control
         }
     }
 
+    /// <summary>Effect summaries for inline WordArt, preserving the shared WordArt visual planner output.</summary>
+    public IReadOnlyList<string> InlineWordArtEffectSummaries
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _inlineWordArts
+                .Where(w => w.Effects.HasAny)
+                .Select(w => w.Effects.Summary)
+                .ToList();
+        }
+    }
+
     /// <summary>Number of inline (non-floating) SmartArt diagrams laid out in the last layout pass.</summary>
     public int InlineSmartArtCount
     {
@@ -5036,16 +5049,7 @@ public sealed class DocumentView : Control
                 var x          = ColumnLeftFor(contentY) + AlignmentOffset(alignment, textWidth, width);
                 var rect       = new Rect(x, pageSpaceY, width, height);
 
-                _inlineWordArts.Add(new FloatingWordArtData
-                {
-                    Rect       = rect,
-                    BehindText = false,
-                    ZOrder     = 0,
-                    Text       = wa.Text,
-                    Style      = wa.Style,
-                    FontSizePt = wa.FontSizePt,
-                    Warp       = wa.Warp,
-                });
+                _inlineWordArts.Add(BuildInlineWordArtData(wa, rect, blockIndex, runIndex: -1));
 
                 // ZZ1 fix: full-height sentinel for correct hit-test reach (see chart site above).
                 _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
@@ -13976,6 +13980,28 @@ public sealed class DocumentView : Control
             Warp = plan.WordArt?.Warp ?? WordArtWarp.None,
             Effects = plan.Effects,
         };
+
+    private static FloatingWordArtData BuildInlineWordArtData(
+        WordArt wordArt,
+        Rect rect,
+        int blockIndex,
+        int runIndex)
+    {
+        var plan = DrawingObjectVisualPlanner.BuildInlineWordArtPlan(wordArt);
+        return new FloatingWordArtData
+        {
+            Rect = rect,
+            BehindText = false,
+            ZOrder = 0,
+            BlockIndex = blockIndex,
+            RunIndex = runIndex,
+            Text = plan.WordArt.Text,
+            Style = plan.WordArt.Style,
+            FontSizePt = plan.WordArt.FontSizeDip / PxPerPoint,
+            Warp = plan.WordArt.Warp,
+            Effects = plan.Effects,
+        };
+    }
 
     private static FloatingSmartArtData BuildFloatingSmartArtData(
         SmartArt smartArt,
