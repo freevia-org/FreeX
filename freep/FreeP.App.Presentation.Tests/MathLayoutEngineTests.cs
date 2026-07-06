@@ -505,6 +505,33 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void OmmlManualBreak_LayoutsAsStackedEquationArrayRows()
+    {
+        var node = ParseOmml(
+            "<m:r><m:t>x</m:t></m:r>" +
+            "<m:r><m:rPr><m:brk/></m:rPr><m:t>y</m:t></m:r>");
+
+        var box = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+        var container = (MathBox.Container)box.Children[0];
+
+        container.Children.Should().HaveCount(2);
+        container.Children[1].Y.Should().BeGreaterThan(
+            container.Children[0].Y + container.Children[0].Metrics.Height,
+            "m:brk starts the following run on a new displayed equation line");
+    }
+
+    [Fact]
+    public void EmptyFallbackGlyph_DoesNotThrowOrReserveWidth()
+    {
+        var box = MathLayoutEngine.Layout(new MathNode.Unknown(string.Empty), "Cambria Math", FontSizePt);
+        var glyph = Assert.IsType<MathBox.Glyph>(box.Children[0]);
+
+        glyph.Text.Should().BeEmpty();
+        glyph.Metrics.Width.Should().Be(0);
+        glyph.Metrics.Height.Should().Be(0);
+    }
+
+    [Fact]
     public void Matrix_UsesMaxRowCellCount_ForRaggedRows()
     {
         var matrix = new MathNode.Matrix(new[]

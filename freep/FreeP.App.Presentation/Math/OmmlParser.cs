@@ -81,16 +81,39 @@ public static class OmmlParser
     private static MathNode ParseRow(XElement container)
     {
         var children = new List<MathNode>();
+        List<MathNode>? rows = null;
+        List<int?>? alignmentPointIndices = null;
+        int? currentAlignmentPointIndex = null;
+
         foreach (var child in container.Elements())
         {
+            if (TryReadManualBreak(child, out var breakAlignmentPointIndex))
+            {
+                if (children.Count > 0)
+                {
+                    rows ??= new List<MathNode>();
+                    alignmentPointIndices ??= new List<int?>();
+                    rows.Add(CreateRow(children));
+                    alignmentPointIndices.Add(currentAlignmentPointIndex);
+                    children.Clear();
+                }
+
+                currentAlignmentPointIndex = breakAlignmentPointIndex;
+            }
+
             var node = ParseElement(child);
             if (node is not null)
                 children.Add(node);
         }
 
-        return children.Count == 1
-            ? children[0]
-            : new MathNode.Row(children);
+        if (rows is not null)
+        {
+            rows.Add(CreateRow(children));
+            alignmentPointIndices!.Add(currentAlignmentPointIndex);
+            return new MathNode.EqArray(rows, alignmentPointIndices);
+        }
+
+        return CreateRow(children);
     }
 
     // ── Dispatcher ────────────────────────────────────────────────────────
@@ -125,6 +148,7 @@ public static class OmmlParser
             "m"        => ParseMatrix(el),
             "eqArr"    => ParseEqArray(el),
             "aln"      => null,
+            "brk"      => null,
             "oMathPara"=> ParseRow(el),
             _          => ParseUnknown(el)
         };
@@ -538,6 +562,41 @@ public static class OmmlParser
         element?.Attribute(M + "val")?.Value
         ?? element?.Attribute("val")?.Value
         ?? element?.Value;
+
+    private static MathNode CreateRow(IReadOnlyList<MathNode> children) =>
+        children.Count == 1
+            ? children[0]
+            : new MathNode.Row(children.ToArray());
+
+    private static bool TryReadManualBreak(XElement element, out int? alignmentPointIndex)
+    {
+        alignmentPointIndex = null;
+
+        XElement? brk = element.Name == M + "brk"
+            ? element
+            : element.Name.LocalName switch
+            {
+                "r" => element.Element(M + "rPr")?.Element(M + "brk"),
+                "box" => element.Element(M + "boxPr")?.Element(M + "brk"),
+                _ => null
+            };
+
+        if (brk is null)
+            return false;
+
+        alignmentPointIndex = ReadAlnAt(brk);
+        return true;
+    }
+
+    private static int? ReadAlnAt(XElement brk)
+    {
+        var value = brk.Attribute(M + "alnAt")?.Value
+            ?? brk.Attribute("alnAt")?.Value;
+
+        return int.TryParse(value, out var result) && result >= 0
+            ? result
+            : null;
+    }
 
     private static MathNode ParseEqArray(XElement el)
     {

@@ -1457,6 +1457,15 @@ public static class MathLayoutEngine
     private static MathBox.Glyph MakeGlyph(string text, string fontFamily, double fontSizePt, bool isItalic)
     {
         double em = Em(fontSizePt);
+        if (string.IsNullOrEmpty(text))
+        {
+            var empty = new MathBox.Glyph(string.Empty, fontFamily, fontSizePt, isItalic);
+            empty.Metrics.Width = 0;
+            empty.Metrics.Height = 0;
+            empty.Metrics.Ascent = 0;
+            return empty;
+        }
+
         int len = System.Math.Max(1, text.Length);
 
         // Per-character width varies; use tighter estimate for single chars (operators)

@@ -397,6 +397,50 @@ public sealed class OmmlParserTests
     }
 
     [Fact]
+    public void Parse_RunManualBreak_StartsNewEquationArrayRow()
+    {
+        var node = Parse(
+            "<m:r><m:t>x</m:t></m:r>" +
+            "<m:r><m:rPr><m:brk/></m:rPr><m:t>y</m:t></m:r>");
+
+        var eqArray = Assert.IsType<MathNode.EqArray>(node);
+        Assert.Equal(2, eqArray.Rows.Count);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(eqArray.Rows[0]).Text);
+        Assert.Equal("y", Assert.IsType<MathNode.Run>(eqArray.Rows[1]).Text);
+        Assert.Equal(new int?[] { null, null }, eqArray.AlignmentPointIndices);
+    }
+
+    [Fact]
+    public void Parse_BoxManualBreak_StartsNewEquationArrayRowAndReadsAlnAt()
+    {
+        var node = Parse(
+            "<m:r><m:t>x</m:t></m:r>" +
+            "<m:box><m:boxPr><m:brk m:alnAt=\"1\"/></m:boxPr><m:e><m:r><m:t>y</m:t></m:r></m:e></m:box>");
+
+        var eqArray = Assert.IsType<MathNode.EqArray>(node);
+        Assert.Equal(2, eqArray.Rows.Count);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(eqArray.Rows[0]).Text);
+
+        var box = Assert.IsType<MathNode.Box>(eqArray.Rows[1]);
+        Assert.Equal("y", Assert.IsType<MathNode.Run>(box.Base).Text);
+        Assert.Equal(new int?[] { null, 1 }, eqArray.AlignmentPointIndices);
+    }
+
+    [Fact]
+    public void Parse_DirectManualBreak_DoesNotCreateUnknownNode()
+    {
+        var node = Parse(
+            "<m:r><m:t>x</m:t></m:r>" +
+            "<m:brk/>" +
+            "<m:r><m:t>y</m:t></m:r>");
+
+        var eqArray = Assert.IsType<MathNode.EqArray>(node);
+        Assert.Equal(2, eqArray.Rows.Count);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(eqArray.Rows[0]).Text);
+        Assert.Equal("y", Assert.IsType<MathNode.Run>(eqArray.Rows[1]).Text);
+    }
+
+    [Fact]
     public void Parse_MatrixColumnAlignments_ReadsMcsAlnMetadata()
     {
         var node = Parse(
