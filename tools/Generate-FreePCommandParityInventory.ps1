@@ -402,7 +402,22 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
             ],
-            RemainingWork: "segmentedProcess now uses the bounded shared process live-layout path for parsed ordered-stage nodes while chevron-style and other unsupported process variants remain on cached drawing fallback. Broader SmartArt geometry families, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
+            RemainingWork: "segmentedProcess now uses the bounded shared process live-layout path for parsed ordered-stage nodes while other unsupported process variants remain on cached drawing fallback. Broader SmartArt geometry families, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
+        new(
+            EvidenceId: "freep.smartart.chevron-process",
+            Area: "SmartArt chevron process live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume ordinary shared slide shape and connector ops emitted by the SmartArt process-family planner; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-smartart-chevron-process-2026-07-07.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
+            ],
+            RemainingWork: "chevronProcess now uses the bounded shared process live-layout path for parsed ordered-stage nodes. The shared planner intentionally represents this as renderer-neutral rounded boxes plus connector ops, not exact PowerPoint chevron polygon geometry; other unsupported process variants remain on cached drawing fallback. Broader SmartArt geometry families, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
         new(
             EvidenceId: "freep.smartart.basic-block-list",
             Area: "SmartArt basic block list live layout",
