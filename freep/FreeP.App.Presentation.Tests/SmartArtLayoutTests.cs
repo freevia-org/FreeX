@@ -248,6 +248,25 @@ public sealed class SmartArtLayoutTests
         }
     }
 
+    [Fact]
+    public void BasicCycle_ReturnsLiveCircularBoxesAndConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Cycle, "Discover", "Plan", "Build", "Review");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicCycle";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("basicCycle is a bounded shared cycle-family layout");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(4, "one live box should be emitted per cycle node");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(4, "basicCycle should reuse the shared circular connector planner");
+
+        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().BeEquivalentTo(new[] { "Discover", "Plan", "Build", "Review" });
+    }
+
     // ── Hierarchy layout ──────────────────────────────────────────────────────────
 
     [Fact]
@@ -361,6 +380,18 @@ public sealed class SmartArtLayoutTests
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
         result.Should().BeNull("process-family layouts outside the bounded live planner should use cached drawing");
+    }
+
+    [Fact]
+    public void UnsupportedCycleSibling_ReturnsNull()
+    {
+        var data = MakeData(SmartArtFamily.Cycle, "A", "B", "C");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/radialCycle";
+        data.IsLiveLayoutSupported = false;
+
+        var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        result.Should().BeNull("cycle-family layouts outside the bounded live planner should use cached drawing");
     }
 
     // BI2: when nodes parse to zero, Layout returns null so compositor uses cached-drawing fallback.
@@ -714,6 +745,63 @@ public sealed class SmartArtLayoutTests
         renderedText.Should().NotContain("Cached list fallback");
         shapeOps.Select(op => op.BoundsDip.Y)
             .Should().BeInAscendingOrder("hosts consume the shared vertical list DrawOp geometry");
+    }
+
+    [Fact]
+    public void Compositor_BasicCycle_UsesLiveLayoutOverCachedDrawing()
+    {
+        var data = MakeData(SmartArtFamily.Cycle, "Live A", "Live B", "Live C", "Live D");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicCycle";
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id            = 13,
+            Kind          = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu    = FrameX,
+            OffsetYEmu    = FrameY,
+            ExtentCxEmu   = FrameCx / 2,
+            ExtentCyEmu   = FrameCy / 2,
+            TextBody      = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached cycle fallback" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id          = 66,
+            Kind        = SlideShapeKind.SmartArt,
+            OffsetXEmu  = FrameX,
+            OffsetYEmu  = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt    = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        shapeOps.Should().HaveCount(8, "basicCycle should render four live boxes plus four connectors");
+        var renderedText = shapeOps
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Live A");
+        renderedText.Should().Contain("Live D");
+        renderedText.Should().NotContain("Cached cycle fallback");
+        shapeOps.Where(op => op.Text is null)
+            .Should().HaveCount(4, "hosts consume the shared cycle connector DrawOps");
     }
 
     [Fact]

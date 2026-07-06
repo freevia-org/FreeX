@@ -1006,6 +1006,25 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesBasicCycleAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/basicCycle",
+            nodes: [("id1", "Discover"), ("id2", "Plan"), ("id3", "Build"), ("id4", "Review")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle,
+            "basicCycle is a cycle-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "basicCycle is in the bounded shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Discover", "Plan", "Build", "Review");
+    }
+
+    [Fact]
     public void Reader_ParsesKnownListFamilyButDisablesLiveLayoutForUnsupportedSibling()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -1022,6 +1041,25 @@ public sealed class SmartArtTests : IDisposable
         sa.Data.IsLiveLayoutSupported.Should().BeFalse(
             "list-family layouts outside the bounded allow-list should keep cached-drawing fallback");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("Item 1", "Item 2");
+    }
+
+    [Fact]
+    public void Reader_ParsesKnownCycleFamilyButDisablesLiveLayoutForUnsupportedSibling()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/radialCycle",
+            nodes: [("id1", "Phase 1"), ("id2", "Phase 2"), ("id3", "Phase 3")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle,
+            "unsupported cycle siblings still retain broad family metadata for future layout slices");
+        sa.Data.IsLiveLayoutSupported.Should().BeFalse(
+            "cycle-family layouts outside the bounded allow-list should keep cached-drawing fallback");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Phase 1", "Phase 2", "Phase 3");
     }
 
     [Fact]
@@ -1105,6 +1143,32 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_BasicCycleSmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/basicCycle",
+            nodes: [("n1", "Discover"), ("n2", "Plan"), ("n3", "Build"), ("n4", "Review")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(8, "four basic-cycle boxes plus four connectors should render from shared live data");
+        var renderedText = liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Discover");
+        renderedText.Should().Contain("Review");
+    }
+
+    [Fact]
     public void Compositor_UnsupportedProcessSibling_UsesCachedFallbackShapes()
     {
         var data = new SmartArtData
@@ -1156,6 +1220,61 @@ public sealed class SmartArtTests : IDisposable
 
         shapeOps.Should().ContainSingle("unsupported process siblings should use cached drawing fallback");
         shapeOps[0].Text?.Paragraphs[0].Runs[0].Text.Should().Be("Cached sibling fallback");
+    }
+
+    [Fact]
+    public void Compositor_UnsupportedCycleSibling_UsesCachedFallbackShapes()
+    {
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.Cycle,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/radialCycle",
+            IsLiveLayoutSupported = false
+        };
+        data.Nodes.Add(new SmartArtNode { Text = "Live A", Level = 0 });
+        data.Nodes.Add(new SmartArtNode { Text = "Live B", Level = 0 });
+        data.Nodes.Add(new SmartArtNode { Text = "Live C", Level = 0 });
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id = 92,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 914_400,
+            OffsetYEmu = 457_200,
+            ExtentCxEmu = 1_828_800,
+            ExtentCyEmu = 914_400,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached cycle sibling fallback" } }
+                    }
+                }
+            }
+        });
+
+        var pres = Presentation.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 93,
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = 914_400,
+            OffsetYEmu = 457_200,
+            ExtentCxEmu = 7_315_200,
+            ExtentCyEmu = 3_657_600,
+            SmartArt = smart
+        });
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        shapeOps.Should().ContainSingle("unsupported cycle siblings should use cached drawing fallback");
+        shapeOps[0].Text?.Paragraphs[0].Runs[0].Text.Should().Be("Cached cycle sibling fallback");
     }
 
     [Fact]
