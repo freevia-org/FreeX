@@ -182,8 +182,8 @@ internal sealed class MarkRevisionRangeCommand(
 
         // Snapshot deep clones: MarkRange mutates run objects in place (splits text, stamps Revision),
         // so a shallow copy would share those mutations and break Revert.
-        _savedRuns = paragraph.Runs.Select(CloneRun).ToList();
-        MarkRange(paragraph, startOffset, endOffset, kind, author, dateXml);
+        _savedRuns = paragraph.Runs.Select(run => RevisionEditPlanner.CloneRunWithText(run, run.Text)).ToList();
+        RevisionEditPlanner.MarkRevisionRange(paragraph, startOffset, endOffset, kind, author, dateXml);
         _applied = true;
     }
 
@@ -198,58 +198,4 @@ internal sealed class MarkRevisionRangeCommand(
         _applied = false;
     }
 
-    // Stamps the revision mark onto every run slice covering [startOffset, endOffset), splitting
-    // partially-covered runs at the boundaries. Mirrors the WPF host's private MarkRevisionRange.
-    private static void MarkRange(Paragraph paragraph, int startOffset, int endOffset, RevisionKind kind, string author, string? dateXml)
-    {
-        var pos = 0;
-        for (var i = 0; i < paragraph.Runs.Count; i++)
-        {
-            var run = paragraph.Runs[i];
-            var len = run.Text.Length;
-            var runStart = pos;
-            var runEnd = pos + len;
-            pos = runEnd;
-            if (len == 0)
-                continue;
-
-            var coverStart = System.Math.Max(runStart, startOffset);
-            var coverEnd = System.Math.Min(runEnd, endOffset);
-            if (coverStart >= coverEnd)
-                continue;
-
-            if (coverStart > runStart)
-            {
-                var head = CloneRun(run, run.Text[..(coverStart - runStart)]);
-                run.Text = run.Text[(coverStart - runStart)..];
-                paragraph.Runs.Insert(i, head);
-                i++;
-            }
-            if (coverEnd < runEnd)
-            {
-                var tail = CloneRun(run, run.Text[(coverEnd - coverStart)..]);
-                run.Text = run.Text[..(coverEnd - coverStart)];
-                paragraph.Runs.Insert(i + 1, tail);
-            }
-
-            run.Revision = kind;
-            run.RevisionAuthor = author;
-            run.RevisionDateXml = dateXml;
-        }
-    }
-
-    private static Run CloneRun(Run source, string text) => new(text, source.Formatting)
-    {
-        HyperlinkUrl = source.HyperlinkUrl,
-        HyperlinkAnchor = source.HyperlinkAnchor,
-        HyperlinkTooltip = source.HyperlinkTooltip,
-        CommentId = source.CommentId,
-        IsCommentReference = source.IsCommentReference,
-        Revision = source.Revision,
-        RevisionAuthor = source.RevisionAuthor,
-        RevisionDateXml = source.RevisionDateXml,
-        FormatRevision = source.FormatRevision,
-    };
-
-    private static Run CloneRun(Run source) => CloneRun(source, source.Text);
 }

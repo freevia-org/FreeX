@@ -4854,11 +4854,9 @@ internal static class FreeWRibbonCommands
         public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: editor.SpellCheckEnabled);
     }
 
-    // Review > Tracking > Track Changes: a stateful toggle over the editor's Track Changes mode. Live
-    // keystroke tracking is out of scope in a RichTextBox, so as a pragmatic gesture, turning the toggle
-    // ON with a non-empty selection marks that selection as a tracked insertion (so the feature does
-    // something visible and the round-trip is exercisable from the UI). The author comes from the
-    // document Author property (falling back to the OS user); the date is stamped at mark time.
+    // Review > Tracking > Track Changes: a stateful toggle over the editor's Track Changes mode. Body
+    // text edits are now recorded by the WPF editor; when switching on over a non-empty selection we still
+    // mark that selection immediately, matching the visible feedback users expect from Word.
     private sealed class TrackChangesToggleCommand(DocumentView editor) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -4870,13 +4868,8 @@ internal static class FreeWRibbonCommands
             // live tracking. This keeps the toggle useful without brittle per-keystroke interception.
             if (editor.TrackChangesEnabled && !editor.Selection.IsEmpty)
             {
-                var author = editor.Model.Properties.Author;
-                if (string.IsNullOrWhiteSpace(author))
-                    author = Environment.UserName;
-                author = author?.Trim() ?? string.Empty;
-
                 var dateXml = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
-                editor.MarkSelectionAsRevision(RevisionKind.Inserted, author, dateXml);
+                editor.MarkSelectionAsRevision(RevisionKind.Inserted, editor.RevisionAuthor, dateXml);
             }
         }
 
