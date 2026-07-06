@@ -411,6 +411,116 @@ public sealed class SourceManagementDialogPlannerTests
     }
 
     [Fact]
+    public void PrimaryAuthorEditor_PersonalRowsNormalizeAndApplyToEntry()
+    {
+        var state = new SourceManagementAuthorEditorState(
+            SourceManagementAuthorEditorMode.Personal,
+            [
+                new SourceManagementAuthorPersonRow(" Jane ", " Q. ", " Doe "),
+                new SourceManagementAuthorPersonRow(" ", " ", " "),
+                new SourceManagementAuthorPersonRow(" Alex ", string.Empty, " Smith ")
+            ],
+            "Ignored Organization");
+
+        var normalized = SourceManagementDialogPlanner.NormalizePrimaryAuthorEditorState(state);
+        var entry = SourceManagementDialogPlanner.ApplyPrimaryAuthorEditorState(
+            new SourceManagementSourceEntry("Ref", "Old Author", string.Empty, string.Empty, string.Empty),
+            state);
+
+        normalized.Mode.Should().Be(SourceManagementAuthorEditorMode.Personal);
+        normalized.PersonalRows.Should().Equal(
+            new SourceManagementAuthorPersonRow("Jane", "Q.", "Doe"),
+            new SourceManagementAuthorPersonRow("Alex", string.Empty, "Smith"));
+        normalized.CorporateAuthor.Should().BeEmpty();
+        SourceManagementDialogPlanner.BuildPrimaryAuthorDisplayText(state)
+            .Should().Be("Jane Q. Doe; Alex Smith");
+        entry.Author.Should().Be("Jane Q. Doe; Alex Smith");
+        entry.PersonalAuthors.Should().Equal(
+            SourceAuthorPerson.Create("Jane", "Q.", "Doe"),
+            SourceAuthorPerson.Create("Alex", string.Empty, "Smith"));
+        entry.CorporateAuthor.Should().BeNull();
+    }
+
+    [Fact]
+    public void PrimaryAuthorEditor_CorporateModeAppliesAuthorAndClearsPersonalRows()
+    {
+        var state = new SourceManagementAuthorEditorState(
+            SourceManagementAuthorEditorMode.Corporate,
+            [new SourceManagementAuthorPersonRow("Jane", "Q.", "Doe")],
+            " World Health Organization ");
+
+        var entry = SourceManagementDialogPlanner.ApplyPrimaryAuthorEditorState(
+            new SourceManagementSourceEntry("Ref", "Jane Q. Doe", string.Empty, string.Empty, string.Empty)
+            {
+                PersonalAuthors = [SourceAuthorPerson.Create("Jane", "Q.", "Doe")]
+            },
+            state);
+
+        SourceManagementDialogPlanner.BuildPrimaryAuthorDisplayText(state)
+            .Should().Be("World Health Organization");
+        entry.Author.Should().Be("World Health Organization");
+        entry.PersonalAuthors.Should().BeEmpty();
+        entry.CorporateAuthor.Should().Be("World Health Organization");
+    }
+
+    [Fact]
+    public void PrimaryAuthorEditor_ProjectsExistingStructuredAuthorsThroughFieldRefresh()
+    {
+        var source = new Source
+        {
+            Type = SourceType.Book,
+            Tag = "Ada1843",
+            Author = "Ada Lovelace",
+            PersonalAuthors = [SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace")],
+            Title = "Notes"
+        };
+        var entry = SourceManagementDialogPlanner.ProjectEntry(source);
+
+        var state = SourceManagementDialogPlanner.ProjectPrimaryAuthorEditorState(entry);
+        var applied = SourceManagementDialogPlanner.ApplyPrimaryAuthorEditorState(entry, state);
+        var refreshedValues = SourceManagementDialogPlanner
+            .BuildEntryFieldPlans(applied)
+            .ToDictionary(plan => plan.Field, plan => (string?)plan.Text);
+        var refreshedEntry = SourceManagementDialogPlanner.CreateEntry(
+            SourceType.Book,
+            refreshedValues,
+            applied);
+
+        state.Mode.Should().Be(SourceManagementAuthorEditorMode.Personal);
+        state.PersonalRows.Should().ContainSingle()
+            .Which.Should().Be(new SourceManagementAuthorPersonRow("Ada", string.Empty, "Lovelace"));
+        refreshedEntry.Author.Should().Be("Ada Lovelace");
+        refreshedEntry.PersonalAuthors.Should().ContainSingle()
+            .Which.Should().Be(SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace"));
+        refreshedEntry.CorporateAuthor.Should().BeNull();
+    }
+
+    [Fact]
+    public void PrimaryAuthorEditor_FreeTextFallbackKeepsTextboxCreateEntryPolicy()
+    {
+        var entry = SourceManagementDialogPlanner.CreateEntry(
+            SourceType.Book,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Author] = "Ada Lovelace"
+            });
+
+        var state = SourceManagementDialogPlanner.ProjectPrimaryAuthorEditorState(entry);
+
+        entry.Author.Should().Be("Ada Lovelace");
+        entry.PersonalAuthors.Should().BeEmpty();
+        entry.CorporateAuthor.Should().Be("Ada Lovelace");
+        state.Mode.Should().Be(SourceManagementAuthorEditorMode.Corporate);
+        state.CorporateAuthor.Should().Be("Ada Lovelace");
+
+        var blankState = SourceManagementDialogPlanner.ProjectPrimaryAuthorEditorState(
+            new SourceManagementSourceEntry(string.Empty, string.Empty, string.Empty, string.Empty, string.Empty));
+        blankState.Mode.Should().Be(SourceManagementAuthorEditorMode.Personal);
+        blankState.PersonalRows.Should().BeEmpty();
+        blankState.CorporateAuthor.Should().BeEmpty();
+    }
+
+    [Fact]
     public void CreateEntry_PreservesExistingSinglePersonRowsWhenDisplayIsUnchanged()
     {
         var previous = SourceManagementDialogPlanner.ProjectEntry(new Source

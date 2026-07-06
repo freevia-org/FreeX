@@ -12,8 +12,11 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         source.Should().Contain("SourceManagementDialogPlanner.BuildSourceTypeChoices(");
         source.Should().Contain("SourceManagementDialogPlanner.BuildEntryFieldPlans(");
         source.Should().Contain("SourceManagementDialogPlanner.CreateEntry(");
+        source.Should().Contain("SourceManagementDialogPlanner.ProjectPrimaryAuthorEditorState(");
+        source.Should().Contain("SourceManagementDialogPlanner.NormalizePrimaryAuthorEditorState(");
+        source.Should().Contain("SourceManagementDialogPlanner.ApplyPrimaryAuthorEditorState(");
         source.Should().Contain("_fields.ToDictionary(pair => pair.Key, pair => (string?)pair.Value.Text),");
-        source.Should().Contain("_initialEntry);");
+        source.Should().Contain("_entryBaseline);");
     }
 
     [Fact]

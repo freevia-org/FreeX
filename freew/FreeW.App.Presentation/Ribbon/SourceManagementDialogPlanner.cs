@@ -174,6 +174,22 @@ public sealed record SourceManagementCitationSourcePlan(
     Source? Source,
     SourceManagementValidation? Validation = null);
 
+public enum SourceManagementAuthorEditorMode
+{
+    Personal,
+    Corporate
+}
+
+public sealed record SourceManagementAuthorPersonRow(
+    string First,
+    string Middle,
+    string Last);
+
+public sealed record SourceManagementAuthorEditorState(
+    SourceManagementAuthorEditorMode Mode,
+    IReadOnlyList<SourceManagementAuthorPersonRow> PersonalRows,
+    string CorporateAuthor);
+
 public static class SourceManagementDialogPlanner
 {
     public const string SourcePickerTitle = "Insert Citation";
@@ -187,6 +203,17 @@ public static class SourceManagementDialogPlanner
     public const string MissingCitationSourceDataMessage = "Enter source details beyond the tag before inserting a citation.";
     public const string MissingManagedSourceDataMessage = "Enter at least one source field.";
     public const string UntitledSourceLabel = "(untitled source)";
+    public const string PrimaryAuthorEditorTitle = "Author";
+    public const string PrimaryAuthorEditorButtonLabel = "...";
+    public const string PrimaryAuthorEditorButtonToolTip = "Edit Author";
+    public const string PersonalAuthorModeLabel = "Personal author";
+    public const string CorporateAuthorModeLabel = "Corporate author";
+    public const string AuthorFirstNameLabel = "First";
+    public const string AuthorMiddleNameLabel = "Middle";
+    public const string AuthorLastNameLabel = "Last";
+    public const string CorporateAuthorLabel = "Corporate Author:";
+    public const string AddAuthorRowButtonLabel = "Add";
+    public const string RemoveAuthorRowButtonLabel = "Remove";
 
     private static readonly IReadOnlyList<SourceManagementSourceTypeChoice> SourceTypeChoices =
     [
@@ -418,6 +445,106 @@ public static class SourceManagementDialogPlanner
             Translator = SourceAuthorPerson.FormatDisplayText(source?.Translators ?? []),
             Translators = ClonePersonalAuthors(source?.Translators ?? [])
         };
+
+    public static SourceManagementAuthorEditorState ProjectPrimaryAuthorEditorState(Source? source) =>
+        ProjectPrimaryAuthorEditorState(ProjectEntry(source));
+
+    public static SourceManagementAuthorEditorState ProjectPrimaryAuthorEditorState(SourceManagementSourceEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        var personalRows = ToAuthorPersonRows(entry.PersonalAuthors);
+        if (personalRows.Count > 0)
+        {
+            return new SourceManagementAuthorEditorState(
+                SourceManagementAuthorEditorMode.Personal,
+                personalRows,
+                string.Empty);
+        }
+
+        if (!string.IsNullOrWhiteSpace(entry.CorporateAuthor))
+        {
+            return new SourceManagementAuthorEditorState(
+                SourceManagementAuthorEditorMode.Corporate,
+                [],
+                entry.CorporateAuthor!.Trim());
+        }
+
+        var projection = NormalizeAuthor(entry.Author, entry);
+        if (projection.PersonalAuthors.Count > 0)
+        {
+            return new SourceManagementAuthorEditorState(
+                SourceManagementAuthorEditorMode.Personal,
+                ToAuthorPersonRows(projection.PersonalAuthors),
+                string.Empty);
+        }
+
+        if (!string.IsNullOrWhiteSpace(projection.CorporateAuthor))
+        {
+            return new SourceManagementAuthorEditorState(
+                SourceManagementAuthorEditorMode.Corporate,
+                [],
+                projection.CorporateAuthor!.Trim());
+        }
+
+        return new SourceManagementAuthorEditorState(
+            SourceManagementAuthorEditorMode.Personal,
+            [],
+            string.Empty);
+    }
+
+    public static SourceManagementAuthorEditorState NormalizePrimaryAuthorEditorState(
+        SourceManagementAuthorEditorState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        if (state.Mode == SourceManagementAuthorEditorMode.Corporate)
+        {
+            return new SourceManagementAuthorEditorState(
+                SourceManagementAuthorEditorMode.Corporate,
+                [],
+                state.CorporateAuthor?.Trim() ?? string.Empty);
+        }
+
+        return new SourceManagementAuthorEditorState(
+            SourceManagementAuthorEditorMode.Personal,
+            ToAuthorPersonRows(ToSourceAuthorPeople(state.PersonalRows)),
+            string.Empty);
+    }
+
+    public static string BuildPrimaryAuthorDisplayText(SourceManagementAuthorEditorState state)
+    {
+        var normalized = NormalizePrimaryAuthorEditorState(state);
+        return normalized.Mode == SourceManagementAuthorEditorMode.Corporate
+            ? normalized.CorporateAuthor
+            : SourceAuthorPerson.FormatDisplayText(ToSourceAuthorPeople(normalized.PersonalRows));
+    }
+
+    public static SourceManagementSourceEntry ApplyPrimaryAuthorEditorState(
+        SourceManagementSourceEntry entry,
+        SourceManagementAuthorEditorState state)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        var normalized = NormalizePrimaryAuthorEditorState(state);
+        if (normalized.Mode == SourceManagementAuthorEditorMode.Corporate)
+        {
+            return entry with
+            {
+                Author = normalized.CorporateAuthor,
+                PersonalAuthors = [],
+                CorporateAuthor = NullIfWhiteSpace(normalized.CorporateAuthor)
+            };
+        }
+
+        var people = ToSourceAuthorPeople(normalized.PersonalRows);
+        return entry with
+        {
+            Author = SourceAuthorPerson.FormatDisplayText(people),
+            PersonalAuthors = people,
+            CorporateAuthor = null
+        };
+    }
 
     public static SourceManagementSourceEntry CreateEntry(
         IReadOnlyDictionary<SourceManagementSourceField, string?> values) =>
@@ -1145,6 +1272,19 @@ public static class SourceManagementDialogPlanner
         people
             .Where(person => person is not null && !person.IsEmpty)
             .Select(person => SourceAuthorPerson.Create(person.First, person.Middle, person.Last))
+            .ToArray();
+
+    private static IReadOnlyList<SourceManagementAuthorPersonRow> ToAuthorPersonRows(
+        IEnumerable<SourceAuthorPerson> people) =>
+        ClonePersonalAuthors(people)
+            .Select(person => new SourceManagementAuthorPersonRow(person.First, person.Middle, person.Last))
+            .ToArray();
+
+    private static IReadOnlyList<SourceAuthorPerson> ToSourceAuthorPeople(
+        IEnumerable<SourceManagementAuthorPersonRow> rows) =>
+        rows
+            .Select(row => SourceAuthorPerson.Create(row.First, row.Middle, row.Last))
+            .Where(person => !person.IsEmpty)
             .ToArray();
 
     private sealed record SourceManagementAuthorProjection(

@@ -5577,6 +5577,25 @@ internal static class FreeWRibbonCommands
                     fields.ToDictionary(pair => pair.Key, pair => (string?)pair.Value.Text),
                     entry);
 
+            void EditPrimaryAuthor()
+            {
+                var current = CurrentEntry();
+                var state = AuthorEditorDialog.Ask(dialog, current);
+                if (state is null)
+                    return;
+
+                entry = SourceManagementDialogPlanner.ApplyPrimaryAuthorEditorState(current, state);
+                if (!fields.TryGetValue(SourceManagementSourceField.Author, out var authorField))
+                {
+                    authorField = NewField();
+                    fields[SourceManagementSourceField.Author] = authorField;
+                }
+
+                authorField.Text = entry.Author;
+                RefreshFields();
+                authorField.Focus();
+            }
+
             void RefreshFields()
             {
                 fieldPanel.Children.Clear();
@@ -5588,7 +5607,10 @@ internal static class FreeWRibbonCommands
                         fields[plan.Field] = box;
                     }
 
-                    AddRow(fieldPanel, plan.Label, box);
+                    if (plan.Field == SourceManagementSourceField.Author)
+                        AddAuthorRow(fieldPanel, plan.Label, box, EditPrimaryAuthor);
+                    else
+                        AddRow(fieldPanel, plan.Label, box);
                 }
             }
 
@@ -5626,10 +5648,221 @@ internal static class FreeWRibbonCommands
         private static System.Windows.Controls.TextBox NewField(string? value = null) =>
             new() { Text = value ?? string.Empty, MinWidth = 320, Margin = new Thickness(0, 0, 0, 10) };
 
+        private static void AddAuthorRow(
+            System.Windows.Controls.Panel panel,
+            string label,
+            System.Windows.Controls.TextBox field,
+            Action edit)
+        {
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+            var row = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal
+            };
+            row.Children.Add(field);
+
+            var editButton = new System.Windows.Controls.Button
+            {
+                Content = SourceManagementDialogPlanner.PrimaryAuthorEditorButtonLabel,
+                MinWidth = 32,
+                Margin = new Thickness(6, 0, 0, 10),
+                ToolTip = SourceManagementDialogPlanner.PrimaryAuthorEditorButtonToolTip
+            };
+            editButton.Click += (_, _) => edit();
+            row.Children.Add(editButton);
+            panel.Children.Add(row);
+        }
+
         private static void AddRow(System.Windows.Controls.Panel panel, string label, System.Windows.Controls.Control control)
         {
             panel.Children.Add(new System.Windows.Controls.TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
             panel.Children.Add(control);
+        }
+    }
+
+    private static class AuthorEditorDialog
+    {
+        private sealed record RowControls(
+            System.Windows.Controls.TextBox First,
+            System.Windows.Controls.TextBox Middle,
+            System.Windows.Controls.TextBox Last,
+            System.Windows.Controls.Grid Host);
+
+        public static SourceManagementAuthorEditorState? Ask(Window? owner, SourceManagementSourceEntry entry)
+        {
+            var initial = SourceManagementDialogPlanner.ProjectPrimaryAuthorEditorState(entry);
+            var rowControls = new List<RowControls>();
+            SourceManagementAuthorEditorState? result = null;
+
+            var dialog = new Window
+            {
+                Title = SourceManagementDialogPlanner.PrimaryAuthorEditorTitle,
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var personalMode = new System.Windows.Controls.RadioButton
+            {
+                Content = SourceManagementDialogPlanner.PersonalAuthorModeLabel,
+                GroupName = "PrimaryAuthorMode",
+                IsChecked = initial.Mode == SourceManagementAuthorEditorMode.Personal,
+                Margin = new Thickness(0, 0, 0, 6)
+            };
+            var corporateMode = new System.Windows.Controls.RadioButton
+            {
+                Content = SourceManagementDialogPlanner.CorporateAuthorModeLabel,
+                GroupName = "PrimaryAuthorMode",
+                IsChecked = initial.Mode == SourceManagementAuthorEditorMode.Corporate,
+                Margin = new Thickness(0, 8, 0, 6)
+            };
+            var peoplePanel = new System.Windows.Controls.StackPanel { Margin = new Thickness(18, 0, 0, 0) };
+            var rowsPanel = new System.Windows.Controls.StackPanel();
+            var corporateLabel = new System.Windows.Controls.TextBlock
+            {
+                Text = SourceManagementDialogPlanner.CorporateAuthorLabel,
+                Margin = new Thickness(18, 0, 0, 4)
+            };
+            var corporateBox = NewAuthorTextBox(initial.CorporateAuthor, minWidth: 360);
+
+            void AddPersonRow(SourceManagementAuthorPersonRow row)
+            {
+                var grid = CreatePersonRowGrid();
+                var first = NewAuthorTextBox(row.First);
+                var middle = NewAuthorTextBox(row.Middle);
+                var last = NewAuthorTextBox(row.Last, minWidth: 140);
+                AddGridChild(grid, first, 0);
+                AddGridChild(grid, middle, 1);
+                AddGridChild(grid, last, 2);
+                rowsPanel.Children.Add(grid);
+                rowControls.Add(new RowControls(first, middle, last, grid));
+            }
+
+            void RemovePersonRow()
+            {
+                if (rowControls.Count <= 1)
+                {
+                    rowControls[0].First.Clear();
+                    rowControls[0].Middle.Clear();
+                    rowControls[0].Last.Clear();
+                    return;
+                }
+
+                var last = rowControls[^1];
+                rowsPanel.Children.Remove(last.Host);
+                rowControls.RemoveAt(rowControls.Count - 1);
+            }
+
+            void RefreshMode()
+            {
+                var personal = personalMode.IsChecked == true;
+                peoplePanel.IsEnabled = personal;
+                corporateLabel.IsEnabled = !personal;
+                corporateBox.IsEnabled = !personal;
+            }
+
+            IReadOnlyList<SourceManagementAuthorPersonRow> initialRows = initial.PersonalRows.Count == 0
+                ? [new SourceManagementAuthorPersonRow(string.Empty, string.Empty, string.Empty)]
+                : initial.PersonalRows;
+            foreach (var row in initialRows)
+            {
+                AddPersonRow(row);
+            }
+
+            var header = CreatePersonRowGrid();
+            AddGridChild(header, NewHeader(SourceManagementDialogPlanner.AuthorFirstNameLabel), 0);
+            AddGridChild(header, NewHeader(SourceManagementDialogPlanner.AuthorMiddleNameLabel), 1);
+            AddGridChild(header, NewHeader(SourceManagementDialogPlanner.AuthorLastNameLabel), 2);
+            peoplePanel.Children.Add(header);
+            peoplePanel.Children.Add(rowsPanel);
+
+            var addRow = new System.Windows.Controls.Button
+            {
+                Content = SourceManagementDialogPlanner.AddAuthorRowButtonLabel,
+                MinWidth = 72,
+                Margin = new Thickness(0, 4, 8, 0)
+            };
+            addRow.Click += (_, _) => AddPersonRow(new SourceManagementAuthorPersonRow(string.Empty, string.Empty, string.Empty));
+            var removeRow = new System.Windows.Controls.Button
+            {
+                Content = SourceManagementDialogPlanner.RemoveAuthorRowButtonLabel,
+                MinWidth = 72,
+                Margin = new Thickness(0, 4, 0, 0)
+            };
+            removeRow.Click += (_, _) => RemovePersonRow();
+            peoplePanel.Children.Add(new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                Children = { addRow, removeRow }
+            });
+
+            personalMode.Checked += (_, _) => RefreshMode();
+            corporateMode.Checked += (_, _) => RefreshMode();
+
+            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            ok.Click += (_, _) =>
+            {
+                var mode = corporateMode.IsChecked == true
+                    ? SourceManagementAuthorEditorMode.Corporate
+                    : SourceManagementAuthorEditorMode.Personal;
+                result = SourceManagementDialogPlanner.NormalizePrimaryAuthorEditorState(
+                    new SourceManagementAuthorEditorState(
+                        mode,
+                        rowControls.Select(row => new SourceManagementAuthorPersonRow(
+                            row.First.Text ?? string.Empty,
+                            row.Middle.Text ?? string.Empty,
+                            row.Last.Text ?? string.Empty)).ToArray(),
+                        corporateBox.Text ?? string.Empty));
+                dialog.DialogResult = true;
+            };
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 14, 0, 0)
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(personalMode);
+            panel.Children.Add(peoplePanel);
+            panel.Children.Add(corporateMode);
+            panel.Children.Add(corporateLabel);
+            panel.Children.Add(corporateBox);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+
+            RefreshMode();
+            return dialog.ShowDialog() == true ? result : null;
+        }
+
+        private static System.Windows.Controls.Grid CreatePersonRowGrid()
+        {
+            var grid = new System.Windows.Controls.Grid { Margin = new Thickness(0, 0, 0, 4) };
+            grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = new GridLength(110) });
+            grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = new GridLength(110) });
+            grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = new GridLength(140) });
+            return grid;
+        }
+
+        private static System.Windows.Controls.TextBlock NewHeader(string text) =>
+            new() { Text = text, Margin = new Thickness(0, 0, 6, 2) };
+
+        private static System.Windows.Controls.TextBox NewAuthorTextBox(string? text, double minWidth = 104) =>
+            new() { Text = text ?? string.Empty, MinWidth = minWidth, Margin = new Thickness(0, 0, 6, 0) };
+
+        private static void AddGridChild(
+            System.Windows.Controls.Grid grid,
+            UIElement child,
+            int column)
+        {
+            System.Windows.Controls.Grid.SetColumn(child, column);
+            grid.Children.Add(child);
         }
     }
 
