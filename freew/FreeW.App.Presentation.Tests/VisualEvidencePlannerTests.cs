@@ -181,6 +181,7 @@ public sealed class VisualEvidencePlannerTests
             "wordart-effects",
             "grouped-child-effects",
             "grouped-child-shape-effects",
+            "grouped-child-wordart-effects",
             "shadow",
             "glow",
             "reflection",
@@ -1302,9 +1303,9 @@ public sealed class VisualEvidencePlannerTests
         expectation.DrawingObjects.Effects.ShapeEffectObjectCount.Should().Be(1);
         expectation.DrawingObjects.Effects.ImageEffectObjectCount.Should().Be(1);
         expectation.DrawingObjects.Effects.WordArtEffectObjectCount.Should().Be(1);
-        expectation.DrawingObjects.Effects.RenderedGroupChildEffectObjectCount.Should().Be(1);
+        expectation.DrawingObjects.Effects.RenderedGroupChildEffectObjectCount.Should().Be(2);
         expectation.DrawingObjects.Effects.RenderedGroupChildShapeEffectObjectCount.Should().Be(1);
-        expectation.DrawingObjects.Effects.RenderedGroupChildWordArtEffectObjectCount.Should().Be(0);
+        expectation.DrawingObjects.Effects.RenderedGroupChildWordArtEffectObjectCount.Should().Be(1);
         expectation.DrawingObjects.Effects.PlannedGroupChildEffectObjectCount.Should().Be(0);
         expectation.DrawingObjects.Effects.PlannedGroupChildShapeEffectObjectCount.Should().Be(0);
         expectation.DrawingObjects.Effects.PlannedGroupChildWordArtEffectObjectCount.Should().Be(0);
@@ -1318,6 +1319,8 @@ public sealed class VisualEvidencePlannerTests
             "WordArt:glow"]);
         expectation.DrawingObjects.Effects.RenderedGroupChildEffectSummaries.Should().Contain(
             "GroupChild0:Shape:glow");
+        expectation.DrawingObjects.Effects.RenderedGroupChildEffectSummaries.Should().Contain(
+            "GroupChild1:WordArt:glow");
         expectation.DrawingObjects.Effects.PlannedGroupChildEffectSummaries.Should().BeEmpty();
     }
 
@@ -1673,7 +1676,7 @@ public sealed class VisualEvidencePlannerTests
             var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(summary);
             markdown.Should().Contain("Scenario Coverage");
             markdown.Should().Contain("avalonia-page-layout-shot");
-            markdown.Should().Contain("1 rendered grouped child effect object(s): GroupChild0:Shape:glow");
+            markdown.Should().Contain("2 rendered grouped child effect object(s): GroupChild0:Shape:glow/GroupChild1:WordArt:glow");
             markdown.Should().NotContain("planned grouped child effect object(s)");
         }
         finally
@@ -1747,7 +1750,7 @@ public sealed class VisualEvidencePlannerTests
             summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("drawing-object renderer pair 'drawing-objects-complex' page 1", StringComparison.Ordinal)
                 && f.Contains("rendered grouped child effect summaries differ", StringComparison.Ordinal)
-                && f.Contains("WPF 'GroupChild0:Shape:glow'", StringComparison.Ordinal)
+                && f.Contains("WPF 'GroupChild0:Shape:glow/GroupChild1:WordArt:glow'", StringComparison.Ordinal)
                 && f.Contains("Avalonia 'GroupChild0:Shape:shadow'", StringComparison.Ordinal));
         }
         finally

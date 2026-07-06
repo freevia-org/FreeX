@@ -1262,7 +1262,7 @@ public static class FreeWVisualEvidenceDocumentFactory
             Effects = new ShapeEffectLst { HasGlow = true, GlowColorHex = "4472C4", GlowRad = 63500 }
         });
         group.ChildOffsets.Add((0, 16));
-        group.Children.Add(new WordArt("Group", WordArtStyle.FillGold, 22));
+        group.Children.Add(new WordArt("Group", WordArtStyle.GlowGold, 22));
         group.ChildOffsets.Add((70, 8));
         return group;
     }

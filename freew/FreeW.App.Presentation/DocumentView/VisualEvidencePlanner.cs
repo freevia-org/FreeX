@@ -669,6 +669,7 @@ public static class FreeWVisualEvidencePlanner
                 "wordart-effects",
                 "grouped-child-effects",
                 "grouped-child-shape-effects",
+                "grouped-child-wordart-effects",
                 "shadow",
                 "glow",
                 "reflection",
@@ -1548,7 +1549,7 @@ public static class FreeWVisualEvidencePlanner
     }
 
     private static bool IsRenderedGroupChildEffect(DrawingObjectVisualPlan visual) =>
-        visual.Kind == DrawingObjectVisualKind.Shape
+        visual.Kind is DrawingObjectVisualKind.Shape or DrawingObjectVisualKind.WordArt
         && (visual.Effects.HasGlow || visual.Effects.HasShadow);
 
     private static string BuildGroupChildEffectSummary(DrawingObjectGroupChildVisualPlan child) =>
