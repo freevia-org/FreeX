@@ -49,8 +49,25 @@ public sealed class ProtectionEnforcementTests
         return view;
     }
 
+    private static DocumentView LoadWithContentControl()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.CheckBoxControl(@checked: false, tag: "Agree"));
+        paragraph.Runs.Add(new Run("Body"));
+        doc.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        return view;
+    }
+
     private static string PlainText(DocumentView view) =>
         view.Model.Paragraphs.First().PlainText;
+
+    private static Paragraph FirstParagraph(DocumentView view) =>
+        (Paragraph)view.Model.Blocks[0];
 
     [StaFact]
     public void NoChangesProtection_MakesEditorReadOnly_AndStopRestoresEditing()
@@ -243,6 +260,35 @@ public sealed class ProtectionEnforcementTests
 
         view.InsertText("X");
         PlainText(view).Should().Be("Body");
+    }
+
+    [StaFact]
+    public void FillingFormsProtection_AllowsExistingContentControlEdits_ButBlocksStricterProtection()
+    {
+        var view = LoadWithContentControl();
+
+        view.SetProtection(ProtectionMode.FillingForms);
+        view.InsertCheckBoxControl();
+
+        FirstParagraph(view).Runs.Should().HaveCount(2, "Filling Forms can fill existing controls but not insert new body controls");
+        view.ToggleContentControl(0, 0).Should().BeTrue();
+        FirstParagraph(view).Runs[0].Control!.Checked.Should().BeTrue();
+
+        view.CanUndo.Should().BeTrue();
+        view.Undo();
+        FirstParagraph(view).Runs[0].Control!.Checked.Should().BeFalse();
+        view.CanRedo.Should().BeTrue();
+        view.Redo();
+        FirstParagraph(view).Runs[0].Control!.Checked.Should().BeTrue();
+
+        view.SetProtection(ProtectionMode.ReadOnly);
+        view.ToggleContentControl(0, 0).Should().BeFalse();
+        FirstParagraph(view).Runs[0].Control!.Checked.Should().BeTrue();
+
+        view.SetProtection(ProtectionMode.None);
+        view.SetMarkedAsFinal(true);
+        view.ToggleContentControl(0, 0).Should().BeFalse();
+        FirstParagraph(view).Runs[0].Control!.Checked.Should().BeTrue();
     }
 
     [StaFact]

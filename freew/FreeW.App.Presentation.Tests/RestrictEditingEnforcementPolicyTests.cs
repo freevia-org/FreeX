@@ -158,6 +158,21 @@ public sealed class RestrictEditingEnforcementPolicyTests
         policy.IsHistoryLocked.Should().BeTrue();
     }
 
+    [Fact]
+    public void Filling_forms_allows_form_field_history_entries_but_blocks_body_history_entries()
+    {
+        var policy = Policy(ProtectionMode.FillingForms);
+
+        policy.DecisionForHistory(RestrictEditingOperationKind.HistoryUndo, DocumentCommandMutationKind.FormField)
+            .IsAllowed.Should().BeTrue();
+        policy.DecisionForHistory(RestrictEditingOperationKind.HistoryRedo, DocumentCommandMutationKind.FormField)
+            .IsAllowed.Should().BeTrue();
+        policy.DecisionForHistory(RestrictEditingOperationKind.HistoryUndo, DocumentCommandMutationKind.BodyText)
+            .BlockReason.Should().Be(RestrictEditingBlockReason.FillingForms);
+        policy.DecisionForHistory(RestrictEditingOperationKind.HistoryRedo, DocumentCommandMutationKind.Mixed)
+            .BlockReason.Should().Be(RestrictEditingBlockReason.FillingForms);
+    }
+
     private static RestrictEditingEnforcementPolicy Policy(ProtectionMode mode) =>
         RestrictEditingEnforcementPolicy.From(new ProtectionSettings(mode), isMarkedAsFinal: false);
 }
