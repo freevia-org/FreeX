@@ -7995,8 +7995,8 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Insert > Header & Footer > Page Number > Format Page Numbers: apply the supported shared
-    // number style and start/continue settings; chapter numbering remains deferred.
+    // Insert > Header & Footer > Page Number > Format Page Numbers: apply the shared
+    // number style, chapter prefix, and start/continue settings.
     private sealed class PageNumberFormatCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -8027,6 +8027,35 @@ internal static class FreeWRibbonCommands
                 SelectedIndex = state.FormatIndex,
                 Margin = new Thickness(0, 2, 0, 10)
             };
+            var includeChapter = new System.Windows.Controls.CheckBox
+            {
+                Content = PageNumberFormatDialogPlanner.IncludeChapterNumberLabel,
+                IsChecked = state.IncludeChapterNumber,
+                Margin = new Thickness(0, 0, 0, 6)
+            };
+            var chapterStyleBox = new System.Windows.Controls.ComboBox
+            {
+                MinWidth = 160,
+                ItemsSource = PageNumberFormatDialogPlanner.ChapterStyleItems.Select(item => item.Label).ToArray(),
+                SelectedIndex = state.ChapterStyleIndex,
+                Margin = new Thickness(0, 2, 0, 8)
+            };
+            var chapterSeparatorBox = new System.Windows.Controls.ComboBox
+            {
+                MinWidth = 140,
+                ItemsSource = PageNumberFormatDialogPlanner.ChapterSeparatorItems.Select(item => item.Label).ToArray(),
+                SelectedIndex = state.ChapterSeparatorIndex,
+                Margin = new Thickness(0, 2, 0, 10)
+            };
+            void UpdateChapterControlState()
+            {
+                var enabled = includeChapter.IsChecked == true;
+                chapterStyleBox.IsEnabled = enabled;
+                chapterSeparatorBox.IsEnabled = enabled;
+            }
+            includeChapter.Checked += (_, _) => UpdateChapterControlState();
+            includeChapter.Unchecked += (_, _) => UpdateChapterControlState();
+            UpdateChapterControlState();
             var continueRadio = new System.Windows.Controls.RadioButton
             {
                 Content = PageNumberFormatDialogPlanner.ContinueLabel,
@@ -8073,7 +8102,10 @@ internal static class FreeWRibbonCommands
                         new PageNumberFormatDialogInput(
                             formatBox.SelectedIndex,
                             continueRadio.IsChecked == true,
-                            startBox.Text),
+                            startBox.Text,
+                            includeChapter.IsChecked == true,
+                            chapterStyleBox.SelectedIndex,
+                            chapterSeparatorBox.SelectedIndex),
                         out result,
                         out var error))
                 {
@@ -8104,6 +8136,11 @@ internal static class FreeWRibbonCommands
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16), MinWidth = 280 };
             panel.Children.Add(new System.Windows.Controls.TextBlock { Text = PageNumberFormatDialogPlanner.NumberFormatLabel });
             panel.Children.Add(formatBox);
+            panel.Children.Add(includeChapter);
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = PageNumberFormatDialogPlanner.ChapterStartsWithStyleLabel });
+            panel.Children.Add(chapterStyleBox);
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = PageNumberFormatDialogPlanner.ChapterSeparatorLabel });
+            panel.Children.Add(chapterSeparatorBox);
             panel.Children.Add(new System.Windows.Controls.TextBlock
             {
                 Text = PageNumberFormatDialogPlanner.PageNumberingLabel,
@@ -8112,13 +8149,6 @@ internal static class FreeWRibbonCommands
             });
             panel.Children.Add(continueRadio);
             panel.Children.Add(startRow);
-            panel.Children.Add(new System.Windows.Controls.TextBlock
-            {
-                Text = PageNumberFormatDialogPlanner.ChapterNumberingDeferredLabel,
-                Foreground = Brushes.DimGray,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 8, 0, 0)
-            });
             panel.Children.Add(status);
             panel.Children.Add(buttons);
 

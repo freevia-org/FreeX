@@ -2264,6 +2264,24 @@ public enum PageNumberFormat
     UpperLetter
 }
 
+/// <summary>
+/// Separator used between a chapter prefix and a PAGE field value. Maps to
+/// w:sectPr/w:pgNumType/@w:chapSep.
+/// </summary>
+public enum PageNumberChapterSeparator
+{
+    /// <summary>Hyphen separator: 1-1 (w:chapSep="hyphen").</summary>
+    Hyphen,
+    /// <summary>Period separator: 1.1 (w:chapSep="period").</summary>
+    Period,
+    /// <summary>Colon separator: 1:1 (w:chapSep="colon").</summary>
+    Colon,
+    /// <summary>Em dash separator: 1--1 (w:chapSep="emDash").</summary>
+    EmDash,
+    /// <summary>En dash separator: 1-1 (w:chapSep="enDash").</summary>
+    EnDash
+}
+
 /// <summary>Page geometry for a section (points; US Letter with 1in margins by default).</summary>
 public sealed class PageSettings
 {
@@ -2408,6 +2426,19 @@ public sealed class PageSettings
     public int? PageNumberStartAt { get; set; }
 
     /// <summary>
+    /// Optional Heading level used as the chapter prefix for PAGE fields
+    /// (w:sectPr/w:pgNumType/@w:chapStyle). Null means no chapter prefix.
+    /// </summary>
+    public int? PageNumberChapterStyleLevel { get; set; }
+
+    /// <summary>
+    /// Separator between the chapter prefix and page number
+    /// (w:sectPr/w:pgNumType/@w:chapSep). Only meaningful when
+    /// <see cref="PageNumberChapterStyleLevel"/> is set.
+    /// </summary>
+    public PageNumberChapterSeparator PageNumberChapterSeparator { get; set; } = PageNumberChapterSeparator.Hyphen;
+
+    /// <summary>
     /// Whether automatic hyphenation is enabled for the document (word/settings.xml's
     /// w:autoHyphenation toggle). Defaults to false so existing documents are unaffected — no
     /// w:autoHyphenation is emitted (and the settings part is only emitted when something needs it).
@@ -2517,6 +2548,8 @@ public sealed class PageSettings
         LineNumberStartAt = LineNumberStartAt,
         PageNumberFormat = PageNumberFormat,
         PageNumberStartAt = PageNumberStartAt,
+        PageNumberChapterStyleLevel = PageNumberChapterStyleLevel,
+        PageNumberChapterSeparator = PageNumberChapterSeparator,
         AutoHyphenation = AutoHyphenation,
         HyphenationZonePt = HyphenationZonePt,
         ConsecutiveHyphenLimit = ConsecutiveHyphenLimit,

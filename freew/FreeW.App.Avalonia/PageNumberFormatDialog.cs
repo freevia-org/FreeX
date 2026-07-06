@@ -15,6 +15,13 @@ internal sealed class PageNumberFormatDialog : Window
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
     private readonly ComboBox _formatBox = new() { MinWidth = 190 };
+    private readonly CheckBox _includeChapterBox = new()
+    {
+        Content = PageNumberFormatDialogPlanner.IncludeChapterNumberLabel,
+        Margin = new Thickness(0, 10, 0, 4)
+    };
+    private readonly ComboBox _chapterStyleBox = new() { MinWidth = 160 };
+    private readonly ComboBox _chapterSeparatorBox = new() { MinWidth = 120 };
     private readonly RadioButton _continueRadio = new()
     {
         Content = PageNumberFormatDialogPlanner.ContinueLabel,
@@ -35,7 +42,7 @@ internal sealed class PageNumberFormatDialog : Window
         ArgumentNullException.ThrowIfNull(current);
 
         Title = PageNumberFormatDialogPlanner.Title;
-        Width = 340;
+        Width = 390;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
@@ -44,15 +51,29 @@ internal sealed class PageNumberFormatDialog : Window
         var state = PageNumberFormatDialogPlanner.BuildInitialState(current);
         _formatBox.ItemsSource = PageNumberFormatDialogPlanner.FormatItems.Select(item => item.Label).ToArray();
         _formatBox.SelectedIndex = state.FormatIndex;
+        _includeChapterBox.IsChecked = state.IncludeChapterNumber;
+        _chapterStyleBox.ItemsSource = PageNumberFormatDialogPlanner.ChapterStyleItems.Select(item => item.Label).ToArray();
+        _chapterStyleBox.SelectedIndex = state.ChapterStyleIndex;
+        _chapterSeparatorBox.ItemsSource = PageNumberFormatDialogPlanner.ChapterSeparatorItems.Select(item => item.Label).ToArray();
+        _chapterSeparatorBox.SelectedIndex = state.ChapterSeparatorIndex;
         _continueRadio.IsChecked = state.ContinueFromPreviousSection;
         _startRadio.IsChecked = !state.ContinueFromPreviousSection;
         _startBox.Text = state.StartAtText;
 
         AvaloniaCompactDialogChrome.ApplyComboBox(_formatBox, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCheckBox(_includeChapterBox, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyComboBox(_chapterStyleBox, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyComboBox(_chapterSeparatorBox, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyRadioButton(_continueRadio, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyRadioButton(_startRadio, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_startBox, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(0, 8, 0, 0));
+        UpdateChapterControlState();
+        _includeChapterBox.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == CheckBox.IsCheckedProperty)
+                UpdateChapterControlState();
+        };
 
         var startRow = new StackPanel { Orientation = Orientation.Horizontal };
         startRow.Children.Add(_startRadio);
@@ -61,6 +82,15 @@ internal sealed class PageNumberFormatDialog : Window
         var content = new StackPanel { Margin = new Thickness(16, 14, 16, 16) };
         content.Children.Add(new TextBlock { Text = PageNumberFormatDialogPlanner.NumberFormatLabel });
         content.Children.Add(_formatBox);
+        content.Children.Add(_includeChapterBox);
+        content.Children.Add(new TextBlock { Text = PageNumberFormatDialogPlanner.ChapterStartsWithStyleLabel });
+        content.Children.Add(_chapterStyleBox);
+        content.Children.Add(new TextBlock
+        {
+            Text = PageNumberFormatDialogPlanner.ChapterSeparatorLabel,
+            Margin = new Thickness(0, 8, 0, 0)
+        });
+        content.Children.Add(_chapterSeparatorBox);
         content.Children.Add(new TextBlock
         {
             Text = PageNumberFormatDialogPlanner.PageNumberingLabel,
@@ -69,13 +99,6 @@ internal sealed class PageNumberFormatDialog : Window
         });
         content.Children.Add(_continueRadio);
         content.Children.Add(startRow);
-        content.Children.Add(new TextBlock
-        {
-            Text = PageNumberFormatDialogPlanner.ChapterNumberingDeferredLabel,
-            Foreground = Brushes.Gray,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 10, 0, 0)
-        });
         content.Children.Add(_status);
 
         var ok = new Button { Content = "OK", IsDefault = true };
@@ -103,7 +126,10 @@ internal sealed class PageNumberFormatDialog : Window
                 new PageNumberFormatDialogInput(
                     _formatBox.SelectedIndex,
                     _continueRadio.IsChecked == true,
-                    _startBox.Text),
+                    _startBox.Text,
+                    _includeChapterBox.IsChecked == true,
+                    _chapterStyleBox.SelectedIndex,
+                    _chapterSeparatorBox.SelectedIndex),
                 out var result,
                 out var error))
         {
@@ -112,6 +138,13 @@ internal sealed class PageNumberFormatDialog : Window
         }
 
         Close(result);
+    }
+
+    private void UpdateChapterControlState()
+    {
+        var enabled = _includeChapterBox.IsChecked == true;
+        _chapterStyleBox.IsEnabled = enabled;
+        _chapterSeparatorBox.IsEnabled = enabled;
     }
 
     public static async Task ShowAndApplyAsync(Window owner, DocumentView editor)

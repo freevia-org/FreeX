@@ -130,10 +130,16 @@ public sealed class FreeWRibbonParityTests
         registry.TryGet("freew.page-number-format", out var command).Should().BeTrue();
 
         command!.Execute(RibbonCommandContext.ForSelectedValue(
-            PageNumberFormatDialogPlanner.BuildCommandValue(PageNumberFormat.LowerRoman, 7)));
+            PageNumberFormatDialogPlanner.BuildCommandValue(
+                PageNumberFormat.LowerRoman,
+                7,
+                chapterStyleLevel: 2,
+                chapterSeparator: PageNumberChapterSeparator.Colon)));
 
         editor.Model.Page.PageNumberFormat.Should().Be(PageNumberFormat.LowerRoman);
         editor.Model.Page.PageNumberStartAt.Should().Be(7);
+        editor.Model.Page.PageNumberChapterStyleLevel.Should().Be(2);
+        editor.Model.Page.PageNumberChapterSeparator.Should().Be(PageNumberChapterSeparator.Colon);
     }
 
     [StaFact]

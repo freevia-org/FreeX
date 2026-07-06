@@ -13,6 +13,7 @@ public sealed class PageNumberFormatDialogPlannerTests
         state.FormatIndex.Should().Be(0);
         state.ContinueFromPreviousSection.Should().BeTrue();
         state.StartAtText.Should().Be("1");
+        state.IncludeChapterNumber.Should().BeFalse();
     }
 
     [Fact]
@@ -28,6 +29,42 @@ public sealed class PageNumberFormatDialogPlannerTests
         ok.Should().BeTrue(error);
         result.Format.Should().Be(PageNumberFormat.UpperRoman);
         result.StartAt.Should().Be(4);
+        result.ChapterStyleLevel.Should().BeNull();
+    }
+
+    [Fact]
+    public void BuildInitialState_LoadsChapterNumbering()
+    {
+        var state = PageNumberFormatDialogPlanner.BuildInitialState(new PageSettings
+        {
+            PageNumberChapterStyleLevel = 2,
+            PageNumberChapterSeparator = PageNumberChapterSeparator.Colon
+        });
+
+        state.IncludeChapterNumber.Should().BeTrue();
+        PageNumberFormatDialogPlanner.ChapterStyleItems[state.ChapterStyleIndex].Level.Should().Be(2);
+        PageNumberFormatDialogPlanner.ChapterSeparatorItems[state.ChapterSeparatorIndex].Separator
+            .Should().Be(PageNumberChapterSeparator.Colon);
+    }
+
+    [Fact]
+    public void TryBuildResult_IncludesChapterNumbering()
+    {
+        var input = new PageNumberFormatDialogInput(
+            FormatIndex: 1,
+            ContinueFromPreviousSection: false,
+            StartAtText: "2",
+            IncludeChapterNumber: true,
+            ChapterStyleIndex: 2,
+            ChapterSeparatorIndex: 1);
+
+        var ok = PageNumberFormatDialogPlanner.TryBuildResult(input, out var result, out var error);
+
+        ok.Should().BeTrue(error);
+        result.Format.Should().Be(PageNumberFormat.LowerRoman);
+        result.StartAt.Should().Be(2);
+        result.ChapterStyleLevel.Should().Be(3);
+        result.ChapterSeparator.Should().Be(PageNumberChapterSeparator.Period);
     }
 
     [Fact]
@@ -58,6 +95,36 @@ public sealed class PageNumberFormatDialogPlannerTests
     }
 
     [Fact]
+    public void BuildDisplayPlans_PrefixesPageNumbersFromMappedHeadingOutline()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Intro") { StyleId = "Heading1" });
+        document.Blocks.Add(new Paragraph("Intro body"));
+        document.Blocks.Add(new Paragraph("Second") { StyleId = "Heading1" });
+
+        var settings = new PageSettings
+        {
+            PageNumberChapterStyleLevel = 1,
+            PageNumberChapterSeparator = PageNumberChapterSeparator.Hyphen
+        };
+        var plans = new[]
+        {
+            Page(0, 1, settings),
+            Page(0, 2, settings),
+            Page(0, 3, settings),
+        };
+
+        var display = PageNumberFormatDialogPlanner.BuildDisplayPlans(
+            plans,
+            document,
+            [0, 0, 2]);
+
+        display.Select(plan => plan.Text).Should().Equal("1-1", "1-2", "2-3");
+        display.Select(plan => plan.ChapterNumber).Should().Equal("1", "1", "2");
+    }
+
+    [Fact]
     public void CommandValue_RoundTripsContinueAndStartAt()
     {
         var start = PageNumberFormatDialogPlanner.BuildCommandValue(PageNumberFormat.LowerRoman, 12);
@@ -70,6 +137,25 @@ public sealed class PageNumberFormatDialogPlannerTests
         PageNumberFormatDialogPlanner.TryBuildResultFromCommandValue(cont, out var contResult)
             .Should().BeTrue();
         contResult.Should().Be(new PageNumberFormatDialogResult(PageNumberFormat.UpperLetter, null));
+    }
+
+    [Fact]
+    public void CommandValue_RoundTripsChapterNumbering()
+    {
+        var value = PageNumberFormatDialogPlanner.BuildCommandValue(
+            PageNumberFormat.LowerRoman,
+            12,
+            chapterStyleLevel: 2,
+            chapterSeparator: PageNumberChapterSeparator.Colon);
+
+        PageNumberFormatDialogPlanner.TryBuildResultFromCommandValue(value, out var result)
+            .Should().BeTrue();
+
+        result.Should().Be(new PageNumberFormatDialogResult(
+            PageNumberFormat.LowerRoman,
+            12,
+            ChapterStyleLevel: 2,
+            ChapterSeparator: PageNumberChapterSeparator.Colon));
     }
 
     private static HeaderFooterPageSectionPlan Page(

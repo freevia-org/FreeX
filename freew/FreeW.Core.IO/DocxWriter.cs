@@ -4864,12 +4864,15 @@ public static class DocxWriter
     {
         var hasFormat = page.PageNumberFormat != PageNumberFormat.Decimal;
         var hasStart = page.PageNumberStartAt is > 0;
-        if (!hasFormat && !hasStart)
+        var hasChapter = page.PageNumberChapterStyleLevel is >= 1 and <= 9;
+        if (!hasFormat && !hasStart && !hasChapter)
             return null;
 
         return new XElement(W + "pgNumType",
             hasFormat ? new XAttribute(W + "fmt", PageNumberFormatToken(page.PageNumberFormat)) : null,
-            hasStart ? new XAttribute(W + "start", page.PageNumberStartAt!.Value) : null);
+            hasStart ? new XAttribute(W + "start", page.PageNumberStartAt!.Value) : null,
+            hasChapter ? new XAttribute(W + "chapStyle", page.PageNumberChapterStyleLevel!.Value) : null,
+            hasChapter ? new XAttribute(W + "chapSep", PageNumberChapterSeparatorToken(page.PageNumberChapterSeparator)) : null);
     }
 
     private static string PageNumberFormatToken(PageNumberFormat format) => format switch
@@ -4879,6 +4882,15 @@ public static class DocxWriter
         PageNumberFormat.LowerLetter => "lowerLetter",
         PageNumberFormat.UpperLetter => "upperLetter",
         _ => "decimal"
+    };
+
+    private static string PageNumberChapterSeparatorToken(PageNumberChapterSeparator separator) => separator switch
+    {
+        PageNumberChapterSeparator.Period => "period",
+        PageNumberChapterSeparator.Colon => "colon",
+        PageNumberChapterSeparator.EmDash => "emDash",
+        PageNumberChapterSeparator.EnDash => "enDash",
+        _ => "hyphen"
     };
 
     /// <summary>
