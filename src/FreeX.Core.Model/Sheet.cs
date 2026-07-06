@@ -14,11 +14,21 @@ public sealed record CommentReply(string Text, string Author = "FreeX")
     public string? Id { get; init; }
 
     /// <summary>
-    /// The raw, unparsed <c>&lt;extLst&gt;</c> XML fragment (if any) from the source
-    /// threadedComment element, e.g. Excel's @mention <c>mentions</c> extension. Round-tripped
-    /// verbatim on save since FreeX does not model @mention linkage.
+    /// The raw, unparsed <c>&lt;mentions&gt;</c> and/or <c>&lt;extLst&gt;</c> XML fragment(s) (if
+    /// any), concatenated in source schema order, from the source threadedComment element, e.g.
+    /// Excel's @mention metadata. Round-tripped verbatim on save since FreeX does not model
+    /// @mention linkage.
     /// </summary>
     public string? MentionsXml { get; init; }
+
+    /// <summary>
+    /// The source <c>&lt;threadedComment&gt;/@personId</c> this reply was loaded with, preserved
+    /// only when <see cref="MentionsXml"/> is also preserved. A save that carries an @mention
+    /// referencing this person id (e.g. <c>mtc:mention/@mentionpersonId</c>) must keep resolving
+    /// after the persons part is rewritten, so the writer prefers this id over a freshly minted
+    /// per-author guid when present.
+    /// </summary>
+    public string? SourcePersonId { get; init; }
 }
 
 public sealed record ThreadedComment(string Text, string Author = "FreeX")
@@ -37,11 +47,21 @@ public sealed record ThreadedComment(string Text, string Author = "FreeX")
     public string? Id { get; init; }
 
     /// <summary>
-    /// The raw, unparsed <c>&lt;extLst&gt;</c> XML fragment (if any) from the source
-    /// threadedComment element, e.g. Excel's @mention <c>mentions</c> extension. Round-tripped
-    /// verbatim on save since FreeX does not model @mention linkage.
+    /// The raw, unparsed <c>&lt;mentions&gt;</c> and/or <c>&lt;extLst&gt;</c> XML fragment(s) (if
+    /// any), concatenated in source schema order, from the source threadedComment element, e.g.
+    /// Excel's @mention metadata. Round-tripped verbatim on save since FreeX does not model
+    /// @mention linkage.
     /// </summary>
     public string? MentionsXml { get; init; }
+
+    /// <summary>
+    /// The source <c>&lt;threadedComment&gt;/@personId</c> this root comment was loaded with,
+    /// preserved only when <see cref="MentionsXml"/> is also preserved. A save that carries an
+    /// @mention referencing this person id (e.g. <c>mtc:mention/@mentionpersonId</c>) must keep
+    /// resolving after the persons part is rewritten, so the writer prefers this id over a
+    /// freshly minted per-author guid when present.
+    /// </summary>
+    public string? SourcePersonId { get; init; }
 }
 
 /// <summary>

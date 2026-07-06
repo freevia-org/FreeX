@@ -153,21 +153,40 @@ internal static class XlsxWorksheetThreadedCommentMapper
 
     private static IReadOnlyDictionary<string, string> CreateAuthorIds(Workbook workbook)
     {
+        // Prefer a preserved source personId (kept only when the comment/reply also carries
+        // @mention metadata that references it, see ThreadedComment.SourcePersonId) over a
+        // freshly minted per-author guid, so a preserved mentionpersonId reference still resolves
+        // to a person id present in the rewritten xl/persons/person.xml. When an author has more
+        // than one candidate source id, the first one encountered (in the same deterministic
+        // ordering used below) wins.
+        var sourcePersonIdsByAuthor = workbook.Sheets
+            .SelectMany(sheet => sheet.ThreadedComments.Values.SelectMany(GetThreadAuthorsWithSourcePersonId))
+            .Where(pair => pair.Author.Length > 0 && pair.SourcePersonId is not null)
+            .GroupBy(pair => pair.Author, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First().SourcePersonId!, StringComparer.Ordinal);
+
         var authors = workbook.Sheets
-            .SelectMany(sheet => sheet.ThreadedComments.Values.SelectMany(GetThreadAuthors))
+            .SelectMany(sheet => sheet.ThreadedComments.Values.SelectMany(GetThreadAuthorsWithSourcePersonId))
+            .Select(pair => pair.Author)
             .Where(author => author.Length > 0)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
-            .ToDictionary(author => author, author => CreateStableGuid("person", author), StringComparer.Ordinal);
+            .ToDictionary(
+                author => author,
+                author => sourcePersonIdsByAuthor.TryGetValue(author, out var sourcePersonId)
+                    ? sourcePersonId
+                    : CreateStableGuid("person", author),
+                StringComparer.Ordinal);
 
         return authors;
     }
 
-    private static IEnumerable<string> GetThreadAuthors(ThreadedComment comment)
+    private static IEnumerable<(string Author, string? SourcePersonId)> GetThreadAuthorsWithSourcePersonId(
+        ThreadedComment comment)
     {
-        yield return NormalizeAuthor(comment.Author);
+        yield return (NormalizeAuthor(comment.Author), comment.SourcePersonId);
         foreach (var reply in comment.Replies)
-            yield return NormalizeAuthor(reply.Author);
+            yield return (NormalizeAuthor(reply.Author), reply.SourcePersonId);
     }
 
     private static IReadOnlyList<string> ReadThreadedCommentPartPaths(ZipArchive archive, string worksheetPath)
@@ -284,6 +303,7 @@ internal static class XlsxWorksheetThreadedCommentMapper
                 var author = authorsByPersonId.TryGetValue(personId, out var displayName)
                     ? displayName
                     : "FreeX";
+                var mentionsXml = ReadMentionsXml(comment);
                 parsedComments.Add(new ParsedThreadedComment(
                     hasAddress ? address.Row : null,
                     hasAddress ? address.Col : null,
@@ -293,7 +313,11 @@ internal static class XlsxWorksheetThreadedCommentMapper
                     author,
                     ParseDateTimeOffset(comment.Attribute("dT")?.Value),
                     XlsxWorksheetXmlValueParser.IsTruthy(comment.Attribute("done")?.Value),
-                    comment.Element(ThreadedCommentNs + "extLst")?.ToString(SaveOptions.DisableFormatting)));
+                    mentionsXml,
+                    // Only preserve the source personId when there is @mention metadata to keep
+                    // resolvable; comments without mentions let the writer mint/reuse the normal
+                    // deterministic per-author guid instead.
+                    mentionsXml is not null ? NormalizeId(comment.Attribute("personId")?.Value) : null));
             }
 
             var repliesByParentId = parsedComments
@@ -317,7 +341,8 @@ internal static class XlsxWorksheetThreadedCommentMapper
                     ModifiedAtUtc = GetThreadModifiedAt(root.TimestampUtc, replies),
                     IsResolved = root.IsResolved,
                     Id = root.Id,
-                    MentionsXml = root.MentionsXml
+                    MentionsXml = root.MentionsXml,
+                    SourcePersonId = root.SourcePersonId
                 };
                 if (replies.Count > 0)
                     threadedComment = threadedComment with { Replies = replies };
@@ -329,6 +354,25 @@ internal static class XlsxWorksheetThreadedCommentMapper
         {
             // Keep workbook load resilient if a threaded-comment part is malformed.
         }
+    }
+
+    /// <summary>
+    /// Captures the CT_ThreadedComment @mention metadata that follows &lt;text&gt;: the real
+    /// &lt;mentions&gt; child element (per the 2018 threadedcomments schema) followed by any
+    /// &lt;extLst&gt; child, in schema order. Both are optional and FreeX does not model @mention
+    /// linkage, so the raw fragment(s) are concatenated verbatim for round-tripping on save.
+    /// </summary>
+    private static string? ReadMentionsXml(XElement comment)
+    {
+        var mentions = comment.Element(ThreadedCommentNs + "mentions")?.ToString(SaveOptions.DisableFormatting);
+        var extLst = comment.Element(ThreadedCommentNs + "extLst")?.ToString(SaveOptions.DisableFormatting);
+        return (mentions, extLst) switch
+        {
+            (null, null) => null,
+            (not null, null) => mentions,
+            (null, not null) => extLst,
+            (not null, not null) => mentions + extLst
+        };
     }
 
     private static void WritePersonsPart(ZipArchive archive, IReadOnlyDictionary<string, string> authorsByName)
@@ -467,11 +511,17 @@ internal static class XlsxWorksheetThreadedCommentMapper
 
         try
         {
-            element.Add(XElement.Parse(mentionsXml, LoadOptions.PreserveWhitespace));
+            // The preserved payload can be up to two sibling elements (<mentions> followed by
+            // <extLst>, per CT_ThreadedComment child order), and XElement.Parse requires a single
+            // root, so wrap the fragment in a throwaway root and re-emit each child in the order
+            // it was captured.
+            var wrapped = XElement.Parse($"<w>{mentionsXml}</w>", LoadOptions.PreserveWhitespace);
+            foreach (var child in wrapped.Elements())
+                element.Add(new XElement(child));
         }
         catch (XmlException)
         {
-            // Keep saves resilient if the preserved extLst fragment is somehow malformed.
+            // Keep saves resilient if the preserved mentions/extLst fragment is somehow malformed.
         }
     }
 
@@ -610,7 +660,8 @@ internal static class XlsxWorksheetThreadedCommentMapper
             CreatedAtUtc = comment.TimestampUtc,
             ModifiedAtUtc = comment.TimestampUtc,
             Id = comment.Id,
-            MentionsXml = comment.MentionsXml
+            MentionsXml = comment.MentionsXml,
+            SourcePersonId = comment.SourcePersonId
         };
 
     private static DateTimeOffset? GetThreadModifiedAt(
@@ -643,5 +694,6 @@ internal static class XlsxWorksheetThreadedCommentMapper
         string Author,
         DateTimeOffset? TimestampUtc,
         bool IsResolved,
-        string? MentionsXml);
+        string? MentionsXml,
+        string? SourcePersonId);
 }

@@ -332,6 +332,20 @@ public sealed partial class XlsxFileAdapter
             XlsxSourceDrawingGeometryRewriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
+        // P7: slicer/timeline selection/range/level lives in preserved native parts. PreserveSourcePackageParts
+        // restored the ORIGINAL slicer/timeline/slicerCache/timelineCache XML, replaying the original selection
+        // state; rewrite ONLY those selection/range/level values in place from the model so an in-app change to a
+        // slicer's selected items or a timeline's selected range/level survives save. Must run after
+        // PreserveSourcePackageParts (the parts must already be at their final path) and is a strict no-op when a
+        // control's model state is empty and the preserved part carries none — keeping selection-free source
+        // slicer/timeline parts byte-stable. It never re-emits or reorders parts, so the critical package graph
+        // is untouched.
+        if (XlsxSlicerTimelineStateRewriter.HasSlicerTimelineState(workbook))
+        {
+            packageStream.Position = 0;
+            XlsxSlicerTimelineStateRewriter.Save(packageStream, workbook);
+        }
+
         if (sourceParts.HasDrawings)
         {
             packageStream.Position = 0;
