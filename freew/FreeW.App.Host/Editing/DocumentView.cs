@@ -326,6 +326,16 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Deterministic shared grammar diagnostics for the committed model. WPF keeps native
+    /// <see cref="SpellCheck"/> for spelling, while this exposes the portable grammar slice used by
+    /// non-WPF renderers.
+    /// </summary>
+    public IReadOnlyList<ProofingDiagnostic> SharedGrammarDiagnostics =>
+        ProofingDiagnosticPlanner.Build(_model, SpellCheckEnabled)
+            .Where(diagnostic => diagnostic.Kind == ProofingDiagnosticKind.Grammar)
+            .ToList();
+
+    /// <summary>
     /// Register a custom dictionary (<c>.lex</c>) file with this control's spell checker so the words it
     /// contains stop being flagged as misspellings. WPF reads the file at registration time, so callers
     /// add the file path once after the on-disk dictionary exists; re-registering after the file changes

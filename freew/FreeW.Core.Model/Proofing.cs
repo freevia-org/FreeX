@@ -4,7 +4,8 @@ namespace FreeW.Core.Model;
 
 public enum ProofingDiagnosticKind
 {
-    Spelling
+    Spelling,
+    Grammar
 }
 
 public sealed record ProofingDiagnostic(
@@ -20,6 +21,16 @@ public sealed record ProofingDiagnostic(
 
 public static class ProofingDiagnosticPlanner
 {
+    private readonly record struct ProofingToken(
+        int Start,
+        int Length,
+        string Word,
+        string Normalized,
+        bool IsEmailOrUrlLike)
+    {
+        public int End => Start + Length;
+    }
+
     private static readonly HashSet<string> KnownMisspellings = new(StringComparer.OrdinalIgnoreCase)
     {
         "acommodate",
@@ -109,6 +120,7 @@ public static class ProofingDiagnosticPlanner
     {
         var text = paragraph.PlainText;
         var i = 0;
+        ProofingToken? previousToken = null;
         while (i < text.Length)
         {
             while (i < text.Length && !IsWordChar(text[i]))
@@ -124,24 +136,81 @@ public static class ProofingDiagnosticPlanner
 
             if (NormalizeWord(word) is not { } normalized)
                 continue;
-            if (customWords.Contains(normalized))
-                continue;
-            if (!KnownMisspellings.Contains(normalized))
-                continue;
-            if (LooksLikeEmailOrUrlToken(text, start, length))
-                continue;
-            var (runIndex, runOffset, languageTag) = LocateRun(paragraph, start, defaultLanguageTag);
 
-            diagnostics.Add(new ProofingDiagnostic(
-                blockIndex,
-                runIndex,
-                runOffset,
+            var token = new ProofingToken(
                 start,
                 length,
                 word,
                 normalized,
-                languageTag));
+                LooksLikeEmailOrUrlToken(text, start, length));
+
+            if (!token.IsEmailOrUrlLike
+                && !customWords.Contains(normalized)
+                && KnownMisspellings.Contains(normalized))
+            {
+                AddDiagnostic(
+                    diagnostics,
+                    blockIndex,
+                    paragraph,
+                    defaultLanguageTag,
+                    token,
+                    ProofingDiagnosticKind.Spelling);
+            }
+
+            if (previousToken is { } previous
+                && IsAdjacentRepeatedWord(previous, token, text))
+            {
+                AddDiagnostic(
+                    diagnostics,
+                    blockIndex,
+                    paragraph,
+                    defaultLanguageTag,
+                    token,
+                    ProofingDiagnosticKind.Grammar);
+            }
+
+            previousToken = token;
         }
+    }
+
+    private static void AddDiagnostic(
+        List<ProofingDiagnostic> diagnostics,
+        int blockIndex,
+        Paragraph paragraph,
+        string? defaultLanguageTag,
+        ProofingToken token,
+        ProofingDiagnosticKind kind)
+    {
+        var (runIndex, runOffset, languageTag) = LocateRun(paragraph, token.Start, defaultLanguageTag);
+
+        diagnostics.Add(new ProofingDiagnostic(
+            blockIndex,
+            runIndex,
+            runOffset,
+            token.Start,
+            token.Length,
+            token.Word,
+            token.Normalized,
+            languageTag,
+            kind));
+    }
+
+    private static bool IsAdjacentRepeatedWord(ProofingToken previous, ProofingToken current, string text)
+    {
+        if (previous.IsEmailOrUrlLike || current.IsEmailOrUrlLike)
+            return false;
+        if (!string.Equals(previous.Normalized, current.Normalized, StringComparison.Ordinal))
+            return false;
+        if (previous.End >= current.Start)
+            return false;
+
+        for (var i = previous.End; i < current.Start; i++)
+        {
+            if (!char.IsWhiteSpace(text[i]))
+                return false;
+        }
+
+        return true;
     }
 
     private static (int RunIndex, int RunOffset, string? LanguageTag) LocateRun(

@@ -13,6 +13,7 @@ public sealed class ProofingDiagnosticPlannerTests
 
         diagnostic.Word.Should().Be("teh");
         diagnostic.NormalizedWord.Should().Be("teh");
+        diagnostic.Kind.Should().Be(ProofingDiagnosticKind.Spelling);
         diagnostic.BlockIndex.Should().Be(0);
         diagnostic.RunIndex.Should().Be(0);
         diagnostic.RunOffset.Should().Be(8);
@@ -23,7 +24,7 @@ public sealed class ProofingDiagnosticPlannerTests
     [Fact]
     public void Build_suppresses_diagnostics_when_spellcheck_disabled()
     {
-        var doc = DocumentWithRun(new Run("teh"));
+        var doc = DocumentWithRun(new Run("teh teh"));
 
         ProofingDiagnosticPlanner.Build(doc, spellCheckEnabled: false)
             .Should().BeEmpty();
@@ -102,6 +103,54 @@ public sealed class ProofingDiagnosticPlannerTests
     public void Build_skips_url_and_email_like_tokens()
     {
         var doc = DocumentWithRun(new Run("mail teh@example.com and visit https://teh.example"));
+
+        ProofingDiagnosticPlanner.Build(doc, spellCheckEnabled: true)
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Build_detects_adjacent_repeated_word_as_grammar_on_second_word()
+    {
+        var doc = DocumentWithRun(new Run("This is the the issue."));
+
+        var diagnostic = ProofingDiagnosticPlanner.Build(doc, spellCheckEnabled: true).Should()
+            .ContainSingle()
+            .Which;
+
+        diagnostic.Kind.Should().Be(ProofingDiagnosticKind.Grammar);
+        diagnostic.Word.Should().Be("the");
+        diagnostic.NormalizedWord.Should().Be("the");
+        diagnostic.BlockIndex.Should().Be(0);
+        diagnostic.RunIndex.Should().Be(0);
+        diagnostic.RunOffset.Should().Be(12);
+        diagnostic.ParagraphOffset.Should().Be(12);
+        diagnostic.Length.Should().Be(3);
+    }
+
+    [Fact]
+    public void Build_detects_repeated_word_case_insensitively_across_runs()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("The "));
+        paragraph.Runs.Add(new Run("the answer"));
+        doc.Blocks.Add(paragraph);
+
+        var diagnostic = ProofingDiagnosticPlanner.Build(doc, spellCheckEnabled: true)
+            .Should().ContainSingle()
+            .Which;
+
+        diagnostic.Kind.Should().Be(ProofingDiagnosticKind.Grammar);
+        diagnostic.RunIndex.Should().Be(1);
+        diagnostic.RunOffset.Should().Be(0);
+        diagnostic.ParagraphOffset.Should().Be(4);
+    }
+
+    [Fact]
+    public void Build_avoids_repeated_word_false_positive_across_punctuation_url_and_email_boundaries()
+    {
+        var doc = DocumentWithRun(new Run("the, the. the www.the the mail the@example.com the"));
 
         ProofingDiagnosticPlanner.Build(doc, spellCheckEnabled: true)
             .Should().BeEmpty();
