@@ -60,6 +60,7 @@ public sealed class NativeWorkflowPolicyBoundaryGuardTests
         var wpfExportOptionsSource = Read(repoRoot, "src", "FreeX.App.Host", "ExportOptionsDialog.cs");
         var wpfParitySource = Read(repoRoot, "src", "FreeX.App.Host", "ParityCapture.cs");
         var avaloniaMainSource = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.cs");
+        var avaloniaExportOptionsSource = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.ExportOptions.cs");
         var avaloniaPrintSource = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.Print.cs");
         var avaloniaParitySource = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs");
 
@@ -82,6 +83,12 @@ public sealed class NativeWorkflowPolicyBoundaryGuardTests
         avaloniaMainSource.Should().Contain("ExportFilePickerPlanner.BuildPortablePdfPickerPlan(");
         avaloniaMainSource.Should().Contain("ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(");
         avaloniaMainSource.Should().Contain("WorkbookExportPrintPlanner.CreatePlanFromPageSetup(");
+        avaloniaExportOptionsSource.Should().Contain("ExportOptionsDialogSurfacePlanner.CreateFormatAvailability(");
+        avaloniaExportOptionsSource.Should().Contain("ExportOptionsDialogSurfacePlanner.CreateResult(");
+        avaloniaExportOptionsSource.Should().Contain("ExportPlanner.TryCreatePageRange(");
+        avaloniaExportOptionsSource.Should().Contain("ExportPlanner.TryNormalizePdfLanguage(");
+        avaloniaExportOptionsSource.Should().Contain("ExportPlanner.TryValidatePublishOptions(");
+        avaloniaExportOptionsSource.Should().Contain("ExportPlanner.TryValidatePageRange(");
         avaloniaPrintSource.Should().Contain("PrintJobPlanner.CreatePlanFromPageSetup(");
         avaloniaPrintSource.Should().Contain("ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(");
         avaloniaParitySource.Should().Contain("WorkbookFileDialogSurfacePlanner.CreateOpenPlan(");
