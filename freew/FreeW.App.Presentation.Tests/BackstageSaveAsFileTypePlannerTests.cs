@@ -79,8 +79,17 @@ public sealed class BackstageSaveAsFileTypePlannerTests
         labels.Should().NotContain(label => label.Contains("PDF", StringComparison.OrdinalIgnoreCase));
 
         groups.Single(group => group.Heading == "Word Documents").Actions
+            .Single(action => action.Label == "Word Document (*.docx)")
+            .Description.Should().Contain("drops macro parts").And.Contain("VBA project bytes are not written");
+        groups.Single(group => group.Heading == "Word Documents").Actions
+            .Single(action => action.Label == "Word Macro-Enabled Document (*.docm)")
+            .Description.Should().Contain("does not inspect or execute macros").And.Contain("drops macro parts");
+        groups.Single(group => group.Heading == "Word Documents").Actions
             .Single(action => action.Label == "Word Template (*.dotx)")
-            .Description.Should().Contain("Opening it creates a new unsaved document");
+            .Description.Should().Contain("Opening it creates a new unsaved document").And.Contain("drops macro parts");
+        groups.Single(group => group.Heading == "Word Documents").Actions
+            .Single(action => action.Label == "Word Macro-Enabled Template (*.dotm)")
+            .Description.Should().Contain("Opening it creates a new unsaved document").And.Contain("preserves existing VBA project bytes");
         groups.Single(group => group.Heading == "Compatibility Formats").Actions
             .Single(action => action.Label == "Word 97-2003 Document (*.doc)")
             .Description.Should().Contain("Compatibility format");

@@ -40,7 +40,19 @@ public sealed class DocumentPersistenceWorkflowTests : IDisposable
         var rows = workflow.BuildFormatCapabilityRows(includeXpsExport: true);
 
         rows.Single(row => row.FormatName == "Word Document" && row.PrimaryExtension == ".docx")
-            .Kind.Should().Be(DocumentFormatCapabilityKind.OpenSave);
+            .Should()
+            .Match<DocumentFormatCapabilityRow>(row =>
+                row.Kind == DocumentFormatCapabilityKind.OpenSave &&
+                row.Description.Contains("drops macro parts", StringComparison.Ordinal) &&
+                row.Description.Contains("VBA project bytes are not written", StringComparison.Ordinal));
+        rows.Single(row => row.FormatName == "Word Macro-Enabled Document" && row.PrimaryExtension == ".docm")
+            .Should()
+            .Match<DocumentFormatCapabilityRow>(row =>
+                row.Kind == DocumentFormatCapabilityKind.OpenSave &&
+                !row.OpensAsTemplate &&
+                row.Description.Contains("preserves existing VBA project bytes", StringComparison.Ordinal) &&
+                row.Description.Contains("does not inspect or execute macros", StringComparison.Ordinal) &&
+                row.Description.Contains("drops macro parts", StringComparison.Ordinal));
         rows.Single(row => row.FormatName == "OpenDocument Text" && row.PrimaryExtension == ".odt")
             .Description.Should().Contain("Unsupported ODF constructs");
         rows.Single(row => row.FormatName == "Word Template" && row.PrimaryExtension == ".dotx")
@@ -48,7 +60,18 @@ public sealed class DocumentPersistenceWorkflowTests : IDisposable
             .Match<DocumentFormatCapabilityRow>(row =>
                 row.Kind == DocumentFormatCapabilityKind.Template &&
                 row.OpensAsTemplate &&
-                row.Description.Contains("new unsaved document", StringComparison.Ordinal));
+                row.Description.Contains("new unsaved document", StringComparison.Ordinal) &&
+                row.Description.Contains("drops macro parts", StringComparison.Ordinal) &&
+                row.Description.Contains("VBA project bytes are not written", StringComparison.Ordinal));
+        rows.Single(row => row.FormatName == "Word Macro-Enabled Template" && row.PrimaryExtension == ".dotm")
+            .Should()
+            .Match<DocumentFormatCapabilityRow>(row =>
+                row.Kind == DocumentFormatCapabilityKind.Template &&
+                row.OpensAsTemplate &&
+                row.Description.Contains("new unsaved document", StringComparison.Ordinal) &&
+                row.Description.Contains("preserves existing VBA project bytes", StringComparison.Ordinal) &&
+                row.Description.Contains("does not inspect or execute macros", StringComparison.Ordinal) &&
+                row.Description.Contains("drops macro parts", StringComparison.Ordinal));
         rows.Single(row => row.FormatName == "Word 97-2003 Document" && row.PrimaryExtension == ".doc")
             .Should()
             .Match<DocumentFormatCapabilityRow>(row =>
