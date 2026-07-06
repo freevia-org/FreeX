@@ -109,7 +109,6 @@ public sealed partial class PivotTableOptionsDialog : Window
     private DockPanel CreateContent()
     {
         var root = new DockPanel { Margin = new Thickness(16) };
-        DockPanel.SetDock(_tabs, Dock.Top);
 
         _layoutTab.Content = CreateLayoutAndFormatTab();
         _tabs.Items.Add(_layoutTab);
@@ -119,8 +118,10 @@ public sealed partial class PivotTableOptionsDialog : Window
         _tabs.Items.Add(new TabItem { Header = UiText.Get("PivotTableOptions_Data"), Content = CreateDataTab() });
         _tabs.Items.Add(new TabItem { Header = UiText.Get("PivotTableOptions_AltText"), Content = CreateAltTextTab() });
 
+        var buttons = PivotDialogLayout.CreateButtonRow(Accept);
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        root.Children.Add(buttons);
         root.Children.Add(_tabs);
-        root.Children.Add(PivotDialogLayout.CreateButtonRow(Accept));
         return root;
     }
 
@@ -143,6 +144,7 @@ public sealed partial class PivotTableOptionsDialog : Window
         AddCheckBox(formatPanel, _autofitColumnsBox);
         AddCheckBox(formatPanel, _preserveFormattingBox);
         stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotTableOptions_FormatSectionGroup"), formatPanel));
+        stack.Children.Add(new Border { Height = 1.5 });
         return stack;
     }
 

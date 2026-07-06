@@ -444,6 +444,61 @@ public sealed partial class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotTableOptionsDialog_DocksButtonRowBelowTabContent()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("PivotTableOptionsDialog.cs");
+        var method = ReadClassSource(
+            "PivotTableOptionsDialog.cs",
+            "private DockPanel CreateContent()",
+            "private StackPanel CreateLayoutAndFormatTab()");
+
+        method.Should().Contain("var buttons = PivotDialogLayout.CreateButtonRow(Accept);");
+        method.Should().Contain("DockPanel.SetDock(buttons, Dock.Bottom);");
+        source.Should().Contain("stack.Children.Add(new Border { Height = 1.5 });");
+        method.IndexOf("root.Children.Add(buttons);", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(method.IndexOf("root.Children.Add(_tabs);", StringComparison.Ordinal));
+        source.Should().NotContain("DockPanel.SetDock(_tabs, Dock.Top);");
+    }
+
+    [Fact]
+    public void PivotTableOptionsParityCapture_SupportsTargetedTabRefresh()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("ParityCapture.cs");
+
+        source.Should().Contain("targetSurfaceId.StartsWith(\"dialog.PivotTableOptions.\", StringComparison.Ordinal)");
+        source.Should().Contain("CaptureDialogTabs(results, \"dialog.PivotTableOptions\", outDir");
+        source.Should().Contain("[\"LayoutAndFormat\", \"TotalsAndFilters\", \"Display\", \"Printing\", \"Data\", \"AltText\"]");
+        source.Should().Contain("Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, and dialog.PivotTableOptions");
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_ButtonRowKeepsNaturalHeightAtRuntime()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotTableOptionsDialog(new PivotTableModel { Name = "PivotTable1" });
+            dialog.Show();
+            try
+            {
+                dialog.UpdateLayout();
+                var buttons = WpfTestTree.FindVisualDescendants<Button>(dialog).ToList();
+                var ok = buttons.Single(button => button.IsDefault);
+                var cancel = buttons.Single(button => button.IsCancel);
+
+                ok.ActualHeight.Should().BeLessThan(40);
+                cancel.ActualHeight.Should().BeLessThan(40);
+                Math.Abs(ok.ActualHeight - cancel.ActualHeight).Should().BeLessThan(1);
+                Math.Round(dialog.ActualHeight).Should().Be(PivotOptionsPlanner.LayoutAndFormatCaptureHeight);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void PivotTableOptionsDialog_ExposesPrintingTab()
     {
         var source = ReadPivotWorkflowSource();
