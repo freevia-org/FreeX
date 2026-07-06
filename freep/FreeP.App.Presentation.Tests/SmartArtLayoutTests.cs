@@ -316,6 +316,21 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void BasicProcess_ReturnsLiveProcessBoxesAndConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Process, "A", "B", "C");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicProcess";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("basicProcess is a bounded shared process layout");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(3, "one live box should be emitted per process node");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(2, "adjacent basic-process nodes need shared connectors");
+    }
+
+    [Fact]
     public void UnsupportedKnownLayout_ReturnsNull()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B");
@@ -508,6 +523,61 @@ public sealed class SmartArtLayoutTests
 
         var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
         shapeOps.Should().HaveCount(3, "continuousBlockProcess should render two live boxes plus one connector");
+        var renderedText = shapeOps
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Live A");
+        renderedText.Should().Contain("Live B");
+        renderedText.Should().NotContain("Cached fallback");
+    }
+
+    [Fact]
+    public void Compositor_BasicProcess_UsesLiveLayoutOverCachedDrawing()
+    {
+        var data = MakeData(SmartArtFamily.Process, "Live A", "Live B");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicProcess";
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id            = 10,
+            Kind          = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu    = FrameX,
+            OffsetYEmu    = FrameY,
+            ExtentCxEmu   = FrameCx / 2,
+            ExtentCyEmu   = FrameCy / 2,
+            TextBody      = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached fallback" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id          = 63,
+            Kind        = SlideShapeKind.SmartArt,
+            OffsetXEmu  = FrameX,
+            OffsetYEmu  = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt    = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        shapeOps.Should().HaveCount(3, "basicProcess should render two live boxes plus one connector");
         var renderedText = shapeOps
             .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
             .ToList();

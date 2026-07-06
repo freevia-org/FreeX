@@ -968,6 +968,25 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesBasicProcessAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/basicProcess",
+            nodes: [("id1", "Stage 1"), ("id2", "Stage 2")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Process,
+            "basicProcess reuses the shared process-family geometry");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "basicProcess is in the bounded shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Stage 1", "Stage 2");
+    }
+
+    [Fact]
     public void Reader_ParsesKnownFamilyButDisablesLiveLayoutForUnsupportedVariant()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -1019,6 +1038,86 @@ public sealed class SmartArtTests : IDisposable
         var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
 
         liveShapes.Should().HaveCount(9, "five process boxes plus four connectors should render from live data");
+    }
+
+    [Fact]
+    public void Compositor_BasicProcessSmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/basicProcess",
+            nodes: [("n1", "Plan"), ("n2", "Build"), ("n3", "Ship")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(5, "three basic-process boxes plus two connectors should render from shared live data");
+        var renderedText = liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Plan");
+        renderedText.Should().Contain("Build");
+        renderedText.Should().Contain("Ship");
+    }
+
+    [Fact]
+    public void Compositor_UnsupportedProcessSibling_UsesCachedFallbackShapes()
+    {
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.Process,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/segmentedProcess",
+            IsLiveLayoutSupported = false
+        };
+        data.Nodes.Add(new SmartArtNode { Text = "Live A", Level = 0 });
+        data.Nodes.Add(new SmartArtNode { Text = "Live B", Level = 0 });
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id = 90,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 914_400,
+            OffsetYEmu = 457_200,
+            ExtentCxEmu = 1_828_800,
+            ExtentCyEmu = 914_400,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached sibling fallback" } }
+                    }
+                }
+            }
+        });
+
+        var pres = Presentation.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 91,
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = 914_400,
+            OffsetYEmu = 457_200,
+            ExtentCxEmu = 7_315_200,
+            ExtentCyEmu = 3_657_600,
+            SmartArt = smart
+        });
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        shapeOps.Should().ContainSingle("unsupported process siblings should use cached drawing fallback");
+        shapeOps[0].Text?.Paragraphs[0].Runs[0].Text.Should().Be("Cached sibling fallback");
     }
 
     [Fact]
