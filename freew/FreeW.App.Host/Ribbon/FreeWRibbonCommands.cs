@@ -1162,6 +1162,9 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.citation-style", new CitationStyleCommand(editor));
         // Insert tab — References: insert a numbered figure/table caption under the caret's block.
         registry.Register("freew.caption", new InsertCaptionCommand(editor));
+        registry.Register("freew.insert-caption.figure", new InsertCaptionLabelCommand(editor, CaptionLabel.Figure));
+        registry.Register("freew.insert-caption.table", new InsertCaptionLabelCommand(editor, CaptionLabel.Table));
+        registry.Register("freew.insert-caption.equation", new InsertCaptionLabelCommand(editor, CaptionLabel.Equation));
         // Insert tab — References: insert a cross-reference (heading/bookmark/caption/footnote) at the caret.
         registry.Register("freew.cross-reference", new InsertCrossReferenceCommand(editor));
         // Insert tab — References: mark the selection (or a prompted term) for the document index, and
@@ -1172,7 +1175,13 @@ internal static class FreeWRibbonCommands
         // Insert tab — References: generate a Table of Figures from the document's figure captions at the
         // caret, and rebuild it in place (remove the prior region + re-insert). Both route through the bus.
         registry.Register("freew.tof", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfFigures(); }));
+        registry.Register("freew.tof.figure", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfFigures(CaptionLabel.Figure); }));
+        registry.Register("freew.tof.table", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfFigures(CaptionLabel.Table); }));
+        registry.Register("freew.tof.equation", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfFigures(CaptionLabel.Equation); }));
         registry.Register("freew.tof-refresh", new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfFigures(); }));
+        registry.Register("freew.tof-refresh.figure", new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfFigures(CaptionLabel.Figure); }));
+        registry.Register("freew.tof-refresh.table", new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfFigures(CaptionLabel.Table); }));
+        registry.Register("freew.tof-refresh.equation", new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfFigures(CaptionLabel.Equation); }));
         // Insert tab — References: mark the selection as a legal citation (a hidden TA field), and insert /
         // rebuild a Table of Authorities built from those marks, grouped by category (reversibly via the bus).
         registry.Register("freew.mark-citation", new MarkCitationCommand(editor));
@@ -4484,7 +4493,7 @@ internal static class FreeWRibbonCommands
         {
             editor.Focus();
             var owner = Window.GetWindow(editor);
-            var defaultLabel = editor.IsCaretInTable() ? CaptionLabel.Table : CaptionLabel.Figure;
+            var defaultLabel = editor.IsCaretInTable() ? Captions.TableLabelText : Captions.FigureLabelText;
 
             var label = CaptionLabelPicker.Ask(owner, defaultLabel);
             if (label is null)
@@ -4495,15 +4504,30 @@ internal static class FreeWRibbonCommands
                 return; // cancelled — leave the model untouched
 
             editor.Focus();
-            editor.InsertCaption(label.Value, text.Trim());
+            editor.InsertCaption(label, text.Trim());
         }
     }
 
-    // A tiny modal dialog choosing the caption label (Figure or Table), seeded with a default. Returns
+    private sealed class InsertCaptionLabelCommand(DocumentView editor, CaptionLabel label) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var text = TextPrompt.Ask(owner, "Insert Caption", "Caption text (optional):", string.Empty);
+            if (text is null)
+                return;
+
+            editor.Focus();
+            editor.InsertCaption(label, text.Trim());
+        }
+    }
+
+    // A tiny modal dialog choosing the caption label, seeded with a default. Returns
     // the chosen label, or null if cancelled.
     private static class CaptionLabelPicker
     {
-        public static CaptionLabel? Ask(Window? owner, CaptionLabel defaultLabel)
+        public static string? Ask(Window? owner, string defaultLabel)
         {
             var list = new System.Windows.Controls.ListBox
             {
@@ -4511,11 +4535,11 @@ internal static class FreeWRibbonCommands
                 MinHeight = 60,
                 Margin = new Thickness(0, 0, 0, 12)
             };
-            list.Items.Add(CaptionLabel.Figure);
-            list.Items.Add(CaptionLabel.Table);
+            foreach (var label in Captions.BuiltInLabelTexts)
+                list.Items.Add(label);
             list.SelectedItem = defaultLabel;
 
-            CaptionLabel? result = null;
+            string? result = null;
             var dialog = new Window
             {
                 Title = "Insert Caption",
@@ -4527,10 +4551,11 @@ internal static class FreeWRibbonCommands
             };
 
             var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var newLabel = new System.Windows.Controls.Button { Content = "New Label...", MinWidth = 96, Margin = new Thickness(0, 0, 8, 0) };
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
             void Choose()
             {
-                if (list.SelectedItem is CaptionLabel chosen)
+                if (list.SelectedItem is string chosen)
                 {
                     result = chosen;
                     dialog.DialogResult = true;
@@ -4538,12 +4563,21 @@ internal static class FreeWRibbonCommands
             }
             ok.Click += (_, _) => Choose();
             list.MouseDoubleClick += (_, _) => Choose();
+            newLabel.Click += (_, _) =>
+            {
+                var custom = TextPrompt.Ask(dialog, "New Label", "Label:", string.Empty);
+                if (string.IsNullOrWhiteSpace(custom))
+                    return;
+                result = Captions.NormalizeLabelText(custom);
+                dialog.DialogResult = true;
+            };
 
             var buttons = new System.Windows.Controls.StackPanel
             {
                 Orientation = System.Windows.Controls.Orientation.Horizontal,
                 HorizontalAlignment = HorizontalAlignment.Right
             };
+            buttons.Children.Add(newLabel);
             buttons.Children.Add(ok);
             buttons.Children.Add(cancel);
 

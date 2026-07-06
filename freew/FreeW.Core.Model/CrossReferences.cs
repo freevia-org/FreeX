@@ -15,6 +15,7 @@ public enum CrossRefType
     Bookmark,
     Figure,
     Table,
+    Equation,
     Footnote,
     Endnote,
     NumberedItem
@@ -130,6 +131,7 @@ public static class CrossReferences
             CrossRefType.Bookmark => BookmarkTargets(doc),
             CrossRefType.Figure => CaptionTargets(doc, CaptionLabel.Figure),
             CrossRefType.Table => CaptionTargets(doc, CaptionLabel.Table),
+            CrossRefType.Equation => CaptionTargets(doc, CaptionLabel.Equation),
             CrossRefType.Footnote => NoteTargets(doc.Footnotes.Keys, "Footnote"),
             CrossRefType.Endnote => NoteTargets(doc.Endnotes.Keys, "Endnote"),
             CrossRefType.NumberedItem => NumberedItemTargets(doc),
@@ -149,7 +151,7 @@ public static class CrossReferences
             [CrossRefInsertAs.Text, CrossRefInsertAs.PageNumber, CrossRefInsertAs.HeadingNumber, CrossRefInsertAs.AboveBelow],
         CrossRefType.Bookmark =>
             [CrossRefInsertAs.Text, CrossRefInsertAs.PageNumber, CrossRefInsertAs.ParagraphNumber, CrossRefInsertAs.AboveBelow],
-        CrossRefType.Figure or CrossRefType.Table =>
+        CrossRefType.Figure or CrossRefType.Table or CrossRefType.Equation =>
             [CrossRefInsertAs.Text, CrossRefInsertAs.PageNumber, CrossRefInsertAs.ParagraphNumber, CrossRefInsertAs.AboveBelow],
         CrossRefType.Footnote or CrossRefType.Endnote =>
             [CrossRefInsertAs.Text, CrossRefInsertAs.PageNumber, CrossRefInsertAs.AboveBelow],

@@ -397,8 +397,18 @@ public static class FreeWRibbon
                 });
                 tab.Group("captions", "Captions", "P", 78, g =>
                 {
-                    g.Medium("freew.caption", "Insert Caption", RibbonCommandIconKind.Caption);
-                    g.Medium("freew.tof", "Insert Table of Figures", RibbonCommandIconKind.TableOfContents);
+                    g.Medium("freew.caption", "Insert Caption", RibbonCommandIconKind.Caption, menu: m =>
+                    {
+                        m.Item("freew.insert-caption.figure", "Figure", "F");
+                        m.Item("freew.insert-caption.table", "Table", "T");
+                        m.Item("freew.insert-caption.equation", "Equation", "E");
+                    });
+                    g.Medium("freew.tof", "Insert Table of Figures", RibbonCommandIconKind.TableOfContents, menu: m =>
+                    {
+                        m.Item("freew.tof.figure", "Figure", "F");
+                        m.Item("freew.tof.table", "Table", "T");
+                        m.Item("freew.tof.equation", "Equation", "E");
+                    });
                     g.Medium("freew.tof-refresh", "Update Table", RibbonCommandIconKind.Refresh);
                     g.Medium("freew.cross-reference", "Cross-reference", RibbonCommandIconKind.CrossReference);
                 });

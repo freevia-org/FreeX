@@ -38,6 +38,7 @@ public static class CrossReferenceDialogPlanner
         CrossRefType.Bookmark,
         CrossRefType.Figure,
         CrossRefType.Table,
+        CrossRefType.Equation,
         CrossRefType.Footnote,
         CrossRefType.Endnote,
         CrossRefType.NumberedItem

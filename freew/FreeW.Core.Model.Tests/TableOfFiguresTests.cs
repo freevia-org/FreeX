@@ -61,6 +61,51 @@ public class TableOfFiguresTests
     }
 
     [Fact]
+    public void Build_EquationLabel_YieldsTableOfEquationsWithOnlyEquationCaptions()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(Caption(CaptionLabel.Figure, 1, "A figure"));
+        doc.Blocks.Add(Caption(CaptionLabel.Equation, 1, "E = mc2"));
+        doc.Blocks.Add(Caption(CaptionLabel.Equation, 2, "F = ma"));
+
+        var tof = TableOfFigures.Build(doc, CaptionLabel.Equation);
+
+        tof.Select(p => p.PlainText).Should().Equal(
+            "Table of Equations",
+            "Equation 1: E = mc2",
+            "Equation 2: F = ma");
+    }
+
+    [Fact]
+    public void Build_CustomLabel_YieldsCustomHeadingAndEntries()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(Captions.BuildCaption("Scheme", 1, "Flow"));
+        doc.Blocks.Add(Caption(CaptionLabel.Figure, 1, "A figure"));
+        doc.Blocks.Add(Captions.BuildCaption("Scheme", 2, "State"));
+
+        var tof = TableOfFigures.Build(doc, "Scheme");
+
+        tof.Select(p => p.PlainText).Should().Equal(
+            "Table of Schemes",
+            "Scheme 1: Flow",
+            "Scheme 2: State");
+    }
+
+    [Fact]
+    public void ExistingLabelText_InfersBuiltInAndCustomGeneratedHeadings()
+    {
+        var doc = new TextDocument();
+
+        doc.Blocks.Add(new Paragraph("Table of Equations") { StyleId = TableOfFigures.HeadingStyleId });
+        TableOfFigures.ExistingLabelText(doc).Should().Be(Captions.EquationLabelText);
+
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Table of Schemes") { StyleId = TableOfFigures.HeadingStyleId });
+        TableOfFigures.ExistingLabelText(doc).Should().Be("Scheme");
+    }
+
+    [Fact]
     public void Build_NoMatchingCaptions_YieldsOnlyTheHeading()
     {
         var doc = new TextDocument();

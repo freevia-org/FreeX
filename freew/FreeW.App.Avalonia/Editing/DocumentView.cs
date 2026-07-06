@@ -10676,9 +10676,15 @@ public sealed class DocumentView : Control
     /// </summary>
     public void InsertCaption(CaptionLabel label, string text = "")
     {
+        InsertCaption(Captions.LabelText(label), text);
+    }
+
+    public void InsertCaption(string labelText, string text = "")
+    {
+        labelText = Captions.NormalizeLabelText(labelText);
         Captions.EnsureStyles(_doc);
-        var number = Captions.NextCaptionNumber(_doc, label);
-        var caption = Captions.BuildCaption(label, number, text);
+        var number = Captions.NextCaptionNumber(_doc, labelText);
+        var caption = Captions.BuildCaption(labelText, number, text);
         var index = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
         _bus.Execute(new InsertParagraphCommand(index, caption));
         _caret = new DocPosition(index, BlockLength(index));
@@ -11272,14 +11278,26 @@ public sealed class DocumentView : Control
 
     public void InsertTableOfFigures(CaptionLabel label = CaptionLabel.Figure)
     {
+        InsertTableOfFigures(Captions.LabelText(label));
+    }
+
+    public void InsertTableOfFigures(string labelText)
+    {
+        labelText = Captions.NormalizeLabelText(labelText);
         TableOfFigures.EnsureStyles(_doc);
-        InsertGeneratedReferenceBlocks(TableOfFigures.Build(_doc, label), "Insert Table of Figures", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
+        InsertGeneratedReferenceBlocks(TableOfFigures.Build(_doc, labelText), "Insert Table of Figures", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
     }
 
     public void RefreshTableOfFigures(CaptionLabel label = CaptionLabel.Figure)
     {
+        RefreshTableOfFigures(Captions.LabelText(label));
+    }
+
+    public void RefreshTableOfFigures(string labelText)
+    {
+        labelText = Captions.NormalizeLabelText(labelText);
         TableOfFigures.EnsureStyles(_doc);
-        RefreshGeneratedReferenceBlocks(TableOfFigures.IsTableOfFiguresParagraph, () => TableOfFigures.Build(_doc, label), "Update Table of Figures");
+        RefreshGeneratedReferenceBlocks(TableOfFigures.IsTableOfFiguresParagraph, () => TableOfFigures.Build(_doc, labelText), "Update Table of Figures");
     }
 
     public void MarkCitation(string? longCitation = null)
@@ -11572,6 +11590,12 @@ public sealed class DocumentView : Control
         if (_doc.Blocks.Any(Citations.IsBibliographyParagraph))
         {
             RefreshBibliography();
+            refreshedGeneratedRegion = true;
+        }
+
+        if (_doc.Blocks.Any(TableOfFigures.IsTableOfFiguresParagraph))
+        {
+            RefreshTableOfFigures(TableOfFigures.ExistingLabelText(_doc) ?? Captions.FigureLabelText);
             refreshedGeneratedRegion = true;
         }
 
