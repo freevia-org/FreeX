@@ -115,6 +115,10 @@ public sealed record DrawingObjectWordArtPlan(
     string? OutlineColorHex,
     bool Bold);
 
+public sealed record DrawingObjectInlineWordArtPlan(
+    DrawingObjectWordArtPlan WordArt,
+    DrawingObjectEffectsPlan Effects);
+
 public sealed record DrawingObjectGroupChildVisualPlan(
     int ChildIndex,
     double OffsetXDip,
@@ -175,6 +179,7 @@ public static class DrawingObjectVisualPlanner
     {
         ArgumentNullException.ThrowIfNull(wordArt);
         ArgumentNullException.ThrowIfNull(snapshot);
+        var inlinePlan = BuildInlineWordArtPlan(wordArt);
 
         return new DrawingObjectVisualPlan(
             DrawingObjectVisualKind.WordArt,
@@ -190,9 +195,18 @@ public static class DrawingObjectVisualPlanner
             Fill: DrawingObjectFillPlan.None,
             Outline: new DrawingObjectOutlinePlan(false, null, 0, null),
             Text: null,
-            WordArt: BuildWordArtPlan(wordArt),
-            Effects: BuildWordArtEffectsPlan(wordArt.Style),
+            WordArt: inlinePlan.WordArt,
+            Effects: inlinePlan.Effects,
             GroupChildren: []);
+    }
+
+    public static DrawingObjectInlineWordArtPlan BuildInlineWordArtPlan(WordArt wordArt)
+    {
+        ArgumentNullException.ThrowIfNull(wordArt);
+
+        return new DrawingObjectInlineWordArtPlan(
+            BuildWordArtPlan(wordArt),
+            BuildWordArtEffectsPlan(wordArt.Style));
     }
 
     public static DrawingObjectVisualPlan BuildVisualPlan(

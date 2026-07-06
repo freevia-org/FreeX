@@ -139,6 +139,25 @@ public sealed class DrawingObjectVisualPlannerTests
     }
 
     [Fact]
+    public void InlineWordArtPlan_RecordsPresetEffectsWithoutFloatingPlacement()
+    {
+        var wordArt = new WordArt("Inline Glow", WordArtStyle.GlowGold, fontSizePt: 24)
+        {
+            Warp = WordArtWarp.ArchUp
+        };
+
+        var plan = DrawingObjectVisualPlanner.BuildInlineWordArtPlan(wordArt);
+
+        plan.WordArt.Text.Should().Be("Inline Glow");
+        plan.WordArt.Style.Should().Be(WordArtStyle.GlowGold);
+        plan.WordArt.Warp.Should().Be(WordArtWarp.ArchUp);
+        plan.WordArt.FontSizeDip.Should().BeApproximately(32, 0.01);
+        plan.Effects.HasGlow.Should().BeTrue();
+        plan.Effects.GlowColorHex.Should().Be("#FFC000");
+        plan.Effects.Summary.Should().Be("glow");
+    }
+
+    [Fact]
     public void GroupPlan_RecordsShapeAndWordArtChildrenWithLocalOffsets()
     {
         var group = new DrawingGroup
