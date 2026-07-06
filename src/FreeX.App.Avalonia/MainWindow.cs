@@ -21536,8 +21536,9 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private static bool IsShellFocusTargetAvailable(ShellFocusTarget target) =>
-        target != ShellFocusTarget.TaskPane;
+    private bool IsShellFocusTargetAvailable(ShellFocusTarget target) =>
+        target != ShellFocusTarget.TaskPane ||
+        _pivotFieldPaneHost.IsVisible;
 
     private ShellFocusTarget GetCurrentShellFocusTarget()
     {
@@ -21549,6 +21550,9 @@ public sealed partial class MainWindow : Window
 
         if (_zoomText.IsFocused)
             return ShellFocusTarget.StatusBar;
+
+        if (IsPivotFieldPaneFocused())
+            return ShellFocusTarget.TaskPane;
 
         if (IsAnyToolbarControlFocused())
             return ShellFocusTarget.Ribbon;
@@ -21562,10 +21566,19 @@ public sealed partial class MainWindow : Window
             ShellFocusTarget.Ribbon => FocusFirstEnabledToolbarControl(),
             ShellFocusTarget.FormulaBar => FocusControl(_formulaBox),
             ShellFocusTarget.SheetTabs => FocusActiveSheetTab(),
-            ShellFocusTarget.TaskPane => false,
+            ShellFocusTarget.TaskPane => FocusVisibleTaskPane(),
             ShellFocusTarget.StatusBar => FocusControl(_zoomText),
             _ => FocusControl(_sheetGridHost)
         };
+
+    private bool FocusVisibleTaskPane() =>
+        (_pivotFieldPaneSearchBox is { } searchBox && FocusControl(searchBox)) ||
+        FocusControl(_pivotFieldPaneHost);
+
+    private bool IsPivotFieldPaneFocused() =>
+        _pivotFieldPaneHost.IsFocused ||
+        _pivotFieldPaneSearchBox?.IsFocused == true ||
+        _pivotDropZones.Any(zone => zone.Bucket.IsFocused);
 
     private bool FocusFirstEnabledToolbarControl()
     {

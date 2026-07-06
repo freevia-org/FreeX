@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -36,6 +37,7 @@ public sealed partial class MainWindow
     private static readonly IBrush PivotDropHighlight = Brush(225, 244, 242);
 
     private readonly Border _pivotFieldPaneHost = new();
+    private TextBox? _pivotFieldPaneSearchBox;
 
     // Signature of the pivot the pane currently reflects, so the pane only rebuilds when the pivot identity
     // or its layout actually changes (cheap guard against rebuilding on every selection move).
@@ -52,7 +54,10 @@ public sealed partial class MainWindow
         _pivotFieldPaneHost.Background = PivotPaneBackground;
         _pivotFieldPaneHost.BorderBrush = ToolbarBorder;
         _pivotFieldPaneHost.BorderThickness = new Thickness(1, 0, 0, 0);
+        _pivotFieldPaneHost.Focusable = true;
         _pivotFieldPaneHost.IsVisible = false;
+        AutomationProperties.SetAutomationId(_pivotFieldPaneHost, "PivotFieldListPane");
+        AutomationProperties.SetName(_pivotFieldPaneHost, UiText.Get("PivotLoc_FieldsPaneTitle"));
         return _pivotFieldPaneHost;
     }
 
@@ -72,6 +77,7 @@ public sealed partial class MainWindow
             {
                 _pivotFieldPaneHost.IsVisible = false;
                 _pivotFieldPaneHost.Child = null;
+                _pivotFieldPaneSearchBox = null;
                 _pivotPaneSignature = null;
                 _pivotPaneSearchText = string.Empty;
             }
@@ -132,6 +138,9 @@ public sealed partial class MainWindow
             Text = _pivotPaneSearchText,
             Margin = new Thickness(0, 0, 0, 8),
         };
+        _pivotFieldPaneSearchBox = searchBox;
+        AutomationProperties.SetAutomationId(searchBox, "PivotFieldListSearchBox");
+        AutomationProperties.SetName(searchBox, UiText.Get("PivotLoc_SearchFields"));
         searchBox.TextChanged += (_, _) =>
         {
             _pivotPaneSearchText = searchBox.Text ?? string.Empty;
