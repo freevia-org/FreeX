@@ -80,7 +80,10 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand
                     return CommandGuards.RejectSheetProtected();
             }
 
-            if (HasComments(sheet, _sourceRange.AllCells()) &&
+            // O47 (meta of N56): a destination cell's pre-existing comment is unconditionally
+            // removed/overwritten by WritePayload even when the corresponding source cell has no
+            // comment, so the guard must cover destination cells too, not just the source range.
+            if ((HasComments(sheet, _sourceRange.AllCells()) || HasComments(sheet, destinationCells)) &&
                 !sheet.ProtectionPermissions.Contains(SheetProtectionPermission.EditObjects))
             {
                 return CommandGuards.RejectSheetProtected();

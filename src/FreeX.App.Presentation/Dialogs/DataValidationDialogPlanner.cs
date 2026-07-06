@@ -47,6 +47,17 @@ public sealed record DataValidationRuleEditorInput
     public string? PromptTitle { get; init; }
     public string? PromptMessage { get; init; }
     public string? ErrorMessage { get; init; }
+
+    /// <summary>
+    /// True when the rule being edited originated from (or must continue to be written to) the
+    /// worksheet x14 extLst block. Carried over from the existing rule so re-saving an unchanged
+    /// (or edited) cross-sheet List validation doesn't silently downgrade it to a broken legacy rule.
+    /// </summary>
+    public bool IsX14 { get; init; }
+    public IReadOnlyDictionary<string, string>? NativeAttributes { get; init; }
+    public IReadOnlyList<string>? NativeChildXmls { get; init; }
+    public IReadOnlyDictionary<string, string>? NativeContainerAttributes { get; init; }
+    public IReadOnlyList<string>? NativeContainerChildXmls { get; init; }
 }
 
 public static class DataValidationDialogPlanner
@@ -186,7 +197,12 @@ public static class DataValidationDialogPlanner
             ErrorTitle = input.ErrorTitle?.Trim() ?? "",
             PromptTitle = input.PromptTitle?.Trim() ?? "",
             PromptMessage = input.PromptMessage?.Trim() ?? "",
-            ErrorMessage = input.ErrorMessage?.Trim() ?? ""
+            ErrorMessage = input.ErrorMessage?.Trim() ?? "",
+            IsX14 = input.IsX14,
+            NativeAttributes = input.NativeAttributes,
+            NativeChildXmls = input.NativeChildXmls,
+            NativeContainerAttributes = input.NativeContainerAttributes,
+            NativeContainerChildXmls = input.NativeContainerChildXmls
         };
     }
 

@@ -233,7 +233,12 @@ public sealed class ClearDataValidationCommand : IWorkbookCommand
             ErrorTitle = source.ErrorTitle,
             ErrorMessage = source.ErrorMessage,
             PromptTitle = source.PromptTitle,
-            PromptMessage = source.PromptMessage
+            PromptMessage = source.PromptMessage,
+            IsX14 = source.IsX14,
+            NativeAttributes = source.NativeAttributes,
+            NativeChildXmls = source.NativeChildXmls,
+            NativeContainerAttributes = source.NativeContainerAttributes,
+            NativeContainerChildXmls = source.NativeContainerChildXmls
         };
 
     private static IEnumerable<DataValidation> BuildReplacementRules(DataValidation source, IReadOnlyList<GridRange> ranges) =>

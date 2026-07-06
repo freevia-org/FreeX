@@ -56,6 +56,10 @@ public sealed class RenameSheetCommand : IWorkbookCommand
     // cells" data labels) hold sheet-qualified text refs just like CF/DV formulas above and
     // must be rewritten the same way, or they keep saying the OLD sheet name after rename.
     private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimRenameSnapshot;
+    // O25: 'Place in This Document' hyperlink bookmarks across ALL sheets (not just the
+    // renamed one — a hyperlink on Sheet1 can target "Sheet2!A1") must be rewritten to the
+    // new sheet name, or the link silently breaks (stale sheet name after rename).
+    private List<(SheetId Sheet, CellAddress Address, string OldBookmark)>? _hyperlinkBookmarkRenameSnapshot;
 
     public string Label => $"Rename Sheet to '{_newName}'";
 
@@ -183,6 +187,52 @@ public sealed class RenameSheetCommand : IWorkbookCommand
         _chartVerbatimRenameSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
         RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, renameOp);
 
+        // O25: rewrite 'Place in This Document' hyperlink bookmarks/targets across ALL sheets
+        // that reference the renamed sheet — a hyperlink lives on whichever sheet it was
+        // inserted on, which may differ from the sheet being renamed.
+        _hyperlinkBookmarkRenameSnapshot = [];
+        foreach (var s in ctx.Workbook.Sheets)
+        {
+            List<KeyValuePair<CellAddress, HyperlinkMetadata>>? changed = null;
+            foreach (var pair in s.HyperlinkMetadata)
+            {
+                var meta = pair.Value;
+                if (meta.LinkType != HyperlinkTargetKind.PlaceInThisDocument)
+                    continue;
+
+                var bookmark = meta.Bookmark;
+                if (string.IsNullOrEmpty(bookmark))
+                    continue;
+
+                var bangIndex = bookmark.IndexOf('!', StringComparison.Ordinal);
+                if (bangIndex < 0)
+                    continue;
+
+                // O27: unescape doubled single-quotes ('' -> ') in a quoted sheet name (Excel's
+                // escaping for an embedded apostrophe, e.g. 'Bob''s Sheet'!A1) before comparing
+                // against _oldName, or a sheet name containing an apostrophe never matches here.
+                var rawSheetPart = bookmark[..bangIndex].Trim('\'');
+                var sheetPart = rawSheetPart.Contains("''", StringComparison.Ordinal)
+                    ? rawSheetPart.Replace("''", "'", StringComparison.Ordinal)
+                    : rawSheetPart;
+                if (!string.Equals(sheetPart, _oldName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var rewritten = FormulaRewriter.Rewrite(bookmark, renameOp, _oldName);
+                if (rewritten is null || rewritten == bookmark)
+                    continue;
+
+                (changed ??= []).Add(new KeyValuePair<CellAddress, HyperlinkMetadata>(pair.Key, meta with { Bookmark = rewritten }));
+            }
+
+            if (changed is null) continue;
+            foreach (var (addr, newMeta) in changed)
+            {
+                _hyperlinkBookmarkRenameSnapshot.Add((s.Id, addr, s.HyperlinkMetadata[addr].Bookmark));
+                s.HyperlinkMetadata[addr] = newMeta;
+            }
+        }
+
         return new CommandOutcome(true);
     }
 
@@ -238,6 +288,18 @@ public sealed class RenameSheetCommand : IWorkbookCommand
                         else           dv.Formula2 = oldValue;
                         break;
                     }
+                }
+            }
+
+            // O25 restore: hyperlink bookmarks
+            if (_hyperlinkBookmarkRenameSnapshot is not null)
+            {
+                foreach (var (sheetId, addr, oldBookmark) in _hyperlinkBookmarkRenameSnapshot)
+                {
+                    var sh = ctx.Workbook.GetSheet(sheetId);
+                    if (sh is null) continue;
+                    if (sh.HyperlinkMetadata.TryGetValue(addr, out var meta))
+                        sh.HyperlinkMetadata[addr] = meta with { Bookmark = oldBookmark };
                 }
             }
         }

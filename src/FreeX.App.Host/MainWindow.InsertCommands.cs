@@ -244,61 +244,25 @@ public partial class MainWindow
         return TryOpenHyperlink(selectedRange.Start);
     }
 
+    // O26: hyperlink 'Place in This Document' targets can be a bare defined name (no '!' /
+    // sheet qualifier) as well as a SheetName!CellRef address. Delegate to the shared
+    // WorkbookReferenceNavigator (the same helper the Name Box and the Avalonia shell's
+    // GoToReference use) so both a sheet-qualified cell ref AND a defined-name-only target
+    // resolve correctly, matching Excel and matching the Avalonia shell's behavior.
     private bool TryNavigateToWorkbookReference(string reference)
     {
-        if (!TryParseWorkbookReference(reference, out var sheetName, out var row, out var col))
+        if (!WorkbookReferenceNavigator.TryParseReferenceRange(
+                reference,
+                _currentSheetId,
+                name => _workbook.Sheets.FirstOrDefault(sheet =>
+                    string.Equals(sheet.Name, name, StringComparison.OrdinalIgnoreCase))?.Id,
+                _workbook.NamedRanges,
+                name => _workbook.TryGetNamedRange(name, _currentSheetId, out var scoped) ? scoped : null,
+                out var range))
             return false;
 
-        Sheet? sheet = null;
-        foreach (var candidate in _workbook.Sheets)
-        {
-            if (!string.Equals(candidate.Name, sheetName, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            sheet = candidate;
-            break;
-        }
-
-        if (sheet is null)
-            return false;
-
-        var address = new CellAddress(sheet.Id, row, col);
-        NavigateToCell(address);
+        NavigateToCell(range.Start);
         return true;
-    }
-
-    private static bool TryParseWorkbookReference(string reference, out string sheetName, out uint row, out uint col)
-    {
-        sheetName = "";
-        row = 0;
-        col = 0;
-
-        var trimmed = reference.Trim();
-        var bang = trimmed.LastIndexOf('!');
-        if (bang <= 0 || bang == trimmed.Length - 1)
-            return false;
-
-        sheetName = trimmed[..bang].Trim().Trim('\'').Replace("''", "'");
-        var cellText = trimmed[(bang + 1)..].Trim().TrimStart('$');
-        var letterCount = cellText.TakeWhile(char.IsLetter).Count();
-        if (letterCount == 0 || letterCount == cellText.Length)
-            return false;
-
-        var colText = cellText[..letterCount].Replace("$", "", StringComparison.Ordinal);
-        var rowText = cellText[letterCount..].TrimStart('$');
-        if (!uint.TryParse(rowText, out row) || row is < 1 or > CellAddress.MaxRow)
-            return false;
-
-        try
-        {
-            col = CellAddress.ColumnNameToNumber(colText);
-        }
-        catch
-        {
-            return false;
-        }
-
-        return col is >= 1 and <= CellAddress.MaxCol && sheetName.Length > 0;
     }
 
     private static HyperlinkTargetKind ToCoreHyperlinkTargetKind(HyperlinkLinkType linkType) =>

@@ -34,7 +34,12 @@ internal static class DataValidationCopySupport
             ErrorTitle = source.ErrorTitle,
             ErrorMessage = source.ErrorMessage,
             PromptTitle = source.PromptTitle,
-            PromptMessage = source.PromptMessage
+            PromptMessage = source.PromptMessage,
+            IsX14 = source.IsX14,
+            NativeAttributes = source.NativeAttributes,
+            NativeChildXmls = source.NativeChildXmls,
+            NativeContainerAttributes = source.NativeContainerAttributes,
+            NativeContainerChildXmls = source.NativeContainerChildXmls
         };
 
         if (includeAdditionalRanges)

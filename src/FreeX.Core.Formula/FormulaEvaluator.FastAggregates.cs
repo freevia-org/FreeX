@@ -572,6 +572,13 @@ public sealed partial class FormulaEvaluator
             if (context.TryResolveLambdaBinding(named.Name) is not null)
                 return FastAggregateRangeResolution.Unsupported;
 
+            // Excel scope precedence: a sheet-scoped named FORMULA outranks a same-named
+            // workbook-global named RANGE. Bail out to the general (slow) argument-expansion
+            // path in FormulaEvaluator.Functions.cs, which resolves that precedence correctly,
+            // instead of streaming the wrong (global range) cells here.
+            if (IsSheetScopedName(named.Name, context, out var sheetScopedIsFormula) && sheetScopedIsFormula)
+                return FastAggregateRangeResolution.Unsupported;
+
             var resolvedNamedRange = context.TryResolveNamedRange(named.Name);
             if (resolvedNamedRange is null)
                 return FastAggregateRangeResolution.Unsupported;

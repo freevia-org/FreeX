@@ -126,14 +126,26 @@ internal static class XlsxNamedRangeMapper
                     continue;
                 }
 
-                // Plain range reference: resolve through ClosedXML.
+                // Plain range reference: resolve through ClosedXML. A defined name's RefersTo may be
+                // a multi-area (union) reference — one comma-separated area per entry in
+                // namedRange.Ranges (e.g. Sheet1!$A$1,Sheet1!$C$1 created via Ctrl-click in Excel's
+                // Name Manager). The in-memory model (GridRange) can only represent a single
+                // rectangle, so we keep the first area (the one Excel itself treats as primary for
+                // Name Box navigation) and surface a warning naming every area that had to be
+                // dropped, instead of discarding them silently.
                 IXLRange? xlRange = null;
+                var extraAreaCount = 0;
                 try
                 {
                     foreach (var candidateRange in namedRange.Ranges)
                     {
-                        xlRange = candidateRange;
-                        break;
+                        if (xlRange is null)
+                        {
+                            xlRange = candidateRange;
+                            continue;
+                        }
+
+                        extraAreaCount++;
                     }
                 }
                 catch (Exception ex)
@@ -144,6 +156,16 @@ internal static class XlsxNamedRangeMapper
 
                 if (xlRange is null)
                     continue;
+
+                if (extraAreaCount > 0)
+                {
+                    var extraAreaNoun = extraAreaCount == 1 ? "area was" : "areas were";
+                    warnings?.Add(
+                        $"[named-ranges] Named range '{namedRange.Name}' refers to a multi-area (union) reference " +
+                        $"('{refersToBody}'); only the first area ('{xlRange.RangeAddress}') was kept and " +
+                        $"{extraAreaCount} additional {extraAreaNoun} dropped " +
+                        "because multi-area named ranges are not yet supported.");
+                }
 
                 var firstCell = xlRange.FirstCell();
                 var lastCell = xlRange.LastCell();

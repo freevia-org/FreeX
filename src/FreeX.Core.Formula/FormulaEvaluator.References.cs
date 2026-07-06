@@ -939,7 +939,7 @@ public sealed partial class FormulaEvaluator
                 width = (int)Math.Truncate(dw);
             }
         }
-        if (height < 0 || width < 0) return ErrorValue.Value;
+        if (height < 0 || width < 0) return ErrorValue.Ref;
         if (height == 0 || width == 0) return ErrorValue.Ref;
 
         long startRow = (long)baseRow + rowsOff;

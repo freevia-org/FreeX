@@ -170,8 +170,7 @@ internal static partial class RowColumnShiftHelpers
         sheet.RowPageBreaksMetadata = ClonePageBreaksMetadata(snapshot.RowPageBreaksMetadata);
         sheet.ColumnPageBreaksMetadata = ClonePageBreaksMetadata(snapshot.ColumnPageBreaksMetadata);
 
-        workbook.WatchedCells.Clear();
-        workbook.WatchedCells.AddRange(snapshot.WatchedCells);
+        RestoreWatchedCells(workbook, snapshot);
         sheet.CellWatchesMetadata = CloneCellWatchesMetadata(snapshot.CellWatchesMetadata);
         sheet.IgnoredErrorsMetadata = CloneIgnoredErrorsMetadata(snapshot.IgnoredErrorsMetadata);
         sheet.AutoFilter = snapshot.AutoFilter;
@@ -400,12 +399,75 @@ internal static partial class RowColumnShiftHelpers
 
     private static void ShiftWatchedCells(Workbook workbook, AddressBearingStateSnapshot snapshot, AddressShift shift)
     {
-        workbook.WatchedCells.Clear();
+        // Shifted is null when the structural edit itself deleted this watch's row/column — that
+        // watch was never present in the live list post-shift, so on undo it must always come back
+        // (the delete's own removal is exactly what undo is reversing) rather than being subject to
+        // "did the user touch this" reconciliation below.
+        var pairs = new List<(CellAddress Original, CellAddress? Shifted)>(snapshot.WatchedCells.Count);
+        var shiftedCells = new List<CellAddress>(snapshot.WatchedCells.Count);
         foreach (var address in snapshot.WatchedCells)
         {
-            if (shift.ShiftAddress(address) is { } shifted)
-                workbook.WatchedCells.Add(shifted);
+            var shifted = shift.ShiftAddress(address);
+            pairs.Add((address, shifted));
+            if (shifted is { } survived)
+                shiftedCells.Add(survived);
         }
+
+        workbook.WatchedCells.Clear();
+        workbook.WatchedCells.AddRange(shiftedCells);
+
+        // Remember the exact original->shifted mapping the shift produced so a later undo
+        // (RestoreAddressBearingState) can tell the shift's own effect apart from any Watch Window
+        // add/remove the user performed on workbook.WatchedCells after this command ran but before
+        // it was undone.
+        snapshot.PostShiftWatchedCells = pairs;
+    }
+
+    /// <summary>
+    /// Restores <see cref="Workbook.WatchedCells"/> from <paramref name="snapshot"/> on undo, but
+    /// reconciles against any Watch Window add/remove the user made directly on the live list after
+    /// the row/column command ran (WatchWindowService.AddWatch/RemoveWatch are not IWorkbookCommands
+    /// and so never appear on the undo stack). If this snapshot was never run through a structural
+    /// shift (e.g. undoing a command whose Apply never reached ShiftAddressBearingState), there is
+    /// nothing to reconcile against and we fall back to the previous unconditional restore.
+    /// </summary>
+    private static void RestoreWatchedCells(Workbook workbook, AddressBearingStateSnapshot snapshot)
+    {
+        if (snapshot.PostShiftWatchedCells is not { } pairs)
+        {
+            workbook.WatchedCells.Clear();
+            workbook.WatchedCells.AddRange(snapshot.WatchedCells);
+            return;
+        }
+
+        // Consume the live list against the shifted side of each original->shifted pair, one live
+        // occurrence per pair, so duplicate addresses are handled correctly.
+        var unmatchedLive = new List<CellAddress>(workbook.WatchedCells);
+        var restored = new List<CellAddress>(snapshot.WatchedCells.Count);
+        foreach (var (original, shifted) in pairs)
+        {
+            if (shifted is not { } survived)
+            {
+                // The structural edit itself deleted this watch (its row/column was removed) — undo
+                // always brings it back, regardless of any unrelated Watch Window activity.
+                restored.Add(original);
+                continue;
+            }
+
+            var index = unmatchedLive.IndexOf(survived);
+            if (index < 0)
+                continue; // user removed this watch after the command ran; don't resurrect it.
+
+            unmatchedLive.RemoveAt(index);
+            restored.Add(original);
+        }
+
+        // Whatever remains in unmatchedLive was added by the user after the command ran (it was never
+        // produced by the shift) — keep it, unshifted, after undo instead of silently discarding it.
+        restored.AddRange(unmatchedLive);
+
+        workbook.WatchedCells.Clear();
+        workbook.WatchedCells.AddRange(restored);
     }
 
     private static WorksheetCellWatchesMetadataModel? ShiftCellWatchesMetadata(
@@ -1540,7 +1602,19 @@ internal sealed record AddressBearingStateSnapshot(
     IReadOnlyList<StructuredTableModel> StructuredTables,
     IReadOnlyList<PivotCacheSourceSnapshot> PivotCaches,
     IReadOnlyList<WorkbookScenario> Scenarios,
-    IReadOnlyList<FormControlAddressSnapshot> FormControls);
+    IReadOnlyList<FormControlAddressSnapshot> FormControls)
+{
+    /// <summary>
+    /// Records what <see cref="RowColumnShiftHelpers.ShiftWatchedCells"/> produced from
+    /// <see cref="WatchedCells"/> the one time the owning command's structural edit (insert/delete
+    /// row or column) was applied. Populated by <see cref="RowColumnShiftHelpers.ShiftAddressBearingState"/>
+    /// and consulted by <see cref="RowColumnShiftHelpers.RestoreAddressBearingState"/> so that undo can
+    /// tell "watches the shift itself moved/dropped" apart from "watches the user added or removed via
+    /// the Watch Window after the command ran" (the latter are never wrapped in an <see cref="IWorkbookCommand"/>
+    /// and so must not be silently discarded/resurrected by an unrelated undo).
+    /// </summary>
+    internal IReadOnlyList<(CellAddress Original, CellAddress? Shifted)>? PostShiftWatchedCells { get; set; }
+}
 
 internal readonly record struct StyleOnlyEntry(uint Row, uint Col, StyleId StyleId);
 

@@ -3311,6 +3311,9 @@
   <data name="InsertLoc_SplitWindowAt" xml:space="preserve">
     <value>Split window at {0}</value>
   </data>
+  <data name="InsertLoc_RemovedWindowSplit" xml:space="preserve">
+    <value>Removed window split</value>
+  </data>
   <data name="InsertLoc_CouldNotSplitWindow" xml:space="preserve">
     <value>Could not split the window.</value>
   </data>

@@ -13,9 +13,29 @@ public partial class MainWindow
     private bool _formatPainterTargetSelectionActive;
     private SheetId? _formatPainterSourceSheetId;
     private GridRange? _formatPainterSourceRange;
+    // Set by the second mouse-down of a double-click (which arms sticky mode via the Preview
+    // handler below) so the immediately-following Click (its mouse-up) doesn't turn around and
+    // cancel the sticky mode it just armed.
+    private bool _formatPainterSuppressNextClickToggle;
 
     private void FormatPainterBtn_Click(object sender, RoutedEventArgs e)
     {
+        if (_formatPainterSuppressNextClickToggle)
+        {
+            _formatPainterSuppressNextClickToggle = false;
+            return;
+        }
+
+        // Matches Excel: clicking the already-pressed Format Painter button (single-shot or
+        // sticky/double-click mode) cancels it, rather than re-capturing a new source and
+        // leaving it active. The double-click handler below re-arms sticky mode afterward when
+        // the second click of a genuine double-click comes through.
+        if (_formatPainterActive)
+        {
+            CancelFormatPainter();
+            return;
+        }
+
         CaptureFormatPainterSource(persistent: false);
     }
 
@@ -24,6 +44,7 @@ public partial class MainWindow
         if (e.ClickCount != 2) return;
 
         CaptureFormatPainterSource(persistent: true);
+        _formatPainterSuppressNextClickToggle = true;
         e.Handled = true;
     }
 

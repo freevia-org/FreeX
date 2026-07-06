@@ -7,6 +7,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 
 using Free.Shared.Shell.Avalonia;
+using FreeX.App.Presentation;
 using FreeX.App.Presentation.SheetUI;
 using FreeX.Core.Commands;
 
@@ -32,15 +33,35 @@ public sealed partial class MainWindow
     }
 
     // Data ▸ Outline ▸ Group / Ungroup (parity gap: the ribbon buttons were no-ops). Groups the
-    // selected rows at outline level 1; Ungroup clears the worksheet outline. Routed through the
-    // generic review-command executor so both get undo/redo. Kept in the Avalonia shell (no
-    // WorkbookSession change) to avoid churn with the concurrently-active FreeW/macOS sessions.
+    // selected rows/columns, nesting the outline level the same way WPF's CreateGroupCommand does
+    // (MainWindow.OutlineCommands.cs): a whole-column selection groups by column instead of
+    // marking every row on the sheet, and the level is the next nesting depth (existing deepest
+    // level in the range + 1), not always a hardcoded 1. Ungroup clears the worksheet outline.
+    // Routed through the generic review-command executor so both get undo/redo. Kept in the
+    // Avalonia shell (no WorkbookSession change) to avoid churn with the concurrently-active
+    // FreeW/macOS sessions.
 
     private void GroupSelectedRows()
     {
         var range = _session.SelectedRange;
+        var sheet = _session.ActiveSheet;
+
+        if (OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns)
+        {
+            var colLevel = OutlineGroupingPlanner.GetNextOutlineLevel(
+                range.Start.Col, range.End.Col, sheet.ColOutlineLevels);
+            var colResult = _session.ExecuteReviewCommand(
+                new GroupColumnsCommand(sheet.Id, range.Start.Col, range.End.Col, colLevel, preserveExistingHierarchy: true));
+            RefreshShell(colResult.Success
+                ? $"Grouped columns {range.Start.Col}–{range.End.Col}"
+                : colResult.ErrorMessage ?? "Could not group columns.");
+            return;
+        }
+
+        var rowLevel = OutlineGroupingPlanner.GetNextOutlineLevel(
+            range.Start.Row, range.End.Row, sheet.RowOutlineLevels);
         var result = _session.ExecuteReviewCommand(
-            new GroupRowsCommand(_session.ActiveSheet.Id, range.Start.Row, range.End.Row, level: 1));
+            new GroupRowsCommand(sheet.Id, range.Start.Row, range.End.Row, rowLevel, preserveExistingHierarchy: true));
         RefreshShell(result.Success
             ? $"Grouped rows {range.Start.Row}–{range.End.Row}"
             : result.ErrorMessage ?? "Could not group rows.");

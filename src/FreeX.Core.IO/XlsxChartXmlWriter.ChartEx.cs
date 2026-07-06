@@ -159,8 +159,12 @@ internal static partial class XlsxChartXmlWriter
 
         if (chart.Type == ChartType.Waterfall)
         {
+            // Mirrors the WPF renderer's own gate (ChartRenderer.WaterfallHistogram.cs:
+            // `chart.ShowSeriesLines ? CreateSeriesLineConnectorSeries(...) : null`), so a chart with
+            // connector lines turned off doesn't come back with them turned on after a save/reopen.
+            var connectorLines = chart.ShowSeriesLines ? "1" : "0";
             return new XElement(chartExNs + "layoutPr",
-                new XElement(chartExNs + "visibility", new XAttribute("connectorLines", "1")),
+                new XElement(chartExNs + "visibility", new XAttribute("connectorLines", connectorLines)),
                 BuildChartExSubtotals(chart, chartExNs));
         }
 

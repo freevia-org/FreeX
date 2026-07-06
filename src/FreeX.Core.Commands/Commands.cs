@@ -194,8 +194,14 @@ internal static class StructuredTableEditEffects
             if (table is null)
                 continue;
 
+            // Excel only auto-expands a table when the edit actually enters non-blank content
+            // adjacent to it — committing an already-blank cell (e.g. clicking into the empty row
+            // below the table and pressing Enter without typing) must never grow the table.
+            var isRealContentEdit = newCell.HasFormula || newCell.Value is not BlankValue;
+
             var tableId = table.Id;
-            if (StructuredTableDesignCommandHelpers.TryGetAutoExpandRange(sheet, table, address) is { } expandRange)
+            if (isRealContentEdit &&
+                StructuredTableDesignCommandHelpers.TryGetAutoExpandRange(sheet, table, address) is { } expandRange)
             {
                 var previousRange = table.Range;
                 var resizeCommand = new ResizeStructuredTableCommand(address.Sheet, tableId, expandRange);
@@ -204,11 +210,15 @@ internal static class StructuredTableEditEffects
                 {
                     applied.Add(resizeCommand);
 
-                    // ResizeStructuredTableCommand's own outcome only reports the table's anchor
-                    // cell as affected, not every cell FillGrownCalculatedColumns silently wrote
-                    // into the newly grown rows — recompute the grown cells directly from the
-                    // range delta so they still get recalculated.
+                    // ResizeStructuredTableCommand's own outcome only reports the cells it knows are
+                    // dirty (the anchor, plus any totals-row relocation/refresh it performed when
+                    // growing past a shown totals row) — not every cell FillGrownCalculatedColumns
+                    // silently wrote into the newly grown rows. Recompute the grown cells directly
+                    // from the range delta so they still get recalculated, folded together with
+                    // whatever the resize itself reported.
                     (extraAffectedCells ??= []).AddRange(GetGrownCells(previousRange, expandRange));
+                    if (resizeOutcome.AffectedCells is { Count: > 0 } resizeAffected)
+                        extraAffectedCells.AddRange(resizeAffected);
                 }
 
                 // Whether or not the resize applied, re-resolve the table before considering N34

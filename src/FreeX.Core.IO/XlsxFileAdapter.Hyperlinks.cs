@@ -22,7 +22,16 @@ public sealed partial class XlsxFileAdapter
 
         var bangIndex = address.IndexOf('!');
         if (bangIndex > 2 && address[0] == '\'' && address[bangIndex - 1] == '\'')
-            return address[1..(bangIndex - 1)] + address[bangIndex..];
+        {
+            // O27: Excel escapes an embedded apostrophe in a quoted sheet name by doubling it
+            // (e.g. 'Bob''s Sheet'!A1 for a sheet literally named "Bob's Sheet"). Unescape ''->'
+            // after stripping the surrounding quotes, or the bookmark ends up with the literal
+            // "''" still in it and downstream sheet-name equality checks (WPF's
+            // TryNavigateToWorkbookReference, WorkbookReferenceNavigator.UnquoteSheetName) fail
+            // to match the real sheet name.
+            var sheetName = address[1..(bangIndex - 1)].Replace("''", "'", StringComparison.Ordinal);
+            return sheetName + address[bangIndex..];
+        }
 
         return address;
     }

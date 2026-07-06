@@ -1978,6 +1978,50 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
                 }
 
                 cell.StyleId = styleId;
+
+                // Legacy CSE array formula (Ctrl+Shift+Enter): NPOI reports every cell physically
+                // covered by the declared array range via IsPartOfArrayFormulaGroup, and the anchor
+                // (top-left) cell of the group via ArrayFormulaRange. Mirror the XLSX loader's model:
+                // only the anchor becomes an independent (Dynamic/array) formula cell; every other
+                // covered cell is registered as a provisional spill/array member so Sheet.TryGetArrayExtent
+                // recognises the whole declared range (CommandGuards.RejectIfSplitsArray then blocks
+                // splitting it, matching Excel's "You cannot change part of an array" rule) and so the
+                // range round-trips as a real array formula if the workbook is later saved as XLSX.
+                if (cell.HasFormula && TryGetArrayFormulaRange(sourceCell, out var arrayRange))
+                {
+                    var anchorRow = ToModelIndex(arrayRange.FirstRow);
+                    var anchorCol = ToModelIndex(arrayRange.FirstColumn);
+                    var isAnchor = address.Row == anchorRow && address.Col == anchorCol;
+
+                    if (isAnchor)
+                    {
+                        // A single-cell "array formula" (FirstRow==LastRow && FirstColumn==LastColumn)
+                        // has no spill/member semantics beyond the anchor itself — Dynamic with a 1x1
+                        // extent behaves identically to Implicit, so only mark it Dynamic when the
+                        // declared range actually covers more than one cell.
+                        cell.ArrayMode = arrayRange.LastRow > arrayRange.FirstRow || arrayRange.LastColumn > arrayRange.FirstColumn
+                            ? FormulaArrayMode.Dynamic
+                            : FormulaArrayMode.Implicit;
+                        sheet.SetCell(address, cell);
+                    }
+                    else
+                    {
+                        // Non-anchor member: NPOI (BIFF8) physically stores a copy of the array
+                        // formula's tokens on every covered cell, but the model must mirror the XLSX
+                        // loader here — only the anchor is an independent formula cell. Registering
+                        // this cell WITH its formula (cell.HasFormula == true) would add it to
+                        // Sheet._formulaCells and make RecalcEngine evaluate it as its own standalone
+                        // formula, fighting the anchor's array/spill write. Strip the formula and keep
+                        // only the cached result as a plain provisional value, exactly like a
+                        // non-anchor XLSX spill-continuation cell.
+                        var anchorAddr = new ModelCellAddress(sheet.Id, anchorRow, anchorCol);
+                        var memberCell = Cell.FromValue(cell.Value);
+                        memberCell.StyleId = cell.StyleId;
+                        sheet.SetProvisionalSpillCell(anchorAddr, address.Row, address.Col, memberCell);
+                    }
+                    continue;
+                }
+
                 sheet.SetCell(address, cell);
             }
         }
@@ -2391,6 +2435,34 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         var trimmedName = name.Trim();
         return string.Equals(trimmedName, builtInName, StringComparison.OrdinalIgnoreCase) ||
                string.Equals(trimmedName, "_xlnm." + builtInName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Detects whether <paramref name="sourceCell"/> is part of a legacy CSE (Ctrl+Shift+Enter) array
+    /// formula group and, if so, returns the declared array range (anchor + bounding box), matching
+    /// NPOI's <see cref="ICell.ArrayFormulaRange"/> semantics (0-based, covers every physical cell of
+    /// the group including the anchor).
+    /// </summary>
+    private static bool TryGetArrayFormulaRange(NPOICell sourceCell, out CellRangeAddress range)
+    {
+        if (sourceCell.IsPartOfArrayFormulaGroup)
+        {
+            try
+            {
+                range = sourceCell.ArrayFormulaRange;
+                return range is not null;
+            }
+            catch (InvalidOperationException)
+            {
+                // Defensive: some NPOI cell implementations throw if queried on a cell whose sheet
+                // is not (yet) fully loaded, or for edge cases outside the documented contract.
+                // Fall back to treating the cell as a plain (non-array) formula rather than crashing
+                // the whole load.
+            }
+        }
+
+        range = null!;
+        return false;
     }
 
     private static Cell MapCell(NPOICell sourceCell, bool uses1904DateSystem)

@@ -52,7 +52,7 @@ public sealed partial class MainWindow
             new SetSplitPanesCommand(sheet.Id, splitRow, splitColumn));
         RefreshShell(result.Success
             ? (wasSplit
-                ? "Removed window split"
+                ? UiText.Get("InsertLoc_RemovedWindowSplit")
                 : UiText.Format("InsertLoc_SplitWindowAt", FormatCellReference(_session.ActiveCell)))
             : result.ErrorMessage ?? UiText.Get("InsertLoc_CouldNotSplitWindow"));
     }

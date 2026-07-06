@@ -347,8 +347,14 @@ public sealed class RecalcEngine
             return 0;
 
         var scale = digits - (int)Math.Floor(Math.Log10(Math.Abs(value))) - 1;
-        // Math.Round only supports up to 15 decimal places; clamp to stay within its valid range.
-        scale = Math.Clamp(scale, -15, 15);
+        // Math.Round(double, int) only accepts digits in [0, 15] and throws ArgumentOutOfRangeException
+        // for negative values (which occur whenever |value| >= 10^digits, e.g. any value >= 1e15 when
+        // digits == 15). Clamping to [-15, 15] does NOT avoid this -- it must be clamped to [0, 15].
+        // A negative "scale" would mean rounding to the left of the decimal point (tens/hundreds/...),
+        // which Math.Round cannot express directly; since callers only ask for at most 15 significant
+        // digits and doubles carry ~15-17 significant digits anyway, clamping to 0 is a safe no-op for
+        // values that already exceed that many integer digits (nothing meaningful left to round off).
+        scale = Math.Clamp(scale, 0, 15);
         return Math.Round(value, scale, MidpointRounding.AwayFromZero);
     }
 

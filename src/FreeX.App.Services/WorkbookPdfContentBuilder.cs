@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
 using Free.Shared.Pdf;
@@ -216,7 +217,12 @@ public static class WorkbookPdfContentBuilder
         // in export order).
         var pageNumber = ResolveEffectiveSheetPageNumber(exportPlan, request, sheet);
         var (header, footer) = ResolveHeaderFooterForPage(sheet, pageNumber);
-        var totalPages = exportPlan.TotalPageCount;
+        // &N (total pages) must reset per sheet, matching Excel and the WPF PrintRenderer path
+        // (RenderWorksheet computes totalPages = printPlan.GridPageCount + comment pages, scoped to
+        // that one sheet) -- NOT exportPlan.TotalPageCount, which sums every sheet in the export and
+        // would leak whole-workbook page counts into every sheet's &N when printing/exporting more
+        // than one sheet at once (O41).
+        var totalPages = ResolveEffectiveSheetTotalPages(exportPlan, sheet);
 
         // Header text: rendered just below the header margin from the top of the page.
         var headerY = pageH - headerEdgePt - 8;   // baseline approx 8pt below header edge
@@ -333,24 +339,25 @@ public static class WorkbookPdfContentBuilder
     // Page-setup helpers
     // -----------------------------------------------------------------------
 
+    /// <summary>
+    /// Resolves the sheet's Scale%/Fit-to-pages setting to a single shrink ratio for this page, using
+    /// <see cref="PagePaginationPlanner.CalculateEffectiveScalePercent"/> as the single source of truth
+    /// so this PDF path can never silently disagree with the neutral pagination plan (O42) -- it feeds
+    /// the same actual row/column page counts that were used to slice this sheet into pages, rather
+    /// than re-deriving an independent ratio here.
+    /// </summary>
     private static double ResolveScaleRatio(
         Sheet sheet,
         PortablePdfExportPlan exportPlan,
         PortablePdfExportPageRequest request)
     {
-        var scaleToFit = sheet.ScaleToFit;
-        if (scaleToFit.ScalePercent is { } pct && pct is >= 10 and <= 400)
-            return pct / 100.0;
-
-        // fit-to-pages: derive scale from actual page count vs. requested count.
         var sheetPlan = exportPlan.ExportPrintPlan.SheetPlans[request.SheetIndex];
-        double ratio = 1.0;
-        if (scaleToFit.FitToPagesWide is { } wide and >= 1 && sheetPlan.ColumnPageCount > wide)
-            ratio = Math.Min(ratio, wide / (double)sheetPlan.ColumnPageCount);
-        if (scaleToFit.FitToPagesTall is { } tall and >= 1 && sheetPlan.RowPageCount > tall)
-            ratio = Math.Min(ratio, tall / (double)sheetPlan.RowPageCount);
+        var effectiveScalePercent = PagePaginationPlanner.CalculateEffectiveScalePercent(
+            sheet.ScaleToFit,
+            sheetPlan.RowPageCount,
+            sheetPlan.ColumnPageCount);
 
-        return Math.Max(0.1, ratio);
+        return Math.Max(0.1, effectiveScalePercent / 100.0);
     }
 
     /// <summary>
@@ -645,6 +652,28 @@ public static class WorkbookPdfContentBuilder
         // Should not happen (request always comes from exportPlan.PageRequests), but fall back to
         // the area-local numbering rather than throwing.
         return firstPageNumber + request.SheetPageNumber - 1;
+    }
+
+    /// <summary>
+    /// Computes the &amp;N total-page-count value for <paramref name="sheet"/>: the sum of
+    /// <see cref="WorkbookSheetExportPrintPlanSummary.PageCount"/> across every print area belonging
+    /// to that sheet (a sheet can have more than one configured print area — see N45/N46), NOT
+    /// <see cref="WorkbookExportPrintPlan.TotalPageCount"/>, which sums across every sheet in the
+    /// export. Real Excel resets &amp;N per sheet in a multi-sheet print job, and so does FreeX's own
+    /// WPF path (<c>PrintRenderer.RenderWorksheet</c> computes a fresh per-sheet total).
+    /// </summary>
+    private static int ResolveEffectiveSheetTotalPages(PortablePdfExportPlan exportPlan, Sheet sheet)
+    {
+        var total = 0;
+        foreach (var sheetPlan in exportPlan.ExportPrintPlan.SheetPlans)
+        {
+            if (sheetPlan.PrintRange.Start.Sheet == sheet.Id)
+                total += sheetPlan.PageCount;
+        }
+
+        // Should not happen (the sheet owning this page must have at least one plan), but fall back
+        // to the whole-export total rather than reporting 0 pages.
+        return total > 0 ? total : exportPlan.TotalPageCount;
     }
 
     private static (WorksheetHeaderFooter Header, WorksheetHeaderFooter Footer)

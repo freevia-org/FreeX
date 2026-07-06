@@ -10,6 +10,11 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
     private readonly bool _transpose;
     private Dictionary<CellAddress, string?>? _previous;
     private Dictionary<CellAddress, ThreadedComment?>? _previousThreaded;
+    // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy note
+    // author + pinned/"Show Comment" state) and must be captured/copied/restored in lockstep
+    // with it, or a pasted note's author/pinned box is left missing at the destination.
+    private Dictionary<CellAddress, string?>? _previousAuthors;
+    private Dictionary<CellAddress, bool>? _previousShown;
 
     public string Label => "Paste Comments";
 
@@ -41,6 +46,8 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
             .ToList();
         _previous = [];
         _previousThreaded = [];
+        _previousAuthors = [];
+        _previousShown = [];
         var affected = new List<CellAddress>();
         foreach (var (source, comment) in sourceComments)
         {
@@ -49,6 +56,21 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
                 ? oldComment
                 : null;
             targetSheet.Comments[destination] = comment;
+
+            _previousAuthors[destination] = targetSheet.CommentAuthors.TryGetValue(destination, out var oldAuthor)
+                ? oldAuthor
+                : null;
+            if (sourceSheet.CommentAuthors.TryGetValue(source, out var author))
+                targetSheet.CommentAuthors[destination] = author;
+            else
+                targetSheet.CommentAuthors.Remove(destination);
+
+            _previousShown[destination] = targetSheet.ShownComments.Contains(destination);
+            if (sourceSheet.ShownComments.Contains(source))
+                targetSheet.ShownComments.Add(destination);
+            else
+                targetSheet.ShownComments.Remove(destination);
+
             affected.Add(destination);
         }
 
@@ -85,6 +107,28 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
                 sheet.ThreadedComments.Remove(address);
             else
                 sheet.ThreadedComments[address] = CloneThreadedComment(comment);
+        }
+
+        if (_previousAuthors is not null)
+        {
+            foreach (var (address, author) in _previousAuthors)
+            {
+                if (author is null)
+                    sheet.CommentAuthors.Remove(address);
+                else
+                    sheet.CommentAuthors[address] = author;
+            }
+        }
+
+        if (_previousShown is not null)
+        {
+            foreach (var (address, wasShown) in _previousShown)
+            {
+                if (wasShown)
+                    sheet.ShownComments.Add(address);
+                else
+                    sheet.ShownComments.Remove(address);
+            }
         }
     }
 
