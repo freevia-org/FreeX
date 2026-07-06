@@ -8526,8 +8526,7 @@ public sealed class DocumentView : Control
 
     private bool ApplyContentControlInteraction(int blockIndex, int runIndex, Func<Run, Run?> planner)
     {
-        if (IsEditingLocked
-            || blockIndex < 0
+        if (blockIndex < 0
             || blockIndex >= _doc.Blocks.Count
             || _doc.Blocks[blockIndex] is not Paragraph paragraph
             || runIndex < 0
@@ -8536,15 +8535,15 @@ public sealed class DocumentView : Control
             return false;
         }
 
-        var updated = planner(paragraph.Runs[runIndex]);
+        var current = paragraph.Runs[runIndex];
+        if (!ContentControlInteractionPlanner.CanEditExistingContentControl(current, RestrictEditingPolicy))
+            return false;
+
+        var updated = planner(current);
         if (updated is null)
             return false;
 
-        _bus.Execute(new ReplaceParagraphRunsCommand(blockIndex, p =>
-        {
-            if (runIndex >= 0 && runIndex < p.Runs.Count)
-                p.Runs[runIndex] = updated;
-        }));
+        _bus.Execute(new ReplaceContentControlRunCommand(blockIndex, runIndex, updated));
         return true;
     }
 

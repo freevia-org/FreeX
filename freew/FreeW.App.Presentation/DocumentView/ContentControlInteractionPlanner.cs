@@ -63,6 +63,12 @@ public static class ContentControlInteractionPlanner
             control is null ? [] : Choices(control));
     }
 
+    public static bool CanEditExistingContentControl(
+        Run run,
+        RestrictEditingEnforcementPolicy protectionPolicy) =>
+        run.Control is not null
+        && protectionPolicy.DecisionFor(RestrictEditingOperationKind.FormFieldEdit).IsAllowed;
+
     public static string Tooltip(ContentControl control)
     {
         var label = control.Alias is { Length: > 0 } alias ? alias : null;

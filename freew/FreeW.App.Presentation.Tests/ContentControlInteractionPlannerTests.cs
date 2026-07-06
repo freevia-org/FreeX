@@ -90,4 +90,35 @@ public sealed class ContentControlInteractionPlannerTests
         updated!.Text.Should().Be("2026-07-05");
         updated.Control!.DateFormat.Should().Be("yyyy-MM-dd");
     }
+
+    [Fact]
+    public void CanEditExistingContentControl_FollowsSharedRestrictEditingPolicy()
+    {
+        var controlRun = Run.CheckBoxControl(@checked: false);
+        var plainRun = new Run("plain");
+
+        ContentControlInteractionPlanner.CanEditExistingContentControl(
+                controlRun,
+                Policy(ProtectionMode.None, isMarkedAsFinal: false))
+            .Should().BeTrue();
+        ContentControlInteractionPlanner.CanEditExistingContentControl(
+                controlRun,
+                Policy(ProtectionMode.FillingForms, isMarkedAsFinal: false))
+            .Should().BeTrue();
+        ContentControlInteractionPlanner.CanEditExistingContentControl(
+                controlRun,
+                Policy(ProtectionMode.ReadOnly, isMarkedAsFinal: false))
+            .Should().BeFalse();
+        ContentControlInteractionPlanner.CanEditExistingContentControl(
+                controlRun,
+                Policy(ProtectionMode.None, isMarkedAsFinal: true))
+            .Should().BeFalse();
+        ContentControlInteractionPlanner.CanEditExistingContentControl(
+                plainRun,
+                Policy(ProtectionMode.FillingForms, isMarkedAsFinal: false))
+            .Should().BeFalse();
+    }
+
+    private static RestrictEditingEnforcementPolicy Policy(ProtectionMode mode, bool isMarkedAsFinal) =>
+        RestrictEditingEnforcementPolicy.From(new ProtectionSettings(mode), isMarkedAsFinal);
 }

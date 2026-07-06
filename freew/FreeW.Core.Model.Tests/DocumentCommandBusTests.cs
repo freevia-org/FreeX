@@ -72,6 +72,33 @@ public class DocumentCommandBusTests
     }
 
     [Fact]
+    public void ReplaceContentControlRun_ClassifiesAsFormField_AndUndoRedoRestoresRuns()
+    {
+        var (doc, bus) = New();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.CheckBoxControl(@checked: false, tag: "Agree"));
+        doc.Blocks.Add(paragraph);
+
+        var command = new ReplaceContentControlRunCommand(0, 0, Run.CheckBoxControl(@checked: true, tag: "Agree"));
+
+        command.MutationKind.Should().Be(DocumentCommandMutationKind.FormField);
+
+        bus.Execute(command);
+
+        paragraph.Runs[0].Control!.Checked.Should().BeTrue();
+        paragraph.Runs[0].Text.Should().Be(ContentControl.CheckedGlyph);
+        bus.NextUndoMutationKind.Should().Be(DocumentCommandMutationKind.FormField);
+
+        bus.Undo().Should().BeTrue();
+        paragraph.Runs[0].Control!.Checked.Should().BeFalse();
+        paragraph.Runs[0].Text.Should().Be(ContentControl.UncheckedGlyph);
+        bus.NextRedoMutationKind.Should().Be(DocumentCommandMutationKind.FormField);
+
+        bus.Redo().Should().BeTrue();
+        paragraph.Runs[0].Control!.Checked.Should().BeTrue();
+    }
+
+    [Fact]
     public void DeleteParagraph_Undo_RestoresSameInstance()
     {
         var (doc, bus) = New();

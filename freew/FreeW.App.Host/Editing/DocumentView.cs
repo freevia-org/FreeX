@@ -4394,13 +4394,13 @@ public sealed class DocumentView : RichTextBox
 
                 // Collect this list's paragraphs first so a MultiLevel list can compute its accumulated
                 // outline markers ("1.1.1") across the whole run before building the WPF items.
-                var listParagraphs = new List<ModelParagraph>();
+                var listParagraphs = new List<(ModelParagraph Paragraph, int BlockIndex)>();
                 while (i < blocks.Count
                     && !hidden.Contains(i)
                     && blocks[i] is ModelParagraph { Formatting.ListKind: var k } listParagraph
                     && k == kind)
                 {
-                    listParagraphs.Add(listParagraph);
+                    listParagraphs.Add((listParagraph, i));
                     visibleCount++;
                     i++;
                 }
@@ -4408,11 +4408,14 @@ public sealed class DocumentView : RichTextBox
                 // MultiLevel lists suppress WPF's built-in marker and render a computed accumulated marker
                 // instead (WPF cannot accumulate "1.1.1"); other kinds use the built-in WPF marker.
                 var markers = kind == ListKind.MultiLevel
-                    ? MultiLevelMarkerSequence(listParagraphs.Select(p => p.Formatting.ListLevel))
+                    ? MultiLevelMarkerSequence(listParagraphs.Select(p => p.Paragraph.Formatting.ListLevel))
                     : null;
                 for (var p = 0; p < listParagraphs.Count; p++)
                 {
-                    var wpfParagraph = BuildParagraph(listParagraphs[p], _model);
+                    var wpfParagraph = BuildParagraph(
+                        listParagraphs[p].Paragraph,
+                        _model,
+                        sourceBlockIndex: listParagraphs[p].BlockIndex);
                     if (markers is not null)
                         PrependMultiLevelMarker(wpfParagraph, markers[p], _model);
                     list.ListItems.Add(new WpfListItem(wpfParagraph));
@@ -6684,7 +6687,7 @@ public sealed class DocumentView : RichTextBox
         int sourceBlockIndex) => block switch
     {
         ModelTable table => BuildTableBlocks(table, document, sourceBlockIndex),
-        ModelParagraph paragraph => [BuildParagraph(paragraph, document)],
+        ModelParagraph paragraph => [BuildParagraph(paragraph, document, sourceBlockIndex: sourceBlockIndex)],
         _ => [BuildParagraph(new ModelParagraph(), document)]
     };
 
@@ -7216,7 +7219,11 @@ public sealed class DocumentView : RichTextBox
         }
     }
 
-    private static WpfParagraph BuildParagraph(ModelParagraph paragraph, TextDocument document, bool inTableCell = false)
+    private static WpfParagraph BuildParagraph(
+        ModelParagraph paragraph,
+        TextDocument document,
+        bool inTableCell = false,
+        int? sourceBlockIndex = null)
     {
         var paraFmt = Resolve(paragraph, document);
         // Inside a table cell, paragraphs that don't set their own spacing follow the table style rather than
@@ -7355,10 +7362,10 @@ public sealed class DocumentView : RichTextBox
         {
             // Emit any pre-cap runs (e.g. image/marker runs before the large letter) inline.
             for (var i = 0; i < firstTextIdx; i++)
-                wpf.Inlines.Add(BuildRun(runs[i], paragraph, document));
+                wpf.Inlines.Add(BuildRun(runs[i], paragraph, document, sourceBlockIndex, i));
 
             // Build the cap run and host it in a Floater so body text wraps around it.
-            var capInline = BuildRun(runs[firstTextIdx], paragraph, document);
+            var capInline = BuildRun(runs[firstTextIdx], paragraph, document, sourceBlockIndex, firstTextIdx);
             var capPara = new WpfParagraph(capInline) { Margin = new Thickness(0, 0, 4, 0) };
             var floater = new System.Windows.Documents.Floater(capPara)
             {
@@ -7371,11 +7378,11 @@ public sealed class DocumentView : RichTextBox
 
             // Emit the remaining runs after the cap.
             for (var i = firstTextIdx + 1; i < runs.Count; i++)
-                wpf.Inlines.Add(BuildRun(runs[i], paragraph, document));
+                wpf.Inlines.Add(BuildRun(runs[i], paragraph, document, sourceBlockIndex, i));
         }
         else
         {
-            AppendRunsWithTabPlans(wpf, runs, paragraph, document, paraFmt);
+            AppendRunsWithTabPlans(wpf, runs, paragraph, document, paraFmt, sourceBlockIndex);
         }
 
         return wpf;
@@ -7386,7 +7393,8 @@ public sealed class DocumentView : RichTextBox
         IReadOnlyList<ModelRun> runs,
         ModelParagraph paragraph,
         TextDocument document,
-        ParagraphFormatting paraFmt)
+        ParagraphFormatting paraFmt,
+        int? sourceBlockIndex)
     {
         var penPositionDip = (paraFmt.IndentLeftPt + paraFmt.FirstLineIndentPt) * PxPerPoint;
         for (var runIndex = 0; runIndex < runs.Count; runIndex++)
@@ -7394,7 +7402,7 @@ public sealed class DocumentView : RichTextBox
             var run = runs[runIndex];
             if (!IsPlainTextRun(run) || !run.Text.Contains('\t', StringComparison.Ordinal))
             {
-                wpf.Inlines.Add(BuildRun(run, paragraph, document));
+                wpf.Inlines.Add(BuildRun(run, paragraph, document, sourceBlockIndex, runIndex));
                 penPositionDip += MeasureRunText(run.Text, run, paragraph, document);
                 continue;
             }
@@ -7411,7 +7419,7 @@ public sealed class DocumentView : RichTextBox
                 {
                     var segment = text.Substring(start, tabIndex - start);
                     var segmentRun = CloneTextRun(run, segment);
-                    wpf.Inlines.Add(BuildRun(segmentRun, paragraph, document));
+                    wpf.Inlines.Add(BuildRun(segmentRun, paragraph, document, sourceBlockIndex, runIndex));
                     penPositionDip += MeasureRunText(segment, segmentRun, paragraph, document);
                 }
 
@@ -7434,7 +7442,7 @@ public sealed class DocumentView : RichTextBox
             {
                 var remainder = text[start..];
                 var remainderRun = CloneTextRun(run, remainder);
-                wpf.Inlines.Add(BuildRun(remainderRun, paragraph, document));
+                wpf.Inlines.Add(BuildRun(remainderRun, paragraph, document, sourceBlockIndex, runIndex));
                 penPositionDip += MeasureRunText(remainder, remainderRun, paragraph, document);
             }
         }
@@ -7667,7 +7675,12 @@ public sealed class DocumentView : RichTextBox
     internal static string StripSoftHyphens(string text) =>
         text.IndexOf(Hyphenator.SoftHyphen) < 0 ? text : text.Replace(Hyphenator.SoftHyphen.ToString(), string.Empty);
 
-    private static Inline BuildRun(ModelRun run, ModelParagraph paragraph, TextDocument document)
+    private static Inline BuildRun(
+        ModelRun run,
+        ModelParagraph paragraph,
+        TextDocument document,
+        int? sourceBlockIndex = null,
+        int? sourceRunIndex = null)
     {
         var effectSet = DocumentEffectSet.FromTheme(document.Theme);
 
@@ -7935,7 +7948,12 @@ public sealed class DocumentView : RichTextBox
         // it reads as a control, plus a ContentControlMarker tag so the control round-trips on commit
         // (see ReadInline). A checkbox control toggles its glyph when clicked.
         if (run.Control is { } control)
-            ApplyContentControlMarker(wpf, control);
+        {
+            var location = sourceBlockIndex is { } blockIndex && sourceRunIndex is { } runIndex
+                ? new ContentControlLocation(blockIndex, runIndex)
+                : (ContentControlLocation?)null;
+            ApplyContentControlMarker(wpf, control, location);
+        }
 
         if (run.HyperlinkUrl is { Length: > 0 } url)
             return BuildHyperlink(wpf, url, run.HyperlinkTooltip);
@@ -8077,16 +8095,21 @@ public sealed class DocumentView : RichTextBox
     /// tag, alias, checked state). Mirrors how CommentMarker/RevisionMarker preserve their marks across
     /// an edit/commit cycle.
     /// </summary>
-    private sealed record ContentControlMarker(ModelContentControl Control);
+    private readonly record struct ContentControlLocation(int BlockIndex, int RunIndex);
+
+    private sealed record ContentControlMarker(ModelContentControl Control, ContentControlLocation? Location = null);
 
     /// <summary>
     /// Marks a WPF run as the content of a content control (w:sdt): a subtle shaded background so the
     /// control region is visible, a bracket-style tooltip, and a <see cref="ContentControlMarker"/> tag
     /// so the control survives a commit/round-trip. A checkbox control toggles its glyph on click.
     /// </summary>
-    private static void ApplyContentControlMarker(WpfRun wpf, ModelContentControl control)
+    private static void ApplyContentControlMarker(
+        WpfRun wpf,
+        ModelContentControl control,
+        ContentControlLocation? location = null)
     {
-        AddMarker(wpf, m => m with { Control = new ContentControlMarker(control) });
+        AddMarker(wpf, m => m with { Control = new ContentControlMarker(control, location) });
         wpf.Background = new SolidColorBrush(ContentControlShade);
         wpf.ToolTip = ContentControlTooltip(control);
 
@@ -8153,13 +8176,24 @@ public sealed class DocumentView : RichTextBox
             || marker.Control.Kind != ContentControlKind.CheckBox)
             return;
 
-        var toggled = marker.Control with { Checked = !marker.Control.Checked };
-        AddMarker(wpf, m => m with { Control = new ContentControlMarker(toggled) });
-        wpf.Text = toggled.Checked ? ModelContentControl.CheckedGlyph : ModelContentControl.UncheckedGlyph;
         e.Handled = true;
+        var owner = FindOwnerView(wpf);
+        if (owner is null || !owner.AllowsContentControlInteraction(marker.Control))
+            return;
+
+        if (owner.RestrictEditingPolicy.IsFormFieldEditingOnly
+            && marker.Location is { } location
+            && owner.ToggleContentControl(location.BlockIndex, location.RunIndex))
+        {
+            return;
+        }
+
+        var toggled = marker.Control with { Checked = !marker.Control.Checked };
+        AddMarker(wpf, m => m with { Control = new ContentControlMarker(toggled, marker.Location) });
+        wpf.Text = toggled.Checked ? ModelContentControl.CheckedGlyph : ModelContentControl.UncheckedGlyph;
 
         // Persist the new state into the model so a subsequent save reflects the toggle.
-        FindOwnerView(wpf)?.CommitToModel();
+        owner.CommitToModel();
     }
 
     /// <summary>
@@ -8176,21 +8210,34 @@ public sealed class DocumentView : RichTextBox
             || control.Items.Count == 0)
             return;
 
+        e.Handled = true;
+        var owner = FindOwnerView(wpf);
+        if (owner is null || !owner.AllowsContentControlInteraction(control))
+            return;
+
         var menu = new ContextMenu();
-        foreach (var item in control.Items)
+        for (var itemIndex = 0; itemIndex < control.Items.Count; itemIndex++)
         {
+            var selectedIndex = itemIndex;
+            var item = control.Items[itemIndex];
             var display = item.DisplayText;
             var entry = new MenuItem { Header = display, IsChecked = display == wpf.Text };
             entry.Click += (_, _) =>
             {
+                if (owner.RestrictEditingPolicy.IsFormFieldEditingOnly
+                    && marker.Location is { } location
+                    && owner.SelectContentControlItem(location.BlockIndex, location.RunIndex, selectedIndex))
+                {
+                    return;
+                }
+
                 wpf.Text = display;
-                FindOwnerView(wpf)?.CommitToModel();
+                owner.CommitToModel();
             };
             menu.Items.Add(entry);
         }
         menu.PlacementTarget = wpf.Parent as UIElement;
         menu.IsOpen = true;
-        e.Handled = true;
     }
 
     /// <summary>
@@ -8204,28 +8251,34 @@ public sealed class DocumentView : RichTextBox
             || marker.Control.Kind != ContentControlKind.DatePicker)
             return;
 
-        var format = string.IsNullOrEmpty(marker.Control.DateFormat)
-            ? ModelContentControl.DefaultDateFormat : marker.Control.DateFormat!;
+        e.Handled = true;
+        var owner = FindOwnerView(wpf);
+        if (owner is null || !owner.AllowsContentControlInteraction(marker.Control))
+            return;
+
         var menu = new ContextMenu();
-        foreach (var (label, date) in new[]
-                 {
-                     ("Today", System.DateTime.Today),
-                     ("Yesterday", System.DateTime.Today.AddDays(-1)),
-                     ("Tomorrow", System.DateTime.Today.AddDays(1))
-                 })
+        var choices = ContentControlInteractionPlanner.RelativeDateChoices(marker.Control);
+        for (var choiceIndex = 0; choiceIndex < choices.Count; choiceIndex++)
         {
-            var text = date.ToString(format, System.Globalization.CultureInfo.CurrentCulture);
-            var entry = new MenuItem { Header = $"{label} ({text})" };
+            var selectedIndex = choiceIndex;
+            var choice = choices[choiceIndex];
+            var entry = new MenuItem { Header = $"{choice.Label} ({choice.DisplayText})" };
             entry.Click += (_, _) =>
             {
-                wpf.Text = text;
-                FindOwnerView(wpf)?.CommitToModel();
+                if (owner.RestrictEditingPolicy.IsFormFieldEditingOnly
+                    && marker.Location is { } location
+                    && owner.SelectContentControlRelativeDate(location.BlockIndex, location.RunIndex, selectedIndex))
+                {
+                    return;
+                }
+
+                wpf.Text = choice.DisplayText;
+                owner.CommitToModel();
             };
             menu.Items.Add(entry);
         }
         menu.PlacementTarget = wpf.Parent as UIElement;
         menu.IsOpen = true;
-        e.Handled = true;
     }
 
     /// <summary>Walks up from an inline to the hosting <see cref="DocumentView"/>, if any.</summary>
@@ -10761,6 +10814,56 @@ public sealed class DocumentView : RichTextBox
         }
     }
 
+    public bool ToggleContentControl(int blockIndex, int runIndex) =>
+        ApplyContentControlInteraction(blockIndex, runIndex, ContentControlInteractionPlanner.ToggleCheckBox);
+
+    public bool SelectContentControlItem(int blockIndex, int runIndex, int itemIndex) =>
+        ApplyContentControlInteraction(blockIndex, runIndex, run =>
+            ContentControlInteractionPlanner.SelectItem(run, itemIndex));
+
+    public bool SelectContentControlRelativeDate(int blockIndex, int runIndex, int choiceIndex) =>
+        ApplyContentControlInteraction(blockIndex, runIndex, run =>
+            ContentControlInteractionPlanner.SelectRelativeDate(run, choiceIndex));
+
+    private bool ApplyContentControlInteraction(int blockIndex, int runIndex, Func<ModelRun, ModelRun?> planner)
+    {
+        if (!TryGetBodyContentControlRun(blockIndex, runIndex, out var current)
+            || !ContentControlInteractionPlanner.CanEditExistingContentControl(current, RestrictEditingPolicy))
+        {
+            return false;
+        }
+
+        var updated = planner(current);
+        if (updated is null)
+            return false;
+
+        _commands.Execute(new ReplaceContentControlRunCommand(blockIndex, runIndex, updated));
+        return true;
+    }
+
+    private bool TryGetBodyContentControlRun(int blockIndex, int runIndex, out ModelRun run)
+    {
+        run = null!;
+        if (blockIndex < 0
+            || blockIndex >= _model.Blocks.Count
+            || _model.Blocks[blockIndex] is not ModelParagraph paragraph
+            || runIndex < 0
+            || runIndex >= paragraph.Runs.Count
+            || paragraph.Runs[runIndex].Control is null)
+        {
+            return false;
+        }
+
+        run = paragraph.Runs[runIndex];
+        return true;
+    }
+
+    private bool AllowsContentControlInteraction(ModelContentControl control)
+    {
+        var probe = new ModelRun(string.Empty) { Control = control };
+        return ContentControlInteractionPlanner.CanEditExistingContentControl(probe, RestrictEditingPolicy);
+    }
+
     /// <summary>
     /// Inserts a plain-text content control (w:sdt) at the caret. When the selection is non-empty its
     /// text becomes the control's content; otherwise a placeholder ("Click to enter text") is used. The
@@ -10769,6 +10872,9 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void InsertPlainTextControl(string? tag = null, string? alias = null)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         Focus();
 
         var selected = Selection?.Text;
@@ -10787,6 +10893,9 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void InsertCheckBoxControl(string? tag = null, string? alias = null)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         Focus();
         var run = BuildControlRun(ModelRun.CheckBoxControl(@checked: false, tag, alias));
         InsertInlineAtCaret(run);
@@ -10799,6 +10908,9 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void InsertRichTextControl(string? tag = null, string? alias = null)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         Focus();
 
         var selected = Selection?.Text;
@@ -10817,6 +10929,9 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void InsertDatePickerControl(string? tag = null, string? alias = null, string? dateFormat = null)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         Focus();
         var fmt = string.IsNullOrEmpty(dateFormat) ? ModelContentControl.DefaultDateFormat : dateFormat!;
         var today = System.DateTime.Today.ToString(fmt, System.Globalization.CultureInfo.CurrentCulture);
@@ -10832,6 +10947,9 @@ public sealed class DocumentView : RichTextBox
     public void InsertDropDownListControl(
         IReadOnlyList<ContentControlListItem>? items = null, string? tag = null, string? alias = null)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         Focus();
         var run = BuildControlRun(ModelRun.DropDownListControl(items ?? DefaultListItems, tag: tag, alias: alias));
         InsertInlineAtCaret(run);
@@ -10845,6 +10963,9 @@ public sealed class DocumentView : RichTextBox
     public void InsertComboBoxControl(
         IReadOnlyList<ContentControlListItem>? items = null, string? tag = null, string? alias = null)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         Focus();
         var run = BuildControlRun(ModelRun.ComboBoxControl(items ?? DefaultListItems, tag: tag, alias: alias));
         InsertInlineAtCaret(run);

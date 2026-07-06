@@ -75,6 +75,43 @@ public sealed class DocumentViewContentControlInteractionTests
         view.SelectContentControlRelativeDate(0, 2, -1).Should().BeFalse();
     }
 
+    [Fact]
+    public void PublicInteractionMethods_AllowExistingControlsUnderFillingFormsButBlockStricterProtection()
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.CheckBoxControl(@checked: false, tag: "Agree"));
+        paragraph.Runs.Add(new Run("body"));
+
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(paragraph);
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.SetProtection(ProtectionMode.FillingForms);
+        view.InsertCheckBoxControl();
+
+        paragraph.Runs.Should().HaveCount(2, "Filling Forms may fill existing fields but must not insert new body controls");
+        view.ToggleContentControl(0, 0).Should().BeTrue();
+        paragraph.Runs[0].Control!.Checked.Should().BeTrue();
+
+        view.CanUndo.Should().BeTrue();
+        view.Undo();
+        paragraph.Runs[0].Control!.Checked.Should().BeFalse();
+        view.CanRedo.Should().BeTrue();
+        view.Redo();
+        paragraph.Runs[0].Control!.Checked.Should().BeTrue();
+
+        view.SetProtection(ProtectionMode.ReadOnly);
+        view.ToggleContentControl(0, 0).Should().BeFalse();
+        paragraph.Runs[0].Control!.Checked.Should().BeTrue();
+
+        view.SetProtection(ProtectionMode.None);
+        view.SetMarkedAsFinal(true);
+        view.ToggleContentControl(0, 0).Should().BeFalse();
+        paragraph.Runs[0].Control!.Checked.Should().BeTrue();
+    }
+
     private static Run InsertedRun(Action<DocumentView> insert)
     {
         var view = new DocumentView();
