@@ -222,6 +222,9 @@ public static class DocumentFormatCapabilityPlanner
 
     private static string Describe(CapabilityKey key, IReadOnlyList<string> extensions)
     {
+        if (DescribeWordOoxmlFormat(key, extensions) is { } wordOoxmlDescription)
+            return wordOoxmlDescription;
+
         if (key.Kind == DocumentFormatCapabilityKind.ImportOnly)
         {
             return $"{key.FormatName} is import-only. FreeW can read it into a new document, but does not save back to {ExtensionsText(extensions)}.";
@@ -240,15 +243,10 @@ public static class DocumentFormatCapabilityPlanner
         }
 
         if (key.Kind == DocumentFormatCapabilityKind.Template)
-        {
             return "Template format. Opening it creates a new unsaved document; Save As writes the reusable template file.";
-        }
 
         return key.FormatName switch
         {
-            "Word Document" => "Default editable Word document format. FreeW can open and save it normally.",
-            "Strict Open XML Document" => "Strict Open XML package. FreeW opens and saves it through the OOXML adapter.",
-            "Word Macro-Enabled Document" => "Editable macro-enabled Word package. Document content is saved; macro preservation remains package-fidelity dependent.",
             "Word XML Document" => "Editable Flat OPC Word XML format. FreeW can open and save it through the Word XML adapter.",
             "Word 2003 XML Document" => "Editable Word 2003 XML format. Use for XML compatibility, with fidelity limited to supported document features.",
             "Web Page, Filtered" => "Clean HTML format. Word-specific layout and advanced features may not round-trip.",
@@ -260,6 +258,39 @@ public static class DocumentFormatCapabilityPlanner
             "Log file" => "Plain-text log file. Formatting, images, tables, and document structure are not preserved.",
             _ => "Editable format that FreeW can open and save through the document adapter catalog.",
         };
+    }
+
+    private static string? DescribeWordOoxmlFormat(CapabilityKey key, IReadOnlyList<string> extensions)
+    {
+        bool HasExtension(string extension) =>
+            extensions.Any(candidate => string.Equals(candidate, extension, StringComparison.OrdinalIgnoreCase));
+
+        if (key.FormatName == "Word Document" && HasExtension(".docx"))
+        {
+            return "Default editable non-macro Word document format. FreeW can open and save it normally; saving here drops macro parts because VBA project bytes are not written to this .docx target.";
+        }
+
+        if (key.FormatName == "Strict Open XML Document" && HasExtension(".docx"))
+        {
+            return "Strict non-macro Open XML package. FreeW opens and saves it through the OOXML adapter; saving here drops macro parts because VBA project bytes are not written to this .docx target.";
+        }
+
+        if (key.FormatName == "Word Macro-Enabled Document" && HasExtension(".docm"))
+        {
+            return "Macro-enabled OOXML document. FreeW preserves existing VBA project bytes when saving as .docm, but does not inspect or execute macros; saving to non-macro targets such as .docx or .dotx drops macro parts.";
+        }
+
+        if (key.FormatName == "Word Template" && HasExtension(".dotx"))
+        {
+            return "Non-macro OOXML template. Opening it creates a new unsaved document; Save As writes the reusable template file, and saving here drops macro parts because VBA project bytes are not written to this .dotx target.";
+        }
+
+        if (key.FormatName == "Word Macro-Enabled Template" && HasExtension(".dotm"))
+        {
+            return "Macro-enabled OOXML template. Opening it creates a new unsaved document; FreeW preserves existing VBA project bytes when saving as .dotm, but does not inspect or execute macros; saving to non-macro targets such as .docx or .dotx drops macro parts.";
+        }
+
+        return null;
     }
 
     private static string DescribeExportOnly(string formatName) =>

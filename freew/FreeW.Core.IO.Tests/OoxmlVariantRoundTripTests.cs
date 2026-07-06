@@ -115,6 +115,12 @@ public class OoxmlVariantRoundTripTests
     }
 
     [Fact]
+    public void DotxSave_StripsVbaProject()
+    {
+        PackageHasEntry(Save(DocxFileAdapter.Dotx(), DocWithMacro()), "word/vbaProject.bin").Should().BeFalse();
+    }
+
+    [Fact]
     public void Docm_RoundTripsMacroBytes_ThroughReadAndReSave()
     {
         using var ms = new MemoryStream(Save(DocxFileAdapter.Docm(), DocWithMacro()));
@@ -126,5 +132,19 @@ public class OoxmlVariantRoundTripTests
 
         // The read path captured it with the right type + relationship, so a re-save keeps it.
         PackageHasEntry(Save(DocxFileAdapter.Docm(), reloaded), "word/vbaProject.bin").Should().BeTrue();
+    }
+
+    [Fact]
+    public void Dotm_RoundTripsMacroBytes_ThroughReadAndReSave()
+    {
+        using var ms = new MemoryStream(Save(DocxFileAdapter.Dotm(), DocWithMacro()));
+        var reloaded = DocxFileAdapter.Dotm().Load(ms);
+
+        var macro = reloaded.Preserved.Parts.FirstOrDefault(p => p.PartName == "/word/vbaProject.bin");
+        macro.Should().NotBeNull();
+        Encoding.ASCII.GetString(macro!.Bytes).Should().Be("FAKE-VBA-BYTES");
+
+        // The read path captured it with the right type + relationship, so a re-save keeps it.
+        PackageHasEntry(Save(DocxFileAdapter.Dotm(), reloaded), "word/vbaProject.bin").Should().BeTrue();
     }
 }

@@ -40,6 +40,14 @@ public sealed class BackstageExportFileTypePlannerTests
 
         group.Actions.Single(action => action.Label == "Word 97-2003 Document (*.doc)")
             .Description.Should().Contain("Compatibility format");
+        group.Actions.Single(action => action.Label == "Word Document (*.docx)")
+            .Description.Should().Contain("drops macro parts").And.Contain("VBA project bytes are not written");
+        group.Actions.Single(action => action.Label == "Word Macro-Enabled Document (*.docm)")
+            .Description.Should().Contain("does not inspect or execute macros").And.Contain("drops macro parts");
+        group.Actions.Single(action => action.Label == "Word Template (*.dotx)")
+            .Description.Should().Contain("Opening it creates a new unsaved document").And.Contain("drops macro parts");
+        group.Actions.Single(action => action.Label == "Word Macro-Enabled Template (*.dotm)")
+            .Description.Should().Contain("Opening it creates a new unsaved document").And.Contain("preserves existing VBA project bytes");
         group.Actions.Single(action => action.Label == "OpenDocument Text (*.odt)")
             .Description.Should().Contain("Unsupported ODF constructs");
 
