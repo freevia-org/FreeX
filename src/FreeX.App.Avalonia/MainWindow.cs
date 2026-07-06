@@ -22435,6 +22435,10 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
+            var exportOptions = await ShowExportOptionsDialogAsync(ExportContentScope.ActiveSheet, ExportFormat.Pdf);
+            if (exportOptions is null)
+                return;
+
             var storageFile = await ShowPortablePdfSavePickerAsync("Export to PDF");
 
             if (storageFile is null)
@@ -22463,11 +22467,17 @@ public sealed partial class MainWindow : Window
                     _statusText.Text = "Exporting PDF...";
                     _statusText.Foreground = Brush(67, 113, 83);
 
-                    var exportPrintPlan = CreateActiveSheetPortablePdfPrintPlan();
+                    var exportPrintPlan = CreatePortablePdfPrintPlan(exportOptions, WorkbookExportPrintOutputKind.Pdf);
                     var exportPlan = PortablePdfExportPlanner.CreatePlan(exportPrintPlan);
                     if (!exportPlan.IsReady)
                     {
                         ShowExportIssue(exportPlan.StatusText);
+                        return;
+                    }
+
+                    if (!TryPreparePortablePdfExportPlan(exportPlan, exportOptions, out var effectiveExportPlan, out var optionsError))
+                    {
+                        ShowExportIssue(optionsError ?? UiText.Get("MainWindowMessage_ExportUnsupportedOptions"));
                         return;
                     }
 
@@ -22476,10 +22486,12 @@ public sealed partial class MainWindow : Window
                     // (headless/no-Skia). The routing decision lives in AvaloniaPdfDocumentExporter so it
                     // is exercised by tests.
                     using var pdfBuffer = new MemoryStream();
-                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
+                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, effectiveExportPlan, pdfBuffer);
                     await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
 
                     RefreshShell(UiText.Format("MainLoc_StatusFileName", outcome.Result.StatusText, Path.GetFileName(path)));
+                    if (exportOptions.OpenAfterPublish)
+                        await TryOpenExportedPdfAsync(path);
                 }
                 catch (Exception ex)
                 {
@@ -22736,6 +22748,16 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
+            if (outputKind != WorkbookExportPrintOutputKind.Pdf)
+            {
+                ShowExportIssue("Portable export supports PDF only; XPS remains Windows-only.");
+                return;
+            }
+
+            var exportOptions = await ShowExportOptionsDialogAsync(ToExportContentScope(scope), ExportFormat.Pdf);
+            if (exportOptions is null)
+                return;
+
             var storageFile = await ShowPortablePdfSavePickerAsync("Export to PDF");
 
             if (storageFile is null)
@@ -22764,7 +22786,7 @@ public sealed partial class MainWindow : Window
                     _statusText.Text = "Exporting PDF...";
                     _statusText.Foreground = Brush(67, 113, 83);
 
-                    var exportPrintPlan = CreateScopedPortablePdfPrintPlan(scope, outputKind);
+                    var exportPrintPlan = CreatePortablePdfPrintPlan(exportOptions, outputKind);
                     var exportPlan = PortablePdfExportPlanner.CreatePlan(exportPrintPlan);
                     if (!exportPlan.IsReady)
                     {
@@ -22772,11 +22794,19 @@ public sealed partial class MainWindow : Window
                         return;
                     }
 
+                    if (!TryPreparePortablePdfExportPlan(exportPlan, exportOptions, out var effectiveExportPlan, out var optionsError))
+                    {
+                        ShowExportIssue(optionsError ?? UiText.Get("MainWindowMessage_ExportUnsupportedOptions"));
+                        return;
+                    }
+
                     using var pdfBuffer = new MemoryStream();
-                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
+                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, effectiveExportPlan, pdfBuffer);
                     await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
 
                     RefreshShell(UiText.Format("MainLoc_StatusFileName", outcome.Result.StatusText, Path.GetFileName(path)));
+                    if (exportOptions.OpenAfterPublish)
+                        await TryOpenExportedPdfAsync(path);
                 }
                 catch (Exception ex)
                 {
@@ -22790,10 +22820,11 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private WorkbookExportPrintPlan CreateScopedPortablePdfPrintPlan(
-        WorkbookExportPrintScope scope,
+    private WorkbookExportPrintPlan CreatePortablePdfPrintPlan(
+        ExportOptions options,
         WorkbookExportPrintOutputKind outputKind)
     {
+        var scope = ToWorkbookExportPrintScope(options.Scope);
         var selectedRange = scope == WorkbookExportPrintScope.SelectedRange
             ? _session.SelectedRange
             : (GridRange?)null;
@@ -22804,9 +22835,26 @@ public sealed partial class MainWindow : Window
                 scope,
                 outputKind,
                 ActiveSheetIndex: ResolveActiveSheetIndex(),
-                SelectedRange: selectedRange),
+                SelectedRange: selectedRange,
+                IgnorePrintAreas: options.IgnorePrintAreas),
             WorkbookExportPrintSurface.MacOs);
     }
+
+    private static ExportContentScope ToExportContentScope(WorkbookExportPrintScope scope) =>
+        scope switch
+        {
+            WorkbookExportPrintScope.SelectedRange => ExportContentScope.Selection,
+            WorkbookExportPrintScope.VisibleWorkbook => ExportContentScope.EntireWorkbook,
+            _ => ExportContentScope.ActiveSheet
+        };
+
+    private static WorkbookExportPrintScope ToWorkbookExportPrintScope(ExportContentScope scope) =>
+        scope switch
+        {
+            ExportContentScope.Selection => WorkbookExportPrintScope.SelectedRange,
+            ExportContentScope.EntireWorkbook => WorkbookExportPrintScope.VisibleWorkbook,
+            _ => WorkbookExportPrintScope.ActiveSheet
+        };
 
     private int ResolveActiveSheetIndex()
     {
