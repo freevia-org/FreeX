@@ -711,10 +711,10 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("FindResultTarget.ThreadedCommentReply,");
         script.Should().Contain("_bordersButton.Flyout = CreateBorderPresetFlyout();");
         script.Should().Contain("_bordersMenuItem.Menu = CreateNativeBorderPresetMenu();");
-        script.Should().Contain("PasteSpecialClipboardAtActiveCell(text, mode, options)");
+        script.Should().Contain("PasteSpecialClipboardAtActiveCell(text, mode, options, clipboardReadFailed: clipboardReadFailed)");
         script.Should().Contain("CreatePasteSpecialTextMenuItem(`\"Text`\")");
         script.Should().Contain("CreateNativePasteSpecialTextMenuItem(`\"Unicode Text`\")");
-        script.Should().Contain("_session.PasteClipboardTextAtActiveCell(text, preserveText: true)");
+        script.Should().Contain("_session.PasteClipboardTextAtActiveCell(text, preserveText: true, clipboardReadFailed: clipboardReadFailed)");
         script.Should().Contain("CreatePastePictureMenuItem(`\"Picture`\", linkedPicture: false)");
         script.Should().Contain("CreateNativePastePictureMenuItem(`\"Linked Picture`\", linkedPicture: true)");
         script.Should().Contain("ShellFocusTarget.Worksheet");
@@ -724,7 +724,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("CycleShellFocus(reverse: e.KeyModifiers == KeyModifiers.Shift);");
         script.Should().Contain("private void CycleShellFocus(bool reverse)");
         script.Should().Contain("ShellFocusCyclePlanner.GetNextAvailable(current, reverse, IsShellFocusTargetAvailable)");
-        script.Should().Contain("private static bool IsShellFocusTargetAvailable(ShellFocusTarget target)");
+        script.Should().Contain("private bool IsShellFocusTargetAvailable(ShellFocusTarget target)");
         script.Should().Contain("private ShellFocusTarget GetCurrentShellFocusTarget()");
         script.Should().Contain("private bool FocusShellRegion(ShellFocusTarget target)");
         script.Should().Contain("private bool FocusFirstEnabledToolbarControl()");
@@ -3099,15 +3099,16 @@ public sealed class MacOsAppReadinessPreflightTests
                     current = ShellFocusCyclePlanner.GetNextAvailable(current, reverse, IsShellFocusTargetAvailable);
                     FocusShellRegion(current);
                 }
-                private static bool IsShellFocusTargetAvailable(ShellFocusTarget target) =>
-                    target != ShellFocusTarget.TaskPane;
+                private bool IsShellFocusTargetAvailable(ShellFocusTarget target) =>
+                    target != ShellFocusTarget.TaskPane ||
+                    _pivotFieldPaneHost.IsVisible;
                 private ShellFocusTarget GetCurrentShellFocusTarget() => ShellFocusTarget.Worksheet;
                 private bool FocusShellRegion(ShellFocusTarget target) => target switch
                 {
                     ShellFocusTarget.Ribbon => FocusFirstEnabledToolbarControl(),
                     ShellFocusTarget.FormulaBar => FocusControl(_formulaBox),
                     ShellFocusTarget.SheetTabs => FocusActiveSheetTab(),
-                    ShellFocusTarget.TaskPane => false,
+                    ShellFocusTarget.TaskPane => FocusVisibleTaskPane(),
                     ShellFocusTarget.StatusBar => FocusControl(_zoomText),
                     _ => FocusControl(_sheetGridHost)
                 };

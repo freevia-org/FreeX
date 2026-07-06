@@ -279,13 +279,21 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     public void F6ShellFocusCycle_UsesSharedPresentationPlanner()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var pivotSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Pivot.cs"));
 
         source.Should().Contain("ShellFocusCyclePlanner.GetNextAvailable(current, reverse, IsShellFocusTargetAvailable)");
-        source.Should().Contain("private static bool IsShellFocusTargetAvailable(ShellFocusTarget target)");
+        source.Should().Contain("private bool IsShellFocusTargetAvailable(ShellFocusTarget target)");
         source.Should().Contain("private ShellFocusTarget GetCurrentShellFocusTarget()");
         source.Should().Contain("private bool FocusShellRegion(ShellFocusTarget target)");
         source.Should().Contain("ShellFocusTarget.Ribbon => FocusFirstEnabledToolbarControl()");
-        source.Should().Contain("ShellFocusTarget.TaskPane => false");
+        source.Should().Contain("target != ShellFocusTarget.TaskPane ||");
+        source.Should().Contain("_pivotFieldPaneHost.IsVisible");
+        source.Should().Contain("if (IsPivotFieldPaneFocused())");
+        source.Should().Contain("ShellFocusTarget.TaskPane => FocusVisibleTaskPane()");
+        source.Should().Contain("private bool FocusVisibleTaskPane()");
+        source.Should().Contain("_pivotFieldPaneSearchBox is { } searchBox && FocusControl(searchBox)");
+        pivotSource.Should().Contain("AutomationProperties.SetAutomationId(_pivotFieldPaneHost, \"PivotFieldListPane\")");
+        pivotSource.Should().Contain("AutomationProperties.SetAutomationId(searchBox, \"PivotFieldListSearchBox\")");
 
         source.Should().NotContain("private enum ShellFocusRegion");
         source.Should().NotContain("private static readonly ShellFocusRegion[] ShellFocusCycle");
