@@ -153,6 +153,63 @@ internal sealed class CrossReferenceDialog : Window
     }
 }
 
+internal sealed class SourceConflictResolutionDialog : Window
+{
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+
+    private SourceManagementSourceConflictResolutionAction? _result;
+
+    private SourceConflictResolutionDialog(SourceManagementSourceConflict conflict)
+    {
+        var choices = SourceManagementDialogPlanner.BuildSourceConflictResolutionChoices(conflict);
+
+        Title = SourceManagementDialogPlanner.SourceConflictDialogTitle;
+        Width = 420;
+        SizeToContent = SizeToContent.Height;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        CanResize = false;
+        ShowInTaskbar = false;
+
+        var message = new TextBlock
+        {
+            Text = SourceManagementDialogPlanner.BuildSourceConflictMessage(conflict),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(16, 14, 16, 0),
+        };
+
+        var buttons = choices
+            .Select(choice => Button(choice.Label, () =>
+            {
+                _result = choice.Action;
+                Close();
+            }))
+            .Append(Button("Cancel", () => Close(), isCancel: true))
+            .ToArray();
+
+        var body = new StackPanel();
+        body.Children.Add(message);
+        body.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow(buttons, new Thickness(16, 12, 16, 14)));
+        Content = body;
+    }
+
+    public static async Task<SourceManagementSourceConflictResolutionAction?> AskAsync(
+        Window owner,
+        SourceManagementSourceConflict conflict)
+    {
+        var dialog = new SourceConflictResolutionDialog(conflict);
+        await dialog.ShowDialog(owner);
+        return dialog._result;
+    }
+
+    private static Button Button(string label, Action click, bool isDefault = false, bool isCancel = false)
+    {
+        var button = new Button { Content = label, IsDefault = isDefault, IsCancel = isCancel };
+        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 84, isDefault: isDefault);
+        button.Click += (_, _) => click();
+        return button;
+    }
+}
+
 internal sealed class CitationSourcePickerDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
@@ -744,8 +801,8 @@ internal sealed class ManageSourcesDialog : Window
                 Button("Delete", DeleteMaster)
             ]);
 
-        var copy = Button("Copy ->", CopyMasterToCurrent);
-        var copyBack = Button("Copy <-", CopyCurrentToMaster);
+        var copy = Button("Copy ->", () => _ = CopyMasterToCurrentAsync());
+        var copyBack = Button("Copy <-", () => _ = CopyCurrentToMasterAsync());
         var centerPane = new StackPanel
         {
             VerticalAlignment = VerticalAlignment.Center,
@@ -822,24 +879,22 @@ internal sealed class ManageSourcesDialog : Window
         RefreshMasterList(plan.SelectedIndex);
     }
 
-    private void CopyMasterToCurrent()
+    private async Task CopyMasterToCurrentAsync()
     {
         var plan = SourceManagementDialogPlanner.CopyMasterToCurrent(
             _state,
             _masterList.SelectedIndex,
             _currentList.SelectedIndex);
-        _state = plan.State;
-        RefreshCurrentList(plan.SelectedIndex);
+        await ApplyCopyPlanAsync(plan, selectedIndex => RefreshCurrentList(selectedIndex));
     }
 
-    private void CopyCurrentToMaster()
+    private async Task CopyCurrentToMasterAsync()
     {
         var plan = SourceManagementDialogPlanner.CopyCurrentToMaster(
             _state,
             _currentList.SelectedIndex,
             _masterList.SelectedIndex);
-        _state = plan.State;
-        RefreshMasterList(plan.SelectedIndex);
+        await ApplyCopyPlanAsync(plan, selectedIndex => RefreshMasterList(selectedIndex));
     }
 
     private async Task AddCurrentAsync()
@@ -905,6 +960,26 @@ internal sealed class ManageSourcesDialog : Window
         _status.Text = validation.Message;
         _status.IsVisible = true;
         return false;
+    }
+
+    private async Task<bool> ApplyCopyPlanAsync(SourceManagementListMutationPlan plan, Action<int?> refresh)
+    {
+        if (plan.Conflict is not null)
+        {
+            var action = await SourceConflictResolutionDialog.AskAsync(this, plan.Conflict);
+            if (action is null)
+                return false;
+
+            plan = SourceManagementDialogPlanner.ResolveSourceConflict(
+                _state,
+                plan.Conflict,
+                action.Value);
+        }
+
+        _state = plan.State;
+        refresh(plan.SelectedIndex);
+        _status.IsVisible = false;
+        return true;
     }
 
     private void RefreshMasterList(int? selectedIndex = null)
