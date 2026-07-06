@@ -2425,7 +2425,7 @@ public static class PptxPackageReader
             SmartArtFamily.Process => layoutId is "process1" or "basicprocess" or "continuousblockprocess",
             SmartArtFamily.List => layoutId is "list1" or "basicblocklist",
             SmartArtFamily.Cycle => layoutId is "cycle1" or "basiccycle",
-            SmartArtFamily.Hierarchy => layoutId is "hierarchy1",
+            SmartArtFamily.Hierarchy => layoutId is "hierarchy1" or "basichierarchy",
             _ => false
         };
     }

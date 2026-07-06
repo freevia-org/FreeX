@@ -1025,6 +1025,27 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesBasicHierarchyAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/basicHierarchy",
+            nodes: [("R", "CEO"), ("C1", "Sales"), ("C2", "Engineering")],
+            parOfConnections: [("R", "C1"), ("R", "C2")]);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Hierarchy,
+            "basicHierarchy is a hierarchy-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "basicHierarchy is in the bounded shared live-layout planner");
+        sa.Data.Nodes.Should().ContainSingle();
+        sa.Data.Nodes[0].Text.Should().Be("CEO");
+        sa.Data.Nodes[0].Children.Select(n => n.Text).Should().BeEquivalentTo(new[] { "Sales", "Engineering" });
+    }
+
+    [Fact]
     public void Reader_ParsesKnownListFamilyButDisablesLiveLayoutForUnsupportedSibling()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -1060,6 +1081,26 @@ public sealed class SmartArtTests : IDisposable
         sa.Data.IsLiveLayoutSupported.Should().BeFalse(
             "cycle-family layouts outside the bounded allow-list should keep cached-drawing fallback");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("Phase 1", "Phase 2", "Phase 3");
+    }
+
+    [Fact]
+    public void Reader_ParsesKnownHierarchyFamilyButDisablesLiveLayoutForUnsupportedSibling()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/verticalBulletList",
+            nodes: [("R", "Root"), ("C", "Child")],
+            parOfConnections: [("R", "C")]);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Hierarchy,
+            "unsupported hierarchy siblings still retain broad family metadata for future layout slices");
+        sa.Data.IsLiveLayoutSupported.Should().BeFalse(
+            "hierarchy-family layouts outside the bounded allow-list should keep cached-drawing fallback");
+        sa.Data.Nodes.Should().ContainSingle();
+        sa.Data.Nodes[0].Children.Should().ContainSingle().Which.Text.Should().Be("Child");
     }
 
     [Fact]
@@ -1169,6 +1210,35 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_BasicHierarchySmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/basicHierarchy",
+            nodes: [("R", "CEO"), ("C1", "Sales"), ("C2", "Engineering")],
+            parOfConnections: [("R", "C1"), ("R", "C2")]);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Hierarchy);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(5, "three basic-hierarchy boxes plus two connectors should render from shared live data");
+        var renderedText = liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("CEO");
+        renderedText.Should().Contain("Sales");
+        renderedText.Should().Contain("Engineering");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(2, "WPF and Avalonia hosts consume shared connector DrawOps");
+    }
+
+    [Fact]
     public void Compositor_UnsupportedProcessSibling_UsesCachedFallbackShapes()
     {
         var data = new SmartArtData
@@ -1275,6 +1345,61 @@ public sealed class SmartArtTests : IDisposable
 
         shapeOps.Should().ContainSingle("unsupported cycle siblings should use cached drawing fallback");
         shapeOps[0].Text?.Paragraphs[0].Runs[0].Text.Should().Be("Cached cycle sibling fallback");
+    }
+
+    [Fact]
+    public void Compositor_UnsupportedHierarchySibling_UsesCachedFallbackShapes()
+    {
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.Hierarchy,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/verticalBulletList",
+            IsLiveLayoutSupported = false
+        };
+        var root = new SmartArtNode { Text = "Root", Level = 0 };
+        root.Children.Add(new SmartArtNode { Text = "Child", Level = 1 });
+        data.Nodes.Add(root);
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id = 94,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 914_400,
+            OffsetYEmu = 457_200,
+            ExtentCxEmu = 1_828_800,
+            ExtentCyEmu = 914_400,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached hierarchy sibling fallback" } }
+                    }
+                }
+            }
+        });
+
+        var pres = Presentation.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 95,
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = 914_400,
+            OffsetYEmu = 457_200,
+            ExtentCxEmu = 7_315_200,
+            ExtentCyEmu = 3_657_600,
+            SmartArt = smart
+        });
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        shapeOps.Should().ContainSingle("unsupported hierarchy siblings should use cached drawing fallback");
+        shapeOps[0].Text?.Paragraphs[0].Runs[0].Text.Should().Be("Cached hierarchy sibling fallback");
     }
 
     [Fact]

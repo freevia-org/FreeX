@@ -418,6 +418,22 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
             ],
             RemainingWork: "basicCycle now uses the bounded shared cycle-family live-layout path for parsed nodes while unsupported cycle siblings remain on cached drawing fallback. Broader SmartArt geometry families, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred.")
+        ,
+        new(
+            EvidenceId: "freep.smartart.basic-hierarchy",
+            Area: "SmartArt basic hierarchy live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume ordinary shared slide shape and connector ops emitted by the SmartArt hierarchy-family layout planner; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-smartart-basic-hierarchy-2026-07-06.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
+            ],
+            RemainingWork: "basicHierarchy now uses the bounded shared hierarchy-family live-layout path for parsed root/child nodes while unsupported hierarchy siblings remain on cached drawing fallback. Broader SmartArt geometry families, assistant/org-chart nuance, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred.")
       ];
 
     private static IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> Collect(RibbonDefinition definition, string profile)
