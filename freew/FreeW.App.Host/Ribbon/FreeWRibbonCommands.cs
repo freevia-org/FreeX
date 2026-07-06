@@ -248,8 +248,8 @@ internal static class FreeWRibbonCommands
                 capturedPreset.Apply(editor);
             }));
         }
-        // "Define New Multilevel List" dialog: captures backed options (number of levels, start-at) and
-        // applies the backed subset (ListKind.MultiLevel + optional ListStartOverride on level 0/1).
+        // "Define New Multilevel List" dialog: captures backed options (number of levels, start-at, and
+        // the first three per-level number styles).
         registry.Register("freew.multilevel-define", new DefineMultilevelListCommand(editor));
         Routed("freew.cut", ApplicationCommands.Cut);
         Routed("freew.copy", ApplicationCommands.Copy);
@@ -2243,13 +2243,13 @@ internal static class FreeWRibbonCommands
     }
 
     // Home > Paragraph > Multilevel List > Define New Multilevel List: opens the definition dialog and
-    // applies the backed subset (ListKind.MultiLevel with optional ListStartOverride on level 0/1).
+    // applies the backed subset (ListKind.MultiLevel, optional start override, and modelled number styles).
     private sealed class DefineMultilevelListCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var def = MultilevelListDialog.Prompt(Window.GetWindow(editor));
+            var def = MultilevelListDialog.Prompt(Window.GetWindow(editor), editor.Model.MultiLevelList.NumberFormats);
             if (def is null)
                 return;
             editor.Focus();
@@ -2261,6 +2261,7 @@ internal static class FreeWRibbonCommands
             {
                 editor.ApplyListStartOverrides(def.Level0StartAt, def.Level1StartAt);
             }
+            editor.ApplyMultiLevelNumberFormats(def.NumberFormats);
         }
     }
 

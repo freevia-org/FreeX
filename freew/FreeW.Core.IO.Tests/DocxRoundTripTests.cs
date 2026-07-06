@@ -1681,6 +1681,39 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void MultiLevelList_WritesAndReadsPerLevelNumberFormats()
+    {
+        var doc = new TextDocument();
+        doc.MultiLevelList.SetNumberFormats(MultiLevelListFormat.DecimalLowerLetterLowerRomanNumberFormats);
+        doc.Blocks.Add(new Paragraph("outline item")
+        {
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.MultiLevel, ListLevel = 2 }
+        });
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        using (var numReader = new StreamReader(zip.GetEntry("word/numbering.xml")!.Open()))
+        {
+            var numbering = numReader.ReadToEnd();
+            numbering.Should().Contain("<w:numFmt w:val=\"decimal\"");
+            numbering.Should().Contain("<w:numFmt w:val=\"lowerLetter\"");
+            numbering.Should().Contain("<w:numFmt w:val=\"lowerRoman\"");
+        }
+
+        stream.Position = 0;
+        var read = DocxReader.Read(stream);
+
+        read.MultiLevelList.NumberFormats.Take(3).Should().Equal(
+            ListNumberFormat.Decimal,
+            ListNumberFormat.LowerLetter,
+            ListNumberFormat.LowerRoman);
+        read.Paragraphs.Single().Formatting.ListKind.Should().Be(ListKind.MultiLevel);
+    }
+
+    [Fact]
     public void NumberedList_StartOverride_RoundTripsAndEmitsLvlOverride()
     {
         var doc = new TextDocument();

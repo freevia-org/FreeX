@@ -2637,6 +2637,12 @@ public sealed class TextDocument
     public ParagraphFormatting DefaultParagraph { get; set; } = ParagraphFormatting.Default;
 
     /// <summary>
+    /// The single modelled FreeW multilevel-list definition. Its per-level number formats map to the
+    /// fixed FreeW multilevel numbering definition in word/numbering.xml.
+    /// </summary>
+    public MultiLevelListFormat MultiLevelList { get; } = new();
+
+    /// <summary>
     /// The page settings of the <em>final</em> (or only) section — the body-level w:sectPr. A document
     /// with no <see cref="Paragraph.SectionBreak"/> markers is single-section and these are its only page
     /// settings, so existing single-section behaviour is unchanged. Earlier sections carry their own

@@ -778,4 +778,33 @@ public sealed class DocumentViewListEditTests
         markerImage.Should().BeNull("inline-image paragraph resets the counter and gets no number marker");
         markerAfter.Should().Be("1.", "numbered item after the image-reset paragraph restarts at 1.");
     }
+
+    [Fact]
+    public async Task Multilevel_list_uses_per_level_number_formats()
+    {
+        string? m0 = null, m1 = null, m2 = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.MultiLevelList.SetNumberFormats(MultiLevelListFormat.DecimalLowerLetterLowerRomanNumberFormats);
+            doc.Blocks.Add(new Paragraph("L0-A") { Formatting = new ParagraphFormatting { ListKind = ListKind.MultiLevel, ListLevel = 0 } });
+            doc.Blocks.Add(new Paragraph("L1-A") { Formatting = new ParagraphFormatting { ListKind = ListKind.MultiLevel, ListLevel = 1 } });
+            doc.Blocks.Add(new Paragraph("L2-A") { Formatting = new ParagraphFormatting { ListKind = ListKind.MultiLevel, ListLevel = 2 } });
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 4000));
+
+            m0 = view.GetListMarkerForBlockPublic(0);
+            m1 = view.GetListMarkerForBlockPublic(1);
+            m2 = view.GetListMarkerForBlockPublic(2);
+        });
+
+        if (!ran) return;
+        m0.Should().Be("1.");
+        m1.Should().Be("1.a.");
+        m2.Should().Be("1.a.i.");
+    }
 }

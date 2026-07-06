@@ -2211,6 +2211,7 @@ public sealed class DocumentView : Control
 
         const int MaxListDepth = 9;
         var levelCounters = new int[MaxListDepth];
+        var multiLevelMarkers = new MultiLevelListMarkerState(_doc.MultiLevelList.NumberFormats);
         for (int i = 0; i < _doc.Blocks.Count; i++)
         {
             if (_doc.Blocks[i] is not Paragraph p)
@@ -2235,6 +2236,7 @@ public sealed class DocumentView : Control
             {
                 // Render loop resets all counters and skips list numbering for this paragraph.
                 Array.Clear(levelCounters, 0, MaxListDepth);
+                multiLevelMarkers.Reset();
                 if (i == blockIdx) return null;
                 continue;
             }
@@ -2243,32 +2245,34 @@ public sealed class DocumentView : Control
             if (kind is ListKind.Number or ListKind.MultiLevel)
             {
                 var level = Math.Clamp(p.Formatting.ListLevel, 0, MaxListDepth - 1);
-                levelCounters[level]++;
-                for (var deeper = level + 1; deeper < MaxListDepth; deeper++)
-                    levelCounters[deeper] = 0;
 
                 if (i == blockIdx)
                 {
                     if (kind is ListKind.MultiLevel)
-                    {
-                        var sb = new System.Text.StringBuilder();
-                        for (var ancestor = 0; ancestor <= level; ancestor++)
-                        {
-                            var value = levelCounters[ancestor] == 0 ? 1 : levelCounters[ancestor];
-                            sb.Append(value.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append('.');
-                        }
-                        return sb.ToString();
-                    }
+                        return multiLevelMarkers.Advance(level, p.Formatting.ListStartOverride);
                     else
                     {
+                        levelCounters[level]++;
+                        for (var deeper = level + 1; deeper < MaxListDepth; deeper++)
+                            levelCounters[deeper] = 0;
                         return $"{levelCounters[level]}.";
                     }
+                }
+
+                if (kind is ListKind.MultiLevel)
+                    multiLevelMarkers.Advance(level, p.Formatting.ListStartOverride);
+                else
+                {
+                    levelCounters[level]++;
+                    for (var deeper = level + 1; deeper < MaxListDepth; deeper++)
+                        levelCounters[deeper] = 0;
                 }
             }
             else if (kind is ListKind.None)
             {
                 // Non-list paragraph: the numbered run has ended, reset all counters.
                 Array.Clear(levelCounters, 0, MaxListDepth);
+                multiLevelMarkers.Reset();
                 if (i == blockIdx) return null;
             }
             else
@@ -3076,6 +3080,7 @@ public sealed class DocumentView : Control
         // (the numbered list has genuinely ended).
         const int MaxListDepth = 9;
         var levelCounters = new int[MaxListDepth];
+        var multiLevelMarkers = new MultiLevelListMarkerState(_doc.MultiLevelList.NumberFormats);
         for (var blockIndex = 0; blockIndex < _doc.Blocks.Count; blockIndex++)
         {
             var block = _doc.Blocks[blockIndex];
@@ -3099,6 +3104,7 @@ public sealed class DocumentView : Control
                         // also calls CollectFloatingObjects internally.
                         // Non-list paragraph: reset all counters (list run ended).
                         Array.Clear(levelCounters, 0, MaxListDepth);
+                        multiLevelMarkers.Reset();
                         LayoutImageParagraphPaged(blockIndex, paragraph, textWidth);
                         continue;
                     }
@@ -3111,6 +3117,7 @@ public sealed class DocumentView : Control
                 {
                     // Non-list paragraph: reset all counters (list run ended).
                     Array.Clear(levelCounters, 0, MaxListDepth);
+                    multiLevelMarkers.Reset();
                     LayoutInlineObjectParagraphPaged(blockIndex, paragraph, textWidth);
                     continue;
                 }
@@ -3124,26 +3131,16 @@ public sealed class DocumentView : Control
                     inset = ListIndentStep * (level + 1);
                     if (kind is ListKind.Number or ListKind.MultiLevel)
                     {
-                        // BS1: increment this level's counter, reset all deeper levels.
-                        levelCounters[level]++;
-                        for (var deeper = level + 1; deeper < MaxListDepth; deeper++)
-                            levelCounters[deeper] = 0;
-
                         // BS2: build the appropriate marker.
                         if (kind is ListKind.MultiLevel)
-                        {
-                            // Accumulated dotted form: counters[0].counters[1]...counters[level].
-                            var sb = new System.Text.StringBuilder();
-                            for (var ancestor = 0; ancestor <= level; ancestor++)
-                            {
-                                // Ancestors not yet entered in this run show 1 (matches Word/WPF).
-                                var value = levelCounters[ancestor] == 0 ? 1 : levelCounters[ancestor];
-                                sb.Append(value.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append('.');
-                            }
-                            marker = sb.ToString();
-                        }
+                            marker = multiLevelMarkers.Advance(level, paragraph.Formatting.ListStartOverride);
                         else
                         {
+                            // BS1: increment this level's counter, reset all deeper levels.
+                            levelCounters[level]++;
+                            for (var deeper = level + 1; deeper < MaxListDepth; deeper++)
+                                levelCounters[deeper] = 0;
+
                             // Number: plain decimal marker for this level's counter.
                             marker = $"{levelCounters[level]}.";
                         }
@@ -3159,6 +3156,7 @@ public sealed class DocumentView : Control
                 {
                     // Non-list paragraph: the numbered list run has ended, reset all counters.
                     Array.Clear(levelCounters, 0, MaxListDepth);
+                    multiLevelMarkers.Reset();
                 }
 
                 LayoutParagraphPaged(blockIndex, paragraph, textWidth, inset, marker);
@@ -10003,6 +10001,13 @@ public sealed class DocumentView : Control
             ListKind = ListKind.MultiLevel,
             ListLevel = formatting.ListLevel
         });
+    }
+
+    public void ApplyMultiLevelNumberFormats(IReadOnlyList<ListNumberFormat> numberFormats)
+    {
+        _doc.MultiLevelList.SetNumberFormats(numberFormats);
+        _laidOutWidth = -1;
+        InvalidateVisual();
     }
 
     public void ApplyMultiLevelListStartOverrides(int? level0StartAt, int? level1StartAt)

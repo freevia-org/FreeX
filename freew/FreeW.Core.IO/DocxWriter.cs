@@ -218,7 +218,11 @@ public static class DocxWriter
                 WriteBinaryPart(archive, "word/fonts/" + part.FileName, ObfuscateFont(part.FontBytes, part.FontKey));
         }
         if (emitNumbering)
-            WritePart(archive, "word/numbering.xml", BuildNumbering(hasLists, preservedNumbering, restartOverrides));
+            WritePart(archive, "word/numbering.xml", BuildNumbering(
+                hasLists,
+                preservedNumbering,
+                document.MultiLevelList.NumberFormats,
+                restartOverrides));
         // One part per (section × header/footer × type) slot with content. Each part XML carries its inline
         // images via PART-LOCAL r:embed ids resolved against its own word/_rels/<part>.xml.rels, and its
         // image media bytes go under word/media/.
@@ -5096,6 +5100,7 @@ public static class DocxWriter
     private static XDocument BuildNumbering(
         bool includeFreeWNumbering,
         PreservedNumberingPlan? preserved,
+        IReadOnlyList<ListNumberFormat> multiLevelNumberFormats,
         IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null)
     {
         XElement Lvl(int level, string numFmt, string lvlText) =>
@@ -5114,13 +5119,18 @@ public static class DocxWriter
             new(W + "abstractNum", new XAttribute(W + "abstractNumId", abstractNumId),
                 Enumerable.Range(0, ListLevelCount).Select(level => Lvl(level, numFmt, lvlText)));
 
-        // Legal/outline numbering: level n's text is "%1.%2.…%(n+1)." — the dotted run of all ancestor
-        // counters. e.g. level 0 -> "%1.", level 2 -> "%1.%2.%3.".
+        // Legal/outline numbering: level n's text is "%1.%2....%(n+1)." - the dotted run of all ancestor
+        // counters. e.g. level 0 -> "%1.", level 2 -> "%1.%2.%3.". Each level's own counter can use a
+        // modelled decimal/letter/Roman number style.
         XElement MultiLevelAbstractNum(int abstractNumId) =>
             new(W + "abstractNum", new XAttribute(W + "abstractNumId", abstractNumId),
                 new XAttribute(W + "multiLevelType", "multilevel"),
-                Enumerable.Range(0, ListLevelCount).Select(level => Lvl(level, "decimal",
+                Enumerable.Range(0, ListLevelCount).Select(level => Lvl(level,
+                    MultiLevelListMarkerFormatter.ToOoxmlToken(GetMultiLevelNumberFormat(level)),
                     string.Concat(Enumerable.Range(1, level + 1).Select(n => $"%{n}.")))));
+
+        ListNumberFormat GetMultiLevelNumberFormat(int level) =>
+            level < multiLevelNumberFormats.Count ? multiLevelNumberFormats[level] : ListNumberFormat.Decimal;
 
         XElement Num(int numId, int abstractNumId) =>
             new(W + "num", new XAttribute(W + "numId", numId),

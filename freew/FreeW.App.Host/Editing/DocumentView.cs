@@ -3039,6 +3039,12 @@ public sealed class DocumentView : RichTextBox
         });
     }
 
+    public void ApplyMultiLevelNumberFormats(IReadOnlyList<ListNumberFormat> numberFormats)
+    {
+        _model.MultiLevelList.SetNumberFormats(numberFormats);
+        Render();
+    }
+
     /// <summary>
     /// Change the outline depth (<see cref="ParagraphFormatting.ListLevel"/>) of every list paragraph
     /// spanned by the selection by <paramref name="delta"/> (e.g. +1 to demote on Tab, -1 to promote on
@@ -4431,7 +4437,9 @@ public sealed class DocumentView : RichTextBox
                 // MultiLevel lists suppress WPF's built-in marker and render a computed accumulated marker
                 // instead (WPF cannot accumulate "1.1.1"); other kinds use the built-in WPF marker.
                 var markers = kind == ListKind.MultiLevel
-                    ? MultiLevelMarkerSequence(listParagraphs.Select(p => p.Paragraph.Formatting.ListLevel))
+                    ? MultiLevelMarkerSequence(
+                        listParagraphs.Select(p => p.Paragraph.Formatting.ListLevel),
+                        _model.MultiLevelList.NumberFormats)
                     : null;
                 for (var p = 0; p < listParagraphs.Count; p++)
                 {
@@ -5933,9 +5941,6 @@ public sealed class DocumentView : RichTextBox
         _ => TextMarkerStyle.Disc
     };
 
-    // Maximum outline depth FreeW's numbering covers (matches DocxWriter.ListLevelCount / numbering.xml).
-    private const int MultiLevelDepth = 9;
-
     /// <summary>
     /// Computes the accumulated outline marker text ("1.", "1.1.", "1.1.1.", …) for a run of multilevel
     /// list paragraphs, mirroring exactly what FreeW writes to <c>numbering.xml</c>: each level n shows the
@@ -5947,33 +5952,12 @@ public sealed class DocumentView : RichTextBox
     /// numbered in this run is shown at its start value (1) so a list that begins at, or jumps to, a deeper
     /// level still renders a sensible dotted prefix rather than zeros.
     /// </para>
-    /// Pure (no WPF), so it is unit-testable. Levels are clamped to <c>[0, <see cref="MultiLevelDepth"/>)</c>.
+    /// Pure (no WPF), so it is unit-testable. Levels are clamped to the modelled multilevel depth.
     /// </summary>
-    internal static IReadOnlyList<string> MultiLevelMarkerSequence(IEnumerable<int> levels)
-    {
-        ArgumentNullException.ThrowIfNull(levels);
-        var counters = new int[MultiLevelDepth];
-        var markers = new List<string>();
-        var builder = new System.Text.StringBuilder();
-        foreach (var rawLevel in levels)
-        {
-            var level = Math.Clamp(rawLevel, 0, MultiLevelDepth - 1);
-            counters[level]++;
-            for (var deeper = level + 1; deeper < MultiLevelDepth; deeper++)
-                counters[deeper] = 0;
-
-            builder.Clear();
-            for (var ancestor = 0; ancestor <= level; ancestor++)
-            {
-                // An ancestor never numbered yet (jumped-into deeper level) shows its start value (1),
-                // matching Word's behaviour rather than printing a "0." prefix.
-                var value = counters[ancestor] == 0 ? 1 : counters[ancestor];
-                builder.Append(value.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append('.');
-            }
-            markers.Add(builder.ToString());
-        }
-        return markers;
-    }
+    internal static IReadOnlyList<string> MultiLevelMarkerSequence(
+        IEnumerable<int> levels,
+        IReadOnlyList<ListNumberFormat>? numberFormats = null) =>
+        MultiLevelListMarkerFormatter.MarkerSequence(levels, numberFormats);
 
     /// <summary>
     /// Prepends the computed accumulated outline marker (e.g. <c>1.1.1.</c>) to a multilevel-list
