@@ -1,4 +1,5 @@
 using System.IO;
+using Free.Shared.Drawing;
 using Free.Shared.Pdf;
 using FreeP.Core.Model;
 
@@ -6,11 +7,11 @@ namespace FreeP.Core.IO;
 
 /// <summary>
 /// Exports a <see cref="Presentation"/> to a real PDF — one page per slide — through the shared, portable
-/// (no-WPF) <see cref="PortablePdfWriter"/> tier that FreeX and FreeW also use. Because FreeP's model is
-/// text-only today (a slide is a title plus text shapes; geometry/styling are deferred), this emits
-/// <em>selectable vector text</em> rather than a rasterized canvas: the slide title in bold near the top and
-/// each shape's text below it. As the slide model gains real geometry/visuals, this builder can grow richer
-/// draw ops without changing the emitter or the calling code.
+/// (no-WPF) <see cref="PortablePdfWriter"/> tier that FreeX and FreeW also use. The exporter emits
+/// selectable vector text plus shared vector geometry for slide backgrounds, basic shapes, and
+/// connector/line strokes rather than relying on a renderer-specific raster canvas. As the slide
+/// model gains more visual primitives, this builder can grow richer draw ops without changing the
+/// emitter or the calling code.
 /// </summary>
 public static class PresentationPdfExporter
 {
@@ -93,11 +94,13 @@ public static class PresentationPdfExporter
         foreach (var shape in slide.Shapes.Where(s => s.Placeholder is null))
         {
             var shapeBox = TryAppendShapeGeometry(ops, shape, slideHeightPoints);
-            var content = !string.IsNullOrEmpty(shape.Text) ? shape.Text : $"[{shape.Kind}]";
+            var hasText = !string.IsNullOrEmpty(shape.Text);
+            var content = hasText ? shape.Text : $"[{shape.Kind}]";
 
             if (shapeBox is { } box)
             {
-                AppendShapeText(ops, box, content);
+                if (hasText || !IsConnectorLike(shape))
+                    AppendShapeText(ops, box, content);
                 continue;
             }
 
@@ -123,6 +126,9 @@ public static class PresentationPdfExporter
         var x = EmuToPoints(shape.OffsetXEmu);
         var y = slideHeightPoints - EmuToPoints(shape.OffsetYEmu) - height;
 
+        if (TryAppendConnectorGeometry(ops, shape, x, y, width, height, slideHeightPoints))
+            return new ShapeBox(x, y, width, height);
+
         if (TryMapFill(shape.Fill, out var fill))
             ops.Add(new PdfFillRect(x, y, width, height, fill));
 
@@ -131,6 +137,62 @@ public static class PresentationPdfExporter
 
         return new ShapeBox(x, y, width, height);
     }
+
+    private static bool TryAppendConnectorGeometry(
+        List<PdfDrawOp> ops,
+        SlideShape shape,
+        double x,
+        double y,
+        double width,
+        double height,
+        double slideHeightPoints)
+    {
+        if (!IsConnectorLike(shape))
+            return false;
+
+        if (!TryMapOutline(shape.Outline, out var stroke, out var strokeWidth))
+            return true;
+
+        if (shape.AutoShapeKind == DrawingShapeKind.ElbowConnector
+            && shape.ElbowRoute is { Count: >= 2 } route)
+        {
+            for (var i = 1; i < route.Count; i++)
+            {
+                var start = ToPdfPoint(route[i - 1], slideHeightPoints);
+                var end = ToPdfPoint(route[i], slideHeightPoints);
+                ops.Add(new PdfLine(start.X, start.Y, end.X, end.Y, stroke, strokeWidth));
+            }
+
+            return true;
+        }
+
+        var (x1, y1, x2, y2) = GetLineEndpoints(shape, x, y, width, height);
+        ops.Add(new PdfLine(x1, y1, x2, y2, stroke, strokeWidth));
+        return true;
+    }
+
+    private static bool IsConnectorLike(SlideShape shape) =>
+        shape.Kind == SlideShapeKind.Connector
+        || shape.AutoShapeKind is DrawingShapeKind.Line
+            or DrawingShapeKind.ElbowConnector
+            or DrawingShapeKind.CurvedConnector;
+
+    private static (double X1, double Y1, double X2, double Y2) GetLineEndpoints(
+        SlideShape shape,
+        double x,
+        double y,
+        double width,
+        double height)
+    {
+        var x1 = shape.FlipH ? x + width : x;
+        var x2 = shape.FlipH ? x : x + width;
+        var y1 = shape.FlipV ? y : y + height;
+        var y2 = shape.FlipV ? y + height : y;
+        return (x1, y1, x2, y2);
+    }
+
+    private static (double X, double Y) ToPdfPoint((long X, long Y) point, double slideHeightPoints) =>
+        (EmuToPoints(point.X), slideHeightPoints - EmuToPoints(point.Y));
 
     private static void AppendShapeText(List<PdfDrawOp> ops, ShapeBox box, string content)
     {

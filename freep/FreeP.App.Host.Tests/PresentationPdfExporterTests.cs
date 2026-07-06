@@ -167,6 +167,73 @@ public class PresentationPdfExporterTests
     }
 
     [Fact]
+    public void BuildDocument_ExportsLineShapesAsPdfLinesNotRectangleOutlines()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Kind = SlideShapeKind.Connector,
+            AutoShapeKind = DrawingShapeKind.Line,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Outline = new ShapeOutline.Visible(SrgbColor.FromRgb(0xC00000), widthPt: 2.25),
+        });
+        deck.Slides.Add(slide);
+
+        var ops = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops;
+
+        ops.OfType<PdfStrokeRect>().Should().BeEmpty("PowerPoint line/connectors are strokes, not boxed shapes");
+        ops.OfType<PdfLine>().Should().ContainSingle(line =>
+            line.X1 == 72 &&
+            line.Y1 == 450 &&
+            line.X2 == 216 &&
+            line.Y2 == 378 &&
+            line.LineWidth == 2.25 &&
+            line.Color == new PdfColor(0xC0, 0x00, 0x00));
+        ops.OfType<PdfText>().Select(text => text.Text)
+            .Should().NotContain("[Connector]", "textless connector shapes should not export visible fallback labels");
+    }
+
+    [Fact]
+    public void BuildDocument_ExportsElbowConnectorRouteAsMultiplePdfLines()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Kind = SlideShapeKind.Connector,
+            AutoShapeKind = DrawingShapeKind.ElbowConnector,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Outline = new ShapeOutline.Visible(SrgbColor.Black, widthPt: 1.5),
+            ElbowRoute =
+            [
+                (DrawingMlCoordinateUnits.PointsToEmu(72), DrawingMlCoordinateUnits.PointsToEmu(90)),
+                (DrawingMlCoordinateUnits.PointsToEmu(144), DrawingMlCoordinateUnits.PointsToEmu(90)),
+                (DrawingMlCoordinateUnits.PointsToEmu(144), DrawingMlCoordinateUnits.PointsToEmu(162)),
+                (DrawingMlCoordinateUnits.PointsToEmu(216), DrawingMlCoordinateUnits.PointsToEmu(162)),
+            ],
+        });
+        deck.Slides.Add(slide);
+
+        var lines = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops.OfType<PdfLine>().ToArray();
+
+        lines.Should().HaveCount(3);
+        lines.Select(line => (line.X1, line.Y1, line.X2, line.Y2)).Should().Equal(
+            (72, 450, 144, 450),
+            (144, 450, 144, 378),
+            (144, 378, 216, 378));
+        lines.Should().OnlyContain(line => line.LineWidth == 1.5 && line.Color == PdfColor.Black);
+    }
+
+    [Fact]
     public void TitleOp_IsBold()
     {
         var doc = PresentationPdfExporter.BuildDocument(SampleDeck());
