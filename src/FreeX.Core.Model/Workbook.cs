@@ -210,6 +210,15 @@ public sealed class Workbook
     /// <summary>Maximum iterative-calculation change threshold. Null means Excel/default.</summary>
     public double? MaxCalculationChange { get; set; }
 
+    /// <summary>
+    /// Whether stored numeric values retain full internal precision (Excel default, true) or are
+    /// permanently rounded to their displayed precision (Excel's File &gt; Options &gt; Advanced
+    /// &gt; "Set precision as displayed", false). Corresponds to XLSX <c>calcPr/@fullPrecision</c>
+    /// (attribute omitted/true means full precision; <c>fullPrecision="0"</c> means precision as
+    /// displayed).
+    /// </summary>
+    public bool FullPrecision { get; set; } = true;
+
     /// <summary>Workbook-level theme definition for Excel-style theme colors, fonts, and effects.</summary>
     public WorkbookTheme Theme { get; set; } = WorkbookTheme.Office;
 
@@ -730,4 +739,43 @@ public sealed record WorksheetCustomViewState(
     uint? ActiveRow = null,
     uint? ActiveCol = null,
     uint? ViewTopRow = null,
-    uint? ViewLeftCol = null);
+    uint? ViewLeftCol = null,
+    /// <summary>
+    /// Rows hidden by the user (Sheet.HiddenRows) at capture time. Only populated/applied when the
+    /// owning <see cref="WorkbookCustomView.IncludeHiddenRowsColumnsAndFilterSettings"/> is true;
+    /// null when that option was off (nothing captured, applying the view leaves current
+    /// hidden-row state untouched).
+    /// </summary>
+    IReadOnlyList<uint>? HiddenRows = null,
+    /// <summary>Columns hidden by the user (Sheet.HiddenCols) at capture time. See <see cref="HiddenRows"/>.</summary>
+    IReadOnlyList<uint>? HiddenCols = null,
+    /// <summary>Rows hidden by an active AutoFilter (Sheet.FilterHiddenRows) at capture time. See <see cref="HiddenRows"/>.</summary>
+    IReadOnlyList<uint>? FilterHiddenRows = null,
+    /// <summary>Worksheet-level AutoFilter definition (Sheet.AutoFilter) at capture time. See <see cref="HiddenRows"/>.</summary>
+    WorksheetAutoFilterModel? AutoFilter = null,
+    /// <summary>
+    /// Print areas (Sheet.PrintAreas) at capture time. Only populated/applied when the owning
+    /// <see cref="WorkbookCustomView.IncludePrintSettings"/> is true; null when that option was off.
+    /// An empty list means "no print area configured" (print the used range) as captured.
+    /// </summary>
+    IReadOnlyList<GridRange>? PrintAreas = null,
+    /// <summary>Page orientation (Sheet.PageOrientation) at capture time. See <see cref="PrintAreas"/>.</summary>
+    WorksheetPageOrientation? PageOrientation = null,
+    /// <summary>Paper size (Sheet.PaperSize) at capture time. See <see cref="PrintAreas"/>.</summary>
+    WorksheetPaperSize? PaperSize = null,
+    /// <summary>Raw OOXML paper-size code (Sheet.PaperSizeCode) at capture time. See <see cref="PrintAreas"/>.</summary>
+    int? PaperSizeCode = null,
+    /// <summary>Page margins (Sheet.PageMargins) at capture time. See <see cref="PrintAreas"/>.</summary>
+    WorksheetPageMargins? PageMargins = null,
+    /// <summary>Header margin in inches (Sheet.HeaderMargin) at capture time. See <see cref="PrintAreas"/>.</summary>
+    double? HeaderMargin = null,
+    /// <summary>Footer margin in inches (Sheet.FooterMargin) at capture time. See <see cref="PrintAreas"/>.</summary>
+    double? FooterMargin = null,
+    /// <summary>Whether gridlines print (Sheet.PrintGridlines) at capture time. See <see cref="PrintAreas"/>.</summary>
+    bool? PrintGridlines = null,
+    /// <summary>Whether row/column headings print (Sheet.PrintHeadings) at capture time. See <see cref="PrintAreas"/>.</summary>
+    bool? PrintHeadings = null,
+    /// <summary>Print scaling (Sheet.ScaleToFit) at capture time. See <see cref="PrintAreas"/>.</summary>
+    WorksheetScaleToFit? ScaleToFit = null,
+    /// <summary>Fit-to-page flag (Sheet.FitToPage) at capture time. See <see cref="PrintAreas"/>.</summary>
+    bool? FitToPage = null);

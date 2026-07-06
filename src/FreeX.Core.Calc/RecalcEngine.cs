@@ -303,7 +303,53 @@ public sealed class RecalcEngine
             }
         }
 
+        // Excel's "Precision as displayed" option (calcPr/@fullPrecision="0") permanently rounds
+        // stored numeric values to the precision shown on screen once a workbook uses it, rather
+        // than retaining full internal (~15 significant digit) precision. Doing this faithfully
+        // requires resolving each cell's effective *displayed* decimal-place count from its number
+        // format (and column width / General-format significant-digit rules), which lives in the
+        // number-format rendering layer above Core.Calc — RecalcEngine has no such dependency and
+        // must not acquire a new cross-tier one just for this. Only apply the top-level (outermost,
+        // resolveSpillDependents == true) pass so recursive spill-dependent follow-ups do not redo
+        // the (currently minimal) rounding pass redundantly.
+        if (resolveSpillDependents && !workbook.FullPrecision)
+            ApplyPrecisionAsDisplayed(workbook, report.RecalculatedCells);
+
         return report;
+    }
+
+    /// <summary>
+    /// Honor <see cref="Workbook.FullPrecision"/> == false ("Precision as displayed") for the given
+    /// set of just-recalculated cells.
+    /// TODO(N30 follow-up, needs FreeX.Core.Presentation/number-format access which Core.Calc cannot
+    /// reference): this currently only clamps stored values to Excel's ~15 significant-digit display
+    /// ceiling, which is a no-op for ordinary double-precision results and does not yet round to each
+    /// cell's actual displayed decimal count (its number format, e.g. "0.00" -> 2 decimals). A full
+    /// fix needs to resolve each cell's effective displayed-decimal-place count (number format +
+    /// General-format significant-digit rules) and round to that instead.
+    /// </summary>
+    private static void ApplyPrecisionAsDisplayed(Workbook workbook, IReadOnlyList<CellAddress> recalculatedCells)
+    {
+        for (var i = 0; i < recalculatedCells.Count; i++)
+        {
+            var addr = recalculatedCells[i];
+            var sheet = workbook.GetSheet(addr.Sheet);
+            var cell = sheet?.GetCell(addr);
+            if (cell?.Value is NumberValue { Value: var raw } && double.IsFinite(raw))
+                cell.Value = new NumberValue(RoundToSignificantDigits(raw, 15));
+        }
+    }
+
+    /// <summary>Round <paramref name="value"/> to at most <paramref name="digits"/> significant decimal digits.</summary>
+    private static double RoundToSignificantDigits(double value, int digits)
+    {
+        if (value == 0)
+            return 0;
+
+        var scale = digits - (int)Math.Floor(Math.Log10(Math.Abs(value))) - 1;
+        // Math.Round only supports up to 15 decimal places; clamp to stay within its valid range.
+        scale = Math.Clamp(scale, -15, 15);
+        return Math.Round(value, scale, MidpointRounding.AwayFromZero);
     }
 
     /// <summary>

@@ -83,7 +83,8 @@ internal static class XlsxWorkbookMetadataWriter
         workbook.ForceFullCalculation ||
         workbook.IterativeCalculation ||
         workbook.MaxCalculationIterations is not null ||
-        workbook.MaxCalculationChange is not null;
+        workbook.MaxCalculationChange is not null ||
+        !workbook.FullPrecision;
 
     public static void SaveWorkbookProperties(Stream xlsxStream, Workbook workbook)
     {
@@ -485,7 +486,12 @@ internal static class XlsxWorkbookMetadataWriter
             root.Add(calcPr);
         }
 
-        calcPr.SetAttributeValue("calcMode", workbook.CalculationMode == WorkbookCalculationMode.Manual ? "manual" : "auto");
+        calcPr.SetAttributeValue("calcMode", workbook.CalculationMode switch
+        {
+            WorkbookCalculationMode.Manual => "manual",
+            WorkbookCalculationMode.AutomaticExceptDataTables => "autoNoTable",
+            _ => "auto"
+        });
         SetBooleanAttribute(calcPr, "fullCalcOnLoad", workbook.FullCalculationOnLoad);
         SetBooleanAttribute(calcPr, "forceFullCalc", workbook.ForceFullCalculation);
         SetBooleanAttribute(calcPr, "iterate", workbook.IterativeCalculation);
@@ -495,6 +501,10 @@ internal static class XlsxWorkbookMetadataWriter
         calcPr.SetAttributeValue(
             "iterateDelta",
             workbook.MaxCalculationChange is { } maxChange ? maxChange.ToString(CultureInfo.InvariantCulture) : null);
+        // fullPrecision defaults to true (full precision) in Excel when the attribute is absent,
+        // so — mirroring the fullCalcOnLoad pattern — only write it when the workbook deviates
+        // from that default (precision-as-displayed, fullPrecision="0").
+        calcPr.SetAttributeValue("fullPrecision", workbook.FullPrecision ? null : "0");
         XlsxWorkbookCalculationPropertyNormalizer.NormalizeElement(calcPr);
 
         return true;

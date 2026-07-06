@@ -355,7 +355,8 @@ internal static class XlsxWorkbookMetadataReader
                 XlsxXmlAttributeReader.ReadBoolAttribute(calcPr, "forceFullCalc"),
                 XlsxXmlAttributeReader.ReadBoolAttribute(calcPr, "iterate"),
                 XlsxXmlAttributeReader.ReadIntAttribute(calcPr, "iterateCount"),
-                XlsxXmlAttributeReader.ReadDoubleAttribute(calcPr, "iterateDelta"));
+                XlsxXmlAttributeReader.ReadDoubleAttribute(calcPr, "iterateDelta"),
+                XlsxXmlAttributeReader.ReadBoolAttribute(calcPr, "fullPrecision", defaultValue: true));
         }
         catch
         {
@@ -577,7 +578,8 @@ internal static class XlsxWorkbookMetadataReader
             XlsxXmlAttributeReader.ReadBoolAttribute(calcPr, "forceFullCalc"),
             XlsxXmlAttributeReader.ReadBoolAttribute(calcPr, "iterate"),
             XlsxXmlAttributeReader.ReadIntAttribute(calcPr, "iterateCount"),
-            XlsxXmlAttributeReader.ReadDoubleAttribute(calcPr, "iterateDelta"));
+            XlsxXmlAttributeReader.ReadDoubleAttribute(calcPr, "iterateDelta"),
+            XlsxXmlAttributeReader.ReadBoolAttribute(calcPr, "fullPrecision", defaultValue: true));
     }
 
     private static IReadOnlyList<XlsxWorkbookCustomView> LoadCustomViews(XDocument workbookXml)
@@ -613,9 +615,10 @@ internal sealed record WorkbookCalculationProperties(
     bool ForceFullCalculation,
     bool IterativeCalculation,
     int? MaxIterations,
-    double? MaxChange)
+    double? MaxChange,
+    bool FullPrecision)
 {
-    public static WorkbookCalculationProperties Default { get; } = new(null, false, false, false, null, null);
+    public static WorkbookCalculationProperties Default { get; } = new(null, false, false, false, null, null, true);
 }
 
 internal sealed record WorkbookViewProperties(

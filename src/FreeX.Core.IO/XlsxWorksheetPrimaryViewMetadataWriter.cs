@@ -182,9 +182,14 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
                 {
                     // Stale native selection (names an older cell than the model's current active
                     // cell): the model wins -- overwrite both activeCell and its sqref to the model
-                    // cursor so a resurrected native cursor can never linger.
+                    // cursor so a resurrected native cursor can never linger. The collapsed sqref is
+                    // now a single area, so any activeCellId (an index into a multi-area sqref list
+                    // per ECMA-376 CT_Selection) that referenced a since-discarded area is no longer
+                    // valid and must be cleared -- leaving it would point past the new single-area
+                    // sqref and require Excel to repair the file on open.
                     selection.SetAttributeValue("activeCell", activeCell);
                     selection.SetAttributeValue("sqref", activeCell);
+                    selection.SetAttributeValue("activeCellId", null);
                 }
                 // else: the native selection already names the model's active cell -- preserve it
                 // verbatim, including a multi-cell sqref range (e.g. A1:F2) that the model does not
@@ -250,12 +255,17 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
                 continue;
 
             // The active pane's cursor is owned by the model (already written by Prune). A STALE
-            // native sqref -- one whose native activeCell names a different cell than the model's
-            // current active cell -- must never overwrite it. But when the native selection names
-            // the SAME active cell as the model, its sqref is the genuine preserved selection RANGE
-            // (e.g. A1:F2) that the model does not itself track, so it must merge through. Other
-            // custom attributes (e.g. a preserved marker) always merge through.
-            if (isActivePane && attribute.Name.LocalName is "sqref" &&
+            // native sqref/activeCellId -- from a native selection whose activeCell names a
+            // different cell than the model's current active cell -- must never overwrite it:
+            // Prune already collapsed the pane's sqref to the model's single active cell (and
+            // cleared activeCellId), so re-merging a stale native activeCellId here would re-index
+            // into a multi-area sqref list that no longer exists (invalid per ECMA-376 CT_Selection).
+            // But when the native selection names the SAME active cell as the model, its sqref/
+            // activeCellId are the genuine preserved selection state (e.g. a multi-area A1:B2 D4:E5
+            // with activeCellId pointing at the active area) that the model does not itself track,
+            // so they must merge through together. Other custom attributes (e.g. a preserved marker)
+            // always merge through.
+            if (isActivePane && attribute.Name.LocalName is "sqref" or "activeCellId" &&
                 !string.Equals(nativeActiveCell, targetSelection.Attribute("activeCell")?.Value, StringComparison.Ordinal))
                 continue;
 

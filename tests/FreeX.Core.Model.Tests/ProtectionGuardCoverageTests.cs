@@ -683,6 +683,34 @@ public class ProtectionGuardCoverageTests
                 sheet.IsProtected = true;
                 return new SetTextBoxTextCommand(sheet.Id, textBox.Id, "After");
             },
+
+            // ---- Structured table calculated-column propagation (N34) ----
+            // Writes the row-shifted formula into the table's other data-body cells and persists
+            // it as the column's CalculatedColumnFormula; calls CommandGuards.RejectIfProtected(sheet)
+            // directly (Commands.cs), so it must reject a fully-protected sheet like EditCellsCommand.
+            ["PropagateCalculatedColumnCommand"] = (wb, sheet) =>
+            {
+                sheet.IsProtected = false;
+                var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2));
+                var table = new StructuredTableModel
+                {
+                    Id = 1,
+                    Name = "Table1",
+                    DisplayName = "Table1",
+                    Range = range,
+                    HeaderRowCount = 1
+                };
+                table.Columns.Add(new StructuredTableColumnModel(1, "Col1"));
+                table.Columns.Add(new StructuredTableColumnModel(2, "Col2"));
+                sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Col1"));
+                sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Col2"));
+                sheet.SetCell(new CellAddress(sheet.Id, 2, 2), Cell.FromFormula("A2*2"));
+                sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new BlankValue());
+                sheet.StructuredTables.Add(table);
+                sheet.IsProtected = true;
+                return new PropagateCalculatedColumnCommand(
+                    sheet.Id, table.Id, columnId: 2, sourceRow: 2, sourceFormulaText: "A2*2", targetRows: [3]);
+            },
         };
 
     // ---------------------------------------------------------------------------

@@ -254,6 +254,10 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
     private Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? _scopedNamedRangeSnapshot;
     private Dictionary<string, string>? _namedFormulaSnapshot;
     private Dictionary<(string Name, SheetId Sheet), string>? _scopedNamedFormulaSnapshot;
+    // N3: sheet-scoped named formulas on SURVIVING sheets whose text referenced the deleted
+    // sheet, rewritten to #REF! — distinct from _scopedNamedFormulaSnapshot above, which is the
+    // full pre-purge snapshot used to restore the deleted sheet's OWN scoped formulas on undo.
+    private Dictionary<(string Name, SheetId Sheet), string>? _survivingScopedNamedFormulaRewriteSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     // X3: CF/DV formula rewrites across surviving sheets for the deleted-sheet #REF! pass
     private List<(Guid RuleId, string? OldValue, SheetId Sheet)>? _cfFormulaDeleteSnapshot;
@@ -307,6 +311,13 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
         // Defined names whose refers-to is a formula expression are not covered by the named-range
         // pass above; rewrite their sheet-qualified references to the deleted sheet to #REF! too.
         _namedFormulaSnapshot = RewriteNamedFormulasForDeletedSheet(ctx.Workbook, deletedSheetName);
+        // N3: sheet-scoped named formulas living on SURVIVING sheets can still reference the
+        // deleted sheet in their text (e.g. Sheet1-scoped 'Foo' = '=Sheet2!A1*2' when Sheet2 is
+        // deleted) — symmetric with the named-range pass above, which already rewrites scoped
+        // named RANGES. RemoveSheet only purged the deleted sheet's OWN scoped formulas, so this
+        // must run separately over what's left.
+        _survivingScopedNamedFormulaRewriteSnapshot =
+            RewriteScopedNamedFormulasForDeletedSheet(ctx.Workbook, deletedSheetName);
 
         // X3: rewrite CF FormulaText and DV Formula1/Formula2 on all surviving sheets
         // that reference the deleted sheet, producing #REF! — mirrors RenameSheetCommand T7.
@@ -427,6 +438,7 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
             RowColumnShiftHelpers.RestoreScopedNamedRanges(ctx.Workbook, _scopedNamedRangeSnapshot);
             RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot);
             RestoreScopedNamedFormulas(ctx.Workbook, _scopedNamedFormulaSnapshot);
+            RestoreScopedNamedFormulas(ctx.Workbook, _survivingScopedNamedFormulaRewriteSnapshot);
             RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimDeleteSnapshot);
 
             // X3 restore: CF/DV formula text rewritten to #REF! must be restored
@@ -491,6 +503,37 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
 
             (snapshot ??= [])[name] = original;
             workbook.NamedFormulas[name] = rewritten;
+        }
+
+        return snapshot ?? [];
+    }
+
+    /// <summary>
+    /// N3: rewrites sheet-scoped named formulas living on surviving sheets whose text
+    /// references the just-deleted sheet, producing #REF! — symmetric with the workbook-global
+    /// pass in <see cref="RewriteNamedFormulasForDeletedSheet"/> and with the scoped named-RANGE
+    /// handling already done via <c>RowColumnShiftHelpers.RewriteAllFormulas</c>. Must run after
+    /// <c>Workbook.RemoveSheet</c> has purged the deleted sheet's own scoped formulas, since this
+    /// only walks what's left (<see cref="Workbook.ScopedNamedFormulas"/> is keyed by the OWNING
+    /// sheet, not by which sheets the formula text references).
+    /// </summary>
+    private static Dictionary<(string Name, SheetId Sheet), string> RewriteScopedNamedFormulasForDeletedSheet(
+        Workbook workbook, string deletedSheetName)
+    {
+        Dictionary<(string Name, SheetId Sheet), string>? snapshot = null;
+        // DeleteSheetOp only matches sheet-qualified references, so the host sheet name passed to
+        // the rewriter is irrelevant to whether a match is found — but pass the scope-owning
+        // sheet's own name for consistency with RowColumnShiftHelpers.RewriteNamedFormulas.
+        foreach (var ((name, sheetId), original) in workbook.ScopedNamedFormulas.ToList())
+        {
+            var sheet = workbook.Sheets.FirstOrDefault(s => s.Id == sheetId);
+            var hostSheetName = sheet?.Name ?? string.Empty;
+            var rewritten = FormulaRewriter.Rewrite(original, new DeleteSheetOp(deletedSheetName), hostSheetName);
+            if (rewritten is null || rewritten == original)
+                continue; // null = no change or unparseable; leave the original untouched
+
+            (snapshot ??= [])[(name, sheetId)] = original;
+            workbook.DefineNamedFormula(name, rewritten, sheetId);
         }
 
         return snapshot ?? [];

@@ -528,6 +528,8 @@ public partial class MainWindow
             {
                 _ when string.Equals(item.Header?.ToString(), UiText.Get("MainWindow_Header_Manual"), StringComparison.Ordinal) =>
                     _workbook.CalculationMode == WorkbookCalculationMode.Manual,
+                _ when string.Equals(item.Header?.ToString(), UiText.Get("MainWindow_Header_AutomaticExceptDataTables"), StringComparison.Ordinal) =>
+                    _workbook.CalculationMode == WorkbookCalculationMode.AutomaticExceptDataTables,
                 _ => _workbook.CalculationMode == WorkbookCalculationMode.Automatic
             };
         }
@@ -541,8 +543,13 @@ public partial class MainWindow
         UpdateViewport();
     }
 
-    private void CalcAutoExceptDataTablesMenuItem_Click(object sender, RoutedEventArgs e) =>
-        CalcAutoMenuItem_Click(sender, e);
+    private void CalcAutoExceptDataTablesMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryExecuteCommand(new SetCalculationModeCommand(WorkbookCalculationMode.AutomaticExceptDataTables), "Calculation Options"))
+            return;
+        RecalculateWorkbook();
+        UpdateViewport();
+    }
 
     private void CalcManualMenuItem_Click(object sender, RoutedEventArgs e)
     {

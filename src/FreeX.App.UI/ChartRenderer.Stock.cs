@@ -71,6 +71,8 @@ public static partial class ChartRenderer
         }
 
         model.Series.Add(series);
+        AddHighLowLinesIfRequested(model, chart, theme, series.Items);
+        AddDropLinesIfRequested(model, chart, theme, series.Items);
         return model;
     }
 
@@ -95,6 +97,89 @@ public static partial class ChartRenderer
             StrokeThickness = 1.5,
             Color = OxyColors.Black
         };
+    }
+
+    /// <summary>
+    /// Draws Excel's stock/line-chart "High-Low Lines" (<c>&lt;c:hiLowLines&gt;</c>): a vertical
+    /// connector between the high and low value at each category, styled from
+    /// <see cref="ChartModel.HighLowLineColor"/>/<see cref="ChartModel.HighLowLineThemeColor"/>/
+    /// <see cref="ChartModel.HighLowLineThickness"/>/<see cref="ChartModel.HighLowLineDashStyle"/>.
+    /// Only drawn when <see cref="ChartModel.ShowHighLowLines"/> is set — the OHLC/HLC price series
+    /// itself already draws its own high-low wick unconditionally, so this is an independent overlay
+    /// (mirroring the source chart XML, where <c>hiLowLines</c> is a sibling element to the price
+    /// series rather than part of it) drawn as one disjoint segment per category in its own
+    /// <see cref="LineSeries"/>, matching the <c>AddWhisker</c>/error-bar idiom used elsewhere in this
+    /// renderer.
+    /// </summary>
+    private static void AddHighLowLinesIfRequested(
+        PlotModel model,
+        ChartModel chart,
+        WorkbookTheme theme,
+        IReadOnlyList<HighLowItem> items)
+    {
+        if (!chart.ShowHighLowLines || items.Count == 0)
+            return;
+
+        var color = chart.HighLowLineThemeColor?.Resolve(theme) ?? chart.HighLowLineColor;
+        var lines = new LineSeries
+        {
+            Color = ToOxyColor(color) ?? OxyColors.Black,
+            StrokeThickness = double.IsFinite(chart.HighLowLineThickness)
+                ? Math.Clamp(chart.HighLowLineThickness, 0, 20)
+                : 1,
+            LineStyle = ToOxyLineStyle(chart.HighLowLineDashStyle),
+            MarkerType = MarkerType.None
+        };
+
+        foreach (var item in items)
+        {
+            if (lines.Points.Count > 0)
+                lines.Points.Add(DataPoint.Undefined);
+            lines.Points.Add(new DataPoint(item.X, item.High));
+            lines.Points.Add(new DataPoint(item.X, item.Low));
+        }
+
+        model.Series.Add(lines);
+    }
+
+    /// <summary>
+    /// Draws Excel's stock/line-chart "Drop Lines" (<c>&lt;c:dropLines&gt;</c>): a vertical connector
+    /// from each plotted data point down to the category axis, styled from
+    /// <see cref="ChartModel.DropLineColor"/>/<see cref="ChartModel.DropLineThemeColor"/>/
+    /// <see cref="ChartModel.DropLineThickness"/>/<see cref="ChartModel.DropLineDashStyle"/>. Only
+    /// drawn when <see cref="ChartModel.ShowDropLines"/> is set. For the stock chart the anchor value
+    /// is the close price at each category; the connector drops to the zero/category-axis line
+    /// (matching the RectangleBarItem/AreaSeries baseline convention used elsewhere in this renderer).
+    /// </summary>
+    private static void AddDropLinesIfRequested(
+        PlotModel model,
+        ChartModel chart,
+        WorkbookTheme theme,
+        IReadOnlyList<HighLowItem> items)
+    {
+        if (!chart.ShowDropLines || items.Count == 0)
+            return;
+
+        var color = chart.DropLineThemeColor?.Resolve(theme) ?? chart.DropLineColor;
+        var lines = new LineSeries
+        {
+            Color = ToOxyColor(color) ?? OxyColors.Black,
+            StrokeThickness = double.IsFinite(chart.DropLineThickness)
+                ? Math.Clamp(chart.DropLineThickness, 0, 20)
+                : 1,
+            LineStyle = ToOxyLineStyle(chart.DropLineDashStyle),
+            MarkerType = MarkerType.None
+        };
+
+        foreach (var item in items)
+        {
+            if (lines.Points.Count > 0)
+                lines.Points.Add(DataPoint.Undefined);
+            lines.Points.Add(new DataPoint(item.X, Math.Min(0, item.Close)));
+            lines.Points.Add(new DataPoint(item.X, item.Close));
+        }
+
+        model.Series.Add(lines);
     }
 
     private static double GetUpDownBarCandleWidth(ChartModel chart) =>

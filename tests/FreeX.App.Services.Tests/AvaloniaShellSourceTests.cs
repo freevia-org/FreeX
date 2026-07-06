@@ -1493,7 +1493,13 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("SourceRect = CreateDrawingImageSourceRect(crop)");
         source.Should().Contain("private static Control CreateDrawingCellRangeSnapshotVisual(");
         source.Should().Contain("renderPlan.PictureGrid is not { } pictureGrid");
-        source.Should().Contain("var cellLookup = pictureGrid.Cells");
+        // Round-8 finding N52: PictureModel.Cells has no uniqueness constraint on (RowOffset,
+        // ColumnOffset), so a straight .ToDictionary(...) throws on adversarial/hand-edited .fxl
+        // files with duplicate offsets. The render was reshaped into a dedup-safe manual last-wins
+        // loop (still keyed by the same tuple), so pin that shape instead of the old ToDictionary call.
+        source.Should().Contain("var cellLookup = new Dictionary<(uint RowOffset, uint ColumnOffset), PictureCellSnapshot>();");
+        source.Should().Contain("foreach (var cell in pictureGrid.Cells)");
+        source.Should().Contain("cellLookup[(cell.RowOffset, cell.ColumnOffset)] = cell;");
         source.Should().Contain("Source = bitmap");
         source.Should().Contain("private static Control CreateDrawingTextBoxVisual(");
         source.Should().Contain("drawingObject.Text");

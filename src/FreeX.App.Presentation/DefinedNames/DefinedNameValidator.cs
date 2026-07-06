@@ -47,7 +47,8 @@ public readonly record struct DefinedNameValidationResult(DefinedNameError Error
 
 /// <summary>
 /// Portable validator for defined-name (named-range) text. It mirrors the rules the desktop hosts apply
-/// through the Core workbook model: the first character must be a letter, underscore, or backslash;
+/// through the Core workbook model: the first character must be a letter, underscore, or backslash
+/// (backslash is allowed because Excel uses it to start macro/XLM-sheet defined names);
 /// subsequent characters must be letters, digits, periods, or underscores (so spaces are rejected);
 /// the name may not look like an A1 or R1C1 cell reference; the single-letter macro tokens R and C are
 /// reserved; the length may not exceed 255; and, within a scope, names are unique case-insensitively.

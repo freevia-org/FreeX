@@ -269,6 +269,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         workbook.IterativeCalculation = calculationProperties.IterativeCalculation;
         workbook.MaxCalculationIterations = calculationProperties.MaxIterations;
         workbook.MaxCalculationChange = calculationProperties.MaxChange;
+        workbook.FullPrecision = calculationProperties.FullPrecision;
         foreach (var (numberFormatId, formatCode) in numberFormatCatalog)
             workbook.NumberFormatCatalog[numberFormatId] = formatCode;
         foreach (var (index, color) in indexedColors.Colors)

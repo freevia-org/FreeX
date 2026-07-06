@@ -2,6 +2,20 @@ using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
 
+file static class ProtectionCommandPasswordHashing
+{
+    /// <summary>
+    /// Hashes a freshly-typed plaintext password (as supplied to Protect Sheet/Workbook) before it
+    /// is stored on <see cref="Sheet.ProtectionPassword"/>/<see cref="Workbook.StructureProtectionPassword"/>,
+    /// so those properties always hold a verifiable hash rather than cleartext -- see
+    /// <see cref="ProtectionPasswordHelper.ToVerifiedLegacyPasswordHash"/>.
+    /// </summary>
+    public static string? HashTypedPassword(string? typedPassword) =>
+        string.IsNullOrEmpty(typedPassword)
+            ? null
+            : ProtectionPasswordHelper.ToVerifiedLegacyPasswordHash(typedPassword);
+}
+
 /// <summary>Protect a worksheet with undo support.</summary>
 public sealed class ProtectSheetCommand : IWorkbookCommand
 {
@@ -39,7 +53,7 @@ public sealed class ProtectSheetCommand : IWorkbookCommand
         _previousPassword = sheet.ProtectionPassword;
         _previousPermissions = sheet.ProtectionPermissions.ToList();
         sheet.IsProtected = true;
-        sheet.ProtectionPassword = string.IsNullOrEmpty(_password) ? null : _password;
+        sheet.ProtectionPassword = ProtectionCommandPasswordHashing.HashTypedPassword(_password);
         sheet.ProtectionPermissions.Clear();
         foreach (var permission in _permissions.Where(Enum.IsDefined).Distinct())
             sheet.ProtectionPermissions.Add(permission);
@@ -228,7 +242,7 @@ public sealed class ProtectWorkbookCommand : IWorkbookCommand
         _previousProtected = ctx.Workbook.IsStructureProtected;
         _previousPassword = ctx.Workbook.StructureProtectionPassword;
         ctx.Workbook.IsStructureProtected = true;
-        ctx.Workbook.StructureProtectionPassword = _password;
+        ctx.Workbook.StructureProtectionPassword = ProtectionCommandPasswordHashing.HashTypedPassword(_password);
         return new CommandOutcome(true);
     }
 

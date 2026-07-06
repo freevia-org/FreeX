@@ -1021,12 +1021,17 @@ public sealed partial class ViewportService : IViewportService
         if (string.IsNullOrEmpty(note))
             return false;
 
-        var expectedMirror = new StringBuilder();
-        AppendCommentLine(expectedMirror, threadedComment.Author, threadedComment.Text);
+        // Excel's legacy-note mirror is "{Author}:\n{RootText}" -- colon followed by a
+        // NEWLINE, not the colon-space used by FormatThreadedComment's user-facing display.
+        // Build the expected mirror independently so this comparison matches what Excel
+        // actually writes into comments1.xml/VML for a threaded comment's root text.
+        var expectedMirror = string.IsNullOrWhiteSpace(threadedComment.Author)
+            ? threadedComment.Text
+            : $"{threadedComment.Author.Trim()}:\n{threadedComment.Text}";
 
         return string.Equals(
             NormalizeLineEndings(note),
-            NormalizeLineEndings(expectedMirror.ToString()),
+            NormalizeLineEndings(expectedMirror),
             StringComparison.Ordinal);
     }
 

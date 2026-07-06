@@ -64,10 +64,16 @@ public static class WorkbookPdfContentBuilder
         PortablePdfExportPlan exportPlan,
         PortablePdfExportPageRequest request)
     {
-        var sheet = workbook.GetSheetAt(request.SheetIndex);
         var contentPlan = PortablePdfPageContentPlanner.CreatePlan(workbook, request);
         if (!contentPlan.IsReady)
             throw new InvalidOperationException(contentPlan.StatusText);
+
+        // Resolve the sheet that actually owns this page's print range rather than indexing by
+        // request.SheetIndex -- SheetIndex is the position of the print AREA within the export
+        // plan's flattened SheetPlans list, which is not the same as the sheet's index in the
+        // workbook once any earlier sheet has more than one configured print area (see N45/N46).
+        var sheet = workbook.GetSheet(request.PrintRange.Start.Sheet)
+            ?? workbook.GetSheetAt(request.SheetIndex);
 
         var (pageW, pageH, mL, mR, mT, mB, headerBandPt, footerBandPt) =
             SheetPdfPageSetupResolver.ComputePdfGeometry(sheet);
@@ -202,8 +208,14 @@ public static class WorkbookPdfContentBuilder
         }
 
         // ── Header band ────────────────────────────────────────────────────────
-        var (header, footer) = ResolveHeaderFooterForPage(sheet, request.SheetPageNumber);
-        var pageNumber = request.SheetPageNumber;
+        // N45/N46: page.SheetPageNumber is always 1-based per print area (PrintPageGridPlanner
+        // numbers every area's pages 1..N independently), so it neither honors sheet.FirstPageNumber
+        // nor continues across a sheet's multiple print areas. Resolve the printed page number the
+        // same way WorksheetPrintRenderPlanner.TryBuild does for WPF: a single counter, seeded from
+        // FirstPageNumber, running across every page that belongs to this sheet (all its print areas,
+        // in export order).
+        var pageNumber = ResolveEffectiveSheetPageNumber(exportPlan, request, sheet);
+        var (header, footer) = ResolveHeaderFooterForPage(sheet, pageNumber);
         var totalPages = exportPlan.TotalPageCount;
 
         // Header text: rendered just below the header margin from the top of the page.
@@ -602,6 +614,37 @@ public static class WorkbookPdfContentBuilder
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Computes the printed page number for <paramref name="request"/> honoring
+    /// <see cref="Sheet.FirstPageNumber"/> and continuing sequentially across every print area that
+    /// belongs to the same sheet, matching <c>WorksheetPrintRenderPlanner.TryBuild</c>'s single
+    /// running counter (seeded from <c>sheet.FirstPageNumber ?? 1</c>) across areas -- unlike
+    /// <see cref="PortablePdfExportPageRequest.SheetPageNumber"/>, which <see cref="PrintPageGridPlanner"/>
+    /// always numbers 1..N independently per print area.
+    /// </summary>
+    private static int ResolveEffectiveSheetPageNumber(
+        PortablePdfExportPlan exportPlan,
+        PortablePdfExportPageRequest request,
+        Sheet sheet)
+    {
+        var firstPageNumber = sheet.FirstPageNumber ?? 1;
+        var offset = 0;
+        foreach (var candidate in exportPlan.PageRequests)
+        {
+            if (candidate.PrintRange.Start.Sheet != sheet.Id)
+                continue;
+
+            if (candidate.ExportPageNumber == request.ExportPageNumber)
+                return firstPageNumber + offset;
+
+            offset++;
+        }
+
+        // Should not happen (request always comes from exportPlan.PageRequests), but fall back to
+        // the area-local numbering rather than throwing.
+        return firstPageNumber + request.SheetPageNumber - 1;
     }
 
     private static (WorksheetHeaderFooter Header, WorksheetHeaderFooter Footer)

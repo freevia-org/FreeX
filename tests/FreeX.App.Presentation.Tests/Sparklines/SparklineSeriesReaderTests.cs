@@ -28,10 +28,14 @@ public sealed class SparklineSeriesReaderTests
         var values = SparklineSeriesReader.BuildValues(sheet);
 
         values.Should().ContainKey(sparklineId);
-        values[sparklineId].Should().Equal(
-            12.5,
-            DateTimeValue.FromDateTime(new DateTime(2026, 5, 19)).Value,
-            1);
+        // Round-8 finding N5: text cells are treated as blank, and the default DisplayEmptyCellsAs
+        // (Gap) keeps the blank's position in the series as NaN so the layout engine breaks the
+        // line there, matching Excel, instead of silently dropping the position.
+        values[sparklineId].Should().HaveCount(4);
+        values[sparklineId][0].Should().Be(12.5);
+        values[sparklineId][1].Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 19)).Value);
+        values[sparklineId][2].Should().Be(1);
+        double.IsNaN(values[sparklineId][3]).Should().BeTrue("the text cell is treated as blank and Gap keeps its position as NaN");
     }
 
     [Fact]

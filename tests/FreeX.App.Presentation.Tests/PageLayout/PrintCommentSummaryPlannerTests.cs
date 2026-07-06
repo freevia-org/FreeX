@@ -19,7 +19,7 @@ public sealed class PrintCommentSummaryPlannerTests
         var comments = new Dictionary<CellAddress, string>
         {
             [a3] = "Later note",
-            [b2] = "Plain note wins"
+            [b2] = "Plain note and thread"
         };
         var threadedComments = new Dictionary<CellAddress, ThreadedComment>
         {
@@ -32,7 +32,7 @@ public sealed class PrintCommentSummaryPlannerTests
         entries.Select(entry => entry.Address).Should().Equal(a1, b2, a3);
         entries.Select(entry => entry.Text).Should().Equal(
             "Quinn: Review total",
-            "Plain note wins",
+            "Note: Plain note and thread" + Environment.NewLine + "FreeX: Thread duplicate",
             "Later note");
     }
 

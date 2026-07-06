@@ -172,6 +172,7 @@ public static partial class ChartRenderer
             }
 
             var stackedColumnModel = BuildStackedColumnModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, chart.Type == ChartType.PercentStackedColumn, theme, pointDataLabelFormats);
+            AddStackedSeriesLines(stackedColumnModel, chart, theme, isBar: false);
             ApplyAxisBounds(stackedColumnModel, chart, theme);
             AddChartDataTableAnnotations(stackedColumnModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
             return stackedColumnModel;
@@ -187,6 +188,7 @@ public static partial class ChartRenderer
             }
 
             var stackedBarModel = BuildStackedBarModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, chart.Type == ChartType.PercentStackedBar, theme, pointDataLabelFormats);
+            AddStackedSeriesLines(stackedBarModel, chart, theme, isBar: true);
             ApplyAxisBounds(stackedBarModel, chart, theme);
             AddChartDataTableAnnotations(stackedBarModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
             return stackedBarModel;
@@ -328,7 +330,7 @@ public static partial class ChartRenderer
                 ApplyNativeDataLabelStyle(series, chart, theme);
                 var trendPoints = firstSeriesPoints is null ? new List<DataPoint>() : null;
                 var colHalfWidth = ColumnBarHalfWidth(chart);
-                var (clusterLeft, clusterRight) = ClusteredBarOffsets(colHalfWidth, clusteredColumnOrdinal, clusteredColumnCount, chart.BarOverlap ?? 0);
+                var (clusterLeft, clusterRight) = ClusteredBarOffsets(colHalfWidth, clusteredColumnOrdinal, clusteredColumnCount, EffectiveBarOverlap(chart));
                 clusteredColumnOrdinal++;
                 var barCategoryValues = new List<double?>();
                 var i = 0;
@@ -563,6 +565,29 @@ public static partial class ChartRenderer
 
         return true;
     }
+
+    /// <summary>
+    /// Resolves the effective Series Overlap percentage for a clustered column/bar chart,
+    /// mirroring Excel's own native default: when the chart XML has no explicit
+    /// <c>&lt;c:overlap&gt;</c> (<see cref="ChartModel.BarOverlap"/> is null), real Excel still
+    /// draws clustered 2-D bar/column charts with overlap=-27 (a small gap between bars in the
+    /// same cluster) -- see <c>XlsxChartPartReader.Bar.cs</c>'s NormalizeExcelNativeDefaultBarOverlap,
+    /// which maps a written -27 back to null on read so a default chart round-trips cleanly.
+    /// Falling back to a literal 0 here (edge-to-edge bars) would silently diverge from Excel's
+    /// rendering for the overwhelming majority of real-world clustered charts, and from the
+    /// equivalent default applied by the shared Avalonia ChartLayoutEngine, so the null case must
+    /// resolve to -27 for the same chart-type family the writer/reader normalize, and to 0 for
+    /// 3-D bar/column (which Excel does not apply the -27 default to).
+    /// </summary>
+    private static int EffectiveBarOverlap(ChartModel chart) =>
+        chart.BarOverlap ?? (chart.Type is ChartType.Column
+            or ChartType.Bar
+            or ChartType.StackedColumn
+            or ChartType.PercentStackedColumn
+            or ChartType.StackedBar
+            or ChartType.PercentStackedBar
+                ? -27
+                : 0);
 
     /// <summary>
     /// Renders a Column or Bar chart entirely from <see cref="ChartModel.EmbeddedSeriesData"/>,

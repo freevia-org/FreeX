@@ -364,6 +364,46 @@ public sealed class ConvertStructuredTableToRangeCommand : IWorkbookCommand
 
 public static class StructuredTableDesignCommandHelpers
 {
+    /// <summary>
+    /// N33: detects the Excel "auto-expand a Table" gesture — typing a value into the row directly
+    /// below the table's last row (within its column span) or the column directly to the right of the
+    /// table's last column (within its row span) — and returns the grown range the table should be
+    /// resized to via <see cref="ResizeStructuredTableCommand"/>. Returns null when
+    /// <paramref name="editedAddress"/> is not an auto-expand gesture for <paramref name="table"/>
+    /// (e.g. it is inside the existing range, diagonal to a corner, or more than one row/column away).
+    /// Mirrors Excel: a table never auto-expands into a cell already covered by another table.
+    /// </summary>
+    public static GridRange? TryGetAutoExpandRange(Sheet sheet, StructuredTableModel table, CellAddress editedAddress)
+    {
+        if (editedAddress.Sheet != table.Range.Start.Sheet)
+            return null;
+
+        var range = table.Range;
+
+        // One row below the table's current last row, still within its column span: grow downward.
+        var isRowExpand = editedAddress.Row == range.End.Row + 1 &&
+            editedAddress.Col >= range.Start.Col && editedAddress.Col <= range.End.Col;
+
+        // One column to the right of the table's current last column, still within its row span:
+        // grow rightward. Excel only extends into the header/data rows, never past the totals row,
+        // so restrict to the existing row span (which already excludes any additional rows below).
+        var isColumnExpand = editedAddress.Col == range.End.Col + 1 &&
+            editedAddress.Row >= range.Start.Row && editedAddress.Row <= range.End.Row;
+
+        if (!isRowExpand && !isColumnExpand)
+            return null;
+
+        var candidate = isRowExpand
+            ? new GridRange(range.Start, new CellAddress(range.Start.Sheet, editedAddress.Row, range.End.Col))
+            : new GridRange(range.Start, new CellAddress(range.Start.Sheet, range.End.Row, editedAddress.Col));
+
+        // Never grow into a cell another table already occupies.
+        if (sheet.StructuredTables.Any(other => other.Id != table.Id && other.Range.Overlaps(candidate)))
+            return null;
+
+        return candidate;
+    }
+
     public static string? ValidateTableName(Workbook workbook, string? name, SheetId? exceptSheetId = null, int? exceptTableId = null)
     {
         var normalizedName = name?.Trim() ?? string.Empty;

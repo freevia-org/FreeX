@@ -54,12 +54,13 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        var validation = SparklinePlanner.ValidateInsert(
+        // The Location field accepts either a single cell (one sparkline) or a multi-row/column range
+        // that expands into a sparkline group, matching Excel's "Insert Sparklines" dialog.
+        var validation = SparklinePlanner.ValidateInsertGroup(
             dialog.Result.DataRangeText,
             dialog.Result.LocationText,
             _currentSheetId,
-            out var dataRange,
-            out var location);
+            out var members);
         if (validation == SparklineInputValidation.InvalidDataRange)
         {
             ShowOwnedMessage(
@@ -70,7 +71,7 @@ public partial class MainWindow
             return;
         }
 
-        if (validation == SparklineInputValidation.InvalidLocation)
+        if (validation == SparklineInputValidation.InvalidLocation || members.Count == 0)
         {
             ShowOwnedMessage(
                 UiText.Get("MainWindowMessage_InsertSparklineInvalidLocation"),
@@ -81,15 +82,32 @@ public partial class MainWindow
         }
 
         var kind = dialog.Result.Kind;
+        var firstLocation = members[0].Location;
 
-        var fallbackLocationRange = new GridRange(location, location);
+        var fallbackLocationRange = new GridRange(firstLocation, firstLocation);
         var useDialogLocationForInitialInsert = true;
         IWorkbookCommand CreateCommand()
         {
-            var currentRange = useDialogLocationForInitialInsert
-                ? fallbackLocationRange
-                : SheetGrid.SelectedRange ?? fallbackLocationRange;
-            return new AddSparklineCommand(_currentSheetId, dataRange, currentRange.Start, kind);
+            // Every member of the group must share one nonzero GroupId so the group survives an
+            // XLSX round-trip as a single <x14:sparklineGroup>; a lone member is simplest left
+            // ungrouped (GroupId 0), matching an independently-inserted sparkline.
+            if (members.Count == 1)
+            {
+                var currentRange = useDialogLocationForInitialInsert
+                    ? fallbackLocationRange
+                    : SheetGrid.SelectedRange ?? fallbackLocationRange;
+                return new AddSparklineCommand(_currentSheetId, members[0].DataRange, currentRange.Start, kind);
+            }
+
+            var sheet = _workbook.GetSheet(_currentSheetId);
+            if (sheet is null)
+                return new AddSparklineCommand(_currentSheetId, members[0].DataRange, members[0].Location, kind);
+            var groupId = SparklineGroupIdAllocator.NextGroupId(sheet.Sparklines);
+            var commands = members
+                .Select(member => (IWorkbookCommand)new AddSparklineCommand(
+                    _currentSheetId, member.DataRange, member.Location, kind, groupId))
+                .ToList();
+            return new CompositeWorkbookCommand("Insert Sparkline", commands);
         }
 
         var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
@@ -104,8 +122,8 @@ public partial class MainWindow
         _repeatPostAction = null;
         InvalidateNavigationCaches();
 
-        SetActiveCell(location);
-        EnsureCellVisible(location);
+        SetActiveCell(firstLocation);
+        EnsureCellVisible(firstLocation);
         UpdateViewport();
     }
 

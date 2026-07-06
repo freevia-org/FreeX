@@ -4,6 +4,13 @@ namespace FreeX.Core.IO;
 
 public sealed partial class NativeJsonAdapter
 {
+    // N13 (partial — see notes on ToWorksheetCustomViewState/ToCustomViewSheetDto below): the
+    // hidden-rows/cols/filter and print-setting fields WorksheetCustomViewState gained in wave 1
+    // (MODEL-A, Workbook.cs) are NOT yet round-tripped through native .fxl JSON. CustomViewSheetDto
+    // (private class, declared in NativeJsonAdapter.Dto.cs — out of scope for this change) has no
+    // matching properties, so there is nowhere to read/write them from in this file without editing
+    // that DTO. The XLSX side (XlsxCustomViewMapper.cs) and the in-memory planner
+    // (CustomViewStatePlanner.cs) are both fully wired; only this native-JSON leg is outstanding.
     private static WorksheetCustomViewState ToWorksheetCustomViewState(CustomViewSheetDto sheetDto)
     {
         var frozenRows = NativeJsonValueSanitizer.ValidFrozenRowsOrZero(sheetDto.FrozenRows);

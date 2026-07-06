@@ -21,6 +21,15 @@ public static class CustomViewStatePlanner
     public static int? SanitizeActiveSheetIndex(Workbook workbook, int? index) =>
         index is >= 0 && index < workbook.Sheets.Count ? index.Value : null;
 
+    // N13: this only ever captures the base pane/zoom/gridline fields — it deliberately leaves the
+    // hidden-rows/cols/filter and print-setting fields null (i.e. "not captured"). Those fields are
+    // gated by the owning WorkbookCustomView's IncludeHiddenRowsColumnsAndFilterSettings /
+    // IncludePrintSettings flags, which live above the per-sheet snapshot this method produces (see
+    // FreeX.Core.Commands.CustomViewCommands.AugmentCapturedState, N14): that gating relies on this
+    // method's result starting out null in those fields for the "flag off" branch to mean anything,
+    // so populating them here unconditionally would silently defeat the flags. ApplyState below
+    // still knows how to restore them (from a state a caller populated some other way), so the
+    // capture/apply pair is complete even though this method's own capture is base-fields-only.
     public static WorksheetCustomViewState CaptureSheetState(Sheet sheet) =>
         SanitizePaneState(new WorksheetCustomViewState(
             sheet.Name,
@@ -80,6 +89,53 @@ public static class CustomViewStatePlanner
             sheet.ViewTopRow = viewTopRow;
         if (state.ViewLeftCol is { } viewLeftCol)
             sheet.ViewLeftCol = viewLeftCol;
+
+        // N13: hidden-rows/cols/filter and print-setting fields. Null means "not captured" (the
+        // owning WorkbookCustomView's IncludeHiddenRowsColumnsAndFilterSettings / IncludePrintSettings
+        // flag was off, or the state came from an older snapshot that predates these fields) —
+        // matching Excel, leave the sheet's current state for that facet untouched in that case.
+        if (state.HiddenRows is { } hiddenRows)
+        {
+            sheet.HiddenRows.Clear();
+            foreach (var row in hiddenRows)
+                sheet.HiddenRows.Add(row);
+        }
+        if (state.HiddenCols is { } hiddenCols)
+        {
+            sheet.HiddenCols.Clear();
+            foreach (var col in hiddenCols)
+                sheet.HiddenCols.Add(col);
+        }
+        if (state.FilterHiddenRows is { } filterHiddenRows)
+        {
+            sheet.FilterHiddenRows.Clear();
+            foreach (var row in filterHiddenRows)
+                sheet.FilterHiddenRows.Add(row);
+        }
+        if (state.AutoFilter is not null)
+            sheet.AutoFilter = state.AutoFilter;
+        if (state.PrintAreas is { } printAreas)
+            sheet.SetPrintAreas(printAreas);
+        if (state.PageOrientation is { } pageOrientation)
+            sheet.PageOrientation = pageOrientation;
+        if (state.PaperSize is { } paperSize)
+            sheet.PaperSize = paperSize;
+        if (state.PaperSizeCode is { } paperSizeCode)
+            sheet.PaperSizeCode = paperSizeCode;
+        if (state.PageMargins is { } pageMargins)
+            sheet.PageMargins = pageMargins;
+        if (state.HeaderMargin is { } headerMargin)
+            sheet.HeaderMargin = headerMargin;
+        if (state.FooterMargin is { } footerMargin)
+            sheet.FooterMargin = footerMargin;
+        if (state.PrintGridlines is { } printGridlines)
+            sheet.PrintGridlines = printGridlines;
+        if (state.PrintHeadings is { } printHeadings)
+            sheet.PrintHeadings = printHeadings;
+        if (state.ScaleToFit is { } scaleToFit)
+            sheet.ScaleToFit = scaleToFit;
+        if (state.FitToPage is { } fitToPage)
+            sheet.FitToPage = fitToPage;
     }
 
     private static uint? SanitizeRow(uint? row) =>

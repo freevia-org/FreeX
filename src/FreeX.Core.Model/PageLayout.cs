@@ -200,10 +200,14 @@ public static class WorksheetPageLayout
             .Select((column, index) => (column, index))
             .ToDictionary(item => item.column, item => item.index);
 
-        var mergedComments = comments
-            .Concat(threadedComments
-                .Where(pair => !comments.ContainsKey(pair.Key))
-                .Select(pair => new KeyValuePair<CellAddress, string>(pair.Key, pair.Value.Text)));
+        // Excel always writes a legacy <comment> compatibility placeholder alongside a modern
+        // threaded comment at the same cell (for older-client fallback), so both dictionaries can
+        // have an entry for the same address. The threaded comment is the real, currently-authored
+        // content (author, replies, resolution) and must win; the legacy dictionary only fills in
+        // addresses that have a plain (non-threaded) note and no threaded comment at all.
+        var mergedComments = threadedComments
+            .Select(pair => new KeyValuePair<CellAddress, string>(pair.Key, pair.Value.Text))
+            .Concat(comments.Where(pair => !threadedComments.ContainsKey(pair.Key)));
 
         return mergedComments
             .Where(pair => rowIndexes.ContainsKey(pair.Key.Row) && columnIndexes.ContainsKey(pair.Key.Col))

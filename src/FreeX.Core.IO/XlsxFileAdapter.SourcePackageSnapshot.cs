@@ -1043,7 +1043,7 @@ public sealed partial class XlsxFileAdapter
                 stream.Position = Count;
         }
 
-        public void RestoreWorkbookDefinedNames(Stream stream)
+        public void RestoreWorkbookDefinedNames(Stream stream, Workbook workbook)
         {
             var sourceWorkbookDefinedNames = ReadWorkbookDefinedNames();
             if (sourceWorkbookDefinedNames is null)
@@ -1053,7 +1053,7 @@ public sealed partial class XlsxFileAdapter
                 stream.Position = 0;
 
             using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
-            RestorePatchWorkbookDefinedNames(archive, sourceWorkbookDefinedNames);
+            RestorePatchWorkbookDefinedNames(archive, sourceWorkbookDefinedNames, XlsxNamedRangeMapper.GetLiveDefinedNameKeys(workbook));
         }
 
         public bool TrySavePatchedCellValues(
@@ -1183,7 +1183,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchWorkbookCalculationProperties(archive);
                 NormalizePatchWorkbookExternalReferences(archive);
                 NormalizePatchWorkbookDefinedNames(archive);
-                RestorePatchWorkbookDefinedNames(archive, sourceWorkbookDefinedNames);
+                RestorePatchWorkbookDefinedNames(archive, sourceWorkbookDefinedNames, XlsxNamedRangeMapper.GetLiveDefinedNameKeys(workbook));
                 NormalizePatchWorkbookOleSize(archive);
                 NormalizePatchWorkbookPivotCaches(archive);
                 NormalizePatchPivotTableDefinitions(archive);
@@ -1635,7 +1635,7 @@ public sealed partial class XlsxFileAdapter
                 : copy;
         }
 
-        private static void RestorePatchWorkbookDefinedNames(ZipArchive archive, XElement? sourceDefinedNames)
+        private static void RestorePatchWorkbookDefinedNames(ZipArchive archive, XElement? sourceDefinedNames, HashSet<string> liveModelDefinedNameKeys)
         {
             if (sourceDefinedNames is null)
                 return;
@@ -1687,6 +1687,17 @@ public sealed partial class XlsxFileAdapter
 
                     continue;
                 }
+
+                // This defined name exists in the pristine pre-edit source snapshot but was dropped
+                // by the patch/full-save name write-back. Only resurrect it here when it is still
+                // live in the current workbook model (e.g. it was preserved verbatim because the
+                // save path never touched defined names for this key) - never re-add a name the user
+                // deleted from the Name Manager, and never re-add an Excel-reserved name (Print_Area
+                // etc.), which is intentionally excluded from the model round-trip and handled
+                // elsewhere.
+                var sourceNameAttr = sourceName.Attribute("name")?.Value;
+                if (!liveModelDefinedNameKeys.Contains(key) && !XlsxNamedRangeMapper.IsExcelReservedDefinedName(sourceNameAttr))
+                    continue;
 
                 targetDefinedNames.Add(new XElement(sourceName));
                 existingKeys.Add(key);
@@ -3188,6 +3199,7 @@ public sealed partial class XlsxFileAdapter
                 .Where(element => string.Equals(element.Attribute("uri")?.Value, diagramGraphicDataUri, StringComparison.Ordinal))
                 .ToList();
             var pictureElements = drawingXml.Descendants(spreadsheetDrawingNs + "pic").ToList();
+            var contentPartElements = drawingXml.Descendants(spreadsheetDrawingNs + "contentPart").ToList();
             var (sourceTextBoxes, sourceShapes) = XlsxWorksheetDrawingPartReader.ReadShapeParts(drawingXml);
 
             // Loaded here (rather than alongside the relationship-graph walk further below) so the picture
@@ -3242,14 +3254,21 @@ public sealed partial class XlsxFileAdapter
                 var connectorCount = anchor
                     .Descendants(spreadsheetDrawingNs + "cxnSp")
                     .Count(element => !element.Ancestors(markupCompatNs + "Fallback").Any());
-                if (chartCount + diagramCount + pictureCount + shapeCount + connectorCount == 0 ||
+                // Ink annotations (hand-drawn strokes anchored via <xdr:contentPart r:id="..."/>,
+                // referencing an InkML part) are not modeled anywhere in the reader/writer. The
+                // full-rewrite path (XlsxWorksheetDrawingObjectWriter) has no concept of them at all
+                // and would silently drop the annotation. Count them here so an anchor containing
+                // only a contentPart is still recognized as patch-safe (preserved verbatim) instead
+                // of forcing a lossy full rewrite.
+                var contentPartCount = anchor.Descendants(spreadsheetDrawingNs + "contentPart").Count();
+                if (chartCount + diagramCount + pictureCount + shapeCount + connectorCount + contentPartCount == 0 ||
                     anchor.Descendants(spreadsheetDrawingNs + "graphicFrame").Count() != chartCount + diagramCount)
                 {
                     return false;
                 }
             }
 
-            if ((chartElements.Count > 0 || pictureElements.Count > 0) && drawingRelsEntry is null)
+            if ((chartElements.Count > 0 || pictureElements.Count > 0 || contentPartElements.Count > 0) && drawingRelsEntry is null)
                 return false;
 
             var referencedRelationshipIds = new HashSet<string>(StringComparer.Ordinal);
@@ -3346,6 +3365,35 @@ public sealed partial class XlsxFileAdapter
                 {
                     return false;
                 }
+            }
+
+            // Ink annotations: <xdr:contentPart r:id="..."/> references an InkML (or similar) part
+            // by relationship id. Never modeled in the drawing object model, so the only safe
+            // handling is to preserve the anchor and its referenced part verbatim on the patch-save
+            // path. Validate the relationship resolves to a real package part (any content type -
+            // Office does not constrain contentPart targets to a single relationship type) and mark
+            // the relationship id as referenced so it isn't rejected as orphaned below.
+            foreach (var contentPartElement in contentPartElements)
+            {
+                var contentPartRelId = contentPartElement.Attribute(relNs + "id")?.Value;
+                if (string.IsNullOrWhiteSpace(contentPartRelId) ||
+                    !referencedRelationshipIds.Add(contentPartRelId))
+                {
+                    return false;
+                }
+
+                var contentPartRelationship = relationshipElements.FirstOrDefault(element =>
+                    RelationshipHasId(element, contentPartRelId) && RelationshipHasInternalTarget(element));
+                var contentPartTarget = contentPartRelationship?.Attribute("Target")?.Value;
+                if (contentPartRelationship is null ||
+                    string.IsNullOrWhiteSpace(contentPartTarget))
+                {
+                    return false;
+                }
+
+                var contentPartPath = XlsxPackagePath.ResolveRelationshipTarget(drawingPath, contentPartTarget);
+                if (archive.GetEntry(contentPartPath) is null)
+                    return false;
             }
 
             if (relationshipElements.Any(element =>

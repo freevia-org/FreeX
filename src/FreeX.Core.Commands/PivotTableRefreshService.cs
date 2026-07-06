@@ -53,6 +53,24 @@ public static partial class PivotTableRefreshService
         if (sourceSheet is null || pivotTable.DataFields.Count == 0)
             return;
 
+        // N32: a table-backed pivot must track its source Table's current extent on every refresh,
+        // not just at creation / explicit "Change Data Source" time — Excel always re-resolves a
+        // table-backed pivot cache against the live ListObject range before recomputing. Re-derive
+        // SourceRange from the live structured table (if it still exists) so rows/columns the table
+        // grew into since the pivot was last refreshed are included.
+        var cache = CommandGuards.FindPivotCache(workbook, pivotTable);
+        if (cache is { SourceType: PivotCacheSourceType.Table } && !string.IsNullOrWhiteSpace(cache.SourceTableName))
+        {
+            var liveTable = FindStructuredTableByName(workbook, cache.SourceTableName);
+            if (liveTable is not null)
+            {
+                sourceSheet = workbook.GetSheet(liveTable.Range.Start.Sheet) ?? sourceSheet;
+                pivotTable.SourceRange = liveTable.Range;
+                cache.SourceReference = liveTable.Range.ToString();
+                cache.SourceSheetName = sourceSheet.Name;
+            }
+        }
+
         ClearRefreshRanges(targetSheet, pivotTable);
 
         var headers = ReadHeaders(sourceSheet, pivotTable.SourceRange);
@@ -292,6 +310,21 @@ public static partial class PivotTableRefreshService
                 new CellAddress(_sheetId, _minRow.Value, _minCol.Value),
                 new CellAddress(_sheetId, _maxRow.Value, _maxCol.Value));
         }
+    }
+
+    private static StructuredTableModel? FindStructuredTableByName(Workbook workbook, string tableName)
+    {
+        foreach (var sheet in workbook.Sheets)
+        foreach (var table in sheet.StructuredTables)
+        {
+            if (string.Equals(table.Name, tableName, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(table.DisplayName, tableName, StringComparison.OrdinalIgnoreCase))
+            {
+                return table;
+            }
+        }
+
+        return null;
     }
 
     private static bool IsValidField(int index, int fieldCount) => index >= 0 && index < fieldCount;

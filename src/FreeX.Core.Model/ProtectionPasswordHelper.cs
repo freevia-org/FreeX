@@ -79,6 +79,23 @@ public static class ProtectionPasswordHelper
     /// from an actual hash (see <see cref="IsLegacyPasswordHash"/>). When in doubt, callers should
     /// track provenance explicitly (e.g. "this string came from XML we just read" vs. "this string
     /// is what the user typed into the Protect dialog") rather than relying on this method to guess.
+    /// <para>
+    /// <b>Known unsafe callers (tracked, not yet fixed here — out of this file's scope):</b>
+    /// <c>XlsxWorkbookMetadataWriter</c>/<c>XlsxWorksheetProtectionMetadataWriter</c> (via the
+    /// duplicated <c>XlsxWorkbookMetadataXmlHelper.ToLegacyPasswordHash</c>) and
+    /// <c>XlsxAllowEditRangeMapper.BuildProtectedRangeElement</c> all call the ambiguous overload on
+    /// <c>Workbook.StructureProtectionPassword</c>/<c>Sheet.ProtectionPassword</c>/
+    /// <c>Sheet.AllowEditRangePasswords</c> values at <b>save</b> time, where the value may be
+    /// freshly-typed plaintext from <c>ProtectSheetCommand</c>/<c>ProtectWorkbookCommand</c>/
+    /// <c>AllowEditRangeDialog</c> rather than a hash loaded from a file. A 4-hex-character typed
+    /// password (e.g. "beef", "c0de") is therefore written to the saved .xlsx verbatim in cleartext
+    /// instead of being hashed. Fixing this requires the command/dialog layer (out of this project's
+    /// scope for this change) to hash a freshly-typed password immediately when it is set — e.g. via
+    /// <see cref="ToVerifiedLegacyPasswordHash"/> below — so that by the time any writer sees
+    /// <c>Sheet.ProtectionPassword</c>/<c>Workbook.StructureProtectionPassword</c>/an
+    /// <c>AllowEditRangePasswords</c> value, it is unconditionally already a hash and this method is
+    /// only ever asked to round-trip one.
+    /// </para>
     /// </summary>
     public static string ToLegacyPasswordHash(string passwordOrHash)
     {
@@ -87,6 +104,19 @@ public static class ProtectionPasswordHelper
 
         return ComputeLegacyPasswordHash(passwordOrHash);
     }
+
+    /// <summary>
+    /// Unambiguously hashes a plaintext password the caller knows for certain was just typed by a
+    /// user (e.g. in the Protect Sheet/Workbook or Allow-Edit-Range dialogs), never treating it as
+    /// an already-computed hash even if it happens to have the 4-hex-digit shape of one. Intended
+    /// for callers that currently set <c>Sheet.ProtectionPassword</c>/
+    /// <c>Workbook.StructureProtectionPassword</c>/an <c>AllowEditRangePasswords</c> entry directly
+    /// from typed input; hashing at that point (instead of at save time via the ambiguous
+    /// <see cref="ToLegacyPasswordHash"/>) removes the plaintext-vs-hash ambiguity entirely, because
+    /// every value downstream is then guaranteed to already be a hash.
+    /// </summary>
+    public static string ToVerifiedLegacyPasswordHash(string plaintextPassword) =>
+        ComputeLegacyPasswordHash(plaintextPassword);
 
     private static string ComputeLegacyPasswordHash(string password)
     {

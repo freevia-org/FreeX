@@ -63,7 +63,15 @@ public static class PrintCommentSummaryPlanner
 
         var result = new List<PrintCommentSummaryEntry>(comments.Count + threadedComments.Count);
         foreach (var pair in comments)
-            result.Add(new PrintCommentSummaryEntry(pair.Key, pair.Value));
+        {
+            var text = threadedComments.TryGetValue(pair.Key, out var thread)
+                ? string.Concat(
+                    "Note: ", pair.Value,
+                    Environment.NewLine,
+                    CommentNavigationPlanner.FormatThreadedComment(thread))
+                : pair.Value;
+            result.Add(new PrintCommentSummaryEntry(pair.Key, text));
+        }
 
         foreach (var pair in threadedComments)
         {
