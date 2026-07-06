@@ -115,6 +115,9 @@ public sealed class DocumentViewLayoutPlannerTests
         plan.HasHeaderRow.Should().BeTrue();
         plan.RepeatsHeaderRow.Should().BeTrue();
         plan.HasBandedRows.Should().BeTrue();
+        plan.HasFirstColumn.Should().BeTrue();
+        plan.HasLastColumn.Should().BeFalse();
+        plan.HasLastRow.Should().BeFalse();
         plan.HasMergedCells.Should().BeTrue();
         plan.HasVerticalMerges.Should().BeTrue();
         plan.HasCellShading.Should().BeTrue();
