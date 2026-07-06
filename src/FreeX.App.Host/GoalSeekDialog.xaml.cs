@@ -109,6 +109,16 @@ public partial class GoalSeekDialog : Window
         DialogFocus.FocusAndSelect(textBox);
     }
 
+    public void ApplyInputValues(
+        CellAddress setCell,
+        string targetValueText,
+        CellAddress changingCell)
+    {
+        SetCellBox.Text = setCell.ToA1();
+        ToValueBox.Text = targetValueText;
+        ChangingCellBox.Text = changingCell.ToA1();
+    }
+
     public static GoalSeekRangeSelectionRequest CreateRangeSelectionRequest(
         GoalSeekRangeSelectionTarget target,
         string currentText) =>

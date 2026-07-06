@@ -516,9 +516,13 @@ internal static class ParityCapture
             {
                 CaptureAccessibilityCheckerDialog(results, outDir, AccessibilityCheckerParityFixture.CreateDialogIssues(sheet.Id));
             }
+            else if (string.Equals(targetSurfaceId, "dialog.GoalSeek", StringComparison.Ordinal))
+            {
+                CaptureDialog(results, "dialog.GoalSeek", outDir, () => CreateGoalSeekParityDialog(sheet.Id));
+            }
             else
             {
-                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells and dialog.AccessibilityChecker in this lane.");
+                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, and dialog.GoalSeek in this lane.");
             }
 
             return;
@@ -572,7 +576,7 @@ internal static class ParityCapture
             new RemoveDuplicatesDialog(CreateColumnChoices("Region", "Product", "Revenue", "Units")));
 
         CaptureDialog(results, "dialog.GoalSeek", outDir, () =>
-            new GoalSeekDialog(sheet.Id, new CellAddress(sheet.Id, 2, 4)));
+            CreateGoalSeekParityDialog(sheet.Id));
 
         CaptureDialog(results, "dialog.GoalSeekStatus", outDir, () =>
             new GoalSeekStatusDialog(new GoalSeekResult(true, 125d, 5000d, 7), 5000d));
@@ -747,6 +751,15 @@ internal static class ParityCapture
             AutoFilterMenuResources.TextProvider,
             AutoFilterMenuResources.BlankDisplayText);
         return new AutoFilterDialog(fixture.MenuPlan);
+    }
+
+    private static GoalSeekDialog CreateGoalSeekParityDialog(SheetId sheetId)
+    {
+        var setCell = new CellAddress(sheetId, 2, 3);
+        var changingCell = new CellAddress(sheetId, 2, 5);
+        var dialog = new GoalSeekDialog(sheetId, setCell);
+        dialog.ApplyInputValues(setCell, "5000", changingCell);
+        return dialog;
     }
 
     private static WorkbookFileDialogSurfacePlan CreateOpenWorkbookDialogSurfacePlan()

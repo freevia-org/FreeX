@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows.Controls;
 using System.Xml.Linq;
 using FluentAssertions;
@@ -166,6 +167,49 @@ public sealed class GoalSeekDialogXamlTests
                 dialog.Close();
             }
         });
+    }
+
+    [Fact]
+    public void ApplyInputValues_SeedsAllRequestFields()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var dialog = new GoalSeekDialog(sheetId, null);
+            dialog.Show();
+            try
+            {
+                dialog.ApplyInputValues(
+                    new CellAddress(sheetId, 2, 3),
+                    "5000",
+                    new CellAddress(sheetId, 2, 5));
+
+                DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, "SetCellBox").Text.Should().Be("C2");
+                DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, "ToValueBox").Text.Should().Be("5000");
+                DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, "ChangingCellBox").Text.Should().Be("E2");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void WpfParityCapture_SeedsSameGoalSeekRequestAsAvalonia()
+    {
+        var wpfSource = DialogSourceTestSupport.ReadHostSources("ParityCapture.cs");
+        var avaloniaSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+
+        wpfSource.Should().Contain("string.Equals(targetSurfaceId, \"dialog.GoalSeek\", StringComparison.Ordinal)");
+        wpfSource.Should().Contain("CreateGoalSeekParityDialog(sheet.Id)");
+        wpfSource.Should().Contain("new CellAddress(sheetId, 2, 3)");
+        wpfSource.Should().Contain("dialog.ApplyInputValues(setCell, \"5000\", changingCell);");
+        wpfSource.Should().Contain("new CellAddress(sheetId, 2, 5)");
+
+        avaloniaSource.Should().Contain("initialSetCellText: \"C2\"");
+        avaloniaSource.Should().Contain("initialTargetValueText: \"5000\"");
+        avaloniaSource.Should().Contain("initialChangingCellText: \"E2\"");
     }
 
     [Fact]
