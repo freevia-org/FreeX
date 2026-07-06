@@ -861,6 +861,39 @@ public sealed class DocumentViewReviewTests
     }
 
     [Fact]
+    public async Task Proofing_diagnostics_surface_repeated_word_grammar_through_existing_glyphs()
+    {
+        IReadOnlyList<ProofingDiagnostic> diagnostics = [];
+        IReadOnlyList<(int Block, int Offset, Rect Rect)> glyphs = [];
+        ProofingDiagnosticKind? activeKind = null;
+        bool addedToDictionary = true;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("We saw the the issue"));
+            var view = Build(doc);
+            view.MoveCaretToBlock(0, 12);
+
+            diagnostics = view.ProofingDiagnosticsForTest;
+            glyphs = view.ProofingSquiggleGlyphsForTest;
+            activeKind = view.CurrentProofingDiagnostic?.Kind;
+            addedToDictionary = view.AddCurrentWordToDictionary();
+        });
+        if (!ran) return;
+
+        var diagnostic = diagnostics.Should().ContainSingle().Which;
+        diagnostic.Kind.Should().Be(ProofingDiagnosticKind.Grammar);
+        diagnostic.Word.Should().Be("the");
+        diagnostic.ParagraphOffset.Should().Be(11);
+        activeKind.Should().Be(ProofingDiagnosticKind.Grammar);
+        glyphs.Select(g => g.Offset).Should().Equal(11, 12, 13);
+        glyphs.Should().OnlyContain(g => g.Rect.Width > 0 && g.Rect.Height > 0);
+        addedToDictionary.Should().BeFalse("grammar diagnostics are not custom-dictionary spelling entries");
+    }
+
+    [Fact]
     public async Task AddCurrentWordToDictionary_requires_active_diagnostic()
     {
         bool normalWordAdded = true;

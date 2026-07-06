@@ -9124,7 +9124,7 @@ public sealed class DocumentView : Control
 
     public bool AddCurrentWordToDictionary()
     {
-        if (CurrentProofingDiagnostic is not { } diagnostic)
+        if (CurrentProofingDiagnostic is not { Kind: ProofingDiagnosticKind.Spelling } diagnostic)
             return false;
 
         if (!_customDictionary.Add(diagnostic.Word))
