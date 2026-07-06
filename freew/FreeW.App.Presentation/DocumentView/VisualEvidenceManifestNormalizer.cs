@@ -105,7 +105,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 21;
+    public const int SummarySchemaVersion = 22;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -1178,6 +1178,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
     {
         var tags = row.ExpectedFeatureTags;
         var tables = row.PageExpectation.Tables;
+        var fillSignatures = tables.TableCellFillSignatures ?? [];
         if (!tags.Contains("table-layout", StringComparer.OrdinalIgnoreCase))
             return;
 
@@ -1199,6 +1200,13 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("table-layout evidence expects banded rows but the table plan records none");
         if (tags.Contains("cell-shading", StringComparer.OrdinalIgnoreCase) && !tables.HasCellShading)
             rowFailures.Add("table-layout evidence expects cell shading but the table plan records none");
+        if (tags.Contains("table-fill-signatures", StringComparer.OrdinalIgnoreCase)
+            && fillSignatures.Count == 0)
+            rowFailures.Add("table-layout evidence expects table cell fill signatures but the table plan records none");
+        if (tags.Contains("style-derived-header-fill", StringComparer.OrdinalIgnoreCase)
+            && !fillSignatures.Any(signature =>
+                signature.Contains("source=style-derived-header", StringComparison.Ordinal)))
+            rowFailures.Add("table-layout evidence expects style-derived header fill signatures but the table plan records none");
         if (tags.Contains("cell-borders", StringComparer.OrdinalIgnoreCase) && !tables.HasCustomCellBorders)
             rowFailures.Add("table-layout evidence expects custom cell borders but the table plan records none");
         if (tags.Contains("cell-margins", StringComparer.OrdinalIgnoreCase) && !tables.HasCellMargins)
@@ -2279,6 +2287,14 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
         var wpfComparisonTables = CanonicalizeTablePlansForComparison(wpfTables.Tables);
         var avaloniaComparisonTables = CanonicalizeTablePlansForComparison(avaloniaTables.Tables);
+        var wpfFillSignatures = TableCellFillSignaturesForComparison(wpfTables, wpfComparisonTables);
+        var avaloniaFillSignatures = TableCellFillSignaturesForComparison(avaloniaTables, avaloniaComparisonTables);
+        if (!wpfFillSignatures.SequenceEqual(avaloniaFillSignatures, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} table cell fill signatures differ: WPF '{FormatSummaries(wpfFillSignatures)}', Avalonia '{FormatSummaries(avaloniaFillSignatures)}'");
+        }
+
         var wpfTableSignatures = BuildTablePlanSignatures(wpfComparisonTables);
         var avaloniaTableSignatures = BuildTablePlanSignatures(avaloniaComparisonTables);
         if (!wpfTableSignatures.SequenceEqual(avaloniaTableSignatures, StringComparer.Ordinal))
@@ -2565,6 +2581,18 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 string.Join(";", table.Cells.Select(BuildTableCellSignature).OrderBy(signature => signature, StringComparer.Ordinal))))
             .OrderBy(signature => signature, StringComparer.Ordinal)
             .ToList();
+
+    private static List<string> TableCellFillSignaturesForComparison(
+        FreeWVisualTableExpectation tableExpectation,
+        IReadOnlyList<DocumentTableLayoutPlan> canonicalizedTables)
+    {
+        if (tableExpectation.TableCellFillSignatures is { Count: > 0 } signatures)
+            return OrderedSummaries(signatures);
+
+        return FreeWVisualEvidencePlanner
+            .BuildTableCellFillSignatures(canonicalizedTables)
+            .ToList();
+    }
 
     private static string BuildTableCellSignature(DocumentTableCellLayoutPlan cell) =>
         string.Join(
