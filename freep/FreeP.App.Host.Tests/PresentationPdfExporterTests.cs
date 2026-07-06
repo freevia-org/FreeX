@@ -234,6 +234,84 @@ public class PresentationPdfExporterTests
     }
 
     [Fact]
+    public void BuildDocument_ExportsStraightConnectorTriangleArrowheads()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Kind = SlideShapeKind.Connector,
+            AutoShapeKind = DrawingShapeKind.Line,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Outline = new ShapeOutline.Visible(
+                SrgbColor.FromRgb(0xC00000),
+                widthPt: 2.25,
+                beginLineEnd: new ShapeLineEnd(ShapeLineEndKind.Triangle),
+                endLineEnd: new ShapeLineEnd(ShapeLineEndKind.Triangle)),
+        });
+        deck.Slides.Add(slide);
+
+        var pageOps = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops;
+        var line = pageOps.OfType<PdfLine>().Should().ContainSingle().Subject;
+        var triangles = pageOps.OfType<PdfFilledTriangle>().ToArray();
+
+        triangles.Should().HaveCount(2);
+        triangles[0].X1.Should().Be(line.X1);
+        triangles[0].Y1.Should().Be(line.Y1);
+        triangles[1].X1.Should().Be(line.X2);
+        triangles[1].Y1.Should().Be(line.Y2);
+        BaseCenter(triangles[0]).X.Should().BeGreaterThan(triangles[0].X1);
+        BaseCenter(triangles[0]).Y.Should().BeLessThan(triangles[0].Y1);
+        BaseCenter(triangles[1]).X.Should().BeLessThan(triangles[1].X1);
+        BaseCenter(triangles[1]).Y.Should().BeGreaterThan(triangles[1].Y1);
+        triangles.Should().OnlyContain(triangle => triangle.Color == new PdfColor(0xC0, 0x00, 0x00));
+    }
+
+    [Fact]
+    public void BuildDocument_ExportsElbowConnectorTriangleArrowheadsAtRouteEnds()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Kind = SlideShapeKind.Connector,
+            AutoShapeKind = DrawingShapeKind.ElbowConnector,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Outline = new ShapeOutline.Visible(
+                SrgbColor.Black,
+                widthPt: 1.5,
+                beginLineEnd: new ShapeLineEnd(ShapeLineEndKind.Triangle),
+                endLineEnd: new ShapeLineEnd(ShapeLineEndKind.Triangle)),
+            ElbowRoute =
+            [
+                (DrawingMlCoordinateUnits.PointsToEmu(72), DrawingMlCoordinateUnits.PointsToEmu(90)),
+                (DrawingMlCoordinateUnits.PointsToEmu(144), DrawingMlCoordinateUnits.PointsToEmu(90)),
+                (DrawingMlCoordinateUnits.PointsToEmu(144), DrawingMlCoordinateUnits.PointsToEmu(162)),
+                (DrawingMlCoordinateUnits.PointsToEmu(216), DrawingMlCoordinateUnits.PointsToEmu(162)),
+            ],
+        });
+        deck.Slides.Add(slide);
+
+        var triangles = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops
+            .OfType<PdfFilledTriangle>()
+            .ToArray();
+
+        triangles.Should().HaveCount(2);
+        (triangles[0].X1, triangles[0].Y1).Should().Be((72, 450));
+        BaseCenter(triangles[0]).Should().Be((80, 450));
+        (triangles[1].X1, triangles[1].Y1).Should().Be((216, 378));
+        BaseCenter(triangles[1]).Should().Be((208, 378));
+    }
+
+    [Fact]
     public void BuildDocument_ExportsPictureShapesAsPdfImages()
     {
         var deck = Presentation.CreateEmpty();
@@ -319,4 +397,7 @@ public class PresentationPdfExporterTests
         0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
         0x42, 0x60, 0x82
     ];
+
+    private static (double X, double Y) BaseCenter(PdfFilledTriangle triangle) =>
+        ((triangle.X2 + triangle.X3) / 2.0, (triangle.Y2 + triangle.Y3) / 2.0);
 }

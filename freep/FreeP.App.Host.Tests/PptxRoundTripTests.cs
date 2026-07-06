@@ -625,6 +625,101 @@ public sealed class PptxRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void RoundTrip_ConnectorTriangleLineEnds_WritesAndReadsVisibleOutline()
+    {
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 42,
+            Name = "Triangle Arrow Connector",
+            Kind = SlideShapeKind.Connector,
+            AutoShapeKind = DrawingShapeKind.Line,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 914400,
+            ExtentCxEmu = 1828800,
+            ExtentCyEmu = 914400,
+            Outline = new ShapeOutline.Visible(
+                new SrgbColor(0xC0, 0x00, 0x00),
+                widthPt: 2.25,
+                beginLineEnd: new ShapeLineEnd(ShapeLineEndKind.Triangle),
+                endLineEnd: new ShapeLineEnd(ShapeLineEndKind.Triangle))
+        });
+
+        var path = WriteToPptx(pres);
+
+        using (var archive = ZipFile.OpenRead(path))
+        using (var slideStream = archive.GetEntry("ppt/slides/slide1.xml")!.Open())
+        {
+            var doc = XDocument.Load(slideStream);
+            XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+            XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            var connector = doc.Descendants(p + "cxnSp")
+                .Single(sp => sp.Descendants(p + "cNvPr")
+                    .Any(c => c.Attribute("name")?.Value == "Triangle Arrow Connector"));
+            var line = connector.Element(p + "spPr")!.Element(a + "ln")!;
+
+            line.Element(a + "headEnd")!.Attribute("type")!.Value.Should().Be("triangle");
+            line.Element(a + "tailEnd")!.Attribute("type")!.Value.Should().Be("triangle");
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var outline = reloaded.Slides[0].Shapes.Single(shape => shape.Name == "Triangle Arrow Connector")
+            .Outline.Should().BeOfType<ShapeOutline.Visible>().Subject;
+        outline.BeginLineEnd.Should().Be(new ShapeLineEnd(ShapeLineEndKind.Triangle));
+        outline.EndLineEnd.Should().Be(new ShapeLineEnd(ShapeLineEndKind.Triangle));
+    }
+
+    [Fact]
+    public void RoundTrip_LineTriangleLineEnds_WritesAndReadsGradientOutline()
+    {
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 43,
+            Name = "Gradient Triangle Line",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Line,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 1828800,
+            ExtentCxEmu = 1828800,
+            ExtentCyEmu = 914400,
+            Outline = new ShapeOutline.GradientVisible(
+                new ShapeFill.Gradient(
+                    new ThemeAwareColor(new SrgbColor(0x10, 0x20, 0x30)),
+                    new ThemeAwareColor(new SrgbColor(0xD0, 0xE0, 0xF0))),
+                widthPt: 3.0,
+                beginLineEnd: new ShapeLineEnd(ShapeLineEndKind.Triangle),
+                endLineEnd: new ShapeLineEnd(ShapeLineEndKind.Triangle))
+        });
+
+        var path = WriteToPptx(pres);
+
+        using (var archive = ZipFile.OpenRead(path))
+        using (var slideStream = archive.GetEntry("ppt/slides/slide1.xml")!.Open())
+        {
+            var doc = XDocument.Load(slideStream);
+            XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+            XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            var shape = doc.Descendants(p + "sp")
+                .Single(sp => sp.Descendants(p + "cNvPr")
+                    .Any(c => c.Attribute("name")?.Value == "Gradient Triangle Line"));
+            var line = shape.Element(p + "spPr")!.Element(a + "ln")!;
+
+            line.Element(a + "gradFill").Should().NotBeNull();
+            line.Element(a + "headEnd")!.Attribute("type")!.Value.Should().Be("triangle");
+            line.Element(a + "tailEnd")!.Attribute("type")!.Value.Should().Be("triangle");
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var outline = reloaded.Slides[0].Shapes.Single(shape => shape.Name == "Gradient Triangle Line")
+            .Outline.Should().BeOfType<ShapeOutline.GradientVisible>().Subject;
+        outline.BeginLineEnd.Should().Be(new ShapeLineEnd(ShapeLineEndKind.Triangle));
+        outline.EndLineEnd.Should().Be(new ShapeLineEnd(ShapeLineEndKind.Triangle));
+    }
+
+    [Fact]
     public void RoundTrip_Outline_None()
     {
         var pres = new Presentation();

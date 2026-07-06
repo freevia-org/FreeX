@@ -57,6 +57,18 @@ public sealed record PdfLine(
     double LineWidth) : PdfDrawOp;
 
 /// <summary>
+/// Fills a triangle path. Used for simple vector markers such as connector arrowheads.
+/// </summary>
+public sealed record PdfFilledTriangle(
+    double X1,
+    double Y1,
+    double X2,
+    double Y2,
+    double X3,
+    double Y3,
+    PdfColor Color) : PdfDrawOp;
+
+/// <summary>
 /// Draws an encoded bitmap image into a rectangular PDF user-space bounds. Supported portable
 /// content types are PNG and JPEG; unsupported content types are skipped by the dependency-free
 /// writer instead of emitting a corrupt image stream.

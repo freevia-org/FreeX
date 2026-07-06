@@ -86,6 +86,17 @@ public static class PortablePdfWriter
                 case PdfLine line:
                     AppendLine(content, line.X1, line.Y1, line.X2, line.Y2, line.Color, line.LineWidth);
                     break;
+                case PdfFilledTriangle triangle:
+                    AppendFilledTriangle(
+                        content,
+                        triangle.X1,
+                        triangle.Y1,
+                        triangle.X2,
+                        triangle.Y2,
+                        triangle.X3,
+                        triangle.Y3,
+                        triangle.Color);
+                    break;
                 case PdfImage image when imageResources.TryGetValue(image, out var resource):
                     AppendImage(content, image, resource.ResourceName);
                     break;
@@ -555,6 +566,24 @@ public static class PortablePdfWriter
         content.AppendLine($"{FormatNumber(lineWidth)} w");
         content.AppendLine($"{FormatNumber(x1)} {FormatNumber(y1)} m");
         content.AppendLine($"{FormatNumber(x2)} {FormatNumber(y2)} l S");
+        content.AppendLine("Q");
+    }
+
+    private static void AppendFilledTriangle(
+        StringBuilder content,
+        double x1,
+        double y1,
+        double x2,
+        double y2,
+        double x3,
+        double y3,
+        PdfColor color)
+    {
+        content.AppendLine("q");
+        AppendRgb(content, color, "rg");
+        content.AppendLine($"{FormatNumber(x1)} {FormatNumber(y1)} m");
+        content.AppendLine($"{FormatNumber(x2)} {FormatNumber(y2)} l");
+        content.AppendLine($"{FormatNumber(x3)} {FormatNumber(y3)} l f");
         content.AppendLine("Q");
     }
 

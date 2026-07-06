@@ -236,6 +236,8 @@ internal static class PptxColorReader
         // a:prstDash
         var dashVal = lnElement.Element(A + "prstDash")?.Attribute("val")?.Value;
         var dash = MapDash(dashVal);
+        var beginLineEnd = TryReadLineEnd(lnElement.Element(A + "tailEnd"));
+        var endLineEnd = TryReadLineEnd(lnElement.Element(A + "headEnd"));
 
         // Wave 22B: a:gradFill → gradient outline
         var gradFill = lnElement.Element(A + "gradFill");
@@ -243,14 +245,14 @@ internal static class PptxColorReader
         {
             var gradient = TryReadGradFill(gradFill, scheme);
             if (gradient is not null)
-                return new ShapeOutline.GradientVisible(gradient, widthPt, dash);
+                return new ShapeOutline.GradientVisible(gradient, widthPt, dash, beginLineEnd, endLineEnd);
         }
 
         var solidFill = lnElement.Element(A + "solidFill");
         var color = solidFill is not null ? TryReadColor(solidFill, scheme) : null;
         color ??= ThemeAwareColor.Black; // fallback
 
-        return new ShapeOutline.Visible(color, widthPt, dash);
+        return new ShapeOutline.Visible(color, widthPt, dash, beginLineEnd, endLineEnd);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -286,5 +288,12 @@ internal static class PptxColorReader
             "sysdash" => OutlineDash.SystemDash,
             "sysdashDot" => OutlineDash.SystemDashDot,
             _ => OutlineDash.Solid
+        };
+
+    private static ShapeLineEnd? TryReadLineEnd(XElement? lineEndElement) =>
+        lineEndElement?.Attribute("type")?.Value?.Trim().ToLowerInvariant() switch
+        {
+            "triangle" => new ShapeLineEnd(ShapeLineEndKind.Triangle),
+            _ => null
         };
 }

@@ -111,6 +111,22 @@ public sealed class PortablePdfWriterTests
     }
 
     [Fact]
+    public void Write_EmitsFilledTrianglePath()
+    {
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfFilledTriangle(20, 30, 12, 25, 12, 35, new PdfColor(0x11, 0x22, 0x33)),
+        });
+
+        var pdf = Encoding.ASCII.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument(new[] { page })));
+
+        pdf.Should().Contain("0.067 0.133 0.2 rg");
+        pdf.Should().Contain("20 30 m");
+        pdf.Should().Contain("12 25 l");
+        pdf.Should().Contain("12 35 l f");
+    }
+
+    [Fact]
     public void Write_EmitsPngImageXObjectAndPlacement()
     {
         var page = new PdfContentPage(100, 80, new PdfDrawOp[]

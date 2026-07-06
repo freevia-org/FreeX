@@ -2756,7 +2756,7 @@ public static class PptxPackageWriter
             xfrm,
             geomEl,
             shape.Fill is not null ? BuildFillEl(shape.Fill, scheme, fillBlipRelId) : null,
-            shape.Outline is not null ? BuildOutlineEl(shape.Outline) : null,
+            shape.Outline is not null ? BuildOutlineEl(shape.Outline, includeLineEnds: ShouldWriteLineEnds(shape)) : null,
             shape.Effects is not null ? BuildEffectLstEl(shape.Effects) : null,
             shape.Effects is not null ? BuildScene3dEl(shape.Effects) : null,
             shape.Effects is not null ? BuildSp3dEl(shape.Effects) : null);
@@ -3339,25 +3339,74 @@ public static class PptxPackageWriter
 
     // ── Outline elements ──────────────────────────────────────────────────────────
 
-    private static XElement BuildOutlineEl(ShapeOutline outline) =>
+    private static XElement BuildOutlineEl(ShapeOutline outline, bool includeLineEnds = false) =>
         outline switch
         {
             ShapeOutline.None => new XElement(A + "ln", new XElement(A + "noFill")),
-            ShapeOutline.Visible v => new XElement(A + "ln",
-                new XAttribute("w", DrawingMlUnits.PointsToEmu(v.WidthPt)),
-                new XElement(A + "solidFill", BuildColorEl(v.Color)),
-                v.Dash != OutlineDash.Solid
-                    ? new XElement(A + "prstDash", new XAttribute("val", ToDashStr(v.Dash)))
-                    : null),
+            ShapeOutline.Visible v => BuildVisibleOutlineEl(v, includeLineEnds),
             // Wave 22B: gradient outline
-            ShapeOutline.GradientVisible gv => new XElement(A + "ln",
-                new XAttribute("w", DrawingMlUnits.PointsToEmu(gv.WidthPt)),
-                BuildGradFillEl(gv.Gradient),
-                gv.Dash != OutlineDash.Solid
-                    ? new XElement(A + "prstDash", new XAttribute("val", ToDashStr(gv.Dash)))
-                    : null),
+            ShapeOutline.GradientVisible gv => BuildGradientOutlineEl(gv, includeLineEnds),
             _ => new XElement(A + "ln")
         };
+
+    private static XElement BuildVisibleOutlineEl(ShapeOutline.Visible outline, bool includeLineEnds)
+    {
+        var children = new List<object?>
+        {
+            new XAttribute("w", DrawingMlUnits.PointsToEmu(outline.WidthPt)),
+            new XElement(A + "solidFill", BuildColorEl(outline.Color)),
+            outline.Dash != OutlineDash.Solid
+                ? new XElement(A + "prstDash", new XAttribute("val", ToDashStr(outline.Dash)))
+                : null
+        };
+        AddLineEndElements(children, outline.BeginLineEnd, outline.EndLineEnd, includeLineEnds);
+        return new XElement(A + "ln", children);
+    }
+
+    private static XElement BuildGradientOutlineEl(ShapeOutline.GradientVisible outline, bool includeLineEnds)
+    {
+        var children = new List<object?>
+        {
+            new XAttribute("w", DrawingMlUnits.PointsToEmu(outline.WidthPt)),
+            BuildGradFillEl(outline.Gradient),
+            outline.Dash != OutlineDash.Solid
+                ? new XElement(A + "prstDash", new XAttribute("val", ToDashStr(outline.Dash)))
+                : null
+        };
+        AddLineEndElements(children, outline.BeginLineEnd, outline.EndLineEnd, includeLineEnds);
+        return new XElement(A + "ln", children);
+    }
+
+    private static void AddLineEndElements(
+        List<object?> children,
+        ShapeLineEnd? beginLineEnd,
+        ShapeLineEnd? endLineEnd,
+        bool includeLineEnds)
+    {
+        if (!includeLineEnds)
+            return;
+
+        if (endLineEnd is not null)
+            children.Add(BuildLineEndEl("headEnd", endLineEnd));
+        if (beginLineEnd is not null)
+            children.Add(BuildLineEndEl("tailEnd", beginLineEnd));
+    }
+
+    private static XElement BuildLineEndEl(string localName, ShapeLineEnd lineEnd) =>
+        new(A + localName, new XAttribute("type", ToLineEndType(lineEnd.Kind)));
+
+    private static string ToLineEndType(ShapeLineEndKind kind) =>
+        kind switch
+        {
+            ShapeLineEndKind.Triangle => "triangle",
+            _ => "none"
+        };
+
+    private static bool ShouldWriteLineEnds(SlideShape shape) =>
+        shape.Kind == SlideShapeKind.Connector
+        || shape.AutoShapeKind is DrawingShapeKind.Line
+            or DrawingShapeKind.ElbowConnector
+            or DrawingShapeKind.CurvedConnector;
 
     // ── a:lstStyle helper ─────────────────────────────────────────────────────────
 

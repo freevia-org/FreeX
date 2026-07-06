@@ -24,6 +24,9 @@ public static class PresentationPdfExporter
     private const double BodyLeadingPt = 26.0;
     private const double ShapeTextInsetPt = 8.0;
     private const double DefaultStrokeWidthPt = 0.75;
+    private const double ArrowheadMinLengthPt = 8.0;
+    private const double ArrowheadLengthStrokeScale = 4.0;
+    private const double ArrowheadHalfWidthRatio = 0.35;
     private const double EmuPerPoint = 12700.0;
 
     /// <summary>Renders the presentation to PDF bytes in memory.</summary>
@@ -179,8 +182,18 @@ public static class PresentationPdfExporter
             for (var i = 1; i < route.Count; i++)
             {
                 var start = ToPdfPoint(route[i - 1], slideHeightPoints);
-                var end = ToPdfPoint(route[i], slideHeightPoints);
-                ops.Add(new PdfLine(start.X, start.Y, end.X, end.Y, stroke, strokeWidth));
+                var routeEnd = ToPdfPoint(route[i], slideHeightPoints);
+                ops.Add(new PdfLine(start.X, start.Y, routeEnd.X, routeEnd.Y, stroke, strokeWidth));
+            }
+
+            if (TryGetLineEnds(shape.Outline, out var beginLineEnd, out var endLineEnd))
+            {
+                var first = ToPdfPoint(route[0], slideHeightPoints);
+                var second = ToPdfPoint(route[1], slideHeightPoints);
+                var penultimate = ToPdfPoint(route[^2], slideHeightPoints);
+                var last = ToPdfPoint(route[^1], slideHeightPoints);
+                AppendLineEndMarker(ops, beginLineEnd, first.X, first.Y, second.X, second.Y, stroke, strokeWidth);
+                AppendLineEndMarker(ops, endLineEnd, last.X, last.Y, penultimate.X, penultimate.Y, stroke, strokeWidth);
             }
 
             return true;
@@ -188,7 +201,70 @@ public static class PresentationPdfExporter
 
         var (x1, y1, x2, y2) = GetLineEndpoints(shape, x, y, width, height);
         ops.Add(new PdfLine(x1, y1, x2, y2, stroke, strokeWidth));
+        if (TryGetLineEnds(shape.Outline, out var begin, out var lineEnd))
+        {
+            AppendLineEndMarker(ops, begin, x1, y1, x2, y2, stroke, strokeWidth);
+            AppendLineEndMarker(ops, lineEnd, x2, y2, x1, y1, stroke, strokeWidth);
+        }
+
         return true;
+    }
+
+    private static bool TryGetLineEnds(ShapeOutline? outline, out ShapeLineEnd? begin, out ShapeLineEnd? end)
+    {
+        switch (outline)
+        {
+            case ShapeOutline.Visible visible:
+                begin = visible.BeginLineEnd;
+                end = visible.EndLineEnd;
+                return begin is not null || end is not null;
+            case ShapeOutline.GradientVisible gradient:
+                begin = gradient.BeginLineEnd;
+                end = gradient.EndLineEnd;
+                return begin is not null || end is not null;
+            default:
+                begin = null;
+                end = null;
+                return false;
+        }
+    }
+
+    private static void AppendLineEndMarker(
+        List<PdfDrawOp> ops,
+        ShapeLineEnd? lineEnd,
+        double tipX,
+        double tipY,
+        double adjacentX,
+        double adjacentY,
+        PdfColor color,
+        double strokeWidth)
+    {
+        if (lineEnd?.Kind != ShapeLineEndKind.Triangle)
+            return;
+
+        var dx = tipX - adjacentX;
+        var dy = tipY - adjacentY;
+        var distance = Math.Sqrt(dx * dx + dy * dy);
+        if (distance < 0.001)
+            return;
+
+        var ux = dx / distance;
+        var uy = dy / distance;
+        var length = Math.Max(ArrowheadMinLengthPt, strokeWidth * ArrowheadLengthStrokeScale);
+        var halfWidth = length * ArrowheadHalfWidthRatio;
+        var baseX = tipX - ux * length;
+        var baseY = tipY - uy * length;
+        var px = -uy;
+        var py = ux;
+
+        ops.Add(new PdfFilledTriangle(
+            tipX,
+            tipY,
+            baseX + px * halfWidth,
+            baseY + py * halfWidth,
+            baseX - px * halfWidth,
+            baseY - py * halfWidth,
+            color));
     }
 
     private static bool IsConnectorLike(SlideShape shape) =>

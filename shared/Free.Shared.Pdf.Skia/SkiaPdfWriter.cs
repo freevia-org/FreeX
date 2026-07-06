@@ -142,6 +142,18 @@ public static class SkiaPdfWriter
                     break;
                 }
 
+                case PdfFilledTriangle triangle:
+                {
+                    fillPaint.Color = ToSkColor(triangle.Color);
+                    using var path = new SKPath();
+                    path.MoveTo((float)triangle.X1, pageHeight - (float)triangle.Y1);
+                    path.LineTo((float)triangle.X2, pageHeight - (float)triangle.Y2);
+                    path.LineTo((float)triangle.X3, pageHeight - (float)triangle.Y3);
+                    path.Close();
+                    canvas.DrawPath(path, fillPaint);
+                    break;
+                }
+
                 case PdfImage image:
                 {
                     if (!IsSupportedImageContentType(image.ContentType) || image.ImageBytes.Length == 0)

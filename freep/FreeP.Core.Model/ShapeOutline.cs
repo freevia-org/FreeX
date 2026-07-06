@@ -18,6 +18,19 @@ public enum OutlineDash
 }
 
 /// <summary>
+/// Bounded connector line-end marker kinds carried from DrawingML line properties.
+/// </summary>
+public enum ShapeLineEndKind
+{
+    Triangle = 1
+}
+
+/// <summary>
+/// Metadata for an authored connector line-end marker.
+/// </summary>
+public sealed record ShapeLineEnd(ShapeLineEndKind Kind);
+
+/// <summary>
 /// Discriminated outline (border/stroke) type for a <see cref="SlideShape"/>.
 /// </summary>
 public abstract class ShapeOutline
@@ -37,15 +50,31 @@ public abstract class ShapeOutline
 
         public ThemeAwareColor Color { get; }
 
-        public Visible(ThemeAwareColor color, double widthPt = 0.75, OutlineDash dash = OutlineDash.Solid)
+        public ShapeLineEnd? BeginLineEnd { get; }
+
+        public ShapeLineEnd? EndLineEnd { get; }
+
+        public Visible(
+            ThemeAwareColor color,
+            double widthPt = 0.75,
+            OutlineDash dash = OutlineDash.Solid,
+            ShapeLineEnd? beginLineEnd = null,
+            ShapeLineEnd? endLineEnd = null)
         {
             Color = color;
             WidthPt = widthPt;
             Dash = dash;
+            BeginLineEnd = beginLineEnd;
+            EndLineEnd = endLineEnd;
         }
 
-        public Visible(SrgbColor color, double widthPt = 0.75, OutlineDash dash = OutlineDash.Solid)
-            : this(new ThemeAwareColor(color), widthPt, dash) { }
+        public Visible(
+            SrgbColor color,
+            double widthPt = 0.75,
+            OutlineDash dash = OutlineDash.Solid,
+            ShapeLineEnd? beginLineEnd = null,
+            ShapeLineEnd? endLineEnd = null)
+            : this(new ThemeAwareColor(color), widthPt, dash, beginLineEnd, endLineEnd) { }
     }
 
     // ── Wave 22B: gradient outline ─────────────────────────────────────────────
@@ -64,11 +93,22 @@ public abstract class ShapeOutline
         /// <summary>Gradient specification reused from <see cref="ShapeFill.Gradient"/>.</summary>
         public ShapeFill.Gradient Gradient { get; }
 
-        public GradientVisible(ShapeFill.Gradient gradient, double widthPt = 0.75, OutlineDash dash = OutlineDash.Solid)
+        public ShapeLineEnd? BeginLineEnd { get; }
+
+        public ShapeLineEnd? EndLineEnd { get; }
+
+        public GradientVisible(
+            ShapeFill.Gradient gradient,
+            double widthPt = 0.75,
+            OutlineDash dash = OutlineDash.Solid,
+            ShapeLineEnd? beginLineEnd = null,
+            ShapeLineEnd? endLineEnd = null)
         {
             Gradient = gradient ?? throw new ArgumentNullException(nameof(gradient));
             WidthPt = widthPt;
             Dash = dash;
+            BeginLineEnd = beginLineEnd;
+            EndLineEnd = endLineEnd;
         }
     }
 }
