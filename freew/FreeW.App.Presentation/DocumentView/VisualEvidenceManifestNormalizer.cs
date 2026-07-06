@@ -2285,8 +2285,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{pairName} estimated table page counts differ: WPF {wpfTables.EstimatedPageCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaTables.EstimatedPageCount.ToString(CultureInfo.InvariantCulture)}");
         }
 
-        var wpfComparisonTables = CanonicalizeTablePlansForComparison(wpfTables.Tables);
-        var avaloniaComparisonTables = CanonicalizeTablePlansForComparison(avaloniaTables.Tables);
+        var wpfComparisonTables = CanonicalizeTablePlansForComparison(wpfTables);
+        var avaloniaComparisonTables = CanonicalizeTablePlansForComparison(avaloniaTables);
         var wpfFillSignatures = TableCellFillSignaturesForComparison(wpfTables, wpfComparisonTables);
         var avaloniaFillSignatures = TableCellFillSignaturesForComparison(avaloniaTables, avaloniaComparisonTables);
         if (!wpfFillSignatures.SequenceEqual(avaloniaFillSignatures, StringComparer.Ordinal))
@@ -2611,19 +2611,23 @@ public static class FreeWVisualEvidenceManifestNormalizer
             cell.HeightDip.HasValue ? FormatDouble(cell.HeightDip.Value) : string.Empty);
 
     private static IReadOnlyList<DocumentTableLayoutPlan> CanonicalizeTablePlansForComparison(
-        IReadOnlyList<DocumentTableLayoutPlan> tables) =>
-        tables
-            .Select(CanonicalizeTablePlanForComparison)
+        FreeWVisualTableExpectation tableExpectation) =>
+        tableExpectation.Tables
+            .Select(table => CanonicalizeTablePlanForComparison(tableExpectation, table))
             .ToList();
 
-    private static DocumentTableLayoutPlan CanonicalizeTablePlanForComparison(DocumentTableLayoutPlan table)
+    private static DocumentTableLayoutPlan CanonicalizeTablePlanForComparison(
+        FreeWVisualTableExpectation tableExpectation,
+        DocumentTableLayoutPlan table)
     {
         if (!table.HasHeaderRow || table.Cells.Count == 0)
             return table;
 
         var styleHeaderFill = DocumentTableStyle.FindById(table.TableStyleId ?? string.Empty)?.HeaderBand?.FillHex;
         var cells = table.Cells
-            .Select(cell => cell.RowIndex == 0 && IsStyleDerivedHeaderFill(cell.ShadingColorHex, styleHeaderFill, table.HasNamedStyle)
+            .Select(cell => cell.RowIndex == 0
+                && !HasExplicitHeaderCellFillSignature(tableExpectation, table, cell)
+                && IsStyleDerivedHeaderFill(cell.ShadingColorHex, styleHeaderFill, table.HasNamedStyle)
                 ? cell with { ShadingColorHex = null }
                 : cell)
             .ToList();
@@ -2642,7 +2646,34 @@ public static class FreeWVisualEvidenceManifestNormalizer
             return false;
 
         return string.Equals(normalizedShading, NormalizeHexForComparison(styleHeaderFillHex), StringComparison.Ordinal)
-            || hasNamedStyle && string.Equals(normalizedShading, "#D9E2F3", StringComparison.Ordinal);
+            || hasNamedStyle && BuiltInHeaderChromeFillHexes.Contains(normalizedShading);
+    }
+
+    private static readonly IReadOnlySet<string> BuiltInHeaderChromeFillHexes =
+        DocumentTableStyle.Catalog
+            .Select(style => NormalizeHexForComparison(style.HeaderBand?.FillHex))
+            .Where(static fill => fill is not null)
+            .Append("#D9E2F3")
+            .ToHashSet(StringComparer.Ordinal)!;
+
+    private static bool HasExplicitHeaderCellFillSignature(
+        FreeWVisualTableExpectation tableExpectation,
+        DocumentTableLayoutPlan table,
+        DocumentTableCellLayoutPlan cell)
+    {
+        if (tableExpectation.TableCellFillSignatures.Count == 0)
+            return false;
+
+        var prefix = string.Join(
+            "|",
+            "table=" + table.TableIndex.ToString(CultureInfo.InvariantCulture),
+            "row=" + cell.RowIndex.ToString(CultureInfo.InvariantCulture),
+            "cell=" + cell.CellIndex.ToString(CultureInfo.InvariantCulture),
+            "grid=" + cell.GridColumnIndex.ToString(CultureInfo.InvariantCulture));
+
+        return tableExpectation.TableCellFillSignatures.Any(signature =>
+            signature.StartsWith(prefix, StringComparison.Ordinal)
+            && signature.Contains("|source=explicit-cell|", StringComparison.Ordinal));
     }
 
     private static string? NormalizeHexForComparison(string? value)
