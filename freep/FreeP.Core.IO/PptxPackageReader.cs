@@ -2422,7 +2422,7 @@ public static class PptxPackageReader
 
         return family switch
         {
-            SmartArtFamily.Process => layoutId is "process1" or "basicprocess" or "continuousblockprocess",
+            SmartArtFamily.Process => layoutId is "process1" or "basicprocess" or "continuousblockprocess" or "segmentedprocess",
             SmartArtFamily.List => layoutId is "list1" or "basicblocklist" or "verticalboxlist" or "stackedlist",
             SmartArtFamily.Cycle => layoutId is "cycle1" or "basiccycle",
             SmartArtFamily.Hierarchy => layoutId is "hierarchy1" or "basichierarchy",

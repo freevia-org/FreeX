@@ -365,6 +365,27 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void SegmentedProcess_ReturnsLiveProcessBoxesAndConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Process, "A", "B", "C");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/segmentedProcess";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("segmentedProcess is a bounded ordered-stage process layout");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(3, "one live box should be emitted per segmented-process node");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(2, "adjacent segmented-process nodes need shared connectors");
+
+        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("A", "B", "C");
+        boxes.Select(s => s.OffsetXEmu)
+            .Should().BeInAscendingOrder("segmentedProcess should reuse the shared process-family geometry");
+    }
+
+    [Fact]
     public void BasicBlockList_ReturnsLiveVerticalListBoxesWithoutConnectors()
     {
         var data = MakeData(SmartArtFamily.List, "A", "B", "C");
@@ -431,7 +452,7 @@ public sealed class SmartArtLayoutTests
     public void UnsupportedKnownLayout_ReturnsNull()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B");
-        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/segmentedProcess";
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/chevronProcess";
         data.IsLiveLayoutSupported = false;
 
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
@@ -708,10 +729,65 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
-    public void Compositor_FallsBackToCachedDrawing_WhenKnownFamilyLayoutIsUnsupported()
+    public void Compositor_SegmentedProcess_UsesLiveLayoutOverCachedDrawing()
     {
         var data = MakeData(SmartArtFamily.Process, "Live A", "Live B");
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/segmentedProcess";
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id            = 10,
+            Kind          = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu    = FrameX,
+            OffsetYEmu    = FrameY,
+            ExtentCxEmu   = FrameCx / 2,
+            ExtentCyEmu   = FrameCy / 2,
+            TextBody      = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached fallback" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id          = 64,
+            Kind        = SlideShapeKind.SmartArt,
+            OffsetXEmu  = FrameX,
+            OffsetYEmu  = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt    = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        shapeOps.Should().HaveCount(3, "segmentedProcess should render two live boxes plus one connector");
+        var renderedText = shapeOps
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Live A");
+        renderedText.Should().Contain("Live B");
+        renderedText.Should().NotContain("Cached fallback");
+    }
+
+    [Fact]
+    public void Compositor_FallsBackToCachedDrawing_WhenKnownFamilyLayoutIsUnsupported()
+    {
+        var data = MakeData(SmartArtFamily.Process, "Live A", "Live B");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/chevronProcess";
         data.IsLiveLayoutSupported = false;
 
         var smart = new SmartArtShape { Data = data };

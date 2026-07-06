@@ -387,7 +387,22 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
             ],
-            RemainingWork: "basicProcess now uses the bounded shared process live-layout path for parsed nodes while segmentedProcess remains an unsupported sibling that falls back to cached drawing. Broader SmartArt geometry families, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
+            RemainingWork: "basicProcess now uses the bounded shared process live-layout path for parsed nodes while other unsupported process variants still fall back to cached drawing. Broader SmartArt geometry families, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
+        new(
+            EvidenceId: "freep.smartart.segmented-process",
+            Area: "SmartArt segmented process live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume ordinary shared slide shape and connector ops emitted by the SmartArt layout planner; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-smartart-segmented-process-2026-07-06.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
+            ],
+            RemainingWork: "segmentedProcess now uses the bounded shared process live-layout path for parsed ordered-stage nodes while chevron-style and other unsupported process variants remain on cached drawing fallback. Broader SmartArt geometry families, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
         new(
             EvidenceId: "freep.smartart.basic-block-list",
             Area: "SmartArt basic block list live layout",
