@@ -104,6 +104,18 @@ public sealed partial class AutoFilterDialogTests
     }
 
     [Fact]
+    public void DialogControls_MenuCommandRowsUseSharedIconColumn()
+    {
+        var source = ReadAutoFilterDialogSources();
+
+        source.Should().Contain("CreateMenuCommandButton(UiText.Get(\"AutoFilter_SortAToZ\"), RibbonCommandIconKind.SortAscending)");
+        source.Should().Contain("CreateMenuCommandButton(UiText.Get(\"AutoFilter_SortZToA\"), RibbonCommandIconKind.SortDescending)");
+        source.Should().Contain("CreateMenuCommandButton(UiText.Get(\"AutoFilter_ClearFilterFrom2\"), RibbonCommandIconKind.Clear)");
+        source.Should().Contain("SetMenuCommandButtonContent(_textFiltersButton, FormatCascadeMenuHeader(UiText.Get(\"AutoFilter_TextFilters\")), RibbonCommandIconKind.Filter)");
+        source.Should().Contain("RibbonIconFactory.CreateIcon(new RibbonCommandIcon(iconKind), 14, Brushes.Black)");
+    }
+
+    [Fact]
     public void DialogControls_SearchBoxHasNoStandaloneVisibleLabel()
     {
         StaTestRunner.Run(() =>
@@ -186,7 +198,8 @@ public sealed partial class AutoFilterDialogTests
             try
             {
                 var clearButton = WpfTestTree.FindVisualDescendants<Button>(dialog)
-                    .Single(button => button.Content?.ToString()?.Contains("Clear Filter From", StringComparison.Ordinal) == true);
+                    .Single(button => WpfTestTree.FindVisualDescendants<TextBlock>(button)
+                        .Any(text => text.Text.Contains("Clear Filter From", StringComparison.Ordinal)));
 
                 clearButton.IsEnabled.Should().BeFalse();
             }
