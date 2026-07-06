@@ -194,4 +194,27 @@ public sealed class AutoFilterMenuPlannerTests
         result.SelectedValues.Should().Equal("west");
         result.CriteriaText.Should().Be("contains:st");
     }
+
+    [Fact]
+    public void FlyoutCommandRows_RenderSharedIconColumnFromMenuPlan()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.AutoFilter.cs"));
+
+        source.Should().Contain("using Free.Shared.Ribbon.Avalonia;");
+        source.Should().Contain("CreateAutoFilterActionButton(AutoFilterMenuItem item, Action onClick, bool isEnabled = true)");
+        source.Should().Contain("AvaloniaRibbonIcons.BuildMonochrome(item.IconKind, 14, null, Brush(0x21, 0x21, 0x21))");
+        source.Should().Contain("Text = item.Label");
+    }
+
+    private static string RepoFile(params string[] parts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
+            directory = directory.Parent;
+
+        if (directory is null)
+            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
+
+        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
+    }
 }

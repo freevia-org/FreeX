@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Media.Immutable;
 
 using Free.Shared.Shell.Avalonia;
+using Free.Shared.Ribbon.Avalonia;
 using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -225,7 +226,7 @@ public sealed partial class MainWindow
 
         void AddMenuCommand(AutoFilterMenuItem item, Action onClick, bool isEnabled = true)
         {
-            var button = CreateAutoFilterActionButton(item.Label, onClick, isEnabled);
+            var button = CreateAutoFilterActionButton(item, onClick, isEnabled);
             if (initialFocusTarget is null && item.FocusRole == AutoFilterMenuEntryFocusRole.Command)
                 initialFocusTarget = button;
 
@@ -500,11 +501,26 @@ public sealed partial class MainWindow
         return root;
     }
 
-    private Button CreateAutoFilterActionButton(string label, Action onClick, bool isEnabled = true)
+    private Button CreateAutoFilterActionButton(AutoFilterMenuItem item, Action onClick, bool isEnabled = true)
     {
         var button = new Button
         {
-            Content = label,
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 7,
+                Children =
+                {
+                    AvaloniaRibbonIcons.BuildMonochrome(item.IconKind, 14, null, Brush(0x21, 0x21, 0x21)),
+                    new TextBlock
+                    {
+                        Text = item.Label,
+                        FontSize = 12,
+                        FontFamily = FormulaBarFontFamily,
+                        VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                    },
+                },
+            },
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
             HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left,
             Background = Brushes.Transparent,

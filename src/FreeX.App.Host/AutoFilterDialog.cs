@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using Free.Shared.Ribbon;
 using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Model;
 
@@ -67,15 +68,15 @@ public sealed partial class AutoFilterDialog : Window
         DisplayMemberPath = nameof(AutoFilterCriteriaOption.Label)
     };
     private readonly TextBox _criteriaValueBox2 = new() { Visibility = Visibility.Collapsed };
-    private readonly Button _sortAscendingButton = CreateMenuCommandButton(UiText.Get("AutoFilter_SortAToZ"));
-    private readonly Button _sortDescendingButton = CreateMenuCommandButton(UiText.Get("AutoFilter_SortZToA"));
-    private readonly Button _clearFilterButton = CreateMenuCommandButton(UiText.Get("AutoFilter_ClearFilterFrom2"));
+    private readonly Button _sortAscendingButton = CreateMenuCommandButton(UiText.Get("AutoFilter_SortAToZ"), RibbonCommandIconKind.SortAscending);
+    private readonly Button _sortDescendingButton = CreateMenuCommandButton(UiText.Get("AutoFilter_SortZToA"), RibbonCommandIconKind.SortDescending);
+    private readonly Button _clearFilterButton = CreateMenuCommandButton(UiText.Get("AutoFilter_ClearFilterFrom2"), RibbonCommandIconKind.Clear);
     private readonly GroupBox _filterByColorGroup = new() { Header = UiText.Get("AutoFilter_FilterByColor2"), Visibility = Visibility.Collapsed };
     private readonly StackPanel _filterByColorPanel = new();
     private readonly List<Button> _colorChoiceButtons = [];
-    private readonly Button _textFiltersButton = CreateMenuCommandButton(UiText.Get("AutoFilter_TextFilters"), Visibility.Collapsed);
-    private readonly Button _numberFiltersButton = CreateMenuCommandButton(UiText.Get("AutoFilter_NumberFilters"), Visibility.Collapsed);
-    private readonly Button _dateFiltersButton = CreateMenuCommandButton(UiText.Get("AutoFilter_DateFilters"), Visibility.Collapsed);
+    private readonly Button _textFiltersButton = CreateMenuCommandButton(UiText.Get("AutoFilter_TextFilters"), RibbonCommandIconKind.Filter, Visibility.Collapsed);
+    private readonly Button _numberFiltersButton = CreateMenuCommandButton(UiText.Get("AutoFilter_NumberFilters"), RibbonCommandIconKind.Filter, Visibility.Collapsed);
+    private readonly Button _dateFiltersButton = CreateMenuCommandButton(UiText.Get("AutoFilter_DateFilters"), RibbonCommandIconKind.Filter, Visibility.Collapsed);
     private readonly ListBox _checklistBox = new();
     private readonly Button _okButton = new() { Content = UiText.Ok, IsDefault = true, Width = 76, Margin = new Thickness(0, 0, 8, 0) };
     private readonly Button _cancelButton = new() { Content = UiText.Cancel, IsCancel = true, Width = 76 };
@@ -107,7 +108,7 @@ public sealed partial class AutoFilterDialog : Window
         : this(CreateDialogItems(menuPlan))
     {
         Title = UiText.Format("AutoFilter_TitleWithHeader", menuPlan.HeaderText);
-        _clearFilterButton.Content = UiText.Format("AutoFilter_ClearFilterFromHeader", menuPlan.HeaderText);
+        SetMenuCommandButtonContent(_clearFilterButton, UiText.Format("AutoFilter_ClearFilterFromHeader", menuPlan.HeaderText), RibbonCommandIconKind.Clear);
         _clearFilterButton.IsEnabled = FindClearFilterEntry(menuPlan)?.IsEnabled ?? true;
         SetSortLabels(menuPlan);
         ShowFilterFamilyButton(menuPlan.FilterKind);
