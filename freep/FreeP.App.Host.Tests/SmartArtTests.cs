@@ -1141,6 +1141,27 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesOrgChartAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/orgChart",
+            nodes: [("R", "CEO"), ("C1", "Sales"), ("C2", "Engineering")],
+            parOfConnections: [("R", "C1"), ("R", "C2")]);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Hierarchy,
+            "orgChart is a hierarchy-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "orgChart is in the bounded shared live-layout planner as a generic tree approximation");
+        sa.Data.Nodes.Should().ContainSingle();
+        sa.Data.Nodes[0].Text.Should().Be("CEO");
+        sa.Data.Nodes[0].Children.Select(n => n.Text).Should().BeEquivalentTo(new[] { "Sales", "Engineering" });
+    }
+
+    [Fact]
     public void Reader_ParsesVerticalBulletListAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -1222,7 +1243,7 @@ public sealed class SmartArtTests : IDisposable
     public void Reader_ParsesKnownHierarchyFamilyButDisablesLiveLayoutForUnsupportedSibling()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
-            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/orgChart",
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/horizontalHierarchy",
             nodes: [("R", "Root"), ("C", "Child")],
             parOfConnections: [("R", "C")]);
 
@@ -1550,6 +1571,35 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_OrgChartSmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/orgChart",
+            nodes: [("R", "CEO"), ("C1", "Sales"), ("C2", "Engineering")],
+            parOfConnections: [("R", "C1"), ("R", "C2")]);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Hierarchy);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(5, "three org-chart boxes plus two connectors should render from shared live data");
+        var renderedText = liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("CEO");
+        renderedText.Should().Contain("Sales");
+        renderedText.Should().Contain("Engineering");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(2, "WPF and Avalonia hosts consume shared orgChart connector DrawOps");
+    }
+
+    [Fact]
     public void Compositor_VerticalBulletListSmartArt_RendersSharedLiveShapes()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -1694,7 +1744,7 @@ public sealed class SmartArtTests : IDisposable
         var data = new SmartArtData
         {
             Family = SmartArtFamily.Hierarchy,
-            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/orgChart",
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/horizontalHierarchy",
             IsLiveLayoutSupported = false
         };
         var root = new SmartArtNode { Text = "Root", Level = 0 };
