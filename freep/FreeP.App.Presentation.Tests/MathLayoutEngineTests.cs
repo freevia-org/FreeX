@@ -329,6 +329,50 @@ public sealed class MathLayoutEngineTests
                     yield return b2;
     }
 
+    private static IEnumerable<MathBox.HRule> AllHRules(MathBox box)
+    {
+        if (box is MathBox.HRule h)
+            yield return h;
+        if (box is MathBox.Container c)
+            foreach (var child in c.Children)
+                foreach (var h2 in AllHRules(child))
+                    yield return h2;
+    }
+
+    [Fact]
+    public void Acc_WithExplicitAccent_PlacesAccentAboveBaseOnSharedLayout()
+    {
+        var acc = new MathNode.Acc("~", Run("x"));
+        var box = MathLayoutEngine.Layout(acc, "Cambria Math", FontSizePt);
+        var container = (MathBox.Container)box.Children[0];
+
+        var accentGlyph = container.Children.OfType<MathBox.Glyph>().Single(g => g.Text == "~");
+        var baseGlyph = AllGlyphs(container).Cast<MathBox.Glyph>().Single(g => g.Text == "x");
+
+        accentGlyph.Y.Should().BeLessThan(baseGlyph.Y);
+        box.Metrics.Ascent.Should().BeGreaterThan(baseGlyph.Metrics.Ascent,
+            "accented math must report the added accent height before WPF/Avalonia consume the shared box");
+    }
+
+    [Fact]
+    public void Bar_OverlineAndUnderline_PositionHRuleAroundBase()
+    {
+        var over = MathLayoutEngine.Layout(new MathNode.Bar(Run("x")), "Cambria Math", FontSizePt);
+        var under = MathLayoutEngine.Layout(new MathNode.Bar(Run("x"), isOver: false), "Cambria Math", FontSizePt);
+
+        var overContainer = (MathBox.Container)over.Children[0];
+        var underContainer = (MathBox.Container)under.Children[0];
+        var overRule = AllHRules(overContainer).Single();
+        var underRule = AllHRules(underContainer).Single();
+        var overBase = AllGlyphs(overContainer).Cast<MathBox.Glyph>().Single(g => g.Text == "x");
+        var underBase = AllGlyphs(underContainer).Cast<MathBox.Glyph>().Single(g => g.Text == "x");
+
+        overRule.Y.Should().BeLessThan(overBase.Y);
+        underRule.Y.Should().BeGreaterThan(underBase.Y + underBase.Metrics.Height);
+        over.Metrics.Ascent.Should().BeGreaterThan(under.Metrics.Ascent,
+            "overline adds ascent while underline adds descent in the shared layout");
+    }
+
     [Fact]
     public void Delim_TwoElements_ExplicitPipeSepChr_RendersPipeBetweenElements()
     {
