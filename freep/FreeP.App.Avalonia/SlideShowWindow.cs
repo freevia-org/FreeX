@@ -7,6 +7,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Free.Shared.AppServices;
+using FreeP.App.Avalonia.Recording;
 using FreeP.App.Compositor;
 using FreeP.App.Rendering.Avalonia;
 using FreeP.Core.Model;
@@ -366,11 +367,7 @@ public sealed class SlideShowWindow : Window
         ApplyInkExecution(SlideShowInkExecutionPlanner.UndoLastStroke(_inkExecutionState));
 
     private static ISlideShowRecordingCaptureBackend CreateDefaultRecordingCaptureBackend() =>
-        SlideShowHostCapabilityRecordingCaptureBackend.FromCapabilities(
-            SlideShowRecordingCaptureAdapterPlanner.BuildCapabilities(
-                SlideShowRecordingCaptureAdapterPlanner.BuildDeferredReadiness(
-                    "Avalonia slideshow",
-                    "Avalonia microphone/camera capture adapter")));
+        new AvaloniaWindowsRecordingCaptureBackend();
 
     /// <summary>Exposes the slide canvas for test assertions (DA1 suppression).</summary>
     internal SlideCanvas CanvasForTest => _slideCanvas;
