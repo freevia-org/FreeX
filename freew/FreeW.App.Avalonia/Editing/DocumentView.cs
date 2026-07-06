@@ -3210,7 +3210,6 @@ public sealed class DocumentView : Control
 
         foreach (var pc in _placed)
         {
-            if (pc.Sentinel) continue;
             var b = pc.Block;
             if (b < 0 || b >= blocks.Count) continue;
             if (blockPageAssignments[b] >= 0) continue;
@@ -11333,7 +11332,8 @@ public sealed class DocumentView : Control
         var plan = TableOfAuthoritiesRegionPlanner.BuildInsertPlan(
             _doc,
             Math.Clamp(_caret.Block, 0, _doc.Blocks.Count),
-            options);
+            options,
+            BuildTableOfAuthoritiesPageResolver());
         ApplyGeneratedReferencePlan(plan, "Insert Table of Authorities", adjustCaretForInsert: true);
     }
 
@@ -11342,8 +11342,30 @@ public sealed class DocumentView : Control
     public void RefreshTableOfAuthorities(ToaOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(_doc, options);
+        var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(
+            _doc,
+            options,
+            BuildTableOfAuthoritiesPageResolver());
         ApplyGeneratedReferencePlan(plan, "Update Table of Authorities", adjustCaretForInsert: false);
+    }
+
+    private ToaCitationPageResolver? BuildTableOfAuthoritiesPageResolver()
+    {
+        try
+        {
+            Relayout(_laidOutWidth > 0 ? _laidOutWidth : FallbackWidth);
+            if (_pageCount <= 1)
+                return null;
+
+            var assignments = ComputeBlockPageAssignments(Math.Max(1, _pageCount));
+            return assignments.Length == 0
+                ? null
+                : (_, blockIndex, _, _) => TableOfAuthorities.ResolveFromBlockPageAssignments(assignments, blockIndex);
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     public void ShowNotes()
@@ -11596,7 +11618,9 @@ public sealed class DocumentView : Control
 
         if (TableOfAuthoritiesRegionPlanner.ContainsRegion(_doc))
         {
-            var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(_doc);
+            var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(
+                _doc,
+                pageResolver: BuildTableOfAuthoritiesPageResolver());
             ApplyGeneratedReferencePlan(plan, "Update Table of Authorities", adjustCaretForInsert: false);
             refreshedGeneratedRegion = true;
         }

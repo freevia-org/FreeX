@@ -200,6 +200,36 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
+    public Task UpdateFields_refreshes_existing_table_of_authorities_with_overflow_page_references() => RunOnUiThread(() =>
+    {
+        var oldRegion = TableOfAuthorities.Build(new[] { new Citation("Old Case", CitationCategory.Cases) });
+        var blocks = new List<Block>
+        {
+            CitationMarkParagraph("Overflow Case", formatted: false)
+        };
+        for (var i = 0; i < 120; i++)
+            blocks.Add(new Paragraph($"Overflow filler {i + 1}: The quick brown fox jumps over the lazy dog."));
+        blocks.Add(CitationMarkParagraph("Overflow Case", formatted: false));
+        blocks.AddRange(oldRegion);
+
+        var view = ViewWith(blocks.ToArray());
+        view.Document.Page.WidthPt = 300;
+        view.Document.Page.HeightPt = 220;
+        view.Document.Page.MarginTopPt = 18;
+        view.Document.Page.MarginBottomPt = 18;
+        view.Document.Page.MarginLeftPt = 18;
+        view.Document.Page.MarginRightPt = 18;
+        view.Measure(new global::Avalonia.Size(800, 4000));
+
+        view.UpdateFields();
+
+        var entry = view.Document.Blocks.OfType<Paragraph>()
+            .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
+        entry.PlainText.Should().MatchRegex(@"^Overflow Case\t1, [2-9][0-9]*$");
+        entry.Runs.Select(run => run.Text).Should().HaveCount(3);
+    });
+
+    [Fact]
     public void InsertCaption_inserts_autonumbered_paragraph_after_caret()
     {
         var view = ViewWith();
