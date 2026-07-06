@@ -949,7 +949,7 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
-    public void Reader_ParsesKnownFamilyButDisablesLiveLayoutForUnsupportedVariant()
+    public void Reader_ParsesContinuousBlockProcessAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
             layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/continuousBlockProcess",
@@ -962,8 +962,27 @@ public sealed class SmartArtTests : IDisposable
         sa.Data.Should().NotBeNull();
         sa.Data!.Family.Should().Be(SmartArtFamily.Process,
             "the model should still retain broad family metadata for future layout slices");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "continuousBlockProcess is in the bounded shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Stage 1", "Stage 2");
+    }
+
+    [Fact]
+    public void Reader_ParsesKnownFamilyButDisablesLiveLayoutForUnsupportedVariant()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/segmentedProcess",
+            nodes: [("id1", "Stage 1"), ("id2", "Stage 2")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Process,
+            "unsupported variants still retain broad family metadata for future layout slices");
         sa.Data.IsLiveLayoutSupported.Should().BeFalse(
-            "continuousBlockProcess has richer geometry than the current bounded process1 planner");
+            "process-family layouts outside the bounded allow-list should keep cached-drawing fallback");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("Stage 1", "Stage 2");
     }
 

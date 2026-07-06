@@ -301,15 +301,30 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void ContinuousBlockProcess_ReturnsLiveProcessBoxesAndConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Process, "A", "B", "C");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/continuousBlockProcess";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("continuousBlockProcess is a bounded shared process layout");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(3, "one live box should be emitted per process node");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(2, "adjacent continuous-block process nodes need shared connectors");
+    }
+
+    [Fact]
     public void UnsupportedKnownLayout_ReturnsNull()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B");
-        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/continuousBlockProcess";
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/segmentedProcess";
         data.IsLiveLayoutSupported = false;
 
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
-        result.Should().BeNull("known-family layouts outside the bounded live planner should use cached drawing");
+        result.Should().BeNull("process-family layouts outside the bounded live planner should use cached drawing");
     }
 
     // BI2: when nodes parse to zero, Layout returns null so compositor uses cached-drawing fallback.
@@ -447,11 +462,10 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
-    public void Compositor_FallsBackToCachedDrawing_WhenKnownFamilyLayoutIsUnsupported()
+    public void Compositor_ContinuousBlockProcess_UsesLiveLayoutOverCachedDrawing()
     {
         var data = MakeData(SmartArtFamily.Process, "Live A", "Live B");
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/continuousBlockProcess";
-        data.IsLiveLayoutSupported = false;
 
         var smart = new SmartArtShape { Data = data };
         smart.FallbackShapes.Add(new SlideShape
@@ -493,7 +507,63 @@ public sealed class SmartArtLayoutTests
         var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
 
         var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
-        shapeOps.Should().ContainSingle("the unsupported process variant should render the cached shape, not live boxes");
+        shapeOps.Should().HaveCount(3, "continuousBlockProcess should render two live boxes plus one connector");
+        var renderedText = shapeOps
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Live A");
+        renderedText.Should().Contain("Live B");
+        renderedText.Should().NotContain("Cached fallback");
+    }
+
+    [Fact]
+    public void Compositor_FallsBackToCachedDrawing_WhenKnownFamilyLayoutIsUnsupported()
+    {
+        var data = MakeData(SmartArtFamily.Process, "Live A", "Live B");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/segmentedProcess";
+        data.IsLiveLayoutSupported = false;
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id            = 10,
+            Kind          = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu    = FrameX,
+            OffsetYEmu    = FrameY,
+            ExtentCxEmu   = FrameCx / 2,
+            ExtentCyEmu   = FrameCy / 2,
+            TextBody      = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached fallback" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id          = 62,
+            Kind        = SlideShapeKind.SmartArt,
+            OffsetXEmu  = FrameX,
+            OffsetYEmu  = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt    = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        shapeOps.Should().ContainSingle("unsupported process variants should render cached drawing, not live boxes");
         shapeOps[0].Text?.Paragraphs[0].Runs[0].Text.Should().Be("Cached fallback");
     }
 
