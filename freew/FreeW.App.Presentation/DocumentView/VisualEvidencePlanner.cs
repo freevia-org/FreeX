@@ -134,6 +134,7 @@ public sealed record FreeWVisualTableExpectation(
     bool HasPreferredWidths,
     bool HasNamedStyle,
     bool HasFloatingTextWrap,
+    IReadOnlyList<string> TableCellFillSignatures,
     IReadOnlyList<DocumentTableLayoutPlan> Tables,
     IReadOnlyList<DocumentTablePaginationPlan> PaginationPlans);
 
@@ -328,7 +329,7 @@ public static class FreeWVisualEvidencePlanner
 {
     public const string ManifestFileName = "freew_visual_evidence_manifest.json";
     public const string SchemaId = "freew.visual-evidence.v1";
-    public const int SchemaVersion = 13;
+    public const int SchemaVersion = 14;
     public const string SectionGeometryPageSurfaceRenderStatus = "section-page-surface";
 
     private const int MaxTrackedColorCount = 4096;
@@ -528,6 +529,8 @@ public static class FreeWVisualEvidencePlanner
                 "repeat-header-row",
                 "banded-rows",
                 "cell-shading",
+                "table-fill-signatures",
+                "style-derived-header-fill",
                 "cell-borders",
                 "cell-margins",
                 "cell-spacing",
@@ -565,6 +568,8 @@ public static class FreeWVisualEvidencePlanner
                 "keep-rows",
                 "banded-rows",
                 "cell-shading",
+                "table-fill-signatures",
+                "style-derived-header-fill",
                 "cell-borders",
                 "cell-margins",
                 "cell-spacing",
@@ -1210,6 +1215,7 @@ public static class FreeWVisualEvidencePlanner
         if (tables.Count == 0)
             return EmptyTableExpectation;
 
+        var tableCellFillSignatures = BuildTableCellFillSignatures(tables);
         return new FreeWVisualTableExpectation(
             TableCount: tables.Count,
             TotalRows: tables.Sum(table => table.RowCount),
@@ -1236,8 +1242,21 @@ public static class FreeWVisualEvidencePlanner
             HasPreferredWidths: tables.Any(table => table.HasPreferredWidths),
             HasNamedStyle: tables.Any(table => table.HasNamedStyle),
             HasFloatingTextWrap: tables.Any(table => table.HasFloatingTextWrap),
+            TableCellFillSignatures: tableCellFillSignatures,
             Tables: tables,
             PaginationPlans: tables.Select(table => table.Pagination).ToList());
+    }
+
+    public static IReadOnlyList<string> BuildTableCellFillSignatures(
+        IEnumerable<DocumentTableLayoutPlan> tables)
+    {
+        ArgumentNullException.ThrowIfNull(tables);
+
+        return tables
+            .SelectMany(BuildTableCellFillSignatures)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(signature => signature, StringComparer.Ordinal)
+            .ToList();
     }
 
     public static FreeWVisualDrawingObjectExpectation BuildDrawingObjectExpectation(
@@ -1905,6 +1924,7 @@ public static class FreeWVisualEvidencePlanner
         HasPreferredWidths: false,
         HasNamedStyle: false,
         HasFloatingTextWrap: false,
+        TableCellFillSignatures: [],
         Tables: [],
         PaginationPlans: []);
 
@@ -2096,6 +2116,75 @@ public static class FreeWVisualEvidencePlanner
         double.IsFinite(value) ? Math.Round(value, 3, MidpointRounding.AwayFromZero) : 0;
 
     private static string NormalizeHexColor(string hex) => ToHex(ParseRgb(hex, fallback: 0xFFFFFF));
+
+    private static string? NormalizeHexColorOrNull(string? hex)
+    {
+        if (string.IsNullOrWhiteSpace(hex))
+            return null;
+
+        var value = hex.Trim();
+        if (value.StartsWith('#'))
+            value = value[1..];
+        if (value.Length == 8)
+            value = value[2..];
+
+        if (value.Length != 6)
+            return hex.Trim().ToUpperInvariant();
+
+        return int.TryParse(value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb)
+            ? ToHex(rgb)
+            : hex.Trim().ToUpperInvariant();
+    }
+
+    private static IEnumerable<string> BuildTableCellFillSignatures(DocumentTableLayoutPlan table)
+    {
+        var styleHeaderFill = NormalizeHexColorOrNull(
+            DocumentTableStyle.FindById(table.TableStyleId ?? string.Empty)?.HeaderBand?.FillHex);
+
+        foreach (var cell in table.Cells)
+        {
+            var isHeaderCell = table.HasHeaderRow && cell.RowIndex == 0;
+            var explicitFill = NormalizeHexColorOrNull(cell.ShadingColorHex);
+
+            if (isHeaderCell && styleHeaderFill is not null)
+            {
+                yield return BuildTableCellFillSignature(
+                    table,
+                    cell,
+                    "style-derived-header",
+                    styleHeaderFill);
+            }
+
+            if (explicitFill is not null
+                && (!isHeaderCell || !string.Equals(explicitFill, styleHeaderFill, StringComparison.Ordinal)))
+            {
+                yield return BuildTableCellFillSignature(
+                    table,
+                    cell,
+                    "explicit-cell",
+                    explicitFill);
+            }
+        }
+    }
+
+    private static string BuildTableCellFillSignature(
+        DocumentTableLayoutPlan table,
+        DocumentTableCellLayoutPlan cell,
+        string source,
+        string fillHex) =>
+        string.Join(
+            "|",
+            "table=" + table.TableIndex.ToString(CultureInfo.InvariantCulture),
+            "row=" + cell.RowIndex.ToString(CultureInfo.InvariantCulture),
+            "cell=" + cell.CellIndex.ToString(CultureInfo.InvariantCulture),
+            "grid=" + cell.GridColumnIndex.ToString(CultureInfo.InvariantCulture),
+            "gridSpan=" + cell.GridSpan.ToString(CultureInfo.InvariantCulture),
+            "rowSpan=" + cell.RowSpan.ToString(CultureInfo.InvariantCulture),
+            "vMergeContinue=" + BoolFlag(cell.IsVerticalMergeContinuation),
+            "source=" + source,
+            "fill=" + fillHex);
+
+    private static string BoolFlag(bool value) => value ? "1" : "0";
 
     private static int ParseRgb(string hex, int fallback)
     {

@@ -47,8 +47,8 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("backstage-pdf-export-fidelity");
         source.Should().Contain("wpf-fidelity-render");
         source.Should().Contain("avalonia-page-layout-shot");
-        source.Should().Contain("[int]$summary.schemaVersion -ne 21");
-        source.Should().Contain("Backstage evidence readiness requires FreeW visual evidence summary schema v21");
+        source.Should().Contain("[int]$summary.schemaVersion -ne 22");
+        source.Should().Contain("Backstage evidence readiness requires FreeW visual evidence summary schema v22");
         source.Should().Contain("$evidenceRows = @($summary.evidence)");
         source.Should().Contain("$requiredWorkflowByScenario");
         source.Should().Contain("$requiredArtifactKindByScenario");

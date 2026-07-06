@@ -131,7 +131,14 @@ public sealed class VisualEvidencePlannerTests
         borderScenario.Composition.ExpectsWatermark.Should().BeTrue();
 
         var tableScenario = FreeWVisualEvidencePlanner.ResolveScenario("table-layout-complex");
-        tableScenario.ExpectedFeatureTags.Should().Contain(["table-layout", "merged-cells", "repeat-header-row"]);
+        tableScenario.ExpectedFeatureTags.Should().Contain([
+            "table-layout",
+            "merged-cells",
+            "repeat-header-row",
+            "cell-shading",
+            "table-fill-signatures",
+            "style-derived-header-fill"
+        ]);
         tableScenario.ExpectedOutputNamePattern.Should().Be("table-layout-complex_p{page}.png");
         tableScenario.Composition.ExpectsTables.Should().BeTrue();
 
@@ -147,6 +154,8 @@ public sealed class VisualEvidencePlannerTests
             "repeat-header-row",
             "keep-rows",
             "cell-borders",
+            "table-fill-signatures",
+            "style-derived-header-fill",
             "header-footer-fields",
             "page-border",
             "watermark",
@@ -1119,6 +1128,19 @@ public sealed class VisualEvidencePlannerTests
         expectation.Tables.HasNamedStyle.Should().BeTrue();
         expectation.Tables.Tables.Single().TableStyleId.Should().Be("GridTable4");
         expectation.Tables.Tables.Single().ColumnWidthsDip.Should().HaveCount(4);
+        expectation.Tables.TableCellFillSignatures.Should().HaveCount(8);
+        expectation.Tables.TableCellFillSignatures.Should().Contain(signature =>
+            signature.Contains("source=style-derived-header", StringComparison.Ordinal)
+            && signature.Contains("fill=#2F5496", StringComparison.Ordinal)
+            && signature.Contains("gridSpan=2", StringComparison.Ordinal));
+        expectation.Tables.TableCellFillSignatures.Should().Contain(signature =>
+            signature.Contains("source=explicit-cell", StringComparison.Ordinal)
+            && signature.Contains("fill=#EAF2F8", StringComparison.Ordinal)
+            && signature.Contains("row=1", StringComparison.Ordinal));
+        expectation.Tables.TableCellFillSignatures.Should().Contain(signature =>
+            signature.Contains("source=explicit-cell", StringComparison.Ordinal)
+            && signature.Contains("fill=#D9EAD3", StringComparison.Ordinal)
+            && signature.Contains("row=4", StringComparison.Ordinal));
         expectation.Tables.Tables.Single().Cells.Should().Contain(cell =>
             cell.GridSpan == 2 && cell.RowSpan == 1);
         expectation.Tables.Tables.Single().Cells.Should().Contain(cell =>
@@ -1199,6 +1221,12 @@ public sealed class VisualEvidencePlannerTests
         expectation.Tables.HasCellSpacing.Should().BeTrue();
         expectation.Tables.HasNamedStyle.Should().BeTrue();
         expectation.Tables.Tables.Single().TableStyleId.Should().Be("GridTable1Light");
+        expectation.Tables.TableCellFillSignatures.Should().Contain(signature =>
+            signature.Contains("source=style-derived-header", StringComparison.Ordinal)
+            && signature.Contains("fill=#4472C4", StringComparison.Ordinal));
+        expectation.Tables.TableCellFillSignatures.Should().Contain(signature =>
+            signature.Contains("source=explicit-cell", StringComparison.Ordinal)
+            && signature.Contains("fill=#F8FBFD", StringComparison.Ordinal));
         expectation.Tables.Tables.Single().Cells.Should().Contain(cell =>
             cell.HasCustomBorders && cell.ShadingColorHex == "#F8FBFD");
         var page2 = expectation.Tables.PaginationPlans.Single().Pages[1];
@@ -1924,6 +1952,10 @@ public sealed class VisualEvidencePlannerTests
                 ]);
 
             summary.Trust.Passed.Should().BeTrue();
+            summary.Evidence.Should().OnlyContain(row =>
+                row.Tables.TableCellFillSignatures.Any(signature =>
+                    signature.Contains("source=style-derived-header", StringComparison.Ordinal)
+                    && signature.Contains("fill=#2F5496", StringComparison.Ordinal)));
             summary.Trust.Failures.Should().NotContain(f =>
                 f.Contains("table renderer pair 'table-layout-complex' page 1", StringComparison.Ordinal)
                 && f.Contains("table plan signatures differ", StringComparison.Ordinal));
@@ -1960,13 +1992,25 @@ public sealed class VisualEvidencePlannerTests
             var bodyShadedCellIndex = avaloniaCells.FindIndex(cell =>
                 cell.RowIndex > 0 && !string.IsNullOrWhiteSpace(cell.ShadingColorHex));
             bodyShadedCellIndex.Should().BeGreaterThanOrEqualTo(0);
-            avaloniaCells[bodyShadedCellIndex] = avaloniaCells[bodyShadedCellIndex] with { ShadingColorHex = "#ABCDEF" };
+            var bodyShadedCell = avaloniaCells[bodyShadedCellIndex];
+            var originalFill = bodyShadedCell.ShadingColorHex!;
+            avaloniaCells[bodyShadedCellIndex] = bodyShadedCell with { ShadingColorHex = "#ABCDEF" };
+            var avaloniaFillSignatures = avaloniaRow.PageExpectation.Tables.TableCellFillSignatures
+                .Select(signature =>
+                    signature.Contains("source=explicit-cell", StringComparison.Ordinal)
+                    && signature.Contains("row=" + bodyShadedCell.RowIndex.ToString(), StringComparison.Ordinal)
+                    && signature.Contains("cell=" + bodyShadedCell.CellIndex.ToString(), StringComparison.Ordinal)
+                    && signature.Contains("fill=" + originalFill, StringComparison.Ordinal)
+                        ? signature.Replace("fill=" + originalFill, "fill=#ABCDEF", StringComparison.Ordinal)
+                        : signature)
+                .ToList();
             var avaloniaWithDifferentTablePlan = avaloniaRow with
             {
                 PageExpectation = avaloniaRow.PageExpectation with
                 {
                     Tables = avaloniaRow.PageExpectation.Tables with
                     {
+                        TableCellFillSignatures = avaloniaFillSignatures,
                         Tables = [avaloniaTablePlan with { Cells = avaloniaCells }]
                     }
                 }
@@ -1999,6 +2043,10 @@ public sealed class VisualEvidencePlannerTests
                 ]);
 
             summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("table renderer pair 'table-layout-complex' page 1", StringComparison.Ordinal)
+                && f.Contains("table cell fill signatures differ", StringComparison.Ordinal)
+                && f.Contains("#ABCDEF", StringComparison.Ordinal));
             summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("table renderer pair 'table-layout-complex' page 1", StringComparison.Ordinal)
                 && f.Contains("table plan signatures differ", StringComparison.Ordinal)
