@@ -237,10 +237,11 @@ public partial class MainWindow
 
         if (existing is null && result.ReplyText is not null)
         {
+            var author = FreeXOptions.NormalizeUserName(_options.UserName);
             changed = TryExecuteRepeatableCurrentRangeCommand(
                 "Threaded Comment",
                 range,
-                r => new SetThreadedCommentCommand(_currentSheetId, r.Start, result.ReplyText),
+                r => new SetThreadedCommentCommand(_currentSheetId, r.Start, result.ReplyText, author),
                 out var outcome);
             if (!changed)
             {
@@ -300,6 +301,7 @@ public partial class MainWindow
                         result.IsResolved != existing.IsResolved;
                     if (hasThreadChange)
                     {
+                        var replyAuthor = FreeXOptions.NormalizeUserName(_options.UserName);
                         changed = TryExecuteRepeatableCurrentRangeCommand(
                             "Edit Comment",
                             range,
@@ -308,7 +310,8 @@ public partial class MainWindow
                                 r.Start,
                                 result.RootText,
                                 result.ReplyText,
-                                result.IsResolved),
+                                result.IsResolved,
+                                replyAuthor),
                             out var outcome);
                         if (!changed)
                         {

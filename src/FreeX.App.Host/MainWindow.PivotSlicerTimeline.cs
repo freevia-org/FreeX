@@ -172,10 +172,18 @@ public partial class MainWindow
         if (slicer is null)
             return;
 
-        var allItems = ReadSlicerSourceItems(slicer).ToList();
-        var selected = SlicerTimelinePlanner.ToggleSlicerSelection(allItems, slicer.SelectedItems, caption);
+        // P8/H45: GridView reports a plain click on an on-grid slicer tile with no modifier info
+        // (NativeSlicerTileToggleRequested is Action<string,string>), so this path must apply Excel's
+        // plain-click REPLACE semantics — the same behaviour Avalonia gets from
+        // SlicerLayoutBuilder.Toggle(..., additive: false) — instead of the additive toggle used by
+        // SlicerTimelinePlanner.ToggleSlicerSelection (which is for the Ctrl-click-aware slicer pane).
+        // A plain click on a caption replaces the whole selection with just that item; a second plain
+        // click on the lone already-selected item clears the filter back to "everything selected".
+        var isSoleSelection = slicer.SelectedItems.Count == 1 &&
+            string.Equals(slicer.SelectedItems[0], caption, StringComparison.CurrentCultureIgnoreCase);
+        List<string> selected = isSoleSelection ? [] : [caption];
 
-        if (!TryExecuteCommand(new SetSlicerSelectionCommand(slicerName, selected.ToList()), "Slicer"))
+        if (!TryExecuteCommand(new SetSlicerSelectionCommand(slicerName, selected), "Slicer"))
             return;
 
         UpdateViewport();

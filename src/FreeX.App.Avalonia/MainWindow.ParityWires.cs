@@ -7,10 +7,47 @@ public sealed partial class MainWindow
 {
     // Small parity wires for ribbon buttons that map to existing capabilities.
 
-    /// <summary>Review - Delete Comment: clear comments/notes on the selection.</summary>
-    private void DeleteActiveCellComment()
+    /// <summary>
+    /// Review - Delete Comment: remove only the threaded comment (with all its replies) at the
+    /// active cell, leaving any coexisting legacy note untouched. Mirrors WPF's
+    /// ReviewDeleteThreadedCommentBtn_Click (MainWindow.ReviewCommands.cs), which runs
+    /// DeleteThreadedCommentCommand rather than the broad ClearCommentsCommand.
+    /// </summary>
+    private void DeleteActiveCellThreadedComment()
     {
-        var result = _session.ClearSelectedRangeComments();
+        var sheet = _session.ActiveSheet;
+        var address = _session.SelectedRange.Start;
+        if (!sheet.ThreadedComments.ContainsKey(address))
+        {
+            RefreshShell(UiText.Get("InsertLoc_CouldNotDeleteComment"));
+            return;
+        }
+
+        var result = _session.ExecuteReviewCommand(
+            new DeleteThreadedCommentCommand(sheet.Id, address));
+        RefreshShell(result.Success
+            ? UiText.Get("InsertLoc_ClearedCommentsAndNotes")
+            : result.ErrorMessage ?? UiText.Get("InsertLoc_CouldNotDeleteComment"));
+    }
+
+    /// <summary>
+    /// Review - Delete Note: remove only the legacy note at the active cell, leaving any
+    /// coexisting threaded comment (and its replies) untouched. Mirrors WPF's
+    /// ReviewDeleteCommentBtn_Click, which runs DeleteCommentCommand rather than the broad
+    /// ClearCommentsCommand.
+    /// </summary>
+    private void DeleteActiveCellNote()
+    {
+        var sheet = _session.ActiveSheet;
+        var address = _session.SelectedRange.Start;
+        if (!sheet.Comments.ContainsKey(address))
+        {
+            RefreshShell(UiText.Get("InsertLoc_CouldNotDeleteComment"));
+            return;
+        }
+
+        var result = _session.ExecuteReviewCommand(
+            new DeleteCommentCommand(sheet.Id, address));
         RefreshShell(result.Success
             ? UiText.Get("InsertLoc_ClearedCommentsAndNotes")
             : result.ErrorMessage ?? UiText.Get("InsertLoc_CouldNotDeleteComment"));
