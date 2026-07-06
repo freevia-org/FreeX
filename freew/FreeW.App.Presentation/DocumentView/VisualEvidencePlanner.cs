@@ -2249,25 +2249,24 @@ public static class FreeWVisualEvidencePlanner
 
     private static IEnumerable<string> BuildTableCellFillSignatures(DocumentTableLayoutPlan table)
     {
-        var styleHeaderFill = NormalizeHexColorOrNull(
-            DocumentTableStyle.FindById(table.TableStyleId ?? string.Empty)?.HeaderBand?.FillHex);
+        var tableStyle = DocumentTableStyle.FindById(table.TableStyleId ?? string.Empty);
 
         foreach (var cell in table.Cells)
         {
-            var isHeaderCell = table.HasHeaderRow && cell.RowIndex == 0;
+            var styleFill = ResolveStyleDerivedCellFill(table, cell, tableStyle);
             var explicitFill = NormalizeHexColorOrNull(cell.ShadingColorHex);
 
-            if (isHeaderCell && styleHeaderFill is not null)
+            if (styleFill is not null)
             {
                 yield return BuildTableCellFillSignature(
                     table,
                     cell,
-                    "style-derived-header",
-                    styleHeaderFill);
+                    styleFill.Value.Source,
+                    styleFill.Value.FillHex);
             }
 
             if (explicitFill is not null
-                && (!isHeaderCell || !string.Equals(explicitFill, styleHeaderFill, StringComparison.Ordinal)))
+                && !string.Equals(explicitFill, styleFill?.FillHex, StringComparison.Ordinal))
             {
                 yield return BuildTableCellFillSignature(
                     table,
@@ -2277,6 +2276,62 @@ public static class FreeWVisualEvidencePlanner
             }
         }
     }
+
+    private static (string Source, string FillHex)? ResolveStyleDerivedCellFill(
+        DocumentTableLayoutPlan table,
+        DocumentTableCellLayoutPlan cell,
+        DocumentTableStyle? tableStyle)
+    {
+        if (tableStyle is null)
+            return null;
+
+        var isFirstColumn = cell.GridColumnIndex == 0;
+        var isLastColumn = table.GridColumnCount > 0
+            && cell.GridColumnIndex + Math.Max(1, cell.GridSpan) >= table.GridColumnCount;
+        var (fillHex, _) = tableStyle.ResolveCellStyle(
+            cell.RowIndex,
+            Math.Max(0, table.RowCount),
+            isFirstColumn,
+            isLastColumn,
+            BuildTableFormatting(table));
+        var normalizedFill = NormalizeHexColorOrNull(fillHex);
+        if (normalizedFill is null)
+            return null;
+
+        return (ResolveStyleDerivedCellFillSource(table, cell, isFirstColumn, isLastColumn), normalizedFill);
+    }
+
+    private static string ResolveStyleDerivedCellFillSource(
+        DocumentTableLayoutPlan table,
+        DocumentTableCellLayoutPlan cell,
+        bool isFirstColumn,
+        bool isLastColumn)
+    {
+        if (table.HasHeaderRow && cell.RowIndex == 0)
+            return "style-derived-header";
+        if (table.HasLastRow && cell.RowIndex == Math.Max(0, table.RowCount - 1))
+            return "style-derived-last-row";
+        if (table.HasFirstColumn && isFirstColumn)
+            return "style-derived-first-column";
+        if (table.HasLastColumn && isLastColumn)
+            return "style-derived-last-column";
+        if (table.HasBandedRows && TableBanding.BodyRowIndex(cell.RowIndex, table.HasHeaderRow) >= 0)
+            return "style-derived-banded-row";
+
+        return "style-derived-cell";
+    }
+
+    private static TableFormatting BuildTableFormatting(DocumentTableLayoutPlan table) =>
+        new()
+        {
+            HeaderRow = table.HasHeaderRow,
+            RepeatHeaderRow = table.RepeatsHeaderRow,
+            BandedRows = table.HasBandedRows,
+            BandedColumns = table.HasBandedColumns,
+            FirstColumn = table.HasFirstColumn,
+            LastColumn = table.HasLastColumn,
+            LastRow = table.HasLastRow
+        };
 
     private static string BuildTableCellFillSignature(
         DocumentTableLayoutPlan table,

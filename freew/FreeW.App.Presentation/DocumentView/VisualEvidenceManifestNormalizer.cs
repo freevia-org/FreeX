@@ -2508,6 +2508,9 @@ public static class FreeWVisualEvidenceManifestNormalizer
             AddTablePropertyDifference(differences, tableIndex, "repeats header row", wpfTable.RepeatsHeaderRow, avaloniaTable.RepeatsHeaderRow);
             AddTablePropertyDifference(differences, tableIndex, "has banded rows", wpfTable.HasBandedRows, avaloniaTable.HasBandedRows);
             AddTablePropertyDifference(differences, tableIndex, "has banded columns", wpfTable.HasBandedColumns, avaloniaTable.HasBandedColumns);
+            AddTablePropertyDifference(differences, tableIndex, "has first column", wpfTable.HasFirstColumn, avaloniaTable.HasFirstColumn);
+            AddTablePropertyDifference(differences, tableIndex, "has last column", wpfTable.HasLastColumn, avaloniaTable.HasLastColumn);
+            AddTablePropertyDifference(differences, tableIndex, "has last row", wpfTable.HasLastRow, avaloniaTable.HasLastRow);
             AddTablePropertyDifference(differences, tableIndex, "has merged cells", wpfTable.HasMergedCells, avaloniaTable.HasMergedCells);
             AddTablePropertyDifference(differences, tableIndex, "has vertical merges", wpfTable.HasVerticalMerges, avaloniaTable.HasVerticalMerges);
             AddTablePropertyDifference(differences, tableIndex, "has cell shading", wpfTable.HasCellShading, avaloniaTable.HasCellShading);
@@ -2647,6 +2650,9 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 BoolFlag(table.RepeatsHeaderRow),
                 BoolFlag(table.HasBandedRows),
                 BoolFlag(table.HasBandedColumns),
+                BoolFlag(table.HasFirstColumn),
+                BoolFlag(table.HasLastColumn),
+                BoolFlag(table.HasLastRow),
                 BoolFlag(table.HasMergedCells),
                 BoolFlag(table.HasVerticalMerges),
                 BoolFlag(table.HasCellShading),
@@ -2703,14 +2709,13 @@ public static class FreeWVisualEvidenceManifestNormalizer
         FreeWVisualTableExpectation tableExpectation,
         DocumentTableLayoutPlan table)
     {
-        if (!table.HasHeaderRow || table.Cells.Count == 0)
+        if (table.Cells.Count == 0)
             return table;
 
-        var styleHeaderFill = DocumentTableStyle.FindById(table.TableStyleId ?? string.Empty)?.HeaderBand?.FillHex;
+        var tableStyle = DocumentTableStyle.FindById(table.TableStyleId ?? string.Empty);
         var cells = table.Cells
-            .Select(cell => cell.RowIndex == 0
-                && !HasExplicitHeaderCellFillSignature(tableExpectation, table, cell)
-                && IsStyleDerivedHeaderFill(cell.ShadingColorHex, styleHeaderFill, table.HasNamedStyle)
+            .Select(cell => !HasExplicitCellFillSignature(tableExpectation, table, cell)
+                && IsStyleDerivedCellFill(table, cell, tableStyle)
                 ? cell with { ShadingColorHex = null }
                 : cell)
             .ToList();
@@ -2722,24 +2727,114 @@ public static class FreeWVisualEvidenceManifestNormalizer
         };
     }
 
-    private static bool IsStyleDerivedHeaderFill(string? shadingColorHex, string? styleHeaderFillHex, bool hasNamedStyle)
+    private static bool IsStyleDerivedCellFill(
+        DocumentTableLayoutPlan table,
+        DocumentTableCellLayoutPlan cell,
+        DocumentTableStyle? tableStyle)
     {
-        var normalizedShading = NormalizeHexForComparison(shadingColorHex);
+        var normalizedShading = NormalizeHexForComparison(cell.ShadingColorHex);
         if (normalizedShading is null)
             return false;
 
-        return string.Equals(normalizedShading, NormalizeHexForComparison(styleHeaderFillHex), StringComparison.Ordinal)
-            || hasNamedStyle && BuiltInHeaderChromeFillHexes.Contains(normalizedShading);
+        var styleFill = NormalizeHexForComparison(ResolveStyleDerivedCellFill(table, cell, tableStyle));
+        if (string.Equals(normalizedShading, styleFill, StringComparison.Ordinal))
+            return true;
+
+        if (table.HasNamedStyle
+            && CanApplyStyleChrome(table, cell)
+            && BuiltInStyleChromeFillHexes.Contains(normalizedShading))
+            return true;
+
+        return IsLegacyStyleChromeFill(table, cell, normalizedShading);
     }
 
-    private static readonly IReadOnlySet<string> BuiltInHeaderChromeFillHexes =
+    private static string? ResolveStyleDerivedCellFill(
+        DocumentTableLayoutPlan table,
+        DocumentTableCellLayoutPlan cell,
+        DocumentTableStyle? tableStyle)
+    {
+        if (tableStyle is null)
+            return null;
+
+        var isFirstColumn = cell.GridColumnIndex == 0;
+        var isLastColumn = table.GridColumnCount > 0
+            && cell.GridColumnIndex + Math.Max(1, cell.GridSpan) >= table.GridColumnCount;
+        var (fillHex, _) = tableStyle.ResolveCellStyle(
+            cell.RowIndex,
+            Math.Max(0, table.RowCount),
+            isFirstColumn,
+            isLastColumn,
+            BuildTableFormatting(table));
+        return fillHex;
+    }
+
+    private static TableFormatting BuildTableFormatting(DocumentTableLayoutPlan table) =>
+        new()
+        {
+            HeaderRow = table.HasHeaderRow,
+            RepeatHeaderRow = table.RepeatsHeaderRow,
+            BandedRows = table.HasBandedRows,
+            BandedColumns = table.HasBandedColumns,
+            FirstColumn = table.HasFirstColumn,
+            LastColumn = table.HasLastColumn,
+            LastRow = table.HasLastRow
+        };
+
+    private static bool CanApplyStyleChrome(DocumentTableLayoutPlan table, DocumentTableCellLayoutPlan cell)
+    {
+        if (table.HasHeaderRow && cell.RowIndex == 0)
+            return true;
+        if (table.HasLastRow && cell.RowIndex == Math.Max(0, table.RowCount - 1))
+            return true;
+        if (table.HasFirstColumn && cell.GridColumnIndex == 0)
+            return true;
+        if (table.HasLastColumn
+            && table.GridColumnCount > 0
+            && cell.GridColumnIndex + Math.Max(1, cell.GridSpan) >= table.GridColumnCount)
+            return true;
+
+        return table.HasBandedRows && TableBanding.BodyRowIndex(cell.RowIndex, table.HasHeaderRow) >= 0;
+    }
+
+    private static bool IsLegacyStyleChromeFill(
+        DocumentTableLayoutPlan table,
+        DocumentTableCellLayoutPlan cell,
+        string normalizedShading)
+    {
+        if (table.HasNamedStyle)
+            return false;
+        if (table.HasHeaderRow && cell.RowIndex == 0)
+            return normalizedShading == LegacyHeaderChromeFillHex;
+        if (!table.HasBandedRows)
+            return false;
+
+        var bodyIndex = TableBanding.BodyRowIndex(cell.RowIndex, table.HasHeaderRow);
+        return bodyIndex >= 0
+            && bodyIndex % 2 == 0
+            && normalizedShading == LegacyBandedRowChromeFillHex;
+    }
+
+    private const string LegacyHeaderChromeFillHex = "#D9E2F3";
+    private const string LegacyBandedRowChromeFillHex = "#F2F2F2";
+
+    private static readonly IReadOnlySet<string> BuiltInStyleChromeFillHexes =
         DocumentTableStyle.Catalog
-            .Select(style => NormalizeHexForComparison(style.HeaderBand?.FillHex))
+            .SelectMany(style => new[]
+            {
+                style.HeaderBand?.FillHex,
+                style.BandedRowOdd?.FillHex,
+                style.BandedRowEven?.FillHex,
+                style.FirstColumnBand?.FillHex,
+                style.LastColumnBand?.FillHex,
+                style.LastRowBand?.FillHex
+            })
+            .Select(NormalizeHexForComparison)
             .Where(static fill => fill is not null)
-            .Append("#D9E2F3")
+            .Append(LegacyHeaderChromeFillHex)
+            .Append(LegacyBandedRowChromeFillHex)
             .ToHashSet(StringComparer.Ordinal)!;
 
-    private static bool HasExplicitHeaderCellFillSignature(
+    private static bool HasExplicitCellFillSignature(
         FreeWVisualTableExpectation tableExpectation,
         DocumentTableLayoutPlan table,
         DocumentTableCellLayoutPlan cell)

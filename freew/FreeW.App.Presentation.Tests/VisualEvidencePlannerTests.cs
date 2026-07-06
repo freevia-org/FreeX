@@ -1151,11 +1151,15 @@ public sealed class VisualEvidencePlannerTests
         expectation.Tables.HasNamedStyle.Should().BeTrue();
         expectation.Tables.Tables.Single().TableStyleId.Should().Be("GridTable4");
         expectation.Tables.Tables.Single().ColumnWidthsDip.Should().HaveCount(4);
-        expectation.Tables.TableCellFillSignatures.Should().HaveCount(8);
+        expectation.Tables.TableCellFillSignatures.Count.Should().BeGreaterThan(8);
         expectation.Tables.TableCellFillSignatures.Should().Contain(signature =>
             signature.Contains("source=style-derived-header", StringComparison.Ordinal)
             && signature.Contains("fill=#2F5496", StringComparison.Ordinal)
             && signature.Contains("gridSpan=2", StringComparison.Ordinal));
+        expectation.Tables.TableCellFillSignatures.Should().Contain(signature =>
+            signature.Contains("source=style-derived-banded-row", StringComparison.Ordinal)
+            && signature.Contains("fill=#BDD7EE", StringComparison.Ordinal)
+            && signature.Contains("row=1", StringComparison.Ordinal));
         expectation.Tables.TableCellFillSignatures.Should().Contain(signature =>
             signature.Contains("source=explicit-cell", StringComparison.Ordinal)
             && signature.Contains("fill=#EAF2F8", StringComparison.Ordinal)
@@ -2066,6 +2070,88 @@ public sealed class VisualEvidencePlannerTests
                 ]);
 
             summary.Trust.Passed.Should().BeTrue();
+            summary.Trust.Failures.Should().NotContain(f =>
+                f.Contains("table renderer pair 'table-layout-complex' page 1", StringComparison.Ordinal)
+                && f.Contains("table plan signatures differ", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_AllowsStyleDerivedBandedRowVarianceInTablePlanEvidence()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "table-layout-complex";
+            var wpfRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var wpfTablePlan = wpfRow.PageExpectation.Tables.Tables.Single();
+            var wpfCells = wpfTablePlan.Cells.ToList();
+            var styleDerivedBodyCellIndex = wpfCells.FindIndex(cell =>
+                cell.RowIndex == 1
+                && cell.ShadingColorHex is null
+                && cell.GridColumnIndex == 1);
+            styleDerivedBodyCellIndex.Should().BeGreaterThanOrEqualTo(0);
+            wpfCells[styleDerivedBodyCellIndex] =
+                wpfCells[styleDerivedBodyCellIndex] with { ShadingColorHex = "#BDD7EE" };
+            var wpfWithMaterializedBandedRowFill = wpfRow with
+            {
+                PageExpectation = wpfRow.PageExpectation with
+                {
+                    Tables = wpfRow.PageExpectation.Tables with
+                    {
+                        Tables = [wpfTablePlan with { Cells = wpfCells }]
+                    }
+                }
+            };
+            var avaloniaRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [wpfWithMaterializedBandedRowFill],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [avaloniaRow],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeTrue();
+            summary.Evidence.Should().OnlyContain(row =>
+                row.Tables.TableCellFillSignatures.Any(signature =>
+                    signature.Contains("source=style-derived-banded-row", StringComparison.Ordinal)
+                    && signature.Contains("fill=#BDD7EE", StringComparison.Ordinal)));
             summary.Trust.Failures.Should().NotContain(f =>
                 f.Contains("table renderer pair 'table-layout-complex' page 1", StringComparison.Ordinal)
                 && f.Contains("table plan signatures differ", StringComparison.Ordinal));
