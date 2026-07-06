@@ -551,11 +551,12 @@ public static partial class ChartRenderPlanner
     {
         double titleAreaHeight = chart.Title is not null ? TitleHeight + Margin : 0;
         bool hasLegend = chart.Legend.HasValue;
+        bool legendReservesPlotSpace = hasLegend && chart.LegendOverlay != true;
         bool legendRight = chart.Legend is LegendPosition.Right or LegendPosition.Left;
-        double legendAreaWidth = hasLegend && legendRight
+        double legendAreaWidth = legendReservesPlotSpace && legendRight
             ? Math.Min(90, bounds.Width * 0.20)
             : 0;
-        double legendAreaHeight = hasLegend && !legendRight
+        double legendAreaHeight = legendReservesPlotSpace && !legendRight
             ? LegendHeight + Margin
             : 0;
 
@@ -607,6 +608,8 @@ public static partial class ChartRenderPlanner
             plotTop,
             plotRight - plotLeft,
             plotBottom - plotTop);
+        if (TryResolveManualLayoutRect(chart.PlotAreaManualLayout, bounds, out var manualPlot))
+            plot = manualPlot;
         ChartPlanRect? titleBounds = chart.Title is not null
             ? new ChartPlanRect(
                 bounds.X + Margin,
@@ -645,20 +648,17 @@ public static partial class ChartRenderPlanner
             return Array.Empty<ChartLegendItemPlan>();
 
         var plot = frame.Plot;
-        double legendX;
-        double legendY;
-        double legendWidth;
-        if (frame.LegendRight)
+        var legendBounds = ResolveLegendBounds(chart, frame);
+        double legendWidth = legendBounds.Width;
+        if (!legendBounds.HasPositiveArea)
+            return Array.Empty<ChartLegendItemPlan>();
+
+        bool verticalLegend = frame.LegendRight;
+        if (chart.LegendManualLayout?.IsCompleteFactorRectangle == true &&
+            legendBounds.Height < LegendHeight * 1.5 &&
+            legendBounds.Width >= 80.0)
         {
-            legendX = frame.Bounds.X + frame.Bounds.Width - frame.LegendAreaWidth - Margin / 2;
-            legendY = plot.Y;
-            legendWidth = frame.LegendAreaWidth - Margin / 2;
-        }
-        else
-        {
-            legendX = plot.X;
-            legendY = frame.Bounds.Y + frame.Bounds.Height - frame.LegendAreaHeight - Margin / 2;
-            legendWidth = plot.Width;
+            verticalLegend = false;
         }
 
         int itemCount = frame.IsPie
@@ -668,7 +668,7 @@ public static partial class ChartRenderPlanner
                     ? chart.Series[0].Values.Count
                     : 0
             : chart.Series.Count;
-        int maxItems = (int)Math.Max(1, frame.LegendRight ? plot.Height / LegendHeight : legendWidth / 80);
+        int maxItems = (int)Math.Max(1, verticalLegend ? legendBounds.Height / LegendHeight : legendWidth / 80);
         int itemsToShow = Math.Min(itemCount, maxItems);
         if (itemsToShow == 0)
             return Array.Empty<ChartLegendItemPlan>();
@@ -676,9 +676,11 @@ public static partial class ChartRenderPlanner
         var items = new List<ChartLegendItemPlan>(itemsToShow);
         for (int itemIndex = 0; itemIndex < itemsToShow; itemIndex++)
         {
-            double itemX = frame.LegendRight ? legendX : legendX + itemIndex * 80.0;
-            double itemY = frame.LegendRight ? legendY + itemIndex * LegendHeight : legendY;
-            double textWidth = frame.LegendRight ? legendWidth - 10 : 70;
+            double itemX = verticalLegend ? legendBounds.X : legendBounds.X + itemIndex * 80.0;
+            double itemY = verticalLegend ? legendBounds.Y + itemIndex * LegendHeight : legendBounds.Y;
+            double textWidth = verticalLegend
+                ? Math.Max(0, legendWidth - 10)
+                : Math.Min(70, Math.Max(0, legendBounds.Right - itemX - 10));
             string text = frame.IsPie
                 ? itemIndex < chart.Categories.Count
                     ? chart.Categories[itemIndex]
@@ -703,6 +705,62 @@ public static partial class ChartRenderPlanner
 
         return items;
     }
+
+    private static ChartPlanRect ResolveLegendBounds(ChartShape chart, ChartFramePlan frame)
+    {
+        if (TryResolveManualLayoutRect(chart.LegendManualLayout, frame.Bounds, out var manualLegend))
+            return manualLegend;
+
+        var plot = frame.Plot;
+        if (frame.LegendRight)
+        {
+            double legendAreaWidth = frame.LegendAreaWidth > 0
+                ? frame.LegendAreaWidth
+                : Math.Min(90, frame.Bounds.Width * 0.20);
+            double legendWidth = Math.Max(0, legendAreaWidth - Margin / 2);
+            return new ChartPlanRect(
+                frame.Bounds.X + frame.Bounds.Width - legendAreaWidth - Margin / 2,
+                plot.Y,
+                legendWidth,
+                plot.Height);
+        }
+
+        double legendAreaHeight = frame.LegendAreaHeight > 0
+            ? frame.LegendAreaHeight
+            : LegendHeight + Margin;
+        return new ChartPlanRect(
+            plot.X,
+            frame.Bounds.Y + frame.Bounds.Height - legendAreaHeight - Margin / 2,
+            plot.Width,
+            LegendHeight);
+    }
+
+    private static bool TryResolveManualLayoutRect(
+        ChartManualLayout? layout,
+        ChartPlanRect parent,
+        out ChartPlanRect rect)
+    {
+        rect = default;
+        if (layout?.IsCompleteFactorRectangle != true)
+            return false;
+
+        double x = parent.X + parent.Width * ClampFactor(layout.X!.Value);
+        double y = parent.Y + parent.Height * ClampFactor(layout.Y!.Value);
+        double width = parent.Width * ClampFactor(layout.Width!.Value);
+        double height = parent.Height * ClampFactor(layout.Height!.Value);
+        double right = Math.Min(parent.Right, x + width);
+        double bottom = Math.Min(parent.Bottom, y + height);
+        rect = new ChartPlanRect(
+            x,
+            y,
+            Math.Max(0, right - x),
+            Math.Max(0, bottom - y));
+
+        return rect.HasPositiveArea;
+    }
+
+    private static double ClampFactor(double value) =>
+        double.IsFinite(value) ? Math.Clamp(value, 0.0, 1.0) : 0.0;
 
     public static bool IsLineOrArea(ChartType chartType) =>
         chartType is ChartType.Line

@@ -1327,6 +1327,84 @@ public sealed class PptxPackageRetentionTests
     }
 
     [Fact]
+    public void ReadWriteRead_ChartManualLayoutAndLegendOverlay_RetainsModeledChartPackageSemantics()
+    {
+        using var source = BuildPptxWithChartManualLayoutAndLegendOverlay();
+        var loaded = PptxPackageReader.Read(source);
+
+        var chart = loaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        chart.PlotAreaManualLayout.Should().NotBeNull();
+        chart.PlotAreaManualLayout!.LayoutTarget.Should().Be("inner");
+        chart.PlotAreaManualLayout.XMode.Should().Be(ChartManualLayoutMode.Factor);
+        chart.PlotAreaManualLayout.YMode.Should().Be(ChartManualLayoutMode.Factor);
+        chart.PlotAreaManualLayout.WidthMode.Should().Be(ChartManualLayoutMode.Factor);
+        chart.PlotAreaManualLayout.HeightMode.Should().Be(ChartManualLayoutMode.Factor);
+        chart.PlotAreaManualLayout.X.Should().BeApproximately(0.12, 0.0001);
+        chart.PlotAreaManualLayout.Y.Should().BeApproximately(0.18, 0.0001);
+        chart.PlotAreaManualLayout.Width.Should().BeApproximately(0.68, 0.0001);
+        chart.PlotAreaManualLayout.Height.Should().BeApproximately(0.62, 0.0001);
+        chart.Legend.Should().Be(LegendPosition.Right);
+        chart.LegendOverlay.Should().BeTrue();
+        chart.LegendManualLayout.Should().NotBeNull();
+        chart.LegendManualLayout!.X.Should().BeApproximately(0.72, 0.0001);
+        chart.LegendManualLayout.Y.Should().BeApproximately(0.20, 0.0001);
+        chart.LegendManualLayout.Width.Should().BeApproximately(0.20, 0.0001);
+        chart.LegendManualLayout.Height.Should().BeApproximately(0.25, 0.0001);
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        var savedBytes = saved.ToArray();
+
+        using (var archive = new ZipArchive(new MemoryStream(savedBytes), ZipArchiveMode.Read))
+        {
+            ReadText(archive, "customXml/chartWorkbookPayload.xml")
+                .Should()
+                .Contain("unrelated-retain-me");
+
+            var savedChartXml = LoadXml(archive, "ppt/charts/chart1.xml");
+            var savedChart = savedChartXml.Root!.Element(ChartNs + "chart")!;
+            var savedPlotManualLayout = savedChart
+                .Element(ChartNs + "plotArea")!
+                .Element(ChartNs + "layout")!
+                .Element(ChartNs + "manualLayout")!;
+            savedPlotManualLayout.Element(ChartNs + "layoutTarget")!.Attribute("val")!.Value.Should().Be("inner");
+            savedPlotManualLayout.Element(ChartNs + "xMode")!.Attribute("val")!.Value.Should().Be("factor");
+            savedPlotManualLayout.Element(ChartNs + "yMode")!.Attribute("val")!.Value.Should().Be("factor");
+            savedPlotManualLayout.Element(ChartNs + "wMode")!.Attribute("val")!.Value.Should().Be("factor");
+            savedPlotManualLayout.Element(ChartNs + "hMode")!.Attribute("val")!.Value.Should().Be("factor");
+            savedPlotManualLayout.Element(ChartNs + "x")!.Attribute("val")!.Value.Should().Be("0.12");
+            savedPlotManualLayout.Element(ChartNs + "y")!.Attribute("val")!.Value.Should().Be("0.18");
+            savedPlotManualLayout.Element(ChartNs + "w")!.Attribute("val")!.Value.Should().Be("0.68");
+            savedPlotManualLayout.Element(ChartNs + "h")!.Attribute("val")!.Value.Should().Be("0.62");
+
+            var savedLegend = savedChart.Element(ChartNs + "legend")!;
+            savedLegend.Element(ChartNs + "overlay")!.Attribute("val")!.Value.Should().Be("1");
+            var savedLegendManualLayout = savedLegend
+                .Element(ChartNs + "layout")!
+                .Element(ChartNs + "manualLayout")!;
+            savedLegendManualLayout.Element(ChartNs + "x")!.Attribute("val")!.Value.Should().Be("0.72");
+            savedLegendManualLayout.Element(ChartNs + "y")!.Attribute("val")!.Value.Should().Be("0.2");
+            savedLegendManualLayout.Element(ChartNs + "w")!.Attribute("val")!.Value.Should().Be("0.2");
+            savedLegendManualLayout.Element(ChartNs + "h")!.Attribute("val")!.Value.Should().Be("0.25");
+        }
+
+        using var savedRead = new MemoryStream(savedBytes);
+        var reloaded = PptxPackageReader.Read(savedRead);
+        var reloadedChart = reloaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        reloadedChart.PlotAreaManualLayout.Should().NotBeNull();
+        reloadedChart.PlotAreaManualLayout!.X.Should().BeApproximately(0.12, 0.0001);
+        reloadedChart.PlotAreaManualLayout.Y.Should().BeApproximately(0.18, 0.0001);
+        reloadedChart.PlotAreaManualLayout.Width.Should().BeApproximately(0.68, 0.0001);
+        reloadedChart.PlotAreaManualLayout.Height.Should().BeApproximately(0.62, 0.0001);
+        reloadedChart.LegendOverlay.Should().BeTrue();
+        reloadedChart.LegendManualLayout.Should().NotBeNull();
+        reloadedChart.LegendManualLayout!.X.Should().BeApproximately(0.72, 0.0001);
+        reloadedChart.LegendManualLayout.Y.Should().BeApproximately(0.20, 0.0001);
+        reloadedChart.LegendManualLayout.Width.Should().BeApproximately(0.20, 0.0001);
+        reloadedChart.LegendManualLayout.Height.Should().BeApproximately(0.25, 0.0001);
+    }
+
+    [Fact]
     public void ReadWriteRead_ChartDataTableTextStyleFontFamily_RoundTripsAndIsNotDroppedToCalibri()
     {
         // KA1: c:dTable/c:txPr/a:defRPr/a:latin typeface="Georgia" must be captured into
@@ -1738,6 +1816,64 @@ public sealed class PptxPackageRetentionTests
         package.Position = 0;
         return package;
     }
+
+    private static MemoryStream BuildPptxWithChartManualLayoutAndLegendOverlay()
+    {
+        using var source = BuildPptxWithChartWorkbookAndUnrelatedPackageData();
+        var package = new MemoryStream();
+        package.Write(source.ToArray());
+        package.Position = 0;
+
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var chartXml = LoadXml(archive, "ppt/charts/chart1.xml");
+            var chartEl = chartXml.Root!.Element(ChartNs + "chart")!;
+            var plotArea = chartEl.Element(ChartNs + "plotArea")!;
+            plotArea.AddFirst(BuildChartManualLayoutXml(
+                layoutTarget: "inner",
+                x: "0.12",
+                y: "0.18",
+                width: "0.68",
+                height: "0.62"));
+
+            chartEl.Element(ChartNs + "legend")?.Remove();
+            chartEl.Element(ChartNs + "plotVisOnly")!.AddBeforeSelf(
+                new XElement(ChartNs + "legend",
+                    new XElement(ChartNs + "legendPos", new XAttribute("val", "r")),
+                    BuildChartManualLayoutXml(
+                        layoutTarget: null,
+                        x: "0.72",
+                        y: "0.20",
+                        width: "0.20",
+                        height: "0.25"),
+                    new XElement(ChartNs + "overlay", new XAttribute("val", "1"))));
+
+            WriteXml(archive, "ppt/charts/chart1.xml", chartXml);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
+    private static XElement BuildChartManualLayoutXml(
+        string? layoutTarget,
+        string x,
+        string y,
+        string width,
+        string height) =>
+        new(ChartNs + "layout",
+            new XElement(ChartNs + "manualLayout",
+                layoutTarget is not null
+                    ? new XElement(ChartNs + "layoutTarget", new XAttribute("val", layoutTarget))
+                    : null,
+                new XElement(ChartNs + "xMode", new XAttribute("val", "factor")),
+                new XElement(ChartNs + "yMode", new XAttribute("val", "factor")),
+                new XElement(ChartNs + "wMode", new XAttribute("val", "factor")),
+                new XElement(ChartNs + "hMode", new XAttribute("val", "factor")),
+                new XElement(ChartNs + "x", new XAttribute("val", x)),
+                new XElement(ChartNs + "y", new XAttribute("val", y)),
+                new XElement(ChartNs + "w", new XAttribute("val", width)),
+                new XElement(ChartNs + "h", new XAttribute("val", height))));
 
     private static MemoryStream BuildPptxWithMultipleChartWorkbooksAndUnrelatedPackageData()
     {

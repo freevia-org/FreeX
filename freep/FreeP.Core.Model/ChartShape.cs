@@ -52,6 +52,45 @@ public enum ChartMarkerSymbol
 /// <summary>Position of the chart legend relative to the plot area.</summary>
 public enum LegendPosition { Right, Left, Top, Bottom }
 
+/// <summary>Coordinate mode for OOXML chart <c>c:manualLayout</c> values.</summary>
+public enum ChartManualLayoutMode { Factor, Edge, Unsupported }
+
+/// <summary>Small modeled subset of OOXML chart <c>c:manualLayout</c>.</summary>
+public sealed class ChartManualLayout
+{
+    /// <summary>Raw <c>c:layoutTarget/@val</c> value, such as <c>inner</c> or <c>outer</c>.</summary>
+    public string? LayoutTarget { get; set; }
+
+    public ChartManualLayoutMode XMode { get; set; } = ChartManualLayoutMode.Factor;
+    public ChartManualLayoutMode YMode { get; set; } = ChartManualLayoutMode.Factor;
+    public ChartManualLayoutMode WidthMode { get; set; } = ChartManualLayoutMode.Factor;
+    public ChartManualLayoutMode HeightMode { get; set; } = ChartManualLayoutMode.Factor;
+
+    /// <summary>Manual x coordinate value from <c>c:x/@val</c>.</summary>
+    public double? X { get; set; }
+
+    /// <summary>Manual y coordinate value from <c>c:y/@val</c>.</summary>
+    public double? Y { get; set; }
+
+    /// <summary>Manual width value from <c>c:w/@val</c>.</summary>
+    public double? Width { get; set; }
+
+    /// <summary>Manual height value from <c>c:h/@val</c>.</summary>
+    public double? Height { get; set; }
+
+    /// <summary>True when v1 rendering can safely resolve this as a factor rectangle.</summary>
+    [JsonIgnore]
+    public bool IsCompleteFactorRectangle =>
+        XMode == ChartManualLayoutMode.Factor &&
+        YMode == ChartManualLayoutMode.Factor &&
+        WidthMode == ChartManualLayoutMode.Factor &&
+        HeightMode == ChartManualLayoutMode.Factor &&
+        X.HasValue &&
+        Y.HasValue &&
+        Width.HasValue &&
+        Height.HasValue;
+}
+
 /// <summary>Position of data labels relative to the data point.</summary>
 public enum DataLabelPosition
 {
@@ -357,6 +396,15 @@ public sealed class ChartShape
 
     /// <summary>Legend position, or null if no legend is displayed.</summary>
     public LegendPosition? Legend { get; set; }
+
+    /// <summary>Optional plot-area manual layout from <c>c:plotArea/c:layout/c:manualLayout</c>.</summary>
+    public ChartManualLayout? PlotAreaManualLayout { get; set; }
+
+    /// <summary>Optional legend manual layout from <c>c:legend/c:layout/c:manualLayout</c>.</summary>
+    public ChartManualLayout? LegendManualLayout { get; set; }
+
+    /// <summary>Explicit <c>c:legend/c:overlay</c> value. Null means unspecified.</summary>
+    public bool? LegendOverlay { get; set; }
 
     /// <summary>True when OOXML <c>c:varyColors</c> asks chart points to use independent fallback colors.</summary>
     public bool VaryColors { get; set; }

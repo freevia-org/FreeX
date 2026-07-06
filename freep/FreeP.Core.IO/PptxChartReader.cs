@@ -53,6 +53,7 @@ internal static class PptxChartReader
         // plotArea
         var plotArea = chartEl.Element(C + "plotArea");
         if (plotArea is null) return shape;
+        shape.PlotAreaManualLayout = ReadManualLayout(plotArea.Element(C + "layout"));
 
         var serIdxMap = DetectChartTypeAndSeries(plotArea, shape, scheme);
 
@@ -138,6 +139,12 @@ internal static class PptxChartReader
                 _           => LegendPosition.Right
             }
             : (LegendPosition?)null;
+        if (legendEl is not null)
+        {
+            shape.LegendManualLayout = ReadManualLayout(legendEl.Element(C + "layout"));
+            shape.LegendOverlay = ParseNullableBoolAttr(
+                legendEl.Element(C + "overlay")?.Attribute("val")?.Value);
+        }
 
         return shape;
     }
@@ -1043,6 +1050,46 @@ internal static class PptxChartReader
         };
     }
 
+    private static ChartManualLayout? ReadManualLayout(XElement? layoutEl)
+    {
+        var manualLayoutEl = layoutEl?.Element(C + "manualLayout");
+        if (manualLayoutEl is null)
+            return null;
+
+        var layout = new ChartManualLayout
+        {
+            LayoutTarget = EmptyToNull(manualLayoutEl.Element(C + "layoutTarget")?.Attribute("val")?.Value),
+            XMode = ReadManualLayoutMode(manualLayoutEl.Element(C + "xMode")?.Attribute("val")?.Value),
+            YMode = ReadManualLayoutMode(manualLayoutEl.Element(C + "yMode")?.Attribute("val")?.Value),
+            WidthMode = ReadManualLayoutMode(manualLayoutEl.Element(C + "wMode")?.Attribute("val")?.Value),
+            HeightMode = ReadManualLayoutMode(manualLayoutEl.Element(C + "hMode")?.Attribute("val")?.Value),
+            X = ParseDouble(manualLayoutEl.Element(C + "x")?.Attribute("val")?.Value),
+            Y = ParseDouble(manualLayoutEl.Element(C + "y")?.Attribute("val")?.Value),
+            Width = ParseDouble(manualLayoutEl.Element(C + "w")?.Attribute("val")?.Value),
+            Height = ParseDouble(manualLayoutEl.Element(C + "h")?.Attribute("val")?.Value),
+        };
+
+        return layout.LayoutTarget is not null ||
+               layout.X.HasValue ||
+               layout.Y.HasValue ||
+               layout.Width.HasValue ||
+               layout.Height.HasValue ||
+               layout.XMode != ChartManualLayoutMode.Factor ||
+               layout.YMode != ChartManualLayoutMode.Factor ||
+               layout.WidthMode != ChartManualLayoutMode.Factor ||
+               layout.HeightMode != ChartManualLayoutMode.Factor
+            ? layout
+            : null;
+    }
+
+    private static ChartManualLayoutMode ReadManualLayoutMode(string? value) =>
+        value switch
+        {
+            null or "factor" => ChartManualLayoutMode.Factor,
+            "edge" => ChartManualLayoutMode.Edge,
+            _ => ChartManualLayoutMode.Unsupported
+        };
+
     private static ShapeFill? ReadDataTableBackgroundFill(XElement dTableEl, PresentationColorScheme scheme)
     {
         var spPr = dTableEl.Element(C + "spPr");
@@ -1116,4 +1163,10 @@ internal static class PptxChartReader
 
     private static int ParseInt(string? s) =>
         int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : 0;
+
+    private static double? ParseDouble(string? s) =>
+        double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) ? value : null;
+
+    private static string? EmptyToNull(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
 }

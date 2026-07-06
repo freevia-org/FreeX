@@ -771,6 +771,77 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildFramePlan_ManualPlotLayout_UsesBoundedFactorRectangle()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.PlotAreaManualLayout = new ChartManualLayout
+        {
+            LayoutTarget = "inner",
+            X = 0.20,
+            Y = 0.15,
+            Width = 0.50,
+            Height = 0.40
+        };
+
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        frame.Plot.Should().Be(new ChartPlanRect(80, 45, 200, 120));
+    }
+
+    [Fact]
+    public void BuildFramePlan_LegendOverlay_DoesNotReservePlotArea()
+    {
+        var reserving = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        reserving.Legend = LegendPosition.Right;
+        var overlay = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        overlay.Legend = LegendPosition.Right;
+        overlay.LegendOverlay = true;
+
+        var reservingFrame = ChartRenderPlanner.BuildFramePlan(reserving, new ChartPlanRect(0, 0, 400, 300));
+        var overlayFrame = ChartRenderPlanner.BuildFramePlan(overlay, new ChartPlanRect(0, 0, 400, 300));
+
+        reservingFrame.Plot.Should().Be(new ChartPlanRect(48, 8, 264, 268));
+        overlayFrame.LegendAreaWidth.Should().Be(0);
+        overlayFrame.Plot.Should().Be(new ChartPlanRect(48, 8, 344, 268));
+    }
+
+    [Fact]
+    public void BuildLegendItemPlans_ManualLegendLayout_DrivesItemPlacement()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.Legend = LegendPosition.Right;
+        chart.LegendOverlay = true;
+        chart.LegendManualLayout = new ChartManualLayout
+        {
+            X = 0.55,
+            Y = 0.20,
+            Width = 0.30,
+            Height = 0.25
+        };
+        var colors = new[]
+        {
+            new SrgbColor(0x11, 0x22, 0x33),
+            new SrgbColor(0x44, 0x55, 0x66)
+        };
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var items = ChartRenderPlanner.BuildLegendItemPlans(chart, frame, colors);
+
+        items.Should().HaveCount(2);
+        items[0].SwatchBounds.X.Should().BeApproximately(220, 0.0001);
+        items[0].SwatchBounds.Y.Should().BeApproximately(63, 0.0001);
+        items[0].SwatchBounds.Width.Should().Be(8);
+        items[0].SwatchBounds.Height.Should().Be(8);
+        items[0].Label.Bounds.X.Should().BeApproximately(230, 0.0001);
+        items[0].Label.Bounds.Y.Should().BeApproximately(60, 0.0001);
+        items[0].Label.Bounds.Width.Should().BeApproximately(110, 0.0001);
+        items[0].Label.Bounds.Height.Should().Be(ChartRenderPlanner.LegendHeight);
+        items[1].SwatchBounds.X.Should().BeApproximately(220, 0.0001);
+        items[1].SwatchBounds.Y.Should().BeApproximately(77, 0.0001);
+        items[1].Label.Text.Should().Be("Forecast");
+    }
+
+    [Fact]
     public void BuildColumnPrimitives_MatchesPowerPointClusterGeometry()
     {
         var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
