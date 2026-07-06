@@ -152,6 +152,44 @@ public sealed class OmmlParserTests
         Assert.Equal("x", Assert.IsType<MathNode.Run>(radical.Radicand).Text);
     }
 
+    [Fact]
+    public void Acc_WithNoChr_DefaultsToHatAndPreservesBase()
+    {
+        var node = Parse("<m:acc><m:e><m:r><m:t>x</m:t></m:r></m:e></m:acc>");
+
+        var acc = Assert.IsType<MathNode.Acc>(node);
+        Assert.Equal("^", acc.AccentChar);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(acc.Base).Text);
+    }
+
+    [Fact]
+    public void Acc_WithExplicitChr_UsesThatAccent()
+    {
+        var node = Parse("<m:acc><m:accPr><m:chr m:val=\"~\"/></m:accPr><m:e><m:r><m:t>x</m:t></m:r></m:e></m:acc>");
+
+        var acc = Assert.IsType<MathNode.Acc>(node);
+        Assert.Equal("~", acc.AccentChar);
+    }
+
+    [Fact]
+    public void Bar_WithNoPos_DefaultsToOverline()
+    {
+        var node = Parse("<m:bar><m:e><m:r><m:t>x</m:t></m:r></m:e></m:bar>");
+
+        var bar = Assert.IsType<MathNode.Bar>(node);
+        Assert.True(bar.IsOver);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(bar.Base).Text);
+    }
+
+    [Fact]
+    public void Bar_WithBottomPos_UsesUnderline()
+    {
+        var node = Parse("<m:bar><m:barPr><m:pos m:val=\"bot\"/></m:barPr><m:e><m:r><m:t>x</m:t></m:r></m:e></m:bar>");
+
+        var bar = Assert.IsType<MathNode.Bar>(node);
+        Assert.False(bar.IsOver);
+    }
+
     // m:d begChr explicit-empty vs absent.
 
     [Fact]
