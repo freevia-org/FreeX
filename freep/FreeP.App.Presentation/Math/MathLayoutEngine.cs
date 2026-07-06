@@ -1350,10 +1350,10 @@ public static class MathLayoutEngine
         for (int i = 0; i < boxes.Count; i++)
         {
             var b = boxes[i];
-            totalW += GetTransparentPhantomOperatorGapBefore(nodes, i, em);
+            totalW += GetTransparentPhantomSpacingGapBefore(nodes, i, em);
             totalW += b.Metrics.Width;
             totalH = Math.Max(totalH, (ascent - b.Metrics.Ascent) + b.Metrics.Height);
-            totalW += GetTransparentPhantomOperatorGapAfter(nodes, i, em);
+            totalW += GetTransparentPhantomSpacingGapAfter(nodes, i, em);
         }
 
         var c = new MathBox.Container();
@@ -1365,81 +1365,97 @@ public static class MathLayoutEngine
         for (int i = 0; i < boxes.Count; i++)
         {
             var b = boxes[i];
-            x += GetTransparentPhantomOperatorGapBefore(nodes, i, em);
+            x += GetTransparentPhantomSpacingGapBefore(nodes, i, em);
             b.X = x;
             b.Y = ascent - b.Metrics.Ascent;
             c.Children.Add(b);
             x += b.Metrics.Width;
-            x += GetTransparentPhantomOperatorGapAfter(nodes, i, em);
+            x += GetTransparentPhantomSpacingGapAfter(nodes, i, em);
         }
 
         return c;
     }
 
-    private static double GetTransparentPhantomOperatorGapBefore(IReadOnlyList<MathNode> nodes, int index, double em)
+    private static double GetTransparentPhantomSpacingGapBefore(IReadOnlyList<MathNode> nodes, int index, double em)
     {
         if (index == 0)
             return 0;
 
-        return GetTransparentPhantomOperatorGap(nodes[index], em);
+        return GetTransparentPhantomSpacingGap(nodes[index], em, TransparentPhantomGapSide.Before);
     }
 
-    private static double GetTransparentPhantomOperatorGapAfter(IReadOnlyList<MathNode> nodes, int index, double em)
+    private static double GetTransparentPhantomSpacingGapAfter(IReadOnlyList<MathNode> nodes, int index, double em)
     {
         if (index >= nodes.Count - 1)
             return 0;
 
-        return GetTransparentPhantomOperatorGap(nodes[index], em);
+        return GetTransparentPhantomSpacingGap(nodes[index], em, TransparentPhantomGapSide.After);
     }
 
-    private static double GetTransparentPhantomOperatorGap(MathNode node, double em)
+    private static double GetTransparentPhantomSpacingGap(MathNode node, double em, TransparentPhantomGapSide side)
     {
         if (node is not MathNode.Phantom { TransparentSpacing: true } phantom)
             return 0;
 
-        return GetTransparentPhantomOperatorSpacingClass(phantom.Base) switch
+        return GetTransparentPhantomSpacingClass(phantom.Base) switch
         {
-            TransparentPhantomOperatorSpacingClass.Relation => em * 0.18,
-            TransparentPhantomOperatorSpacingClass.Binary => em * 0.14,
+            TransparentPhantomSpacingClass.Relation => em * 0.18,
+            TransparentPhantomSpacingClass.Binary => em * 0.14,
+            TransparentPhantomSpacingClass.LargeOperator => em * 0.12,
+            TransparentPhantomSpacingClass.Punctuation when side == TransparentPhantomGapSide.After => em * 0.10,
             _ => 0
         };
     }
 
-    private static TransparentPhantomOperatorSpacingClass GetTransparentPhantomOperatorSpacingClass(MathNode node)
+    private static TransparentPhantomSpacingClass GetTransparentPhantomSpacingClass(MathNode node)
     {
         if (node is MathNode.Row row && row.Children.Count == 1)
-            return GetTransparentPhantomOperatorSpacingClass(row.Children[0]);
+            return GetTransparentPhantomSpacingClass(row.Children[0]);
 
         if (node is MathNode.Run run)
-            return ClassifyTransparentPhantomOperatorRun(run.Text);
+            return ClassifyTransparentPhantomSpacingRun(run.Text);
 
         if (node is MathNode.Unknown unknown)
-            return ClassifyTransparentPhantomOperatorRun(unknown.FallbackText);
+            return ClassifyTransparentPhantomSpacingRun(unknown.FallbackText);
 
-        return TransparentPhantomOperatorSpacingClass.None;
+        return TransparentPhantomSpacingClass.None;
     }
 
-    private static TransparentPhantomOperatorSpacingClass ClassifyTransparentPhantomOperatorRun(string text)
+    private static TransparentPhantomSpacingClass ClassifyTransparentPhantomSpacingRun(string text)
     {
         var trimmed = text.Trim();
         if (trimmed.Length != 1)
-            return TransparentPhantomOperatorSpacingClass.None;
+            return TransparentPhantomSpacingClass.None;
 
         return trimmed[0] switch
         {
-            '=' or '<' or '>' or '\u2264' or '\u2265' or '\u2260' or '\u2248' =>
-                TransparentPhantomOperatorSpacingClass.Relation,
+            '=' or '<' or '>' or '\u2264' or '\u2265' or '\u2260' or '\u2248' or '\u2208' or '\u2209' or '\u2282'
+                or '\u2283' or '\u2286' or '\u2287' or '\u2190' or '\u2192' or '\u2194' or '\u21d0' or '\u21d2'
+                or '\u21d4' =>
+                TransparentPhantomSpacingClass.Relation,
             '+' or '-' or '\u2212' or '\u00b1' or '\u00d7' or '\u00f7' or '*' or '/' =>
-                TransparentPhantomOperatorSpacingClass.Binary,
-            _ => TransparentPhantomOperatorSpacingClass.None
+                TransparentPhantomSpacingClass.Binary,
+            '\u2211' or '\u220f' or '\u222b' or '\u222e' or '\u22c0' or '\u22c1' or '\u22c2' or '\u22c3' =>
+                TransparentPhantomSpacingClass.LargeOperator,
+            ',' or ';' or ':' =>
+                TransparentPhantomSpacingClass.Punctuation,
+            _ => TransparentPhantomSpacingClass.None
         };
     }
 
-    private enum TransparentPhantomOperatorSpacingClass
+    private enum TransparentPhantomGapSide
+    {
+        Before,
+        After
+    }
+
+    private enum TransparentPhantomSpacingClass
     {
         None,
         Binary,
-        Relation
+        Relation,
+        LargeOperator,
+        Punctuation
     }
 
     // ── Glyph factory ─────────────────────────────────────────────────────
