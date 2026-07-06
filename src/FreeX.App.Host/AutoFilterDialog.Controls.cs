@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using Free.Shared.Ribbon;
 using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Model;
 
@@ -12,10 +13,13 @@ namespace FreeX.App.Host;
 
 public sealed partial class AutoFilterDialog
 {
-    private static Button CreateMenuCommandButton(string content, Visibility visibility = Visibility.Visible) =>
-        new()
+    private static Button CreateMenuCommandButton(
+        string content,
+        RibbonCommandIconKind iconKind,
+        Visibility visibility = Visibility.Visible)
+    {
+        var button = new Button
         {
-            Content = content,
             Visibility = visibility,
             HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left,
             Padding = new Thickness(6, 3, 6, 3),
@@ -24,6 +28,30 @@ public sealed partial class AutoFilterDialog
             BorderThickness = new Thickness(0),
             Background = Brushes.Transparent
         };
+        SetMenuCommandButtonContent(button, content, iconKind);
+        return button;
+    }
+
+    private static void SetMenuCommandButtonContent(
+        Button button,
+        string content,
+        RibbonCommandIconKind iconKind)
+    {
+        button.Content = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Children =
+            {
+                RibbonIconFactory.CreateIcon(new RibbonCommandIcon(iconKind), 14, Brushes.Black),
+                new TextBlock
+                {
+                    Text = content,
+                    Margin = new Thickness(7, 0, 0, 0),
+                    VerticalAlignment = System.Windows.VerticalAlignment.Center
+                }
+            }
+        };
+    }
 
     private static string FormatCascadeMenuHeader(string header) => $"{header}    >";
 
@@ -121,15 +149,15 @@ public sealed partial class AutoFilterDialog
         _textFiltersButton.Visibility = filterKind == AutoFilterMenuFilterKind.Text
             ? Visibility.Visible
             : Visibility.Collapsed;
-        _textFiltersButton.Content = FormatCascadeMenuHeader(UiText.Get("AutoFilter_TextFilters"));
+        SetMenuCommandButtonContent(_textFiltersButton, FormatCascadeMenuHeader(UiText.Get("AutoFilter_TextFilters")), RibbonCommandIconKind.Filter);
         _numberFiltersButton.Visibility = filterKind == AutoFilterMenuFilterKind.Number
             ? Visibility.Visible
             : Visibility.Collapsed;
-        _numberFiltersButton.Content = FormatCascadeMenuHeader(UiText.Get("AutoFilter_NumberFilters"));
+        SetMenuCommandButtonContent(_numberFiltersButton, FormatCascadeMenuHeader(UiText.Get("AutoFilter_NumberFilters")), RibbonCommandIconKind.Filter);
         _dateFiltersButton.Visibility = filterKind == AutoFilterMenuFilterKind.Date
             ? Visibility.Visible
             : Visibility.Collapsed;
-        _dateFiltersButton.Content = FormatCascadeMenuHeader(UiText.Get("AutoFilter_DateFilters"));
+        SetMenuCommandButtonContent(_dateFiltersButton, FormatCascadeMenuHeader(UiText.Get("AutoFilter_DateFilters")), RibbonCommandIconKind.Filter);
     }
 
     private void ConfigureFilterFamilySubmenu(AutoFilterMenuPlan menuPlan)
@@ -261,15 +289,15 @@ public sealed partial class AutoFilterDialog
             return;
         }
 
-        _sortAscendingButton.Content = ascending;
-        _sortDescendingButton.Content = descending;
+        SetMenuCommandButtonContent(_sortAscendingButton, ascending, RibbonCommandIconKind.SortAscending);
+        SetMenuCommandButtonContent(_sortDescendingButton, descending, RibbonCommandIconKind.SortDescending);
     }
 
     private void SetSortLabels(AutoFilterMenuFilterKind filterKind)
     {
         var labels = GetSortLabels(filterKind);
-        _sortAscendingButton.Content = labels.Ascending;
-        _sortDescendingButton.Content = labels.Descending;
+        SetMenuCommandButtonContent(_sortAscendingButton, labels.Ascending, RibbonCommandIconKind.SortAscending);
+        SetMenuCommandButtonContent(_sortDescendingButton, labels.Descending, RibbonCommandIconKind.SortDescending);
     }
 
     private StackPanel CreateBetweenCriteriaPanel()

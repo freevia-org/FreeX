@@ -79,17 +79,7 @@ internal static class PptxChartWriter
     private static XDocument BuildChartDoc(ChartShape chart)
     {
         var plotArea = BuildPlotArea(chart);
-        var legendEl = chart.Legend.HasValue
-            ? new XElement(C + "legend",
-                new XElement(C + "legendPos",
-                    new XAttribute("val", chart.Legend.Value switch
-                    {
-                        LegendPosition.Left   => "l",
-                        LegendPosition.Top    => "t",
-                        LegendPosition.Bottom => "b",
-                        _                     => "r"
-                    })))
-            : null;
+        var legendEl = BuildLegendEl(chart);
 
         var titleEl = chart.Title is not null
             ? BuildTitleEl(chart.Title)
@@ -224,6 +214,7 @@ internal static class PptxChartWriter
         var dataTableEl = BuildDataTableEl(chart.DataTable);
 
         return new XElement(C + "plotArea",
+            BuildManualLayoutEl(chart.PlotAreaManualLayout),
             primaryChartTypeEl,
             secondaryChartTypeEl,
             xValAxEl,
@@ -233,6 +224,66 @@ internal static class PptxChartWriter
             secValAxEl,
             dataTableEl);
     }
+
+    private static XElement? BuildLegendEl(ChartShape chart)
+    {
+        if (!chart.Legend.HasValue)
+            return null;
+
+        return new XElement(C + "legend",
+            new XElement(C + "legendPos",
+                new XAttribute("val", chart.Legend.Value switch
+                {
+                    LegendPosition.Left   => "l",
+                    LegendPosition.Top    => "t",
+                    LegendPosition.Bottom => "b",
+                    _                     => "r"
+                })),
+            BuildManualLayoutEl(chart.LegendManualLayout),
+            chart.LegendOverlay.HasValue
+                ? new XElement(C + "overlay", new XAttribute("val", BoolValue(chart.LegendOverlay.Value)))
+                : null);
+    }
+
+    private static XElement? BuildManualLayoutEl(ChartManualLayout? layout)
+    {
+        if (layout is null)
+            return null;
+
+        bool hasUnsupportedMode =
+            layout.XMode == ChartManualLayoutMode.Unsupported ||
+            layout.YMode == ChartManualLayoutMode.Unsupported ||
+            layout.WidthMode == ChartManualLayoutMode.Unsupported ||
+            layout.HeightMode == ChartManualLayoutMode.Unsupported;
+        var manualLayout = new XElement(C + "manualLayout");
+        if (!string.IsNullOrWhiteSpace(layout.LayoutTarget))
+            manualLayout.Add(new XElement(C + "layoutTarget", new XAttribute("val", layout.LayoutTarget)));
+
+        if (!hasUnsupportedMode)
+        {
+            manualLayout.Add(
+                new XElement(C + "xMode", new XAttribute("val", ToManualLayoutModeValue(layout.XMode))),
+                new XElement(C + "yMode", new XAttribute("val", ToManualLayoutModeValue(layout.YMode))),
+                new XElement(C + "wMode", new XAttribute("val", ToManualLayoutModeValue(layout.WidthMode))),
+                new XElement(C + "hMode", new XAttribute("val", ToManualLayoutModeValue(layout.HeightMode))),
+                ManualLayoutValueEl("x", layout.X),
+                ManualLayoutValueEl("y", layout.Y),
+                ManualLayoutValueEl("w", layout.Width),
+                ManualLayoutValueEl("h", layout.Height));
+        }
+
+        return manualLayout.HasElements
+            ? new XElement(C + "layout", manualLayout)
+            : null;
+    }
+
+    private static XElement? ManualLayoutValueEl(string localName, double? value) =>
+        value.HasValue
+            ? new XElement(C + localName, new XAttribute("val", value.Value.ToString("G", CultureInfo.InvariantCulture)))
+            : null;
+
+    private static string ToManualLayoutModeValue(ChartManualLayoutMode mode) =>
+        mode == ChartManualLayoutMode.Edge ? "edge" : "factor";
 
     /// <summary>Dispatches to the correct chart-type builder using the given axId pair.</summary>
     private static XElement? BuildChartTypeEl(
