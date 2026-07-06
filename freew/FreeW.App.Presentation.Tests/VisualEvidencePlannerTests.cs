@@ -1967,6 +1967,172 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void BuildNormalizedSummaryFromFiles_AllowsBuiltInHeaderChromeVarianceInTablePlanEvidence()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "table-layout-complex";
+            var wpfRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var wpfTablePlan = wpfRow.PageExpectation.Tables.Tables.Single();
+            var wpfCells = wpfTablePlan.Cells.ToList();
+            wpfCells[0] = wpfCells[0] with { ShadingColorHex = "#4472C4" };
+            var wpfWithLegacyHeaderChrome = wpfRow with
+            {
+                PageExpectation = wpfRow.PageExpectation with
+                {
+                    Tables = wpfRow.PageExpectation.Tables with
+                    {
+                        Tables = [wpfTablePlan with { Cells = wpfCells }]
+                    }
+                }
+            };
+            var avaloniaRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaTablePlan = avaloniaRow.PageExpectation.Tables.Tables.Single();
+            var avaloniaCells = avaloniaTablePlan.Cells.ToList();
+            avaloniaCells[0] = avaloniaCells[0] with { ShadingColorHex = null };
+            var avaloniaWithoutHeaderChrome = avaloniaRow with
+            {
+                PageExpectation = avaloniaRow.PageExpectation with
+                {
+                    Tables = avaloniaRow.PageExpectation.Tables with
+                    {
+                        Tables = [avaloniaTablePlan with { Cells = avaloniaCells }]
+                    }
+                }
+            };
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [wpfWithLegacyHeaderChrome],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [avaloniaWithoutHeaderChrome],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeTrue();
+            summary.Trust.Failures.Should().NotContain(f =>
+                f.Contains("table renderer pair 'table-layout-complex' page 1", StringComparison.Ordinal)
+                && f.Contains("table plan signatures differ", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RequiresMatchingExplicitHeaderTableShadingEvidence()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "table-layout-complex";
+            var wpfRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaTablePlan = avaloniaRow.PageExpectation.Tables.Tables.Single();
+            var avaloniaCells = avaloniaTablePlan.Cells.ToList();
+            avaloniaCells[0] = avaloniaCells[0] with { ShadingColorHex = "#C00000" };
+            var avaloniaWithExplicitHeaderShadingTable = avaloniaTablePlan with { Cells = avaloniaCells };
+            var avaloniaWithExplicitHeaderShading = avaloniaRow with
+            {
+                PageExpectation = avaloniaRow.PageExpectation with
+                {
+                    Tables = avaloniaRow.PageExpectation.Tables with
+                    {
+                        TableCellFillSignatures = FreeWVisualEvidencePlanner.BuildTableCellFillSignatures(
+                            [avaloniaWithExplicitHeaderShadingTable]),
+                        Tables = [avaloniaWithExplicitHeaderShadingTable]
+                    }
+                }
+            };
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [wpfRow],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [avaloniaWithExplicitHeaderShading],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("table renderer pair 'table-layout-complex' page 1", StringComparison.Ordinal)
+                && f.Contains("table cell fill signatures differ", StringComparison.Ordinal)
+                && f.Contains("#C00000", StringComparison.Ordinal));
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("table renderer pair 'table-layout-complex' page 1", StringComparison.Ordinal)
+                && f.Contains("table plan signatures differ", StringComparison.Ordinal)
+                && f.Contains("shading color differs", StringComparison.Ordinal)
+                && f.Contains("#C00000", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void BuildNormalizedSummaryFromFiles_RequiresMatchingExplicitBodyTableShadingEvidence()
     {
         var root = CreateTempRoot();
