@@ -386,6 +386,27 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void VerticalBoxList_ReturnsLiveVerticalListBoxesWithoutConnectors()
+    {
+        var data = MakeData(SmartArtFamily.List, "A", "B", "C");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/verticalBoxList";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("verticalBoxList is a bounded shared list-family layout");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(3, "one live box should be emitted per list node");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().BeEmpty("the shared list planner renders a vertical box list without connectors");
+
+        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("A", "B", "C");
+        boxes.Select(s => s.OffsetYEmu)
+            .Should().BeInAscendingOrder("verticalBoxList should reuse the shared vertical list-family geometry");
+    }
+
+    [Fact]
     public void UnsupportedKnownLayout_ReturnsNull()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B");
@@ -770,6 +791,64 @@ public sealed class SmartArtLayoutTests
         renderedText.Should().Contain("Live B");
         renderedText.Should().Contain("Live C");
         renderedText.Should().NotContain("Cached list fallback");
+        shapeOps.Select(op => op.BoundsDip.Y)
+            .Should().BeInAscendingOrder("hosts consume the shared vertical list DrawOp geometry");
+    }
+
+    [Fact]
+    public void Compositor_VerticalBoxList_UsesLiveLayoutOverCachedDrawing()
+    {
+        var data = MakeData(SmartArtFamily.List, "Live A", "Live B", "Live C");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/verticalBoxList";
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id            = 16,
+            Kind          = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu    = FrameX,
+            OffsetYEmu    = FrameY,
+            ExtentCxEmu   = FrameCx / 2,
+            ExtentCyEmu   = FrameCy / 2,
+            TextBody      = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached vertical box list fallback" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id          = 68,
+            Kind        = SlideShapeKind.SmartArt,
+            OffsetXEmu  = FrameX,
+            OffsetYEmu  = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt    = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        shapeOps.Should().HaveCount(3, "verticalBoxList should render three live list boxes and no connectors");
+        var renderedText = shapeOps
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Live A");
+        renderedText.Should().Contain("Live B");
+        renderedText.Should().Contain("Live C");
+        renderedText.Should().NotContain("Cached vertical box list fallback");
         shapeOps.Select(op => op.BoundsDip.Y)
             .Should().BeInAscendingOrder("hosts consume the shared vertical list DrawOp geometry");
     }
