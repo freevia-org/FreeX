@@ -2382,13 +2382,9 @@ public sealed class DocumentView : Control
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
             return _floatingGroups
                 .SelectMany(group => group.Children)
-                .Where(child => child.Kind == FloatingGroupChildData.ChildKind.Shape
-                    && child.Shape?.Effects.HasAny == true)
-                .Select(child =>
-                    "GroupChild"
-                    + child.ChildIndex.ToString(CultureInfo.InvariantCulture)
-                    + ":Shape:"
-                    + child.Shape!.Effects.Summary.Replace(", ", "+", StringComparison.Ordinal))
+                .Select(BuildFloatingGroupChildEffectSummary)
+                .Where(summary => summary is not null)
+                .Select(summary => summary!)
                 .ToList();
         }
     }
@@ -13913,6 +13909,7 @@ public sealed class DocumentView : Control
         public WordArtStyle Style;
         public double       FontSizePt  = 36;
         public WordArtWarp  Warp;
+        public DrawingObjectEffectsPlan Effects = DrawingObjectEffectsPlan.None;
     }
 
     private sealed class FloatingSmartArtData
@@ -13977,6 +13974,7 @@ public sealed class DocumentView : Control
             Style = plan.WordArt?.Style ?? WordArtStyle.FillBlue,
             FontSizePt = (plan.WordArt?.FontSizeDip ?? 48) / PxPerPoint,
             Warp = plan.WordArt?.Warp ?? WordArtWarp.None,
+            Effects = plan.Effects,
         };
 
     private static FloatingSmartArtData BuildFloatingSmartArtData(
@@ -14852,6 +14850,7 @@ public sealed class DocumentView : Control
 
         var rect = wd.Rect;
         var (fillHex, outlineHex, bold) = WordArtStyleToColors(wd.Style);
+        DrawFloatingWordArtEffects(context, wd, rect);
 
         // Draw a light background frame so the WordArt region is visible even without warp geometry.
         context.DrawRectangle(null,
@@ -14907,6 +14906,63 @@ public sealed class DocumentView : Control
             var warpFmt = new RunFormatting { FontSizePt = 7, ColorHex = "#888888" };
             var warpFt  = Build($"~{wd.Warp}", warpFmt);
             context.DrawText(warpFt, new Point(rect.X + 2, rect.Bottom - warpFt.Height));
+        }
+    }
+
+    private static string? BuildFloatingGroupChildEffectSummary(FloatingGroupChildData child)
+    {
+        var (kind, effects) = child.Kind switch
+        {
+            FloatingGroupChildData.ChildKind.Shape when child.Shape?.Effects.HasAny == true =>
+                ("Shape", child.Shape.Effects),
+            FloatingGroupChildData.ChildKind.WordArt when child.WordArt?.Effects.HasAny == true =>
+                ("WordArt", child.WordArt.Effects),
+            _ => ((string?)null, DrawingObjectEffectsPlan.None)
+        };
+
+        return kind is null
+            ? null
+            : "GroupChild"
+              + child.ChildIndex.ToString(CultureInfo.InvariantCulture)
+              + ":"
+              + kind
+              + ":"
+              + effects.Summary.Replace(", ", "+", StringComparison.Ordinal);
+    }
+
+    private static void DrawFloatingWordArtEffects(DrawingContext context, FloatingWordArtData wd, Rect rect)
+    {
+        var effects = wd.Effects;
+        if (!effects.HasAny)
+            return;
+
+        if (effects.HasShadow)
+        {
+            var shadowColor = TryParseAvaloniaColor(effects.ShadowColorHex, out var parsed)
+                ? parsed
+                : Colors.Black;
+            var radians = effects.ShadowDirectionDegrees * Math.PI / 180.0;
+            var distance = effects.ShadowDistanceDip > 0 ? effects.ShadowDistanceDip : 3.0;
+            var offsetX = Math.Cos(radians) * distance;
+            var offsetY = Math.Sin(radians) * distance;
+            var spread = Math.Max(2.0, effects.ShadowBlurDip * 0.2);
+            context.FillRectangle(
+                EffectBrush(shadowColor, effects.ShadowOpacity * 0.45),
+                OffsetAndInflate(rect, offsetX, offsetY, spread));
+        }
+
+        if (effects.HasGlow)
+        {
+            var glowColor = TryParseAvaloniaColor(effects.GlowColorHex, out var parsed)
+                ? parsed
+                : Color.FromRgb(0x44, 0x72, 0xC4);
+            var radius = Math.Max(2.0, effects.GlowRadiusDip);
+            context.FillRectangle(
+                EffectBrush(glowColor, effects.GlowOpacity * 0.18),
+                OffsetAndInflate(rect, 0, 0, radius * 0.7));
+            context.FillRectangle(
+                EffectBrush(glowColor, effects.GlowOpacity * 0.28),
+                OffsetAndInflate(rect, 0, 0, radius * 0.35));
         }
     }
 
