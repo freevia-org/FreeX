@@ -2,6 +2,7 @@ using System.Windows;
 using System.Text;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
+using FreeP.App.Host.Recording;
 using Xunit;
 using FluentAssertions;
 using FreeP.Core.Model;
@@ -372,7 +373,10 @@ public sealed class SlideShowWindowTests
                 new[] { pres.Slides[2].Id, pres.Slides[0].Id }),
             startIndex: 0);
 
-        var window = new SlideShowWindow(pres, route);
+        var window = new SlideShowWindow(
+            pres,
+            route,
+            SlideShowHostCapabilityRecordingCaptureBackend.Deferred("WPF slideshow"));
         try
         {
             window.PlaybackRoute.CustomShowName.Should().Be("Executive review");
@@ -522,14 +526,14 @@ public sealed class SlideShowWindowTests
             var readiness = window.RecordingCaptureAdapterReadiness;
 
             readiness.HostName.Should().Be("WPF slideshow");
-            readiness.AdapterName.Should().Be("WPF microphone/camera capture adapter");
-            readiness.Devices.Should().BeEmpty();
-            readiness.CanCaptureNarration.Should().BeFalse();
+            readiness.AdapterName.Should().Be("WPF Windows microphone capture adapter");
+            readiness.Devices.Should().OnlyContain(device =>
+                device.Kind == SlideShowRecordingCaptureDeviceKind.Microphone);
+            readiness.CanCaptureNarration.Should().Be(
+                readiness.Devices.Any(device => device.Kind == SlideShowRecordingCaptureDeviceKind.Microphone && device.IsAvailable));
             readiness.CanCaptureCamera.Should().BeFalse();
-            readiness.MissingStreams.Should().Equal(
-                SlideShowRecordingCaptureStreamKind.NarrationAudio,
-                SlideShowRecordingCaptureStreamKind.CameraVideo);
-            readiness.StatusText.Should().Contain("Recording capture adapter is not registered");
+            readiness.MissingStreams.Should().Contain(SlideShowRecordingCaptureStreamKind.CameraVideo);
+            readiness.StatusText.Should().NotContain("Recording capture adapter is not registered");
             window.RecordingExecutionState.HostCapabilities.EffectiveCaptureAdapterReadiness
                 .Should().BeSameAs(readiness);
         }
@@ -680,7 +684,10 @@ public sealed class SlideShowWindowTests
     public void SlideShowWindow_ApplyPresenterToolIntent_UsesSharedPlannerState()
     {
         var pres = Presentation.CreateEmpty();
-        var window = new SlideShowWindow(pres, 0);
+        var window = new SlideShowWindow(
+            pres,
+            0,
+            SlideShowHostCapabilityRecordingCaptureBackend.Deferred("WPF slideshow"));
         try
         {
             var plan = window.ApplyPresenterToolIntent(

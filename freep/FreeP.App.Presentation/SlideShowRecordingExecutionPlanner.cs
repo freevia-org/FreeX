@@ -111,6 +111,13 @@ public sealed record SlideShowRecordingCaptureRequest(
     string SuggestedFileName,
     string ContentType);
 
+public sealed record SlideShowRecordingCaptureStartRequest(
+    SlideShowRecordingMediaArtifactKind Kind,
+    int SlideIndex,
+    DateTimeOffset StartedAtUtc,
+    string SuggestedFileName,
+    string ContentType);
+
 public sealed record SlideShowRecordingCaptureResult(
     bool IsCaptured,
     bool IsDeferred,
@@ -118,14 +125,18 @@ public sealed record SlideShowRecordingCaptureResult(
     string PackagePath,
     long ContentLengthBytes,
     string ContentSha256,
-    byte[]? PayloadBytes = null)
+    byte[]? PayloadBytes = null,
+    string? SuggestedFileNameOverride = null,
+    string? ContentTypeOverride = null)
 {
     public static SlideShowRecordingCaptureResult Captured(
         string statusText,
         string packagePath = "",
         long contentLengthBytes = 0,
         string contentSha256 = "",
-        byte[]? payloadBytes = null) =>
+        byte[]? payloadBytes = null,
+        string? suggestedFileNameOverride = null,
+        string? contentTypeOverride = null) =>
         new(
             IsCaptured: true,
             IsDeferred: false,
@@ -133,7 +144,9 @@ public sealed record SlideShowRecordingCaptureResult(
             packagePath,
             contentLengthBytes,
             contentSha256,
-            payloadBytes);
+            payloadBytes,
+            suggestedFileNameOverride,
+            contentTypeOverride);
 
     public static SlideShowRecordingCaptureResult Deferred(string statusText) =>
         new(
@@ -143,7 +156,9 @@ public sealed record SlideShowRecordingCaptureResult(
             PackagePath: string.Empty,
             ContentLengthBytes: 0,
             ContentSha256: string.Empty,
-            PayloadBytes: null);
+            PayloadBytes: null,
+            SuggestedFileNameOverride: null,
+            ContentTypeOverride: null);
 }
 
 public interface ISlideShowRecordingCaptureBackend
@@ -151,6 +166,10 @@ public interface ISlideShowRecordingCaptureBackend
     SlideShowRecordingHostCapabilities Capabilities { get; }
 
     SlideShowRecordingCaptureAdapterReadiness AdapterReadiness { get; }
+
+    void BeginCapture(SlideShowRecordingCaptureStartRequest request)
+    {
+    }
 
     SlideShowRecordingCaptureResult CompleteCapture(SlideShowRecordingCaptureRequest request);
 }
@@ -434,7 +453,7 @@ public static class SlideShowRecordingExecutionPlanner
             };
         }
 
-        actions.AddRange(EnterSlideActions(state, slideIndex));
+        actions.AddRange(EnterSlideActions(state, slideIndex, nowUtc));
         return state with
         {
             CurrentSlideIndex = slideIndex,
@@ -525,7 +544,7 @@ public static class SlideShowRecordingExecutionPlanner
 
         if (currentSlideIndex >= 0)
         {
-            actions.AddRange(EnterSlideActions(active, currentSlideIndex));
+            actions.AddRange(EnterSlideActions(active, currentSlideIndex, nowUtc));
         }
 
         return active with { LastActions = actions };
@@ -607,7 +626,7 @@ public static class SlideShowRecordingExecutionPlanner
         string extension,
         string contentType)
     {
-        var suggestedFileName = $"slide-{slideIndex + 1:000}-{fileStem}.{extension}";
+        var suggestedFileName = BuildSuggestedFileName(slideIndex, fileStem, extension);
         var result = state.ActiveCaptureBackend.CompleteCapture(
             new SlideShowRecordingCaptureRequest(
                 kind,
@@ -623,8 +642,8 @@ public static class SlideShowRecordingExecutionPlanner
             slideIndex,
             result.IsCaptured,
             result.IsDeferred,
-            suggestedFileName,
-            contentType,
+            result.SuggestedFileNameOverride ?? suggestedFileName,
+            result.ContentTypeOverride ?? contentType,
             result.StatusText,
             result.PackagePath,
             result.ContentLengthBytes,
@@ -634,7 +653,8 @@ public static class SlideShowRecordingExecutionPlanner
 
     private static IReadOnlyList<SlideShowRecordingExecutionAction> EnterSlideActions(
         SlideShowRecordingExecutionState state,
-        int slideIndex)
+        int slideIndex,
+        DateTimeOffset nowUtc)
     {
         var actions = new List<SlideShowRecordingExecutionAction>
         {
@@ -647,6 +667,14 @@ public static class SlideShowRecordingExecutionPlanner
 
         if (state.RecordingPlan.IsNarrationRequested)
         {
+            BeginCaptureIfAvailable(
+                state,
+                slideIndex,
+                nowUtc,
+                SlideShowRecordingMediaArtifactKind.NarrationAudio,
+                "narration",
+                "m4a",
+                "audio/mp4");
             actions.Add(CaptureAction(
                 state,
                 slideIndex,
@@ -657,6 +685,14 @@ public static class SlideShowRecordingExecutionPlanner
 
         if (state.RecordingPlan.IsMediaCaptureRequested)
         {
+            BeginCaptureIfAvailable(
+                state,
+                slideIndex,
+                nowUtc,
+                SlideShowRecordingMediaArtifactKind.CameraVideo,
+                "camera",
+                "mp4",
+                "video/mp4");
             actions.Add(CaptureAction(
                 state,
                 slideIndex,
@@ -666,6 +702,29 @@ public static class SlideShowRecordingExecutionPlanner
         }
 
         return actions;
+    }
+
+    private static void BeginCaptureIfAvailable(
+        SlideShowRecordingExecutionState state,
+        int slideIndex,
+        DateTimeOffset nowUtc,
+        SlideShowRecordingMediaArtifactKind kind,
+        string fileStem,
+        string extension,
+        string contentType)
+    {
+        var available = kind == SlideShowRecordingMediaArtifactKind.NarrationAudio
+            ? state.HostCapabilities.CanCaptureNarration
+            : state.HostCapabilities.CanCaptureCamera;
+        if (!available)
+            return;
+
+        state.ActiveCaptureBackend.BeginCapture(new SlideShowRecordingCaptureStartRequest(
+            kind,
+            slideIndex,
+            nowUtc,
+            BuildSuggestedFileName(slideIndex, fileStem, extension),
+            contentType));
     }
 
     private static IReadOnlyList<SlideShowRecordingExecutionAction> LeaveSlideActions(
@@ -715,4 +774,7 @@ public static class SlideShowRecordingExecutionPlanner
                 slideIndex,
                 IsDeferred: true,
                 $"{state.HostCapabilities.HostName}: {state.HostCapabilities.UnavailableReason}");
+
+    private static string BuildSuggestedFileName(int slideIndex, string fileStem, string extension) =>
+        $"slide-{slideIndex + 1:000}-{fileStem}.{extension}";
 }

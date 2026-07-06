@@ -8,6 +8,7 @@ using System.Windows.Threading;
 using Free.Shared.AppServices;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
+using FreeP.App.Host.Recording;
 using FreeP.App.Rendering.Wpf;
 using FreeP.Core.Model;
 
@@ -372,11 +373,7 @@ public sealed class SlideShowWindow : Window
         ApplyInkExecution(SlideShowInkExecutionPlanner.UndoLastStroke(_inkExecutionState));
 
     private static ISlideShowRecordingCaptureBackend CreateDefaultRecordingCaptureBackend() =>
-        SlideShowHostCapabilityRecordingCaptureBackend.FromCapabilities(
-            SlideShowRecordingCaptureAdapterPlanner.BuildCapabilities(
-                SlideShowRecordingCaptureAdapterPlanner.BuildDeferredReadiness(
-                    "WPF slideshow",
-                    "WPF microphone/camera capture adapter")));
+        new WpfWindowsRecordingCaptureBackend();
 
     // ── Keyboard navigation ───────────────────────────────────────────────────────
 
