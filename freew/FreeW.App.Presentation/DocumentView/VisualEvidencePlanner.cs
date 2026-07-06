@@ -2497,6 +2497,8 @@ public static class FreeWVisualEvidencePlanner
         target.LineNumberMode = copy.LineNumberMode;
         target.LineNumberCountBy = copy.LineNumberCountBy;
         target.LineNumberStartAt = copy.LineNumberStartAt;
+        target.PageNumberFormat = copy.PageNumberFormat;
+        target.PageNumberStartAt = copy.PageNumberStartAt;
         target.AutoHyphenation = copy.AutoHyphenation;
         target.HyphenationZonePt = copy.HyphenationZonePt;
         target.ConsecutiveHyphenLimit = copy.ConsecutiveHyphenLimit;
@@ -2515,7 +2517,9 @@ public static class FreeWVisualEvidencePlanner
         && Math.Abs(left.MarginTopPt - right.MarginTopPt) < 0.001
         && Math.Abs(left.MarginRightPt - right.MarginRightPt) < 0.001
         && Math.Abs(left.MarginBottomPt - right.MarginBottomPt) < 0.001
-        && left.Landscape == right.Landscape;
+        && left.Landscape == right.Landscape
+        && left.PageNumberFormat == right.PageNumberFormat
+        && left.PageNumberStartAt == right.PageNumberStartAt;
 
     private static int[] BuildSectionBreakPageAssignments(TextDocument document, int pageCount)
     {

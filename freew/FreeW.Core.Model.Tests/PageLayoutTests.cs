@@ -152,6 +152,29 @@ public class PageLayoutTests
     }
 
     [Fact]
+    public void SetPageSettingsCommand_CopiesAndRestoresPageNumbering()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Page.PageNumberFormat = PageNumberFormat.Decimal;
+        doc.Page.PageNumberStartAt = null;
+        var settings = doc.Page.Clone();
+        settings.PageNumberFormat = PageNumberFormat.UpperRoman;
+        settings.PageNumberStartAt = 4;
+        var command = new SetPageSettingsCommand(settings);
+        var context = new CommandContext(doc);
+
+        command.Apply(context);
+
+        doc.Page.PageNumberFormat.Should().Be(PageNumberFormat.UpperRoman);
+        doc.Page.PageNumberStartAt.Should().Be(4);
+
+        command.Revert(context);
+
+        doc.Page.PageNumberFormat.Should().Be(PageNumberFormat.Decimal);
+        doc.Page.PageNumberStartAt.Should().BeNull();
+    }
+
+    [Fact]
     public void EvenHeaderFooter_DefaultToNull()
     {
         var doc = new TextDocument();

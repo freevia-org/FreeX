@@ -237,6 +237,12 @@ internal static class FreeWAvaloniaRibbonCommands
         // Header / Footer — enable the page-margin region (render-ready). Region caret editing deferred.
         r.Register("freew.header", new ActionRibbonCommand(editor.EnsureHeader));
         r.Register("freew.footer", new ActionRibbonCommand(editor.EnsureFooter));
+        r.Register("freew.page-number", new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)));
+        r.Register("freew.page-number-top", new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: false)));
+        r.Register("freew.page-number-bottom", new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)));
+        r.Register("freew.page-number-current", new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.PageNumber)));
+        r.Register("freew.page-number-format", new ContextRibbonCommand(
+            context => ExecutePageNumberFormat(editor, callbacks, context)));
         r.Register("freew.datetime", new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.Date)));
         RegisterHeaderFooterCommands(r, editor);
 
@@ -608,6 +614,20 @@ internal static class FreeWAvaloniaRibbonCommands
     {
         if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var points))
             apply(points);
+    }
+
+    private static void ExecutePageNumberFormat(
+        DocumentView editor,
+        RibbonHostCallbacks callbacks,
+        RibbonCommandContext context)
+    {
+        if (PageNumberFormatDialogPlanner.TryBuildResultFromCommandValue(context.SelectedValue, out var result))
+        {
+            editor.ApplyPageNumberFormat(result);
+            return;
+        }
+
+        callbacks.OpenPageNumberFormatDialog?.Invoke();
     }
 
     private enum ColumnsPreset

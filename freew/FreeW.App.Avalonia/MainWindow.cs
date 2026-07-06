@@ -348,6 +348,9 @@ public sealed class MainWindow : Window
     private Task OpenPageSetupDialogAsync() =>
         PageSetupDialog.ShowAndApplyAsync(this, _editor);
 
+    private Task OpenPageNumberFormatDialogAsync() =>
+        PageNumberFormatDialog.ShowAndApplyAsync(this, _editor);
+
     /// <summary>
     /// AV-DESIGN: Opens the Page Borders dialog (modal); on OK applies the chosen border via
     /// <see cref="DocumentView.SetPageBorder"/> (undoable), or removes it on "None". Wired to
@@ -1137,6 +1140,7 @@ public sealed class MainWindow : Window
             OpenFontDialog:      () => _ = OpenFontDialogAsync(),
             OpenParagraphDialog: () => _ = OpenParagraphDialogAsync(),
             OpenPageSetupDialog: () => _ = OpenPageSetupDialogAsync(),
+            OpenPageNumberFormatDialog: () => _ = OpenPageNumberFormatDialogAsync(),
             ToggleOrientation:   ToggleOrientation,
             ApplyMarginPreset:   ApplyMarginPreset,
             ApplyPaperSize:      ApplyPaperSize,

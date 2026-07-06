@@ -4764,6 +4764,9 @@ public static class DocxWriter
             // pgBorders and before cols. @w:countBy is the numbering interval; @w:restart is
             // "continuous" (across pages) or "newPage" (restart each page).
             BuildLineNumbering(page),
+            // Page numbering (w:pgNumType): emitted only when a section overrides Word's default
+            // decimal/continue behaviour. Schema order places it after lnNumType and before cols.
+            BuildPageNumbering(page),
             // Columns: w:cols carries the count (w:num) and inter-column gap (w:space, dxa). Emitted
             // unconditionally; w:num="1" is harmless and keeps the section shape stable. @w:sep draws a
             // line between columns; explicit per-column widths (Left/Right presets) switch to
@@ -4852,6 +4855,27 @@ public static class DocxWriter
             new XAttribute(W + "restart", restart),
             new XAttribute(W + "start", Math.Max(1, page.LineNumberStartAt)));
     }
+
+    private static XElement? BuildPageNumbering(PageSettings page)
+    {
+        var hasFormat = page.PageNumberFormat != PageNumberFormat.Decimal;
+        var hasStart = page.PageNumberStartAt is > 0;
+        if (!hasFormat && !hasStart)
+            return null;
+
+        return new XElement(W + "pgNumType",
+            hasFormat ? new XAttribute(W + "fmt", PageNumberFormatToken(page.PageNumberFormat)) : null,
+            hasStart ? new XAttribute(W + "start", page.PageNumberStartAt!.Value) : null);
+    }
+
+    private static string PageNumberFormatToken(PageNumberFormat format) => format switch
+    {
+        PageNumberFormat.LowerRoman => "lowerRoman",
+        PageNumberFormat.UpperRoman => "upperRoman",
+        PageNumberFormat.LowerLetter => "lowerLetter",
+        PageNumberFormat.UpperLetter => "upperLetter",
+        _ => "decimal"
+    };
 
     /// <summary>
     /// Builds the w:cols element (column layout). Always emitted so the section shape stays stable.

@@ -422,7 +422,7 @@ static void RenderDocumentComposite(
                 var hfSlot = ResolveHfSlotByName(ownerHf, hSlotName);
                 if (hfSlot is not null && !hfSlot.IsEmpty)
                 {
-                    var hfPage = RenderHfSlot(hfSlot, doc, thisPageWDip, hfH, i + 1, pageCount);
+                    var hfPage = RenderHfSlot(hfSlot, doc, thisPageWDip, hfH, i + 1, box.PageNumberText, pageCount);
                     if (hfPage is not null)
                     {
                         var hfVis = new DrawingVisual();
@@ -439,7 +439,7 @@ static void RenderDocumentComposite(
                 var fSlot = ResolveHfSlotByName(ownerHf, fSlotName);
                 if (fSlot is not null && !fSlot.IsEmpty)
                 {
-                    var hfPage = RenderHfSlot(fSlot, doc, thisPageWDip, hfH, i + 1, pageCount);
+                    var hfPage = RenderHfSlot(fSlot, doc, thisPageWDip, hfH, i + 1, box.PageNumberText, pageCount);
                     if (hfPage is not null)
                     {
                         var hfVis = new DrawingVisual();
@@ -1387,7 +1387,7 @@ static HeaderFooter? ResolveHfSlotByName(SectionHeadersFooters hf, string slotNa
 /// Returns null if the slot is empty or rendering fails.
 /// </summary>
 static DocumentPage? RenderHfSlot(HeaderFooter slot, TextDocument sourceDoc,
-    double pageWDip, double heightDip, int pageNumber, int pageCount)
+    double pageWDip, double heightDip, int pageNumber, string pageNumberText, int pageCount)
 {
     try
     {
@@ -1403,6 +1403,7 @@ static DocumentPage? RenderHfSlot(HeaderFooter slot, TextDocument sourceDoc,
 
         // Inject PAGE/NUMPAGES context.
         DocumentView._renderHfPageNumber = pageNumber;
+        DocumentView._renderHfPageNumberText = pageNumberText;
         DocumentView._renderHfPageCount  = pageCount > 0 ? pageCount : 1;
         var hfView = new DocumentView { Width = pageWDip };
         try
@@ -1412,6 +1413,7 @@ static DocumentPage? RenderHfSlot(HeaderFooter slot, TextDocument sourceDoc,
         finally
         {
             DocumentView._renderHfPageNumber = 0;
+            DocumentView._renderHfPageNumberText = null;
             DocumentView._renderHfPageCount  = 0;
         }
 

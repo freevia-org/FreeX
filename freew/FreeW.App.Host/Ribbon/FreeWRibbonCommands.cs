@@ -7960,18 +7960,135 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Insert > Header & Footer > Page Number > Format Page Numbers…: shows a simple dialog where the
-    // user can set the starting page number (a common use case). For now shows an informational message
-    // — a full format dialog (number style, chapter numbering, start-at) is out of scope for this wave.
+    // Insert > Header & Footer > Page Number > Format Page Numbers: apply the supported shared
+    // number style and start/continue settings; chapter numbering remains deferred.
     private sealed class PageNumberFormatCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            DialogMessageHelper.ShowInfo(
-                Window.GetWindow(editor),
-                "Page number format options (number style, chapter numbering, start-at) are not yet implemented.",
-                "Format Page Numbers");
+            if (PageNumberFormatDialogPlanner.TryBuildResultFromCommandValue(context.SelectedValue, out var contextResult))
+            {
+                editor.ApplyPageNumberFormat(contextResult);
+                return;
+            }
+
+            if (PageNumberFormatDialog.Prompt(Window.GetWindow(editor), editor.Model.Page) is { } result)
+                editor.ApplyPageNumberFormat(result);
+        }
+    }
+
+    private static class PageNumberFormatDialog
+    {
+        public static PageNumberFormatDialogResult? Prompt(Window? owner, PageSettings page)
+        {
+            var state = PageNumberFormatDialogPlanner.BuildInitialState(page);
+            PageNumberFormatDialogResult? result = null;
+
+            var formatBox = new System.Windows.Controls.ComboBox
+            {
+                MinWidth = 180,
+                ItemsSource = PageNumberFormatDialogPlanner.FormatItems.Select(item => item.Label).ToArray(),
+                SelectedIndex = state.FormatIndex,
+                Margin = new Thickness(0, 2, 0, 10)
+            };
+            var continueRadio = new System.Windows.Controls.RadioButton
+            {
+                Content = PageNumberFormatDialogPlanner.ContinueLabel,
+                GroupName = "PageNumbering",
+                IsChecked = state.ContinueFromPreviousSection,
+                Margin = new Thickness(0, 2, 0, 4)
+            };
+            var startRadio = new System.Windows.Controls.RadioButton
+            {
+                Content = PageNumberFormatDialogPlanner.StartAtLabel,
+                GroupName = "PageNumbering",
+                IsChecked = !state.ContinueFromPreviousSection,
+                Margin = new Thickness(0, 2, 8, 4)
+            };
+            var startBox = new System.Windows.Controls.TextBox
+            {
+                Text = state.StartAtText,
+                Width = 72,
+                Margin = new Thickness(0, 0, 0, 4)
+            };
+            var status = new System.Windows.Controls.TextBlock
+            {
+                Foreground = Brushes.Firebrick,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 6, 0, 0)
+            };
+
+            var dialog = new Window
+            {
+                Title = PageNumberFormatDialogPlanner.Title,
+                Owner = owner,
+                SizeToContent = SizeToContent.WidthAndHeight,
+                WindowStartupLocation = owner is null
+                    ? WindowStartupLocation.CenterScreen
+                    : WindowStartupLocation.CenterOwner,
+                ResizeMode = ResizeMode.NoResize
+            };
+
+            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            ok.Click += (_, _) =>
+            {
+                if (!PageNumberFormatDialogPlanner.TryBuildResult(
+                        new PageNumberFormatDialogInput(
+                            formatBox.SelectedIndex,
+                            continueRadio.IsChecked == true,
+                            startBox.Text),
+                        out result,
+                        out var error))
+                {
+                    status.Text = error ?? PageNumberFormatDialogPlanner.InvalidStartAtMessage;
+                    return;
+                }
+
+                dialog.DialogResult = true;
+            };
+
+            var startRow = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                Margin = new Thickness(0, 0, 0, 4)
+            };
+            startRow.Children.Add(startRadio);
+            startRow.Children.Add(startBox);
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 12, 0, 0)
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16), MinWidth = 280 };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = PageNumberFormatDialogPlanner.NumberFormatLabel });
+            panel.Children.Add(formatBox);
+            panel.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = PageNumberFormatDialogPlanner.PageNumberingLabel,
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 4, 0, 2)
+            });
+            panel.Children.Add(continueRadio);
+            panel.Children.Add(startRow);
+            panel.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = PageNumberFormatDialogPlanner.ChapterNumberingDeferredLabel,
+                Foreground = Brushes.DimGray,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 8, 0, 0)
+            });
+            panel.Children.Add(status);
+            panel.Children.Add(buttons);
+
+            dialog.Content = panel;
+            return dialog.ShowDialog() == true ? result : null;
         }
     }
 

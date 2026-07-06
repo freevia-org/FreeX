@@ -101,6 +101,13 @@ public sealed class DocumentView : RichTextBox
     internal static int _renderHfPageNumber;
 
     /// <summary>
+    /// Optional preformatted PAGE display text for header/footer rendering. When set, this wins over
+    /// <see cref="_renderHfPageNumber"/> so section formats such as Roman numerals render correctly.
+    /// </summary>
+    [ThreadStatic]
+    internal static string? _renderHfPageNumberText;
+
+    /// <summary>
     /// The total page count to use when resolving NUMPAGES fields during a header/footer sub-editor render
     /// in <see cref="DocumentViewMode.PagedEdit"/>. Zero means "not set" (fall back to cached). Mirrors
     /// <see cref="_renderHfPageNumber"/>.
@@ -813,6 +820,9 @@ public sealed class DocumentView : RichTextBox
         Render();
     }
 
+    public void ApplyPageNumberFormat(PageNumberFormatDialogResult result) =>
+        ApplyPageSettings(page => PageNumberFormatDialogPlanner.ApplyResult(page, result));
+
     /// <summary>
     /// Toggle the whole-page border (w:sectPr/w:pgBorders). When the page has no border one is added
     /// (<paramref name="colorHex"/>/<paramref name="widthPt"/>); otherwise it is cleared. Re-renders so
@@ -1514,7 +1524,10 @@ public sealed class DocumentView : RichTextBox
         if (index < 0 || index > _model.Blocks.Count)
             index = _model.Blocks.Count;
         var para = new FreeW.Core.Model.Paragraph();
-        para.Runs.Add(FreeW.Core.Model.Run.PageNumberField());
+        para.Runs.Add(new FreeW.Core.Model.Run(ResolvePageNumberFieldText(_model))
+        {
+            FieldKind = RunFieldKind.PageNumber
+        });
         _commands.Execute(new InsertBlockCommand(index, para));
     }
 
@@ -8549,9 +8562,12 @@ public sealed class DocumentView : RichTextBox
         // count injected by PaginatedEditorPanel just before LoadModel on the h/f sub-editor.  The
         // thread-static fields are zero outside that narrow window, so ordinary renders are unaffected.
         if (kind == RunFieldKind.PageNumber && _renderHfPageNumber > 0)
-            return _renderHfPageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return _renderHfPageNumberText
+                ?? _renderHfPageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture);
         if (kind == RunFieldKind.NumPages && _renderHfPageCount > 0)
             return _renderHfPageCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (kind == RunFieldKind.PageNumber)
+            return ResolvePageNumberFieldText(document);
         return kind switch
         {
             RunFieldKind.Date => DateTime.Now.ToString("d", culture),
@@ -8564,6 +8580,12 @@ public sealed class DocumentView : RichTextBox
             RunFieldKind.DocComments => document.Properties.Comments is { Length: > 0 } comments ? comments : cached,
             _ => cached
         };
+    }
+
+    private static string ResolvePageNumberFieldText(TextDocument document)
+    {
+        var firstValue = Math.Max(1, document.Page.PageNumberStartAt ?? 1);
+        return PageNumberFormatDialogPlanner.FormatPageNumber(firstValue, document.Page.PageNumberFormat);
     }
 
     /// <summary>
