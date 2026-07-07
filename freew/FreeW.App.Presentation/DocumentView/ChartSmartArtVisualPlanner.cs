@@ -51,13 +51,38 @@ public sealed record SmartArtNodeVisualPlan(
     double ShadowDepth,
     string ConnectorHex);
 
+public sealed record SmartArtHierarchyNodeGeometry(
+    int NodeIndex,
+    int? ParentNodeIndex,
+    int Depth,
+    double X,
+    double Y,
+    double Width,
+    double Height);
+
+public sealed record SmartArtHierarchyConnectorGeometry(
+    int ParentNodeIndex,
+    int ChildNodeIndex,
+    double X1,
+    double Y1,
+    double X2,
+    double Y2);
+
+public sealed record SmartArtHierarchyGeometryPlan(
+    IReadOnlyList<SmartArtHierarchyNodeGeometry> Nodes,
+    IReadOnlyList<SmartArtHierarchyConnectorGeometry> Connectors,
+    int MaxDepth,
+    double NaturalWidth,
+    double NaturalHeight);
+
 public sealed record SmartArtVisualPlan(
     SmartArtKind Kind,
     string LayoutId,
     SmartArtLayoutPreset Layout,
     SmartArtColorScheme ColorScheme,
     SmartArtStyle Style,
-    IReadOnlyList<SmartArtNodeVisualPlan> Nodes);
+    IReadOnlyList<SmartArtNodeVisualPlan> Nodes,
+    SmartArtHierarchyGeometryPlan? HierarchyGeometry = null);
 
 public static class ChartSmartArtVisualPlanner
 {
@@ -183,13 +208,18 @@ public static class ChartSmartArtVisualPlanner
         var nodes = new List<SmartArtNodeVisualPlan>();
         FlattenNodes(smartArt.Nodes, depth: 0, nodes, colorScheme, style);
 
+        var hierarchyGeometry = layout.Kind == SmartArtKind.Hierarchy
+            ? BuildHierarchyGeometry(smartArt.Nodes)
+            : null;
+
         return new SmartArtVisualPlan(
-            smartArt.Kind,
+            layout.Kind,
             layout.Id,
             layout,
             colorScheme,
             style,
-            nodes);
+            nodes,
+            hierarchyGeometry);
     }
 
     public static IReadOnlyList<string> BuildSmartArtVisualSignatures(IEnumerable<SmartArtVisualPlan> smartArts)
@@ -213,6 +243,7 @@ public static class ChartSmartArtVisualPlanner
             "preset=" + NormalizeSignatureText(smartArt.Layout.Id),
             "colorScheme=" + NormalizeSignatureText(smartArt.ColorScheme.Id),
             "style=" + NormalizeSignatureText(smartArt.Style.Id),
+            "hierarchy=" + BuildSmartArtHierarchyVisualSignature(smartArt.HierarchyGeometry),
             "nodes=" + string.Join(";", smartArt.Nodes.Select(BuildSmartArtNodeVisualSignature)));
     }
 
@@ -266,6 +297,82 @@ public static class ChartSmartArtVisualPlanner
         }
     }
 
+    private static SmartArtHierarchyGeometryPlan BuildHierarchyGeometry(IReadOnlyList<SmartArtNode> roots)
+    {
+        const double margin = 8;
+        const double nodeWidth = 112;
+        const double nodeHeight = 30;
+        const double horizontalSpacing = 22;
+        const double verticalSpacing = 34;
+
+        var boxes = new List<SmartArtHierarchyNodeGeometry>();
+        var connectors = new List<SmartArtHierarchyConnectorGeometry>();
+        var leafIndex = 0;
+        var maxDepth = 0;
+
+        (int Index, double CenterX) LayoutNode(SmartArtNode node, int? parentIndex, int depth)
+        {
+            var nodeIndex = boxes.Count;
+            boxes.Add(new SmartArtHierarchyNodeGeometry(nodeIndex, parentIndex, depth, 0, 0, nodeWidth, nodeHeight));
+            maxDepth = Math.Max(maxDepth, depth);
+
+            double centerX;
+            var childResults = new List<(int Index, double CenterX)>();
+            foreach (var child in node.Children)
+                childResults.Add(LayoutNode(child, nodeIndex, depth + 1));
+
+            if (childResults.Count == 0)
+            {
+                centerX = margin + nodeWidth / 2 + leafIndex * (nodeWidth + horizontalSpacing);
+                leafIndex++;
+            }
+            else
+            {
+                centerX = (childResults[0].CenterX + childResults[^1].CenterX) / 2;
+            }
+
+            var x = centerX - nodeWidth / 2;
+            var y = margin + depth * (nodeHeight + verticalSpacing);
+            boxes[nodeIndex] = new SmartArtHierarchyNodeGeometry(
+                nodeIndex,
+                parentIndex,
+                depth,
+                x,
+                y,
+                nodeWidth,
+                nodeHeight);
+
+            foreach (var child in childResults)
+            {
+                var childBox = boxes[child.Index];
+                connectors.Add(new SmartArtHierarchyConnectorGeometry(
+                    nodeIndex,
+                    child.Index,
+                    x + nodeWidth / 2,
+                    y + nodeHeight,
+                    childBox.X + childBox.Width / 2,
+                    childBox.Y));
+            }
+
+            return (nodeIndex, centerX);
+        }
+
+        foreach (var root in roots)
+            LayoutNode(root, parentIndex: null, depth: 0);
+
+        if (boxes.Count == 0)
+            return new SmartArtHierarchyGeometryPlan([], [], 0, 0, 0);
+
+        var naturalWidth = boxes.Max(box => box.X + box.Width) + margin;
+        var naturalHeight = boxes.Max(box => box.Y + box.Height) + margin;
+        return new SmartArtHierarchyGeometryPlan(
+            boxes,
+            connectors,
+            maxDepth,
+            naturalWidth,
+            naturalHeight);
+    }
+
     private static string ConnectorContrast(string fillHex)
     {
         var (r, g, b) = ParseRgb(fillHex);
@@ -313,6 +420,44 @@ public static class ChartSmartArtVisualPlanner
             FormatSignatureDouble(node.ShadowBlur),
             FormatSignatureDouble(node.ShadowDepth),
             node.ConnectorHex);
+
+    private static string BuildSmartArtHierarchyVisualSignature(SmartArtHierarchyGeometryPlan? geometry)
+    {
+        if (geometry is null)
+            return "none";
+
+        var nodeSignature = string.Join(
+            ",",
+            geometry.Nodes.Select(node => string.Join(
+                ":",
+                node.NodeIndex.ToString(CultureInfo.InvariantCulture),
+                node.ParentNodeIndex?.ToString(CultureInfo.InvariantCulture) ?? "root",
+                node.Depth.ToString(CultureInfo.InvariantCulture),
+                FormatSignatureDouble(node.X),
+                FormatSignatureDouble(node.Y),
+                FormatSignatureDouble(node.Width),
+                FormatSignatureDouble(node.Height))));
+
+        var connectorSignature = string.Join(
+            ",",
+            geometry.Connectors.Select(connector => string.Join(
+                ":",
+                connector.ParentNodeIndex.ToString(CultureInfo.InvariantCulture),
+                connector.ChildNodeIndex.ToString(CultureInfo.InvariantCulture),
+                FormatSignatureDouble(connector.X1),
+                FormatSignatureDouble(connector.Y1),
+                FormatSignatureDouble(connector.X2),
+                FormatSignatureDouble(connector.Y2))));
+
+        return string.Join(
+            "/",
+            "maxDepth=" + geometry.MaxDepth.ToString(CultureInfo.InvariantCulture),
+            "nodes=" + geometry.Nodes.Count.ToString(CultureInfo.InvariantCulture),
+            "connectors=" + geometry.Connectors.Count.ToString(CultureInfo.InvariantCulture),
+            "size=" + FormatSignatureDouble(geometry.NaturalWidth) + "x" + FormatSignatureDouble(geometry.NaturalHeight),
+            "boxes=" + nodeSignature,
+            "lines=" + connectorSignature);
+    }
 
     private static string BoolFlag(bool value) => value ? "1" : "0";
 

@@ -25,10 +25,9 @@ internal static class SmartArtRenderer
         SmartArt smartArt,
         SmartArtVisualPlan plan,
         double strokeThickness) =>
-        Build(smartArt.Nodes, plan, strokeThickness);
+        Build(plan, strokeThickness);
 
     private static FrameworkElement Build(
-        IReadOnlyList<SmartArtNode> nodes,
         SmartArtVisualPlan plan,
         double strokeThickness)
     {
@@ -47,7 +46,7 @@ internal static class SmartArtRenderer
             "cycle1"                 => BuildCycle(plan.Nodes, strokeThickness),
 
             // ── Hierarchy ───────────────────────────────────────────────────────────────────────────
-            "hierarchy1" or "orgchart1" => BuildHierarchy(nodes, plan.Nodes, strokeThickness),
+            "hierarchy1" or "orgchart1" => BuildHierarchy(plan, strokeThickness),
 
             // ── Radial ──────────────────────────────────────────────────────────────────────────────
             "radial1"                => BuildRadial(plan.Nodes, strokeThickness),
@@ -262,80 +261,69 @@ internal static class SmartArtRenderer
         return canvas;
     }
 
-    // Hierarchy layout: tree of parent + indented children.
+    // Hierarchy layout: shared planner geometry, with styles mapped by DFS node index.
     private static FrameworkElement BuildHierarchy(
-        IReadOnlyList<SmartArtNode> nodes,
-        IReadOnlyList<SmartArtNodeVisualPlan> plannedNodes,
+        SmartArtVisualPlan plan,
         double strokeThickness)
     {
-        var root = new StackPanel
+        if (plan.HierarchyGeometry is not { Nodes.Count: > 0 } geometry)
+            return BuildVerticalList(plan.Nodes, strokeThickness);
+
+        var canvas = new Canvas
         {
-            Orientation = Orientation.Vertical,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            VerticalAlignment = VerticalAlignment.Top,
+            Width = geometry.NaturalWidth,
+            Height = geometry.NaturalHeight,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(6)
         };
-        var nodePlans = BuildNodePlanMap(nodes, plannedNodes);
-        foreach (var node in nodes)
+
+        foreach (var connector in geometry.Connectors)
         {
-            root.Children.Add(MakeNodeBox(PlanFor(node, nodePlans, plannedNodes), strokeThickness,
-                margin: new Thickness(2),
-                padding: new Thickness(8, 4, 8, 4)));
+            if (connector.ParentNodeIndex < 0 || connector.ParentNodeIndex >= plan.Nodes.Count)
+                continue;
 
-            // Render children indented beneath parent (hierarchy-children rendered, not dropped).
-            if (node.Children.Count > 0)
+            var parent = plan.Nodes[connector.ParentNodeIndex];
+            canvas.Children.Add(new Line
             {
-                var childPanel = new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
-                    Margin = new Thickness(20, 0, 2, 4)
-                };
-                foreach (var child in node.Children)
-                {
-                    childPanel.Children.Add(MakeNodeBox(PlanFor(child, nodePlans, plannedNodes), strokeThickness,
-                        margin: new Thickness(2),
-                        padding: new Thickness(6, 3, 6, 3)));
-                }
-                root.Children.Add(childPanel);
-            }
-        }
-        return root;
-    }
-
-    private static Dictionary<SmartArtNode, SmartArtNodeVisualPlan> BuildNodePlanMap(
-        IEnumerable<SmartArtNode> nodes,
-        IReadOnlyList<SmartArtNodeVisualPlan> plannedNodes)
-    {
-        var map = new Dictionary<SmartArtNode, SmartArtNodeVisualPlan>();
-        var planIndex = 0;
-
-        void Visit(IEnumerable<SmartArtNode> source)
-        {
-            foreach (var node in source)
-            {
-                if (planIndex < plannedNodes.Count)
-                    map[node] = plannedNodes[planIndex++];
-                Visit(node.Children);
-            }
+                X1 = connector.X1,
+                Y1 = connector.Y1,
+                X2 = connector.X2,
+                Y2 = connector.Y2,
+                Stroke = new SolidColorBrush(ParseHex(parent.ConnectorHex)),
+                StrokeThickness = ConnectorThickness(parent, strokeThickness),
+                Opacity = 0.75
+            });
         }
 
-        Visit(nodes);
-        return map;
+        foreach (var nodeGeometry in geometry.Nodes)
+        {
+            if (nodeGeometry.NodeIndex < 0 || nodeGeometry.NodeIndex >= plan.Nodes.Count)
+                continue;
+
+            var box = MakeNodeBox(
+                plan.Nodes[nodeGeometry.NodeIndex],
+                strokeThickness,
+                margin: new Thickness(0),
+                padding: new Thickness(6, 3, 6, 3),
+                width: nodeGeometry.Width);
+            box.Height = nodeGeometry.Height;
+            Canvas.SetLeft(box, nodeGeometry.X);
+            Canvas.SetTop(box, nodeGeometry.Y);
+            canvas.Children.Add(box);
+        }
+
+        return new Viewbox
+        {
+            Stretch = Stretch.Uniform,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            Child = canvas
+        };
     }
 
-    private static SmartArtNodeVisualPlan PlanFor(
-        SmartArtNode node,
-        IReadOnlyDictionary<SmartArtNode, SmartArtNodeVisualPlan> nodePlans,
-        IReadOnlyList<SmartArtNodeVisualPlan> plannedNodes)
-    {
-        if (nodePlans.TryGetValue(node, out var plan))
-            return plan;
-
-        return plannedNodes.Count > 0
-            ? plannedNodes[0] with { Text = node.Text }
-            : new SmartArtNodeVisualPlan(node.Text, 0, 0, "#4E81BD", "#FFFFFF", "#20538F", 1, 0, 0, 0, 0, "#365986");
-    }
+    private static double ConnectorThickness(SmartArtNodeVisualPlan node, double strokeThickness) =>
+        Math.Max(strokeThickness, node.BorderThickness > 0 ? node.BorderThickness : strokeThickness);
 
     // Radial layout: central hub + satellite nodes arranged around it.
     private static FrameworkElement BuildRadial(

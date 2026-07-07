@@ -184,7 +184,11 @@ public sealed class SmartArtRenderingTests
             .Select(tb => tb!.Text)
             .ToList();
 
-        Assert.Equal(new[] { "Root", "Child", "SecondRoot" }, renderedNodeTexts);
+        Assert.Equal(new[] { "Root", "Child", "Grandchild", "SecondRoot" }, renderedNodeTexts);
+
+        var connectors = LogicalDescendants<Line>(view.Document);
+        Assert.True(connectors.Count >= 2,
+            $"expected hierarchy connectors for Root->Child and Child->Grandchild; got {connectors.Count}");
 
         var secondRootBorder = LogicalDescendants<Border>(view.Document)
             .Single(b => b.Child is TextBlock { Text: "SecondRoot" });

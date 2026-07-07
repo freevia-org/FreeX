@@ -707,7 +707,7 @@ public static class FreeWVisualEvidenceDocumentFactory
         doc.Blocks.Add(new Paragraph(
             "This shared fixture exercises Word-style chart and SmartArt visual planning: named chart " +
             "palettes, quick layouts, scatter markers, data labels, axis titles, plot fills, SmartArt " +
-            "layouts, color schemes, styles, and node fill sequences."));
+            "hierarchy depth, connectors, color schemes, styles, and node fill sequences."));
 
         var chartParagraph = new Paragraph();
         chartParagraph.Runs.Add(new Run("Column chart with quick-layout annotations: "));
@@ -720,7 +720,7 @@ public static class FreeWVisualEvidenceDocumentFactory
         doc.Blocks.Add(scatterParagraph);
 
         var smartArtParagraph = new Paragraph();
-        smartArtParagraph.Runs.Add(new Run("SmartArt process colors and style: "));
+        smartArtParagraph.Runs.Add(new Run("SmartArt hierarchy colors and style: "));
         smartArtParagraph.Runs.Add(Run.FromSmartArt(BuildStyledSmartArt()));
         doc.Blocks.Add(smartArtParagraph);
 
@@ -1259,10 +1259,14 @@ public static class FreeWVisualEvidenceDocumentFactory
 
     private static SmartArt BuildStyledSmartArt()
     {
-        var smartArt = SmartArt.Create(SmartArtKind.Process, ["Plan", "Build", "Verify"]);
-        smartArt.WidthPt = 300;
-        smartArt.HeightPt = 110;
-        smartArt.LayoutId = "stepup1";
+        var root = new SmartArtNode("Plan");
+        var child = root.AddChild("Build");
+        child.AddChild("Verify");
+        var smartArt = new SmartArt { Kind = SmartArtKind.Hierarchy };
+        smartArt.Nodes.Add(root);
+        smartArt.WidthPt = 320;
+        smartArt.HeightPt = 140;
+        smartArt.LayoutId = "orgchart1";
         smartArt.ColorSchemeId = "accent1";
         smartArt.StyleId = "intense1";
         return smartArt;
