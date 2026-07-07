@@ -486,6 +486,49 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
+    public void EquationVisualPlanner_MatrixRendersBracketedGridAndRoundTrips()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var equation = new Equation([MathRun.MatrixOf(MathMatrix.Identity2x2())]);
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var matrixPanel = LogicalDescendants<StackPanel>(view.Document)
+            .Single(panel => Equals(panel.Tag, EquationVisualElementKind.Matrix));
+        var grid = LogicalDescendants<Grid>(matrixPanel).Single();
+        grid.RowDefinitions.Should().HaveCount(2);
+        grid.ColumnDefinitions.Should().HaveCount(2);
+        grid.Children.OfType<TextBlock>()
+            .Select(TextBlockText)
+            .Should().Equal("1", "0", "0", "1");
+
+        var visualText = LogicalDescendants<TextBlock>(matrixPanel)
+            .Select(TextBlockText)
+            .Where(text => text.Length > 0)
+            .ToList();
+        visualText.Should().Contain(EquationVisualPlanner.MatrixOpenDelimiterText);
+        visualText.Should().Contain(EquationVisualPlanner.MatrixCloseDelimiterText);
+        visualText.Should().NotContain("[1, 0; 0, 1]",
+            "the WPF equation visual should build a matrix grid instead of the raw linear fallback");
+
+        view.CommitToModel();
+        var recovered = FirstRun(view.Model);
+        recovered.Equation.Should().NotBeNull();
+        var run = recovered.Equation!.Runs.Should().ContainSingle().Subject;
+        run.Kind.Should().Be(MathRunKind.Matrix);
+        run.Matrix.Should().NotBeNull();
+        run.Matrix!.RowCount.Should().Be(2);
+        run.Matrix.ColumnCount.Should().Be(2);
+        run.Matrix.Rows[0].Should().Equal("1", "0");
+        run.Matrix.Rows[1].Should().Equal("0", "1");
+    }
+
+    [StaFact]
     public void InsertEquation_PlacesStructuredEquationAtCaret()
     {
         var view = new DocumentView();

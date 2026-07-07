@@ -9930,7 +9930,7 @@ public sealed class DocumentView : RichTextBox
     /// Renders an inline equation as an InlineUIContainer hosting a Border that carries the model
     /// <see cref="Equation"/> on its Tag (so CommitToModel round-trips it, mirroring shapes). The border
     /// consumes the shared equation visual planner so simple scripts render as styled math segments and
-    /// lightweight fraction/radical structures render with stacked/root visual cues.
+    /// lightweight fraction/radical/n-ary/matrix structures render with visual cues.
     /// </summary>
     private static InlineUIContainer BuildEquationRun(Equation equation)
     {
@@ -9973,6 +9973,7 @@ public sealed class DocumentView : RichTextBox
             EquationVisualElementKind.Fraction => BuildEquationFractionElement(element),
             EquationVisualElementKind.Radical => BuildEquationRadicalElement(element),
             EquationVisualElementKind.NAry => BuildEquationNAryElement(element),
+            EquationVisualElementKind.Matrix => BuildEquationMatrixElement(element),
             _ => BuildEquationTextBlock(element.Segments)
         };
     }
@@ -10094,6 +10095,90 @@ public sealed class DocumentView : RichTextBox
 
         return panel;
     }
+
+    private static FrameworkElement BuildEquationMatrixElement(EquationVisualElement element)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 0, 2, 0),
+            Tag = EquationVisualElementKind.Matrix
+        };
+
+        panel.Children.Add(BuildEquationMatrixDelimiterTextBlock(
+            EquationVisualPlanner.MatrixOpenDelimiterText,
+            EquationVisualSegmentRole.MatrixOpenDelimiter));
+
+        var grid = new Grid
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(1, 0, 1, 0)
+        };
+        var rowCount = Math.Max(1, element.MatrixRowCount);
+        var columnCount = Math.Max(1, element.MatrixColumnCount);
+        for (var rowIndex = 0; rowIndex < rowCount; rowIndex++)
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        for (var columnIndex = 0; columnIndex < columnCount; columnIndex++)
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        foreach (var row in element.MatrixRows)
+        {
+            foreach (var cell in row.Cells)
+            {
+                var text = BuildEquationStructureTextBlock(
+                    MatrixCellSegment(cell.Text),
+                    WpfTextAlignment.Center,
+                    new Thickness(4, 0, 4, 0));
+                Grid.SetRow(text, cell.RowIndex);
+                Grid.SetColumn(text, cell.ColumnIndex);
+                grid.Children.Add(text);
+            }
+        }
+
+        if (grid.Children.Count == 0)
+        {
+            grid.Children.Add(BuildEquationStructureTextBlock(
+                MatrixCellSegment(string.Empty),
+                WpfTextAlignment.Center,
+                new Thickness(4, 0, 4, 0)));
+        }
+
+        panel.Children.Add(grid);
+        panel.Children.Add(BuildEquationMatrixDelimiterTextBlock(
+            EquationVisualPlanner.MatrixCloseDelimiterText,
+            EquationVisualSegmentRole.MatrixCloseDelimiter));
+        return panel;
+    }
+
+    private static TextBlock BuildEquationMatrixDelimiterTextBlock(
+        string text,
+        EquationVisualSegmentRole role)
+    {
+        return BuildEquationStructureTextBlock(
+            new EquationVisualSegment(
+                text,
+                role,
+                new EquationVisualStyle(
+                    FontFamily: EquationVisualPlanner.DefaultMathFontFamily,
+                    Italic: false,
+                    FontSizeScale: 1.25,
+                    BaselineRole: EquationVisualBaselineRole.Normal,
+                    BaselineOffsetEm: 0.0)),
+            WpfTextAlignment.Center,
+            new Thickness(1, 0, 1, 0));
+    }
+
+    private static EquationVisualSegment MatrixCellSegment(string text) =>
+        new(
+            text,
+            EquationVisualSegmentRole.MatrixCell,
+            new EquationVisualStyle(
+                FontFamily: EquationVisualPlanner.DefaultMathFontFamily,
+                Italic: true,
+                FontSizeScale: EquationVisualPlanner.StructureFontSizeScale,
+                BaselineRole: EquationVisualBaselineRole.Normal,
+                BaselineOffsetEm: 0.0));
 
     private static void AddNAryLimitText(Grid grid, int row, EquationVisualSegment segment, Thickness margin)
     {

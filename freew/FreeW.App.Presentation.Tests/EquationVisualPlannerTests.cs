@@ -153,6 +153,48 @@ public sealed class EquationVisualPlannerTests
     }
 
     [Fact]
+    public void EquationVisualPlanner_Matrix_BuildsStructuredRowsCellsAndDisplaySegments()
+    {
+        var plan = EquationVisualPlanner.Build(new Equation([MathRun.MatrixOf(MathMatrix.Identity2x2())]));
+
+        plan.LinearText.Should().Be("[1, 0; 0, 1]");
+        plan.Elements.Should().ContainSingle();
+        var element = plan.Elements[0];
+        element.Kind.Should().Be(EquationVisualElementKind.Matrix);
+        element.LinearText.Should().Be("[1, 0; 0, 1]");
+        element.MatrixRowCount.Should().Be(2);
+        element.MatrixColumnCount.Should().Be(2);
+        element.MatrixRows.Select(row => row.RowIndex).Should().Equal(0, 1);
+        element.MatrixRows[0].Cells.Select(cell => (cell.RowIndex, cell.ColumnIndex, cell.Text))
+            .Should().Equal((0, 0, "1"), (0, 1, "0"));
+        element.MatrixRows[1].Cells.Select(cell => (cell.RowIndex, cell.ColumnIndex, cell.Text))
+            .Should().Equal((1, 0, "0"), (1, 1, "1"));
+        plan.Segments.Select(segment => segment.Text).Should().Equal(
+            EquationVisualPlanner.MatrixOpenDelimiterText,
+            "1",
+            EquationVisualPlanner.MatrixColumnSeparatorText,
+            "0",
+            EquationVisualPlanner.MatrixRowSeparatorText,
+            "0",
+            EquationVisualPlanner.MatrixColumnSeparatorText,
+            "1",
+            EquationVisualPlanner.MatrixCloseDelimiterText);
+        plan.Segments.Select(segment => segment.Role).Should().Equal(
+            EquationVisualSegmentRole.MatrixOpenDelimiter,
+            EquationVisualSegmentRole.MatrixCell,
+            EquationVisualSegmentRole.MatrixColumnSeparator,
+            EquationVisualSegmentRole.MatrixCell,
+            EquationVisualSegmentRole.MatrixRowSeparator,
+            EquationVisualSegmentRole.MatrixCell,
+            EquationVisualSegmentRole.MatrixColumnSeparator,
+            EquationVisualSegmentRole.MatrixCell,
+            EquationVisualSegmentRole.MatrixCloseDelimiter);
+        plan.Segments.Where(segment => segment.Role == EquationVisualSegmentRole.MatrixCell)
+            .Should().OnlyContain(segment => segment.Style.FontSizeScale == EquationVisualPlanner.StructureFontSizeScale);
+        plan.Segments.Should().NotContain(segment => segment.Role == EquationVisualSegmentRole.LinearFallback);
+    }
+
+    [Fact]
     public void EquationVisualPlanner_UnsupportedStructuredKinds_RetainLinearFallbackSegments()
     {
         var runs = new[]
@@ -160,7 +202,6 @@ public sealed class EquationVisualPlannerTests
             MathRun.AccentOf("x", "hat"),
             MathRun.BarOf("x"),
             MathRun.Delimiter("x + y", "[", "]"),
-            MathRun.MatrixOf(MathMatrix.Identity2x2()),
             MathRun.FunctionApply("sin", "x"),
             MathRun.GroupCharOf("x", "over", "top")
         };
