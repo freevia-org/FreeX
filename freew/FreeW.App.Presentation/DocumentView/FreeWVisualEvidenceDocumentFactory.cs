@@ -850,6 +850,49 @@ public static class FreeWVisualEvidenceDocumentFactory
         return doc;
     }
 
+    public static TextDocument BuildMultiSectionHeaderFooterImageDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Page.HeaderDistancePt = 24;
+        doc.Page.FooterDistancePt = 24;
+        doc.Blocks.Clear();
+
+        doc.Blocks.Add(StyledParagraph("Section 1 Header Image", "Heading1"));
+        doc.Blocks.Add(new Paragraph(
+            "The first page uses a left-aligned header image so the shared evidence planner can " +
+            "record image bytes, size, slot, section, alignment, and alt text."));
+        for (var i = 1; i <= 8; i++)
+            doc.Blocks.Add(new Paragraph($"Section one body paragraph {i}: header image evidence remains stable."));
+
+        var sectionBreak = new Section(
+            new PageSettings
+            {
+                HeaderDistancePt = 24,
+                FooterDistancePt = 24
+            },
+            SectionBreakKind.NextPage);
+        sectionBreak.HeadersFooters.Header = ImageHeaderFooter(
+            "Section One Letterhead",
+            TextAlignment.Left,
+            widthPt: 96,
+            heightPt: 32);
+        doc.Blocks.Add(new Paragraph("[ Next-page section break ]") { SectionBreak = sectionBreak });
+
+        doc.FinalSectionHeadersFooters.Header = ImageHeaderFooter(
+            "Section Two Letterhead",
+            TextAlignment.Right,
+            widthPt: 84,
+            heightPt: 28);
+        doc.Blocks.Add(StyledParagraph("Section 2 Header Image", "Heading1"));
+        doc.Blocks.Add(new Paragraph(
+            "The second page uses a right-aligned header image to make cross-renderer visual evidence " +
+            "catch stale section, alignment, or image metadata."));
+        for (var i = 1; i <= 8; i++)
+            doc.Blocks.Add(new Paragraph($"Section two body paragraph {i}: the final section header differs."));
+
+        return doc;
+    }
+
     private static Paragraph StyledParagraph(string text, string styleId) =>
         new(text) { StyleId = styleId };
 
@@ -858,6 +901,26 @@ public static class FreeWVisualEvidenceDocumentFactory
         var headerFooter = new HeaderFooter();
         var paragraph = new Paragraph();
         paragraph.Runs.AddRange(runs);
+        headerFooter.Paragraphs.Add(paragraph);
+        return headerFooter;
+    }
+
+    private static HeaderFooter ImageHeaderFooter(
+        string altText,
+        TextAlignment alignment,
+        double widthPt,
+        double heightPt)
+    {
+        var headerFooter = new HeaderFooter();
+        var paragraph = new Paragraph
+        {
+            Formatting = ParagraphFormatting.Default with { Alignment = alignment }
+        };
+        paragraph.Runs.Add(Run.FromImage(new InlineImage(BuildGeneratedWatermarkPngBytes(), widthPt, heightPt)
+        {
+            AltText = altText,
+            Wrapping = ImageWrapping.Inline
+        }));
         headerFooter.Paragraphs.Add(paragraph);
         return headerFooter;
     }

@@ -1742,6 +1742,12 @@ static void GenerateF2FlowCorpus(string outDir)
         Console.WriteLine("  wrote references-heavy-fields.docx");
     }
 
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildMultiSectionHeaderFooterImageDocument();
+        DocxWriter.Write(doc, Path.Combine(outDir, "f2-hf-images.docx"));
+        Console.WriteLine("  wrote f2-hf-images.docx");
+    }
+
     // ─── 4. Footnotes ────────────────────────────────────────────────────────────────────────────
     {
         var doc = FreeWVisualEvidenceDocumentFactory.BuildFootnotePlacementDocument();

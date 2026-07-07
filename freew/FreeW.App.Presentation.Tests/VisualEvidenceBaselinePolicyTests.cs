@@ -191,6 +191,7 @@ public sealed class VisualEvidenceBaselinePolicyTests
             DrawingObjects: expectation.DrawingObjects,
             ChartSmartArt: expectation.ChartSmartArt,
             Fields: expectation.Fields,
+            HeaderFooters: expectation.HeaderFooters,
             TableOfAuthorities: expectation.TableOfAuthorities,
             ProofingDiagnostics: expectation.ProofingDiagnostics,
             Trust: new FreeWVisualEvidenceTrust(true, []));

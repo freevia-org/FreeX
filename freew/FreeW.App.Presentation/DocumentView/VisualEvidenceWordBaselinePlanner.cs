@@ -30,6 +30,7 @@ public static class FreeWWordBaselineEvidencePlanner
         "f2-hf-basic",
         "f2-hf-firstpage",
         "f2-hf-oddeven",
+        "f2-hf-images",
         "field-page-number-variants",
         "references-heavy-fields",
         "f2-footnotes",

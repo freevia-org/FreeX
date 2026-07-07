@@ -977,7 +977,7 @@ public sealed class DocumentView : Control
         var bestDist = double.MaxValue;
         foreach (var item in _headerFooterItems)
         {
-            if (item.Target is null)
+            if (item.Target is null || item.Image is not null)
                 continue;
             var top = item.Y;
             var bottom = item.Y + (item.LineHeight > 0 ? item.LineHeight : DefaultFontSizePt * PxPerPoint * 1.3);
@@ -2655,7 +2655,7 @@ public sealed class DocumentView : Control
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
             return _headerFooterItems
-                .Where(i => !string.IsNullOrEmpty(i.Text)) // AV-HFEDIT: skip empty editable-region placeholders
+                .Where(i => i.Image is null && !string.IsNullOrEmpty(i.Text)) // AV-HFEDIT: skip empty editable-region placeholders
                 .Select(i => (i.Text, i.Y, i.Alignment))
                 .ToList();
         }
@@ -2673,8 +2673,24 @@ public sealed class DocumentView : Control
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
             return _headerFooterItems
-                .Where(i => !string.IsNullOrEmpty(i.Text)) // AV-HFEDIT: skip empty editable-region placeholders
+                .Where(i => i.Image is null && !string.IsNullOrEmpty(i.Text)) // AV-HFEDIT: skip empty editable-region placeholders
                 .Select(i => (i.Text, i.X, i.Y, i.Alignment, i.AvailableWidth))
+                .ToList();
+        }
+    }
+
+    internal IReadOnlyList<(string Signature, Rect Rect, TextAlignment Alignment, string SlotName)> HeaderFooterImageItems
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _headerFooterItems
+                .Where(i => i.Image is not null)
+                .Select(i => (
+                    i.ImageSignature ?? string.Empty,
+                    new Rect(i.X, i.Y, Math.Max(1, i.Width), Math.Max(1, i.Height)),
+                    i.Alignment,
+                    i.SlotName))
                 .ToList();
         }
     }
@@ -3332,7 +3348,11 @@ public sealed class DocumentView : Control
             {
                 var hfY = pageTop + headerDistDip;
                 EmitHfParagraphs(header!, hfY, hfWidth, pageNumberText, _pageCount,
-                    pi => MakeHfTarget(sectionHf, headerSlot, pi));
+                    pi => MakeHfTarget(sectionHf, headerSlot, pi),
+                    slots.HeaderSlotName,
+                    pi + 1,
+                    pageSection.SectionIndex + 1,
+                    pageSection.SectionRelativePageNumber);
             }
 
             // Emit footer.
@@ -3343,7 +3363,11 @@ public sealed class DocumentView : Control
                 var pageBottom = pageTop + _pageHeightPx;
                 var hfY = pageBottom - footerDistDip;
                 EmitHfParagraphs(footer!, hfY, hfWidth, pageNumberText, _pageCount,
-                    pi => MakeHfTarget(sectionHf, footerSlot, pi));
+                    pi => MakeHfTarget(sectionHf, footerSlot, pi),
+                    slots.FooterSlotName,
+                    pi + 1,
+                    pageSection.SectionIndex + 1,
+                    pageSection.SectionRelativePageNumber);
             }
         }
     }
@@ -3356,8 +3380,17 @@ public sealed class DocumentView : Control
     /// defaults when present. Each tab-separated segment is emitted as a separate HfRenderItem at the
     /// computed X position so the draw loop does not need tab-aware logic.
     /// </summary>
-    private void EmitHfParagraphs(HeaderFooter hf, double startY, double availWidth, string pageNumberText, int pageCount,
-        Func<int, HfTarget>? targetFactory = null)
+    private void EmitHfParagraphs(
+        HeaderFooter hf,
+        double startY,
+        double availWidth,
+        string pageNumberText,
+        int pageCount,
+        Func<int, HfTarget>? targetFactory = null,
+        string slotName = "",
+        int pageNumber = 1,
+        int sectionOrdinal = 1,
+        int sectionRelativePageNumber = 1)
     {
         var y = startY;
         for (var paraIdx = 0; paraIdx < hf.Paragraphs.Count; paraIdx++)
@@ -3379,20 +3412,65 @@ public sealed class DocumentView : Control
             // begins, so a click X maps to a model offset for the editing caret. Model offset advances
             // by run.Text.Length for each run (field runs are atomic — their resolved text may differ in
             // length, but the model span is run.Text.Length, including a single tab char per model tab).
-            var segments = new List<(int StopIndex, string Text, RunFormatting Fmt, int ModelStart)>();
+            var segments = new List<HfSegment>();
             var sb = new System.Text.StringBuilder();
             RunFormatting segFmt = para.Runs.Count > 0 ? para.Runs[0].Formatting : RunFormatting.Default;
             var stopIndex = 0;
             var modelOffset = 0;       // running literal-model offset across all runs
             var segModelStart = 0;     // model offset at the start of the current (buffered) segment
 
-            foreach (var run in para.Runs)
+            void FlushText(bool includeEmpty = false)
             {
+                if (sb.Length == 0 && !includeEmpty)
+                    return;
+
+                segments.Add(new HfSegment
+                {
+                    StopIndex = stopIndex,
+                    Text = sb.ToString(),
+                    Fmt = segFmt,
+                    ModelStart = segModelStart,
+                });
+                sb.Clear();
+                segModelStart = modelOffset;
+            }
+
+            for (var runIndex = 0; runIndex < para.Runs.Count; runIndex++)
+            {
+                var run = para.Runs[runIndex];
                 var fieldText = ResolveHfField(run, pageNumberText, pageCount);
                 var isField = fieldText is not null;
                 var text = fieldText ?? run.Text;
                 if (run.Formatting.FontSizePt.HasValue)
                     segFmt = run.Formatting;
+
+                if (run.Image is { } image)
+                {
+                    FlushText();
+                    var width = Math.Max(1, PageLayout.PointsToDip(Math.Max(0, image.WidthPt)));
+                    var height = Math.Max(1, PageLayout.PointsToDip(Math.Max(0, image.HeightPt)));
+                    segments.Add(new HfSegment
+                    {
+                        StopIndex = stopIndex,
+                        Image = image,
+                        ImageSignature = HeaderFooterVisualPlanner.BuildImageSignature(
+                            string.IsNullOrWhiteSpace(slotName) ? "header-footer" : slotName,
+                            pageNumber,
+                            sectionOrdinal,
+                            sectionRelativePageNumber,
+                            paraIdx,
+                            runIndex,
+                            image,
+                            pf.Alignment),
+                        Fmt = run.Formatting,
+                        ModelStart = modelOffset,
+                        Width = width,
+                        Height = height,
+                    });
+                    modelOffset += run.Text.Length;
+                    segModelStart = modelOffset;
+                    continue;
+                }
 
                 if (isField)
                 {
@@ -3411,8 +3489,7 @@ public sealed class DocumentView : Control
                     if (pi < parts.Length - 1)
                     {
                         // A TAB was consumed — flush the current buffer as a segment and advance the stop index.
-                        segments.Add((stopIndex, sb.ToString(), segFmt, segModelStart));
-                        sb.Clear();
+                        FlushText(includeEmpty: true);
                         stopIndex++;
                         modelOffset += 1;            // the consumed tab is one model char
                         segModelStart = modelOffset; // next segment starts after the tab
@@ -3420,18 +3497,28 @@ public sealed class DocumentView : Control
                 }
             }
             // Flush the final (or only) segment.
-            segments.Add((stopIndex, sb.ToString(), segFmt, segModelStart));
+            FlushText(includeEmpty: segments.Count == 0);
 
             // Whether the paragraph contains any tab characters at all.
             var hasAnyTab = segments.Count > 1 || (segments.Count == 1 && stopIndex > 0);
+            var hasImages = segments.Any(s => s.Image is not null);
 
             // Compute the line height from the first non-empty segment (or use DefaultFontSizePt).
-            var firstNonEmpty = segments.FirstOrDefault(s => s.Text.Length > 0);
-            RunFormatting lineRefFmt = firstNonEmpty.Text?.Length > 0 ? firstNonEmpty.Fmt : RunFormatting.Default;
-            var sampleText = firstNonEmpty.Text ?? string.Empty;
-            var lineH = string.IsNullOrEmpty(sampleText)
-                ? DefaultFontSizePt * PxPerPoint * 1.3
-                : Build(sampleText.Length > 1 ? sampleText[..1] : sampleText, lineRefFmt).Height * 1.15;
+            var lineH = DefaultFontSizePt * PxPerPoint * 1.3;
+            foreach (var segment in segments)
+            {
+                if (segment.Image is not null)
+                {
+                    lineH = Math.Max(lineH, segment.Height);
+                    continue;
+                }
+
+                if (!string.IsNullOrEmpty(segment.Text))
+                {
+                    var sampleText = segment.Text.Length > 1 ? segment.Text[..1] : segment.Text;
+                    lineH = Math.Max(lineH, Build(sampleText, segment.Fmt).Height * 1.15);
+                }
+            }
 
             // Resolve explicit tab stops from the paragraph; sort by position.
             var explicitStops = pf.TabStops
@@ -3443,7 +3530,36 @@ public sealed class DocumentView : Control
             var defaultCenterPx = availWidth / 2.0;
             var defaultRightPx  = availWidth;
 
-            if (!hasAnyTab)
+            double SegmentWidth(HfSegment segment) =>
+                segment.Image is not null
+                    ? segment.Width
+                    : string.IsNullOrEmpty(segment.Text)
+                        ? 0
+                        : Build(segment.Text, segment.Fmt).WidthIncludingTrailingWhitespace;
+
+            void AddSegmentItem(HfSegment segment, double itemX)
+            {
+                var width = SegmentWidth(segment);
+                _headerFooterItems.Add(new HfRenderItem
+                {
+                    Text             = segment.Text,
+                    Fmt              = segment.Fmt,
+                    Image            = segment.Image,
+                    ImageSignature   = segment.ImageSignature,
+                    SlotName         = slotName,
+                    Width            = width,
+                    Height           = segment.Image is not null ? segment.Height : lineH,
+                    X                = itemX,
+                    Y                = y,
+                    AvailableWidth   = 0,
+                    Alignment        = TextAlignment.Left,
+                    Target           = segment.Image is null ? paraTarget : null,
+                    LineHeight       = lineH,
+                    ModelStartOffset = segment.ModelStart,
+                });
+            }
+
+            if (!hasAnyTab && !hasImages)
             {
                 // No tabs — use paragraph alignment as before. Emit even an EMPTY paragraph so an empty
                 // header/footer line is still clickable for editing (the caret needs a region to land in).
@@ -3452,6 +3568,7 @@ public sealed class DocumentView : Control
                 {
                     Text             = seg.Text,
                     Fmt              = seg.Fmt,
+                    SlotName         = slotName,
                     X                = _contentLeft,
                     Y                = y,
                     AvailableWidth   = availWidth,
@@ -3461,18 +3578,53 @@ public sealed class DocumentView : Control
                     ModelStartOffset = seg.ModelStart,
                 });
             }
+            else if (!hasAnyTab)
+            {
+                var visible = segments
+                    .Where(s => s.Image is not null || !string.IsNullOrEmpty(s.Text))
+                    .ToList();
+                if (visible.Count == 0)
+                {
+                    _headerFooterItems.Add(new HfRenderItem
+                    {
+                        SlotName         = slotName,
+                        X                = _contentLeft,
+                        Y                = y,
+                        AvailableWidth   = availWidth,
+                        Alignment        = pf.Alignment,
+                        Target           = paraTarget,
+                        LineHeight       = lineH,
+                    });
+                }
+                else
+                {
+                    var totalWidth = visible.Sum(SegmentWidth);
+                    var cursor = _contentLeft + AlignmentOffset(pf.Alignment, availWidth, totalWidth, isLast: true);
+                    cursor = Math.Max(_contentLeft, Math.Min(_contentLeft + Math.Max(0, availWidth - totalWidth), cursor));
+                    foreach (var segment in visible)
+                    {
+                        AddSegmentItem(segment, cursor);
+                        cursor += SegmentWidth(segment);
+                    }
+                }
+            }
             else
             {
                 // Tab-split: each segment is positioned by its tab-stop ordinal.
                 // StopIndex 0 → left (at _contentLeft, no stop lookup needed).
                 // StopIndex 1 → first tab stop  (default: centre).
                 // StopIndex 2 → second tab stop (default: right).
-                foreach (var (si, text, fmt, modelStart) in segments)
+                foreach (var group in segments.GroupBy(s => s.StopIndex).OrderBy(g => g.Key))
                 {
-                    if (string.IsNullOrEmpty(text)) continue;
+                    var visible = group
+                        .Where(s => s.Image is not null || !string.IsNullOrEmpty(s.Text))
+                        .ToList();
+                    if (visible.Count == 0)
+                        continue;
 
                     double stopX;
                     TabStopAlignment stopAlign;
+                    var si = group.Key;
 
                     if (si == 0)
                     {
@@ -3496,31 +3648,24 @@ public sealed class DocumentView : Control
                     }
 
                     // Measure segment text to compute the draw X.
-                    var segFt = Build(text, fmt);
-                    var segW  = segFt.WidthIncludingTrailingWhitespace;
+                    var groupWidth = visible.Sum(SegmentWidth);
 
                     var itemX = stopAlign switch
                     {
-                        TabStopAlignment.Center  => _contentLeft + stopX - segW / 2,
-                        TabStopAlignment.Right   => _contentLeft + stopX - segW,
-                        TabStopAlignment.Decimal => _contentLeft + stopX - segW, // approximation: treat as right
+                        TabStopAlignment.Center  => _contentLeft + stopX - groupWidth / 2,
+                        TabStopAlignment.Right   => _contentLeft + stopX - groupWidth,
+                        TabStopAlignment.Decimal => _contentLeft + stopX - groupWidth, // approximation: treat as right
                         _                        => _contentLeft + stopX,
                     };
                     // Clamp to content area so text never overflows the page edge.
-                    itemX = Math.Max(_contentLeft, Math.Min(_contentLeft + availWidth - segW, itemX));
+                    itemX = Math.Max(_contentLeft, Math.Min(_contentLeft + availWidth - groupWidth, itemX));
 
-                    _headerFooterItems.Add(new HfRenderItem
+                    var cursor = itemX;
+                    foreach (var segment in visible)
                     {
-                        Text             = text,
-                        Fmt              = fmt,
-                        X                = itemX,
-                        Y                = y,
-                        AvailableWidth   = 0,                  // absolute X — skip alignment offset at draw time
-                        Alignment        = TextAlignment.Left, // draw loop uses X as-is (offset=0 for Left)
-                        Target           = paraTarget,
-                        LineHeight       = lineH,
-                        ModelStartOffset = modelStart,
-                    });
+                        AddSegmentItem(segment, cursor);
+                        cursor += SegmentWidth(segment);
+                    }
                 }
             }
 
@@ -6154,6 +6299,13 @@ public sealed class DocumentView : Control
         {
             foreach (var item in _headerFooterItems)
             {
+                if (item.Image is { } image)
+                {
+                    var rect = new Rect(item.X, item.Y, Math.Max(1, item.Width), Math.Max(1, item.Height));
+                    DrawFloatingImage(context, rect, DecodeBitmap(image));
+                    continue;
+                }
+
                 if (string.IsNullOrEmpty(item.Text))
                     continue;
                 var ft = Build(item.Text, item.Fmt);
@@ -13821,6 +13973,18 @@ public sealed class DocumentView : Control
 
     // ── HF: header/footer render item ─────────────────────────────────────────────────────────────
 
+    private sealed class HfSegment
+    {
+        public int StopIndex;
+        public string Text = string.Empty;
+        public RunFormatting Fmt = RunFormatting.Default;
+        public int ModelStart;
+        public InlineImage? Image;
+        public string? ImageSignature;
+        public double Width;
+        public double Height;
+    }
+
     /// <summary>One pre-computed line to draw in a header or footer band.</summary>
     private sealed class HfRenderItem
     {
@@ -13836,6 +14000,11 @@ public sealed class DocumentView : Control
         public double AvailableWidth;
         /// <summary>Paragraph alignment for this line.</summary>
         public TextAlignment Alignment;
+        public InlineImage? Image;
+        public string? ImageSignature;
+        public string SlotName = string.Empty;
+        public double Width;
+        public double Height;
 
         // ── AV-HFEDIT: editing back-reference + offset mapping ────────────────────────────────────
         /// <summary>
