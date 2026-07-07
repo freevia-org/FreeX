@@ -35,7 +35,8 @@ internal static partial class RowColumnShiftHelpers
             CaptureList(sheet.StructuredTables),
             CapturePivotCaches(workbook),
             CaptureList(workbook.Scenarios),
-            CaptureFormControls(sheet));
+            CaptureFormControls(sheet),
+            CaptureCrossSheetFormControlRefs(workbook, sheet));
 
     private static IReadOnlyList<StyleOnlyEntry> CaptureStyleOnlyEntries(Sheet sheet)
     {
@@ -101,11 +102,20 @@ internal static partial class RowColumnShiftHelpers
         var snapshots = new List<PictureAddressSnapshot>(sheet.Pictures.Count);
         foreach (var picture in sheet.Pictures)
         {
+            // P23: a same-sheet linked picture's rendered grid geometry (SourceRowCount/
+            // SourceColumnCount) and cached cell snapshot (Cells) get rewritten in place by
+            // RefreshLinkedPictureSnapshot whenever a structural edit lands inside its
+            // LinkedSourceRange (see ShiftPictures below). Snapshot them here too — alongside
+            // the range/anchor fields already captured — so RestoreAddressBearingState can put
+            // the picture's whole rendered state back on undo, not just its addressing.
             snapshots.Add(new PictureAddressSnapshot(
                 picture,
                 picture.Anchor,
                 picture.LinkedSourceRange,
-                picture.IsLinkedToSourceRange));
+                picture.IsLinkedToSourceRange,
+                picture.SourceRowCount,
+                picture.SourceColumnCount,
+                [.. picture.Cells]));
         }
 
         return snapshots;
@@ -133,6 +143,66 @@ internal static partial class RowColumnShiftHelpers
             snapshots.Add(new FormControlAddressSnapshot(control, control.Anchor, control.LinkedCell, control.ListFillRange));
 
         return snapshots;
+    }
+
+    // P83: a form control's LinkedCell/ListFillRange can explicitly point at a *different* sheet
+    // than the one hosting the control (e.g. a checkbox on Sheet2 with LinkedCell "Sheet1!$A$5" —
+    // cross-sheet linked cells are supported, see FormControlInteractionService.TryResolveLinkedCell).
+    // CaptureFormControls/ShiftFormControls above only ever see the single sheet being structurally
+    // edited, so a control hosted elsewhere that references the edited sheet never gets its string
+    // ref rewritten. Capture those workbook-wide (excluding the edited sheet, which the per-sheet
+    // pass above already owns) so ShiftCrossSheetFormControlRefs can fix them up too.
+    private static IReadOnlyList<CrossSheetFormControlRefSnapshot> CaptureCrossSheetFormControlRefs(
+        Workbook workbook,
+        Sheet editedSheet)
+    {
+        List<CrossSheetFormControlRefSnapshot>? snapshots = null;
+        foreach (var hostSheet in workbook.Sheets)
+        {
+            if (ReferenceEquals(hostSheet, editedSheet) || hostSheet.FormControls.Count == 0)
+                continue;
+
+            foreach (var control in hostSheet.FormControls)
+            {
+                if (!ReferencesSheetByName(control.LinkedCell, editedSheet.Name) &&
+                    !ReferencesSheetByName(control.ListFillRange, editedSheet.Name))
+                {
+                    continue;
+                }
+
+                snapshots ??= [];
+                snapshots.Add(new CrossSheetFormControlRefSnapshot(control, control.LinkedCell, control.ListFillRange));
+            }
+        }
+
+        return snapshots ?? (IReadOnlyList<CrossSheetFormControlRefSnapshot>)[];
+    }
+
+    /// <summary>True when <paramref name="reference"/> contains an explicit "SheetName!" (or
+    /// 'Quoted Name'!) qualifier equal to <paramref name="sheetName"/>. Bare/unqualified refs
+    /// belong to the control's own hosting sheet, not the edited sheet, so they must return false
+    /// here — only an explicit cross-sheet qualifier makes a foreign-hosted control's ref subject
+    /// to this sheet's structural edits.</summary>
+    private static bool ReferencesSheetByName(string? reference, string sheetName)
+    {
+        if (string.IsNullOrWhiteSpace(reference))
+            return false;
+
+        var raw = reference.TrimStart();
+        if (raw.StartsWith('=')) raw = raw[1..].Trim();
+
+        foreach (var token in raw.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var bangIndex = token.LastIndexOf('!');
+            if (bangIndex < 0)
+                continue;
+
+            var tokenSheetName = NormalizeSheetReference(token[..bangIndex]);
+            if (string.Equals(tokenSheetName, sheetName, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
     }
 
     // N33: a pivot table's SourceRange can reference a *different* sheet than the one it is placed
@@ -226,6 +296,16 @@ internal static partial class RowColumnShiftHelpers
             entry.Picture.Anchor = entry.Anchor;
             entry.Picture.LinkedSourceRange = entry.LinkedSourceRange;
             entry.Picture.IsLinkedToSourceRange = entry.IsLinkedToSourceRange;
+
+            // P23: undo a structural edit that had refreshed a linked picture's rendered
+            // snapshot (RefreshLinkedPictureSnapshot) must also put the geometry/cell cache back,
+            // not just the range/anchor — otherwise the picture keeps drawing the post-edit grid
+            // even though its LinkedSourceRange above was correctly restored to the pre-edit range.
+            entry.Picture.SourceRowCount = entry.SourceRowCount;
+            entry.Picture.SourceColumnCount = entry.SourceColumnCount;
+            entry.Picture.Cells.Clear();
+            entry.Picture.Cells.AddRange(entry.Cells);
+
             sheet.Pictures.Add(entry.Picture);
         }
 
@@ -267,6 +347,16 @@ internal static partial class RowColumnShiftHelpers
             entry.Control.LinkedCell    = entry.LinkedCell;
             entry.Control.ListFillRange = entry.ListFillRange;
             sheet.FormControls.Add(entry.Control);
+        }
+
+        // P83: restore string refs on controls hosted on OTHER sheets that point at this sheet.
+        // These controls are never removed from their own sheet's FormControls list (only the
+        // edited sheet's own controls are cleared/re-added above), so just put the ref strings
+        // back in place — no Clear/Add dance needed.
+        foreach (var entry in snapshot.CrossSheetFormControlRefs)
+        {
+            entry.Control.LinkedCell    = entry.LinkedCell;
+            entry.Control.ListFillRange = entry.ListFillRange;
         }
     }
 
@@ -334,6 +424,7 @@ internal static partial class RowColumnShiftHelpers
         ShiftPivotCaches(snapshot, shift);
         ShiftScenarios(workbook, snapshot, shift);
         ShiftFormControls(sheet, snapshot, shift);
+        ShiftCrossSheetFormControlRefs(snapshot, shift);
     }
 
     private static void ApplyShiftedStyleOnlyEntries(
@@ -901,6 +992,7 @@ internal static partial class RowColumnShiftHelpers
             NumberValue number => number.Value.ToString(CultureInfo.CurrentCulture),
             BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
             TextValue text => text.Value,
+            DateTimeValue dateTime => dateTime.Value.ToString(CultureInfo.CurrentCulture),
             ErrorValue error => error.Code,
             _ => value.ToString() ?? ""
         };
@@ -941,6 +1033,23 @@ internal static partial class RowColumnShiftHelpers
             entry.Control.LinkedCell    = newLinkedCell;
             entry.Control.ListFillRange = newListFillRange;
             sheet.FormControls.Add(entry.Control);
+        }
+    }
+
+    // P83: rewrite LinkedCell/ListFillRange on controls hosted on OTHER sheets that explicitly
+    // qualify a reference to the edited sheet (e.g. Sheet2's checkbox with LinkedCell
+    // "Sheet1!$A$5" when Sheet1 is the one being structurally edited). ShiftFormControlRef only
+    // rewrites tokens whose sheet-qualifier matches shift.SheetName and leaves everything else
+    // (including bare/unqualified tokens, which belong to the control's own hosting sheet) byte-
+    // for-byte unchanged, so it is safe to call unconditionally for every captured entry here —
+    // no anchor/removal handling is needed since these controls are never hosted on the edited
+    // sheet in the first place.
+    private static void ShiftCrossSheetFormControlRefs(AddressBearingStateSnapshot snapshot, AddressShift shift)
+    {
+        foreach (var entry in snapshot.CrossSheetFormControlRefs)
+        {
+            entry.Control.LinkedCell    = ShiftFormControlRef(entry.LinkedCell, shift);
+            entry.Control.ListFillRange = ShiftFormControlRef(entry.ListFillRange, shift);
         }
     }
 
@@ -1712,7 +1821,8 @@ internal sealed record AddressBearingStateSnapshot(
     IReadOnlyList<StructuredTableModel> StructuredTables,
     IReadOnlyList<PivotCacheSourceSnapshot> PivotCaches,
     IReadOnlyList<WorkbookScenario> Scenarios,
-    IReadOnlyList<FormControlAddressSnapshot> FormControls)
+    IReadOnlyList<FormControlAddressSnapshot> FormControls,
+    IReadOnlyList<CrossSheetFormControlRefSnapshot> CrossSheetFormControlRefs)
 {
     /// <summary>
     /// Records what <see cref="RowColumnShiftHelpers.ShiftWatchedCells"/> produced from
@@ -1736,7 +1846,10 @@ internal readonly record struct PictureAddressSnapshot(
     PictureModel Picture,
     CellAddress Anchor,
     GridRange? LinkedSourceRange,
-    bool IsLinkedToSourceRange);
+    bool IsLinkedToSourceRange,
+    uint SourceRowCount,
+    uint SourceColumnCount,
+    IReadOnlyList<PictureCellSnapshot> Cells);
 
 internal readonly record struct SparklineAddressSnapshot(
     SparklineModel Sparkline,
@@ -1758,5 +1871,10 @@ internal readonly record struct PivotCacheSourceSnapshot(
 internal readonly record struct FormControlAddressSnapshot(
     FormControlModel Control,
     GridRange? Anchor,
+    string? LinkedCell,
+    string? ListFillRange);
+
+internal readonly record struct CrossSheetFormControlRefSnapshot(
+    FormControlModel Control,
     string? LinkedCell,
     string? ListFillRange);

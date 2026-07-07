@@ -1053,7 +1053,7 @@ public sealed partial class XlsxFileAdapter
                 stream.Position = 0;
 
             using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
-            RestorePatchWorkbookDefinedNames(archive, sourceWorkbookDefinedNames, workbook, XlsxNamedRangeMapper.GetLiveDefinedNameKeys(workbook));
+            RestorePatchWorkbookDefinedNames(archive, sourceWorkbookDefinedNames, workbook, XlsxNamedRangeMapper.GetLiveDefinedNameKeys(workbook), ReadSourceSheetNamesByLocalId());
         }
 
         public bool TrySavePatchedCellValues(
@@ -1183,7 +1183,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchWorkbookCalculationProperties(archive);
                 NormalizePatchWorkbookExternalReferences(archive);
                 NormalizePatchWorkbookDefinedNames(archive);
-                RestorePatchWorkbookDefinedNames(archive, sourceWorkbookDefinedNames, workbook, XlsxNamedRangeMapper.GetLiveDefinedNameKeys(workbook));
+                RestorePatchWorkbookDefinedNames(archive, sourceWorkbookDefinedNames, workbook, XlsxNamedRangeMapper.GetLiveDefinedNameKeys(workbook), ReadSourceSheetNamesByLocalId());
                 NormalizePatchWorkbookOleSize(archive);
                 NormalizePatchWorkbookPivotCaches(archive);
                 NormalizePatchPivotTableDefinitions(archive);
@@ -1635,11 +1635,38 @@ public sealed partial class XlsxFileAdapter
                 : copy;
         }
 
+        /// <summary>
+        /// Reads the pristine pre-edit workbook's &lt;sheets&gt; order (sheet name by its ORIGINAL
+        /// zero-based position, i.e. the localSheetId a sheet-scoped definedName's localSheetId
+        /// attribute refers to). Used by <see cref="RestorePatchWorkbookDefinedNames"/> to remap a
+        /// resurrected name's scope onto the sheet's current index after a delete/reorder (P112).
+        /// </summary>
+        private List<string> ReadSourceSheetNamesByLocalId()
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            using var sourcePackage = new MemoryStream(Buffer, Offset, Count, writable: false);
+            using var archive = new ZipArchive(sourcePackage, ZipArchiveMode.Read);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return [];
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var sheets = workbookXml.Root?.Element(workbookNs + "sheets");
+            if (sheets is null)
+                return [];
+
+            return sheets
+                .Elements(workbookNs + "sheet")
+                .Select(sheet => sheet.Attribute("name")?.Value ?? string.Empty)
+                .ToList();
+        }
+
         private static void RestorePatchWorkbookDefinedNames(
             ZipArchive archive,
             XElement? sourceDefinedNames,
             Workbook workbook,
-            HashSet<string> liveModelDefinedNameKeys)
+            HashSet<string> liveModelDefinedNameKeys,
+            IReadOnlyList<string> sourceSheetNamesByLocalId)
         {
             if (sourceDefinedNames is null)
                 return;
@@ -1653,6 +1680,13 @@ public sealed partial class XlsxFileAdapter
             var root = workbookXml.Root;
             if (root is null)
                 return;
+
+            // Current (post-edit) sheet order, for remapping a resurrected sheet-scoped name's
+            // stale localSheetId (P112): index in this list = the CURRENT localSheetId for that name.
+            var targetSheetNames = root.Element(workbookNs + "sheets")?
+                .Elements(workbookNs + "sheet")
+                .Select(sheet => sheet.Attribute("name")?.Value ?? string.Empty)
+                .ToList() ?? [];
 
             var changed = false;
             var targetDefinedNames = root.Element(workbookNs + "definedNames");
@@ -1723,7 +1757,37 @@ public sealed partial class XlsxFileAdapter
                     continue;
                 }
 
-                targetDefinedNames.Add(new XElement(sourceName));
+                var resurrected = new XElement(sourceName);
+                var localSheetIdAttr = resurrected.Attribute("localSheetId");
+                if (localSheetIdAttr is not null)
+                {
+                    // Sheet-scoped: remap the OLD localSheetId (an index into the pristine pre-edit
+                    // <sheets> order) onto that same sheet's CURRENT index, since sheet delete/reorder
+                    // shifts indices but this name was never live in the model to get remapped
+                    // automatically. If the scope sheet itself no longer exists (deleted), drop the
+                    // name entirely rather than emit an out-of-range/misscoped localSheetId (P112).
+                    if (!int.TryParse(localSheetIdAttr.Value, out var oldLocalSheetId) ||
+                        oldLocalSheetId < 0 ||
+                        oldLocalSheetId >= sourceSheetNamesByLocalId.Count)
+                        continue;
+
+                    var scopeSheetName = sourceSheetNamesByLocalId[oldLocalSheetId];
+                    var newLocalSheetId = targetSheetNames.FindIndex(
+                        name => string.Equals(name, scopeSheetName, StringComparison.OrdinalIgnoreCase));
+                    if (newLocalSheetId < 0)
+                        continue;
+
+                    localSheetIdAttr.Value = newLocalSheetId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    key = DefinedNameKey(resurrected);
+
+                    // Re-check for a collision at the remapped index: ClosedXML may already have
+                    // re-emitted an entry for this name at the sheet's new index (common for
+                    // Excel-reserved names like Print_Area).
+                    if (existingKeys.Contains(key))
+                        continue;
+                }
+
+                targetDefinedNames.Add(resurrected);
                 existingKeys.Add(key);
                 changed = true;
             }
@@ -2911,6 +2975,26 @@ public sealed partial class XlsxFileAdapter
             if (workbookXml.Root is null)
             {
                 blockReason = "package_guard_workbook_xml";
+                return false;
+            }
+
+            // A Protect/Unprotect Workbook command changes IsStructureProtected/
+            // StructureProtectionPassword/ProtectionMetadata on the live model, but the patch-save
+            // path below only carries the *original* xl/workbook.xml workbookProtection element
+            // forward (cosmetically normalized) -- it never re-derives that element from the
+            // model. Detect a protection-state delta against the source bytes here and force the
+            // full ClosedXML save (which does call XlsxWorkbookMetadataWriter.ApplyProtection off
+            // the current model) instead of silently keeping a stale verifier. See
+            // FreeXCleanupMED15Tests.ProtectWorkbookCommand_AfterUnprotectingModernHashWorkbook_DropsStaleVerifierForOldPassword.
+            var sourceProtection = XlsxWorkbookMetadataReader.LoadWorkbookMetadata(archive);
+            if (sourceProtection.Protection.IsStructureProtected != workbook.IsStructureProtected ||
+                !string.Equals(sourceProtection.Protection.PasswordHash, workbook.StructureProtectionPassword, StringComparison.Ordinal) ||
+                !string.Equals(
+                    sourceProtection.ProtectionMetadata?.Get("workbookProtection"),
+                    workbook.ProtectionMetadata?.Get("workbookProtection"),
+                    StringComparison.Ordinal))
+            {
+                blockReason = "workbook_postprocessing_protection_changed";
                 return false;
             }
 

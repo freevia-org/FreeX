@@ -146,7 +146,7 @@ public static partial class PrintRenderer
             dc.DrawText(ft, textPoint);
 
             // PDF overlay for this run
-            AddHeaderFooterTextOverlay(textOverlays, run.Text, textPoint, remainingWidth, typeface, TextAlignment.Left);
+            AddHeaderFooterTextOverlay(textOverlays, run.Text, textPoint, remainingWidth, typeface, fontSize, TextAlignment.Left);
 
             x += ft.WidthIncludingTrailingWhitespace;
         }
@@ -159,7 +159,8 @@ public static partial class PrintRenderer
         {
             if (string.IsNullOrEmpty(run.Text)) continue;
             var typeface = ResolveRunTypeface(run);
-            total += MeasurePrintedSingleLineText(run.Text, typeface).WidthIncludingTrailingWhitespace;
+            var fontSize = run.FontSize ?? PrintFontSize;
+            total += MeasurePrintedSingleLineText(run.Text, typeface, fontSize).WidthIncludingTrailingWhitespace;
         }
         return total;
     }
@@ -178,14 +179,15 @@ public static partial class PrintRenderer
         Point textPoint,
         double maxTextWidth,
         Typeface typeface,
+        double fontSize,
         TextAlignment alignment)
     {
-        var overlayText = BoundPrintedSingleLineOverlayText(text, maxTextWidth, typeface);
+        var overlayText = BoundPrintedSingleLineOverlayText(text, maxTextWidth, typeface, fontSize);
         if (string.IsNullOrEmpty(overlayText))
             return;
 
         var overlayX = textPoint.X;
-        var overlayWidth = MeasurePrintedSingleLineText(overlayText, typeface).WidthIncludingTrailingWhitespace;
+        var overlayWidth = MeasurePrintedSingleLineText(overlayText, typeface, fontSize).WidthIncludingTrailingWhitespace;
         if (alignment == TextAlignment.Center)
             overlayX += Math.Max(0, (maxTextWidth - overlayWidth) / 2);
         else if (alignment == TextAlignment.Right)
@@ -195,7 +197,7 @@ public static partial class PrintRenderer
             overlayText,
             overlayX,
             textPoint.Y,
-            PrintFontSize,
+            fontSize,
             typeface.FontFamily.Source,
             typeface.Weight >= FontWeights.SemiBold,
             typeface.Style == FontStyles.Italic || typeface.Style == FontStyles.Oblique,

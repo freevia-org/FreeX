@@ -48,6 +48,11 @@ public sealed class RenameSheetCommand : IWorkbookCommand
     private List<(PivotCacheModel Cache, string OldValue)>? _pivotCacheNameSnapshot;
     private List<(ChartModel Chart, string OldValue)>? _chartPivotSourceNameSnapshot;
     private List<(SlicerModel Slicer, string OldValue)>? _slicerNameSnapshot;
+    // P84: TimelineModel.SourceSheetName is the timeline-object twin of SlicerModel.SourceSheetName
+    // above (same "which sheet hosts this object's anchor" role) and must be rewritten on rename
+    // the same way, or SlicerTimelinePanePlanner.IsAnchoredOnSheet keeps comparing against the
+    // stale old sheet name and the timeline silently stops rendering.
+    private List<(TimelineModel Timeline, string OldValue)>? _timelineNameSnapshot;
     private List<(PictureModel Picture, string OldValue)>? _pictureNameSnapshot;
     // P81: FormControlModel.LinkedCell/ListFillRange hold sheet-qualified string refs (e.g.
     // "Sheet1!$D$3", Excel's fmlaLink) just like the string refs above and must be rewritten
@@ -135,6 +140,17 @@ public sealed class RenameSheetCommand : IWorkbookCommand
             {
                 _slicerNameSnapshot.Add((slicer, slicer.SourceSheetName));
                 slicer.SourceSheetName = _newName;
+            }
+        }
+
+        _timelineNameSnapshot = [];
+        foreach (var timeline in ctx.Workbook.Timelines)
+        {
+            if (timeline.SourceSheetName is not null &&
+                string.Equals(timeline.SourceSheetName, _oldName, StringComparison.OrdinalIgnoreCase))
+            {
+                _timelineNameSnapshot.Add((timeline, timeline.SourceSheetName));
+                timeline.SourceSheetName = _newName;
             }
         }
 
@@ -354,6 +370,10 @@ public sealed class RenameSheetCommand : IWorkbookCommand
                 foreach (var (slicer, oldValue) in _slicerNameSnapshot)
                     slicer.SourceSheetName = oldValue;
 
+            if (_timelineNameSnapshot is not null)
+                foreach (var (timeline, oldValue) in _timelineNameSnapshot)
+                    timeline.SourceSheetName = oldValue;
+
             if (_pictureNameSnapshot is not null)
                 foreach (var (pic, oldValue) in _pictureNameSnapshot)
                     pic.LinkedSourceSheetName = oldValue;
@@ -447,6 +467,10 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
     // sheet has no new name to rewrite onto, so these are nulled instead of renamed).
     private List<(PivotCacheModel Cache, string OldValue)>? _pivotCacheNameDeleteSnapshot;
     private List<(SlicerModel Slicer, string OldValue)>? _slicerNameDeleteSnapshot;
+    // P84: mirrors _slicerNameDeleteSnapshot above for TimelineModel.SourceSheetName — a timeline
+    // anchored on the deleted sheet must have its dangling sheet-name ref cleared too, or it can
+    // silently reattach to an unrelated sheet later re-created/renamed with the same name.
+    private List<(TimelineModel Timeline, string OldValue)>? _timelineNameDeleteSnapshot;
     private List<(PictureModel Picture, string OldValue)>? _pictureNameDeleteSnapshot;
     // K16: chart verbatim series/data-label formulas that reference the deleted sheet must
     // become #REF! just like ordinary cell/CF/DV formulas do via DeleteSheetOp — otherwise
@@ -602,6 +626,17 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
             }
         }
 
+        _timelineNameDeleteSnapshot = [];
+        foreach (var timeline in ctx.Workbook.Timelines)
+        {
+            if (timeline.SourceSheetName is not null &&
+                string.Equals(timeline.SourceSheetName, deletedSheetName, StringComparison.OrdinalIgnoreCase))
+            {
+                _timelineNameDeleteSnapshot.Add((timeline, timeline.SourceSheetName));
+                timeline.SourceSheetName = null;
+            }
+        }
+
         return new CommandOutcome(true);
     }
 
@@ -660,6 +695,10 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
             if (_pictureNameDeleteSnapshot is not null)
                 foreach (var (pic, oldValue) in _pictureNameDeleteSnapshot)
                     pic.LinkedSourceSheetName = oldValue;
+
+            if (_timelineNameDeleteSnapshot is not null)
+                foreach (var (timeline, oldValue) in _timelineNameDeleteSnapshot)
+                    timeline.SourceSheetName = oldValue;
         }
     }
 

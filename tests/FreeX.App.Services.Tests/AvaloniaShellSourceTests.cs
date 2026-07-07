@@ -1683,7 +1683,13 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var cutResult = _session.TryCutSelectedRangeText();");
         source.Should().Contain("await clipboard.SetTextAsync(cutResult.Text);");
         source.Should().Contain("var copyResult = _session.TryCopySelectedRangeText();");
-        source.Should().Contain("await clipboard.SetTextAsync(copyResult.Text);");
+        // Copy places plain text AND an HTML table fragment on the OS clipboard together (review
+        // P47 — parity with real Excel and the WPF host's M7 CF_HTML export), via a DataTransfer
+        // instead of the plain SetTextAsync used by Cut (which does not need HTML — Excel's own
+        // Cut clipboard payload is plain-text-only in practice for this shell's parity target).
+        source.Should().Contain("using var transfer = new DataTransfer();");
+        source.Should().Contain("AddClipboardTextAndHtml(transfer, copiedText, _session.Viewport, _session.ActiveSheet, _session.SelectedRange, _session.Workbook.Theme);");
+        source.Should().Contain("await clipboard.SetDataAsync(transfer);");
         source.Should().Contain("var text = await clipboard.TryGetTextAsync();");
         source.Should().Contain("_session.ShouldPreferExternalClipboardImage(text)");
         source.Should().Contain("private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard, CellAddress destination)");
@@ -2169,7 +2175,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("dropdown.SelectionChanged += DataValidationDropdown_SelectionChanged;");
         source.Should().Contain("private static bool IsOpenActiveDropdownShortcut(KeyEventArgs args)");
         source.Should().Contain("args.Key == Key.Down && args.KeyModifiers == KeyModifiers.Alt;");
-        source.Should().Contain("e.Handled = OpenActiveDataValidationDropdown();");
+        // Alt+Down mirrors WPF's OpenActiveDropdown fallback chain: try the data-validation dropdown
+        // first, and when the active cell isn't a List-DV cell, fall through to the AutoFilter column
+        // dropdown when the active cell is a filter-button cell (review P35 — this shell used to only
+        // ever try the data-validation dropdown, silently doing nothing on a plain AutoFilter header).
+        source.Should().Contain("e.Handled = OpenActiveDataValidationDropdown() || OpenActiveAutoFilterDropdown();");
         source.Should().Contain("_activeDataValidationDropdown.IsDropDownOpen = true;");
         source.Should().Contain("private void DataValidationDropdown_SelectionChanged(object? sender, SelectionChangedEventArgs e)");
         source.Should().Contain("CommitDataValidationDropdownSelection(selected);");

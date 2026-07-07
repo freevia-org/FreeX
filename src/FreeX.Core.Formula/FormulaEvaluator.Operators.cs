@@ -297,17 +297,35 @@ public sealed partial class FormulaEvaluator
 
         if (leftRange is RangeValue lr && rightRange is RangeValue rr)
         {
-            if (!CanBroadcast(lr.RowCount, rr.RowCount) || !CanBroadcast(lr.ColCount, rr.ColCount))
-                return ErrorValue.Value;
-
+            // P77: Excel does not abort a whole elementwise operation just because the two
+            // operand arrays have mismatched (non-1, non-equal) dimensions on an axis — it
+            // expands the result to the bounding (Max) shape per axis and pads whichever operand
+            // runs out of rows/columns with #N/A for the uncovered cells, so e.g. {A1:A2}+{B1:B3}
+            // (2x1 + 3x1) yields a 3x1 spill {A1+B1; A2+B2; #N/A} rather than one scalar #VALUE!.
             var rowCount = Math.Max(lr.RowCount, rr.RowCount);
             var colCount = Math.Max(lr.ColCount, rr.ColCount);
+
             var cells = new ScalarValue[rowCount, colCount];
             for (var row = 0; row < rowCount; row++)
+            {
+                // A dimension of 1 always broadcasts (index 0 for every row/col); otherwise the
+                // operand only covers this row/col if it actually extends that far.
+                var leftRowInBounds = lr.RowCount == 1 || row < lr.RowCount;
+                var rightRowInBounds = rr.RowCount == 1 || row < rr.RowCount;
+
                 for (var col = 0; col < colCount; col++)
-                    cells[row, col] = scalarOp(
-                        lr.Cells[lr.RowCount == 1 ? 0 : row, lr.ColCount == 1 ? 0 : col],
-                        rr.Cells[rr.RowCount == 1 ? 0 : row, rr.ColCount == 1 ? 0 : col]);
+                {
+                    var leftColInBounds = lr.ColCount == 1 || col < lr.ColCount;
+                    var rightColInBounds = rr.ColCount == 1 || col < rr.ColCount;
+
+                    cells[row, col] = leftRowInBounds && leftColInBounds && rightRowInBounds && rightColInBounds
+                        ? scalarOp(
+                            lr.Cells[lr.RowCount == 1 ? 0 : row, lr.ColCount == 1 ? 0 : col],
+                            rr.Cells[rr.RowCount == 1 ? 0 : row, rr.ColCount == 1 ? 0 : col])
+                        : ErrorValue.NA;
+                }
+            }
+
             return new RangeValue(cells, lr.StartRow, lr.StartCol) { SheetName = lr.SheetName };
         }
 
@@ -328,8 +346,6 @@ public sealed partial class FormulaEvaluator
 
         return new RangeValue(result, range.StartRow, range.StartCol) { SheetName = range.SheetName };
     }
-
-    private static bool CanBroadcast(int left, int right) => left == right || left == 1 || right == 1;
 
     private enum ArithmeticKind
     {

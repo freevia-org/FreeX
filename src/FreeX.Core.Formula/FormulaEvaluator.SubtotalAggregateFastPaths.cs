@@ -299,9 +299,13 @@ public sealed partial class FormulaEvaluator
             var resolved = context.TryResolveNamedRange(named.Name);
             if (resolved is null)
             {
+                // Not a resolvable range - it may be a workbook-global named FORMULA
+                // (e.g. a dynamic OFFSET/COUNTA range). Defer to the slow path, which
+                // evaluates named formulas via TryEvaluateNamedFormula, instead of
+                // short-circuiting to #NAME?.
                 range = default;
-                result = ErrorValue.Name;
-                return DirectRangeFastPathState.Error;
+                result = BlankValue.Instance;
+                return DirectRangeFastPathState.Unsupported;
             }
 
             var gridRange = resolved.Value;

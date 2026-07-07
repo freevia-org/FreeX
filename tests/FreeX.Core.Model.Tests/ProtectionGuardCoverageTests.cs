@@ -448,6 +448,19 @@ public class ProtectionGuardCoverageTests
                     new PasteSpecialOptions());
             },
 
+            // Pastes external (non-FreeX) clipboard text combined with the existing destination
+            // cell via Paste Special's Add/Subtract/Multiply/Divide Operation (review P46). Guards
+            // via CommandGuards.CanEditCell per address exactly like PasteSpecialCellsCommand above.
+            ["ExternalTextPasteSpecialCommand"] = (wb, sheet) =>
+            {
+                var addr = new CellAddress(sheet.Id, 1, 1);
+                return new ExternalTextPasteSpecialCommand(
+                    sheet.Id,
+                    [(addr, "1")],
+                    preserveText: false,
+                    PasteSpecialOperation.Add);
+            },
+
             ["PasteMergedRegionsCommand"] = (wb, sheet) =>
             {
                 // Recreating a copied merge at the destination is a FormatCells-gated edit,

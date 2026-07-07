@@ -36,16 +36,20 @@ internal static class NativeJsonVisualDtoMapper
             {
                 RowOffset = cell.RowOffset,
                 ColumnOffset = cell.ColumnOffset,
-                Text = cell.Text
+                Text = cell.Text,
+                Style = NativeJsonAdapter.FromCellStyle(cell.Style),
+                IsNumericOrDate = cell.IsNumericOrDate
             })
             .ToList()
     };
 
+    // A picture is owned by (and saved under) the sheet it is anchored/visually placed on, regardless
+    // of which sheet its optional LinkedSourceRange points at. The linked range's own sheet identity
+    // round-trips separately via LinkedSourceSheetName (see FromPicture/ToPicture + the cross-sheet
+    // rebind pass in NativeJsonAdapter), so a cross-sheet linked picture must never be excluded here —
+    // doing so silently drops the picture from every sheet's saved list (P24).
     public static bool IsPictureOnSheet(PictureModel picture, SheetId sheetId) =>
-        picture.Anchor.Sheet == sheetId &&
-        (picture.LinkedSourceRange is not { } linkedSourceRange ||
-         linkedSourceRange.Start.Sheet == sheetId &&
-         linkedSourceRange.End.Sheet == sheetId);
+        picture.Anchor.Sheet == sheetId;
 
     public static PictureModel? ToPicture(PictureDto? pictureDto, SheetId sheetId)
     {
@@ -88,7 +92,12 @@ internal static class NativeJsonVisualDtoMapper
                 if (cellDto is null)
                     continue;
 
-                picture.Cells.Add(new PictureCellSnapshot(cellDto.RowOffset, cellDto.ColumnOffset, cellDto.Text ?? ""));
+                picture.Cells.Add(new PictureCellSnapshot(
+                    cellDto.RowOffset,
+                    cellDto.ColumnOffset,
+                    cellDto.Text ?? "",
+                    NativeJsonAdapter.ToCellStyle(cellDto.Style),
+                    cellDto.IsNumericOrDate));
             }
 
             return picture;
@@ -364,6 +373,8 @@ internal class PictureCellDto
     public uint RowOffset { get; set; }
     public uint ColumnOffset { get; set; }
     public string? Text { get; set; }
+    public NativeJsonAdapter.CellStyleDto? Style { get; set; }
+    public bool IsNumericOrDate { get; set; }
 }
 
 internal class TextBoxDto

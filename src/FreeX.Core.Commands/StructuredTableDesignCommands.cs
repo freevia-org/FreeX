@@ -210,10 +210,19 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
 
         var oldTotalsRow = previousTable.Range.End.Row;
         var relocatedCells = new List<CellAddress>();
-        for (var col = resizedTable.Range.Start.Col; col <= resizedTable.Range.End.Col; col++)
+        // Only clear the columns that were actually part of the OLD table. If the resize also
+        // grows the table wider, the extra columns at the old totals row were never part of the
+        // previous table -- they are ordinary (possibly user-populated) cells that become part of
+        // the grown table's data body, and must be left untouched rather than blanked.
+        for (var col = previousTable.Range.Start.Col; col <= previousTable.Range.End.Col; col++)
         {
             var address = new CellAddress(_sheetId, oldTotalsRow, col);
-            SnapshotAndSetCell(sheet, address, Cell.FromValue(BlankValue.Instance));
+            // Preserve the totals row's existing formatting on the cell that now becomes an
+            // ordinary data row -- only the totals content/formula is being relocated, not the
+            // cell's style.
+            var blank = Cell.FromValue(BlankValue.Instance);
+            blank.StyleId = sheet.GetCell(address)?.StyleId ?? StyleId.Default;
+            SnapshotAndSetCell(sheet, address, blank);
             relocatedCells.Add(address);
         }
 

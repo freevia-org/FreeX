@@ -307,7 +307,9 @@ public static class PagePaginationPlanner
         double headerMarginInches,
         double footerMarginInches,
         IReadOnlyCollection<uint>? rowPageBreaks = null,
-        IReadOnlyCollection<uint>? columnPageBreaks = null)
+        IReadOnlyCollection<uint>? columnPageBreaks = null,
+        Func<uint, bool>? isRowHidden = null,
+        Func<uint, bool>? isColumnHidden = null)
     {
         var plan = BuildPlan(
             printRange,
@@ -324,7 +326,9 @@ public static class PagePaginationPlanner
             headerMarginInches,
             footerMarginInches,
             rowPageBreaks,
-            columnPageBreaks);
+            columnPageBreaks,
+            isRowHidden,
+            isColumnHidden);
 
         return new PagePaginationResult(
             BuildSegments(plan.RowPlans),

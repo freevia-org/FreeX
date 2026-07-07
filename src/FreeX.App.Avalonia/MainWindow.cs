@@ -785,6 +785,13 @@ public sealed partial class MainWindow : Window
     internal Func<Task<bool>>? ConfirmSelectionMoveOverwriteOverrideForTest;
     private IReadOnlyDictionary<(uint Row, uint Col), SparklineCellEntry> _sparklinesByCell =
         new Dictionary<(uint Row, uint Col), SparklineCellEntry>();
+    // Set by BuildSheetGrid for the sheet just rendered. When true, CreateCell must NOT paint an
+    // opaque white base fill on unfilled cells — doing so would occlude the tiled worksheet
+    // background image painted on the parent Grid's Background (mirrors WPF's
+    // GridView.Rendering.cs "WorksheetBackground == null ? Brushes.White : null" gate).
+    private bool _activeSheetHasBackgroundImage;
+    private WorksheetBackgroundImage? _worksheetBackgroundBrushSource;
+    private ImageBrush? _worksheetBackgroundBrushCache;
     // Pivot overlay adornments rebuilt on each sheet-grid refresh.
     // Maps (row, col) → the portable target model used to open the pivot header dropdown menu.
     private Dictionary<(uint Row, uint Col), PivotHeaderDropdownTargetModel> _pivotHeaderDropdownTargets = [];
@@ -4196,9 +4203,10 @@ public sealed partial class MainWindow : Window
 
         _sparklinesByCell = BuildSparklineCellLookup(_session.ActiveSheet);
         BuildPivotAdornmentLookups(_session.Workbook, _session.ActiveSheet);
+        _activeSheetHasBackgroundImage = _session.ActiveSheet.BackgroundImage != null;
         var grid = new AvaloniaGrid
         {
-            Background = Brushes.White,
+            Background = (IBrush?)BuildWorksheetBackgroundBrush(_session.ActiveSheet.BackgroundImage) ?? Brushes.White,
         };
 
         if (showHeadings)
@@ -5624,6 +5632,45 @@ public sealed partial class MainWindow : Window
         return marker;
     }
 
+    /// <summary>
+    /// Builds (and caches) the tiled ImageBrush used to paint a worksheet's Page Layout ▸ Background
+    /// picture behind the sheet grid — the Avalonia counterpart to WPF's
+    /// GridView.DrawingObjects.Pictures.cs GetWorksheetBackgroundBrush/RenderWorksheetBackground.
+    /// Returns null (no background) when the sheet has none or the bytes fail to decode.
+    /// </summary>
+    private ImageBrush? BuildWorksheetBackgroundBrush(WorksheetBackgroundImage? background)
+    {
+        if (background == null)
+        {
+            _worksheetBackgroundBrushSource = null;
+            _worksheetBackgroundBrushCache = null;
+            return null;
+        }
+
+        if (_worksheetBackgroundBrushCache is { } cached && ReferenceEquals(_worksheetBackgroundBrushSource, background))
+            return cached;
+
+        if (!TryCreateDrawingBitmap(background.ImageBytes, out var bitmap))
+        {
+            _worksheetBackgroundBrushSource = null;
+            _worksheetBackgroundBrushCache = null;
+            return null;
+        }
+
+        var brush = new ImageBrush(bitmap)
+        {
+            TileMode = TileMode.Tile,
+            Stretch = Stretch.None,
+            AlignmentX = AlignmentX.Left,
+            AlignmentY = AlignmentY.Top,
+            DestinationRect = new RelativeRect(0, 0, bitmap.PixelSize.Width, bitmap.PixelSize.Height, RelativeUnit.Absolute),
+        };
+
+        _worksheetBackgroundBrushSource = background;
+        _worksheetBackgroundBrushCache = brush;
+        return brush;
+    }
+
     private static bool TryCreateDrawingBitmap(byte[] imageBytes, out Bitmap bitmap)
     {
         try
@@ -6918,11 +6965,16 @@ public sealed partial class MainWindow : Window
         }
 
         var style = cell.Style;
-        IBrush background;
+        IBrush? background;
         if (style?.GradientFill is { } gradientFill && CellGradientBrush.Build(gradientFill) is { } gradientBrush)
             background = gradientBrush;
         else if (style?.ResolveFillColor(_session.Workbook.Theme) is { } fillColor)
             background = Brush(fillColor);
+        else if (_activeSheetHasBackgroundImage)
+            // Let the sheet grid's tiled background-image Brush (set in BuildSheetGrid) show through
+            // instead of occluding it with an opaque base fill — mirrors WPF's
+            // "WorksheetBackground == null ? Brushes.White : null" gate in GridView.Rendering.cs.
+            background = null;
         else
             background = Brushes.White;
 
@@ -6998,7 +7050,7 @@ public sealed partial class MainWindow : Window
 
     private Border CreateInteractiveCellBorder(
         string text,
-        IBrush background,
+        IBrush? background,
         IBrush foreground,
         TextAlignment textAlignment,
         AvaloniaVerticalAlignment verticalAlignment,
@@ -7166,7 +7218,7 @@ public sealed partial class MainWindow : Window
             border.Cursor = new Cursor(StandardCursorType.Ibeam);
             border.Child = CreateInlineCellEditor(
                 address,
-                background,
+                background ?? Brushes.White,
                 foreground,
                 textAlignment,
                 fontWeight,
@@ -7880,7 +7932,7 @@ public sealed partial class MainWindow : Window
 
     private static Border CreateCellBorder(
         string text,
-        IBrush background,
+        IBrush? background,
         IBrush foreground,
         TextAlignment textAlignment,
         AvaloniaVerticalAlignment verticalAlignment,
@@ -8113,18 +8165,33 @@ public sealed partial class MainWindow : Window
         var verticalInset = bar.VerticalInset * zoomFactor;
         var color = Color.FromRgb(bar.FillColor.R, bar.FillColor.G, bar.FillColor.B);
 
-        IBrush fill = bar.Gradient
-            ? new LinearGradientBrush
+        // P53: mirror WPF's gradient direction (GridView.ConditionalDataBars.cs) — a negative bar's
+        // gradient flows from solid (away from the axis) to faded (toward the axis), i.e. the
+        // reverse of a positive bar's light-to-solid left-to-right ramp.
+        IBrush fill;
+        if (bar.Gradient)
+        {
+            var gradientBrush = new LinearGradientBrush
             {
                 StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
                 EndPoint = new RelativePoint(1, 0, RelativeUnit.Relative),
-                GradientStops =
-                {
-                    new GradientStop(Color.FromArgb(90, color.R, color.G, color.B), 0),
-                    new GradientStop(color, 1),
-                },
+            };
+            if (bar.IsNegative)
+            {
+                gradientBrush.GradientStops.Add(new GradientStop(color, 0));
+                gradientBrush.GradientStops.Add(new GradientStop(Color.FromArgb(90, color.R, color.G, color.B), 1));
             }
-            : new SolidColorBrush(color);
+            else
+            {
+                gradientBrush.GradientStops.Add(new GradientStop(Color.FromArgb(90, color.R, color.G, color.B), 0));
+                gradientBrush.GradientStops.Add(new GradientStop(color, 1));
+            }
+            fill = gradientBrush;
+        }
+        else
+        {
+            fill = new SolidColorBrush(color);
+        }
 
         var rectangle = new AvaloniaRectangle
         {
@@ -8136,13 +8203,36 @@ public sealed partial class MainWindow : Window
         };
         if (bar.Border)
         {
-            rectangle.Stroke = new SolidColorBrush(color);
+            // P53: use the authored border color when supplied, matching WPF, instead of always
+            // stroking with the bar's own fill color.
+            var borderColor = bar.BorderColor is { } bc
+                ? Color.FromRgb(bc.R, bc.G, bc.B)
+                : color;
+            rectangle.Stroke = new SolidColorBrush(borderColor);
             rectangle.StrokeThickness = 0.75 * zoomFactor;
+        }
+
+        // P53: zero-crossing axis line for a negative-axis data bar, mirroring WPF's
+        // GridView.ConditionalDataBars.cs (drawn only when the axis sits strictly inside the cell).
+        Control? axisLine = null;
+        if (bar.AxisFraction > 0d && bar.AxisFraction < 1d)
+        {
+            var axisColor = bar.AxisColor is { } ac
+                ? Color.FromRgb(ac.R, ac.G, ac.B)
+                : Colors.Black;
+            axisLine = new AvaloniaRectangle
+            {
+                Fill = new SolidColorBrush(axisColor),
+                Width = Math.Max(1d, 1d * zoomFactor),
+                Margin = new Thickness(0, verticalInset, 0, verticalInset),
+                IsHitTestVisible = false,
+            };
         }
 
         // Width is resolved relative to the cell's drawable content area via a binding-free
         // panel that places the fraction-sized rectangle at arrange time.
-        return new ConditionalDataBarPanel(rectangle, bar.StartFraction, bar.FractionWidth, horizontalInset);
+        return new ConditionalDataBarPanel(
+            rectangle, bar.StartFraction, bar.FractionWidth, horizontalInset, axisLine, bar.AxisFraction);
     }
 
     private static Control CreateConditionalIconLayer(CfIconRenderInstruction icon, double zoomFactor)
@@ -18954,13 +19044,38 @@ public sealed partial class MainWindow : Window
 
         var rangeReference = FormatRangeReference(_session.SelectedRange);
         var copyResult = _session.TryCopySelectedRangeText();
-        if (!copyResult.Success)
+        if (!copyResult.Success || copyResult.Text is not { } copiedText)
         {
             ShowEditIssue(copyResult.ErrorMessage ?? UiText.Get("MainLoc_CopyFailed"));
             return;
         }
 
-        await clipboard.SetTextAsync(copyResult.Text);
+        // Place plain text AND an HTML table fragment on the OS clipboard together, matching real
+        // Excel and the WPF host's M7 CF_HTML export: destinations that understand HTML (LibreOffice
+        // Writer/Calc, browsers, Word/Outlook) pick up bold/fill/merges/number-format display styling
+        // instead of only flattened TSV text. Only single-range selections build the HTML fragment
+        // (mirroring TryCopySelectedRangeText's own single-range Viewport/SelectedRange usage) —
+        // multi-area selections keep the existing plain-text-only behavior.
+        using var transfer = new DataTransfer();
+        if (_session.SelectedRanges.Count > 1)
+        {
+            transfer.Add(DataTransferItem.CreateText(copiedText));
+        }
+        else
+        {
+            AddClipboardTextAndHtml(transfer, copiedText, _session.Viewport, _session.ActiveSheet, _session.SelectedRange, _session.Workbook.Theme);
+        }
+
+        try
+        {
+            await clipboard.SetDataAsync(transfer);
+        }
+        catch
+        {
+            // Some backends may reject a custom platform format; fall back to plain text only.
+            await clipboard.SetTextAsync(copiedText);
+        }
+
         RefreshShell(UiText.Format("MainLoc_CopiedX", rangeReference));
     }
 
@@ -21290,6 +21405,15 @@ public sealed partial class MainWindow : Window
         args.Key == Key.Down && args.KeyModifiers == KeyModifiers.Alt;
 
     /// <summary>
+    /// The worksheet-cell context-menu shortcut (Menu key / Shift+F10) — the same key combo used for
+    /// the sheet-tab context menu (<see cref="IsSheetTabContextMenuKey"/>), Excel's universal
+    /// "open the context menu for whatever's focused" gesture applied to the active grid cell/range.
+    /// </summary>
+    private static bool IsWorksheetContextMenuKey(KeyEventArgs args) =>
+        args.Key == Key.Apps ||
+        args.Key == Key.F10 && args.KeyModifiers == KeyModifiers.Shift;
+
+    /// <summary>
     /// True for Ctrl/Cmd(+Shift)+Arrow, Ctrl/Cmd+Home, and Ctrl/Cmd(+Shift)+End - the Excel
     /// used-range navigation/extend shortcuts that must still reach <see cref="NavigateActiveCell"/>
     /// even though the command modifier is held (mirrors the WPF host's
@@ -21330,9 +21454,24 @@ public sealed partial class MainWindow : Window
         {
             if (!_formulaBox.IsFocused)
             {
-                e.Handled = OpenActiveDataValidationDropdown();
+                // Mirror WPF's OpenActiveDropdown fallback chain: data-validation dropdown first,
+                // then the AutoFilter column dropdown when the active cell is a filter-button cell
+                // (see OpenActiveAutoFilterDropdown in MainWindow.AutoFilter.cs).
+                e.Handled = OpenActiveDataValidationDropdown() || OpenActiveAutoFilterDropdown();
             }
 
+            return;
+        }
+
+        if (IsWorksheetContextMenuKey(e) && !IsTextEditingEventSource(e))
+        {
+            // Menu key / Shift+F10 over the worksheet grid: open the same cell context menu the
+            // pointer-driven right-click path opens (OpenWorksheetCellContextMenu), anchored on the
+            // active cell's Border so it appears where the user is actually looking — mirrors WPF's
+            // KeyboardCommandShortcut.OpenContextMenu -> OpenKeyboardContextMenu.
+            var anchor = (Control?)_activeCellBorder ?? _sheetGridHost;
+            OpenWorksheetCellContextMenu(anchor);
+            e.Handled = true;
             return;
         }
 
@@ -23156,10 +23295,20 @@ public sealed partial class MainWindow : Window
 
     private void ShowEditIssue(string message)
     {
+        // Announce the failure to screen readers: the Avalonia shell has no owned modal message box
+        // for validation/commit failures (unlike WPF's ShowOwnedMessage), so _statusText's live
+        // region is the only accessible signal that the edit did NOT succeed.
+        EnsureStatusTextLiveRegion();
         _statusText.Text = message;
         _statusText.Foreground = Brush(143, 74, 18);
         UpdateSaveButton();
     }
+
+    /// <summary>Test-only seam driving the real <see cref="ShowEditIssue"/> production code path.</summary>
+    internal void InvokeShowEditIssueForTest(string message) => ShowEditIssue(message);
+
+    /// <summary>Test-only seam exposing <see cref="_statusText"/> for accessibility assertions.</summary>
+    internal TextBlock StatusTextForTest => _statusText;
 
     private void ShowHelpIssue(string message)
     {

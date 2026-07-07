@@ -104,7 +104,7 @@ internal static partial class XlsxChartXmlWriter
         yield return ToPointDataLabelBoolXml("showPercent", format.ShowPercentage, chartNs);
         yield return ToPointDataLabelBoolXml("showBubbleSize", format.ShowBubbleSize, chartNs);
         yield return format.SeparatorText is { } separator
-            ? new XElement(chartNs + "separator", new XAttribute("val", separator))
+            ? new XElement(chartNs + "separator", separator)
             : null;
     }
 

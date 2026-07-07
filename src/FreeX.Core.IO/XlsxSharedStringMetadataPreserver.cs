@@ -71,7 +71,14 @@ internal static class XlsxSharedStringMetadataPreserver
                 if (sourceMatches.Count == 0)
                     continue;
 
-                var targetMatches = targetElements.Where(item => ReadSharedStringPlainText(item, workbookNs) == text).ToList();
+                // P70: pair rich source occurrences only against target occurrences that are
+                // ALSO rich (same-text plain si entries in targetElements must never receive a
+                // rich replacement positionally — a plain first-use si sharing the text with a
+                // later rich si would otherwise get clobbered, silently promoting every plain
+                // cell using that string to rich formatting/phonetics it never had).
+                var targetMatches = targetElements
+                    .Where(item => HasRichSharedStringMetadata(item, workbookNs) && ReadSharedStringPlainText(item, workbookNs) == text)
+                    .ToList();
                 var count = Math.Min(sourceMatches.Count, targetMatches.Count);
                 for (var i = 0; i < count; i++)
                 {

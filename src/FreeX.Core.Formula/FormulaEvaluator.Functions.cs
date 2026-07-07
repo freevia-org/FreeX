@@ -581,12 +581,16 @@ public sealed partial class FormulaEvaluator
                 return true;
 
             case NamedRangeNode named:
-                var range = context.TryResolveNamedRange(named.Name);
-                if (range is not { } resolved || resolved.RowCount != 1 || resolved.ColCount != 1)
+                // Sheet-scope precedence: a sheet-scoped named FORMULA must shadow a same-named
+                // workbook-global named RANGE here too (see ResolveNamedRangeNodeAsReference),
+                // so ANCHORARRAY(Foo) anchors on the scoped formula's reference, not the global
+                // range's.
+                var reference = ResolveNamedRangeNodeAsReference(named, context);
+                if (reference is not RangeValue resolved || resolved.RowCount != 1 || resolved.ColCount != 1)
                     return false;
-                row = resolved.Start.Row;
-                col = resolved.Start.Col;
-                sheetName = context.TryGetSheetName(resolved.Start.Sheet);
+                row = resolved.StartRow;
+                col = resolved.StartCol;
+                sheetName = resolved.SheetName;
                 return true;
 
             default:

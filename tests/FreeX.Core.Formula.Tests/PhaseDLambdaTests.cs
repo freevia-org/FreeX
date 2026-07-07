@@ -324,13 +324,23 @@ public class PhaseDLambdaTests
 
     // ── SCAN ────────────────────────────────────────────────────────────────
 
+    // Unlike MAP/SCAN/BYROW/BYCOL/MAKEARRAY (which must place each lambda result into a single
+    // output cell, so an array result is invalid), REDUCE only returns its *final* accumulator —
+    // never places intermediate results into a grid cell — so an array-valued accumulator built
+    // via HSTACK/VSTACK is a legitimate, well-documented Excel idiom and must NOT be #CALC!.
+    // See also FreeXCleanupMED9Tests.Reduce_WithVStackArrayAccumulator_ReturnsStackedArray_NotCalcError.
     [Fact]
-    public void Reduce_ArrayReturningLambda_ReturnsCalcError()
+    public void Reduce_ArrayReturningLambda_ReturnsStackedArray()
     {
         Set(16, 1, new NumberValue(1));
         Set(16, 2, new NumberValue(2));
 
-        Assert.Equal(ErrorValue.Calc, Eval("=REDUCE(0, A16:B16, LAMBDA(acc, x, HSTACK(acc,x)))"));
+        var result = Rv(Eval("=REDUCE(0, A16:B16, LAMBDA(acc, x, HSTACK(acc,x)))"));
+        Assert.Equal(1, result.RowCount);
+        Assert.Equal(3, result.ColCount);
+        Assert.Equal(0.0, Num(result.At(1, 1)));
+        Assert.Equal(1.0, Num(result.At(1, 2)));
+        Assert.Equal(2.0, Num(result.At(1, 3)));
     }
 
     [Fact]

@@ -140,7 +140,20 @@ public sealed class RecalcEngine
                 foreach (var addr in plan.OrderedCells)
                     dirtyCells.Add(addr);
 
-                evaluationPlan = _graph.GetEvaluationOrder(dirtyCells);
+                // Volatile functions (OFFSET/INDIRECT/CELL/...) can dynamically read a cell that has
+                // no registered dependency edge back to them (only their static argument cells get an
+                // edge - see CollectReferences' FunctionCallNode case). Left unordered relative to an
+                // unrelated dirty cell they dynamically read, Kahn's ready-queue (backed by HashSet
+                // enumeration) picks an arbitrary order between two cells that both reach in-degree 0
+                // at the same time - so the volatile cell can run first and observe that cell's
+                // pre-edit value for this pass (P78; self-heals only next recalc since volatiles
+                // always re-run). GetEvaluationOrder's deprioritized-tie-break keeps every REAL
+                // dependency edge intact (a non-volatile cell that statically references a volatile
+                // one is still correctly ordered after it) while making volatile cells lose every
+                // ready-queue tie against a non-volatile cell, so by the time a volatile cell
+                // evaluates, every unrelated same-pass dirty cell has already settled.
+                evaluationPlan = _graph.GetEvaluationOrder(dirtyCells, deprioritized: _volatileCells);
+
                 if (evaluationPlan.CyclicCells.Count > 0)
                 {
                     if (workbook.IterativeCalculation)

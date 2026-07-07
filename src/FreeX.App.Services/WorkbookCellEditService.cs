@@ -80,6 +80,23 @@ public sealed class WorkbookCellEditService
             : null;
     }
 
+    /// <summary>
+    /// Recalculates <paramref name="affectedCells"/> unconditionally, independent of the workbook's
+    /// <see cref="WorkbookCalculationMode"/>. Unlike <see cref="RecalculateIfAutomatic"/> (used after
+    /// live cell edits, where Manual mode intentionally defers recalculation until the user asks for
+    /// it), some report-generation flows need each intermediate state actually computed no matter
+    /// the calc mode -- e.g. Scenario Summary applies one scenario's values at a time and must read
+    /// each one's genuinely recalculated result cells rather than repeating the same stale
+    /// pre-report value in every scenario column (see ScenarioSummaryReportCommand).
+    /// </summary>
+    public RecalcReport RecalculateAlways(Workbook workbook, IReadOnlyList<CellAddress> affectedCells)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(affectedCells);
+
+        return _recalcEngine.Recalculate(workbook, affectedCells);
+    }
+
     /// <summary>Forces a full recalculation of every formula in the workbook (F9 / Calculate Now).</summary>
     public RecalcReport RecalculateAll(Workbook workbook)
     {

@@ -147,7 +147,14 @@ public static partial class NumberFormatDecimalAdjuster
                 continue;
 
             changed = true;
-            return section.Insert(match.Index + match.Length, "0");
+            var placeholders = match.Groups[3].Value;
+            // Append a placeholder matching the run's own style ('0' for "0.00" -> "0.000",
+            // '#' for "0.##" -> "0.###") at the END of the decimal-placeholder run, not
+            // immediately after the literal digits: '#'/'?' are valid decimal placeholders too
+            // and must not be skipped over, or the inserted '0' lands mid-run (e.g. "0.##" would
+            // become "0.0##" instead of Excel's "0.###").
+            var placeholderChar = placeholders.Length > 0 ? placeholders[^1] : '0';
+            return section.Insert(match.Index + match.Length, placeholderChar.ToString());
         }
 
         foreach (Match match in IntegerDigitsRegex().Matches(section))
@@ -230,7 +237,12 @@ public static partial class NumberFormatDecimalAdjuster
         return !inQuote && !inBracket;
     }
 
-    [GeneratedRegex(@"(\d*)(\.(\d*))")]
+    // Matches the whole decimal-placeholder run after the dot, not just literal digits: '#' and
+    // '?' are equally valid decimal placeholders (e.g. "0.0#", "0.##", "#.##") and must be
+    // included so Increase Decimal appends its new placeholder at the end of the run instead of
+    // splicing it in immediately after the literal digits (which would turn "0.##" into the
+    // mis-shaped "0.0##" rather than Excel's "0.###").
+    [GeneratedRegex(@"(\d*)(\.([0#?]*))")]
     private static partial Regex DecimalPlacesRegex();
 
     [GeneratedRegex(@"(\d+)")]

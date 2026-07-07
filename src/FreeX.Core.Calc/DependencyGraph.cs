@@ -432,7 +432,26 @@ public sealed class DependencyGraph
     /// <summary>
     /// Topologically order a known dirty set, including the dirty roots themselves.
     /// </summary>
-    public RecalcPlan GetEvaluationOrder(IReadOnlyCollection<CellAddress> dirtyCells)
+    public RecalcPlan GetEvaluationOrder(IReadOnlyCollection<CellAddress> dirtyCells) =>
+        GetEvaluationOrder(dirtyCells, deprioritized: null);
+
+    /// <summary>
+    /// Topologically order a known dirty set, including the dirty roots themselves. When
+    /// <paramref name="deprioritized"/> is given, a cell in that set that ties for in-degree-0
+    /// readiness against a cell NOT in that set always loses the tie (the non-deprioritized cell is
+    /// dequeued first). This does not change the graph's real precedent/dependent edges or any
+    /// ordering they imply — a deprioritized cell that is a genuine precedent of another candidate
+    /// still unblocks (and is still correctly ordered before) that dependent exactly as before; the
+    /// bias only resolves ties between cells that have NO edge between them, where Kahn's ready-queue
+    /// order would otherwise be arbitrary HashSet/enqueue-order happenstance.
+    ///
+    /// Used for volatile-function cells (OFFSET/INDIRECT/...), which can dynamically read a cell
+    /// that has no registered dependency edge back to them (P78): without this bias such a cell can
+    /// tie for readiness with, and run before, an unrelated dirty cell it dynamically reads this pass.
+    /// </summary>
+    public RecalcPlan GetEvaluationOrder(
+        IReadOnlyCollection<CellAddress> dirtyCells,
+        IReadOnlyCollection<CellAddress>? deprioritized)
     {
         if (dirtyCells.Count == 0)
             return EmptyPlan;
@@ -454,12 +473,37 @@ public sealed class DependencyGraph
                 ready.Enqueue(cell);
         }
 
-        while (ready.Count > 0)
+        if (deprioritized is null || deprioritized.Count == 0)
         {
-            var cell = ready.Dequeue();
-            sorted.Add(cell);
+            while (ready.Count > 0)
+            {
+                var cell = ready.Dequeue();
+                sorted.Add(cell);
 
-            DecrementDependentInDegrees(cell, inDegree, ready);
+                DecrementDependentInDegrees(cell, inDegree, ready);
+            }
+        }
+        else
+        {
+            var deprioritizedSet = deprioritized as HashSet<CellAddress> ?? new HashSet<CellAddress>(deprioritized);
+
+            // Rotate past any deprioritized cell at the front of the queue as long as a
+            // non-deprioritized cell is also currently ready (bounded by ready.Count rotations —
+            // once every remaining ready cell is deprioritized, the rotation stops and one is taken).
+            while (ready.Count > 0)
+            {
+                var rotations = 0;
+                while (deprioritizedSet.Contains(ready.Peek()) && rotations < ready.Count)
+                {
+                    ready.Enqueue(ready.Dequeue());
+                    rotations++;
+                }
+
+                var cell = ready.Dequeue();
+                sorted.Add(cell);
+
+                DecrementDependentInDegrees(cell, inDegree, ready);
+            }
         }
 
         ResolveResidualAfterKahn(inDegree, candidates, candidateIndex, sorted, out var cycles);

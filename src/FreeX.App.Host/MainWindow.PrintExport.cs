@@ -449,6 +449,7 @@ public partial class MainWindow
         sourcePage.UpdateLayout();
         var textOverlays = PdfTextOverlayExtractor.Extract(sourcePage);
         var linkOverlays = PdfLinkOverlayExtractor.Extract(sourcePage);
+        var cellDestinationOverlays = PdfCellDestinationOverlayExtractor.Extract(sourcePage);
 
         var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
             Math.Max(1, (int)Math.Ceiling(width)),
@@ -466,8 +467,15 @@ public partial class MainWindow
             Width = width,
             Height = height
         });
-        if (textOverlays.Count > 0 || linkOverlays.Count > 0)
-            fixedPage.Children.Add(new VisualHost { TextOverlays = textOverlays, LinkOverlays = linkOverlays });
+        if (textOverlays.Count > 0 || linkOverlays.Count > 0 || cellDestinationOverlays.Count > 0)
+        {
+            fixedPage.Children.Add(new VisualHost
+            {
+                TextOverlays = textOverlays,
+                LinkOverlays = linkOverlays,
+                CellDestinationOverlays = cellDestinationOverlays
+            });
+        }
 
         var clone = new PageContent();
         ((System.Windows.Markup.IAddChild)clone).AddChild(fixedPage);

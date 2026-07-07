@@ -28,6 +28,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
+    private List<(SheetId Sheet, CellAddress Address, string OldBookmark)>? _otherSheetHyperlinkBookmarkSnapshot;
     private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
     private List<GridRange>? _mergeSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dvRuleSnapshot;
@@ -124,7 +125,8 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             // already shifted above by ShiftAnnotationsInBandRight) so a "Place in This Document"
             // link whose Bookmark text points at a cell inside the shifted band keeps pointing at
             // the same logical cell, matching whole-row/whole-column insert.
-            RowColumnShiftHelpers.ShiftHyperlinkBookmarks(sheet, insertRightOp, sheet.Name);
+            _otherSheetHyperlinkBookmarkSnapshot = RowColumnShiftHelpers.ShiftHyperlinkBookmarks(
+                ctx.Workbook, sheet, insertRightOp, sheet.Name);
             _formulaSnapshot.Clear();
             RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, insertRightOp, _formulaSnapshot);
             _namedFormulaSnapshot.Clear();
@@ -196,7 +198,8 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             // already shifted above by ShiftAnnotationsInBandDown) so a "Place in This Document"
             // link whose Bookmark text points at a cell inside the shifted band keeps pointing at
             // the same logical cell, matching whole-row/whole-column insert.
-            RowColumnShiftHelpers.ShiftHyperlinkBookmarks(sheet, insertDownOp, sheet.Name);
+            _otherSheetHyperlinkBookmarkSnapshot = RowColumnShiftHelpers.ShiftHyperlinkBookmarks(
+                ctx.Workbook, sheet, insertDownOp, sheet.Name);
             _formulaSnapshot.Clear();
             RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, insertDownOp, _formulaSnapshot);
             _namedFormulaSnapshot.Clear();
@@ -251,6 +254,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
+        RowColumnShiftHelpers.RestoreHyperlinkBookmarks(ctx.Workbook, _otherSheetHyperlinkBookmarkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot);
     }
 
@@ -640,6 +644,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
     private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
+    private List<(SheetId Sheet, CellAddress Address, string OldBookmark)>? _otherSheetHyperlinkBookmarkSnapshot;
     private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
     private List<GridRange>? _mergeSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dvRuleSnapshot;
@@ -729,7 +734,8 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             // already shifted/removed above by DeleteAnnotationsInBandLeft) so a surviving "Place in
             // This Document" link whose Bookmark text points at a cell after the deleted band keeps
             // pointing at the same logical cell, matching whole-row/whole-column delete.
-            RowColumnShiftHelpers.ShiftHyperlinkBookmarks(sheet, deleteLeftOp, sheet.Name);
+            _otherSheetHyperlinkBookmarkSnapshot = RowColumnShiftHelpers.ShiftHyperlinkBookmarks(
+                ctx.Workbook, sheet, deleteLeftOp, sheet.Name);
             _formulaSnapshot.Clear();
             RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, deleteLeftOp, _formulaSnapshot);
             _namedFormulaSnapshot.Clear();
@@ -799,7 +805,8 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             // already shifted/removed above by DeleteAnnotationsInBandUp) so a surviving "Place in
             // This Document" link whose Bookmark text points at a cell after the deleted band keeps
             // pointing at the same logical cell, matching whole-row/whole-column delete.
-            RowColumnShiftHelpers.ShiftHyperlinkBookmarks(sheet, deleteUpOp, sheet.Name);
+            _otherSheetHyperlinkBookmarkSnapshot = RowColumnShiftHelpers.ShiftHyperlinkBookmarks(
+                ctx.Workbook, sheet, deleteUpOp, sheet.Name);
             _formulaSnapshot.Clear();
             RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, deleteUpOp, _formulaSnapshot);
             _namedFormulaSnapshot.Clear();
@@ -845,6 +852,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
+        RowColumnShiftHelpers.RestoreHyperlinkBookmarks(ctx.Workbook, _otherSheetHyperlinkBookmarkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot);
     }
 

@@ -33,8 +33,11 @@ public partial class ConditionalFormatTests
     }
 
     [Fact]
-    public void Top10_PreservesInsertionOrderWhenValuesTieAtRankBoundary()
+    public void Top10_HighlightsAllValuesTiedAtRankBoundary()
     {
+        // Excel's Top/Bottom N highlights every cell whose value ranks within the top N,
+        // ties included -- so more than N cells can end up highlighted when the Nth-ranked
+        // value repeats. Top 1 over {10, 10, 5} must highlight BOTH 10s, not just the first.
         var (wb, sheet) = MakeWorkbook();
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(10)));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(10)));
@@ -54,9 +57,9 @@ public partial class ConditionalFormatTests
         var vp = GetViewport(wb, sheet);
 
         GetCell(vp, 1, 1).Style!.FillColor.Should().Be(new CellColor(198, 239, 206));
-        GetCell(vp, 2, 1).Style!.FillColor.Should().NotBe(
+        GetCell(vp, 2, 1).Style!.FillColor.Should().Be(
             new CellColor(198, 239, 206),
-            "the in-place sort should preserve the previous stable ordering for tied values");
+            "both cells tied for the top-1 slot must highlight, matching Excel's tie-inclusive Top/Bottom N");
         GetCell(vp, 3, 1).Style!.FillColor.Should().NotBe(new CellColor(198, 239, 206));
     }
 

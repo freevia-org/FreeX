@@ -15,7 +15,7 @@ public sealed class TimelineModel
     public string PackagePart { get; init; } = "";
     public DrawingAnchorRange? DrawingAnchor { get; init; }
     public string? DrawingShapeName { get; init; }
-    public string? SourceSheetName { get; init; }
+    public string? SourceSheetName { get; set; }
     /// <summary>
     /// The OOXML <c>level</c> attribute from the timeline definition part (xl/timelines/*.xml).
     /// Maps to the Excel date hierarchy: 0=years, 1=quarters, 2=months, 3=days.

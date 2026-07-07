@@ -602,6 +602,7 @@ public sealed partial class NativeJsonAdapter
         public List<HyperlinkDto> Hyperlinks { get; set; } = [];
         public List<RichTextRunDto> RichTextRuns { get; set; } = [];
         public List<string> AllowEditRanges { get; set; } = [];
+        public List<AllowEditRangePasswordDto> AllowEditRangePasswords { get; set; } = [];
         public WorksheetBackgroundDto? BackgroundImage { get; set; }
         public List<PictureDto> Pictures { get; set; } = [];
         public List<TextBoxDto> TextBoxes { get; set; } = [];
@@ -864,7 +865,9 @@ public sealed partial class NativeJsonAdapter
         public string? ScrollPosition { get; set; }
     }
 
-    private class CellStyleDto
+    // Internal (not private): shared with NativeJsonVisualDtoMapper so picture-cell snapshots can
+    // round-trip their captured CellStyle (see PictureCellDto.Style, P26).
+    internal class CellStyleDto
     {
         public string FontName { get; set; } = "Calibri";
         public double FontSize { get; set; } = 11;
@@ -905,13 +908,16 @@ public sealed partial class NativeJsonAdapter
         public IReadOnlyDictionary<string, string>? NativeDifferentialElementXmls { get; set; }
     }
 
-    private class CellBorderDto
+    // Internal (not private): exposed as a property type on the now-internal CellStyleDto (shared
+    // with NativeJsonVisualDtoMapper for picture-cell snapshot styles, P26).
+    internal class CellBorderDto
     {
         public BorderStyle Style { get; set; }
         public CellColor Color { get; set; }
     }
 
-    private class CellGradientFillDto
+    // Internal (not private): exposed as a property type on the now-internal CellStyleDto (P26).
+    internal class CellGradientFillDto
     {
         public CellGradientFillType Type { get; set; }
         public double Degree { get; set; }
@@ -926,7 +932,9 @@ public sealed partial class NativeJsonAdapter
         public List<CellGradientStopDto> Stops { get; set; } = [];
     }
 
-    private class CellGradientStopDto
+    // Internal (not private): exposed transitively via CellGradientFillDto.Stops on the now-internal
+    // CellStyleDto (P26).
+    internal class CellGradientStopDto
     {
         public double Position { get; set; }
         public CellColor Color { get; set; }
@@ -985,6 +993,18 @@ public sealed partial class NativeJsonAdapter
         public HyperlinkTargetKind? LinkType { get; set; }
         public string? ScreenTip { get; set; }
         public string? Bookmark { get; set; }
+    }
+
+    /// <summary>
+    /// Per-range "Range Password" for an entry in <see cref="SheetDto.AllowEditRanges"/> (see
+    /// <see cref="Sheet.AllowEditRangePasswords"/>). <see cref="Range"/> is the same
+    /// <c>GridRange.ToString()</c> form used in <see cref="SheetDto.AllowEditRanges"/>, so it can be
+    /// matched back up on load.
+    /// </summary>
+    private class AllowEditRangePasswordDto
+    {
+        public string? Range { get; set; }
+        public string? Password { get; set; }
     }
 
     private class UIntDoubleDto

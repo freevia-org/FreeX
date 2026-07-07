@@ -25,7 +25,7 @@ public static class PagePrintTextPlanner
     ///   <item><c>&amp;nn</c> – set font size (1–2 digit number; <c>&amp;0</c>–<c>&amp;99</c>)</item>
     ///   <item><c>&amp;KRRGGBB</c> – set RGB color (6 hex digits)</item>
     ///   <item><c>&amp;&amp;</c> – literal <c>&amp;</c></item>
-    ///   <item><c>&amp;+</c> / <c>&amp;-</c> – super/subscript (state tracked; no geometry change here)</item>
+    ///   <item><c>&amp;+</c> / <c>&amp;-</c> / <c>&amp;X</c> / <c>&amp;Y</c> – super/subscript (state tracked; no geometry change here)</item>
     ///   <item><c>&amp;P</c> / <c>&amp;[Page]</c> – current page number</item>
     ///   <item><c>&amp;N</c> / <c>&amp;[Pages]</c> – total pages</item>
     ///   <item><c>&amp;D</c> / <c>&amp;[Date]</c> – short date</item>
@@ -237,6 +237,8 @@ public static class PagePrintTextPlanner
                     continue;
                 case '+':
                 case '-':
+                case 'X':
+                case 'Y':
                     i += 2; // super/subscript — state not tracked geometrically here
                     continue;
 

@@ -540,7 +540,16 @@ public sealed partial class XlsxFileAdapter
 
             sourceChart.Element(chartExNs + "legend")?.Remove();
             if (generatedLegend is not null)
-                sourceChart.Add(new XElement(generatedLegend));
+            {
+                // CT_Chart child order is (title, plotArea, legend, extLst) — the legend must be
+                // inserted before any trailing extLst, never blindly appended, or Excel treats the
+                // chartEx part as invalid and repairs (discards) the chart on open.
+                var sourceExtLst = sourceChart.Element(chartExNs + "extLst");
+                if (sourceExtLst is not null)
+                    sourceExtLst.AddBeforeSelf(new XElement(generatedLegend));
+                else
+                    sourceChart.Add(new XElement(generatedLegend));
+            }
 
             MergeChartExSeries(sourceChart, generatedXml, chartExNs);
         }

@@ -147,12 +147,14 @@ internal static class XlsxWorksheetScenarioMapper
     {
         NumberValue number => double.IsFinite(number.Value),
         DateTimeValue dateTime => double.IsFinite(dateTime.Value),
-        TextValue or BoolValue or ErrorValue => true,
+        TextValue or BoolValue or ErrorValue or BlankValue => true,
         _ => false
     };
 
     private static ScalarValue ParseValue(string rawValue)
     {
+        if (rawValue.Length == 0)
+            return BlankValue.Instance;
         if (string.Equals(rawValue, "TRUE", StringComparison.OrdinalIgnoreCase))
             return new BoolValue(true);
         if (string.Equals(rawValue, "FALSE", StringComparison.OrdinalIgnoreCase))
@@ -185,6 +187,7 @@ internal static class XlsxWorksheetScenarioMapper
         TextValue text => text.Value,
         BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
         ErrorValue error => error.Code,
+        BlankValue => string.Empty,
         _ => string.Empty
     };
 

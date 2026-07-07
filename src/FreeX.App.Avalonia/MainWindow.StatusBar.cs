@@ -28,6 +28,10 @@ public sealed partial class MainWindow
     // MainWindow.cs) so this file alone can wire the live-region behavior.
     private bool _selectionStatsLiveSettingApplied;
 
+    // Whether AutomationProperties.LiveSetting has already been applied to _statusText. Same lazy
+    // pattern as _selectionStatsLiveSettingApplied — see EnsureStatusTextLiveRegion.
+    private bool _statusTextLiveSettingApplied;
+
     private bool GetStatusBarOption(string optionTag) =>
         AvaloniaStatusBarSource.IsOptionVisible(_statusBarOptionVisibility, optionTag);
 
@@ -155,5 +159,23 @@ public sealed partial class MainWindow
 
         AutomationProperties.SetLiveSetting(_selectionStatsText, AutomationLiveSetting.Polite);
         _selectionStatsLiveSettingApplied = true;
+    }
+
+    // ── Accessibility: live-region announcement for status/edit-issue text ───
+    // _statusText carries both routine "Ready"/save-completed status AND edit/validation-commit
+    // failure messages (ShowEditIssue, ShowSaveIssue, ShowOpenIssue, ShowExportIssue) — the Avalonia
+    // shell has no owned modal MessageBox for validation violations the way WPF's
+    // MainWindow.Editing.cs ShowOwnedMessage does, so this text update is the ONLY signal a failed
+    // commit occurred. Without a live region a screen-reader user gets no announcement at all and can
+    // believe a rejected edit succeeded. Mirrors EnsureSelectionStatsLiveRegion's lazy-apply pattern
+    // (Name/HelpText stay their fixed "Status"/help-text values; LiveSetting is what makes a
+    // content/Text change get announced).
+    private void EnsureStatusTextLiveRegion()
+    {
+        if (_statusTextLiveSettingApplied)
+            return;
+
+        AutomationProperties.SetLiveSetting(_statusText, AutomationLiveSetting.Polite);
+        _statusTextLiveSettingApplied = true;
     }
 }

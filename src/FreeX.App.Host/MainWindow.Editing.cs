@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -140,6 +141,8 @@ public partial class MainWindow
         var layout = FormulaInlineEditorLayoutPlanner.Create(cx, cy, cellW, cellH);
 
         _inlineEditor.Text = text;
+        AutomationProperties.SetAutomationId(_inlineEditor, "WorksheetInlineCellEditor");
+        AutomationProperties.SetName(_inlineEditor, UiText.Format("MainWindow_AutomationName_InlineCellEditorFormat", FormatCellReference(addr)));
         _inlineEditorChromeBaseRect = layout.EditorRect;
         ApplyInlineEditorChromeFrame(FormulaInlineEditorOverflow.None);
 

@@ -206,11 +206,12 @@ public partial class MainWindow
         if (!TryExecuteCommand(
             new ScenarioSummaryReportCommand(
                 ParseScenarioResultCells(resultCellsText),
-                (workbook, changedCells) =>
-                {
-                    if (workbook.CalculationMode == WorkbookCalculationMode.Automatic)
-                        _recalcEngine.Recalculate(workbook, changedCells);
-                }),
+                // Always recalculate here, independent of the workbook's calculation mode: the
+                // summary report's whole purpose is to show each scenario's distinct computed
+                // result, so Manual mode must not leave every scenario column reading the same
+                // stale pre-report value (Excel's own Scenario Summary always computes fresh
+                // per-scenario results).
+                (workbook, changedCells) => _recalcEngine.Recalculate(workbook, changedCells)),
             "Scenario Manager"))
             return;
 

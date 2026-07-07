@@ -227,8 +227,14 @@ public partial class MainWindow
         string? currentClipboardText = null;
         bool currentClipboardTextRead = false;
 
-        // If we have an internal clipboard (copied from within this app), use it with formula adjustment
-        if (_internalClipboard is { } clip)
+        // Paste Special > Text / Unicode Text (Excel semantics: paste the clipboard's plain text
+        // only, discarding any FreeX-internal formula/formatting payload) must always go through the
+        // external-clipboard plain-text path below, even right after an in-app copy where the OS
+        // clipboard text still matches the internal clipboard's text. Without this early bypass, the
+        // internal-clipboard branch below wins (its text-equality check can't tell "explicitly asked
+        // for text" from "clipboard unchanged") and silently performs a full formatted internal
+        // paste instead (review P44).
+        if (!externalTextAsText && _internalClipboard is { } clip)
         {
             currentClipboardText = TryGetClipboardText(out var clipboardReadFailed);
             currentClipboardTextRead = true;
@@ -385,7 +391,8 @@ public partial class MainWindow
                 _currentSheetId,
                 currentRange,
                 capturedRows,
-                preserveText: externalTextAsText);
+                preserveText: externalTextAsText,
+                options);
         }
 
         var fallbackOutcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateExternalPasteCommand);
@@ -903,6 +910,13 @@ public partial class MainWindow
         // Map merge-region anchor -> region, and mark covered (non-anchor) cells to skip, exactly
         // as HtmlTableWriter does for full-sheet HTML export, so a copied merged range keeps its
         // rowspan/colspan on paste into another app instead of splitting back into single cells.
+        //
+        // Unlike the full-sheet writer, a copied range can clip a merged region whose anchor
+        // (top-left cell) lies outside the copied range entirely (e.g. copy A2:B3 when A1:A3 is
+        // merged). In that case the true anchor is never visited, so we synthesize a clipped
+        // anchor at the top-left of the region's intersection with the range and span only the
+        // visible rows/cols, keeping every row's column count intact instead of silently dropping
+        // the covered cell's slot.
         var anchors = new Dictionary<(uint, uint), GridRange>();
         var covered = new HashSet<(uint, uint)>();
         if (sheet is not null)
@@ -912,11 +926,34 @@ public partial class MainWindow
                 if (!RangesOverlap(region, range))
                     continue;
 
-                anchors[(region.Start.Row, region.Start.Col)] = region;
-                foreach (var addr in region.AllCells())
+                var anchorInRange = region.Start.Row >= range.Start.Row && region.Start.Row <= range.End.Row &&
+                                     region.Start.Col >= range.Start.Col && region.Start.Col <= range.End.Col;
+                if (anchorInRange)
                 {
-                    if (addr.Row != region.Start.Row || addr.Col != region.Start.Col)
-                        covered.Add((addr.Row, addr.Col));
+                    anchors[(region.Start.Row, region.Start.Col)] = region;
+                    foreach (var addr in region.AllCells())
+                    {
+                        if (addr.Row != region.Start.Row || addr.Col != region.Start.Col)
+                            covered.Add((addr.Row, addr.Col));
+                    }
+                }
+                else
+                {
+                    // Clip the region to the copied range and treat the clipped top-left as a
+                    // synthetic anchor so the row/col slot is still filled with a spanning cell.
+                    var clippedStartRow = Math.Max(region.Start.Row, range.Start.Row);
+                    var clippedStartCol = Math.Max(region.Start.Col, range.Start.Col);
+                    var clippedEndRow = Math.Min(region.End.Row, range.End.Row);
+                    var clippedEndCol = Math.Min(region.End.Col, range.End.Col);
+                    var clippedRegion = new GridRange(
+                        new CellAddress(range.Start.Sheet, clippedStartRow, clippedStartCol),
+                        new CellAddress(range.Start.Sheet, clippedEndRow, clippedEndCol));
+                    anchors[(clippedStartRow, clippedStartCol)] = clippedRegion;
+                    foreach (var addr in clippedRegion.AllCells())
+                    {
+                        if (addr.Row != clippedStartRow || addr.Col != clippedStartCol)
+                            covered.Add((addr.Row, addr.Col));
+                    }
                 }
             }
         }

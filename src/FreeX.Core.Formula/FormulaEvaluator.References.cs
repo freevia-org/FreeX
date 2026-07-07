@@ -397,6 +397,37 @@ public sealed partial class FormulaEvaluator
         }
     }
 
+    /// <summary>
+    /// Resolves a <see cref="NamedRangeNode"/> to a reference value honouring Excel's sheet-scope
+    /// precedence (a name scoped to the current sheet — range or formula kind — always outranks a
+    /// same-named workbook-global name; see <see cref="IsSheetScopedName"/>/<see cref="EvaluateNamedRange"/>).
+    /// This is the reference-argument counterpart of that bare-name resolution: every call site that
+    /// treats a name as a REFERENCE (OFFSET's base, CELL/FORMULATEXT/ISFORMULA/ISREF's argument, ANCHORARRAY)
+    /// must apply the same precedence, not just <c>context.TryResolveNamedRange</c>, or a sheet-scoped
+    /// named formula shadowing a workbook-global named range silently resolves to the wrong (global) range.
+    /// Returns a <see cref="RangeValue"/> on success; an <see cref="ErrorValue"/> if the name doesn't
+    /// resolve to a range/formula-that-evaluates-to-a-reference at all (#NAME?), or if a resolved scoped
+    /// formula evaluates to a non-reference scalar (#VALUE!, matching Excel's treatment of a name whose
+    /// formula body isn't itself a reference).
+    /// </summary>
+    private static ScalarValue ResolveNamedRangeNodeAsReference(NamedRangeNode node, IEvalContext context)
+    {
+        if (IsSheetScopedName(node.Name, context, out var sheetScopedIsFormula) && sheetScopedIsFormula)
+        {
+            if (!TryEvaluateNamedFormula(node.Name, context, out var formulaValue))
+                return ErrorValue.Name;
+            return formulaValue is RangeValue or ErrorValue ? formulaValue : ErrorValue.Value;
+        }
+
+        var range = context.TryResolveNamedRange(node.Name);
+        if (range is not null)
+            return BuildRangeValueOrError(range.Value, context);
+
+        return TryEvaluateNamedFormula(node.Name, context, out var namedFormulaValue)
+            ? namedFormulaValue is RangeValue or ErrorValue ? namedFormulaValue : ErrorValue.Value
+            : ErrorValue.Name;
+    }
+
     private static FreeX.Core.Model.GridRange? TryResolveStructuredReferenceRange(
         StructuredReferenceNode node,
         IEvalContext context)
@@ -624,7 +655,11 @@ public sealed partial class FormulaEvaluator
                                   ? TrueValue : FalseValue,
             FullColumnRangeRefNode col => col.SheetName is null || context.SheetExists(col.SheetName) ? TrueValue : FalseValue,
             FullRowRangeRefNode row => row.SheetName is null || context.SheetExists(row.SheetName) ? TrueValue : FalseValue,
-            NamedRangeNode nm => context.TryResolveNamedRange(nm.Name) is not null ? TrueValue : FalseValue,
+            // Sheet-scope precedence: a sheet-scoped named FORMULA must shadow a same-named
+            // workbook-global named RANGE here too (see ResolveNamedRangeNodeAsReference).
+            // ISREF is true only when the name resolves to an actual reference — a scoped
+            // formula that evaluates to a plain scalar is not a reference, matching Excel.
+            NamedRangeNode nm => ResolveNamedRangeNodeAsReference(nm, context) is RangeValue ? TrueValue : FalseValue,
             FunctionCallNode fn when fn.FunctionName is "OFFSET" or "INDIRECT"
                 => EvaluateReferenceReturningIsRef(fn, context),
             _                 => FalseValue
@@ -686,16 +721,16 @@ public sealed partial class FormulaEvaluator
 
         if (node is NamedRangeNode named)
         {
-            var range = context.TryResolveNamedRange(named.Name);
-            if (range is null) return ErrorValue.Name;
+            // Sheet-scope precedence: a sheet-scoped named FORMULA must shadow a same-named
+            // workbook-global named RANGE here too (see ResolveNamedRangeNodeAsReference), so
+            // e.g. CELL/FORMULATEXT/ISFORMULA read the scoped formula's top-left cell, not the
+            // global range's.
+            var reference = ResolveNamedRangeNodeAsReference(named, context);
+            if (reference is ErrorValue namedError)
+                return mapReferenceFunctionValueErrorToNA && namedError == ErrorValue.Value ? ErrorValue.NA : namedError;
 
-            var modelRange = range.Value;
-            return TryGetCell(
-                context.TryGetSheetName(modelRange.Start.Sheet),
-                modelRange.Start.Row,
-                modelRange.Start.Col,
-                context,
-                out cell);
+            var namedRange = (RangeValue)reference;
+            return TryGetCell(namedRange.SheetName, namedRange.StartRow, namedRange.StartCol, context, out cell);
         }
 
         if (node is FunctionCallNode fn && fn.FunctionName is "OFFSET" or "INDIRECT")
@@ -766,8 +801,11 @@ public sealed partial class FormulaEvaluator
 
         if (node is NamedRangeNode named)
         {
-            var rangeRef = context.TryResolveNamedRange(named.Name);
-            return rangeRef is null ? ErrorValue.Name : BuildRangeValueOrError(rangeRef.Value, context);
+            // Sheet-scope precedence: a sheet-scoped named FORMULA must shadow a same-named
+            // workbook-global named RANGE here too (see ResolveNamedRangeNodeAsReference), so
+            // e.g. CELL("address", Foo) reports the scoped formula's reference, not the global
+            // range's.
+            return ResolveNamedRangeNodeAsReference(named, context);
         }
 
         if (node is FunctionCallNode fn && fn.FunctionName is "OFFSET" or "INDIRECT")
@@ -848,37 +886,44 @@ public sealed partial class FormulaEvaluator
             case FullColumnRangeRefNode fullColumnRange:
                 if (fullColumnRange.SheetName is not null && !context.SheetExists(fullColumnRange.SheetName))
                     return ErrorValue.Ref;
-                uint fullColumnStart = CellAddress.ColumnNameToNumber(fullColumnRange.StartColumnName);
-                uint fullColumnEnd = CellAddress.ColumnNameToNumber(fullColumnRange.EndColumnName);
-                uint fc0 = Math.Min(fullColumnStart, fullColumnEnd);
-                uint fc1 = Math.Max(fullColumnStart, fullColumnEnd);
-                baseRow = 1; baseCol = fc0;
-                baseHeight = (int)CellAddress.MaxRow;
+                // Clamp the open row extent to the sheet's used range first — same as the direct
+                // A:A reference path (BuildRangeValue/ClampOpenEndedRangeToUsed) — so that
+                // OFFSET(A:A,...) materializes the populated extent instead of the full
+                // 1,048,576-row column, which would otherwise always exceed the materialization cap.
+                var clampedColumnRange = ClampOpenEndedRangeToUsed(ToRangeRef(fullColumnRange), context);
+                uint fc0 = Math.Min(clampedColumnRange.Start.ColumnNumber, clampedColumnRange.End.ColumnNumber);
+                uint fc1 = Math.Max(clampedColumnRange.Start.ColumnNumber, clampedColumnRange.End.ColumnNumber);
+                uint fcr0 = Math.Min(clampedColumnRange.Start.Row, clampedColumnRange.End.Row);
+                uint fcr1 = Math.Max(clampedColumnRange.Start.Row, clampedColumnRange.End.Row);
+                baseRow = fcr0; baseCol = fc0;
+                baseHeight = (int)(fcr1 - fcr0 + 1);
                 baseWidth = (int)(fc1 - fc0 + 1);
                 baseSheet = fullColumnRange.SheetName;
                 break;
             case FullRowRangeRefNode fullRowRange:
                 if (fullRowRange.SheetName is not null && !context.SheetExists(fullRowRange.SheetName))
                     return ErrorValue.Ref;
-                uint fr0 = Math.Min(fullRowRange.StartRow, fullRowRange.EndRow);
-                uint fr1 = Math.Max(fullRowRange.StartRow, fullRowRange.EndRow);
-                baseRow = fr0; baseCol = 1;
+                // Same used-range clamp as above, for the open column extent of a full-row base.
+                var clampedRowRange = ClampOpenEndedRangeToUsed(ToRangeRef(fullRowRange), context);
+                uint fr0 = Math.Min(clampedRowRange.Start.Row, clampedRowRange.End.Row);
+                uint fr1 = Math.Max(clampedRowRange.Start.Row, clampedRowRange.End.Row);
+                uint frc0 = Math.Min(clampedRowRange.Start.ColumnNumber, clampedRowRange.End.ColumnNumber);
+                uint frc1 = Math.Max(clampedRowRange.Start.ColumnNumber, clampedRowRange.End.ColumnNumber);
+                baseRow = fr0; baseCol = frc0;
                 baseHeight = (int)(fr1 - fr0 + 1);
-                baseWidth = (int)CellAddress.MaxCol;
+                baseWidth = (int)(frc1 - frc0 + 1);
                 baseSheet = fullRowRange.SheetName;
                 break;
             case NamedRangeNode nm:
-                var nr = context.TryResolveNamedRange(nm.Name);
-                if (nr is null) return ErrorValue.Name;
-                var g = nr.Value;
-                uint nr0 = Math.Min(g.Start.Row, g.End.Row);
-                uint nr1 = Math.Max(g.Start.Row, g.End.Row);
-                uint nc0 = Math.Min(g.Start.Col, g.End.Col);
-                uint nc1 = Math.Max(g.Start.Col, g.End.Col);
-                baseRow = nr0; baseCol = nc0;
-                baseHeight = (int)(nr1 - nr0 + 1);
-                baseWidth = (int)(nc1 - nc0 + 1);
-                baseSheet = context.TryGetSheetName(g.Start.Sheet);
+                // Sheet-scope precedence: a sheet-scoped named FORMULA must shadow a same-named
+                // workbook-global named RANGE here too, matching bare-name resolution (see
+                // ResolveNamedRangeNodeAsReference / IsSheetScopedName).
+                var namedReference = ResolveNamedRangeNodeAsReference(nm, context);
+                if (namedReference is ErrorValue namedError) return namedError;
+                var namedRange = (RangeValue)namedReference;
+                baseRow = namedRange.StartRow; baseCol = namedRange.StartCol;
+                baseHeight = namedRange.RowCount; baseWidth = namedRange.ColCount;
+                baseSheet = namedRange.SheetName;
                 break;
             case FunctionCallNode fn when fn.FunctionName is "OFFSET" or "INDIRECT":
                 // The base argument may itself be a reference-returning function call, e.g.

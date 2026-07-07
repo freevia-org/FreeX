@@ -28,7 +28,23 @@ public static class PasteCommandFactory
         SheetId targetSheetId,
         GridRange destinationRange,
         IReadOnlyList<IReadOnlyList<string>> rows,
-        bool preserveText = false)
+        bool preserveText = false) =>
+        CreateExternalTextPasteCommand(targetSheetId, destinationRange, rows, preserveText, default);
+
+    /// <summary>
+    /// Same as the <paramref name="preserveText"/>-only overload, but also honors Paste Special's
+    /// Transpose / Skip Blanks / Operation for an EXTERNAL (non-FreeX) clipboard paste. Excel applies
+    /// these three options to a plain-text paste exactly as it does to an internal-cells paste; before
+    /// this overload existed, the WPF host's external-clipboard fallback silently dropped them
+    /// (review P46 — pasting a copied external TSV block with Transpose ticked pasted un-transposed
+    /// with no warning).
+    /// </summary>
+    public static IWorkbookCommand CreateExternalTextPasteCommand(
+        SheetId targetSheetId,
+        GridRange destinationRange,
+        IReadOnlyList<IReadOnlyList<string>> rows,
+        bool preserveText,
+        PasteSpecialOptions options)
     {
         var destination = destinationRange.Start;
         if (destination.Sheet != targetSheetId)
@@ -36,12 +52,18 @@ public static class PasteCommandFactory
         if (destinationRange.End.Sheet != targetSheetId)
             return new RejectedWorkbookCommand("Paste", "Paste destination range must be on the target sheet.");
 
-        var rowCount = (ulong)rows.Count;
-        var colCount = 0UL;
+        var sourceRowCount = (ulong)rows.Count;
+        var sourceColCount = 0UL;
         foreach (var row in rows)
-            colCount = Math.Max(colCount, (ulong)row.Count);
-        var targetRowCount = rowCount == 0 ? 0 : Math.Max(rowCount, destinationRange.RowCount);
-        var targetColCount = colCount == 0 ? 0 : Math.Max(colCount, destinationRange.ColCount);
+            sourceColCount = Math.Max(sourceColCount, (ulong)row.Count);
+
+        // Transpose swaps which source axis (rows vs. columns) tiles against the destination range,
+        // matching PasteCommandFactory.CreateInternalPasteCommand's treatment of sourceRange.RowCount
+        // vs ColCount under Transpose.
+        var pasteRowCount = options.Transpose ? sourceColCount : sourceRowCount;
+        var pasteColCount = options.Transpose ? sourceRowCount : sourceColCount;
+        var targetRowCount = pasteRowCount == 0 ? 0 : Math.Max(pasteRowCount, destinationRange.RowCount);
+        var targetColCount = pasteColCount == 0 ? 0 : Math.Max(pasteColCount, destinationRange.ColCount);
 
         if (targetRowCount > 0 &&
             targetColCount > 0 &&
@@ -50,29 +72,39 @@ public static class PasteCommandFactory
             return new RejectedWorkbookCommand("Paste", "Paste destination range is outside the worksheet bounds.");
         }
 
-        var edits = new List<(CellAddress Address, Cell Cell)>();
+        var edits = new List<(CellAddress Address, string Text)>();
         for (var rowOffset = 0UL; rowOffset < targetRowCount; rowOffset++)
         {
-            var sourceRow = rows[(int)(rowOffset % rowCount)];
-            if (sourceRow.Count == 0)
-                continue;
-
             for (var colOffset = 0UL; colOffset < targetColCount; colOffset++)
             {
-                var sourceColIndex = (int)(colOffset % colCount);
-                if (sourceColIndex >= sourceRow.Count)
+                var (sourceRowIndex, sourceColIndex) = options.Transpose
+                    ? (colOffset % pasteRowCount, rowOffset % pasteColCount)
+                    : (rowOffset % pasteRowCount, colOffset % pasteColCount);
+
+                var sourceRow = rows[(int)sourceRowIndex];
+                if ((int)sourceColIndex >= sourceRow.Count)
+                    continue;
+
+                var text = sourceRow[(int)sourceColIndex];
+                if (options.SkipBlanks && text.Length == 0)
                     continue;
 
                 var address = new CellAddress(
                     targetSheetId,
                     destination.Row + (uint)rowOffset,
                     destination.Col + (uint)colOffset);
-                var text = sourceRow[sourceColIndex];
-                edits.Add((address, Cell.FromValue(preserveText ? new TextValue(text) : ParseClipboardValue(text))));
+                edits.Add((address, text));
             }
         }
 
-        return new EditCellsCommand(targetSheetId, edits);
+        if (options.Operation != PasteSpecialOperation.None)
+            return new ExternalTextPasteSpecialCommand(targetSheetId, edits, preserveText, options.Operation);
+
+        var plainEdits = new List<(CellAddress Address, Cell Cell)>(edits.Count);
+        foreach (var (address, text) in edits)
+            plainEdits.Add((address, Cell.FromValue(preserveText ? new TextValue(text) : ParseClipboardValue(text))));
+
+        return new EditCellsCommand(targetSheetId, plainEdits);
     }
 
     public static IWorkbookCommand CreateInternalPasteCommand(
@@ -681,7 +713,7 @@ public static class PasteCommandFactory
         System.Globalization.NumberStyles.AllowExponent |
         System.Globalization.NumberStyles.AllowCurrencySymbol;
 
-    private static ScalarValue ParseClipboardValue(string text)
+    internal static ScalarValue ParseClipboardValue(string text)
     {
         // Excel's text-escape convention: a leading apostrophe forces the pasted field to be kept
         // as text (apostrophe stripped), exactly like typing '123 into a cell. This must be checked
@@ -746,5 +778,96 @@ public static class PasteCommandFactory
         }
 
         return double.TryParse(text, System.Globalization.NumberStyles.Any, UsCulture, out number);
+    }
+}
+
+/// <summary>
+/// Pastes external (non-FreeX) clipboard text combined with the existing destination cell via
+/// Paste Special's Add/Subtract/Multiply/Divide "Operation" — the external-clipboard counterpart of
+/// <see cref="PasteSpecialCellsCommand"/>'s Operation handling. Unlike a plain
+/// <see cref="EditCellsCommand"/>, the pasted value cannot be precomputed when the command is built:
+/// it depends on the CURRENT destination cell value, which is only available inside <see cref="Apply"/>
+/// (review P46 — the WPF host's external-clipboard Paste Special fallback silently ignored Operation).
+/// </summary>
+internal sealed class ExternalTextPasteSpecialCommand : IWorkbookCommand, IAffectedCellsCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly IReadOnlyList<(CellAddress Address, string Text)> _edits;
+    private readonly bool _preserveText;
+    private readonly PasteSpecialOperation _operation;
+    private readonly IReadOnlyList<CellAddress> _affectedCells;
+    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
+
+    public string Label => "Paste Special";
+
+    public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
+
+    public ExternalTextPasteSpecialCommand(
+        SheetId sheetId,
+        IReadOnlyList<(CellAddress Address, string Text)> edits,
+        bool preserveText,
+        PasteSpecialOperation operation)
+    {
+        _sheetId = sheetId;
+        _edits = edits;
+        _preserveText = preserveText;
+        _operation = operation;
+        _affectedCells = edits.Select(e => e.Address).ToList();
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        if (!Enum.IsDefined(_operation))
+            return new CommandOutcome(false, "Paste Special operation is not supported.");
+
+        var sheet = ctx.GetSheet(_sheetId);
+        if (sheet.IsProtected)
+        {
+            foreach (var (address, _) in _edits)
+                if (!CommandGuards.CanEditCell(ctx.Workbook, sheet, address))
+                    return CommandGuards.RejectSheetProtected();
+        }
+
+        _snapshot = [];
+        foreach (var (address, text) in _edits)
+        {
+            _snapshot.Add((address, sheet.GetCell(address)?.Clone(), sheet.GetStyleOnly(address.Row, address.Col)));
+
+            var sourceValue = _preserveText ? new TextValue(text) : PasteCommandFactory.ParseClipboardValue(text);
+            var existing = sheet.GetCell(address)?.Clone() ?? Cell.FromValue(BlankValue.Instance);
+            existing.StyleId = sheet.GetStyleOnly(address.Row, address.Col) ?? existing.StyleId;
+            var result = PasteArithmetic.ApplyOperation(existing.Value, sourceValue, _operation);
+            if (result is null)
+                continue;
+
+            existing.Value = result;
+            existing.FormulaText = null;
+            sheet.SetCell(address, existing);
+        }
+
+        return new CommandOutcome(true, AffectedCells: _affectedCells);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_snapshot is null)
+            return;
+
+        var sheet = ctx.GetSheet(_sheetId);
+        foreach (var (address, oldCell, oldStyleOnly) in _snapshot)
+        {
+            if (oldCell is null)
+            {
+                sheet.ClearCell(address);
+                if (oldStyleOnly.HasValue)
+                    sheet.SetStyleOnly(address.Row, address.Col, oldStyleOnly.Value);
+                else
+                    sheet.ClearStyleOnly(address.Row, address.Col);
+            }
+            else
+            {
+                sheet.SetCell(address, oldCell.Clone());
+            }
+        }
     }
 }

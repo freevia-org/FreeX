@@ -36,9 +36,18 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
         if (CommentCommandGuards.RejectIfEditObjectsBlocked(targetSheet) is { } protectedOutcome)
             return protectedOutcome;
 
+        // P114: pre-materialize author/shown state (like the comment text below) BEFORE the
+        // mutation loop runs. When source == target (same-sheet paste) with an overlapping
+        // source/destination range, reading sourceSheet.CommentAuthors/ShownComments LIVE inside
+        // the loop would observe values already overwritten by an earlier iteration instead of
+        // each note's own original author/pinned state.
         var sourceComments = _sourceRange.AllCells()
             .Where(sourceSheet.Comments.ContainsKey)
-            .Select(address => (Address: address, Comment: sourceSheet.Comments[address]))
+            .Select(address => (
+                Address: address,
+                Comment: sourceSheet.Comments[address],
+                Author: sourceSheet.CommentAuthors.TryGetValue(address, out var author) ? author : null,
+                Shown: sourceSheet.ShownComments.Contains(address)))
             .ToList();
         var sourceThreadedComments = _sourceRange.AllCells()
             .Where(sourceSheet.ThreadedComments.ContainsKey)
@@ -49,7 +58,7 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
         _previousAuthors = [];
         _previousShown = [];
         var affected = new List<CellAddress>();
-        foreach (var (source, comment) in sourceComments)
+        foreach (var (source, comment, author, shown) in sourceComments)
         {
             var destination = MapDestination(source, _sourceRange, _destination, _transpose);
             _previous[destination] = targetSheet.Comments.TryGetValue(destination, out var oldComment)
@@ -60,13 +69,13 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
             _previousAuthors[destination] = targetSheet.CommentAuthors.TryGetValue(destination, out var oldAuthor)
                 ? oldAuthor
                 : null;
-            if (sourceSheet.CommentAuthors.TryGetValue(source, out var author))
+            if (author is not null)
                 targetSheet.CommentAuthors[destination] = author;
             else
                 targetSheet.CommentAuthors.Remove(destination);
 
             _previousShown[destination] = targetSheet.ShownComments.Contains(destination);
-            if (sourceSheet.ShownComments.Contains(source))
+            if (shown)
                 targetSheet.ShownComments.Add(destination);
             else
                 targetSheet.ShownComments.Remove(destination);

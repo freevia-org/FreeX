@@ -117,6 +117,25 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
+    /// Keyboard fallback for Excel's Alt+Down shortcut (<c>IsOpenActiveDropdownShortcut</c>): when the
+    /// active cell has no data-validation dropdown to open, and is instead an AutoFilter header/filter-
+    /// button cell, opens that column's filter flyout — mirroring WPF's
+    /// <c>OpenActiveDropdown</c> → <c>OpenAutoFilterDropdownForActiveCell</c> fallback
+    /// (MainWindow.EditingDropdowns.cs). Returns false (leaving the key unhandled) when the active cell
+    /// is not a filter-button cell, so callers can fall through to whatever default behavior applies.
+    /// </summary>
+    private bool OpenActiveAutoFilterDropdown()
+    {
+        var address = _session.ActiveCell;
+        if (!AutoFilterHeaderButtonPlanner.IsFilterButtonCell(_session.ActiveSheet, address.Row, address.Col))
+            return false;
+
+        var anchor = (Control?)_activeCellBorder ?? _sheetGridHost;
+        OpenAutoFilterFlyout(anchor, address);
+        return true;
+    }
+
+    /// <summary>
     /// Opens the AutoFilter dropdown for the header cell: Sort A-Z / Sort Z-A, Clear Filter, and a value
     /// checklist. Sorting runs the Core <see cref="SortCommand"/> over the filter range by the clicked
     /// column; applying the checklist (or Clear) runs the Core <see cref="FilterCommand"/> with the chosen

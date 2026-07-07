@@ -3320,7 +3320,12 @@ public sealed class WorkbookSessionTests
         session.SelectCell(a1);
         var clipboardText = session.CopySelectedRangeText();
 
-        session.ShouldPreferExternalClipboardImage(null).Should().BeFalse();
+        // P45: a null text read after our own copy means the OS clipboard no longer holds text (an
+        // image was copied in another app, or it was cleared) — prefer the external image, matching
+        // Excel and the WPF host. The Avalonia caller still falls back to the internal paste when no
+        // image is actually present, so this is safe. Only a text read equal to our copied text keeps
+        // preferring the internal clipboard.
+        session.ShouldPreferExternalClipboardImage(null).Should().BeTrue();
         session.ShouldPreferExternalClipboardImage(clipboardText).Should().BeFalse();
         session.ShouldPreferExternalClipboardImage("").Should().BeTrue();
     }

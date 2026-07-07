@@ -86,7 +86,7 @@ internal static class XlsxWorkbookMetadataPreserver
             changed = true;
         if (MergeCustomWorkbookViews(sourceCustomWorkbookViews, targetRoot, workbookNs, XlsxCustomViewMapper.GetModeledIds(workbook)))
             changed = true;
-        if (MergeDefinedNames(sourceDefinedNames, targetRoot, workbookNs))
+        if (MergeDefinedNames(sourceDefinedNames, targetRoot, workbookNs, sourceWorkbookXml))
             changed = true;
         if (MergeChildBlock(sourceOleSize, targetRoot, workbookNs + "oleSize"))
             changed = true;
@@ -417,13 +417,19 @@ internal static class XlsxWorkbookMetadataPreserver
             return true;
         }
 
-        var changed = XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(
-            sourceWorkbookProtection,
-            targetWorkbookProtection);
-        if (XlsxWorkbookProtectionNormalizer.NormalizeElement(targetWorkbookProtection))
-            changed = true;
-
-        return changed;
+        // Every workbookProtection attribute is model-governed: lockStructure/workbookPassword are
+        // written directly from Workbook.IsStructureProtected/StructureProtectionPassword, and every
+        // other attribute (the modern workbookAlgorithmName/workbookHashValue/workbookSaltValue/
+        // workbookSpinCount quartet, revisionsPassword, lockWindows, ...) is carried verbatim through
+        // Workbook.ProtectionMetadata (see XlsxWorkbookMetadataReader.LoadProtectionMetadata /
+        // XlsxWorkbookMetadataWriter.ApplyProtection). A target workbookProtection element existing
+        // here means ApplyProtection already ran and wrote the model's current, authoritative state --
+        // so, unlike the other native-attribute merges in this file, nothing should be blindly copied
+        // back from the stale pre-edit source element (that would resurrect a revoked password's
+        // verifier alongside a freshly-set one; see
+        // FreeXCleanupMED15Tests.ProtectWorkbookCommand_AfterUnprotectingModernHashWorkbook_DropsStaleVerifierForOldPassword).
+        // Only the normalizer runs, to keep formatting consistent with the wholesale-clone branch above.
+        return XlsxWorkbookProtectionNormalizer.NormalizeElement(targetWorkbookProtection);
     }
 
     private static bool MergeCalculationProperties(XElement? sourceCalculationProperties, XElement targetRoot, XNamespace workbookNs)
@@ -636,7 +642,11 @@ internal static class XlsxWorkbookMetadataPreserver
         namespaceName.StartsWith("http://schemas.microsoft.com/office/spreadsheetml/", StringComparison.Ordinal) &&
         namespaceName.Contains("/revision", StringComparison.Ordinal);
 
-    private static bool MergeDefinedNames(XElement? sourceDefinedNames, XElement targetRoot, XNamespace workbookNs)
+    private static bool MergeDefinedNames(
+        XElement? sourceDefinedNames,
+        XElement targetRoot,
+        XNamespace workbookNs,
+        XDocument sourceWorkbookXml)
     {
         var sourceNames = sourceDefinedNames?
             .Elements(workbookNs + "definedName")
@@ -645,26 +655,63 @@ internal static class XlsxWorkbookMetadataPreserver
         if (sourceNames.Count == 0)
             return false;
 
-        var targetDefinedNames = targetRoot.Element(workbookNs + "definedNames");
-        if (targetDefinedNames is null)
-        {
-            targetRoot.Add(new XElement(sourceDefinedNames!));
-            return true;
-        }
+        // Sheet-scoped defined names merged in here (Excel-reserved or otherwise never loaded into
+        // the model - see XlsxFileAdapter.SourcePackageSnapshot.RestorePatchWorkbookDefinedNames's
+        // resurrection-gate comments) carry a localSheetId that indexes the PRISTINE pre-edit sheet
+        // order. A sheet delete/reorder shifts that index, so it must be remapped by sheet NAME onto
+        // the CURRENT (already-written target) sheet order rather than cloned verbatim (P112) -
+        // otherwise the name ends up scoped to the wrong sheet, or carries an out-of-range index.
+        var sourceSheetNamesByLocalId = sourceWorkbookXml.Root?
+            .Element(workbookNs + "sheets")?
+            .Elements(workbookNs + "sheet")
+            .Select(sheet => sheet.Attribute("name")?.Value ?? string.Empty)
+            .ToList()
+            ?? [];
+        var targetSheetNames = targetRoot.Element(workbookNs + "sheets")?
+            .Elements(workbookNs + "sheet")
+            .Select(sheet => sheet.Attribute("name")?.Value ?? string.Empty)
+            .ToList()
+            ?? [];
 
-        var existingKeys = targetDefinedNames
+        var targetDefinedNames = targetRoot.Element(workbookNs + "definedNames");
+        var existingKeys = targetDefinedNames?
             .Elements(workbookNs + "definedName")
             .Select(DefinedNameKey)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            .ToHashSet(StringComparer.OrdinalIgnoreCase)
+            ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         var changed = false;
         foreach (var sourceName in sourceNames)
         {
-            var key = DefinedNameKey(sourceName);
+            var candidate = new XElement(sourceName);
+            var localSheetIdAttr = candidate.Attribute("localSheetId");
+            if (localSheetIdAttr is not null)
+            {
+                if (!int.TryParse(localSheetIdAttr.Value, out var oldLocalSheetId) ||
+                    oldLocalSheetId < 0 ||
+                    oldLocalSheetId >= sourceSheetNamesByLocalId.Count)
+                    continue;
+
+                var scopeSheetName = sourceSheetNamesByLocalId[oldLocalSheetId];
+                var newLocalSheetId = targetSheetNames.FindIndex(
+                    name => string.Equals(name, scopeSheetName, StringComparison.OrdinalIgnoreCase));
+                if (newLocalSheetId < 0)
+                    continue;
+
+                localSheetIdAttr.Value = newLocalSheetId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+
+            var key = DefinedNameKey(candidate);
             if (existingKeys.Contains(key))
                 continue;
 
-            targetDefinedNames.Add(new XElement(sourceName));
+            if (targetDefinedNames is null)
+            {
+                targetDefinedNames = new XElement(workbookNs + "definedNames");
+                targetRoot.Add(targetDefinedNames);
+            }
+
+            targetDefinedNames.Add(candidate);
             existingKeys.Add(key);
             changed = true;
         }

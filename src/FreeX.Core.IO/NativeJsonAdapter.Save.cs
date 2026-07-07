@@ -304,6 +304,15 @@ public sealed partial class NativeJsonAdapter
                     .Where(range => IsValidRangeOnSheet(range, s.Id))
                     .Select(range => range.ToString())
                     .ToList(),
+                AllowEditRangePasswords = s.AllowEditRanges
+                    .Where(range => IsValidRangeOnSheet(range, s.Id))
+                    .Where(range => !string.IsNullOrEmpty(s.AllowEditRangePasswords.GetValueOrDefault(range)))
+                    .Select(range => new AllowEditRangePasswordDto
+                    {
+                        Range = range.ToString(),
+                        Password = s.AllowEditRangePasswords[range]
+                    })
+                    .ToList(),
                 BackgroundImage = ToWorksheetBackgroundDto(s.BackgroundImage),
                 Pictures = s.Pictures
                     .OfType<PictureModel>()

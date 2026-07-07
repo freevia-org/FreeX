@@ -123,7 +123,7 @@ public sealed partial class XlsxFileAdapter
         if (featurePlan.HasBackgroundImages)
         {
             packageStream.Position = 0;
-            XlsxWorksheetBackgroundReaderWriter.Save(packageStream, workbook);
+            XlsxWorksheetBackgroundReaderWriter.Save(packageStream, workbook, GetSourceMediaEntryNames(workbook));
         }
 
         if (featurePlan.HasHeaderFooterPictures)
@@ -565,6 +565,43 @@ public sealed partial class XlsxFileAdapter
             return 0;
         }
     }
+
+    // Returns the set of xl/media/* entry names already present in the source package (or an empty
+    // set when there is no source package). WriteBackground runs before PreserveSourcePackageParts
+    // copies the source's own xl/media/* entries into the generated archive, so a background image
+    // saved under the user's raw filename (e.g. "image1.png") can otherwise claim a media name the
+    // source package already uses for an authored picture; CopyUnknownPackageParts then skips
+    // copying that source media because the name is already taken, leaving other drawings pointing
+    // at the wrong (background) image. Reserving these names lets the background writer pick a
+    // collision-free name up front instead of silently shadowing preserved source media.
+    private static IReadOnlySet<string> GetSourceMediaEntryNames(Workbook workbook)
+    {
+        if (!SourcePackages.TryGetValue(workbook, out var sourcePackage))
+            return EmptyMediaEntryNames;
+
+        try
+        {
+            using var sourceStream = sourcePackage.OpenRead();
+            using var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read);
+
+            const string prefix = "xl/media/";
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in sourceArchive.Entries)
+            {
+                if (entry.FullName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    names.Add(entry.FullName);
+            }
+
+            return names;
+        }
+        catch
+        {
+            return EmptyMediaEntryNames;
+        }
+    }
+
+    private static readonly IReadOnlySet<string> EmptyMediaEntryNames =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Returns true when <paramref name="sheet"/> has at least one rich-text run whose color kind

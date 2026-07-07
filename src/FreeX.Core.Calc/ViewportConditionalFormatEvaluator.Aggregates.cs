@@ -162,8 +162,16 @@ internal static partial class ViewportConditionalFormatEvaluator
                 return valueOrder != 0 ? valueOrder : left.Index.CompareTo(right.Index);
             });
 
-        var result = new HashSet<CellAddress>(take);
-        for (var i = 0; i < take; i++)
+        // Excel highlights every cell whose value ranks within the top/bottom N, ties
+        // included -- so once the Nth-ranked value is known, extend the cutoff to cover
+        // any later entries that tie its value (more than N cells can end up matched).
+        var cutoffValue = rankedValues[take - 1].Value;
+        var effectiveTake = take;
+        while (effectiveTake < rankedValues.Count && rankedValues[effectiveTake].Value == cutoffValue)
+            effectiveTake++;
+
+        var result = new HashSet<CellAddress>(effectiveTake);
+        for (var i = 0; i < effectiveTake; i++)
             result.Add(rankedValues[i].Address);
 
         return result;
@@ -450,7 +458,10 @@ internal static partial class ViewportConditionalFormatEvaluator
 
     private static DateTime StartOfWeek(DateTime date)
     {
-        var offset = (7 + (int)date.DayOfWeek - (int)DayOfWeek.Monday) % 7;
+        // Excel's cfRule timePeriod week formulas are WEEKDAY()-based with the default
+        // (Sunday=1) return type, so "this/last/next week" spans Sunday..Saturday, not
+        // the ISO Monday-start week.
+        var offset = (int)date.DayOfWeek - (int)DayOfWeek.Sunday;
         return date.AddDays(-offset).Date;
     }
 

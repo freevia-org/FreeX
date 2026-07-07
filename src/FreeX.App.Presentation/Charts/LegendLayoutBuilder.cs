@@ -142,7 +142,36 @@ internal static class LegendLayoutBuilder
 
         var entries = new List<(int, string)>(request.Series.Count);
         foreach (var series in request.Series)
+        {
+            if (IsLegendEntryDeleted(chart, series.SeriesIndex))
+                continue;
             entries.Add((series.SeriesIndex, series.Name ?? $"Series {series.SeriesIndex + 1}"));
+        }
         return entries;
+    }
+
+    /// <summary>
+    /// Returns true when the series with chart-XML index <paramref name="seriesIndex"/> has its
+    /// legend entry marked deleted via <c>&lt;c:legendEntry&gt;&lt;c:delete val="1"/&gt;</c> (Excel's
+    /// way to hide helper series from the legend). Mirrors the WPF host's
+    /// ChartRenderer.SeriesFormatting.IsLegendEntryDeleted: the legend-entry idx is a legend-position
+    /// index (declaration order), resolved to the series' own idx via <see cref="ChartModel.SeriesPlotOrder"/>
+    /// when populated, otherwise matched directly (legacy single-plot-group case).
+    /// </summary>
+    private static bool IsLegendEntryDeleted(ChartModel chart, int seriesIndex)
+    {
+        var entries = chart.LegendEntries;
+        var plotOrder = chart.SeriesPlotOrder;
+        for (var i = 0; i < entries.Count; i++)
+        {
+            var entry = entries[i];
+            var resolvedSeriesIndex = plotOrder.Count > 0 && entry.Index >= 0 && entry.Index < plotOrder.Count
+                ? plotOrder[entry.Index]
+                : entry.Index;
+            if (resolvedSeriesIndex == seriesIndex)
+                return entry.IsDeleted == true;
+        }
+
+        return false;
     }
 }

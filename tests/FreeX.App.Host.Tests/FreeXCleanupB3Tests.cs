@@ -49,7 +49,10 @@ public sealed class FreeXCleanupB3Tests
                 replaceFindBox.Text = "foo";
                 replaceBox.Text = "bar";
 
-                // Look-in defaults to Values (LookInCombo.SelectedIndex = 1) — do not change it.
+                // This scenario specifically exercises Look-in=Values (LookInCombo.SelectedIndex = 1);
+                // set it explicitly rather than relying on the dialog's default, which is Formulas
+                // (matching Excel and the Avalonia shell).
+                DialogSourceTestSupport.GetPrivateField<ComboBox>(dialog, "LookInCombo").SelectedIndex = 1;
                 DialogSourceTestSupport.InvokePrivateHandler(dialog, "FindNext_Click");
 
                 // First Replace click: A1 is found first (row order) but is not replaceable in
@@ -99,6 +102,10 @@ public sealed class FreeXCleanupB3Tests
                 replaceFindBox.Text = "foo";
                 replaceBox.Text = "bar";
 
+                // This scenario specifically exercises Look-in=Values; set it explicitly rather than
+                // relying on the dialog's default, which is Formulas (matching Excel and the Avalonia
+                // shell).
+                DialogSourceTestSupport.GetPrivateField<ComboBox>(dialog, "LookInCombo").SelectedIndex = 1;
                 DialogSourceTestSupport.InvokePrivateHandler(dialog, "FindNext_Click");
                 // Must terminate (bounded by the match count) rather than loop forever, and must
                 // leave both formula cells untouched.

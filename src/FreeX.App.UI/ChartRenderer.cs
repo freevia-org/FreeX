@@ -252,11 +252,20 @@ public static partial class ChartRenderer
         var clusteredColumnCount = chart.Type is ChartType.Column or ChartType.ThreeDColumn
             ? CountClusteredBarSeries(chart, dataStartCol, endCol)
             : 0;
+        // Same count, computed for a plain (non-stacked) Bar/ThreeDBar chart so "Vary colors by
+        // point" below can tell whether this is the chart's sole plotted series (Excel's only
+        // varyColors shape for bar/column charts — see ChartStylePlanner.ResolveVaryColorsPointFill).
+        var barChartSeriesCount = chart.Type is ChartType.Bar or ChartType.ThreeDBar
+            ? CountClusteredBarSeries(chart, dataStartCol, endCol)
+            : 0;
         var clusteredColumnOrdinal = 0;
         // Per-clustered-bar-series value lists (category index -> value), captured so a
         // Budget-vs-Actual <c:upDownBars> deviation overlay can be drawn between the first two
         // bar series after the main loop. Only collected for clustered column charts.
         var clusteredBarValues = new List<List<double?>>();
+        // Lazily built only when a single-series Column/Bar chart actually needs to resolve
+        // "Vary colors by point" (ChartStylePlanner.ResolveVaryColorsPointFill below).
+        CellColor[]? varyColorsPalette = null;
         for (uint col = dataStartCol; col <= endCol; col++)
         {
             if (ShouldSkipScatterXColumn(chart, col, dataStartCol))
@@ -339,7 +348,16 @@ public static partial class ChartRenderer
                     if (cellLookup.TryGetValue((r, col), out var cell)
                         && TryGetChartNumericValue(cell, out var v))
                     {
-                        series.Items.Add(new RectangleBarItem(i + clusterLeft, Math.Min(0, v), i + clusterRight, Math.Max(0, v)));
+                        var columnBarItem = new RectangleBarItem(i + clusterLeft, Math.Min(0, v), i + clusterRight, Math.Max(0, v));
+                        // "Vary colors by point" (c:varyColors) only applies when this is the
+                        // chart's sole plotted series — matching Excel, which otherwise needs one
+                        // color per series for the legend to make sense.
+                        if (chart.VaryColorsByPoint == true &&
+                            ChartStylePlanner.ResolveVaryColorsPointFill(chart, seriesIndex, i, clusteredColumnCount, theme, varyColorsPalette ??= ChartStylePlanner.BuildExcelSeriesPalette(theme)) is { } varyColor)
+                        {
+                            columnBarItem.Color = OxyColor.FromRgb(varyColor.R, varyColor.G, varyColor.B);
+                        }
+                        series.Items.Add(columnBarItem);
                         trendPoints?.Add(new DataPoint(i, v));
                         barCategoryValues.Add(v);
                         if (ShouldUseAnnotationLabels(chart))
@@ -388,7 +406,13 @@ public static partial class ChartRenderer
                     if (cellLookup.TryGetValue((r, col), out var cell)
                         && TryGetChartNumericValue(cell, out var v))
                     {
-                        series.Items.Add(new BarItem { Value = v });
+                        var barItem = new BarItem { Value = v };
+                        if (chart.VaryColorsByPoint == true &&
+                            ChartStylePlanner.ResolveVaryColorsPointFill(chart, seriesIndex, i, barChartSeriesCount, theme, varyColorsPalette ??= ChartStylePlanner.BuildExcelSeriesPalette(theme)) is { } varyColor)
+                        {
+                            barItem.Color = OxyColor.FromRgb(varyColor.R, varyColor.G, varyColor.B);
+                        }
+                        series.Items.Add(barItem);
                         trendPoints?.Add(new DataPoint(i, v));
                         if (ShouldUseAnnotationLabels(chart))
                             AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), v, i, v);
