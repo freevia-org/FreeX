@@ -213,7 +213,7 @@ public sealed class CellFillColorFilterCommand : IWorkbookCommand
                 sheet.GetStyleOnly(row, filterCol) ??
                 StyleId.Default;
             var fillColor = ctx.Workbook.GetStyle(styleId).FillColor;
-            FilterHiddenRowUpdater.SetVisible(sheet.FilterHiddenRows, row, fillColor == _fillColor);
+            FilterHiddenRowUpdater.ApplyColumnOwnedVisibility(sheet, filterCol, row, fillColor == _fillColor);
         }
 
         return new CommandOutcome(true);
@@ -265,7 +265,7 @@ public sealed class CellNoFillColorFilterCommand : IWorkbookCommand
                 sheet.GetStyleOnly(row, filterCol) ??
                 StyleId.Default;
             var fillColor = ctx.Workbook.GetStyle(styleId).FillColor;
-            FilterHiddenRowUpdater.SetVisible(sheet.FilterHiddenRows, row, fillColor is null);
+            FilterHiddenRowUpdater.ApplyColumnOwnedVisibility(sheet, filterCol, row, fillColor is null);
         }
 
         return new CommandOutcome(true);
@@ -320,7 +320,7 @@ public sealed class CellFontColorFilterCommand : IWorkbookCommand
                 sheet.GetStyleOnly(row, filterCol) ??
                 StyleId.Default;
             var fontColor = ctx.Workbook.GetStyle(styleId).FontColor;
-            FilterHiddenRowUpdater.SetVisible(sheet.FilterHiddenRows, row, fontColor == _fontColor);
+            FilterHiddenRowUpdater.ApplyColumnOwnedVisibility(sheet, filterCol, row, fontColor == _fontColor);
         }
 
         return new CommandOutcome(true);
@@ -349,6 +349,11 @@ internal struct FilterUndoSnapshot
     // undo could leave it out of sync with the restored FilterHiddenRows and corrupt the next
     // recompute's "preserve rows I don't own" logic.
     private uint[]? _valueFilterHiddenRows;
+    // R12-sort-filter-1: sheet.ColumnFilterOwnedRows (which rows each condition/average/top-bottom/
+    // color column filter currently owns) must roll back alongside FilterHiddenRows too, otherwise
+    // an undo could leave a stale/mismatched ownership entry behind that corrupts the next
+    // ApplyColumnOwnedVisibility/ClearColumnOwnedRange AND-across-columns decision.
+    private Dictionary<uint, HashSet<uint>>? _columnFilterOwnedRows;
 
     public bool HasSnapshot => _hiddenRows is not null;
 
@@ -358,6 +363,7 @@ internal struct FilterUndoSnapshot
         _filterHiddenRows = null;
         _activeValueFilterColumns = null;
         _valueFilterHiddenRows = null;
+        _columnFilterOwnedRows = null;
     }
 
     public void Capture(Sheet sheet)
@@ -370,6 +376,11 @@ internal struct FilterUndoSnapshot
                 kvp => kvp.Key,
                 IReadOnlyList<string> (kvp) => [.. kvp.Value]);
         _valueFilterHiddenRows = [.. sheet.ValueFilterHiddenRows];
+        _columnFilterOwnedRows = sheet.ColumnFilterOwnedRows.Count == 0
+            ? null
+            : sheet.ColumnFilterOwnedRows.ToDictionary(
+                kvp => kvp.Key,
+                HashSet<uint> (kvp) => [.. kvp.Value]);
     }
 
     public void CaptureIfNeeded(Sheet sheet)
@@ -401,6 +412,13 @@ internal struct FilterUndoSnapshot
         sheet.ValueFilterHiddenRows.Clear();
         if (_valueFilterHiddenRows is not null)
             sheet.ValueFilterHiddenRows.UnionWith(_valueFilterHiddenRows);
+
+        sheet.ColumnFilterOwnedRows.Clear();
+        if (_columnFilterOwnedRows is not null)
+        {
+            foreach (var (col, ownedRows) in _columnFilterOwnedRows)
+                sheet.ColumnFilterOwnedRows[col] = [.. ownedRows];
+        }
     }
 }
 
@@ -486,6 +504,99 @@ internal static class FilterHiddenRowUpdater
             if (row >= firstDataRow && row <= lastDataRow)
                 filterHiddenRows.Remove(row);
         }
+    }
+
+    /// <summary>
+    /// Applies a single row's visible/hidden decision for the non-value-list AutoFilter mechanisms
+    /// (condition/custom-criterion, Top 10/Above-Average, and cell/font-color filters), recording
+    /// ownership per <paramref name="filterCol"/> in <see cref="Sheet.ColumnFilterOwnedRows"/> so a
+    /// later re-evaluation of THIS SAME column never un-hides a row that some OTHER active column's
+    /// filter (a value-list filter via <see cref="Sheet.ActiveValueFilterColumns"/>, or another
+    /// condition/average/top-bottom/color filter) is responsible for hiding (finding
+    /// R12-sort-filter-1). Excel ANDs AutoFilter criteria across columns — a row is hidden if it
+    /// fails ANY active column's filter — so un-hiding must only ever relinquish rows this column's
+    /// own mechanism previously claimed.
+    /// </summary>
+    public static void ApplyColumnOwnedVisibility(Sheet sheet, uint filterCol, uint row, bool visible)
+    {
+        if (!sheet.ColumnFilterOwnedRows.TryGetValue(filterCol, out var owned))
+        {
+            owned = [];
+            sheet.ColumnFilterOwnedRows[filterCol] = owned;
+        }
+
+        if (visible)
+        {
+            // Only relinquish the row from FilterHiddenRows if no OTHER active mechanism (a
+            // value-list filter on any column, or another condition/average/top-bottom/color
+            // filter's owned rows) is also responsible for hiding it.
+            owned.Remove(row);
+            if (!IsHiddenByAnyOtherActiveMechanism(sheet, filterCol, row))
+                sheet.FilterHiddenRows.Remove(row);
+        }
+        else
+        {
+            owned.Add(row);
+            sheet.FilterHiddenRows.Add(row);
+        }
+    }
+
+    private static bool IsHiddenByAnyOtherActiveMechanism(Sheet sheet, uint excludeCol, uint row)
+    {
+        if (sheet.ValueFilterHiddenRows.Contains(row))
+            return true;
+
+        foreach (var (col, owned) in sheet.ColumnFilterOwnedRows)
+        {
+            if (col != excludeCol && owned.Contains(row))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Cheap short-circuit for <see cref="ApplyColumnOwnedVisibility"/>'s callers: true when calling
+    /// it for <paramref name="row"/>/<paramref name="visible"/> would be a strict no-op (no ownership
+    /// change, no FilterHiddenRows change) — i.e. the row is already NOT owned by this column and
+    /// already not hidden (when <paramref name="visible"/> is true), or already owned by this column
+    /// (and therefore already hidden) when <paramref name="visible"/> is false. Skipping the call in
+    /// that case avoids per-row HashSet churn on dense filters without risking the AND-across-columns
+    /// bug this ownership tracking exists to fix (finding R12-sort-filter-1) — an un-owned but
+    /// otherwise-hidden row (e.g. hidden directly, or by another column) is intentionally NOT treated
+    /// as a no-op so it still gets a chance to be relinquished when this column now wants it visible.
+    /// </summary>
+    public static bool IsColumnOwnedVisibilityAlreadyCorrect(Sheet sheet, uint filterCol, uint row, bool visible)
+    {
+        var owned = sheet.ColumnFilterOwnedRows.TryGetValue(filterCol, out var ownedRows) && ownedRows.Contains(row);
+        return visible
+            ? !owned && !sheet.FilterHiddenRows.Contains(row)
+            : owned;
+    }
+
+    /// <summary>
+    /// Relinquishes every row in <paramref name="range"/> that <paramref name="filterCol"/>'s own
+    /// condition/average/top-bottom/color filter currently owns (e.g. when that filter is being
+    /// cleared, or degenerately matches nothing/everything), without disturbing rows some OTHER
+    /// active column's filter is hiding. Mirrors <see cref="ApplyColumnOwnedVisibility"/>'s
+    /// ownership discipline for the bulk-clear code paths (finding R12-sort-filter-1).
+    /// </summary>
+    public static void ClearColumnOwnedRange(Sheet sheet, uint filterCol, GridRange range)
+    {
+        if (!sheet.ColumnFilterOwnedRows.TryGetValue(filterCol, out var owned) || owned.Count == 0)
+            return;
+
+        var firstDataRow = range.Start.Row + 1;
+        var lastDataRow = range.End.Row;
+        foreach (var row in owned)
+        {
+            if (row < firstDataRow || row > lastDataRow)
+                continue;
+            if (!IsHiddenByAnyOtherActiveMechanism(sheet, filterCol, row))
+                sheet.FilterHiddenRows.Remove(row);
+        }
+
+        owned.Clear();
     }
 
     public static bool ContainsAnyInRange(HashSet<uint> filterHiddenRows, GridRange range)

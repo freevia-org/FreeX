@@ -53,26 +53,46 @@ public static partial class BuiltInFunctions
         switch (basis)
         {
             case 0: // US 30/360 (NASD)
-            {
-                int y1 = d1.Year, m1 = d1.Month, dd1 = d1.Day;
-                int y2 = d2.Year, m2 = d2.Month, dd2 = d2.Day;
-                if (dd2 == 31 && dd1 >= 30) dd2 = 30;
-                if (dd1 == 31) dd1 = 30;
-                return ((y2 - y1) * 360 + (m2 - m1) * 30 + (dd2 - dd1)) / 360.0;
-            }
+                return Days30360Us(d1, d2) / 360.0;
             case 1: return (d2 - d1).TotalDays / ActualYearLength(d1, d2);
             case 2: return (d2 - d1).TotalDays / 360.0;
             case 3: return (d2 - d1).TotalDays / 365.0;
             case 4: // European 30/360
-            {
-                int y1 = d1.Year, m1 = d1.Month, dd1 = d1.Day;
-                int y2 = d2.Year, m2 = d2.Month, dd2 = d2.Day;
-                if (dd1 == 31) dd1 = 30;
-                if (dd2 == 31) dd2 = 30;
-                return ((y2 - y1) * 360 + (m2 - m1) * 30 + (dd2 - dd1)) / 360.0;
-            }
+                return Days30360European(d1, d2) / 360.0;
             default: return (d2 - d1).TotalDays / 365.0;
         }
+    }
+
+    private static double Days30360Us(DateTime d1, DateTime d2)
+    {
+        int y1 = d1.Year, m1 = d1.Month, dd1 = d1.Day;
+        int y2 = d2.Year, m2 = d2.Month, dd2 = d2.Day;
+        if (dd2 == 31 && dd1 >= 30) dd2 = 30;
+        if (dd1 == 31) dd1 = 30;
+        return (y2 - y1) * 360 + (m2 - m1) * 30 + (dd2 - dd1);
+    }
+
+    private static double Days30360European(DateTime d1, DateTime d2)
+    {
+        int y1 = d1.Year, m1 = d1.Month, dd1 = d1.Day;
+        int y2 = d2.Year, m2 = d2.Month, dd2 = d2.Day;
+        if (dd1 == 31) dd1 = 30;
+        if (dd2 == 31) dd2 = 30;
+        return (y2 - y1) * 360 + (m2 - m1) * 30 + (dd2 - dd1);
+    }
+
+    /// <summary>
+    /// Day count between two dates per the coupon-day-count-basis rules used by
+    /// COUPDAYBS/COUPDAYSNC (30/360 for bases 0 and 4, actual calendar days otherwise).
+    /// </summary>
+    private static double CouponDayCount(DateTime d1, DateTime d2, int basis)
+    {
+        return basis switch
+        {
+            0 => Days30360Us(d1, d2),
+            4 => Days30360European(d1, d2),
+            _ => (d2 - d1).TotalDays,
+        };
     }
 
     private static bool TryGetFinancialBasis(IReadOnlyList<ScalarValue> args, int index, out int basis)

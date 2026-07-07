@@ -54,17 +54,18 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
 
         _undoSnapshot.Reset();
 
+        var filterCol = _range.Start.Col + _filterColOffset;
+
         if (_count == 0)
         {
-            if (!FilterHiddenRowUpdater.ContainsAnyInRange(sheet.FilterHiddenRows, _range))
+            if (!sheet.ColumnFilterOwnedRows.TryGetValue(filterCol, out var ownedRows) || ownedRows.Count == 0)
                 return new CommandOutcome(true);
 
             _undoSnapshot.CaptureIfNeeded(sheet);
-            FilterHiddenRowUpdater.ClearRange(sheet.FilterHiddenRows, _range);
+            FilterHiddenRowUpdater.ClearColumnOwnedRange(sheet, filterCol, _range);
             return new CommandOutcome(true);
         }
 
-        var filterCol = _range.Start.Col + _filterColOffset;
         var firstDataRow = _range.Start.Row + 1;
         var lastDataRow = _range.End.Row;
         if (firstDataRow > lastDataRow)
@@ -89,7 +90,7 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
             if (keepCount > 0)
                 SelectBestRows(sheet, filterCol, firstDataRow, lastDataRow, keepCount, _top, keptRows);
 
-            ApplyKeptRowVisibility(sheet, firstDataRow, lastDataRow, keptRows);
+            ApplyKeptRowVisibility(sheet, filterCol, firstDataRow, lastDataRow, keptRows);
         }
         finally
         {
@@ -171,16 +172,17 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
         for (var row = firstDataRow; row <= lastDataRow; row++)
         {
             var visible = sheet.GetValue(row, filterCol) is NumberValue;
-            if (sheet.FilterHiddenRows.Contains(row) == !visible)
+            if (FilterHiddenRowUpdater.IsColumnOwnedVisibilityAlreadyCorrect(sheet, filterCol, row, visible))
                 continue;
 
             _undoSnapshot.CaptureIfNeeded(sheet);
-            FilterHiddenRowUpdater.SetHidden(sheet.FilterHiddenRows, row, !visible);
+            FilterHiddenRowUpdater.ApplyColumnOwnedVisibility(sheet, filterCol, row, visible);
         }
     }
 
     private void ApplyKeptRowVisibility(
         Sheet sheet,
+        uint filterCol,
         uint firstDataRow,
         uint lastDataRow,
         bool[] keptRows)
@@ -188,11 +190,11 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
         for (var row = firstDataRow; row <= lastDataRow; row++)
         {
             var visible = keptRows[(int)(row - firstDataRow)];
-            if (sheet.FilterHiddenRows.Contains(row) == !visible)
+            if (FilterHiddenRowUpdater.IsColumnOwnedVisibilityAlreadyCorrect(sheet, filterCol, row, visible))
                 continue;
 
             _undoSnapshot.CaptureIfNeeded(sheet);
-            FilterHiddenRowUpdater.SetHidden(sheet.FilterHiddenRows, row, !visible);
+            FilterHiddenRowUpdater.ApplyColumnOwnedVisibility(sheet, filterCol, row, visible);
         }
     }
 

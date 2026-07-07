@@ -583,13 +583,22 @@ public sealed class Workbook
                 RemoveNamedRange(name);
         }
 
-        // Remove all sheet-scoped names belonging to the deleted sheet.
+        // Remove all sheet-scoped names belonging to the deleted sheet (scope == deleted sheet),
+        // AND sheet-scoped names whose TARGET range points at the deleted sheet even though their
+        // scope is a different, surviving sheet (e.g. a Sheet1-scoped name that refers to
+        // Sheet2!$A$1, with Sheet2 being deleted). GridRange cannot represent "#REF!" the way a
+        // named-formula string can, so — mirroring the workbook-global-range branch above, which
+        // already drops (rather than #REF!-rewrites) any global range targeting the deleted sheet —
+        // the dangling scoped range is dropped too instead of surviving with a nonexistent target.
         if (_scopedNamedRanges is not null)
         {
-            foreach (var key in _scopedNamedRanges.Keys.Where(k => k.Sheet == sheetId).ToList())
+            foreach (var (key, scopedRange) in _scopedNamedRanges.ToList())
             {
-                _scopedNamedRanges.Remove(key);
-                _scopedNamedRangeMetadata?.Remove(key);
+                if (key.Sheet == sheetId || scopedRange.Start.Sheet == sheetId || scopedRange.End.Sheet == sheetId)
+                {
+                    _scopedNamedRanges.Remove(key);
+                    _scopedNamedRangeMetadata?.Remove(key);
+                }
             }
         }
 

@@ -740,6 +740,7 @@ public sealed partial class NativeJsonAdapter
         public string? ErrorMessage { get; set; }
         public string? PromptTitle { get; set; }
         public string? PromptMessage { get; set; }
+        public bool IsX14 { get; set; }
         public Dictionary<string, string>? NativeAttributes { get; set; }
         public List<string>? NativeChildXmls { get; set; }
         public Dictionary<string, string>? NativeContainerAttributes { get; set; }

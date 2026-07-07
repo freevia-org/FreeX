@@ -29,6 +29,18 @@ public sealed record CommentReply(string Text, string Author = "FreeX")
     /// per-author guid when present.
     /// </summary>
     public string? SourcePersonId { get; init; }
+
+    /// <summary>
+    /// Display names, by source person id, for every person referenced by a
+    /// <c>mtc:mention/@mentionpersonId</c> inside <see cref="MentionsXml"/> who is NOT themselves
+    /// this reply's (or any other comment/reply's) author -- e.g. an @-mentioned person who has
+    /// never posted a comment. FreeX does not model @mention linkage as first-class data, but a
+    /// mentioned person's <c>&lt;person&gt;</c> record must still be written to
+    /// <c>xl/persons/person.xml</c> on save so the mention keeps resolving; without this, the
+    /// mentioned (non-authoring) person's record silently disappears after a save because
+    /// person.xml is rewritten solely from comment/reply authors.
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? MentionedPersonDisplayNames { get; init; }
 }
 
 public sealed record ThreadedComment(string Text, string Author = "FreeX")
@@ -62,6 +74,18 @@ public sealed record ThreadedComment(string Text, string Author = "FreeX")
     /// freshly minted per-author guid when present.
     /// </summary>
     public string? SourcePersonId { get; init; }
+
+    /// <summary>
+    /// Display names, by source person id, for every person referenced by a
+    /// <c>mtc:mention/@mentionpersonId</c> inside <see cref="MentionsXml"/> who is NOT themselves
+    /// this comment's (or any reply's) author -- e.g. an @-mentioned person who has never posted a
+    /// comment. FreeX does not model @mention linkage as first-class data, but a mentioned
+    /// person's <c>&lt;person&gt;</c> record must still be written to
+    /// <c>xl/persons/person.xml</c> on save so the mention keeps resolving; without this, the
+    /// mentioned (non-authoring) person's record silently disappears after a save because
+    /// person.xml is rewritten solely from comment/reply authors.
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? MentionedPersonDisplayNames { get; init; }
 }
 
 /// <summary>
@@ -543,6 +567,19 @@ public sealed partial class Sheet
     /// filters' hidden rows the next time a value-list filter is applied on a different column.
     /// </summary>
     public HashSet<uint> ValueFilterHiddenRows { get; } = [];
+
+    /// <summary>
+    /// Runtime per-column ownership state for the non-value-list AutoFilter mechanisms (condition/
+    /// custom-criterion, Top 10/Above-Average, and cell/font-color filters), keyed by absolute
+    /// 1-based column index. Each entry is exactly the set of rows THAT column's own filter last
+    /// decided to hide. Excel ANDs AutoFilter criteria across every active column (a row stays
+    /// hidden if it fails ANY active column's filter), so when one of these mechanisms re-evaluates
+    /// its own column it must only ever un-hide rows found in its OWN entry here — never a row some
+    /// other column's mechanism (a value-list filter via <see cref="ActiveValueFilterColumns"/>, or
+    /// another condition/average/top-bottom/color filter on a different column) hid (finding
+    /// R12-sort-filter-1). See FreeX.Core.Commands.FilterHiddenRowUpdater.ApplyColumnOwnedVisibility.
+    /// </summary>
+    public Dictionary<uint, HashSet<uint>> ColumnFilterOwnedRows { get; } = [];
 
     /// <summary>Set of column numbers that are hidden (1-based).</summary>
     public HashSet<uint> HiddenCols { get; } = [];

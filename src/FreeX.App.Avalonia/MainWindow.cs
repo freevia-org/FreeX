@@ -754,6 +754,33 @@ public sealed partial class MainWindow : Window
     /// </summary>
     internal IReadOnlyList<string> CellAddressAutocompleteNamesForTest() => BuildCellAddressAutocompleteNames();
 
+    /// <summary>
+    /// Test-only accessor for the Formula Bar's current text, so headless tests can seed typed
+    /// input before driving <see cref="RaiseFormulaBoxKeyDownForTest"/>. Not used by production
+    /// code paths.
+    /// </summary>
+    internal string? FormulaBoxTextForTest
+    {
+        get => _formulaBox.Text;
+        set => _formulaBox.Text = value;
+    }
+
+    /// <summary>
+    /// Test-only seam that drives the real Formula Bar KeyDown handling (Enter/Tab commit-and-move,
+    /// line-break insertion) with a caller-supplied <see cref="KeyEventArgs"/>, so assertions can run
+    /// against the resulting <see cref="Session"/> state rather than only a source-string proxy. Not
+    /// used by production code paths.
+    /// </summary>
+    internal void RaiseFormulaBoxKeyDownForTest(KeyEventArgs e) => FormulaBox_KeyDown(_formulaBox, e);
+
+    /// <summary>
+    /// Test-only seam that drives the real worksheet pointer-wheel handling (row/column panning,
+    /// Ctrl+wheel zoom) with a caller-supplied <see cref="PointerWheelEventArgs"/>, so assertions can
+    /// run against the resulting <see cref="Session"/> state rather than only a source-string proxy.
+    /// Not used by production code paths.
+    /// </summary>
+    internal void RaisePointerWheelChangedForTest(PointerWheelEventArgs e) => SheetScrollViewer_PointerWheelChanged(_sheetGridHost, e);
+
     private readonly RecentColorsStore _recentColors = new();
     private MacOsLaunchSmokeDialogSnapshot _launchSmokeDialogEvidence = MacOsLaunchSmokeDialogSnapshot.Empty;
     private ComboBox? _activeDataValidationDropdown;
@@ -7294,8 +7321,12 @@ public sealed partial class MainWindow : Window
             }
             else if (intent.Action == ExcelEditKeyAction.CommitAndMove && intent.Target is { } target)
             {
-                var rowDelta = GetCellIndexDelta(address.Row, target.Row);
-                var colDelta = GetCellIndexDelta(address.Col, target.Col);
+                var adjustedTarget = ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(
+                    _session.Workbook.GetSheet(address.Sheet),
+                    address,
+                    target);
+                var rowDelta = GetCellIndexDelta(address.Row, adjustedTarget.Row);
+                var colDelta = GetCellIndexDelta(address.Col, adjustedTarget.Col);
                 CommitInlineCellEdit(rowDelta, colDelta);
                 args.Handled = true;
             }
@@ -14351,8 +14382,12 @@ public sealed partial class MainWindow : Window
             }
             else if (CommitFormulaBox())
             {
-                var rowDelta = GetCellIndexDelta(current.Row, target.Row);
-                var colDelta = GetCellIndexDelta(current.Col, target.Col);
+                var adjustedTarget = ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(
+                    _session.Workbook.GetSheet(current.Sheet),
+                    current,
+                    target);
+                var rowDelta = GetCellIndexDelta(current.Row, adjustedTarget.Row);
+                var colDelta = GetCellIndexDelta(current.Col, adjustedTarget.Col);
                 _session.MoveActiveCell(rowDelta, colDelta);
                 RefreshShell("Ready");
                 FocusShellRegion(ShellFocusTarget.Worksheet);
@@ -22069,6 +22104,7 @@ public sealed partial class MainWindow : Window
             return;
 
         var pageRows = Math.Max(1, _session.Viewport.RowMetrics.Count - 1);
+        var pageCols = Math.Max(1, _session.Viewport.ColMetrics.Count - 1);
         var extendSelection = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         var useDataBoundary = ExcelWorksheetNavigationPlanner.ShouldUseDataBoundary(navigationKey, navigationModifiers, _endMode);
         var ctrlHeld = e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta);
@@ -22078,7 +22114,16 @@ public sealed partial class MainWindow : Window
         if (_endMode)
             _endMode = false;
 
-        CellAddress? target = navigationKey switch
+        // Alt+PageUp/Alt+PageDown resolve to a horizontal screen-page move (Excel/WPF parity)
+        // before falling back to the vertical PageUp/PageDown handling below.
+        CellAddress? target = ExcelWorksheetNavigationPlanner.GetHorizontalPageTarget(
+            navigationKey,
+            navigationKey,
+            navigationModifiers,
+            current,
+            pageCols);
+
+        target ??= navigationKey switch
         {
             ExcelWorksheetNavigationKey.Up => useDataBoundary
                 ? ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(sheet, current, -1)
@@ -22200,6 +22245,19 @@ public sealed partial class MainWindow : Window
 
         var vertical = e.Delta.Y;
         var horizontal = e.Delta.X;
+
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            // Ctrl+Scroll = zoom (mirrors the WPF host's SheetGrid_MouseWheel).
+            var wheelScroll = Math.Abs(horizontal) > Math.Abs(vertical) ? horizontal : vertical;
+            var notches = wheelScroll > 0 ? 1 : wheelScroll < 0 ? -1 : 0;
+            if (notches != 0)
+                ApplyZoomPercent(_session.ZoomPercent + notches * StatusBarZoomSliderPlanner.ZoomStepPercent, "Zoom failed.");
+
+            e.Handled = true;
+            return;
+        }
+
         var rowDelta = 0;
         var colDelta = 0;
         if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) ||

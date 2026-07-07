@@ -15,6 +15,11 @@ public sealed class ToggleWorksheetAutoFilterCommand : IWorkbookCommand, IEstima
     // finding F8/G7, for why this state exists).
     private Dictionary<uint, IReadOnlyList<string>>? _previousActiveValueFilterColumns;
     private uint[]? _previousValueFilterHiddenRows;
+    // R12-sort-filter-1: sheet.ColumnFilterOwnedRows (which rows each condition/average/top-bottom/
+    // color column filter currently owns) must roll back alongside the value-filter state above for
+    // the same reason (G6) — otherwise a stale per-column ownership entry survives turning AutoFilter
+    // off and incorrectly keeps a row hidden the next time an unrelated column's filter re-evaluates it.
+    private Dictionary<uint, HashSet<uint>>? _previousColumnFilterOwnedRows;
 
     public ToggleWorksheetAutoFilterCommand(SheetId sheetId, GridRange range)
     {
@@ -45,6 +50,11 @@ public sealed class ToggleWorksheetAutoFilterCommand : IWorkbookCommand, IEstima
                 kvp => kvp.Key,
                 IReadOnlyList<string> (kvp) => [.. kvp.Value]);
         _previousValueFilterHiddenRows = [.. sheet.ValueFilterHiddenRows];
+        _previousColumnFilterOwnedRows = sheet.ColumnFilterOwnedRows.Count == 0
+            ? null
+            : sheet.ColumnFilterOwnedRows.ToDictionary(
+                kvp => kvp.Key,
+                HashSet<uint> (kvp) => [.. kvp.Value]);
 
         if (sheet.AutoFilter is null)
         {
@@ -59,6 +69,7 @@ public sealed class ToggleWorksheetAutoFilterCommand : IWorkbookCommand, IEstima
         sheet.AutoFilter = null;
         sheet.ActiveValueFilterColumns.Clear();
         sheet.ValueFilterHiddenRows.Clear();
+        sheet.ColumnFilterOwnedRows.Clear();
         return new CommandOutcome(true);
     }
 
@@ -80,6 +91,13 @@ public sealed class ToggleWorksheetAutoFilterCommand : IWorkbookCommand, IEstima
         sheet.ValueFilterHiddenRows.Clear();
         if (_previousValueFilterHiddenRows is not null)
             sheet.ValueFilterHiddenRows.UnionWith(_previousValueFilterHiddenRows);
+
+        sheet.ColumnFilterOwnedRows.Clear();
+        if (_previousColumnFilterOwnedRows is not null)
+        {
+            foreach (var (col, ownedRows) in _previousColumnFilterOwnedRows)
+                sheet.ColumnFilterOwnedRows[col] = [.. ownedRows];
+        }
     }
 
     private static WorksheetAutoFilterModel? CloneAutoFilter(WorksheetAutoFilterModel? autoFilter)

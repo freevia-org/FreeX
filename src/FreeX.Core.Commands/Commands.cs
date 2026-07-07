@@ -359,7 +359,7 @@ internal static class StructuredTableEditEffects
     /// header/totals accounting used by <see cref="ResizeStructuredTableCommand.FillGrownCalculatedColumns"/>
     /// and the sibling structured-table commands.
     /// </summary>
-    private static (uint FirstDataRow, uint LastDataRow) GetDataBodyRowBounds(StructuredTableModel table)
+    internal static (uint FirstDataRow, uint LastDataRow) GetDataBodyRowBounds(StructuredTableModel table)
     {
         var hasHeaderRow = table.HeaderRowCount is null or > 0;
         var firstDataRow = table.Range.Start.Row + (hasHeaderRow ? 1u : 0u);
@@ -449,7 +449,15 @@ internal sealed class PropagateCalculatedColumnCommand : IWorkbookCommand
             sheet.SetCell(address, Cell.FromFormula(shiftedFormula));
         }
 
-        table.SetCalculatedColumnFormula(_columnId, _sourceFormulaText);
+        // Persist the formula anchored to the table's first data-body row -- matching the OOXML
+        // <calculatedColumnFormula> convention (always relative to the table's first row) that
+        // native XLSX loads already populate. Storing it verbatim at whatever row the user
+        // happened to type it on would leave later auto-expand fills
+        // (ResizeStructuredTableCommand.FillGrownCalculatedColumns) with no reliable anchor row to
+        // shift from.
+        var (firstDataRow, _) = StructuredTableEditEffects.GetDataBodyRowBounds(table);
+        var normalizedFormula = StructuredTableEditEffects.ShiftFormulaRows(_sourceFormulaText, _sourceRow, firstDataRow, sheet.Name);
+        table.SetCalculatedColumnFormula(_columnId, normalizedFormula);
         _applied = true;
 
         return new CommandOutcome(true, AffectedCells: _snapshot.ConvertAll(s => s.Address));

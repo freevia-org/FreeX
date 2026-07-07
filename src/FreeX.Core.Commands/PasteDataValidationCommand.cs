@@ -37,17 +37,28 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
 
         foreach (var rule in sourceRules)
         {
-            if (!rule.AppliesTo.Overlaps(_sourceRange))
-                continue;
+            // A rule can be anchored purely by an AdditionalRanges entry (AppliesTo elsewhere,
+            // or vice versa), so every range the rule covers must be checked against the copied
+            // source, not just the primary AppliesTo range. Each overlapping piece becomes its
+            // own pasted rule with a fresh AppliesTo and no stale AdditionalRanges copied along
+            // (matching FormatPainterDataValidationCommand's includeAdditionalRanges:false).
+            foreach (var sourceRuleRange in EnumerateRuleRanges(rule))
+            {
+                var intersection = Intersect(sourceRuleRange, _sourceRange);
+                if (intersection is null)
+                    continue;
 
-            var intersection = Intersect(rule.AppliesTo, _sourceRange);
-            if (intersection is null)
-                continue;
-
-            var mappedRange = MapRange(intersection.Value, _sourceRange, _destination, _transpose);
-            var rowDelta = (int)mappedRange.Start.Row - (int)intersection.Value.Start.Row;
-            var colDelta = (int)mappedRange.Start.Col - (int)intersection.Value.Start.Col;
-            targetSheet.DataValidations.Add(DataValidationCopySupport.CloneValidation(rule, mappedRange, targetSheet.Name, rowDelta, colDelta));
+                var mappedRange = MapRange(intersection.Value, _sourceRange, _destination, _transpose);
+                var rowDelta = (int)mappedRange.Start.Row - (int)intersection.Value.Start.Row;
+                var colDelta = (int)mappedRange.Start.Col - (int)intersection.Value.Start.Col;
+                targetSheet.DataValidations.Add(DataValidationCopySupport.CloneValidation(
+                    rule,
+                    mappedRange,
+                    targetSheet.Name,
+                    rowDelta,
+                    colDelta,
+                    includeAdditionalRanges: false));
+            }
         }
 
         return new CommandOutcome(true);
@@ -75,6 +86,13 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
 
     private static GridRange? Intersect(GridRange first, GridRange second) =>
         GridRange.TryIntersect(first, second, out var intersection) ? intersection : null;
+
+    private static IEnumerable<GridRange> EnumerateRuleRanges(DataValidation rule)
+    {
+        yield return rule.AppliesTo;
+        foreach (var range in rule.AdditionalRanges)
+            yield return range;
+    }
 
     private static GridRange MapRange(GridRange range, GridRange sourceRange, CellAddress destination, bool transpose)
     {

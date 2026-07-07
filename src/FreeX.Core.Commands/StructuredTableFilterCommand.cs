@@ -29,17 +29,18 @@ public sealed class ApplyStructuredTableFiltersCommand : IWorkbookCommand
         if (filters is null)
             return new CommandOutcome(false, "Table filter refers to a missing column.");
 
-        if (FilterHiddenRowsAlreadyMatch(sheet, table.Range, filters))
+        if (FilterHiddenRowsAlreadyMatch(sheet, table.Range, table.TotalsRowShown, filters))
             return new CommandOutcome(true);
 
         _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
 
-        RemoveExistingFilterRows(sheet.FilterHiddenRows, table.Range);
+        RemoveExistingFilterRows(sheet.FilterHiddenRows, table.Range, table.TotalsRowShown);
 
         if (filters.Count == 0)
             return new CommandOutcome(true);
 
-        for (var row = table.Range.Start.Row + 1; row <= table.Range.End.Row; row++)
+        var lastDataRow = LastDataRow(table.Range, table.TotalsRowShown);
+        for (var row = table.Range.Start.Row + 1; row <= lastDataRow; row++)
         {
             if (!RowMatchesAllFilters(sheet, row, filters))
                 sheet.FilterHiddenRows.Add(row);
@@ -80,10 +81,13 @@ public sealed class ApplyStructuredTableFiltersCommand : IWorkbookCommand
         return filters;
     }
 
-    private static void RemoveExistingFilterRows(HashSet<uint> filterHiddenRows, GridRange range)
+    private static uint LastDataRow(GridRange range, bool totalsRowShown) =>
+        totalsRowShown && range.End.Row > range.Start.Row ? range.End.Row - 1 : range.End.Row;
+
+    private static void RemoveExistingFilterRows(HashSet<uint> filterHiddenRows, GridRange range, bool totalsRowShown)
     {
         var firstDataRow = range.Start.Row + 1;
-        var lastDataRow = range.End.Row;
+        var lastDataRow = LastDataRow(range, totalsRowShown);
         if (filterHiddenRows.Count < range.RowCount)
         {
             filterHiddenRows.RemoveWhere(row => row >= firstDataRow && row <= lastDataRow);
@@ -110,9 +114,10 @@ public sealed class ApplyStructuredTableFiltersCommand : IWorkbookCommand
         return true;
     }
 
-    private static bool FilterHiddenRowsAlreadyMatch(Sheet sheet, GridRange range, IReadOnlyList<TableFilterState> filters)
+    private static bool FilterHiddenRowsAlreadyMatch(Sheet sheet, GridRange range, bool totalsRowShown, IReadOnlyList<TableFilterState> filters)
     {
-        for (var row = range.Start.Row + 1; row <= range.End.Row; row++)
+        var lastDataRow = LastDataRow(range, totalsRowShown);
+        for (var row = range.Start.Row + 1; row <= lastDataRow; row++)
         {
             var shouldBeHidden = filters.Count > 0 && !RowMatchesAllFilters(sheet, row, filters);
             if (sheet.FilterHiddenRows.Contains(row) != shouldBeHidden)

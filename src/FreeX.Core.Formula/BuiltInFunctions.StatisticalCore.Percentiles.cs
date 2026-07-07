@@ -54,7 +54,7 @@ public static partial class BuiltInFunctions
         int n = sorted.Count;
         if (n == 0) return ErrorValue.Num;
         double rank = k * (n + 1) - 1;
-        if (rank < 0 || rank >= n) return ErrorValue.Num;
+        if (rank < 0 || rank > n - 1) return ErrorValue.Num;
         int lo = (int)rank;
         if (lo >= n - 1) return NumberResult(sorted[n - 1]);
         return NumberResult(sorted[lo] + (rank - lo) * (sorted[lo + 1] - sorted[lo]));

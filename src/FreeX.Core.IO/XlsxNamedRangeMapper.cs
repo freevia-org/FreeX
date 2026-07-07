@@ -598,11 +598,21 @@ internal static class XlsxNamedRangeMapper
         if (xlWorkbook is not null && !xlWorkbook.TryGetWorksheet(sheet.Name, out _))
             return false;
 
-        var startA1 = range.Start.ToA1();
-        var endA1 = range.End.ToA1();
+        var startA1 = ToAbsoluteA1(range.Start);
+        var endA1 = ToAbsoluteA1(range.End);
         address = $"{SheetNameFormatter.QuoteIfNeeded(sheet.Name)}!{startA1}:{endA1}";
         return true;
     }
+
+    /// <summary>
+    /// Formats a cell address as an absolute ($-anchored) A1 reference (e.g. "$B$7"). A defined
+    /// name's refers-to formula MUST be absolute: Excel interprets a relative reference in a
+    /// defined name relative to the active/using cell, so writing a bare "B7" (as
+    /// <see cref="CellAddress.ToA1"/> does) silently shifts the name's meaning depending on where
+    /// it is used and can trigger Excel's repair prompt for whole-column/row names.
+    /// </summary>
+    private static string ToAbsoluteA1(CellAddress address) =>
+        $"${CellAddress.NumberToColumnName(address.Col)}${address.Row.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
 
     private static string FormatDefinedNameFormula(string formulaText)
     {

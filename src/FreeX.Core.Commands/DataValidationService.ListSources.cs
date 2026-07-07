@@ -451,7 +451,13 @@ public static partial class DataValidationService
         return value switch
         {
             TextValue t   => t.Value,
-            NumberValue n => n.Value.ToString(System.Globalization.CultureInfo.CurrentCulture),
+            // Inline list items (ParseInlineListItems) are raw invariant-culture text taken verbatim
+            // from Formula1 (e.g. "1.5,2.5,3.5"), never reformatted for the current locale. Excel
+            // itself matches list validation by value, not by locale-formatted text, so the scalar
+            // value must be rendered the same way here or a comma-decimal locale (e.g. de-DE) would
+            // format 1.5 as "1,5" and never match the "1.5" list item. Mirrors
+            // DataValidationDropdownPlanner.FormatCellValue, which already uses InvariantCulture.
+            NumberValue n => n.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
             BoolValue b   => b.Value ? "TRUE" : "FALSE",
             _             => value.ToString() ?? ""
         };

@@ -116,7 +116,8 @@ public static partial class PrintRenderer
 
             var typeface = ResolveRunTypeface(run);
             var fontSize = run.FontSize ?? PrintFontSize;
-            var brush = run.Color is { } c ? new SolidColorBrush(Color.FromRgb(c.R, c.G, c.B)) : Brushes.Black;
+            var textColor = run.Color is { } c ? Color.FromRgb(c.R, c.G, c.B) : Colors.Black;
+            var brush = new SolidColorBrush(textColor);
             var remainingWidth = Math.Max(1, rightBoundary - x);
 
             var ft = new FormattedText(
@@ -146,7 +147,7 @@ public static partial class PrintRenderer
             dc.DrawText(ft, textPoint);
 
             // PDF overlay for this run
-            AddHeaderFooterTextOverlay(textOverlays, run.Text, textPoint, remainingWidth, typeface, fontSize, TextAlignment.Left);
+            AddHeaderFooterTextOverlay(textOverlays, run.Text, textPoint, remainingWidth, typeface, fontSize, TextAlignment.Left, textColor);
 
             x += ft.WidthIncludingTrailingWhitespace;
         }
@@ -180,7 +181,8 @@ public static partial class PrintRenderer
         double maxTextWidth,
         Typeface typeface,
         double fontSize,
-        TextAlignment alignment)
+        TextAlignment alignment,
+        Color color)
     {
         var overlayText = BoundPrintedSingleLineOverlayText(text, maxTextWidth, typeface, fontSize);
         if (string.IsNullOrEmpty(overlayText))
@@ -201,7 +203,7 @@ public static partial class PrintRenderer
             typeface.FontFamily.Source,
             typeface.Weight >= FontWeights.SemiBold,
             typeface.Style == FontStyles.Italic || typeface.Style == FontStyles.Oblique,
-            Colors.Black));
+            color));
     }
 
 }

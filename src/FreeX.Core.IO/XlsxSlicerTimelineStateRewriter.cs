@@ -192,10 +192,19 @@ internal static class XlsxSlicerTimelineStateRewriter
     /// normalization) and rewrites its <c>s</c>
     /// flag to match whether that caption is in the model's current <see cref="SlicerModel.SelectedItems"/>.
     /// No-op when the part carries no native tabular items, or when every flag already matches the model
-    /// (idempotent re-save of an unchanged workbook stays byte-stable).
+    /// (idempotent re-save of an unchanged workbook stays byte-stable). Also a strict no-op when the
+    /// model's <see cref="SlicerModel.SelectedItems"/> is empty: that list is populated ONLY by the host
+    /// UI's <c>SlicerItemResolver.ResolvePivotCacheItems</c> (never by the Core.IO load path), and that
+    /// resolver deliberately skips projecting a selection when every item is selected. So an empty
+    /// <c>SelectedItems</c> at save time means "the model never captured/changed the selection" — NOT "the
+    /// user deselected everything" — and must leave the preserved native <c>s</c> flags untouched rather
+    /// than being read as "nothing is selected" and stripping every flag.
     /// </summary>
     private static bool RewriteNativeCacheItemSelection(XElement cacheRoot, SlicerModel model, Workbook workbook)
     {
+        if (model.SelectedItems.Count == 0)
+            return false;
+
         var itemsElement = cacheRoot
             .Descendants()
             .FirstOrDefault(element => string.Equals(element.Name.LocalName, "items", StringComparison.OrdinalIgnoreCase));

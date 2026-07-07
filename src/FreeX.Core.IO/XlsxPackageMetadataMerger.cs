@@ -895,8 +895,22 @@ internal static class XlsxPackageMetadataMerger
         var targetPart = XlsxPackagePath.ResolveRelationshipTarget(RelationshipPartToSourcePart(relationshipPartPath), target);
         var isModernCommentPackageGraphRelationship =
             IsModernCommentPackageGraphRelationship(relationshipPartPath, relationship, targetPart);
-        if (IsExcludedSourcePart(targetPart, excludedSourceParts) && !isModernCommentPackageGraphRelationship)
+        // excludedSourceParts wins UNLESS the target package already has a live part at targetPart
+        // that the workbook model itself asked for (tracked via generatedEntriesBeforeMerge, a
+        // snapshot taken after XlsxWorksheetThreadedCommentMapper.Save ran but before this source
+        // package merge). That distinguishes two cases that both exclude
+        // xl/threadedComments/threadedComment*.xml + xl/persons/person.xml:
+        //  - the model still has threaded comments: Save wrote fresh replacements, so a sidecar
+        //    (e.g. a modern threadedCommentMetadata part) relationship pointing at them must still
+        //    be preserved -- it references a live part, not a stale/deleted one.
+        //  - the model has NO threaded comments left (the user deleted every one): Save wrote
+        //    nothing, so targetPart is genuinely absent, and the relationship must NOT be
+        //    resurrected from the source package (round-12 R12-comments-notes-1).
+        if (IsExcludedSourcePart(targetPart, excludedSourceParts) &&
+            !(isModernCommentPackageGraphRelationship && generatedEntriesBeforeMerge.Contains(targetPart)))
+        {
             return false;
+        }
 
         return !string.IsNullOrWhiteSpace(targetPart) &&
                targetIndex.Contains(targetPart) &&

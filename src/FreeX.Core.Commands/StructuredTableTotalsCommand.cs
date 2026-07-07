@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -97,8 +98,33 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
         if (!TotalsRowFunctionSubtotalNumbers.TryGetValue(function, out var subtotalNumber))
             return null;
 
-        var escapedColumnName = column.Name.Replace("]", "]]");
+        var escapedColumnName = EscapeStructuredReferenceColumnName(column.Name);
         return Cell.FromFormula($"SUBTOTAL({subtotalNumber.ToString(CultureInfo.InvariantCulture)},[{escapedColumnName}])");
+    }
+
+    // R12-xlsx-tables-3: a column header containing '[', ']', '#', or an apostrophe must have each
+    // such character individually escaped with a leading apostrophe, or FreeX's own formula lexer
+    // (see FreeX.Core.Formula.Lexer.ReadStructuredReferenceSelectorSlow) either mis-parses the
+    // selector (an unescaped '[' opens a nested/combined-selector bracket group it can never close)
+    // or StructuredReferenceResolver.FindColumnIndex simply fails to match the literal header text,
+    // leaving the totals cell's SUBTOTAL formula resolving to #NAME?. Escaping only ']' (the
+    // previous behavior) left '[' and '#' broken.
+    private static readonly char[] StructuredReferenceEscapableChars = ['[', ']', '#', '\''];
+
+    private static string EscapeStructuredReferenceColumnName(string columnName)
+    {
+        if (columnName.AsSpan().IndexOfAny(StructuredReferenceEscapableChars) < 0)
+            return columnName;
+
+        var builder = new StringBuilder(columnName.Length + 4);
+        foreach (var ch in columnName)
+        {
+            if (ch is '[' or ']' or '#' or '\'')
+                builder.Append('\'');
+            builder.Append(ch);
+        }
+
+        return builder.ToString();
     }
 }
 

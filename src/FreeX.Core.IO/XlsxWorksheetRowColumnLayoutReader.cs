@@ -483,6 +483,14 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         if (min > max)
             return;
 
+        // Cap a malformed/crafted <col min max> span to the model's max column so a tiny file
+        // can't drive a multi-billion-iteration loop (OOM / hang). Excel itself clamps <col> max
+        // to the sheet's column count. Mirrors OdsFileAdapter.Read.cs's repeat-count clamp.
+        if (min > CellAddress.MaxCol)
+            return;
+        if (max > CellAddress.MaxCol)
+            max = CellAddress.MaxCol;
+
         if (XlsxWorksheetXmlValueParser.IsTruthy(col.Attribute("hidden")?.Value))
         {
             for (var colNumber = min; colNumber <= max; colNumber++)

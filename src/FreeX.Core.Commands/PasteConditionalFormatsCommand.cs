@@ -75,6 +75,9 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
             MinColor = source.MinColor,
             MidColor = source.MidColor,
             MaxColor = source.MaxColor,
+            MinColorSource = source.MinColorSource,
+            MidColorSource = source.MidColorSource,
+            MaxColorSource = source.MaxColorSource,
             UseThreeColorScale = source.UseThreeColorScale,
             MinThresholdType = source.MinThresholdType,
             MinThresholdValue = source.MinThresholdValue,
@@ -86,6 +89,7 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
             MaxThresholdValue = source.MaxThresholdValue,
             MaxThresholdGreaterThanOrEqual = source.MaxThresholdGreaterThanOrEqual,
             DataBarColor = source.DataBarColor,
+            DataBarColorSource = source.DataBarColorSource,
             DataBarMinThresholdType = source.DataBarMinThresholdType,
             DataBarMinThresholdValue = source.DataBarMinThresholdValue,
             DataBarMaxThresholdType = source.DataBarMaxThresholdType,
@@ -95,11 +99,14 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
             DataBarMaxLength = source.DataBarMaxLength,
             DataBarGradient = source.DataBarGradient,
             DataBarBorder = source.DataBarBorder,
+            DataBarBorderColor = source.DataBarBorderColor,
             DataBarAxisPosition = source.DataBarAxisPosition,
             DataBarAxisColor = source.DataBarAxisColor,
             DataBarNegativeFillColor = source.DataBarNegativeFillColor,
             DataBarNegativeBorderColor = source.DataBarNegativeBorderColor,
             AboveAverage = source.AboveAverage,
+            EqualAverage = source.EqualAverage,
+            StdDevCount = source.StdDevCount,
             FormulaText = source.FormulaText,
             IconSetStyle = source.IconSetStyle,
             IconSetShowValue = source.IconSetShowValue,
@@ -117,6 +124,7 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
             NativeContainerChildXmls = source.NativeContainerChildXmls
         };
         clone.IconSetThresholds.AddRange(source.IconSetThresholds);
+        clone.IconOverrides.AddRange(source.IconOverrides);
         return clone;
     }
 

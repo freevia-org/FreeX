@@ -1338,10 +1338,28 @@ internal sealed class RangeDependencyIndex
     private readonly Dictionary<uint, List<RangeDependencyGroup>> _rowBuckets = [];
     private readonly Dictionary<uint, List<RangeDependencyGroup>> _columnBuckets = [];
 
+    // Tracks how many times each logical (range, dependent) pair has been added. A formula
+    // that references the same range twice (e.g. =SUM(A1:A100)+COUNT(A1:A100)) reports that
+    // range/dependent pair to Add twice; the underlying bucket groups use a HashSet so the
+    // second Add is a structural no-op, and Count must mirror that idempotency (and only
+    // truly remove/decrement once the occurrence count drops back to zero) or it drifts and
+    // never returns to 0, permanently disabling the exact-chain recalc fast paths that gate
+    // on Count == 0.
+    private readonly Dictionary<RangeDependency, int> _occurrences = [];
+
     public int Count { get; private set; }
 
     public void Add(RangeDependency dependency)
     {
+        _occurrences.TryGetValue(dependency, out var occurrences);
+        _occurrences[dependency] = occurrences + 1;
+        if (occurrences > 0)
+        {
+            // Already logically present: bucket groups already contain this dependent
+            // (HashSet.Add is idempotent), so don't double-count it.
+            return;
+        }
+
         var range = dependency.Range;
         if (UseRowIndex(range))
             AddToBuckets(_rowBuckets, dependency, range.Start.Row, range.End.Row, RowBucketSize);
@@ -1353,6 +1371,19 @@ internal sealed class RangeDependencyIndex
 
     public void Remove(RangeDependency dependency)
     {
+        if (!_occurrences.TryGetValue(dependency, out var occurrences) || occurrences <= 0)
+            return;
+
+        if (occurrences > 1)
+        {
+            // Other occurrences of this same (range, dependent) pair remain logically
+            // present; the bucket groups still need the dependent, so don't remove it yet.
+            _occurrences[dependency] = occurrences - 1;
+            return;
+        }
+
+        _occurrences.Remove(dependency);
+
         var range = dependency.Range;
         var removed = UseRowIndex(range)
             ? RemoveFromBuckets(_rowBuckets, dependency, range.Start.Row, range.End.Row, RowBucketSize)

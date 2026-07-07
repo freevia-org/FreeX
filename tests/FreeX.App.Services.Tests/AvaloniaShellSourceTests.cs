@@ -1564,8 +1564,13 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(e.Key)");
         source.Should().Contain("FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(e.KeyModifiers)");
         source.Should().Contain("intent.Action == ExcelEditKeyAction.CommitAndMove");
-        source.Should().Contain("var rowDelta = GetCellIndexDelta(current.Row, target.Row);");
-        source.Should().Contain("var colDelta = GetCellIndexDelta(current.Col, target.Col);");
+        // M-round12 (R12-avalonia-parity-deep) made Enter/Tab commit-and-move merge-aware: the
+        // formula box now resolves the landing cell through ExcelWorksheetNavigationPlanner's
+        // shared AdjustTargetPastMerge helper (mirrors the inline cell editor and the WPF host)
+        // instead of moving straight to the raw intent.Target.
+        source.Should().Contain("var adjustedTarget = ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(");
+        source.Should().Contain("var rowDelta = GetCellIndexDelta(current.Row, adjustedTarget.Row);");
+        source.Should().Contain("var colDelta = GetCellIndexDelta(current.Col, adjustedTarget.Col);");
         source.Should().Contain("_session.MoveActiveCell(rowDelta, colDelta);");
         source.Should().Contain("var result = _session.CommitCellText(_formulaBox.Text ?? \"\", UseR1C1ReferenceStyle);");
         source.Should().Contain("if (_isOpening || _isSaving)");

@@ -238,6 +238,16 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
     /// <see cref="RefreshStructuredTableTotalsCommand"/> right after this runs. Existing data cells
     /// are never touched; only cells the resize newly brought into the table's data body are written,
     /// and every overwritten cell is snapshotted so Revert can restore it exactly.
+    /// <para>
+    /// <see cref="StructuredTableColumnModel.CalculatedColumnFormula"/> is always stored anchored to
+    /// the table's first data-body row (matching the OOXML <c>&lt;calculatedColumnFormula&gt;</c>
+    /// convention that native XLSX loads populate, and the same normalization
+    /// <see cref="PropagateCalculatedColumnCommand"/> applies when persisting a newly detected
+    /// calculated column) — so each new row's formula must be row-shifted from that anchor row
+    /// (via <see cref="StructuredTableEditEffects.ShiftFormulaRows"/>), never written verbatim,
+    /// or every auto-expanded row would be frozen on the anchor row's operands instead of Excel's
+    /// per-row relative references.
+    /// </para>
     /// </summary>
     private void FillGrownCalculatedColumns(Sheet sheet, StructuredTableModel previousTable, StructuredTableModel resizedTable)
     {
@@ -251,6 +261,7 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
         if (newLastDataRow <= previousLastDataRow)
             return;
 
+        var (anchorRow, _) = StructuredTableEditEffects.GetDataBodyRowBounds(resizedTable);
         var firstNewRow = Math.Max(previousLastDataRow + 1, resizedTable.Range.Start.Row + 1);
         for (var columnIndex = 0; columnIndex < resizedTable.Columns.Count; columnIndex++)
         {
@@ -262,7 +273,8 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
             for (var row = firstNewRow; row <= newLastDataRow; row++)
             {
                 var address = new CellAddress(_sheetId, row, col);
-                SnapshotAndSetCell(sheet, address, Cell.FromFormula(formula));
+                var shiftedFormula = StructuredTableEditEffects.ShiftFormulaRows(formula, anchorRow, row, sheet.Name);
+                SnapshotAndSetCell(sheet, address, Cell.FromFormula(shiftedFormula));
             }
         }
     }

@@ -77,9 +77,13 @@ public static class PasteCommandFactory
         {
             for (var colOffset = 0UL; colOffset < targetColCount; colOffset++)
             {
+                // Mod by the SOURCE's own axis counts (sourceRowCount/sourceColCount), matching
+                // EnumerateTiledAddresses' `colOffset % sourceRange.RowCount` / `rowOffset % sourceRange.ColCount`.
+                // pasteRowCount/pasteColCount are the (possibly transposed) PASTE geometry, not the source's —
+                // modding by them here inverted the wrap period for non-square blocks (review R12-clipboard-interop-1).
                 var (sourceRowIndex, sourceColIndex) = options.Transpose
-                    ? (colOffset % pasteRowCount, rowOffset % pasteColCount)
-                    : (rowOffset % pasteRowCount, colOffset % pasteColCount);
+                    ? (colOffset % sourceRowCount, rowOffset % sourceColCount)
+                    : (rowOffset % sourceRowCount, colOffset % sourceColCount);
 
                 var sourceRow = rows[(int)sourceRowIndex];
                 if ((int)sourceColIndex >= sourceRow.Count)
