@@ -683,15 +683,15 @@ static int RenderMode(
     bool isSyntheticPage = false)
 {
     var sourceDocument = documentFactory?.Invoke() ?? BuildMultiPageDocument();
-    var sectionGeometrySurface = ResolveSectionGeometrySurfacePlan(scenarioId, sourceDocument, pageNumber, pageCount);
-    var sectionGeometryPage = sectionGeometrySurface?.PagePlan
+    var sectionPageSurface = ResolveSectionPageSurfacePlan(scenarioId, sourceDocument, pageNumber, pageCount);
+    var sectionGeometryPage = sectionPageSurface?.PagePlan
         ?? ResolveSectionGeometryPage(scenarioId, sourceDocument, pageNumber, pageCount);
-    var doc = sectionGeometrySurface?.Document ?? sourceDocument;
+    var doc = sectionPageSurface?.Document ?? sourceDocument;
     var evidencePage = sectionGeometryPage?.Page ?? doc.Page;
-    if (sectionGeometrySurface is not null)
+    if (sectionPageSurface is not null)
     {
-        width = (int)Math.Max(1, Math.Ceiling(sectionGeometrySurface.CaptureWidthDip));
-        height = (int)Math.Max(1, Math.Ceiling(sectionGeometrySurface.CaptureHeightDip));
+        width = (int)Math.Max(1, Math.Ceiling(sectionPageSurface.CaptureWidthDip));
+        height = (int)Math.Max(1, Math.Ceiling(sectionPageSurface.CaptureHeightDip));
         viewportOffsetY = 0;
     }
 
@@ -756,7 +756,7 @@ static int RenderMode(
             height,
             evidencePage,
             LayoutKindFor(mode),
-            captureSource: sectionGeometrySurface is null
+            captureSource: sectionPageSurface is null
                 ? "avalonia-render-target"
                 : "avalonia-section-page-surface",
             viewMode: mode.ToString(),
@@ -766,8 +766,9 @@ static int RenderMode(
             hasEndnotes: hasEndnotes,
             isSyntheticPage: isSyntheticPage,
             sectionGeometryPage: sectionGeometryPage,
-            sectionGeometrySurfacePlan: sectionGeometrySurface,
-            document: doc);
+            sectionGeometrySurfacePlan: sectionPageSurface,
+            document: doc,
+            evidenceDocument: sectionPageSurface is null ? null : sourceDocument);
         Console.WriteLine($"[PageLayoutShot] {label}: {bytes.Length:N0} bytes → {outPath}");
         return 0;
     }
@@ -808,7 +809,7 @@ static int RenderMode(
             height,
             evidencePage,
             LayoutKindFor(mode),
-            captureSource: sectionGeometrySurface is null
+            captureSource: sectionPageSurface is null
                 ? "skia-fallback-placeholder"
                 : "skia-fallback-section-page-surface",
             viewMode: mode.ToString(),
@@ -818,8 +819,9 @@ static int RenderMode(
             hasEndnotes: hasEndnotes,
             isSyntheticPage: isSyntheticPage,
             sectionGeometryPage: sectionGeometryPage,
-            sectionGeometrySurfacePlan: sectionGeometrySurface,
-            document: doc);
+            sectionGeometrySurfacePlan: sectionPageSurface,
+            document: doc,
+            evidenceDocument: sectionPageSurface is null ? null : sourceDocument);
         Console.WriteLine($"[PageLayoutShot] {label} (Skia fallback): {pngBytes.Length:N0} bytes → {outPath}");
         return 0;
     }
@@ -893,11 +895,13 @@ static void AddAvaloniaEvidence(
     bool isSyntheticPage = false,
     FreeWVisualSectionGeometryPagePlan? sectionGeometryPage = null,
     FreeWVisualSectionGeometrySurfacePlan? sectionGeometrySurfacePlan = null,
-    TextDocument? document = null)
+    TextDocument? document = null,
+    TextDocument? evidenceDocument = null)
 {
+    var expectationDocument = evidenceDocument ?? document;
     var stats = ComputePngPixelStats(pngBytes, pixelWidth, pixelHeight);
     var sectionOrdinal = sectionGeometryPage?.SectionOrdinal
-        ?? (document is null ? 1 : FreeWVisualEvidencePlanner.ResolveSectionOrdinal(document, page));
+        ?? (expectationDocument is null ? 1 : FreeWVisualEvidencePlanner.ResolveSectionOrdinal(expectationDocument, page));
     var sectionRelativePageNumber = sectionGeometryPage?.SectionRelativePageNumber ?? 1;
     var sectionOwnerId = sectionGeometryPage?.SectionOwnerId
         ?? FreeWVisualEvidencePlanner.BuildSectionOwnerId(sectionOrdinal);
@@ -930,6 +934,8 @@ static void AddAvaloniaEvidence(
 
     if (sectionGeometrySurfacePlan is not null)
     {
+        metadata["sectionPageSurfaceEvidence"] = "shared-page-surface";
+        metadata["sectionPageSurfaceRenderStatus"] = "avalonia-" + sectionGeometrySurfacePlan.RenderStatus;
         metadata["sectionSurfaceSourceBlocks"] = string.Join(",", sectionGeometrySurfacePlan.SourceBlockIndexes);
         metadata["sectionSurfacePageWidthDip"] = PageLayout.PointsToDip(sectionGeometrySurfacePlan.Page.WidthPt)
             .ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -967,8 +973,8 @@ static void AddAvaloniaEvidence(
         pageCount: pageCount,
         layoutKind: layoutKind,
         availableWidthDip: pixelWidth,
-        headerSlotName: ResolveAvaloniaHeaderSlotName(document, pageNumber),
-        footerSlotName: ResolveAvaloniaFooterSlotName(document, pageNumber),
+        headerSlotName: ResolveAvaloniaHeaderSlotName(expectationDocument, pageNumber),
+        footerSlotName: ResolveAvaloniaFooterSlotName(expectationDocument, pageNumber),
         hasFootnotes: hasFootnotes,
         hasEndnotes: hasEndnotes,
         isSyntheticPage: isSyntheticPage,
@@ -976,7 +982,7 @@ static void AddAvaloniaEvidence(
         sectionRelativePageNumber: sectionRelativePageNumber,
         sectionOwnerId: sectionOwnerId,
         hostMetadata: metadata,
-        document: document);
+        document: expectationDocument);
     FreeWVisualEvidencePlanner.EnsureTrusted(row);
     evidence.Add(row);
 }
@@ -1157,13 +1163,13 @@ static FreeWVisualSectionGeometryPagePlan? ResolveSectionGeometryPage(
         .FirstOrDefault(page => page.PageNumber == pageNumber);
 }
 
-static FreeWVisualSectionGeometrySurfacePlan? ResolveSectionGeometrySurfacePlan(
+static FreeWVisualSectionGeometrySurfacePlan? ResolveSectionPageSurfacePlan(
     string scenarioId,
     TextDocument document,
     int pageNumber,
     int pageCount)
 {
-    if (!FreeWVisualEvidenceManifestNormalizer.SectionGeometryRendererScenarioIds.Contains(
+    if (!FreeWVisualEvidenceManifestNormalizer.SectionPageSurfaceRendererScenarioIds.Contains(
             scenarioId,
             StringComparer.OrdinalIgnoreCase))
     {

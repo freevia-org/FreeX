@@ -126,6 +126,11 @@ public static class FreeWVisualEvidenceManifestNormalizer
     [
         "f2-section-landscape"
     ];
+    public static IReadOnlyList<string> SectionPageSurfaceRendererScenarioIds { get; } =
+    [
+        "f2-section-landscape",
+        "f2-hf-images"
+    ];
     public static IReadOnlyList<string> ReviewRendererScenarioIds { get; } =
     [
         "f2-tracked-changes",

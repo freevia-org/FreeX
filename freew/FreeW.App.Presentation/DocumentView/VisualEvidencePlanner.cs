@@ -1162,7 +1162,7 @@ public static class FreeWVisualEvidencePlanner
 
             surfacePlans.Add(new FreeWVisualSectionGeometrySurfacePlan(
                 pagePlan,
-                BuildSectionGeometrySurfaceDocument(document, pagePlan.Page, sourceBlockIndexes),
+                BuildSectionGeometrySurfaceDocument(document, pagePlan, sourceBlockIndexes),
                 sourceBlockIndexes,
                 captureWidth,
                 captureHeight,
@@ -2717,13 +2717,14 @@ public static class FreeWVisualEvidencePlanner
 
     private static TextDocument BuildSectionGeometrySurfaceDocument(
         TextDocument source,
-        PageSettings page,
+        FreeWVisualSectionGeometryPagePlan pagePlan,
         IReadOnlyList<int> sourceBlockIndexes)
     {
         var document = TextDocument.CreateEmpty();
         document.Blocks.Clear();
         CopyDocumentShell(source, document);
-        CopyPageSettings(page, document.Page);
+        CopyPageSettings(pagePlan.Page, document.Page);
+        CopySectionHeadersFooters(source, document, pagePlan.SectionOrdinal);
 
         foreach (var blockIndex in sourceBlockIndexes)
         {
@@ -2735,6 +2736,91 @@ public static class FreeWVisualEvidencePlanner
             document.Blocks.Add(new Paragraph());
 
         return document;
+    }
+
+    private static void CopySectionHeadersFooters(
+        TextDocument source,
+        TextDocument target,
+        int sectionOrdinal)
+    {
+        var sections = source.Sections;
+        var sectionIndex = Math.Clamp(sectionOrdinal - 1, 0, Math.Max(0, sections.Count - 1));
+        var headersFooters = sections.Count == 0
+            ? source.FinalSectionHeadersFooters
+            : sections[sectionIndex].HeadersFooters;
+
+        CopyHeaderFooterSlots(headersFooters, target.FinalSectionHeadersFooters);
+    }
+
+    private static void CopyHeaderFooterSlots(
+        SectionHeadersFooters source,
+        SectionHeadersFooters target)
+    {
+        target.Header = CloneHeaderFooter(source.Header);
+        target.Footer = CloneHeaderFooter(source.Footer);
+        target.EvenHeader = CloneHeaderFooter(source.EvenHeader);
+        target.EvenFooter = CloneHeaderFooter(source.EvenFooter);
+        target.FirstHeader = CloneHeaderFooter(source.FirstHeader);
+        target.FirstFooter = CloneHeaderFooter(source.FirstFooter);
+    }
+
+    private static HeaderFooter? CloneHeaderFooter(HeaderFooter? source)
+    {
+        if (source is null)
+            return null;
+
+        var clone = new HeaderFooter();
+        foreach (var paragraph in source.Paragraphs)
+        {
+            var clonedParagraph = (Paragraph)DocumentMerge.CloneBlock(paragraph);
+            CopyHeaderFooterImageMetadata(paragraph, clonedParagraph);
+            clone.Paragraphs.Add(clonedParagraph);
+        }
+        return clone;
+    }
+
+    private static void CopyHeaderFooterImageMetadata(Paragraph source, Paragraph target)
+    {
+        var count = Math.Min(source.Runs.Count, target.Runs.Count);
+        for (var i = 0; i < count; i++)
+        {
+            if (source.Runs[i].Image is not { } sourceImage || target.Runs[i].Image is not { } targetImage)
+                continue;
+
+            targetImage.AltText = sourceImage.AltText;
+            targetImage.Wrapping = sourceImage.Wrapping;
+            targetImage.HorizontalOffsetPt = sourceImage.HorizontalOffsetPt;
+            targetImage.VerticalOffsetPt = sourceImage.VerticalOffsetPt;
+            targetImage.HorizontalAnchor = sourceImage.HorizontalAnchor;
+            targetImage.VerticalAnchor = sourceImage.VerticalAnchor;
+            targetImage.ZOrderIndex = sourceImage.ZOrderIndex;
+            targetImage.RotationAngle = sourceImage.RotationAngle;
+            targetImage.FlipH = sourceImage.FlipH;
+            targetImage.FlipV = sourceImage.FlipV;
+            targetImage.CropLeft = sourceImage.CropLeft;
+            targetImage.CropRight = sourceImage.CropRight;
+            targetImage.CropTop = sourceImage.CropTop;
+            targetImage.CropBottom = sourceImage.CropBottom;
+            targetImage.BorderColorHex = sourceImage.BorderColorHex;
+            targetImage.BorderWidthPt = sourceImage.BorderWidthPt;
+            targetImage.BorderDash = sourceImage.BorderDash;
+            targetImage.OriginalPixelWidth = sourceImage.OriginalPixelWidth;
+            targetImage.OriginalPixelHeight = sourceImage.OriginalPixelHeight;
+            targetImage.BrightnessPct = sourceImage.BrightnessPct;
+            targetImage.ContrastPct = sourceImage.ContrastPct;
+            targetImage.SaturationPct = sourceImage.SaturationPct;
+            targetImage.TransparencyPct = sourceImage.TransparencyPct;
+            targetImage.RecolorMode = sourceImage.RecolorMode;
+            targetImage.ColorTemperature = sourceImage.ColorTemperature;
+            targetImage.ShadowPreset = sourceImage.ShadowPreset;
+            targetImage.GlowSizePt = sourceImage.GlowSizePt;
+            targetImage.GlowColorHex = sourceImage.GlowColorHex;
+            targetImage.ReflectionPreset = sourceImage.ReflectionPreset;
+            targetImage.SoftEdgePt = sourceImage.SoftEdgePt;
+            targetImage.BevelPreset = sourceImage.BevelPreset;
+            targetImage.ArtisticEffect = sourceImage.ArtisticEffect;
+            targetImage.PictureStylePreset = sourceImage.PictureStylePreset;
+        }
     }
 
     private static void CopyDocumentShell(TextDocument source, TextDocument target)
