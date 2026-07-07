@@ -1843,8 +1843,17 @@ public static class DocxReader
     private static MathRun ReadFunctionApply(XElement func)
     {
         var funcName = MathTextOf(func.Element(M + "fName"));
-        var argument = MathTextOf(func.Element(M + "e"));
-        return MathRun.FunctionApply(funcName, argument);
+        var argument = func.Element(M + "e");
+        var argumentText = MathTextOf(argument);
+        return HasStructuredMathSlot(argument)
+            ? new MathRun
+            {
+                Kind = MathRunKind.FunctionApply,
+                FuncName = funcName,
+                Base = argumentText,
+                FunctionArgumentEquation = ReadMathSlot(argument)
+            }
+            : MathRun.FunctionApply(funcName, argumentText);
     }
 
     /// <summary>

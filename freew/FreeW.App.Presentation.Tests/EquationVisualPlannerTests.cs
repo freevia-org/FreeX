@@ -491,4 +491,61 @@ public sealed class EquationVisualPlannerTests
         plan.Segments[2].Style.FontSizeScale.Should().Be(EquationVisualPlanner.StructureFontSizeScale);
         plan.Segments.Should().NotContain(segment => segment.Role == EquationVisualSegmentRole.LinearFallback);
     }
+
+    [Fact]
+    public void EquationVisualPlanner_NestedFunctionArgument_SurfacesSharedSlotPlanAndKeepsFlattenedSegments()
+    {
+        var plan = EquationVisualPlanner.Build(new Equation([
+            MathRun.FunctionApply(
+                "sin",
+                new Equation([
+                    MathRun.PlainText("a+"),
+                    MathRun.Superscript("x", "2")
+                ]))
+        ]));
+
+        plan.LinearText.Should().Be("sin(a+x^2)");
+        plan.Elements.Should().ContainSingle();
+        var function = plan.Elements[0];
+        function.Kind.Should().Be(EquationVisualElementKind.FunctionApply);
+        function.FunctionName.Should().Be("sin");
+        function.FunctionArgument.Should().Be("a+x^2");
+        function.FunctionArgumentPlan.Should().NotBeNull();
+        function.FunctionArgumentPlan!.Segments.Select(segment => segment.Role)
+            .Should().Equal(
+                EquationVisualSegmentRole.Text,
+                EquationVisualSegmentRole.Base,
+                EquationVisualSegmentRole.Superscript);
+
+        plan.Segments.Select(segment => segment.Text).Should().Equal(
+            "sin",
+            EquationVisualPlanner.FunctionOpenDelimiterText,
+            "a+x^2",
+            EquationVisualPlanner.FunctionCloseDelimiterText);
+        plan.Segments.Select(segment => segment.Role).Should().Equal(
+            EquationVisualSegmentRole.FunctionName,
+            EquationVisualSegmentRole.FunctionOpenDelimiter,
+            EquationVisualSegmentRole.FunctionArgument,
+            EquationVisualSegmentRole.FunctionCloseDelimiter);
+        plan.Segments.Should().NotContain(segment => segment.Role == EquationVisualSegmentRole.LinearFallback);
+    }
+
+    [Fact]
+    public void EquationVisualPlanner_NestedFunctionArgument_IsDepthBounded()
+    {
+        var equation = new Equation();
+        equation.Runs.Add(new MathRun
+        {
+            Kind = MathRunKind.FunctionApply,
+            FuncName = "sin",
+            Base = "x",
+            FunctionArgumentEquation = equation
+        });
+
+        var plan = EquationVisualPlanner.Build(equation);
+
+        plan.LinearText.Should().Contain("sin(x)");
+        plan.LinearText.Length.Should().BeLessThan(100);
+        plan.Elements.Should().NotBeEmpty();
+    }
 }

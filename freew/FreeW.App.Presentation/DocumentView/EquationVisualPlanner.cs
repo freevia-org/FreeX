@@ -105,6 +105,7 @@ public sealed record EquationVisualElement(
     public EquationVisualPlan? DenominatorPlan { get; init; }
     public EquationVisualPlan? RadicandPlan { get; init; }
     public EquationVisualPlan? DelimiterContentPlan { get; init; }
+    public EquationVisualPlan? FunctionArgumentPlan { get; init; }
 
     public int MatrixRowCount => MatrixRows.Count;
 
@@ -268,7 +269,8 @@ public sealed record EquationVisualElement(
         string linearText,
         string functionName,
         string argument,
-        IReadOnlyList<EquationVisualSegment> segments) =>
+        IReadOnlyList<EquationVisualSegment> segments,
+        EquationVisualPlan? argumentPlan = null) =>
         new(
             EquationVisualElementKind.FunctionApply,
             linearText,
@@ -279,7 +281,8 @@ public sealed record EquationVisualElement(
             string.Empty)
         {
             FunctionName = functionName,
-            FunctionArgument = argument
+            FunctionArgument = argument,
+            FunctionArgumentPlan = argumentPlan
         };
 }
 
@@ -497,7 +500,7 @@ public static class EquationVisualPlanner
                 break;
 
             case MathRunKind.FunctionApply:
-                AddFunctionApplyElement(run, segments, elements);
+                AddFunctionApplyElement(run, segments, elements, depth);
                 break;
 
             default:
@@ -793,13 +796,17 @@ public static class EquationVisualPlanner
     private static void AddFunctionApplyElement(
         MathRun run,
         List<EquationVisualSegment> segments,
-        List<EquationVisualElement> elements)
+        List<EquationVisualElement> elements,
+        int depth)
     {
+        var argumentPlan = BuildSlotPlan(run.FunctionArgumentEquation, depth);
+        var argumentText = argumentPlan?.LinearText ?? run.Base;
+
         var runSegments = new List<EquationVisualSegment>();
         AddIfAny(runSegments, run.FuncName, EquationVisualSegmentRole.FunctionName, FunctionNameStyle);
         if (!string.IsNullOrEmpty(run.FuncName))
             AddIfAny(runSegments, FunctionOpenDelimiterText, EquationVisualSegmentRole.FunctionOpenDelimiter, FunctionDelimiterStyle);
-        AddIfAny(runSegments, run.Base, EquationVisualSegmentRole.FunctionArgument, StructureStyle);
+        AddIfAny(runSegments, argumentText, EquationVisualSegmentRole.FunctionArgument, StructureStyle);
         if (!string.IsNullOrEmpty(run.FuncName))
             AddIfAny(runSegments, FunctionCloseDelimiterText, EquationVisualSegmentRole.FunctionCloseDelimiter, FunctionDelimiterStyle);
 
@@ -810,8 +817,9 @@ public static class EquationVisualPlanner
         elements.Add(EquationVisualElement.FunctionApply(
             run.LinearText,
             run.FuncName,
-            run.Base,
-            runSegments));
+            argumentText,
+            runSegments,
+            argumentPlan));
     }
 
     private static string AccentCueText(string accent)

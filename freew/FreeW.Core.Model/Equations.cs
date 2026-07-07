@@ -108,6 +108,9 @@ public sealed record MathRun
     /// <summary>Optional structured content equation for nested OMML delimiter slots.</summary>
     public Equation? DelimiterContentEquation { get; init; }
 
+    /// <summary>Optional structured argument equation for nested OMML function-apply slots.</summary>
+    public Equation? FunctionArgumentEquation { get; init; }
+
     /// <summary>The radical's degree (empty = square root; non-empty = nth root). Only for <see cref="MathRunKind.Radical"/>.</summary>
     public string Degree { get; init; } = string.Empty;
 
@@ -251,6 +254,20 @@ public sealed record MathRun
     public static MathRun FunctionApply(string funcName, string argument) =>
         new() { Kind = MathRunKind.FunctionApply, FuncName = funcName, Base = argument };
 
+    /// <summary>Creates a function-application fragment (m:func) whose argument is a structured equation.</summary>
+    public static MathRun FunctionApply(string funcName, Equation argument)
+    {
+        ArgumentNullException.ThrowIfNull(argument);
+
+        return new()
+        {
+            Kind = MathRunKind.FunctionApply,
+            FuncName = funcName,
+            Base = argument.LinearText,
+            FunctionArgumentEquation = argument
+        };
+    }
+
     /// <summary>Creates a group-character fragment (m:groupChr): <paramref name="@base"/> grouped by <paramref name="groupChr"/>.</summary>
     public static MathRun GroupCharOf(string @base, string groupChr = "\u23DE", string groupChrPos = "top") =>
         new()
@@ -281,12 +298,18 @@ public sealed record MathRun
         MathRunKind.Bar => BarTop ? $"‾{Base}‾" : $"_{Base}_",
         MathRunKind.Delimiter => $"{OpenChar}{SlotLinearText(DelimiterContentEquation, Base, depth)}{CloseChar}",
         MathRunKind.Matrix => Matrix?.LinearText ?? string.Empty,
-        MathRunKind.FunctionApply => string.IsNullOrEmpty(FuncName) ? Base : $"{FuncName}({Base})",
+        MathRunKind.FunctionApply => FunctionLinearText(depth),
         MathRunKind.GroupChar => string.Equals(GroupChrPos, "bot", StringComparison.OrdinalIgnoreCase)
             ? $"{Base}{GroupChr}"
             : $"{GroupChr}{Base}",
         _ => Text
     };
+
+    private string FunctionLinearText(int depth)
+    {
+        var argument = SlotLinearText(FunctionArgumentEquation, Base, depth);
+        return string.IsNullOrEmpty(FuncName) ? argument : $"{FuncName}({argument})";
+    }
 
     private static string SlotLinearText(Equation? equation, string fallback, int depth)
     {

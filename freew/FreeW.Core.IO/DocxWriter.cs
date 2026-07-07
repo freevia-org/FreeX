@@ -2567,7 +2567,7 @@ public static class DocxWriter
         MathRunKind.Bar => BuildBar(run),
         MathRunKind.Delimiter => BuildDelimiter(run, depth),
         MathRunKind.Matrix => BuildMatrix(run.Matrix),
-        MathRunKind.FunctionApply => BuildFunctionApply(run),
+        MathRunKind.FunctionApply => BuildFunctionApply(run, depth),
         MathRunKind.GroupChar => BuildGroupChar(run),
         _ => MathText(run.Text)
     };
@@ -2687,10 +2687,10 @@ public static class DocxWriter
     /// Builds a function-apply element (m:func): m:fName holds a plain text run with the function name
     /// and m:e holds the argument. Mirrors <c>DocxReader.ReadFunctionApply</c>.
     /// </summary>
-    private static XElement BuildFunctionApply(MathRun run) =>
+    private static XElement BuildFunctionApply(MathRun run, int depth) =>
         new(M + "func",
             new XElement(M + "fName", MathText(run.FuncName)),
-            new XElement(M + "e", MathText(run.Base)));
+            BuildMathSlot(M + "e", run.FunctionArgumentEquation, run.Base, depth));
 
     /// <summary>
     /// Builds a group-character element (m:groupChr): m:groupChrPr carries the spanning glyph

@@ -553,6 +553,80 @@ public class EquationRoundTripTests
     }
 
     [Fact]
+    public void NestedFunctionArgument_SurvivesRoundTripAndEmitsDirectSlotChildren()
+    {
+        var equation = new Equation([
+            MathRun.FunctionApply(
+                "sin",
+                new Equation([
+                    MathRun.PlainText("a+"),
+                    MathRun.Superscript("x", "2")
+                ]))
+        ]);
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(paragraph);
+
+        var read = RoundTrip(doc);
+        var xml = WriteDocumentXml(doc);
+
+        var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Equation is not null).Equation!;
+        roundTripped.Runs.Should().ContainSingle();
+        var function = roundTripped.Runs[0];
+        function.Kind.Should().Be(MathRunKind.FunctionApply);
+        function.FuncName.Should().Be("sin");
+        function.Base.Should().Be("a+x2");
+        function.FunctionArgumentEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        function.FunctionArgumentEquation.Runs[1].Base.Should().Be("x");
+        function.FunctionArgumentEquation.Runs[1].Sup.Should().Be("2");
+        roundTripped.LinearText.Should().Be("sin(a+x^2)");
+
+        var writtenFunction = xml.Descendants(M + "func").Single();
+        var argument = writtenFunction.Element(M + "e")!;
+        argument.Elements(M + "oMath").Should().BeEmpty();
+        argument.Elements(M + "r").Should().ContainSingle();
+        argument.Elements(M + "sSup").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void RawNestedFunctionArgument_ReadsAsNestedEquation()
+    {
+        var documentXml = $$"""
+            <w:document xmlns:w="{{W.NamespaceName}}" xmlns:m="{{M.NamespaceName}}">
+              <w:body>
+                <w:p>
+                  <m:oMath>
+                    <m:func>
+                      <m:fName><m:r><m:t>sin</m:t></m:r></m:fName>
+                      <m:e>
+                        <m:r><m:t>a+</m:t></m:r>
+                        <m:sSup>
+                          <m:e><m:r><m:t>x</m:t></m:r></m:e>
+                          <m:sup><m:r><m:t>2</m:t></m:r></m:sup>
+                        </m:sSup>
+                      </m:e>
+                    </m:func>
+                  </m:oMath>
+                </w:p>
+              </w:body>
+            </w:document>
+            """;
+
+        var read = ReadDocumentXml(documentXml);
+
+        var equation = read.Paragraphs.Single().Runs.Single(run => run.Equation is not null).Equation!;
+        equation.Runs.Should().ContainSingle();
+        var function = equation.Runs[0];
+        function.Kind.Should().Be(MathRunKind.FunctionApply);
+        function.FuncName.Should().Be("sin");
+        function.FunctionArgumentEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        equation.LinearText.Should().Be("sin(a+x^2)");
+    }
+
+    [Fact]
     public void GroupCharEquation_SurvivesRoundTrip()
     {
         var read = RoundTripEquation(new Equation([MathRun.GroupCharOf("x+y", "\u23DF", "bot")]));

@@ -208,6 +208,42 @@ public class EquationsTests
     }
 
     [Fact]
+    public void MathRun_FunctionApply_CanCarryNestedArgumentEquation()
+    {
+        var argument = new Equation([
+            MathRun.PlainText("a+"),
+            MathRun.Superscript("x", "2")
+        ]);
+
+        var func = MathRun.FunctionApply("sin", argument);
+
+        func.Kind.Should().Be(MathRunKind.FunctionApply);
+        func.FuncName.Should().Be("sin");
+        func.Base.Should().Be("a+x^2");
+        func.FunctionArgumentEquation.Should().BeSameAs(argument);
+        func.LinearText.Should().Be("sin(a+x^2)");
+    }
+
+    [Fact]
+    public void MathRun_FunctionApply_LinearText_IsDepthBoundedForCyclicNestedArgument()
+    {
+        var equation = new Equation();
+        equation.Runs.Add(new MathRun
+        {
+            Kind = MathRunKind.FunctionApply,
+            FuncName = "sin",
+            Base = "x",
+            FunctionArgumentEquation = equation
+        });
+
+        var linearText = equation.LinearText;
+
+        linearText.Should().NotBeEmpty();
+        linearText.Length.Should().BeLessThan(100);
+        linearText.Should().Contain("sin(x)");
+    }
+
+    [Fact]
     public void MathRun_FunctionApply_RendersLimWithArgument()
     {
         var lim = MathRun.FunctionApply("lim", "f(x)");
