@@ -1224,6 +1224,14 @@ public sealed class VisualEvidencePlannerTests
         expectation.Tables.HasNamedStyle.Should().BeTrue();
         expectation.Tables.Tables.Single().TableStyleId.Should().Be("GridTable4");
         expectation.Tables.Tables.Single().ColumnWidthsDip.Should().HaveCount(4);
+        var headerCellFill = expectation.Tables.Tables.Single().Cells
+            .Single(cell => cell.RowIndex == 0 && cell.CellIndex == 0)
+            .EffectiveFill;
+        headerCellFill.StyleDerivedFillSource.Should().Be("style-derived-header");
+        headerCellFill.StyleDerivedFillHex.Should().Be("#2F5496");
+        headerCellFill.EffectiveFillHex.Should().Be("#2F5496");
+        headerCellFill.StyleDerivedBold.Should().BeTrue();
+        headerCellFill.EffectiveBold.Should().BeTrue();
         expectation.Tables.TableCellFillSignatures.Count.Should().BeGreaterThan(8);
         expectation.Tables.TableCellFillSignatures.Should().Contain(signature =>
             signature.Contains("source=style-derived-header", StringComparison.Ordinal)

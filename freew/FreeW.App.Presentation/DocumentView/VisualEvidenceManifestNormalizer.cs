@@ -2835,7 +2835,11 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 table.AutoFit,
                 table.TableStyleId ?? string.Empty,
                 string.Join(",", table.ColumnWidthsDip.Select(FormatDouble)),
-                string.Join(";", table.Cells.Select(BuildTableCellSignature).OrderBy(signature => signature, StringComparer.Ordinal))))
+                string.Join(
+                    ";",
+                    table.Cells
+                        .Select(cell => BuildTableCellSignature(table, cell))
+                        .OrderBy(signature => signature, StringComparer.Ordinal))))
             .OrderBy(signature => signature, StringComparer.Ordinal)
             .ToList();
 
@@ -2851,8 +2855,11 @@ public static class FreeWVisualEvidenceManifestNormalizer
             .ToList();
     }
 
-    private static string BuildTableCellSignature(DocumentTableCellLayoutPlan cell) =>
-        string.Join(
+    private static string BuildTableCellSignature(DocumentTableLayoutPlan table, DocumentTableCellLayoutPlan cell)
+    {
+        var fillPlan = DocumentViewLayoutPlanner.BuildTableCellEffectiveFillPlan(table, cell);
+
+        return string.Join(
             ":",
             cell.RowIndex.ToString(CultureInfo.InvariantCulture),
             cell.CellIndex.ToString(CultureInfo.InvariantCulture),
@@ -2861,11 +2868,19 @@ public static class FreeWVisualEvidenceManifestNormalizer
             cell.RowSpan.ToString(CultureInfo.InvariantCulture),
             BoolFlag(cell.IsVerticalMergeContinuation),
             cell.ShadingColorHex ?? string.Empty,
+            fillPlan.ExplicitFillHex ?? string.Empty,
+            fillPlan.StyleDerivedFillSource ?? string.Empty,
+            fillPlan.StyleDerivedFillHex ?? string.Empty,
+            fillPlan.EffectiveFillSource ?? string.Empty,
+            fillPlan.EffectiveFillHex ?? string.Empty,
+            BoolFlag(fillPlan.StyleDerivedBold),
+            BoolFlag(fillPlan.EffectiveBold),
             BoolFlag(cell.HasCustomBorders),
             cell.TextDirection,
             cell.VerticalAlignment,
             cell.PreferredWidthDip.HasValue ? FormatDouble(cell.PreferredWidthDip.Value) : string.Empty,
             cell.HeightDip.HasValue ? FormatDouble(cell.HeightDip.Value) : string.Empty);
+    }
 
     private static IReadOnlyList<DocumentTableLayoutPlan> CanonicalizeTablePlansForComparison(
         FreeWVisualTableExpectation tableExpectation) =>
@@ -2880,10 +2895,9 @@ public static class FreeWVisualEvidenceManifestNormalizer
         if (table.Cells.Count == 0)
             return table;
 
-        var tableStyle = DocumentTableStyle.FindById(table.TableStyleId ?? string.Empty);
         var cells = table.Cells
             .Select(cell => !HasExplicitCellFillSignature(tableExpectation, table, cell)
-                && IsStyleDerivedCellFill(table, cell, tableStyle)
+                && IsStyleDerivedCellFill(table, cell)
                 ? cell with { ShadingColorHex = null }
                 : cell)
             .ToList();
@@ -2897,14 +2911,14 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
     private static bool IsStyleDerivedCellFill(
         DocumentTableLayoutPlan table,
-        DocumentTableCellLayoutPlan cell,
-        DocumentTableStyle? tableStyle)
+        DocumentTableCellLayoutPlan cell)
     {
         var normalizedShading = NormalizeHexForComparison(cell.ShadingColorHex);
         if (normalizedShading is null)
             return false;
 
-        var styleFill = NormalizeHexForComparison(ResolveStyleDerivedCellFill(table, cell, tableStyle));
+        var fillPlan = DocumentViewLayoutPlanner.BuildTableCellEffectiveFillPlan(table, cell);
+        var styleFill = NormalizeHexForComparison(fillPlan.StyleDerivedFillHex);
         if (string.Equals(normalizedShading, styleFill, StringComparison.Ordinal))
             return true;
 
@@ -2915,38 +2929,6 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
         return IsLegacyStyleChromeFill(table, cell, normalizedShading);
     }
-
-    private static string? ResolveStyleDerivedCellFill(
-        DocumentTableLayoutPlan table,
-        DocumentTableCellLayoutPlan cell,
-        DocumentTableStyle? tableStyle)
-    {
-        if (tableStyle is null)
-            return null;
-
-        var isFirstColumn = cell.GridColumnIndex == 0;
-        var isLastColumn = table.GridColumnCount > 0
-            && cell.GridColumnIndex + Math.Max(1, cell.GridSpan) >= table.GridColumnCount;
-        var (fillHex, _) = tableStyle.ResolveCellStyle(
-            cell.RowIndex,
-            Math.Max(0, table.RowCount),
-            isFirstColumn,
-            isLastColumn,
-            BuildTableFormatting(table));
-        return fillHex;
-    }
-
-    private static TableFormatting BuildTableFormatting(DocumentTableLayoutPlan table) =>
-        new()
-        {
-            HeaderRow = table.HasHeaderRow,
-            RepeatHeaderRow = table.RepeatsHeaderRow,
-            BandedRows = table.HasBandedRows,
-            BandedColumns = table.HasBandedColumns,
-            FirstColumn = table.HasFirstColumn,
-            LastColumn = table.HasLastColumn,
-            LastRow = table.HasLastRow
-        };
 
     private static bool CanApplyStyleChrome(DocumentTableLayoutPlan table, DocumentTableCellLayoutPlan cell)
     {
@@ -2972,18 +2954,15 @@ public static class FreeWVisualEvidenceManifestNormalizer
         if (table.HasNamedStyle)
             return false;
         if (table.HasHeaderRow && cell.RowIndex == 0)
-            return normalizedShading == LegacyHeaderChromeFillHex;
+            return normalizedShading == DocumentViewLayoutPlanner.LegacyHeaderRowFillHex;
         if (!table.HasBandedRows)
             return false;
 
         var bodyIndex = TableBanding.BodyRowIndex(cell.RowIndex, table.HasHeaderRow);
         return bodyIndex >= 0
             && bodyIndex % 2 == 0
-            && normalizedShading == LegacyBandedRowChromeFillHex;
+            && normalizedShading == DocumentViewLayoutPlanner.LegacyBandedRowFillHex;
     }
-
-    private const string LegacyHeaderChromeFillHex = "#D9E2F3";
-    private const string LegacyBandedRowChromeFillHex = "#F2F2F2";
 
     private static readonly IReadOnlySet<string> BuiltInStyleChromeFillHexes =
         DocumentTableStyle.Catalog
@@ -2998,8 +2977,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
             })
             .Select(NormalizeHexForComparison)
             .Where(static fill => fill is not null)
-            .Append(LegacyHeaderChromeFillHex)
-            .Append(LegacyBandedRowChromeFillHex)
+            .Append(DocumentViewLayoutPlanner.LegacyHeaderRowFillHex)
+            .Append(DocumentViewLayoutPlanner.LegacyBandedRowFillHex)
             .ToHashSet(StringComparer.Ordinal)!;
 
     private static bool HasExplicitCellFillSignature(

@@ -139,8 +139,9 @@ public sealed class TableStyleGalleryTests
 
         var wpfTable = editor.Document.Blocks.OfType<WpfTable>().First();
         var headerCell = wpfTable.RowGroups[0].Rows[0].Cells[0];
-        headerCell.Background.Should().NotBe(Brushes.White,
-            "header band fill must render a non-white background");
+        var fill = headerCell.Background.Should().BeOfType<SolidColorBrush>(
+            "header band fill must render from the shared effective-fill plan").Subject;
+        fill.Color.Should().Be(Color.FromRgb(0x44, 0x72, 0xC4));
     }
 
     // ── Preview / revert cycle ───────────────────────────────────────────────────────────────────────

@@ -135,6 +135,29 @@ public sealed class DocumentViewLayoutPlannerTests
         plan.Cells.Where(cell => cell.RowIndex == 0)
             .Should()
             .OnlyContain(cell => cell.ShadingColorHex == null, "header fill is style-derived evidence, not explicit cell shading");
+        var headerCell = plan.Cells.Single(cell => cell.RowIndex == 0 && cell.CellIndex == 0);
+        headerCell.EffectiveFill.ExplicitFillHex.Should().BeNull();
+        headerCell.EffectiveFill.StyleDerivedFillSource.Should().Be("style-derived-header");
+        headerCell.EffectiveFill.StyleDerivedFillHex.Should().Be("#2F5496");
+        headerCell.EffectiveFill.EffectiveFillSource.Should().Be("style-derived-header");
+        headerCell.EffectiveFill.EffectiveFillHex.Should().Be("#2F5496");
+        headerCell.EffectiveFill.StyleDerivedBold.Should().BeTrue();
+        headerCell.EffectiveFill.EffectiveBold.Should().BeTrue();
+        var explicitBodyCell = plan.Cells.Single(cell =>
+            cell.RowIndex == 1
+            && cell.ShadingColorHex == "#EAF2F8");
+        explicitBodyCell.EffectiveFill.ExplicitFillHex.Should().Be("#EAF2F8");
+        explicitBodyCell.EffectiveFill.StyleDerivedFillSource.Should().BeNull();
+        explicitBodyCell.EffectiveFill.StyleDerivedFillHex.Should().BeNull();
+        explicitBodyCell.EffectiveFill.EffectiveFillSource.Should().Be("explicit-cell");
+        explicitBodyCell.EffectiveFill.EffectiveFillHex.Should().Be("#EAF2F8");
+        explicitBodyCell.EffectiveFill.StyleDerivedBold.Should().BeTrue();
+        explicitBodyCell.EffectiveFill.EffectiveBold.Should().BeTrue();
+        var bandedBodyCell = plan.Cells.Single(cell => cell.RowIndex == 1 && cell.CellIndex == 1);
+        bandedBodyCell.EffectiveFill.StyleDerivedFillSource.Should().Be("style-derived-banded-row");
+        bandedBodyCell.EffectiveFill.StyleDerivedFillHex.Should().Be("#BDD7EE");
+        bandedBodyCell.EffectiveFill.EffectiveFillSource.Should().Be("style-derived-banded-row");
+        bandedBodyCell.EffectiveFill.EffectiveFillHex.Should().Be("#BDD7EE");
         plan.Cells.Where(cell => cell.RowIndex > 0)
             .Should()
             .Contain(cell => cell.ShadingColorHex != null, "body cells still carry explicit cell-shading evidence");
@@ -838,6 +861,21 @@ public sealed class DocumentViewLayoutPlannerSourceGuardTests
         avaloniaSource.Should().Contain("BuildGridlines(");
         avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildRulerTicks(");
         avaloniaSource.Should().Contain("DrawingObjectVisualPlanner.BuildVisualPlan(");
+    }
+
+    [Fact]
+    public void PlatformDocumentViews_UseSharedTableCellEffectiveFillPlans()
+    {
+        var hostSource = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
+        var avaloniaSource = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
+
+        hostSource.Should().Contain("cell => cell.EffectiveFill");
+        hostSource.Should().Contain("DocumentTableCellEffectiveFillPlan.Empty");
+        hostSource.Should().NotContain("ResolveCellStyle(");
+
+        avaloniaSource.Should().Contain("cell => cell.EffectiveFill");
+        avaloniaSource.Should().Contain("DocumentTableCellEffectiveFillPlan.Empty");
+        avaloniaSource.Should().NotContain("ResolveCellStyle(");
     }
 
     [Fact]
