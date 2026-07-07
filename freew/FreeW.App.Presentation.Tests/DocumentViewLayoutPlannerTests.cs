@@ -631,6 +631,44 @@ public sealed class DocumentViewLayoutPlannerTests
     }
 
     [Fact]
+    public void BuildFloatingWrapReservation_UsesFloatingObjectDimensionsOnlyForWrappingModes()
+    {
+        var square = Run.FromImage(new InlineImage([], widthPt: 72, heightPt: 54)
+        {
+            Wrapping = ImageWrapping.Square,
+        });
+        var topAndBottom = Run.FromImage(new InlineImage([], widthPt: 90, heightPt: 45)
+        {
+            Wrapping = ImageWrapping.TopAndBottom,
+        });
+        var behind = Run.FromImage(new InlineImage([], widthPt: 72, heightPt: 54)
+        {
+            Wrapping = ImageWrapping.Behind,
+        });
+
+        var squarePlan = DocumentViewLayoutPlanner.BuildFloatingWrapReservation(square);
+        var topAndBottomPlan = DocumentViewLayoutPlanner.BuildFloatingWrapReservation(topAndBottom);
+
+        squarePlan.Should().Be(new DocumentFloatingWrapReservationPlan(
+            DocumentFloatingObjectKind.Image,
+            WidthDip: 96,
+            HeightDip: 72,
+            ImageWrapping.Square));
+        topAndBottomPlan.Should().Be(new DocumentFloatingWrapReservationPlan(
+            DocumentFloatingObjectKind.Image,
+            WidthDip: 120,
+            HeightDip: 60,
+            ImageWrapping.TopAndBottom));
+        DocumentViewLayoutPlanner.BuildFloatingWrapReservation(topAndBottom, topAndBottomReservationWidthDip: 624)
+            .Should().Be(new DocumentFloatingWrapReservationPlan(
+                DocumentFloatingObjectKind.Image,
+                WidthDip: 624,
+                HeightDip: 60,
+                ImageWrapping.TopAndBottom));
+        DocumentViewLayoutPlanner.BuildFloatingWrapReservation(behind).Should().BeNull();
+    }
+
+    [Fact]
     public void BuildFloatingObjectDrawOrder_OrdersMergedKindsInsideEachBand()
     {
         var surface = DocumentViewLayoutPlanner.BuildSurfacePlan(
@@ -844,6 +882,7 @@ public sealed class DocumentViewLayoutPlannerSourceGuardTests
         hostSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingOverlaySurfacePlan(");
         hostSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingObjectSnapshots(");
         hostSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(");
+        hostSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingWrapReservation(");
         hostSource.Should().Contain("DrawingObjectVisualPlanner.BuildVisualPlan(");
         hostSource.Should().Contain("BuildGroupPlannedChildVisual(");
         hostSource.Should().Contain("DrawingObjectVisualKind.Image when child is InlineImage image");

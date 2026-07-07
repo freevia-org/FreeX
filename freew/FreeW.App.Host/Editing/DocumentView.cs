@@ -6455,24 +6455,11 @@ public sealed class DocumentView : RichTextBox
             case WpfRun { Tag: PageBreakMarker }:
                 modelParagraph.Runs.Add(ModelRun.PageBreak());
                 break;
-            case WpfRun { Tag: AnchorMarker { Image: { } anchorImage } }:
-                // A floating image placeholder — recover the model image object verbatim.
-                modelParagraph.Runs.Add(new ModelRun(string.Empty) { Image = anchorImage });
+            case Floater floater when HasFloatingWrapReservationMarker(floater):
+                ReadFloatingWrapReservationFloater(modelParagraph, floater, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
                 break;
-            case WpfRun { Tag: AnchorMarker { Shape: { } anchorShape } }:
-                modelParagraph.Runs.Add(ModelRun.FromShape(anchorShape));
-                break;
-            case WpfRun { Tag: AnchorMarker { Chart: { } anchorChart } }:
-                modelParagraph.Runs.Add(new ModelRun(string.Empty) { Chart = anchorChart });
-                break;
-            case WpfRun { Tag: AnchorMarker { SmartArt: { } anchorSmartArt } }:
-                modelParagraph.Runs.Add(new ModelRun(string.Empty) { SmartArt = anchorSmartArt });
-                break;
-            case WpfRun { Tag: AnchorMarker { WordArt: { } anchorWordArt } }:
-                modelParagraph.Runs.Add(ModelRun.FromWordArt(anchorWordArt));
-                break;
-            case WpfRun { Tag: AnchorMarker { DrawingGroup: { } anchorGroup } }:
-                modelParagraph.Runs.Add(ModelRun.FromDrawingGroup(anchorGroup));
+            case WpfRun { Tag: AnchorMarker marker }:
+                AddAnchorMarkerRun(modelParagraph, marker, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
                 break;
             case WpfRun { Tag: CitationMarker citationMarker }:
                 // A hidden Mark Citation (TA) field round-trips as a textless citation-mark run.
@@ -6583,6 +6570,97 @@ public sealed class DocumentView : RichTextBox
         run.HyperlinkAnchor = anchor;
         run.HyperlinkTooltip = tooltip;
         return run;
+    }
+
+    private static void ReadFloatingWrapReservationFloater(ModelParagraph modelParagraph, Floater floater, string? hyperlinkUrl, string? hyperlinkAnchor, string? hyperlinkTooltip)
+    {
+        if (floater.Tag is FloatingWrapReservationMarker { Anchor: { } marker } reservationMarker)
+        {
+            AddAnchorMarkerRun(
+                modelParagraph,
+                marker,
+                reservationMarker.HyperlinkUrl ?? hyperlinkUrl,
+                reservationMarker.HyperlinkAnchor ?? hyperlinkAnchor,
+                reservationMarker.HyperlinkTooltip ?? hyperlinkTooltip);
+            return;
+        }
+
+        foreach (var block in floater.Blocks)
+        {
+            if (block is BlockUIContainer { Child: FrameworkElement { Tag: FloatingWrapReservationMarker { Anchor: { } nestedMarker } nestedReservationMarker } })
+            {
+                AddAnchorMarkerRun(
+                    modelParagraph,
+                    nestedMarker,
+                    nestedReservationMarker.HyperlinkUrl ?? hyperlinkUrl,
+                    nestedReservationMarker.HyperlinkAnchor ?? hyperlinkAnchor,
+                    nestedReservationMarker.HyperlinkTooltip ?? hyperlinkTooltip);
+                return;
+            }
+        }
+    }
+
+    private static bool HasFloatingWrapReservationMarker(Floater floater)
+    {
+        if (floater.Tag is FloatingWrapReservationMarker)
+            return true;
+
+        return floater.Blocks.OfType<BlockUIContainer>()
+            .Any(block => block.Child is FrameworkElement { Tag: FloatingWrapReservationMarker });
+    }
+
+    private static void AddAnchorMarkerRun(ModelParagraph modelParagraph, AnchorMarker marker, string? hyperlinkUrl, string? hyperlinkAnchor, string? hyperlinkTooltip)
+    {
+        if (marker.Image is { } anchorImage)
+        {
+            modelParagraph.Runs.Add(new ModelRun(string.Empty)
+            {
+                Image = anchorImage,
+                HyperlinkUrl = hyperlinkUrl,
+                HyperlinkAnchor = hyperlinkAnchor,
+                HyperlinkTooltip = hyperlinkTooltip,
+            });
+            return;
+        }
+
+        if (marker.Shape is { } anchorShape)
+        {
+            modelParagraph.Runs.Add(WithHyperlink(ModelRun.FromShape(anchorShape), hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip));
+            return;
+        }
+
+        if (marker.Chart is { } anchorChart)
+        {
+            modelParagraph.Runs.Add(new ModelRun(string.Empty)
+            {
+                Chart = anchorChart,
+                HyperlinkUrl = hyperlinkUrl,
+                HyperlinkAnchor = hyperlinkAnchor,
+                HyperlinkTooltip = hyperlinkTooltip,
+            });
+            return;
+        }
+
+        if (marker.SmartArt is { } anchorSmartArt)
+        {
+            modelParagraph.Runs.Add(new ModelRun(string.Empty)
+            {
+                SmartArt = anchorSmartArt,
+                HyperlinkUrl = hyperlinkUrl,
+                HyperlinkAnchor = hyperlinkAnchor,
+                HyperlinkTooltip = hyperlinkTooltip,
+            });
+            return;
+        }
+
+        if (marker.WordArt is { } anchorWordArt)
+        {
+            modelParagraph.Runs.Add(WithHyperlink(ModelRun.FromWordArt(anchorWordArt), hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip));
+            return;
+        }
+
+        if (marker.DrawingGroup is { } anchorGroup)
+            modelParagraph.Runs.Add(WithHyperlink(ModelRun.FromDrawingGroup(anchorGroup), hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip));
     }
 
     private static ModelTable ReadTable(WpfTable wpfTable, TextDocument document)
@@ -7743,32 +7821,29 @@ public sealed class DocumentView : RichTextBox
 
         if (run.Image is { } image)
         {
-            // Floating images render on the overlay canvas (see SyncFloatingObjectsCanvas), NOT in the
-            // FlowDocument. Emit a zero-width placeholder run tagged with AnchorMarker so CommitToModel
-            // can recover the image object verbatim. Inline images continue to render as InlineUIContainers.
             if (image.IsFloating)
-                return new WpfRun(string.Empty) { Tag = new AnchorMarker(Image: image) };
+                return BuildFloatingAnchorRun(run, document, new AnchorMarker(Image: image));
             return WrapHyperlinkIfNeeded(run, BuildImageRun(image));
         }
 
         if (run.Shape is { } shape)
         {
             if (shape.IsFloating)
-                return new WpfRun(string.Empty) { Tag = new AnchorMarker(Shape: shape) };
+                return BuildFloatingAnchorRun(run, document, new AnchorMarker(Shape: shape));
             return WrapHyperlinkIfNeeded(run, BuildShapeRun(shape, effectSet));
         }
 
         if (run.Chart is { } chart)
         {
             if (chart.IsFloating)
-                return new WpfRun(string.Empty) { Tag = new AnchorMarker(Chart: chart) };
+                return BuildFloatingAnchorRun(run, document, new AnchorMarker(Chart: chart));
             return WrapHyperlinkIfNeeded(run, BuildChartRun(chart, effectSet));
         }
 
         if (run.WordArt is { } wordArt)
         {
             if (wordArt.IsFloating)
-                return new WpfRun(string.Empty) { Tag = new AnchorMarker(WordArt: wordArt) };
+                return BuildFloatingAnchorRun(run, document, new AnchorMarker(WordArt: wordArt));
             return WrapHyperlinkIfNeeded(run, BuildWordArtRun(wordArt, effectSet));
         }
 
@@ -7778,14 +7853,12 @@ public sealed class DocumentView : RichTextBox
         if (run.SmartArt is { } smartArt)
         {
             if (smartArt.IsFloating)
-                return new WpfRun(string.Empty) { Tag = new AnchorMarker(SmartArt: smartArt) };
+                return BuildFloatingAnchorRun(run, document, new AnchorMarker(SmartArt: smartArt));
             return WrapHyperlinkIfNeeded(run, BuildSmartArtRun(smartArt, effectSet));
         }
 
-        // DrawingGroup is always floating; emit a zero-width AnchorMarker so CommitToModel
-        // can recover the group object verbatim via the floating canvas path.
         if (run.DrawingGroup is { } drawingGroup)
-            return new WpfRun(string.Empty) { Tag = new AnchorMarker(DrawingGroup: drawingGroup) };
+            return BuildFloatingAnchorRun(run, document, new AnchorMarker(DrawingGroup: drawingGroup));
 
         if (run.EmbeddedObject is { } embedded)
             return WrapHyperlinkIfNeeded(run, BuildEmbeddedObjectRun(embedded));
@@ -8018,6 +8091,61 @@ public sealed class DocumentView : RichTextBox
             return BuildInternalHyperlink(wpf, anchor, run.HyperlinkTooltip);
 
         return wpf;
+    }
+
+    private static Inline BuildFloatingAnchorRun(ModelRun run, TextDocument document, AnchorMarker marker)
+    {
+        var topAndBottomWidthDip = FloatingWrapReservationTextWidthDip(document);
+        var reservation = DocumentViewLayoutPlanner.BuildFloatingWrapReservation(run, topAndBottomWidthDip);
+        if (reservation is not null)
+            return BuildFloatingWrapReservationFloater(marker, run, reservation);
+
+        return WrapHyperlinkIfNeeded(run, new WpfRun(string.Empty) { Tag = marker });
+    }
+
+    private static double FloatingWrapReservationTextWidthDip(TextDocument document)
+    {
+        var pageMetrics = DocumentViewLayoutPlanner.BuildPageMetrics(document.Page);
+        if (document.Page.ColumnCount <= 1)
+            return pageMetrics.ContentWidthDip;
+
+        return DocumentViewLayoutPlanner.BuildColumnPlan(
+            document.Page,
+            pageMetrics.ContentWidthDip,
+            usePageColumns: true).WidthDip;
+    }
+
+    private static Floater BuildFloatingWrapReservationFloater(AnchorMarker marker, ModelRun run, DocumentFloatingWrapReservationPlan reservation)
+    {
+        var reservationMarker = new FloatingWrapReservationMarker(
+            marker,
+            run.HyperlinkUrl,
+            run.HyperlinkAnchor,
+            run.HyperlinkTooltip);
+        var placeholder = new Border
+        {
+            Width = reservation.WidthDip,
+            Height = reservation.HeightDip,
+            Background = Brushes.Transparent,
+            Opacity = 0,
+            IsHitTestVisible = false,
+            Focusable = false,
+            Tag = reservationMarker,
+        };
+
+        var block = new BlockUIContainer(placeholder)
+        {
+            Margin = new Thickness(0),
+        };
+
+        return new Floater(block)
+        {
+            Width = reservation.WidthDip,
+            HorizontalAlignment = reservation.Wrapping == ImageWrapping.TopAndBottom
+                ? HorizontalAlignment.Center
+                : HorizontalAlignment.Left,
+            Tag = reservationMarker,
+        };
     }
 
     private static Inline WrapHyperlinkIfNeeded(ModelRun run, Inline inline)
@@ -8530,6 +8658,16 @@ public sealed class DocumentView : RichTextBox
         SmartArt? SmartArt = null,
         WordArt? WordArt = null,
         FreeW.Core.Model.DrawingGroup? DrawingGroup = null);
+
+    /// <summary>
+    /// Distinguishes WPF floating-object wrap reservations from other <see cref="Floater"/> uses, such as
+    /// drop caps, so commit readback only recovers overlay-canvas anchors created by this path.
+    /// </summary>
+    private sealed record FloatingWrapReservationMarker(
+        AnchorMarker Anchor,
+        string? HyperlinkUrl = null,
+        string? HyperlinkAnchor = null,
+        string? HyperlinkTooltip = null);
 
     /// <summary>
     /// Renders an endnote reference as a small superscript marker showing the endnote number, tagged
