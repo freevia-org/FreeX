@@ -2089,6 +2089,7 @@ public static partial class ChartRenderPlanner
             plot,
             innerRadius: 0,
             outerRadius: Math.Min(plot.Width, plot.Height) / 2 * 0.85,
+            ResolvePieStartAngle(chart),
             seriesColors,
             fillPlans,
             ShouldVaryPointColors(chart));
@@ -2125,6 +2126,7 @@ public static partial class ChartRenderPlanner
                 plot,
                 innerRadius,
                 seriesOuterRadius,
+                ResolvePieStartAngle(chart),
                 seriesColors,
                 fillPlans,
                 ShouldVaryPointColors(chart)));
@@ -2605,6 +2607,7 @@ public static partial class ChartRenderPlanner
         ChartPlanRect plot,
         double innerRadius,
         double outerRadius,
+        double initialStartAngle,
         IReadOnlyList<SrgbColor>? seriesColors,
         ChartFillPlanSet? fillPlans,
         bool varyByPoint)
@@ -2623,7 +2626,7 @@ public static partial class ChartRenderPlanner
         var center = new ChartPlanPoint(
             plot.X + plot.Width / 2,
             plot.Y + plot.Height / 2);
-        double startAngle = -Math.PI / 2;
+        double startAngle = initialStartAngle;
         var primitives = new List<ChartPieSlicePrimitive>(values.Count);
         for (int pointIndex = 0; pointIndex < values.Count; pointIndex++)
         {
@@ -2643,6 +2646,12 @@ public static partial class ChartRenderPlanner
 
         return primitives;
     }
+
+    private static double ResolvePieStartAngle(ChartShape chart) =>
+        DegreesToRadians(Math.Clamp(chart.FirstSliceAngleDegrees ?? 0, 0, 360) - 90);
+
+    private static double DegreesToRadians(double degrees) =>
+        degrees * Math.PI / 180.0;
 
     private static (
         IReadOnlyList<ChartGridLinePlan> gridLines,
@@ -3304,7 +3313,7 @@ public static partial class ChartRenderPlanner
         double centerX = plot.X + plot.Width / 2;
         double centerY = plot.Y + plot.Height / 2;
         double radius = Math.Min(plot.Width, plot.Height) / 2 * 0.85;
-        double startAngle = -Math.PI / 2;
+        double startAngle = ResolvePieStartAngle(chart);
         var position = labels.Position ?? DataLabelPosition.BestFit;
         double labelRadius = position == DataLabelPosition.InsideEnd
             ? radius * 0.65

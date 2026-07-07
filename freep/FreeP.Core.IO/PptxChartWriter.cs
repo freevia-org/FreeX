@@ -156,14 +156,7 @@ internal static class PptxChartWriter
         {
             var chartDlblsEl = BuildDataLabelsEl(chart.DataLabels, chart.ChartType);
             if (chartDlblsEl is not null)
-            {
-                // Insert dLbls before the first c:axId child (or at end if none).
-                var firstAxId = primaryChartTypeEl.Elements(C + "axId").FirstOrDefault();
-                if (firstAxId is not null)
-                    firstAxId.AddBeforeSelf(chartDlblsEl);
-                else
-                    primaryChartTypeEl.Add(chartDlblsEl);
-            }
+                AddDataLabelsInSchemaOrder(primaryChartTypeEl, chartDlblsEl);
         }
 
         // CA1: secondary plot group — always a lineChart referencing the secondary axis pair.
@@ -346,7 +339,8 @@ internal static class PptxChartWriter
     private static XElement BuildPieChartEl(ChartShape chart, List<XElement> seriesEls) =>
         new XElement(C + "pieChart",
             BuildVaryColorsEl(chart),
-            seriesEls);
+            seriesEls,
+            BuildFirstSliceAngleEl(chart));
 
     private static XElement BuildAreaChartEl(ChartShape chart, List<XElement> seriesEls,
         int catAxId = PrimaryCatAxId, int valAxId = PrimaryValAxId) =>
@@ -378,9 +372,20 @@ internal static class PptxChartWriter
     private static XElement BuildDoughnutChartEl(ChartShape chart, List<XElement> seriesEls) =>
         new XElement(C + "doughnutChart",
             BuildVaryColorsEl(chart),
+            seriesEls,
+            BuildFirstSliceAngleEl(chart),
             new XElement(C + "holeSize",
-                new XAttribute("val", chart.DoughnutHolePercent.ToString(CultureInfo.InvariantCulture))),
-            seriesEls);
+                new XAttribute("val", chart.DoughnutHolePercent.ToString(CultureInfo.InvariantCulture))));
+
+    private static XElement? BuildFirstSliceAngleEl(ChartShape chart)
+    {
+        if (chart.ChartType is not (ChartType.Pie or ChartType.Doughnut) ||
+            chart.FirstSliceAngleDegrees is not { } angle)
+            return null;
+
+        return new XElement(C + "firstSliceAng",
+            new XAttribute("val", Math.Clamp(angle, 0, 360).ToString(CultureInfo.InvariantCulture)));
+    }
 
     private static XElement BuildRadarChartEl(ChartShape chart, List<XElement> seriesEls,
         int catAxId = PrimaryCatAxId, int valAxId = PrimaryValAxId) =>
@@ -463,6 +468,21 @@ internal static class PptxChartWriter
             el.Add(new XElement(C + "showPercent", new XAttribute("val", "1")));
 
         return el;
+    }
+
+    private static void AddDataLabelsInSchemaOrder(XElement chartTypeEl, XElement dataLabelsEl)
+    {
+        var boundary = chartTypeEl.Elements()
+            .FirstOrDefault(element =>
+                element.Name == C + "firstSliceAng" ||
+                element.Name == C + "holeSize" ||
+                element.Name == C + "axId" ||
+                element.Name == C + "extLst");
+
+        if (boundary is not null)
+            boundary.AddBeforeSelf(dataLabelsEl);
+        else
+            chartTypeEl.Add(dataLabelsEl);
     }
 
     private static XElement? BuildDataTableEl(ChartDataTableSettings? dataTable)

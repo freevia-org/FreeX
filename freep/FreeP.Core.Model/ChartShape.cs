@@ -418,6 +418,12 @@ public sealed class ChartShape
     public int DoughnutHolePercent { get; set; } = 50;
 
     /// <summary>
+    /// Authored first-slice angle in degrees for pie and doughnut charts (from <c>c:firstSliceAng</c>).
+    /// Null preserves the app default start angle.
+    /// </summary>
+    public int? FirstSliceAngleDegrees { get; set; }
+
+    /// <summary>
     /// Scatter/bubble style (marker, line+marker, smooth line, etc.).
     /// Populated for Scatter and Bubble chart types.
     /// </summary>

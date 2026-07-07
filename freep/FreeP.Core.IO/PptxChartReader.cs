@@ -348,6 +348,7 @@ internal static class PptxChartReader
     {
         ReadVaryColors(el, shape);
         shape.ChartType = ChartType.Pie;
+        shape.FirstSliceAngleDegrees = ReadFirstSliceAngle(el);
         ReadSeriesFromChart(el, shape, scheme, idxMap);
     }
 
@@ -374,6 +375,7 @@ internal static class PptxChartReader
     {
         ReadVaryColors(el, shape);
         shape.ChartType = ChartType.Doughnut;
+        shape.FirstSliceAngleDegrees = ReadFirstSliceAngle(el);
 
         // c:holeSize val= gives the inner radius as a percentage (default 50).
         var holeSizeStr = el.Element(C + "holeSize")?.Attribute("val")?.Value;
@@ -863,6 +865,12 @@ internal static class PptxChartReader
             series.PointColors[pointIndex] = color;
     }
 
+    private static int? ReadFirstSliceAngle(XElement chartEl)
+    {
+        var value = ParseNullableInt(chartEl.Element(C + "firstSliceAng")?.Attribute("val")?.Value);
+        return value.HasValue ? Math.Clamp(value.Value, 0, 360) : null;
+    }
+
     private static ChartMarkerSymbol? ReadMarkerSymbol(string? value) =>
         value switch
         {
@@ -1163,6 +1171,9 @@ internal static class PptxChartReader
 
     private static int ParseInt(string? s) =>
         int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : 0;
+
+    private static int? ParseNullableInt(string? s) =>
+        int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : null;
 
     private static double? ParseDouble(string? s) =>
         double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) ? value : null;
