@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Security.Cryptography;
+using FreeW.Core.Model;
 using FreeW.App.Presentation.DocumentView;
 
 namespace FreeW.App.Presentation.Tests;
@@ -18,6 +19,7 @@ public sealed class VisualEvidencePlannerTests
             "f2-hf-images",
             "field-page-number-variants",
             "references-heavy-fields",
+            "equation-structures",
             "f2-footnotes",
             "f2-endnotes",
             "f2-columns",
@@ -96,6 +98,25 @@ public sealed class VisualEvidencePlannerTests
             "legal-authorities"]);
         referencesScenario.ExpectedOutputNamePattern.Should().Be("references-heavy-fields_p{page}.png");
         referencesScenario.MinimumExpectedOutputs.Should().Be(2);
+
+        var equationScenario = FreeWVisualEvidencePlanner.ResolveScenario("equation-structures");
+        equationScenario.ExpectedFeatureTags.Should().Contain([
+            "equations",
+            "officemath",
+            "math-run-structures",
+            "shared-equation-visual-planner",
+            "scripts",
+            "fractions",
+            "radicals",
+            "n-ary-operators",
+            "matrices",
+            "accents",
+            "bars",
+            "delimiters",
+            "group-characters",
+            "function-apply"]);
+        equationScenario.ExpectedOutputNamePattern.Should().Be("equation-structures_p{page}.png");
+        equationScenario.MinimumExpectedOutputs.Should().Be(1);
 
         var floatingScenario = FreeWVisualEvidencePlanner.ResolveScenario("page-composition-floating-image");
         floatingScenario.Composition.ExpectsFloatingObjects.Should().BeTrue();
@@ -737,6 +758,40 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void EquationStructuresDocument_CoversModeledEquationKinds()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildEquationStructuresDocument();
+
+        var equations = document.Blocks
+            .OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Where(run => run.Equation is not null)
+            .Select(run => run.Equation!)
+            .ToList();
+        var kinds = equations
+            .SelectMany(equation => equation.Runs)
+            .Select(run => run.Kind)
+            .Distinct()
+            .ToList();
+
+        equations.Should().HaveCountGreaterThanOrEqualTo(7);
+        kinds.Should().Contain([
+            MathRunKind.Text,
+            MathRunKind.Superscript,
+            MathRunKind.Subscript,
+            MathRunKind.SubSuperscript,
+            MathRunKind.Fraction,
+            MathRunKind.Radical,
+            MathRunKind.NAry,
+            MathRunKind.Accent,
+            MathRunKind.Bar,
+            MathRunKind.Delimiter,
+            MathRunKind.Matrix,
+            MathRunKind.FunctionApply,
+            MathRunKind.GroupChar]);
+    }
+
+    [Fact]
     public void DefaultExpectedScenarios_RequiresPairedBackstageRendererEvidence()
     {
         var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
@@ -814,6 +869,24 @@ public sealed class VisualEvidencePlannerTests
         var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
 
         foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.FieldRendererScenarioIds)
+        {
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
+        }
+    }
+
+    [Fact]
+    public void DefaultExpectedScenarios_RequiresPairedEquationRendererEvidence()
+    {
+        var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
+
+        foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.EquationRendererScenarioIds)
         {
             expected.Should().Contain(e =>
                 e.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
@@ -933,13 +1006,14 @@ public sealed class VisualEvidencePlannerTests
 
             plan.WordApplicationProgId.Should().Be("Word.Application");
             plan.MaxPagesPerDocument.Should().Be(3);
-            plan.ExpectedFixtureCount.Should().Be(24);
-            plan.ExpectedBaselinePngCount.Should().Be(72);
+            plan.ExpectedFixtureCount.Should().Be(25);
+            plan.ExpectedBaselinePngCount.Should().Be(75);
             plan.Fixtures.Select(f => f.DocumentName).Should().Contain([
                 "f2-hf-basic.docx",
                 "f2-hf-images.docx",
                 "field-page-number-variants.docx",
                 "references-heavy-fields.docx",
+                "equation-structures.docx",
                 "review-proofing-visual-depth.docx",
                 "table-layout-complex.docx",
                 "table-pagination-repeat-header.docx",
@@ -963,6 +1037,8 @@ public sealed class VisualEvidencePlannerTests
                 .ExpectedBaselinePaths.Should().Contain("field-page-number-variants/field-page-number-variants_p1.png");
             plan.Fixtures.Single(f => f.ScenarioId == "references-heavy-fields")
                 .ExpectedBaselinePaths.Should().Contain("references-heavy-fields/references-heavy-fields_p2.png");
+            plan.Fixtures.Single(f => f.ScenarioId == "equation-structures")
+                .ExpectedBaselinePaths.Should().Contain("equation-structures/equation-structures_p1.png");
             plan.Fixtures.Single(f => f.ScenarioId == "f2-hf-images")
                 .ExpectedBaselinePaths.Should().Contain("f2-hf-images/f2-hf-images_p2.png");
             plan.Fixtures.Single(f => f.ScenarioId == "review-proofing-visual-depth")
@@ -5047,6 +5123,7 @@ public sealed class VisualEvidencePlannerTests
             "f2-hf-images" => FreeWVisualEvidenceDocumentFactory.BuildMultiSectionHeaderFooterImageDocument(),
             "field-page-number-variants" => FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument(),
             "references-heavy-fields" => FreeWVisualEvidenceDocumentFactory.BuildReferencesHeavyFieldDocument(),
+            "equation-structures" => FreeWVisualEvidenceDocumentFactory.BuildEquationStructuresDocument(),
             "f2-tracked-changes" => FreeWVisualEvidenceDocumentFactory.BuildTrackedChangesReviewDocument(),
             "f2-comments" => FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument(),
             "review-proofing-visual-depth" => FreeWVisualEvidenceDocumentFactory.BuildReviewProofingVisualDepthDocument(),

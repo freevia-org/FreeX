@@ -161,6 +161,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
         "field-page-number-variants",
         "references-heavy-fields"
     ];
+    public static IReadOnlyList<string> EquationRendererScenarioIds { get; } =
+    [
+        "equation-structures"
+    ];
     public static IReadOnlyList<string> HeaderFooterRendererScenarioIds { get; } =
     [
         "f2-hf-basic",
@@ -267,6 +271,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         ValidateSectionGeometryRendererPairs(rows, failures);
         ValidateReviewRendererPairs(rows, failures);
         ValidateFieldRendererPairs(rows, failures);
+        ValidateEquationRendererPairs(rows, failures);
         ValidateHeaderFooterRendererPairs(rows, failures);
         ValidateTableRendererPairs(rows, failures);
         ValidateDrawingObjectRendererPairs(rows, failures);
@@ -666,6 +671,17 @@ public static class FreeWVisualEvidenceManifestNormalizer
                     scenario.MinimumExpectedOutputs));
             }
             else if (FieldRendererScenarioIds.Contains(scenario.ScenarioId, StringComparer.OrdinalIgnoreCase))
+            {
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    WpfHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    AvaloniaHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+            }
+            else if (EquationRendererScenarioIds.Contains(scenario.ScenarioId, StringComparer.OrdinalIgnoreCase))
             {
                 expected.Add(new FreeWVisualEvidenceExpectedScenario(
                     WpfHostId,
@@ -1869,6 +1885,49 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 ValidateFieldPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
                 if (string.Equals(scenarioId, "references-heavy-fields", StringComparison.OrdinalIgnoreCase))
                     ValidateReferencesHeavyToaPairRow(pageNumber, wpf, avalonia, failures);
+            }
+        }
+    }
+
+    private static void ValidateEquationRendererPairs(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,
+        List<string> failures)
+    {
+        foreach (var scenarioId in EquationRendererScenarioIds)
+        {
+            var wpfRows = TrustedRowsForHostScenario(rows, WpfHostId, scenarioId);
+            var avaloniaRows = TrustedRowsForHostScenario(rows, AvaloniaHostId, scenarioId);
+            if (wpfRows.Count == 0 || avaloniaRows.Count == 0)
+                continue;
+
+            ValidateUniquePages(scenarioId, WpfHostId, wpfRows, failures);
+            ValidateUniquePages(scenarioId, AvaloniaHostId, avaloniaRows, failures);
+
+            var wpfPages = wpfRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var avaloniaPages = avaloniaRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var requiredPages = RequiredScenarioPages(scenarioId);
+            var missingAvaloniaPages = requiredPages.Except(avaloniaPages).ToList();
+            var missingWpfPages = requiredPages.Except(wpfPages).ToList();
+            if (missingAvaloniaPages.Count > 0)
+            {
+                failures.Add(
+                    $"equation renderer pair '{scenarioId}' is missing Avalonia page(s): {FormatPages(missingAvaloniaPages)}");
+            }
+
+            if (missingWpfPages.Count > 0)
+            {
+                failures.Add(
+                    $"equation renderer pair '{scenarioId}' is missing WPF page(s): {FormatPages(missingWpfPages)}");
+            }
+
+            foreach (var pageNumber in wpfPages.Intersect(avaloniaPages))
+            {
+                var wpf = wpfRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                var avalonia = avaloniaRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                if (wpf is null || avalonia is null)
+                    continue;
+
+                ValidateRendererPairRow("equation renderer pair", scenarioId, pageNumber, wpf, avalonia, failures);
             }
         }
     }
