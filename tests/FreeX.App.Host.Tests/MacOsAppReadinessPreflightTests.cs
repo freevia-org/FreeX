@@ -761,8 +761,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("DrawingObjectRenderPlanner.Plan(viewport)");
         script.Should().Contain("CreateSelectableDrawingObjectVisual(renderPlan, width, height)");
         script.Should().Contain("AutomationProperties.SetItemStatus(container, selected ? `\"Selected`\" : `\"Not selected`\")");
-        script.Should().Contain("CreateDrawingObjectVisual(renderPlan, width, height)");
-        script.Should().Contain("CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height)");
+        script.Should().Contain("CreateDrawingObjectVisual(renderPlan, width, height, _session.Workbook.Theme)");
+        script.Should().Contain("CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height, theme)");
         script.Should().Contain("CreateDrawingImageSourceRect(crop)");
         script.Should().Contain("TryCreateDrawingBitmap(imageBytes, out var bitmap)");
         script.Should().Contain("private static bool HasVisibleCellBorder(CellStyle? style)");
@@ -2176,7 +2176,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     _bordersButton.IsEnabled = isIdle;
                     _bordersMenuItem.IsEnabled = _bordersButton.IsEnabled;
                     CreateNativePasteSpecialMenu();
-                    PasteSpecialClipboardAtActiveCell(text, mode, options);
+                    PasteSpecialClipboardAtActiveCell(text, mode, options, clipboardReadFailed: clipboardReadFailed);
                     /*
                     CreatePasteCommentsMenuItem("Comments and Notes")
                     CreatePasteDataValidationMenuItem("Validation")
@@ -2226,7 +2226,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     CreateNativePasteSpecialTextMenuItem("Unicode Text");
                     CreateNativePastePictureMenuItem("Picture", linkedPicture: false);
                     CreateNativePastePictureMenuItem("Linked Picture", linkedPicture: true);
-                    _session.PasteClipboardTextAtActiveCell(text, preserveText: true);
+                    _session.PasteClipboardTextAtActiveCell(text, preserveText: true, clipboardReadFailed: clipboardReadFailed);
                     _session.ShouldPreferExternalClipboardImage(text);
                     private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard, CellAddress destination)
                     await clipboard.TryGetBitmapAsync()
@@ -2250,8 +2250,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     if (args.Key is Key.Enter or Key.Space) { }
                     CreateSelectedDrawingObjectAdorner();
                     ClearSelectedDrawingObject();
-                    CreateDrawingObjectVisual(renderPlan, width, height);
-                    CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height);
+                    CreateDrawingObjectVisual(renderPlan, width, height, _session.Workbook.Theme);
+                    CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height, theme);
                     CreateDrawingImageSourceRect(crop);
                     TryCreateDrawingBitmap(imageBytes, out var bitmap);
                     AddStyledCellBorderOverlay(content, style);
@@ -2282,7 +2282,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     dialog.Opened += (_, _) => cancelButton.Focus();
                     AutomationProperties.SetAutomationId(replaceButton, "PdfExportOverwriteReplaceButton");
                     AutomationProperties.SetAutomationId(cancelButton, "PdfExportOverwriteCancelButton");
-                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
+                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, effectiveExportPlan, pdfBuffer);
                     await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
                     ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);
                     _workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();
@@ -3102,7 +3102,13 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool IsShellFocusTargetAvailable(ShellFocusTarget target) =>
                     target != ShellFocusTarget.TaskPane ||
                     _pivotFieldPaneHost.IsVisible;
-                private ShellFocusTarget GetCurrentShellFocusTarget() => ShellFocusTarget.Worksheet;
+                private ShellFocusTarget GetCurrentShellFocusTarget()
+                {
+                    if (IsPivotFieldPaneFocused())
+                        return ShellFocusTarget.TaskPane;
+
+                    return ShellFocusTarget.Worksheet;
+                }
                 private bool FocusShellRegion(ShellFocusTarget target) => target switch
                 {
                     ShellFocusTarget.Ribbon => FocusFirstEnabledToolbarControl(),
@@ -3120,6 +3126,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 ];
                 private bool IsAnyToolbarControlFocused() => true;
                 private bool IsAnySheetTabFocused() => true;
+                private bool IsPivotFieldPaneFocused() => true;
                 private static bool FocusControl(Control control) => true;
                 internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot()
                 {
@@ -3858,8 +3865,8 @@ public sealed class MacOsAppReadinessPreflightTests
                 public bool CaptureFormatPainterSource(bool persistent = false)
                 public void CancelFormatPainter()
                 public WorkbookCellEditResult ApplyFormatPainterToSelectedRange()
-                CreateFormatPainterCommand(sourceSheet, sourceRange, targetRange)
-                private IWorkbookCommand CreateFormatPainterCommand(Sheet sourceSheet, GridRange sourceRange, GridRange targetRange)
+                CreateFormatPainterCommand(sourceSheet, sourceRange, targetRanges)
+                IReadOnlyList<GridRange> targetRanges)
                 FormatPainterCommandFactory.Create(
                 public WorkbookCellEditResult ClearSelectedRangeAll()
                 public WorkbookCellEditResult ClearSelectedRangeFormats()
