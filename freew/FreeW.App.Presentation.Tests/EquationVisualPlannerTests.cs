@@ -298,17 +298,30 @@ public sealed class EquationVisualPlannerTests
     }
 
     [Fact]
-    public void EquationVisualPlanner_FunctionApply_RetainsLinearFallbackSegment()
+    public void EquationVisualPlanner_FunctionApply_BuildsStructuredFunctionApplicationElement()
     {
-        var run = MathRun.FunctionApply("sin", "x");
+        var run = MathRun.FunctionApply("sin", "x + y");
         var plan = EquationVisualPlanner.Build(new Equation([run]));
 
         plan.LinearText.Should().Be(run.LinearText);
-        plan.Segments.Should().ContainSingle();
-        plan.Segments[0].Text.Should().Be(run.LinearText);
-        plan.Segments[0].Role.Should().Be(EquationVisualSegmentRole.LinearFallback);
-        plan.Segments[0].Style.BaselineRole.Should().Be(EquationVisualBaselineRole.Normal);
         plan.Elements.Should().ContainSingle();
-        plan.Elements[0].Kind.Should().Be(EquationVisualElementKind.Segments);
+        plan.Elements[0].Kind.Should().Be(EquationVisualElementKind.FunctionApply);
+        plan.Elements[0].FunctionName.Should().Be("sin");
+        plan.Elements[0].FunctionArgument.Should().Be("x + y");
+        plan.Segments.Select(segment => segment.Text).Should().Equal(
+            "sin",
+            EquationVisualPlanner.FunctionOpenDelimiterText,
+            "x + y",
+            EquationVisualPlanner.FunctionCloseDelimiterText);
+        plan.Segments.Select(segment => segment.Role).Should().Equal(
+            EquationVisualSegmentRole.FunctionName,
+            EquationVisualSegmentRole.FunctionOpenDelimiter,
+            EquationVisualSegmentRole.FunctionArgument,
+            EquationVisualSegmentRole.FunctionCloseDelimiter);
+        plan.Segments[0].Style.Italic.Should().BeFalse();
+        plan.Segments[2].Style.Italic.Should().BeTrue();
+        plan.Segments[0].Style.FontSizeScale.Should().Be(EquationVisualPlanner.StructureFontSizeScale);
+        plan.Segments[2].Style.FontSizeScale.Should().Be(EquationVisualPlanner.StructureFontSizeScale);
+        plan.Segments.Should().NotContain(segment => segment.Role == EquationVisualSegmentRole.LinearFallback);
     }
 }

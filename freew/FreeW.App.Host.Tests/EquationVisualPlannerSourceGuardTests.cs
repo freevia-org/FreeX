@@ -21,6 +21,7 @@ public sealed class EquationVisualPlannerSourceGuardTests
         source.Should().Contain("EquationVisualElementKind.Bar");
         source.Should().Contain("EquationVisualElementKind.Delimiter");
         source.Should().Contain("EquationVisualElementKind.GroupChar");
+        source.Should().Contain("EquationVisualElementKind.FunctionApply");
         source.Should().Contain("EquationVisualBaselineRole.Superscript");
         source.Should().NotContain("Text = equation.LinearText");
     }

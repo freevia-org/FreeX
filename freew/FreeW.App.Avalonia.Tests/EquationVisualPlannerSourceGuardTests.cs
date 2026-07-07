@@ -18,6 +18,8 @@ public sealed class EquationVisualPlannerSourceGuardTests
         source.Should().Contain("BaseText");
         source.Should().Contain("OpenDelimiter");
         source.Should().Contain("GroupCharacterPosition");
+        source.Should().Contain("FunctionName");
+        source.Should().Contain("FunctionArgument");
         source.Should().Contain("run.Equation is null");
         source.Should().NotContain("hasInlineEquation");
     }
