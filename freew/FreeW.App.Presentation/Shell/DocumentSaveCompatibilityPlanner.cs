@@ -489,7 +489,8 @@ public static class DocumentSaveCompatibilityPlanner
                 run.SmartArt is not null ||
                 run.PreservedDrawing is not null ||
                 run.DrawingGroup is not null);
-            var hasContentControls = runs.Any(run => run.Control is not null);
+            var hasContentControls = document.Blocks.Any(block => block.BlockContentControl is not null) ||
+                runs.Any(run => run.Control is not null);
             var hasHeadersFooters = document.Sections.Any(section => !section.HeadersFooters.IsEmpty);
             var hasRichFormatting =
                 paragraphs.Any(HasRichParagraphFormatting) ||

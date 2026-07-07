@@ -214,6 +214,7 @@ public static class DocumentCompare
 
         var result = new Paragraph
         {
+            BlockContentControl = revised.BlockContentControl,
             Formatting = revised.Formatting,
             StyleId = revised.StyleId,
         };
@@ -295,6 +296,7 @@ public static class DocumentCompare
     {
         var clone = new Paragraph
         {
+            BlockContentControl = source.BlockContentControl,
             Formatting = source.Formatting,
             StyleId = source.StyleId,
         };
@@ -409,6 +411,7 @@ public static class DocumentCompare
     {
         var clone = new Paragraph
         {
+            BlockContentControl = source.BlockContentControl,
             Formatting = source.Formatting,
             StyleId = source.StyleId,
         };
@@ -428,7 +431,11 @@ public static class DocumentCompare
 
     private static Table CloneTable(Table source)
     {
-        var clone = new Table { Formatting = source.Formatting };
+        var clone = new Table
+        {
+            BlockContentControl = source.BlockContentControl,
+            Formatting = source.Formatting
+        };
         clone.ColumnWidthsPt.AddRange(source.ColumnWidthsPt);
         foreach (var row in source.Rows)
         {

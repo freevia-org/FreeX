@@ -1675,6 +1675,7 @@ public static class MailMerge
     {
         var clone = new Paragraph
         {
+            BlockContentControl = source.BlockContentControl,
             Formatting = source.Formatting,
             StyleId = source.StyleId,
         };
@@ -1711,7 +1712,11 @@ public static class MailMerge
 
     private static Table CloneTable(Table source, IReadOnlyDictionary<string, string> row)
     {
-        var clone = new Table { Formatting = source.Formatting };
+        var clone = new Table
+        {
+            BlockContentControl = source.BlockContentControl,
+            Formatting = source.Formatting
+        };
         clone.ColumnWidthsPt.AddRange(source.ColumnWidthsPt);
         foreach (var sourceRow in source.Rows)
         {
@@ -1745,6 +1750,7 @@ public static class MailMerge
     {
         var clone = new Paragraph
         {
+            BlockContentControl = source.BlockContentControl,
             Formatting = source.Formatting,
             StyleId = source.StyleId,
         };
@@ -1780,7 +1786,11 @@ public static class MailMerge
 
     private static Table CloneTableWithRules(Table source, IReadOnlyDictionary<string, string> row, MergeState state, int recordIndex)
     {
-        var clone = new Table { Formatting = source.Formatting };
+        var clone = new Table
+        {
+            BlockContentControl = source.BlockContentControl,
+            Formatting = source.Formatting
+        };
         clone.ColumnWidthsPt.AddRange(source.ColumnWidthsPt);
         foreach (var sourceRow in source.Rows)
         {

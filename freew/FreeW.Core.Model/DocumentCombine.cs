@@ -114,6 +114,7 @@ public static class DocumentCombine
     {
         var merged = new Paragraph
         {
+            BlockContentControl = bParagraph.BlockContentControl ?? aParagraph?.BlockContentControl,
             Formatting = bParagraph.Formatting,
             StyleId = bParagraph.StyleId,
         };
@@ -233,6 +234,7 @@ public static class DocumentCombine
     {
         var clone = new Paragraph
         {
+            BlockContentControl = source.BlockContentControl,
             Formatting = source.Formatting,
             StyleId = source.StyleId,
         };
@@ -244,7 +246,11 @@ public static class DocumentCombine
 
     private static Table CloneTable(Table source)
     {
-        var clone = new Table { Formatting = source.Formatting };
+        var clone = new Table
+        {
+            BlockContentControl = source.BlockContentControl,
+            Formatting = source.Formatting
+        };
         clone.ColumnWidthsPt.AddRange(source.ColumnWidthsPt);
         foreach (var row in source.Rows)
         {

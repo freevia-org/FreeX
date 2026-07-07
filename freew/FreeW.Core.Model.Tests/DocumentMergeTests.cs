@@ -28,6 +28,21 @@ public class DocumentMergeTests
     }
 
     [Fact]
+    public void CloneBlocks_PreservesSharedBlockContentControlRegion()
+    {
+        var control = BlockContentControl.BibliographyRegion();
+        var source = new TextDocument();
+        source.Blocks.Add(new Paragraph("References") { BlockContentControl = control });
+        source.Blocks.Add(new Paragraph("Entry") { BlockContentControl = control });
+
+        var clones = DocumentMerge.CloneBlocks(source);
+
+        clones.Should().HaveCount(2);
+        clones[0].BlockContentControl.Should().Be(control);
+        ReferenceEquals(clones[1].BlockContentControl, clones[0].BlockContentControl).Should().BeTrue();
+    }
+
+    [Fact]
     public void CloneBlocks_DeepCopiesTables()
     {
         var source = new TextDocument();

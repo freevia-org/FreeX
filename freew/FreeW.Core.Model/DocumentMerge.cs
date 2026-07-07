@@ -66,6 +66,7 @@ public static class DocumentMerge
     {
         var clone = new Paragraph
         {
+            BlockContentControl = source.BlockContentControl,
             Formatting = source.Formatting,
             StyleId = source.StyleId,
         };
@@ -99,7 +100,11 @@ public static class DocumentMerge
 
     private static Table CloneTable(Table source)
     {
-        var clone = new Table { Formatting = source.Formatting };
+        var clone = new Table
+        {
+            BlockContentControl = source.BlockContentControl,
+            Formatting = source.Formatting
+        };
         clone.ColumnWidthsPt.AddRange(source.ColumnWidthsPt);
         foreach (var row in source.Rows)
         {

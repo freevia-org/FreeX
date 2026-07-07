@@ -99,6 +99,25 @@ public sealed class DocumentSaveCompatibilityPlannerTests
     }
 
     [Fact]
+    public void Build_PlainTextWithBlockLevelContentControl_WarnsAboutContentControls()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("References")
+        {
+            BlockContentControl = BlockContentControl.BibliographyRegion(),
+        });
+        var target = ResolveTarget("Plain.txt");
+
+        var plan = DocumentSaveCompatibilityPlanner.Build(document, target);
+
+        plan.RequiresConfirmation.Should().BeTrue();
+        plan.Warnings.Select(warning => warning.Kind).Should().Equal(
+            DocumentSaveCompatibilityWarningKind.TextOnlyTarget,
+            DocumentSaveCompatibilityWarningKind.ContentControls);
+    }
+
+    [Fact]
     public void Build_Word2003XmlUsesSelectedFormatMetadataInsteadOfXmlExtension()
     {
         var document = TextDocument.CreateEmpty();

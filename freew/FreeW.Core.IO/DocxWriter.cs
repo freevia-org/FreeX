@@ -1099,8 +1099,25 @@ public static class DocxWriter
         var drawings = new RunDrawings(imagesByRun, chartsByRun, embeddedByRun, smartArtsByRun, ids, preservedDrawingRelIds);
 
         var body = new XElement(W + "body");
-        foreach (var block in document.Blocks)
-            body.Add(BuildBlock(block, drawings, hyperlinks, partsBySection, preservedNumbering, restartOverrides));
+        for (var i = 0; i < document.Blocks.Count;)
+        {
+            var control = document.Blocks[i].BlockContentControl;
+            if (control is null)
+            {
+                body.Add(BuildBlock(document.Blocks[i], drawings, hyperlinks, partsBySection, preservedNumbering, restartOverrides));
+                i++;
+                continue;
+            }
+
+            var content = new XElement(W + "sdtContent");
+            while (i < document.Blocks.Count && ReferenceEquals(document.Blocks[i].BlockContentControl, control))
+            {
+                content.Add(BuildBlock(document.Blocks[i], drawings, hyperlinks, partsBySection, preservedNumbering, restartOverrides));
+                i++;
+            }
+
+            body.Add(new XElement(W + "sdt", BuildBlockSdtProperties(control), content));
+        }
         body.Add(BuildSectionProperties(document.Page, finalSectionParts));
 
         // Page background colour (w:background): it is positionally the FIRST child of w:document, before
@@ -1576,6 +1593,7 @@ public static class DocxWriter
     {
         var copy = new Paragraph
         {
+            BlockContentControl = paragraph.BlockContentControl,
             Formatting = paragraph.Formatting,
             StyleId = paragraph.StyleId,
         };
@@ -1840,6 +1858,42 @@ public static class DocxWriter
         // instance concerns. Always emit the element even when empty to signal "previously default".
         change.Add(BuildStyleParagraphProperties(revision.PreviousParagraphFormatting) ?? new XElement(W + "pPr"));
         return change;
+    }
+
+    private static XElement BuildBlockSdtProperties(BlockContentControl control)
+    {
+        var sdtPr = new XElement(W + "sdtPr");
+        if (control.Alias is { Length: > 0 } alias)
+            sdtPr.Add(new XElement(W + "alias", new XAttribute(W + "val", alias)));
+        if (control.Tag is { Length: > 0 } tag)
+            sdtPr.Add(new XElement(W + "tag", new XAttribute(W + "val", tag)));
+
+        var gallery = control.DocPartGallery;
+        if (control.Kind == BlockContentControlKind.Bibliography && string.IsNullOrWhiteSpace(gallery))
+            gallery = BlockContentControl.BibliographyGallery;
+
+        var hasDocPart = control.Kind is BlockContentControlKind.Bibliography or BlockContentControlKind.DocumentPart
+            || !string.IsNullOrWhiteSpace(gallery)
+            || !string.IsNullOrWhiteSpace(control.DocPartCategory)
+            || control.DocPartUnique;
+        if (hasDocPart)
+        {
+            var docPart = new XElement(W + "docPartObj");
+            if (!string.IsNullOrWhiteSpace(gallery))
+                docPart.Add(new XElement(W + "docPartGallery", new XAttribute(W + "val", gallery!)));
+            if (control.DocPartCategory is { Length: > 0 } category)
+                docPart.Add(new XElement(W + "docPartCategory", new XAttribute(W + "val", category)));
+            if (control.DocPartUnique || control.Kind == BlockContentControlKind.Bibliography)
+                docPart.Add(new XElement(W + "docPartUnique"));
+            sdtPr.Add(docPart);
+        }
+
+        if (control.Kind == BlockContentControlKind.RichText)
+            sdtPr.Add(new XElement(W + "richText"));
+        else if (control.Kind == BlockContentControlKind.PlainText)
+            sdtPr.Add(new XElement(W + "text"));
+
+        return sdtPr;
     }
 
     /// <summary>

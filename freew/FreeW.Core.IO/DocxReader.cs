@@ -1366,7 +1366,8 @@ public static class DocxReader
         IReadOnlyDictionary<(int NumId, int Level), int> startOverrides,
         ref Paragraph? prevPara,
         ref bool prevAfterAuto,
-        ContentControl? inheritedControl = null)
+        ContentControl? inheritedControl = null,
+        BlockContentControl? inheritedBlockContentControl = null)
     {
         if (element.Name == W + "p")
         {
@@ -1380,6 +1381,7 @@ public static class DocxReader
                 preservedDrawingTarget: document,
                 inheritedControl,
                 startOverrides: startOverrides);
+            para.BlockContentControl = inheritedBlockContentControl;
             document.Blocks.Add(para);
             var sp = element.Element(W + "pPr")?.Element(W + "spacing");
             var beforeAuto = sp?.Attribute(W + "beforeAutospacing")?.Value is "1" or "true" or "on";
@@ -1393,15 +1395,30 @@ public static class DocxReader
         }
         else if (element.Name == W + "tbl")
         {
-            document.Blocks.Add(ReadTable(element, archive, imageRelationships, hyperlinkRelationships, numbering, startOverrides, document, inheritedControl));
+            var table = ReadTable(element, archive, imageRelationships, hyperlinkRelationships, numbering, startOverrides, document, inheritedControl);
+            table.BlockContentControl = inheritedBlockContentControl;
+            document.Blocks.Add(table);
             prevPara = null;
             prevAfterAuto = false;
         }
         else if (element.Name == W + "sdt")
         {
-            var control = ReadContentControl(element.Element(W + "sdtPr"));
+            var blockControl = ReadBlockContentControl(element.Element(W + "sdtPr"));
             foreach (var child in element.Element(W + "sdtContent")?.Elements() ?? [])
-                AddBodyBlock(child, document, archive, imageRelationships, hyperlinkRelationships, numbering, startOverrides, ref prevPara, ref prevAfterAuto, control);
+            {
+                AddBodyBlock(
+                    child,
+                    document,
+                    archive,
+                    imageRelationships,
+                    hyperlinkRelationships,
+                    numbering,
+                    startOverrides,
+                    ref prevPara,
+                    ref prevAfterAuto,
+                    inheritedControl,
+                    blockControl);
+            }
         }
     }
 
@@ -2082,6 +2099,33 @@ public static class DocxReader
             hyperlinkAnchor,
             hyperlinkTooltip,
             preservedDrawingTarget);
+    }
+
+    private static BlockContentControl ReadBlockContentControl(XElement? sdtPr)
+    {
+        var tag = sdtPr?.Element(W + "tag")?.Attribute(W + "val")?.Value;
+        var alias = sdtPr?.Element(W + "alias")?.Attribute(W + "val")?.Value;
+        var docPart = sdtPr?.Element(W + "docPartObj");
+        var gallery = docPart?.Element(W + "docPartGallery")?.Attribute(W + "val")?.Value;
+        var category = docPart?.Element(W + "docPartCategory")?.Attribute(W + "val")?.Value;
+        var hasDocPartUnique = docPart?.Element(W + "docPartUnique") is not null;
+
+        var kind = gallery is not null
+            && string.Equals(gallery, BlockContentControl.BibliographyGallery, StringComparison.OrdinalIgnoreCase)
+                ? BlockContentControlKind.Bibliography
+                : docPart is not null
+                    ? BlockContentControlKind.DocumentPart
+                    : sdtPr?.Element(W + "text") is not null
+                        ? BlockContentControlKind.PlainText
+                        : BlockContentControlKind.RichText;
+
+        return new BlockContentControl(
+            kind,
+            string.IsNullOrEmpty(tag) ? null : tag,
+            string.IsNullOrEmpty(alias) ? null : alias,
+            string.IsNullOrEmpty(gallery) ? null : gallery,
+            string.IsNullOrEmpty(category) ? null : category,
+            hasDocPartUnique);
     }
 
     private static ContentControl ReadContentControl(XElement? sdtPr)

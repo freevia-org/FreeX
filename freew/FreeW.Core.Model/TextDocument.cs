@@ -1705,11 +1705,55 @@ public sealed record FormatRevision(RunFormatting PreviousFormatting, string? Au
 public sealed record ParagraphFormatRevision(ParagraphFormatting PreviousParagraphFormatting, string? Author, string? DateXml);
 
 /// <summary>
+/// The body-level content control (structured document tag, w:sdt) role carried by one or more
+/// consecutive document blocks.
+/// </summary>
+public enum BlockContentControlKind
+{
+    RichText,
+    PlainText,
+    DocumentPart,
+    Bibliography
+}
+
+/// <summary>
+/// A body-level content-control mark carried by a <see cref="Block"/>. Consecutive body blocks sharing the
+/// same instance serialize as one outer w:sdt/w:sdtContent wrapper while the blocks themselves remain
+/// ordinary paragraphs/tables in the model. This keeps run-level <see cref="ContentControl"/> behavior
+/// unchanged and gives Word bibliography regions a place to retain their docPartObj/gallery metadata.
+/// </summary>
+public sealed record BlockContentControl(
+    BlockContentControlKind Kind,
+    string? Tag = null,
+    string? Alias = null,
+    string? DocPartGallery = null,
+    string? DocPartCategory = null,
+    bool DocPartUnique = false)
+{
+    public const string BibliographyTag = "Bibliography";
+    public const string BibliographyAlias = "Bibliography";
+    public const string BibliographyGallery = "Bibliographies";
+
+    public static BlockContentControl BibliographyRegion() =>
+        new(
+            BlockContentControlKind.Bibliography,
+            Tag: BibliographyTag,
+            Alias: BibliographyAlias,
+            DocPartGallery: BibliographyGallery,
+            DocPartUnique: true);
+}
+
+/// <summary>
 /// A top-level document block. The document body is an ordered sequence of blocks; today that is
 /// paragraphs and tables, mirroring how WordprocessingML interleaves w:p and w:tbl inside w:body.
 /// </summary>
 public abstract class Block
 {
+    /// <summary>
+    /// Optional body-level content-control region metadata. The DOCX writer groups consecutive blocks
+    /// sharing the same instance into one outer w:sdt; run-level controls still live on <see cref="Run"/>.
+    /// </summary>
+    public BlockContentControl? BlockContentControl { get; set; }
 }
 
 /// <summary>A paragraph: an ordered sequence of runs plus paragraph formatting and an optional style.</summary>
