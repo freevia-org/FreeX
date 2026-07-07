@@ -1292,6 +1292,18 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("drawing-object evidence expects WordArt but the object plan records none");
         if (tags.Contains("drawing-groups", StringComparer.OrdinalIgnoreCase) && !objects.HasGroups)
             rowFailures.Add("drawing-object evidence expects drawing groups but the object plan records none");
+        var groupChildren = NormalizeGroupChildren(objects.GroupChildren);
+        if (tags.Contains("grouped-mixed-children", StringComparer.OrdinalIgnoreCase) && !groupChildren.HasMixedTypedChildren)
+            rowFailures.Add("drawing-object evidence expects grouped image/chart/SmartArt children but the group child plan records none");
+        if (tags.Contains("grouped-child-images", StringComparer.OrdinalIgnoreCase) && groupChildren.ImageChildCount <= 0)
+            rowFailures.Add("drawing-object evidence expects grouped image children but the group child plan records none");
+        if (tags.Contains("grouped-child-charts", StringComparer.OrdinalIgnoreCase) && groupChildren.ChartChildCount <= 0)
+            rowFailures.Add("drawing-object evidence expects grouped chart children but the group child plan records none");
+        if (tags.Contains("grouped-child-smartart", StringComparer.OrdinalIgnoreCase) && groupChildren.SmartArtChildCount <= 0)
+            rowFailures.Add("drawing-object evidence expects grouped SmartArt children but the group child plan records none");
+        if (tags.Contains("grouped-child-visual-signature", StringComparer.OrdinalIgnoreCase)
+            && (groupChildren.ChildVisualSignatures is null || groupChildren.ChildVisualSignatures.Count == 0))
+            rowFailures.Add("drawing-object evidence expects grouped child visual signatures but the group child plan records none");
         if (tags.Contains("behind-text", StringComparer.OrdinalIgnoreCase) && objects.BehindTextCount <= 0)
             rowFailures.Add("drawing-object evidence expects behind-text objects but the object plan records none");
         if (tags.Contains("in-front", StringComparer.OrdinalIgnoreCase) && objects.InFrontCount <= 0)
@@ -2254,6 +2266,30 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{pairName} alt text summaries differ: WPF '{FormatSummaries(wpfAltTextSummaries)}', Avalonia '{FormatSummaries(avaloniaAltTextSummaries)}'");
         }
 
+        var wpfGroupChildren = NormalizeGroupChildren(wpfObjects.GroupChildren);
+        var avaloniaGroupChildren = NormalizeGroupChildren(avaloniaObjects.GroupChildren);
+        if (wpfGroupChildren.ChildCount != avaloniaGroupChildren.ChildCount)
+        {
+            failures.Add(
+                $"{pairName} grouped child counts differ: WPF {wpfGroupChildren.ChildCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaGroupChildren.ChildCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        var wpfGroupChildKinds = OrderedSummaries(wpfGroupChildren.ChildKindSummaries ?? []);
+        var avaloniaGroupChildKinds = OrderedSummaries(avaloniaGroupChildren.ChildKindSummaries ?? []);
+        if (!wpfGroupChildKinds.SequenceEqual(avaloniaGroupChildKinds, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} grouped child kind summaries differ: WPF '{FormatSummaries(wpfGroupChildKinds)}', Avalonia '{FormatSummaries(avaloniaGroupChildKinds)}'");
+        }
+
+        var wpfGroupChildVisualSignatures = OrderedSummaries(wpfGroupChildren.ChildVisualSignatures ?? []);
+        var avaloniaGroupChildVisualSignatures = OrderedSummaries(avaloniaGroupChildren.ChildVisualSignatures ?? []);
+        if (!wpfGroupChildVisualSignatures.SequenceEqual(avaloniaGroupChildVisualSignatures, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} grouped child visual signatures differ: WPF '{FormatSummaries(wpfGroupChildVisualSignatures)}', Avalonia '{FormatSummaries(avaloniaGroupChildVisualSignatures)}'");
+        }
+
         var wpfEffectSummaries = OrderedSummaries(wpfObjects.Effects.EffectSummaries);
         var avaloniaEffectSummaries = OrderedSummaries(avaloniaObjects.Effects.EffectSummaries);
         if (!wpfEffectSummaries.SequenceEqual(avaloniaEffectSummaries, StringComparer.Ordinal))
@@ -3076,6 +3112,18 @@ public static class FreeWVisualEvidenceManifestNormalizer
             BoolFlag(watermark.IsPicture));
     }
 
+    private static FreeWVisualDrawingObjectGroupChildExpectation NormalizeGroupChildren(
+        FreeWVisualDrawingObjectGroupChildExpectation? groupChildren) =>
+        groupChildren ?? new FreeWVisualDrawingObjectGroupChildExpectation(
+            ChildCount: 0,
+            ImageChildCount: 0,
+            ShapeChildCount: 0,
+            ChartChildCount: 0,
+            SmartArtChildCount: 0,
+            WordArtChildCount: 0,
+            ChildKindSummaries: [],
+            ChildVisualSignatures: []);
+
     private static List<string> BuildFloatingObjectSignatures(IEnumerable<DocumentFloatingObjectSnapshot> objects) =>
         objects
             .Select(o => string.Join(
@@ -3178,6 +3226,13 @@ public static class FreeWVisualEvidenceManifestNormalizer
             parts.Add(
                 $"{row.DrawingObjects.FloatingObjectCount.ToString(CultureInfo.InvariantCulture)} drawing object(s), " +
                 $"{row.DrawingObjects.BehindTextCount.ToString(CultureInfo.InvariantCulture)} behind text");
+            var groupChildren = NormalizeGroupChildren(row.DrawingObjects.GroupChildren);
+            if (groupChildren.ChildCount > 0)
+            {
+                parts.Add(
+                    $"{groupChildren.ChildCount.ToString(CultureInfo.InvariantCulture)} grouped child object(s): " +
+                    string.Join("/", groupChildren.ChildKindSummaries));
+            }
             if (row.DrawingObjects.Effects.EffectObjectCount > 0)
             {
                 parts.Add(

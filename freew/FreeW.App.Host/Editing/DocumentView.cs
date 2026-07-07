@@ -5065,7 +5065,10 @@ public sealed class DocumentView : RichTextBox
     /// to inline images rendered in the FlowDocument. The root element is tagged with the model image
     /// so click-selection can recover it.
     /// </summary>
-    private FrameworkElement BuildFloatingImageVisual(InlineImage image, DocumentFloatRect rect)
+    private FrameworkElement BuildFloatingImageVisual(
+        InlineImage image,
+        DocumentFloatRect rect,
+        bool enableSelection = true)
     {
         var widthPx = rect.WidthDip;
         var heightPx = rect.HeightDip;
@@ -5138,13 +5141,16 @@ public sealed class DocumentView : RichTextBox
         ApplyImageWpfEffects(root, image);
 
         // Wire click to select this floating image. Shift/Ctrl adds to multi-select.
-        root.Cursor = Cursors.SizeAll;
-        root.MouseLeftButtonDown += (_, e) =>
+        if (enableSelection)
         {
-            var addToMulti = (Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Control)) != 0;
-            SelectFloatingImage(image, addToMulti);
-            e.Handled = true;
-        };
+            root.Cursor = Cursors.SizeAll;
+            root.MouseLeftButtonDown += (_, e) =>
+            {
+                var addToMulti = (Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Control)) != 0;
+                SelectFloatingImage(image, addToMulti);
+                e.Handled = true;
+            };
+        }
         return root;
     }
 
@@ -5486,22 +5492,31 @@ public sealed class DocumentView : RichTextBox
         return root;
     }
 
-    private FrameworkElement BuildFloatingChartVisual(Chart chart, DocumentFloatRect rect) =>
+    private FrameworkElement BuildFloatingChartVisual(
+        Chart chart,
+        DocumentFloatRect rect,
+        bool enableSelection = true) =>
         BuildFloatingPlannedInlineObjectVisual(
             chart,
             rect,
-            BuildChartRun(chart, DocumentEffectSet.FromTheme(_model.Theme)));
+            BuildChartRun(chart, DocumentEffectSet.FromTheme(_model.Theme)),
+            enableSelection);
 
-    private FrameworkElement BuildFloatingSmartArtVisual(SmartArt smartArt, DocumentFloatRect rect) =>
+    private FrameworkElement BuildFloatingSmartArtVisual(
+        SmartArt smartArt,
+        DocumentFloatRect rect,
+        bool enableSelection = true) =>
         BuildFloatingPlannedInlineObjectVisual(
             smartArt,
             rect,
-            BuildSmartArtRun(smartArt, DocumentEffectSet.FromTheme(_model.Theme)));
+            BuildSmartArtRun(smartArt, DocumentEffectSet.FromTheme(_model.Theme)),
+            enableSelection);
 
     private FrameworkElement BuildFloatingPlannedInlineObjectVisual(
         object modelObject,
         DocumentFloatRect rect,
-        InlineUIContainer container)
+        InlineUIContainer container,
+        bool enableSelection = true)
     {
         if (container.Child is not FrameworkElement root)
             return BuildFloatingObjectPlaceholderVisual(modelObject, rect);
@@ -5510,13 +5525,16 @@ public sealed class DocumentView : RichTextBox
         root.Width = rect.WidthDip;
         root.Height = rect.HeightDip;
         root.Tag = modelObject;
-        root.Cursor = Cursors.SizeAll;
-        root.MouseLeftButtonDown += (_, e) =>
+        if (enableSelection)
         {
-            var addToMulti = (Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Control)) != 0;
-            SelectFloatingObject(modelObject, addToMulti);
-            e.Handled = true;
-        };
+            root.Cursor = Cursors.SizeAll;
+            root.MouseLeftButtonDown += (_, e) =>
+            {
+                var addToMulti = (Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Control)) != 0;
+                SelectFloatingObject(modelObject, addToMulti);
+                e.Handled = true;
+            };
+        }
 
         return root;
     }
@@ -5558,7 +5576,7 @@ public sealed class DocumentView : RichTextBox
             double offsetY;
             if (plannedChildren.TryGetValue(i, out var plannedChild))
             {
-                childElement = BuildDrawingObjectCoreVisual(plannedChild.Visual);
+                childElement = BuildGroupPlannedChildVisual(group.Children[i], plannedChild.Visual);
                 offsetX = plannedChild.OffsetXDip;
                 offsetY = plannedChild.OffsetYDip;
             }
@@ -5595,6 +5613,23 @@ public sealed class DocumentView : RichTextBox
         };
         return root;
     }
+
+    private FrameworkElement BuildGroupPlannedChildVisual(object child, DrawingObjectVisualPlan plan) =>
+        plan.Kind switch
+        {
+            DrawingObjectVisualKind.Shape or DrawingObjectVisualKind.WordArt =>
+                BuildDrawingObjectCoreVisual(plan),
+            DrawingObjectVisualKind.Image when child is InlineImage image =>
+                BuildFloatingImageVisual(image, plan.Rect, enableSelection: false),
+            DrawingObjectVisualKind.Chart when child is Chart chart =>
+                BuildFloatingChartVisual(chart, plan.Rect, enableSelection: false),
+            DrawingObjectVisualKind.SmartArt when child is SmartArt smartArt =>
+                BuildFloatingSmartArtVisual(smartArt, plan.Rect, enableSelection: false),
+            _ => BuildGroupUnsupportedChildPlaceholder(
+                child,
+                plan.Rect.WidthDip / PxPerPoint,
+                plan.Rect.HeightDip / PxPerPoint)
+        };
 
     private static FrameworkElement BuildGroupUnsupportedChildPlaceholder(object child, double widthPt, double heightPt)
     {

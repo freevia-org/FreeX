@@ -1314,19 +1314,46 @@ public static class FreeWVisualEvidenceDocumentFactory
     {
         var group = new DrawingGroup
         {
-            WidthPt = 180,
-            HeightPt = 82,
+            WidthPt = 260,
+            HeightPt = 150,
             Placement = Placement(ImageWrapping.Square, xPt: 280, yPt: 260, zOrder: 10)
         };
+        group.Children.Add(new InlineImage(BuildGeneratedWatermarkPngBytes(), widthPt: 42, heightPt: 30)
+        {
+            AltText = "Grouped image child"
+        });
+        group.ChildOffsets.Add((0, 0));
         group.Children.Add(new Shape(ShapeKind.Ellipse, 82, 50)
         {
             FillColorHex = "#CFE2F3",
             OutlineColorHex = "#1155CC",
             Effects = new ShapeEffectLst { HasGlow = true, GlowColorHex = "4472C4", GlowRad = 63500 }
         });
-        group.ChildOffsets.Add((0, 16));
+        group.ChildOffsets.Add((0, 40));
+        var chart = Chart.Create(
+            ChartKind.Column,
+            ["Q1", "Q2"],
+            [2.0, 3.0],
+            seriesName: "Grouped",
+            title: "Grouped chart");
+        chart.WidthPt = 108;
+        chart.HeightPt = 72;
+        chart.StyleId = 2;
+        chart.ColorSchemeId = "colorful2";
+        chart.QuickLayoutId = 5;
+        chart.ShowLegend = true;
+        group.Children.Add(chart);
+        group.ChildOffsets.Add((94, 0));
         group.Children.Add(new WordArt("Group", WordArtStyle.GlowGold, 22));
-        group.ChildOffsets.Add((70, 8));
+        group.ChildOffsets.Add((94, 82));
+        var smartArt = SmartArt.Create(SmartArtKind.Process, ["Plan", "Check"]);
+        smartArt.WidthPt = 128;
+        smartArt.HeightPt = 46;
+        smartArt.LayoutId = "process1";
+        smartArt.ColorSchemeId = "accent1";
+        smartArt.StyleId = "moderate1";
+        group.Children.Add(smartArt);
+        group.ChildOffsets.Add((0, 98));
         return group;
     }
 
