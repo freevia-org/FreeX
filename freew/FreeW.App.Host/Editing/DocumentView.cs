@@ -6763,7 +6763,8 @@ public sealed class DocumentView : RichTextBox
         TextDocument document,
         int sourceBlockIndex)
     {
-        var paginationPlan = DocumentViewLayoutPlanner.BuildTablePaginationPlan(table, document.Page);
+        var tableLayoutPlan = DocumentViewLayoutPlanner.BuildTableLayoutPlan(table, page: document.Page);
+        var paginationPlan = tableLayoutPlan.Pagination;
         if (ShouldRenderPlannedTablePages(table, paginationPlan))
         {
             return paginationPlan.Pages
@@ -6771,13 +6772,14 @@ public sealed class DocumentView : RichTextBox
                     table,
                     document,
                     sourceBlockIndex,
+                    tableLayoutPlan,
                     page,
                     segmentIndex,
                     paginationPlan.Pages.Count))
                 .ToList();
         }
 
-        return [BuildTable(table, document, sourceBlockIndex)];
+        return [BuildTable(table, document, sourceBlockIndex, tableLayoutPlan)];
     }
 
     private static bool ShouldRenderPlannedTablePages(ModelTable table, DocumentTablePaginationPlan paginationPlan) =>
@@ -6790,6 +6792,7 @@ public sealed class DocumentView : RichTextBox
         ModelTable table,
         TextDocument document,
         int sourceBlockIndex = -1,
+        DocumentTableLayoutPlan? tableLayoutPlan = null,
         DocumentTablePaginationPagePlan? paginationPage = null,
         int segmentIndex = 0,
         int segmentCount = 1)
@@ -6821,9 +6824,18 @@ public sealed class DocumentView : RichTextBox
                 column.Width = new GridLength(table.ColumnWidthsPt[c] * PxPerPoint);
             wpf.Columns.Add(column);
         }
+        tableLayoutPlan ??= DocumentViewLayoutPlanner.BuildTableLayoutPlan(table, page: document.Page);
+        var cellEffectiveFills = tableLayoutPlan.Cells.ToDictionary(
+            cell => (cell.RowIndex, cell.CellIndex),
+            cell => cell.EffectiveFill);
 
-        // Resolve the catalog style (if a TableStyleId is set) so the renderer can use its fills and
-        // border color. When no named style is set the legacy HeaderRowFill/BandedRowFill constants apply.
+        DocumentTableCellEffectiveFillPlan EffectiveFillFor(int rowIndex, int cellIndex) =>
+            cellEffectiveFills.TryGetValue((rowIndex, cellIndex), out var fillPlan)
+                ? fillPlan
+                : DocumentTableCellEffectiveFillPlan.Empty;
+
+        // Resolve the catalog style for table-level chrome such as border color; per-cell fills and bold
+        // come from the shared DocumentTableCellEffectiveFillPlan above.
         var catalogStyle = table.TableStyleId is { Length: > 0 } sid
             ? DocumentTableStyle.FindById(sid)
             : null;
@@ -6840,16 +6852,11 @@ public sealed class DocumentView : RichTextBox
             wpf.BorderThickness = new Thickness(0.5);
         }
 
-        var fmt = table.Formatting;
         var totalRows = table.Rows.Count;
         var group = new TableRowGroup();
         void AppendRenderedRow(int rowIndex, bool isRepeatedHeader)
         {
             var modelRow = table.Rows[rowIndex];
-            var isHeaderRow = fmt.HeaderRow && rowIndex == 0;
-            var isBandedRow = fmt.BandedRows
-                && !isHeaderRow
-                && TableBanding.IsBandedBodyRow(rowIndex, fmt.HeaderRow);
             var wpfRow = new WpfTableRow { Tag = new WpfTableRowTag(rowIndex, isRepeatedHeader) };
             // WPF System.Windows.Documents.TableRow is a TextElement (not FrameworkElement), so it has
             // no MinHeight / Height property. To enforce a minimum row height we inject a zero-width
@@ -6864,7 +6871,6 @@ public sealed class DocumentView : RichTextBox
             // column even when earlier cells span multiple grid columns.
             var gridColumn = 0;
             var cellIndex = 0;
-            var lastCellIndex = modelRow.Cells.Count - 1;
             foreach (var modelCell in modelRow.Cells)
             {
                 var span = Math.Max(1, modelCell.GridSpan);
@@ -6909,27 +6915,10 @@ public sealed class DocumentView : RichTextBox
                     wpfCell.BorderThickness = new Thickness(0);
                 }
 
-                // Resolve cell appearance: explicit shading always wins; then catalog style; then legacy flags.
-                bool cellBold = isHeaderRow;
-                if (modelCell.ShadingColorHex is { Length: > 0 } cellShading)
-                {
-                    wpfCell.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(cellShading));
-                }
-                else if (catalogStyle is not null)
-                {
-                    // Catalog style: resolve fill + bold for this cell's position.
-                    var isFirst = cellIndex == 0;
-                    var isLast = cellIndex == lastCellIndex;
-                    var (fillHex, bold) = catalogStyle.ResolveCellStyle(rowIndex, totalRows, isFirst, isLast, fmt);
-                    cellBold = bold;
-                    if (fillHex is { Length: > 0 })
-                        wpfCell.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#" + fillHex));
-                }
-                else if (isHeaderRow)
-                    wpfCell.Background = new SolidColorBrush(HeaderRowFill);
-                else if (isBandedRow)
-                    wpfCell.Background = new SolidColorBrush(BandedRowFill);
-                if (cellBold)
+                var cellAppearance = EffectiveFillFor(rowIndex, cellIndex);
+                if (TryParseColor(cellAppearance.EffectiveFillHex, out var cellFill))
+                    wpfCell.Background = new SolidColorBrush(cellFill);
+                if (cellAppearance.EffectiveBold)
                     wpfCell.FontWeight = FontWeights.Bold;
                 // Resolve cell content. For non-Top vertical alignment, or when text is rotated, we wrap
                 // everything in a BlockUIContainer so we can position the content via WPF layout. WPF

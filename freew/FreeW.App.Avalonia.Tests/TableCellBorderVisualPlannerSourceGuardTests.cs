@@ -11,6 +11,9 @@ public sealed class TableCellBorderVisualPlannerSourceGuardTests
         source.Should().Contain("TableCellBorderVisualPlan? CellBorderPlan");
         source.Should().Contain("DrawCellEdgeLine(DrawingContext context, TableCellBorderEdgeVisualPlan edge, Rect rect)");
         source.Should().Contain("BorderLineStyle.Double");
+        source.Should().Contain("cell => cell.EffectiveFill");
+        source.Should().Contain("DocumentTableCellEffectiveFillPlan.Empty");
+        source.Should().NotContain("ResolveCellStyle(");
         source.Should().NotContain("DrawCellEdgeLine(DrawingContext context, CellBorderEdge? edge");
     }
 

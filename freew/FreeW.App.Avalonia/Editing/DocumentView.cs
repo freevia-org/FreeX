@@ -4787,7 +4787,21 @@ public sealed class DocumentView : Control
 
         const double pad = 5;
         var borders = table.Formatting.Borders || _showTableGridlines;
-        var headerOffset = table.Formatting.HeaderRow ? 1 : 0;
+        var tableLayoutPlan = DocumentViewLayoutPlanner.BuildTableLayoutPlan(table, page: _doc.Page);
+        var cellEffectiveFills = tableLayoutPlan.Cells.ToDictionary(
+            cell => (cell.RowIndex, cell.CellIndex),
+            cell => cell.EffectiveFill);
+
+        DocumentTableCellEffectiveFillPlan EffectiveFillFor(int rowIndex, int cellIndex) =>
+            cellEffectiveFills.TryGetValue((rowIndex, cellIndex), out var fillPlan)
+                ? fillPlan
+                : DocumentTableCellEffectiveFillPlan.Empty;
+
+        IBrush? EffectiveFillBrush(DocumentTableCellEffectiveFillPlan fillPlan) =>
+            string.IsNullOrWhiteSpace(fillPlan.EffectiveFillHex)
+                ? null
+                : BrushFor(fillPlan.EffectiveFillHex);
+
         // AV-TBL: glyphOffset is unique within this table block and is used as PlacedChar.Offset so
         // TryGetCaretRect can match (Block == tableBlockIndex && Offset == glyphOffset).
         var glyphOffset = 0;
@@ -4802,11 +4816,11 @@ public sealed class DocumentView : Control
         for (var pr = 0; pr < table.Rows.Count; pr++)
         {
             var prRow = table.Rows[pr];
-            var prIsHeader = table.Formatting.HeaderRow && pr == 0;
             var prRowHeight = Build("Ag", RunFormatting.Default).Height + 2 * pad;
             var prCol = 0;
-            foreach (var cell in prRow.Cells)
+            for (var cellIndex = 0; cellIndex < prRow.Cells.Count; cellIndex++)
             {
+                var cell = prRow.Cells[cellIndex];
                 if (prCol >= cols)
                     break;
                 var prSpan = Math.Clamp(cell.GridSpan <= 0 ? 1 : cell.GridSpan, 1, cols - prCol);
@@ -4817,7 +4831,7 @@ public sealed class DocumentView : Control
                 var prFmt = cell.Paragraphs.Count > 0 && cell.Paragraphs[0].Runs.Count > 0
                     ? cell.Paragraphs[0].Runs[0].Formatting
                     : RunFormatting.Default;
-                if (prIsHeader)
+                if (EffectiveFillFor(pr, cellIndex).EffectiveBold)
                     prFmt = prFmt with { Bold = true };
 
                 var prInnerW = Math.Max(10, prCellWidth - 2 * pad);
@@ -4834,7 +4848,7 @@ public sealed class DocumentView : Control
         }
 
         var plannedPagesByFirstSourceRow = _viewMode == DocumentViewMode.PrintLayout
-            ? DocumentViewLayoutPlanner.BuildTablePaginationPlan(table, _doc.Page).Pages
+            ? tableLayoutPlan.Pagination.Pages
                 .Where(page => page.PageNumber > 1 && page.SourceRowIndexes.Count > 0)
                 .ToDictionary(page => page.SourceRowIndexes[0])
             : new Dictionary<int, DocumentTablePaginationPagePlan>();
@@ -4856,10 +4870,6 @@ public sealed class DocumentView : Control
         void RenderTableRow(int r, double? reservedContentY = null)
         {
             var row = table.Rows[r];
-            var isHeader = table.Formatting.HeaderRow && r == 0;
-            var isBand = table.Formatting.BandedRows
-                && !isHeader
-                && TableBanding.IsBandedBodyRow(r, table.Formatting.HeaderRow);
 
             // AV-TBL: carry the TableCell model reference and actual column index so we can emit
             // per-paragraph, per-character cell-aware PlacedChars for caret routing.
@@ -4880,7 +4890,8 @@ public sealed class DocumentView : Control
                 var fmt = cell.Paragraphs.Count > 0 && cell.Paragraphs[0].Runs.Count > 0
                     ? cell.Paragraphs[0].Runs[0].Formatting
                     : RunFormatting.Default;
-                if (isHeader)
+                var cellAppearance = EffectiveFillFor(r, cellIndex);
+                if (cellAppearance.EffectiveBold)
                     fmt = fmt with { Bold = true };
 
                 // BE2: wrap each cell paragraph independently so multi-paragraph cells render on
@@ -4912,8 +4923,7 @@ public sealed class DocumentView : Control
                     cellWidth += colWidths[startCol + s];
                 var cellX = rowColLeft + colOffsets[startCol];
                 var rect = new Rect(cellX, rowPageSpaceY, cellWidth, rowHeight);
-                // AV-TBL4: per-cell ShadingColorHex overrides table-style fills; header/band still apply as fallback.
-                IBrush? fill = ResolveCellFill(cellModel, table, r, cellIndex, isHeader, isBand);
+                var fill = EffectiveFillBrush(EffectiveFillFor(r, cellIndex));
                 var cellBorderPlan = TableCellBorderVisualPlanner.Build(cellModel.Borders, PxPerPoint);
                 _rects.Add((rect, fill, borders, cellBorderPlan.HasVisibleEdges ? cellBorderPlan : null));
                 _cellHits.Add((rect, blockIndex, r, startCol));
@@ -5660,39 +5670,6 @@ public sealed class DocumentView : Control
         return result;
     }
 
-    // AV-TBL4: resolve the fill brush for a cell — per-cell ShadingColorHex wins; header/band are fallbacks.
-    private IBrush? ResolveCellFill(
-        TableCell cell,
-        Table table,
-        int rowIndex,
-        int cellIndex,
-        bool isHeader,
-        bool isBand)
-    {
-        if (!string.IsNullOrEmpty(cell.ShadingColorHex))
-            return BrushFor(cell.ShadingColorHex);
-
-        var catalogStyle = table.TableStyleId is { Length: > 0 } styleId
-            ? DocumentTableStyle.FindById(styleId)
-            : null;
-        if (catalogStyle is not null)
-        {
-            var columnCount = Math.Max(0, table.Rows[rowIndex].Cells.Count);
-            var (fillHex, _) = catalogStyle.ResolveCellStyle(
-                rowIndex,
-                table.Rows.Count,
-                cellIndex == 0,
-                cellIndex == Math.Max(0, columnCount - 1),
-                table.Formatting);
-            if (!string.IsNullOrWhiteSpace(fillHex))
-                return BrushFor("#" + fillHex);
-        }
-
-        if (isHeader) return HeaderFill;
-        if (isBand)   return BandFill;
-        return null;
-    }
-
     // AV-TBL4: draw per-edge cell borders using the shared host-neutral border plan.
     private void DrawCellBorderEdges(DrawingContext context, Rect rect, TableCellBorderVisualPlan plan)
     {
@@ -6016,7 +5993,6 @@ public sealed class DocumentView : Control
         return bitmap;
     }
 
-    private static IBrush HeaderFill { get; } = new SolidColorBrush(Color.FromRgb(0xDE, 0xE9, 0xF7));
     private static IBrush BandFill { get; } = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2));
     private static Pen TableBorderPen { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A)), 0.75);
     private static IBrush PageDeskBrush   { get; } = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0));

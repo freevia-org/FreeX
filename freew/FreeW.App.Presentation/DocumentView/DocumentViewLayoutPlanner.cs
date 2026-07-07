@@ -56,6 +56,29 @@ public sealed record DocumentColumnLayoutPlan(
 
 public sealed record DocumentGridlineSegment(double X1, double Y1, double X2, double Y2);
 
+public sealed record DocumentTableCellEffectiveFillPlan(
+    string? ExplicitFillHex,
+    string? StyleDerivedFillSource,
+    string? StyleDerivedFillHex,
+    string? EffectiveFillSource,
+    string? EffectiveFillHex,
+    bool StyleDerivedBold,
+    bool EffectiveBold)
+{
+    public static DocumentTableCellEffectiveFillPlan Empty { get; } = new(
+        ExplicitFillHex: null,
+        StyleDerivedFillSource: null,
+        StyleDerivedFillHex: null,
+        EffectiveFillSource: null,
+        EffectiveFillHex: null,
+        StyleDerivedBold: false,
+        EffectiveBold: false);
+
+    public bool HasExplicitFill => !string.IsNullOrWhiteSpace(ExplicitFillHex);
+    public bool HasStyleDerivedFill => !string.IsNullOrWhiteSpace(StyleDerivedFillHex);
+    public bool HasEffectiveFill => !string.IsNullOrWhiteSpace(EffectiveFillHex);
+}
+
 public sealed record DocumentTableCellLayoutPlan(
     int RowIndex,
     int CellIndex,
@@ -68,7 +91,11 @@ public sealed record DocumentTableCellLayoutPlan(
     string TextDirection,
     string VerticalAlignment,
     double? PreferredWidthDip,
-    double? HeightDip);
+    double? HeightDip)
+{
+    public DocumentTableCellEffectiveFillPlan EffectiveFill { get; init; } =
+        DocumentTableCellEffectiveFillPlan.Empty;
+}
 
 public sealed record DocumentTablePaginationRowPlan(
     int RowIndex,
@@ -478,7 +505,16 @@ public static class DocumentViewLayoutPlanner
                     cell.TextDirection.ToString(),
                     cell.VerticalAlignment.ToString(),
                     cell.WidthPt is > 0 ? RoundDip(PageLayout.PointsToDip(cell.WidthPt.Value)) : null,
-                    row.HeightPt is > 0 ? RoundDip(PageLayout.PointsToDip(row.HeightPt.Value)) : null));
+                    row.HeightPt is > 0 ? RoundDip(PageLayout.PointsToDip(row.HeightPt.Value)) : null)
+                {
+                    EffectiveFill = BuildTableCellEffectiveFillPlan(
+                        table,
+                        rowIndex,
+                        cellIndex,
+                        gridColumnIndex,
+                        gridSpan,
+                        gridColumnCount)
+                });
 
                 gridColumnIndex += gridSpan;
             }
@@ -516,6 +552,180 @@ public static class DocumentViewLayoutPlanner
             cells,
             BuildTablePaginationPlan(table, page ?? new PageSettings(), tableIndex));
     }
+
+    public static DocumentTableCellEffectiveFillPlan BuildTableCellEffectiveFillPlan(
+        Table table,
+        int rowIndex,
+        int cellIndex,
+        int gridColumnIndex,
+        int gridSpan,
+        int gridColumnCount)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+
+        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
+            return DocumentTableCellEffectiveFillPlan.Empty;
+        if (cellIndex < 0 || cellIndex >= table.Rows[rowIndex].Cells.Count)
+            return DocumentTableCellEffectiveFillPlan.Empty;
+
+        var cell = table.Rows[rowIndex].Cells[cellIndex];
+        return BuildTableCellEffectiveFillPlan(
+            NormalizeHexColorOrNull(cell.ShadingColorHex),
+            table.TableStyleId,
+            table.Formatting,
+            rowIndex,
+            table.Rows.Count,
+            gridColumnIndex,
+            Math.Max(1, gridSpan),
+            Math.Max(0, gridColumnCount));
+    }
+
+    public static DocumentTableCellEffectiveFillPlan BuildTableCellEffectiveFillPlan(
+        DocumentTableLayoutPlan table,
+        DocumentTableCellLayoutPlan cell)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        ArgumentNullException.ThrowIfNull(cell);
+
+        return BuildTableCellEffectiveFillPlan(
+            NormalizeHexColorOrNull(cell.ShadingColorHex),
+            table.TableStyleId,
+            BuildTableFormatting(table),
+            cell.RowIndex,
+            Math.Max(0, table.RowCount),
+            cell.GridColumnIndex,
+            Math.Max(1, cell.GridSpan),
+            Math.Max(0, table.GridColumnCount));
+    }
+
+    private static DocumentTableCellEffectiveFillPlan BuildTableCellEffectiveFillPlan(
+        string? explicitFillHex,
+        string? tableStyleId,
+        TableFormatting formatting,
+        int rowIndex,
+        int rowCount,
+        int gridColumnIndex,
+        int gridSpan,
+        int gridColumnCount)
+    {
+        var styleFillSource = (string?)null;
+        var styleFillHex = (string?)null;
+        var styleDerivedBold = false;
+
+        var catalogStyle = tableStyleId is { Length: > 0 }
+            ? DocumentTableStyle.FindById(tableStyleId)
+            : null;
+        if (catalogStyle is not null)
+        {
+            var isFirstColumn = gridColumnIndex == 0;
+            var isLastColumn = gridColumnCount > 0
+                && gridColumnIndex + Math.Max(1, gridSpan) >= gridColumnCount;
+            var (fillHex, bold) = catalogStyle.ResolveCellStyle(
+                rowIndex,
+                Math.Max(0, rowCount),
+                isFirstColumn,
+                isLastColumn,
+                formatting);
+            styleFillHex = NormalizeHexColorOrNull(fillHex);
+            styleDerivedBold = bold;
+            if (styleFillHex is not null)
+                styleFillSource = ResolveStyleDerivedCellFillSource(
+                    formatting,
+                    rowIndex,
+                    Math.Max(0, rowCount),
+                    gridColumnIndex,
+                    Math.Max(1, gridSpan),
+                    gridColumnCount,
+                    isFirstColumn,
+                    isLastColumn);
+        }
+
+        var legacyFillSource = (string?)null;
+        var legacyFillHex = (string?)null;
+        var isHeaderRow = formatting.HeaderRow && rowIndex == 0;
+        var isBandedRow = formatting.BandedRows
+            && !isHeaderRow
+            && TableBanding.IsBandedBodyRow(rowIndex, formatting.HeaderRow);
+        if (catalogStyle is null)
+        {
+            if (isHeaderRow)
+            {
+                legacyFillSource = "legacy-header-row";
+                legacyFillHex = LegacyHeaderRowFillHex;
+            }
+            else if (isBandedRow)
+            {
+                legacyFillSource = "legacy-banded-row";
+                legacyFillHex = LegacyBandedRowFillHex;
+            }
+        }
+
+        var effectiveFillSource = (string?)null;
+        var effectiveFillHex = (string?)null;
+        if (explicitFillHex is not null)
+        {
+            effectiveFillSource = "explicit-cell";
+            effectiveFillHex = explicitFillHex;
+        }
+        else if (styleFillHex is not null)
+        {
+            effectiveFillSource = styleFillSource;
+            effectiveFillHex = styleFillHex;
+        }
+        else if (legacyFillHex is not null)
+        {
+            effectiveFillSource = legacyFillSource;
+            effectiveFillHex = legacyFillHex;
+        }
+
+        return new DocumentTableCellEffectiveFillPlan(
+            ExplicitFillHex: explicitFillHex,
+            StyleDerivedFillSource: styleFillSource,
+            StyleDerivedFillHex: styleFillHex,
+            EffectiveFillSource: effectiveFillSource,
+            EffectiveFillHex: effectiveFillHex,
+            StyleDerivedBold: styleDerivedBold,
+            EffectiveBold: styleDerivedBold || (catalogStyle is null && isHeaderRow));
+    }
+
+    private static string ResolveStyleDerivedCellFillSource(
+        TableFormatting formatting,
+        int rowIndex,
+        int rowCount,
+        int gridColumnIndex,
+        int gridSpan,
+        int gridColumnCount,
+        bool isFirstColumn,
+        bool isLastColumn)
+    {
+        if (formatting.HeaderRow && rowIndex == 0)
+            return "style-derived-header";
+        if (formatting.LastRow && rowIndex == Math.Max(0, rowCount - 1))
+            return "style-derived-last-row";
+        if (formatting.FirstColumn && isFirstColumn)
+            return "style-derived-first-column";
+        if (formatting.LastColumn && isLastColumn)
+            return "style-derived-last-column";
+        if (formatting.BandedRows && TableBanding.BodyRowIndex(rowIndex, formatting.HeaderRow) >= 0)
+            return "style-derived-banded-row";
+
+        return "style-derived-cell";
+    }
+
+    private static TableFormatting BuildTableFormatting(DocumentTableLayoutPlan table) =>
+        new()
+        {
+            HeaderRow = table.HasHeaderRow,
+            RepeatHeaderRow = table.RepeatsHeaderRow,
+            BandedRows = table.HasBandedRows,
+            BandedColumns = table.HasBandedColumns,
+            FirstColumn = table.HasFirstColumn,
+            LastColumn = table.HasLastColumn,
+            LastRow = table.HasLastRow
+        };
+
+    public const string LegacyHeaderRowFillHex = "#D9E2F3";
+    public const string LegacyBandedRowFillHex = "#F2F2F2";
 
     public static DocumentTablePaginationPlan BuildTablePaginationPlan(
         Table table,
