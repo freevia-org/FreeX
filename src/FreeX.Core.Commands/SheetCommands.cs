@@ -49,6 +49,11 @@ public sealed class RenameSheetCommand : IWorkbookCommand
     private List<(ChartModel Chart, string OldValue)>? _chartPivotSourceNameSnapshot;
     private List<(SlicerModel Slicer, string OldValue)>? _slicerNameSnapshot;
     private List<(PictureModel Picture, string OldValue)>? _pictureNameSnapshot;
+    // P81: FormControlModel.LinkedCell/ListFillRange hold sheet-qualified string refs (e.g.
+    // "Sheet1!$D$3", Excel's fmlaLink) just like the string refs above and must be rewritten
+    // the same way on rename, or a loaded checkbox/list-box's linked cell/fill range goes stale
+    // (FormControlInteractionService.TryResolveLinkedCell then fails to resolve the sheet).
+    private List<(FormControlModel Control, string? OldLinkedCell, string? OldListFillRange)>? _formControlNameSnapshot;
     // T7: CF/DV formula rewrites across ALL sheets for the rename
     private List<(Guid RuleId, string? OldValue, SheetId Sheet)>? _cfFormulaRenameSnapshot;
     private List<(Guid RuleId, int Slot, string? OldValue, SheetId Sheet)>? _dvFormulaRenameSnapshot;
@@ -60,6 +65,13 @@ public sealed class RenameSheetCommand : IWorkbookCommand
     // renamed one — a hyperlink on Sheet1 can target "Sheet2!A1") must be rewritten to the
     // new sheet name, or the link silently breaks (stale sheet name after rename).
     private List<(SheetId Sheet, CellAddress Address, string OldBookmark)>? _hyperlinkBookmarkRenameSnapshot;
+    // P113: when a 'Place in This Document' hyperlink has no Bookmark set (FreeX's own Insert
+    // Hyperlink dialog stores the target ref directly on sheet.Hyperlinks and leaves Bookmark
+    // empty — Bookmark is only populated via the separate Bookmark picker), the sheet-qualified
+    // ref lives in sheet.Hyperlinks[addr] instead and must be rewritten there, or the link goes
+    // stale (HyperlinkNavigationPlanner/CreateXlsxHyperlink both fall back to that raw target
+    // whenever Bookmark is empty).
+    private List<(SheetId Sheet, CellAddress Address, string OldTarget)>? _hyperlinkTargetRenameSnapshot;
 
     public string Label => $"Rename Sheet to '{_newName}'";
 
@@ -142,6 +154,49 @@ public sealed class RenameSheetCommand : IWorkbookCommand
 
         // T7: rewrite CF FormulaText and DV Formula1/Formula2 across all sheets with RenameSheetOp
         var renameOp = new RenameSheetOp(_oldName, _newName);
+
+        // P81: rewrite FormControlModel.LinkedCell/ListFillRange across ALL sheets — a control
+        // on any sheet can hold a cross-sheet ref (e.g. a checkbox on Sheet2 linked to
+        // "Sheet1!$D$3"), mirroring the CF/DV pass below via the same FormulaRewriter path
+        // (both are bare single-ref "formulas", not full '='-prefixed expressions).
+        _formControlNameSnapshot = [];
+        foreach (var s in ctx.Workbook.Sheets)
+        {
+            foreach (var control in s.FormControls)
+            {
+                string? newLinkedCell = control.LinkedCell;
+                string? newListFillRange = control.ListFillRange;
+                bool changed = false;
+
+                if (control.LinkedCell is { } linkedCell)
+                {
+                    var rewritten = FormulaRewriter.Rewrite(linkedCell, renameOp, s.Name);
+                    if (rewritten is not null && rewritten != linkedCell)
+                    {
+                        newLinkedCell = rewritten;
+                        changed = true;
+                    }
+                }
+
+                if (control.ListFillRange is { } listFillRange)
+                {
+                    var rewritten = FormulaRewriter.Rewrite(listFillRange, renameOp, s.Name);
+                    if (rewritten is not null && rewritten != listFillRange)
+                    {
+                        newListFillRange = rewritten;
+                        changed = true;
+                    }
+                }
+
+                if (!changed)
+                    continue;
+
+                _formControlNameSnapshot.Add((control, control.LinkedCell, control.ListFillRange));
+                control.LinkedCell = newLinkedCell;
+                control.ListFillRange = newListFillRange;
+            }
+        }
+
         _cfFormulaRenameSnapshot = [];
         _dvFormulaRenameSnapshot = [];
         foreach (var s in ctx.Workbook.Sheets)
@@ -187,13 +242,19 @@ public sealed class RenameSheetCommand : IWorkbookCommand
         _chartVerbatimRenameSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
         RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, renameOp);
 
-        // O25: rewrite 'Place in This Document' hyperlink bookmarks/targets across ALL sheets
-        // that reference the renamed sheet — a hyperlink lives on whichever sheet it was
-        // inserted on, which may differ from the sheet being renamed.
+        // O25/P113: rewrite 'Place in This Document' hyperlink bookmarks/targets across ALL
+        // sheets that reference the renamed sheet — a hyperlink lives on whichever sheet it was
+        // inserted on, which may differ from the sheet being renamed. When Bookmark is empty
+        // (FreeX's own Insert Hyperlink dialog stores the ref straight into sheet.Hyperlinks and
+        // leaves Bookmark unset unless the separate Bookmark picker was used), fall back to
+        // rewriting sheet.Hyperlinks[addr] instead — that's the string every consumer
+        // (HyperlinkNavigationPlanner, CreateXlsxHyperlink) actually reads when Bookmark is empty.
         _hyperlinkBookmarkRenameSnapshot = [];
+        _hyperlinkTargetRenameSnapshot = [];
         foreach (var s in ctx.Workbook.Sheets)
         {
             List<KeyValuePair<CellAddress, HyperlinkMetadata>>? changed = null;
+            List<KeyValuePair<CellAddress, string>>? targetChanged = null;
             foreach (var pair in s.HyperlinkMetadata)
             {
                 var meta = pair.Value;
@@ -202,7 +263,30 @@ public sealed class RenameSheetCommand : IWorkbookCommand
 
                 var bookmark = meta.Bookmark;
                 if (string.IsNullOrEmpty(bookmark))
+                {
+                    // No bookmark recorded — the sheet-qualified ref lives directly on
+                    // sheet.Hyperlinks[addr] instead (see SetHyperlinkCommand).
+                    if (!s.Hyperlinks.TryGetValue(pair.Key, out var target) || string.IsNullOrEmpty(target))
+                        continue;
+
+                    var tBangIndex = target.IndexOf('!', StringComparison.Ordinal);
+                    if (tBangIndex < 0)
+                        continue;
+
+                    var tRawSheetPart = target[..tBangIndex].Trim('\'');
+                    var tSheetPart = tRawSheetPart.Contains("''", StringComparison.Ordinal)
+                        ? tRawSheetPart.Replace("''", "'", StringComparison.Ordinal)
+                        : tRawSheetPart;
+                    if (!string.Equals(tSheetPart, _oldName, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    var rewrittenTarget = FormulaRewriter.Rewrite(target, renameOp, _oldName);
+                    if (rewrittenTarget is null || rewrittenTarget == target)
+                        continue;
+
+                    (targetChanged ??= []).Add(new KeyValuePair<CellAddress, string>(pair.Key, rewrittenTarget));
                     continue;
+                }
 
                 var bangIndex = bookmark.IndexOf('!', StringComparison.Ordinal);
                 if (bangIndex < 0)
@@ -225,11 +309,22 @@ public sealed class RenameSheetCommand : IWorkbookCommand
                 (changed ??= []).Add(new KeyValuePair<CellAddress, HyperlinkMetadata>(pair.Key, meta with { Bookmark = rewritten }));
             }
 
-            if (changed is null) continue;
-            foreach (var (addr, newMeta) in changed)
+            if (changed is not null)
             {
-                _hyperlinkBookmarkRenameSnapshot.Add((s.Id, addr, s.HyperlinkMetadata[addr].Bookmark));
-                s.HyperlinkMetadata[addr] = newMeta;
+                foreach (var (addr, newMeta) in changed)
+                {
+                    _hyperlinkBookmarkRenameSnapshot.Add((s.Id, addr, s.HyperlinkMetadata[addr].Bookmark));
+                    s.HyperlinkMetadata[addr] = newMeta;
+                }
+            }
+
+            if (targetChanged is not null)
+            {
+                foreach (var (addr, newTarget) in targetChanged)
+                {
+                    _hyperlinkTargetRenameSnapshot.Add((s.Id, addr, s.Hyperlinks[addr]));
+                    s.Hyperlinks[addr] = newTarget;
+                }
             }
         }
 
@@ -262,6 +357,14 @@ public sealed class RenameSheetCommand : IWorkbookCommand
             if (_pictureNameSnapshot is not null)
                 foreach (var (pic, oldValue) in _pictureNameSnapshot)
                     pic.LinkedSourceSheetName = oldValue;
+
+            // P81 restore: FormControl LinkedCell/ListFillRange
+            if (_formControlNameSnapshot is not null)
+                foreach (var (control, oldLinkedCell, oldListFillRange) in _formControlNameSnapshot)
+                {
+                    control.LinkedCell = oldLinkedCell;
+                    control.ListFillRange = oldListFillRange;
+                }
 
             // T7 restore: CF/DV formula text
             if (_cfFormulaRenameSnapshot is not null)
@@ -300,6 +403,18 @@ public sealed class RenameSheetCommand : IWorkbookCommand
                     if (sh is null) continue;
                     if (sh.HyperlinkMetadata.TryGetValue(addr, out var meta))
                         sh.HyperlinkMetadata[addr] = meta with { Bookmark = oldBookmark };
+                }
+            }
+
+            // P113 restore: hyperlink raw targets (bookmark-less 'Place in This Document' links)
+            if (_hyperlinkTargetRenameSnapshot is not null)
+            {
+                foreach (var (sheetId, addr, oldTarget) in _hyperlinkTargetRenameSnapshot)
+                {
+                    var sh = ctx.Workbook.GetSheet(sheetId);
+                    if (sh is null) continue;
+                    if (sh.Hyperlinks.ContainsKey(addr))
+                        sh.Hyperlinks[addr] = oldTarget;
                 }
             }
         }

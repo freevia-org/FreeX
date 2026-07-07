@@ -419,6 +419,10 @@ public partial class MainWindow
         SheetGrid.FormControls = keepObjectData ? sheet?.FormControls : null;
         SheetGrid.WorksheetBackground = sheet?.BackgroundImage;
         SheetGrid.ActiveSheetId = _currentSheetId;
+        // Mirror the Avalonia shell (MainWindow.cs MapCellFlowDirection/MapCellTextAlignment): bind the
+        // active sheet's Sheet.IsRightToLeft (Excel's sheetView rightToLeft="1") to the grid so
+        // Context-reading-order cells resolve to RTL instead of always defaulting to LTR (P28).
+        SheetGrid.IsSheetRightToLeft = sheet?.IsRightToLeft ?? false;
         SheetGrid.SheetRichTextRuns = sheet?.RichTextRuns;
         SheetGrid.Sparklines = sheet?.Sparklines;
         SheetGrid.SparklineValues = sheet is null

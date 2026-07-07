@@ -93,6 +93,11 @@ public static partial class PrintRenderer
                 sheet.PrintHeadings);
             var pageNumber = page.PageNumber;
             var (pageHeader, pageFooter, pageHeaderPictures, pageFooterPictures) = ResolveHeaderFooterForPage(sheet, pageNumber);
+            // Same effective scale percent (explicit Scale% or the ratio implied by Fit-to-pages) that
+            // PagePaginationPlanner already used to decide this area's page capacity/count -- feeding it
+            // through here keeps the drawn scale in lockstep with the portable/Skia PDF export path instead of
+            // re-deriving an independent per-page ratio from each page's own geometry (P97).
+            var configuredScalePercent = printPlan.AreaPlans[page.AreaIndex].Pagination.EffectiveScalePercent;
             var (visual, textOverlays, linkOverlays, cellDestinationOverlays) = RenderPageVisual(
                 sheet,
                 pageW,
@@ -134,7 +139,8 @@ public static partial class PrintRenderer
                 pageNumber,
                 totalPages,
                 sheet.PrintDraftQuality,
-                sheet.PrintBlackAndWhite);
+                sheet.PrintBlackAndWhite,
+                configuredScalePercent);
 
             var container = new VisualHost
             {

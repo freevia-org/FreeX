@@ -106,9 +106,20 @@ public partial class GridView
         var cols = Math.Max(1, picture.SourceColumnCount);
         var cellWidth = rect.Width / cols;
         var cellHeight = rect.Height / rows;
-        var cellLookup = picture.Cells
-            .Where(cell => cell.RowOffset < rows && cell.ColumnOffset < cols)
-            .ToDictionary(cell => (cell.RowOffset, cell.ColumnOffset));
+        // Built as a manual last-wins loop rather than .ToDictionary(...): PictureModel.Cells is a
+        // plain List<PictureCellSnapshot> with no uniqueness constraint on (RowOffset, ColumnOffset),
+        // and a hand-edited or adversarial .fxl file can legitimately contain duplicate offsets. A
+        // straight ToDictionary throws ArgumentException on the second duplicate and crashes the
+        // render; last-wins keeps the render resilient and picks the later (later-drawn) entry,
+        // matching normal "last write wins" dictionary-assignment semantics. Mirrors the Avalonia
+        // shell's MainWindow.cs picture-snapshot renderer (N52 fix) so both platforms behave the same
+        // on the same adversarial file.
+        var cellLookup = new Dictionary<(uint RowOffset, uint ColumnOffset), PictureCellSnapshot>();
+        foreach (var cell in picture.Cells)
+        {
+            if (cell.RowOffset < rows && cell.ColumnOffset < cols)
+                cellLookup[(cell.RowOffset, cell.ColumnOffset)] = cell;
+        }
 
         dc.DrawRectangle(fill, PictureBorderPen, rect);
 

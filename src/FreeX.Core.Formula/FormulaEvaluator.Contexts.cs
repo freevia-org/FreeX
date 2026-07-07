@@ -255,7 +255,9 @@ public sealed partial class FormulaEvaluator
             var bindings = new Dictionary<string, ScalarValue>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < lambda.Parameters.Count; i++)
                 bindings[lambda.Parameters[i]] = args[i];
-            return _evaluator.EvaluateNode(lambda.Body, new ScopedEvalContext(this, bindings, _evaluator));
+            // Lexical scoping: evaluate the body against the environment captured when the
+            // LAMBDA was defined (lambda.Closure), not the call-site context (this).
+            return _evaluator.EvaluateNode(lambda.Body, new ScopedEvalContext(lambda.Closure ?? this, bindings, _evaluator));
         }
 
         private FreeX.Core.Model.Sheet? ResolveSheet(string sheetName)
@@ -316,7 +318,9 @@ public sealed partial class FormulaEvaluator
             if (args.Count != lambda.Parameters.Count) return ErrorValue.Value;
             var nb = new Dictionary<string, ScalarValue>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < lambda.Parameters.Count; i++) nb[lambda.Parameters[i]] = args[i];
-            return _evaluator.EvaluateNode(lambda.Body, new ScopedEvalContext(this, nb, _evaluator));
+            // Lexical scoping: evaluate the body against the environment captured when the
+            // LAMBDA was defined (lambda.Closure), not the call-site context (this).
+            return _evaluator.EvaluateNode(lambda.Body, new ScopedEvalContext(lambda.Closure ?? this, nb, _evaluator));
         }
     }
 }

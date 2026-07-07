@@ -73,7 +73,7 @@ public sealed partial class ViewportService
         ScalarValue value,
         Workbook workbook,
         CfEvaluationContext cfContext) =>
-        ViewportConditionalFormatEvaluator.EvaluateDataBar(sheet, addr, value, workbook, cfContext);
+        ViewportConditionalFormatEvaluator.EvaluateDataBar(sheet, addr, value, workbook, cfContext, MatchesFormula);
 }
 
 internal readonly record struct CfContextCacheKey(SheetId SheetId, int ContentVersion, int CfRuleVersion);

@@ -725,6 +725,17 @@ internal static partial class XlsxWorksheetMetadataPreserver
         if (sourceBlockName == workbookNs + "legacyDrawingHF")
             return !XlsxHeaderFooterPictureReaderWriter.HasPictures(sheet);
 
+        // NOTE (deferred P27): a cleared sheet BACKGROUND image (Sheet.BackgroundImage set to null)
+        // can leave the source <picture> block retained here, resurrecting the deleted background on
+        // save. We cannot gate on `sheet.BackgroundImage is null` because a worksheet <picture> may
+        // instead be a preserved EXTERNAL-target background (TargetMode="External") that FreeX never
+        // loads into the model (XlsxWorksheetBackgroundReaderWriter.Read returns null when the image
+        // part is not embedded in the package) — dropping the block in that case destroys a
+        // legitimately-preserved external background (breaks the FileAdapterSmoke /
+        // XlsxNonChartSchemaValidation picture-preservation round-trips). A correct fix needs a
+        // load-time "modeled background" flag to tell "cleared an internal background" from "never
+        // modeled". Left as a follow-up rather than risk the regression.
+
         return false;
     }
 

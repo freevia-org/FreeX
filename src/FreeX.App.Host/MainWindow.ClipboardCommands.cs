@@ -72,7 +72,18 @@ public partial class MainWindow
         var viewport = SheetGrid.Viewport;
         if (viewport == null) return;
 
-        var text = ClipboardSerializer.Serialize(viewport, range);
+        // P41: SheetGrid.Viewport only materializes the on-screen scroll position (see
+        // ViewportService.Metrics BuildFrozenAwareRowMetrics, which stops once it has covered the
+        // visible height/width). Serializing/HTML-rendering directly off that viewport truncates
+        // any part of the copied range that falls outside the current scroll position to blank —
+        // both for the plain-text/CF_HTML clipboard payload placed on the OS clipboard for external
+        // paste, and would silently corrupt internal same-instance paste too if not for the
+        // clip.Cells fallback captured further below. Build a viewport request sized to the actual
+        // copied range instead, so external copy/paste (and CF_HTML) always reflects the full
+        // selection regardless of what is currently scrolled into view.
+        var fullRangeViewport = BuildFullRangeViewportForClipboard(range) ?? viewport;
+
+        var text = ClipboardSerializer.Serialize(fullRangeViewport, range);
         var sheetForHtml = _workbook.GetSheet(_currentSheetId);
         try
         {
@@ -82,7 +93,7 @@ public partial class MainWindow
             // display text, while anything HTML-unaware still gets the existing plain TSV text (M7).
             var data = new DataObject();
             data.SetText(text);
-            var html = BuildHtmlClipboardFragment(viewport, sheetForHtml, range, _workbook.Theme);
+            var html = BuildHtmlClipboardFragment(fullRangeViewport, sheetForHtml, range, _workbook.Theme);
             if (!string.IsNullOrEmpty(html))
                 data.SetData(System.Windows.DataFormats.Html, html);
             System.Windows.Clipboard.SetDataObject(data, copy: true);
@@ -101,7 +112,7 @@ public partial class MainWindow
         // Capture raw cells (including formulas) for paste formula adjustment
         var sheet = _workbook.GetSheet(_currentSheetId);
         var clipCells = new List<(CellAddress, Cell)>();
-        var pictureCells = CapturePictureCells(viewport, sheet, range);
+        var pictureCells = CapturePictureCells(fullRangeViewport, sheet, range);
         for (uint r = range.Start.Row; r <= range.End.Row; r++)
         {
             for (uint c = range.Start.Col; c <= range.End.Col; c++)
@@ -112,6 +123,50 @@ public partial class MainWindow
             }
         }
         _internalClipboard = new InternalClipboard(range, clipCells, pictureCells, text, isCut);
+    }
+
+    /// <summary>
+    /// Builds a <see cref="ViewportModel"/> that materializes every cell in <paramref name="range"/>,
+    /// independent of the current scroll position (P41). <see cref="SheetGrid"/>'s live viewport is
+    /// built from a <c>ViewportRequest</c> sized to the on-screen scroll area (see
+    /// <c>MainWindow.CreateViewport</c>/<c>ViewportService.Metrics.BuildFrozenAwareRowMetrics</c>,
+    /// which stops materializing rows/columns once it has covered that on-screen height/width) — a
+    /// selection extending past the visible viewport would otherwise serialize as blank for every
+    /// off-screen cell, both to the OS clipboard (plain text + CF_HTML) and to the internal picture
+    /// snapshot. Requesting a viewport whose top-left is the copied range's own start and whose
+    /// available height/width is sized (generously) to the range's own row/column span, mirroring
+    /// how <see cref="PrintRenderer.RenderWorksheet"/> requests a viewport sized to the print range
+    /// rather than the on-screen area, guarantees every cell in the range is present regardless of
+    /// what is currently scrolled into view. Returns null (falling back to the on-screen viewport)
+    /// if the current sheet cannot be resolved.
+    /// </summary>
+    private ViewportModel? BuildFullRangeViewportForClipboard(GridRange range)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return null;
+
+        // Generous per-row/per-column pixel bounds so the viewport's internal "stop materializing"
+        // heuristic (which walks actual row heights/column widths, not these estimates) always
+        // reaches past the end of the requested range even for tall rows / wide columns, while still
+        // being a small constant multiple of the range size rather than the whole sheet.
+        const double MaxPlausibleRowHeight = 500.0;
+        const double MaxPlausibleColWidth = 2000.0;
+
+        var rowSpan = (double)range.RowCount;
+        var colSpan = (double)range.ColCount;
+        var availableHeight = Math.Min(double.MaxValue / 2, (rowSpan + 2) * MaxPlausibleRowHeight);
+        var availableWidth = Math.Min(double.MaxValue / 2, (colSpan + 2) * MaxPlausibleColWidth);
+
+        var request = new ViewportRequest(
+            TopRow: range.Start.Row,
+            LeftCol: range.Start.Col,
+            AvailableHeight: availableHeight,
+            AvailableWidth: availableWidth,
+            IncludeObjects: false,
+            SplitPaneOffsets: null);
+
+        return _viewportService.GetViewport(_workbook, _currentSheetId, request);
     }
 
     private static List<(CellAddress Source, PictureCellSnapshot Snapshot)> CapturePictureCells(

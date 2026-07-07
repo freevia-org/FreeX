@@ -28,6 +28,14 @@ public sealed class RecalcEngine
     private readonly HashSet<CellAddress> _volatileCells = [];
     private readonly Dictionary<DependencyPlanCacheKey, FormulaDependencyPlan> _dependencyPlanCache = [];
     private readonly Queue<DependencyPlanCacheKey> _dependencyPlanCacheOrder = [];
+    // Anchors that most recently evaluated to #SPILL! because IsSpillBlocked found an occupied
+    // target cell. The blocking cell (e.g. a plain value pasted into the spill range) has no
+    // dependency-graph edge back to the anchor — its formula's static references never included
+    // it — so an edit that only clears the blocker would otherwise never re-dirty the anchor and
+    // the stale #SPILL! would persist until a full recalc. Tracked here (not in Sheet, which has
+    // no notion of "why" a spill is blocked) and retried as extra changed-roots every recalc pass
+    // so a cleared blocker makes the anchor spill again immediately, matching Excel.
+    private readonly HashSet<CellAddress> _spillBlockedAnchors = [];
 
     public RecalcEngine(DependencyGraph graph, FormulaEvaluator evaluator)
     {
@@ -63,7 +71,12 @@ public sealed class RecalcEngine
         if (plan.OrderedCells.Count == 0 &&
             plan.CyclicCells.Count == 0 &&
             _volatileCells.Count == 0 &&
-            changedFormulaCells is null)
+            changedFormulaCells is null &&
+            // A cleared/edited cell that was blocking a #SPILL! anchor has no dependency-graph edge
+            // back to that anchor (P73), so the traversal above is empty even though the anchor now
+            // needs to re-spill. Fall through to the spill-anchor retry pass below instead of
+            // short-circuiting here.
+            !(resolveSpillDependents && _spillBlockedAnchors.Count > 0))
         {
             return EmptyReport;
         }
@@ -189,6 +202,7 @@ public sealed class RecalcEngine
                     sheet.ClearSpillRange(addr);
                     if (hadSpill) spillTargetsMayHaveChanged = true;
                     cell.Value = ImplicitIntersection.Resolve(implicitRange, addr.Row, addr.Col);
+                    _spillBlockedAnchors.Remove(addr);
                     AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, addr);
                 }
                 else if (result is RangeValue rv)
@@ -198,6 +212,10 @@ public sealed class RecalcEngine
                     {
                         cell.Value = ErrorValue.Spill;
                         if (hadSpill) spillTargetsMayHaveChanged = true;
+                        // Remember this anchor so a later recalc (triggered by an edit that clears
+                        // the blocking cell, which has no dependency-graph edge back to us) retries
+                        // it instead of leaving a stale #SPILL! forever. See field comment.
+                        _spillBlockedAnchors.Add(addr);
                         AddError(ref errors, addr, "#SPILL!");
                     }
                     else
@@ -205,6 +223,7 @@ public sealed class RecalcEngine
                         cell.Value = rv.Cells[0, 0];
                         sheet.SetSpillRange(addr, rv);
                         spillTargetsMayHaveChanged = true;
+                        _spillBlockedAnchors.Remove(addr);
                         AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, addr);
                     }
                 }
@@ -213,6 +232,7 @@ public sealed class RecalcEngine
                     sheet.ClearSpillRange(addr);
                     if (hadSpill) spillTargetsMayHaveChanged = true;
                     cell.Value = result;
+                    _spillBlockedAnchors.Remove(addr);
                     AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, addr);
                 }
             }
@@ -234,6 +254,7 @@ public sealed class RecalcEngine
                 sheet.ClearSpillRange(addr);
                 if (hadSpill) spillTargetsMayHaveChanged = true;
                 cell.Value = ErrorValue.Value;
+                _spillBlockedAnchors.Remove(addr);
                 AddError(ref errors, addr, "#VALUE!");
             }
             catch (FormulaEvalException ex)
@@ -241,6 +262,7 @@ public sealed class RecalcEngine
                 sheet.ClearSpillRange(addr);
                 if (hadSpill) spillTargetsMayHaveChanged = true;
                 cell.Value = new ErrorValue(ex.ErrorCode);
+                _spillBlockedAnchors.Remove(addr);
                 AddError(ref errors, addr, ex.ErrorCode);
             }
             catch (Exception)
@@ -255,6 +277,7 @@ public sealed class RecalcEngine
                 sheet.ClearSpillRange(addr);
                 if (hadSpill) spillTargetsMayHaveChanged = true;
                 cell.Value = ErrorValue.Value;
+                _spillBlockedAnchors.Remove(addr);
                 AddError(ref errors, addr, "#VALUE!");
 #endif
             }
@@ -300,6 +323,47 @@ public sealed class RecalcEngine
 
                 var spillReport = Recalculate(workbook, spillDependents, resolveSpillDependents: false);
                 report = MergeRecalcReports(report, spillReport);
+            }
+        }
+
+        // Retry anchors that were showing #SPILL! as of some earlier pass. Excel re-spills the
+        // instant the cell(s) blocking a dynamic array are cleared/moved away, even when the edit
+        // that cleared them (e.g. deleting a plain value that happened to sit in the spill range)
+        // has no dependency-graph edge back to the anchor's formula (its precedents are only its
+        // own static references, which never included the blocking cell). Without this, a blocked
+        // anchor's #SPILL! is stuck until a full recalc / F9. Gated to the outermost call only —
+        // the retry itself runs through the normal Recalculate path (resolveSpillDependents: false)
+        // so it cannot re-enter this block and recurse.
+        if (resolveSpillDependents && _spillBlockedAnchors.Count > 0)
+        {
+            List<CellAddress>? retryAnchors = null;
+            List<CellAddress>? staleAnchors = null;
+            foreach (var anchor in _spillBlockedAnchors)
+            {
+                var sheet = workbook.GetSheet(anchor.Sheet);
+                var cell = sheet?.GetCell(anchor);
+                if (cell is null || !cell.HasFormula || cell.Value is not ErrorValue { Code: "#SPILL!" })
+                {
+                    // No longer this engine's concern (cell cleared, overwritten, or already
+                    // resolved by some other path) — stop tracking it so the set cannot grow
+                    // without bound across a long editing session.
+                    (staleAnchors ??= []).Add(anchor);
+                    continue;
+                }
+
+                (retryAnchors ??= []).Add(anchor);
+            }
+
+            if (staleAnchors is not null)
+            {
+                foreach (var stale in staleAnchors)
+                    _spillBlockedAnchors.Remove(stale);
+            }
+
+            if (retryAnchors is not null)
+            {
+                var retryReport = Recalculate(workbook, retryAnchors, resolveSpillDependents: false);
+                report = MergeRecalcReports(report, retryReport);
             }
         }
 
@@ -1063,9 +1127,21 @@ public sealed class RecalcEngine
             case NamedRangeNode named:
             {
                 cacheableForDependencyPlan = false;
-                // Sheet-scope-first: a name scoped to defaultSheetId takes precedence
-                // over a same-named workbook-global name (Excel rule §18.2.6).
-                if (workbook is not null && workbook.TryGetNamedRange(named.Name, defaultSheetId, out var namedRange))
+                // Sheet-scope-first, and scope wins over kind: a sheet-scoped named FORMULA must
+                // take precedence over a same-named workbook-global named RANGE, exactly like
+                // FormulaEvaluator.IsSheetScopedName/EvaluateNamedRange resolve it (Excel rule
+                // §18.2.6 is per-name, not per-kind). Workbook.TryGetNamedRange only distinguishes
+                // scoped-range vs global-range and falls through to the global range dictionary
+                // when no scoped RANGE exists — it does not know about a scoped FORMULA of the same
+                // name shadowing that global range, so calling it first (as this case used to)
+                // would register a dependency on the wrong cells whenever the scoped name is a
+                // formula. Check for an explicit sheet-scoped FORMULA first, mirroring the eval
+                // side's precedence exactly, before ever consulting the range resolver.
+                var sheetScopedIsFormula = workbook is not null &&
+                    workbook.ScopedNamedFormulas.ContainsKey((named.Name, defaultSheetId));
+
+                if (!sheetScopedIsFormula &&
+                    workbook is not null && workbook.TryGetNamedRange(named.Name, defaultSheetId, out var namedRange))
                 {
                     refs.AddRange(namedRange);
                     return false;

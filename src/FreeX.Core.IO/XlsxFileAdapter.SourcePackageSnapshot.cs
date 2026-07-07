@@ -1714,7 +1714,8 @@ public sealed partial class XlsxFileAdapter
                 // means the user removed it via the Name Manager).
                 var sourceNameAttr = sourceName.Attribute("name")?.Value;
                 var isModelRepresentable = !string.IsNullOrWhiteSpace(sourceNameAttr) &&
-                    workbook.ValidateNamedRangeName(sourceNameAttr) is null;
+                    workbook.ValidateNamedRangeName(sourceNameAttr) is null &&
+                    !IsUnmodelableDefinedNameRefersTo(sourceName.Value);
                 if (isModelRepresentable &&
                     !liveModelDefinedNameKeys.Contains(key) &&
                     !XlsxNamedRangeMapper.IsExcelReservedDefinedName(sourceNameAttr))
@@ -1736,6 +1737,62 @@ public sealed partial class XlsxFileAdapter
                 var localSheetId = element.Attribute("localSheetId")?.Value ?? string.Empty;
                 return $"{name}\u001f{localSheetId}";
             }
+        }
+
+        // A defined name's refersTo body never makes it into the model (NamedRanges/
+        // NamedFormulas/ScopedNamedFormulas) when it is a constant literal (e.g. 0.21 or "Hello"),
+        // an external-workbook reference (e.g. [1]Sheet1!$A$1), or a broken reference (#REF!).
+        // XlsxNamedRangeMapper.IsFormulaExpression treats all three as "not a formula" (no
+        // operator/parenthesis characters), so LoadWorkbookDefinedNameFormulasFromPackage /
+        // LoadDefinedNames silently skip them, and they are equally not a resolvable plain range
+        // reference (ClosedXML has nothing to resolve for a constant, an external workbook index,
+        // or a #REF! error). ValidateNamedRangeName only inspects the NAME text, so it happily
+        // passes all three, which previously made isModelRepresentable true for content FreeX can
+        // never model - the resurrection gate must detect that case directly (matching the same
+        // never-loaded-in-the-first-place reasoning already applied to validator-rejected names).
+        private static bool IsUnmodelableDefinedNameRefersTo(string refersTo)
+        {
+            var body = refersTo.Trim();
+            if (body.StartsWith('='))
+                body = body[1..].Trim();
+
+            if (body.Length == 0)
+                return true;
+
+            // Broken reference, anywhere in the body (Excel keeps these; FreeX has no #REF! model).
+            if (body.Contains("#REF!", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // External-workbook reference: '[<index>]SheetName!...' (optionally with the sheet name
+            // single-quoted, e.g. '[1]Sheet1'!$A$1). FreeX only models references into the current
+            // workbook, so any external-workbook marker is unmodelable regardless of what follows.
+            var externalRefOpen = body.IndexOf('[');
+            var externalRefClose = externalRefOpen >= 0 ? body.IndexOf(']', externalRefOpen + 1) : -1;
+            if (externalRefOpen >= 0 &&
+                externalRefClose > externalRefOpen &&
+                int.TryParse(
+                    body.Substring(externalRefOpen + 1, externalRefClose - externalRefOpen - 1),
+                    out _))
+            {
+                return true;
+            }
+
+            // A plain range/cell reference always contains a '!' scope separator (SheetName!$A$1) or
+            // is a bare cell/range address without one; formula expressions were already excluded by
+            // the ValidateNamedRangeName/IsFormulaExpression checks made by the caller before this
+            // helper runs on the remaining "not a formula" bodies. Anything left with no '!' and no
+            // digit-bearing cell-address shape (e.g. a text/number/boolean constant such as 0.21 or
+            // "Hello") is a constant literal, which is never loaded into the model.
+            if (!body.Contains('!'))
+            {
+                var looksLikeBareCellAddress = body.Length > 0 &&
+                    (body[0] == '$' || char.IsLetter(body[0])) &&
+                    body.Any(char.IsDigit);
+                if (!looksLikeBareCellAddress)
+                    return true;
+            }
+
+            return false;
         }
 
         private static void NormalizePatchWorkbookOleSize(ZipArchive archive)
@@ -6538,30 +6595,32 @@ public sealed partial class XlsxFileAdapter
 
             // XlsxWorksheetViewWriter.UpdateSheetView only knows how to emit a <pane> element for
             // the split-pane case (state="split"); it has no support for writing a frozen-pane
-            // (state="frozen"/"frozenSplit") <pane> element and never touches an existing one. If
-            // FrozenRows/FrozenCols actually changed as part of this patch, that specific
-            // sub-change cannot be represented by the writer -- fall back to the existing on-disk
-            // frozen/split state so an unrelated attribute change (e.g. ShowZeros) is still applied
-            // without silently corrupting or dropping the user's real freeze/split-pane setup.
-            var (existingFrozenRows, existingFrozenCols, existingSplitRow, existingSplitColumn) =
+            // (state="frozen"/"frozenSplit") <pane> element, never touches an existing one, and
+            // never removes a <pane> element to represent unfreezing/un-splitting. If
+            // FrozenRows/FrozenCols or SplitRow/SplitColumn actually changed as part of this patch,
+            // that sub-change cannot be represented by the writer at all -- rather than silently
+            // reverting the user's freeze/split change (which then gets baked into the new baseline
+            // as "already on disk" and is permanently lost), escalate to a full save so the
+            // authoritative full-save writer (which does handle freeze/split correctly) applies it.
+            var (existingFrozenRows, existingFrozenCols, _, _) =
                 ReadExistingPaneState(worksheetXml);
             if (patch.Original.FrozenRows != patch.Current.FrozenRows ||
                 patch.Original.FrozenCols != patch.Current.FrozenCols)
             {
-                sheet.FrozenRows = existingFrozenRows;
-                sheet.FrozenCols = existingFrozenCols;
+                return false;
             }
 
             if (sheet.FrozenRows == 0 && sheet.FrozenCols == 0 &&
                 (patch.Original.SplitRow != patch.Current.SplitRow ||
                  patch.Original.SplitColumn != patch.Current.SplitColumn) &&
-                (existingFrozenRows > 0 || existingFrozenCols > 0))
+                (existingFrozenRows > 0 || existingFrozenCols > 0 ||
+                 patch.Current.SplitRow is null && patch.Current.SplitColumn is null))
             {
-                // The on-disk pane is currently frozen (not split), and the writer can't convert a
-                // frozen pane into a split one -- leave the existing frozen pane alone rather than
-                // silently dropping it in favor of an unwritable split state.
-                sheet.SplitRow = existingSplitRow;
-                sheet.SplitColumn = existingSplitColumn;
+                // Either the on-disk pane is currently frozen (not split) and the writer can't
+                // convert a frozen pane into a split one, or the split is being removed entirely
+                // (writer never removes a <pane> element) -- neither is representable by the
+                // in-place writer, so escalate to a full save instead of silently reverting.
+                return false;
             }
 
             return XlsxWorksheetViewWriter.UpdateSheetView(worksheetXml, sheet);

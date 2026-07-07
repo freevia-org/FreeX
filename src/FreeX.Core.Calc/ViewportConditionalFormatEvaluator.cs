@@ -306,42 +306,17 @@ internal static partial class ViewportConditionalFormatEvaluator
                 continue;
 
             CfStyleResult? matchedStyle = null;
-            bool conditionMet;
+            var conditionMet = MatchesRuleCondition(cf, sheet, addr, value, workbook, cfContext, matchesFormula, out var colorScaleStyle);
             if (cf.RuleType == CfRuleType.ColorScale)
             {
-                var colorScaleStyle = ComputeColorScaleStyle(cf, value, sheet, workbook, addr, cfContext);
-                conditionMet = colorScaleStyle is not null;
                 if (colorScaleStyle is not null)
                     matchedStyle = new CfStyleResult(colorScaleStyle, CanUseAsDefaultMergedStyle: true);
             }
-            else
+            else if (conditionMet && cf.FormatIfTrue is not null)
             {
-                conditionMet = cf.RuleType switch
-                {
-                    CfRuleType.CellValue => MatchesCellValue(cf, value, sheet, workbook, addr, cfContext),
-                    CfRuleType.AboveAverage => MatchesAboveAverage(cf, value, cfContext.Aggregates),
-                    CfRuleType.Formula => matchesFormula(cf, sheet, addr, workbook, cfContext),
-                    CfRuleType.Top10 => MatchesTopBottom(cf, addr, cfContext.Aggregates),
-                    CfRuleType.DuplicateValues => MatchesDuplicateState(cf, value, cfContext.Aggregates, duplicate: true),
-                    CfRuleType.UniqueValues => MatchesDuplicateState(cf, value, cfContext.Aggregates, duplicate: false),
-                    CfRuleType.ContainsText => MatchesTextRule(cf, value, TextRuleMatchKind.Contains),
-                    CfRuleType.NotContainsText => MatchesTextRule(cf, value, TextRuleMatchKind.NotContains),
-                    CfRuleType.BeginsWith => MatchesTextRule(cf, value, TextRuleMatchKind.BeginsWith),
-                    CfRuleType.EndsWith => MatchesTextRule(cf, value, TextRuleMatchKind.EndsWith),
-                    CfRuleType.DateOccurring => MatchesDateOccurring(cf, value, DateTime.Today),
-                    CfRuleType.Blanks => IsBlankValue(value),
-                    CfRuleType.NoBlanks => !IsBlankValue(value),
-                    CfRuleType.Errors => value is ErrorValue,
-                    CfRuleType.NoErrors => value is not ErrorValue,
-                    _ => false
-                };
-
-                if (conditionMet && cf.FormatIfTrue is not null)
-                {
-                    matchedStyle = cfContext.DefaultMergedFormatStyles.TryGetValue(cf, out var defaultMergedStyle)
-                        ? new CfStyleResult(defaultMergedStyle, CanUseAsDefaultMergedStyle: true)
-                        : new CfStyleResult(cf.FormatIfTrue, CanUseAsDefaultMergedStyle: false);
-                }
+                matchedStyle = cfContext.DefaultMergedFormatStyles.TryGetValue(cf, out var defaultMergedStyle)
+                    ? new CfStyleResult(defaultMergedStyle, CanUseAsDefaultMergedStyle: true)
+                    : new CfStyleResult(cf.FormatIfTrue, CanUseAsDefaultMergedStyle: false);
             }
 
             if (!conditionMet)
@@ -361,6 +336,87 @@ internal static partial class ViewportConditionalFormatEvaluator
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Evaluates whether a single rule's condition is true for <paramref name="addr"/>, independent
+    /// of rule kind. Shared by the style evaluator (<see cref="Evaluate"/>) and the icon-set/data-bar
+    /// evaluators so that a higher-priority Stop-If-True rule of ANY kind (style, icon set, or data
+    /// bar) can suppress a lower-priority icon-set or data-bar rule exactly like Excel does.
+    /// </summary>
+    private static bool MatchesRuleCondition(
+        ConditionalFormat cf,
+        Sheet sheet,
+        CellAddress addr,
+        ScalarValue value,
+        Workbook workbook,
+        CfEvaluationContext cfContext,
+        Func<ConditionalFormat, Sheet, CellAddress, Workbook, CfEvaluationContext, bool> matchesFormula,
+        out CellStyle? colorScaleStyle)
+    {
+        if (cf.RuleType == CfRuleType.ColorScale)
+        {
+            colorScaleStyle = ComputeColorScaleStyle(cf, value, sheet, workbook, addr, cfContext);
+            return colorScaleStyle is not null;
+        }
+
+        colorScaleStyle = null;
+        return cf.RuleType switch
+        {
+            CfRuleType.CellValue => MatchesCellValue(cf, value, sheet, workbook, addr, cfContext),
+            CfRuleType.AboveAverage => MatchesAboveAverage(cf, value, cfContext.Aggregates),
+            CfRuleType.Formula => matchesFormula(cf, sheet, addr, workbook, cfContext),
+            CfRuleType.Top10 => MatchesTopBottom(cf, addr, cfContext.Aggregates),
+            CfRuleType.DuplicateValues => MatchesDuplicateState(cf, value, cfContext.Aggregates, duplicate: true),
+            CfRuleType.UniqueValues => MatchesDuplicateState(cf, value, cfContext.Aggregates, duplicate: false),
+            CfRuleType.ContainsText => MatchesTextRule(cf, value, TextRuleMatchKind.Contains),
+            CfRuleType.NotContainsText => MatchesTextRule(cf, value, TextRuleMatchKind.NotContains),
+            CfRuleType.BeginsWith => MatchesTextRule(cf, value, TextRuleMatchKind.BeginsWith),
+            CfRuleType.EndsWith => MatchesTextRule(cf, value, TextRuleMatchKind.EndsWith),
+            CfRuleType.DateOccurring => MatchesDateOccurring(cf, value, DateTime.Today),
+            CfRuleType.Blanks => IsBlankValue(value),
+            CfRuleType.NoBlanks => !IsBlankValue(value),
+            CfRuleType.Errors => value is ErrorValue,
+            CfRuleType.NoErrors => value is not ErrorValue,
+            CfRuleType.IconSet => false,
+            CfRuleType.DataBar => false,
+            _ => false
+        };
+    }
+
+    /// <summary>
+    /// Returns true when a rule strictly above <paramref name="belowPriorityRule"/> in priority order,
+    /// applying to <paramref name="addr"/>, has its condition met AND is marked Stop-If-True. Excel
+    /// suppresses ALL lower-priority conditional formatting (style, icon set, or data bar alike) once
+    /// such a rule fires; icon-set and data-bar rules do not evaluate their own StopIfTrue flag against
+    /// each other because Excel only ever displays one icon set and one data bar per cell regardless,
+    /// but a Stop-If-True rule of any kind above them must still hide them.
+    /// </summary>
+    internal static bool IsSuppressedByHigherPriorityStopIfTrue(
+        ConditionalFormat belowPriorityRule,
+        Sheet sheet,
+        CellAddress addr,
+        ScalarValue value,
+        Workbook workbook,
+        CfEvaluationContext cfContext,
+        Func<ConditionalFormat, Sheet, CellAddress, Workbook, CfEvaluationContext, bool> matchesFormula)
+    {
+        for (var i = 0; i < cfContext.RulesByPriority.Count; i++)
+        {
+            var cf = cfContext.RulesByPriority[i];
+            if (ReferenceEquals(cf, belowPriorityRule))
+                return false;
+
+            if (!cf.StopIfTrue)
+                continue;
+            if (!cf.AllRanges.Any(r => r.Contains(addr)))
+                continue;
+
+            if (MatchesRuleCondition(cf, sheet, addr, value, workbook, cfContext, matchesFormula, out _))
+                return true;
+        }
+
+        return false;
     }
 
     private static CellStyle GetStackedDifferentialStyle(

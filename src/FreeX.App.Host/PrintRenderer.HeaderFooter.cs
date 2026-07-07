@@ -65,7 +65,8 @@ public static partial class PrintRenderer
         int pageNumber,
         int totalPages,
         bool draftQuality,
-        bool blackAndWhite)
+        bool blackAndWhite,
+        double configuredScalePercent)
     {
         var visual = new DrawingVisual();
         var textOverlays = new List<PdfTextOverlay>();
@@ -96,19 +97,28 @@ public static partial class PrintRenderer
         var printedWidth = measurement.HeaderWidth + measurement.TotalColumnWidth(pageColumns.Count);
         var printedHeight = measurement.HeaderHeight + measurement.TotalRowHeight(pageRows.Count);
 
-        // Excel's Page Setup > Scaling ('Adjust to N%' or 'Fit to N pages') shrinks every printed
-        // element (gridlines, cell text, headings, charts, text boxes, comments) so the page's real
-        // content fits the printable area -- it never just changes how many rows/columns are packed
-        // onto a page and then draws them at full size. PagePaginationPlanner already inflated the
-        // rows/columns-per-page capacity to reach the correct page count (so pageRows/pageColumns can
-        // be larger than what fits the printable area at 100%); the ratio between the printable area
-        // and this page's actual (unscaled) drawn size is exactly the visual shrink factor to apply
-        // here, capped at 1 so content that already fits is never scaled up.
-        var scaleRatio = 1.0;
-        if (printedWidth > 0)
-            scaleRatio = Math.Min(scaleRatio, printableW / printedWidth);
-        if (printedHeight > 0)
-            scaleRatio = Math.Min(scaleRatio, printableH / printedHeight);
+        // Excel's Page Setup > Scaling ('Adjust to N%' or 'Fit to N pages') shrinks/grows every printed
+        // element (gridlines, cell text, headings, charts, text boxes, comments) in direct proportion to
+        // the configured scale -- it is never merely a repagination hint that only kicks in once content
+        // would otherwise overflow. configuredScalePercent is PagePaginationPlanner's single source of
+        // truth (the same EffectiveScalePercent that decided this area's page capacity/count), so apply
+        // it here unconditionally first, exactly like the portable/Skia PDF export path
+        // (FreeX.App.Services.WorkbookPdfContentBuilder.ResolveScaleRatio/ComputeActualGridSizes) --
+        // this is what makes
+        // "Adjust to 50% normal size" visibly shrink a grid whose real (unscaled) size already fits one
+        // page (P97), and keeps every page of a multi-page printout at the same scale instead of each
+        // page deriving its own shrink from its own possibly-still-overflowing content extent.
+        var scaleRatio = Math.Max(0.001, configuredScalePercent / 100.0);
+
+        // Defensive fit-to-page shrink: even after applying the configured scale, guard against residual
+        // overflow on this page's own content (e.g. an oversized merged row) the same way the portable
+        // PDF path does, relative to the already-scaled size -- never scale up here, only shrink further.
+        var scaledPrintedWidth = printedWidth * scaleRatio;
+        var scaledPrintedHeight = printedHeight * scaleRatio;
+        if (scaledPrintedWidth > printableW && scaledPrintedWidth > 0)
+            scaleRatio = Math.Min(scaleRatio, scaleRatio * (printableW / scaledPrintedWidth));
+        if (scaledPrintedHeight > printableH && scaledPrintedHeight > 0)
+            scaleRatio = Math.Min(scaleRatio, scaleRatio * (printableH / scaledPrintedHeight));
         if (!double.IsFinite(scaleRatio) || scaleRatio <= 0)
             scaleRatio = 1.0;
 
@@ -125,12 +135,13 @@ public static partial class PrintRenderer
         var scaledLinkOverlayStart = linkOverlays.Count;
         var scaledCellDestinationOverlayStart = cellDestinationOverlays.Count;
 
-        if (scaleRatio < 1.0)
+        if (scaleRatio != 1.0)
         {
             // Scale everything printed inside the content area (headings, gridlines, cells, charts,
-            // text boxes, comments) about the content's own top-left corner so it shrinks in place
-            // without shifting off the already-applied centering offset. Header/footer bands are
-            // drawn outside this transform (matching Excel, which never scales header/footer text).
+            // text boxes, comments) about the content's own top-left corner so it shrinks (Scale% &lt;
+            // 100) or grows (Scale% &gt; 100, e.g. "Adjust to 200% normal size") in place without
+            // shifting off the already-applied centering offset. Header/footer bands are drawn outside
+            // this transform (matching Excel, which never scales header/footer text).
             dc.PushTransform(new TranslateTransform(contentLeft, contentTop));
             dc.PushTransform(new ScaleTransform(scaleRatio, scaleRatio));
             dc.PushTransform(new TranslateTransform(-contentLeft, -contentTop));
@@ -226,7 +237,7 @@ public static partial class PrintRenderer
                 blackAndWhite);
         }
 
-        if (scaleRatio < 1.0)
+        if (scaleRatio != 1.0)
         {
             dc.Pop();
             dc.Pop();

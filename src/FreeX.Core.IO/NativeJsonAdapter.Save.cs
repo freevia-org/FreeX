@@ -22,6 +22,39 @@ public sealed partial class NativeJsonAdapter
     internal void SaveForPatchValidationFingerprint(Workbook workbook, Stream stream) =>
         Save(workbook, stream, includeCells: false, includeStyleOnlyCells: false, includeCellStyles: false);
 
+    /// <summary>
+    /// Returns the stored representation of a protection password for the .fxl format.
+    /// <see cref="Sheet.ProtectionPassword"/>/<see cref="Workbook.StructureProtectionPassword"/>
+    /// almost always already hold a hash by the time a save happens — the command layer
+    /// (<c>ProtectSheetCommand</c>/<c>ProtectWorkbookCommand</c>) hashes a freshly-typed password
+    /// into a legacy 4-hex-digit verifier immediately, and a workbook loaded from .xlsx carries
+    /// its cached "iso29500:..." or legacy-hex hash straight through. Blindly re-hashing an
+    /// already-hashed value with <see cref="NativePasswordHelper.HashPassword"/> would produce
+    /// sha256(&lt;hash&gt;) instead of sha256(&lt;plaintext&gt;), which
+    /// <see cref="ProtectionPasswordHelper.VerifyStoredPassword"/> can never again verify against
+    /// the real typed password — a permanent lockout. So any value already recognizable as one of
+    /// the hash forms <c>VerifyStoredPassword</c> understands (iso29500, or legacy 4-hex shape) is
+    /// stored verbatim; only a value with neither shape (genuine plaintext) is hashed here.
+    /// </summary>
+    private static string StoreProtectionPassword(string value) =>
+        ProtectionPasswordHelper.IsIso29500Hash(value) || IsLegacyPasswordHashShape(value)
+            ? value
+            : NativePasswordHelper.HashPassword(value);
+
+    /// <summary>
+    /// True when <paramref name="value"/> has the exact shape of a legacy (pre-2013) Excel
+    /// password verifier produced by <c>ProtectionPasswordHelper.ToVerifiedLegacyPasswordHash</c>:
+    /// exactly 4 hex digits. Mirrors <c>ProtectionPasswordHelper.IsLegacyPasswordHash</c> (private
+    /// to FreeX.Core.Model) so this IO-layer save path can recognize the same shape without a
+    /// dependency on that helper's internals.
+    /// </summary>
+    private static bool IsLegacyPasswordHashShape(string value) =>
+        value.Length == 4 &&
+        value.All(ch =>
+            ch is >= '0' and <= '9' ||
+            ch is >= 'A' and <= 'F' ||
+            ch is >= 'a' and <= 'f');
+
     private static void Save(
         Workbook workbook,
         Stream stream,
@@ -58,7 +91,7 @@ public sealed partial class NativeJsonAdapter
             AdditionalViews = FromWorkbookAdditionalViews(workbook.AdditionalViews),
             IsStructureProtected = workbook.IsStructureProtected,
             StructureProtectionPassword = workbook.IsStructureProtected && workbook.StructureProtectionPassword is { } swp
-                ? NativePasswordHelper.HashPassword(swp)
+                ? StoreProtectionPassword(swp)
                 : null,
             ProtectionMetadata = FromWorkbookProtectionMetadata(workbook.ProtectionMetadata),
             WindowArrangement = NativeJsonValueSanitizer.ValidEnumOrDefault(workbook.WindowArrangement, WorkbookWindowArrangement.Tiled),
@@ -103,7 +136,7 @@ public sealed partial class NativeJsonAdapter
                 TabColor = s.TabColor is { } color ? FormatColor(color) : null,
                 IsProtected = s.IsProtected,
                 ProtectionPassword = s.IsProtected && s.ProtectionPassword is { } shp
-                    ? NativePasswordHelper.HashPassword(shp)
+                    ? StoreProtectionPassword(shp)
                     : null,
                 ProtectionPermissions = s.ProtectionPermissions
                     .Where(Enum.IsDefined)

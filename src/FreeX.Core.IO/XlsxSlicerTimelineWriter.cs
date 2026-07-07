@@ -187,7 +187,19 @@ internal static class XlsxSlicerTimelineWriter
                         OptionalAttribute("caption", slicer.Caption),
                         OptionalAttribute("style", slicer.StyleName),
                         new XAttribute("cache", cacheName),
-                        new XAttribute("rowHeight", "228600")))));
+                        new XAttribute("rowHeight", "228600"),
+                        // P10: columnCount/showCaption are read by XlsxSlicerTimelineMetadataReader
+                        // (defaults: columnCount=1, showCaption=true when absent) but were never
+                        // emitted here, so a fresh save silently dropped a non-default tile-column
+                        // layout or a hidden caption band on every round trip. Only emit when the
+                        // value differs from Excel's default so an unchanged default-shaped slicer's
+                        // XML stays exactly as before this fix.
+                        slicer.ColumnCount != 1
+                            ? new XAttribute("columnCount", slicer.ColumnCount.ToString(CultureInfo.InvariantCulture))
+                            : null,
+                        !slicer.ShowCaption
+                            ? new XAttribute("showCaption", "0")
+                            : null))));
             if (isNewCache)
             {
                 // P11: a table slicer (SourceTableId set, no pivot binding) binds to a structured table via

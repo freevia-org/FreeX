@@ -395,13 +395,60 @@ internal static class XlsxNamedRangeMapper
         }
     }
 
+    // Mirrors XlsxWorkbookSchemaNormalizer.WorkbookChildOrder's CT_Workbook child sequence so a
+    // newly-created <definedNames> element (patch-save path, which does not run the full workbook
+    // schema normalizer) is inserted after sheets/functionGroups/externalReferences and before
+    // calcPr/oleSize/etc, instead of unconditionally right after <sheets/>. Placing it before
+    // <externalReferences/> violates the CT_Workbook sequence and triggers Excel's repair prompt.
+    private static readonly string[] WorkbookElementsBeforeDefinedNames =
+    {
+        "sheets",
+        "functionGroups",
+        "externalReferences",
+    };
+
+    private static readonly string[] WorkbookElementsAfterDefinedNames =
+    {
+        "calcPr",
+        "oleSize",
+        "customWorkbookViews",
+        "pivotCaches",
+        "smartTagPr",
+        "smartTagTypes",
+        "webPublishing",
+        "fileRecoveryPr",
+        "webPublishObjects",
+        "extLst",
+    };
+
     private static void InsertDefinedNamesElement(XElement root, XNamespace workbookNs, XElement definedNames)
     {
-        var sheets = root.Element(workbookNs + "sheets");
-        if (sheets is not null)
+        // Insert immediately after the last of sheets/functionGroups/externalReferences that is
+        // present, in document order, so definedNames lands after all three per the schema.
+        XElement? lastPrecedingSibling = null;
+        foreach (var localName in WorkbookElementsBeforeDefinedNames)
         {
-            sheets.AddAfterSelf(definedNames);
+            var element = root.Element(workbookNs + localName);
+            if (element is not null)
+                lastPrecedingSibling = element;
+        }
+
+        if (lastPrecedingSibling is not null)
+        {
+            lastPrecedingSibling.AddAfterSelf(definedNames);
             return;
+        }
+
+        // No sheets/functionGroups/externalReferences element found (unexpected but be defensive):
+        // insert before the first element that must follow definedNames, if any.
+        foreach (var localName in WorkbookElementsAfterDefinedNames)
+        {
+            var element = root.Element(workbookNs + localName);
+            if (element is not null)
+            {
+                element.AddBeforeSelf(definedNames);
+                return;
+            }
         }
 
         root.Add(definedNames);

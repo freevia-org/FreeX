@@ -228,43 +228,58 @@ public sealed partial class FindReplaceDialog : Window
         if (_results.Count == 0 || _currentIndex < 0)
             return;
 
-        var match = _results[_currentIndex];
         var options = CreateFindOptions();
-        var result = FindReplaceDialogPlanner.TryReplaceSingleMatch(
-            _getWorkbook(),
-            _commandBus,
-            match,
-            search,
-            ReplaceBox.Text,
-            matchCase: MatchCaseBox.IsChecked == true,
-            matchEntireCell: MatchEntireBox.IsChecked == true,
-            lookIn: options.LookIn,
-            replacementFormat: _replaceFormatDiff);
 
-        if (ShowReplaceFailureWarning(result.Failure))
-            return;
-
-        if (!result.Replaced)
+        // A match can be non-replaceable without being a hard failure (e.g. Look-in=Values finds a
+        // formula cell whose displayed result matches, but the formula itself can't be replaced).
+        // Advance through the remaining matches (bounded by _results.Count so an all-non-replaceable
+        // result set still terminates) instead of getting permanently stuck retrying the same match
+        // forever — matching the Avalonia shell's WorkbookSession.ReplaceNextValue, which always
+        // moves the active cell past a skipped match before the next Replace click.
+        for (var attempt = 0; attempt < _results.Count; attempt++)
         {
-            SetStatusText(UiText.Get("FindReplace_NoReplaceableMatchFound"));
-            return;
-        }
+            var match = _results[_currentIndex];
+            var result = FindReplaceDialogPlanner.TryReplaceSingleMatch(
+                _getWorkbook(),
+                _commandBus,
+                match,
+                search,
+                ReplaceBox.Text,
+                matchCase: MatchCaseBox.IsChecked == true,
+                matchEntireCell: MatchEntireBox.IsChecked == true,
+                lookIn: options.LookIn,
+                replacementFormat: _replaceFormatDiff);
 
-        SetStatusText(UiText.Get("FindReplace_ReplacedOneCell"));
-        _onWorkbookChanged();
-        _results = FindReplaceService.Find(
-            _getWorkbook(), search,
-            options,
-            matchCase: MatchCaseBox.IsChecked == true,
-            matchEntireCell: MatchEntireBox.IsChecked == true);
-        _currentIndex = -1;
-        UpdateResultsGrid();
-        if (_results.Count > 0)
-        {
-            _currentIndex = 0;
+            if (ShowReplaceFailureWarning(result.Failure))
+                return;
+
+            if (result.Replaced)
+            {
+                SetStatusText(UiText.Get("FindReplace_ReplacedOneCell"));
+                _onWorkbookChanged();
+                _results = FindReplaceService.Find(
+                    _getWorkbook(), search,
+                    options,
+                    matchCase: MatchCaseBox.IsChecked == true,
+                    matchEntireCell: MatchEntireBox.IsChecked == true);
+                _currentIndex = -1;
+                UpdateResultsGrid();
+                if (_results.Count > 0)
+                {
+                    _currentIndex = 0;
+                    _navigateTo(_results[_currentIndex].Address);
+                    SetStatusText(UiText.Format("FindReplace_MatchStatus", 1, _results.Count));
+                }
+                return;
+            }
+
+            // Not replaceable: advance past this match so the next attempt (or the next Replace
+            // click, if this was the last attempt) tries a different one instead of repeating it.
+            _currentIndex = (_currentIndex + 1) % _results.Count;
             _navigateTo(_results[_currentIndex].Address);
-            SetStatusText(UiText.Format("FindReplace_MatchStatus", 1, _results.Count));
         }
+
+        SetStatusText(UiText.Get("FindReplace_NoReplaceableMatchFound"));
     }
 
     private bool ShowReplaceFailureWarning(CommandOutcome? failure)

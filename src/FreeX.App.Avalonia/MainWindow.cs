@@ -18,6 +18,7 @@ using Avalonia.Media.Immutable;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using System.Globalization;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.Backstage;
@@ -406,6 +407,12 @@ public sealed partial class MainWindow : Window
     private readonly IPlatformPrinter _platformPrinter;
     private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
     private readonly ContentControl _sheetGridHost = new();
+    // The active cell's Border from the most recent BuildSheetGrid pass. Cells are plain Borders
+    // rebuilt on every RefreshShell (see CreateInteractiveCellBorder), so this is refreshed each
+    // pass and used to move REAL keyboard focus onto the active cell (see MoveFocusToActiveCellBorder)
+    // so a screen reader (Orca/AT-SPI, VoiceOver) actually observes a focus change while navigating
+    // the grid, instead of focus sitting statically on _sheetGridHost the whole time.
+    private Border? _activeCellBorder;
     private readonly ContentControl _sheetTabsHost = new();
     private readonly ScrollViewer _sheetScrollViewer = new();
     private readonly ScrollViewer _sheetTabsScroller = new();
@@ -703,6 +710,23 @@ public sealed partial class MainWindow : Window
     /// used by production code paths.
     /// </summary>
     internal Control RebuildSheetGridForTest() => BuildSheetGrid();
+
+    /// <summary>
+    /// Test-only accessor for the persistent worksheet grid host (survives RefreshShell/
+    /// BuildSheetGrid rebuilds — see its field comment), so headless accessibility regression tests
+    /// can move real keyboard focus onto it before driving navigation, exactly as a screen-reader
+    /// user tabbing into the grid would. Not used by production code paths.
+    /// </summary>
+    internal Control SheetGridHostForTest => _sheetGridHost;
+
+    /// <summary>
+    /// Test-only accessor for the active cell's real Border control (see
+    /// <see cref="_activeCellBorder"/>/<see cref="MoveFocusToActiveCellBorder"/>), so headless
+    /// accessibility regression tests can assert which control keyboard focus actually lands on
+    /// after grid navigation, and read its AutomationProperties Name/AutomationId. Not used by
+    /// production code paths.
+    /// </summary>
+    internal Control? ActiveCellBorderForTest => _activeCellBorder;
 
     /// <summary>
     /// Test-only accessor for the Name Box's current text (K23 regression coverage), so headless
@@ -3644,7 +3668,15 @@ public sealed partial class MainWindow : Window
         var formulaSelectionStart = _formulaBox.SelectionStart;
         var formulaSelectionEnd = _formulaBox.SelectionEnd;
 
+        // Captured BEFORE the rebuild: the outgoing active-cell Border (if focused) is about to be
+        // detached from the visual tree by the Content reassignment below, at which point Avalonia
+        // clears its focus (InputElement.OnDetachedFromVisualTreeCore), so checking focus AFTER the
+        // rebuild would always see "nothing focused" and this would never re-focus the new cell.
+        var gridHadFocus = IsGridFocused();
+
         _sheetGridHost.Content = BuildSheetGrid();
+        if (gridHadFocus)
+            MoveFocusToActiveCellBorder();
         _sheetTabsHost.Content = BuildSheetTabs();
         UpdateSheetTabNavigationVisibility();
         if (!_cellAddressBoxHasPendingEdit)
@@ -3698,6 +3730,48 @@ public sealed partial class MainWindow : Window
             FreeX.App.Avalonia.Pivot.PivotSourceContext.FindActivePivot(_session.ActiveSheet, _session.ActiveCell) is not null);
         UpdateSaveButton();
         _refreshRibbonToggleStates?.Invoke();
+    }
+
+    /// <summary>
+    /// True when the currently focused element is <see cref="_sheetGridHost"/> itself or one of its
+    /// descendants (i.e. a previous active-cell Border) — meaning the user is actively navigating
+    /// the worksheet grid rather than editing the formula bar/inline editor or interacting with a
+    /// dialog/toolbar/menu. Must be captured BEFORE <see cref="BuildSheetGrid"/> replaces
+    /// <see cref="_sheetGridHost"/>'s Content, since detaching the currently-focused old Border
+    /// clears focus entirely (Avalonia's InputElement.OnDetachedFromVisualTreeCore) rather than
+    /// leaving it on _sheetGridHost or any ancestor.
+    /// </summary>
+    private bool IsGridFocused()
+    {
+        var focused = FocusManager?.GetFocusedElement();
+        return ReferenceEquals(focused, _sheetGridHost) ||
+               (focused is Control focusedControl && IsDescendantOf(focusedControl, _sheetGridHost));
+    }
+
+    /// <summary>
+    /// Moves real keyboard focus onto the active cell's Border after a grid rebuild. Without this,
+    /// focus never leaves <see cref="_sheetGridHost"/> (a single static "Worksheet"-named element),
+    /// so a screen reader has no focus-change signal at all while the user arrows from cell to
+    /// cell — the per-cell AutomationId/Name set in CreateInteractiveCellBorder are otherwise dead
+    /// weight since nothing ever focuses them. Mirrors, in spirit, what WPF's
+    /// GridViewAutomationPeer.NotifySelectionChanged achieves via
+    /// RaiseAutomationEvent(AutomationFocusChanged): Avalonia's AT-SPI/UIA bridges key off real
+    /// FocusManager focus transitions rather than an app-raised event, so this real Focus() call is
+    /// the Avalonia-native way to produce the same observable behavior. Caller gates this on
+    /// <see cref="IsGridFocused"/> (captured pre-rebuild) so focus is only stolen from the grid
+    /// itself, never from the formula bar, a dialog, or the ribbon.
+    /// </summary>
+    private void MoveFocusToActiveCellBorder() => _activeCellBorder?.Focus();
+
+    private static bool IsDescendantOf(Visual node, Visual ancestor)
+    {
+        for (var current = node.GetVisualParent(); current is not null; current = current.GetVisualParent())
+        {
+            if (ReferenceEquals(current, ancestor))
+                return true;
+        }
+
+        return false;
     }
 
     private void UpdateViewportScrollBars()
@@ -4092,6 +4166,7 @@ public sealed partial class MainWindow : Window
     private Control BuildSheetGrid()
     {
         _activeDataValidationDropdown = null;
+        _activeCellBorder = null;
         var viewport = _session.Viewport;
         var showHeadings = _session.ActiveSheet.ShowHeadings;
         var zoomFactor = GetActiveZoomFactor();
@@ -7001,6 +7076,21 @@ public sealed partial class MainWindow : Window
         var columnName = CellAddress.NumberToColumnName(address.Col);
         AutomationProperties.SetAutomationId(border, $"Cell_{columnName}{address.Row}");
         AutomationProperties.SetName(border, FormatCellAccessibleName(columnName, address.Row, text));
+
+        // The active cell (not just any selected cell) is made a REAL focusable/focus-tracked
+        // element so keyboard focus actually moves as the user arrows around the grid, matching
+        // WPF's GridViewAutomationPeer.NotifySelectionChanged (GridView.cs), which raises
+        // AutomationFocusChanged/SelectionItemPatternOnElementSelected on every active-cell move.
+        // Avalonia has no direct equivalent of RaiseAutomationEvent for arbitrary UIA/AT-SPI
+        // events; instead its automation bridges observe real FocusManager focus changes, so
+        // moving actual keyboard focus here (see MoveFocusToActiveCellBorder, called after each
+        // BuildSheetGrid/RefreshShell pass) is what makes a screen reader announce the new
+        // cell's name/address on every navigation instead of staying silent on _sheetGridHost.
+        if (address == _session.ActiveCell)
+        {
+            border.Focusable = true;
+            _activeCellBorder = border;
+        }
 
         // Excel treats a merged region as a single unit for the fill handle: if the selection's
         // bottom-right corner lands anywhere inside this cell's merge (not just on the merge's own

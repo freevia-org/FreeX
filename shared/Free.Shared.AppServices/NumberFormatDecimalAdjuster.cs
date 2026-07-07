@@ -26,7 +26,16 @@ public static partial class NumberFormatDecimalAdjuster
             return format;
 
         var adjusted = AdjustSections(format, addDecimalPlace: true, out var changed);
-        return changed ? adjusted : format + ".0";
+        if (changed)
+            return adjusted;
+
+        // No adjustable numeric placeholder was found anywhere in the format. Real Excel treats
+        // Increase/Decrease Decimal as a no-op in that case (e.g. date/time formats like
+        // "mm/dd/yyyy" or "h:mm", and the Text format "@"). Blindly appending ".0" would inject a
+        // literal '0' into the code, which flips date formats into the numeric rendering path
+        // (IsDateTimeFormat rejects any format containing '0'/'#') and produces garbage like
+        // "mm/dd/yyyy46108.0" or, for Text, "hello.0".
+        return format;
     }
 
     public static string RemoveDecimalPlace(string? format)
@@ -227,7 +236,11 @@ public static partial class NumberFormatDecimalAdjuster
     [GeneratedRegex(@"(\d+)")]
     private static partial Regex IntegerDigitsRegex();
 
-    [GeneratedRegex(@"\.(\d+)")]
+    // Matches the whole decimal-placeholder run after the dot, not just literal digits: '#' and '?'
+    // are equally valid decimal placeholders (e.g. "0.0#", "0.##", "#.##") and must be included so
+    // Decrease Decimal trims the run correctly instead of either treating '0#' as a two-digit integer
+    // mask (dropping the whole ".0" and leaving a corrupt "0#") or matching nothing at all ("0.##").
+    [GeneratedRegex(@"\.([0#?]+)")]
     private static partial Regex RemoveDecimalPlacesRegex();
 
     /// <summary>

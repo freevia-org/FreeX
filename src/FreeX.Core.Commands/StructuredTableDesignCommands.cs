@@ -444,7 +444,12 @@ public static class StructuredTableDesignCommandHelpers
     /// resized to via <see cref="ResizeStructuredTableCommand"/>. Returns null when
     /// <paramref name="editedAddress"/> is not an auto-expand gesture for <paramref name="table"/>
     /// (e.g. it is inside the existing range, diagonal to a corner, or more than one row/column away).
-    /// Mirrors Excel: a table never auto-expands into a cell already covered by another table.
+    /// Mirrors Excel: a table never auto-expands into a cell already covered by another table, and —
+    /// P105 — never auto-expands downward when the table's last row is a shown totals row: Excel
+    /// suppresses the row-expand gesture entirely directly below a totals row (the user must use the
+    /// Resize Table handle/dialog instead), so typing into that row must be treated as an ordinary,
+    /// out-of-table edit rather than growing the table and destroying the just-typed value under the
+    /// totals refresh.
     /// </summary>
     public static GridRange? TryGetAutoExpandRange(Sheet sheet, StructuredTableModel table, CellAddress editedAddress)
     {
@@ -454,7 +459,9 @@ public static class StructuredTableDesignCommandHelpers
         var range = table.Range;
 
         // One row below the table's current last row, still within its column span: grow downward.
-        var isRowExpand = editedAddress.Row == range.End.Row + 1 &&
+        // Never when that last row is a shown totals row — Excel does not auto-expand below one.
+        var isRowExpand = !table.TotalsRowShown &&
+            editedAddress.Row == range.End.Row + 1 &&
             editedAddress.Col >= range.Start.Col && editedAddress.Col <= range.End.Col;
 
         // One column to the right of the table's current last column, still within its row span:

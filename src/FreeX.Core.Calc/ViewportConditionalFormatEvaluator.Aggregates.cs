@@ -253,12 +253,46 @@ internal static partial class ViewportConditionalFormatEvaluator
         }
 
         var s = GetString(value);
-        return cf.Operator switch
-        {
-            CfOperator.Equal => string.Equals(s, cf.Value1, StringComparison.OrdinalIgnoreCase),
-            CfOperator.NotEqual => !string.Equals(s, cf.Value1, StringComparison.OrdinalIgnoreCase),
-            _ => false
-        };
+        if (cf.Operator is not (CfOperator.Equal or CfOperator.NotEqual))
+            return false;
+
+        var threshold = ResolveCellValueTextThreshold(cf, sheet, workbook, addr, cfContext);
+        var isEqual = threshold is not null && string.Equals(s, threshold, StringComparison.OrdinalIgnoreCase);
+        return cf.Operator == CfOperator.Equal ? isEqual : !isEqual;
+    }
+
+    /// <summary>
+    /// Resolves the text comparison threshold for a CellIs "equal to"/"not equal to" rule. Excel
+    /// stores a literal text comparand as a quoted formula string (e.g. <c>"abc"</c>) and a cell
+    /// reference/formula comparand as bare formula text (e.g. <c>$B$1</c>); both are parsed into
+    /// the same threshold-formula cache used by the numeric branch above
+    /// (<see cref="TryResolveCellValueScalarThreshold"/>), so evaluate through that cache here too
+    /// instead of comparing the cell's display text against the raw, still-quoted formula source.
+    /// </summary>
+    private static string? ResolveCellValueTextThreshold(
+        ConditionalFormat cf,
+        Sheet sheet,
+        Workbook workbook,
+        CellAddress addr,
+        CfEvaluationContext cfContext)
+    {
+        if (TryResolveCellValueScalarThreshold(cf, CfThresholdFormulaSlot.CellValue1, sheet, workbook, addr, cfContext, out var scalar))
+            return GetString(scalar);
+
+        // No parsed formula cache entry (e.g. Value1 is null/blank) — fall back to the raw text,
+        // unwrapping an Excel quoted-string literal like "abc" to its literal content.
+        return UnquoteLiteral(cf.Value1);
+    }
+
+    private static string? UnquoteLiteral(string? text)
+    {
+        if (text is null)
+            return null;
+
+        if (text.Length >= 2 && text[0] == '"' && text[^1] == '"')
+            return text.Substring(1, text.Length - 2).Replace("\"\"", "\"");
+
+        return text;
     }
 
     private static bool TryResolveCellValueNumericThreshold(

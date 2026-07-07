@@ -348,9 +348,13 @@ public static class FindReplaceService
         if (cell is null)
             return false;
 
+        // Formulas-mode on a cell with no formula falls back to the same plain display text
+        // FindReplaceSearchPlanner.EnumerateSearchTexts used to find the match (Excel's
+        // "Look in: Formulas" replaces constants too — it is the ONLY replace mode Excel offers,
+        // and it must not silently skip the very matches Find reported).
         var currentText = lookIn switch
         {
-            FindLookIn.Formulas => cell.FormulaText,
+            FindLookIn.Formulas => cell.HasFormula ? cell.FormulaText : GetDisplayText(cell.Value),
             FindLookIn.Values => cell.HasFormula
                 ? null
                 : workbook is not null
@@ -362,7 +366,7 @@ public static class FindReplaceService
             !TryCreateReplacementText(currentText, searchText, replaceText, comparison, matchEntireCell, out var newText))
             return false;
 
-        if (lookIn == FindLookIn.Formulas)
+        if (lookIn == FindLookIn.Formulas && cell.HasFormula)
         {
             newCell = cell.Clone();
             newCell.FormulaText = newText;

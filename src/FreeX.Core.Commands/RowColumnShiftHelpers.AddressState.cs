@@ -13,6 +13,8 @@ internal static partial class RowColumnShiftHelpers
             CaptureUIntSet(sheet.GroupHiddenRows),
             CaptureUIntSet(sheet.GroupHiddenCols),
             CaptureList(sheet.AllowEditRanges),
+            CaptureAllowEditRangePasswords(sheet),
+            CaptureAllowEditRangeUnlocked(sheet),
             sheet.PrintTitleRows,
             sheet.PrintTitleColumns,
             ClonePageBreaksMetadata(sheet.RowPageBreaksMetadata),
@@ -29,7 +31,7 @@ internal static partial class RowColumnShiftHelpers
             CaptureDrawingShapes(sheet),
             CapturePictures(sheet),
             CaptureSparklines(sheet),
-            CapturePivotTables(sheet),
+            CapturePivotTables(workbook),
             CaptureList(sheet.StructuredTables),
             CapturePivotCaches(workbook),
             CaptureList(workbook.Scenarios),
@@ -55,6 +57,17 @@ internal static partial class RowColumnShiftHelpers
 
     private static IReadOnlyList<T> CaptureList<T>(IReadOnlyCollection<T> source) =>
         source.Count == 0 ? [] : [.. source];
+
+    // M42: AllowEditRangePasswords/UnlockedAllowEditRanges are parallel state to AllowEditRanges,
+    // keyed by the exact GridRange stored there (see Sheet.AllowEditRangePasswords doc comment).
+    // They must be captured/shifted/restored alongside AllowEditRanges itself so a row/column
+    // insert/delete never orphans a range's password (or its per-session unlock) under the old,
+    // now-stale GridRange key.
+    private static IReadOnlyList<KeyValuePair<GridRange, string?>> CaptureAllowEditRangePasswords(Sheet sheet) =>
+        sheet.AllowEditRangePasswords.Count == 0 ? [] : [.. sheet.AllowEditRangePasswords];
+
+    private static IReadOnlyList<GridRange> CaptureAllowEditRangeUnlocked(Sheet sheet) =>
+        sheet.UnlockedAllowEditRanges.Count == 0 ? [] : [.. sheet.UnlockedAllowEditRanges];
 
     private static IReadOnlyList<TextBoxAddressSnapshot> CaptureTextBoxes(Sheet sheet)
     {
@@ -122,16 +135,28 @@ internal static partial class RowColumnShiftHelpers
         return snapshots;
     }
 
-    private static IReadOnlyList<PivotTableAddressSnapshot> CapturePivotTables(Sheet sheet)
+    // N33: a pivot table's SourceRange can reference a *different* sheet than the one it is placed
+    // on (e.g. a pivot built from Sheet1!A1:D100 but placed on Sheet2, Excel's default "New
+    // Worksheet" destination). Capturing/shifting only the edited sheet's own PivotTables would miss
+    // exactly that common case — mirrors the workbook-wide walk already used for charts
+    // (CaptureChartDataRanges/ShiftChartRowsUp in RowColumnShiftHelpers.PrintAndCharts.cs) so a pivot
+    // hosted anywhere in the workbook still has its SourceRange/TargetRange corrected when the sheet
+    // either range points at is structurally edited.
+    private static IReadOnlyList<PivotTableAddressSnapshot> CapturePivotTables(Workbook workbook)
     {
-        if (sheet.PivotTables.Count == 0)
-            return [];
+        List<PivotTableAddressSnapshot>? snapshots = null;
+        foreach (var hostSheet in workbook.Sheets)
+        {
+            if (hostSheet.PivotTables.Count == 0)
+                continue;
 
-        var snapshots = new List<PivotTableAddressSnapshot>(sheet.PivotTables.Count);
-        foreach (var pivotTable in sheet.PivotTables)
-            snapshots.Add(new PivotTableAddressSnapshot(pivotTable, pivotTable.SourceRange, pivotTable.TargetRange, pivotTable.LastRenderedRange));
+            snapshots ??= new List<PivotTableAddressSnapshot>();
+            foreach (var pivotTable in hostSheet.PivotTables)
+                snapshots.Add(new PivotTableAddressSnapshot(
+                    pivotTable, pivotTable.SourceRange, pivotTable.TargetRange, pivotTable.LastRenderedRange, hostSheet.Id));
+        }
 
-        return snapshots;
+        return snapshots ?? (IReadOnlyList<PivotTableAddressSnapshot>)[];
     }
 
     private static IReadOnlyList<PivotCacheSourceSnapshot> CapturePivotCaches(Workbook workbook)
@@ -165,6 +190,8 @@ internal static partial class RowColumnShiftHelpers
         RestoreSet(sheet.GroupHiddenRows, snapshot.GroupHiddenRows);
         RestoreSet(sheet.GroupHiddenCols, snapshot.GroupHiddenCols);
         RestoreList(sheet.AllowEditRanges, snapshot.AllowEditRanges);
+        RestoreAllowEditRangePasswords(sheet, snapshot.AllowEditRangePasswords);
+        RestoreAllowEditRangeUnlocked(sheet, snapshot.UnlockedAllowEditRanges);
         sheet.PrintTitleRows = snapshot.PrintTitleRows;
         sheet.PrintTitleColumns = snapshot.PrintTitleColumns;
         sheet.RowPageBreaksMetadata = ClonePageBreaksMetadata(snapshot.RowPageBreaksMetadata);
@@ -210,13 +237,18 @@ internal static partial class RowColumnShiftHelpers
             sheet.Sparklines.Add(entry.Sparkline);
         }
 
-        sheet.PivotTables.Clear();
+        // N33: PivotTables is a workbook-wide snapshot (a pivot's SourceRange can point at a
+        // different sheet than the one it is placed on) — clear every host sheet that appears in
+        // the snapshot, not just the sheet being edited, mirroring RestoreChartDataRanges.
+        foreach (var hostSheetId in DistinctPivotHostSheets(snapshot.PivotTables))
+            workbook.GetSheet(hostSheetId)?.PivotTables.Clear();
+
         foreach (var entry in snapshot.PivotTables)
         {
             entry.PivotTable.SourceRange = entry.SourceRange;
             entry.PivotTable.TargetRange = entry.TargetRange;
             entry.PivotTable.LastRenderedRange = entry.LastRenderedRange;
-            sheet.PivotTables.Add(entry.PivotTable);
+            workbook.GetSheet(entry.HostSheet)?.PivotTables.Add(entry.PivotTable);
         }
 
         sheet.StructuredTables.Clear();
@@ -279,6 +311,8 @@ internal static partial class RowColumnShiftHelpers
         ApplyShiftedStyleOnlyEntries(sheet, snapshot.StyleOnlyEntries, shift);
         ShiftOutlineAndGroupCollections(sheet, snapshot, shift);
         RestoreList(sheet.AllowEditRanges, ShiftRanges(snapshot.AllowEditRanges, shift));
+        ShiftAllowEditRangePasswords(sheet, snapshot.AllowEditRangePasswords, shift);
+        ShiftAllowEditRangeUnlocked(sheet, snapshot.UnlockedAllowEditRanges, shift);
         ShiftPrintTitles(sheet, snapshot, shift);
         ShiftPageBreakMetadata(sheet, snapshot, shift);
 
@@ -295,7 +329,7 @@ internal static partial class RowColumnShiftHelpers
         ShiftDrawingShapes(sheet, snapshot, shift);
         ShiftPictures(workbook, sheet, snapshot, shift);
         ShiftSparklines(sheet, snapshot, shift);
-        ShiftPivotTables(sheet, snapshot, shift);
+        ShiftPivotTables(workbook, snapshot, shift);
         ShiftStructuredTables(sheet, snapshot, shift);
         ShiftPivotCaches(snapshot, shift);
         ShiftScenarios(workbook, snapshot, shift);
@@ -395,6 +429,56 @@ internal static partial class RowColumnShiftHelpers
         }
 
         return shifted;
+    }
+
+    // M42: rekeys Sheet.AllowEditRangePasswords onto the post-shift GridRange so a range's own
+    // password survives a row/column insert/delete alongside AllowEditRanges itself. A range that
+    // the shift deletes entirely (ShiftRange returns null) drops its password too, matching
+    // AllowEditRanges dropping the range itself.
+    private static void ShiftAllowEditRangePasswords(
+        Sheet sheet,
+        IReadOnlyList<KeyValuePair<GridRange, string?>> passwords,
+        AddressShift shift)
+    {
+        sheet.AllowEditRangePasswords.Clear();
+        foreach (var (range, password) in passwords)
+        {
+            if (shift.ShiftRange(range) is { } shiftedRange)
+                sheet.AllowEditRangePasswords[shiftedRange] = password;
+        }
+    }
+
+    private static void RestoreAllowEditRangePasswords(
+        Sheet sheet,
+        IReadOnlyList<KeyValuePair<GridRange, string?>> passwords)
+    {
+        sheet.AllowEditRangePasswords.Clear();
+        foreach (var (range, password) in passwords)
+            sheet.AllowEditRangePasswords[range] = password;
+    }
+
+    // M42: rekeys Sheet.UnlockedAllowEditRanges (the in-memory, per-session "already entered the
+    // correct range password" gate) onto the post-shift GridRange so an already-unlocked range does
+    // not spuriously re-prompt for its password merely because a row/column shift moved it, while a
+    // range the shift deletes entirely is dropped.
+    private static void ShiftAllowEditRangeUnlocked(
+        Sheet sheet,
+        IReadOnlyList<GridRange> unlocked,
+        AddressShift shift)
+    {
+        sheet.UnlockedAllowEditRanges.Clear();
+        foreach (var range in unlocked)
+        {
+            if (shift.ShiftRange(range) is { } shiftedRange)
+                sheet.UnlockedAllowEditRanges.Add(shiftedRange);
+        }
+    }
+
+    private static void RestoreAllowEditRangeUnlocked(Sheet sheet, IReadOnlyList<GridRange> unlocked)
+    {
+        sheet.UnlockedAllowEditRanges.Clear();
+        foreach (var range in unlocked)
+            sheet.UnlockedAllowEditRanges.Add(range);
     }
 
     private static void ShiftWatchedCells(Workbook workbook, AddressBearingStateSnapshot snapshot, AddressShift shift)
@@ -896,11 +980,22 @@ internal static partial class RowColumnShiftHelpers
         }
     }
 
-    private static void ShiftPivotTables(Sheet sheet, AddressBearingStateSnapshot snapshot, AddressShift shift)
+    // N33: workbook-wide (see CapturePivotTables) so a pivot table's SourceRange is corrected even
+    // when the pivot itself is hosted on a different sheet than the one being structurally edited.
+    // AddressShift.ShiftRange already no-ops a range on a sheet other than the one being shifted
+    // (range.Start.Sheet != SheetId), so it is safe to call for SourceRange/TargetRange/
+    // LastRenderedRange regardless of which of those actually lives on the edited sheet.
+    private static void ShiftPivotTables(Workbook workbook, AddressBearingStateSnapshot snapshot, AddressShift shift)
     {
-        sheet.PivotTables.Clear();
+        foreach (var hostSheetId in DistinctPivotHostSheets(snapshot.PivotTables))
+            workbook.GetSheet(hostSheetId)?.PivotTables.Clear();
+
         foreach (var entry in snapshot.PivotTables)
         {
+            var hostSheet = workbook.GetSheet(entry.HostSheet);
+            if (hostSheet is null)
+                continue;
+
             if (shift.ShiftRange(entry.SourceRange) is not { } sourceRange ||
                 shift.ShiftRange(entry.TargetRange) is not { } targetRange)
             {
@@ -912,7 +1007,20 @@ internal static partial class RowColumnShiftHelpers
             entry.PivotTable.LastRenderedRange = entry.LastRenderedRange is { } lastRenderedRange
                 ? shift.ShiftRange(lastRenderedRange)
                 : null;
-            sheet.PivotTables.Add(entry.PivotTable);
+            hostSheet.PivotTables.Add(entry.PivotTable);
+        }
+    }
+
+    private static IEnumerable<SheetId> DistinctPivotHostSheets(IReadOnlyList<PivotTableAddressSnapshot> pivotTables)
+    {
+        if (pivotTables.Count == 0)
+            yield break;
+
+        var seen = new HashSet<SheetId>();
+        foreach (var entry in pivotTables)
+        {
+            if (seen.Add(entry.HostSheet))
+                yield return entry.HostSheet;
         }
     }
 
@@ -1582,6 +1690,8 @@ internal sealed record AddressBearingStateSnapshot(
     IReadOnlyCollection<uint> GroupHiddenRows,
     IReadOnlyCollection<uint> GroupHiddenCols,
     IReadOnlyList<GridRange> AllowEditRanges,
+    IReadOnlyList<KeyValuePair<GridRange, string?>> AllowEditRangePasswords,
+    IReadOnlyList<GridRange> UnlockedAllowEditRanges,
     WorksheetRepeatRange? PrintTitleRows,
     WorksheetRepeatRange? PrintTitleColumns,
     WorksheetPageBreaksMetadataModel? RowPageBreaksMetadata,
@@ -1637,7 +1747,8 @@ internal readonly record struct PivotTableAddressSnapshot(
     PivotTableModel PivotTable,
     GridRange SourceRange,
     GridRange TargetRange,
-    GridRange? LastRenderedRange);
+    GridRange? LastRenderedRange,
+    SheetId HostSheet);
 
 internal readonly record struct PivotCacheSourceSnapshot(
     PivotCacheModel Cache,

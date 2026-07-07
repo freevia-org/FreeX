@@ -435,13 +435,20 @@ internal static partial class ViewportConditionalFormatEvaluator
         CellAddress addr,
         ScalarValue value,
         Workbook workbook,
-        CfEvaluationContext cfContext)
+        CfEvaluationContext cfContext,
+        Func<ConditionalFormat, Sheet, CellAddress, Workbook, CfEvaluationContext, bool> matchesFormula)
     {
         for (var i = 0; i < cfContext.RulesByPriority.Count; i++)
         {
             var cf = cfContext.RulesByPriority[i];
             if (cf.RuleType != CfRuleType.DataBar || !cf.AllRanges.Any(r => r.Contains(addr)))
                 continue;
+
+            // A higher-priority rule of ANY kind (style, icon set, or data bar) whose condition is
+            // met and which is marked Stop If True suppresses this data bar, matching Excel's
+            // standard "stop if true hides lower-priority icon sets/data bars" idiom.
+            if (IsSuppressedByHigherPriorityStopIfTrue(cf, sheet, addr, value, workbook, cfContext, matchesFormula))
+                return null;
 
             if (!TryGetDouble(value, out var cellValue) ||
                 !double.IsFinite(cellValue) ||
@@ -471,8 +478,27 @@ internal static partial class ViewportConditionalFormatEvaluator
                     cf.AppliesTo.Start,
                     GetStaticThresholdFormulaValue(cfContext, cf, CfThresholdFormulaSlot.DataBarMax),
                     GetThresholdFormula(cfContext, cf, CfThresholdFormulaSlot.DataBarMax),
-                    out var max) ||
-                max <= min)
+                    out var max))
+            {
+                continue;
+            }
+
+            // Excel's default ("automatic") data bar minimum/maximum -- represented by cfvo
+            // type="min"/"max" in the classic block and its x14 autoMin/autoMax twin, both of
+            // which the reader maps onto CfThresholdType.Min/Max for data bars -- is NOT simply
+            // "use the range's actual minimum/maximum" the way an icon set or color scale
+            // type="min"/"max" threshold is. For data bars specifically, Excel always keeps a
+            // zero baseline: the automatic minimum is min(0, actual minimum) and the automatic
+            // maximum is max(0, actual maximum). Without this, an all-positive range (e.g.
+            // 10/20/30) would resolve min=10, giving the smallest cell a zero-length bar (no bar
+            // at all) instead of Excel's ~1/3-length bar. A genuinely explicit numeric/percent/
+            // percentile/formula threshold is unaffected since only Min/Max get the zero clamp.
+            if (cf.DataBarMinThresholdType == CfThresholdType.Min)
+                min = Math.Min(0d, min);
+            if (cf.DataBarMaxThresholdType == CfThresholdType.Max)
+                max = Math.Max(0d, max);
+
+            if (max <= min)
             {
                 continue;
             }

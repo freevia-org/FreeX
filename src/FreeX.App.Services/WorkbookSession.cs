@@ -4114,10 +4114,99 @@ public sealed class WorkbookSession
         ActiveSheet.ActiveCol = address.Col;
         SetSingleSelectedRange(new GridRange(address, address));
         FormulaEditAddress = null;
+        RefreshLinkedPicturesForEditedCells(result);
         MarkDirty();
         _selectionStatsRevision++;
         RefreshViewport();
         EnsureActiveCellVisible();
+    }
+
+    /// <summary>
+    /// Excel's Paste Special &gt; Linked Picture (our Copy-then-Paste-Linked-Picture) keeps drawing a
+    /// live snapshot of its source range: any edit to a cell inside that range must refresh the
+    /// picture's rendered content immediately, not just on structural row/column shifts. Those
+    /// shifts already refresh the snapshot via RowColumnShiftHelpers.RefreshLinkedPictureSnapshot
+    /// (ShiftPictures, gated on the range's coordinates having moved), but a plain value/format edit
+    /// that leaves LinkedSourceRange's coordinates unchanged never goes through that path — nothing
+    /// else in the app touches a linked picture's cached Cells after paste. Called from every
+    /// successful edit-result apply so it covers direct edits, fill, paste, etc. uniformly.
+    /// </summary>
+    private void RefreshLinkedPicturesForEditedCells(WorkbookCellEditResult result)
+    {
+        HashSet<CellAddress>? editedCells = null;
+        foreach (var cell in result.AffectedCells)
+            (editedCells ??= []).Add(cell);
+        if (result.RecalcReport is { } recalcReport)
+        {
+            foreach (var cell in recalcReport.RecalculatedCells)
+                (editedCells ??= []).Add(cell);
+        }
+        if (editedCells is null || editedCells.Count == 0)
+            return;
+
+        foreach (var sheet in Workbook.Sheets)
+        {
+            if (sheet.Pictures.Count == 0)
+                continue;
+
+            foreach (var picture in sheet.Pictures)
+            {
+                if (!picture.IsLinkedToSourceRange || picture.LinkedSourceRange is not { } sourceRange)
+                    continue;
+
+                var sourceSheet = Workbook.GetSheet(sourceRange.Start.Sheet);
+                if (sourceSheet is null)
+                    continue;
+
+                var touched = false;
+                foreach (var edited in editedCells)
+                {
+                    if (edited.Sheet.Equals(sourceRange.Start.Sheet) &&
+                        edited.Row >= sourceRange.Start.Row && edited.Row <= sourceRange.End.Row &&
+                        edited.Col >= sourceRange.Start.Col && edited.Col <= sourceRange.End.Col)
+                    {
+                        touched = true;
+                        break;
+                    }
+                }
+                if (!touched)
+                    continue;
+
+                RefreshLinkedPictureCells(picture, sourceSheet, sourceRange);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Rebuilds a linked picture's cached cell snapshot from the live contents of its source range.
+    /// Mirrors RowColumnShiftHelpers.RefreshLinkedPictureSnapshot (Core.Commands, private to that
+    /// file) so both refresh paths render identical content for the same source range.
+    /// </summary>
+    private void RefreshLinkedPictureCells(PictureModel picture, Sheet sourceSheet, GridRange sourceRange)
+    {
+        picture.SourceRowCount = sourceRange.RowCount;
+        picture.SourceColumnCount = sourceRange.ColCount;
+
+        picture.Cells.Clear();
+        for (var row = sourceRange.Start.Row; row <= sourceRange.End.Row; row++)
+        {
+            for (var col = sourceRange.Start.Col; col <= sourceRange.End.Col; col++)
+            {
+                var cell = sourceSheet.GetCell(row, col);
+                var styleId = cell?.StyleId
+                    ?? sourceSheet.GetStyleOnly(row, col)
+                    ?? StyleId.Default;
+                var style = Workbook.GetStyle(styleId);
+                var value = cell?.Value ?? BlankValue.Instance;
+
+                picture.Cells.Add(new PictureCellSnapshot(
+                    row - sourceRange.Start.Row,
+                    col - sourceRange.Start.Col,
+                    FormatPictureCellText(value),
+                    style.Clone(),
+                    value is NumberValue or DateTimeValue));
+            }
+        }
     }
 
     private void ApplySuccessfulRangeEditResult(WorkbookCellEditResult result, GridRange selectedRange)
@@ -4127,6 +4216,7 @@ public sealed class WorkbookSession
         ActiveSheet.ActiveCol = ActiveCell.Col;
         SetSingleSelectedRange(selectedRange);
         FormulaEditAddress = null;
+        RefreshLinkedPicturesForEditedCells(result);
         MarkDirty();
         _selectionStatsRevision++;
         RefreshViewport();

@@ -53,9 +53,11 @@ public sealed partial class StructuredTableCommandTests
         configured.Range.Should().Be(new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 3)));
         configured.TotalsRowShown.Should().BeTrue();
         configured.TotalsRowCount.Should().Be(1);
+        // P106: built-in totalsRowFunction aggregates are materialized as live SUBTOTAL formulas,
+        // not precomputed static values.
         sheet.GetValue(5, 1).Should().Be(new TextValue("Total"));
-        sheet.GetValue(5, 2).Should().Be(new NumberValue(45));
-        sheet.GetValue(5, 3).Should().Be(new NumberValue(2));
+        sheet.GetCell(5, 2)!.FormulaText.Should().Be("SUBTOTAL(109,[Sales])");
+        sheet.GetCell(5, 3)!.FormulaText.Should().Be("SUBTOTAL(103,[Orders])");
         sheet.GetValue(6, 1).Should().Be(new TextValue("Below table"));
         sheet.StructuredTables.Single(candidate => candidate.Id == lowerTable.Id).Range
             .Should().Be(new GridRange(new CellAddress(sheet.Id, 9, 1), new CellAddress(sheet.Id, 10, 2)));
