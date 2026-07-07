@@ -1524,7 +1524,8 @@ public sealed class VisualEvidencePlannerTests
             signature.Contains("categoryAxis=Height", StringComparison.Ordinal) &&
             signature.Contains("valueAxis=Weight", StringComparison.Ordinal));
         expectation.ChartSmartArt.SmartArtVisualSignatures.Should().ContainSingle(signature =>
-            signature.Contains("layout=stepup1", StringComparison.Ordinal) &&
+            signature.Contains("layout=orgchart1", StringComparison.Ordinal) &&
+            signature.Contains("hierarchy=maxDepth=2/nodes=3/connectors=2", StringComparison.Ordinal) &&
             signature.Contains("colorScheme=accent1", StringComparison.Ordinal) &&
             signature.Contains("style=intense1", StringComparison.Ordinal) &&
             signature.Contains("#38517D", StringComparison.Ordinal) &&
@@ -1533,8 +1534,12 @@ public sealed class VisualEvidencePlannerTests
         expectation.ChartSmartArt.Charts.Should().Contain(plan =>
             plan.Kind == ChartKind.Scatter &&
             plan.GeometryKind == ChartVisualGeometryKind.MarkerOnly);
-        expectation.ChartSmartArt.SmartArts.Single().LayoutId.Should().Be("stepup1");
-        expectation.ChartSmartArt.SmartArts.Single().Nodes.Select(node => node.FillHex)
+        var smartArt = expectation.ChartSmartArt.SmartArts.Single();
+        smartArt.LayoutId.Should().Be("orgchart1");
+        smartArt.HierarchyGeometry.Should().NotBeNull();
+        smartArt.HierarchyGeometry!.MaxDepth.Should().Be(2);
+        smartArt.HierarchyGeometry.Connectors.Should().HaveCount(2);
+        smartArt.Nodes.Select(node => node.FillHex)
             .Should().ContainInOrder("#38517D", "#486DAF", "#679AD6");
     }
 

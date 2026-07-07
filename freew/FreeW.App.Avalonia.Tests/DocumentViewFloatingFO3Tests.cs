@@ -144,16 +144,18 @@ public sealed class DocumentViewFloatingFO3Tests
         double vOffsetPt,
         int zOrder = 0,
         string? colorSchemeId = null,
-        string? styleId = null)
+        string? styleId = null,
+        Action<SmartArt>? configure = null)
     {
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
         var para = new Paragraph();
         para.Runs.Add(new Run("Anchor text.", RunFormatting.Default));
 
-        var sa = SmartArt.Create(kind, new[] { "Node A", "Node B", "Node C" });
+        var sa = CreateFloatingSmartArt(kind);
         sa.ColorSchemeId = colorSchemeId;
         sa.StyleId = styleId;
+        configure?.Invoke(sa);
         sa.Placement = new FloatingPlacement
         {
             Wrapping           = wrapping,
@@ -166,6 +168,19 @@ public sealed class DocumentViewFloatingFO3Tests
         para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { SmartArt = sa });
         doc.Blocks.Add(para);
         return doc;
+    }
+
+    private static SmartArt CreateFloatingSmartArt(SmartArtKind kind)
+    {
+        if (kind != SmartArtKind.Hierarchy)
+            return SmartArt.Create(kind, new[] { "Node A", "Node B", "Node C" });
+
+        var root = new SmartArtNode("Root");
+        var child = root.AddChild("Child");
+        child.AddChild("Grandchild");
+        var smartArt = new SmartArt { Kind = SmartArtKind.Hierarchy };
+        smartArt.Nodes.Add(root);
+        return smartArt;
     }
 
     private static TextDocument DocWithFloatingGroup(ImageWrapping wrapping, double hOffsetPt, double vOffsetPt, int zOrder = 0)
@@ -520,6 +535,8 @@ public sealed class DocumentViewFloatingFO3Tests
     {
         SmartArtKind kind = SmartArtKind.List;
         int nodeCount = 0;
+        int maxDepth = -1;
+        int connectorCount = -1;
         var ran = await OnUiThread(() =>
         {
             var doc = DocWithFloatingSmartArt(SmartArtKind.Hierarchy, ImageWrapping.Square, 0, 0);
@@ -527,12 +544,53 @@ public sealed class DocumentViewFloatingFO3Tests
             view.LoadDocument(doc);
             view.Measure(new Size(816, 2000));
             var rects = view.FloatingSmartArtRects;
-            if (rects.Count > 0) { kind = rects[0].Kind; nodeCount = rects[0].NodeCount; }
+            if (rects.Count > 0)
+            {
+                kind = rects[0].Kind;
+                nodeCount = rects[0].NodeCount;
+                maxDepth = rects[0].MaxHierarchyDepth;
+                connectorCount = rects[0].HierarchyConnectorCount;
+            }
         });
 
         if (!ran) return;
         kind.Should().Be(SmartArtKind.Hierarchy, "SmartArt kind must be preserved");
-        nodeCount.Should().Be(3, "three nodes must be captured in FloatingSmartArtRects");
+        nodeCount.Should().Be(3, "root/child/grandchild must be captured in FloatingSmartArtRects");
+        maxDepth.Should().Be(2, "floating hierarchy SmartArt should expose grandchild depth");
+        connectorCount.Should().Be(2, "floating hierarchy SmartArt should expose parent-child connector geometry");
+    }
+
+    [Fact]
+    public async Task Floating_smartart_uses_resolved_hierarchy_layout_when_model_kind_is_stale()
+    {
+        SmartArtKind kind = SmartArtKind.List;
+        int maxDepth = -1;
+        int connectorCount = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingSmartArt(
+                SmartArtKind.Hierarchy,
+                ImageWrapping.Square,
+                0,
+                0,
+                configure: smartArt =>
+                {
+                    smartArt.Kind = SmartArtKind.Process;
+                    smartArt.LayoutId = "orgchart1";
+                });
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var rect = view.FloatingSmartArtRects.Single();
+            kind = rect.Kind;
+            maxDepth = rect.MaxHierarchyDepth;
+            connectorCount = rect.HierarchyConnectorCount;
+        });
+
+        if (!ran) return;
+        kind.Should().Be(SmartArtKind.Hierarchy, "the resolved org-chart layout should drive Avalonia rendering");
+        maxDepth.Should().Be(2);
+        connectorCount.Should().Be(2);
     }
 
     [Fact]

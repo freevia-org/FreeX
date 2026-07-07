@@ -2446,6 +2446,7 @@ public sealed class DocumentView : Control
 
     /// <summary>Snapshot of floating SmartArt rects for tests (rect, behind-text, z-order, kind, node count).</summary>
     public IReadOnlyList<(Rect Rect, bool BehindText, int ZOrder, SmartArtKind Kind, int NodeCount,
+        int MaxHierarchyDepth, int HierarchyConnectorCount,
         string? FirstFillHex, string? FirstBorderHex, double BorderThickness, double CornerRadius,
         double ShadowOpacity, double ShadowBlur, double ShadowDepth, string? FirstConnectorHex)> FloatingSmartArtRects
     {
@@ -2461,6 +2462,8 @@ public sealed class DocumentView : Control
                     s.ZOrder,
                     s.Kind,
                     s.NodeTexts.Count,
+                    s.HierarchyGeometry?.MaxDepth ?? 0,
+                    s.HierarchyGeometry?.Connectors.Count ?? 0,
                     first?.FillHex,
                     first?.BorderHex,
                     first?.BorderThickness ?? 0,
@@ -2544,6 +2547,7 @@ public sealed class DocumentView : Control
 
     /// <summary>Snapshot of inline SmartArt rects for tests (rect, kind, node count).</summary>
     public IReadOnlyList<(Rect Rect, SmartArtKind Kind, int NodeCount,
+        int MaxHierarchyDepth, int HierarchyConnectorCount,
         string? FirstFillHex, string? FirstBorderHex, double BorderThickness, double CornerRadius,
         double ShadowOpacity, double ShadowBlur, double ShadowDepth, string? FirstConnectorHex)> InlineSmartArtRects
     {
@@ -2557,6 +2561,8 @@ public sealed class DocumentView : Control
                     s.Rect,
                     s.Kind,
                     s.NodeTexts.Count,
+                    s.HierarchyGeometry?.MaxDepth ?? 0,
+                    s.HierarchyGeometry?.Connectors.Count ?? 0,
                     first?.FillHex,
                     first?.BorderHex,
                     first?.BorderThickness ?? 0,
@@ -14099,6 +14105,7 @@ public sealed class DocumentView : Control
         // Flattened node texts (first-level nodes + their children depth-first).
         public List<string>     NodeTexts = [];
         public List<SmartArtNodeVisualPlan> NodePlans = [];
+        public SmartArtHierarchyGeometryPlan? HierarchyGeometry;
         public List<Color>      NodeFills = [];
         public Color            NodeTextColor = Colors.White;
     }
@@ -14189,11 +14196,12 @@ public sealed class DocumentView : Control
             ZOrder = zOrder,
             BlockIndex = blockIndex,
             RunIndex = runIndex,
-            Kind = smartArt.Kind,
+            Kind = plan.Kind,
             LayoutId = plan.LayoutId,
             Style = plan.Style,
             NodeTexts = plan.Nodes.Select(n => n.Text).ToList(),
             NodePlans = plan.Nodes.ToList(),
+            HierarchyGeometry = plan.HierarchyGeometry,
             NodeFills = plan.Nodes.Select(n => ToAvaloniaChartColor(n.FillHex)).ToList(),
             NodeTextColor = plan.Nodes.Count > 0
                 ? ToAvaloniaChartColor(plan.Nodes[0].TextHex)
@@ -15186,57 +15194,19 @@ public sealed class DocumentView : Control
         // Draw node boxes.
         const double nodePad  = 6;
         const double nodeH    = 26;
-        const double connGap  = 8;
 
         var areaTop   = rect.Y + headerFt.Height + 6;
         var areaH     = rect.Height - (areaTop - rect.Y) - nodePad;
         var areaW     = rect.Width - 2 * nodePad;
 
-        if (sd.Kind == SmartArtKind.Hierarchy)
+        if (sd.HierarchyGeometry is { Nodes.Count: > 0 } hierarchy)
         {
-            // Simple top-down: root on row 0, children on row 1, evenly spaced.
-            var roots    = sd.NodeTexts.Count > 0 ? new[] { sd.NodeTexts[0] } : [];
-            var children = sd.NodeTexts.Skip(1).ToArray();
-
-            // Root box.
-            var rootW = Math.Min(areaW, 120);
-            var rootX = rect.X + (rect.Width - rootW) / 2;
-            var rootY = areaTop + nodePad;
-            var rootRect = new Rect(rootX, rootY, rootW, nodeH);
-            DrawSmartArtNodeBox(context, sd, 0, rootRect);
-            DrawSmartArtNodeText(context, roots.Length > 0 ? roots[0] : string.Empty, rootRect, SmartArtTextColorAt(sd, 0));
-
-            if (children.Length > 0)
-            {
-                var childW  = Math.Min((areaW - (children.Length - 1) * connGap) / children.Length, 90);
-                var childY  = rootY + nodeH + connGap * 2;
-                var totalChildW = childW * children.Length + connGap * (children.Length - 1);
-                var childStartX = rect.X + (rect.Width - totalChildW) / 2;
-
-                // Vertical line from root to child row.
-                var midRootX = rootX + rootW / 2;
-                var connectorPen = SmartArtConnectorPenAt(sd, 0);
-                context.DrawLine(connectorPen, new Point(midRootX, rootY + nodeH), new Point(midRootX, childY - connGap));
-                // Horizontal line across child tops.
-                if (children.Length > 1)
-                {
-                    context.DrawLine(connectorPen,
-                        new Point(childStartX + childW / 2, childY - connGap),
-                        new Point(childStartX + (children.Length - 1) * (childW + connGap) + childW / 2, childY - connGap));
-                }
-
-                for (var ci = 0; ci < children.Length; ci++)
-                {
-                    var cx = childStartX + ci * (childW + connGap);
-                    var childRect = new Rect(cx, childY, childW, nodeH);
-                    DrawSmartArtNodeBox(context, sd, ci + 1, childRect);
-                    DrawSmartArtNodeText(context, children[ci], childRect, SmartArtTextColorAt(sd, ci + 1));
-                    // Vertical drop line from horizontal bus to child.
-                    context.DrawLine(connectorPen,
-                        new Point(cx + childW / 2, childY - connGap),
-                        new Point(cx + childW / 2, childY));
-                }
-            }
+            var hierarchyTarget = new Rect(
+                rect.X + nodePad,
+                areaTop + nodePad,
+                areaW,
+                Math.Max(1, areaH - nodePad));
+            DrawSmartArtHierarchy(context, sd, hierarchy, hierarchyTarget);
         }
         else
         {
@@ -15270,6 +15240,55 @@ public sealed class DocumentView : Control
                     bx += arrowW + 2;
                 }
             }
+        }
+    }
+
+    private void DrawSmartArtHierarchy(
+        DrawingContext context,
+        FloatingSmartArtData sd,
+        SmartArtHierarchyGeometryPlan hierarchy,
+        Rect target)
+    {
+        var naturalWidth = Math.Max(1, hierarchy.NaturalWidth);
+        var naturalHeight = Math.Max(1, hierarchy.NaturalHeight);
+        var scale = Math.Min(target.Width / naturalWidth, target.Height / naturalHeight);
+        if (!double.IsFinite(scale) || scale <= 0)
+            scale = 1;
+
+        var contentWidth = naturalWidth * scale;
+        var contentHeight = naturalHeight * scale;
+        var offsetX = target.X + Math.Max(0, (target.Width - contentWidth) / 2);
+        var offsetY = target.Y + Math.Max(0, (target.Height - contentHeight) / 2);
+
+        Point ScalePoint(double x, double y) =>
+            new(offsetX + x * scale, offsetY + y * scale);
+
+        Rect ScaleRect(SmartArtHierarchyNodeGeometry node) =>
+            new(
+                offsetX + node.X * scale,
+                offsetY + node.Y * scale,
+                node.Width * scale,
+                node.Height * scale);
+
+        foreach (var connector in hierarchy.Connectors)
+        {
+            if (connector.ParentNodeIndex < 0 || connector.ParentNodeIndex >= sd.NodePlans.Count)
+                continue;
+
+            context.DrawLine(
+                SmartArtConnectorPenAt(sd, connector.ParentNodeIndex),
+                ScalePoint(connector.X1, connector.Y1),
+                ScalePoint(connector.X2, connector.Y2));
+        }
+
+        foreach (var node in hierarchy.Nodes)
+        {
+            if (node.NodeIndex < 0 || node.NodeIndex >= sd.NodeTexts.Count)
+                continue;
+
+            var nodeRect = ScaleRect(node);
+            DrawSmartArtNodeBox(context, sd, node.NodeIndex, nodeRect);
+            DrawSmartArtNodeText(context, sd.NodeTexts[node.NodeIndex], nodeRect, SmartArtTextColorAt(sd, node.NodeIndex));
         }
     }
 

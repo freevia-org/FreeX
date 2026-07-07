@@ -123,6 +123,7 @@ public sealed class ChartSmartArtVisualPlannerTests
         var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt);
 
         plan.LayoutId.Should().Be("stepup1");
+        plan.Kind.Should().Be(SmartArtKind.Process);
         plan.Layout.Kind.Should().Be(SmartArtKind.Process);
         plan.ColorScheme.Id.Should().Be("accent1");
         plan.Style.Id.Should().Be("intense1");
@@ -180,5 +181,61 @@ public sealed class ChartSmartArtVisualPlannerTests
         plan.LayoutId.Should().Be("hierarchy1");
         plan.Nodes.Select(n => n.Text).Should().ContainInOrder("CEO", "Ops", "Sales");
         plan.Nodes.Select(n => n.Depth).Should().ContainInOrder(0, 1, 1);
+    }
+
+    [Fact]
+    public void SmartArtPlan_HierarchyLayoutProvidesReusableGeometry()
+    {
+        var root = new SmartArtNode("CEO");
+        var ops = root.AddChild("Ops");
+        ops.AddChild("Lead");
+        root.AddChild("Sales");
+        var smartArt = new SmartArt { Kind = SmartArtKind.Hierarchy };
+        smartArt.LayoutId = "orgchart1";
+        smartArt.Nodes.Add(root);
+        smartArt.Nodes.Add(new SmartArtNode("Advisor"));
+
+        var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt);
+
+        plan.HierarchyGeometry.Should().NotBeNull();
+        var geometry = plan.HierarchyGeometry!;
+        plan.Nodes.Select(n => n.Text).Should().ContainInOrder("CEO", "Ops", "Lead", "Sales", "Advisor");
+        geometry.MaxDepth.Should().Be(2);
+        geometry.Nodes.Select(n => n.NodeIndex).Should().ContainInOrder(0, 1, 2, 3, 4);
+        geometry.Nodes.Select(n => n.ParentNodeIndex).Should().ContainInOrder(null, 0, 1, 0, null);
+        geometry.Nodes.Select(n => n.Depth).Should().ContainInOrder(0, 1, 2, 1, 0);
+        geometry.Connectors.Select(c => (c.ParentNodeIndex, c.ChildNodeIndex))
+            .Should().BeEquivalentTo([(0, 1), (1, 2), (0, 3)]);
+        geometry.Nodes[1].Y.Should().BeGreaterThan(geometry.Nodes[0].Y);
+        geometry.Nodes[2].Y.Should().BeGreaterThan(geometry.Nodes[1].Y);
+        geometry.NaturalWidth.Should().BeGreaterThan(0);
+        geometry.NaturalHeight.Should().BeGreaterThan(0);
+
+        var signature = ChartSmartArtVisualPlanner.BuildSmartArtVisualSignature(plan);
+        signature.Should().Contain("hierarchy=maxDepth=2/nodes=5/connectors=3");
+        signature.Should().Contain("boxes=0:root:0");
+        signature.Should().Contain("2:1:2");
+        signature.Should().Contain("lines=");
+    }
+
+    [Fact]
+    public void SmartArtPlan_ResolvedLayoutKindOverridesStaleModelKind()
+    {
+        var root = new SmartArtNode("Root");
+        var child = root.AddChild("Child");
+        child.AddChild("Grandchild");
+        var smartArt = new SmartArt { Kind = SmartArtKind.Process };
+        smartArt.LayoutId = "orgchart1";
+        smartArt.Nodes.Add(root);
+
+        var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt);
+
+        plan.Kind.Should().Be(SmartArtKind.Hierarchy);
+        plan.Layout.Kind.Should().Be(SmartArtKind.Hierarchy);
+        plan.HierarchyGeometry.Should().NotBeNull();
+        plan.HierarchyGeometry!.MaxDepth.Should().Be(2);
+        plan.HierarchyGeometry.Connectors.Count.Should().Be(2);
+        ChartSmartArtVisualPlanner.BuildSmartArtVisualSignature(plan)
+            .Should().Contain("kind=Hierarchy|layout=orgchart1");
     }
 }
