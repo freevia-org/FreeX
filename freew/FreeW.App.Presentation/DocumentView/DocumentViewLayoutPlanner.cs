@@ -279,6 +279,12 @@ public sealed record DocumentFloatingWrapExclusionZone(
     DocumentFloatRect Rect,
     ImageWrapping Wrapping);
 
+public sealed record DocumentFloatingWrapReservationPlan(
+    DocumentFloatingObjectKind Kind,
+    double WidthDip,
+    double HeightDip,
+    ImageWrapping Wrapping);
+
 public sealed record DocumentFloatingLineExclusionPlan(
     double LeftDeltaDip,
     double RightShrinkDip);
@@ -1222,6 +1228,100 @@ public static class DocumentViewLayoutPlanner
         return wrapping is ImageWrapping.Square or ImageWrapping.Tight or ImageWrapping.TopAndBottom
             ? new DocumentFloatingWrapExclusionZone(pageSpaceRect, wrapping)
             : null;
+    }
+
+    public static DocumentFloatingWrapReservationPlan? BuildFloatingWrapReservation(
+        Run run,
+        double? topAndBottomReservationWidthDip = null)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+
+        if (run.Image is { IsFloating: true } image)
+            return BuildFloatingWrapReservation(
+                DocumentFloatingObjectKind.Image,
+                image.WidthPt,
+                image.HeightPt,
+                defaultWidthPt: 120,
+                defaultHeightPt: 80,
+                image.Wrapping,
+                topAndBottomReservationWidthDip);
+
+        if (run.Shape is { IsFloating: true, Placement: { } shapePlacement } shape)
+            return BuildFloatingWrapReservation(
+                DocumentFloatingObjectKind.Shape,
+                shape.WidthPt,
+                shape.HeightPt,
+                defaultWidthPt: 120,
+                defaultHeightPt: 80,
+                shapePlacement.Wrapping,
+                topAndBottomReservationWidthDip);
+
+        if (run.Chart is { IsFloating: true, Placement: { } chartPlacement } chart)
+            return BuildFloatingWrapReservation(
+                DocumentFloatingObjectKind.Chart,
+                chart.WidthPt,
+                chart.HeightPt,
+                defaultWidthPt: 360,
+                defaultHeightPt: 216,
+                chartPlacement.Wrapping,
+                topAndBottomReservationWidthDip);
+
+        if (run.WordArt is { IsFloating: true, Placement: { } wordArtPlacement } wordArt)
+            return BuildFloatingWrapReservation(
+                DocumentFloatingObjectKind.WordArt,
+                EstimateWordArtWidthPt(wordArt),
+                EstimateWordArtHeightPt(wordArt),
+                defaultWidthPt: 72,
+                defaultHeightPt: 40,
+                wordArtPlacement.Wrapping,
+                topAndBottomReservationWidthDip);
+
+        if (run.SmartArt is { IsFloating: true, Placement: { } smartArtPlacement } smartArt)
+            return BuildFloatingWrapReservation(
+                DocumentFloatingObjectKind.SmartArt,
+                smartArt.WidthPt,
+                smartArt.HeightPt,
+                defaultWidthPt: 468,
+                defaultHeightPt: 216,
+                smartArtPlacement.Wrapping,
+                topAndBottomReservationWidthDip);
+
+        if (run.DrawingGroup is { } group)
+            return BuildFloatingWrapReservation(
+                DocumentFloatingObjectKind.Group,
+                group.WidthPt,
+                group.HeightPt,
+                defaultWidthPt: 144,
+                defaultHeightPt: 72,
+                group.Placement.Wrapping,
+                topAndBottomReservationWidthDip);
+
+        return null;
+    }
+
+    private static DocumentFloatingWrapReservationPlan? BuildFloatingWrapReservation(
+        DocumentFloatingObjectKind kind,
+        double widthPt,
+        double heightPt,
+        double defaultWidthPt,
+        double defaultHeightPt,
+        ImageWrapping wrapping,
+        double? topAndBottomReservationWidthDip)
+    {
+        if (wrapping is not (ImageWrapping.Square or ImageWrapping.Tight or ImageWrapping.TopAndBottom))
+            return null;
+
+        var resolvedWidthPt = widthPt > 0 ? widthPt : defaultWidthPt;
+        var resolvedHeightPt = heightPt > 0 ? heightPt : defaultHeightPt;
+        var widthDip = wrapping == ImageWrapping.TopAndBottom && topAndBottomReservationWidthDip is > 0
+            ? topAndBottomReservationWidthDip.Value
+            : PageLayout.PointsToDip(resolvedWidthPt);
+
+        return new DocumentFloatingWrapReservationPlan(
+            kind,
+            Math.Max(1, widthDip),
+            Math.Max(1, PageLayout.PointsToDip(resolvedHeightPt)),
+            wrapping);
     }
 
     public static DocumentFloatingLineExclusionPlan BuildSquareTightWrapExclusion(
