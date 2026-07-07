@@ -1332,6 +1332,58 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void BuildTableExpectation_PreservesExplicitHeaderShadingThatMatchesStyleFill()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var table = new Table
+        {
+            Formatting = new TableFormatting
+            {
+                HeaderRow = true,
+                BandedRows = true
+            },
+            TableStyleId = "GridTable4"
+        };
+        table.Rows.Add(new TableRow
+        {
+            Cells =
+            {
+                new TableCell("Header") { ShadingColorHex = "#2F5496" },
+                new TableCell("Header 2")
+            }
+        });
+        table.Rows.Add(new TableRow
+        {
+            Cells =
+            {
+                new TableCell("Body 1"),
+                new TableCell("Body 2")
+            }
+        });
+        document.Blocks.Add(table);
+
+        var expectation = FreeWVisualEvidencePlanner.BuildTableExpectation(document);
+        var headerCell = expectation.Tables.Single().Cells.Single(cell => cell.RowIndex == 0 && cell.CellIndex == 0);
+
+        headerCell.ShadingColorHex.Should().Be("#2F5496");
+        headerCell.EffectiveFill.ExplicitFillHex.Should().Be("#2F5496");
+        headerCell.EffectiveFill.StyleDerivedFillSource.Should().Be("style-derived-header");
+        headerCell.EffectiveFill.StyleDerivedFillHex.Should().Be("#2F5496");
+        headerCell.EffectiveFill.EffectiveFillSource.Should().Be("explicit-cell");
+        expectation.TableCellFillSignatures.Should().Contain(signature =>
+            signature.Contains("row=0", StringComparison.Ordinal)
+            && signature.Contains("cell=0", StringComparison.Ordinal)
+            && signature.Contains("source=style-derived-header", StringComparison.Ordinal)
+            && signature.Contains("fill=#2F5496", StringComparison.Ordinal));
+        expectation.TableCellFillSignatures.Should().Contain(signature =>
+            signature.Contains("row=0", StringComparison.Ordinal)
+            && signature.Contains("cell=0", StringComparison.Ordinal)
+            && signature.Contains("source=explicit-cell", StringComparison.Ordinal)
+            && signature.Contains("fill=#2F5496", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void BuildPageExpectation_RecordsSharedTablePaginationPlan()
     {
         var document = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
@@ -2305,6 +2357,9 @@ public sealed class VisualEvidencePlannerTests
                 row.Tables.TableCellFillSignatures.Any(signature =>
                     signature.Contains("source=style-derived-header", StringComparison.Ordinal)
                     && signature.Contains("fill=#2F5496", StringComparison.Ordinal)));
+            summary.Evidence.Should().OnlyContain(row =>
+                row.Tables.Tables.Single().Cells.Single(cell => cell.RowIndex == 0 && cell.CellIndex == 0)
+                    .ShadingColorHex == null);
             summary.Trust.Failures.Should().NotContain(f =>
                 f.Contains("table renderer pair 'table-layout-complex' page 1", StringComparison.Ordinal)
                 && f.Contains("table plan signatures differ", StringComparison.Ordinal));
@@ -2316,7 +2371,7 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
-    public void BuildNormalizedSummaryFromFiles_AllowsBuiltInHeaderChromeVarianceInTablePlanEvidence()
+    public void BuildNormalizedSummaryFromFiles_RequiresPlannedStyleDerivedHeaderFillEvidence()
     {
         var root = CreateTempRoot();
         try
@@ -2389,10 +2444,16 @@ public sealed class VisualEvidencePlannerTests
                         1)
                 ]);
 
-            summary.Trust.Passed.Should().BeTrue();
-            summary.Trust.Failures.Should().NotContain(f =>
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("table renderer pair 'table-layout-complex' page 1", StringComparison.Ordinal)
-                && f.Contains("table plan signatures differ", StringComparison.Ordinal));
+                && f.Contains("table cell fill signatures differ", StringComparison.Ordinal)
+                && f.Contains("#4472C4", StringComparison.Ordinal));
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("table renderer pair 'table-layout-complex' page 1", StringComparison.Ordinal)
+                && f.Contains("table plan signatures differ", StringComparison.Ordinal)
+                && f.Contains("shading color differs", StringComparison.Ordinal)
+                && f.Contains("#4472C4", StringComparison.Ordinal));
         }
         finally
         {
@@ -2472,6 +2533,10 @@ public sealed class VisualEvidencePlannerTests
                 row.Tables.TableCellFillSignatures.Any(signature =>
                     signature.Contains("source=style-derived-banded-row", StringComparison.Ordinal)
                     && signature.Contains("fill=#BDD7EE", StringComparison.Ordinal)));
+            summary.Evidence.Should().OnlyContain(row =>
+                row.Tables.Tables.Single().Cells
+                    .Where(cell => cell.RowIndex == 1 && cell.GridColumnIndex == 1)
+                    .All(cell => cell.ShadingColorHex == null));
             summary.Trust.Failures.Should().NotContain(f =>
                 f.Contains("table renderer pair 'table-layout-complex' page 1", StringComparison.Ordinal)
                 && f.Contains("table plan signatures differ", StringComparison.Ordinal));

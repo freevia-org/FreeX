@@ -1032,10 +1032,15 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("pixel dimensions must be positive");
         if (row.PixelStats.Width != row.PixelWidth || row.PixelStats.Height != row.PixelHeight)
             rowFailures.Add("pixel stats dimensions do not match evidence dimensions");
-        if (!string.Equals(row.OutputName, row.PageExpectation.ExpectedOutputName, StringComparison.OrdinalIgnoreCase))
-            rowFailures.Add($"output name '{row.OutputName}' does not match expected '{row.PageExpectation.ExpectedOutputName}'");
-        ValidateFeatureExpectations(row, rowFailures);
-        ValidateBackstageCaptureSource(row, rowFailures);
+        var pageExpectation = row.PageExpectation with
+        {
+            Tables = FreeWVisualEvidencePlanner.NormalizeTableFillEvidence(row.PageExpectation.Tables)
+        };
+        var normalizedRow = row with { PageExpectation = pageExpectation };
+        if (!string.Equals(row.OutputName, pageExpectation.ExpectedOutputName, StringComparison.OrdinalIgnoreCase))
+            rowFailures.Add($"output name '{row.OutputName}' does not match expected '{pageExpectation.ExpectedOutputName}'");
+        ValidateFeatureExpectations(normalizedRow, rowFailures);
+        ValidateBackstageCaptureSource(normalizedRow, rowFailures);
 
         var outputPath = ResolveOutputPath(row.OutputPath, manifestDirectory);
         var relativeOutputPath = NormalizeRelativePath(runRoot, outputPath);
@@ -1086,18 +1091,18 @@ public static class FreeWVisualEvidenceManifestNormalizer
             row.HostMetadata
                 .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.OrdinalIgnoreCase),
-            row.PageExpectation.PageNumber,
-            row.PageExpectation.PageCount,
-            row.PageExpectation.LayoutKind,
-            row.PageExpectation.ExpectedOutputName,
-            row.PageExpectation.Features,
-            row.PageExpectation.Tables,
-            row.PageExpectation.DrawingObjects,
-            row.PageExpectation.ChartSmartArt,
-            row.PageExpectation.Fields,
-            row.PageExpectation.HeaderFooters ?? HeaderFooterVisualPlanner.EmptyExpectation,
-            row.PageExpectation.TableOfAuthorities,
-            row.PageExpectation.ProofingDiagnostics,
+            pageExpectation.PageNumber,
+            pageExpectation.PageCount,
+            pageExpectation.LayoutKind,
+            pageExpectation.ExpectedOutputName,
+            pageExpectation.Features,
+            pageExpectation.Tables,
+            pageExpectation.DrawingObjects,
+            pageExpectation.ChartSmartArt,
+            pageExpectation.Fields,
+            pageExpectation.HeaderFooters ?? HeaderFooterVisualPlanner.EmptyExpectation,
+            pageExpectation.TableOfAuthorities,
+            pageExpectation.ProofingDiagnostics,
             trust);
     }
 
@@ -2605,8 +2610,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
         List<string> failures)
     {
         var pairName = $"table renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
-        var wpfTables = wpf.Tables;
-        var avaloniaTables = avalonia.Tables;
+        var wpfTables = FreeWVisualEvidencePlanner.NormalizeTableFillEvidence(wpf.Tables);
+        var avaloniaTables = FreeWVisualEvidencePlanner.NormalizeTableFillEvidence(avalonia.Tables);
         if (wpfTables.TableCount != avaloniaTables.TableCount)
         {
             failures.Add(
@@ -2631,10 +2636,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{pairName} estimated table page counts differ: WPF {wpfTables.EstimatedPageCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaTables.EstimatedPageCount.ToString(CultureInfo.InvariantCulture)}");
         }
 
-        var wpfComparisonTables = CanonicalizeTablePlansForComparison(wpfTables);
-        var avaloniaComparisonTables = CanonicalizeTablePlansForComparison(avaloniaTables);
-        var wpfFillSignatures = TableCellFillSignaturesForComparison(wpfTables, wpfComparisonTables);
-        var avaloniaFillSignatures = TableCellFillSignaturesForComparison(avaloniaTables, avaloniaComparisonTables);
+        var wpfComparisonTables = wpfTables.Tables;
+        var avaloniaComparisonTables = avaloniaTables.Tables;
+        var wpfFillSignatures = OrderedSummaries(wpfTables.TableCellFillSignatures);
+        var avaloniaFillSignatures = OrderedSummaries(avaloniaTables.TableCellFillSignatures);
         if (!wpfFillSignatures.SequenceEqual(avaloniaFillSignatures, StringComparer.Ordinal))
         {
             failures.Add(
@@ -2938,18 +2943,6 @@ public static class FreeWVisualEvidenceManifestNormalizer
             .OrderBy(signature => signature, StringComparer.Ordinal)
             .ToList();
 
-    private static List<string> TableCellFillSignaturesForComparison(
-        FreeWVisualTableExpectation tableExpectation,
-        IReadOnlyList<DocumentTableLayoutPlan> canonicalizedTables)
-    {
-        if (tableExpectation.TableCellFillSignatures is { Count: > 0 } signatures)
-            return OrderedSummaries(signatures);
-
-        return FreeWVisualEvidencePlanner
-            .BuildTableCellFillSignatures(canonicalizedTables)
-            .ToList();
-    }
-
     private static string BuildTableCellSignature(DocumentTableLayoutPlan table, DocumentTableCellLayoutPlan cell)
     {
         var fillPlan = DocumentViewLayoutPlanner.BuildTableCellEffectiveFillPlan(table, cell);
@@ -2975,139 +2968,6 @@ public static class FreeWVisualEvidenceManifestNormalizer
             cell.VerticalAlignment,
             cell.PreferredWidthDip.HasValue ? FormatDouble(cell.PreferredWidthDip.Value) : string.Empty,
             cell.HeightDip.HasValue ? FormatDouble(cell.HeightDip.Value) : string.Empty);
-    }
-
-    private static IReadOnlyList<DocumentTableLayoutPlan> CanonicalizeTablePlansForComparison(
-        FreeWVisualTableExpectation tableExpectation) =>
-        tableExpectation.Tables
-            .Select(table => CanonicalizeTablePlanForComparison(tableExpectation, table))
-            .ToList();
-
-    private static DocumentTableLayoutPlan CanonicalizeTablePlanForComparison(
-        FreeWVisualTableExpectation tableExpectation,
-        DocumentTableLayoutPlan table)
-    {
-        if (table.Cells.Count == 0)
-            return table;
-
-        var cells = table.Cells
-            .Select(cell => !HasExplicitCellFillSignature(tableExpectation, table, cell)
-                && IsStyleDerivedCellFill(table, cell)
-                ? cell with { ShadingColorHex = null }
-                : cell)
-            .ToList();
-
-        return table with
-        {
-            HasCellShading = cells.Any(cell => !string.IsNullOrWhiteSpace(cell.ShadingColorHex)),
-            Cells = cells
-        };
-    }
-
-    private static bool IsStyleDerivedCellFill(
-        DocumentTableLayoutPlan table,
-        DocumentTableCellLayoutPlan cell)
-    {
-        var normalizedShading = NormalizeHexForComparison(cell.ShadingColorHex);
-        if (normalizedShading is null)
-            return false;
-
-        var fillPlan = DocumentViewLayoutPlanner.BuildTableCellEffectiveFillPlan(table, cell);
-        var styleFill = NormalizeHexForComparison(fillPlan.StyleDerivedFillHex);
-        if (string.Equals(normalizedShading, styleFill, StringComparison.Ordinal))
-            return true;
-
-        if (table.HasNamedStyle
-            && CanApplyStyleChrome(table, cell)
-            && BuiltInStyleChromeFillHexes.Contains(normalizedShading))
-            return true;
-
-        return IsLegacyStyleChromeFill(table, cell, normalizedShading);
-    }
-
-    private static bool CanApplyStyleChrome(DocumentTableLayoutPlan table, DocumentTableCellLayoutPlan cell)
-    {
-        if (table.HasHeaderRow && cell.RowIndex == 0)
-            return true;
-        if (table.HasLastRow && cell.RowIndex == Math.Max(0, table.RowCount - 1))
-            return true;
-        if (table.HasFirstColumn && cell.GridColumnIndex == 0)
-            return true;
-        if (table.HasLastColumn
-            && table.GridColumnCount > 0
-            && cell.GridColumnIndex + Math.Max(1, cell.GridSpan) >= table.GridColumnCount)
-            return true;
-
-        return table.HasBandedRows && TableBanding.BodyRowIndex(cell.RowIndex, table.HasHeaderRow) >= 0;
-    }
-
-    private static bool IsLegacyStyleChromeFill(
-        DocumentTableLayoutPlan table,
-        DocumentTableCellLayoutPlan cell,
-        string normalizedShading)
-    {
-        if (table.HasNamedStyle)
-            return false;
-        if (table.HasHeaderRow && cell.RowIndex == 0)
-            return normalizedShading == DocumentViewLayoutPlanner.LegacyHeaderRowFillHex;
-        if (!table.HasBandedRows)
-            return false;
-
-        var bodyIndex = TableBanding.BodyRowIndex(cell.RowIndex, table.HasHeaderRow);
-        return bodyIndex >= 0
-            && bodyIndex % 2 == 0
-            && normalizedShading == DocumentViewLayoutPlanner.LegacyBandedRowFillHex;
-    }
-
-    private static readonly IReadOnlySet<string> BuiltInStyleChromeFillHexes =
-        DocumentTableStyle.Catalog
-            .SelectMany(style => new[]
-            {
-                style.HeaderBand?.FillHex,
-                style.BandedRowOdd?.FillHex,
-                style.BandedRowEven?.FillHex,
-                style.FirstColumnBand?.FillHex,
-                style.LastColumnBand?.FillHex,
-                style.LastRowBand?.FillHex
-            })
-            .Select(NormalizeHexForComparison)
-            .Where(static fill => fill is not null)
-            .Append(DocumentViewLayoutPlanner.LegacyHeaderRowFillHex)
-            .Append(DocumentViewLayoutPlanner.LegacyBandedRowFillHex)
-            .ToHashSet(StringComparer.Ordinal)!;
-
-    private static bool HasExplicitCellFillSignature(
-        FreeWVisualTableExpectation tableExpectation,
-        DocumentTableLayoutPlan table,
-        DocumentTableCellLayoutPlan cell)
-    {
-        if (tableExpectation.TableCellFillSignatures.Count == 0)
-            return false;
-
-        var prefix = string.Join(
-            "|",
-            "table=" + table.TableIndex.ToString(CultureInfo.InvariantCulture),
-            "row=" + cell.RowIndex.ToString(CultureInfo.InvariantCulture),
-            "cell=" + cell.CellIndex.ToString(CultureInfo.InvariantCulture),
-            "grid=" + cell.GridColumnIndex.ToString(CultureInfo.InvariantCulture));
-
-        return tableExpectation.TableCellFillSignatures.Any(signature =>
-            signature.StartsWith(prefix, StringComparison.Ordinal)
-            && signature.Contains("|source=explicit-cell|", StringComparison.Ordinal));
-    }
-
-    private static string? NormalizeHexForComparison(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return null;
-
-        var trimmed = value.Trim();
-        if (trimmed.StartsWith('#'))
-            trimmed = trimmed[1..];
-
-        return trimmed.Length == 6
-            ? "#" + trimmed.ToUpperInvariant()
-            : value.Trim().ToUpperInvariant();
     }
 
     private static List<string> BuildTablePaginationSignatures(IEnumerable<DocumentTablePaginationPlan> plans) =>
