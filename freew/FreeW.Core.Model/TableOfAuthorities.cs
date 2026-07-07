@@ -69,6 +69,22 @@ public sealed class ToaOptions
 }
 
 /// <summary>
+/// Page-reference evidence for a marked TOA citation. <paramref name="PageNumber"/> is a one-based physical
+/// page number used for ordering and de-duplication; <paramref name="DisplayText"/> is the emitted TOA text.
+/// </summary>
+public readonly record struct ToaCitationPageReference(int PageNumber, string DisplayText);
+
+/// <summary>
+/// Resolves the rendered page reference for a citation mark at a top-level document block/run location.
+/// Host layers answer from their pagination surfaces; shared TOA generation owns grouping and formatting.
+/// </summary>
+public delegate ToaCitationPageReference? ToaCitationPageResolver(
+    TextDocument document,
+    int blockIndex,
+    int runIndex,
+    Citation citation);
+
+/// <summary>
 /// Pure, WPF-free generation of a Table of Authorities (Word's References &gt; Table of Authorities) from
 /// the document's marked legal citations (see <see cref="TextDocument.Citations"/>). Lives in the model
 /// project so it is unit-testable without any UI, mirroring <see cref="DocumentIndex"/>.
@@ -146,6 +162,30 @@ public static class TableOfAuthorities
     }
 
     /// <summary>
+    /// Builds the Table of Authorities paragraphs using default options plus host pagination evidence.
+    /// Entries in <paramref name="blockPageAssignments"/> are zero-based page indexes for top-level
+    /// <see cref="TextDocument.Blocks"/>; generated TOA text uses one-based Word page numbers.
+    /// </summary>
+    public static IReadOnlyList<Paragraph> Build(
+        TextDocument document,
+        IReadOnlyList<int>? blockPageAssignments)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        return Build(document, ToaOptions.Default, blockPageAssignments);
+    }
+
+    /// <summary>
+    /// Builds the Table of Authorities paragraphs using default options plus host pagination evidence.
+    /// </summary>
+    public static IReadOnlyList<Paragraph> Build(
+        TextDocument document,
+        ToaCitationPageResolver? pageResolver)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        return Build(document, ToaOptions.Default, pageResolver);
+    }
+
+    /// <summary>
     /// Builds the Table of Authorities paragraphs for <paramref name="document"/> using the given
     /// <paramref name="options"/>: a "Table of Authorities" heading (<see cref="HeadingStyleId"/>) followed,
     /// per non-empty category (limited by <see cref="ToaOptions.CategoryFilter"/> when set) in Word's display
@@ -158,8 +198,41 @@ public static class TableOfAuthorities
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(options);
+        return Build(document, options, pageResolver: null);
+    }
 
-        var occurrences = CanonicalizeOccurrences(CollectCitationOccurrences(document));
+    /// <summary>
+    /// Builds the Table of Authorities paragraphs for <paramref name="document"/> using the given
+    /// <paramref name="options"/> and optional host pagination evidence. Entries in
+    /// <paramref name="blockPageAssignments"/> are zero-based page indexes for top-level
+    /// <see cref="TextDocument.Blocks"/>; generated TOA text uses one-based Word page numbers.
+    /// </summary>
+    public static IReadOnlyList<Paragraph> Build(
+        TextDocument document,
+        ToaOptions options,
+        IReadOnlyList<int>? blockPageAssignments)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(options);
+        return Build(document, options, ToBlockPageAssignmentResolver(blockPageAssignments));
+    }
+
+    /// <summary>
+    /// Builds the Table of Authorities paragraphs for <paramref name="document"/> using the given
+    /// <paramref name="options"/> and optional host pagination evidence. When <paramref name="pageResolver"/>
+    /// returns a page reference for a citation mark, that reference is used for the generated entry; otherwise
+    /// the legacy explicit-break fallback is used.
+    /// </summary>
+    public static IReadOnlyList<Paragraph> Build(
+        TextDocument document,
+        ToaOptions options,
+        ToaCitationPageResolver? pageResolver)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(options);
+
+        var occurrences = CanonicalizeOccurrences(
+            CollectCitationOccurrences(document, pageResolver));
 
         // When UsePassim, count per canonical (long-form, category) pair so short-form marks contribute
         // to the full authority entry they reference.
@@ -248,7 +321,7 @@ public static class TableOfAuthorities
         Dictionary<ToaEntryKey, int>? occurrenceCounts,
         double entryRightTabStopPt,
         Dictionary<ToaEntryKey, RunFormatting>? sourceFormatting,
-        Dictionary<ToaEntryKey, IReadOnlyList<int>>? pageReferences)
+        Dictionary<ToaEntryKey, IReadOnlyList<ToaCitationPageReference>>? pageReferences)
     {
         var paragraphs = new List<Paragraph>
         {
@@ -346,14 +419,14 @@ public static class TableOfAuthorities
     private static string FormatPageReference(
         string entry,
         CitationCategory category,
-        IReadOnlyList<int> pages,
+        IReadOnlyList<ToaCitationPageReference> pages,
         ToaOptions options,
         Dictionary<ToaEntryKey, int>? occurrenceCounts)
     {
         if (options.UsePassim && IsPassimEntry(entry, category, occurrenceCounts))
             return "passim";
 
-        return string.Join(", ", pages);
+        return string.Join(", ", pages.Select(page => page.DisplayText));
     }
 
     private static bool IsPassimEntry(
@@ -401,7 +474,7 @@ public static class TableOfAuthorities
                 key = new ToaEntryKey(canonicalLongCitation, citation.Category);
             }
 
-            canonical.Add(new ToaCanonicalCitation(citation, key, occurrence.PageNumber, occurrence.SourceFormatting));
+            canonical.Add(new ToaCanonicalCitation(citation, key, occurrence.PageReference, occurrence.SourceFormatting));
 
             if (citation.LongCitation.Length == 0 || citation.ShortCitation.Length == 0)
                 continue;
@@ -480,22 +553,26 @@ public static class TableOfAuthorities
         return formatting;
     }
 
-    private static IReadOnlyList<ToaCitationOccurrence> CollectCitationOccurrences(TextDocument document)
+    private static IReadOnlyList<ToaCitationOccurrence> CollectCitationOccurrences(
+        TextDocument document,
+        ToaCitationPageResolver? pageResolver = null)
     {
         var useExplicitPageReferences = HasExplicitPageBoundary(document);
         var occurrences = new List<ToaCitationOccurrence>();
         var pageNumber = 1;
 
-        foreach (var block in document.Blocks)
+        for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
         {
+            var block = document.Blocks[blockIndex];
             if (block is not Paragraph paragraph)
                 continue;
 
             if (paragraph.Formatting.PageBreakBefore)
                 pageNumber++;
 
-            foreach (var run in paragraph.Runs)
+            for (var runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
             {
+                var run = paragraph.Runs[runIndex];
                 if (run.IsPageBreak)
                 {
                     pageNumber++;
@@ -503,10 +580,13 @@ public static class TableOfAuthorities
                 }
 
                 if (run.Citation is { } citation)
+                {
+                    var resolvedPageReference = pageResolver?.Invoke(document, blockIndex, runIndex, citation);
                     occurrences.Add(new ToaCitationOccurrence(
                         citation,
-                        useExplicitPageReferences ? pageNumber : null,
+                        resolvedPageReference ?? (useExplicitPageReferences ? CreatePageReference(pageNumber) : null),
                         run.Formatting));
+                }
             }
 
             if (paragraph.SectionBreak is { } sectionBreak)
@@ -516,6 +596,38 @@ public static class TableOfAuthorities
         occurrences.AddRange(document.Citations.Select(citation => new ToaCitationOccurrence(citation, null, null)));
         return occurrences;
     }
+
+    public static ToaCitationPageReference? ResolveFromBlockPageAssignments(
+        IReadOnlyList<int>? blockPageAssignments,
+        int blockIndex)
+    {
+        if (blockPageAssignments is null || blockIndex < 0 || blockIndex >= blockPageAssignments.Count)
+            return null;
+
+        var pageIndex = blockPageAssignments[blockIndex];
+        return pageIndex >= 0 && pageIndex < int.MaxValue
+            ? CreatePageReference(pageIndex + 1)
+            : null;
+    }
+
+    /// <summary>
+    /// Creates normalized page-reference evidence for a live host resolver. Hosts should only call this
+    /// when they have real layout evidence; no-layout callers must keep passing no resolver so entries stay
+    /// text-only instead of receiving invented page numbers.
+    /// </summary>
+    public static ToaCitationPageReference CreatePageReference(int pageNumber)
+    {
+        var safePageNumber = Math.Max(1, pageNumber);
+        return new ToaCitationPageReference(
+            safePageNumber,
+            safePageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    private static ToaCitationPageResolver? ToBlockPageAssignmentResolver(
+        IReadOnlyList<int>? blockPageAssignments) =>
+        blockPageAssignments is null
+            ? null
+            : (_, blockIndex, _, _) => ResolveFromBlockPageAssignments(blockPageAssignments, blockIndex);
 
     private static bool HasExplicitPageBoundary(TextDocument document) =>
         document.Blocks.OfType<Paragraph>().Any(paragraph =>
@@ -531,16 +643,16 @@ public static class TableOfAuthorities
         _ => pageNumber
     };
 
-    private static Dictionary<ToaEntryKey, IReadOnlyList<int>>? BuildPageReferences(
+    private static Dictionary<ToaEntryKey, IReadOnlyList<ToaCitationPageReference>>? BuildPageReferences(
         IReadOnlyList<ToaCanonicalCitation> occurrences)
     {
-        Dictionary<ToaEntryKey, SortedSet<int>>? pages = null;
+        Dictionary<ToaEntryKey, SortedDictionary<int, string>>? pages = null;
         foreach (var occurrence in occurrences)
         {
-            if (occurrence.PageNumber is not { } pageNumber || occurrence.EntryKey.LongCitation.Length == 0)
+            if (occurrence.PageReference is not { } pageReference || occurrence.EntryKey.LongCitation.Length == 0)
                 continue;
 
-            pages ??= new Dictionary<ToaEntryKey, SortedSet<int>>(EntryKeyComparer);
+            pages ??= new Dictionary<ToaEntryKey, SortedDictionary<int, string>>(EntryKeyComparer);
             var key = occurrence.EntryKey;
             if (!pages.TryGetValue(key, out var entryPages))
             {
@@ -548,12 +660,18 @@ public static class TableOfAuthorities
                 pages[key] = entryPages;
             }
 
-            entryPages.Add(pageNumber);
+            var safePageNumber = Math.Max(1, pageReference.PageNumber);
+            var displayText = string.IsNullOrWhiteSpace(pageReference.DisplayText)
+                ? safePageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : pageReference.DisplayText.Trim();
+            entryPages.TryAdd(safePageNumber, displayText);
         }
 
         return pages?.ToDictionary(
             pair => pair.Key,
-            pair => (IReadOnlyList<int>)pair.Value.ToList(),
+            pair => (IReadOnlyList<ToaCitationPageReference>)pair.Value
+                .Select(page => new ToaCitationPageReference(page.Key, page.Value))
+                .ToList(),
             EntryKeyComparer);
     }
 
@@ -570,12 +688,15 @@ public static class TableOfAuthorities
 
     private readonly record struct ToaEntryKey(string LongCitation, CitationCategory Category);
 
-    private sealed record ToaCitationOccurrence(Citation Citation, int? PageNumber, RunFormatting? SourceFormatting);
+    private sealed record ToaCitationOccurrence(
+        Citation Citation,
+        ToaCitationPageReference? PageReference,
+        RunFormatting? SourceFormatting);
 
     private sealed record ToaCanonicalCitation(
         Citation Citation,
         ToaEntryKey EntryKey,
-        int? PageNumber,
+        ToaCitationPageReference? PageReference,
         RunFormatting? SourceFormatting);
 
     private sealed class ToaEntryKeyComparer : IEqualityComparer<ToaEntryKey>

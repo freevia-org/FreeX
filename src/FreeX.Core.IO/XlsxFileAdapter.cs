@@ -269,6 +269,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         workbook.IterativeCalculation = calculationProperties.IterativeCalculation;
         workbook.MaxCalculationIterations = calculationProperties.MaxIterations;
         workbook.MaxCalculationChange = calculationProperties.MaxChange;
+        workbook.FullPrecision = calculationProperties.FullPrecision;
         foreach (var (numberFormatId, formatCode) in numberFormatCatalog)
             workbook.NumberFormatCatalog[numberFormatId] = formatCode;
         foreach (var (index, color) in indexedColors.Colors)
@@ -455,9 +456,23 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 {
                     // Plain value cell (or provisional spill cell that ClosedXML exposes as HasArrayFormula
                     // — those have a cached <v> value accessible via MapFormulaValue).
-                    var v = xlCell.HasFormula
-                        ? XlsxClosedXmlCellMapper.MapFormulaValue(xlCell, workbook.Uses1904DateSystem)
-                        : XlsxClosedXmlCellMapper.MapValue(xlCell, workbook.Uses1904DateSystem);
+                    ScalarValue v;
+                    if (xlCell.HasFormula && !xlCell.HasArrayFormula && string.IsNullOrEmpty(xlCell.FormulaA1))
+                    {
+                        // Excel 365's <f ca="1"/> spill-continuation marker (empty formula element,
+                        // ca="1"): there is no formula text to evaluate, so asking ClosedXML for
+                        // xlCell.Value here would force it to parse the empty formula string and throw
+                        // (ExpressionParseException: "Unexpected token EofSymbolId"). Read the cached
+                        // <v> directly instead — this also correctly yields BlankValue when the marker
+                        // carries no cached value at all (e.g. a blank last spill member).
+                        v = XlsxClosedXmlCellMapper.MapValue(xlCell.CachedValue, workbook.Uses1904DateSystem);
+                    }
+                    else
+                    {
+                        v = xlCell.HasFormula
+                            ? XlsxClosedXmlCellMapper.MapFormulaValue(xlCell, workbook.Uses1904DateSystem)
+                            : XlsxClosedXmlCellMapper.MapValue(xlCell, workbook.Uses1904DateSystem);
+                    }
                     cell = Cell.FromValue(v);
                 }
 
@@ -482,6 +497,18 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
                 if (cell.Value is BlankValue && !cell.HasFormula)
                 {
+                    // A blank member cell still belonging to a declared CSE/dynamic array ref range
+                    // (e.g. C1:C3 where C3's cached <v> is blank or absent) must still be registered
+                    // as a provisional spill member so Sheet.TryGetArrayExtent recovers the file's
+                    // full declared extent at save time — otherwise the extent silently shrinks to
+                    // the bounding box of only the members that happened to carry a cached value,
+                    // and the array's declared range is lost on round-trip (see XlsxFileAdapter.Save.cs).
+                    if (provisionalAnchor is { } blankAnchor)
+                    {
+                        sheet.SetProvisionalSpillCell(blankAnchor, addr.Row, addr.Col, cell);
+                        continue;
+                    }
+
                     if (cell.StyleId != StyleId.Default)
                         sheet.SetStyleOnly(addr.Row, addr.Col, cell.StyleId);
 

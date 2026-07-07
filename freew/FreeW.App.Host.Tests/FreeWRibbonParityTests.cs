@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Free.Shared.Ribbon;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host.Tests;
@@ -119,6 +120,42 @@ public sealed class FreeWRibbonParityTests
         command!.Execute(RibbonCommandContext.Empty);
 
         invoked.Should().BeTrue();
+    }
+
+    [StaFact]
+    public void PageNumberFormatCommand_AppliesSharedPlannerResult()
+    {
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+        registry.TryGet("freew.page-number-format", out var command).Should().BeTrue();
+
+        command!.Execute(RibbonCommandContext.ForSelectedValue(
+            PageNumberFormatDialogPlanner.BuildCommandValue(
+                PageNumberFormat.LowerRoman,
+                7,
+                chapterStyleLevel: 2,
+                chapterSeparator: PageNumberChapterSeparator.Colon)));
+
+        editor.Model.Page.PageNumberFormat.Should().Be(PageNumberFormat.LowerRoman);
+        editor.Model.Page.PageNumberStartAt.Should().Be(7);
+        editor.Model.Page.PageNumberChapterStyleLevel.Should().Be(2);
+        editor.Model.Page.PageNumberChapterSeparator.Should().Be(PageNumberChapterSeparator.Colon);
+    }
+
+    [StaFact]
+    public void PageNumberCurrentPositionCommand_UsesFormattedPageNumber()
+    {
+        var editor = new DocumentView();
+        editor.Model.Page.PageNumberFormat = PageNumberFormat.LowerRoman;
+        editor.Model.Page.PageNumberStartAt = 4;
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+        registry.TryGet("freew.page-number-current", out var command).Should().BeTrue();
+
+        command!.Execute(RibbonCommandContext.Empty);
+
+        editor.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Should().Contain(r => r.FieldKind == RunFieldKind.PageNumber && r.Text == "iv");
     }
 
     [StaFact]
@@ -269,6 +306,56 @@ public sealed class FreeWRibbonParityTests
                 "freew.table-of-authorities",
                 "freew.table-of-authorities-refresh"
             });
+    }
+
+    [StaFact]
+    public void ReferencesCaptions_ExposeLabelMenusAndUpdateFieldsRefreshesTableOfFigures()
+    {
+        var definition = FreeWRibbon.Build();
+        var captions = definition.FindTab("references")!.FindGroup("captions");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        var visibleAndMenuIds = CommandIds(captions!).Concat(MenuCommandIds(captions!)).ToArray();
+        visibleAndMenuIds.Should().Contain(new[]
+        {
+            "freew.caption",
+            "freew.insert-caption.figure",
+            "freew.insert-caption.table",
+            "freew.insert-caption.equation",
+            "freew.tof",
+            "freew.tof.figure",
+            "freew.tof.table",
+            "freew.tof.equation",
+            "freew.tof-refresh"
+        });
+
+        foreach (var id in new[]
+        {
+            "freew.insert-caption.equation",
+            "freew.tof.table",
+            "freew.tof.equation",
+            "freew.tof-refresh.table",
+            "freew.tof-refresh.equation"
+        })
+        {
+            registry.TryGet(id, out _).Should().BeTrue($"{id} must be registered");
+        }
+
+        editor.Model.Blocks.Clear();
+        editor.Model.Blocks.Add(new Paragraph("Body"));
+        editor.InsertCaption(CaptionLabel.Equation, "First");
+        editor.InsertTableOfFigures(CaptionLabel.Equation);
+        editor.InsertCaption(CaptionLabel.Equation, "Second");
+
+        editor.UpdateFields();
+
+        var tableText = editor.Model.Blocks.OfType<Paragraph>()
+            .Where(TableOfFigures.IsTableOfFiguresParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .ToList();
+        tableText.Should().StartWith("Table of Equations");
+        tableText.Skip(1).Should().BeEquivalentTo("Equation 1: First", "Equation 2: Second");
     }
 
     [StaFact]

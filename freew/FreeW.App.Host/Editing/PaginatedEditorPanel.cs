@@ -5,6 +5,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
@@ -182,6 +183,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         // Phase 4 + W18: resolve header/footer slots per page, routing to the correct section's
         // SectionHeadersFooters (per-section tracking) and passing pageCount for live page numbers.
         var pageToSection = HeaderFooterPagePlanner.MapPagesToSections(model, assignment, pageCount);
+        var pageNumberDisplay = PageNumberFormatDialogPlanner.BuildDisplayPlans(pageToSection, model, assignment);
         var differentOddEvenPages = HeaderFooterPagePlanner.UsesDifferentOddEvenPages(model);
         // Endnotes page is appended after body pages when the document has endnotes.
         var hasEndnotes = model.Endnotes.Count > 0;
@@ -202,6 +204,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 headerSlot: slots.Header, headerSlotName: slots.HeaderSlotName,
                 footerSlot: slots.Footer, footerSlotName: slots.FooterSlotName,
                 pageCount: totalBoxCount,
+                pageNumberText: pageNumberDisplay[i].Text,
                 footnoteIds: pageFootnoteIds[i]);
             // W21: record which section this page belongs to so CommitHeaderFooterSlots can write
             // edits back to the correct section's HeadersFooters rather than always the document-level.
@@ -603,6 +606,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         var hasEndnotesRep = model.Endnotes.Count > 0;
         var totalBoxCountRep = hasEndnotesRep ? pageCount + 1 : pageCount;
         var pageToSectionRep = HeaderFooterPagePlanner.MapPagesToSections(model, assignment, pageCount);
+        var pageNumberDisplayRep = PageNumberFormatDialogPlanner.BuildDisplayPlans(pageToSectionRep, model, assignment);
         var differentOddEvenPagesRep = HeaderFooterPagePlanner.UsesDifferentOddEvenPages(model);
         for (var i = 0; i < pageCount; i++)
         {
@@ -618,6 +622,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 headerSlot: slots.Header, headerSlotName: slots.HeaderSlotName,
                 footerSlot: slots.Footer, footerSlotName: slots.FooterSlotName,
                 pageCount: totalBoxCountRep,
+                pageNumberText: pageNumberDisplayRep[i].Text,
                 footnoteIds: pageFootnoteIdsRep[i]);
             box.OwnerSectionHf = pageSection.HeadersFooters; // W21: section-aware commit
             _pageBoxes.Add(box);
@@ -736,6 +741,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         var hasEndnotesReb = model.Endnotes.Count > 0;
         var totalBoxCountReb = hasEndnotesReb ? pageCount + 1 : pageCount;
         var pageToSectionReb = HeaderFooterPagePlanner.MapPagesToSections(model, assignment, pageCount);
+        var pageNumberDisplayReb = PageNumberFormatDialogPlanner.BuildDisplayPlans(pageToSectionReb, model, assignment);
         var differentOddEvenPagesReb = HeaderFooterPagePlanner.UsesDifferentOddEvenPages(model);
         for (var i = 0; i < pageCount; i++)
         {
@@ -751,6 +757,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 headerSlot: slots.Header, headerSlotName: slots.HeaderSlotName,
                 footerSlot: slots.Footer, footerSlotName: slots.FooterSlotName,
                 pageCount: totalBoxCountReb,
+                pageNumberText: pageNumberDisplayReb[i].Text,
                 footnoteIds: pageFootnoteIdsReb[i]);
             box.OwnerSectionHf = pageSection.HeadersFooters; // W21: section-aware commit
             _pageBoxes.Add(box);

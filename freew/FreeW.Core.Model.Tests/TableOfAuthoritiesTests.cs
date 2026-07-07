@@ -454,6 +454,59 @@ public class TableOfAuthoritiesTests
     }
 
     [Fact]
+    public void Build_FromDocument_PageResolverSuppliesOverflowPageReferencesWithoutExplicitBreaks()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(CitationMarkParagraph("Case A"));
+        doc.Blocks.Add(new Paragraph("Overflow body"));
+        doc.Blocks.Add(CitationMarkParagraph("Case A"));
+
+        var entry = TableOfAuthorities.Build(
+                doc,
+                ToaOptions.Default,
+                (_, blockIndex, _, _) => new ToaCitationPageReference(
+                    blockIndex == 2 ? 2 : 1,
+                    blockIndex == 2 ? "2" : "1"))
+            .Single(p => p.StyleId == TableOfAuthorities.EntryStyleId);
+
+        entry.PlainText.Should().Be("Case A\t1, 2");
+        entry.Runs.Select(run => run.Text).Should().Equal("Case A", "\t", "1, 2");
+    }
+
+    [Fact]
+    public void Build_FromDocument_PageResolverPreservesDisplayTextAndDedupesPhysicalPages()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(CitationMarkParagraph("Case A"));
+        doc.Blocks.Add(CitationMarkParagraph("Case A"));
+
+        var entry = TableOfAuthorities.Build(
+                doc,
+                ToaOptions.Default,
+                (_, _, _, _) => new ToaCitationPageReference(2, "ii"))
+            .Single(p => p.StyleId == TableOfAuthorities.EntryStyleId);
+
+        entry.PlainText.Should().Be("Case A\tii");
+    }
+
+    [Fact]
+    public void Build_FromDocument_BlockPageAssignmentAdapterSuppliesPageReferences()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(CitationMarkParagraph("Case A"));
+        doc.Blocks.Add(new Paragraph("Middle"));
+        doc.Blocks.Add(CitationMarkParagraph("Case A"));
+
+        var entry = TableOfAuthorities.Build(doc, new[] { 0, 0, 1 })
+            .Single(p => p.StyleId == TableOfAuthorities.EntryStyleId);
+
+        entry.PlainText.Should().Be("Case A\t1, 2");
+    }
+
+    [Fact]
     public void Build_FromDocument_ShortCitationAliasAggregatesPageReferences()
     {
         var doc = TextDocument.CreateEmpty();
@@ -526,6 +579,27 @@ public class TableOfAuthoritiesTests
 
         entry.PlainText.Should().Be("Case A");
         entry.Runs.Should().ContainSingle().Which.Text.Should().Be("Case A");
+    }
+
+    [Fact]
+    public void Build_FromDocument_LiveSinglePageResolverSuppliesPageOneWithoutChangingFallback()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(CitationMarkParagraph("Case A"));
+
+        TableOfAuthorities.Build(doc)
+            .Single(p => p.StyleId == TableOfAuthorities.EntryStyleId)
+            .PlainText.Should().Be("Case A");
+
+        var entry = TableOfAuthorities.Build(
+                doc,
+                ToaOptions.Default,
+                (_, _, _, _) => TableOfAuthorities.CreatePageReference(1))
+            .Single(p => p.StyleId == TableOfAuthorities.EntryStyleId);
+
+        entry.PlainText.Should().Be("Case A\t1");
+        entry.Runs.Select(run => run.Text).Should().Equal("Case A", "\t", "1");
     }
 
     [Fact]

@@ -16,6 +16,14 @@ public sealed partial class ViewportService
             var rule = cfContext.IconRulesByPriority[i];
             if (!rule.AllRanges.Any(r => r.Contains(addr)))
                 continue;
+
+            // A higher-priority rule of ANY kind (style, icon set, or data bar) whose condition is
+            // met and which is marked Stop If True suppresses this icon, matching Excel's standard
+            // "stop if true hides lower-priority icon sets/data bars" idiom.
+            if (ViewportConditionalFormatEvaluator.IsSuppressedByHigherPriorityStopIfTrue(
+                    rule, sheet, addr, value, workbook, cfContext, MatchesFormula))
+                return null;
+
             if (!TryGetDouble(value, out var cellValue))
                 return null;
 

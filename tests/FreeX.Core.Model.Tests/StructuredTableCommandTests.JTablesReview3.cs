@@ -117,9 +117,11 @@ public sealed class StructuredTableCommandTestsJTablesReview3
 
         var outcome = command.Apply(ctx);
 
+        // P106: the totals cell is now a live =SUBTOTAL(109,[Amount]) formula — the filter-hidden
+        // row exclusion is SUBTOTAL's own 100-series evaluation semantics (covered directly by
+        // BuiltInFunctions.Subtotal.cs's own tests), not a value this command precomputes anymore.
         outcome.Success.Should().BeTrue(outcome.ErrorMessage);
-        // Unfiltered total would be 10+20+15+5=50; excluding filtered row 3 (20) gives 30.
-        sheet.GetValue(6, 2).Should().Be(new NumberValue(30));
+        sheet.GetCell(6, 2)!.FormulaText.Should().Be("SUBTOTAL(109,[Amount])");
     }
 
     [Fact]
@@ -149,8 +151,10 @@ public sealed class StructuredTableCommandTestsJTablesReview3
 
         command.Apply(ctx).Success.Should().BeTrue();
 
-        // Rows 2 and 4 remain visible (row 3 filter-hidden, row 5 manually hidden) → count = 2.
-        sheet.GetValue(6, 1).Should().Be(new NumberValue(2));
+        // P106: "count" is materialized as a live =SUBTOTAL(103,[Region]) formula; SUBTOTAL's own
+        // 100-series semantics (covered by BuiltInFunctions.Subtotal.cs's tests) skip both the
+        // filter-hidden row 3 and the manually-hidden row 5 at evaluation time.
+        sheet.GetCell(6, 1)!.FormulaText.Should().Be("SUBTOTAL(103,[Region])");
     }
 
     // ── H51: Convert to Range clears the table's filter-hidden state ───────────

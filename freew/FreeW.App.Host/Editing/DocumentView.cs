@@ -101,6 +101,13 @@ public sealed class DocumentView : RichTextBox
     internal static int _renderHfPageNumber;
 
     /// <summary>
+    /// Optional preformatted PAGE display text for header/footer rendering. When set, this wins over
+    /// <see cref="_renderHfPageNumber"/> so section formats such as Roman numerals render correctly.
+    /// </summary>
+    [ThreadStatic]
+    internal static string? _renderHfPageNumberText;
+
+    /// <summary>
     /// The total page count to use when resolving NUMPAGES fields during a header/footer sub-editor render
     /// in <see cref="DocumentViewMode.PagedEdit"/>. Zero means "not set" (fall back to cached). Mirrors
     /// <see cref="_renderHfPageNumber"/>.
@@ -569,6 +576,13 @@ public sealed class DocumentView : RichTextBox
             e.Handled = true;
             return;
         }
+        if (TrackChangesEnabled
+            && !string.IsNullOrEmpty(e.Text)
+            && TryRecordTrackedTextInput(e.Text))
+        {
+            e.Handled = true;
+            return;
+        }
         base.OnPreviewTextInput(e);
     }
 
@@ -585,6 +599,20 @@ public sealed class DocumentView : RichTextBox
         {
             e.Handled = true;
             return;
+        }
+
+        if (TrackChangesEnabled
+            && Keyboard.Modifiers == ModifierKeys.None
+            && (e.Key == Key.Back || e.Key == Key.Delete))
+        {
+            var handled = e.Key == Key.Back
+                ? TryRecordTrackedBackspace()
+                : TryRecordTrackedDeleteForward();
+            if (handled)
+            {
+                e.Handled = true;
+                return;
+            }
         }
 
         base.OnPreviewKeyDown(e);
@@ -604,6 +632,11 @@ public sealed class DocumentView : RichTextBox
 
         if (AutoCorrectEnabled && Selection.IsEmpty && TryAutoCorrect(c))
             return true;
+        if (TrackChangesEnabled)
+        {
+            InsertText(c.ToString());
+            return false;
+        }
         // No rule fired: insert the literal character at the caret (mirroring the RichTextBox's own insert).
         CaretPosition.InsertTextInRun(c.ToString());
         CaretPosition = CaretPosition.GetPositionAtOffset(1, LogicalDirection.Forward) ?? CaretPosition;
@@ -812,6 +845,9 @@ public sealed class DocumentView : RichTextBox
         apply(_model.Page);
         Render();
     }
+
+    public void ApplyPageNumberFormat(PageNumberFormatDialogResult result) =>
+        ApplyPageSettings(page => PageNumberFormatDialogPlanner.ApplyResult(page, result));
 
     /// <summary>
     /// Toggle the whole-page border (w:sectPr/w:pgBorders). When the page has no border one is added
@@ -1514,7 +1550,10 @@ public sealed class DocumentView : RichTextBox
         if (index < 0 || index > _model.Blocks.Count)
             index = _model.Blocks.Count;
         var para = new FreeW.Core.Model.Paragraph();
-        para.Runs.Add(FreeW.Core.Model.Run.PageNumberField());
+        para.Runs.Add(new FreeW.Core.Model.Run(ResolvePageNumberFieldText(_model))
+        {
+            FieldKind = RunFieldKind.PageNumber
+        });
         _commands.Execute(new InsertBlockCommand(index, para));
     }
 
@@ -3026,6 +3065,12 @@ public sealed class DocumentView : RichTextBox
         });
     }
 
+    public void ApplyMultiLevelNumberFormats(IReadOnlyList<ListNumberFormat> numberFormats)
+    {
+        _model.MultiLevelList.SetNumberFormats(numberFormats);
+        Render();
+    }
+
     /// <summary>
     /// Change the outline depth (<see cref="ParagraphFormatting.ListLevel"/>) of every list paragraph
     /// spanned by the selection by <paramref name="delta"/> (e.g. +1 to demote on Tab, -1 to promote on
@@ -4418,7 +4463,9 @@ public sealed class DocumentView : RichTextBox
                 // MultiLevel lists suppress WPF's built-in marker and render a computed accumulated marker
                 // instead (WPF cannot accumulate "1.1.1"); other kinds use the built-in WPF marker.
                 var markers = kind == ListKind.MultiLevel
-                    ? MultiLevelMarkerSequence(listParagraphs.Select(p => p.Paragraph.Formatting.ListLevel))
+                    ? MultiLevelMarkerSequence(
+                        listParagraphs.Select(p => p.Paragraph.Formatting.ListLevel),
+                        _model.MultiLevelList.NumberFormats)
                     : null;
                 for (var p = 0; p < listParagraphs.Count; p++)
                 {
@@ -5018,7 +5065,10 @@ public sealed class DocumentView : RichTextBox
     /// to inline images rendered in the FlowDocument. The root element is tagged with the model image
     /// so click-selection can recover it.
     /// </summary>
-    private FrameworkElement BuildFloatingImageVisual(InlineImage image, DocumentFloatRect rect)
+    private FrameworkElement BuildFloatingImageVisual(
+        InlineImage image,
+        DocumentFloatRect rect,
+        bool enableSelection = true)
     {
         var widthPx = rect.WidthDip;
         var heightPx = rect.HeightDip;
@@ -5091,13 +5141,16 @@ public sealed class DocumentView : RichTextBox
         ApplyImageWpfEffects(root, image);
 
         // Wire click to select this floating image. Shift/Ctrl adds to multi-select.
-        root.Cursor = Cursors.SizeAll;
-        root.MouseLeftButtonDown += (_, e) =>
+        if (enableSelection)
         {
-            var addToMulti = (Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Control)) != 0;
-            SelectFloatingImage(image, addToMulti);
-            e.Handled = true;
-        };
+            root.Cursor = Cursors.SizeAll;
+            root.MouseLeftButtonDown += (_, e) =>
+            {
+                var addToMulti = (Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Control)) != 0;
+                SelectFloatingImage(image, addToMulti);
+                e.Handled = true;
+            };
+        }
         return root;
     }
 
@@ -5439,22 +5492,31 @@ public sealed class DocumentView : RichTextBox
         return root;
     }
 
-    private FrameworkElement BuildFloatingChartVisual(Chart chart, DocumentFloatRect rect) =>
+    private FrameworkElement BuildFloatingChartVisual(
+        Chart chart,
+        DocumentFloatRect rect,
+        bool enableSelection = true) =>
         BuildFloatingPlannedInlineObjectVisual(
             chart,
             rect,
-            BuildChartRun(chart, DocumentEffectSet.FromTheme(_model.Theme)));
+            BuildChartRun(chart, DocumentEffectSet.FromTheme(_model.Theme)),
+            enableSelection);
 
-    private FrameworkElement BuildFloatingSmartArtVisual(SmartArt smartArt, DocumentFloatRect rect) =>
+    private FrameworkElement BuildFloatingSmartArtVisual(
+        SmartArt smartArt,
+        DocumentFloatRect rect,
+        bool enableSelection = true) =>
         BuildFloatingPlannedInlineObjectVisual(
             smartArt,
             rect,
-            BuildSmartArtRun(smartArt, DocumentEffectSet.FromTheme(_model.Theme)));
+            BuildSmartArtRun(smartArt, DocumentEffectSet.FromTheme(_model.Theme)),
+            enableSelection);
 
     private FrameworkElement BuildFloatingPlannedInlineObjectVisual(
         object modelObject,
         DocumentFloatRect rect,
-        InlineUIContainer container)
+        InlineUIContainer container,
+        bool enableSelection = true)
     {
         if (container.Child is not FrameworkElement root)
             return BuildFloatingObjectPlaceholderVisual(modelObject, rect);
@@ -5463,13 +5525,16 @@ public sealed class DocumentView : RichTextBox
         root.Width = rect.WidthDip;
         root.Height = rect.HeightDip;
         root.Tag = modelObject;
-        root.Cursor = Cursors.SizeAll;
-        root.MouseLeftButtonDown += (_, e) =>
+        if (enableSelection)
         {
-            var addToMulti = (Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Control)) != 0;
-            SelectFloatingObject(modelObject, addToMulti);
-            e.Handled = true;
-        };
+            root.Cursor = Cursors.SizeAll;
+            root.MouseLeftButtonDown += (_, e) =>
+            {
+                var addToMulti = (Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Control)) != 0;
+                SelectFloatingObject(modelObject, addToMulti);
+                e.Handled = true;
+            };
+        }
 
         return root;
     }
@@ -5511,7 +5576,7 @@ public sealed class DocumentView : RichTextBox
             double offsetY;
             if (plannedChildren.TryGetValue(i, out var plannedChild))
             {
-                childElement = BuildDrawingObjectCoreVisual(plannedChild.Visual);
+                childElement = BuildGroupPlannedChildVisual(group.Children[i], plannedChild.Visual);
                 offsetX = plannedChild.OffsetXDip;
                 offsetY = plannedChild.OffsetYDip;
             }
@@ -5548,6 +5613,23 @@ public sealed class DocumentView : RichTextBox
         };
         return root;
     }
+
+    private FrameworkElement BuildGroupPlannedChildVisual(object child, DrawingObjectVisualPlan plan) =>
+        plan.Kind switch
+        {
+            DrawingObjectVisualKind.Shape or DrawingObjectVisualKind.WordArt =>
+                BuildDrawingObjectCoreVisual(plan),
+            DrawingObjectVisualKind.Image when child is InlineImage image =>
+                BuildFloatingImageVisual(image, plan.Rect, enableSelection: false),
+            DrawingObjectVisualKind.Chart when child is Chart chart =>
+                BuildFloatingChartVisual(chart, plan.Rect, enableSelection: false),
+            DrawingObjectVisualKind.SmartArt when child is SmartArt smartArt =>
+                BuildFloatingSmartArtVisual(smartArt, plan.Rect, enableSelection: false),
+            _ => BuildGroupUnsupportedChildPlaceholder(
+                child,
+                plan.Rect.WidthDip / PxPerPoint,
+                plan.Rect.HeightDip / PxPerPoint)
+        };
 
     private static FrameworkElement BuildGroupUnsupportedChildPlaceholder(object child, double widthPt, double heightPt)
     {
@@ -5920,9 +6002,6 @@ public sealed class DocumentView : RichTextBox
         _ => TextMarkerStyle.Disc
     };
 
-    // Maximum outline depth FreeW's numbering covers (matches DocxWriter.ListLevelCount / numbering.xml).
-    private const int MultiLevelDepth = 9;
-
     /// <summary>
     /// Computes the accumulated outline marker text ("1.", "1.1.", "1.1.1.", …) for a run of multilevel
     /// list paragraphs, mirroring exactly what FreeW writes to <c>numbering.xml</c>: each level n shows the
@@ -5934,33 +6013,12 @@ public sealed class DocumentView : RichTextBox
     /// numbered in this run is shown at its start value (1) so a list that begins at, or jumps to, a deeper
     /// level still renders a sensible dotted prefix rather than zeros.
     /// </para>
-    /// Pure (no WPF), so it is unit-testable. Levels are clamped to <c>[0, <see cref="MultiLevelDepth"/>)</c>.
+    /// Pure (no WPF), so it is unit-testable. Levels are clamped to the modelled multilevel depth.
     /// </summary>
-    internal static IReadOnlyList<string> MultiLevelMarkerSequence(IEnumerable<int> levels)
-    {
-        ArgumentNullException.ThrowIfNull(levels);
-        var counters = new int[MultiLevelDepth];
-        var markers = new List<string>();
-        var builder = new System.Text.StringBuilder();
-        foreach (var rawLevel in levels)
-        {
-            var level = Math.Clamp(rawLevel, 0, MultiLevelDepth - 1);
-            counters[level]++;
-            for (var deeper = level + 1; deeper < MultiLevelDepth; deeper++)
-                counters[deeper] = 0;
-
-            builder.Clear();
-            for (var ancestor = 0; ancestor <= level; ancestor++)
-            {
-                // An ancestor never numbered yet (jumped-into deeper level) shows its start value (1),
-                // matching Word's behaviour rather than printing a "0." prefix.
-                var value = counters[ancestor] == 0 ? 1 : counters[ancestor];
-                builder.Append(value.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append('.');
-            }
-            markers.Add(builder.ToString());
-        }
-        return markers;
-    }
+    internal static IReadOnlyList<string> MultiLevelMarkerSequence(
+        IEnumerable<int> levels,
+        IReadOnlyList<ListNumberFormat>? numberFormats = null) =>
+        MultiLevelListMarkerFormatter.MarkerSequence(levels, numberFormats);
 
     /// <summary>
     /// Prepends the computed accumulated outline marker (e.g. <c>1.1.1.</c>) to a multilevel-list
@@ -6397,24 +6455,11 @@ public sealed class DocumentView : RichTextBox
             case WpfRun { Tag: PageBreakMarker }:
                 modelParagraph.Runs.Add(ModelRun.PageBreak());
                 break;
-            case WpfRun { Tag: AnchorMarker { Image: { } anchorImage } }:
-                // A floating image placeholder — recover the model image object verbatim.
-                modelParagraph.Runs.Add(new ModelRun(string.Empty) { Image = anchorImage });
+            case Floater floater when HasFloatingWrapReservationMarker(floater):
+                ReadFloatingWrapReservationFloater(modelParagraph, floater, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
                 break;
-            case WpfRun { Tag: AnchorMarker { Shape: { } anchorShape } }:
-                modelParagraph.Runs.Add(ModelRun.FromShape(anchorShape));
-                break;
-            case WpfRun { Tag: AnchorMarker { Chart: { } anchorChart } }:
-                modelParagraph.Runs.Add(new ModelRun(string.Empty) { Chart = anchorChart });
-                break;
-            case WpfRun { Tag: AnchorMarker { SmartArt: { } anchorSmartArt } }:
-                modelParagraph.Runs.Add(new ModelRun(string.Empty) { SmartArt = anchorSmartArt });
-                break;
-            case WpfRun { Tag: AnchorMarker { WordArt: { } anchorWordArt } }:
-                modelParagraph.Runs.Add(ModelRun.FromWordArt(anchorWordArt));
-                break;
-            case WpfRun { Tag: AnchorMarker { DrawingGroup: { } anchorGroup } }:
-                modelParagraph.Runs.Add(ModelRun.FromDrawingGroup(anchorGroup));
+            case WpfRun { Tag: AnchorMarker marker }:
+                AddAnchorMarkerRun(modelParagraph, marker, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
                 break;
             case WpfRun { Tag: CitationMarker citationMarker }:
                 // A hidden Mark Citation (TA) field round-trips as a textless citation-mark run.
@@ -6525,6 +6570,97 @@ public sealed class DocumentView : RichTextBox
         run.HyperlinkAnchor = anchor;
         run.HyperlinkTooltip = tooltip;
         return run;
+    }
+
+    private static void ReadFloatingWrapReservationFloater(ModelParagraph modelParagraph, Floater floater, string? hyperlinkUrl, string? hyperlinkAnchor, string? hyperlinkTooltip)
+    {
+        if (floater.Tag is FloatingWrapReservationMarker { Anchor: { } marker } reservationMarker)
+        {
+            AddAnchorMarkerRun(
+                modelParagraph,
+                marker,
+                reservationMarker.HyperlinkUrl ?? hyperlinkUrl,
+                reservationMarker.HyperlinkAnchor ?? hyperlinkAnchor,
+                reservationMarker.HyperlinkTooltip ?? hyperlinkTooltip);
+            return;
+        }
+
+        foreach (var block in floater.Blocks)
+        {
+            if (block is BlockUIContainer { Child: FrameworkElement { Tag: FloatingWrapReservationMarker { Anchor: { } nestedMarker } nestedReservationMarker } })
+            {
+                AddAnchorMarkerRun(
+                    modelParagraph,
+                    nestedMarker,
+                    nestedReservationMarker.HyperlinkUrl ?? hyperlinkUrl,
+                    nestedReservationMarker.HyperlinkAnchor ?? hyperlinkAnchor,
+                    nestedReservationMarker.HyperlinkTooltip ?? hyperlinkTooltip);
+                return;
+            }
+        }
+    }
+
+    private static bool HasFloatingWrapReservationMarker(Floater floater)
+    {
+        if (floater.Tag is FloatingWrapReservationMarker)
+            return true;
+
+        return floater.Blocks.OfType<BlockUIContainer>()
+            .Any(block => block.Child is FrameworkElement { Tag: FloatingWrapReservationMarker });
+    }
+
+    private static void AddAnchorMarkerRun(ModelParagraph modelParagraph, AnchorMarker marker, string? hyperlinkUrl, string? hyperlinkAnchor, string? hyperlinkTooltip)
+    {
+        if (marker.Image is { } anchorImage)
+        {
+            modelParagraph.Runs.Add(new ModelRun(string.Empty)
+            {
+                Image = anchorImage,
+                HyperlinkUrl = hyperlinkUrl,
+                HyperlinkAnchor = hyperlinkAnchor,
+                HyperlinkTooltip = hyperlinkTooltip,
+            });
+            return;
+        }
+
+        if (marker.Shape is { } anchorShape)
+        {
+            modelParagraph.Runs.Add(WithHyperlink(ModelRun.FromShape(anchorShape), hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip));
+            return;
+        }
+
+        if (marker.Chart is { } anchorChart)
+        {
+            modelParagraph.Runs.Add(new ModelRun(string.Empty)
+            {
+                Chart = anchorChart,
+                HyperlinkUrl = hyperlinkUrl,
+                HyperlinkAnchor = hyperlinkAnchor,
+                HyperlinkTooltip = hyperlinkTooltip,
+            });
+            return;
+        }
+
+        if (marker.SmartArt is { } anchorSmartArt)
+        {
+            modelParagraph.Runs.Add(new ModelRun(string.Empty)
+            {
+                SmartArt = anchorSmartArt,
+                HyperlinkUrl = hyperlinkUrl,
+                HyperlinkAnchor = hyperlinkAnchor,
+                HyperlinkTooltip = hyperlinkTooltip,
+            });
+            return;
+        }
+
+        if (marker.WordArt is { } anchorWordArt)
+        {
+            modelParagraph.Runs.Add(WithHyperlink(ModelRun.FromWordArt(anchorWordArt), hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip));
+            return;
+        }
+
+        if (marker.DrawingGroup is { } anchorGroup)
+            modelParagraph.Runs.Add(WithHyperlink(ModelRun.FromDrawingGroup(anchorGroup), hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip));
     }
 
     private static ModelTable ReadTable(WpfTable wpfTable, TextDocument document)
@@ -6740,7 +6876,8 @@ public sealed class DocumentView : RichTextBox
         TextDocument document,
         int sourceBlockIndex)
     {
-        var paginationPlan = DocumentViewLayoutPlanner.BuildTablePaginationPlan(table, document.Page);
+        var tableLayoutPlan = DocumentViewLayoutPlanner.BuildTableLayoutPlan(table, page: document.Page);
+        var paginationPlan = tableLayoutPlan.Pagination;
         if (ShouldRenderPlannedTablePages(table, paginationPlan))
         {
             return paginationPlan.Pages
@@ -6748,13 +6885,14 @@ public sealed class DocumentView : RichTextBox
                     table,
                     document,
                     sourceBlockIndex,
+                    tableLayoutPlan,
                     page,
                     segmentIndex,
                     paginationPlan.Pages.Count))
                 .ToList();
         }
 
-        return [BuildTable(table, document, sourceBlockIndex)];
+        return [BuildTable(table, document, sourceBlockIndex, tableLayoutPlan)];
     }
 
     private static bool ShouldRenderPlannedTablePages(ModelTable table, DocumentTablePaginationPlan paginationPlan) =>
@@ -6767,6 +6905,7 @@ public sealed class DocumentView : RichTextBox
         ModelTable table,
         TextDocument document,
         int sourceBlockIndex = -1,
+        DocumentTableLayoutPlan? tableLayoutPlan = null,
         DocumentTablePaginationPagePlan? paginationPage = null,
         int segmentIndex = 0,
         int segmentCount = 1)
@@ -6798,9 +6937,18 @@ public sealed class DocumentView : RichTextBox
                 column.Width = new GridLength(table.ColumnWidthsPt[c] * PxPerPoint);
             wpf.Columns.Add(column);
         }
+        tableLayoutPlan ??= DocumentViewLayoutPlanner.BuildTableLayoutPlan(table, page: document.Page);
+        var cellEffectiveFills = tableLayoutPlan.Cells.ToDictionary(
+            cell => (cell.RowIndex, cell.CellIndex),
+            cell => cell.EffectiveFill);
 
-        // Resolve the catalog style (if a TableStyleId is set) so the renderer can use its fills and
-        // border color. When no named style is set the legacy HeaderRowFill/BandedRowFill constants apply.
+        DocumentTableCellEffectiveFillPlan EffectiveFillFor(int rowIndex, int cellIndex) =>
+            cellEffectiveFills.TryGetValue((rowIndex, cellIndex), out var fillPlan)
+                ? fillPlan
+                : DocumentTableCellEffectiveFillPlan.Empty;
+
+        // Resolve the catalog style for table-level chrome such as border color; per-cell fills and bold
+        // come from the shared DocumentTableCellEffectiveFillPlan above.
         var catalogStyle = table.TableStyleId is { Length: > 0 } sid
             ? DocumentTableStyle.FindById(sid)
             : null;
@@ -6817,16 +6965,11 @@ public sealed class DocumentView : RichTextBox
             wpf.BorderThickness = new Thickness(0.5);
         }
 
-        var fmt = table.Formatting;
         var totalRows = table.Rows.Count;
         var group = new TableRowGroup();
         void AppendRenderedRow(int rowIndex, bool isRepeatedHeader)
         {
             var modelRow = table.Rows[rowIndex];
-            var isHeaderRow = fmt.HeaderRow && rowIndex == 0;
-            var isBandedRow = fmt.BandedRows
-                && !isHeaderRow
-                && TableBanding.IsBandedBodyRow(rowIndex, fmt.HeaderRow);
             var wpfRow = new WpfTableRow { Tag = new WpfTableRowTag(rowIndex, isRepeatedHeader) };
             // WPF System.Windows.Documents.TableRow is a TextElement (not FrameworkElement), so it has
             // no MinHeight / Height property. To enforce a minimum row height we inject a zero-width
@@ -6841,7 +6984,6 @@ public sealed class DocumentView : RichTextBox
             // column even when earlier cells span multiple grid columns.
             var gridColumn = 0;
             var cellIndex = 0;
-            var lastCellIndex = modelRow.Cells.Count - 1;
             foreach (var modelCell in modelRow.Cells)
             {
                 var span = Math.Max(1, modelCell.GridSpan);
@@ -6886,27 +7028,10 @@ public sealed class DocumentView : RichTextBox
                     wpfCell.BorderThickness = new Thickness(0);
                 }
 
-                // Resolve cell appearance: explicit shading always wins; then catalog style; then legacy flags.
-                bool cellBold = isHeaderRow;
-                if (modelCell.ShadingColorHex is { Length: > 0 } cellShading)
-                {
-                    wpfCell.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(cellShading));
-                }
-                else if (catalogStyle is not null)
-                {
-                    // Catalog style: resolve fill + bold for this cell's position.
-                    var isFirst = cellIndex == 0;
-                    var isLast = cellIndex == lastCellIndex;
-                    var (fillHex, bold) = catalogStyle.ResolveCellStyle(rowIndex, totalRows, isFirst, isLast, fmt);
-                    cellBold = bold;
-                    if (fillHex is { Length: > 0 })
-                        wpfCell.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#" + fillHex));
-                }
-                else if (isHeaderRow)
-                    wpfCell.Background = new SolidColorBrush(HeaderRowFill);
-                else if (isBandedRow)
-                    wpfCell.Background = new SolidColorBrush(BandedRowFill);
-                if (cellBold)
+                var cellAppearance = EffectiveFillFor(rowIndex, cellIndex);
+                if (TryParseColor(cellAppearance.EffectiveFillHex, out var cellFill))
+                    wpfCell.Background = new SolidColorBrush(cellFill);
+                if (cellAppearance.EffectiveBold)
                     wpfCell.FontWeight = FontWeights.Bold;
                 // Resolve cell content. For non-Top vertical alignment, or when text is rotated, we wrap
                 // everything in a BlockUIContainer so we can position the content via WPF layout. WPF
@@ -7696,32 +7821,29 @@ public sealed class DocumentView : RichTextBox
 
         if (run.Image is { } image)
         {
-            // Floating images render on the overlay canvas (see SyncFloatingObjectsCanvas), NOT in the
-            // FlowDocument. Emit a zero-width placeholder run tagged with AnchorMarker so CommitToModel
-            // can recover the image object verbatim. Inline images continue to render as InlineUIContainers.
             if (image.IsFloating)
-                return new WpfRun(string.Empty) { Tag = new AnchorMarker(Image: image) };
+                return BuildFloatingAnchorRun(run, document, new AnchorMarker(Image: image));
             return WrapHyperlinkIfNeeded(run, BuildImageRun(image));
         }
 
         if (run.Shape is { } shape)
         {
             if (shape.IsFloating)
-                return new WpfRun(string.Empty) { Tag = new AnchorMarker(Shape: shape) };
+                return BuildFloatingAnchorRun(run, document, new AnchorMarker(Shape: shape));
             return WrapHyperlinkIfNeeded(run, BuildShapeRun(shape, effectSet));
         }
 
         if (run.Chart is { } chart)
         {
             if (chart.IsFloating)
-                return new WpfRun(string.Empty) { Tag = new AnchorMarker(Chart: chart) };
+                return BuildFloatingAnchorRun(run, document, new AnchorMarker(Chart: chart));
             return WrapHyperlinkIfNeeded(run, BuildChartRun(chart, effectSet));
         }
 
         if (run.WordArt is { } wordArt)
         {
             if (wordArt.IsFloating)
-                return new WpfRun(string.Empty) { Tag = new AnchorMarker(WordArt: wordArt) };
+                return BuildFloatingAnchorRun(run, document, new AnchorMarker(WordArt: wordArt));
             return WrapHyperlinkIfNeeded(run, BuildWordArtRun(wordArt, effectSet));
         }
 
@@ -7731,14 +7853,12 @@ public sealed class DocumentView : RichTextBox
         if (run.SmartArt is { } smartArt)
         {
             if (smartArt.IsFloating)
-                return new WpfRun(string.Empty) { Tag = new AnchorMarker(SmartArt: smartArt) };
+                return BuildFloatingAnchorRun(run, document, new AnchorMarker(SmartArt: smartArt));
             return WrapHyperlinkIfNeeded(run, BuildSmartArtRun(smartArt, effectSet));
         }
 
-        // DrawingGroup is always floating; emit a zero-width AnchorMarker so CommitToModel
-        // can recover the group object verbatim via the floating canvas path.
         if (run.DrawingGroup is { } drawingGroup)
-            return new WpfRun(string.Empty) { Tag = new AnchorMarker(DrawingGroup: drawingGroup) };
+            return BuildFloatingAnchorRun(run, document, new AnchorMarker(DrawingGroup: drawingGroup));
 
         if (run.EmbeddedObject is { } embedded)
             return WrapHyperlinkIfNeeded(run, BuildEmbeddedObjectRun(embedded));
@@ -7971,6 +8091,54 @@ public sealed class DocumentView : RichTextBox
             return BuildInternalHyperlink(wpf, anchor, run.HyperlinkTooltip);
 
         return wpf;
+    }
+
+    private static Inline BuildFloatingAnchorRun(ModelRun run, TextDocument document, AnchorMarker marker)
+    {
+        var topAndBottomWidthDip = FloatingWrapReservationTextWidthDip(document);
+        var reservation = DocumentViewLayoutPlanner.BuildFloatingWrapReservation(run, topAndBottomWidthDip);
+        if (reservation is not null)
+            return BuildFloatingWrapReservationFloater(marker, run, reservation);
+
+        return WrapHyperlinkIfNeeded(run, new WpfRun(string.Empty) { Tag = marker });
+    }
+
+    private static double FloatingWrapReservationTextWidthDip(TextDocument document)
+    {
+        return DocumentViewLayoutPlanner.BuildFloatingWrapReservationTextWidthDip(document.Page);
+    }
+
+    private static Floater BuildFloatingWrapReservationFloater(AnchorMarker marker, ModelRun run, DocumentFloatingWrapReservationPlan reservation)
+    {
+        var reservationMarker = new FloatingWrapReservationMarker(
+            marker,
+            run.HyperlinkUrl,
+            run.HyperlinkAnchor,
+            run.HyperlinkTooltip);
+        var placeholder = new Border
+        {
+            Width = reservation.WidthDip,
+            Height = reservation.HeightDip,
+            Background = Brushes.Transparent,
+            Opacity = 0,
+            IsHitTestVisible = false,
+            Focusable = false,
+            Tag = reservationMarker,
+        };
+
+        var block = new BlockUIContainer(placeholder)
+        {
+            Margin = new Thickness(0),
+        };
+
+        return new Floater(block)
+        {
+            Width = reservation.WidthDip,
+            HorizontalAlignment = reservation.Wrapping == ImageWrapping.TopAndBottom
+                ? HorizontalAlignment.Center
+                : HorizontalAlignment.Left,
+            Tag = reservationMarker,
+        };
     }
 
     private static Inline WrapHyperlinkIfNeeded(ModelRun run, Inline inline)
@@ -8485,6 +8653,16 @@ public sealed class DocumentView : RichTextBox
         FreeW.Core.Model.DrawingGroup? DrawingGroup = null);
 
     /// <summary>
+    /// Distinguishes WPF floating-object wrap reservations from other <see cref="Floater"/> uses, such as
+    /// drop caps, so commit readback only recovers overlay-canvas anchors created by this path.
+    /// </summary>
+    private sealed record FloatingWrapReservationMarker(
+        AnchorMarker Anchor,
+        string? HyperlinkUrl = null,
+        string? HyperlinkAnchor = null,
+        string? HyperlinkTooltip = null);
+
+    /// <summary>
     /// Renders an endnote reference as a small superscript marker showing the endnote number, tagged
     /// with an <see cref="EndnoteMarker"/> so <see cref="ReadInline"/> can recover the id on commit.
     /// A tooltip surfaces the endnote text when the document carries it. Mirrors
@@ -8549,9 +8727,12 @@ public sealed class DocumentView : RichTextBox
         // count injected by PaginatedEditorPanel just before LoadModel on the h/f sub-editor.  The
         // thread-static fields are zero outside that narrow window, so ordinary renders are unaffected.
         if (kind == RunFieldKind.PageNumber && _renderHfPageNumber > 0)
-            return _renderHfPageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return _renderHfPageNumberText
+                ?? _renderHfPageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture);
         if (kind == RunFieldKind.NumPages && _renderHfPageCount > 0)
             return _renderHfPageCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (kind == RunFieldKind.PageNumber)
+            return ResolvePageNumberFieldText(document);
         return kind switch
         {
             RunFieldKind.Date => DateTime.Now.ToString("d", culture),
@@ -8564,6 +8745,12 @@ public sealed class DocumentView : RichTextBox
             RunFieldKind.DocComments => document.Properties.Comments is { Length: > 0 } comments ? comments : cached,
             _ => cached
         };
+    }
+
+    private static string ResolvePageNumberFieldText(TextDocument document)
+    {
+        var firstValue = Math.Max(1, document.Page.PageNumberStartAt ?? 1);
+        return PageNumberFormatDialogPlanner.FormatPageNumber(firstValue, document.Page.PageNumberFormat);
     }
 
     /// <summary>
@@ -8939,9 +9126,18 @@ public sealed class DocumentView : RichTextBox
             refreshedGeneratedRegion = true;
         }
 
+        if (_model.Blocks.Any(TableOfFigures.IsTableOfFiguresParagraph))
+        {
+            RefreshTableOfFigures(TableOfFigures.ExistingLabelText(_model) ?? Captions.FigureLabelText);
+            refreshedGeneratedRegion = true;
+        }
+
         if (TableOfAuthoritiesRegionPlanner.ContainsRegion(_model))
         {
-            ApplyTableOfAuthoritiesPlan(TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(_model));
+            ApplyTableOfAuthoritiesPlan(
+                TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(
+                    _model,
+                    pageResolver: BuildTableOfAuthoritiesPageResolver()));
             refreshedGeneratedRegion = true;
         }
 
@@ -9726,10 +9922,13 @@ public sealed class DocumentView : RichTextBox
     /// <summary>
     /// Renders an inline equation as an InlineUIContainer hosting a Border that carries the model
     /// <see cref="Equation"/> on its Tag (so CommitToModel round-trips it, mirroring shapes). The border
-    /// shows the equation's linear form in a serif/italic face as a lightweight visual stand-in.
+    /// consumes the shared equation visual planner so simple scripts render as styled math segments and
+    /// lightweight fraction/radical/n-ary/matrix/function structures render with visual cues.
     /// </summary>
     private static InlineUIContainer BuildEquationRun(Equation equation)
     {
+        var plan = EquationVisualPlanner.Build(equation);
+        var content = BuildEquationVisualContent(plan);
         var element = new Border
         {
             Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF6, 0xFB)),
@@ -9737,15 +9936,442 @@ public sealed class DocumentView : RichTextBox
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(3),
             Padding = new Thickness(4, 1, 4, 1),
-            Child = new TextBlock
-            {
-                Text = equation.LinearText,
-                FontFamily = new FontFamily("Cambria, Times New Roman, serif"),
-                FontStyle = FontStyles.Italic
-            },
+            Child = content,
             Tag = equation // carries the model equation so CommitToModel can round-trip it
         };
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Center };
+    }
+
+    private static FrameworkElement BuildEquationVisualContent(EquationVisualPlan plan)
+    {
+        if (plan.Elements.All(element => element.Kind == EquationVisualElementKind.Segments))
+            return BuildEquationTextBlock(plan.Segments);
+
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        foreach (var element in plan.Elements)
+            panel.Children.Add(BuildEquationVisualElement(element));
+
+        return panel;
+    }
+
+    private static FrameworkElement BuildEquationVisualElement(EquationVisualElement element)
+    {
+        return element.Kind switch
+        {
+            EquationVisualElementKind.Fraction => BuildEquationFractionElement(element),
+            EquationVisualElementKind.Radical => BuildEquationRadicalElement(element),
+            EquationVisualElementKind.NAry => BuildEquationNAryElement(element),
+            EquationVisualElementKind.Matrix => BuildEquationMatrixElement(element),
+            EquationVisualElementKind.Accent => BuildEquationAccentElement(element),
+            EquationVisualElementKind.Bar => BuildEquationBarElement(element),
+            EquationVisualElementKind.Delimiter => BuildEquationDelimiterElement(element),
+            EquationVisualElementKind.GroupChar => BuildEquationGroupCharElement(element),
+            EquationVisualElementKind.FunctionApply => BuildEquationFunctionApplyElement(element),
+            _ => BuildEquationTextBlock(element.Segments)
+        };
+    }
+
+    private static TextBlock BuildEquationTextBlock(IReadOnlyList<EquationVisualSegment> segments)
+    {
+        var text = new TextBlock
+        {
+            FontFamily = new FontFamily(EquationVisualPlanner.DefaultMathFontFamily),
+            FontSize = DefaultFontSizePt * PxPerPoint,
+            FontStyle = FontStyles.Italic,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        foreach (var segment in segments)
+            AppendEquationVisualSegment(text, segment);
+
+        return text;
+    }
+
+    private static FrameworkElement BuildEquationFractionElement(EquationVisualElement element)
+    {
+        var numerator = SegmentWithRole(element, EquationVisualSegmentRole.FractionNumerator);
+        var denominator = SegmentWithRole(element, EquationVisualSegmentRole.FractionDenominator);
+        var stack = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 0, 2, 0),
+            Tag = EquationVisualElementKind.Fraction
+        };
+
+        stack.Children.Add(BuildEquationStructureTextBlock(numerator, WpfTextAlignment.Center));
+        stack.Children.Add(new Border
+        {
+            Background = Brushes.Black,
+            Height = 1,
+            MinWidth = 14,
+            Margin = new Thickness(0, 0, 0, 0)
+        });
+        stack.Children.Add(BuildEquationStructureTextBlock(denominator, WpfTextAlignment.Center));
+        return stack;
+    }
+
+    private static FrameworkElement BuildEquationRadicalElement(EquationVisualElement element)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 0, 2, 0),
+            Tag = EquationVisualElementKind.Radical
+        };
+
+        if (SegmentWithRole(element, EquationVisualSegmentRole.RadicalDegree) is { Text.Length: > 0 } degree)
+        {
+            panel.Children.Add(BuildEquationStructureTextBlock(
+                degree,
+                WpfTextAlignment.Center,
+                new Thickness(0, 0, -1, 7)));
+        }
+
+        panel.Children.Add(BuildEquationStructureTextBlock(
+            SegmentWithRole(element, EquationVisualSegmentRole.RadicalSign),
+            WpfTextAlignment.Center));
+        panel.Children.Add(new Border
+        {
+            BorderBrush = Brushes.Black,
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Padding = new Thickness(1, 0, 1, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = BuildEquationStructureTextBlock(
+                SegmentWithRole(element, EquationVisualSegmentRole.RadicalRadicand),
+                WpfTextAlignment.Center)
+        });
+
+        return panel;
+    }
+
+    private static FrameworkElement BuildEquationNAryElement(EquationVisualElement element)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 0, 2, 0),
+            Tag = EquationVisualElementKind.NAry
+        };
+
+        var limits = new Grid
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(1, 0, 1, 0)
+        };
+        limits.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        limits.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        limits.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        AddNAryLimitText(
+            limits,
+            row: 0,
+            SegmentWithRole(element, EquationVisualSegmentRole.NAryUpperLimit),
+            new Thickness(0, 0, 0, -2));
+        AddNAryLimitText(
+            limits,
+            row: 1,
+            SegmentWithRole(element, EquationVisualSegmentRole.NAryOperator),
+            new Thickness(0, -1, 0, -1));
+        AddNAryLimitText(
+            limits,
+            row: 2,
+            SegmentWithRole(element, EquationVisualSegmentRole.NAryLowerLimit),
+            new Thickness(0, -2, 0, 0));
+
+        panel.Children.Add(limits);
+        panel.Children.Add(BuildEquationStructureTextBlock(
+            SegmentWithRole(element, EquationVisualSegmentRole.NAryOperand),
+            WpfTextAlignment.Left,
+            new Thickness(3, 0, 0, 0)));
+
+        return panel;
+    }
+
+    private static FrameworkElement BuildEquationAccentElement(EquationVisualElement element)
+    {
+        var stack = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 0, 2, 0),
+            Tag = EquationVisualElementKind.Accent
+        };
+
+        stack.Children.Add(BuildEquationStructureTextBlock(
+            SegmentWithRole(element, EquationVisualSegmentRole.AccentMark),
+            WpfTextAlignment.Center,
+            new Thickness(0, 0, 0, -3)));
+        stack.Children.Add(BuildEquationStructureTextBlock(
+            SegmentWithRole(element, EquationVisualSegmentRole.AccentBase),
+            WpfTextAlignment.Center,
+            new Thickness(0, -3, 0, 0)));
+        return stack;
+    }
+
+    private static FrameworkElement BuildEquationBarElement(EquationVisualElement element)
+    {
+        var stack = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 0, 2, 0),
+            MinWidth = 14,
+            Tag = EquationVisualElementKind.Bar
+        };
+
+        var baseText = BuildEquationStructureTextBlock(
+            SegmentWithRole(element, EquationVisualSegmentRole.BarBase),
+            WpfTextAlignment.Center);
+        if (element.BarTop)
+        {
+            stack.Children.Add(BuildEquationBarLine(new Thickness(0, 0, 0, -1)));
+            stack.Children.Add(baseText);
+        }
+        else
+        {
+            stack.Children.Add(baseText);
+            stack.Children.Add(BuildEquationBarLine(new Thickness(0, -1, 0, 0)));
+        }
+
+        return stack;
+    }
+
+    private static FrameworkElement BuildEquationDelimiterElement(EquationVisualElement element)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(1, 0, 1, 0),
+            Tag = EquationVisualElementKind.Delimiter
+        };
+
+        panel.Children.Add(BuildEquationStructureTextBlock(
+            SegmentWithRole(element, EquationVisualSegmentRole.DelimiterOpen),
+            WpfTextAlignment.Center,
+            new Thickness(1, 0, 1, 0)));
+        panel.Children.Add(BuildEquationStructureTextBlock(
+            SegmentWithRole(element, EquationVisualSegmentRole.DelimiterContent),
+            WpfTextAlignment.Center,
+            new Thickness(1, 0, 1, 0)));
+        panel.Children.Add(BuildEquationStructureTextBlock(
+            SegmentWithRole(element, EquationVisualSegmentRole.DelimiterClose),
+            WpfTextAlignment.Center,
+            new Thickness(1, 0, 1, 0)));
+
+        return panel;
+    }
+
+    private static FrameworkElement BuildEquationGroupCharElement(EquationVisualElement element)
+    {
+        var stack = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 0, 2, 0),
+            Tag = EquationVisualElementKind.GroupChar
+        };
+
+        var mark = BuildEquationStructureTextBlock(
+            SegmentWithRole(element, EquationVisualSegmentRole.GroupCharMark),
+            WpfTextAlignment.Center,
+            new Thickness(0, 0, 0, -3));
+        var baseText = BuildEquationStructureTextBlock(
+            SegmentWithRole(element, EquationVisualSegmentRole.GroupCharBase),
+            WpfTextAlignment.Center,
+            new Thickness(0, -3, 0, 0));
+
+        if (element.GroupCharacterTop)
+        {
+            stack.Children.Add(mark);
+            stack.Children.Add(baseText);
+        }
+        else
+        {
+            baseText.Margin = new Thickness(0, 0, 0, -3);
+            mark.Margin = new Thickness(0, -3, 0, 0);
+            stack.Children.Add(baseText);
+            stack.Children.Add(mark);
+        }
+
+        return stack;
+    }
+
+    private static FrameworkElement BuildEquationFunctionApplyElement(EquationVisualElement element)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 0, 2, 0),
+            Tag = EquationVisualElementKind.FunctionApply
+        };
+
+        AddEquationFunctionPart(panel, EquationVisualSegmentRole.FunctionName, new Thickness(1, 0, 0, 0));
+        AddEquationFunctionPart(panel, EquationVisualSegmentRole.FunctionOpenDelimiter, new Thickness(1, 0, 0, 0));
+        AddEquationFunctionPart(panel, EquationVisualSegmentRole.FunctionArgument, new Thickness(0, 0, 0, 0));
+        AddEquationFunctionPart(panel, EquationVisualSegmentRole.FunctionCloseDelimiter, new Thickness(0, 0, 1, 0));
+        return panel;
+
+        void AddEquationFunctionPart(StackPanel target, EquationVisualSegmentRole role, Thickness margin)
+        {
+            var segment = SegmentWithRole(element, role);
+            if (segment.Text.Length == 0)
+                return;
+
+            target.Children.Add(BuildEquationStructureTextBlock(segment, WpfTextAlignment.Center, margin));
+        }
+    }
+
+    private static Border BuildEquationBarLine(Thickness margin) =>
+        new()
+        {
+            Background = Brushes.Black,
+            Height = 1,
+            MinWidth = 14,
+            Margin = margin
+        };
+
+    private static FrameworkElement BuildEquationMatrixElement(EquationVisualElement element)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 0, 2, 0),
+            Tag = EquationVisualElementKind.Matrix
+        };
+
+        panel.Children.Add(BuildEquationMatrixDelimiterTextBlock(
+            EquationVisualPlanner.MatrixOpenDelimiterText,
+            EquationVisualSegmentRole.MatrixOpenDelimiter));
+
+        var grid = new Grid
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(1, 0, 1, 0)
+        };
+        var rowCount = Math.Max(1, element.MatrixRowCount);
+        var columnCount = Math.Max(1, element.MatrixColumnCount);
+        for (var rowIndex = 0; rowIndex < rowCount; rowIndex++)
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        for (var columnIndex = 0; columnIndex < columnCount; columnIndex++)
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        foreach (var row in element.MatrixRows)
+        {
+            foreach (var cell in row.Cells)
+            {
+                var text = BuildEquationStructureTextBlock(
+                    MatrixCellSegment(cell.Text),
+                    WpfTextAlignment.Center,
+                    new Thickness(4, 0, 4, 0));
+                Grid.SetRow(text, cell.RowIndex);
+                Grid.SetColumn(text, cell.ColumnIndex);
+                grid.Children.Add(text);
+            }
+        }
+
+        if (grid.Children.Count == 0)
+        {
+            grid.Children.Add(BuildEquationStructureTextBlock(
+                MatrixCellSegment(string.Empty),
+                WpfTextAlignment.Center,
+                new Thickness(4, 0, 4, 0)));
+        }
+
+        panel.Children.Add(grid);
+        panel.Children.Add(BuildEquationMatrixDelimiterTextBlock(
+            EquationVisualPlanner.MatrixCloseDelimiterText,
+            EquationVisualSegmentRole.MatrixCloseDelimiter));
+        return panel;
+    }
+
+    private static TextBlock BuildEquationMatrixDelimiterTextBlock(
+        string text,
+        EquationVisualSegmentRole role)
+    {
+        return BuildEquationStructureTextBlock(
+            new EquationVisualSegment(
+                text,
+                role,
+                new EquationVisualStyle(
+                    FontFamily: EquationVisualPlanner.DefaultMathFontFamily,
+                    Italic: false,
+                    FontSizeScale: 1.25,
+                    BaselineRole: EquationVisualBaselineRole.Normal,
+                    BaselineOffsetEm: 0.0)),
+            WpfTextAlignment.Center,
+            new Thickness(1, 0, 1, 0));
+    }
+
+    private static EquationVisualSegment MatrixCellSegment(string text) =>
+        new(
+            text,
+            EquationVisualSegmentRole.MatrixCell,
+            new EquationVisualStyle(
+                FontFamily: EquationVisualPlanner.DefaultMathFontFamily,
+                Italic: true,
+                FontSizeScale: EquationVisualPlanner.StructureFontSizeScale,
+                BaselineRole: EquationVisualBaselineRole.Normal,
+                BaselineOffsetEm: 0.0));
+
+    private static void AddNAryLimitText(Grid grid, int row, EquationVisualSegment segment, Thickness margin)
+    {
+        if (segment.Text.Length == 0)
+            return;
+
+        var text = BuildEquationStructureTextBlock(segment, WpfTextAlignment.Center, margin);
+        Grid.SetRow(text, row);
+        grid.Children.Add(text);
+    }
+
+    private static EquationVisualSegment SegmentWithRole(EquationVisualElement element, EquationVisualSegmentRole role)
+    {
+        return element.Segments.FirstOrDefault(segment => segment.Role == role)
+            ?? new EquationVisualSegment(string.Empty, role, new EquationVisualStyle(
+                EquationVisualPlanner.DefaultMathFontFamily,
+                Italic: true,
+                FontSizeScale: 1.0,
+                EquationVisualBaselineRole.Normal,
+                BaselineOffsetEm: 0.0));
+    }
+
+    private static TextBlock BuildEquationStructureTextBlock(
+        EquationVisualSegment segment,
+        WpfTextAlignment textAlignment,
+        Thickness? margin = null)
+    {
+        var text = BuildEquationTextBlock([segment]);
+        text.TextAlignment = textAlignment;
+        text.Margin = margin ?? new Thickness(0);
+        text.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+        text.LineHeight = Math.Max(1, text.FontSize * 1.05);
+        return text;
+    }
+
+    private static void AppendEquationVisualSegment(TextBlock text, EquationVisualSegment segment)
+    {
+        var run = new WpfRun(segment.Text)
+        {
+            FontFamily = new FontFamily(segment.Style.FontFamily),
+            FontSize = DefaultFontSizePt * PxPerPoint * segment.Style.FontSizeScale,
+            FontStyle = segment.Style.Italic ? FontStyles.Italic : FontStyles.Normal,
+            BaselineAlignment = segment.Style.BaselineRole switch
+            {
+                EquationVisualBaselineRole.Superscript => BaselineAlignment.Superscript,
+                EquationVisualBaselineRole.Subscript => BaselineAlignment.Subscript,
+                _ => BaselineAlignment.Baseline
+            }
+        };
+        text.Inlines.Add(run);
     }
 
     /// <summary>
@@ -9755,27 +10381,33 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     private static InlineUIContainer BuildWordArtRun(WordArt wordArt, DocumentEffectSet effectSet)
     {
-        // Derive foreground colour and optional WPF effect from the style preset.
-        var (foreground, wpfEffect) = WordArtRenderStyle(wordArt.Style, effectSet);
+        var plan = DrawingObjectVisualPlanner.BuildInlineWordArtPlan(wordArt);
+        var wordArtPlan = plan.WordArt;
+        // Derive foreground colour and optional WPF effect from the shared style preset.
+        var (foreground, wpfEffect) = WordArtRenderStyle(plan, effectSet);
 
         // Warp hint: when a warp is set, add a slight italic skew as a best-effort visual cue
         // (WPF has no built-in text-path warp; full geometry warp is deferred).
         var element = new TextBlock
         {
-            Text       = wordArt.Text,
-            FontSize   = wordArt.FontSizePt * PxPerPoint,
+            Text       = wordArtPlan.Text,
+            FontSize   = wordArtPlan.FontSizeDip,
             FontWeight = FontWeights.Bold,
             Foreground = foreground,
             Effect     = wpfEffect,
             Tag        = wordArt, // carries the model WordArt so CommitToModel can round-trip it
         };
         // Apply warp visual hint
-        if (wordArt.Warp != WordArtWarp.None)
-            element.FontStyle = wordArt.Warp is WordArtWarp.ArchUp or WordArtWarp.Inflate or WordArtWarp.Wave1
+        if (wordArtPlan.Warp != WordArtWarp.None)
+            element.FontStyle = wordArtPlan.Warp is WordArtWarp.ArchUp or WordArtWarp.Inflate or WordArtWarp.Wave1
                 ? FontStyles.Normal : FontStyles.Italic;
 
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Center };
     }
+
+    private static (System.Windows.Media.Brush Foreground, System.Windows.Media.Effects.Effect? Effect)
+        WordArtRenderStyle(DrawingObjectInlineWordArtPlan plan, DocumentEffectSet effectSet) =>
+        WordArtRenderStyle(plan.WordArt.Style, effectSet);
 
     /// <summary>
     /// Returns the foreground brush + optional WPF effect for a given <see cref="WordArtStyle"/> preset.
@@ -10574,6 +11206,9 @@ public sealed class DocumentView : RichTextBox
             return;
 
         Focus();
+        if (TrackChangesEnabled && TryRecordTrackedTextInput(text))
+            return;
+
         var selection = Selection;
         if (!selection.IsEmpty)
         {
@@ -10587,6 +11222,230 @@ public sealed class DocumentView : RichTextBox
         CaretPosition = caret.GetPositionAtOffset(text.Length) ?? caret;
         CommitToModel();
         Render();
+    }
+
+    private bool TryRecordTrackedTextInput(string text)
+    {
+        if (!TrackChangesEnabled
+            || string.IsNullOrEmpty(text)
+            || !AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit)
+            || !TryGetCurrentBodyTextTarget(out var paragraphIndex, out var startOffset, out var endOffset, out var hasSelection))
+        {
+            return false;
+        }
+
+        var insertOffset = Math.Min(startOffset, endOffset);
+        var author = CurrentRevisionAuthor();
+        var dateXml = CurrentRevisionDateXml();
+
+        CommitToModel();
+        if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph)
+            return false;
+
+        _commands.Execute(new ReplaceParagraphRunsCommand(paragraphIndex, paragraph =>
+        {
+            if (hasSelection)
+                RevisionEditPlanner.DeleteRangeAsRevision(paragraph, startOffset, endOffset, author, dateXml);
+
+            var formatting = RevisionEditPlanner.FormattingAtOffset(paragraph, insertOffset);
+            var link = RevisionEditPlanner.LinkAtOffset(paragraph, insertOffset);
+            RevisionEditPlanner.InsertText(
+                paragraph,
+                insertOffset,
+                text,
+                formatting,
+                new RevisionEditPlanner.InsertOptions(
+                    RevisionKind.Inserted,
+                    author,
+                    dateXml,
+                    link.HyperlinkUrl,
+                    link.HyperlinkAnchor,
+                    link.HyperlinkTooltip));
+        }));
+        PlaceCaretAtModelTextOffset(paragraphIndex, insertOffset + text.Length);
+        return true;
+    }
+
+    private bool TryRecordTrackedBackspace()
+    {
+        if (!TrackChangesEnabled || !AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return false;
+        if (!TryGetCurrentBodyTextTarget(out var paragraphIndex, out var startOffset, out var endOffset, out var hasSelection))
+            return false;
+        if (hasSelection)
+            return TryRecordTrackedDeletion(paragraphIndex, startOffset, endOffset, placeAfterKeptForwardDelete: false);
+        if (startOffset <= 0)
+            return false;
+        return TryRecordTrackedDeletion(paragraphIndex, startOffset - 1, startOffset, placeAfterKeptForwardDelete: false);
+    }
+
+    private bool TryRecordTrackedDeleteForward()
+    {
+        if (!TrackChangesEnabled || !AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return false;
+        if (!TryGetCurrentBodyTextTarget(out var paragraphIndex, out var startOffset, out var endOffset, out var hasSelection))
+            return false;
+        if (hasSelection)
+            return TryRecordTrackedDeletion(paragraphIndex, startOffset, endOffset, placeAfterKeptForwardDelete: false);
+        CommitToModel();
+        if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph paragraph)
+            return false;
+        if (startOffset >= paragraph.PlainText.Length)
+            return false;
+        return TryRecordTrackedDeletion(paragraphIndex, startOffset, startOffset + 1, placeAfterKeptForwardDelete: true);
+    }
+
+    private bool TryRecordTrackedDeletion(int paragraphIndex, int startOffset, int endOffset, bool placeAfterKeptForwardDelete)
+    {
+        var author = CurrentRevisionAuthor();
+        var dateXml = CurrentRevisionDateXml();
+        RevisionEditPlanner.DeleteResult result = default;
+
+        CommitToModel();
+        if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph)
+            return false;
+
+        _commands.Execute(new ReplaceParagraphRunsCommand(paragraphIndex, paragraph =>
+        {
+            result = RevisionEditPlanner.DeleteRangeAsRevision(paragraph, startOffset, endOffset, author, dateXml);
+        }));
+
+        var caretOffset = placeAfterKeptForwardDelete && result.KeptDeletedText
+            ? Math.Max(startOffset, endOffset)
+            : result.CaretOffset;
+        PlaceCaretAtModelTextOffset(paragraphIndex, caretOffset);
+        return true;
+    }
+
+    private bool TryGetCurrentBodyTextTarget(
+        out int paragraphIndex,
+        out int startOffset,
+        out int endOffset,
+        out bool hasSelection)
+    {
+        paragraphIndex = -1;
+        startOffset = 0;
+        endOffset = 0;
+        hasSelection = false;
+
+        WpfParagraph? paragraph;
+        if (!Selection.IsEmpty)
+        {
+            paragraph = Selection.Start.Paragraph;
+            if (paragraph is null || !ReferenceEquals(paragraph, Selection.End.Paragraph))
+                return false;
+            startOffset = OffsetInParagraph(paragraph, Selection.Start);
+            endOffset = OffsetInParagraph(paragraph, Selection.End);
+            hasSelection = startOffset != endOffset;
+        }
+        else
+        {
+            paragraph = CaretPosition?.Paragraph;
+            if (paragraph is null || CaretPosition is null)
+                return false;
+            startOffset = OffsetInParagraph(paragraph, CaretPosition);
+            endOffset = startOffset;
+        }
+
+        var indexOf = new Dictionary<WpfParagraph, int>();
+        var modelIndex = 0;
+        foreach (var block in Document.Blocks)
+            NumberLeafBlocks(block, indexOf, ref modelIndex);
+        if (!indexOf.TryGetValue(paragraph, out var visibleIndex))
+            return false;
+
+        paragraphIndex = ModelIndexFromVisible(visibleIndex);
+        return true;
+    }
+
+    private string CurrentRevisionAuthor()
+    {
+        var author = string.IsNullOrWhiteSpace(RevisionAuthor)
+            ? _model.Properties.Author
+            : RevisionAuthor;
+        if (string.IsNullOrWhiteSpace(author))
+            author = Environment.UserName;
+        return string.IsNullOrWhiteSpace(author) ? "FreeW User" : author.Trim();
+    }
+
+    private static string CurrentRevisionDateXml() =>
+        DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
+
+    private void PlaceCaretAtModelTextOffset(int modelBlockIndex, int offset)
+    {
+        if (TextPointerAtModelTextOffset(modelBlockIndex, offset) is { } pointer)
+        {
+            CaretPosition = pointer;
+            Focus();
+        }
+    }
+
+    private TextPointer? TextPointerAtModelTextOffset(int modelBlockIndex, int offset)
+    {
+        if (LeafBlockAtModelIndex(modelBlockIndex) is not WpfParagraph paragraph)
+            return null;
+        return TextPointerAtParagraphOffset(paragraph, offset);
+    }
+
+    private static TextPointer TextPointerAtParagraphOffset(WpfParagraph paragraph, int offset)
+    {
+        var remaining = Math.Max(0, offset);
+        foreach (var inline in paragraph.Inlines)
+        {
+            if (TryTextPointerInInline(inline, ref remaining, out var pointer))
+                return pointer;
+        }
+
+        return paragraph.ContentEnd.GetInsertionPosition(LogicalDirection.Backward) ?? paragraph.ContentEnd;
+    }
+
+    private static bool TryTextPointerInInline(Inline inline, ref int remaining, out TextPointer pointer)
+    {
+        switch (inline)
+        {
+            case WpfRun run:
+                if (remaining <= run.Text.Length)
+                {
+                    pointer = run.ContentStart.GetPositionAtOffset(remaining, LogicalDirection.Forward)
+                        ?? run.ContentStart;
+                    return true;
+                }
+                remaining -= run.Text.Length;
+                break;
+            case Span span:
+                foreach (var child in span.Inlines)
+                {
+                    if (TryTextPointerInInline(child, ref remaining, out pointer))
+                        return true;
+                }
+                break;
+        }
+
+        pointer = inline.ContentEnd;
+        return false;
+    }
+
+    internal void MoveCaretToBlockForTest(int modelBlockIndex, int offset) =>
+        PlaceCaretAtModelTextOffset(modelBlockIndex, offset);
+
+    internal void SetSelectionRangeForTest(int anchorBlock, int anchorOffset, int caretBlock, int caretOffset)
+    {
+        var anchor = TextPointerAtModelTextOffset(anchorBlock, anchorOffset);
+        var caret = TextPointerAtModelTextOffset(caretBlock, caretOffset);
+        if (anchor is not null && caret is not null)
+            Selection.Select(anchor, caret);
+    }
+
+    internal void BackspaceForTest()
+    {
+        if (!TryRecordTrackedBackspace())
+            EditingCommands.Backspace.Execute(null, this);
+    }
+
+    internal void DeleteForwardForTest()
+    {
+        if (!TryRecordTrackedDeleteForward())
+            EditingCommands.Delete.Execute(null, this);
     }
 
     /// <summary>
@@ -11656,7 +12515,12 @@ public sealed class DocumentView : RichTextBox
         if (index < 0 || index > _model.Blocks.Count)
             index = _model.Blocks.Count;
 
-        ApplyTableOfAuthoritiesPlan(TableOfAuthoritiesRegionPlanner.BuildInsertPlan(_model, index, options));
+        ApplyTableOfAuthoritiesPlan(
+            TableOfAuthoritiesRegionPlanner.BuildInsertPlan(
+                _model,
+                index,
+                options,
+                BuildTableOfAuthoritiesPageResolver()));
     }
 
     /// <summary>
@@ -11675,7 +12539,84 @@ public sealed class DocumentView : RichTextBox
     {
         ArgumentNullException.ThrowIfNull(options);
         CommitToModel();
-        ApplyTableOfAuthoritiesPlan(TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(_model, options));
+        ApplyTableOfAuthoritiesPlan(
+            TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(
+                _model,
+                options,
+                BuildTableOfAuthoritiesPageResolver()));
+    }
+
+    private ToaCitationPageResolver? BuildTableOfAuthoritiesPageResolver()
+    {
+        try
+        {
+            var pagination = PaginationEngine.Compute(this);
+            var pageCount = Math.Max(1, pagination.PageCount);
+            if (pageCount == 1 || pagination.PageBreakYsDip.Count == 0)
+            {
+                return (_, blockIndex, runIndex, _) =>
+                    IsModelCitationRun(blockIndex, runIndex)
+                        ? TableOfAuthorities.CreatePageReference(1)
+                        : null;
+            }
+
+            var firstRect = Document.ContentStart.GetCharacterRect(LogicalDirection.Forward);
+            if (firstRect.IsEmpty)
+                return null;
+
+            var topY = firstRect.Top;
+            return (_, blockIndex, runIndex, _) =>
+            {
+                var offset = ModelRunStartOffset(blockIndex, runIndex);
+                var pointer = TextPointerAtModelTextOffset(blockIndex, offset);
+                if (pointer is null)
+                    return null;
+
+                var rect = pointer.GetCharacterRect(LogicalDirection.Forward);
+                if (rect.IsEmpty)
+                    return null;
+
+                var y = rect.Top - topY;
+                var pageIndex = 0;
+                foreach (var breakY in pagination.PageBreakYsDip)
+                {
+                    if (y + 0.5 < breakY)
+                        break;
+                    pageIndex++;
+                }
+
+                var pageNumber = Math.Min(Math.Max(1, pageIndex + 1), pageCount);
+                return TableOfAuthorities.CreatePageReference(pageNumber);
+            };
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private bool IsModelCitationRun(int modelBlockIndex, int runIndex) =>
+        modelBlockIndex >= 0
+        && modelBlockIndex < _model.Blocks.Count
+        && _model.Blocks[modelBlockIndex] is ModelParagraph paragraph
+        && runIndex >= 0
+        && runIndex < paragraph.Runs.Count
+        && paragraph.Runs[runIndex].Citation is not null;
+
+    private int ModelRunStartOffset(int modelBlockIndex, int runIndex)
+    {
+        if (modelBlockIndex < 0
+            || modelBlockIndex >= _model.Blocks.Count
+            || _model.Blocks[modelBlockIndex] is not ModelParagraph paragraph)
+        {
+            return 0;
+        }
+
+        var offset = 0;
+        var limit = Math.Clamp(runIndex, 0, paragraph.Runs.Count);
+        for (var i = 0; i < limit; i++)
+            offset += paragraph.Runs[i].Text.Length;
+        return offset;
     }
 
     private void ApplyTableOfAuthoritiesPlan(TableOfAuthoritiesRegionPlan plan)
@@ -11697,8 +12638,14 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void InsertTableOfFigures(CaptionLabel label = CaptionLabel.Figure)
     {
+        InsertTableOfFigures(Captions.LabelText(label));
+    }
+
+    public void InsertTableOfFigures(string labelText)
+    {
         // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
+        labelText = Captions.NormalizeLabelText(labelText);
         TableOfFigures.EnsureStyles(_model);
 
         // Insert at the caret's block (a table of figures reads as front-/back-matter); fall back to the end.
@@ -11706,7 +12653,7 @@ public sealed class DocumentView : RichTextBox
         if (index < 0 || index > _model.Blocks.Count)
             index = _model.Blocks.Count;
 
-        InsertTableOfFiguresAt(index, label);
+        InsertTableOfFiguresAt(index, labelText);
     }
 
     /// <summary>
@@ -11718,7 +12665,13 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void RefreshTableOfFigures(CaptionLabel label = CaptionLabel.Figure)
     {
+        RefreshTableOfFigures(Captions.LabelText(label));
+    }
+
+    public void RefreshTableOfFigures(string labelText)
+    {
         CommitToModel();
+        labelText = Captions.NormalizeLabelText(labelText);
         TableOfFigures.EnsureStyles(_model);
 
         // Find the first existing table-of-figures paragraph (the marker region anchor).
@@ -11745,14 +12698,14 @@ public sealed class DocumentView : RichTextBox
         for (var i = indices.Count - 1; i >= 0; i--)
             _commands.Execute(new DeleteParagraphCommand(indices[i]));
 
-        InsertTableOfFiguresAt(insertAt, label);
+        InsertTableOfFiguresAt(insertAt, labelText);
     }
 
     // Insert the freshly built table-of-figures paragraphs starting at block index `at`, one reversible
     // InsertParagraphCommand each (kept in order). The bus's Changed event redraws.
-    private void InsertTableOfFiguresAt(int at, CaptionLabel label)
+    private void InsertTableOfFiguresAt(int at, string labelText)
     {
-        var entries = TableOfFigures.Build(_model, label);
+        var entries = TableOfFigures.Build(_model, labelText);
         var index = Math.Clamp(at, 0, _model.Blocks.Count);
         foreach (var paragraph in entries)
             _commands.Execute(new InsertParagraphCommand(index++, paragraph));
@@ -11773,12 +12726,18 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void InsertCaption(CaptionLabel label, string text)
     {
+        InsertCaption(Captions.LabelText(label), text);
+    }
+
+    public void InsertCaption(string labelText, string text)
+    {
         // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
+        labelText = Captions.NormalizeLabelText(labelText);
         Captions.EnsureStyles(_model);
 
-        var number = Captions.NextCaptionNumber(_model, label);
-        var caption = Captions.BuildCaption(label, number, text);
+        var number = Captions.NextCaptionNumber(_model, labelText);
+        var caption = Captions.BuildCaption(labelText, number, text);
 
         // Insert after the caret's block so the caption sits under the selected image/table.
         var index = CaretBlockIndex() + 1;
@@ -11861,12 +12820,14 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// When true, the editor is in Track Changes mode. Live keystroke-level tracking is not attempted
-    /// (it is brittle in a RichTextBox); the flag is a model/UI state that the ribbon toggle reflects and
-    /// that gates <see cref="MarkSelectionAsRevision"/> (used to mark the selection as an insertion or
-    /// deletion). Accept-All / Reject-All operate regardless of this flag.
+    /// When true, the editor is in Track Changes mode. Body text typing and Backspace/Delete are recorded
+    /// as tracked insertions/deletions through the shared revision edit planner; selection-marking and
+    /// accept/reject operate regardless of this flag.
     /// </summary>
     public bool TrackChangesEnabled { get; set; }
+
+    /// <summary>The default revision author stamped on tracked changes this editor records.</summary>
+    public string RevisionAuthor { get; set; } = "FreeW User";
 
     // ── Review > Tracking display controls ────────────────────────────────────────────────────────
     // These are view-only flags: they affect how the document renders but never touch the model.
@@ -12025,7 +12986,7 @@ public sealed class DocumentView : RichTextBox
         if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph modelParagraph)
             return;
 
-        MarkRevisionRange(modelParagraph, startOffset, endOffset, kind, author, dateXml);
+        RevisionEditPlanner.MarkRevisionRange(modelParagraph, startOffset, endOffset, kind, author, dateXml);
         Render();
     }
 

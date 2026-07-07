@@ -348,9 +348,13 @@ public static class FindReplaceService
         if (cell is null)
             return false;
 
+        // Formulas-mode on a cell with no formula falls back to the same plain display text
+        // FindReplaceSearchPlanner.EnumerateSearchTexts used to find the match (Excel's
+        // "Look in: Formulas" replaces constants too — it is the ONLY replace mode Excel offers,
+        // and it must not silently skip the very matches Find reported).
         var currentText = lookIn switch
         {
-            FindLookIn.Formulas => cell.FormulaText,
+            FindLookIn.Formulas => cell.HasFormula ? cell.FormulaText : GetDisplayText(cell.Value),
             FindLookIn.Values => cell.HasFormula
                 ? null
                 : workbook is not null
@@ -362,7 +366,7 @@ public static class FindReplaceService
             !TryCreateReplacementText(currentText, searchText, replaceText, comparison, matchEntireCell, out var newText))
             return false;
 
-        if (lookIn == FindLookIn.Formulas)
+        if (lookIn == FindLookIn.Formulas && cell.HasFormula)
         {
             newCell = cell.Clone();
             newCell.FormulaText = newText;
@@ -374,10 +378,16 @@ public static class FindReplaceService
 
         // Re-parse the replacement text the same way Excel re-parses text typed into a cell
         // (accepts "$", thousands separators, "%", and dates) so a formatted numeric match
-        // round-trips back into a NumberValue rather than becoming literal text.
-        ScalarValue newValue = ExcelTextNumberParser.TryParse(newText, out var number)
-            ? new NumberValue(number)
-            : new TextValue(newText);
+        // round-trips back into a NumberValue rather than becoming literal text. An empty
+        // replacement result (e.g. Replace All with a blank "Replace with") must clear the cell
+        // to BlankValue rather than storing an empty TextValue — Excel leaves the cell truly
+        // blank (COUNTA excludes it, ISBLANK is TRUE), and a stored empty-string TextValue would
+        // also round-trip into the saved .xlsx as a non-blank string cell.
+        ScalarValue newValue = newText.Length == 0
+            ? BlankValue.Instance
+            : ExcelTextNumberParser.TryParse(newText, out var number)
+                ? new NumberValue(number)
+                : new TextValue(newText);
 
         newCell = cell.Clone();
         newCell.Value = newValue;
@@ -445,18 +455,31 @@ public static class FindReplaceService
         if (HasWildcard(searchText))
         {
             var regex = GetOrCreateSearchRegex(searchText, comparison, matchEntireCell);
-            if (!regex.IsMatch(currentText))
-                return false;
+            try
+            {
+                if (!regex.IsMatch(currentText))
+                    return false;
 
-            // Match Entire Cell replaces the whole cell text with the literal replacement.
-            // Otherwise every non-overlapping wildcard match is replaced with the literal
-            // replacement text — Excel does not expand wildcards in the replacement string, so a
-            // MatchEvaluator is used instead of the string overload (which would otherwise treat
-            // "$1"-style sequences in replaceText as regex backreferences).
-            newText = matchEntireCell
-                ? replaceText
-                : regex.Replace(currentText, _ => replaceText);
-            return true;
+                // Match Entire Cell replaces the whole cell text with the literal replacement.
+                // Otherwise every non-overlapping wildcard match is replaced with the literal
+                // replacement text — Excel does not expand wildcards in the replacement string, so a
+                // manual match walk (see ReplaceNonOverlappingMatches) is used instead of
+                // Regex.Replace: an all-wildcard pattern like "*" is unanchored and can match the
+                // full text AND then an empty string at end-of-input, which Regex.Replace would
+                // substitute twice (Regex.Replace("abc", ".*", "X") == "XX"); Excel produces "X".
+                newText = matchEntireCell
+                    ? replaceText
+                    : ReplaceNonOverlappingMatches(regex, currentText, replaceText);
+                return true;
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                // Mirror every formula-side wildcard consumer (BuiltInFunctions.Criteria.cs,
+                // BuiltInFunctions.TextCore.Search.cs, BuiltInFunctions.Regex.cs): a catastrophically
+                // backtracking pattern must not crash the host — treat it as "no match" instead of
+                // letting the exception escape into the Find/Replace UI click handler.
+                return false;
+            }
         }
 
         var isMatch = matchEntireCell
@@ -472,6 +495,49 @@ public static class FindReplaceService
     }
 
     /// <summary>
+    /// Replaces every non-overlapping match of <paramref name="regex"/> in <paramref name="input"/>
+    /// with the literal <paramref name="replacement"/>, skipping a zero-length match that starts
+    /// exactly where the previous match ended. Plain <see cref="Regex.Replace(string, string)"/>
+    /// does not skip that trailing empty match, so an unanchored, fully-wildcard pattern (e.g. the
+    /// pattern built from a lone <c>*</c>) matches the whole input once and then matches an empty
+    /// string at the end, causing the replacement text to be substituted twice.
+    /// </summary>
+    private static string ReplaceNonOverlappingMatches(Regex regex, string input, string replacement)
+    {
+        var sb = new System.Text.StringBuilder();
+        var position = 0;
+        var lastMatchEnd = -1;
+        var match = regex.Match(input);
+        while (match.Success)
+        {
+            if (match.Length == 0 && match.Index == lastMatchEnd)
+            {
+                // Zero-length match immediately abutting the previous (possibly non-empty) match:
+                // skip it rather than substituting a second replacement, and advance by one
+                // character (or stop) so the scan makes progress.
+                if (match.Index >= input.Length)
+                    break;
+                match = regex.Match(input, match.Index + 1);
+                continue;
+            }
+
+            sb.Append(input, position, match.Index - position);
+            sb.Append(replacement);
+            position = match.Index + match.Length;
+            lastMatchEnd = position;
+
+            match = match.Length == 0 && position < input.Length
+                ? regex.Match(input, position + 1)
+                : position <= input.Length
+                    ? regex.Match(input, position)
+                    : Match.Empty;
+        }
+
+        sb.Append(input, position, input.Length - position);
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// Text-match test shared by <see cref="Find"/> and the Replace path. Excel-style wildcards
     /// (<c>*</c> = any run of characters, <c>?</c> = exactly one character, <c>~</c> escapes the
     /// next wildcard character) are honored whenever <paramref name="searchText"/> contains one;
@@ -483,7 +549,17 @@ public static class FindReplaceService
         if (HasWildcard(searchText))
         {
             var regex = GetOrCreateSearchRegex(searchText, comparison, matchEntireCell);
-            return regex.IsMatch(text);
+            try
+            {
+                return regex.IsMatch(text);
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                // A catastrophically backtracking wildcard pattern (e.g. many alternating "*x"
+                // segments against long repetitive text) must not crash Find/Replace — every
+                // formula-side wildcard consumer treats a timeout as "no match" and so do we.
+                return false;
+            }
         }
 
         return matchEntireCell

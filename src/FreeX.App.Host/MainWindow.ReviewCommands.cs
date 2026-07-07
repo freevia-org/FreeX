@@ -237,10 +237,11 @@ public partial class MainWindow
 
         if (existing is null && result.ReplyText is not null)
         {
+            var author = FreeXOptions.NormalizeUserName(_options.UserName);
             changed = TryExecuteRepeatableCurrentRangeCommand(
                 "Threaded Comment",
                 range,
-                r => new SetThreadedCommentCommand(_currentSheetId, r.Start, result.ReplyText),
+                r => new SetThreadedCommentCommand(_currentSheetId, r.Start, result.ReplyText, author),
                 out var outcome);
             if (!changed)
             {
@@ -300,6 +301,7 @@ public partial class MainWindow
                         result.IsResolved != existing.IsResolved;
                     if (hasThreadChange)
                     {
+                        var replyAuthor = FreeXOptions.NormalizeUserName(_options.UserName);
                         changed = TryExecuteRepeatableCurrentRangeCommand(
                             "Edit Comment",
                             range,
@@ -308,7 +310,8 @@ public partial class MainWindow
                                 r.Start,
                                 result.RootText,
                                 result.ReplyText,
-                                result.IsResolved),
+                                result.IsResolved,
+                                replyAuthor),
                             out var outcome);
                         if (!changed)
                         {
@@ -657,7 +660,8 @@ public partial class MainWindow
             _currentSheetId,
             defaultRange,
             sheet.AllowEditRanges,
-            request => ApplyAllowEditRangeSelection(dialog, request)) { Owner = this };
+            request => ApplyAllowEditRangeSelection(dialog, request),
+            sheet.AllowEditRangePasswords) { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
         IWorkbookCommand? command = null;
@@ -665,20 +669,44 @@ public partial class MainWindow
         switch (dialog.Result)
         {
             case { Action: AllowEditRangeAction.Add, Range: { } range }:
-                command = new AllowEditRangeCommand(_currentSheetId, range);
+                command = new CompositeWorkbookCommand(
+                    "Allow Edit Range",
+                    [
+                        new AllowEditRangeCommand(_currentSheetId, range),
+                        new SetAllowEditRangePasswordCommand(_currentSheetId, range, dialog.RangePassword)
+                    ]);
                 successMessage = UiText.Format("MainWindowMessage_AllowEditRangeAdded", range);
                 break;
             case { Action: AllowEditRangeAction.Modify, PreviousRange: { } previousRange, Range: { } range }:
-                command = new CompositeWorkbookCommand(
-                    "Modify Allow Edit Range",
-                    [
-                        new RemoveAllowEditRangeCommand(_currentSheetId, previousRange),
-                        new AllowEditRangeCommand(_currentSheetId, range)
-                    ]);
+                var modifyCommands = new List<IWorkbookCommand>
+                {
+                    new RemoveAllowEditRangeCommand(_currentSheetId, previousRange),
+                    new AllowEditRangeCommand(_currentSheetId, range)
+                };
+                // Only touch the stored password when the user actually typed into the password box
+                // this time (RangePasswordChanged); a modify with the box left blank keeps whatever
+                // password (if any) the range already had, matching Excel and AllowEditRangeDialog's
+                // own contract for RangePasswordChanged.
+                if (dialog.RangePasswordChanged)
+                {
+                    modifyCommands.Add(new SetAllowEditRangePasswordCommand(_currentSheetId, range, dialog.RangePassword));
+                }
+                else if (!range.Equals(previousRange) && sheet.AllowEditRangePasswords.TryGetValue(previousRange, out var carriedPassword))
+                {
+                    // The range's key changed (e.g. its bounds were edited) but the password was left
+                    // untouched -- carry the existing password over to the new key so it is not lost.
+                    modifyCommands.Add(new SetAllowEditRangePasswordCommand(_currentSheetId, range, carriedPassword));
+                }
+                command = new CompositeWorkbookCommand("Modify Allow Edit Range", modifyCommands);
                 successMessage = UiText.Format("MainWindowMessage_AllowEditRangeModified", range);
                 break;
             case { Action: AllowEditRangeAction.Remove, Range: { } range }:
-                command = new RemoveAllowEditRangeCommand(_currentSheetId, range);
+                command = new CompositeWorkbookCommand(
+                    "Remove Allow Edit Range",
+                    [
+                        new RemoveAllowEditRangeCommand(_currentSheetId, range),
+                        new SetAllowEditRangePasswordCommand(_currentSheetId, range, null)
+                    ]);
                 successMessage = UiText.Format("MainWindowMessage_AllowEditRangeRemoved", range);
                 break;
             case { Action: AllowEditRangeAction.Clear }:
@@ -694,6 +722,60 @@ public partial class MainWindow
             return;
 
         _messageService.ShowInfo(successMessage, UiText.Get("MainWindowMessage_AllowEditRangesTitle"));
+    }
+
+    /// <summary>
+    /// Sets (or clears) the Allow-Edit-Range password for a single range with full undo support.
+    /// AllowEditRangeDialog computes the typed password (<see cref="AllowEditRangeDialog.RangePassword"/>)
+    /// but has no command of its own to store it -- <see cref="SheetProtectionCommands"/>'s
+    /// Add/Remove/Clear commands only ever touch <see cref="Sheet.AllowEditRanges"/>, never
+    /// <see cref="Sheet.AllowEditRangePasswords"/> (see CommandGuards' M42 remarks). This composes
+    /// alongside them so the range's password is actually persisted and undo/redo restores it.
+    /// </summary>
+    private sealed class SetAllowEditRangePasswordCommand : IWorkbookCommand
+    {
+        private readonly SheetId _sheetId;
+        private readonly GridRange _range;
+        private readonly string? _password;
+        private string? _previousPassword;
+        private bool _hadPreviousEntry;
+
+        public string Label => "Set Allow Edit Range Password";
+
+        public SetAllowEditRangePasswordCommand(SheetId sheetId, GridRange range, string? password)
+        {
+            _sheetId = sheetId;
+            _range = range;
+            _password = string.IsNullOrEmpty(password) ? null : password;
+        }
+
+        public CommandOutcome Apply(ICommandContext ctx)
+        {
+            var sheet = ctx.GetSheet(_sheetId);
+            _hadPreviousEntry = sheet.AllowEditRangePasswords.TryGetValue(_range, out _previousPassword);
+
+            if (_password is null)
+                sheet.AllowEditRangePasswords.Remove(_range);
+            else
+                sheet.AllowEditRangePasswords[_range] = _password;
+
+            // The password just changed while the sheet may still be protected: any prior "already
+            // unlocked this session" grant for this range no longer reflects the current password.
+            sheet.UnlockedAllowEditRanges.Remove(_range);
+
+            return new CommandOutcome(true);
+        }
+
+        public void Revert(ICommandContext ctx)
+        {
+            var sheet = ctx.GetSheet(_sheetId);
+            if (_hadPreviousEntry)
+                sheet.AllowEditRangePasswords[_range] = _previousPassword;
+            else
+                sheet.AllowEditRangePasswords.Remove(_range);
+
+            sheet.UnlockedAllowEditRanges.Remove(_range);
+        }
     }
 
     private void ApplyAllowEditRangeSelection(AllowEditRangeDialog? dialog, AllowEditRangeSelectionRequest request)

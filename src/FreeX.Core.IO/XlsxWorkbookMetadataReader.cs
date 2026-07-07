@@ -355,7 +355,8 @@ internal static class XlsxWorkbookMetadataReader
                 XlsxXmlAttributeReader.ReadBoolAttribute(calcPr, "forceFullCalc"),
                 XlsxXmlAttributeReader.ReadBoolAttribute(calcPr, "iterate"),
                 XlsxXmlAttributeReader.ReadIntAttribute(calcPr, "iterateCount"),
-                XlsxXmlAttributeReader.ReadDoubleAttribute(calcPr, "iterateDelta"));
+                XlsxXmlAttributeReader.ReadDoubleAttribute(calcPr, "iterateDelta"),
+                XlsxXmlAttributeReader.ReadBoolAttribute(calcPr, "fullPrecision", defaultValue: true));
         }
         catch
         {
@@ -502,18 +503,16 @@ internal static class XlsxWorkbookMetadataReader
         if (bookViews is null)
             return null;
 
-        XElement? fallbackView = null;
+        // OOXML/Excel treats the first <workbookView> under <bookViews> as authoritative
+        // (mirrors the writer's FindFirstWorkbookView contract). Do not prefer a later
+        // zero/absent-activeTab entry -- that would silently discard the real saved
+        // selection whenever an earlier view has a genuine non-zero activeTab.
         foreach (var view in bookViews.Elements(workbookNs + "workbookView"))
         {
-            fallbackView ??= view;
-            if (XlsxXmlAttributeReader.ReadIntAttribute(view, "firstSheet") is null or 0 &&
-                XlsxXmlAttributeReader.ReadIntAttribute(view, "activeTab") is null or 0)
-            {
-                return view;
-            }
+            return view;
         }
 
-        return fallbackView;
+        return null;
     }
 
     private static WorkbookFileSharingModel? LoadFileSharing(XDocument workbookXml)
@@ -577,7 +576,8 @@ internal static class XlsxWorkbookMetadataReader
             XlsxXmlAttributeReader.ReadBoolAttribute(calcPr, "forceFullCalc"),
             XlsxXmlAttributeReader.ReadBoolAttribute(calcPr, "iterate"),
             XlsxXmlAttributeReader.ReadIntAttribute(calcPr, "iterateCount"),
-            XlsxXmlAttributeReader.ReadDoubleAttribute(calcPr, "iterateDelta"));
+            XlsxXmlAttributeReader.ReadDoubleAttribute(calcPr, "iterateDelta"),
+            XlsxXmlAttributeReader.ReadBoolAttribute(calcPr, "fullPrecision", defaultValue: true));
     }
 
     private static IReadOnlyList<XlsxWorkbookCustomView> LoadCustomViews(XDocument workbookXml)
@@ -613,9 +613,10 @@ internal sealed record WorkbookCalculationProperties(
     bool ForceFullCalculation,
     bool IterativeCalculation,
     int? MaxIterations,
-    double? MaxChange)
+    double? MaxChange,
+    bool FullPrecision)
 {
-    public static WorkbookCalculationProperties Default { get; } = new(null, false, false, false, null, null);
+    public static WorkbookCalculationProperties Default { get; } = new(null, false, false, false, null, null, true);
 }
 
 internal sealed record WorkbookViewProperties(

@@ -3,17 +3,18 @@ using System.Globalization;
 namespace FreeW.Core.Model;
 
 /// <summary>
-/// The kind of object a caption labels. Today figures and tables, mirroring Word's two built-in
-/// caption labels; the enum is the single point of extension for future labels (e.g. equations).
+/// The kind of object a caption labels. Covers Word's common built-in labels while string overloads
+/// handle custom labels.
 /// </summary>
 public enum CaptionLabel
 {
     Figure,
-    Table
+    Table,
+    Equation
 }
 
 /// <summary>
-/// Pure, WPF-free helpers for document captions and sequential figure/table numbering. Lives in the
+/// Pure, WPF-free helpers for document captions and sequential caption numbering. Lives in the
 /// model project so it is fully unit-testable without any UI.
 /// <para>
 /// A caption is just an ordinary <see cref="Paragraph"/> carrying the <see cref="StyleId"/>
@@ -33,16 +34,36 @@ public static class Captions
     /// <summary>The style id (and name) of the built-in caption paragraph style.</summary>
     public const string StyleId = "Caption";
 
+    public const string FigureLabelText = "Figure";
+    public const string TableLabelText = "Table";
+    public const string EquationLabelText = "Equation";
+
+    public static readonly IReadOnlyList<string> BuiltInLabelTexts =
+    [
+        FigureLabelText,
+        TableLabelText,
+        EquationLabelText
+    ];
+
     /// <summary>The separator between a caption's number and its descriptive text.</summary>
     private const string Separator = ": ";
 
     /// <summary>The label word that prefixes a caption of <paramref name="label"/> (e.g. "Figure").</summary>
     public static string LabelText(CaptionLabel label) => label switch
     {
-        CaptionLabel.Figure => "Figure",
-        CaptionLabel.Table => "Table",
+        CaptionLabel.Figure => FigureLabelText,
+        CaptionLabel.Table => TableLabelText,
+        CaptionLabel.Equation => EquationLabelText,
         _ => label.ToString()
     };
+
+    public static string NormalizeLabelText(string labelText)
+    {
+        var normalized = labelText?.Trim() ?? string.Empty;
+        if (normalized.Length == 0)
+            throw new ArgumentException("Caption label text cannot be empty.", nameof(labelText));
+        return normalized;
+    }
 
     /// <summary>
     /// Returns the next 1-based ordinal for a caption of <paramref name="label"/> in
@@ -53,7 +74,17 @@ public static class Captions
     /// </summary>
     public static int NextCaptionNumber(TextDocument document, CaptionLabel label)
     {
+        return NextCaptionNumber(document, LabelText(label));
+    }
+
+    /// <summary>
+    /// Returns the next 1-based ordinal for a caption with the given label text. This supports Word's
+    /// built-in labels plus custom labels created through Insert Caption > New Label.
+    /// </summary>
+    public static int NextCaptionNumber(TextDocument document, string labelText)
+    {
         ArgumentNullException.ThrowIfNull(document);
+        var label = NormalizeLabelText(labelText);
 
         var count = 0;
         foreach (var block in document.Blocks)
@@ -71,7 +102,15 @@ public static class Captions
     /// </summary>
     public static Paragraph BuildCaption(CaptionLabel label, int number, string text)
     {
-        var prefix = $"{LabelText(label)} {number.ToString(CultureInfo.InvariantCulture)}";
+        return BuildCaption(LabelText(label), number, text);
+    }
+
+    /// <summary>
+    /// Builds a <c>Caption</c>-styled paragraph for a built-in or custom caption label.
+    /// </summary>
+    public static Paragraph BuildCaption(string labelText, int number, string text)
+    {
+        var prefix = $"{NormalizeLabelText(labelText)} {number.ToString(CultureInfo.InvariantCulture)}";
         var trimmed = text?.Trim() ?? string.Empty;
         var full = trimmed.Length > 0 ? $"{prefix}{Separator}{trimmed}" : prefix;
         return new Paragraph(full) { StyleId = StyleId };
@@ -108,8 +147,11 @@ public static class Captions
     private static bool IsCaptionStyle(string? styleId) =>
         string.Equals(styleId, StyleId, StringComparison.Ordinal);
 
+    public static bool IsCaptionOf(Paragraph paragraph, CaptionLabel label) =>
+        IsCaptionOf(paragraph, LabelText(label));
+
     // True when the paragraph is a caption carrying the given label (style + leading "Label " prefix).
-    private static bool IsCaptionOf(Paragraph paragraph, CaptionLabel label) =>
+    public static bool IsCaptionOf(Paragraph paragraph, string labelText) =>
         IsCaptionStyle(paragraph.StyleId)
-        && paragraph.PlainText.StartsWith(LabelText(label) + " ", StringComparison.Ordinal);
+        && paragraph.PlainText.StartsWith(NormalizeLabelText(labelText) + " ", StringComparison.Ordinal);
 }

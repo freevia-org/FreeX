@@ -614,41 +614,56 @@ public record StyleDiff(
 )
 {
     /// <summary>Create a StyleDiff that captures all properties of <paramref name="style"/> as explicit overrides.</summary>
-    public static StyleDiff FromStyle(CellStyle style) => new(
-        Bold:            style.Bold,
-        Italic:          style.Italic,
-        Underline:       style.Underline,
-        Strikethrough:   style.Strikethrough,
-        Superscript:     style.Superscript,
-        Subscript:       style.Subscript,
-        FontName:        style.FontName,
-        FontSize:        style.FontSize,
-        FontColor:       style.FontColor,
-        FontThemeColor:  style.FontThemeColor,
-        FillColor:       style.FillColor,
-        FillThemeColor:  style.FillThemeColor,
-        FillPatternStyle: style.FillPatternStyle,
-        FillPatternColor: style.FillPatternColor,
-        FillPatternThemeColor: style.FillPatternThemeColor,
-        HAlign:          style.HorizontalAlignment,
-        VAlign:          style.VerticalAlignment,
-        WrapText:        style.WrapText,
-        ShrinkToFit:     style.ShrinkToFit,
-        NumberFormat:    style.NumberFormat,
-        DoubleUnderline: style.DoubleUnderline,
-        IndentLevel:     style.IndentLevel,
-        TextRotation:    style.TextRotation,
-        BorderTop:            style.BorderTop,
-        BorderRight:          style.BorderRight,
-        BorderBottom:         style.BorderBottom,
-        BorderLeft:           style.BorderLeft,
-        BorderDiagonalDown:   style.BorderDiagonalDown,
-        BorderDiagonalUp:     style.BorderDiagonalUp,
-        Locked:          style.Locked,
-        Hidden:          style.Hidden,
-        FontScheme:      style.FontScheme,
-        GradientFill:    style.GradientFill?.Clone()
-    );
+    public static StyleDiff FromStyle(CellStyle style)
+    {
+        // When the source style has no fill at all (no flat/theme color, no pattern, no gradient),
+        // FillColor/FillThemeColor/GradientFill would all serialize as null in the diff, which
+        // ApplyTo() interprets as "leave the target's fill untouched" rather than "the source has
+        // no fill". Force an explicit ClearFill so painting a fill-less source actually removes
+        // any existing fill (color/theme/pattern/gradient) from the target, matching Excel's
+        // Format Painter behavior and keeping FillPatternStyle/FillColor internally consistent.
+        bool isFillLess = style.FillColor is null
+            && style.FillThemeColor is null
+            && style.FillPatternStyle == CellFillPatternStyle.None
+            && style.GradientFill is null;
+
+        return new(
+            Bold:            style.Bold,
+            Italic:          style.Italic,
+            Underline:       style.Underline,
+            Strikethrough:   style.Strikethrough,
+            Superscript:     style.Superscript,
+            Subscript:       style.Subscript,
+            FontName:        style.FontName,
+            FontSize:        style.FontSize,
+            FontColor:       style.FontColor,
+            FontThemeColor:  style.FontThemeColor,
+            FillColor:       style.FillColor,
+            FillThemeColor:  style.FillThemeColor,
+            FillPatternStyle: style.FillPatternStyle,
+            FillPatternColor: style.FillPatternColor,
+            FillPatternThemeColor: style.FillPatternThemeColor,
+            HAlign:          style.HorizontalAlignment,
+            VAlign:          style.VerticalAlignment,
+            WrapText:        style.WrapText,
+            ShrinkToFit:     style.ShrinkToFit,
+            NumberFormat:    style.NumberFormat,
+            DoubleUnderline: style.DoubleUnderline,
+            IndentLevel:     style.IndentLevel,
+            TextRotation:    style.TextRotation,
+            BorderTop:            style.BorderTop,
+            BorderRight:          style.BorderRight,
+            BorderBottom:         style.BorderBottom,
+            BorderLeft:           style.BorderLeft,
+            BorderDiagonalDown:   style.BorderDiagonalDown,
+            BorderDiagonalUp:     style.BorderDiagonalUp,
+            Locked:          style.Locked,
+            Hidden:          style.Hidden,
+            ClearFill:       isFillLess ? true : null,
+            FontScheme:      style.FontScheme,
+            GradientFill:    style.GradientFill?.Clone()
+        );
+    }
 
     /// <summary>Apply this diff to a base style, returning a new style with only non-null fields overridden.</summary>
     public CellStyle ApplyTo(CellStyle base_)

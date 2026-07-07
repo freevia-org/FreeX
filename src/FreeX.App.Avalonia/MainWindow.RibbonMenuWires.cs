@@ -210,9 +210,18 @@ public sealed partial class MainWindow
     }
 
     // ── Data ▸ Outline ▸ Show / Hide Detail ──────────────────────────────────────
+    // Mirrors WPF's blanket ExpandGroupBtn_Click/CollapseGroupBtn_Click (MainWindow.OutlineCommands.cs):
+    // pick row vs. column outline based on whether the current selection is a whole-column
+    // selection, so grouped columns can be expanded/collapsed from the ribbon too, not just rows.
+    // (The per-group +/- boundary toggle that WPF's grid raises via OnOutlineGroupToggleRequested
+    // has no Avalonia counterpart yet — the Avalonia shell has no outline-gutter click surface in
+    // its grid rendering to wire it to; that remains a separate, grid-rendering-level gap.)
     private void ShowOutlineDetail()
     {
-        var result = _session.ExecuteReviewCommand(new ExpandRowGroupCommand(_session.ActiveSheet.Id, 1));
+        var axis = OutlineGroupingService.GetGroupingAxis(_session.SelectedRange);
+        var result = axis == OutlineGroupingAxis.Columns
+            ? _session.ExecuteReviewCommand(new ExpandColGroupCommand(_session.ActiveSheet.Id, 1))
+            : _session.ExecuteReviewCommand(new ExpandRowGroupCommand(_session.ActiveSheet.Id, 1));
         RefreshShell(result.Success
             ? UiText.Get("RibbonWire_ShownDetail")
             : result.ErrorMessage ?? UiText.Get("RibbonWire_ShowDetailFailed"));
@@ -220,7 +229,10 @@ public sealed partial class MainWindow
 
     private void HideOutlineDetail()
     {
-        var result = _session.ExecuteReviewCommand(new CollapseRowGroupCommand(_session.ActiveSheet.Id, 1));
+        var axis = OutlineGroupingService.GetGroupingAxis(_session.SelectedRange);
+        var result = axis == OutlineGroupingAxis.Columns
+            ? _session.ExecuteReviewCommand(new CollapseColGroupCommand(_session.ActiveSheet.Id, 1))
+            : _session.ExecuteReviewCommand(new CollapseRowGroupCommand(_session.ActiveSheet.Id, 1));
         RefreshShell(result.Success
             ? UiText.Get("RibbonWire_HidDetail")
             : result.ErrorMessage ?? UiText.Get("RibbonWire_HideDetailFailed"));

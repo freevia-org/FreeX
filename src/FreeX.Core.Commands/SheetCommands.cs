@@ -48,7 +48,17 @@ public sealed class RenameSheetCommand : IWorkbookCommand
     private List<(PivotCacheModel Cache, string OldValue)>? _pivotCacheNameSnapshot;
     private List<(ChartModel Chart, string OldValue)>? _chartPivotSourceNameSnapshot;
     private List<(SlicerModel Slicer, string OldValue)>? _slicerNameSnapshot;
+    // P84: TimelineModel.SourceSheetName is the timeline-object twin of SlicerModel.SourceSheetName
+    // above (same "which sheet hosts this object's anchor" role) and must be rewritten on rename
+    // the same way, or SlicerTimelinePanePlanner.IsAnchoredOnSheet keeps comparing against the
+    // stale old sheet name and the timeline silently stops rendering.
+    private List<(TimelineModel Timeline, string OldValue)>? _timelineNameSnapshot;
     private List<(PictureModel Picture, string OldValue)>? _pictureNameSnapshot;
+    // P81: FormControlModel.LinkedCell/ListFillRange hold sheet-qualified string refs (e.g.
+    // "Sheet1!$D$3", Excel's fmlaLink) just like the string refs above and must be rewritten
+    // the same way on rename, or a loaded checkbox/list-box's linked cell/fill range goes stale
+    // (FormControlInteractionService.TryResolveLinkedCell then fails to resolve the sheet).
+    private List<(FormControlModel Control, string? OldLinkedCell, string? OldListFillRange)>? _formControlNameSnapshot;
     // T7: CF/DV formula rewrites across ALL sheets for the rename
     private List<(Guid RuleId, string? OldValue, SheetId Sheet)>? _cfFormulaRenameSnapshot;
     private List<(Guid RuleId, int Slot, string? OldValue, SheetId Sheet)>? _dvFormulaRenameSnapshot;
@@ -56,6 +66,17 @@ public sealed class RenameSheetCommand : IWorkbookCommand
     // cells" data labels) hold sheet-qualified text refs just like CF/DV formulas above and
     // must be rewritten the same way, or they keep saying the OLD sheet name after rename.
     private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimRenameSnapshot;
+    // O25: 'Place in This Document' hyperlink bookmarks across ALL sheets (not just the
+    // renamed one — a hyperlink on Sheet1 can target "Sheet2!A1") must be rewritten to the
+    // new sheet name, or the link silently breaks (stale sheet name after rename).
+    private List<(SheetId Sheet, CellAddress Address, string OldBookmark)>? _hyperlinkBookmarkRenameSnapshot;
+    // P113: when a 'Place in This Document' hyperlink has no Bookmark set (FreeX's own Insert
+    // Hyperlink dialog stores the target ref directly on sheet.Hyperlinks and leaves Bookmark
+    // empty — Bookmark is only populated via the separate Bookmark picker), the sheet-qualified
+    // ref lives in sheet.Hyperlinks[addr] instead and must be rewritten there, or the link goes
+    // stale (HyperlinkNavigationPlanner/CreateXlsxHyperlink both fall back to that raw target
+    // whenever Bookmark is empty).
+    private List<(SheetId Sheet, CellAddress Address, string OldTarget)>? _hyperlinkTargetRenameSnapshot;
 
     public string Label => $"Rename Sheet to '{_newName}'";
 
@@ -122,6 +143,17 @@ public sealed class RenameSheetCommand : IWorkbookCommand
             }
         }
 
+        _timelineNameSnapshot = [];
+        foreach (var timeline in ctx.Workbook.Timelines)
+        {
+            if (timeline.SourceSheetName is not null &&
+                string.Equals(timeline.SourceSheetName, _oldName, StringComparison.OrdinalIgnoreCase))
+            {
+                _timelineNameSnapshot.Add((timeline, timeline.SourceSheetName));
+                timeline.SourceSheetName = _newName;
+            }
+        }
+
         _pictureNameSnapshot = [];
         foreach (var s in ctx.Workbook.Sheets)
         {
@@ -138,6 +170,49 @@ public sealed class RenameSheetCommand : IWorkbookCommand
 
         // T7: rewrite CF FormulaText and DV Formula1/Formula2 across all sheets with RenameSheetOp
         var renameOp = new RenameSheetOp(_oldName, _newName);
+
+        // P81: rewrite FormControlModel.LinkedCell/ListFillRange across ALL sheets — a control
+        // on any sheet can hold a cross-sheet ref (e.g. a checkbox on Sheet2 linked to
+        // "Sheet1!$D$3"), mirroring the CF/DV pass below via the same FormulaRewriter path
+        // (both are bare single-ref "formulas", not full '='-prefixed expressions).
+        _formControlNameSnapshot = [];
+        foreach (var s in ctx.Workbook.Sheets)
+        {
+            foreach (var control in s.FormControls)
+            {
+                string? newLinkedCell = control.LinkedCell;
+                string? newListFillRange = control.ListFillRange;
+                bool changed = false;
+
+                if (control.LinkedCell is { } linkedCell)
+                {
+                    var rewritten = FormulaRewriter.Rewrite(linkedCell, renameOp, s.Name);
+                    if (rewritten is not null && rewritten != linkedCell)
+                    {
+                        newLinkedCell = rewritten;
+                        changed = true;
+                    }
+                }
+
+                if (control.ListFillRange is { } listFillRange)
+                {
+                    var rewritten = FormulaRewriter.Rewrite(listFillRange, renameOp, s.Name);
+                    if (rewritten is not null && rewritten != listFillRange)
+                    {
+                        newListFillRange = rewritten;
+                        changed = true;
+                    }
+                }
+
+                if (!changed)
+                    continue;
+
+                _formControlNameSnapshot.Add((control, control.LinkedCell, control.ListFillRange));
+                control.LinkedCell = newLinkedCell;
+                control.ListFillRange = newListFillRange;
+            }
+        }
+
         _cfFormulaRenameSnapshot = [];
         _dvFormulaRenameSnapshot = [];
         foreach (var s in ctx.Workbook.Sheets)
@@ -183,6 +258,92 @@ public sealed class RenameSheetCommand : IWorkbookCommand
         _chartVerbatimRenameSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
         RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, renameOp);
 
+        // O25/P113: rewrite 'Place in This Document' hyperlink bookmarks/targets across ALL
+        // sheets that reference the renamed sheet — a hyperlink lives on whichever sheet it was
+        // inserted on, which may differ from the sheet being renamed. When Bookmark is empty
+        // (FreeX's own Insert Hyperlink dialog stores the ref straight into sheet.Hyperlinks and
+        // leaves Bookmark unset unless the separate Bookmark picker was used), fall back to
+        // rewriting sheet.Hyperlinks[addr] instead — that's the string every consumer
+        // (HyperlinkNavigationPlanner, CreateXlsxHyperlink) actually reads when Bookmark is empty.
+        _hyperlinkBookmarkRenameSnapshot = [];
+        _hyperlinkTargetRenameSnapshot = [];
+        foreach (var s in ctx.Workbook.Sheets)
+        {
+            List<KeyValuePair<CellAddress, HyperlinkMetadata>>? changed = null;
+            List<KeyValuePair<CellAddress, string>>? targetChanged = null;
+            foreach (var pair in s.HyperlinkMetadata)
+            {
+                var meta = pair.Value;
+                if (meta.LinkType != HyperlinkTargetKind.PlaceInThisDocument)
+                    continue;
+
+                var bookmark = meta.Bookmark;
+                if (string.IsNullOrEmpty(bookmark))
+                {
+                    // No bookmark recorded — the sheet-qualified ref lives directly on
+                    // sheet.Hyperlinks[addr] instead (see SetHyperlinkCommand).
+                    if (!s.Hyperlinks.TryGetValue(pair.Key, out var target) || string.IsNullOrEmpty(target))
+                        continue;
+
+                    var tBangIndex = target.IndexOf('!', StringComparison.Ordinal);
+                    if (tBangIndex < 0)
+                        continue;
+
+                    var tRawSheetPart = target[..tBangIndex].Trim('\'');
+                    var tSheetPart = tRawSheetPart.Contains("''", StringComparison.Ordinal)
+                        ? tRawSheetPart.Replace("''", "'", StringComparison.Ordinal)
+                        : tRawSheetPart;
+                    if (!string.Equals(tSheetPart, _oldName, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    var rewrittenTarget = FormulaRewriter.Rewrite(target, renameOp, _oldName);
+                    if (rewrittenTarget is null || rewrittenTarget == target)
+                        continue;
+
+                    (targetChanged ??= []).Add(new KeyValuePair<CellAddress, string>(pair.Key, rewrittenTarget));
+                    continue;
+                }
+
+                var bangIndex = bookmark.IndexOf('!', StringComparison.Ordinal);
+                if (bangIndex < 0)
+                    continue;
+
+                // O27: unescape doubled single-quotes ('' -> ') in a quoted sheet name (Excel's
+                // escaping for an embedded apostrophe, e.g. 'Bob''s Sheet'!A1) before comparing
+                // against _oldName, or a sheet name containing an apostrophe never matches here.
+                var rawSheetPart = bookmark[..bangIndex].Trim('\'');
+                var sheetPart = rawSheetPart.Contains("''", StringComparison.Ordinal)
+                    ? rawSheetPart.Replace("''", "'", StringComparison.Ordinal)
+                    : rawSheetPart;
+                if (!string.Equals(sheetPart, _oldName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var rewritten = FormulaRewriter.Rewrite(bookmark, renameOp, _oldName);
+                if (rewritten is null || rewritten == bookmark)
+                    continue;
+
+                (changed ??= []).Add(new KeyValuePair<CellAddress, HyperlinkMetadata>(pair.Key, meta with { Bookmark = rewritten }));
+            }
+
+            if (changed is not null)
+            {
+                foreach (var (addr, newMeta) in changed)
+                {
+                    _hyperlinkBookmarkRenameSnapshot.Add((s.Id, addr, s.HyperlinkMetadata[addr].Bookmark));
+                    s.HyperlinkMetadata[addr] = newMeta;
+                }
+            }
+
+            if (targetChanged is not null)
+            {
+                foreach (var (addr, newTarget) in targetChanged)
+                {
+                    _hyperlinkTargetRenameSnapshot.Add((s.Id, addr, s.Hyperlinks[addr]));
+                    s.Hyperlinks[addr] = newTarget;
+                }
+            }
+        }
+
         return new CommandOutcome(true);
     }
 
@@ -209,9 +370,21 @@ public sealed class RenameSheetCommand : IWorkbookCommand
                 foreach (var (slicer, oldValue) in _slicerNameSnapshot)
                     slicer.SourceSheetName = oldValue;
 
+            if (_timelineNameSnapshot is not null)
+                foreach (var (timeline, oldValue) in _timelineNameSnapshot)
+                    timeline.SourceSheetName = oldValue;
+
             if (_pictureNameSnapshot is not null)
                 foreach (var (pic, oldValue) in _pictureNameSnapshot)
                     pic.LinkedSourceSheetName = oldValue;
+
+            // P81 restore: FormControl LinkedCell/ListFillRange
+            if (_formControlNameSnapshot is not null)
+                foreach (var (control, oldLinkedCell, oldListFillRange) in _formControlNameSnapshot)
+                {
+                    control.LinkedCell = oldLinkedCell;
+                    control.ListFillRange = oldListFillRange;
+                }
 
             // T7 restore: CF/DV formula text
             if (_cfFormulaRenameSnapshot is not null)
@@ -240,6 +413,30 @@ public sealed class RenameSheetCommand : IWorkbookCommand
                     }
                 }
             }
+
+            // O25 restore: hyperlink bookmarks
+            if (_hyperlinkBookmarkRenameSnapshot is not null)
+            {
+                foreach (var (sheetId, addr, oldBookmark) in _hyperlinkBookmarkRenameSnapshot)
+                {
+                    var sh = ctx.Workbook.GetSheet(sheetId);
+                    if (sh is null) continue;
+                    if (sh.HyperlinkMetadata.TryGetValue(addr, out var meta))
+                        sh.HyperlinkMetadata[addr] = meta with { Bookmark = oldBookmark };
+                }
+            }
+
+            // P113 restore: hyperlink raw targets (bookmark-less 'Place in This Document' links)
+            if (_hyperlinkTargetRenameSnapshot is not null)
+            {
+                foreach (var (sheetId, addr, oldTarget) in _hyperlinkTargetRenameSnapshot)
+                {
+                    var sh = ctx.Workbook.GetSheet(sheetId);
+                    if (sh is null) continue;
+                    if (sh.Hyperlinks.ContainsKey(addr))
+                        sh.Hyperlinks[addr] = oldTarget;
+                }
+            }
         }
     }
 }
@@ -254,6 +451,10 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
     private Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? _scopedNamedRangeSnapshot;
     private Dictionary<string, string>? _namedFormulaSnapshot;
     private Dictionary<(string Name, SheetId Sheet), string>? _scopedNamedFormulaSnapshot;
+    // N3: sheet-scoped named formulas on SURVIVING sheets whose text referenced the deleted
+    // sheet, rewritten to #REF! — distinct from _scopedNamedFormulaSnapshot above, which is the
+    // full pre-purge snapshot used to restore the deleted sheet's OWN scoped formulas on undo.
+    private Dictionary<(string Name, SheetId Sheet), string>? _survivingScopedNamedFormulaRewriteSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     // X3: CF/DV formula rewrites across surviving sheets for the deleted-sheet #REF! pass
     private List<(Guid RuleId, string? OldValue, SheetId Sheet)>? _cfFormulaDeleteSnapshot;
@@ -266,6 +467,10 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
     // sheet has no new name to rewrite onto, so these are nulled instead of renamed).
     private List<(PivotCacheModel Cache, string OldValue)>? _pivotCacheNameDeleteSnapshot;
     private List<(SlicerModel Slicer, string OldValue)>? _slicerNameDeleteSnapshot;
+    // P84: mirrors _slicerNameDeleteSnapshot above for TimelineModel.SourceSheetName — a timeline
+    // anchored on the deleted sheet must have its dangling sheet-name ref cleared too, or it can
+    // silently reattach to an unrelated sheet later re-created/renamed with the same name.
+    private List<(TimelineModel Timeline, string OldValue)>? _timelineNameDeleteSnapshot;
     private List<(PictureModel Picture, string OldValue)>? _pictureNameDeleteSnapshot;
     // K16: chart verbatim series/data-label formulas that reference the deleted sheet must
     // become #REF! just like ordinary cell/CF/DV formulas do via DeleteSheetOp — otherwise
@@ -307,6 +512,13 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
         // Defined names whose refers-to is a formula expression are not covered by the named-range
         // pass above; rewrite their sheet-qualified references to the deleted sheet to #REF! too.
         _namedFormulaSnapshot = RewriteNamedFormulasForDeletedSheet(ctx.Workbook, deletedSheetName);
+        // N3: sheet-scoped named formulas living on SURVIVING sheets can still reference the
+        // deleted sheet in their text (e.g. Sheet1-scoped 'Foo' = '=Sheet2!A1*2' when Sheet2 is
+        // deleted) — symmetric with the named-range pass above, which already rewrites scoped
+        // named RANGES. RemoveSheet only purged the deleted sheet's OWN scoped formulas, so this
+        // must run separately over what's left.
+        _survivingScopedNamedFormulaRewriteSnapshot =
+            RewriteScopedNamedFormulasForDeletedSheet(ctx.Workbook, deletedSheetName);
 
         // X3: rewrite CF FormulaText and DV Formula1/Formula2 on all surviving sheets
         // that reference the deleted sheet, producing #REF! — mirrors RenameSheetCommand T7.
@@ -414,6 +626,17 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
             }
         }
 
+        _timelineNameDeleteSnapshot = [];
+        foreach (var timeline in ctx.Workbook.Timelines)
+        {
+            if (timeline.SourceSheetName is not null &&
+                string.Equals(timeline.SourceSheetName, deletedSheetName, StringComparison.OrdinalIgnoreCase))
+            {
+                _timelineNameDeleteSnapshot.Add((timeline, timeline.SourceSheetName));
+                timeline.SourceSheetName = null;
+            }
+        }
+
         return new CommandOutcome(true);
     }
 
@@ -427,6 +650,7 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
             RowColumnShiftHelpers.RestoreScopedNamedRanges(ctx.Workbook, _scopedNamedRangeSnapshot);
             RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot);
             RestoreScopedNamedFormulas(ctx.Workbook, _scopedNamedFormulaSnapshot);
+            RestoreScopedNamedFormulas(ctx.Workbook, _survivingScopedNamedFormulaRewriteSnapshot);
             RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimDeleteSnapshot);
 
             // X3 restore: CF/DV formula text rewritten to #REF! must be restored
@@ -471,6 +695,10 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
             if (_pictureNameDeleteSnapshot is not null)
                 foreach (var (pic, oldValue) in _pictureNameDeleteSnapshot)
                     pic.LinkedSourceSheetName = oldValue;
+
+            if (_timelineNameDeleteSnapshot is not null)
+                foreach (var (timeline, oldValue) in _timelineNameDeleteSnapshot)
+                    timeline.SourceSheetName = oldValue;
         }
     }
 
@@ -491,6 +719,37 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
 
             (snapshot ??= [])[name] = original;
             workbook.NamedFormulas[name] = rewritten;
+        }
+
+        return snapshot ?? [];
+    }
+
+    /// <summary>
+    /// N3: rewrites sheet-scoped named formulas living on surviving sheets whose text
+    /// references the just-deleted sheet, producing #REF! — symmetric with the workbook-global
+    /// pass in <see cref="RewriteNamedFormulasForDeletedSheet"/> and with the scoped named-RANGE
+    /// handling already done via <c>RowColumnShiftHelpers.RewriteAllFormulas</c>. Must run after
+    /// <c>Workbook.RemoveSheet</c> has purged the deleted sheet's own scoped formulas, since this
+    /// only walks what's left (<see cref="Workbook.ScopedNamedFormulas"/> is keyed by the OWNING
+    /// sheet, not by which sheets the formula text references).
+    /// </summary>
+    private static Dictionary<(string Name, SheetId Sheet), string> RewriteScopedNamedFormulasForDeletedSheet(
+        Workbook workbook, string deletedSheetName)
+    {
+        Dictionary<(string Name, SheetId Sheet), string>? snapshot = null;
+        // DeleteSheetOp only matches sheet-qualified references, so the host sheet name passed to
+        // the rewriter is irrelevant to whether a match is found — but pass the scope-owning
+        // sheet's own name for consistency with RowColumnShiftHelpers.RewriteNamedFormulas.
+        foreach (var ((name, sheetId), original) in workbook.ScopedNamedFormulas.ToList())
+        {
+            var sheet = workbook.Sheets.FirstOrDefault(s => s.Id == sheetId);
+            var hostSheetName = sheet?.Name ?? string.Empty;
+            var rewritten = FormulaRewriter.Rewrite(original, new DeleteSheetOp(deletedSheetName), hostSheetName);
+            if (rewritten is null || rewritten == original)
+                continue; // null = no change or unparseable; leave the original untouched
+
+            (snapshot ??= [])[(name, sheetId)] = original;
+            workbook.DefineNamedFormula(name, rewritten, sheetId);
         }
 
         return snapshot ?? [];

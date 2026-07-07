@@ -129,7 +129,9 @@ internal static class AdvancedFilterPlanBuilder
             return parsed!;
         if (criteriaText.StartsWith('='))
             return new TextEqualsFilterCriterion(criteriaText[1..]);
-        return new TextEqualsFilterCriterion(criteriaText);
+        // Excel semantics: plain (unquoted) text in an Advanced Filter criteria cell means
+        // "begins with", not exact match. Exact match requires the ="text" form (handled above).
+        return new TextBeginsWithFilterCriterion(criteriaText);
     }
 
     private sealed class UniqueRowSet

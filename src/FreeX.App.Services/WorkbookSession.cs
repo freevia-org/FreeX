@@ -836,7 +836,12 @@ public sealed class WorkbookSession
             Workbook,
             new ScenarioSummaryReportCommand(
                 plan.ResultCells,
-                (workbook, changedCells) => _cellEditService.RecalculateIfAutomatic(workbook, changedCells)));
+                // Always recalculate here, independent of the workbook's calculation mode: the
+                // summary report's whole purpose is to show each scenario's distinct computed
+                // result, so Manual mode must not leave every scenario column reading the same
+                // stale pre-report value (Excel's own Scenario Summary always computes fresh
+                // per-scenario results).
+                (workbook, changedCells) => _cellEditService.RecalculateAlways(workbook, changedCells)));
         if (!result.Success)
             return result;
 
@@ -1869,7 +1874,14 @@ public sealed class WorkbookSession
         bool preserveText = false,
         bool clipboardReadFailed = false)
     {
-        if (_internalClipboard is { } internalClipboard)
+        // Paste Special > Text / Unicode Text (preserveText: true — Excel semantics: paste the
+        // clipboard's plain text only) must always go through the external-clipboard plain-text path
+        // below, even right after an in-app copy where the OS clipboard text still matches the
+        // internal clipboard's text. Otherwise the internal-clipboard branch below wins (its
+        // text-equality check can't distinguish "explicitly asked for text" from "clipboard
+        // unchanged") and silently performs a full formatted internal paste instead (review P44),
+        // mirroring the WPF host's ExecutePaste externalTextAsText bypass.
+        if (!preserveText && _internalClipboard is { } internalClipboard)
         {
             var pastePlan = ClipboardPastePlanner.PlanPaste(internalClipboard.Text, text, clipboardReadFailed);
             if (pastePlan == ClipboardPastePlan.ReadFailed)
@@ -1932,9 +1944,35 @@ public sealed class WorkbookSession
                 RecalcReport: null);
         }
 
-        if (_internalClipboard is not { } internalClipboard ||
-            (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
+        if (_internalClipboard is not { } internalClipboard)
         {
+            // No FreeX-internal clipboard at all — fall back to an external-text Paste Special
+            // instead of unconditionally rejecting, matching Excel (Paste Special on a copied
+            // external TSV/CSV block still applies Transpose/Skip Blanks/Operation) and the WPF
+            // host's PasteSpecialBtn_Click, which only routes to PasteSpecialAction.ExternalText
+            // when _internalClipboard is null at click time (review P46 — this shell used to reject
+            // with "Paste Special requires copied FreeX cells." for any external text, silently
+            // dropping the selected options instead of honoring them).
+            if (string.IsNullOrEmpty(text))
+            {
+                return new WorkbookCellEditResult(
+                    false,
+                    "Paste Special requires copied FreeX cells.",
+                    [],
+                    RecalcReport: null);
+            }
+
+            return PasteExternalTextAtActiveCell(text, preserveText: false, options);
+        }
+
+        if (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal))
+        {
+            // A FreeX-internal clipboard exists, but the live OS clipboard text no longer matches
+            // it (another app/window changed the platform clipboard since the FreeX copy). Unlike
+            // the "no internal clipboard at all" case above, this is a genuine invalidation signal —
+            // the Paste Special options the user selected were configured against the internal
+            // clip's shape, so silently redirecting to an external-text paste could misapply them.
+            // Reject and require a fresh copy, matching the pre-P46 safety guard.
             _internalClipboard = null;
             return new WorkbookCellEditResult(
                 false,
@@ -2226,11 +2264,21 @@ public sealed class WorkbookSession
 
     public bool ShouldPreferExternalClipboardImage(string? text)
     {
+        // A non-empty text read means the OS clipboard still holds text we could paste; never prefer
+        // an image over it.
         if (!string.IsNullOrWhiteSpace(text))
             return false;
 
-        return _internalClipboard is not { } internalClipboard ||
-            (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal));
+        // P45: otherwise the OS clipboard holds no text we can match against — either another app put
+        // an IMAGE on it (TryGetTextAsync returns null) or it was cleared/emptied ("" ). In both cases
+        // the internal snapshot we may have captured earlier is stale, so prefer the external image,
+        // matching Excel and the WPF host (where Clipboard.GetText() returns "" and thus mismatches the
+        // internal text). This is safe even for a transient empty read right after our own in-app copy:
+        // the Avalonia caller gates on `ShouldPreferExternalClipboardImage(text) && TryPasteClipboard-
+        // ImageAsync(...)`, so when no image is actually present it falls straight back to the internal/
+        // text paste. Treating a null read as "unchanged" (the old behavior) instead swallowed a real
+        // image-copied-in-another-app change on Linux/macOS.
+        return true;
     }
 
     public WorkbookCellEditResult PasteClipboardImageAtActiveCell(
@@ -2259,15 +2307,28 @@ public sealed class WorkbookSession
         return result;
     }
 
-    public WorkbookCellEditResult PasteExternalTextAtActiveCell(string text, bool preserveText = false)
+    public WorkbookCellEditResult PasteExternalTextAtActiveCell(string text, bool preserveText = false) =>
+        PasteExternalTextAtActiveCell(text, preserveText, default);
+
+    /// <summary>
+    /// Same as the <paramref name="preserveText"/>-only overload, but also honors Paste Special's
+    /// Transpose / Skip Blanks / Operation for an EXTERNAL (non-FreeX) clipboard paste, matching Excel
+    /// and the WPF host's <c>PasteCommandFactory.CreateExternalTextPasteCommand</c> options overload
+    /// (review P46 — this shell used to reject Paste Special entirely for external clipboard text
+    /// instead of applying the selected options).
+    /// </summary>
+    public WorkbookCellEditResult PasteExternalTextAtActiveCell(string text, bool preserveText, PasteSpecialOptions options)
     {
         ArgumentNullException.ThrowIfNull(text);
 
         var destination = ActiveCell;
         var destinationRange = GetSinglePasteDestinationRange(destination);
         var rows = ClipboardSerializer.Deserialize(text);
-        var columnCount = rows.Length == 0 ? 0 : rows.Max(static row => row.Length);
-        var command = CreateExternalTextPasteCommand(destinationRange, rows, preserveText);
+        var sourceRowCount = (ulong)rows.Length;
+        var sourceColCount = rows.Length == 0 ? 0UL : (ulong)rows.Max(static row => row.Length);
+        var pasteRowCount = options.Transpose ? sourceColCount : sourceRowCount;
+        var pasteColCount = options.Transpose ? sourceRowCount : sourceColCount;
+        var command = CreateExternalTextPasteCommand(destinationRange, rows, preserveText, options);
         var result = _cellEditService.ExecuteEditCommand(Workbook, command);
         if (!result.Success)
             return result;
@@ -2275,8 +2336,8 @@ public sealed class WorkbookSession
         ApplySuccessfulEditResult(result, destination);
         SelectPastedRange(
             destination,
-            Math.Max((ulong)rows.Length, destinationRange.RowCount),
-            Math.Max((ulong)columnCount, destinationRange.ColCount));
+            Math.Max(pasteRowCount, destinationRange.RowCount),
+            Math.Max(pasteColCount, destinationRange.ColCount));
         return result;
     }
 
@@ -2659,9 +2720,10 @@ public sealed class WorkbookSession
         }
 
         var targetRange = SelectedRange;
+        var targetRanges = GetCurrentSelectedRanges();
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            CreateFormatPainterCommand(sourceSheet, sourceRange, targetRange));
+            CreateFormatPainterCommand(sourceSheet, sourceRange, targetRanges));
         if (!result.Success)
         {
             if (!_formatPainterPersistent)
@@ -3411,20 +3473,21 @@ public sealed class WorkbookSession
         return commands;
     }
 
-    private IWorkbookCommand CreateFormatPainterCommand(Sheet sourceSheet, GridRange sourceRange, GridRange targetRange)
+    private IWorkbookCommand CreateFormatPainterCommand(
+        Sheet sourceSheet,
+        GridRange sourceRange,
+        IReadOnlyList<GridRange> targetRanges)
     {
         var targetSheetIds = CurrentGroupedEditSheetIds();
-        var commands = new List<IWorkbookCommand>(targetSheetIds.Count);
-        foreach (var sheetId in targetSheetIds)
-        {
-            commands.Add(FormatPainterCommandFactory.Create(
+        return SelectionStyleCommandPlanner.CreateRangeCommand(
+            targetSheetIds,
+            targetRanges,
+            (sheetId, sheetTargetRange) => FormatPainterCommandFactory.Create(
                 Workbook,
                 sourceSheet,
                 sourceRange,
-                RemapRangeToSheet(targetRange, sheetId)));
-        }
-
-        return ToCommand("Format Painter", commands);
+                sheetTargetRange),
+            "Format Painter");
     }
 
     private IWorkbookCommand CreateClearAllCommand(GridRange range)
@@ -3507,7 +3570,8 @@ public sealed class WorkbookSession
     private IWorkbookCommand CreateExternalTextPasteCommand(
         GridRange destinationRange,
         IReadOnlyList<IReadOnlyList<string>> rows,
-        bool preserveText)
+        bool preserveText,
+        PasteSpecialOptions options = default)
     {
         var targetSheetIds = CurrentGroupedEditSheetIds();
         var commands = targetSheetIds
@@ -3515,7 +3579,8 @@ public sealed class WorkbookSession
                 sheetId,
                 RemapRangeToSheet(destinationRange, sheetId),
                 rows,
-                preserveText))
+                preserveText,
+                options))
             .ToList();
         return ToCommand("Paste", commands);
     }
@@ -4112,10 +4177,99 @@ public sealed class WorkbookSession
         ActiveSheet.ActiveCol = address.Col;
         SetSingleSelectedRange(new GridRange(address, address));
         FormulaEditAddress = null;
+        RefreshLinkedPicturesForEditedCells(result);
         MarkDirty();
         _selectionStatsRevision++;
         RefreshViewport();
         EnsureActiveCellVisible();
+    }
+
+    /// <summary>
+    /// Excel's Paste Special &gt; Linked Picture (our Copy-then-Paste-Linked-Picture) keeps drawing a
+    /// live snapshot of its source range: any edit to a cell inside that range must refresh the
+    /// picture's rendered content immediately, not just on structural row/column shifts. Those
+    /// shifts already refresh the snapshot via RowColumnShiftHelpers.RefreshLinkedPictureSnapshot
+    /// (ShiftPictures, gated on the range's coordinates having moved), but a plain value/format edit
+    /// that leaves LinkedSourceRange's coordinates unchanged never goes through that path — nothing
+    /// else in the app touches a linked picture's cached Cells after paste. Called from every
+    /// successful edit-result apply so it covers direct edits, fill, paste, etc. uniformly.
+    /// </summary>
+    private void RefreshLinkedPicturesForEditedCells(WorkbookCellEditResult result)
+    {
+        HashSet<CellAddress>? editedCells = null;
+        foreach (var cell in result.AffectedCells)
+            (editedCells ??= []).Add(cell);
+        if (result.RecalcReport is { } recalcReport)
+        {
+            foreach (var cell in recalcReport.RecalculatedCells)
+                (editedCells ??= []).Add(cell);
+        }
+        if (editedCells is null || editedCells.Count == 0)
+            return;
+
+        foreach (var sheet in Workbook.Sheets)
+        {
+            if (sheet.Pictures.Count == 0)
+                continue;
+
+            foreach (var picture in sheet.Pictures)
+            {
+                if (!picture.IsLinkedToSourceRange || picture.LinkedSourceRange is not { } sourceRange)
+                    continue;
+
+                var sourceSheet = Workbook.GetSheet(sourceRange.Start.Sheet);
+                if (sourceSheet is null)
+                    continue;
+
+                var touched = false;
+                foreach (var edited in editedCells)
+                {
+                    if (edited.Sheet.Equals(sourceRange.Start.Sheet) &&
+                        edited.Row >= sourceRange.Start.Row && edited.Row <= sourceRange.End.Row &&
+                        edited.Col >= sourceRange.Start.Col && edited.Col <= sourceRange.End.Col)
+                    {
+                        touched = true;
+                        break;
+                    }
+                }
+                if (!touched)
+                    continue;
+
+                RefreshLinkedPictureCells(picture, sourceSheet, sourceRange);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Rebuilds a linked picture's cached cell snapshot from the live contents of its source range.
+    /// Mirrors RowColumnShiftHelpers.RefreshLinkedPictureSnapshot (Core.Commands, private to that
+    /// file) so both refresh paths render identical content for the same source range.
+    /// </summary>
+    private void RefreshLinkedPictureCells(PictureModel picture, Sheet sourceSheet, GridRange sourceRange)
+    {
+        picture.SourceRowCount = sourceRange.RowCount;
+        picture.SourceColumnCount = sourceRange.ColCount;
+
+        picture.Cells.Clear();
+        for (var row = sourceRange.Start.Row; row <= sourceRange.End.Row; row++)
+        {
+            for (var col = sourceRange.Start.Col; col <= sourceRange.End.Col; col++)
+            {
+                var cell = sourceSheet.GetCell(row, col);
+                var styleId = cell?.StyleId
+                    ?? sourceSheet.GetStyleOnly(row, col)
+                    ?? StyleId.Default;
+                var style = Workbook.GetStyle(styleId);
+                var value = cell?.Value ?? BlankValue.Instance;
+
+                picture.Cells.Add(new PictureCellSnapshot(
+                    row - sourceRange.Start.Row,
+                    col - sourceRange.Start.Col,
+                    FormatPictureCellText(value),
+                    style.Clone(),
+                    value is NumberValue or DateTimeValue));
+            }
+        }
     }
 
     private void ApplySuccessfulRangeEditResult(WorkbookCellEditResult result, GridRange selectedRange)
@@ -4125,6 +4279,7 @@ public sealed class WorkbookSession
         ActiveSheet.ActiveCol = ActiveCell.Col;
         SetSingleSelectedRange(selectedRange);
         FormulaEditAddress = null;
+        RefreshLinkedPicturesForEditedCells(result);
         MarkDirty();
         _selectionStatsRevision++;
         RefreshViewport();
@@ -4924,6 +5079,7 @@ public sealed class WorkbookSession
             NumberValue number => number.Value.ToString(CultureInfo.CurrentCulture),
             BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
             TextValue text => text.Value,
+            DateTimeValue dateTime => dateTime.Value.ToString(CultureInfo.CurrentCulture),
             ErrorValue error => error.Code,
             _ => value.ToString() ?? ""
         };

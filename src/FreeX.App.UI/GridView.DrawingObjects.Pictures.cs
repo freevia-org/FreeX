@@ -106,9 +106,20 @@ public partial class GridView
         var cols = Math.Max(1, picture.SourceColumnCount);
         var cellWidth = rect.Width / cols;
         var cellHeight = rect.Height / rows;
-        var cellLookup = picture.Cells
-            .Where(cell => cell.RowOffset < rows && cell.ColumnOffset < cols)
-            .ToDictionary(cell => (cell.RowOffset, cell.ColumnOffset));
+        // Built as a manual last-wins loop rather than .ToDictionary(...): PictureModel.Cells is a
+        // plain List<PictureCellSnapshot> with no uniqueness constraint on (RowOffset, ColumnOffset),
+        // and a hand-edited or adversarial .fxl file can legitimately contain duplicate offsets. A
+        // straight ToDictionary throws ArgumentException on the second duplicate and crashes the
+        // render; last-wins keeps the render resilient and picks the later (later-drawn) entry,
+        // matching normal "last write wins" dictionary-assignment semantics. Mirrors the Avalonia
+        // shell's MainWindow.cs picture-snapshot renderer (N52 fix) so both platforms behave the same
+        // on the same adversarial file.
+        var cellLookup = new Dictionary<(uint RowOffset, uint ColumnOffset), PictureCellSnapshot>();
+        foreach (var cell in picture.Cells)
+        {
+            if (cell.RowOffset < rows && cell.ColumnOffset < cols)
+                cellLookup[(cell.RowOffset, cell.ColumnOffset)] = cell;
+        }
 
         dc.DrawRectangle(fill, PictureBorderPen, rect);
 
@@ -307,13 +318,51 @@ public partial class GridView
             new Rect(ActualRowHeaderWidth, EffectiveColHeaderHeight, Math.Max(0, ActualWidth - ActualRowHeaderWidth), Math.Max(0, ActualHeight - EffectiveColHeaderHeight)));
     }
 
+    /// <summary>
+    /// Computes the pixel distance scrolled off-screen above/left-of the first visible row/column,
+    /// so the tiled background brush's origin can stay anchored to cell A1 (matching Excel) instead
+    /// of the fixed viewport rect. Uses the sheet's default row/column size as an approximation for
+    /// rows/columns that scrolled out of the metrics window; exact for sheets without custom sizing.
+    /// </summary>
+    private (double RowScrollOffset, double ColScrollOffset) GetWorksheetBackgroundScrollOffsets()
+    {
+        var viewport = Viewport;
+        if (viewport == null)
+            return (0, 0);
+
+        double rowOffset = 0;
+        if (viewport.RowMetrics.Count > 0)
+        {
+            var firstRow = viewport.RowMetrics[0].Row;
+            if (firstRow > 1 && SheetDefaultRowHeight > 0)
+                rowOffset = (firstRow - 1) * SheetDefaultRowHeight;
+        }
+
+        double colOffset = 0;
+        if (viewport.ColMetrics.Count > 0)
+        {
+            var firstCol = viewport.ColMetrics[0].Col;
+            if (firstCol > 1 && SheetDefaultColumnWidth > 0)
+                colOffset = (firstCol - 1) * SheetDefaultColumnWidth;
+        }
+
+        return (rowOffset, colOffset);
+    }
+
     private ImageBrush GetWorksheetBackgroundBrush(WorksheetBackgroundImage background, ImageSource image)
     {
+        var (rowScrollOffset, colScrollOffset) = GetWorksheetBackgroundScrollOffsets();
+
+        // Anchor the tile pattern to cell A1: the viewport origin is offset by the scrolled-off
+        // pixels (mod the tile size) so tiles stay glued to the cell grid instead of the window.
+        var tileOriginX = ActualRowHeaderWidth - Mod(colScrollOffset, image.Width);
+        var tileOriginY = EffectiveColHeaderHeight - Mod(rowScrollOffset, image.Height);
+
         var key = new WorksheetBackgroundBrushCacheKey(
             background,
             image,
-            ActualRowHeaderWidth,
-            EffectiveColHeaderHeight,
+            tileOriginX,
+            tileOriginY,
             image.Width,
             image.Height);
         if (_worksheetBackgroundBrushCache is { } cached && _worksheetBackgroundBrushCacheKey == key)
@@ -323,7 +372,7 @@ public partial class GridView
         {
             TileMode = TileMode.Tile,
             ViewportUnits = BrushMappingMode.Absolute,
-            Viewport = new Rect(ActualRowHeaderWidth, EffectiveColHeaderHeight, image.Width, image.Height),
+            Viewport = new Rect(tileOriginX, tileOriginY, image.Width, image.Height),
             Stretch = Stretch.None,
             AlignmentX = AlignmentX.Left,
             AlignmentY = AlignmentY.Top
@@ -336,6 +385,15 @@ public partial class GridView
         return brush;
     }
 
+    private static double Mod(double value, double modulus)
+    {
+        if (modulus <= 0 || !double.IsFinite(value))
+            return 0;
+
+        var result = value % modulus;
+        return result < 0 ? result + modulus : result;
+    }
+
     private static bool TryLoadWorksheetBackgroundImage(WorksheetBackgroundImage background, out ImageSource? image)
         => WpfBitmapImageLoader.TryLoad(background.ImageBytes, out image);
 
@@ -345,8 +403,8 @@ public partial class GridView
     private readonly record struct WorksheetBackgroundBrushCacheKey(
         WorksheetBackgroundImage Background,
         ImageSource Image,
-        double RowHeaderWidth,
-        double ColumnHeaderHeight,
+        double TileOriginX,
+        double TileOriginY,
         double ImageWidth,
         double ImageHeight);
 

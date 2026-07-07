@@ -152,6 +152,14 @@ public sealed class DocumentView : Control
     private readonly List<FloatingChartData>    _inlineCharts    = new();
     private readonly List<FloatingWordArtData>  _inlineWordArts  = new();
     private readonly List<FloatingSmartArtData> _inlineSmartArts = new();
+    private readonly List<(string Text, EquationVisualSegmentRole Role, EquationVisualBaselineRole BaselineRole,
+        double FontSizeScale, string FontFamily, bool Italic)> _equationVisualSegments = new();
+    private readonly List<(EquationVisualElementKind Kind, string LinearText, string Numerator, string Denominator,
+        string Radicand, string Degree, string Operator, string LowerLimit, string UpperLimit, string Operand,
+        IReadOnlyList<EquationVisualMatrixRow> MatrixRows, string BaseText, string Accent, bool BarTop,
+        string OpenDelimiter, string CloseDelimiter, string GroupCharacter, string GroupCharacterPosition,
+        string FunctionName, string FunctionArgument)>
+        _equationVisualElements = new();
     private readonly Dictionary<InlineImage, Bitmap?> _bitmapCache = new();
     private byte[]? _watermarkBitmapCacheBytes;
     private Bitmap? _watermarkBitmapCache;
@@ -977,7 +985,7 @@ public sealed class DocumentView : Control
         var bestDist = double.MaxValue;
         foreach (var item in _headerFooterItems)
         {
-            if (item.Target is null)
+            if (item.Target is null || item.Image is not null)
                 continue;
             var top = item.Y;
             var bottom = item.Y + (item.LineHeight > 0 ? item.LineHeight : DefaultFontSizePt * PxPerPoint * 1.3);
@@ -2211,6 +2219,7 @@ public sealed class DocumentView : Control
 
         const int MaxListDepth = 9;
         var levelCounters = new int[MaxListDepth];
+        var multiLevelMarkers = new MultiLevelListMarkerState(_doc.MultiLevelList.NumberFormats);
         for (int i = 0; i < _doc.Blocks.Count; i++)
         {
             if (_doc.Blocks[i] is not Paragraph p)
@@ -2235,6 +2244,7 @@ public sealed class DocumentView : Control
             {
                 // Render loop resets all counters and skips list numbering for this paragraph.
                 Array.Clear(levelCounters, 0, MaxListDepth);
+                multiLevelMarkers.Reset();
                 if (i == blockIdx) return null;
                 continue;
             }
@@ -2243,32 +2253,34 @@ public sealed class DocumentView : Control
             if (kind is ListKind.Number or ListKind.MultiLevel)
             {
                 var level = Math.Clamp(p.Formatting.ListLevel, 0, MaxListDepth - 1);
-                levelCounters[level]++;
-                for (var deeper = level + 1; deeper < MaxListDepth; deeper++)
-                    levelCounters[deeper] = 0;
 
                 if (i == blockIdx)
                 {
                     if (kind is ListKind.MultiLevel)
-                    {
-                        var sb = new System.Text.StringBuilder();
-                        for (var ancestor = 0; ancestor <= level; ancestor++)
-                        {
-                            var value = levelCounters[ancestor] == 0 ? 1 : levelCounters[ancestor];
-                            sb.Append(value.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append('.');
-                        }
-                        return sb.ToString();
-                    }
+                        return multiLevelMarkers.Advance(level, p.Formatting.ListStartOverride);
                     else
                     {
+                        levelCounters[level]++;
+                        for (var deeper = level + 1; deeper < MaxListDepth; deeper++)
+                            levelCounters[deeper] = 0;
                         return $"{levelCounters[level]}.";
                     }
+                }
+
+                if (kind is ListKind.MultiLevel)
+                    multiLevelMarkers.Advance(level, p.Formatting.ListStartOverride);
+                else
+                {
+                    levelCounters[level]++;
+                    for (var deeper = level + 1; deeper < MaxListDepth; deeper++)
+                        levelCounters[deeper] = 0;
                 }
             }
             else if (kind is ListKind.None)
             {
                 // Non-list paragraph: the numbered run has ended, reset all counters.
                 Array.Clear(levelCounters, 0, MaxListDepth);
+                multiLevelMarkers.Reset();
                 if (i == blockIdx) return null;
             }
             else
@@ -2378,13 +2390,9 @@ public sealed class DocumentView : Control
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
             return _floatingGroups
                 .SelectMany(group => group.Children)
-                .Where(child => child.Kind == FloatingGroupChildData.ChildKind.Shape
-                    && child.Shape?.Effects.HasAny == true)
-                .Select(child =>
-                    "GroupChild"
-                    + child.ChildIndex.ToString(CultureInfo.InvariantCulture)
-                    + ":Shape:"
-                    + child.Shape!.Effects.Summary.Replace(", ", "+", StringComparison.Ordinal))
+                .Select(BuildFloatingGroupChildEffectSummary)
+                .Where(summary => summary is not null)
+                .Select(summary => summary!)
                 .ToList();
         }
     }
@@ -2446,6 +2454,7 @@ public sealed class DocumentView : Control
 
     /// <summary>Snapshot of floating SmartArt rects for tests (rect, behind-text, z-order, kind, node count).</summary>
     public IReadOnlyList<(Rect Rect, bool BehindText, int ZOrder, SmartArtKind Kind, int NodeCount,
+        int MaxHierarchyDepth, int HierarchyConnectorCount,
         string? FirstFillHex, string? FirstBorderHex, double BorderThickness, double CornerRadius,
         double ShadowOpacity, double ShadowBlur, double ShadowDepth, string? FirstConnectorHex)> FloatingSmartArtRects
     {
@@ -2461,6 +2470,8 @@ public sealed class DocumentView : Control
                     s.ZOrder,
                     s.Kind,
                     s.NodeTexts.Count,
+                    s.HierarchyGeometry?.MaxDepth ?? 0,
+                    s.HierarchyGeometry?.Connectors.Count ?? 0,
                     first?.FillHex,
                     first?.BorderHex,
                     first?.BorderThickness ?? 0,
@@ -2470,6 +2481,22 @@ public sealed class DocumentView : Control
                     first?.ShadowDepth ?? 0,
                     first?.ConnectorHex);
             }).ToList();
+        }
+    }
+
+    /// <summary>Snapshot of shared layout geometry plans used by floating SmartArt diagrams.</summary>
+    public IReadOnlyList<(string LayoutId, string? GeometryKind, int GeometryNodeCount, int GeometryConnectorCount)> FloatingSmartArtLayoutGeometries
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _floatingSmartArts
+                .Select(s => (
+                    s.LayoutId,
+                    s.LayoutGeometry?.Kind.ToString(),
+                    s.LayoutGeometry?.Nodes.Count ?? 0,
+                    s.LayoutGeometry?.Connectors.Count ?? 0))
+                .ToList();
         }
     }
 
@@ -2523,6 +2550,19 @@ public sealed class DocumentView : Control
         }
     }
 
+    /// <summary>Effect summaries for inline WordArt, preserving the shared WordArt visual planner output.</summary>
+    public IReadOnlyList<string> InlineWordArtEffectSummaries
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _inlineWordArts
+                .Where(w => w.Effects.HasAny)
+                .Select(w => w.Effects.Summary)
+                .ToList();
+        }
+    }
+
     /// <summary>Number of inline (non-floating) SmartArt diagrams laid out in the last layout pass.</summary>
     public int InlineSmartArtCount
     {
@@ -2531,6 +2571,7 @@ public sealed class DocumentView : Control
 
     /// <summary>Snapshot of inline SmartArt rects for tests (rect, kind, node count).</summary>
     public IReadOnlyList<(Rect Rect, SmartArtKind Kind, int NodeCount,
+        int MaxHierarchyDepth, int HierarchyConnectorCount,
         string? FirstFillHex, string? FirstBorderHex, double BorderThickness, double CornerRadius,
         double ShadowOpacity, double ShadowBlur, double ShadowDepth, string? FirstConnectorHex)> InlineSmartArtRects
     {
@@ -2544,6 +2585,8 @@ public sealed class DocumentView : Control
                     s.Rect,
                     s.Kind,
                     s.NodeTexts.Count,
+                    s.HierarchyGeometry?.MaxDepth ?? 0,
+                    s.HierarchyGeometry?.Connectors.Count ?? 0,
                     first?.FillHex,
                     first?.BorderHex,
                     first?.BorderThickness ?? 0,
@@ -2553,6 +2596,22 @@ public sealed class DocumentView : Control
                     first?.ShadowDepth ?? 0,
                     first?.ConnectorHex);
             }).ToList();
+        }
+    }
+
+    /// <summary>Snapshot of shared layout geometry plans used by inline SmartArt diagrams.</summary>
+    public IReadOnlyList<(string LayoutId, string? GeometryKind, int GeometryNodeCount, int GeometryConnectorCount)> InlineSmartArtLayoutGeometries
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _inlineSmartArts
+                .Select(s => (
+                    s.LayoutId,
+                    s.LayoutGeometry?.Kind.ToString(),
+                    s.LayoutGeometry?.Nodes.Count ?? 0,
+                    s.LayoutGeometry?.Connectors.Count ?? 0))
+                .ToList();
         }
     }
 
@@ -2642,7 +2701,7 @@ public sealed class DocumentView : Control
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
             return _headerFooterItems
-                .Where(i => !string.IsNullOrEmpty(i.Text)) // AV-HFEDIT: skip empty editable-region placeholders
+                .Where(i => i.Image is null && !string.IsNullOrEmpty(i.Text)) // AV-HFEDIT: skip empty editable-region placeholders
                 .Select(i => (i.Text, i.Y, i.Alignment))
                 .ToList();
         }
@@ -2660,8 +2719,24 @@ public sealed class DocumentView : Control
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
             return _headerFooterItems
-                .Where(i => !string.IsNullOrEmpty(i.Text)) // AV-HFEDIT: skip empty editable-region placeholders
+                .Where(i => i.Image is null && !string.IsNullOrEmpty(i.Text)) // AV-HFEDIT: skip empty editable-region placeholders
                 .Select(i => (i.Text, i.X, i.Y, i.Alignment, i.AvailableWidth))
+                .ToList();
+        }
+    }
+
+    internal IReadOnlyList<(string Signature, Rect Rect, TextAlignment Alignment, string SlotName)> HeaderFooterImageItems
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _headerFooterItems
+                .Where(i => i.Image is not null)
+                .Select(i => (
+                    i.ImageSignature ?? string.Empty,
+                    new Rect(i.X, i.Y, Math.Max(1, i.Width), Math.Max(1, i.Height)),
+                    i.Alignment,
+                    i.SlotName))
                 .ToList();
         }
     }
@@ -2737,6 +2812,30 @@ public sealed class DocumentView : Control
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
             return _inlineCharts.Select(c =>
                 (c.GeometryKind, (IReadOnlyList<string>)c.Palette.Select(ToHex).ToList())).ToList();
+        }
+    }
+
+    public IReadOnlyList<(string Text, EquationVisualSegmentRole Role, EquationVisualBaselineRole BaselineRole,
+        double FontSizeScale, string FontFamily, bool Italic)> EquationVisualSegments
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _equationVisualSegments.ToList();
+        }
+    }
+
+    public IReadOnlyList<(EquationVisualElementKind Kind, string LinearText, string Numerator, string Denominator,
+        string Radicand, string Degree, string Operator, string LowerLimit, string UpperLimit, string Operand,
+        IReadOnlyList<EquationVisualMatrixRow> MatrixRows, string BaseText, string Accent, bool BarTop,
+        string OpenDelimiter, string CloseDelimiter, string GroupCharacter, string GroupCharacterPosition,
+        string FunctionName, string FunctionArgument)>
+        EquationVisualElements
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _equationVisualElements.ToList();
         }
     }
 
@@ -2915,6 +3014,8 @@ public sealed class DocumentView : Control
         _inlineCharts.Clear();
         _inlineWordArts.Clear();
         _inlineSmartArts.Clear();
+        _equationVisualSegments.Clear();
+        _equationVisualElements.Clear();
         _cellHits.Clear();
         _headerFooterItems.Clear();
         _noteItems.Clear();           // AV-NOTERENDER
@@ -3027,6 +3128,8 @@ public sealed class DocumentView : Control
                 _inlineCharts.Clear();
                 _inlineWordArts.Clear();
                 _inlineSmartArts.Clear();
+                _equationVisualSegments.Clear();
+                _equationVisualElements.Clear();
                 _cellHits.Clear();
                 _tabLeaderSpans.Clear();
                 _layoutContentY = 0;
@@ -3076,6 +3179,7 @@ public sealed class DocumentView : Control
         // (the numbered list has genuinely ended).
         const int MaxListDepth = 9;
         var levelCounters = new int[MaxListDepth];
+        var multiLevelMarkers = new MultiLevelListMarkerState(_doc.MultiLevelList.NumberFormats);
         for (var blockIndex = 0; blockIndex < _doc.Blocks.Count; blockIndex++)
         {
             var block = _doc.Blocks[blockIndex];
@@ -3099,6 +3203,7 @@ public sealed class DocumentView : Control
                         // also calls CollectFloatingObjects internally.
                         // Non-list paragraph: reset all counters (list run ended).
                         Array.Clear(levelCounters, 0, MaxListDepth);
+                        multiLevelMarkers.Reset();
                         LayoutImageParagraphPaged(blockIndex, paragraph, textWidth);
                         continue;
                     }
@@ -3111,6 +3216,7 @@ public sealed class DocumentView : Control
                 {
                     // Non-list paragraph: reset all counters (list run ended).
                     Array.Clear(levelCounters, 0, MaxListDepth);
+                    multiLevelMarkers.Reset();
                     LayoutInlineObjectParagraphPaged(blockIndex, paragraph, textWidth);
                     continue;
                 }
@@ -3124,26 +3230,16 @@ public sealed class DocumentView : Control
                     inset = ListIndentStep * (level + 1);
                     if (kind is ListKind.Number or ListKind.MultiLevel)
                     {
-                        // BS1: increment this level's counter, reset all deeper levels.
-                        levelCounters[level]++;
-                        for (var deeper = level + 1; deeper < MaxListDepth; deeper++)
-                            levelCounters[deeper] = 0;
-
                         // BS2: build the appropriate marker.
                         if (kind is ListKind.MultiLevel)
-                        {
-                            // Accumulated dotted form: counters[0].counters[1]...counters[level].
-                            var sb = new System.Text.StringBuilder();
-                            for (var ancestor = 0; ancestor <= level; ancestor++)
-                            {
-                                // Ancestors not yet entered in this run show 1 (matches Word/WPF).
-                                var value = levelCounters[ancestor] == 0 ? 1 : levelCounters[ancestor];
-                                sb.Append(value.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append('.');
-                            }
-                            marker = sb.ToString();
-                        }
+                            marker = multiLevelMarkers.Advance(level, paragraph.Formatting.ListStartOverride);
                         else
                         {
+                            // BS1: increment this level's counter, reset all deeper levels.
+                            levelCounters[level]++;
+                            for (var deeper = level + 1; deeper < MaxListDepth; deeper++)
+                                levelCounters[deeper] = 0;
+
                             // Number: plain decimal marker for this level's counter.
                             marker = $"{levelCounters[level]}.";
                         }
@@ -3159,6 +3255,7 @@ public sealed class DocumentView : Control
                 {
                     // Non-list paragraph: the numbered list run has ended, reset all counters.
                     Array.Clear(levelCounters, 0, MaxListDepth);
+                    multiLevelMarkers.Reset();
                 }
 
                 LayoutParagraphPaged(blockIndex, paragraph, textWidth, inset, marker);
@@ -3190,6 +3287,12 @@ public sealed class DocumentView : Control
     /// </summary>
     private IReadOnlyList<HeaderFooterPageSectionPlan> ComputePageSectionMap(int pageCount)
     {
+        var blockPageAssignments = ComputeBlockPageAssignments(pageCount);
+        return HeaderFooterPagePlanner.MapPagesToSections(_doc, blockPageAssignments, pageCount);
+    }
+
+    private int[] ComputeBlockPageAssignments(int pageCount)
+    {
         var blocks = _doc.Blocks;
         var blockPageAssignments = Enumerable
             .Repeat(HeaderFooterPagePlanner.UnassignedBlockPageIndex, blocks.Count)
@@ -3197,7 +3300,6 @@ public sealed class DocumentView : Control
 
         foreach (var pc in _placed)
         {
-            if (pc.Sentinel) continue;
             var b = pc.Block;
             if (b < 0 || b >= blocks.Count) continue;
             if (blockPageAssignments[b] >= 0) continue;
@@ -3206,7 +3308,7 @@ public sealed class DocumentView : Control
             blockPageAssignments[b] = Math.Clamp(pg, 0, pageCount - 1);
         }
 
-        return HeaderFooterPagePlanner.MapPagesToSections(_doc, blockPageAssignments, pageCount);
+        return blockPageAssignments;
     }
 
     /// <summary>Maps the shared planner slot kind to Avalonia's edit-target slot enum.</summary>
@@ -3265,7 +3367,12 @@ public sealed class DocumentView : Control
         var diffOddEven = HeaderFooterPagePlanner.UsesDifferentOddEvenPages(_doc);
 
         // Build a true page-to-section map from Avalonia's placed block positions.
-        var pageToSection = ComputePageSectionMap(_pageCount);
+        var blockPageAssignments = ComputeBlockPageAssignments(_pageCount);
+        var pageToSection = HeaderFooterPagePlanner.MapPagesToSections(_doc, blockPageAssignments, _pageCount);
+        var pageNumberDisplay = PageNumberFormatDialogPlanner.BuildDisplayPlans(
+            pageToSection,
+            _doc,
+            blockPageAssignments);
 
         for (var pi = 0; pi < _pageCount; pi++)
         {
@@ -3277,8 +3384,7 @@ public sealed class DocumentView : Control
             var sectionHf = pageSection.HeadersFooters;
             var sectionPage = pageSection.PageSettings;
 
-            // 1-based page number for this page (pi is 0-based).
-            var pageNumber = pi + 1;
+            var pageNumberText = pageNumberDisplay[pi].Text;
 
             // Resolve header/footer slots through the shared Presentation planner.
             var slots = HeaderFooterPagePlanner.ResolveSlots(
@@ -3315,8 +3421,12 @@ public sealed class DocumentView : Control
             if (headerActive)
             {
                 var hfY = pageTop + headerDistDip;
-                EmitHfParagraphs(header!, hfY, hfWidth, pageNumber, _pageCount,
-                    pi => MakeHfTarget(sectionHf, headerSlot, pi));
+                EmitHfParagraphs(header!, hfY, hfWidth, pageNumberText, _pageCount,
+                    pi => MakeHfTarget(sectionHf, headerSlot, pi),
+                    slots.HeaderSlotName,
+                    pi + 1,
+                    pageSection.SectionIndex + 1,
+                    pageSection.SectionRelativePageNumber);
             }
 
             // Emit footer.
@@ -3326,8 +3436,12 @@ public sealed class DocumentView : Control
                 // starts at: pageBottom - footerDistDip (+ a line-height offset per line).
                 var pageBottom = pageTop + _pageHeightPx;
                 var hfY = pageBottom - footerDistDip;
-                EmitHfParagraphs(footer!, hfY, hfWidth, pageNumber, _pageCount,
-                    pi => MakeHfTarget(sectionHf, footerSlot, pi));
+                EmitHfParagraphs(footer!, hfY, hfWidth, pageNumberText, _pageCount,
+                    pi => MakeHfTarget(sectionHf, footerSlot, pi),
+                    slots.FooterSlotName,
+                    pi + 1,
+                    pageSection.SectionIndex + 1,
+                    pageSection.SectionRelativePageNumber);
             }
         }
     }
@@ -3340,8 +3454,17 @@ public sealed class DocumentView : Control
     /// defaults when present. Each tab-separated segment is emitted as a separate HfRenderItem at the
     /// computed X position so the draw loop does not need tab-aware logic.
     /// </summary>
-    private void EmitHfParagraphs(HeaderFooter hf, double startY, double availWidth, int pageNumber, int pageCount,
-        Func<int, HfTarget>? targetFactory = null)
+    private void EmitHfParagraphs(
+        HeaderFooter hf,
+        double startY,
+        double availWidth,
+        string pageNumberText,
+        int pageCount,
+        Func<int, HfTarget>? targetFactory = null,
+        string slotName = "",
+        int pageNumber = 1,
+        int sectionOrdinal = 1,
+        int sectionRelativePageNumber = 1)
     {
         var y = startY;
         for (var paraIdx = 0; paraIdx < hf.Paragraphs.Count; paraIdx++)
@@ -3363,20 +3486,65 @@ public sealed class DocumentView : Control
             // begins, so a click X maps to a model offset for the editing caret. Model offset advances
             // by run.Text.Length for each run (field runs are atomic — their resolved text may differ in
             // length, but the model span is run.Text.Length, including a single tab char per model tab).
-            var segments = new List<(int StopIndex, string Text, RunFormatting Fmt, int ModelStart)>();
+            var segments = new List<HfSegment>();
             var sb = new System.Text.StringBuilder();
             RunFormatting segFmt = para.Runs.Count > 0 ? para.Runs[0].Formatting : RunFormatting.Default;
             var stopIndex = 0;
             var modelOffset = 0;       // running literal-model offset across all runs
             var segModelStart = 0;     // model offset at the start of the current (buffered) segment
 
-            foreach (var run in para.Runs)
+            void FlushText(bool includeEmpty = false)
             {
-                var fieldText = ResolveHfField(run, pageNumber, pageCount);
+                if (sb.Length == 0 && !includeEmpty)
+                    return;
+
+                segments.Add(new HfSegment
+                {
+                    StopIndex = stopIndex,
+                    Text = sb.ToString(),
+                    Fmt = segFmt,
+                    ModelStart = segModelStart,
+                });
+                sb.Clear();
+                segModelStart = modelOffset;
+            }
+
+            for (var runIndex = 0; runIndex < para.Runs.Count; runIndex++)
+            {
+                var run = para.Runs[runIndex];
+                var fieldText = ResolveHfField(run, pageNumberText, pageCount);
                 var isField = fieldText is not null;
                 var text = fieldText ?? run.Text;
                 if (run.Formatting.FontSizePt.HasValue)
                     segFmt = run.Formatting;
+
+                if (run.Image is { } image)
+                {
+                    FlushText();
+                    var width = Math.Max(1, PageLayout.PointsToDip(Math.Max(0, image.WidthPt)));
+                    var height = Math.Max(1, PageLayout.PointsToDip(Math.Max(0, image.HeightPt)));
+                    segments.Add(new HfSegment
+                    {
+                        StopIndex = stopIndex,
+                        Image = image,
+                        ImageSignature = HeaderFooterVisualPlanner.BuildImageSignature(
+                            string.IsNullOrWhiteSpace(slotName) ? "header-footer" : slotName,
+                            pageNumber,
+                            sectionOrdinal,
+                            sectionRelativePageNumber,
+                            paraIdx,
+                            runIndex,
+                            image,
+                            pf.Alignment),
+                        Fmt = run.Formatting,
+                        ModelStart = modelOffset,
+                        Width = width,
+                        Height = height,
+                    });
+                    modelOffset += run.Text.Length;
+                    segModelStart = modelOffset;
+                    continue;
+                }
 
                 if (isField)
                 {
@@ -3395,8 +3563,7 @@ public sealed class DocumentView : Control
                     if (pi < parts.Length - 1)
                     {
                         // A TAB was consumed — flush the current buffer as a segment and advance the stop index.
-                        segments.Add((stopIndex, sb.ToString(), segFmt, segModelStart));
-                        sb.Clear();
+                        FlushText(includeEmpty: true);
                         stopIndex++;
                         modelOffset += 1;            // the consumed tab is one model char
                         segModelStart = modelOffset; // next segment starts after the tab
@@ -3404,18 +3571,28 @@ public sealed class DocumentView : Control
                 }
             }
             // Flush the final (or only) segment.
-            segments.Add((stopIndex, sb.ToString(), segFmt, segModelStart));
+            FlushText(includeEmpty: segments.Count == 0);
 
             // Whether the paragraph contains any tab characters at all.
             var hasAnyTab = segments.Count > 1 || (segments.Count == 1 && stopIndex > 0);
+            var hasImages = segments.Any(s => s.Image is not null);
 
             // Compute the line height from the first non-empty segment (or use DefaultFontSizePt).
-            var firstNonEmpty = segments.FirstOrDefault(s => s.Text.Length > 0);
-            RunFormatting lineRefFmt = firstNonEmpty.Text?.Length > 0 ? firstNonEmpty.Fmt : RunFormatting.Default;
-            var sampleText = firstNonEmpty.Text ?? string.Empty;
-            var lineH = string.IsNullOrEmpty(sampleText)
-                ? DefaultFontSizePt * PxPerPoint * 1.3
-                : Build(sampleText.Length > 1 ? sampleText[..1] : sampleText, lineRefFmt).Height * 1.15;
+            var lineH = DefaultFontSizePt * PxPerPoint * 1.3;
+            foreach (var segment in segments)
+            {
+                if (segment.Image is not null)
+                {
+                    lineH = Math.Max(lineH, segment.Height);
+                    continue;
+                }
+
+                if (!string.IsNullOrEmpty(segment.Text))
+                {
+                    var sampleText = segment.Text.Length > 1 ? segment.Text[..1] : segment.Text;
+                    lineH = Math.Max(lineH, Build(sampleText, segment.Fmt).Height * 1.15);
+                }
+            }
 
             // Resolve explicit tab stops from the paragraph; sort by position.
             var explicitStops = pf.TabStops
@@ -3427,7 +3604,36 @@ public sealed class DocumentView : Control
             var defaultCenterPx = availWidth / 2.0;
             var defaultRightPx  = availWidth;
 
-            if (!hasAnyTab)
+            double SegmentWidth(HfSegment segment) =>
+                segment.Image is not null
+                    ? segment.Width
+                    : string.IsNullOrEmpty(segment.Text)
+                        ? 0
+                        : Build(segment.Text, segment.Fmt).WidthIncludingTrailingWhitespace;
+
+            void AddSegmentItem(HfSegment segment, double itemX)
+            {
+                var width = SegmentWidth(segment);
+                _headerFooterItems.Add(new HfRenderItem
+                {
+                    Text             = segment.Text,
+                    Fmt              = segment.Fmt,
+                    Image            = segment.Image,
+                    ImageSignature   = segment.ImageSignature,
+                    SlotName         = slotName,
+                    Width            = width,
+                    Height           = segment.Image is not null ? segment.Height : lineH,
+                    X                = itemX,
+                    Y                = y,
+                    AvailableWidth   = 0,
+                    Alignment        = TextAlignment.Left,
+                    Target           = segment.Image is null ? paraTarget : null,
+                    LineHeight       = lineH,
+                    ModelStartOffset = segment.ModelStart,
+                });
+            }
+
+            if (!hasAnyTab && !hasImages)
             {
                 // No tabs — use paragraph alignment as before. Emit even an EMPTY paragraph so an empty
                 // header/footer line is still clickable for editing (the caret needs a region to land in).
@@ -3436,6 +3642,7 @@ public sealed class DocumentView : Control
                 {
                     Text             = seg.Text,
                     Fmt              = seg.Fmt,
+                    SlotName         = slotName,
                     X                = _contentLeft,
                     Y                = y,
                     AvailableWidth   = availWidth,
@@ -3445,18 +3652,53 @@ public sealed class DocumentView : Control
                     ModelStartOffset = seg.ModelStart,
                 });
             }
+            else if (!hasAnyTab)
+            {
+                var visible = segments
+                    .Where(s => s.Image is not null || !string.IsNullOrEmpty(s.Text))
+                    .ToList();
+                if (visible.Count == 0)
+                {
+                    _headerFooterItems.Add(new HfRenderItem
+                    {
+                        SlotName         = slotName,
+                        X                = _contentLeft,
+                        Y                = y,
+                        AvailableWidth   = availWidth,
+                        Alignment        = pf.Alignment,
+                        Target           = paraTarget,
+                        LineHeight       = lineH,
+                    });
+                }
+                else
+                {
+                    var totalWidth = visible.Sum(SegmentWidth);
+                    var cursor = _contentLeft + AlignmentOffset(pf.Alignment, availWidth, totalWidth, isLast: true);
+                    cursor = Math.Max(_contentLeft, Math.Min(_contentLeft + Math.Max(0, availWidth - totalWidth), cursor));
+                    foreach (var segment in visible)
+                    {
+                        AddSegmentItem(segment, cursor);
+                        cursor += SegmentWidth(segment);
+                    }
+                }
+            }
             else
             {
                 // Tab-split: each segment is positioned by its tab-stop ordinal.
                 // StopIndex 0 → left (at _contentLeft, no stop lookup needed).
                 // StopIndex 1 → first tab stop  (default: centre).
                 // StopIndex 2 → second tab stop (default: right).
-                foreach (var (si, text, fmt, modelStart) in segments)
+                foreach (var group in segments.GroupBy(s => s.StopIndex).OrderBy(g => g.Key))
                 {
-                    if (string.IsNullOrEmpty(text)) continue;
+                    var visible = group
+                        .Where(s => s.Image is not null || !string.IsNullOrEmpty(s.Text))
+                        .ToList();
+                    if (visible.Count == 0)
+                        continue;
 
                     double stopX;
                     TabStopAlignment stopAlign;
+                    var si = group.Key;
 
                     if (si == 0)
                     {
@@ -3480,31 +3722,24 @@ public sealed class DocumentView : Control
                     }
 
                     // Measure segment text to compute the draw X.
-                    var segFt = Build(text, fmt);
-                    var segW  = segFt.WidthIncludingTrailingWhitespace;
+                    var groupWidth = visible.Sum(SegmentWidth);
 
                     var itemX = stopAlign switch
                     {
-                        TabStopAlignment.Center  => _contentLeft + stopX - segW / 2,
-                        TabStopAlignment.Right   => _contentLeft + stopX - segW,
-                        TabStopAlignment.Decimal => _contentLeft + stopX - segW, // approximation: treat as right
+                        TabStopAlignment.Center  => _contentLeft + stopX - groupWidth / 2,
+                        TabStopAlignment.Right   => _contentLeft + stopX - groupWidth,
+                        TabStopAlignment.Decimal => _contentLeft + stopX - groupWidth, // approximation: treat as right
                         _                        => _contentLeft + stopX,
                     };
                     // Clamp to content area so text never overflows the page edge.
-                    itemX = Math.Max(_contentLeft, Math.Min(_contentLeft + availWidth - segW, itemX));
+                    itemX = Math.Max(_contentLeft, Math.Min(_contentLeft + availWidth - groupWidth, itemX));
 
-                    _headerFooterItems.Add(new HfRenderItem
+                    var cursor = itemX;
+                    foreach (var segment in visible)
                     {
-                        Text             = text,
-                        Fmt              = fmt,
-                        X                = itemX,
-                        Y                = y,
-                        AvailableWidth   = 0,                  // absolute X — skip alignment offset at draw time
-                        Alignment        = TextAlignment.Left, // draw loop uses X as-is (offset=0 for Left)
-                        Target           = paraTarget,
-                        LineHeight       = lineH,
-                        ModelStartOffset = modelStart,
-                    });
+                        AddSegmentItem(segment, cursor);
+                        cursor += SegmentWidth(segment);
+                    }
                 }
             }
 
@@ -3517,13 +3752,13 @@ public sealed class DocumentView : Control
     /// Handles both <see cref="RunFieldKind"/> simple fields and <see cref="ComplexField"/>
     /// instructions that contain PAGE / NUMPAGES / DATE / FILENAME / AUTHOR keywords.
     /// </summary>
-    private string? ResolveHfField(Run run, int pageNumber, int pageCount)
+    private string? ResolveHfField(Run run, string pageNumberText, int pageCount)
     {
         // Simple RunFieldKind fields.
         switch (run.FieldKind)
         {
             case RunFieldKind.PageNumber:
-                return pageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                return pageNumberText;
             case RunFieldKind.NumPages:
                 return pageCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
             case RunFieldKind.Date:
@@ -3550,7 +3785,7 @@ public sealed class DocumentView : Control
             var keyword = instr.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
             return keyword.ToUpperInvariant() switch
             {
-                "PAGE"     => pageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "PAGE"     => pageNumberText,
                 "NUMPAGES" => pageCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 "DATE"     => DateTime.Now.ToString("M/d/yyyy", System.Globalization.CultureInfo.InvariantCulture),
                 "TIME"     => DateTime.Now.ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture),
@@ -4055,49 +4290,45 @@ public sealed class DocumentView : Control
 
     // ── AV-WRAP: wrap-exclusion helpers ───────────────────────────────────────────────────────────────
 
+    private DocumentFloatingTextWrapLinePlan BuildFloatingTextWrapLinePlan(
+        double estimatedLineHeight,
+        double baseTextWidthDip,
+        double? lineContentYDip = null,
+        double? currentContentYDip = null)
+    {
+        var wrapColumnWidth = _colCount > 1 ? _colWidth : _contentWidth;
+        var peekContentY = lineContentYDip ?? PeekFirstLineContentY(estimatedLineHeight);
+        return DocumentViewLayoutPlanner.BuildFloatingTextWrapLinePlan(
+            _wrapExclusions,
+            _surfacePlan,
+            currentContentYDip ?? _layoutContentY,
+            peekContentY,
+            estimatedLineHeight,
+            _contentLeft,
+            _colCount,
+            wrapColumnWidth,
+            _colGap,
+            baseTextWidthDip);
+    }
+
     /// <summary>
     /// Advances <c>_layoutContentY</c> past any TopAndBottom exclusion zones that would overlap
     /// a line of <paramref name="estimatedLineHeight"/> at the current position.
-    /// Loops until no TopAndBottom zone overlaps, capping at 200 iterations to prevent infinite loops
-    /// for pathological documents.
-    /// Only active when there are TopAndBottom exclusions registered.
-    /// BB2: In multi-column layout a TopAndBottom float blocks the entire page-width Y-band, so we
-    /// advance to the LAST column on the affected page (making all columns skip past the float's Y-band).
+    /// BB2: the shared planner advances to the last column slot on the affected page, so every column
+    /// skips the blocked Y-band.
     /// </summary>
-    private void AdvancePastTopAndBottomExclusions(double estimatedLineHeight)
+    private void AdvancePastTopAndBottomExclusions(double estimatedLineHeight, double baseTextWidthDip)
     {
         if (_wrapExclusions.Count == 0) return;
-        for (var guard = 0; guard < 200; guard++)
-        {
-            var peekContentY  = PeekFirstLineContentY(estimatedLineHeight);
-            var peekPageSpaceY = ContentYToPageSpaceY(peekContentY);
-            var wrapColumnWidth = _colCount > 1 ? _colWidth : _contentWidth;
-            var exclusionBottom = DocumentViewLayoutPlanner.BuildTopAndBottomWrapExclusionBottom(
-                _wrapExclusions,
-                peekPageSpaceY,
-                estimatedLineHeight,
-                _contentLeft,
-                _colCount,
-                wrapColumnWidth,
-                _colGap);
-            if (exclusionBottom is null) break; // no overlap: done
 
-            var targetContentY = DocumentViewLayoutPlanner.BuildContentYAfterTopAndBottomWrapExclusion(
-                _surfacePlan,
-                _layoutContentY,
-                peekContentY,
-                exclusionBottom.Value,
-                _colCount);
-
-            if (targetContentY <= _layoutContentY)
-                break; // safety: do not regress
-            _layoutContentY = targetContentY;
-        }
+        var plan = BuildFloatingTextWrapLinePlan(estimatedLineHeight, baseTextWidthDip);
+        if (plan.HasTopAndBottomAdvance && plan.PlannedContentYDip > _layoutContentY)
+            _layoutContentY = plan.PlannedContentYDip;
     }
 
     private void LayoutParagraphPaged(int blockIndex, Paragraph paragraph, double textWidth, double leftInset = 0, string? marker = null)
     {
-        var rawCells = IsEditable(paragraph) ? ParaCells(paragraph) : FallbackCells(paragraph.PlainText);
+        var rawCells = IsEditable(paragraph) ? ParaCells(paragraph) : DisplayCells(paragraph);
         // Resolve named-style formatting for display only; editing re-derives raw cells from the model.
         var cells = paragraph.StyleId is null
             ? rawCells
@@ -4196,30 +4427,11 @@ public sealed class DocumentView : Control
 
         var lineIndex = 0;
 
-        // AV-WRAP: pre-compute the column geometry for exclusion queries.
-        // These are the same values used in EmitLinePaged to identify the column.
-        var wrapColW = _colCount > 1 ? _colWidth : _contentWidth;
-
-        // AV-WRAP: Helper that peeks the page-space Y of the CURRENT line-being-built, then
-        // queries Square/Tight exclusions to get the adjusted wrap budget for that line.
-        // This mirrors the values EmitLinePaged will compute when actually emitting the line.
-        // estimatedH: estimated line height (max of heights[lineStart..i)).
-        double PeekLineAvail(double estimatedH, int fromIdx, double baseAlignWidth)
+        // AV-WRAP: ask the shared presentation planner for the current line's effective width.
+        double PeekLineAvail(double estimatedH, double baseAlignWidth)
         {
             if (_wrapExclusions.Count == 0) return baseAlignWidth;
-            var peekContentY   = PeekFirstLineContentY(estimatedH);
-            var peekPageSpaceY = ContentYToPageSpaceY(peekContentY);
-            // Peek the column for the line (mirrors EmitLinePaged slot logic).
-            var slot       = _layoutTextAreaHeight > 0 ? (int)(peekContentY / _layoutTextAreaHeight) : 0;
-            var colIdx     = slot % _colCount;
-            var cLeft      = _contentLeft + colIdx * (_colWidth + _colGap);
-            var exclusion  = DocumentViewLayoutPlanner.BuildSquareTightWrapExclusion(
-                _wrapExclusions,
-                peekPageSpaceY,
-                estimatedH,
-                cLeft,
-                wrapColW);
-            return Math.Max(20, baseAlignWidth - exclusion.LeftDeltaDip - exclusion.RightShrinkDip);
+            return BuildFloatingTextWrapLinePlan(estimatedH, baseAlignWidth).EffectiveTextWidthDip;
         }
 
         while (i < cells.Count)
@@ -4254,14 +4466,14 @@ public sealed class DocumentView : Control
             var lineH2 = DefaultFontSizePt * PxPerPoint * 1.3;
             for (var c2 = lineStart; c2 <= i && c2 < heights.Length; c2++)
                 if (heights[c2] > lineH2) lineH2 = heights[c2];
-            var lineAvail = PeekLineAvail(lineH2, lineStart, lineAlignWidth);
+            var lineAvail = PeekLineAvail(lineH2, lineAlignWidth);
 
             if (lineWidth + measured[i] > lineAvail && i > lineStart)
             {
                 var breakAt = lastBreak >= lineStart ? lastBreak + 1 : i;
                 // AV-WRAP: push past any TopAndBottom exclusion zones before emitting.
                 if (_wrapExclusions.Count > 0)
-                    AdvancePastTopAndBottomExclusions(lineH2);
+                    AdvancePastTopAndBottomExclusions(lineH2, lineAlignWidth);
                 EmitLinePaged(blockIndex, cells, measured, heights, lineStart, breakAt, alignment,
                     lineAlignWidth, paraLeftInset + lineExtraInset, pf);
                 lineIndex++;
@@ -4296,7 +4508,7 @@ public sealed class DocumentView : Control
                 var lineH = DefaultFontSizePt * PxPerPoint * 1.3;
                 for (var c2 = lineStart; c2 < cells.Count; c2++)
                     if (heights[c2] > lineH) lineH = heights[c2];
-                AdvancePastTopAndBottomExclusions(lineH);
+                AdvancePastTopAndBottomExclusions(lineH, lineAlignWidth);
             }
             EmitLinePaged(blockIndex, cells, measured, heights, lineStart, cells.Count, alignment,
                 lineAlignWidth, paraLeftInset + lineExtraInset, pf, isLast: true);
@@ -4332,7 +4544,6 @@ public sealed class DocumentView : Control
 
         // Ensure the whole line fits on one page (push to next page if it overflows).
         var contentY = ReserveContentY(lineHeight);
-        var pageSpaceY = ContentYToPageSpaceY(contentY);
 
         // Word-spacing expansion for justify (last line stays left).
         // OO1 fix: exclude the trailing space from BOTH the visible-width sum and the gap-add loop.
@@ -4371,27 +4582,39 @@ public sealed class DocumentView : Control
             }
         }
 
+        var pageSpaceY = ContentYToPageSpaceY(contentY);
+
         // AV-COL: compute the left edge of the column this line lands in.
         // slot = which column-slot (0-based across all pages); colIndex = slot % _colCount.
-        var lineSlot     = _layoutTextAreaHeight > 0 ? (int)(contentY / _layoutTextAreaHeight) : 0;
-        var lineColIndex = lineSlot % _colCount;
-        var colLeft      = _contentLeft + lineColIndex * (_colWidth + _colGap);
-        var colW         = _colCount > 1 ? _colWidth : _contentWidth;
+        var lineSlot = _layoutTextAreaHeight > 0 ? (int)(contentY / _layoutTextAreaHeight) : 0;
+        var colLeft = _contentLeft + (lineSlot % _colCount) * (_colWidth + _colGap);
 
-        // AV-WRAP: apply Square/Tight exclusion zones for this line.
-        // TopAndBottom is handled in LayoutParagraphPaged (advances _layoutContentY before we arrive here).
-        var lineExclusion = _wrapExclusions.Count > 0
-            ? DocumentViewLayoutPlanner.BuildSquareTightWrapExclusion(
-                _wrapExclusions,
-                pageSpaceY,
+        DocumentFloatingTextWrapLinePlan? wrapLinePlan = null;
+        if (_wrapExclusions.Count > 0)
+        {
+            wrapLinePlan = BuildFloatingTextWrapLinePlan(
                 lineHeight,
-                colLeft,
-                colW)
-            : new DocumentFloatingLineExclusionPlan(0, 0);
-        var wrapLeftDelta = lineExclusion.LeftDeltaDip;
-        var wrapRightShrink = lineExclusion.RightShrinkDip;
+                availableWidth,
+                lineContentYDip: contentY,
+                currentContentYDip: contentY);
+            if (wrapLinePlan.HasTopAndBottomAdvance && wrapLinePlan.PlannedContentYDip > contentY)
+            {
+                _layoutContentY = wrapLinePlan.PlannedContentYDip;
+                contentY = ReserveContentY(lineHeight);
+                wrapLinePlan = BuildFloatingTextWrapLinePlan(
+                    lineHeight,
+                    availableWidth,
+                    lineContentYDip: contentY,
+                    currentContentYDip: contentY);
+            }
+
+            pageSpaceY = wrapLinePlan.PageSpaceYDip;
+            colLeft = wrapLinePlan.ColumnLeftDip;
+        }
+
+        var wrapLeftDelta = wrapLinePlan?.LeftDeltaDip ?? 0;
         var effectiveLeftInset = leftInset + wrapLeftDelta;
-        var effectiveWidth     = availableWidth - wrapLeftDelta - wrapRightShrink;
+        var effectiveWidth = wrapLinePlan?.EffectiveTextWidthDip ?? availableWidth;
         if (effectiveWidth < 20) effectiveWidth = 20; // safety floor
 
         // AV-TAB: detect whether this line contains any tab characters.
@@ -4626,7 +4849,21 @@ public sealed class DocumentView : Control
 
         const double pad = 5;
         var borders = table.Formatting.Borders || _showTableGridlines;
-        var headerOffset = table.Formatting.HeaderRow ? 1 : 0;
+        var tableLayoutPlan = DocumentViewLayoutPlanner.BuildTableLayoutPlan(table, page: _doc.Page);
+        var cellEffectiveFills = tableLayoutPlan.Cells.ToDictionary(
+            cell => (cell.RowIndex, cell.CellIndex),
+            cell => cell.EffectiveFill);
+
+        DocumentTableCellEffectiveFillPlan EffectiveFillFor(int rowIndex, int cellIndex) =>
+            cellEffectiveFills.TryGetValue((rowIndex, cellIndex), out var fillPlan)
+                ? fillPlan
+                : DocumentTableCellEffectiveFillPlan.Empty;
+
+        IBrush? EffectiveFillBrush(DocumentTableCellEffectiveFillPlan fillPlan) =>
+            string.IsNullOrWhiteSpace(fillPlan.EffectiveFillHex)
+                ? null
+                : BrushFor(fillPlan.EffectiveFillHex);
+
         // AV-TBL: glyphOffset is unique within this table block and is used as PlacedChar.Offset so
         // TryGetCaretRect can match (Block == tableBlockIndex && Offset == glyphOffset).
         var glyphOffset = 0;
@@ -4641,11 +4878,11 @@ public sealed class DocumentView : Control
         for (var pr = 0; pr < table.Rows.Count; pr++)
         {
             var prRow = table.Rows[pr];
-            var prIsHeader = table.Formatting.HeaderRow && pr == 0;
             var prRowHeight = Build("Ag", RunFormatting.Default).Height + 2 * pad;
             var prCol = 0;
-            foreach (var cell in prRow.Cells)
+            for (var cellIndex = 0; cellIndex < prRow.Cells.Count; cellIndex++)
             {
+                var cell = prRow.Cells[cellIndex];
                 if (prCol >= cols)
                     break;
                 var prSpan = Math.Clamp(cell.GridSpan <= 0 ? 1 : cell.GridSpan, 1, cols - prCol);
@@ -4656,7 +4893,7 @@ public sealed class DocumentView : Control
                 var prFmt = cell.Paragraphs.Count > 0 && cell.Paragraphs[0].Runs.Count > 0
                     ? cell.Paragraphs[0].Runs[0].Formatting
                     : RunFormatting.Default;
-                if (prIsHeader)
+                if (EffectiveFillFor(pr, cellIndex).EffectiveBold)
                     prFmt = prFmt with { Bold = true };
 
                 var prInnerW = Math.Max(10, prCellWidth - 2 * pad);
@@ -4673,7 +4910,7 @@ public sealed class DocumentView : Control
         }
 
         var plannedPagesByFirstSourceRow = _viewMode == DocumentViewMode.PrintLayout
-            ? DocumentViewLayoutPlanner.BuildTablePaginationPlan(table, _doc.Page).Pages
+            ? tableLayoutPlan.Pagination.Pages
                 .Where(page => page.PageNumber > 1 && page.SourceRowIndexes.Count > 0)
                 .ToDictionary(page => page.SourceRowIndexes[0])
             : new Dictionary<int, DocumentTablePaginationPagePlan>();
@@ -4695,10 +4932,6 @@ public sealed class DocumentView : Control
         void RenderTableRow(int r, double? reservedContentY = null)
         {
             var row = table.Rows[r];
-            var isHeader = table.Formatting.HeaderRow && r == 0;
-            var isBand = table.Formatting.BandedRows
-                && !isHeader
-                && TableBanding.IsBandedBodyRow(r, table.Formatting.HeaderRow);
 
             // AV-TBL: carry the TableCell model reference and actual column index so we can emit
             // per-paragraph, per-character cell-aware PlacedChars for caret routing.
@@ -4719,7 +4952,8 @@ public sealed class DocumentView : Control
                 var fmt = cell.Paragraphs.Count > 0 && cell.Paragraphs[0].Runs.Count > 0
                     ? cell.Paragraphs[0].Runs[0].Formatting
                     : RunFormatting.Default;
-                if (isHeader)
+                var cellAppearance = EffectiveFillFor(r, cellIndex);
+                if (cellAppearance.EffectiveBold)
                     fmt = fmt with { Bold = true };
 
                 // BE2: wrap each cell paragraph independently so multi-paragraph cells render on
@@ -4751,8 +4985,7 @@ public sealed class DocumentView : Control
                     cellWidth += colWidths[startCol + s];
                 var cellX = rowColLeft + colOffsets[startCol];
                 var rect = new Rect(cellX, rowPageSpaceY, cellWidth, rowHeight);
-                // AV-TBL4: per-cell ShadingColorHex overrides table-style fills; header/band still apply as fallback.
-                IBrush? fill = ResolveCellFill(cellModel, table, r, cellIndex, isHeader, isBand);
+                var fill = EffectiveFillBrush(EffectiveFillFor(r, cellIndex));
                 var cellBorderPlan = TableCellBorderVisualPlanner.Build(cellModel.Borders, PxPerPoint);
                 _rects.Add((rect, fill, borders, cellBorderPlan.HasVisibleEdges ? cellBorderPlan : null));
                 _cellHits.Add((rect, blockIndex, r, startCol));
@@ -5032,16 +5265,7 @@ public sealed class DocumentView : Control
                 var x          = ColumnLeftFor(contentY) + AlignmentOffset(alignment, textWidth, width);
                 var rect       = new Rect(x, pageSpaceY, width, height);
 
-                _inlineWordArts.Add(new FloatingWordArtData
-                {
-                    Rect       = rect,
-                    BehindText = false,
-                    ZOrder     = 0,
-                    Text       = wa.Text,
-                    Style      = wa.Style,
-                    FontSizePt = wa.FontSizePt,
-                    Warp       = wa.Warp,
-                });
+                _inlineWordArts.Add(BuildInlineWordArtData(wa, rect, blockIndex, runIndex: -1));
 
                 // ZZ1 fix: full-height sentinel for correct hit-test reach (see chart site above).
                 _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
@@ -5508,39 +5732,6 @@ public sealed class DocumentView : Control
         return result;
     }
 
-    // AV-TBL4: resolve the fill brush for a cell — per-cell ShadingColorHex wins; header/band are fallbacks.
-    private IBrush? ResolveCellFill(
-        TableCell cell,
-        Table table,
-        int rowIndex,
-        int cellIndex,
-        bool isHeader,
-        bool isBand)
-    {
-        if (!string.IsNullOrEmpty(cell.ShadingColorHex))
-            return BrushFor(cell.ShadingColorHex);
-
-        var catalogStyle = table.TableStyleId is { Length: > 0 } styleId
-            ? DocumentTableStyle.FindById(styleId)
-            : null;
-        if (catalogStyle is not null)
-        {
-            var columnCount = Math.Max(0, table.Rows[rowIndex].Cells.Count);
-            var (fillHex, _) = catalogStyle.ResolveCellStyle(
-                rowIndex,
-                table.Rows.Count,
-                cellIndex == 0,
-                cellIndex == Math.Max(0, columnCount - 1),
-                table.Formatting);
-            if (!string.IsNullOrWhiteSpace(fillHex))
-                return BrushFor("#" + fillHex);
-        }
-
-        if (isHeader) return HeaderFill;
-        if (isBand)   return BandFill;
-        return null;
-    }
-
     // AV-TBL4: draw per-edge cell borders using the shared host-neutral border plan.
     private void DrawCellBorderEdges(DrawingContext context, Rect rect, TableCellBorderVisualPlan plan)
     {
@@ -5864,7 +6055,6 @@ public sealed class DocumentView : Control
         return bitmap;
     }
 
-    private static IBrush HeaderFill { get; } = new SolidColorBrush(Color.FromRgb(0xDE, 0xE9, 0xF7));
     private static IBrush BandFill { get; } = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2));
     private static Pen TableBorderPen { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A)), 0.75);
     private static IBrush PageDeskBrush   { get; } = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0));
@@ -6147,6 +6337,13 @@ public sealed class DocumentView : Control
         {
             foreach (var item in _headerFooterItems)
             {
+                if (item.Image is { } image)
+                {
+                    var rect = new Rect(item.X, item.Y, Math.Max(1, item.Width), Math.Max(1, item.Height));
+                    DrawFloatingImage(context, rect, DecodeBitmap(image));
+                    continue;
+                }
+
                 if (string.IsNullOrEmpty(item.Text))
                     continue;
                 var ft = Build(item.Text, item.Fmt);
@@ -8401,18 +8598,19 @@ public sealed class DocumentView : Control
                 return;
             var offset = cc.Offset;
             var fmt = ActiveFormatting(para, offset);
-            // AV-TRACKEDIT: record cell typing as a tracked insertion too when Track Changes is on.
-            var cellInsRevision = TrackChangesEnabled ? RevisionKind.Inserted : RevisionKind.None;
-            var cellInsAuthor = TrackChangesEnabled ? RevisionAuthor : null;
-            var cellInsDate = TrackChangesEnabled ? CurrentRevisionDateXml() : null;
             _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
             {
-                var chars = ParaCells(p);
-                // BE4: insert at incrementing position so multi-char paste/IME inserts in order.
-                var at = Math.Clamp(offset, 0, chars.Count);
-                foreach (var ch in text)
-                    chars.Insert(at++, new Cell(ch, fmt, null, cellInsRevision, cellInsAuthor, cellInsDate));
-                SetRuns(p, chars);
+                RevisionEditPlanner.InsertText(
+                    p,
+                    offset,
+                    text,
+                    fmt,
+                    TrackChangesEnabled
+                        ? new RevisionEditPlanner.InsertOptions(
+                            RevisionKind.Inserted,
+                            RevisionAuthor,
+                            CurrentRevisionDateXml())
+                        : default);
             }));
             _cellCaret = cc with { Offset = offset + text.Length };
             _cellAnchor = _cellCaret;
@@ -8436,9 +8634,6 @@ public sealed class DocumentView : Control
         var bodyFmt = pendingFmt ?? ActiveFormatting(paragraph, bodyOffset);
         // AV-TRACKEDIT: when Track Changes is on, typed characters are recorded as a tracked insertion
         // (author + date) so they render underlined/coloured and round-trip as w:ins. OFF behaves as before.
-        var insRevision = TrackChangesEnabled ? RevisionKind.Inserted : RevisionKind.None;
-        var insAuthor = TrackChangesEnabled ? RevisionAuthor : null;
-        var insDate = TrackChangesEnabled ? CurrentRevisionDateXml() : null;
         // AV-LINK: typing strictly inside a hyperlink span extends that link (Word's behaviour); typing at a
         // link's edge or outside a link inserts plain (un-linked) text.
         var insLink = ActiveLink(paragraph, bodyOffset);
@@ -8448,10 +8643,18 @@ public sealed class DocumentView : Control
             // BE4 (body parity): insert at an incrementing position so multi-char text (paste / IME /
             // model inserts like a citation string) keeps its order — a fixed insert index would reverse it.
             // Cells carry the tracked-insertion revision tags when Track Changes is on (null otherwise).
-            var at = Math.Clamp(bodyOffset, 0, cells.Count);
-            foreach (var ch in text)
-                cells.Insert(at++, new Cell(ch, bodyFmt, null, insRevision, insAuthor, insDate, insLink));
-            SetRuns(p, cells);
+            RevisionEditPlanner.InsertText(
+                p,
+                bodyOffset,
+                text,
+                bodyFmt,
+                new RevisionEditPlanner.InsertOptions(
+                    TrackChangesEnabled ? RevisionKind.Inserted : RevisionKind.None,
+                    TrackChangesEnabled ? RevisionAuthor : null,
+                    TrackChangesEnabled ? CurrentRevisionDateXml() : null,
+                    insLink?.Url,
+                    insLink?.Anchor,
+                    insLink?.Tooltip));
         }));
         _caret = new DocPosition(block, bodyOffset + text.Length);
         _selectionAnchor = _caret;
@@ -9569,36 +9772,15 @@ public sealed class DocumentView : Control
     /// </summary>
     private (List<Cell> Cells, int Caret) MarkCellsDeleted(List<Cell> cells, int lo, int hi)
     {
-        lo = Math.Clamp(lo, 0, cells.Count);
-        hi = Math.Clamp(hi, 0, cells.Count);
-        if (hi <= lo)
-            return (cells, lo);
-
-        var result = new List<Cell>(cells.Count);
-        result.AddRange(cells.Take(lo));
-        for (var k = lo; k < hi; k++)
-        {
-            var cell = cells[k];
-            // Deleting one's own still-pending insertion removes it outright (Word: it never "existed").
-            if (cell.Revision == RevisionKind.Inserted &&
-                string.Equals(cell.RevisionAuthor, RevisionAuthor, StringComparison.Ordinal))
-                continue;
-            // Already a tracked deletion → keep as-is (deleting struck text is a no-op).
-            if (cell.Revision == RevisionKind.Deleted)
-            {
-                result.Add(cell);
-                continue;
-            }
-            // Otherwise mark the (ordinary, or other-author-inserted) character as a tracked deletion: keep it.
-            result.Add(cell with
-            {
-                Revision = RevisionKind.Deleted,
-                RevisionAuthor = RevisionAuthor,
-                RevisionDateXml = CurrentRevisionDateXml(),
-            });
-        }
-        result.AddRange(cells.Skip(hi));
-        return (result, lo);
+        var paragraph = new Paragraph();
+        SetRuns(paragraph, cells);
+        var sharedResult = RevisionEditPlanner.DeleteRangeAsRevision(
+            paragraph,
+            lo,
+            hi,
+            RevisionAuthor,
+            CurrentRevisionDateXml());
+        return (ParaCells(paragraph), sharedResult.CaretOffset);
     }
 
     /// <summary>
@@ -10005,6 +10187,13 @@ public sealed class DocumentView : Control
         });
     }
 
+    public void ApplyMultiLevelNumberFormats(IReadOnlyList<ListNumberFormat> numberFormats)
+    {
+        _doc.MultiLevelList.SetNumberFormats(numberFormats);
+        _laidOutWidth = -1;
+        InvalidateVisual();
+    }
+
     public void ApplyMultiLevelListStartOverrides(int? level0StartAt, int? level1StartAt)
     {
         FormatSelectedParagraphs(formatting =>
@@ -10258,6 +10447,9 @@ public sealed class DocumentView : Control
         apply(settings);
         SetPageSettings(settings);
     }
+
+    public void ApplyPageNumberFormat(PageNumberFormatDialogResult result) =>
+        ApplyPageSettings(page => PageNumberFormatDialogPlanner.ApplyResult(page, result));
 
     public void ToggleDifferentFirstPage() =>
         ApplyPageSettings(settings => settings.DifferentFirstPage = !settings.DifferentFirstPage);
@@ -10668,9 +10860,15 @@ public sealed class DocumentView : Control
     /// </summary>
     public void InsertCaption(CaptionLabel label, string text = "")
     {
+        InsertCaption(Captions.LabelText(label), text);
+    }
+
+    public void InsertCaption(string labelText, string text = "")
+    {
+        labelText = Captions.NormalizeLabelText(labelText);
         Captions.EnsureStyles(_doc);
-        var number = Captions.NextCaptionNumber(_doc, label);
-        var caption = Captions.BuildCaption(label, number, text);
+        var number = Captions.NextCaptionNumber(_doc, labelText);
+        var caption = Captions.BuildCaption(labelText, number, text);
         var index = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
         _bus.Execute(new InsertParagraphCommand(index, caption));
         _caret = new DocPosition(index, BlockLength(index));
@@ -11264,14 +11462,26 @@ public sealed class DocumentView : Control
 
     public void InsertTableOfFigures(CaptionLabel label = CaptionLabel.Figure)
     {
+        InsertTableOfFigures(Captions.LabelText(label));
+    }
+
+    public void InsertTableOfFigures(string labelText)
+    {
+        labelText = Captions.NormalizeLabelText(labelText);
         TableOfFigures.EnsureStyles(_doc);
-        InsertGeneratedReferenceBlocks(TableOfFigures.Build(_doc, label), "Insert Table of Figures", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
+        InsertGeneratedReferenceBlocks(TableOfFigures.Build(_doc, labelText), "Insert Table of Figures", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
     }
 
     public void RefreshTableOfFigures(CaptionLabel label = CaptionLabel.Figure)
     {
+        RefreshTableOfFigures(Captions.LabelText(label));
+    }
+
+    public void RefreshTableOfFigures(string labelText)
+    {
+        labelText = Captions.NormalizeLabelText(labelText);
         TableOfFigures.EnsureStyles(_doc);
-        RefreshGeneratedReferenceBlocks(TableOfFigures.IsTableOfFiguresParagraph, () => TableOfFigures.Build(_doc, label), "Update Table of Figures");
+        RefreshGeneratedReferenceBlocks(TableOfFigures.IsTableOfFiguresParagraph, () => TableOfFigures.Build(_doc, labelText), "Update Table of Figures");
     }
 
     public void MarkCitation(string? longCitation = null)
@@ -11312,7 +11522,8 @@ public sealed class DocumentView : Control
         var plan = TableOfAuthoritiesRegionPlanner.BuildInsertPlan(
             _doc,
             Math.Clamp(_caret.Block, 0, _doc.Blocks.Count),
-            options);
+            options,
+            BuildTableOfAuthoritiesPageResolver());
         ApplyGeneratedReferencePlan(plan, "Insert Table of Authorities", adjustCaretForInsert: true);
     }
 
@@ -11321,8 +11532,117 @@ public sealed class DocumentView : Control
     public void RefreshTableOfAuthorities(ToaOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(_doc, options);
+        var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(
+            _doc,
+            options,
+            BuildTableOfAuthoritiesPageResolver());
         ApplyGeneratedReferencePlan(plan, "Update Table of Authorities", adjustCaretForInsert: false);
+    }
+
+    private ToaCitationPageResolver? BuildTableOfAuthoritiesPageResolver()
+    {
+        try
+        {
+            Relayout(_laidOutWidth > 0 ? _laidOutWidth : FallbackWidth);
+            var pageCount = Math.Max(1, _pageCount);
+            var hasExplicitPageBoundary = HasTableOfAuthoritiesExplicitPageBoundary(_doc);
+            if (pageCount == 1 && hasExplicitPageBoundary)
+                return null;
+
+            return (_, blockIndex, runIndex, _) => ResolveTableOfAuthoritiesCitationPage(
+                blockIndex,
+                runIndex,
+                pageCount,
+                hasExplicitPageBoundary);
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private ToaCitationPageReference? ResolveTableOfAuthoritiesCitationPage(
+        int blockIndex,
+        int runIndex,
+        int pageCount,
+        bool hasExplicitPageBoundary)
+    {
+        if (blockIndex < 0
+            || blockIndex >= _doc.Blocks.Count
+            || _doc.Blocks[blockIndex] is not Paragraph paragraph
+            || runIndex < 0
+            || runIndex >= paragraph.Runs.Count
+            || paragraph.Runs[runIndex].Citation is null)
+        {
+            return null;
+        }
+
+        var offset = ModelRunStartOffset(paragraph, runIndex);
+        if (TryResolvePlacedPageForBlockOffset(blockIndex, offset, pageCount, out var pageIndex))
+            return TableOfAuthorities.CreatePageReference(pageIndex + 1);
+
+        return pageCount == 1 && !hasExplicitPageBoundary
+            ? TableOfAuthorities.CreatePageReference(1)
+            : null;
+    }
+
+    private static bool HasTableOfAuthoritiesExplicitPageBoundary(TextDocument document) =>
+        document.Blocks.OfType<Paragraph>().Any(paragraph =>
+            paragraph.Formatting.PageBreakBefore
+            || paragraph.Runs.Any(run => run.IsPageBreak)
+            || paragraph.SectionBreak is { BreakKind: SectionBreakKind.NextPage or SectionBreakKind.EvenPage or SectionBreakKind.OddPage });
+
+    private static int ModelRunStartOffset(Paragraph paragraph, int runIndex)
+    {
+        var offset = 0;
+        for (var i = 0; i < runIndex; i++)
+            offset += paragraph.Runs[i].Text.Length;
+        return offset;
+    }
+
+    private bool TryResolvePlacedPageForBlockOffset(
+        int blockIndex,
+        int offset,
+        int pageCount,
+        out int pageIndex)
+    {
+        PlacedChar? atOrAfter = null;
+        PlacedChar? before = null;
+
+        foreach (var pc in _placed)
+        {
+            if (pc.Block != blockIndex || pc.IsCell)
+                continue;
+
+            if (pc.Offset >= offset
+                && (atOrAfter is null
+                    || pc.Offset < atOrAfter.Value.Offset
+                    || (pc.Offset == atOrAfter.Value.Offset && atOrAfter.Value.Sentinel && !pc.Sentinel)))
+            {
+                atOrAfter = pc;
+            }
+
+            if (pc.Offset <= offset
+                && (before is null
+                    || pc.Offset > before.Value.Offset
+                    || (pc.Offset == before.Value.Offset && before.Value.Sentinel && !pc.Sentinel)))
+            {
+                before = pc;
+            }
+        }
+
+        var resolved = atOrAfter ?? before;
+        if (resolved is not { } placed)
+        {
+            pageIndex = 0;
+            return false;
+        }
+
+        pageIndex = Math.Clamp(
+            PageIndexFromPageSpaceY(placed.Y),
+            0,
+            Math.Max(0, pageCount - 1));
+        return true;
     }
 
     public void ShowNotes()
@@ -11567,9 +11887,17 @@ public sealed class DocumentView : Control
             refreshedGeneratedRegion = true;
         }
 
+        if (_doc.Blocks.Any(TableOfFigures.IsTableOfFiguresParagraph))
+        {
+            RefreshTableOfFigures(TableOfFigures.ExistingLabelText(_doc) ?? Captions.FigureLabelText);
+            refreshedGeneratedRegion = true;
+        }
+
         if (TableOfAuthoritiesRegionPlanner.ContainsRegion(_doc))
         {
-            var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(_doc);
+            var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(
+                _doc,
+                pageResolver: BuildTableOfAuthoritiesPageResolver());
             ApplyGeneratedReferencePlan(plan, "Update Table of Authorities", adjustCaretForInsert: false);
             refreshedGeneratedRegion = true;
         }
@@ -11592,7 +11920,8 @@ public sealed class DocumentView : Control
             "AUTHOR" => _doc.Properties.Author ?? string.Empty,
             "TITLE" => _doc.Properties.Title ?? string.Empty,
             "FILENAME" => string.Empty,
-            "PAGE" or "NUMPAGES" => "1",
+            "PAGE" => ResolvePageNumberFieldText(),
+            "NUMPAGES" => "1",
             _ => fallback,
         };
 
@@ -11607,9 +11936,16 @@ public sealed class DocumentView : Control
         RunFieldKind.Subject     => _doc.Properties.Subject ?? string.Empty,
         RunFieldKind.Keywords    => _doc.Properties.Keywords ?? string.Empty,
         RunFieldKind.DocComments => _doc.Properties.Comments ?? string.Empty,
-        RunFieldKind.PageNumber or RunFieldKind.NumPages => "1",
+        RunFieldKind.PageNumber  => ResolvePageNumberFieldText(),
+        RunFieldKind.NumPages    => "1",
         _ => string.Empty,
     };
+
+    private string ResolvePageNumberFieldText()
+    {
+        var firstValue = Math.Max(1, _doc.Page.PageNumberStartAt ?? 1);
+        return PageNumberFormatDialogPlanner.FormatPageNumber(firstValue, _doc.Page.PageNumberFormat);
+    }
 
     /// <summary>
     /// AV-INSERT2: Insert an inline equation at the caret (Word's Insert &gt; Equation). The equation is
@@ -13251,6 +13587,103 @@ public sealed class DocumentView : Control
         return cells;
     }
 
+    private List<Cell> DisplayCells(Paragraph paragraph)
+    {
+        if (paragraph.Runs.All(run => run.Equation is null))
+            return FallbackCells(paragraph.PlainText);
+
+        var cells = new List<Cell>();
+        foreach (var run in paragraph.Runs)
+        {
+            if (run.Equation is { } equation)
+            {
+                AddEquationDisplayCells(equation, run.Formatting, cells);
+                continue;
+            }
+
+            foreach (var ch in run.Text)
+                cells.Add(new Cell(ch, run.Formatting));
+        }
+        return cells;
+    }
+
+    private void AddEquationDisplayCells(Equation equation, RunFormatting baseFormatting, List<Cell> cells)
+    {
+        var plan = EquationVisualPlanner.Build(equation);
+        foreach (var element in plan.Elements)
+            AddEquationVisualElement(element, baseFormatting, cells);
+    }
+
+    private void AddEquationVisualElement(
+        EquationVisualElement element,
+        RunFormatting baseFormatting,
+        List<Cell> cells)
+    {
+        _equationVisualElements.Add((
+            element.Kind,
+            element.LinearText,
+            element.Numerator,
+            element.Denominator,
+            element.Radicand,
+            element.Degree,
+            element.Operator,
+            element.LowerLimit,
+            element.UpperLimit,
+            element.Operand,
+            element.MatrixRows,
+            element.BaseText,
+            element.Accent,
+            element.BarTop,
+            element.OpenDelimiter,
+            element.CloseDelimiter,
+            element.GroupCharacter,
+            element.GroupCharacterPosition,
+            element.FunctionName,
+            element.FunctionArgument));
+
+        foreach (var segment in element.Segments)
+            AddEquationVisualSegment(segment, baseFormatting, cells);
+    }
+
+    private void AddEquationVisualSegment(
+        EquationVisualSegment segment,
+        RunFormatting baseFormatting,
+        List<Cell> cells)
+    {
+        _equationVisualSegments.Add((
+            segment.Text,
+            segment.Role,
+            segment.Style.BaselineRole,
+            segment.Style.FontSizeScale,
+            segment.Style.FontFamily,
+            segment.Style.Italic));
+
+        var fmt = ApplyEquationVisualStyle(baseFormatting, segment.Style);
+        foreach (var ch in segment.Text)
+            cells.Add(new Cell(ch, fmt));
+    }
+
+    private static RunFormatting ApplyEquationVisualStyle(RunFormatting baseFormatting, EquationVisualStyle style)
+    {
+        var verticalAlign = style.BaselineRole switch
+        {
+            EquationVisualBaselineRole.Superscript => VerticalAlign.Superscript,
+            EquationVisualBaselineRole.Subscript => VerticalAlign.Subscript,
+            _ => VerticalAlign.Baseline
+        };
+
+        var styled = baseFormatting with
+        {
+            FontFamily = style.FontFamily,
+            Italic = style.Italic,
+            VerticalAlign = verticalAlign
+        };
+
+        return verticalAlign == VerticalAlign.Baseline && Math.Abs(style.FontSizeScale - 1.0) > 0.001
+            ? styled with { FontSizePt = (baseFormatting.FontSizePt ?? DefaultFontSizePt) * style.FontSizeScale }
+            : styled;
+    }
+
     private static List<Cell> FallbackCells(string text)
     {
         var cells = new List<Cell>(text.Length);
@@ -13762,6 +14195,18 @@ public sealed class DocumentView : Control
 
     // ── HF: header/footer render item ─────────────────────────────────────────────────────────────
 
+    private sealed class HfSegment
+    {
+        public int StopIndex;
+        public string Text = string.Empty;
+        public RunFormatting Fmt = RunFormatting.Default;
+        public int ModelStart;
+        public InlineImage? Image;
+        public string? ImageSignature;
+        public double Width;
+        public double Height;
+    }
+
     /// <summary>One pre-computed line to draw in a header or footer band.</summary>
     private sealed class HfRenderItem
     {
@@ -13777,6 +14222,11 @@ public sealed class DocumentView : Control
         public double AvailableWidth;
         /// <summary>Paragraph alignment for this line.</summary>
         public TextAlignment Alignment;
+        public InlineImage? Image;
+        public string? ImageSignature;
+        public string SlotName = string.Empty;
+        public double Width;
+        public double Height;
 
         // ── AV-HFEDIT: editing back-reference + offset mapping ────────────────────────────────────
         /// <summary>
@@ -13878,6 +14328,7 @@ public sealed class DocumentView : Control
         public WordArtStyle Style;
         public double       FontSizePt  = 36;
         public WordArtWarp  Warp;
+        public DrawingObjectEffectsPlan Effects = DrawingObjectEffectsPlan.None;
     }
 
     private sealed class FloatingSmartArtData
@@ -13894,6 +14345,8 @@ public sealed class DocumentView : Control
         // Flattened node texts (first-level nodes + their children depth-first).
         public List<string>     NodeTexts = [];
         public List<SmartArtNodeVisualPlan> NodePlans = [];
+        public SmartArtHierarchyGeometryPlan? HierarchyGeometry;
+        public SmartArtLayoutGeometryPlan? LayoutGeometry;
         public List<Color>      NodeFills = [];
         public Color            NodeTextColor = Colors.White;
     }
@@ -13942,7 +14395,30 @@ public sealed class DocumentView : Control
             Style = plan.WordArt?.Style ?? WordArtStyle.FillBlue,
             FontSizePt = (plan.WordArt?.FontSizeDip ?? 48) / PxPerPoint,
             Warp = plan.WordArt?.Warp ?? WordArtWarp.None,
+            Effects = plan.Effects,
         };
+
+    private static FloatingWordArtData BuildInlineWordArtData(
+        WordArt wordArt,
+        Rect rect,
+        int blockIndex,
+        int runIndex)
+    {
+        var plan = DrawingObjectVisualPlanner.BuildInlineWordArtPlan(wordArt);
+        return new FloatingWordArtData
+        {
+            Rect = rect,
+            BehindText = false,
+            ZOrder = 0,
+            BlockIndex = blockIndex,
+            RunIndex = runIndex,
+            Text = plan.WordArt.Text,
+            Style = plan.WordArt.Style,
+            FontSizePt = plan.WordArt.FontSizeDip / PxPerPoint,
+            Warp = plan.WordArt.Warp,
+            Effects = plan.Effects,
+        };
+    }
 
     private static FloatingSmartArtData BuildFloatingSmartArtData(
         SmartArt smartArt,
@@ -13961,11 +14437,13 @@ public sealed class DocumentView : Control
             ZOrder = zOrder,
             BlockIndex = blockIndex,
             RunIndex = runIndex,
-            Kind = smartArt.Kind,
+            Kind = plan.Kind,
             LayoutId = plan.LayoutId,
             Style = plan.Style,
             NodeTexts = plan.Nodes.Select(n => n.Text).ToList(),
             NodePlans = plan.Nodes.ToList(),
+            HierarchyGeometry = plan.HierarchyGeometry,
+            LayoutGeometry = plan.LayoutGeometry,
             NodeFills = plan.Nodes.Select(n => ToAvaloniaChartColor(n.FillHex)).ToList(),
             NodeTextColor = plan.Nodes.Count > 0
                 ? ToAvaloniaChartColor(plan.Nodes[0].TextHex)
@@ -14817,6 +15295,7 @@ public sealed class DocumentView : Control
 
         var rect = wd.Rect;
         var (fillHex, outlineHex, bold) = WordArtStyleToColors(wd.Style);
+        DrawFloatingWordArtEffects(context, wd, rect);
 
         // Draw a light background frame so the WordArt region is visible even without warp geometry.
         context.DrawRectangle(null,
@@ -14875,6 +15354,63 @@ public sealed class DocumentView : Control
         }
     }
 
+    private static string? BuildFloatingGroupChildEffectSummary(FloatingGroupChildData child)
+    {
+        var (kind, effects) = child.Kind switch
+        {
+            FloatingGroupChildData.ChildKind.Shape when child.Shape?.Effects.HasAny == true =>
+                ("Shape", child.Shape.Effects),
+            FloatingGroupChildData.ChildKind.WordArt when child.WordArt?.Effects.HasAny == true =>
+                ("WordArt", child.WordArt.Effects),
+            _ => ((string?)null, DrawingObjectEffectsPlan.None)
+        };
+
+        return kind is null
+            ? null
+            : "GroupChild"
+              + child.ChildIndex.ToString(CultureInfo.InvariantCulture)
+              + ":"
+              + kind
+              + ":"
+              + effects.Summary.Replace(", ", "+", StringComparison.Ordinal);
+    }
+
+    private static void DrawFloatingWordArtEffects(DrawingContext context, FloatingWordArtData wd, Rect rect)
+    {
+        var effects = wd.Effects;
+        if (!effects.HasAny)
+            return;
+
+        if (effects.HasShadow)
+        {
+            var shadowColor = TryParseAvaloniaColor(effects.ShadowColorHex, out var parsed)
+                ? parsed
+                : Colors.Black;
+            var radians = effects.ShadowDirectionDegrees * Math.PI / 180.0;
+            var distance = effects.ShadowDistanceDip > 0 ? effects.ShadowDistanceDip : 3.0;
+            var offsetX = Math.Cos(radians) * distance;
+            var offsetY = Math.Sin(radians) * distance;
+            var spread = Math.Max(2.0, effects.ShadowBlurDip * 0.2);
+            context.FillRectangle(
+                EffectBrush(shadowColor, effects.ShadowOpacity * 0.45),
+                OffsetAndInflate(rect, offsetX, offsetY, spread));
+        }
+
+        if (effects.HasGlow)
+        {
+            var glowColor = TryParseAvaloniaColor(effects.GlowColorHex, out var parsed)
+                ? parsed
+                : Color.FromRgb(0x44, 0x72, 0xC4);
+            var radius = Math.Max(2.0, effects.GlowRadiusDip);
+            context.FillRectangle(
+                EffectBrush(glowColor, effects.GlowOpacity * 0.18),
+                OffsetAndInflate(rect, 0, 0, radius * 0.7));
+            context.FillRectangle(
+                EffectBrush(glowColor, effects.GlowOpacity * 0.28),
+                OffsetAndInflate(rect, 0, 0, radius * 0.35));
+        }
+    }
+
     /// <summary>
     /// Renders a floating SmartArt diagram at its page-space rect.
     /// Rendered: node topology — boxes with text labels + connecting lines — at the correct placement.
@@ -14900,57 +15436,28 @@ public sealed class DocumentView : Control
         // Draw node boxes.
         const double nodePad  = 6;
         const double nodeH    = 26;
-        const double connGap  = 8;
 
         var areaTop   = rect.Y + headerFt.Height + 6;
         var areaH     = rect.Height - (areaTop - rect.Y) - nodePad;
         var areaW     = rect.Width - 2 * nodePad;
 
-        if (sd.Kind == SmartArtKind.Hierarchy)
+        if (sd.HierarchyGeometry is { Nodes.Count: > 0 } hierarchy)
         {
-            // Simple top-down: root on row 0, children on row 1, evenly spaced.
-            var roots    = sd.NodeTexts.Count > 0 ? new[] { sd.NodeTexts[0] } : [];
-            var children = sd.NodeTexts.Skip(1).ToArray();
-
-            // Root box.
-            var rootW = Math.Min(areaW, 120);
-            var rootX = rect.X + (rect.Width - rootW) / 2;
-            var rootY = areaTop + nodePad;
-            var rootRect = new Rect(rootX, rootY, rootW, nodeH);
-            DrawSmartArtNodeBox(context, sd, 0, rootRect);
-            DrawSmartArtNodeText(context, roots.Length > 0 ? roots[0] : string.Empty, rootRect, SmartArtTextColorAt(sd, 0));
-
-            if (children.Length > 0)
-            {
-                var childW  = Math.Min((areaW - (children.Length - 1) * connGap) / children.Length, 90);
-                var childY  = rootY + nodeH + connGap * 2;
-                var totalChildW = childW * children.Length + connGap * (children.Length - 1);
-                var childStartX = rect.X + (rect.Width - totalChildW) / 2;
-
-                // Vertical line from root to child row.
-                var midRootX = rootX + rootW / 2;
-                var connectorPen = SmartArtConnectorPenAt(sd, 0);
-                context.DrawLine(connectorPen, new Point(midRootX, rootY + nodeH), new Point(midRootX, childY - connGap));
-                // Horizontal line across child tops.
-                if (children.Length > 1)
-                {
-                    context.DrawLine(connectorPen,
-                        new Point(childStartX + childW / 2, childY - connGap),
-                        new Point(childStartX + (children.Length - 1) * (childW + connGap) + childW / 2, childY - connGap));
-                }
-
-                for (var ci = 0; ci < children.Length; ci++)
-                {
-                    var cx = childStartX + ci * (childW + connGap);
-                    var childRect = new Rect(cx, childY, childW, nodeH);
-                    DrawSmartArtNodeBox(context, sd, ci + 1, childRect);
-                    DrawSmartArtNodeText(context, children[ci], childRect, SmartArtTextColorAt(sd, ci + 1));
-                    // Vertical drop line from horizontal bus to child.
-                    context.DrawLine(connectorPen,
-                        new Point(cx + childW / 2, childY - connGap),
-                        new Point(cx + childW / 2, childY));
-                }
-            }
+            var hierarchyTarget = new Rect(
+                rect.X + nodePad,
+                areaTop + nodePad,
+                areaW,
+                Math.Max(1, areaH - nodePad));
+            DrawSmartArtHierarchy(context, sd, hierarchy, hierarchyTarget);
+        }
+        else if (sd.LayoutGeometry is { Nodes.Count: > 0 } layoutGeometry)
+        {
+            var layoutTarget = new Rect(
+                rect.X + nodePad,
+                areaTop + nodePad,
+                areaW,
+                Math.Max(1, areaH - nodePad));
+            DrawSmartArtLayoutGeometry(context, sd, layoutGeometry, layoutTarget);
         }
         else
         {
@@ -14984,6 +15491,132 @@ public sealed class DocumentView : Control
                     bx += arrowW + 2;
                 }
             }
+        }
+    }
+
+    private void DrawSmartArtLayoutGeometry(
+        DrawingContext context,
+        FloatingSmartArtData sd,
+        SmartArtLayoutGeometryPlan layout,
+        Rect target)
+    {
+        var naturalWidth = Math.Max(1, layout.NaturalWidth);
+        var naturalHeight = Math.Max(1, layout.NaturalHeight);
+        var scale = Math.Min(target.Width / naturalWidth, target.Height / naturalHeight);
+        if (!double.IsFinite(scale) || scale <= 0)
+            scale = 1;
+
+        var contentWidth = naturalWidth * scale;
+        var contentHeight = naturalHeight * scale;
+        var offsetX = target.X + Math.Max(0, (target.Width - contentWidth) / 2);
+        var offsetY = target.Y + Math.Max(0, (target.Height - contentHeight) / 2);
+
+        Point ScalePoint(double x, double y) =>
+            new(offsetX + x * scale, offsetY + y * scale);
+
+        Rect ScaleRect(SmartArtLayoutNodeGeometry node) =>
+            new(
+                offsetX + node.X * scale,
+                offsetY + node.Y * scale,
+                node.Width * scale,
+                node.Height * scale);
+
+        foreach (var connector in layout.Connectors)
+        {
+            if (connector.SourceNodeIndex < 0 || connector.SourceNodeIndex >= sd.NodePlans.Count)
+                continue;
+
+            var start = ScalePoint(connector.X1, connector.Y1);
+            var end = ScalePoint(connector.X2, connector.Y2);
+            var pen = SmartArtConnectorPenAt(sd, connector.SourceNodeIndex);
+            context.DrawLine(pen, start, end);
+            if (connector.Kind == SmartArtLayoutConnectorKind.Arrow)
+                DrawSmartArtArrowHead(context, pen, start, end);
+        }
+
+        foreach (var node in layout.Nodes)
+        {
+            if (node.NodeIndex < 0 || node.NodeIndex >= sd.NodeTexts.Count)
+                continue;
+
+            var nodeRect = ScaleRect(node);
+            DrawSmartArtNodeBox(context, sd, node.NodeIndex, nodeRect);
+            DrawSmartArtNodeText(context, sd.NodeTexts[node.NodeIndex], nodeRect, SmartArtTextColorAt(sd, node.NodeIndex));
+        }
+    }
+
+    private static void DrawSmartArtArrowHead(DrawingContext context, Pen pen, Point start, Point end)
+    {
+        var dx = end.X - start.X;
+        var dy = end.Y - start.Y;
+        var length = Math.Sqrt(dx * dx + dy * dy);
+        if (length <= 0.001)
+            return;
+
+        var ux = dx / length;
+        var uy = dy / length;
+        var px = -uy;
+        var py = ux;
+        const double arrowLength = 6;
+        const double arrowWidth = 4;
+
+        var p1 = new Point(
+            end.X - ux * arrowLength + px * arrowWidth,
+            end.Y - uy * arrowLength + py * arrowWidth);
+        var p2 = new Point(
+            end.X - ux * arrowLength - px * arrowWidth,
+            end.Y - uy * arrowLength - py * arrowWidth);
+
+        context.DrawLine(pen, end, p1);
+        context.DrawLine(pen, end, p2);
+    }
+
+    private void DrawSmartArtHierarchy(
+        DrawingContext context,
+        FloatingSmartArtData sd,
+        SmartArtHierarchyGeometryPlan hierarchy,
+        Rect target)
+    {
+        var naturalWidth = Math.Max(1, hierarchy.NaturalWidth);
+        var naturalHeight = Math.Max(1, hierarchy.NaturalHeight);
+        var scale = Math.Min(target.Width / naturalWidth, target.Height / naturalHeight);
+        if (!double.IsFinite(scale) || scale <= 0)
+            scale = 1;
+
+        var contentWidth = naturalWidth * scale;
+        var contentHeight = naturalHeight * scale;
+        var offsetX = target.X + Math.Max(0, (target.Width - contentWidth) / 2);
+        var offsetY = target.Y + Math.Max(0, (target.Height - contentHeight) / 2);
+
+        Point ScalePoint(double x, double y) =>
+            new(offsetX + x * scale, offsetY + y * scale);
+
+        Rect ScaleRect(SmartArtHierarchyNodeGeometry node) =>
+            new(
+                offsetX + node.X * scale,
+                offsetY + node.Y * scale,
+                node.Width * scale,
+                node.Height * scale);
+
+        foreach (var connector in hierarchy.Connectors)
+        {
+            if (connector.ParentNodeIndex < 0 || connector.ParentNodeIndex >= sd.NodePlans.Count)
+                continue;
+
+            context.DrawLine(
+                SmartArtConnectorPenAt(sd, connector.ParentNodeIndex),
+                ScalePoint(connector.X1, connector.Y1),
+                ScalePoint(connector.X2, connector.Y2));
+        }
+
+        foreach (var node in hierarchy.Nodes)
+        {
+            if (node.NodeIndex < 0 || node.NodeIndex >= sd.NodeTexts.Count)
+                continue;
+
+            var nodeRect = ScaleRect(node);
+            DrawSmartArtNodeBox(context, sd, node.NodeIndex, nodeRect);
+            DrawSmartArtNodeText(context, sd.NodeTexts[node.NodeIndex], nodeRect, SmartArtTextColorAt(sd, node.NodeIndex));
         }
     }
 

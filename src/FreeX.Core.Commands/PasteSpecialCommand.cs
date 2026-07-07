@@ -110,6 +110,9 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
                     return CommandGuards.RejectSheetProtected();
         }
 
+        if (CommandGuards.RejectIfSplitsArray(sheet, cells.Select(c => c.Address)) is { } splitsArrayRejection)
+            return splitsArrayRejection;
+
         _snapshot = [];
         foreach (var (address, cell, sourceAddress) in cells)
         {
@@ -198,7 +201,8 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
                     continue;
                 }
 
-                yield return (destination, BuildCell(workbook, sheet, destination, sourceCell), sourceAddress);
+                if (TryBuildCell(workbook, sheet, destination, sourceCell, out var cell))
+                    yield return (destination, cell, sourceAddress);
             }
 
             yield break;
@@ -217,25 +221,42 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
                     (int)_destination.Row - (int)_sourceRange.Start.Row,
                     (int)_destination.Col - (int)_sourceRange.Start.Col);
 
-            yield return (destination, BuildCell(workbook, sheet, destination, sourceCell), sourceAddress);
+            if (TryBuildCell(workbook, sheet, destination, sourceCell, out var cell))
+                yield return (destination, cell, sourceAddress);
         }
     }
 
-    private Cell BuildCell(Workbook workbook, Sheet sheet, CellAddress destination, Cell sourceCell)
+    /// <summary>
+    /// Builds the destination cell for an arithmetic Paste Special operation. Returns false (leaving
+    /// <paramref name="cell"/> unset) when the operation is a no-op — e.g. the destination is
+    /// non-numeric text/error (Excel leaves it untouched rather than writing #VALUE!) or both source
+    /// and destination are blank (Excel leaves it blank rather than writing a literal 0) — so the
+    /// caller skips this cell entirely: no value/style/rich-text/hyperlink change.
+    /// </summary>
+    private bool TryBuildCell(Workbook workbook, Sheet sheet, CellAddress destination, Cell sourceCell, out Cell cell)
     {
-        var cell = sourceCell.Clone();
-        if (_options.Operation != PasteSpecialOperation.None)
+        if (_options.Operation == PasteSpecialOperation.None)
         {
-            var existing = sheet.GetCell(destination)?.Clone() ?? Cell.FromValue(BlankValue.Instance);
-            existing.StyleId = sheet.GetStyleOnly(destination.Row, destination.Col) ?? existing.StyleId;
-            cell = existing;
-            cell.Value = ApplyOperation(existing.Value, sourceCell.Value, _options.Operation);
-            cell.FormulaText = null;
-            if (_options.ContentKind == PasteSpecialContentKind.ValuesAndNumberFormats)
-                cell.StyleId = MergeNumberFormat(workbook, existing.StyleId, sourceCell.StyleId);
+            cell = sourceCell.Clone();
+            return true;
         }
 
-        return cell;
+        var existing = sheet.GetCell(destination)?.Clone() ?? Cell.FromValue(BlankValue.Instance);
+        existing.StyleId = sheet.GetStyleOnly(destination.Row, destination.Col) ?? existing.StyleId;
+        var result = ApplyOperation(existing.Value, sourceCell.Value, _options.Operation);
+        if (result is null)
+        {
+            cell = existing;
+            return false;
+        }
+
+        existing.Value = result;
+        existing.FormulaText = null;
+        if (_options.ContentKind == PasteSpecialContentKind.ValuesAndNumberFormats)
+            existing.StyleId = MergeNumberFormat(workbook, existing.StyleId, sourceCell.StyleId);
+
+        cell = existing;
+        return true;
     }
 
     private static StyleId MergeNumberFormat(Workbook workbook, StyleId destinationStyleId, StyleId sourceStyleId)
@@ -248,10 +269,31 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
     private static bool IsBlank(Cell cell) =>
         cell.FormulaText is null && cell.Value is BlankValue;
 
-    private static ScalarValue ApplyOperation(ScalarValue destination, ScalarValue source, PasteSpecialOperation operation)
+    private static ScalarValue? ApplyOperation(ScalarValue destination, ScalarValue source, PasteSpecialOperation operation) =>
+        PasteArithmetic.ApplyOperation(destination, source, operation);
+}
+
+/// <summary>
+/// Shared arithmetic for Paste Special's Add/Subtract/Multiply/Divide "Operation", used both by
+/// <see cref="PasteSpecialCellsCommand"/> (internal-clipboard paste) and by the external-text paste
+/// path (<see cref="ExternalTextPasteSpecialCommand"/>) so pasting a plain-text/TSV clipboard with an
+/// Operation selected combines with the destination the same way an internal-cells paste does.
+/// </summary>
+internal static class PasteArithmetic
+{
+    /// <summary>
+    /// Applies the Paste Special arithmetic operation, matching Excel: non-numeric, non-blank
+    /// operands (text, errors) leave the destination cell entirely unchanged rather than producing
+    /// a #VALUE! error, and a blank source combined with a blank destination stays blank rather than
+    /// materializing a literal 0. Returns null to signal "leave the destination cell unchanged".
+    /// </summary>
+    public static ScalarValue? ApplyOperation(ScalarValue destination, ScalarValue source, PasteSpecialOperation operation)
     {
         if (!TryNumber(destination, out var left) || !TryNumber(source, out var right))
-            return ErrorValue.Value;
+            return null;
+
+        if (destination is BlankValue && source is BlankValue)
+            return null;
 
         var result = operation switch
         {

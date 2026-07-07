@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
 using Free.Shared.Pdf;
@@ -64,10 +65,16 @@ public static class WorkbookPdfContentBuilder
         PortablePdfExportPlan exportPlan,
         PortablePdfExportPageRequest request)
     {
-        var sheet = workbook.GetSheetAt(request.SheetIndex);
         var contentPlan = PortablePdfPageContentPlanner.CreatePlan(workbook, request);
         if (!contentPlan.IsReady)
             throw new InvalidOperationException(contentPlan.StatusText);
+
+        // Resolve the sheet that actually owns this page's print range rather than indexing by
+        // request.SheetIndex -- SheetIndex is the position of the print AREA within the export
+        // plan's flattened SheetPlans list, which is not the same as the sheet's index in the
+        // workbook once any earlier sheet has more than one configured print area (see N45/N46).
+        var sheet = workbook.GetSheet(request.PrintRange.Start.Sheet)
+            ?? workbook.GetSheetAt(request.SheetIndex);
 
         var (pageW, pageH, mL, mR, mT, mB, headerBandPt, footerBandPt) =
             SheetPdfPageSetupResolver.ComputePdfGeometry(sheet);
@@ -142,13 +149,15 @@ public static class WorkbookPdfContentBuilder
 
             if (!string.IsNullOrEmpty(cell.DisplayText))
             {
-                // Font size honors the sheet's Scale%/Fit-to-pages ratio (shrink only, matching the
-                // grid geometry above) -- Excel's Page Setup scaling shrinks printed text along with
-                // everything else, matching the WPF print path's single ScaleTransform over the whole
-                // content area. Clamp is applied to the unscaled size first (matching the sheet's
-                // authored font sizes) and the result is then scaled, so a 50% scale on a 10pt font
-                // yields 5pt rather than re-clamping back up to the 7pt floor.
-                var textScale = Math.Min(1.0, scaleRatio);
+                // Font size honors the sheet's Scale%/Fit-to-pages ratio in both directions (shrink AND
+                // grow, matching the grid geometry above) -- Excel's Page Setup scaling shrinks/grows
+                // printed text along with everything else, matching the WPF print path's single
+                // ScaleTransform over the whole content area (which also rescales text overlay font
+                // sizes uncapped -- see RescaleTextOverlays). Clamp is applied to the unscaled size
+                // first (matching the sheet's authored font sizes) and the result is then scaled, so a
+                // 50% scale on a 10pt font yields 5pt rather than re-clamping back up to the 7pt floor,
+                // and a 200% scale on a 10pt font yields 20pt.
+                var textScale = scaleRatio;
                 var fontSize  = Math.Clamp(style.FontSize, 7, 10) * textScale;
                 var fontFace  = cell.IsTitle || style.Bold ? PdfFontFace.Bold : PdfFontFace.Regular;
                 // B&W mode: force font colour to black regardless of style.
@@ -202,9 +211,20 @@ public static class WorkbookPdfContentBuilder
         }
 
         // ── Header band ────────────────────────────────────────────────────────
-        var (header, footer) = ResolveHeaderFooterForPage(sheet, request.SheetPageNumber);
-        var pageNumber = request.SheetPageNumber;
-        var totalPages = exportPlan.TotalPageCount;
+        // N45/N46: page.SheetPageNumber is always 1-based per print area (PrintPageGridPlanner
+        // numbers every area's pages 1..N independently), so it neither honors sheet.FirstPageNumber
+        // nor continues across a sheet's multiple print areas. Resolve the printed page number the
+        // same way WorksheetPrintRenderPlanner.TryBuild does for WPF: a single counter, seeded from
+        // FirstPageNumber, running across every page that belongs to this sheet (all its print areas,
+        // in export order).
+        var pageNumber = ResolveEffectiveSheetPageNumber(exportPlan, request, sheet);
+        var (header, footer) = ResolveHeaderFooterForPage(sheet, pageNumber);
+        // &N (total pages) must reset per sheet, matching Excel and the WPF PrintRenderer path
+        // (RenderWorksheet computes totalPages = printPlan.GridPageCount + comment pages, scoped to
+        // that one sheet) -- NOT exportPlan.TotalPageCount, which sums every sheet in the export and
+        // would leak whole-workbook page counts into every sheet's &N when printing/exporting more
+        // than one sheet at once (O41).
+        var totalPages = ResolveEffectiveSheetTotalPages(exportPlan, sheet);
 
         // Header text: rendered just below the header margin from the top of the page.
         var headerY = pageH - headerEdgePt - 8;   // baseline approx 8pt below header edge
@@ -321,24 +341,25 @@ public static class WorkbookPdfContentBuilder
     // Page-setup helpers
     // -----------------------------------------------------------------------
 
+    /// <summary>
+    /// Resolves the sheet's Scale%/Fit-to-pages setting to a single shrink ratio for this page, using
+    /// <see cref="PagePaginationPlanner.CalculateEffectiveScalePercent"/> as the single source of truth
+    /// so this PDF path can never silently disagree with the neutral pagination plan (O42) -- it feeds
+    /// the same actual row/column page counts that were used to slice this sheet into pages, rather
+    /// than re-deriving an independent ratio here.
+    /// </summary>
     private static double ResolveScaleRatio(
         Sheet sheet,
         PortablePdfExportPlan exportPlan,
         PortablePdfExportPageRequest request)
     {
-        var scaleToFit = sheet.ScaleToFit;
-        if (scaleToFit.ScalePercent is { } pct && pct is >= 10 and <= 400)
-            return pct / 100.0;
-
-        // fit-to-pages: derive scale from actual page count vs. requested count.
         var sheetPlan = exportPlan.ExportPrintPlan.SheetPlans[request.SheetIndex];
-        double ratio = 1.0;
-        if (scaleToFit.FitToPagesWide is { } wide and >= 1 && sheetPlan.ColumnPageCount > wide)
-            ratio = Math.Min(ratio, wide / (double)sheetPlan.ColumnPageCount);
-        if (scaleToFit.FitToPagesTall is { } tall and >= 1 && sheetPlan.RowPageCount > tall)
-            ratio = Math.Min(ratio, tall / (double)sheetPlan.RowPageCount);
+        var effectiveScalePercent = PagePaginationPlanner.CalculateEffectiveScalePercent(
+            sheet.ScaleToFit,
+            sheetPlan.RowPageCount,
+            sheetPlan.ColumnPageCount);
 
-        return Math.Max(0.1, ratio);
+        return Math.Max(0.1, effectiveScalePercent / 100.0);
     }
 
     /// <summary>
@@ -387,13 +408,15 @@ public static class WorkbookPdfContentBuilder
             totalRowHeightPt += pt;
         }
 
-        // Apply the sheet's configured Scale%/Fit-to-pages ratio directly and unconditionally first
-        // (only for shrink — scale-up via ScalePercent > 100 is out of scope here and left to the
-        // pre-existing overflow-fit behavior below). This is what makes "Adjust to 50% normal size"
-        // visibly shrink a grid whose real size already fit the page (e.g. a small sheet), matching
-        // Excel: Scale% is a direct multiplier on every printed element, not merely a repagination
-        // hint that only matters once content overflows.
-        if (scaleRatio < 1.0)
+        // Apply the sheet's configured Scale%/Fit-to-pages ratio directly and unconditionally first,
+        // for both shrink (&lt;100%) and grow (&gt;100%) -- matching the WPF PrintRenderer path, whose
+        // single ScaleTransform(scaleRatio, scaleRatio) is pushed whenever scaleRatio != 1.0
+        // (PrintRenderer.HeaderFooter.cs:138), not merely when it shrinks. This is what makes
+        // "Adjust to 50% normal size" visibly shrink a grid whose real size already fit the page, and
+        // "Adjust to 200% normal size" visibly grow one, matching Excel: Scale% is a direct multiplier
+        // on every printed element, not merely a repagination hint that only matters once content
+        // overflows.
+        if (scaleRatio != 1.0)
         {
             for (var i = 0; i < colWidthsPt.Length; i++)
                 colWidthsPt[i] *= scaleRatio;
@@ -602,6 +625,62 @@ public static class WorkbookPdfContentBuilder
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Computes the printed page number for <paramref name="request"/> honoring
+    /// <see cref="Sheet.FirstPageNumber"/> and continuing sequentially across every print area that
+    /// belongs to the same sheet, matching <c>WorksheetPrintRenderPlanner.TryBuild</c>'s single
+    /// running counter (seeded from <c>sheet.FirstPageNumber ?? 1</c>) across areas -- unlike
+    /// <see cref="PortablePdfExportPageRequest.SheetPageNumber"/>, which <see cref="PrintPageGridPlanner"/>
+    /// always numbers 1..N independently per print area.
+    /// </summary>
+    private static int ResolveEffectiveSheetPageNumber(
+        PortablePdfExportPlan exportPlan,
+        PortablePdfExportPageRequest request,
+        Sheet sheet)
+    {
+        var firstPageNumber = sheet.FirstPageNumber ?? 1;
+        var offset = 0;
+        foreach (var candidate in exportPlan.PageRequests)
+        {
+            if (candidate.PrintRange.Start.Sheet != sheet.Id)
+                continue;
+
+            if (candidate.ExportPageNumber == request.ExportPageNumber)
+                return firstPageNumber + offset;
+
+            offset++;
+        }
+
+        // Should not happen (request always comes from exportPlan.PageRequests), but fall back to
+        // the area-local numbering rather than throwing.
+        return firstPageNumber + request.SheetPageNumber - 1;
+    }
+
+    /// <summary>
+    /// Computes the &amp;N total-page-count value for <paramref name="sheet"/>: the count of every
+    /// actual <see cref="PortablePdfExportPageRequest"/> belonging to that sheet (a sheet can have more
+    /// than one configured print area — see N45/N46), INCLUDING any "at end of sheet" comment-summary
+    /// pages <c>PortablePdfExportPlanner.AddCommentSummaryPageRequests</c> appends after the grid pages
+    /// -- NOT merely <see cref="WorkbookSheetExportPrintPlanSummary.PageCount"/> (grid pages only), and
+    /// NOT <see cref="WorkbookExportPrintPlan.TotalPageCount"/>, which sums across every sheet in the
+    /// export. Real Excel resets &amp;N per sheet in a multi-sheet print job and includes the appended
+    /// comment pages in that count, and so does FreeX's own WPF path (<c>PrintRenderer.RenderWorksheet</c>
+    /// computes totalPages = printPlan.GridPageCount + commentSummaryPages.Count).
+    /// </summary>
+    private static int ResolveEffectiveSheetTotalPages(PortablePdfExportPlan exportPlan, Sheet sheet)
+    {
+        var total = 0;
+        foreach (var candidate in exportPlan.PageRequests)
+        {
+            if (candidate.PrintRange.Start.Sheet == sheet.Id)
+                total++;
+        }
+
+        // Should not happen (the sheet owning this page must have at least one request), but fall
+        // back to the whole-export total rather than reporting 0 pages.
+        return total > 0 ? total : exportPlan.TotalPageCount;
     }
 
     private static (WorksheetHeaderFooter Header, WorksheetHeaderFooter Footer)

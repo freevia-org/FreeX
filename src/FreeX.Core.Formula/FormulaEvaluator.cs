@@ -214,8 +214,15 @@ public sealed partial class FormulaEvaluator
 
 }
 
-/// <summary>A first-class function value created by LAMBDA. Holds parameter names and the unevaluated body AST.</summary>
-public sealed record LambdaValue(IReadOnlyList<string> Parameters, FormulaNode Body) : ScalarValue;
+/// <summary>
+/// A first-class function value created by LAMBDA. Holds parameter names, the unevaluated body AST,
+/// and the lexical environment (<see cref="Closure"/>) captured at the point the LAMBDA(...) expression
+/// was evaluated — e.g. the LET scope that defined it. Excel LAMBDA is lexically scoped: free variables
+/// in the body resolve against the definition-site environment, never the call site's, so this is
+/// evaluated against <c>Closure</c> (falling back to the call-site context only for a LambdaValue that
+/// captured no enclosing scope, i.e. a bare top-level LAMBDA).
+/// </summary>
+public sealed record LambdaValue(IReadOnlyList<string> Parameters, FormulaNode Body, IEvalContext? Closure) : ScalarValue;
 
 internal sealed record DirectTextLiteralValue(string Value) : ScalarValue;
 internal sealed record ReferencedScalarValue(ScalarValue Value) : ScalarValue;

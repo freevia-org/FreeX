@@ -187,29 +187,68 @@ internal static class XlsxSlicerTimelineWriter
                         OptionalAttribute("caption", slicer.Caption),
                         OptionalAttribute("style", slicer.StyleName),
                         new XAttribute("cache", cacheName),
-                        new XAttribute("rowHeight", "228600")))));
+                        new XAttribute("rowHeight", "228600"),
+                        // P10: columnCount/showCaption are read by XlsxSlicerTimelineMetadataReader
+                        // (defaults: columnCount=1, showCaption=true when absent) but were never
+                        // emitted here, so a fresh save silently dropped a non-default tile-column
+                        // layout or a hidden caption band on every round trip. Only emit when the
+                        // value differs from Excel's default so an unchanged default-shaped slicer's
+                        // XML stays exactly as before this fix.
+                        slicer.ColumnCount != 1
+                            ? new XAttribute("columnCount", slicer.ColumnCount.ToString(CultureInfo.InvariantCulture))
+                            : null,
+                        !slicer.ShowCaption
+                            ? new XAttribute("showCaption", "0")
+                            : null))));
             if (isNewCache)
             {
+                // P11: a table slicer (SourceTableId set, no pivot binding) binds to a structured table via
+                // an x15:tableSlicerCache ext, NOT a <pivotTables> element. A pivot slicer keeps the
+                // <pivotTables> binding. The FreeX selected-item ext (when present) shares the same extLst.
+                var isTableSlicer = slicer.SourceTableId is not null &&
+                                    string.IsNullOrWhiteSpace(slicer.SourcePivotTableName);
+
+                var extensions = new List<XElement>();
+                if (isTableSlicer)
+                {
+                    extensions.Add(new XElement(WorkbookNs + "ext",
+                        new XAttribute("uri", "{2F2917AC-EB37-4324-AD4E-5DD8C200BD13}"),
+                        new XElement(TimelineNs + "tableSlicerCache",
+                            new XAttribute("tableId", slicer.SourceTableId!.Value.ToString(CultureInfo.InvariantCulture)),
+                            slicer.SourceTableColumnId is { } tableColumn
+                                ? new XAttribute("column", tableColumn.ToString(CultureInfo.InvariantCulture))
+                                : null)));
+                }
+
+                if (slicer.SelectedItems.Count > 0)
+                {
+                    extensions.Add(new XElement(WorkbookNs + "ext",
+                        new XAttribute("uri", "{9F2C6F77-9A06-4E1E-AF41-4DB3CB03A6A6}"),
+                        new XElement(freexNs + "selectedItems",
+                            slicer.SelectedItems.Select(item =>
+                                new XElement(freexNs + "selectedItem", new XAttribute("value", item))))));
+                }
+
                 XlsxPackageXmlEditor.ReplaceXml(archive, cachePath!, new XDocument(
                     new XElement(SlicerNs + "slicerCacheDefinition",
                         slicer.SelectedItems.Count == 0
                             ? null
                             : new XAttribute(XNamespace.Xmlns + "x", WorkbookNs.NamespaceName),
+                        isTableSlicer
+                            ? new XAttribute(XNamespace.Xmlns + "x15", TimelineNs.NamespaceName)
+                            : null,
                         new XAttribute("name", cacheName),
                         OptionalAttribute("sourceName", slicer.SourceFieldName),
-                        new XElement(SlicerNs + "pivotTables",
-                            new XElement(
-                                SlicerNs + "pivotTable",
-                                OptionalAttribute("name", slicer.SourcePivotTableName),
-                                new XAttribute("tabId", "1"))),
-                        slicer.SelectedItems.Count == 0
+                        isTableSlicer
                             ? null
-                            : new XElement(SlicerNs + "extLst",
-                                new XElement(WorkbookNs + "ext",
-                                    new XAttribute("uri", "{9F2C6F77-9A06-4E1E-AF41-4DB3CB03A6A6}"),
-                                    new XElement(freexNs + "selectedItems",
-                                        slicer.SelectedItems.Select(item =>
-                                            new XElement(freexNs + "selectedItem", new XAttribute("value", item)))))))));
+                            : new XElement(SlicerNs + "pivotTables",
+                                new XElement(
+                                    SlicerNs + "pivotTable",
+                                    OptionalAttribute("name", slicer.SourcePivotTableName),
+                                    new XAttribute("tabId", ResolvePivotHostTabId(workbook, workbookXml, slicer.SourcePivotTableName)))),
+                        extensions.Count == 0
+                            ? null
+                            : new XElement(SlicerNs + "extLst", extensions))));
             }
             var resolvedCachePath = cachePath!;
             var cacheRelationshipId = XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
@@ -341,6 +380,44 @@ internal static class XlsxSlicerTimelineWriter
 
         XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
         XlsxPackageXmlEditor.ReplaceXml(archive, workbookRelsPath, workbookRelsXml);
+    }
+
+    // P12: the slicerCache's pivotTable/@tabId is the sheetId of the worksheet hosting the pivot, not a
+    // hardcoded "1". Resolve the model sheet that owns the pivot, then read that sheet's sheetId from
+    // workbook.xml's <sheet name sheetId> (matched by name). Fall back to "1" when the pivot's host sheet
+    // (or its sheetId) can't be resolved, preserving the previous behaviour for degenerate packages.
+    private static string ResolvePivotHostTabId(Workbook workbook, XDocument workbookXml, string? sourcePivotTableName)
+    {
+        if (string.IsNullOrWhiteSpace(sourcePivotTableName))
+            return "1";
+
+        string? hostSheetName = null;
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (sheet.PivotTables.Any(pivot =>
+                    string.Equals(pivot.Name, sourcePivotTableName, StringComparison.OrdinalIgnoreCase)))
+            {
+                hostSheetName = sheet.Name;
+                break;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(hostSheetName))
+            return "1";
+
+        var sheetsElement = workbookXml.Root?.Element(WorkbookNs + "sheets");
+        foreach (var sheetElement in sheetsElement?.Elements(WorkbookNs + "sheet") ?? [])
+        {
+            if (string.Equals(sheetElement.Attribute("name")?.Value, hostSheetName, StringComparison.OrdinalIgnoreCase))
+            {
+                var sheetId = sheetElement.Attribute("sheetId")?.Value;
+                if (!string.IsNullOrWhiteSpace(sheetId))
+                    return sheetId;
+                break;
+            }
+        }
+
+        return "1";
     }
 
     private static string ResolveWorksheetPath(Workbook workbook, string? sourcePivotTableName)

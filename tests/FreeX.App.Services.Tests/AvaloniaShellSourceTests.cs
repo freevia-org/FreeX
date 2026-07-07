@@ -1493,7 +1493,13 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("SourceRect = CreateDrawingImageSourceRect(crop)");
         source.Should().Contain("private static Control CreateDrawingCellRangeSnapshotVisual(");
         source.Should().Contain("renderPlan.PictureGrid is not { } pictureGrid");
-        source.Should().Contain("var cellLookup = pictureGrid.Cells");
+        // Round-8 finding N52: PictureModel.Cells has no uniqueness constraint on (RowOffset,
+        // ColumnOffset), so a straight .ToDictionary(...) throws on adversarial/hand-edited .fxl
+        // files with duplicate offsets. The render was reshaped into a dedup-safe manual last-wins
+        // loop (still keyed by the same tuple), so pin that shape instead of the old ToDictionary call.
+        source.Should().Contain("var cellLookup = new Dictionary<(uint RowOffset, uint ColumnOffset), PictureCellSnapshot>();");
+        source.Should().Contain("foreach (var cell in pictureGrid.Cells)");
+        source.Should().Contain("cellLookup[(cell.RowOffset, cell.ColumnOffset)] = cell;");
         source.Should().Contain("Source = bitmap");
         source.Should().Contain("private static Control CreateDrawingTextBoxVisual(");
         source.Should().Contain("drawingObject.Text");
@@ -1558,8 +1564,13 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(e.Key)");
         source.Should().Contain("FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(e.KeyModifiers)");
         source.Should().Contain("intent.Action == ExcelEditKeyAction.CommitAndMove");
-        source.Should().Contain("var rowDelta = GetCellIndexDelta(current.Row, target.Row);");
-        source.Should().Contain("var colDelta = GetCellIndexDelta(current.Col, target.Col);");
+        // M-round12 (R12-avalonia-parity-deep) made Enter/Tab commit-and-move merge-aware: the
+        // formula box now resolves the landing cell through ExcelWorksheetNavigationPlanner's
+        // shared AdjustTargetPastMerge helper (mirrors the inline cell editor and the WPF host)
+        // instead of moving straight to the raw intent.Target.
+        source.Should().Contain("var adjustedTarget = ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(");
+        source.Should().Contain("var rowDelta = GetCellIndexDelta(current.Row, adjustedTarget.Row);");
+        source.Should().Contain("var colDelta = GetCellIndexDelta(current.Col, adjustedTarget.Col);");
         source.Should().Contain("_session.MoveActiveCell(rowDelta, colDelta);");
         source.Should().Contain("var result = _session.CommitCellText(_formulaBox.Text ?? \"\", UseR1C1ReferenceStyle);");
         source.Should().Contain("if (_isOpening || _isSaving)");
@@ -1677,7 +1688,13 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var cutResult = _session.TryCutSelectedRangeText();");
         source.Should().Contain("await clipboard.SetTextAsync(cutResult.Text);");
         source.Should().Contain("var copyResult = _session.TryCopySelectedRangeText();");
-        source.Should().Contain("await clipboard.SetTextAsync(copyResult.Text);");
+        // Copy places plain text AND an HTML table fragment on the OS clipboard together (review
+        // P47 — parity with real Excel and the WPF host's M7 CF_HTML export), via a DataTransfer
+        // instead of the plain SetTextAsync used by Cut (which does not need HTML — Excel's own
+        // Cut clipboard payload is plain-text-only in practice for this shell's parity target).
+        source.Should().Contain("using var transfer = new DataTransfer();");
+        source.Should().Contain("AddClipboardTextAndHtml(transfer, copiedText, _session.Viewport, _session.ActiveSheet, _session.SelectedRange, _session.Workbook.Theme);");
+        source.Should().Contain("await clipboard.SetDataAsync(transfer);");
         source.Should().Contain("var text = await clipboard.TryGetTextAsync();");
         source.Should().Contain("_session.ShouldPreferExternalClipboardImage(text)");
         source.Should().Contain("private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard, CellAddress destination)");
@@ -2163,7 +2180,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("dropdown.SelectionChanged += DataValidationDropdown_SelectionChanged;");
         source.Should().Contain("private static bool IsOpenActiveDropdownShortcut(KeyEventArgs args)");
         source.Should().Contain("args.Key == Key.Down && args.KeyModifiers == KeyModifiers.Alt;");
-        source.Should().Contain("e.Handled = OpenActiveDataValidationDropdown();");
+        // Alt+Down mirrors WPF's OpenActiveDropdown fallback chain: try the data-validation dropdown
+        // first, and when the active cell isn't a List-DV cell, fall through to the AutoFilter column
+        // dropdown when the active cell is a filter-button cell (review P35 — this shell used to only
+        // ever try the data-validation dropdown, silently doing nothing on a plain AutoFilter header).
+        source.Should().Contain("e.Handled = OpenActiveDataValidationDropdown() || OpenActiveAutoFilterDropdown();");
         source.Should().Contain("_activeDataValidationDropdown.IsDropDownOpen = true;");
         source.Should().Contain("private void DataValidationDropdown_SelectionChanged(object? sender, SelectionChangedEventArgs e)");
         source.Should().Contain("CommitDataValidationDropdownSelection(selected);");

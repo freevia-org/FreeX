@@ -1295,6 +1295,33 @@ public enum SourceType
 
     /// <summary>A Word electronic source (adds URL and accessed date fields).</summary>
     ElectronicSource = 7,
+
+    /// <summary>A Word patent source (adds inventor, patent number and filing/jurisdiction fields).</summary>
+    Patent = 8,
+
+    /// <summary>A Word interview source (adds interviewee/interviewer, medium and date fields).</summary>
+    Interview = 9,
+
+    /// <summary>A Word miscellaneous source for lightly structured material.</summary>
+    Misc = 10,
+
+    /// <summary>A Word film source (adds director, producer, writer, performer and production fields).</summary>
+    Film = 11,
+
+    /// <summary>A Word sound recording source (adds artist/composer/performer and album fields).</summary>
+    SoundRecording = 12,
+
+    /// <summary>A Word art source (adds artist, medium and holding/location fields).</summary>
+    Art = 13,
+
+    /// <summary>A Word internet site source (adds site/publisher, URL and accessed-date fields).</summary>
+    InternetSite = 14,
+
+    /// <summary>A Word performance source (adds performer/conductor, theater and date fields).</summary>
+    Performance = 15,
+
+    /// <summary>A Word bibliography case source (distinct from Table of Authorities citation marks).</summary>
+    Case = 16,
 }
 
 /// <summary>
@@ -1385,8 +1412,44 @@ public sealed class Source
     /// <summary>The conference or proceedings name for <see cref="SourceType.ConferenceProceedings"/>; null when unknown.</summary>
     public string? ConferenceName { get; init; }
 
+    /// <summary>The inventor role for a <see cref="SourceType.Patent"/>; null when unknown.</summary>
+    public string? Inventor { get; init; }
+
+    /// <summary>The interviewee role for a <see cref="SourceType.Interview"/>; null when unknown.</summary>
+    public string? Interviewee { get; init; }
+
+    /// <summary>The interviewer role for a <see cref="SourceType.Interview"/>; null when unknown.</summary>
+    public string? Interviewer { get; init; }
+
+    /// <summary>The artist role for <see cref="SourceType.Art"/> or <see cref="SourceType.SoundRecording"/>; null when unknown.</summary>
+    public string? Artist { get; init; }
+
+    /// <summary>The composer role for <see cref="SourceType.SoundRecording"/>; null when unknown.</summary>
+    public string? Composer { get; init; }
+
+    /// <summary>The conductor role for <see cref="SourceType.SoundRecording"/> or <see cref="SourceType.Performance"/>; null when unknown.</summary>
+    public string? Conductor { get; init; }
+
+    /// <summary>The director role for <see cref="SourceType.Film"/>; null when unknown.</summary>
+    public string? Director { get; init; }
+
+    /// <summary>The performer role for <see cref="SourceType.Film"/>, <see cref="SourceType.SoundRecording"/>, or <see cref="SourceType.Performance"/>; null when unknown.</summary>
+    public string? Performer { get; init; }
+
+    /// <summary>The producer role for <see cref="SourceType.Film"/> or <see cref="SourceType.SoundRecording"/>; null when unknown.</summary>
+    public string? ProducerName { get; init; }
+
+    /// <summary>The writer role for <see cref="SourceType.Film"/>; null when unknown.</summary>
+    public string? Writer { get; init; }
+
     /// <summary>The year of publication. Empty when unknown.</summary>
     public string Year { get; init; } = string.Empty;
+
+    /// <summary>The month value used by Word bibliography source types that carry a full date; null when unknown.</summary>
+    public string? Month { get; init; }
+
+    /// <summary>The day value used by Word bibliography source types that carry a full date; null when unknown.</summary>
+    public string? Day { get; init; }
 
     /// <summary>The institution responsible for a report; null when unknown / not applicable.</summary>
     public string? Institution { get; init; }
@@ -1405,6 +1468,42 @@ public sealed class Source
 
     /// <summary>The chapter number for a <see cref="SourceType.BookSection"/>; null when unknown.</summary>
     public string? ChapterNumber { get; init; }
+
+    /// <summary>The patent number for a <see cref="SourceType.Patent"/>; null when unknown.</summary>
+    public string? PatentNumber { get; init; }
+
+    /// <summary>The case number for a <see cref="SourceType.Case"/>; null when unknown.</summary>
+    public string? CaseNumber { get; init; }
+
+    /// <summary>The court for a <see cref="SourceType.Case"/>; null when unknown.</summary>
+    public string? Court { get; init; }
+
+    /// <summary>The reporter for a <see cref="SourceType.Case"/>; null when unknown.</summary>
+    public string? Reporter { get; init; }
+
+    /// <summary>The country/region jurisdiction for a <see cref="SourceType.Patent"/> or <see cref="SourceType.Case"/>; null when unknown.</summary>
+    public string? CountryRegion { get; init; }
+
+    /// <summary>The state/province jurisdiction for a <see cref="SourceType.Patent"/> or <see cref="SourceType.Case"/>; null when unknown.</summary>
+    public string? StateProvince { get; init; }
+
+    /// <summary>A source-specific medium, such as an interview medium or miscellaneous format; null when unknown.</summary>
+    public string? Medium { get; init; }
+
+    /// <summary>A source-specific type/kind string for miscellaneous Word sources; null when unknown.</summary>
+    public string? SourceKind { get; init; }
+
+    /// <summary>The album title for a <see cref="SourceType.SoundRecording"/>; null when unknown.</summary>
+    public string? AlbumTitle { get; init; }
+
+    /// <summary>The production company for a <see cref="SourceType.Film"/>; null when unknown.</summary>
+    public string? ProductionCompany { get; init; }
+
+    /// <summary>The recording number for a <see cref="SourceType.SoundRecording"/>; null when unknown.</summary>
+    public string? RecordingNumber { get; init; }
+
+    /// <summary>The theater or venue for a <see cref="SourceType.Performance"/>; null when unknown.</summary>
+    public string? Theater { get; init; }
 
     /// <summary>A shortened citation title; null when unknown.</summary>
     public string? ShortTitle { get; init; }
@@ -1606,11 +1705,55 @@ public sealed record FormatRevision(RunFormatting PreviousFormatting, string? Au
 public sealed record ParagraphFormatRevision(ParagraphFormatting PreviousParagraphFormatting, string? Author, string? DateXml);
 
 /// <summary>
+/// The body-level content control (structured document tag, w:sdt) role carried by one or more
+/// consecutive document blocks.
+/// </summary>
+public enum BlockContentControlKind
+{
+    RichText,
+    PlainText,
+    DocumentPart,
+    Bibliography
+}
+
+/// <summary>
+/// A body-level content-control mark carried by a <see cref="Block"/>. Consecutive body blocks sharing the
+/// same instance serialize as one outer w:sdt/w:sdtContent wrapper while the blocks themselves remain
+/// ordinary paragraphs/tables in the model. This keeps run-level <see cref="ContentControl"/> behavior
+/// unchanged and gives Word bibliography regions a place to retain their docPartObj/gallery metadata.
+/// </summary>
+public sealed record BlockContentControl(
+    BlockContentControlKind Kind,
+    string? Tag = null,
+    string? Alias = null,
+    string? DocPartGallery = null,
+    string? DocPartCategory = null,
+    bool DocPartUnique = false)
+{
+    public const string BibliographyTag = "Bibliography";
+    public const string BibliographyAlias = "Bibliography";
+    public const string BibliographyGallery = "Bibliographies";
+
+    public static BlockContentControl BibliographyRegion() =>
+        new(
+            BlockContentControlKind.Bibliography,
+            Tag: BibliographyTag,
+            Alias: BibliographyAlias,
+            DocPartGallery: BibliographyGallery,
+            DocPartUnique: true);
+}
+
+/// <summary>
 /// A top-level document block. The document body is an ordered sequence of blocks; today that is
 /// paragraphs and tables, mirroring how WordprocessingML interleaves w:p and w:tbl inside w:body.
 /// </summary>
 public abstract class Block
 {
+    /// <summary>
+    /// Optional body-level content-control region metadata. The DOCX writer groups consecutive blocks
+    /// sharing the same instance into one outer w:sdt; run-level controls still live on <see cref="Run"/>.
+    /// </summary>
+    public BlockContentControl? BlockContentControl { get; set; }
 }
 
 /// <summary>A paragraph: an ordered sequence of runs plus paragraph formatting and an optional style.</summary>
@@ -2247,6 +2390,41 @@ public enum PageVerticalAlignment
     Bottom
 }
 
+/// <summary>
+/// Number format for PAGE fields in a section. Maps to w:sectPr/w:pgNumType/@w:fmt.
+/// </summary>
+public enum PageNumberFormat
+{
+    /// <summary>Arabic numerals: 1, 2, 3 (w:fmt="decimal", the Word default).</summary>
+    Decimal,
+    /// <summary>Lower-case Roman numerals: i, ii, iii (w:fmt="lowerRoman").</summary>
+    LowerRoman,
+    /// <summary>Upper-case Roman numerals: I, II, III (w:fmt="upperRoman").</summary>
+    UpperRoman,
+    /// <summary>Lower-case letters: a, b, c (w:fmt="lowerLetter").</summary>
+    LowerLetter,
+    /// <summary>Upper-case letters: A, B, C (w:fmt="upperLetter").</summary>
+    UpperLetter
+}
+
+/// <summary>
+/// Separator used between a chapter prefix and a PAGE field value. Maps to
+/// w:sectPr/w:pgNumType/@w:chapSep.
+/// </summary>
+public enum PageNumberChapterSeparator
+{
+    /// <summary>Hyphen separator: 1-1 (w:chapSep="hyphen").</summary>
+    Hyphen,
+    /// <summary>Period separator: 1.1 (w:chapSep="period").</summary>
+    Period,
+    /// <summary>Colon separator: 1:1 (w:chapSep="colon").</summary>
+    Colon,
+    /// <summary>Em dash separator: 1--1 (w:chapSep="emDash").</summary>
+    EmDash,
+    /// <summary>En dash separator: 1-1 (w:chapSep="enDash").</summary>
+    EnDash
+}
+
 /// <summary>Page geometry for a section (points; US Letter with 1in margins by default).</summary>
 public sealed class PageSettings
 {
@@ -2379,6 +2557,31 @@ public sealed class PageSettings
     public int LineNumberStartAt { get; set; } = 1;
 
     /// <summary>
+    /// Number style used by PAGE fields in this section (w:sectPr/w:pgNumType/@w:fmt). Defaults to
+    /// <see cref="PageNumberFormat.Decimal"/>, matching Word.
+    /// </summary>
+    public PageNumberFormat PageNumberFormat { get; set; } = PageNumberFormat.Decimal;
+
+    /// <summary>
+    /// Optional first PAGE value for this section (w:sectPr/w:pgNumType/@w:start). Null means continue
+    /// numbering from the previous section; for the first section, continue starts at 1.
+    /// </summary>
+    public int? PageNumberStartAt { get; set; }
+
+    /// <summary>
+    /// Optional Heading level used as the chapter prefix for PAGE fields
+    /// (w:sectPr/w:pgNumType/@w:chapStyle). Null means no chapter prefix.
+    /// </summary>
+    public int? PageNumberChapterStyleLevel { get; set; }
+
+    /// <summary>
+    /// Separator between the chapter prefix and page number
+    /// (w:sectPr/w:pgNumType/@w:chapSep). Only meaningful when
+    /// <see cref="PageNumberChapterStyleLevel"/> is set.
+    /// </summary>
+    public PageNumberChapterSeparator PageNumberChapterSeparator { get; set; } = PageNumberChapterSeparator.Hyphen;
+
+    /// <summary>
     /// Whether automatic hyphenation is enabled for the document (word/settings.xml's
     /// w:autoHyphenation toggle). Defaults to false so existing documents are unaffected — no
     /// w:autoHyphenation is emitted (and the settings part is only emitted when something needs it).
@@ -2486,6 +2689,10 @@ public sealed class PageSettings
         LineNumberMode = LineNumberMode,
         LineNumberCountBy = LineNumberCountBy,
         LineNumberStartAt = LineNumberStartAt,
+        PageNumberFormat = PageNumberFormat,
+        PageNumberStartAt = PageNumberStartAt,
+        PageNumberChapterStyleLevel = PageNumberChapterStyleLevel,
+        PageNumberChapterSeparator = PageNumberChapterSeparator,
         AutoHyphenation = AutoHyphenation,
         HyphenationZonePt = HyphenationZonePt,
         ConsecutiveHyphenLimit = ConsecutiveHyphenLimit,
@@ -2604,6 +2811,12 @@ public sealed class TextDocument
     public Dictionary<string, DocumentStyle> Styles { get; } = [];
     public RunFormatting DefaultRun { get; set; } = new() { FontFamily = "Calibri", FontSizePt = 11 };
     public ParagraphFormatting DefaultParagraph { get; set; } = ParagraphFormatting.Default;
+
+    /// <summary>
+    /// The single modelled FreeW multilevel-list definition. Its per-level number formats map to the
+    /// fixed FreeW multilevel numbering definition in word/numbering.xml.
+    /// </summary>
+    public MultiLevelListFormat MultiLevelList { get; } = new();
 
     /// <summary>
     /// The page settings of the <em>final</em> (or only) section — the body-level w:sectPr. A document

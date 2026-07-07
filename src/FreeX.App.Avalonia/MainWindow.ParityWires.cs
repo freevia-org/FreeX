@@ -7,10 +7,47 @@ public sealed partial class MainWindow
 {
     // Small parity wires for ribbon buttons that map to existing capabilities.
 
-    /// <summary>Review - Delete Comment: clear comments/notes on the selection.</summary>
-    private void DeleteActiveCellComment()
+    /// <summary>
+    /// Review - Delete Comment: remove only the threaded comment (with all its replies) at the
+    /// active cell, leaving any coexisting legacy note untouched. Mirrors WPF's
+    /// ReviewDeleteThreadedCommentBtn_Click (MainWindow.ReviewCommands.cs), which runs
+    /// DeleteThreadedCommentCommand rather than the broad ClearCommentsCommand.
+    /// </summary>
+    private void DeleteActiveCellThreadedComment()
     {
-        var result = _session.ClearSelectedRangeComments();
+        var sheet = _session.ActiveSheet;
+        var address = _session.SelectedRange.Start;
+        if (!sheet.ThreadedComments.ContainsKey(address))
+        {
+            RefreshShell(UiText.Get("InsertLoc_CouldNotDeleteComment"));
+            return;
+        }
+
+        var result = _session.ExecuteReviewCommand(
+            new DeleteThreadedCommentCommand(sheet.Id, address));
+        RefreshShell(result.Success
+            ? UiText.Get("InsertLoc_ClearedCommentsAndNotes")
+            : result.ErrorMessage ?? UiText.Get("InsertLoc_CouldNotDeleteComment"));
+    }
+
+    /// <summary>
+    /// Review - Delete Note: remove only the legacy note at the active cell, leaving any
+    /// coexisting threaded comment (and its replies) untouched. Mirrors WPF's
+    /// ReviewDeleteCommentBtn_Click, which runs DeleteCommentCommand rather than the broad
+    /// ClearCommentsCommand.
+    /// </summary>
+    private void DeleteActiveCellNote()
+    {
+        var sheet = _session.ActiveSheet;
+        var address = _session.SelectedRange.Start;
+        if (!sheet.Comments.ContainsKey(address))
+        {
+            RefreshShell(UiText.Get("InsertLoc_CouldNotDeleteComment"));
+            return;
+        }
+
+        var result = _session.ExecuteReviewCommand(
+            new DeleteCommentCommand(sheet.Id, address));
         RefreshShell(result.Success
             ? UiText.Get("InsertLoc_ClearedCommentsAndNotes")
             : result.ErrorMessage ?? UiText.Get("InsertLoc_CouldNotDeleteComment"));
@@ -29,14 +66,31 @@ public sealed partial class MainWindow
         RefreshShell(UiText.Get("InsertLoc_NormalView"));
     }
 
-    /// <summary>View - Split: split the window at the active cell.</summary>
+    /// <summary>
+    /// View - Split: toggles the window split, matching the ribbon's IconToggle("Split", ...) semantics
+    /// and WPF's SplitViewBtn_Click (MainWindow.ViewCommands.cs). If the active sheet is already split,
+    /// clear it (splitRow/splitColumn both null); otherwise split at the active cell.
+    /// </summary>
     private void SplitPanesAtActiveCell()
     {
-        var cell = _session.ActiveCell;
+        var sheet = _session.ActiveSheet;
+        uint? splitRow = null;
+        uint? splitColumn = null;
+        var wasSplit = sheet.SplitRow is not null || sheet.SplitColumn is not null;
+
+        if (!wasSplit)
+        {
+            var cell = _session.ActiveCell;
+            splitRow = cell.Row > 1 ? cell.Row : null;
+            splitColumn = cell.Col > 1 ? cell.Col : null;
+        }
+
         var result = _session.ExecuteReviewCommand(
-            new SetSplitPanesCommand(_session.ActiveSheet.Id, cell.Row, cell.Col));
+            new SetSplitPanesCommand(sheet.Id, splitRow, splitColumn));
         RefreshShell(result.Success
-            ? UiText.Format("InsertLoc_SplitWindowAt", FormatCellReference(cell))
+            ? (wasSplit
+                ? UiText.Get("InsertLoc_RemovedWindowSplit")
+                : UiText.Format("InsertLoc_SplitWindowAt", FormatCellReference(_session.ActiveCell)))
             : result.ErrorMessage ?? UiText.Get("InsertLoc_CouldNotSplitWindow"));
     }
 }

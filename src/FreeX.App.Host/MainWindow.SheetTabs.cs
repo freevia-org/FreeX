@@ -1767,7 +1767,11 @@ public partial class MainWindow
     {
         var tab = GetContextMenuTab(sender);
         if (tab == null) return;
-        HideSheet(tab.Id);
+
+        var selectedSheetIds = _groupedSheetIds.Contains(tab.Id)
+            ? _workbook.Sheets.Select(sheet => sheet.Id).Where(_groupedSheetIds.Contains).ToList()
+            : [tab.Id];
+        HideSheets(selectedSheetIds);
     }
 
     private void SheetCtxUnhide_Click(object sender, RoutedEventArgs e)
@@ -1777,17 +1781,29 @@ public partial class MainWindow
 
     private void HideCurrentSheet()
     {
-        HideSheet(_currentSheetId);
+        var selectedSheetIds = _groupedSheetIds.Contains(_currentSheetId)
+            ? _workbook.Sheets.Select(sheet => sheet.Id).Where(_groupedSheetIds.Contains).ToList()
+            : [_currentSheetId];
+        HideSheets(selectedSheetIds);
     }
 
-    private void HideSheet(SheetId sheetId)
+    private void HideSheets(IReadOnlyCollection<SheetId> sheetIds)
     {
-        if (!TryExecuteCommand(new SetSheetHiddenCommand(sheetId, hidden: true), "Hide Sheet"))
+        var hideCommands = sheetIds
+            .Select(sheetId => (IWorkbookCommand)new SetSheetHiddenCommand(sheetId, hidden: true))
+            .ToList();
+        if (hideCommands.Count == 0)
+            return;
+        var command = hideCommands.Count == 1
+            ? hideCommands[0]
+            : new CompositeWorkbookCommand("Hide Sheet", hideCommands);
+        if (!TryExecuteCommand(command, "Hide Sheet"))
             return;
 
-        if (_currentSheetId == sheetId)
+        if (sheetIds.Contains(_currentSheetId))
             _currentSheetId = _workbook.Sheets.First(s => !s.IsHidden).Id;
-        _groupedSheetIds.Remove(sheetId);
+        foreach (var sheetId in sheetIds)
+            _groupedSheetIds.Remove(sheetId);
         if (_groupedSheetIds.Count == 0)
             _groupedSheetIds.Add(_currentSheetId);
         _sheetGroupAnchor = _currentSheetId;
@@ -1837,7 +1853,11 @@ public partial class MainWindow
     {
         var tab = GetContextMenuTab(sender);
         if (tab == null) return;
-        ColorSheetTab(tab.Id);
+
+        var selectedSheetIds = _groupedSheetIds.Contains(tab.Id)
+            ? _workbook.Sheets.Select(sheet => sheet.Id).Where(_groupedSheetIds.Contains).ToList()
+            : [tab.Id];
+        ColorSheetTabs(tab.Id, selectedSheetIds);
     }
 
     private void SheetCtxProtectSheet_Click(object sender, RoutedEventArgs e) =>
@@ -1845,16 +1865,27 @@ public partial class MainWindow
 
     private void ColorCurrentSheetTab()
     {
-        ColorSheetTab(_currentSheetId);
+        var selectedSheetIds = _groupedSheetIds.Contains(_currentSheetId)
+            ? _workbook.Sheets.Select(sheet => sheet.Id).Where(_groupedSheetIds.Contains).ToList()
+            : [_currentSheetId];
+        ColorSheetTabs(_currentSheetId, selectedSheetIds);
     }
 
-    private void ColorSheetTab(SheetId sheetId)
+    private void ColorSheetTabs(SheetId sheetId, IReadOnlyCollection<SheetId> sheetIds)
     {
         var sheet = _workbook.GetSheet(sheetId);
         if (!TryShowColorPicker("Tab Color", sheet?.TabColor ?? new CellColor(15, 109, 140), allowNoColor: true, out var tabColor))
             return;
 
-        if (!TryExecuteCommand(new SetSheetTabColorCommand(sheetId, tabColor), "Tab Color"))
+        var colorCommands = sheetIds
+            .Select(id => (IWorkbookCommand)new SetSheetTabColorCommand(id, tabColor))
+            .ToList();
+        if (colorCommands.Count == 0)
+            return;
+        var command = colorCommands.Count == 1
+            ? colorCommands[0]
+            : new CompositeWorkbookCommand("Tab Color", colorCommands);
+        if (!TryExecuteCommand(command, "Tab Color"))
             return;
         RefreshSheetTabs();
     }

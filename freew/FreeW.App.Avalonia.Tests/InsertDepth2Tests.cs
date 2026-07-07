@@ -1,7 +1,12 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Avalonia.Headless;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 
@@ -16,6 +21,22 @@ namespace FreeW.App.Avalonia.Tests;
 /// </summary>
 public sealed class InsertDepth2Tests
 {
+    private static readonly HeadlessUnitTestSession Session =
+        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
+
+    private static async Task<bool> OnUiThread(Action action)
+    {
+        try
+        {
+            await Session.Dispatch(action, CancellationToken.None);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
     private static TextDocument MakeDoc(string text = "Hello world")
     {
         var doc = TextDocument.CreateEmpty();
@@ -557,5 +578,412 @@ public sealed class InsertDepth2Tests
         view.Undo();
         view.Document.Blocks.OfType<Paragraph>().SelectMany(p => p.Runs)
             .Any(run => run.Equation is not null).Should().BeFalse("Undo removes the equation run");
+    }
+
+    [Fact]
+    public async Task EquationVisualPlanner_default_equation_lays_out_script_segments()
+    {
+        string[] texts = [];
+        EquationVisualSegmentRole[] roles = [];
+        (EquationVisualBaselineRole BaselineRole, double FontSizeScale, string FontFamily, bool Italic) script = default;
+        MathRunKind[] kinds = [];
+        var placedGlyphCount = 0;
+
+        var ran = await OnUiThread(() =>
+        {
+            var view = MakeView("");
+
+            view.InsertEquation();
+
+            var segments = view.EquationVisualSegments;
+            texts = segments.Select(segment => segment.Text).ToArray();
+            roles = segments.Select(segment => segment.Role).ToArray();
+            script = (
+                segments[^1].BaselineRole,
+                segments[^1].FontSizeScale,
+                segments[^1].FontFamily,
+                segments[^1].Italic);
+            placedGlyphCount = view.PlacedGlyphCount;
+            var eqRun = view.Document.Blocks.OfType<Paragraph>()
+                .SelectMany(p => p.Runs)
+                .Single(run => run.Equation is not null);
+            kinds = eqRun.Equation!.Runs.Select(run => run.Kind).ToArray();
+        });
+
+        if (!ran) return;
+
+        texts.Should().Equal("E = m", "c", "2");
+        roles.Should().Equal(
+            EquationVisualSegmentRole.Text,
+            EquationVisualSegmentRole.Base,
+            EquationVisualSegmentRole.Superscript);
+        script.BaselineRole.Should().Be(EquationVisualBaselineRole.Superscript);
+        script.FontSizeScale.Should().Be(EquationVisualPlanner.ScriptFontSizeScale);
+        script.FontFamily.Should().Contain("Cambria Math");
+        script.Italic.Should().BeTrue();
+        placedGlyphCount.Should().Be(7,
+            "the rendered default equation should place E = m plus c and 2, without the linear fallback caret");
+        kinds.Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+    }
+
+    [Fact]
+    public async Task EquationVisualPlanner_fraction_and_radical_lay_out_shared_structure()
+    {
+        EquationVisualElementKind[] elementKinds = [];
+        (string LinearText, string Numerator, string Denominator, string Radicand, string Degree)[] elementSlots = [];
+        string[] texts = [];
+        EquationVisualSegmentRole[] roles = [];
+        double[] fontSizeScales = [];
+        MathRunKind[] kinds = [];
+        var placedText = string.Empty;
+        var linearText = string.Empty;
+        var placedGlyphCount = 0;
+
+        var ran = await OnUiThread(() =>
+        {
+            var view = MakeView("");
+            view.InsertEquation(new Equation([
+                MathRun.Fraction("a + b", "c"),
+                MathRun.Radical("x + 1", "3")
+            ]));
+
+            var elements = view.EquationVisualElements;
+            elementKinds = elements.Select(element => element.Kind).ToArray();
+            elementSlots = elements
+                .Select(element => (element.LinearText, element.Numerator, element.Denominator, element.Radicand, element.Degree))
+                .ToArray();
+            var segments = view.EquationVisualSegments;
+            texts = segments.Select(segment => segment.Text).ToArray();
+            roles = segments.Select(segment => segment.Role).ToArray();
+            fontSizeScales = segments.Select(segment => segment.FontSizeScale).ToArray();
+            placedText = string.Concat(view.GetPlacedForBlock(0).Select(placed => placed.Ch));
+            placedGlyphCount = view.PlacedGlyphCount;
+
+            var eqRun = view.Document.Blocks.OfType<Paragraph>()
+                .SelectMany(p => p.Runs)
+                .Single(run => run.Equation is not null);
+            kinds = eqRun.Equation!.Runs.Select(run => run.Kind).ToArray();
+            linearText = eqRun.Equation!.LinearText;
+        });
+
+        if (!ran) return;
+
+        elementKinds.Should().Equal(EquationVisualElementKind.Fraction, EquationVisualElementKind.Radical);
+        elementSlots[0].Should().Be(("a + b/c", "a + b", "c", string.Empty, string.Empty));
+        elementSlots[1].Should().Be(($"3{EquationVisualPlanner.RadicalSignText}(x + 1)", string.Empty, string.Empty, "x + 1", "3"));
+        texts.Should().Equal(
+            "a + b",
+            EquationVisualPlanner.FractionBarText,
+            "c",
+            "3",
+            EquationVisualPlanner.RadicalSignText,
+            "x + 1");
+        roles.Should().Equal(
+            EquationVisualSegmentRole.FractionNumerator,
+            EquationVisualSegmentRole.FractionBar,
+            EquationVisualSegmentRole.FractionDenominator,
+            EquationVisualSegmentRole.RadicalDegree,
+            EquationVisualSegmentRole.RadicalSign,
+            EquationVisualSegmentRole.RadicalRadicand);
+        fontSizeScales[0].Should().Be(EquationVisualPlanner.StructureFontSizeScale);
+        fontSizeScales[2].Should().Be(EquationVisualPlanner.StructureFontSizeScale);
+        fontSizeScales[3].Should().Be(EquationVisualPlanner.ScriptFontSizeScale);
+        placedText.Should().Be($"a + b{EquationVisualPlanner.FractionBarText}c3{EquationVisualPlanner.RadicalSignText}x + 1");
+        placedGlyphCount.Should().Be(14,
+            "Avalonia should lay out fraction/radical display segments instead of the raw linear fallback parentheses");
+        kinds.Should().Equal(MathRunKind.Fraction, MathRunKind.Radical);
+        linearText.Should().Be($"a + b/c3{EquationVisualPlanner.RadicalSignText}(x + 1)");
+    }
+
+    [Fact]
+    public async Task EquationVisualPlanner_nary_lays_out_shared_large_operator_structure()
+    {
+        EquationVisualElementKind[] elementKinds = [];
+        (string LinearText, string Operator, string LowerLimit, string UpperLimit, string Operand)[] elementSlots = [];
+        string[] texts = [];
+        EquationVisualSegmentRole[] roles = [];
+        (EquationVisualBaselineRole BaselineRole, double FontSizeScale, bool Italic)[] styles = [];
+        MathRunKind[] kinds = [];
+        var placedText = string.Empty;
+        var linearText = string.Empty;
+        var placedGlyphCount = 0;
+
+        var ran = await OnUiThread(() =>
+        {
+            var view = MakeView("");
+            view.InsertEquation(new Equation([MathRun.NAry("\u2211", "i=1", "n", "i")]));
+
+            var elements = view.EquationVisualElements;
+            elementKinds = elements.Select(element => element.Kind).ToArray();
+            elementSlots = elements
+                .Select(element => (element.LinearText, element.Operator, element.LowerLimit, element.UpperLimit, element.Operand))
+                .ToArray();
+            var segments = view.EquationVisualSegments;
+            texts = segments.Select(segment => segment.Text).ToArray();
+            roles = segments.Select(segment => segment.Role).ToArray();
+            styles = segments
+                .Select(segment => (segment.BaselineRole, segment.FontSizeScale, segment.Italic))
+                .ToArray();
+            placedText = string.Concat(view.GetPlacedForBlock(0).Select(placed => placed.Ch));
+            placedGlyphCount = view.PlacedGlyphCount;
+
+            var eqRun = view.Document.Blocks.OfType<Paragraph>()
+                .SelectMany(p => p.Runs)
+                .Single(run => run.Equation is not null);
+            kinds = eqRun.Equation!.Runs.Select(run => run.Kind).ToArray();
+            linearText = eqRun.Equation!.LinearText;
+        });
+
+        if (!ran) return;
+
+        elementKinds.Should().Equal(EquationVisualElementKind.NAry);
+        elementSlots[0].Should().Be(("\u2211(i=1..n) i", "\u2211", "i=1", "n", "i"));
+        texts.Should().Equal("\u2211", "i=1", "n", "i");
+        roles.Should().Equal(
+            EquationVisualSegmentRole.NAryOperator,
+            EquationVisualSegmentRole.NAryLowerLimit,
+            EquationVisualSegmentRole.NAryUpperLimit,
+            EquationVisualSegmentRole.NAryOperand);
+        styles[0].FontSizeScale.Should().Be(EquationVisualPlanner.LargeOperatorFontSizeScale);
+        styles[0].Italic.Should().BeFalse();
+        styles[1].BaselineRole.Should().Be(EquationVisualBaselineRole.Subscript);
+        styles[2].BaselineRole.Should().Be(EquationVisualBaselineRole.Superscript);
+        styles[3].FontSizeScale.Should().Be(EquationVisualPlanner.StructureFontSizeScale);
+        placedText.Should().Be("\u2211i=1ni");
+        placedGlyphCount.Should().Be(6,
+            "Avalonia should lay out n-ary display segments instead of the raw linear fallback limits");
+        kinds.Should().Equal(MathRunKind.NAry);
+        linearText.Should().Be("\u2211(i=1..n) i");
+    }
+
+    [Fact]
+    public async Task EquationVisualPlanner_matrix_lays_out_shared_grid_structure()
+    {
+        EquationVisualElementKind[] elementKinds = [];
+        IReadOnlyList<EquationVisualMatrixRow> matrixRows = Array.Empty<EquationVisualMatrixRow>();
+        string[] texts = [];
+        EquationVisualSegmentRole[] roles = [];
+        double[] fontSizeScales = [];
+        MathRunKind[] kinds = [];
+        var placedText = string.Empty;
+        var linearText = string.Empty;
+        var placedGlyphCount = 0;
+
+        var ran = await OnUiThread(() =>
+        {
+            var view = MakeView("");
+            view.InsertEquation(new Equation([MathRun.MatrixOf(MathMatrix.Identity2x2())]));
+
+            var elements = view.EquationVisualElements;
+            elementKinds = elements.Select(element => element.Kind).ToArray();
+            matrixRows = elements.Single().MatrixRows;
+            var segments = view.EquationVisualSegments;
+            texts = segments.Select(segment => segment.Text).ToArray();
+            roles = segments.Select(segment => segment.Role).ToArray();
+            fontSizeScales = segments.Select(segment => segment.FontSizeScale).ToArray();
+            placedText = string.Concat(view.GetPlacedForBlock(0).Select(placed => placed.Ch));
+            placedGlyphCount = view.PlacedGlyphCount;
+
+            var eqRun = view.Document.Blocks.OfType<Paragraph>()
+                .SelectMany(p => p.Runs)
+                .Single(run => run.Equation is not null);
+            kinds = eqRun.Equation!.Runs.Select(run => run.Kind).ToArray();
+            linearText = eqRun.Equation!.LinearText;
+        });
+
+        if (!ran) return;
+
+        elementKinds.Should().Equal(EquationVisualElementKind.Matrix);
+        matrixRows.Should().HaveCount(2);
+        matrixRows[0].Cells.Select(cell => (cell.RowIndex, cell.ColumnIndex, cell.Text))
+            .Should().Equal((0, 0, "1"), (0, 1, "0"));
+        matrixRows[1].Cells.Select(cell => (cell.RowIndex, cell.ColumnIndex, cell.Text))
+            .Should().Equal((1, 0, "0"), (1, 1, "1"));
+        texts.Should().Equal(
+            EquationVisualPlanner.MatrixOpenDelimiterText,
+            "1",
+            EquationVisualPlanner.MatrixColumnSeparatorText,
+            "0",
+            EquationVisualPlanner.MatrixRowSeparatorText,
+            "0",
+            EquationVisualPlanner.MatrixColumnSeparatorText,
+            "1",
+            EquationVisualPlanner.MatrixCloseDelimiterText);
+        roles.Should().Equal(
+            EquationVisualSegmentRole.MatrixOpenDelimiter,
+            EquationVisualSegmentRole.MatrixCell,
+            EquationVisualSegmentRole.MatrixColumnSeparator,
+            EquationVisualSegmentRole.MatrixCell,
+            EquationVisualSegmentRole.MatrixRowSeparator,
+            EquationVisualSegmentRole.MatrixCell,
+            EquationVisualSegmentRole.MatrixColumnSeparator,
+            EquationVisualSegmentRole.MatrixCell,
+            EquationVisualSegmentRole.MatrixCloseDelimiter);
+        fontSizeScales[1].Should().Be(EquationVisualPlanner.StructureFontSizeScale);
+        fontSizeScales[3].Should().Be(EquationVisualPlanner.StructureFontSizeScale);
+        placedText.Should().Be(
+            $"{EquationVisualPlanner.MatrixOpenDelimiterText}1{EquationVisualPlanner.MatrixColumnSeparatorText}" +
+            $"0{EquationVisualPlanner.MatrixRowSeparatorText}0{EquationVisualPlanner.MatrixColumnSeparatorText}" +
+            $"1{EquationVisualPlanner.MatrixCloseDelimiterText}");
+        placedGlyphCount.Should().Be(12,
+            "Avalonia should lay out matrix display segments instead of the raw linear fallback with commas");
+        kinds.Should().Equal(MathRunKind.Matrix);
+        linearText.Should().Be("[1, 0; 0, 1]");
+    }
+
+    [Fact]
+    public async Task EquationVisualPlanner_decorators_lay_out_shared_structure()
+    {
+        EquationVisualElementKind[] elementKinds = [];
+        (string BaseText, string Accent, bool BarTop, string OpenDelimiter, string CloseDelimiter,
+            string GroupCharacter, string GroupCharacterPosition)[] elementSlots = [];
+        string[] texts = [];
+        EquationVisualSegmentRole[] roles = [];
+        (EquationVisualBaselineRole BaselineRole, double FontSizeScale, bool Italic)[] styles = [];
+        MathRunKind[] kinds = [];
+        var placedText = string.Empty;
+        var linearText = string.Empty;
+        var placedGlyphCount = 0;
+
+        var ran = await OnUiThread(() =>
+        {
+            var view = MakeView("");
+            view.InsertEquation(new Equation([
+                MathRun.AccentOf("x", "hat"),
+                MathRun.BarOf("y", top: false),
+                MathRun.Delimiter("a + b", "[", "]"),
+                MathRun.GroupCharOf("z", "\u23DF", "bot")
+            ]));
+
+            var elements = view.EquationVisualElements;
+            elementKinds = elements.Select(element => element.Kind).ToArray();
+            elementSlots = elements
+                .Select(element => (
+                    element.BaseText,
+                    element.Accent,
+                    element.BarTop,
+                    element.OpenDelimiter,
+                    element.CloseDelimiter,
+                    element.GroupCharacter,
+                    element.GroupCharacterPosition))
+                .ToArray();
+            var segments = view.EquationVisualSegments;
+            texts = segments.Select(segment => segment.Text).ToArray();
+            roles = segments.Select(segment => segment.Role).ToArray();
+            styles = segments
+                .Select(segment => (segment.BaselineRole, segment.FontSizeScale, segment.Italic))
+                .ToArray();
+            placedText = string.Concat(view.GetPlacedForBlock(0).Select(placed => placed.Ch));
+            placedGlyphCount = view.PlacedGlyphCount;
+
+            var eqRun = view.Document.Blocks.OfType<Paragraph>()
+                .SelectMany(p => p.Runs)
+                .Single(run => run.Equation is not null);
+            kinds = eqRun.Equation!.Runs.Select(run => run.Kind).ToArray();
+            linearText = eqRun.Equation!.LinearText;
+        });
+
+        if (!ran) return;
+
+        elementKinds.Should().Equal(
+            EquationVisualElementKind.Accent,
+            EquationVisualElementKind.Bar,
+            EquationVisualElementKind.Delimiter,
+            EquationVisualElementKind.GroupChar);
+        elementSlots[0].Should().Be(("x", "hat", true, string.Empty, string.Empty, string.Empty, string.Empty));
+        elementSlots[1].Should().Be(("y", string.Empty, false, string.Empty, string.Empty, string.Empty, string.Empty));
+        elementSlots[2].Should().Be(("a + b", string.Empty, true, "[", "]", string.Empty, string.Empty));
+        elementSlots[3].Should().Be(("z", string.Empty, true, string.Empty, string.Empty, "\u23DF", "bot"));
+        texts.Should().Equal("hat", "x", "y", EquationVisualPlanner.UnderbarCueText, "[", "a + b", "]", "z", "\u23DF");
+        roles.Should().Equal(
+            EquationVisualSegmentRole.AccentMark,
+            EquationVisualSegmentRole.AccentBase,
+            EquationVisualSegmentRole.BarBase,
+            EquationVisualSegmentRole.BarMark,
+            EquationVisualSegmentRole.DelimiterOpen,
+            EquationVisualSegmentRole.DelimiterContent,
+            EquationVisualSegmentRole.DelimiterClose,
+            EquationVisualSegmentRole.GroupCharBase,
+            EquationVisualSegmentRole.GroupCharMark);
+        styles[0].FontSizeScale.Should().Be(EquationVisualPlanner.DecoratorFontSizeScale);
+        styles[0].Italic.Should().BeFalse();
+        styles[1].FontSizeScale.Should().Be(EquationVisualPlanner.StructureFontSizeScale);
+        styles[3].FontSizeScale.Should().Be(EquationVisualPlanner.DecoratorFontSizeScale);
+        styles[4].FontSizeScale.Should().Be(EquationVisualPlanner.DelimiterFontSizeScale);
+        placedText.Should().Be($"hatxy{EquationVisualPlanner.UnderbarCueText}[a + b]z\u23DF");
+        placedGlyphCount.Should().Be(15,
+            "Avalonia should lay out decorator display segments instead of raw linear fallback strings");
+        kinds.Should().Equal(
+            MathRunKind.Accent,
+            MathRunKind.Bar,
+            MathRunKind.Delimiter,
+            MathRunKind.GroupChar);
+        linearText.Should().Be("xhat_y_[a + b]z\u23DF");
+    }
+
+    [Fact]
+    public async Task EquationVisualPlanner_function_apply_lays_out_shared_function_structure()
+    {
+        EquationVisualElementKind[] elementKinds = [];
+        (string LinearText, string FunctionName, string FunctionArgument)[] elementSlots = [];
+        string[] texts = [];
+        EquationVisualSegmentRole[] roles = [];
+        (EquationVisualBaselineRole BaselineRole, double FontSizeScale, bool Italic)[] styles = [];
+        MathRunKind[] kinds = [];
+        var placedText = string.Empty;
+        var linearText = string.Empty;
+        var placedGlyphCount = 0;
+
+        var ran = await OnUiThread(() =>
+        {
+            var view = MakeView("");
+            view.InsertEquation(new Equation([MathRun.FunctionApply("sin", "x + y")]));
+
+            var elements = view.EquationVisualElements;
+            elementKinds = elements.Select(element => element.Kind).ToArray();
+            elementSlots = elements
+                .Select(element => (element.LinearText, element.FunctionName, element.FunctionArgument))
+                .ToArray();
+            var segments = view.EquationVisualSegments;
+            texts = segments.Select(segment => segment.Text).ToArray();
+            roles = segments.Select(segment => segment.Role).ToArray();
+            styles = segments
+                .Select(segment => (segment.BaselineRole, segment.FontSizeScale, segment.Italic))
+                .ToArray();
+            placedText = string.Concat(view.GetPlacedForBlock(0).Select(placed => placed.Ch));
+            placedGlyphCount = view.PlacedGlyphCount;
+
+            var eqRun = view.Document.Blocks.OfType<Paragraph>()
+                .SelectMany(p => p.Runs)
+                .Single(run => run.Equation is not null);
+            kinds = eqRun.Equation!.Runs.Select(run => run.Kind).ToArray();
+            linearText = eqRun.Equation!.LinearText;
+        });
+
+        if (!ran) return;
+
+        elementKinds.Should().Equal(EquationVisualElementKind.FunctionApply);
+        elementSlots[0].Should().Be(("sin(x + y)", "sin", "x + y"));
+        texts.Should().Equal(
+            "sin",
+            EquationVisualPlanner.FunctionOpenDelimiterText,
+            "x + y",
+            EquationVisualPlanner.FunctionCloseDelimiterText);
+        roles.Should().Equal(
+            EquationVisualSegmentRole.FunctionName,
+            EquationVisualSegmentRole.FunctionOpenDelimiter,
+            EquationVisualSegmentRole.FunctionArgument,
+            EquationVisualSegmentRole.FunctionCloseDelimiter);
+        roles.Should().NotContain(EquationVisualSegmentRole.LinearFallback);
+        styles[0].Italic.Should().BeFalse();
+        styles[1].Italic.Should().BeFalse();
+        styles[2].Italic.Should().BeTrue();
+        styles[0].FontSizeScale.Should().Be(EquationVisualPlanner.StructureFontSizeScale);
+        styles[2].FontSizeScale.Should().Be(EquationVisualPlanner.StructureFontSizeScale);
+        placedText.Should().Be("sin(x + y)");
+        placedGlyphCount.Should().Be(10,
+            "Avalonia should lay out function display segments instead of a single raw linear fallback segment");
+        kinds.Should().Equal(MathRunKind.FunctionApply);
+        linearText.Should().Be("sin(x + y)");
     }
 }

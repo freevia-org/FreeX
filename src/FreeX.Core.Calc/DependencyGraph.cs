@@ -432,7 +432,26 @@ public sealed class DependencyGraph
     /// <summary>
     /// Topologically order a known dirty set, including the dirty roots themselves.
     /// </summary>
-    public RecalcPlan GetEvaluationOrder(IReadOnlyCollection<CellAddress> dirtyCells)
+    public RecalcPlan GetEvaluationOrder(IReadOnlyCollection<CellAddress> dirtyCells) =>
+        GetEvaluationOrder(dirtyCells, deprioritized: null);
+
+    /// <summary>
+    /// Topologically order a known dirty set, including the dirty roots themselves. When
+    /// <paramref name="deprioritized"/> is given, a cell in that set that ties for in-degree-0
+    /// readiness against a cell NOT in that set always loses the tie (the non-deprioritized cell is
+    /// dequeued first). This does not change the graph's real precedent/dependent edges or any
+    /// ordering they imply — a deprioritized cell that is a genuine precedent of another candidate
+    /// still unblocks (and is still correctly ordered before) that dependent exactly as before; the
+    /// bias only resolves ties between cells that have NO edge between them, where Kahn's ready-queue
+    /// order would otherwise be arbitrary HashSet/enqueue-order happenstance.
+    ///
+    /// Used for volatile-function cells (OFFSET/INDIRECT/...), which can dynamically read a cell
+    /// that has no registered dependency edge back to them (P78): without this bias such a cell can
+    /// tie for readiness with, and run before, an unrelated dirty cell it dynamically reads this pass.
+    /// </summary>
+    public RecalcPlan GetEvaluationOrder(
+        IReadOnlyCollection<CellAddress> dirtyCells,
+        IReadOnlyCollection<CellAddress>? deprioritized)
     {
         if (dirtyCells.Count == 0)
             return EmptyPlan;
@@ -454,12 +473,37 @@ public sealed class DependencyGraph
                 ready.Enqueue(cell);
         }
 
-        while (ready.Count > 0)
+        if (deprioritized is null || deprioritized.Count == 0)
         {
-            var cell = ready.Dequeue();
-            sorted.Add(cell);
+            while (ready.Count > 0)
+            {
+                var cell = ready.Dequeue();
+                sorted.Add(cell);
 
-            DecrementDependentInDegrees(cell, inDegree, ready);
+                DecrementDependentInDegrees(cell, inDegree, ready);
+            }
+        }
+        else
+        {
+            var deprioritizedSet = deprioritized as HashSet<CellAddress> ?? new HashSet<CellAddress>(deprioritized);
+
+            // Rotate past any deprioritized cell at the front of the queue as long as a
+            // non-deprioritized cell is also currently ready (bounded by ready.Count rotations —
+            // once every remaining ready cell is deprioritized, the rotation stops and one is taken).
+            while (ready.Count > 0)
+            {
+                var rotations = 0;
+                while (deprioritizedSet.Contains(ready.Peek()) && rotations < ready.Count)
+                {
+                    ready.Enqueue(ready.Dequeue());
+                    rotations++;
+                }
+
+                var cell = ready.Dequeue();
+                sorted.Add(cell);
+
+                DecrementDependentInDegrees(cell, inDegree, ready);
+            }
         }
 
         ResolveResidualAfterKahn(inDegree, candidates, candidateIndex, sorted, out var cycles);
@@ -1294,10 +1338,28 @@ internal sealed class RangeDependencyIndex
     private readonly Dictionary<uint, List<RangeDependencyGroup>> _rowBuckets = [];
     private readonly Dictionary<uint, List<RangeDependencyGroup>> _columnBuckets = [];
 
+    // Tracks how many times each logical (range, dependent) pair has been added. A formula
+    // that references the same range twice (e.g. =SUM(A1:A100)+COUNT(A1:A100)) reports that
+    // range/dependent pair to Add twice; the underlying bucket groups use a HashSet so the
+    // second Add is a structural no-op, and Count must mirror that idempotency (and only
+    // truly remove/decrement once the occurrence count drops back to zero) or it drifts and
+    // never returns to 0, permanently disabling the exact-chain recalc fast paths that gate
+    // on Count == 0.
+    private readonly Dictionary<RangeDependency, int> _occurrences = [];
+
     public int Count { get; private set; }
 
     public void Add(RangeDependency dependency)
     {
+        _occurrences.TryGetValue(dependency, out var occurrences);
+        _occurrences[dependency] = occurrences + 1;
+        if (occurrences > 0)
+        {
+            // Already logically present: bucket groups already contain this dependent
+            // (HashSet.Add is idempotent), so don't double-count it.
+            return;
+        }
+
         var range = dependency.Range;
         if (UseRowIndex(range))
             AddToBuckets(_rowBuckets, dependency, range.Start.Row, range.End.Row, RowBucketSize);
@@ -1309,6 +1371,19 @@ internal sealed class RangeDependencyIndex
 
     public void Remove(RangeDependency dependency)
     {
+        if (!_occurrences.TryGetValue(dependency, out var occurrences) || occurrences <= 0)
+            return;
+
+        if (occurrences > 1)
+        {
+            // Other occurrences of this same (range, dependent) pair remain logically
+            // present; the bucket groups still need the dependent, so don't remove it yet.
+            _occurrences[dependency] = occurrences - 1;
+            return;
+        }
+
+        _occurrences.Remove(dependency);
+
         var range = dependency.Range;
         var removed = UseRowIndex(range)
             ? RemoveFromBuckets(_rowBuckets, dependency, range.Start.Row, range.End.Row, RowBucketSize)

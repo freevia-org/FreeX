@@ -327,6 +327,34 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    /// <summary>
+    /// Discards every Trace Precedents/Dependents arrow without prompting. Row/column insert and
+    /// delete rewrite formulas and move cells (RowColumnShiftHelpers.RewriteAllFormulas /
+    /// ShiftAddressBearingRows*/Columns*) but never touch <see cref="_formulaTraceArrows"/> itself, so
+    /// a stale arrow set silently keeps pointing at pre-edit grid coordinates that, after the shift,
+    /// belong to different cells than the formula's actual (now-moved) precedents/dependents — a
+    /// wrong, misleading audit arrow. Excel clears trace arrows outright on a structural edit rather
+    /// than trying to re-derive them, since the frontier the arrows were expanded from may no longer
+    /// even resolve to a formula cell; this mirrors that behavior.
+    /// </summary>
+    /// <remarks>
+    /// TODO(O24 remaining scope): call this from every row/column insert/delete call site in
+    /// MainWindow.CellsCommands.cs (InsertRowsCommand/DeleteRowsCommand/InsertColumnsCommand/
+    /// DeleteColumnsCommand executions), and add the matching call in the Avalonia shell
+    /// (src/FreeX.App.Avalonia/MainWindow.FormulaAuditing.cs + its own CellsCommands equivalent),
+    /// which reproduces the identical stale-arrow bug. Both files were out of scope for this fix
+    /// (owned by another reviewer in this pass), so the invalidation is landed here, ready to wire in,
+    /// but not yet invoked from those structural-edit paths.
+    /// </remarks>
+    private void ClearFormulaTraceArrowsAfterStructuralEdit()
+    {
+        if (_formulaTraceArrows.Count == 0)
+            return;
+
+        _formulaTraceArrows.Clear();
+        UpdateViewport();
+    }
+
     private void ShowFormulasBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
@@ -528,6 +556,8 @@ public partial class MainWindow
             {
                 _ when string.Equals(item.Header?.ToString(), UiText.Get("MainWindow_Header_Manual"), StringComparison.Ordinal) =>
                     _workbook.CalculationMode == WorkbookCalculationMode.Manual,
+                _ when string.Equals(item.Header?.ToString(), UiText.Get("MainWindow_Header_AutomaticExceptDataTables"), StringComparison.Ordinal) =>
+                    _workbook.CalculationMode == WorkbookCalculationMode.AutomaticExceptDataTables,
                 _ => _workbook.CalculationMode == WorkbookCalculationMode.Automatic
             };
         }
@@ -541,8 +571,13 @@ public partial class MainWindow
         UpdateViewport();
     }
 
-    private void CalcAutoExceptDataTablesMenuItem_Click(object sender, RoutedEventArgs e) =>
-        CalcAutoMenuItem_Click(sender, e);
+    private void CalcAutoExceptDataTablesMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryExecuteCommand(new SetCalculationModeCommand(WorkbookCalculationMode.AutomaticExceptDataTables), "Calculation Options"))
+            return;
+        RecalculateWorkbook();
+        UpdateViewport();
+    }
 
     private void CalcManualMenuItem_Click(object sender, RoutedEventArgs e)
     {

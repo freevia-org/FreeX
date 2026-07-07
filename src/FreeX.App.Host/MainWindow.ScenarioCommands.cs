@@ -69,14 +69,14 @@ public partial class MainWindow
         bool locked,
         string? replaceScenarioName = null)
     {
-        GridRange range;
-        if (TryParseScenarioChangingCells(changingCellsText, out var parsedRange))
+        IReadOnlyList<GridRange> ranges;
+        if (TryParseScenarioChangingCells(changingCellsText, out var parsedRanges))
         {
-            range = parsedRange;
+            ranges = parsedRanges;
         }
         else if (SheetGrid.SelectedRange is { } selectedRange)
         {
-            range = selectedRange;
+            ranges = [selectedRange];
         }
         else
         {
@@ -84,32 +84,40 @@ public partial class MainWindow
             return;
         }
 
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null)
-            return;
-
         var name = string.IsNullOrWhiteSpace(scenarioName)
             ? (_workbook.Scenarios.Count == 0 ? "Scenario 1" : $"Scenario {_workbook.Scenarios.Count + 1}")
             : scenarioName;
         if (name is null)
             return;
 
-        var changes = range.AllCells()
-            .Select(address => new ScenarioCellValue(address, sheet.GetValue(address.Row, address.Col)))
-            .ToList();
+        var changes = new List<ScenarioCellValue>();
+        var seen = new HashSet<CellAddress>();
+        foreach (var range in ranges)
+        {
+            var sheet = _workbook.GetSheet(range.Start.Sheet);
+            if (sheet is null)
+                continue;
+
+            foreach (var address in range.AllCells())
+            {
+                if (seen.Add(address))
+                    changes.Add(new ScenarioCellValue(address, sheet.GetValue(address.Row, address.Col)));
+            }
+        }
+
         if (!TryExecuteCommand(new SaveScenarioCommand(name, changes, comment, hidden, locked, replaceScenarioName), "Scenario Manager"))
             return;
 
         _messageService.ShowInfo(ScenarioManagerPlanner.FormatSavedMessage(name, changes.Count), "Scenario Manager");
     }
 
-    private bool TryParseScenarioChangingCells(string? changingCellsText, out GridRange range)
+    private bool TryParseScenarioChangingCells(string? changingCellsText, out IReadOnlyList<GridRange> ranges)
     {
         if (!string.IsNullOrWhiteSpace(changingCellsText) &&
-            WorkbookRangeTextCodec.TryParse(_currentSheetId, changingCellsText, ResolveSheetIdByName, out range))
+            WorkbookRangeTextCodec.TryParseMany(_currentSheetId, changingCellsText, ResolveSheetIdByName, out ranges))
             return true;
 
-        range = default;
+        ranges = [];
         return false;
     }
 
@@ -198,11 +206,12 @@ public partial class MainWindow
         if (!TryExecuteCommand(
             new ScenarioSummaryReportCommand(
                 ParseScenarioResultCells(resultCellsText),
-                (workbook, changedCells) =>
-                {
-                    if (workbook.CalculationMode == WorkbookCalculationMode.Automatic)
-                        _recalcEngine.Recalculate(workbook, changedCells);
-                }),
+                // Always recalculate here, independent of the workbook's calculation mode: the
+                // summary report's whole purpose is to show each scenario's distinct computed
+                // result, so Manual mode must not leave every scenario column reading the same
+                // stale pre-report value (Excel's own Scenario Summary always computes fresh
+                // per-scenario results).
+                (workbook, changedCells) => _recalcEngine.Recalculate(workbook, changedCells)),
             "Scenario Manager"))
             return;
 

@@ -435,13 +435,20 @@ internal static partial class ViewportConditionalFormatEvaluator
         CellAddress addr,
         ScalarValue value,
         Workbook workbook,
-        CfEvaluationContext cfContext)
+        CfEvaluationContext cfContext,
+        Func<ConditionalFormat, Sheet, CellAddress, Workbook, CfEvaluationContext, bool> matchesFormula)
     {
         for (var i = 0; i < cfContext.RulesByPriority.Count; i++)
         {
             var cf = cfContext.RulesByPriority[i];
             if (cf.RuleType != CfRuleType.DataBar || !cf.AllRanges.Any(r => r.Contains(addr)))
                 continue;
+
+            // A higher-priority rule of ANY kind (style, icon set, or data bar) whose condition is
+            // met and which is marked Stop If True suppresses this data bar, matching Excel's
+            // standard "stop if true hides lower-priority icon sets/data bars" idiom.
+            if (IsSuppressedByHigherPriorityStopIfTrue(cf, sheet, addr, value, workbook, cfContext, matchesFormula))
+                return null;
 
             if (!TryGetDouble(value, out var cellValue) ||
                 !double.IsFinite(cellValue) ||
@@ -471,8 +478,27 @@ internal static partial class ViewportConditionalFormatEvaluator
                     cf.AppliesTo.Start,
                     GetStaticThresholdFormulaValue(cfContext, cf, CfThresholdFormulaSlot.DataBarMax),
                     GetThresholdFormula(cfContext, cf, CfThresholdFormulaSlot.DataBarMax),
-                    out var max) ||
-                max <= min)
+                    out var max))
+            {
+                continue;
+            }
+
+            // Excel's default ("automatic") data bar minimum/maximum -- represented by cfvo
+            // type="min"/"max" in the classic block and its x14 autoMin/autoMax twin, both of
+            // which the reader maps onto CfThresholdType.Min/Max for data bars -- is NOT simply
+            // "use the range's actual minimum/maximum" the way an icon set or color scale
+            // type="min"/"max" threshold is. For data bars specifically, Excel always keeps a
+            // zero baseline: the automatic minimum is min(0, actual minimum) and the automatic
+            // maximum is max(0, actual maximum). Without this, an all-positive range (e.g.
+            // 10/20/30) would resolve min=10, giving the smallest cell a zero-length bar (no bar
+            // at all) instead of Excel's ~1/3-length bar. A genuinely explicit numeric/percent/
+            // percentile/formula threshold is unaffected since only Min/Max get the zero clamp.
+            if (cf.DataBarMinThresholdType == CfThresholdType.Min)
+                min = Math.Min(0d, min);
+            if (cf.DataBarMaxThresholdType == CfThresholdType.Max)
+                max = Math.Max(0d, max);
+
+            if (max <= min)
             {
                 continue;
             }
@@ -482,19 +508,29 @@ internal static partial class ViewportConditionalFormatEvaluator
             if (maxLength < minLength)
                 (minLength, maxLength) = (maxLength, minLength);
 
-            // Negative-axis path: when the range straddles zero and axisPosition is not "none",
-            // place the axis. "Middle" pins the axis at Excel's fixed 50% position regardless of
-            // the min/max skew; "Automatic" (unset) places it proportionally at the zero crossing.
-            // Positive bars extend rightward from the axis; negative bars extend leftward from the
-            // axis using the negative fill color.
+            // Negative-axis path: when the range straddles zero (or is entirely negative, which
+            // the zero clamp above pins to max == 0 -- i.e. the axis sits at the right edge) and
+            // axisPosition is not "none", place the axis. "Middle" pins the axis at Excel's fixed
+            // 50% position regardless of the min/max skew; "Automatic" (unset) places it
+            // proportionally at the zero crossing. Positive bars extend rightward from the axis;
+            // negative bars extend leftward from the axis using the negative fill color. An
+            // all-negative range (max <= 0) has no positive bars to draw, but every value must
+            // still go through the negative branch below so the longest (most negative) bar is
+            // the most negative value, growing leftward from the axis in the negative color --
+            // not the positive-path fallthrough, which would invert both length and color.
             var axisAtNone = string.Equals(cf.DataBarAxisPosition, "none", StringComparison.OrdinalIgnoreCase);
             var axisAtMiddle = string.Equals(cf.DataBarAxisPosition, "middle", StringComparison.OrdinalIgnoreCase);
-            if (!axisAtNone && min < 0 && max > 0)
+            if (!axisAtNone && min < 0 && max >= 0)
             {
+                // min < 0 <= max here, so max - min > 0 always; no divide-by-zero guard needed.
                 var axisFraction = axisAtMiddle ? 0.5d : (0d - min) / (max - min);
                 if (cellValue >= 0)
                 {
-                    var t = Math.Clamp((cellValue - 0d) / (max - 0d), 0d, 1d);
+                    // max can be exactly 0 for an all-negative (or all-zero) range where the
+                    // automatic-maximum zero clamp pins max at 0; the only cell that can reach
+                    // this branch then is cellValue == 0 itself, which is always a full-length
+                    // "positive" segment of zero width (t is irrelevant / avoid a 0/0 NaN).
+                    var t = max > 0d ? Math.Clamp(cellValue / max, 0d, 1d) : 0d;
                     var length = (minLength + (maxLength - minLength) * t) * (1d - axisFraction);
                     if (length <= 0)
                     {

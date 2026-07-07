@@ -200,6 +200,36 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
+    public Task UpdateFields_refreshes_existing_table_of_authorities_with_overflow_page_references() => RunOnUiThread(() =>
+    {
+        var oldRegion = TableOfAuthorities.Build(new[] { new Citation("Old Case", CitationCategory.Cases) });
+        var blocks = new List<Block>
+        {
+            CitationMarkParagraph("Overflow Case", formatted: false)
+        };
+        for (var i = 0; i < 120; i++)
+            blocks.Add(new Paragraph($"Overflow filler {i + 1}: The quick brown fox jumps over the lazy dog."));
+        blocks.Add(CitationMarkParagraph("Overflow Case", formatted: false));
+        blocks.AddRange(oldRegion);
+
+        var view = ViewWith(blocks.ToArray());
+        view.Document.Page.WidthPt = 300;
+        view.Document.Page.HeightPt = 220;
+        view.Document.Page.MarginTopPt = 18;
+        view.Document.Page.MarginBottomPt = 18;
+        view.Document.Page.MarginLeftPt = 18;
+        view.Document.Page.MarginRightPt = 18;
+        view.Measure(new global::Avalonia.Size(800, 4000));
+
+        view.UpdateFields();
+
+        var entry = view.Document.Blocks.OfType<Paragraph>()
+            .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
+        entry.PlainText.Should().MatchRegex(@"^Overflow Case\t1, [2-9][0-9]*$");
+        entry.Runs.Select(run => run.Text).Should().HaveCount(3);
+    });
+
+    [Fact]
     public void InsertCaption_inserts_autonumbered_paragraph_after_caret()
     {
         var view = ViewWith();
@@ -224,10 +254,25 @@ public sealed class ReferencesTabTests
         view.InsertCaption(CaptionLabel.Figure, "A");
         view.InsertCaption(CaptionLabel.Figure, "B");
         view.InsertCaption(CaptionLabel.Table, "T");
+        view.InsertCaption(CaptionLabel.Equation, "E");
 
         var texts = view.Document.Blocks.OfType<Paragraph>()
             .Where(Captions.IsCaptionParagraph).Select(p => p.PlainText).ToList();
-        texts.Should().Contain(new[] { "Figure 1: A", "Figure 2: B", "Table 1: T" });
+        texts.Should().Contain(new[] { "Figure 1: A", "Figure 2: B", "Table 1: T", "Equation 1: E" });
+    }
+
+    [Fact]
+    public void InsertCaption_supports_custom_label_text()
+    {
+        var view = ViewWith();
+
+        view.InsertCaption("Scheme", "Flow");
+        view.InsertCaption("Scheme", "State");
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .Where(Captions.IsCaptionParagraph)
+            .Select(p => p.PlainText)
+            .Should().Contain(new[] { "Scheme 1: Flow", "Scheme 2: State" });
     }
 
     // ── Cross-reference ─────────────────────────────────────────────────────────────
@@ -523,6 +568,48 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
+    public void Table_of_figures_supports_equation_and_custom_caption_labels()
+    {
+        var view = ViewWith();
+
+        view.InsertCaption(CaptionLabel.Equation, "Energy");
+        view.InsertCaption("Scheme", "Flow");
+        view.InsertTableOfFigures(CaptionLabel.Equation);
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .Where(TableOfFigures.IsTableOfFiguresParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should()
+            .Equal("Table of Equations", "Equation 1: Energy");
+
+        view.RefreshTableOfFigures("Scheme");
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .Where(TableOfFigures.IsTableOfFiguresParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should()
+            .Equal("Table of Schemes", "Scheme 1: Flow");
+    }
+
+    [Fact]
+    public void UpdateFields_refreshes_table_of_figures_region()
+    {
+        var view = ViewWith();
+
+        view.InsertCaption(CaptionLabel.Equation, "First");
+        view.InsertTableOfFigures(CaptionLabel.Equation);
+        view.Document.Blocks.Add(Captions.BuildCaption(CaptionLabel.Equation, 2, "Second"));
+
+        view.UpdateFields();
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .Where(TableOfFigures.IsTableOfFiguresParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should()
+            .Equal("Table of Equations", "Equation 1: First", "Equation 2: Second");
+    }
+
+    [Fact]
     public void Table_of_authorities_commands_mark_insert_and_refresh_generated_table()
     {
         var view = ViewWith(new Paragraph("Brown v. Board"));
@@ -579,12 +666,13 @@ public sealed class ReferencesTabTests
             .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
             .ToList();
         toa.Select(paragraph => paragraph.PlainText)
-            .Should().Equal("Table of Authorities", "Statutes", "17 U.S.C. 107");
+            .Should().Equal("Table of Authorities", "Statutes", "17 U.S.C. 107\t1");
 
         var entry = toa.Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
         entry.Formatting.TabStops.Should().ContainSingle()
             .Which.Leader.Should().Be(TabLeader.None);
-        entry.Runs.Single().Formatting.Italic.Should().BeTrue();
+        entry.Runs.Select(run => run.Text).Should().Equal("17 U.S.C. 107", "\t", "1");
+        entry.Runs[0].Formatting.Italic.Should().BeTrue();
     }
 
     [Fact]
@@ -602,6 +690,39 @@ public sealed class ReferencesTabTests
         entry.PlainText.Should().Be("Brown v. Board\t1, 2");
         entry.Runs.Select(run => run.Text).Should().Equal("Brown v. Board", "\t", "1, 2");
     }
+
+    [Fact]
+    public Task Table_of_authorities_insert_resolves_mark_position_inside_long_paragraph_after_page_transition() =>
+        RunOnUiThread(() =>
+        {
+            var filler = string.Join(
+                " ",
+                Enumerable.Repeat("The quick brown fox jumps over the lazy dog.", 80));
+            var paragraph = new Paragraph
+            {
+                Runs =
+                {
+                    new Run(filler + " "),
+                    Run.CitationMark(new Citation("Late Case", CitationCategory.Cases))
+                }
+            };
+            var view = ViewWith(paragraph);
+            view.Document.Page.WidthPt = 300;
+            view.Document.Page.HeightPt = 220;
+            view.Document.Page.MarginTopPt = 18;
+            view.Document.Page.MarginBottomPt = 18;
+            view.Document.Page.MarginLeftPt = 18;
+            view.Document.Page.MarginRightPt = 18;
+            view.Measure(new global::Avalonia.Size(800, 4000));
+
+            view.InsertTableOfAuthorities();
+
+            var entry = view.Document.Blocks.OfType<Paragraph>()
+                .Single(block => block.StyleId == TableOfAuthorities.EntryStyleId);
+            entry.PlainText.Should().MatchRegex(@"^Late Case\t[1-9][0-9]*$");
+            entry.Runs.Select(run => run.Text).Should().HaveCount(3);
+            entry.Runs[2].Text.Should().NotBe("1");
+        });
 
     [Fact]
     public void Table_of_authorities_refresh_consumes_shared_render_plan_metadata()
@@ -662,13 +783,14 @@ public sealed class ReferencesTabTests
             "freew.toc", "freew.toc-refresh",
             "freew.insert-toc", "freew.update-toc",
             "freew.caption",
-            "freew.insert-caption", "freew.insert-caption.figure", "freew.insert-caption.table",
+            "freew.insert-caption", "freew.insert-caption.figure", "freew.insert-caption.table", "freew.insert-caption.equation",
             "freew.cross-reference",
             "freew.citation",
             "freew.insert-citation", "freew.citation-style", "freew.bibliography",
             "freew.show-notes", "freew.footnote-endnote-options",
             "freew.manage-sources",
-            "freew.tof", "freew.tof-refresh",
+            "freew.tof", "freew.tof.figure", "freew.tof.table", "freew.tof.equation",
+            "freew.tof-refresh", "freew.tof-refresh.figure", "freew.tof-refresh.table", "freew.tof-refresh.equation",
             "freew.index-mark", "freew.index-insert", "freew.index-refresh",
             "freew.mark-citation", "freew.table-of-authorities", "freew.table-of-authorities-refresh",
         };
@@ -742,11 +864,15 @@ public sealed class ReferencesTabTests
             "freew.caption",
             "freew.insert-caption.figure",
             "freew.insert-caption.table",
+            "freew.insert-caption.equation",
             "freew.cross-reference",
             "freew.show-notes",
             "freew.footnote-endnote-options",
             "freew.manage-sources",
             "freew.tof",
+            "freew.tof.figure",
+            "freew.tof.table",
+            "freew.tof.equation",
             "freew.tof-refresh",
             "freew.index-mark",
             "freew.index-insert",

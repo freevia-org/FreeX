@@ -53,6 +53,24 @@ public sealed class BibliographyRegionPlannerTests
     }
 
     [Fact]
+    public void BuildInsertPlan_MarksGeneratedOutputAsSharedBibliographyBlockControl()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Sources.Add(new Source { Tag = "Sm24", Author = "Smith", Title = "A Work", Year = "2024" });
+
+        var plan = BibliographyRegionPlanner.BuildInsertPlan(document, insertAt: 0);
+
+        plan.BlockContentControl.Should().NotBeNull();
+        plan.BlockContentControl!.Kind.Should().Be(BlockContentControlKind.Bibliography);
+        plan.BlockContentControl.DocPartGallery.Should().Be(BlockContentControl.BibliographyGallery);
+        plan.BlockContentControl.DocPartUnique.Should().BeTrue();
+        plan.Paragraphs.Should().HaveCount(2);
+        plan.Paragraphs.Should().OnlyContain(paragraph =>
+            ReferenceEquals(paragraph.BlockContentControl, plan.BlockContentControl));
+    }
+
+    [Fact]
     public void BuildRefreshPlan_WithExistingRegion_ReusesFirstPositionAndDeletesDescending()
     {
         var document = TextDocument.CreateEmpty();

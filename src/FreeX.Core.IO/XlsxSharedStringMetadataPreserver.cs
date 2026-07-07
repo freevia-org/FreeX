@@ -25,31 +25,78 @@ internal static class XlsxSharedStringMetadataPreserver
         if (sourceRoot is null || targetRoot is null)
             return;
 
-        var sourceRichStringsByText = GetUniqueSharedStringsByPlainText(
-            sourceRoot.Elements(workbookNs + "si")
-                .Where(item => HasRichSharedStringMetadata(item, workbookNs)),
-            workbookNs);
-        if (sourceRichStringsByText.Count == 0)
+        // Shared strings are keyed by plain text because ClosedXML fully regenerates
+        // sharedStrings.xml (dedup/reorder), so source and target indices don't align.
+        // Plain text that is unique in a document is matched directly. Plain text that
+        // collides (rich vs. plain, or two differently-formatted runs rendering the same
+        // text) must NOT be silently dropped -- those are matched positionally instead
+        // (first source occurrence with that text to the first target occurrence with
+        // that text, second to second, etc.), since both documents enumerate shared
+        // strings in the same first-use cell order.
+        var sourceRichStrings = sourceRoot.Elements(workbookNs + "si")
+            .Where(item => HasRichSharedStringMetadata(item, workbookNs))
+            .ToList();
+        if (sourceRichStrings.Count == 0)
             return;
 
-        var targetStringsByText = GetUniqueSharedStringsByPlainText(
-            targetRoot.Elements(workbookNs + "si"),
-            workbookNs);
+        var sourceUniqueByText = GetUniqueSharedStringsByPlainText(sourceRichStrings, workbookNs, out var sourceDuplicateTexts);
+        var targetElements = targetRoot.Elements(workbookNs + "si").ToList();
+        var targetUniqueByText = GetUniqueSharedStringsByPlainText(targetElements, workbookNs, out var targetDuplicateTexts);
 
         var changed = false;
-        foreach (var (plainText, sourceString) in sourceRichStringsByText)
+        foreach (var (plainText, sourceString) in sourceUniqueByText)
         {
-            if (!targetStringsByText.TryGetValue(plainText, out var targetString))
+            if (!targetUniqueByText.TryGetValue(plainText, out var targetString))
                 continue;
 
-            var replacement = new XElement(sourceString);
-            SanitizeRichSharedStringFontNames(replacement, workbookNs);
-            targetString.ReplaceWith(replacement);
+            ReplaceSharedString(targetString, sourceString, workbookNs);
             changed = true;
+        }
+
+        if (sourceDuplicateTexts is not null || targetDuplicateTexts is not null)
+        {
+            IEnumerable<string> textsToMatch = sourceDuplicateTexts is null
+                ? targetDuplicateTexts!
+                : targetDuplicateTexts is null
+                    ? sourceDuplicateTexts
+                    : sourceDuplicateTexts.Concat(targetDuplicateTexts);
+
+            var handledTexts = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var text in textsToMatch)
+            {
+                if (!handledTexts.Add(text))
+                    continue;
+
+                var sourceMatches = sourceRichStrings.Where(item => ReadSharedStringPlainText(item, workbookNs) == text).ToList();
+                if (sourceMatches.Count == 0)
+                    continue;
+
+                // P70: pair rich source occurrences only against target occurrences that are
+                // ALSO rich (same-text plain si entries in targetElements must never receive a
+                // rich replacement positionally — a plain first-use si sharing the text with a
+                // later rich si would otherwise get clobbered, silently promoting every plain
+                // cell using that string to rich formatting/phonetics it never had).
+                var targetMatches = targetElements
+                    .Where(item => HasRichSharedStringMetadata(item, workbookNs) && ReadSharedStringPlainText(item, workbookNs) == text)
+                    .ToList();
+                var count = Math.Min(sourceMatches.Count, targetMatches.Count);
+                for (var i = 0; i < count; i++)
+                {
+                    ReplaceSharedString(targetMatches[i], sourceMatches[i], workbookNs);
+                    changed = true;
+                }
+            }
         }
 
         if (changed)
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, "xl/sharedStrings.xml", targetXml);
+    }
+
+    private static void ReplaceSharedString(XElement targetString, XElement sourceString, XNamespace workbookNs)
+    {
+        var replacement = new XElement(sourceString);
+        SanitizeRichSharedStringFontNames(replacement, workbookNs);
+        targetString.ReplaceWith(replacement);
     }
 
     private static bool ContainsRichSharedStringMetadata(ZipArchiveEntry sharedStringsEntry)
@@ -79,10 +126,11 @@ internal static class XlsxSharedStringMetadataPreserver
 
     private static Dictionary<string, XElement> GetUniqueSharedStringsByPlainText(
         IEnumerable<XElement> sharedStrings,
-        XNamespace workbookNs)
+        XNamespace workbookNs,
+        out HashSet<string>? duplicates)
     {
         var unique = new Dictionary<string, XElement>(StringComparer.Ordinal);
-        HashSet<string>? duplicates = null;
+        duplicates = null;
         foreach (var element in sharedStrings)
         {
             var text = ReadSharedStringPlainText(element, workbookNs);

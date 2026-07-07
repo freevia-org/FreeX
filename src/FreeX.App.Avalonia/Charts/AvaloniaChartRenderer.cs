@@ -127,8 +127,13 @@ public sealed class AvaloniaChartRenderer
             RenderAxisTitle(canvas, layout.SecondaryValueAxis, layout.PlotArea);
 
         var isTreemap = layout.Type == ModelChartType.Treemap;
+        // Excel only applies "Vary colors by point" (c:varyColors) to bar/column charts when there
+        // is exactly one plotted series (see ChartStylePlanner.ResolveVaryColorsPointFill) — count
+        // the actual bar/column series in this layout (combo line/scatter overlays are laid out
+        // with a different Kind and so are correctly excluded).
+        var barSeriesCount = layout.Series.Count(s => s.Kind is SeriesGeometryKind.Columns or SeriesGeometryKind.Bars);
         foreach (var series in layout.Series)
-            RenderSeries(canvas, series, isTreemap ? layout.DataLabels : []);
+            RenderSeries(canvas, series, isTreemap ? layout.DataLabels : [], barSeriesCount);
 
         RenderLegend(canvas, layout.Legend);
         // Treemap labels are rendered inline with white text inside RenderTreemapTiles.
@@ -225,13 +230,13 @@ public sealed class AvaloniaChartRenderer
 
     // ── Series ──────────────────────────────────────────────────────────────
 
-    private void RenderSeries(Canvas canvas, SeriesLayout series, IReadOnlyList<DataLabelBox> extraLabels)
+    private void RenderSeries(Canvas canvas, SeriesLayout series, IReadOnlyList<DataLabelBox> extraLabels, int barSeriesCount = 0)
     {
         switch (series.Kind)
         {
             case SeriesGeometryKind.Columns:
             case SeriesGeometryKind.Bars:
-                RenderBars(canvas, series);
+                RenderBars(canvas, series, barSeriesCount);
                 break;
             case SeriesGeometryKind.Line:
                 RenderLine(canvas, series);
@@ -276,7 +281,7 @@ public sealed class AvaloniaChartRenderer
             RenderErrorBars(canvas, errorBars);
     }
 
-    private void RenderBars(Canvas canvas, SeriesLayout series)
+    private void RenderBars(Canvas canvas, SeriesLayout series, int barSeriesCount = 0)
     {
         // Fix 7: NoFill / NoLine — transparent helper/invisible bars.
         var paint = ChartStylePlanner.ResolveBarPaint(_chart, series.SeriesIndex, _theme, ThemePalette);
@@ -288,10 +293,16 @@ public sealed class AvaloniaChartRenderer
             if (bar.Rect.Width <= 0 && bar.Rect.Height <= 0)
                 continue;
 
-            // Per-bar fill override (used by waterfall increase/decrease/total coloring).
+            // Per-bar fill override: an explicit per-point <c:dPt> fill or (for a single-series
+            // chart) "Vary colors by point" takes priority over the series-level fill; waterfall's
+            // increase/decrease/total coloring also arrives via FillColorOverride.
+            var varyColorsFill = ChartStylePlanner.ResolveVaryColorsPointFill(
+                _chart, series.SeriesIndex, bar.PointIndex, barSeriesCount, _theme, ThemePalette);
             IBrush barFill = bar.FillColorOverride is { } overrideColor
                 ? SolidBrush(overrideColor)
-                : fill;
+                : varyColorsFill is { } varyColor
+                    ? SolidBrush(varyColor)
+                    : fill;
 
             var rect = new AvaloniaRectangle
             {

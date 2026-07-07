@@ -80,6 +80,23 @@ public sealed class WorkbookCellEditService
             : null;
     }
 
+    /// <summary>
+    /// Recalculates <paramref name="affectedCells"/> unconditionally, independent of the workbook's
+    /// <see cref="WorkbookCalculationMode"/>. Unlike <see cref="RecalculateIfAutomatic"/> (used after
+    /// live cell edits, where Manual mode intentionally defers recalculation until the user asks for
+    /// it), some report-generation flows need each intermediate state actually computed no matter
+    /// the calc mode -- e.g. Scenario Summary applies one scenario's values at a time and must read
+    /// each one's genuinely recalculated result cells rather than repeating the same stale
+    /// pre-report value in every scenario column (see ScenarioSummaryReportCommand).
+    /// </summary>
+    public RecalcReport RecalculateAlways(Workbook workbook, IReadOnlyList<CellAddress> affectedCells)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(affectedCells);
+
+        return _recalcEngine.Recalculate(workbook, affectedCells);
+    }
+
     /// <summary>Forces a full recalculation of every formula in the workbook (F9 / Calculate Now).</summary>
     public RecalcReport RecalculateAll(Workbook workbook)
     {
@@ -116,9 +133,23 @@ public sealed class WorkbookCellEditService
             workbook,
             new GoalSeekCommand(request.ChangingCell, seekResult.FoundValue));
 
-        return editResult.Success
-            ? WorkbookGoalSeekResult.AppliedResult(request, seekResult, editResult)
-            : WorkbookGoalSeekResult.ApplyFailed(request, seekResult, editResult);
+        if (!editResult.Success)
+            return WorkbookGoalSeekResult.ApplyFailed(request, seekResult, editResult);
+
+        // Excel always refreshes the set cell (and the rest of the dependency chain from the
+        // changing cell) once Goal Seek applies its result, even when the workbook is in Manual
+        // calculation mode — Goal Seek's recalculation is a deliberate one-time action, not subject
+        // to the "only recalc on F9" rule that otherwise governs Manual mode. ApplyHistoryOutcome
+        // above already ran RecalculateIfAutomatic, which is a no-op outside Automatic mode, so
+        // force the recalculation here when it was skipped, or the set cell would keep displaying
+        // its pre-seek value until the user manually recalculates.
+        if (workbook.CalculationMode != WorkbookCalculationMode.Automatic)
+        {
+            var manualRecalcReport = _recalcEngine.Recalculate(workbook, [request.ChangingCell]);
+            editResult = editResult with { RecalcReport = manualRecalcReport };
+        }
+
+        return WorkbookGoalSeekResult.AppliedResult(request, seekResult, editResult);
     }
 
     public WorkbookCellEditResult CommitCellText(
@@ -205,6 +236,12 @@ public sealed class WorkbookCellEditService
         address.Row is >= 1 and <= CellAddress.MaxRow &&
         address.Col is >= 1 and <= CellAddress.MaxCol;
 
+    // N44: mirrors FreeX.Core.Commands.CommandGuards.CanEditCell (internal to that assembly and not
+    // visible here) so Goal Seek's pre-validation agrees with the authoritative guard that
+    // GoalSeekCommand.Apply itself runs. A range listed in Sheet.AllowEditRanges only grants access
+    // when it has no Allow-Edit-Range password, or the password has already been unlocked this
+    // session (Sheet.UnlockedAllowEditRanges) -- otherwise fall through to the locked-style check
+    // below, same as an unlisted cell.
     private static bool CanEditCell(Workbook workbook, Sheet sheet, CellAddress address)
     {
         if (!sheet.IsProtected)
@@ -212,7 +249,12 @@ public sealed class WorkbookCellEditService
 
         foreach (var range in sheet.AllowEditRanges)
         {
-            if (range.Contains(address))
+            if (!range.Contains(address))
+                continue;
+
+            var isPasswordProtected = sheet.AllowEditRangePasswords.TryGetValue(range, out var stored) &&
+                !string.IsNullOrEmpty(stored);
+            if (!isPasswordProtected || sheet.UnlockedAllowEditRanges.Contains(range))
                 return true;
         }
 

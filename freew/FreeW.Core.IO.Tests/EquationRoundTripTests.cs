@@ -22,6 +22,20 @@ public class EquationRoundTripTests
         return DocxReader.Read(stream);
     }
 
+    private static TextDocument ReadDocumentXml(string documentXml)
+    {
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var entry = zip.CreateEntry("word/document.xml");
+            using var writer = new StreamWriter(entry.Open());
+            writer.Write(documentXml);
+        }
+
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
     private static XDocument WriteDocumentXml(TextDocument document)
     {
         using var stream = new MemoryStream();
@@ -79,6 +93,169 @@ public class EquationRoundTripTests
     }
 
     [Fact]
+    public void NestedScriptSlots_SurviveRoundTripAndEmitDirectSlotChildren()
+    {
+        var baseEquation = new Equation([
+            MathRun.PlainText("a+"),
+            MathRun.Subscript("x", "1")
+        ]);
+        var subEquation = new Equation([
+            MathRun.PlainText("i+"),
+            MathRun.Superscript("j", "2")
+        ]);
+        var supEquation = new Equation([
+            MathRun.PlainText("n+"),
+            MathRun.Subscript("k", "0")
+        ]);
+        var equation = new Equation([
+            MathRun.Superscript(baseEquation, supEquation),
+            MathRun.Subscript(baseEquation, subEquation),
+            MathRun.SubSuperscript(baseEquation, subEquation, supEquation)
+        ]);
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(paragraph);
+
+        var read = RoundTrip(doc);
+        var xml = WriteDocumentXml(doc);
+
+        var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Equation is not null).Equation!;
+        roundTripped.Runs.Select(run => run.Kind).Should().Equal(
+            MathRunKind.Superscript,
+            MathRunKind.Subscript,
+            MathRunKind.SubSuperscript);
+        var superscript = roundTripped.Runs[0];
+        superscript.Base.Should().Be("a+x1");
+        superscript.Sup.Should().Be("n+k0");
+        superscript.ScriptBaseEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        superscript.ScriptSupEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        var subscript = roundTripped.Runs[1];
+        subscript.ScriptBaseEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        subscript.ScriptSubEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        var subSuperscript = roundTripped.Runs[2];
+        subSuperscript.ScriptBaseEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        subSuperscript.ScriptSubEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        subSuperscript.ScriptSupEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        roundTripped.LinearText.Should().Be("a+x_1^n+k_0a+x_1_i+j^2a+x_1_i+j^2^n+k_0");
+
+        var oMath = xml.Descendants(M + "oMath").Single();
+        var writtenSuperscript = oMath.Elements(M + "sSup").Single();
+        writtenSuperscript.Element(M + "e")!.Elements(M + "oMath").Should().BeEmpty();
+        writtenSuperscript.Element(M + "e")!.Elements(M + "sSub").Should().ContainSingle();
+        writtenSuperscript.Element(M + "sup")!.Elements(M + "sSub").Should().ContainSingle();
+
+        var writtenSubscript = oMath.Elements(M + "sSub").Single();
+        writtenSubscript.Element(M + "e")!.Elements(M + "sSub").Should().ContainSingle();
+        writtenSubscript.Element(M + "sub")!.Elements(M + "sSup").Should().ContainSingle();
+
+        var writtenSubSuperscript = oMath.Elements(M + "sSubSup").Single();
+        writtenSubSuperscript.Element(M + "e")!.Elements(M + "sSub").Should().ContainSingle();
+        writtenSubSuperscript.Element(M + "sub")!.Elements(M + "sSup").Should().ContainSingle();
+        writtenSubSuperscript.Element(M + "sup")!.Elements(M + "sSub").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void RawNestedScriptSlots_ReadAsNestedEquations()
+    {
+        var documentXml = $$"""
+            <w:document xmlns:w="{{W.NamespaceName}}" xmlns:m="{{M.NamespaceName}}">
+              <w:body>
+                <w:p>
+                  <m:oMath>
+                    <m:sSup>
+                      <m:e>
+                        <m:r><m:t>a+</m:t></m:r>
+                        <m:sSub>
+                          <m:e><m:r><m:t>x</m:t></m:r></m:e>
+                          <m:sub><m:r><m:t>1</m:t></m:r></m:sub>
+                        </m:sSub>
+                      </m:e>
+                      <m:sup>
+                        <m:r><m:t>n+</m:t></m:r>
+                        <m:sSub>
+                          <m:e><m:r><m:t>k</m:t></m:r></m:e>
+                          <m:sub><m:r><m:t>0</m:t></m:r></m:sub>
+                        </m:sSub>
+                      </m:sup>
+                    </m:sSup>
+                    <m:sSub>
+                      <m:e>
+                        <m:r><m:t>a+</m:t></m:r>
+                        <m:sSub>
+                          <m:e><m:r><m:t>x</m:t></m:r></m:e>
+                          <m:sub><m:r><m:t>1</m:t></m:r></m:sub>
+                        </m:sSub>
+                      </m:e>
+                      <m:sub>
+                        <m:r><m:t>i+</m:t></m:r>
+                        <m:sSup>
+                          <m:e><m:r><m:t>j</m:t></m:r></m:e>
+                          <m:sup><m:r><m:t>2</m:t></m:r></m:sup>
+                        </m:sSup>
+                      </m:sub>
+                    </m:sSub>
+                    <m:sSubSup>
+                      <m:e>
+                        <m:r><m:t>a+</m:t></m:r>
+                        <m:sSub>
+                          <m:e><m:r><m:t>x</m:t></m:r></m:e>
+                          <m:sub><m:r><m:t>1</m:t></m:r></m:sub>
+                        </m:sSub>
+                      </m:e>
+                      <m:sub>
+                        <m:r><m:t>i+</m:t></m:r>
+                        <m:sSup>
+                          <m:e><m:r><m:t>j</m:t></m:r></m:e>
+                          <m:sup><m:r><m:t>2</m:t></m:r></m:sup>
+                        </m:sSup>
+                      </m:sub>
+                      <m:sup>
+                        <m:r><m:t>n+</m:t></m:r>
+                        <m:sSub>
+                          <m:e><m:r><m:t>k</m:t></m:r></m:e>
+                          <m:sub><m:r><m:t>0</m:t></m:r></m:sub>
+                        </m:sSub>
+                      </m:sup>
+                    </m:sSubSup>
+                  </m:oMath>
+                </w:p>
+              </w:body>
+            </w:document>
+            """;
+
+        var read = ReadDocumentXml(documentXml);
+
+        var equation = read.Paragraphs.Single().Runs.Single(run => run.Equation is not null).Equation!;
+        equation.Runs.Select(run => run.Kind).Should().Equal(
+            MathRunKind.Superscript,
+            MathRunKind.Subscript,
+            MathRunKind.SubSuperscript);
+        equation.Runs[0].ScriptBaseEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        equation.Runs[0].ScriptSupEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        equation.Runs[1].ScriptBaseEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        equation.Runs[1].ScriptSubEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        equation.Runs[2].ScriptBaseEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        equation.Runs[2].ScriptSubEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        equation.Runs[2].ScriptSupEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        equation.LinearText.Should().Be("a+x_1^n+k_0a+x_1_i+j^2a+x_1_i+j^2^n+k_0");
+    }
+
+    [Fact]
     public void FractionEquation_SurvivesRoundTrip()
     {
         var equation = new Equation([MathRun.Fraction("1", "2")]);
@@ -95,6 +272,175 @@ public class EquationRoundTripTests
         roundTripped.Runs[0].Numerator.Should().Be("1");
         roundTripped.Runs[0].Denominator.Should().Be("2");
         roundTripped.LinearText.Should().Be("1/2");
+    }
+
+    [Fact]
+    public void NestedFractionSlots_SurviveRoundTripAndEmitDirectSlotChildren()
+    {
+        var equation = new Equation([
+            MathRun.Fraction(
+                new Equation([
+                    MathRun.PlainText("a+"),
+                    MathRun.Superscript("x", "2")
+                ]),
+                new Equation([
+                    MathRun.PlainText("b+"),
+                    MathRun.Subscript("y", "1")
+                ]))
+        ]);
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(paragraph);
+
+        var read = RoundTrip(doc);
+        var xml = WriteDocumentXml(doc);
+
+        var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Equation is not null).Equation!;
+        roundTripped.Runs.Should().ContainSingle();
+        var fraction = roundTripped.Runs[0];
+        fraction.Kind.Should().Be(MathRunKind.Fraction);
+        fraction.Numerator.Should().Be("a+x2");
+        fraction.Denominator.Should().Be("b+y1");
+        fraction.NumeratorEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        fraction.NumeratorEquation.Runs[1].Base.Should().Be("x");
+        fraction.NumeratorEquation.Runs[1].Sup.Should().Be("2");
+        fraction.DenominatorEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        fraction.DenominatorEquation.Runs[1].Base.Should().Be("y");
+        fraction.DenominatorEquation.Runs[1].Sub.Should().Be("1");
+        roundTripped.LinearText.Should().Be("a+x^2/b+y_1");
+
+        var writtenFraction = xml.Descendants(M + "f").Single();
+        var num = writtenFraction.Element(M + "num")!;
+        var den = writtenFraction.Element(M + "den")!;
+        num.Elements(M + "oMath").Should().BeEmpty();
+        den.Elements(M + "oMath").Should().BeEmpty();
+        num.Elements(M + "r").Should().ContainSingle();
+        num.Elements(M + "sSup").Should().ContainSingle();
+        den.Elements(M + "r").Should().ContainSingle();
+        den.Elements(M + "sSub").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void RawNestedFractionSlots_ReadAsNestedEquations()
+    {
+        var documentXml = $$"""
+            <w:document xmlns:w="{{W.NamespaceName}}" xmlns:m="{{M.NamespaceName}}">
+              <w:body>
+                <w:p>
+                  <m:oMath>
+                    <m:f>
+                      <m:num>
+                        <m:r><m:t>a+</m:t></m:r>
+                        <m:sSup>
+                          <m:e><m:r><m:t>x</m:t></m:r></m:e>
+                          <m:sup><m:r><m:t>2</m:t></m:r></m:sup>
+                        </m:sSup>
+                      </m:num>
+                      <m:den>
+                        <m:r><m:t>b+</m:t></m:r>
+                        <m:sSub>
+                          <m:e><m:r><m:t>y</m:t></m:r></m:e>
+                          <m:sub><m:r><m:t>1</m:t></m:r></m:sub>
+                        </m:sSub>
+                      </m:den>
+                    </m:f>
+                  </m:oMath>
+                </w:p>
+              </w:body>
+            </w:document>
+            """;
+
+        var read = ReadDocumentXml(documentXml);
+
+        var equation = read.Paragraphs.Single().Runs.Single(run => run.Equation is not null).Equation!;
+        equation.Runs.Should().ContainSingle();
+        var fraction = equation.Runs[0];
+        fraction.Kind.Should().Be(MathRunKind.Fraction);
+        fraction.NumeratorEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        fraction.DenominatorEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        equation.LinearText.Should().Be("a+x^2/b+y_1");
+    }
+
+    [Fact]
+    public void NestedRadicalRadicand_SurvivesRoundTripAndEmitsDirectSlotChildren()
+    {
+        var equation = new Equation([
+            MathRun.Radical(
+                new Equation([
+                    MathRun.PlainText("a+"),
+                    MathRun.Superscript("x", "2")
+                ]),
+                "3")
+        ]);
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(paragraph);
+
+        var read = RoundTrip(doc);
+        var xml = WriteDocumentXml(doc);
+
+        var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Equation is not null).Equation!;
+        roundTripped.Runs.Should().ContainSingle();
+        var radical = roundTripped.Runs[0];
+        radical.Kind.Should().Be(MathRunKind.Radical);
+        radical.Base.Should().Be("a+x2");
+        radical.Degree.Should().Be("3");
+        radical.RadicandEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        radical.RadicandEquation.Runs[1].Base.Should().Be("x");
+        radical.RadicandEquation.Runs[1].Sup.Should().Be("2");
+        roundTripped.LinearText.Should().Be("3\u221a(a+x^2)");
+
+        var writtenRadical = xml.Descendants(M + "rad").Single();
+        writtenRadical.Elements().Select(element => element.Name.LocalName)
+            .Should().Equal("radPr", "deg", "e");
+        var radicand = writtenRadical.Element(M + "e")!;
+        radicand.Elements(M + "oMath").Should().BeEmpty();
+        radicand.Elements(M + "r").Should().ContainSingle();
+        radicand.Elements(M + "sSup").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void RawNestedRadicalRadicand_ReadsAsNestedEquation()
+    {
+        var documentXml = $$"""
+            <w:document xmlns:w="{{W.NamespaceName}}" xmlns:m="{{M.NamespaceName}}">
+              <w:body>
+                <w:p>
+                  <m:oMath>
+                    <m:rad>
+                      <m:radPr><m:degHide m:val="0" /></m:radPr>
+                      <m:deg><m:r><m:t>3</m:t></m:r></m:deg>
+                      <m:e>
+                        <m:r><m:t>a+</m:t></m:r>
+                        <m:sSup>
+                          <m:e><m:r><m:t>x</m:t></m:r></m:e>
+                          <m:sup><m:r><m:t>2</m:t></m:r></m:sup>
+                        </m:sSup>
+                      </m:e>
+                    </m:rad>
+                  </m:oMath>
+                </w:p>
+              </w:body>
+            </w:document>
+            """;
+
+        var read = ReadDocumentXml(documentXml);
+
+        var equation = read.Paragraphs.Single().Runs.Single(run => run.Equation is not null).Equation!;
+        equation.Runs.Should().ContainSingle();
+        var radical = equation.Runs[0];
+        radical.Kind.Should().Be(MathRunKind.Radical);
+        radical.Degree.Should().Be("3");
+        radical.RadicandEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        equation.LinearText.Should().Be("3\u221a(a+x^2)");
     }
 
     [Fact]
@@ -193,6 +539,143 @@ public class EquationRoundTripTests
     }
 
     [Fact]
+    public void NestedNArySlots_SurviveRoundTripAndEmitDirectSlotChildren()
+    {
+        var equation = new Equation([
+            MathRun.NAry(
+                "\u2211",
+                new Equation([
+                    MathRun.PlainText("i="),
+                    MathRun.Subscript("j", "1")
+                ]),
+                new Equation([MathRun.Superscript("n", "2")]),
+                new Equation([MathRun.Fraction("1", "i")]))
+        ]);
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(paragraph);
+
+        var read = RoundTrip(doc);
+        var xml = WriteDocumentXml(doc);
+
+        var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Equation is not null).Equation!;
+        roundTripped.Runs.Should().ContainSingle();
+        var nary = roundTripped.Runs[0];
+        nary.Kind.Should().Be(MathRunKind.NAry);
+        nary.Operator.Should().Be("\u2211");
+        nary.NAryLowerLimitEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        nary.NAryLowerLimitEquation.Runs[1].Base.Should().Be("j");
+        nary.NAryLowerLimitEquation.Runs[1].Sub.Should().Be("1");
+        nary.NAryUpperLimitEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Superscript);
+        nary.NAryUpperLimitEquation.Runs[0].Base.Should().Be("n");
+        nary.NAryUpperLimitEquation.Runs[0].Sup.Should().Be("2");
+        nary.NAryOperandEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Fraction);
+        nary.NAryOperandEquation.Runs[0].Numerator.Should().Be("1");
+        nary.NAryOperandEquation.Runs[0].Denominator.Should().Be("i");
+        roundTripped.LinearText.Should().Be("\u2211(i=j_1..n^2) 1/i");
+
+        var writtenNAry = xml.Descendants(M + "nary").Single();
+        var pr = writtenNAry.Element(M + "naryPr")!;
+        pr.Element(M + "subHide")!.Attribute(M + "val")!.Value.Should().Be("0");
+        pr.Element(M + "supHide")!.Attribute(M + "val")!.Value.Should().Be("0");
+        var sub = writtenNAry.Element(M + "sub")!;
+        var sup = writtenNAry.Element(M + "sup")!;
+        var operand = writtenNAry.Element(M + "e")!;
+        sub.Elements(M + "oMath").Should().BeEmpty();
+        sup.Elements(M + "oMath").Should().BeEmpty();
+        operand.Elements(M + "oMath").Should().BeEmpty();
+        sub.Elements(M + "r").Should().ContainSingle();
+        sub.Elements(M + "sSub").Should().ContainSingle();
+        sup.Elements(M + "sSup").Should().ContainSingle();
+        operand.Elements(M + "f").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void StructuredNAryEmptyLimits_EmitHiddenLimitProperties()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(new Equation([
+            MathRun.NAry(
+                "\u2211",
+                new Equation(),
+                new Equation(),
+                Equation.FromText("x"))
+        ])));
+        doc.Blocks.Add(paragraph);
+
+        var xml = WriteDocumentXml(doc);
+
+        var writtenNAry = xml.Descendants(M + "nary").Single();
+        var pr = writtenNAry.Element(M + "naryPr")!;
+        pr.Element(M + "subHide")!.Attribute(M + "val")!.Value.Should().Be("1");
+        pr.Element(M + "supHide")!.Attribute(M + "val")!.Value.Should().Be("1");
+        writtenNAry.Element(M + "sub")!.Elements().Should().BeEmpty();
+        writtenNAry.Element(M + "sup")!.Elements().Should().BeEmpty();
+        writtenNAry.Element(M + "e")!.Elements(M + "r").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void RawNestedNArySlots_ReadAsNestedEquations()
+    {
+        var documentXml = $$"""
+            <w:document xmlns:w="{{W.NamespaceName}}" xmlns:m="{{M.NamespaceName}}">
+              <w:body>
+                <w:p>
+                  <m:oMath>
+                    <m:nary>
+                      <m:naryPr>
+                        <m:chr m:val="&#x2211;" />
+                        <m:subHide m:val="0" />
+                        <m:supHide m:val="0" />
+                      </m:naryPr>
+                      <m:sub>
+                        <m:r><m:t>i=</m:t></m:r>
+                        <m:sSub>
+                          <m:e><m:r><m:t>j</m:t></m:r></m:e>
+                          <m:sub><m:r><m:t>1</m:t></m:r></m:sub>
+                        </m:sSub>
+                      </m:sub>
+                      <m:sup>
+                        <m:sSup>
+                          <m:e><m:r><m:t>n</m:t></m:r></m:e>
+                          <m:sup><m:r><m:t>2</m:t></m:r></m:sup>
+                        </m:sSup>
+                      </m:sup>
+                      <m:e>
+                        <m:f>
+                          <m:num><m:r><m:t>1</m:t></m:r></m:num>
+                          <m:den><m:r><m:t>i</m:t></m:r></m:den>
+                        </m:f>
+                      </m:e>
+                    </m:nary>
+                  </m:oMath>
+                </w:p>
+              </w:body>
+            </w:document>
+            """;
+
+        var read = ReadDocumentXml(documentXml);
+
+        var equation = read.Paragraphs.Single().Runs.Single(run => run.Equation is not null).Equation!;
+        equation.Runs.Should().ContainSingle();
+        var nary = equation.Runs[0];
+        nary.Kind.Should().Be(MathRunKind.NAry);
+        nary.Operator.Should().Be("\u2211");
+        nary.NAryLowerLimitEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        nary.NAryUpperLimitEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Superscript);
+        nary.NAryOperandEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Fraction);
+        equation.LinearText.Should().Be("\u2211(i=j_1..n^2) 1/i");
+    }
+
+    [Fact]
     public void AccentEquation_SurvivesRoundTrip()
     {
         var read = RoundTripEquation(new Equation([MathRun.AccentOf("x", "→")]));
@@ -263,6 +746,86 @@ public class EquationRoundTripTests
     }
 
     [Fact]
+    public void NestedDelimiterContent_SurvivesRoundTripAndEmitsDirectSlotChildren()
+    {
+        var equation = new Equation([
+            MathRun.Delimiter(
+                new Equation([
+                    MathRun.PlainText("a+"),
+                    MathRun.Superscript("x", "2")
+                ]),
+                "[",
+                "]")
+        ]);
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(paragraph);
+
+        var read = RoundTrip(doc);
+        var xml = WriteDocumentXml(doc);
+
+        var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Equation is not null).Equation!;
+        roundTripped.Runs.Should().ContainSingle();
+        var delimiter = roundTripped.Runs[0];
+        delimiter.Kind.Should().Be(MathRunKind.Delimiter);
+        delimiter.Base.Should().Be("a+x2");
+        delimiter.OpenChar.Should().Be("[");
+        delimiter.CloseChar.Should().Be("]");
+        delimiter.DelimiterContentEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        delimiter.DelimiterContentEquation.Runs[1].Base.Should().Be("x");
+        delimiter.DelimiterContentEquation.Runs[1].Sup.Should().Be("2");
+        roundTripped.LinearText.Should().Be("[a+x^2]");
+
+        var writtenDelimiter = xml.Descendants(M + "d").Single();
+        var content = writtenDelimiter.Element(M + "e")!;
+        content.Elements(M + "oMath").Should().BeEmpty();
+        content.Elements(M + "r").Should().ContainSingle();
+        content.Elements(M + "sSup").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void RawNestedDelimiterContent_ReadsAsNestedEquation()
+    {
+        var documentXml = $$"""
+            <w:document xmlns:w="{{W.NamespaceName}}" xmlns:m="{{M.NamespaceName}}">
+              <w:body>
+                <w:p>
+                  <m:oMath>
+                    <m:d>
+                      <m:dPr>
+                        <m:begChr m:val="[" />
+                        <m:endChr m:val="]" />
+                      </m:dPr>
+                      <m:e>
+                        <m:r><m:t>a+</m:t></m:r>
+                        <m:sSup>
+                          <m:e><m:r><m:t>x</m:t></m:r></m:e>
+                          <m:sup><m:r><m:t>2</m:t></m:r></m:sup>
+                        </m:sSup>
+                      </m:e>
+                    </m:d>
+                  </m:oMath>
+                </w:p>
+              </w:body>
+            </w:document>
+            """;
+
+        var read = ReadDocumentXml(documentXml);
+
+        var equation = read.Paragraphs.Single().Runs.Single(run => run.Equation is not null).Equation!;
+        equation.Runs.Should().ContainSingle();
+        var delimiter = equation.Runs[0];
+        delimiter.Kind.Should().Be(MathRunKind.Delimiter);
+        delimiter.OpenChar.Should().Be("[");
+        delimiter.CloseChar.Should().Be("]");
+        delimiter.DelimiterContentEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        equation.LinearText.Should().Be("[a+x^2]");
+    }
+
+    [Fact]
     public void MatrixEquation_SurvivesRoundTrip()
     {
         var read = RoundTripEquation(new Equation([MathRun.MatrixOf(new MathMatrix([["1", "2"], ["3", "4"]]))]));
@@ -287,6 +850,80 @@ public class EquationRoundTripTests
         read.Runs[0].FuncName.Should().Be("sin");
         read.Runs[0].Base.Should().Be("x");
         read.LinearText.Should().Be("sin(x)");
+    }
+
+    [Fact]
+    public void NestedFunctionArgument_SurvivesRoundTripAndEmitsDirectSlotChildren()
+    {
+        var equation = new Equation([
+            MathRun.FunctionApply(
+                "sin",
+                new Equation([
+                    MathRun.PlainText("a+"),
+                    MathRun.Superscript("x", "2")
+                ]))
+        ]);
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(paragraph);
+
+        var read = RoundTrip(doc);
+        var xml = WriteDocumentXml(doc);
+
+        var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Equation is not null).Equation!;
+        roundTripped.Runs.Should().ContainSingle();
+        var function = roundTripped.Runs[0];
+        function.Kind.Should().Be(MathRunKind.FunctionApply);
+        function.FuncName.Should().Be("sin");
+        function.Base.Should().Be("a+x2");
+        function.FunctionArgumentEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        function.FunctionArgumentEquation.Runs[1].Base.Should().Be("x");
+        function.FunctionArgumentEquation.Runs[1].Sup.Should().Be("2");
+        roundTripped.LinearText.Should().Be("sin(a+x^2)");
+
+        var writtenFunction = xml.Descendants(M + "func").Single();
+        var argument = writtenFunction.Element(M + "e")!;
+        argument.Elements(M + "oMath").Should().BeEmpty();
+        argument.Elements(M + "r").Should().ContainSingle();
+        argument.Elements(M + "sSup").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void RawNestedFunctionArgument_ReadsAsNestedEquation()
+    {
+        var documentXml = $$"""
+            <w:document xmlns:w="{{W.NamespaceName}}" xmlns:m="{{M.NamespaceName}}">
+              <w:body>
+                <w:p>
+                  <m:oMath>
+                    <m:func>
+                      <m:fName><m:r><m:t>sin</m:t></m:r></m:fName>
+                      <m:e>
+                        <m:r><m:t>a+</m:t></m:r>
+                        <m:sSup>
+                          <m:e><m:r><m:t>x</m:t></m:r></m:e>
+                          <m:sup><m:r><m:t>2</m:t></m:r></m:sup>
+                        </m:sSup>
+                      </m:e>
+                    </m:func>
+                  </m:oMath>
+                </w:p>
+              </w:body>
+            </w:document>
+            """;
+
+        var read = ReadDocumentXml(documentXml);
+
+        var equation = read.Paragraphs.Single().Runs.Single(run => run.Equation is not null).Equation!;
+        equation.Runs.Should().ContainSingle();
+        var function = equation.Runs[0];
+        function.Kind.Should().Be(MathRunKind.FunctionApply);
+        function.FuncName.Should().Be("sin");
+        function.FunctionArgumentEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        equation.LinearText.Should().Be("sin(a+x^2)");
     }
 
     [Fact]

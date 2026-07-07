@@ -2368,6 +2368,12 @@ public partial class FileAdapterSmokeTests
     [Fact]
     public void NativeJsonAdapter_Save_SkipsCrossSheetVisualObjects()
     {
+        // A visual object is owned by (and saved under) the sheet it is ANCHORED on - never by
+        // whatever sheet an optional cross-sheet reference (a linked picture's LinkedSourceRange)
+        // happens to point at. A picture anchored on Sheet1 with a LinkedSourceRange on "Other" is
+        // therefore still Sheet1's picture and must be saved there (P24 - previously this
+        // configuration satisfied neither sheet's save filter and the picture was silently dropped
+        // from the file entirely); only an object truly ANCHORED on a different sheet is excluded here.
         var workbook = new Workbook("ObjectCrossSheetSaveTest");
         var sheet = workbook.AddSheet("Sheet1");
         var otherSheet = workbook.AddSheet("Other");
@@ -2421,8 +2427,10 @@ public partial class FileAdapterSmokeTests
         using var document = JsonDocument.Parse(ms);
         var sheetJson = document.RootElement.GetProperty("Sheets")[0];
         sheetJson.GetProperty("Pictures").EnumerateArray()
-            .Should().ContainSingle()
-            .Which.GetProperty("Anchor").GetString().Should().Be("B2");
+            .Select(picture => picture.GetProperty("Anchor").GetString())
+            .Should().BeEquivalentTo(["B2", "B3"],
+                "both pictures anchored on Sheet1 must be saved there, regardless of where either " +
+                "picture's own LinkedSourceRange points - only the picture anchored on \"Other\" is excluded");
         sheetJson.GetProperty("TextBoxes").EnumerateArray()
             .Should().ContainSingle()
             .Which.GetProperty("Anchor").GetString().Should().Be("B4");
@@ -10156,6 +10164,12 @@ public partial class FileAdapterSmokeTests
         seriesDefaults.TextColor.Should().Be(new CellColor(31, 78, 121));
         seriesDefaults.FontSize.Should().Be(12);
 
+        // No edits were made after loading, so this save takes the byte-identical SourceCopy path
+        // (LastSaveDiagnostics.Reason == "model_unchanged") rather than regenerating xl/charts/chart1.xml
+        // through XlsxChartXmlWriter — it must echo the ORIGINAL package bytes verbatim, separator
+        // val="; " attribute and all. (XlsxChartXmlWriter.SeriesFormatting's element-text <c:separator>
+        // form only applies to a fresh/full chart XML rebuild; it must never retroactively rewrite an
+        // untouched preserved chart part, or this SourceCopy byte-identity contract would break.)
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
         saved.Position = 0;
@@ -16701,7 +16715,7 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void XlsxAdapter_FreshSave_DeduplicatesScenarioInputCellsAndSkipsBlankValues()
+    public void XlsxAdapter_FreshSave_DeduplicatesScenarioInputCellsAndKeepsBlankValues()
     {
         var workbook = new Workbook("ScenarioDedupeTest");
         var sheet = workbook.AddSheet("Data");
@@ -16726,9 +16740,13 @@ public partial class FileAdapterSmokeTests
             .Elements(worksheetNs + "inputCells")
             .ToList();
 
-        inputCells.Should().ContainSingle();
+        // A1 is deduplicated to the last write (20); B1's blank capture is now
+        // retained (empty val="") instead of being silently dropped.
+        inputCells.Should().HaveCount(2);
         inputCells[0].Attribute("r")!.Value.Should().Be("A1");
         inputCells[0].Attribute("val")!.Value.Should().Be("20");
+        inputCells[1].Attribute("r")!.Value.Should().Be("B1");
+        inputCells[1].Attribute("val")!.Value.Should().Be(string.Empty);
     }
 
     [Fact]

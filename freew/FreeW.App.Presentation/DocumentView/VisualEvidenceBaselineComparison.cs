@@ -114,6 +114,7 @@ public static class FreeWVisualBaselineComparisonPlanner
             "wordart-picture-watermark-layout",
             "field-page-number-variants",
             "references-heavy-fields",
+            "equation-structures",
             "backstage-print-preview-fidelity",
             "backstage-pdf-export-fidelity"
         };

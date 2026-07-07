@@ -53,7 +53,8 @@ public sealed partial class NativeJsonAdapter
         return GetCachedStyleId(workbook, ref styleIdCache, inlineStyle);
     }
 
-    private static CellStyle? ToCellStyle(CellStyleDto? dto)
+    // Internal (not private): reused by NativeJsonVisualDtoMapper for picture-cell snapshot styles (P26).
+    internal static CellStyle? ToCellStyle(CellStyleDto? dto)
     {
         if (dto is null)
             return null;
@@ -96,7 +97,8 @@ public sealed partial class NativeJsonAdapter
         };
     }
 
-    private static CellStyleDto? FromCellStyle(CellStyle? style)
+    // Internal (not private): reused by NativeJsonVisualDtoMapper for picture-cell snapshot styles (P26).
+    internal static CellStyleDto? FromCellStyle(CellStyle? style)
     {
         if (style is null)
             return null;

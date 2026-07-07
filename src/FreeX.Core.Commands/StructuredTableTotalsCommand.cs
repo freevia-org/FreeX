@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -37,7 +39,7 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
             var address = new CellAddress(_sheetId, totalsRow, table.Range.Start.Col + (uint)index);
             affectedCells.Add(address);
             _previousCells[address] = sheet.GetCell(address.Row, address.Col)?.Clone();
-            if (ResolveTotalsCell(sheet, table, table.Columns[index], index) is { } cell)
+            if (ResolveTotalsCell(table.Columns[index]) is { } cell)
                 sheet.SetCell(address, cell);
             else
                 sheet.SetCell(address, BlankValue.Instance);
@@ -62,11 +64,28 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
         _previousCells.Clear();
     }
 
-    private static Cell? ResolveTotalsCell(
-        Sheet sheet,
-        StructuredTableModel table,
-        StructuredTableColumnModel column,
-        int columnIndex)
+    // P106: Excel's table totals row is always backed by a live =SUBTOTAL(10x,[Column]) formula for
+    // every built-in totalsRowFunction (never a static constant) — the 100-series function numbers
+    // make SUBTOTAL itself skip manually/filter/group-hidden rows at evaluation time, so no separate
+    // hidden-row-aware aggregation is needed here anymore. Writing a formula (instead of a
+    // precomputed NumberValue) also keeps the total live across future data edits and recalcs
+    // correctly even when it is regenerated before FillGrownCalculatedColumns's newly written
+    // formula cells have been recalculated (their cached Values are still blank at that point; a
+    // static aggregate computed then would freeze at a wrong, stale number forever).
+    private static readonly Dictionary<string, int> TotalsRowFunctionSubtotalNumbers = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["average"] = 101,
+        ["avg"] = 101,
+        ["count"] = 103,
+        ["countnums"] = 102,
+        ["max"] = 104,
+        ["min"] = 105,
+        ["stddev"] = 107,
+        ["sum"] = 109,
+        ["var"] = 110,
+    };
+
+    private static Cell? ResolveTotalsCell(StructuredTableColumnModel column)
     {
         if (!string.IsNullOrWhiteSpace(column.TotalsRowLabel))
             return Cell.FromValue(new TextValue(column.TotalsRowLabel));
@@ -76,103 +95,36 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
             return null;
 
         var function = column.TotalsRowFunction.Trim();
-        if (string.Equals(function, "count", StringComparison.OrdinalIgnoreCase))
-            return Cell.FromValue(new NumberValue(CountNonBlankColumnValues(sheet, table, columnIndex)));
+        if (!TotalsRowFunctionSubtotalNumbers.TryGetValue(function, out var subtotalNumber))
+            return null;
 
-        var aggregate = CalculateColumnNumbers(sheet, table, columnIndex);
-        if (string.Equals(function, "sum", StringComparison.OrdinalIgnoreCase))
-            return Cell.FromValue(new NumberValue(aggregate.Sum));
-        if (string.Equals(function, "average", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(function, "avg", StringComparison.OrdinalIgnoreCase))
-            return Cell.FromValue(new NumberValue(aggregate.Count == 0 ? 0 : aggregate.Sum / aggregate.Count));
-        if (string.Equals(function, "countnums", StringComparison.OrdinalIgnoreCase))
-            return Cell.FromValue(new NumberValue(aggregate.Count));
-        if (string.Equals(function, "min", StringComparison.OrdinalIgnoreCase))
-            return Cell.FromValue(new NumberValue(aggregate.Count == 0 ? 0 : aggregate.Min));
-        if (string.Equals(function, "max", StringComparison.OrdinalIgnoreCase))
-            return Cell.FromValue(new NumberValue(aggregate.Count == 0 ? 0 : aggregate.Max));
-
-        return null;
+        var escapedColumnName = EscapeStructuredReferenceColumnName(column.Name);
+        return Cell.FromFormula($"SUBTOTAL({subtotalNumber.ToString(CultureInfo.InvariantCulture)},[{escapedColumnName}])");
     }
 
-    private static NumberAggregate CalculateColumnNumbers(Sheet sheet, StructuredTableModel table, int columnIndex)
+    // R12-xlsx-tables-3: a column header containing '[', ']', '#', or an apostrophe must have each
+    // such character individually escaped with a leading apostrophe, or FreeX's own formula lexer
+    // (see FreeX.Core.Formula.Lexer.ReadStructuredReferenceSelectorSlow) either mis-parses the
+    // selector (an unescaped '[' opens a nested/combined-selector bracket group it can never close)
+    // or StructuredReferenceResolver.FindColumnIndex simply fails to match the literal header text,
+    // leaving the totals cell's SUBTOTAL formula resolving to #NAME?. Escaping only ']' (the
+    // previous behavior) left '[' and '#' broken.
+    private static readonly char[] StructuredReferenceEscapableChars = ['[', ']', '#', '\''];
+
+    private static string EscapeStructuredReferenceColumnName(string columnName)
     {
-        var col = table.Range.Start.Col + (uint)columnIndex;
-        var lastDataRow = table.TotalsRowShown ? table.Range.End.Row - 1 : table.Range.End.Row;
-        var aggregate = new NumberAggregate();
-        for (var row = table.Range.Start.Row + HeaderRowCount(table); row <= lastDataRow; row++)
+        if (columnName.AsSpan().IndexOfAny(StructuredReferenceEscapableChars) < 0)
+            return columnName;
+
+        var builder = new StringBuilder(columnName.Length + 4);
+        foreach (var ch in columnName)
         {
-            // Excel's table totals row is backed by SUBTOTAL(10x, ...), whose 100-series function
-            // numbers skip every effectively-hidden row (manual, filter, and group-collapsed) — not
-            // just filter-hidden ones — so mirror that here rather than aggregating raw cell values.
-            if (sheet.IsRowEffectivelyHidden(row))
-                continue;
-            if (TryGetNumber(sheet.GetValue(row, col)) is { } value)
-                aggregate.Add(value);
+            if (ch is '[' or ']' or '#' or '\'')
+                builder.Append('\'');
+            builder.Append(ch);
         }
 
-        return aggregate;
-    }
-
-    private static int CountNonBlankColumnValues(Sheet sheet, StructuredTableModel table, int columnIndex)
-    {
-        var col = table.Range.Start.Col + (uint)columnIndex;
-        var lastDataRow = table.TotalsRowShown ? table.Range.End.Row - 1 : table.Range.End.Row;
-        var count = 0;
-        for (var row = table.Range.Start.Row + HeaderRowCount(table); row <= lastDataRow; row++)
-        {
-            if (sheet.IsRowEffectivelyHidden(row))
-                continue;
-            if (sheet.GetValue(row, col) is not BlankValue)
-                count++;
-        }
-
-        return count;
-    }
-
-    // Excel tables normally have a single header row, but headerRowCount="0" (a headerless table)
-    // is a supported, round-tripped feature — clamp to the table's actual row span so a headerless
-    // table's very first row is treated as data, not silently excluded from the totals aggregate.
-    private static uint HeaderRowCount(StructuredTableModel table)
-    {
-        var rowCount = checked((int)table.Range.RowCount);
-        return (uint)Math.Clamp(table.HeaderRowCount ?? 1, 0, rowCount);
-    }
-
-    private static double? TryGetNumber(ScalarValue value) =>
-        value switch
-        {
-            NumberValue number => number.Value,
-            DateTimeValue date => date.Value,
-            BoolValue boolean => boolean.Value ? 1 : 0,
-            _ => null
-        };
-
-    private struct NumberAggregate
-    {
-        public double Sum { get; private set; }
-        public int Count { get; private set; }
-        public double Min { get; private set; }
-        public double Max { get; private set; }
-
-        public void Add(double value)
-        {
-            if (Count == 0)
-            {
-                Min = value;
-                Max = value;
-            }
-            else
-            {
-                if (value < Min)
-                    Min = value;
-                if (value > Max)
-                    Max = value;
-            }
-
-            Sum += value;
-            Count++;
-        }
+        return builder.ToString();
     }
 }
 

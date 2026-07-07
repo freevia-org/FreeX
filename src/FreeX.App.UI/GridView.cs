@@ -58,6 +58,22 @@ public partial class GridView : FrameworkElement
         peer.NotifySelectionChanged(SelectedRange?.Start);
     }
 
+    /// <summary>
+    /// Evicts cached cell automation peers that fell out of the visible viewport (e.g. after
+    /// scrolling/navigating a large workbook), so <c>_cellPeers</c> tracks only currently
+    /// reachable cells instead of growing without bound for the life of the grid; also
+    /// re-announces the active cell's value if it changed without a selection move (e.g.
+    /// Ctrl+Enter commit or F9 recalc).
+    /// </summary>
+    private void NotifyViewportAutomationChanged()
+    {
+        if (UIElementAutomationPeer.FromElement(this) is not GridViewAutomationPeer peer)
+            return;
+
+        peer.EvictStaleCellPeers();
+        peer.NotifyActiveCellValueIfChanged();
+    }
+
     private sealed class GridViewAutomationPeer(GridView owner) :
         FrameworkElementAutomationPeer(owner),
         IGridProvider,
@@ -66,6 +82,8 @@ public partial class GridView : FrameworkElement
         private readonly Dictionary<(uint Row, uint Col), GridViewCellAutomationPeer> _cellPeers = [];
 
         private CellAddress? _lastNotifiedActiveCell = owner.SelectedRange?.Start;
+
+        private string? _lastNotifiedActiveCellDisplayText;
 
         private GridView OwnerGrid => (GridView)Owner;
 
@@ -131,17 +149,10 @@ public partial class GridView : FrameworkElement
 
         internal Rect GetCellBoundingRectangle(uint row, uint column)
         {
-            if (!TryGetMetric(OwnerGrid.Viewport?.RowMetrics, row, out var rowMetric) ||
-                !TryGetMetric(OwnerGrid.Viewport?.ColMetrics, column, out var columnMetric))
-            {
+            var viewport = OwnerGrid.Viewport;
+            if (viewport is null || !TryGetSplitAwareBounds(viewport, OwnerGrid.ShowHeaders, row, column, out var bounds))
                 return Rect.Empty;
-            }
 
-            var bounds = new Rect(
-                OwnerGrid.ActualRowHeaderWidth + columnMetric.LeftOffset,
-                OwnerGrid.EffectiveColHeaderHeight + rowMetric.TopOffset,
-                columnMetric.Width,
-                rowMetric.Height);
             try
             {
                 var topLeft = OwnerGrid.PointToScreen(bounds.TopLeft);
@@ -152,6 +163,88 @@ public partial class GridView : FrameworkElement
             {
                 return bounds;
             }
+        }
+
+        /// <summary>
+        /// Resolves a cell's bounds honoring split panes: cells that live only in
+        /// SplitPanes.TopRows/LeftColumns/BottomLeftRows/TopRightColumns are looked up in
+        /// those metric lists (not just the main Viewport.RowMetrics/ColMetrics), and the
+        /// pane origin is offset by the pinned-pane extent (via the split divider layout)
+        /// so bounds match what GridView actually renders, mirroring
+        /// GridView.SplitPanes.cs's HitTestViewportCell/SplitPaneCellLayoutPlanner logic.
+        /// </summary>
+        private static bool TryGetSplitAwareBounds(ViewportModel viewport, bool showHeaders, uint row, uint column, out Rect bounds)
+        {
+            var rowHeaderWidth = showHeaders ? GridView.CalculateRowHeaderWidth(viewport) : 0.0;
+            var colHeaderHeight = showHeaders ? GridView.CalculateColumnHeaderHeight(viewport) : 0.0;
+
+            var splitPanes = viewport.SplitPanes;
+            if (splitPanes is null)
+            {
+                if (!TryGetMetric(viewport.RowMetrics, row, out var mainRowMetric) ||
+                    !TryGetMetric(viewport.ColMetrics, column, out var mainColMetric))
+                {
+                    bounds = Rect.Empty;
+                    return false;
+                }
+
+                bounds = new Rect(
+                    rowHeaderWidth + mainColMetric.LeftOffset,
+                    colHeaderHeight + mainRowMetric.TopOffset,
+                    mainColMetric.Width,
+                    mainRowMetric.Height);
+                return true;
+            }
+
+            var dividerLayout = GridView.CalculateSplitDividerLayout(viewport);
+            var horizontalY = dividerLayout.HorizontalY ?? colHeaderHeight;
+            var verticalX = dividerLayout.VerticalX ?? rowHeaderWidth;
+
+            var isTopPane = TryGetMetric(splitPanes.TopRows, row, out var topRowMetric);
+            var isLeftPane = TryGetMetric(splitPanes.LeftColumns, column, out var leftColMetric);
+
+            RowMetric rowMetric;
+            double rowOrigin;
+            if (isTopPane)
+            {
+                rowMetric = topRowMetric;
+                rowOrigin = colHeaderHeight;
+            }
+            else if (TryGetMetric(splitPanes.BottomLeftRows ?? viewport.RowMetrics, row, out var bottomRowMetric))
+            {
+                rowMetric = bottomRowMetric;
+                rowOrigin = horizontalY;
+            }
+            else
+            {
+                bounds = Rect.Empty;
+                return false;
+            }
+
+            ColMetric colMetric;
+            double colOrigin;
+            if (isLeftPane)
+            {
+                colMetric = leftColMetric;
+                colOrigin = rowHeaderWidth;
+            }
+            else if (TryGetMetric(splitPanes.TopRightColumns ?? viewport.ColMetrics, column, out var topRightColMetric))
+            {
+                colMetric = topRightColMetric;
+                colOrigin = verticalX;
+            }
+            else
+            {
+                bounds = Rect.Empty;
+                return false;
+            }
+
+            bounds = new Rect(
+                colOrigin + colMetric.LeftOffset,
+                rowOrigin + rowMetric.TopOffset,
+                colMetric.Width,
+                rowMetric.Height);
+            return true;
         }
 
         public override object? GetPattern(PatternInterface patternInterface) =>
@@ -179,7 +272,10 @@ public partial class GridView : FrameworkElement
             RaiseAutomationEvent(AutomationEvents.SelectionItemPatternOnElementSelected);
 
             if (activeCell is not { } address)
+            {
+                _lastNotifiedActiveCellDisplayText = null;
                 return;
+            }
 
             var cellPeer = GetOrCreateCellPeer(address.Row, address.Col);
 
@@ -191,6 +287,28 @@ public partial class GridView : FrameworkElement
 
             cellPeer.RaiseAutomationEvent(AutomationEvents.AutomationFocusChanged);
             cellPeer.RaiseAutomationEvent(AutomationEvents.SelectionItemPatternOnElementSelected);
+            cellPeer.NotifyNameChanged();
+            _lastNotifiedActiveCellDisplayText = GetCellDisplayText(address.Row, address.Col);
+        }
+
+        /// <summary>
+        /// Re-announces the still-active cell's Name/Value when its displayed content changes
+        /// without a selection move (e.g. Ctrl+Enter commit that leaves the selection in place,
+        /// or an F9 recalc that updates the focused formula cell), so a screen reader's braille
+        /// display / value readout does not keep showing the pre-edit value. Called whenever the
+        /// viewport is rebuilt (see GridView.Properties.cs OnViewportChanged).
+        /// </summary>
+        internal void NotifyActiveCellValueIfChanged()
+        {
+            if (_lastNotifiedActiveCell is not { } address)
+                return;
+
+            var displayText = GetCellDisplayText(address.Row, address.Col);
+            if (displayText == _lastNotifiedActiveCellDisplayText)
+                return;
+
+            _lastNotifiedActiveCellDisplayText = displayText;
+            var cellPeer = GetOrCreateCellPeer(address.Row, address.Col);
             cellPeer.NotifyNameChanged();
         }
 
@@ -229,6 +347,38 @@ public partial class GridView : FrameworkElement
             peer = new GridViewCellAutomationPeer(this, row, column);
             _cellPeers[key] = peer;
             return peer;
+        }
+
+        /// <summary>
+        /// Drops cached peers for cells no longer in the visible viewport (main + split
+        /// panes) or the active cell, so navigating/scrolling a large workbook does not
+        /// accumulate unbounded automation peers for the lifetime of the grid.
+        /// </summary>
+        internal void EvictStaleCellPeers()
+        {
+            if (_cellPeers.Count == 0)
+                return;
+
+            var rows = GetVisibleRows(OwnerGrid.Viewport);
+            var columns = GetVisibleColumns(OwnerGrid.Viewport);
+
+            List<(uint Row, uint Col)>? stale = null;
+            foreach (var key in _cellPeers.Keys)
+            {
+                if (rows.Contains(key.Row) && columns.Contains(key.Col))
+                    continue;
+
+                if (_lastNotifiedActiveCell is { } active && active.Row == key.Row && active.Col == key.Col)
+                    continue;
+
+                (stale ??= []).Add(key);
+            }
+
+            if (stale is null)
+                return;
+
+            foreach (var key in stale)
+                _cellPeers.Remove(key);
         }
 
         private bool TryGetDisplayCell(uint row, uint column, out DisplayCell cell)

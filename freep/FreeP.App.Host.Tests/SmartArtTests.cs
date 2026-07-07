@@ -37,7 +37,10 @@ public sealed class SmartArtTests : IDisposable
     /// Builds a minimal but self-consistent in-memory .pptx archive with one SmartArt shape.
     /// Writes it to disk and returns the path.
     /// </summary>
-    private string MakeSmartArtPptx(string[] nodeTexts)
+    private string MakeSmartArtPptx(
+        string[] nodeTexts,
+        bool pictureCaptionList = false,
+        bool includeNodeImage = false)
     {
         var path = Path.Combine(_tempDir, $"smartart_{Guid.NewGuid():N}.pptx");
 
@@ -63,10 +66,28 @@ public sealed class SmartArtTests : IDisposable
 
         // Build dsp:drawing XML with fallback shapes
         int shapeIdx = 1;
-        var fallbackSpEls = nodeTexts.Select(text =>
+        var fallbackEls = new List<XElement>();
+        foreach (var text in nodeTexts)
         {
             int idx = shapeIdx++;
-            return new XElement(dspNs + "sp",
+            if (pictureCaptionList && includeNodeImage)
+            {
+                fallbackEls.Add(new XElement(dspNs + "pic",
+                    new XElement(dspNs + "nvPicPr",
+                        new XElement(dspNs + "cNvPr", new XAttribute("id", idx), new XAttribute("name", $"Picture{idx}")),
+                        new XElement(dspNs + "cNvPicPr")),
+                    new XElement(dspNs + "blipFill",
+                        new XElement(aNs + "blip", new XAttribute(rNs + "embed", "rIdImg1")),
+                        new XElement(aNs + "stretch", new XElement(aNs + "fillRect"))),
+                    new XElement(dspNs + "spPr",
+                        new XElement(aNs + "xfrm",
+                            new XElement(aNs + "off", new XAttribute("x", (idx - 1) * 914400L), new XAttribute("y", "457200")),
+                            new XElement(aNs + "ext", new XAttribute("cx", "457200"), new XAttribute("cy", "457200"))),
+                        new XElement(aNs + "prstGeom", new XAttribute("prst", "rect"), new XElement(aNs + "avLst")))));
+                idx = shapeIdx++;
+            }
+
+            fallbackEls.Add(new XElement(dspNs + "sp",
                 new XElement(dspNs + "nvSpPr",
                     new XElement(dspNs + "cNvPr", new XAttribute("id", idx), new XAttribute("name", $"Node{idx}")),
                     new XElement(dspNs + "cNvSpPr")),
@@ -83,23 +104,42 @@ public sealed class SmartArtTests : IDisposable
                     new XElement(aNs + "p",
                         new XElement(aNs + "r",
                             new XElement(aNs + "rPr", new XAttribute("lang", "en-US")),
-                            new XElement(aNs + "t", text)))));
-        }).ToArray();
+                            new XElement(aNs + "t", text))))));
+        }
 
         var dspDrawingXml = new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(dspNs + "drawing",
                 new XAttribute(XNamespace.Xmlns + "dsp", dspNs.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "a", aNs.NamespaceName),
-                new XElement(dspNs + "spTree", fallbackSpEls)));
+                new XAttribute(XNamespace.Xmlns + "r", rNs.NamespaceName),
+                new XElement(dspNs + "spTree", fallbackEls)));
 
         // Build minimal diagram data XML (just a root element)
-        var dataXml = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(dgmNs + "dataModel",
-                new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
+        var dataXml = pictureCaptionList
+            ? new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
+                new XElement(dgmNs + "dataModel",
+                    new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
+                    new XElement(dgmNs + "ptLst",
+                        nodeTexts.Select((text, i) =>
+                            new XElement(dgmNs + "pt",
+                                new XAttribute("modelId", $"n{i + 1}"),
+                                new XAttribute("type", "node"),
+                                new XElement(dgmNs + "t",
+                                    new XElement(aNs + "p",
+                                        new XElement(aNs + "r",
+                                            new XElement(aNs + "t", text)))))))))
+            : new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
+                new XElement(dgmNs + "dataModel",
+                    new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
 
         // Minimal layout, quickStyle, colors XML
-        var layoutXml  = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), new XElement(dgmNs + "layoutDef",  new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
+        var layoutXml  = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(dgmNs + "layoutDef",
+                new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
+                pictureCaptionList
+                    ? new XAttribute("uniqueId", "urn:microsoft.com/office/officeart/2005/8/layout/pictureCaptionList")
+                    : null));
         var qsXml      = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), new XElement(dgmNs + "styleDef",   new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
         var colorsXml  = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), new XElement(dgmNs + "colorsDef", new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
 
@@ -178,9 +218,12 @@ public sealed class SmartArtTests : IDisposable
         // [Content_Types].xml
         var ctNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/content-types");
         WriteXml("[Content_Types].xml", new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(ctNs + "Types",
+                new XElement(ctNs + "Types",
                 new XElement(ctNs + "Default", new XAttribute("Extension", "rels"),  new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
                 new XElement(ctNs + "Default", new XAttribute("Extension", "xml"),   new XAttribute("ContentType", "application/xml")),
+                includeNodeImage
+                    ? new XElement(ctNs + "Default", new XAttribute("Extension", "png"), new XAttribute("ContentType", "image/png"))
+                    : null,
                 new XElement(ctNs + "Override", new XAttribute("PartName", "/ppt/presentation.xml"), new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml")),
                 new XElement(ctNs + "Override", new XAttribute("PartName", "/ppt/slides/slide1.xml"), new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.presentationml.slide+xml")),
                 new XElement(ctNs + "Override", new XAttribute("PartName", "/ppt/theme/theme1.xml"), new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.theme+xml")),
@@ -296,6 +339,12 @@ public sealed class SmartArtTests : IDisposable
         WriteXml("ppt/diagrams/quickStyle1.xml", qsXml);
         WriteXml("ppt/diagrams/colors1.xml",     colorsXml);
         WriteXml("ppt/diagrams/drawing1.xml",    dspDrawingXml);
+        if (includeNodeImage)
+        {
+            WriteEntry("ppt/media/image1.png", Minimal1x1Png());
+            WriteEntry("ppt/diagrams/_rels/drawing1.xml.rels", MakeRels(pkgNs,
+                ("rIdImg1", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image", "../media/image1.png")));
+        }
 
         // data1.xml rels: points to drawing1.xml
         WriteEntry("ppt/diagrams/_rels/data1.xml.rels", MakeRels(pkgNs,
@@ -303,6 +352,19 @@ public sealed class SmartArtTests : IDisposable
 
         return path;
     }
+
+    private static byte[] Minimal1x1Png() =>
+    [
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9C, 0x63, 0x60, 0x00, 0x00, 0x00,
+        0x02, 0x00, 0x01, 0xE2, 0x21, 0xBC, 0x33, 0x00,
+        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+        0x42, 0x60, 0x82
+    ];
 
     // ── Model unit tests ─────────────────────────────────────────────────────────
 
@@ -390,6 +452,47 @@ public sealed class SmartArtTests : IDisposable
             shape.Kind.Should().Be(SlideShapeKind.AutoShape);
             shape.PlainText.Should().Be(text);
         }
+    }
+
+    [Fact]
+    public void Reader_SmartArt_PictureCaptionList_ImportsNodePictures()
+    {
+        var nodeTexts = new[] { "Alpha caption", "Beta caption" };
+        var pptxPath = MakeSmartArtPptx(nodeTexts, pictureCaptionList: true, includeNodeImage: true);
+        var pres = PptxPackageReader.Read(pptxPath);
+
+        var smart = pres.Slides[0].Shapes
+            .First(s => s.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smart.Data.Should().NotBeNull();
+        smart.Data!.LayoutUniqueId.Should().EndWith("/pictureCaptionList");
+        smart.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "the fixture has a deterministic one-to-one ordered node/picture mapping");
+        smart.Data.Nodes.Should().HaveCount(nodeTexts.Length);
+        smart.Data.Nodes.Select(n => n.Text).Should().Equal(nodeTexts);
+        smart.Data.Nodes.Select(n => n.Picture?.ContentType).Should().OnlyContain(contentType => contentType == "image/png");
+        smart.Data.Nodes.Select(n => n.Picture?.Bytes.Length ?? 0).Should().OnlyContain(length => length > 0);
+        smart.FallbackShapes.Should().Contain(s => s.Kind == SlideShapeKind.Picture,
+            "the cached dsp:pic is still parsed as an ordinary fallback picture shape");
+    }
+
+    [Fact]
+    public void Reader_SmartArt_PictureCaptionList_WithoutImage_KeepsLiveLayoutDisabled()
+    {
+        var pptxPath = MakeSmartArtPptx(["Caption only"], pictureCaptionList: true, includeNodeImage: false);
+        var pres = PptxPackageReader.Read(pptxPath);
+
+        var smart = pres.Slides[0].Shapes
+            .First(s => s.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smart.Data.Should().NotBeNull();
+        smart.Data!.IsLiveLayoutSupported.Should().BeFalse(
+            "pictureCaptionList must not claim live layout when node images cannot be resolved");
+        smart.Data.Nodes.Should().ContainSingle();
+        smart.Data.Nodes[0].Picture.Should().BeNull();
+        smart.FallbackShapes.Should().NotBeEmpty("cached drawing remains the render fallback");
     }
 
     [Fact]
@@ -987,10 +1090,283 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
-    public void Reader_ParsesKnownFamilyButDisablesLiveLayoutForUnsupportedVariant()
+    public void Reader_ParsesSegmentedProcessAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
             layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/segmentedProcess",
+            nodes: [("id1", "Stage 1"), ("id2", "Stage 2")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Process,
+            "segmentedProcess reuses the shared process-family geometry");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "segmentedProcess is in the bounded shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Stage 1", "Stage 2");
+    }
+
+    [Fact]
+    public void Reader_ParsesChevronProcessAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/chevronProcess",
+            nodes: [("id1", "Stage 1"), ("id2", "Stage 2")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Process,
+            "chevronProcess reuses the shared process-family geometry");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "chevronProcess is in the bounded shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Stage 1", "Stage 2");
+    }
+
+    [Fact]
+    public void Reader_ParsesBasicBlockListAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/basicBlockList",
+            nodes: [("id1", "Item 1"), ("id2", "Item 2"), ("id3", "Item 3")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.List,
+            "basicBlockList is a list-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "basicBlockList is in the bounded shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Item 1", "Item 2", "Item 3");
+    }
+
+    [Fact]
+    public void Reader_ParsesVerticalBoxListAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/verticalBoxList",
+            nodes: [("id1", "Item 1"), ("id2", "Item 2"), ("id3", "Item 3")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.List,
+            "verticalBoxList is a list-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "verticalBoxList is in the bounded shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Item 1", "Item 2", "Item 3");
+    }
+
+    [Fact]
+    public void Reader_ParsesBasicCycleAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/basicCycle",
+            nodes: [("id1", "Discover"), ("id2", "Plan"), ("id3", "Build"), ("id4", "Review")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle,
+            "basicCycle is a cycle-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "basicCycle is in the bounded shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Discover", "Plan", "Build", "Review");
+    }
+
+    [Fact]
+    public void Reader_ParsesRadialCycleAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/radialCycle",
+            nodes: [("id1", "Identify"), ("id2", "Analyze"), ("id3", "Act"), ("id4", "Review")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle,
+            "radialCycle is a cycle-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "radialCycle is in the bounded shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Identify", "Analyze", "Act", "Review");
+    }
+
+    [Fact]
+    public void Reader_ParsesGearCycleAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/gearCycle",
+            nodes: [("id1", "Initiate"), ("id2", "Coordinate"), ("id3", "Deliver"), ("id4", "Improve")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle,
+            "gearCycle is a cycle-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "gearCycle is in the bounded shared live-layout planner as a cycle approximation");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Initiate", "Coordinate", "Deliver", "Improve");
+    }
+
+    [Fact]
+    public void Reader_ParsesBasicHierarchyAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/basicHierarchy",
+            nodes: [("R", "CEO"), ("C1", "Sales"), ("C2", "Engineering")],
+            parOfConnections: [("R", "C1"), ("R", "C2")]);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Hierarchy,
+            "basicHierarchy is a hierarchy-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "basicHierarchy is in the bounded shared live-layout planner");
+        sa.Data.Nodes.Should().ContainSingle();
+        sa.Data.Nodes[0].Text.Should().Be("CEO");
+        sa.Data.Nodes[0].Children.Select(n => n.Text).Should().BeEquivalentTo(new[] { "Sales", "Engineering" });
+    }
+
+    [Fact]
+    public void Reader_ParsesOrgChartAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/orgChart",
+            nodes: [("R", "CEO"), ("C1", "Sales"), ("C2", "Engineering")],
+            parOfConnections: [("R", "C1"), ("R", "C2")]);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Hierarchy,
+            "orgChart is a hierarchy-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "orgChart is in the bounded shared live-layout planner as a generic tree approximation");
+        sa.Data.Nodes.Should().ContainSingle();
+        sa.Data.Nodes[0].Text.Should().Be("CEO");
+        sa.Data.Nodes[0].Children.Select(n => n.Text).Should().BeEquivalentTo(new[] { "Sales", "Engineering" });
+    }
+
+    [Fact]
+    public void Reader_ParsesVerticalBulletListAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/verticalBulletList",
+            nodes: [("R", "Project"), ("C1", "Scope"), ("C2", "Timeline"), ("C3", "Risks")],
+            parOfConnections: [("R", "C1"), ("R", "C2"), ("R", "C3")]);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Hierarchy,
+            "verticalBulletList is a hierarchy-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "verticalBulletList is in the bounded shared live-layout planner");
+        sa.Data.Nodes.Should().ContainSingle();
+        sa.Data.Nodes[0].Text.Should().Be("Project");
+        sa.Data.Nodes[0].Children.Select(n => n.Text).Should().BeEquivalentTo(new[] { "Scope", "Timeline", "Risks" });
+    }
+
+    [Fact]
+    public void Reader_ParsesStackedListAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/stackedList",
+            nodes: [("id1", "Item 1"), ("id2", "Item 2"), ("id3", "Item 3")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.List,
+            "stackedList is a list-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "stackedList is in the bounded shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Item 1", "Item 2", "Item 3");
+    }
+
+    [Fact]
+    public void Reader_ParsesKnownListFamilyButDisablesLiveLayoutForUnsupportedSibling()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/pictureCaptionList",
+            nodes: [("id1", "Item 1"), ("id2", "Item 2")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.List,
+            "unsupported list siblings still retain broad family metadata for future layout slices");
+        sa.Data.IsLiveLayoutSupported.Should().BeFalse(
+            "list-family layouts outside the bounded allow-list should keep cached-drawing fallback");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Item 1", "Item 2");
+    }
+
+    [Fact]
+    public void Reader_ParsesKnownCycleFamilyButDisablesLiveLayoutForUnsupportedSibling()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/textCycle",
+            nodes: [("id1", "Phase 1"), ("id2", "Phase 2"), ("id3", "Phase 3")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle,
+            "unsupported cycle siblings still retain broad family metadata for future layout slices");
+        sa.Data.IsLiveLayoutSupported.Should().BeFalse(
+            "cycle-family layouts outside the bounded allow-list should keep cached-drawing fallback");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Phase 1", "Phase 2", "Phase 3");
+    }
+
+    [Fact]
+    public void Reader_ParsesKnownHierarchyFamilyButDisablesLiveLayoutForUnsupportedSibling()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/horizontalHierarchy",
+            nodes: [("R", "Root"), ("C", "Child")],
+            parOfConnections: [("R", "C")]);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Hierarchy,
+            "unsupported hierarchy siblings still retain broad family metadata for future layout slices");
+        sa.Data.IsLiveLayoutSupported.Should().BeFalse(
+            "hierarchy-family layouts outside the bounded allow-list should keep cached-drawing fallback");
+        sa.Data.Nodes.Should().ContainSingle();
+        sa.Data.Nodes[0].Children.Should().ContainSingle().Which.Text.Should().Be("Child");
+    }
+
+    [Fact]
+    public void Reader_ParsesKnownFamilyButDisablesLiveLayoutForUnsupportedVariant()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/closedChevronProcess",
             nodes: [("id1", "Stage 1"), ("id2", "Stage 2")],
             parOfConnections: []);
 
@@ -1067,12 +1443,302 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_SegmentedProcessSmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/segmentedProcess",
+            nodes: [("n1", "Plan"), ("n2", "Build"), ("n3", "Ship")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Process);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(5, "three segmented-process boxes plus two connectors should render from shared live data");
+        var renderedText = liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Plan");
+        renderedText.Should().Contain("Build");
+        renderedText.Should().Contain("Ship");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(2, "WPF and Avalonia hosts consume shared connector DrawOps");
+    }
+
+    [Fact]
+    public void Compositor_ChevronProcessSmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/chevronProcess",
+            nodes: [("n1", "Plan"), ("n2", "Build"), ("n3", "Ship")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Process);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(5, "three chevron-process boxes plus two connectors should render from shared live data");
+        var renderedText = liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Plan");
+        renderedText.Should().Contain("Build");
+        renderedText.Should().Contain("Ship");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(2, "WPF and Avalonia hosts consume shared chevron-process connector DrawOps");
+    }
+
+    [Fact]
+    public void Compositor_VerticalBoxListSmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/verticalBoxList",
+            nodes: [("n1", "Plan"), ("n2", "Build"), ("n3", "Ship")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.List);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(3, "three vertical-box-list boxes should render from shared live data");
+        liveShapes.Where(op => op.Text is null)
+            .Should().BeEmpty("list-family live geometry emits no connectors");
+        var renderedText = liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Plan");
+        renderedText.Should().Contain("Build");
+        renderedText.Should().Contain("Ship");
+        liveShapes.Select(op => op.BoundsDip.Y)
+            .Should().BeInAscendingOrder("WPF and Avalonia hosts consume shared vertical list DrawOps");
+    }
+
+    [Fact]
+    public void Compositor_StackedListSmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/stackedList",
+            nodes: [("n1", "Plan"), ("n2", "Build"), ("n3", "Ship")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.List);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(3, "three stacked-list boxes should render from shared live data");
+        liveShapes.Where(op => op.Text is null)
+            .Should().BeEmpty("list-family live geometry emits no connectors");
+        var renderedText = liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Plan");
+        renderedText.Should().Contain("Build");
+        renderedText.Should().Contain("Ship");
+        liveShapes.Select(op => op.BoundsDip.Y)
+            .Should().BeInAscendingOrder("WPF and Avalonia hosts consume shared stacked-list DrawOps");
+    }
+
+    [Fact]
+    public void Compositor_BasicCycleSmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/basicCycle",
+            nodes: [("n1", "Discover"), ("n2", "Plan"), ("n3", "Build"), ("n4", "Review")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(8, "four basic-cycle boxes plus four connectors should render from shared live data");
+        var renderedText = liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Discover");
+        renderedText.Should().Contain("Review");
+    }
+
+    [Fact]
+    public void Compositor_RadialCycleSmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/radialCycle",
+            nodes: [("n1", "Identify"), ("n2", "Analyze"), ("n3", "Act"), ("n4", "Review")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(8, "four radial-cycle boxes plus four connectors should render from shared live data");
+        var renderedText = liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Identify");
+        renderedText.Should().Contain("Review");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(4, "WPF and Avalonia hosts consume shared radial-cycle connector DrawOps");
+    }
+
+    [Fact]
+    public void Compositor_GearCycleSmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/gearCycle",
+            nodes: [("n1", "Initiate"), ("n2", "Coordinate"), ("n3", "Deliver"), ("n4", "Improve")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(8, "four gear-cycle boxes plus four connectors should render from shared live data");
+        var renderedText = liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Initiate");
+        renderedText.Should().Contain("Improve");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(4, "WPF and Avalonia hosts consume shared gear-cycle connector DrawOps");
+    }
+
+    [Fact]
+    public void Compositor_BasicHierarchySmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/basicHierarchy",
+            nodes: [("R", "CEO"), ("C1", "Sales"), ("C2", "Engineering")],
+            parOfConnections: [("R", "C1"), ("R", "C2")]);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Hierarchy);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(5, "three basic-hierarchy boxes plus two connectors should render from shared live data");
+        var renderedText = liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("CEO");
+        renderedText.Should().Contain("Sales");
+        renderedText.Should().Contain("Engineering");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(2, "WPF and Avalonia hosts consume shared connector DrawOps");
+    }
+
+    [Fact]
+    public void Compositor_OrgChartSmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/orgChart",
+            nodes: [("R", "CEO"), ("C1", "Sales"), ("C2", "Engineering")],
+            parOfConnections: [("R", "C1"), ("R", "C2")]);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Hierarchy);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(5, "three org-chart boxes plus two connectors should render from shared live data");
+        var renderedText = liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("CEO");
+        renderedText.Should().Contain("Sales");
+        renderedText.Should().Contain("Engineering");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(2, "WPF and Avalonia hosts consume shared orgChart connector DrawOps");
+    }
+
+    [Fact]
+    public void Compositor_VerticalBulletListSmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/verticalBulletList",
+            nodes: [("R", "Project"), ("C1", "Scope"), ("C2", "Timeline"), ("C3", "Risks")],
+            parOfConnections: [("R", "C1"), ("R", "C2"), ("R", "C3")]);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Hierarchy);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(7, "four vertical-bullet-list boxes plus three connectors should render from shared live data");
+        var renderedText = liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Project");
+        renderedText.Should().Contain("Scope");
+        renderedText.Should().Contain("Timeline");
+        renderedText.Should().Contain("Risks");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(3, "WPF and Avalonia hosts consume shared connector DrawOps");
+    }
+
+    [Fact]
     public void Compositor_UnsupportedProcessSibling_UsesCachedFallbackShapes()
     {
         var data = new SmartArtData
         {
             Family = SmartArtFamily.Process,
-            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/segmentedProcess",
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/closedChevronProcess",
             IsLiveLayoutSupported = false
         };
         data.Nodes.Add(new SmartArtNode { Text = "Live A", Level = 0 });
@@ -1118,6 +1784,116 @@ public sealed class SmartArtTests : IDisposable
 
         shapeOps.Should().ContainSingle("unsupported process siblings should use cached drawing fallback");
         shapeOps[0].Text?.Paragraphs[0].Runs[0].Text.Should().Be("Cached sibling fallback");
+    }
+
+    [Fact]
+    public void Compositor_UnsupportedCycleSibling_UsesCachedFallbackShapes()
+    {
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.Cycle,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/textCycle",
+            IsLiveLayoutSupported = false
+        };
+        data.Nodes.Add(new SmartArtNode { Text = "Live A", Level = 0 });
+        data.Nodes.Add(new SmartArtNode { Text = "Live B", Level = 0 });
+        data.Nodes.Add(new SmartArtNode { Text = "Live C", Level = 0 });
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id = 92,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 914_400,
+            OffsetYEmu = 457_200,
+            ExtentCxEmu = 1_828_800,
+            ExtentCyEmu = 914_400,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached cycle sibling fallback" } }
+                    }
+                }
+            }
+        });
+
+        var pres = Presentation.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 93,
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = 914_400,
+            OffsetYEmu = 457_200,
+            ExtentCxEmu = 7_315_200,
+            ExtentCyEmu = 3_657_600,
+            SmartArt = smart
+        });
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        shapeOps.Should().ContainSingle("unsupported cycle siblings should use cached drawing fallback");
+        shapeOps[0].Text?.Paragraphs[0].Runs[0].Text.Should().Be("Cached cycle sibling fallback");
+    }
+
+    [Fact]
+    public void Compositor_UnsupportedHierarchySibling_UsesCachedFallbackShapes()
+    {
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.Hierarchy,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/horizontalHierarchy",
+            IsLiveLayoutSupported = false
+        };
+        var root = new SmartArtNode { Text = "Root", Level = 0 };
+        root.Children.Add(new SmartArtNode { Text = "Child", Level = 1 });
+        data.Nodes.Add(root);
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id = 94,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 914_400,
+            OffsetYEmu = 457_200,
+            ExtentCxEmu = 1_828_800,
+            ExtentCyEmu = 914_400,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached hierarchy sibling fallback" } }
+                    }
+                }
+            }
+        });
+
+        var pres = Presentation.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 95,
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = 914_400,
+            OffsetYEmu = 457_200,
+            ExtentCxEmu = 7_315_200,
+            ExtentCyEmu = 3_657_600,
+            SmartArt = smart
+        });
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        shapeOps.Should().ContainSingle("unsupported hierarchy siblings should use cached drawing fallback");
+        shapeOps[0].Text?.Paragraphs[0].Runs[0].Text.Should().Be("Cached hierarchy sibling fallback");
     }
 
     [Fact]

@@ -33,10 +33,13 @@ public sealed partial class StructuredTableCommandTests
 
         var outcome = command.Apply(ctx);
 
+        // P106: built-in totalsRowFunction aggregates (sum/count/...) are materialized as live
+        // =SUBTOTAL(10x,[Column]) formulas — never a precomputed static value — so the total stays
+        // correct after later edits/recalcs instead of freezing at whatever was true at Apply time.
         outcome.Success.Should().BeTrue();
         sheet.GetValue(5, 1).Should().Be(new TextValue("Total"));
-        sheet.GetValue(5, 2).Should().Be(new NumberValue(45));
-        sheet.GetValue(5, 3).Should().Be(new NumberValue(2));
+        sheet.GetCell(5, 2)!.FormulaText.Should().Be("SUBTOTAL(109,[Sales])");
+        sheet.GetCell(5, 3)!.FormulaText.Should().Be("SUBTOTAL(103,[Orders])");
 
         command.Revert(ctx);
 
@@ -81,7 +84,8 @@ public sealed partial class StructuredTableCommandTests
         totalsFormulaCell.Should().NotBeNull();
         totalsFormulaCell!.FormulaText.Should().Be("SUM(B2:B4)");
         totalsFormulaCell.Value.Should().Be(BlankValue.Instance);
-        sheet.GetValue(5, 3).Should().Be(new NumberValue(2));
+        // P106: the built-in "count" aggregate is also a live formula now, not a precomputed value.
+        sheet.GetCell(5, 3)!.FormulaText.Should().Be("SUBTOTAL(103,[Orders])");
     }
 
     [BenchmarkFact]
@@ -146,7 +150,10 @@ public sealed partial class StructuredTableCommandTests
             if (!outcome.Success)
                 throw new InvalidOperationException(outcome.ErrorMessage);
 
-            checksum += ((NumberValue)sheet.GetValue(totalsRow, 2)).Value;
+            // P106: totals cells are now live =SUBTOTAL(10x,[Column]) formulas rather than a
+            // precomputed NumberValue, so there is no cached numeric Value to sum here anymore —
+            // use the generated formula's length as a cheap, deterministic "work happened" signal.
+            checksum += sheet.GetCell(totalsRow, 2)!.FormulaText!.Length;
             timings[i] = step.Elapsed.TotalMilliseconds;
         }
 

@@ -123,6 +123,7 @@ public sealed class ChartSmartArtVisualPlannerTests
         var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt);
 
         plan.LayoutId.Should().Be("stepup1");
+        plan.Kind.Should().Be(SmartArtKind.Process);
         plan.Layout.Kind.Should().Be(SmartArtKind.Process);
         plan.ColorScheme.Id.Should().Be("accent1");
         plan.Style.Id.Should().Be("intense1");
@@ -180,5 +181,122 @@ public sealed class ChartSmartArtVisualPlannerTests
         plan.LayoutId.Should().Be("hierarchy1");
         plan.Nodes.Select(n => n.Text).Should().ContainInOrder("CEO", "Ops", "Sales");
         plan.Nodes.Select(n => n.Depth).Should().ContainInOrder(0, 1, 1);
+    }
+
+    [Fact]
+    public void SmartArtPlan_HierarchyLayoutProvidesReusableGeometry()
+    {
+        var root = new SmartArtNode("CEO");
+        var ops = root.AddChild("Ops");
+        ops.AddChild("Lead");
+        root.AddChild("Sales");
+        var smartArt = new SmartArt { Kind = SmartArtKind.Hierarchy };
+        smartArt.LayoutId = "orgchart1";
+        smartArt.Nodes.Add(root);
+        smartArt.Nodes.Add(new SmartArtNode("Advisor"));
+
+        var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt);
+
+        plan.HierarchyGeometry.Should().NotBeNull();
+        var geometry = plan.HierarchyGeometry!;
+        plan.Nodes.Select(n => n.Text).Should().ContainInOrder("CEO", "Ops", "Lead", "Sales", "Advisor");
+        geometry.MaxDepth.Should().Be(2);
+        geometry.Nodes.Select(n => n.NodeIndex).Should().ContainInOrder(0, 1, 2, 3, 4);
+        geometry.Nodes.Select(n => n.ParentNodeIndex).Should().ContainInOrder(null, 0, 1, 0, null);
+        geometry.Nodes.Select(n => n.Depth).Should().ContainInOrder(0, 1, 2, 1, 0);
+        geometry.Connectors.Select(c => (c.ParentNodeIndex, c.ChildNodeIndex))
+            .Should().BeEquivalentTo([(0, 1), (1, 2), (0, 3)]);
+        geometry.Nodes[1].Y.Should().BeGreaterThan(geometry.Nodes[0].Y);
+        geometry.Nodes[2].Y.Should().BeGreaterThan(geometry.Nodes[1].Y);
+        geometry.NaturalWidth.Should().BeGreaterThan(0);
+        geometry.NaturalHeight.Should().BeGreaterThan(0);
+
+        var signature = ChartSmartArtVisualPlanner.BuildSmartArtVisualSignature(plan);
+        signature.Should().Contain("hierarchy=maxDepth=2/nodes=5/connectors=3");
+        signature.Should().Contain("boxes=0:root:0");
+        signature.Should().Contain("2:1:2");
+        signature.Should().Contain("lines=");
+    }
+
+    [Theory]
+    [InlineData("cycle1", "Cycle", 4, 4, 200, 160)]
+    [InlineData("radial1", "Radial", 4, 3, 220, 180)]
+    [InlineData("matrix1", "Matrix", 4, 0, 182, 94)]
+    [InlineData("horizbullet1", "HorizontalList", 4, 0, 320, 46)]
+    [InlineData("stepup1", "StepUp", 4, 3, 266, 130)]
+    [InlineData("stepdown1", "StepDown", 4, 3, 266, 130)]
+    public void SmartArtPlan_ProvidesReusableLayoutGeometryForBreadthLayouts(
+        string layoutId,
+        string expectedKind,
+        int expectedNodes,
+        int expectedConnectors,
+        double expectedWidth,
+        double expectedHeight)
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.List, ["Alpha", "Beta", "Gamma", "Delta"]);
+        smartArt.LayoutId = layoutId;
+
+        var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt);
+
+        plan.LayoutGeometry.Should().NotBeNull();
+        var geometry = plan.LayoutGeometry!;
+        geometry.Kind.ToString().Should().Be(expectedKind);
+        geometry.Nodes.Should().HaveCount(expectedNodes);
+        geometry.Connectors.Should().HaveCount(expectedConnectors);
+        geometry.NaturalWidth.Should().BeApproximately(expectedWidth, 0.01);
+        geometry.NaturalHeight.Should().BeApproximately(expectedHeight, 0.01);
+
+        var signature = ChartSmartArtVisualPlanner.BuildSmartArtVisualSignature(plan);
+        signature.Should().Contain(
+            $"geometry=kind={expectedKind}/nodes={expectedNodes}/connectors={expectedConnectors}/size={expectedWidth}x{expectedHeight}");
+    }
+
+    [Fact]
+    public void SmartArtPlan_LayoutGeometryUsesStableNodePlacements()
+    {
+        var cycle = SmartArt.Create(SmartArtKind.List, ["North", "East", "South", "West"]);
+        cycle.LayoutId = "cycle1";
+        var cycleGeometry = ChartSmartArtVisualPlanner.BuildSmartArtPlan(cycle).LayoutGeometry!;
+        cycleGeometry.Nodes[0].X.Should().BeApproximately(74, 0.01);
+        cycleGeometry.Nodes[0].Y.Should().BeApproximately(11, 0.01);
+        cycleGeometry.Connectors.Select(c => (c.SourceNodeIndex, c.TargetNodeIndex))
+            .Should().ContainInOrder((0, 1), (1, 2), (2, 3), (3, 0));
+
+        var radial = SmartArt.Create(SmartArtKind.List, ["Hub", "North", "East", "West"]);
+        radial.LayoutId = "radial1";
+        var radialGeometry = ChartSmartArtVisualPlanner.BuildSmartArtPlan(radial).LayoutGeometry!;
+        radialGeometry.Nodes[0].X.Should().BeApproximately(82, 0.01);
+        radialGeometry.Nodes[0].Y.Should().BeApproximately(72, 0.01);
+        radialGeometry.Nodes[1].X.Should().BeApproximately(86, 0.01);
+        radialGeometry.Nodes[1].Y.Should().BeApproximately(20, 0.01);
+        radialGeometry.Connectors.Select(c => (c.SourceNodeIndex, c.TargetNodeIndex))
+            .Should().ContainInOrder((0, 1), (0, 2), (0, 3));
+
+        var matrix = SmartArt.Create(SmartArtKind.List, ["A", "B", "C", "D"]);
+        matrix.LayoutId = "matrix1";
+        var matrixGeometry = ChartSmartArtVisualPlanner.BuildSmartArtPlan(matrix).LayoutGeometry!;
+        matrixGeometry.Nodes[2].X.Should().BeApproximately(8, 0.01);
+        matrixGeometry.Nodes[2].Y.Should().BeApproximately(52, 0.01);
+    }
+
+    [Fact]
+    public void SmartArtPlan_ResolvedLayoutKindOverridesStaleModelKind()
+    {
+        var root = new SmartArtNode("Root");
+        var child = root.AddChild("Child");
+        child.AddChild("Grandchild");
+        var smartArt = new SmartArt { Kind = SmartArtKind.Process };
+        smartArt.LayoutId = "orgchart1";
+        smartArt.Nodes.Add(root);
+
+        var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt);
+
+        plan.Kind.Should().Be(SmartArtKind.Hierarchy);
+        plan.Layout.Kind.Should().Be(SmartArtKind.Hierarchy);
+        plan.HierarchyGeometry.Should().NotBeNull();
+        plan.HierarchyGeometry!.MaxDepth.Should().Be(2);
+        plan.HierarchyGeometry.Connectors.Count.Should().Be(2);
+        ChartSmartArtVisualPlanner.BuildSmartArtVisualSignature(plan)
+            .Should().Contain("kind=Hierarchy|layout=orgchart1");
     }
 }

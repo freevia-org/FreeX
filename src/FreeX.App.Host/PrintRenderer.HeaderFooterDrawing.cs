@@ -116,7 +116,8 @@ public static partial class PrintRenderer
 
             var typeface = ResolveRunTypeface(run);
             var fontSize = run.FontSize ?? PrintFontSize;
-            var brush = run.Color is { } c ? new SolidColorBrush(Color.FromRgb(c.R, c.G, c.B)) : Brushes.Black;
+            var textColor = run.Color is { } c ? Color.FromRgb(c.R, c.G, c.B) : Colors.Black;
+            var brush = new SolidColorBrush(textColor);
             var remainingWidth = Math.Max(1, rightBoundary - x);
 
             var ft = new FormattedText(
@@ -146,7 +147,7 @@ public static partial class PrintRenderer
             dc.DrawText(ft, textPoint);
 
             // PDF overlay for this run
-            AddHeaderFooterTextOverlay(textOverlays, run.Text, textPoint, remainingWidth, typeface, TextAlignment.Left);
+            AddHeaderFooterTextOverlay(textOverlays, run.Text, textPoint, remainingWidth, typeface, fontSize, TextAlignment.Left, textColor);
 
             x += ft.WidthIncludingTrailingWhitespace;
         }
@@ -159,7 +160,8 @@ public static partial class PrintRenderer
         {
             if (string.IsNullOrEmpty(run.Text)) continue;
             var typeface = ResolveRunTypeface(run);
-            total += MeasurePrintedSingleLineText(run.Text, typeface).WidthIncludingTrailingWhitespace;
+            var fontSize = run.FontSize ?? PrintFontSize;
+            total += MeasurePrintedSingleLineText(run.Text, typeface, fontSize).WidthIncludingTrailingWhitespace;
         }
         return total;
     }
@@ -178,14 +180,16 @@ public static partial class PrintRenderer
         Point textPoint,
         double maxTextWidth,
         Typeface typeface,
-        TextAlignment alignment)
+        double fontSize,
+        TextAlignment alignment,
+        Color color)
     {
-        var overlayText = BoundPrintedSingleLineOverlayText(text, maxTextWidth, typeface);
+        var overlayText = BoundPrintedSingleLineOverlayText(text, maxTextWidth, typeface, fontSize);
         if (string.IsNullOrEmpty(overlayText))
             return;
 
         var overlayX = textPoint.X;
-        var overlayWidth = MeasurePrintedSingleLineText(overlayText, typeface).WidthIncludingTrailingWhitespace;
+        var overlayWidth = MeasurePrintedSingleLineText(overlayText, typeface, fontSize).WidthIncludingTrailingWhitespace;
         if (alignment == TextAlignment.Center)
             overlayX += Math.Max(0, (maxTextWidth - overlayWidth) / 2);
         else if (alignment == TextAlignment.Right)
@@ -195,11 +199,11 @@ public static partial class PrintRenderer
             overlayText,
             overlayX,
             textPoint.Y,
-            PrintFontSize,
+            fontSize,
             typeface.FontFamily.Source,
             typeface.Weight >= FontWeights.SemiBold,
             typeface.Style == FontStyles.Italic || typeface.Style == FontStyles.Oblique,
-            Colors.Black));
+            color));
     }
 
 }

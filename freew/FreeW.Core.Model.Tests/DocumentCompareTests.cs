@@ -27,6 +27,22 @@ public class DocumentCompareTests
     }
 
     [Fact]
+    public void IdenticalDocuments_PreserveSharedBlockContentControlRegion()
+    {
+        var control = BlockContentControl.BibliographyRegion();
+        var original = DocWith("References", "Entry");
+        var revised = DocWith("References", "Entry");
+        foreach (var block in revised.Blocks)
+            block.BlockContentControl = control;
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        result.Blocks.Should().HaveCount(2);
+        result.Blocks[0].BlockContentControl.Should().Be(control);
+        ReferenceEquals(result.Blocks[1].BlockContentControl, result.Blocks[0].BlockContentControl).Should().BeTrue();
+    }
+
+    [Fact]
     public void InsertedParagraph_IsMarkedInserted()
     {
         var original = DocWith("Keep this", "Tail");

@@ -34,7 +34,7 @@ public sealed class SaveCustomViewCommand : IWorkbookCommand
 
         var view = new WorkbookCustomView(
             _name,
-            CustomViewStatePlanner.CaptureWorkbookState(workbook),
+            CaptureWorkbookState(workbook, _includePrintSettings, _includeHiddenRowsColumnsAndFilterSettings),
             IncludePrintSettings: _includePrintSettings,
             IncludeHiddenRowsColumnsAndFilterSettings: _includeHiddenRowsColumnsAndFilterSettings,
             ActiveSheetIndex: CustomViewStatePlanner.CaptureActiveSheetIndex(workbook));
@@ -72,6 +72,121 @@ public sealed class SaveCustomViewCommand : IWorkbookCommand
 
     internal static WorksheetCustomViewState SanitizePaneState(WorksheetCustomViewState state)
         => CustomViewStatePlanner.SanitizePaneState(state);
+
+    // N14: IncludePrintSettings / IncludeHiddenRowsColumnsAndFilterSettings must actually gate
+    // what gets captured — matching Excel, where unchecking either checkbox in the "Add View"
+    // dialog means that state is NOT snapshotted (and so is left untouched on Show View later).
+    // CustomViewStatePlanner.CaptureWorkbookState/CaptureSheetState only ever produce the base
+    // pane/zoom/gridline fields; augment each sheet's state here with the hidden-rows/cols/filter
+    // and print-setting fields the WorksheetCustomViewState record already has room for (see N13).
+    internal static List<WorksheetCustomViewState> CaptureWorkbookState(
+        Workbook workbook, bool includePrintSettings, bool includeHiddenRowsColumnsAndFilterSettings) =>
+        workbook.Sheets
+            .Select(sheet => AugmentCapturedState(
+                CustomViewStatePlanner.CaptureSheetState(sheet),
+                sheet,
+                includePrintSettings,
+                includeHiddenRowsColumnsAndFilterSettings))
+            .ToList();
+
+    private static WorksheetCustomViewState AugmentCapturedState(
+        WorksheetCustomViewState state, Sheet sheet,
+        bool includePrintSettings, bool includeHiddenRowsColumnsAndFilterSettings)
+    {
+        if (includeHiddenRowsColumnsAndFilterSettings)
+        {
+            state = state with
+            {
+                HiddenRows = sheet.HiddenRows.Count > 0 ? sheet.HiddenRows.ToList() : [],
+                HiddenCols = sheet.HiddenCols.Count > 0 ? sheet.HiddenCols.ToList() : [],
+                FilterHiddenRows = sheet.FilterHiddenRows.Count > 0 ? sheet.FilterHiddenRows.ToList() : [],
+                AutoFilter = sheet.AutoFilter,
+            };
+        }
+
+        if (includePrintSettings)
+        {
+            state = state with
+            {
+                PrintAreas = sheet.PrintAreas.ToList(),
+                PageOrientation = sheet.PageOrientation,
+                PaperSize = sheet.PaperSize,
+                PaperSizeCode = sheet.PaperSizeCode,
+                PageMargins = sheet.PageMargins,
+                HeaderMargin = sheet.HeaderMargin,
+                FooterMargin = sheet.FooterMargin,
+                PrintGridlines = sheet.PrintGridlines,
+                PrintHeadings = sheet.PrintHeadings,
+                ScaleToFit = sheet.ScaleToFit,
+                FitToPage = sheet.FitToPage,
+            };
+        }
+
+        return state;
+    }
+
+    /// <summary>
+    /// N14: applies a saved view's hidden-row/col/filter and print-setting fields back onto
+    /// <paramref name="sheet"/> when present (i.e. when the owning view's flag was set at save
+    /// time — see <see cref="AugmentCapturedState"/>). Null/omitted fields mean "not captured",
+    /// so current sheet state for that facet is left untouched, matching Excel's behavior when
+    /// a custom view was saved with the corresponding checkbox unchecked.
+    /// </summary>
+    internal static void ApplyExtendedState(Sheet sheet, WorksheetCustomViewState state)
+    {
+        if (state.HiddenRows is { } hiddenRows)
+        {
+            sheet.HiddenRows.Clear();
+            foreach (var row in hiddenRows)
+                sheet.HiddenRows.Add(row);
+        }
+        if (state.HiddenCols is { } hiddenCols)
+        {
+            sheet.HiddenCols.Clear();
+            foreach (var col in hiddenCols)
+                sheet.HiddenCols.Add(col);
+        }
+        if (state.FilterHiddenRows is { } filterHiddenRows)
+        {
+            sheet.FilterHiddenRows.Clear();
+            foreach (var row in filterHiddenRows)
+                sheet.FilterHiddenRows.Add(row);
+        }
+        if (state.AutoFilter is not null)
+            sheet.AutoFilter = state.AutoFilter;
+
+        if (state.PrintAreas is { } printAreas)
+            sheet.SetPrintAreas(printAreas);
+        if (state.PageOrientation is { } pageOrientation)
+            sheet.PageOrientation = pageOrientation;
+        if (state.PaperSize is { } paperSize)
+            sheet.PaperSize = paperSize;
+        if (state.PaperSizeCode is { } paperSizeCode)
+            sheet.PaperSizeCode = paperSizeCode;
+        if (state.PageMargins is { } pageMargins)
+            sheet.PageMargins = pageMargins;
+        if (state.HeaderMargin is { } headerMargin)
+            sheet.HeaderMargin = headerMargin;
+        if (state.FooterMargin is { } footerMargin)
+            sheet.FooterMargin = footerMargin;
+        if (state.PrintGridlines is { } printGridlines)
+            sheet.PrintGridlines = printGridlines;
+        if (state.PrintHeadings is { } printHeadings)
+            sheet.PrintHeadings = printHeadings;
+        if (state.ScaleToFit is { } scaleToFit)
+            sheet.ScaleToFit = scaleToFit;
+        if (state.FitToPage is { } fitToPage)
+            sheet.FitToPage = fitToPage;
+    }
+
+    /// <summary>
+    /// N14: captures the current extended (hidden-rows/cols/filter + print-setting) state of
+    /// <paramref name="sheet"/> as a <see cref="WorksheetCustomViewState"/>-shaped snapshot for
+    /// undo, regardless of which fields a saved view happens to include — Revert must restore
+    /// exactly what was on the sheet before Apply, not merely the fields the view captured.
+    /// </summary>
+    internal static WorksheetCustomViewState CaptureExtendedState(Sheet sheet, WorksheetCustomViewState baseState) =>
+        AugmentCapturedState(baseState, sheet, includePrintSettings: true, includeHiddenRowsColumnsAndFilterSettings: true);
 }
 
 public sealed class ApplyCustomViewCommand : IWorkbookCommand
@@ -93,14 +208,22 @@ public sealed class ApplyCustomViewCommand : IWorkbookCommand
         if (index < 0)
             return new CommandOutcome(false, $"Custom view '{_name}' was not found.");
 
-        _previousStates = Capture(ctx.Workbook);
-        _previousActiveSheetIndex = CustomViewStatePlanner.CaptureActiveSheetIndex(ctx.Workbook);
         var view = ctx.Workbook.CustomViews[index];
+
+        // N14: undo must restore exactly what was on each sheet before Apply, independent of
+        // which fields this particular view captured — always snapshot the full extended state,
+        // not just the subset view.IncludePrintSettings/IncludeHiddenRowsColumnsAndFilterSettings
+        // gate for the forward apply below.
+        _previousStates = ctx.Workbook.Sheets
+            .Select(sheet => SaveCustomViewCommand.CaptureExtendedState(sheet, CustomViewStatePlanner.CaptureSheetState(sheet)))
+            .ToList();
+        _previousActiveSheetIndex = CustomViewStatePlanner.CaptureActiveSheetIndex(ctx.Workbook);
+
         foreach (var state in view.Sheets)
         {
             var sheet = ctx.Workbook.GetSheet(state.SheetName);
             if (sheet is null) continue;
-            ApplyState(sheet, state);
+            ApplyState(sheet, state, view);
         }
         if (CustomViewStatePlanner.SanitizeActiveSheetIndex(ctx.Workbook, view.ActiveSheetIndex) is { } activeSheetIndex)
             ctx.Workbook.ActiveSheetIndex = activeSheetIndex;
@@ -115,16 +238,24 @@ public sealed class ApplyCustomViewCommand : IWorkbookCommand
         {
             var sheet = ctx.Workbook.GetSheet(state.SheetName);
             if (sheet is null) continue;
-            ApplyState(sheet, state);
+            // Undo always restores the full previously-captured state (both base and extended
+            // fields were captured unconditionally in Apply above), so no view flags gate this.
+            CustomViewStatePlanner.ApplyState(sheet, state);
+            SaveCustomViewCommand.ApplyExtendedState(sheet, state);
         }
         ctx.Workbook.ActiveSheetIndex = CustomViewStatePlanner.SanitizeActiveSheetIndex(ctx.Workbook, _previousActiveSheetIndex);
     }
 
-    private static List<WorksheetCustomViewState> Capture(Workbook workbook) =>
-        CustomViewStatePlanner.CaptureWorkbookState(workbook);
-
-    private static void ApplyState(Sheet sheet, WorksheetCustomViewState state)
-        => CustomViewStatePlanner.ApplyState(sheet, state);
+    private static void ApplyState(Sheet sheet, WorksheetCustomViewState state, WorkbookCustomView view)
+    {
+        CustomViewStatePlanner.ApplyState(sheet, state);
+        // N14: only restore hidden-rows/cols/filter and print settings when the saved view
+        // actually captured them (i.e. its flag was set at save time) — matching Excel, where
+        // a view saved with either checkbox unchecked leaves that facet of the current sheet
+        // state untouched when the view is later shown.
+        if (view.IncludeHiddenRowsColumnsAndFilterSettings || view.IncludePrintSettings)
+            SaveCustomViewCommand.ApplyExtendedState(sheet, state);
+    }
 }
 
 public sealed class DeleteCustomViewCommand : IWorkbookCommand

@@ -1007,13 +1007,22 @@ public sealed partial class ViewportService : IViewportService
             : null;
     }
 
+    // Real Excel 365 writes its legacy comments1.xml/VML "note" mirror of a threaded comment's
+    // root text using a fixed compatibility banner, never "{Author}:\n{RootText}". The banner
+    // always starts with this literal line; the legacy author Excel assigns to the mirror is
+    // always literally "tc={GUID}" (never a real display name). XlsxWorksheetCommentReader
+    // already filters this shim out before it ever reaches Sheet.Comments, but this check stays
+    // as defense-in-depth for any other load path (e.g. a workbook round-tripped through the
+    // native JSON format, or constructed directly in-memory) that might still carry it.
+    private const string LegacyThreadedCommentBanner = "[Threaded comment]";
+
     /// <summary>
     /// Detects whether <paramref name="note"/> is the backward-compat mirror that Excel writes
     /// into the legacy comments1.xml/VML "note" part for a threaded comment's root text (so
     /// pre-2018 readers still see something), rather than a genuine, independently-authored Note.
-    /// Excel's mirror text is exactly "{Author}:\n{RootText}" (only the root comment, never
-    /// replies). Anything else -- including a note that merely happens to repeat the comment
-    /// text without the author prefix, or one that includes reply content -- is treated as a
+    /// Excel's real mirror is the fixed "[Threaded comment]" compatibility banner (never
+    /// "{Author}:\n{RootText}", despite what earlier revisions of this method assumed). Anything
+    /// else -- including a note that merely happens to repeat the comment text -- is treated as a
     /// real Note so it is never silently dropped from the display.
     /// </summary>
     private static bool IsLegacyMirrorOfThreadedComment(string? note, ThreadedComment threadedComment)
@@ -1021,12 +1030,18 @@ public sealed partial class ViewportService : IViewportService
         if (string.IsNullOrEmpty(note))
             return false;
 
-        var expectedMirror = new StringBuilder();
-        AppendCommentLine(expectedMirror, threadedComment.Author, threadedComment.Text);
+        if (note.TrimStart().StartsWith(LegacyThreadedCommentBanner, StringComparison.Ordinal))
+            return true;
+
+        // Older/non-Excel producers may still write the previously-assumed "{Author}:\n{RootText}"
+        // form; keep recognizing it too so those files don't regress to showing a bogus Mixed note.
+        var expectedMirror = string.IsNullOrWhiteSpace(threadedComment.Author)
+            ? threadedComment.Text
+            : $"{threadedComment.Author.Trim()}:\n{threadedComment.Text}";
 
         return string.Equals(
             NormalizeLineEndings(note),
-            NormalizeLineEndings(expectedMirror.ToString()),
+            NormalizeLineEndings(expectedMirror),
             StringComparison.Ordinal);
     }
 

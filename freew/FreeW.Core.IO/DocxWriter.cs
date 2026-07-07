@@ -218,7 +218,11 @@ public static class DocxWriter
                 WriteBinaryPart(archive, "word/fonts/" + part.FileName, ObfuscateFont(part.FontBytes, part.FontKey));
         }
         if (emitNumbering)
-            WritePart(archive, "word/numbering.xml", BuildNumbering(hasLists, preservedNumbering, restartOverrides));
+            WritePart(archive, "word/numbering.xml", BuildNumbering(
+                hasLists,
+                preservedNumbering,
+                document.MultiLevelList.NumberFormats,
+                restartOverrides));
         // One part per (section × header/footer × type) slot with content. Each part XML carries its inline
         // images via PART-LOCAL r:embed ids resolved against its own word/_rels/<part>.xml.rels, and its
         // image media bytes go under word/media/.
@@ -1095,8 +1099,25 @@ public static class DocxWriter
         var drawings = new RunDrawings(imagesByRun, chartsByRun, embeddedByRun, smartArtsByRun, ids, preservedDrawingRelIds);
 
         var body = new XElement(W + "body");
-        foreach (var block in document.Blocks)
-            body.Add(BuildBlock(block, drawings, hyperlinks, partsBySection, preservedNumbering, restartOverrides));
+        for (var i = 0; i < document.Blocks.Count;)
+        {
+            var control = document.Blocks[i].BlockContentControl;
+            if (control is null)
+            {
+                body.Add(BuildBlock(document.Blocks[i], drawings, hyperlinks, partsBySection, preservedNumbering, restartOverrides));
+                i++;
+                continue;
+            }
+
+            var content = new XElement(W + "sdtContent");
+            while (i < document.Blocks.Count && ReferenceEquals(document.Blocks[i].BlockContentControl, control))
+            {
+                content.Add(BuildBlock(document.Blocks[i], drawings, hyperlinks, partsBySection, preservedNumbering, restartOverrides));
+                i++;
+            }
+
+            body.Add(new XElement(W + "sdt", BuildBlockSdtProperties(control), content));
+        }
         body.Add(BuildSectionProperties(document.Page, finalSectionParts));
 
         // Page background colour (w:background): it is positionally the FIRST child of w:document, before
@@ -1572,6 +1593,7 @@ public static class DocxWriter
     {
         var copy = new Paragraph
         {
+            BlockContentControl = paragraph.BlockContentControl,
             Formatting = paragraph.Formatting,
             StyleId = paragraph.StyleId,
         };
@@ -1836,6 +1858,42 @@ public static class DocxWriter
         // instance concerns. Always emit the element even when empty to signal "previously default".
         change.Add(BuildStyleParagraphProperties(revision.PreviousParagraphFormatting) ?? new XElement(W + "pPr"));
         return change;
+    }
+
+    private static XElement BuildBlockSdtProperties(BlockContentControl control)
+    {
+        var sdtPr = new XElement(W + "sdtPr");
+        if (control.Alias is { Length: > 0 } alias)
+            sdtPr.Add(new XElement(W + "alias", new XAttribute(W + "val", alias)));
+        if (control.Tag is { Length: > 0 } tag)
+            sdtPr.Add(new XElement(W + "tag", new XAttribute(W + "val", tag)));
+
+        var gallery = control.DocPartGallery;
+        if (control.Kind == BlockContentControlKind.Bibliography && string.IsNullOrWhiteSpace(gallery))
+            gallery = BlockContentControl.BibliographyGallery;
+
+        var hasDocPart = control.Kind is BlockContentControlKind.Bibliography or BlockContentControlKind.DocumentPart
+            || !string.IsNullOrWhiteSpace(gallery)
+            || !string.IsNullOrWhiteSpace(control.DocPartCategory)
+            || control.DocPartUnique;
+        if (hasDocPart)
+        {
+            var docPart = new XElement(W + "docPartObj");
+            if (!string.IsNullOrWhiteSpace(gallery))
+                docPart.Add(new XElement(W + "docPartGallery", new XAttribute(W + "val", gallery!)));
+            if (control.DocPartCategory is { Length: > 0 } category)
+                docPart.Add(new XElement(W + "docPartCategory", new XAttribute(W + "val", category)));
+            if (control.DocPartUnique || control.Kind == BlockContentControlKind.Bibliography)
+                docPart.Add(new XElement(W + "docPartUnique"));
+            sdtPr.Add(docPart);
+        }
+
+        if (control.Kind == BlockContentControlKind.RichText)
+            sdtPr.Add(new XElement(W + "richText"));
+        else if (control.Kind == BlockContentControlKind.PlainText)
+            sdtPr.Add(new XElement(W + "text"));
+
+        return sdtPr;
     }
 
     /// <summary>
@@ -2535,7 +2593,7 @@ public static class DocxWriter
     {
         var oMath = new XElement(M + "oMath");
         foreach (var run in equation.Runs)
-            oMath.Add(BuildMathRun(run));
+            oMath.Add(BuildMathRun(run, depth: 0));
         return oMath;
     }
 
@@ -2544,38 +2602,57 @@ public static class DocxWriter
     /// m:nary / m:acc / m:bar / m:d / m:m, or a plain m:r for text. Mirrors the reader (see
     /// <c>DocxReader.ReadOMath</c>).
     /// </summary>
-    private static XElement BuildMathRun(MathRun run) => run.Kind switch
+    private static XElement BuildMathRun(MathRun run, int depth) => run.Kind switch
     {
         MathRunKind.Superscript => new XElement(M + "sSup",
-            new XElement(M + "e", MathText(run.Base)),
-            new XElement(M + "sup", MathText(run.Sup))),
+            BuildMathSlot(M + "e", run.ScriptBaseEquation, run.Base, depth),
+            BuildMathSlot(M + "sup", run.ScriptSupEquation, run.Sup, depth)),
         MathRunKind.Subscript => new XElement(M + "sSub",
-            new XElement(M + "e", MathText(run.Base)),
-            new XElement(M + "sub", MathText(run.Sub))),
+            BuildMathSlot(M + "e", run.ScriptBaseEquation, run.Base, depth),
+            BuildMathSlot(M + "sub", run.ScriptSubEquation, run.Sub, depth)),
         MathRunKind.SubSuperscript => new XElement(M + "sSubSup",
-            new XElement(M + "e", MathText(run.Base)),
-            new XElement(M + "sub", MathText(run.Sub)),
-            new XElement(M + "sup", MathText(run.Sup))),
-        MathRunKind.Fraction => new XElement(M + "f",
-            new XElement(M + "num", MathText(run.Numerator)),
-            new XElement(M + "den", MathText(run.Denominator))),
-        MathRunKind.Radical => BuildRadical(run),
-        MathRunKind.NAry => BuildNAry(run),
+            BuildMathSlot(M + "e", run.ScriptBaseEquation, run.Base, depth),
+            BuildMathSlot(M + "sub", run.ScriptSubEquation, run.Sub, depth),
+            BuildMathSlot(M + "sup", run.ScriptSupEquation, run.Sup, depth)),
+        MathRunKind.Fraction => BuildFraction(run, depth),
+        MathRunKind.Radical => BuildRadical(run, depth),
+        MathRunKind.NAry => BuildNAry(run, depth),
         MathRunKind.Accent => BuildAccent(run),
         MathRunKind.Bar => BuildBar(run),
-        MathRunKind.Delimiter => BuildDelimiter(run),
+        MathRunKind.Delimiter => BuildDelimiter(run, depth),
         MathRunKind.Matrix => BuildMatrix(run.Matrix),
-        MathRunKind.FunctionApply => BuildFunctionApply(run),
+        MathRunKind.FunctionApply => BuildFunctionApply(run, depth),
         MathRunKind.GroupChar => BuildGroupChar(run),
         _ => MathText(run.Text)
     };
+
+    private static XElement BuildFraction(MathRun run, int depth) =>
+        new(M + "f",
+            BuildMathSlot(M + "num", run.NumeratorEquation, run.Numerator, depth),
+            BuildMathSlot(M + "den", run.DenominatorEquation, run.Denominator, depth));
+
+    private static XElement BuildMathSlot(XName slotName, Equation? equation, string fallback, int depth)
+    {
+        var slot = new XElement(slotName);
+        if (equation is not null && depth < MathRun.MaxNestedEquationDepth)
+        {
+            foreach (var childRun in equation.Runs)
+                slot.Add(BuildMathRun(childRun, depth + 1));
+        }
+        else
+        {
+            slot.Add(MathText(fallback));
+        }
+
+        return slot;
+    }
 
     /// <summary>
     /// Builds a radical (m:rad). A square root sets m:radPr/m:degHide and emits an empty m:deg; an nth
     /// root carries the degree in m:deg. The radicand is the m:e element. The reader keys off m:degHide
     /// and the m:deg text to recover <see cref="MathRun.Degree"/>.
     /// </summary>
-    private static XElement BuildRadical(MathRun run)
+    private static XElement BuildRadical(MathRun run, int depth)
     {
         var isSquare = string.IsNullOrEmpty(run.Degree);
         var deg = isSquare
@@ -2585,26 +2662,31 @@ public static class DocxWriter
             new XElement(M + "radPr",
                 new XElement(M + "degHide", new XAttribute(M + "val", isSquare ? "1" : "0"))),
             deg,
-            new XElement(M + "e", MathText(run.Base)));
+            BuildMathSlot(M + "e", run.RadicandEquation, run.Base, depth));
     }
 
     /// <summary>
     /// Builds an n-ary operator (m:nary): m:naryPr carries the operator glyph (m:chr) plus subscript/
     /// superscript-limit visibility; m:sub / m:sup hold the limits and m:e the operand.
     /// </summary>
-    private static XElement BuildNAry(MathRun run)
+    private static XElement BuildNAry(MathRun run, int depth)
     {
         var pr = new XElement(M + "naryPr");
         if (!string.IsNullOrEmpty(run.Operator))
             pr.Add(new XElement(M + "chr", new XAttribute(M + "val", run.Operator)));
-        pr.Add(new XElement(M + "subHide", new XAttribute(M + "val", string.IsNullOrEmpty(run.Sub) ? "1" : "0")));
-        pr.Add(new XElement(M + "supHide", new XAttribute(M + "val", string.IsNullOrEmpty(run.Sup) ? "1" : "0")));
+        pr.Add(new XElement(M + "subHide", new XAttribute(M + "val", IsMathSlotHidden(run.NAryLowerLimitEquation, run.Sub, depth) ? "1" : "0")));
+        pr.Add(new XElement(M + "supHide", new XAttribute(M + "val", IsMathSlotHidden(run.NAryUpperLimitEquation, run.Sup, depth) ? "1" : "0")));
         return new XElement(M + "nary",
             pr,
-            new XElement(M + "sub", MathText(run.Sub)),
-            new XElement(M + "sup", MathText(run.Sup)),
-            new XElement(M + "e", MathText(run.Base)));
+            BuildMathSlot(M + "sub", run.NAryLowerLimitEquation, run.Sub, depth),
+            BuildMathSlot(M + "sup", run.NAryUpperLimitEquation, run.Sup, depth),
+            BuildMathSlot(M + "e", run.NAryOperandEquation, run.Base, depth));
     }
+
+    private static bool IsMathSlotHidden(Equation? equation, string fallback, int depth) =>
+        string.IsNullOrEmpty(equation is not null && depth < MathRun.MaxNestedEquationDepth
+            ? equation.LinearText
+            : fallback);
 
     /// <summary>
     /// Builds an accent (m:acc): m:accPr/m:chr carries the accent glyph (hat/bar/vec/dot/tilde); the
@@ -2635,12 +2717,12 @@ public static class DocxWriter
     /// Builds a delimiter (m:d): m:dPr carries the begin/end glyphs (m:begChr / m:endChr); a single
     /// m:e holds the bracketed content.
     /// </summary>
-    private static XElement BuildDelimiter(MathRun run) =>
+    private static XElement BuildDelimiter(MathRun run, int depth) =>
         new(M + "d",
             new XElement(M + "dPr",
                 new XElement(M + "begChr", new XAttribute(M + "val", run.OpenChar)),
                 new XElement(M + "endChr", new XAttribute(M + "val", run.CloseChar))),
-            new XElement(M + "e", MathText(run.Base)));
+            BuildMathSlot(M + "e", run.DelimiterContentEquation, run.Base, depth));
 
     /// <summary>
     /// Builds a matrix (m:m): one m:mr per row, each holding one m:e (cell) per column. An absent/empty
@@ -2664,10 +2746,10 @@ public static class DocxWriter
     /// Builds a function-apply element (m:func): m:fName holds a plain text run with the function name
     /// and m:e holds the argument. Mirrors <c>DocxReader.ReadFunctionApply</c>.
     /// </summary>
-    private static XElement BuildFunctionApply(MathRun run) =>
+    private static XElement BuildFunctionApply(MathRun run, int depth) =>
         new(M + "func",
             new XElement(M + "fName", MathText(run.FuncName)),
-            new XElement(M + "e", MathText(run.Base)));
+            BuildMathSlot(M + "e", run.FunctionArgumentEquation, run.Base, depth));
 
     /// <summary>
     /// Builds a group-character element (m:groupChr): m:groupChrPr carries the spanning glyph
@@ -4764,6 +4846,9 @@ public static class DocxWriter
             // pgBorders and before cols. @w:countBy is the numbering interval; @w:restart is
             // "continuous" (across pages) or "newPage" (restart each page).
             BuildLineNumbering(page),
+            // Page numbering (w:pgNumType): emitted only when a section overrides Word's default
+            // decimal/continue behaviour. Schema order places it after lnNumType and before cols.
+            BuildPageNumbering(page),
             // Columns: w:cols carries the count (w:num) and inter-column gap (w:space, dxa). Emitted
             // unconditionally; w:num="1" is harmless and keeps the section shape stable. @w:sep draws a
             // line between columns; explicit per-column widths (Left/Right presets) switch to
@@ -4852,6 +4937,39 @@ public static class DocxWriter
             new XAttribute(W + "restart", restart),
             new XAttribute(W + "start", Math.Max(1, page.LineNumberStartAt)));
     }
+
+    private static XElement? BuildPageNumbering(PageSettings page)
+    {
+        var hasFormat = page.PageNumberFormat != PageNumberFormat.Decimal;
+        var hasStart = page.PageNumberStartAt is > 0;
+        var hasChapter = page.PageNumberChapterStyleLevel is >= 1 and <= 9;
+        if (!hasFormat && !hasStart && !hasChapter)
+            return null;
+
+        return new XElement(W + "pgNumType",
+            hasFormat ? new XAttribute(W + "fmt", PageNumberFormatToken(page.PageNumberFormat)) : null,
+            hasStart ? new XAttribute(W + "start", page.PageNumberStartAt!.Value) : null,
+            hasChapter ? new XAttribute(W + "chapStyle", page.PageNumberChapterStyleLevel!.Value) : null,
+            hasChapter ? new XAttribute(W + "chapSep", PageNumberChapterSeparatorToken(page.PageNumberChapterSeparator)) : null);
+    }
+
+    private static string PageNumberFormatToken(PageNumberFormat format) => format switch
+    {
+        PageNumberFormat.LowerRoman => "lowerRoman",
+        PageNumberFormat.UpperRoman => "upperRoman",
+        PageNumberFormat.LowerLetter => "lowerLetter",
+        PageNumberFormat.UpperLetter => "upperLetter",
+        _ => "decimal"
+    };
+
+    private static string PageNumberChapterSeparatorToken(PageNumberChapterSeparator separator) => separator switch
+    {
+        PageNumberChapterSeparator.Period => "period",
+        PageNumberChapterSeparator.Colon => "colon",
+        PageNumberChapterSeparator.EmDash => "emDash",
+        PageNumberChapterSeparator.EnDash => "enDash",
+        _ => "hyphen"
+    };
 
     /// <summary>
     /// Builds the w:cols element (column layout). Always emitted so the section shape stays stable.
@@ -5072,6 +5190,7 @@ public static class DocxWriter
     private static XDocument BuildNumbering(
         bool includeFreeWNumbering,
         PreservedNumberingPlan? preserved,
+        IReadOnlyList<ListNumberFormat> multiLevelNumberFormats,
         IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null)
     {
         XElement Lvl(int level, string numFmt, string lvlText) =>
@@ -5090,13 +5209,18 @@ public static class DocxWriter
             new(W + "abstractNum", new XAttribute(W + "abstractNumId", abstractNumId),
                 Enumerable.Range(0, ListLevelCount).Select(level => Lvl(level, numFmt, lvlText)));
 
-        // Legal/outline numbering: level n's text is "%1.%2.…%(n+1)." — the dotted run of all ancestor
-        // counters. e.g. level 0 -> "%1.", level 2 -> "%1.%2.%3.".
+        // Legal/outline numbering: level n's text is "%1.%2....%(n+1)." - the dotted run of all ancestor
+        // counters. e.g. level 0 -> "%1.", level 2 -> "%1.%2.%3.". Each level's own counter can use a
+        // modelled decimal/letter/Roman number style.
         XElement MultiLevelAbstractNum(int abstractNumId) =>
             new(W + "abstractNum", new XAttribute(W + "abstractNumId", abstractNumId),
                 new XAttribute(W + "multiLevelType", "multilevel"),
-                Enumerable.Range(0, ListLevelCount).Select(level => Lvl(level, "decimal",
+                Enumerable.Range(0, ListLevelCount).Select(level => Lvl(level,
+                    MultiLevelListMarkerFormatter.ToOoxmlToken(GetMultiLevelNumberFormat(level)),
                     string.Concat(Enumerable.Range(1, level + 1).Select(n => $"%{n}.")))));
+
+        ListNumberFormat GetMultiLevelNumberFormat(int level) =>
+            level < multiLevelNumberFormats.Count ? multiLevelNumberFormats[level] : ListNumberFormat.Decimal;
 
         XElement Num(int numId, int abstractNumId) =>
             new(W + "num", new XAttribute(W + "numId", numId),
@@ -5403,6 +5527,15 @@ public static class DocxWriter
         SourceType.ConferenceProceedings => "ConferenceProceedings",
         SourceType.ArticleInPeriodical => "ArticleInAPeriodical",
         SourceType.ElectronicSource => "ElectronicSource",
+        SourceType.Patent => "Patent",
+        SourceType.Interview => "Interview",
+        SourceType.Misc => "Misc",
+        SourceType.Film => "Film",
+        SourceType.SoundRecording => "SoundRecording",
+        SourceType.Art => "Art",
+        SourceType.InternetSite => "InternetSite",
+        SourceType.Performance => "Performance",
+        SourceType.Case => "Case",
         _ => "Book",
     };
 
@@ -5434,12 +5567,26 @@ public static class DocxWriter
             AddBibliographyField(element, "BookTitle", source.BookTitle);
             AddBibliographyField(element, "ConferenceName", source.ConferenceName);
             AddBibliographyField(element, "Year", source.Year);
+            AddBibliographyField(element, "Month", source.Month);
+            AddBibliographyField(element, "Day", source.Day);
             AddBibliographyField(element, "Institution", source.Institution);
             AddBibliographyField(element, "Publisher", source.Publisher);
             AddBibliographyField(element, "City", source.City);
             AddBibliographyField(element, "Edition", source.Edition);
             AddBibliographyField(element, "StandardNumber", source.StandardNumber);
             AddBibliographyField(element, "ChapterNumber", source.ChapterNumber);
+            AddBibliographyField(element, "PatentNumber", source.PatentNumber);
+            AddBibliographyField(element, "CaseNumber", source.CaseNumber);
+            AddBibliographyField(element, "Court", source.Court);
+            AddBibliographyField(element, "Reporter", source.Reporter);
+            AddBibliographyField(element, "CountryRegion", source.CountryRegion);
+            AddBibliographyField(element, "StateProvince", source.StateProvince);
+            AddBibliographyField(element, "Medium", source.Medium);
+            AddBibliographyField(element, "Type", source.SourceKind);
+            AddBibliographyField(element, "AlbumTitle", source.AlbumTitle);
+            AddBibliographyField(element, "ProductionCompany", source.ProductionCompany);
+            AddBibliographyField(element, "RecordingNumber", source.RecordingNumber);
+            AddBibliographyField(element, "Theater", source.Theater);
             AddBibliographyField(element, "ShortTitle", source.ShortTitle);
             AddBibliographyField(element, "Comments", source.Comments);
             AddBibliographyField(element, "JournalName", source.Journal);
@@ -5486,6 +5633,16 @@ public static class DocxWriter
         AddRole(roles, "Author", source.PersonalAuthors, corporate);
         AddRole(roles, "Editor", source.Editors, corporate: null);
         AddRole(roles, "Translator", source.Translators, corporate: null);
+        AddRole(roles, "Inventor", [], source.Inventor);
+        AddRole(roles, "Interviewee", [], source.Interviewee);
+        AddRole(roles, "Interviewer", [], source.Interviewer);
+        AddRole(roles, "Artist", [], source.Artist);
+        AddRole(roles, "Composer", [], source.Composer);
+        AddRole(roles, "Conductor", [], source.Conductor);
+        AddRole(roles, "Director", [], source.Director);
+        AddRole(roles, "Performer", [], source.Performer);
+        AddRole(roles, "ProducerName", [], source.ProducerName);
+        AddRole(roles, "Writer", [], source.Writer);
 
         return roles.Count == 0 ? null : new XElement(B + "Author", roles);
 

@@ -336,6 +336,167 @@ public sealed class MasterSourceStoreTests
     }
 
     [Fact]
+    public void MasterStore_JsonRoundTrip_PreservesSourceManagerBreadthFields()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"master-sources-breadth-{Guid.NewGuid()}.json");
+        try
+        {
+            var store = new MasterSourceStore
+            {
+                Sources =
+                [
+                    SourceRecord.FromSource(new Source
+                    {
+                        Tag = "Patent2026",
+                        Type = SourceType.Patent,
+                        Inventor = "Lovelace, Ada",
+                        Title = "Analytical Engine Control",
+                        Year = "1843",
+                        Month = "July",
+                        Day = "4",
+                        PatentNumber = "GB-1843-1",
+                        CountryRegion = "United Kingdom",
+                        StateProvince = "London"
+                    }),
+                    SourceRecord.FromSource(new Source
+                    {
+                        Tag = "Interview2026",
+                        Type = SourceType.Interview,
+                        Interviewee = "Hopper, Grace",
+                        Interviewer = "Mauchly, Jean",
+                        Medium = "Recorded interview"
+                    }),
+                    SourceRecord.FromSource(new Source
+                    {
+                        Tag = "Misc2026",
+                        Type = SourceType.Misc,
+                        Author = "Example Archive",
+                        SourceKind = "Manuscript",
+                        Medium = "Scan"
+                    }),
+                    SourceRecord.FromSource(new Source
+                    {
+                        Tag = "Film2026",
+                        Type = SourceType.Film,
+                        Director = "Kubrick, Stanley",
+                        ProducerName = "MGM",
+                        Writer = "Clarke, Arthur C.",
+                        Performer = "Dullea, Keir",
+                        ProductionCompany = "Metro-Goldwyn-Mayer",
+                        Medium = "Film"
+                    }),
+                    SourceRecord.FromSource(new Source
+                    {
+                        Tag = "Recording2026",
+                        Type = SourceType.SoundRecording,
+                        Artist = "Holiday, Billie",
+                        Composer = "Strange, Lewis Allan",
+                        Conductor = "Jones, Quincy",
+                        Performer = "Holiday, Billie",
+                        ProducerName = "Norman Granz",
+                        AlbumTitle = "Lady Sings",
+                        RecordingNumber = "RS-1",
+                        Medium = "LP"
+                    }),
+                    SourceRecord.FromSource(new Source
+                    {
+                        Tag = "Art2026",
+                        Type = SourceType.Art,
+                        Artist = "Kahlo, Frida",
+                        Institution = "Museo Dolores Olmedo",
+                        City = "Mexico City",
+                        Medium = "Oil on masonite"
+                    }),
+                    SourceRecord.FromSource(new Source
+                    {
+                        Tag = "Site2026",
+                        Type = SourceType.InternetSite,
+                        Author = "Example Archive",
+                        Publisher = "Example Site",
+                        Url = "https://example.test",
+                        AccessedYear = "2026"
+                    }),
+                    SourceRecord.FromSource(new Source
+                    {
+                        Tag = "Performance2026",
+                        Type = SourceType.Performance,
+                        Performer = "Royal Shakespeare Company",
+                        Conductor = "Doe, Jane",
+                        Theater = "Globe Theatre",
+                        City = "London",
+                        Month = "May",
+                        Day = "8",
+                        Medium = "Stage performance"
+                    }),
+                    SourceRecord.FromSource(new Source
+                    {
+                        Tag = "Case2026",
+                        Type = SourceType.Case,
+                        Author = "Brown",
+                        Title = "Brown v. Board of Education",
+                        CaseNumber = "1",
+                        Court = "U.S. Supreme Court",
+                        Reporter = "347 U.S. 483",
+                        CountryRegion = "United States",
+                        StateProvince = "District of Columbia",
+                        City = "Washington",
+                        Month = "May",
+                        Day = "17",
+                        Year = "1954"
+                    })
+                ]
+            };
+            var settingsStore = JsonSettingsStore<MasterSourceStore>.ForPath(path);
+
+            settingsStore.Save(store);
+            var sources = JsonSettingsStore<MasterSourceStore>.ForPath(path).Load().ToSources();
+
+            sources.Should().HaveCount(9);
+            sources[0].Type.Should().Be(SourceType.Patent);
+            sources[0].Inventor.Should().Be("Lovelace, Ada");
+            sources[0].PatentNumber.Should().Be("GB-1843-1");
+            sources[0].CountryRegion.Should().Be("United Kingdom");
+            sources[0].StateProvince.Should().Be("London");
+            sources[0].Month.Should().Be("July");
+            sources[0].Day.Should().Be("4");
+            sources[1].Type.Should().Be(SourceType.Interview);
+            sources[1].Interviewee.Should().Be("Hopper, Grace");
+            sources[1].Interviewer.Should().Be("Mauchly, Jean");
+            sources[1].Medium.Should().Be("Recorded interview");
+            sources[2].Type.Should().Be(SourceType.Misc);
+            sources[2].SourceKind.Should().Be("Manuscript");
+            sources[2].Medium.Should().Be("Scan");
+            sources[3].Type.Should().Be(SourceType.Film);
+            sources[3].Director.Should().Be("Kubrick, Stanley");
+            sources[3].ProductionCompany.Should().Be("Metro-Goldwyn-Mayer");
+            sources[4].Type.Should().Be(SourceType.SoundRecording);
+            sources[4].Artist.Should().Be("Holiday, Billie");
+            sources[4].AlbumTitle.Should().Be("Lady Sings");
+            sources[4].RecordingNumber.Should().Be("RS-1");
+            sources[5].Type.Should().Be(SourceType.Art);
+            sources[5].Artist.Should().Be("Kahlo, Frida");
+            sources[5].Institution.Should().Be("Museo Dolores Olmedo");
+            sources[6].Type.Should().Be(SourceType.InternetSite);
+            sources[6].Url.Should().Be("https://example.test");
+            sources[6].AccessedYear.Should().Be("2026");
+            sources[7].Type.Should().Be(SourceType.Performance);
+            sources[7].Performer.Should().Be("Royal Shakespeare Company");
+            sources[7].Theater.Should().Be("Globe Theatre");
+            sources[8].Type.Should().Be(SourceType.Case);
+            sources[8].CaseNumber.Should().Be("1");
+            sources[8].Court.Should().Be("U.S. Supreme Court");
+            sources[8].Reporter.Should().Be("347 U.S. 483");
+            sources[8].CountryRegion.Should().Be("United States");
+            sources[8].StateProvince.Should().Be("District of Columbia");
+            sources[8].City.Should().Be("Washington");
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void MasterStore_AddOrUpdate_ReplacesExistingTag()
     {
         var store = new MasterSourceStore();
@@ -403,18 +564,16 @@ public sealed class MasterSourceStoreTests
             Year   = "2023"
         });
 
-        // Simulate document-level source list (mutable list as document keeps internally).
-        var docSources = new System.Collections.Generic.List<Source>();
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources: [],
+            masterSources: masterStore.ToSources());
+        var plan = SourceManagementDialogPlanner.CopyMasterToCurrent(
+            state,
+            masterSelectedIndex: 0,
+            currentSelectedIndex: -1);
 
-        // Perform copy: take all master sources and add to doc (simulate dialog Copy→ action).
-        var masterSources = masterStore.ToSources();
-        foreach (var src in masterSources)
-        {
-            if (!docSources.Any(s => s.Tag == src.Tag))
-                docSources.Add(src);
-        }
-
-        docSources.Should().HaveCount(1);
-        docSources[0].Tag.Should().Be("Copy1");
+        plan.Conflict.Should().BeNull();
+        plan.State.CurrentSources.Should().HaveCount(1);
+        plan.State.CurrentSources[0].Tag.Should().Be("Copy1");
     }
 }

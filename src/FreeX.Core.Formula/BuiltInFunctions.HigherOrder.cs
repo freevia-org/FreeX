@@ -54,7 +54,7 @@ public static partial class BuiltInFunctions
         foreach (var val in flat)
         {
             acc = ctx.InvokeLambda(lambda, [acc, val]);
-            if (acc is RangeValue) return ErrorValue.Calc;
+            if (acc is ErrorValue accError) return accError;
         }
         return acc;
     }

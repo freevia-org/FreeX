@@ -250,7 +250,10 @@ public sealed class Lexer
         while (_pos < _text.Length)
         {
             var c = _text[_pos];
-            if (c == '[')
+            // R12-xlsx-tables-3: a literal '[', '#', or '\'' inside a column name is escaped with a
+            // leading apostrophe (e.g. [A'[B] for the literal name "A[B") — bail to the slow path,
+            // which understands that escape, instead of returning this apostrophe raw.
+            if (c == '[' || (c == '\'' && IsEscapableStructuredReferenceChar(_pos + 1)))
                 break;
 
             if (c == ']')
@@ -281,6 +284,20 @@ public sealed class Lexer
         while (_pos < _text.Length)
         {
             var c = _text[_pos];
+            // R12-xlsx-tables-3: an apostrophe immediately before '[', ']', '#', or another
+            // apostrophe escapes THAT character as a literal — this is how a column name containing
+            // one of those characters round-trips through a structured reference without the
+            // escaped '[' opening a (nested/combined-selector) bracket group or the escaped '#'
+            // being mistaken for a "#Data"/"#Totals"/etc. section keyword. Mirrors Excel's own
+            // structured-reference escaping convention. An apostrophe NOT followed by one of those
+            // characters (e.g. a plain "It's") is not an escape prefix and is copied through as-is.
+            if (c == '\'' && IsEscapableStructuredReferenceChar(_pos + 1))
+            {
+                sb.Append(_text[_pos + 1]);
+                _pos += 2;
+                continue;
+            }
+
             if (c == '[')
             {
                 depth++;
@@ -314,6 +331,16 @@ public sealed class Lexer
 
         throw new FormulaParseException($"Unterminated structured reference starting at position {start}");
     }
+
+    /// <summary>
+    /// True when <paramref name="index"/> is in range and the character there is one of the four
+    /// characters a leading apostrophe can escape inside a structured reference selector: '[', ']',
+    /// '#', or an apostrophe itself. Used by <see cref="ReadStructuredReferenceSelector"/> and
+    /// <see cref="ReadStructuredReferenceSelectorSlow"/> to distinguish an escape-prefix apostrophe
+    /// from a plain literal apostrophe (e.g. in "It's") elsewhere in a column name.
+    /// </summary>
+    private bool IsEscapableStructuredReferenceChar(int index) =>
+        index < _text.Length && _text[index] is '[' or ']' or '#' or '\'';
 
     private Token ReadIdentifierOrRef()
     {

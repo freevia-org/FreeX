@@ -114,7 +114,7 @@ public sealed class FindReplaceDialogXamlTests
         AssertComboBoxContainsExactly(document, presentation, xaml, "WithinCombo", ["Sheet", "Workbook"]);
         AssertComboBoxContainsExactly(document, presentation, xaml, "SearchCombo", ["By Rows", "By Columns"]);
         AssertComboBoxContainsExactly(document, presentation, xaml, "LookInCombo", ["Formulas", "Values", "Notes", "Comments"]);
-        AssertNamedElementHasAttribute(document, presentation, xaml, "ComboBox", "LookInCombo", "SelectedIndex", "1");
+        AssertNamedElementHasAttribute(document, presentation, xaml, "ComboBox", "LookInCombo", "SelectedIndex", "0");
         document.Descendants(presentation + "ComboBoxItem")
             .Select(element => element.Attribute("IsEnabled")?.Value)
             .Should()

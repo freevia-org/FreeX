@@ -450,13 +450,27 @@ public static partial class NumberFormatter
 
         // Build output: replace the lead bracket with its numeric value,
         // then fill in mm and ss with the remainder components.
+        // Quote-aware (mirrors the inQuote scanning convention used throughout this formatter,
+        // e.g. FindUnquotedElapsedTimeToken/RemoveUnquotedBracketDirectives): text inside "..."
+        // literals is copied verbatim (quote marks dropped, matching Excel's rendering) and never
+        // treated as a token, so a literal such as "mm" or "ss" is not mistaken for a substitution.
         var sb = new System.Text.StringBuilder();
         if (value < 0) sb.Append('-');
         int i = 0;
+        bool inQuote = false;
         while (i < format.Length)
         {
+            if (format[i] == '"')
+            {
+                inQuote = !inQuote;
+                i++;
+            }
+            else if (inQuote)
+            {
+                sb.Append(format[i++]);
+            }
             // Skip the bracket token we already handled
-            if (string.Compare(format, i, leadToken, 0, leadToken.Length, StringComparison.OrdinalIgnoreCase) == 0)
+            else if (string.Compare(format, i, leadToken, 0, leadToken.Length, StringComparison.OrdinalIgnoreCase) == 0)
             {
                 sb.Append(leadValue);
                 i += leadToken.Length;
@@ -478,6 +492,16 @@ public static partial class NumberFormatter
             {
                 sb.Append(remSeconds.ToString("D2"));
                 i += 2;
+            }
+            else if (format[i] == 'm' && elapsedMatch.Groups[1].Success) // single m after [h]
+            {
+                sb.Append(remMinutes);
+                i += 1;
+            }
+            else if (format[i] == 's') // single s (remainder seconds after [h] or [m] lead)
+            {
+                sb.Append(remSeconds);
+                i += 1;
             }
             else if (i == fractionalDotIndex)
             {

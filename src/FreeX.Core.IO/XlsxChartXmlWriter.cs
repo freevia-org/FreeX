@@ -437,7 +437,8 @@ internal static partial class XlsxChartXmlWriter
         bool usesSecondaryAxis,
         bool includeDataLabels)
     {
-        if (includeDataLabels && ToDataLabelsXml(chart, chartNs, drawingNs) is { } dataLabels)
+        if (includeDataLabels && ChartTypeSupport.SupportsDataLabels(chart.Type) &&
+            ToDataLabelsXml(chart, chartNs, drawingNs) is { } dataLabels)
             InsertAfterLastSeries(plotChart, dataLabels, chartNs);
 
         if (!ShouldWriteChartAxes(chart.Type))

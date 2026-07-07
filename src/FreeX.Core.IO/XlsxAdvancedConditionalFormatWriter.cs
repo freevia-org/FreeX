@@ -94,7 +94,57 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             if (newX14DataBars is not null)
                 AppendX14ConditionalFormattingsExt(root, newX14DataBars, workbookNs);
 
+            RealignClassicRulePriorities(root, workbookNs, sheet);
+
             XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+        }
+    }
+
+    /// <summary>
+    /// ClosedXML's <c>IXLConditionalFormat</c> object model has no Priority property, so
+    /// <see cref="XlsxConditionalFormatClosedXmlMapper.Save"/> lets it renumber every classic
+    /// (cellIs/expression) <c>cfRule</c> it writes 1..N in add order, discarding the rule's real
+    /// original <see cref="ConditionalFormat.Priority"/>. That collides/inverts against the advanced
+    /// (colorScale/dataBar/iconSet/long-tail) rules just written above with their true priority
+    /// verbatim, changing the file's rule evaluation order on round-trip (P52). Fix up by walking the
+    /// classic cfRule elements ClosedXML wrote, in document order, and reassigning each one's priority
+    /// attribute to the matching classic <see cref="ConditionalFormat"/>'s real (file-order) priority --
+    /// ClosedXML preserves the relative order rules were added in, and the model's classic rules were
+    /// added to <c>xlSheet</c> in that same relative order, so a positional match is safe.
+    /// </summary>
+    private static void RealignClassicRulePriorities(XElement root, XNamespace worksheetNs, Sheet sheet)
+    {
+        List<int>? classicPriorities = null;
+        foreach (var cf in sheet.ConditionalFormats)
+        {
+            if (XlsxAdvancedConditionalFormatMetadata.IsAdvancedConditionalFormat(cf))
+                continue;
+
+            classicPriorities ??= [];
+            classicPriorities.Add(cf.Priority);
+        }
+
+        if (classicPriorities is null)
+            return;
+
+        var index = 0;
+        foreach (var conditionalFormatting in root.Elements(worksheetNs + "conditionalFormatting"))
+        {
+            foreach (var rule in conditionalFormatting.Elements(worksheetNs + "cfRule"))
+            {
+                var type = rule.Attribute("type")?.Value;
+                if (!string.Equals(type, "cellIs", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(type, "expression", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (index >= classicPriorities.Count)
+                    break;
+
+                rule.SetAttributeValue("priority", classicPriorities[index]);
+                index++;
+            }
         }
     }
 

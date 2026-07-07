@@ -7,34 +7,41 @@ namespace FreeW.App.Host;
 
 /// <summary>
 /// A predefined multilevel-list format applied by the Multilevel List dropdown gallery.
-/// Encodes the list kind and an optional link-to-style (heading style) for each level. Because the
-/// FreeW model represents multilevel lists as a single <see cref="ListKind.MultiLevel"/> definition
-/// (the decimal accumulating counter 1., 1.1., 1.1.1. … serialised to word/numbering.xml), presets that
-/// differ only in number style are not yet fully separable in the model. The name is shown in the gallery
-/// picker and as a tooltip; the <see cref="Apply"/> lambda is the concrete application action.
 /// </summary>
 internal sealed record MultilevelListPreset(string Name, string Description, Action<DocumentView> Apply);
 
 /// <summary>
-/// The per-level configuration captured by the "Define New Multilevel List" dialog. Per-level number
-/// style (Roman / letter / decimal) is not yet backed by the model and is deferred; the dialog surfaces
-/// only the backed subset: start-at value per level and which levels to include.
+/// The per-level configuration captured by the "Define New Multilevel List" dialog.
 /// </summary>
 internal sealed record MultilevelListDefinition(
-    /// <summary>Number of active levels (1–9).</summary>
+    /// <summary>Number of active levels (1-9).</summary>
     int Levels,
     /// <summary>Start-at value for level 0 (1-based; null = continue).</summary>
     int? Level0StartAt,
     /// <summary>Start-at value for level 1 (1-based; null = continue).</summary>
-    int? Level1StartAt);
+    int? Level1StartAt,
+    /// <summary>Number formats for the modelled multilevel definition.</summary>
+    IReadOnlyList<ListNumberFormat> NumberFormats);
 
 /// <summary>
-/// A small "Define New Multilevel List" dialog that captures the backed subset of per-level options:
-/// number of active outline levels and optional start-at value for the first two levels.
-/// Per-level number style (Roman, letter, decimal) is not yet modelled and is noted as deferred.
+/// A small "Define New Multilevel List" dialog for the backed FreeW multilevel options.
 /// </summary>
 internal static class MultilevelListDialog
 {
+    private sealed record NumberFormatChoice(string Label, ListNumberFormat Format)
+    {
+        public override string ToString() => Label;
+    }
+
+    private static readonly NumberFormatChoice[] NumberFormatChoices =
+    [
+        new("1, 2, 3", ListNumberFormat.Decimal),
+        new("a, b, c", ListNumberFormat.LowerLetter),
+        new("A, B, C", ListNumberFormat.UpperLetter),
+        new("i, ii, iii", ListNumberFormat.LowerRoman),
+        new("I, II, III", ListNumberFormat.UpperRoman)
+    ];
+
     /// <summary>
     /// The catalog of predefined multilevel-list formats shown in the Multilevel List dropdown gallery.
     /// </summary>
@@ -42,20 +49,26 @@ internal static class MultilevelListDialog
     [
         new(
             "Outline: 1. / 1.1. / 1.1.1.",
-            "Decimal outline (1., 1.1., 1.1.1. …) — the standard FreeW multilevel list.",
-            view => view.ApplyMultiLevelList()),
-        new(
-            "Outline: 1. / a. / i.",
-            "Decimal + letter + roman — applied as the same multilevel counter (per-level style is a render hint).",
-            view => view.ApplyMultiLevelList()),
-        new(
-            "Outline (Headings): link to Heading styles",
-            "Apply multilevel list and map each level to Heading 1–3 styles.",
+            "Decimal outline using the standard FreeW multilevel list.",
             view =>
             {
                 view.ApplyMultiLevelList();
-                // Link-to-style is a render hint: set the paragraph style to the matching heading level
-                // (the list level was already set by ApplyMultiLevelList / ChangeListLevel).
+                view.ApplyMultiLevelNumberFormats(MultiLevelListFormat.DecimalNumberFormats);
+            }),
+        new(
+            "Outline: 1. / a. / i.",
+            "Decimal + lower-letter + lower-roman per-level numbering.",
+            view =>
+            {
+                view.ApplyMultiLevelList();
+                view.ApplyMultiLevelNumberFormats(MultiLevelListFormat.DecimalLowerLetterLowerRomanNumberFormats);
+            }),
+        new(
+            "Outline (Headings): link to Heading styles",
+            "Apply multilevel list and map each level to Heading 1-3 styles.",
+            view =>
+            {
+                view.ApplyMultiLevelList();
                 var fmt = view.CurrentParagraphFormatting;
                 var headingStyleId = fmt.ListLevel switch
                 {
@@ -65,6 +78,7 @@ internal static class MultilevelListDialog
                 };
                 if (view.Model.Styles.ContainsKey(headingStyleId))
                     view.SetParagraphStyle(headingStyleId);
+                view.ApplyMultiLevelNumberFormats(MultiLevelListFormat.DecimalNumberFormats);
             }),
     ];
 
@@ -72,7 +86,9 @@ internal static class MultilevelListDialog
     /// Show the "Define New Multilevel List" dialog seeded with the current selection. Returns the chosen
     /// definition, or null if cancelled.
     /// </summary>
-    public static MultilevelListDefinition? Prompt(Window? owner)
+    public static MultilevelListDefinition? Prompt(
+        Window? owner,
+        IReadOnlyList<ListNumberFormat>? currentNumberFormats = null)
     {
         MultilevelListDefinition? result = null;
 
@@ -90,10 +106,13 @@ internal static class MultilevelListDialog
         var levelsBox = new ComboBox { MinWidth = 80, Margin = new Thickness(0, 0, 0, 8) };
         for (var i = 1; i <= 9; i++)
             levelsBox.Items.Add(i.ToString());
-        levelsBox.SelectedIndex = 8; // default to 9 levels (Word default)
+        levelsBox.SelectedIndex = 8;
 
         var startAt0Box = new TextBox { Text = "1", MinWidth = 60, Margin = new Thickness(0, 0, 0, 8), ToolTip = "Start-at for level 1 (1-based)" };
         var startAt1Box = new TextBox { Text = "1", MinWidth = 60, Margin = new Thickness(0, 0, 0, 8), ToolTip = "Start-at for level 2 (1-based)" };
+        var level0FormatBox = NumberFormatBox(GetFormat(currentNumberFormats, 0));
+        var level1FormatBox = NumberFormatBox(GetFormat(currentNumberFormats, 1));
+        var level2FormatBox = NumberFormatBox(GetFormat(currentNumberFormats, 2));
 
         var panel = new StackPanel { Margin = new Thickness(14) };
         panel.Children.Add(new TextBlock
@@ -103,18 +122,12 @@ internal static class MultilevelListDialog
             Margin = new Thickness(0, 0, 0, 10),
         });
 
-        AddRow(panel, "Number of levels (1–9):", levelsBox);
+        AddRow(panel, "Number of levels (1-9):", levelsBox);
         AddRow(panel, "Level 1 start at:",        startAt0Box);
         AddRow(panel, "Level 2 start at:",        startAt1Box);
-
-        panel.Children.Add(new TextBlock
-        {
-            Text = "Note: per-level number style (Roman numerals, letters) is not yet backed by the FreeW model — deferred.",
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = System.Windows.Media.Brushes.Gray,
-            FontSize = 10,
-            Margin = new Thickness(0, 10, 0, 0),
-        });
+        AddRow(panel, "Level 1 number style:",    level0FormatBox);
+        AddRow(panel, "Level 2 number style:",    level1FormatBox);
+        AddRow(panel, "Level 3 number style:",    level2FormatBox);
 
         void Accept()
         {
@@ -140,7 +153,11 @@ internal static class MultilevelListDialog
                 s1 = v1;
             }
 
-            result = new MultilevelListDefinition(levels, s0, s1);
+            var formats = MultiLevelListFormat.DecimalNumberFormats.ToArray();
+            formats[0] = SelectedNumberFormat(level0FormatBox);
+            formats[1] = SelectedNumberFormat(level1FormatBox);
+            formats[2] = SelectedNumberFormat(level2FormatBox);
+            result = new MultilevelListDefinition(levels, s0, s1, formats);
             dialog.DialogResult = true;
         }
 
@@ -157,4 +174,19 @@ internal static class MultilevelListDialog
             fe.Margin = new Thickness(0, 0, 0, 8);
         panel.Children.Add(field);
     }
+
+    private static ComboBox NumberFormatBox(ListNumberFormat selected)
+    {
+        var box = new ComboBox { MinWidth = 130, Margin = new Thickness(0, 0, 0, 8) };
+        foreach (var choice in NumberFormatChoices)
+            box.Items.Add(choice);
+        box.SelectedItem = NumberFormatChoices.First(c => c.Format == selected);
+        return box;
+    }
+
+    private static ListNumberFormat SelectedNumberFormat(ComboBox box) =>
+        box.SelectedItem is NumberFormatChoice choice ? choice.Format : ListNumberFormat.Decimal;
+
+    private static ListNumberFormat GetFormat(IReadOnlyList<ListNumberFormat>? formats, int level) =>
+        formats is not null && level < formats.Count ? formats[level] : ListNumberFormat.Decimal;
 }

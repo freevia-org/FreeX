@@ -177,10 +177,11 @@ public sealed class SubtotalCommand : IWorkbookCommand
 
     /// <summary>
     /// Builds the row outline the same way Excel does for Data &gt; Subtotal: each group's detail
-    /// rows get outline level 1 (so the outline pane's 1/2/3 buttons can collapse to just the
-    /// subtotal/grand-total rows), while the subtotal and grand-total rows themselves stay at
-    /// level 0. This mirrors <see cref="GroupRowsCommand"/>'s ownership of
-    /// <see cref="Sheet.RowOutlineLevels"/>.
+    /// rows get the deepest outline level (so the outline pane's 1/2/3 buttons can collapse to
+    /// just the subtotal/grand-total rows), while the grand-total row stays at level 0. This
+    /// mirrors <see cref="GroupRowsCommand"/>'s ownership of <see cref="Sheet.RowOutlineLevels"/>,
+    /// including its use of <see cref="OutlineGroupingService.GetGroupedOutlineLevel"/> to nest
+    /// levels rather than clobbering them.
     /// </summary>
     /// <remarks>
     /// <see cref="SubtotalInsertionPlan.FormulaStartRow"/>/<see cref="SubtotalInsertionPlan.FormulaEndRow"/>
@@ -191,7 +192,22 @@ public sealed class SubtotalCommand : IWorkbookCommand
     /// plan originally computed). So rather than re-deriving the cumulative shift here, this scans
     /// the sheet's own final state — via the same <see cref="SubtotalRowFinder"/> used by
     /// <see cref="RemoveSubtotalRowsCommand"/> — to find exactly which rows in the final range are
-    /// subtotal/grand-total rows, and marks every other row in that range as outline level 1.
+    /// subtotal/grand-total rows.
+    /// </remarks>
+    /// <remarks>
+    /// For nested subtotals (Data &gt; Subtotal run a second time, with "Replace current
+    /// subtotals" unchecked, over a range that still contains a prior pass's subtotal rows) this
+    /// must build a multi-level outline, not flatten everything to level 1: the prior pass's
+    /// group-total rows (still present, still SUBTOTAL-formula rows, so still in
+    /// <paramref name="sheet"/>'s <see cref="Sheet.RowOutlineLevels"/> at whatever level that pass
+    /// left them) become intermediate levels, and only the innermost, ungrouped detail rows sit at
+    /// the deepest level. That's exactly the nesting rule <see cref="GroupRowsCommand"/> already
+    /// uses for manual Group Rows: the next level is one more than the deepest existing level
+    /// already present in the range (<see cref="OutlineGroupingService.GetGroupedOutlineLevel"/>
+    /// with <c>preserveExistingHierarchy: true</c>). The grand-total row is excluded from that
+    /// scan and pinned at level 0 (Excel never nests the grand total itself), and every other
+    /// pre-existing subtotal/grand-total row this pass finds becomes an intermediate level — one
+    /// less than the new detail level — rather than being left at its old, now-too-shallow level.
     /// </remarks>
     private void ApplyGroupOutline(Sheet sheet, SubtotalPlan plan)
     {
@@ -201,10 +217,57 @@ public sealed class SubtotalCommand : IWorkbookCommand
             new CellAddress(_range.Start.Sheet, _range.End.Row + insertedRowCount, _range.End.Col));
         var totalRows = new HashSet<uint>(SubtotalRowFinder.Find(sheet, _sheetId, finalRange));
 
+        // The grand-total row is whichever total row this pass itself just inserted/rewrote via
+        // ApplyInsertAndEdit(plan.GrandTotalRow, ...); its final position shifted along with every
+        // other row already written, but SubtotalRowFinder's rescan reports final positions, so the
+        // simplest correct way to identify it post-shift is: it's the total row that is NOT one of
+        // this pass's own group-total rows AND sits outside every group span, i.e. the one total row
+        // that remains after removing rows immediately following each detected group. Rather than
+        // re-deriving that mapping, use the plan-relative fact that summaryBelowData puts the grand
+        // total strictly after the last group-total row in the final range, and summaryAboveData puts
+        // it strictly before the first group-total row — both are simply the total row furthest from
+        // the detail rows on the "outside" of the whole block.
+        var grandTotalRow = _summaryBelowData
+            ? finalRange.End.Row
+            : finalRange.Start.Row + 1;
+
+        // The deepest level any prior pass left in this range (grand total excluded — it always
+        // stays at 0 and must never inflate the nesting depth). A first pass has no prior levels
+        // here, so this is 0 and every non-total row lands at level 1, matching the single-level
+        // behavior the existing tests pin down.
+        var deepestExistingLevel = 0;
         for (var row = finalRange.Start.Row + 1; row <= finalRange.End.Row; row++)
         {
-            if (!totalRows.Contains(row))
-                sheet.RowOutlineLevels[row] = 1;
+            if (row == grandTotalRow)
+                continue;
+            if (sheet.RowOutlineLevels.TryGetValue(row, out var existingLevel) && existingLevel > deepestExistingLevel)
+                deepestExistingLevel = existingLevel;
+        }
+
+        var isNestedPass = deepestExistingLevel > 0;
+        var detailLevel = OutlineGroupingService.GetGroupedOutlineLevel(deepestExistingLevel, 1, preserveExistingHierarchy: true);
+        var intermediateLevel = Math.Max(1, detailLevel - 1);
+
+        for (var row = finalRange.Start.Row + 1; row <= finalRange.End.Row; row++)
+        {
+            if (row == grandTotalRow)
+            {
+                sheet.RowOutlineLevels[row] = 0;
+            }
+            else if (totalRows.Contains(row))
+            {
+                // A first pass keeps its own group-total rows at level 0, exactly like Excel's
+                // single-level Data > Subtotal (and the existing regression tests pin this down).
+                // Only once a prior pass has already built an outline here (isNestedPass) does a
+                // subtotal row need to move off level 0: it sits one level shallower than the
+                // freshly-marked detail rows, so it can still be collapsed to on its own via the
+                // outline pane before collapsing all the way to the grand total.
+                sheet.RowOutlineLevels[row] = isNestedPass ? intermediateLevel : 0;
+            }
+            else
+            {
+                sheet.RowOutlineLevels[row] = detailLevel;
+            }
         }
     }
 

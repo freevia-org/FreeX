@@ -12,8 +12,11 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         source.Should().Contain("SourceManagementDialogPlanner.BuildSourceTypeChoices(");
         source.Should().Contain("SourceManagementDialogPlanner.BuildEntryFieldPlans(");
         source.Should().Contain("SourceManagementDialogPlanner.CreateEntry(");
+        source.Should().Contain("SourceManagementDialogPlanner.ProjectPrimaryAuthorEditorState(");
+        source.Should().Contain("SourceManagementDialogPlanner.NormalizePrimaryAuthorEditorState(");
+        source.Should().Contain("SourceManagementDialogPlanner.ApplyPrimaryAuthorEditorState(");
         source.Should().Contain("_fields.ToDictionary(pair => pair.Key, pair => (string?)pair.Value.Text),");
-        source.Should().Contain("_initialEntry);");
+        source.Should().Contain("_entryBaseline);");
     }
 
     [Fact]
@@ -39,6 +42,9 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         source.Should().Contain("SourceManagementDialogPlanner.DeleteMasterSource(");
         source.Should().Contain("SourceManagementDialogPlanner.CopyMasterToCurrent(");
         source.Should().Contain("SourceManagementDialogPlanner.CopyCurrentToMaster(");
+        source.Should().Contain("SourceManagementDialogPlanner.BuildSourceConflictMessage(");
+        source.Should().Contain("SourceManagementDialogPlanner.BuildSourceConflictResolutionChoices(");
+        source.Should().Contain("SourceManagementDialogPlanner.ResolveSourceConflict(");
         source.Should().Contain("SourceManagementDialogPlanner.AddCurrentSource(");
         source.Should().Contain("SourceManagementDialogPlanner.EditCurrentSource(");
         source.Should().Contain("SourceManagementDialogPlanner.DeleteCurrentSource(");
@@ -46,7 +52,7 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
     }
 
     [Fact]
-    public void ReferencesDialogs_DoesNotOwnSourceAuthorParsingPolicy()
+    public void ReferencesDialogs_DoesNotOwnSourceAuthorOrConflictPolicy()
     {
         var source = ReadReferencesDialogsSource();
 
@@ -54,6 +60,11 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         source.Should().NotContain("PersonalAuthors =");
         source.Should().NotContain("CorporateAuthor =");
         source.Should().NotContain("SourceAuthorPerson.Create(");
+        source.Should().NotContain("SourcePayloadEquals(");
+        source.Should().NotContain("SourcePeopleEqual(");
+        source.Should().NotContain("SourceValueEquals(");
+        source.Should().NotContain("SourceManagementTagIdentity");
+        source.Should().NotContain("FindSourceIndexByTag(");
     }
 
     private static string ReadReferencesDialogsSource()

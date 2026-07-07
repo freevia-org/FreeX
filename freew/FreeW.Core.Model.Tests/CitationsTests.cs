@@ -945,6 +945,150 @@ public class CitationsTests
         ((int)SourceType.ConferenceProceedings).Should().Be(5);
         ((int)SourceType.ArticleInPeriodical).Should().Be(6);
         ((int)SourceType.ElectronicSource).Should().Be(7);
+        ((int)SourceType.Patent).Should().Be(8);
+        ((int)SourceType.Interview).Should().Be(9);
+        ((int)SourceType.Misc).Should().Be(10);
+        ((int)SourceType.Film).Should().Be(11);
+        ((int)SourceType.SoundRecording).Should().Be(12);
+        ((int)SourceType.Art).Should().Be(13);
+        ((int)SourceType.InternetSite).Should().Be(14);
+        ((int)SourceType.Performance).Should().Be(15);
+        ((int)SourceType.Case).Should().Be(16);
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_SourceManagerBreadthTypes_UseModeledFields()
+    {
+        var patent = new Source
+        {
+            Type = SourceType.Patent,
+            Inventor = "Lovelace, Ada",
+            Title = "Analytical Engine Control",
+            Year = "1843",
+            Month = "July",
+            Day = "4",
+            PatentNumber = "GB-1843-1",
+            CountryRegion = "United Kingdom",
+            StateProvince = "London"
+        };
+        var interview = new Source
+        {
+            Type = SourceType.Interview,
+            Interviewee = "Hopper, Grace",
+            Interviewer = "Mauchly, Jean",
+            Title = "Compiler Notes",
+            Year = "1968",
+            Medium = "Recorded interview"
+        };
+        var misc = new Source
+        {
+            Type = SourceType.Misc,
+            Author = "Example Archive",
+            Title = "Loose note",
+            Year = "2026",
+            SourceKind = "Manuscript",
+            Medium = "Scan"
+        };
+        var caseSource = new Source
+        {
+            Type = SourceType.Case,
+            Author = "Brown",
+            Title = "Brown v. Board of Education",
+            Year = "1954",
+            Month = "May",
+            Day = "17",
+            CaseNumber = "1",
+            Court = "U.S. Supreme Court",
+            Reporter = "347 U.S. 483",
+            CountryRegion = "United States",
+            StateProvince = "District of Columbia"
+        };
+
+        Citations.FormatInText(patent, CitationStyle.Apa).Should().Be("(Lovelace, 1843)");
+        Citations.FormatBibliographyEntry(patent, CitationStyle.Apa)
+            .Should().Be("Lovelace, Ada. (1843). Analytical Engine Control. patent GB-1843-1, United Kingdom, London, 4 July 1843.");
+        Citations.FormatBibliographyEntry(interview, CitationStyle.Chicago)
+            .Should().Be("Hopper, Grace. Compiler Notes. interview by Mauchly, Jean, Recorded interview, 1968.");
+        Citations.FormatBibliographyEntry(misc, CitationStyle.Ieee)
+            .Should().Be("Example Archive, \"Loose note,\" Manuscript, Scan, 2026.");
+        Citations.FormatBibliographyEntry(caseSource, CitationStyle.Apa)
+            .Should().Be("Brown. (1954). Brown v. Board of Education. case no. 1, U.S. Supreme Court, 347 U.S. 483, United States, District of Columbia, 17 May 1954.");
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_MediaBreadthTypes_UseModeledFields()
+    {
+        var film = new Source
+        {
+            Type = SourceType.Film,
+            Director = "Kubrick, Stanley",
+            ProducerName = "MGM",
+            Writer = "Clarke, Arthur C.",
+            Performer = "Dullea, Keir",
+            Title = "2001: A Space Odyssey",
+            Year = "1968",
+            ProductionCompany = "Metro-Goldwyn-Mayer",
+            Medium = "Film"
+        };
+        var recording = new Source
+        {
+            Type = SourceType.SoundRecording,
+            Artist = "Holiday, Billie",
+            Composer = "Strange, Lewis Allan",
+            Conductor = "Jones, Quincy",
+            Title = "Strange Fruit",
+            AlbumTitle = "Lady Sings",
+            Year = "1956",
+            RecordingNumber = "RS-1",
+            Medium = "LP"
+        };
+        var art = new Source
+        {
+            Type = SourceType.Art,
+            Artist = "Kahlo, Frida",
+            Title = "The Broken Column",
+            Year = "1944",
+            Medium = "Oil on masonite",
+            Institution = "Museo Dolores Olmedo",
+            City = "Mexico City"
+        };
+        var internetSite = new Source
+        {
+            Type = SourceType.InternetSite,
+            Author = "Example Archive",
+            Title = "Example Home",
+            Year = "2026",
+            Publisher = "Example Site",
+            Url = "https://example.test",
+            AccessedDay = "7",
+            AccessedMonth = "July",
+            AccessedYear = "2026"
+        };
+        var performance = new Source
+        {
+            Type = SourceType.Performance,
+            Performer = "Royal Shakespeare Company",
+            Conductor = "Doe, Jane",
+            Title = "Hamlet",
+            Year = "2026",
+            Month = "May",
+            Day = "8",
+            Theater = "Globe Theatre",
+            City = "London",
+            Medium = "Stage performance"
+        };
+
+        Citations.FormatInText(film, CitationStyle.Apa).Should().Be("(Kubrick, 1968)");
+        Citations.FormatBibliographyEntry(film, CitationStyle.Apa)
+            .Should().Be("Kubrick, Stanley. (1968). 2001: A Space Odyssey. produced by MGM, written by Clarke, Arthur C., performed by Dullea, Keir, Metro-Goldwyn-Mayer, Film.");
+        Citations.FormatBibliographyEntry(recording, CitationStyle.Chicago)
+            .Should().Be("Holiday, Billie. Strange Fruit. Lady Sings, composed by Strange, Lewis Allan, conducted by Jones, Quincy, recording RS-1, LP, 1956.");
+        Citations.FormatBibliographyEntry(art, CitationStyle.Ieee)
+            .Should().Be("Kahlo, Frida, \"The Broken Column,\" Oil on masonite, Museo Dolores Olmedo, Mexico City, 1944.");
+        Citations.FormatBibliographyEntry(internetSite, CitationStyle.Apa)
+            .Should().Be("Example Archive. (2026). Example Home. Example Site, https://example.test, accessed 7 July 2026.");
+        Citations.FormatBibliographyEntry(performance, CitationStyle.Chicago)
+            .Should().Be("Royal Shakespeare Company. Hamlet. conducted by Doe, Jane, Globe Theatre, London, Stage performance, 8 May 2026, 2026.");
     }
 
     [Fact]

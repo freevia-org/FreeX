@@ -242,8 +242,23 @@ public sealed partial class FormulaEvaluator
                 }
                 else
                 {
-                    var resolvedRange = context.TryResolveNamedRange(named.Name);
-                    if (resolvedRange is not null)
+                    // Excel scope precedence: a sheet-scoped name (either kind) always wins over a
+                    // same-named workbook-global name, so a sheet-scoped named FORMULA must be
+                    // preferred over a workbook-global named RANGE here too — matching the bare-name
+                    // resolution in EvaluateNamedRange/EvaluateArrayOperand (see IsSheetScopedName).
+                    FreeX.Core.Model.GridRange? resolvedRange;
+                    bool preferScopedFormula = false;
+                    if (IsSheetScopedName(named.Name, context, out var sheetScopedIsFormula) && sheetScopedIsFormula)
+                    {
+                        preferScopedFormula = true;
+                        resolvedRange = null;
+                    }
+                    else
+                    {
+                        resolvedRange = context.TryResolveNamedRange(named.Name);
+                    }
+
+                    if (!preferScopedFormula && resolvedRange is not null)
                     {
                         var r = resolvedRange.Value;
                         if (isStructured)
@@ -566,12 +581,16 @@ public sealed partial class FormulaEvaluator
                 return true;
 
             case NamedRangeNode named:
-                var range = context.TryResolveNamedRange(named.Name);
-                if (range is not { } resolved || resolved.RowCount != 1 || resolved.ColCount != 1)
+                // Sheet-scope precedence: a sheet-scoped named FORMULA must shadow a same-named
+                // workbook-global named RANGE here too (see ResolveNamedRangeNodeAsReference),
+                // so ANCHORARRAY(Foo) anchors on the scoped formula's reference, not the global
+                // range's.
+                var reference = ResolveNamedRangeNodeAsReference(named, context);
+                if (reference is not RangeValue resolved || resolved.RowCount != 1 || resolved.ColCount != 1)
                     return false;
-                row = resolved.Start.Row;
-                col = resolved.Start.Col;
-                sheetName = context.TryGetSheetName(resolved.Start.Sheet);
+                row = resolved.StartRow;
+                col = resolved.StartCol;
+                sheetName = resolved.SheetName;
                 return true;
 
             default:

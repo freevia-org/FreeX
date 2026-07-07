@@ -505,6 +505,16 @@ public static class DocxReader
             var author = ReadBibliographyAuthor(element);
             var editors = ReadBibliographyPersonalContributors(element, "Editor");
             var translators = ReadBibliographyPersonalContributors(element, "Translator");
+            var inventor = ReadBibliographyContributorDisplay(element, "Inventor");
+            var interviewee = ReadBibliographyContributorDisplay(element, "Interviewee");
+            var interviewer = ReadBibliographyContributorDisplay(element, "Interviewer");
+            var artist = ReadBibliographyContributorDisplay(element, "Artist");
+            var composer = ReadBibliographyContributorDisplay(element, "Composer");
+            var conductor = ReadBibliographyContributorDisplay(element, "Conductor");
+            var director = ReadBibliographyContributorDisplay(element, "Director");
+            var performer = ReadBibliographyContributorDisplay(element, "Performer");
+            var producerName = ReadBibliographyContributorDisplay(element, "ProducerName");
+            var writer = ReadBibliographyContributorDisplay(element, "Writer");
             var dayAccessed = Field(element, "DayAccessed");
             var monthAccessed = Field(element, "MonthAccessed");
             var yearAccessed = Field(element, "YearAccessed");
@@ -522,13 +532,37 @@ public static class DocxReader
                 Title = Field(element, "Title") ?? string.Empty,
                 BookTitle = Field(element, "BookTitle"),
                 ConferenceName = Field(element, "ConferenceName"),
+                Inventor = inventor,
+                Interviewee = interviewee,
+                Interviewer = interviewer,
+                Artist = artist,
+                Composer = composer,
+                Conductor = conductor,
+                Director = director,
+                Performer = performer,
+                ProducerName = producerName,
+                Writer = writer,
                 Year = Field(element, "Year") ?? string.Empty,
+                Month = Field(element, "Month"),
+                Day = Field(element, "Day"),
                 Institution = Field(element, "Institution"),
                 Publisher = Field(element, "Publisher"),
                 City = Field(element, "City"),
                 Edition = Field(element, "Edition"),
                 StandardNumber = Field(element, "StandardNumber"),
                 ChapterNumber = Field(element, "ChapterNumber"),
+                PatentNumber = Field(element, "PatentNumber"),
+                CaseNumber = Field(element, "CaseNumber"),
+                Court = Field(element, "Court"),
+                Reporter = Field(element, "Reporter"),
+                CountryRegion = Field(element, "CountryRegion"),
+                StateProvince = Field(element, "StateProvince"),
+                Medium = Field(element, "Medium"),
+                SourceKind = Field(element, "Type"),
+                AlbumTitle = Field(element, "AlbumTitle"),
+                ProductionCompany = Field(element, "ProductionCompany"),
+                RecordingNumber = Field(element, "RecordingNumber"),
+                Theater = Field(element, "Theater"),
                 ShortTitle = Field(element, "ShortTitle"),
                 Comments = Field(element, "Comments"),
                 Journal = Field(element, "JournalName"),
@@ -582,6 +616,24 @@ public static class DocxReader
         return ReadPeople(role).ToList();
     }
 
+    private static string? ReadBibliographyContributorDisplay(XElement source, string roleName)
+    {
+        var role = source.Element(B + "Author")?.Element(B + roleName);
+        if (role is null)
+            return null;
+
+        var corporate = role.Element(B + "Corporate")?.Value;
+        if (!string.IsNullOrWhiteSpace(corporate))
+            return corporate.Trim();
+
+        var people = ReadPeople(role).ToList();
+        if (people.Count > 0)
+            return SourceAuthorPerson.FormatDisplayText(people);
+
+        var value = (role.Value ?? string.Empty).Trim();
+        return value.Length == 0 ? null : value;
+    }
+
     private static IEnumerable<SourceAuthorPerson> ReadPeople(XElement role) =>
         role.Element(B + "NameList")?
             .Elements(B + "Person")
@@ -613,6 +665,15 @@ public static class DocxReader
         "ConferenceProceedings" => SourceType.ConferenceProceedings,
         "ArticleInAPeriodical" => SourceType.ArticleInPeriodical,
         "ElectronicSource" => SourceType.ElectronicSource,
+        "Patent" => SourceType.Patent,
+        "Interview" => SourceType.Interview,
+        "Misc" => SourceType.Misc,
+        "Film" => SourceType.Film,
+        "SoundRecording" => SourceType.SoundRecording,
+        "Art" => SourceType.Art,
+        "InternetSite" => SourceType.InternetSite,
+        "Performance" => SourceType.Performance,
+        "Case" => SourceType.Case,
         _ => SourceType.Book,
     };
 
@@ -938,6 +999,9 @@ public static class DocxReader
 
         // Line numbering (w:lnNumType): recover the mode + interval.
         ReadLineNumbering(sectPr.Element(W + "lnNumType"), page);
+
+        // Page numbering (w:pgNumType): recover section PAGE field style + optional start-at value.
+        ReadPageNumbering(sectPr.Element(W + "pgNumType"), page);
 
         // Page vertical alignment (w:vAlign): map the val token back ("both"→Justified); absent → Top.
         page.VerticalAlignment =
@@ -1302,7 +1366,8 @@ public static class DocxReader
         IReadOnlyDictionary<(int NumId, int Level), int> startOverrides,
         ref Paragraph? prevPara,
         ref bool prevAfterAuto,
-        ContentControl? inheritedControl = null)
+        ContentControl? inheritedControl = null,
+        BlockContentControl? inheritedBlockContentControl = null)
     {
         if (element.Name == W + "p")
         {
@@ -1316,6 +1381,7 @@ public static class DocxReader
                 preservedDrawingTarget: document,
                 inheritedControl,
                 startOverrides: startOverrides);
+            para.BlockContentControl = inheritedBlockContentControl;
             document.Blocks.Add(para);
             var sp = element.Element(W + "pPr")?.Element(W + "spacing");
             var beforeAuto = sp?.Attribute(W + "beforeAutospacing")?.Value is "1" or "true" or "on";
@@ -1329,15 +1395,30 @@ public static class DocxReader
         }
         else if (element.Name == W + "tbl")
         {
-            document.Blocks.Add(ReadTable(element, archive, imageRelationships, hyperlinkRelationships, numbering, startOverrides, document, inheritedControl));
+            var table = ReadTable(element, archive, imageRelationships, hyperlinkRelationships, numbering, startOverrides, document, inheritedControl);
+            table.BlockContentControl = inheritedBlockContentControl;
+            document.Blocks.Add(table);
             prevPara = null;
             prevAfterAuto = false;
         }
         else if (element.Name == W + "sdt")
         {
-            var control = ReadContentControl(element.Element(W + "sdtPr"));
+            var blockControl = ReadBlockContentControl(element.Element(W + "sdtPr"));
             foreach (var child in element.Element(W + "sdtContent")?.Elements() ?? [])
-                AddBodyBlock(child, document, archive, imageRelationships, hyperlinkRelationships, numbering, startOverrides, ref prevPara, ref prevAfterAuto, control);
+            {
+                AddBodyBlock(
+                    child,
+                    document,
+                    archive,
+                    imageRelationships,
+                    hyperlinkRelationships,
+                    numbering,
+                    startOverrides,
+                    ref prevPara,
+                    ref prevAfterAuto,
+                    inheritedControl,
+                    blockControl);
+            }
         }
     }
 
@@ -1584,53 +1665,159 @@ public static class DocxReader
     private static Equation ReadOMath(XElement oMath)
     {
         var equation = new Equation();
-        foreach (var child in oMath.Elements())
+        foreach (var run in ReadMathRuns(oMath.Elements()))
+            equation.Runs.Add(run);
+        return equation;
+    }
+
+    private static IEnumerable<MathRun> ReadMathRuns(IEnumerable<XElement> elements)
+    {
+        foreach (var child in elements)
         {
             if (child.Name == M + "r")
-                equation.Runs.Add(MathRun.PlainText(MathTextOf(child)));
+                yield return MathRun.PlainText(MathTextOf(child));
             else if (child.Name == M + "sSup")
-                equation.Runs.Add(MathRun.Superscript(
-                    MathTextOf(child.Element(M + "e")),
-                    MathTextOf(child.Element(M + "sup"))));
+                yield return ReadSuperscript(child);
             else if (child.Name == M + "sSub")
-                equation.Runs.Add(MathRun.Subscript(
-                    MathTextOf(child.Element(M + "e")),
-                    MathTextOf(child.Element(M + "sub"))));
+                yield return ReadSubscript(child);
             else if (child.Name == M + "sSubSup")
-                equation.Runs.Add(MathRun.SubSuperscript(
-                    MathTextOf(child.Element(M + "e")),
-                    MathTextOf(child.Element(M + "sub")),
-                    MathTextOf(child.Element(M + "sup"))));
+                yield return ReadSubSuperscript(child);
             else if (child.Name == M + "f")
-                equation.Runs.Add(MathRun.Fraction(
-                    MathTextOf(child.Element(M + "num")),
-                    MathTextOf(child.Element(M + "den"))));
+                yield return ReadFraction(child);
             else if (child.Name == M + "rad")
-                equation.Runs.Add(ReadRadical(child));
+                yield return ReadRadical(child);
             else if (child.Name == M + "nary")
-                equation.Runs.Add(ReadNAry(child));
+                yield return ReadNAry(child);
             else if (child.Name == M + "acc")
-                equation.Runs.Add(ReadAccent(child));
+                yield return ReadAccent(child);
             else if (child.Name == M + "bar")
-                equation.Runs.Add(ReadBar(child));
+                yield return ReadBar(child);
             else if (child.Name == M + "d")
-                equation.Runs.Add(ReadDelimiter(child));
+                yield return ReadDelimiter(child);
             else if (child.Name == M + "m")
-                equation.Runs.Add(MathRun.MatrixOf(ReadMatrix(child)));
+                yield return MathRun.MatrixOf(ReadMatrix(child));
             else if (child.Name == M + "func")
-                equation.Runs.Add(ReadFunctionApply(child));
+                yield return ReadFunctionApply(child);
             else if (child.Name == M + "groupChr")
-                equation.Runs.Add(ReadGroupChar(child));
+                yield return ReadGroupChar(child);
             else
             {
                 // Unknown OMML construct: keep its text so the equation degrades rather than disappears.
                 var fallback = MathTextOf(child);
                 if (fallback.Length > 0)
-                    equation.Runs.Add(MathRun.PlainText(fallback));
+                    yield return MathRun.PlainText(fallback);
             }
         }
-        return equation;
     }
+
+    private static MathRun ReadSuperscript(XElement script)
+    {
+        var baseSlot = script.Element(M + "e");
+        var sup = script.Element(M + "sup");
+        var baseText = MathTextOf(baseSlot);
+        var supText = MathTextOf(sup);
+        var hasNestedBase = HasStructuredMathSlot(baseSlot);
+        var hasNestedSup = HasStructuredMathSlot(sup);
+
+        return hasNestedBase || hasNestedSup
+            ? new MathRun
+            {
+                Kind = MathRunKind.Superscript,
+                Base = baseText,
+                Sup = supText,
+                ScriptBaseEquation = hasNestedBase ? ReadMathSlot(baseSlot) : null,
+                ScriptSupEquation = hasNestedSup ? ReadMathSlot(sup) : null
+            }
+            : MathRun.Superscript(baseText, supText);
+    }
+
+    private static MathRun ReadSubscript(XElement script)
+    {
+        var baseSlot = script.Element(M + "e");
+        var sub = script.Element(M + "sub");
+        var baseText = MathTextOf(baseSlot);
+        var subText = MathTextOf(sub);
+        var hasNestedBase = HasStructuredMathSlot(baseSlot);
+        var hasNestedSub = HasStructuredMathSlot(sub);
+
+        return hasNestedBase || hasNestedSub
+            ? new MathRun
+            {
+                Kind = MathRunKind.Subscript,
+                Base = baseText,
+                Sub = subText,
+                ScriptBaseEquation = hasNestedBase ? ReadMathSlot(baseSlot) : null,
+                ScriptSubEquation = hasNestedSub ? ReadMathSlot(sub) : null
+            }
+            : MathRun.Subscript(baseText, subText);
+    }
+
+    private static MathRun ReadSubSuperscript(XElement script)
+    {
+        var baseSlot = script.Element(M + "e");
+        var sub = script.Element(M + "sub");
+        var sup = script.Element(M + "sup");
+        var baseText = MathTextOf(baseSlot);
+        var subText = MathTextOf(sub);
+        var supText = MathTextOf(sup);
+        var hasNestedBase = HasStructuredMathSlot(baseSlot);
+        var hasNestedSub = HasStructuredMathSlot(sub);
+        var hasNestedSup = HasStructuredMathSlot(sup);
+
+        return hasNestedBase || hasNestedSub || hasNestedSup
+            ? new MathRun
+            {
+                Kind = MathRunKind.SubSuperscript,
+                Base = baseText,
+                Sub = subText,
+                Sup = supText,
+                ScriptBaseEquation = hasNestedBase ? ReadMathSlot(baseSlot) : null,
+                ScriptSubEquation = hasNestedSub ? ReadMathSlot(sub) : null,
+                ScriptSupEquation = hasNestedSup ? ReadMathSlot(sup) : null
+            }
+            : MathRun.SubSuperscript(baseText, subText, supText);
+    }
+
+    private static MathRun ReadFraction(XElement fraction)
+    {
+        var numerator = fraction.Element(M + "num");
+        var denominator = fraction.Element(M + "den");
+        var numeratorText = MathTextOf(numerator);
+        var denominatorText = MathTextOf(denominator);
+        var hasNestedNumerator = HasStructuredMathSlot(numerator);
+        var hasNestedDenominator = HasStructuredMathSlot(denominator);
+
+        return hasNestedNumerator || hasNestedDenominator
+            ? new MathRun
+            {
+                Kind = MathRunKind.Fraction,
+                Numerator = numeratorText,
+                Denominator = denominatorText,
+                NumeratorEquation = hasNestedNumerator ? ReadMathSlot(numerator) : null,
+                DenominatorEquation = hasNestedDenominator ? ReadMathSlot(denominator) : null
+            }
+            : MathRun.Fraction(numeratorText, denominatorText);
+    }
+
+    private static Equation ReadMathSlot(XElement? slot) =>
+        slot is null ? new Equation() : new Equation(ReadMathRuns(slot.Elements()));
+
+    private static bool HasStructuredMathSlot(XElement? slot) =>
+        slot is not null && slot.Elements().Any(IsStructuredMathElement);
+
+    private static bool IsStructuredMathElement(XElement element) =>
+        element.Name == M + "sSup" ||
+        element.Name == M + "sSub" ||
+        element.Name == M + "sSubSup" ||
+        element.Name == M + "f" ||
+        element.Name == M + "rad" ||
+        element.Name == M + "nary" ||
+        element.Name == M + "acc" ||
+        element.Name == M + "bar" ||
+        element.Name == M + "d" ||
+        element.Name == M + "m" ||
+        element.Name == M + "func" ||
+        element.Name == M + "groupChr";
 
     /// <summary>
     /// Reads a radical (m:rad). When m:radPr/m:degHide is "1" (or m:deg is empty) it is a square root
@@ -1641,7 +1828,17 @@ public static class DocxReader
         var degHide = rad.Element(M + "radPr")?.Element(M + "degHide")?.Attribute(M + "val")?.Value;
         var degText = MathTextOf(rad.Element(M + "deg"));
         var degree = degHide == "1" ? string.Empty : degText;
-        return MathRun.Radical(MathTextOf(rad.Element(M + "e")), degree);
+        var radicand = rad.Element(M + "e");
+        var radicandText = MathTextOf(radicand);
+        return HasStructuredMathSlot(radicand)
+            ? new MathRun
+            {
+                Kind = MathRunKind.Radical,
+                Base = radicandText,
+                Degree = degree,
+                RadicandEquation = ReadMathSlot(radicand)
+            }
+            : MathRun.Radical(radicandText, degree);
     }
 
     /// <summary>
@@ -1651,11 +1848,30 @@ public static class DocxReader
     private static MathRun ReadNAry(XElement nary)
     {
         var chr = nary.Element(M + "naryPr")?.Element(M + "chr")?.Attribute(M + "val")?.Value;
-        return MathRun.NAry(
-            string.IsNullOrEmpty(chr) ? "∑" : chr,
-            MathTextOf(nary.Element(M + "sub")),
-            MathTextOf(nary.Element(M + "sup")),
-            MathTextOf(nary.Element(M + "e")));
+        var sub = nary.Element(M + "sub");
+        var sup = nary.Element(M + "sup");
+        var operand = nary.Element(M + "e");
+        var subText = MathTextOf(sub);
+        var supText = MathTextOf(sup);
+        var operandText = MathTextOf(operand);
+        var hasNestedSub = HasStructuredMathSlot(sub);
+        var hasNestedSup = HasStructuredMathSlot(sup);
+        var hasNestedOperand = HasStructuredMathSlot(operand);
+        var op = string.IsNullOrEmpty(chr) ? "∑" : chr;
+
+        return hasNestedSub || hasNestedSup || hasNestedOperand
+            ? new MathRun
+            {
+                Kind = MathRunKind.NAry,
+                Operator = op,
+                Sub = subText,
+                Sup = supText,
+                Base = operandText,
+                NAryLowerLimitEquation = hasNestedSub ? ReadMathSlot(sub) : null,
+                NAryUpperLimitEquation = hasNestedSup ? ReadMathSlot(sup) : null,
+                NAryOperandEquation = hasNestedOperand ? ReadMathSlot(operand) : null
+            }
+            : MathRun.NAry(op, subText, supText, operandText);
     }
 
     /// <summary>
@@ -1688,10 +1904,21 @@ public static class DocxReader
         var dPr = d.Element(M + "dPr");
         var open = dPr?.Element(M + "begChr")?.Attribute(M + "val")?.Value;
         var close = dPr?.Element(M + "endChr")?.Attribute(M + "val")?.Value;
-        return MathRun.Delimiter(
-            MathTextOf(d.Element(M + "e")),
-            string.IsNullOrEmpty(open) ? "(" : open,
-            string.IsNullOrEmpty(close) ? ")" : close);
+        var content = d.Element(M + "e");
+        var contentText = MathTextOf(content);
+        return HasStructuredMathSlot(content)
+            ? new MathRun
+            {
+                Kind = MathRunKind.Delimiter,
+                Base = contentText,
+                OpenChar = string.IsNullOrEmpty(open) ? "(" : open,
+                CloseChar = string.IsNullOrEmpty(close) ? ")" : close,
+                DelimiterContentEquation = ReadMathSlot(content)
+            }
+            : MathRun.Delimiter(
+                contentText,
+                string.IsNullOrEmpty(open) ? "(" : open,
+                string.IsNullOrEmpty(close) ? ")" : close);
     }
 
     /// <summary>
@@ -1713,8 +1940,17 @@ public static class DocxReader
     private static MathRun ReadFunctionApply(XElement func)
     {
         var funcName = MathTextOf(func.Element(M + "fName"));
-        var argument = MathTextOf(func.Element(M + "e"));
-        return MathRun.FunctionApply(funcName, argument);
+        var argument = func.Element(M + "e");
+        var argumentText = MathTextOf(argument);
+        return HasStructuredMathSlot(argument)
+            ? new MathRun
+            {
+                Kind = MathRunKind.FunctionApply,
+                FuncName = funcName,
+                Base = argumentText,
+                FunctionArgumentEquation = ReadMathSlot(argument)
+            }
+            : MathRun.FunctionApply(funcName, argumentText);
     }
 
     /// <summary>
@@ -1943,6 +2179,33 @@ public static class DocxReader
             hyperlinkAnchor,
             hyperlinkTooltip,
             preservedDrawingTarget);
+    }
+
+    private static BlockContentControl ReadBlockContentControl(XElement? sdtPr)
+    {
+        var tag = sdtPr?.Element(W + "tag")?.Attribute(W + "val")?.Value;
+        var alias = sdtPr?.Element(W + "alias")?.Attribute(W + "val")?.Value;
+        var docPart = sdtPr?.Element(W + "docPartObj");
+        var gallery = docPart?.Element(W + "docPartGallery")?.Attribute(W + "val")?.Value;
+        var category = docPart?.Element(W + "docPartCategory")?.Attribute(W + "val")?.Value;
+        var hasDocPartUnique = docPart?.Element(W + "docPartUnique") is not null;
+
+        var kind = gallery is not null
+            && string.Equals(gallery, BlockContentControl.BibliographyGallery, StringComparison.OrdinalIgnoreCase)
+                ? BlockContentControlKind.Bibliography
+                : docPart is not null
+                    ? BlockContentControlKind.DocumentPart
+                    : sdtPr?.Element(W + "text") is not null
+                        ? BlockContentControlKind.PlainText
+                        : BlockContentControlKind.RichText;
+
+        return new BlockContentControl(
+            kind,
+            string.IsNullOrEmpty(tag) ? null : tag,
+            string.IsNullOrEmpty(alias) ? null : alias,
+            string.IsNullOrEmpty(gallery) ? null : gallery,
+            string.IsNullOrEmpty(category) ? null : category,
+            hasDocPartUnique);
     }
 
     private static ContentControl ReadContentControl(XElement? sdtPr)
@@ -4165,6 +4428,42 @@ public static class DocxReader
             page.LineNumberStartAt = startAt;
     }
 
+    private static void ReadPageNumbering(XElement? pgNumType, PageSettings page)
+    {
+        if (pgNumType is null)
+            return;
+
+        page.PageNumberFormat = PageNumberFormatFromToken(pgNumType.Attribute(W + "fmt")?.Value);
+        page.PageNumberStartAt = int.TryParse(pgNumType.Attribute(W + "start")?.Value, out var startAt)
+            && startAt >= 1
+                ? startAt
+                : null;
+        page.PageNumberChapterStyleLevel = int.TryParse(pgNumType.Attribute(W + "chapStyle")?.Value, out var chapterStyle)
+            && chapterStyle is >= 1 and <= 9
+                ? chapterStyle
+                : null;
+        page.PageNumberChapterSeparator = PageNumberChapterSeparatorFromToken(
+            pgNumType.Attribute(W + "chapSep")?.Value);
+    }
+
+    private static PageNumberFormat PageNumberFormatFromToken(string? token) => token switch
+    {
+        "lowerRoman" => PageNumberFormat.LowerRoman,
+        "upperRoman" => PageNumberFormat.UpperRoman,
+        "lowerLetter" => PageNumberFormat.LowerLetter,
+        "upperLetter" => PageNumberFormat.UpperLetter,
+        _ => PageNumberFormat.Decimal
+    };
+
+    private static PageNumberChapterSeparator PageNumberChapterSeparatorFromToken(string? token) => token switch
+    {
+        "period" => PageNumberChapterSeparator.Period,
+        "colon" => PageNumberChapterSeparator.Colon,
+        "emDash" => PageNumberChapterSeparator.EmDash,
+        "enDash" => PageNumberChapterSeparator.EnDash,
+        _ => PageNumberChapterSeparator.Hyphen
+    };
+
     /// <summary>
     /// Maps a w:vAlign/@w:val token back to a <see cref="PageVerticalAlignment"/> ("both"→Justified).
     /// A null/unknown token (including the absent default and "top") maps to
@@ -4216,6 +4515,7 @@ public static class DocxReader
 
         // abstractNumId -> ListKind, taken from the format of its lowest level.
         var abstractKinds = new Dictionary<int, ListKind>();
+        var abstractMultiLevelFormats = new Dictionary<int, IReadOnlyList<ListNumberFormat>>();
         foreach (var abstractNum in root.Elements(W + "abstractNum"))
         {
             var abstractNumId = ParseInt(abstractNum.Attribute(W + "abstractNumId")?.Value);
@@ -4227,17 +4527,30 @@ public static class DocxReader
             // MultiLevel, not Bullet — the deeper levels carry decimal/letter formats that the model
             // must expose for correct display/editing of sub-levels.
             var numFmt = levels.FirstOrDefault()?.Element(W + "numFmt")?.Attribute(W + "val")?.Value;
-            abstractKinds[abstractNumId] = IsMultiLevel(abstractNum, levels)
+            var isMultiLevel = IsMultiLevel(abstractNum, levels);
+            if (isMultiLevel)
+                abstractMultiLevelFormats[abstractNumId] = ReadMultiLevelNumberFormats(levels);
+            abstractKinds[abstractNumId] = isMultiLevel
                 ? ListKind.MultiLevel
                 : numFmt == "bullet" ? ListKind.Bullet : ListKind.Number;
         }
 
+        var appliedMultiLevelFormats = false;
         foreach (var num in root.Elements(W + "num"))
         {
             var numId = ParseInt(num.Attribute(W + "numId")?.Value);
             var abstractNumId = ParseInt(num.Element(W + "abstractNumId")?.Attribute(W + "val")?.Value);
             if (abstractKinds.TryGetValue(abstractNumId, out var kind))
+            {
                 map[numId] = kind;
+                if (!appliedMultiLevelFormats
+                    && kind == ListKind.MultiLevel
+                    && abstractMultiLevelFormats.TryGetValue(abstractNumId, out var numberFormats))
+                {
+                    document.MultiLevelList.SetNumberFormats(numberFormats);
+                    appliedMultiLevelFormats = true;
+                }
+            }
 
             // Detect restart-override w:num elements: each w:lvlOverride/w:startOverride pair is a
             // counter-reset override for one list level, emitted by FreeW or by Word for the same purpose.
@@ -4271,6 +4584,21 @@ public static class DocxReader
 
         var level1Text = levels.ElementAtOrDefault(1)?.Element(W + "lvlText")?.Attribute(W + "val")?.Value;
         return level1Text is not null && level1Text.Contains("%1") && level1Text.Contains("%2");
+    }
+
+    private static IReadOnlyList<ListNumberFormat> ReadMultiLevelNumberFormats(IReadOnlyList<XElement> levels)
+    {
+        var formats = Enumerable.Repeat(ListNumberFormat.Decimal, MultiLevelListFormat.LevelCount).ToArray();
+        foreach (var level in levels)
+        {
+            var index = ParseInt(level.Attribute(W + "ilvl")?.Value);
+            if (index < 0 || index >= formats.Length)
+                continue;
+
+            formats[index] = MultiLevelListMarkerFormatter.FromOoxmlToken(
+                level.Element(W + "numFmt")?.Attribute(W + "val")?.Value);
+        }
+        return formats;
     }
 
     /// <summary>

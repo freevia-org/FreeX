@@ -14,11 +14,33 @@ public sealed record CommentReply(string Text, string Author = "FreeX")
     public string? Id { get; init; }
 
     /// <summary>
-    /// The raw, unparsed <c>&lt;extLst&gt;</c> XML fragment (if any) from the source
-    /// threadedComment element, e.g. Excel's @mention <c>mentions</c> extension. Round-tripped
-    /// verbatim on save since FreeX does not model @mention linkage.
+    /// The raw, unparsed <c>&lt;mentions&gt;</c> and/or <c>&lt;extLst&gt;</c> XML fragment(s) (if
+    /// any), concatenated in source schema order, from the source threadedComment element, e.g.
+    /// Excel's @mention metadata. Round-tripped verbatim on save since FreeX does not model
+    /// @mention linkage.
     /// </summary>
     public string? MentionsXml { get; init; }
+
+    /// <summary>
+    /// The source <c>&lt;threadedComment&gt;/@personId</c> this reply was loaded with, preserved
+    /// only when <see cref="MentionsXml"/> is also preserved. A save that carries an @mention
+    /// referencing this person id (e.g. <c>mtc:mention/@mentionpersonId</c>) must keep resolving
+    /// after the persons part is rewritten, so the writer prefers this id over a freshly minted
+    /// per-author guid when present.
+    /// </summary>
+    public string? SourcePersonId { get; init; }
+
+    /// <summary>
+    /// Display names, by source person id, for every person referenced by a
+    /// <c>mtc:mention/@mentionpersonId</c> inside <see cref="MentionsXml"/> who is NOT themselves
+    /// this reply's (or any other comment/reply's) author -- e.g. an @-mentioned person who has
+    /// never posted a comment. FreeX does not model @mention linkage as first-class data, but a
+    /// mentioned person's <c>&lt;person&gt;</c> record must still be written to
+    /// <c>xl/persons/person.xml</c> on save so the mention keeps resolving; without this, the
+    /// mentioned (non-authoring) person's record silently disappears after a save because
+    /// person.xml is rewritten solely from comment/reply authors.
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? MentionedPersonDisplayNames { get; init; }
 }
 
 public sealed record ThreadedComment(string Text, string Author = "FreeX")
@@ -37,11 +59,33 @@ public sealed record ThreadedComment(string Text, string Author = "FreeX")
     public string? Id { get; init; }
 
     /// <summary>
-    /// The raw, unparsed <c>&lt;extLst&gt;</c> XML fragment (if any) from the source
-    /// threadedComment element, e.g. Excel's @mention <c>mentions</c> extension. Round-tripped
-    /// verbatim on save since FreeX does not model @mention linkage.
+    /// The raw, unparsed <c>&lt;mentions&gt;</c> and/or <c>&lt;extLst&gt;</c> XML fragment(s) (if
+    /// any), concatenated in source schema order, from the source threadedComment element, e.g.
+    /// Excel's @mention metadata. Round-tripped verbatim on save since FreeX does not model
+    /// @mention linkage.
     /// </summary>
     public string? MentionsXml { get; init; }
+
+    /// <summary>
+    /// The source <c>&lt;threadedComment&gt;/@personId</c> this root comment was loaded with,
+    /// preserved only when <see cref="MentionsXml"/> is also preserved. A save that carries an
+    /// @mention referencing this person id (e.g. <c>mtc:mention/@mentionpersonId</c>) must keep
+    /// resolving after the persons part is rewritten, so the writer prefers this id over a
+    /// freshly minted per-author guid when present.
+    /// </summary>
+    public string? SourcePersonId { get; init; }
+
+    /// <summary>
+    /// Display names, by source person id, for every person referenced by a
+    /// <c>mtc:mention/@mentionpersonId</c> inside <see cref="MentionsXml"/> who is NOT themselves
+    /// this comment's (or any reply's) author -- e.g. an @-mentioned person who has never posted a
+    /// comment. FreeX does not model @mention linkage as first-class data, but a mentioned
+    /// person's <c>&lt;person&gt;</c> record must still be written to
+    /// <c>xl/persons/person.xml</c> on save so the mention keeps resolving; without this, the
+    /// mentioned (non-authoring) person's record silently disappears after a save because
+    /// person.xml is rewritten solely from comment/reply authors.
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? MentionedPersonDisplayNames { get; init; }
 }
 
 /// <summary>
@@ -524,6 +568,19 @@ public sealed partial class Sheet
     /// </summary>
     public HashSet<uint> ValueFilterHiddenRows { get; } = [];
 
+    /// <summary>
+    /// Runtime per-column ownership state for the non-value-list AutoFilter mechanisms (condition/
+    /// custom-criterion, Top 10/Above-Average, and cell/font-color filters), keyed by absolute
+    /// 1-based column index. Each entry is exactly the set of rows THAT column's own filter last
+    /// decided to hide. Excel ANDs AutoFilter criteria across every active column (a row stays
+    /// hidden if it fails ANY active column's filter), so when one of these mechanisms re-evaluates
+    /// its own column it must only ever un-hide rows found in its OWN entry here — never a row some
+    /// other column's mechanism (a value-list filter via <see cref="ActiveValueFilterColumns"/>, or
+    /// another condition/average/top-bottom/color filter on a different column) hid (finding
+    /// R12-sort-filter-1). See FreeX.Core.Commands.FilterHiddenRowUpdater.ApplyColumnOwnedVisibility.
+    /// </summary>
+    public Dictionary<uint, HashSet<uint>> ColumnFilterOwnedRows { get; } = [];
+
     /// <summary>Set of column numbers that are hidden (1-based).</summary>
     public HashSet<uint> HiddenCols { get; } = [];
 
@@ -597,8 +654,28 @@ public sealed partial class Sheet
     /// </summary>
     public Dictionary<CellAddress, IReadOnlyList<CellTextRun>> RichTextRuns { get; } = [];
 
-    /// <summary>True when the sheet is protected against edits.</summary>
-    public bool IsProtected { get; set; }
+    private bool _isProtected;
+
+    /// <summary>
+    /// True when the sheet is protected against edits. Toggling this (in either direction — on
+    /// protect or on unprotect) clears <see cref="UnlockedAllowEditRanges"/> so a per-session
+    /// range unlock granted under a previous protection/password never survives a re-protect with
+    /// a changed (or newly (re)added) range password; callers must supply the range password again
+    /// under the new protection state. Assigning the same value the property already holds is a
+    /// no-op and does not clear the set (e.g. <c>Revert</c> restoring an unchanged prior state).
+    /// </summary>
+    public bool IsProtected
+    {
+        get => _isProtected;
+        set
+        {
+            if (_isProtected == value)
+                return;
+
+            _isProtected = value;
+            UnlockedAllowEditRanges.Clear();
+        }
+    }
 
     /// <summary>Password hash for sheet protection. Null means no password required.</summary>
     public string? ProtectionPassword { get; set; }
@@ -632,10 +709,13 @@ public sealed partial class Sheet
     /// session (the user supplied the correct range password once, verified via
     /// <c>CommandGuards.TryUnlockAllowEditRange</c>). Not persisted to the workbook file or undo
     /// history — purely an in-memory, per-session gate so the password prompt is not repeated for
-    /// every edit. Nothing currently clears an entry when the sheet is unprotected/re-protected or
-    /// the range's password is changed/removed; a stale unlock would only matter if the sheet were
-    /// re-protected without reloading, which callers that flip <see cref="IsProtected"/> should take
-    /// into account (e.g. by clearing this set themselves) if that scenario needs to re-lock ranges.
+    /// every edit. Cleared automatically whenever <see cref="IsProtected"/> actually changes value
+    /// (protect or unprotect, including undo/redo of either), so a stale unlock granted under a
+    /// previous protection cannot silently survive a re-protect with a new/changed range password.
+    /// Still not cleared by directly mutating <see cref="AllowEditRangePasswords"/> or
+    /// <see cref="AllowEditRanges"/> without also toggling <see cref="IsProtected"/>; callers that
+    /// change a range's password while the sheet stays protected must clear the relevant entry (or
+    /// the whole set) themselves.
     /// </summary>
     public HashSet<GridRange> UnlockedAllowEditRanges { get; } = [];
 

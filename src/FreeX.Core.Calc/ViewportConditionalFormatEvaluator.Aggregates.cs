@@ -162,8 +162,16 @@ internal static partial class ViewportConditionalFormatEvaluator
                 return valueOrder != 0 ? valueOrder : left.Index.CompareTo(right.Index);
             });
 
-        var result = new HashSet<CellAddress>(take);
-        for (var i = 0; i < take; i++)
+        // Excel highlights every cell whose value ranks within the top/bottom N, ties
+        // included -- so once the Nth-ranked value is known, extend the cutoff to cover
+        // any later entries that tie its value (more than N cells can end up matched).
+        var cutoffValue = rankedValues[take - 1].Value;
+        var effectiveTake = take;
+        while (effectiveTake < rankedValues.Count && rankedValues[effectiveTake].Value == cutoffValue)
+            effectiveTake++;
+
+        var result = new HashSet<CellAddress>(effectiveTake);
+        for (var i = 0; i < effectiveTake; i++)
             result.Add(rankedValues[i].Address);
 
         return result;
@@ -173,10 +181,27 @@ internal static partial class ViewportConditionalFormatEvaluator
         Sheet sheet,
         ConditionalFormat cf)
     {
+        // A rule's sqref can list multiple ranges that overlap each other (e.g. "A1:B2 B2:C3"),
+        // and Excel treats the covered cell set as a set — each cell counted once regardless of
+        // how many of the rule's ranges include it. Without de-duplication a cell in the overlap
+        // is visited once per covering range, skewing sum/average/stdDev/count and distorting the
+        // Top10 ranking and percentile/percent thresholds. Single-range rules (the common case)
+        // never allocate the tracking set.
+        HashSet<CellAddress>? seen = null;
+        var multiRange = cf.AllRanges.Count() > 1;
         foreach (var range in cf.AllRanges)
         {
             foreach (var item in EnumerateAggregateValues(sheet, range))
+            {
+                if (multiRange)
+                {
+                    seen ??= new HashSet<CellAddress>();
+                    if (!seen.Add(item.Address))
+                        continue;
+                }
+
                 yield return item;
+            }
         }
     }
 
@@ -253,12 +278,46 @@ internal static partial class ViewportConditionalFormatEvaluator
         }
 
         var s = GetString(value);
-        return cf.Operator switch
-        {
-            CfOperator.Equal => string.Equals(s, cf.Value1, StringComparison.OrdinalIgnoreCase),
-            CfOperator.NotEqual => !string.Equals(s, cf.Value1, StringComparison.OrdinalIgnoreCase),
-            _ => false
-        };
+        if (cf.Operator is not (CfOperator.Equal or CfOperator.NotEqual))
+            return false;
+
+        var threshold = ResolveCellValueTextThreshold(cf, sheet, workbook, addr, cfContext);
+        var isEqual = threshold is not null && string.Equals(s, threshold, StringComparison.OrdinalIgnoreCase);
+        return cf.Operator == CfOperator.Equal ? isEqual : !isEqual;
+    }
+
+    /// <summary>
+    /// Resolves the text comparison threshold for a CellIs "equal to"/"not equal to" rule. Excel
+    /// stores a literal text comparand as a quoted formula string (e.g. <c>"abc"</c>) and a cell
+    /// reference/formula comparand as bare formula text (e.g. <c>$B$1</c>); both are parsed into
+    /// the same threshold-formula cache used by the numeric branch above
+    /// (<see cref="TryResolveCellValueScalarThreshold"/>), so evaluate through that cache here too
+    /// instead of comparing the cell's display text against the raw, still-quoted formula source.
+    /// </summary>
+    private static string? ResolveCellValueTextThreshold(
+        ConditionalFormat cf,
+        Sheet sheet,
+        Workbook workbook,
+        CellAddress addr,
+        CfEvaluationContext cfContext)
+    {
+        if (TryResolveCellValueScalarThreshold(cf, CfThresholdFormulaSlot.CellValue1, sheet, workbook, addr, cfContext, out var scalar))
+            return GetString(scalar);
+
+        // No parsed formula cache entry (e.g. Value1 is null/blank) — fall back to the raw text,
+        // unwrapping an Excel quoted-string literal like "abc" to its literal content.
+        return UnquoteLiteral(cf.Value1);
+    }
+
+    private static string? UnquoteLiteral(string? text)
+    {
+        if (text is null)
+            return null;
+
+        if (text.Length >= 2 && text[0] == '"' && text[^1] == '"')
+            return text.Substring(1, text.Length - 2).Replace("\"\"", "\"");
+
+        return text;
     }
 
     private static bool TryResolveCellValueNumericThreshold(
@@ -416,7 +475,10 @@ internal static partial class ViewportConditionalFormatEvaluator
 
     private static DateTime StartOfWeek(DateTime date)
     {
-        var offset = (7 + (int)date.DayOfWeek - (int)DayOfWeek.Monday) % 7;
+        // Excel's cfRule timePeriod week formulas are WEEKDAY()-based with the default
+        // (Sunday=1) return type, so "this/last/next week" spans Sunday..Saturday, not
+        // the ISO Monday-start week.
+        var offset = (int)date.DayOfWeek - (int)DayOfWeek.Sunday;
         return date.AddDays(-offset).Date;
     }
 

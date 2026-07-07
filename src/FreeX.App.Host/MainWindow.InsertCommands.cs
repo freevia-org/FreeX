@@ -54,12 +54,13 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        var validation = SparklinePlanner.ValidateInsert(
+        // The Location field accepts either a single cell (one sparkline) or a multi-row/column range
+        // that expands into a sparkline group, matching Excel's "Insert Sparklines" dialog.
+        var validation = SparklinePlanner.ValidateInsertGroup(
             dialog.Result.DataRangeText,
             dialog.Result.LocationText,
             _currentSheetId,
-            out var dataRange,
-            out var location);
+            out var members);
         if (validation == SparklineInputValidation.InvalidDataRange)
         {
             ShowOwnedMessage(
@@ -70,7 +71,7 @@ public partial class MainWindow
             return;
         }
 
-        if (validation == SparklineInputValidation.InvalidLocation)
+        if (validation == SparklineInputValidation.InvalidLocation || members.Count == 0)
         {
             ShowOwnedMessage(
                 UiText.Get("MainWindowMessage_InsertSparklineInvalidLocation"),
@@ -81,15 +82,32 @@ public partial class MainWindow
         }
 
         var kind = dialog.Result.Kind;
+        var firstLocation = members[0].Location;
 
-        var fallbackLocationRange = new GridRange(location, location);
+        var fallbackLocationRange = new GridRange(firstLocation, firstLocation);
         var useDialogLocationForInitialInsert = true;
         IWorkbookCommand CreateCommand()
         {
-            var currentRange = useDialogLocationForInitialInsert
-                ? fallbackLocationRange
-                : SheetGrid.SelectedRange ?? fallbackLocationRange;
-            return new AddSparklineCommand(_currentSheetId, dataRange, currentRange.Start, kind);
+            // Every member of the group must share one nonzero GroupId so the group survives an
+            // XLSX round-trip as a single <x14:sparklineGroup>; a lone member is simplest left
+            // ungrouped (GroupId 0), matching an independently-inserted sparkline.
+            if (members.Count == 1)
+            {
+                var currentRange = useDialogLocationForInitialInsert
+                    ? fallbackLocationRange
+                    : SheetGrid.SelectedRange ?? fallbackLocationRange;
+                return new AddSparklineCommand(_currentSheetId, members[0].DataRange, currentRange.Start, kind);
+            }
+
+            var sheet = _workbook.GetSheet(_currentSheetId);
+            if (sheet is null)
+                return new AddSparklineCommand(_currentSheetId, members[0].DataRange, members[0].Location, kind);
+            var groupId = SparklineGroupIdAllocator.NextGroupId(sheet.Sparklines);
+            var commands = members
+                .Select(member => (IWorkbookCommand)new AddSparklineCommand(
+                    _currentSheetId, member.DataRange, member.Location, kind, groupId))
+                .ToList();
+            return new CompositeWorkbookCommand("Insert Sparkline", commands);
         }
 
         var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
@@ -104,8 +122,8 @@ public partial class MainWindow
         _repeatPostAction = null;
         InvalidateNavigationCaches();
 
-        SetActiveCell(location);
-        EnsureCellVisible(location);
+        SetActiveCell(firstLocation);
+        EnsureCellVisible(firstLocation);
         UpdateViewport();
     }
 
@@ -226,61 +244,25 @@ public partial class MainWindow
         return TryOpenHyperlink(selectedRange.Start);
     }
 
+    // O26: hyperlink 'Place in This Document' targets can be a bare defined name (no '!' /
+    // sheet qualifier) as well as a SheetName!CellRef address. Delegate to the shared
+    // WorkbookReferenceNavigator (the same helper the Name Box and the Avalonia shell's
+    // GoToReference use) so both a sheet-qualified cell ref AND a defined-name-only target
+    // resolve correctly, matching Excel and matching the Avalonia shell's behavior.
     private bool TryNavigateToWorkbookReference(string reference)
     {
-        if (!TryParseWorkbookReference(reference, out var sheetName, out var row, out var col))
+        if (!WorkbookReferenceNavigator.TryParseReferenceRange(
+                reference,
+                _currentSheetId,
+                name => _workbook.Sheets.FirstOrDefault(sheet =>
+                    string.Equals(sheet.Name, name, StringComparison.OrdinalIgnoreCase))?.Id,
+                _workbook.NamedRanges,
+                name => _workbook.TryGetNamedRange(name, _currentSheetId, out var scoped) ? scoped : null,
+                out var range))
             return false;
 
-        Sheet? sheet = null;
-        foreach (var candidate in _workbook.Sheets)
-        {
-            if (!string.Equals(candidate.Name, sheetName, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            sheet = candidate;
-            break;
-        }
-
-        if (sheet is null)
-            return false;
-
-        var address = new CellAddress(sheet.Id, row, col);
-        NavigateToCell(address);
+        NavigateToCell(range.Start);
         return true;
-    }
-
-    private static bool TryParseWorkbookReference(string reference, out string sheetName, out uint row, out uint col)
-    {
-        sheetName = "";
-        row = 0;
-        col = 0;
-
-        var trimmed = reference.Trim();
-        var bang = trimmed.LastIndexOf('!');
-        if (bang <= 0 || bang == trimmed.Length - 1)
-            return false;
-
-        sheetName = trimmed[..bang].Trim().Trim('\'').Replace("''", "'");
-        var cellText = trimmed[(bang + 1)..].Trim().TrimStart('$');
-        var letterCount = cellText.TakeWhile(char.IsLetter).Count();
-        if (letterCount == 0 || letterCount == cellText.Length)
-            return false;
-
-        var colText = cellText[..letterCount].Replace("$", "", StringComparison.Ordinal);
-        var rowText = cellText[letterCount..].TrimStart('$');
-        if (!uint.TryParse(rowText, out row) || row is < 1 or > CellAddress.MaxRow)
-            return false;
-
-        try
-        {
-            col = CellAddress.ColumnNameToNumber(colText);
-        }
-        catch
-        {
-            return false;
-        }
-
-        return col is >= 1 and <= CellAddress.MaxCol && sheetName.Length > 0;
     }
 
     private static HyperlinkTargetKind ToCoreHyperlinkTargetKind(HyperlinkLinkType linkType) =>

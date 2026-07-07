@@ -127,6 +127,7 @@ public static class DrawingInputParser
             NumberValue number => number.Value.ToString(CultureInfo.CurrentCulture),
             BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
             TextValue text => text.Value,
+            DateTimeValue dateTime => dateTime.Value.ToString(CultureInfo.CurrentCulture),
             ErrorValue error => error.Code,
             _ => value.ToString() ?? ""
         };

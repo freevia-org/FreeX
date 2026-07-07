@@ -72,7 +72,18 @@ public partial class MainWindow
         var viewport = SheetGrid.Viewport;
         if (viewport == null) return;
 
-        var text = ClipboardSerializer.Serialize(viewport, range);
+        // P41: SheetGrid.Viewport only materializes the on-screen scroll position (see
+        // ViewportService.Metrics BuildFrozenAwareRowMetrics, which stops once it has covered the
+        // visible height/width). Serializing/HTML-rendering directly off that viewport truncates
+        // any part of the copied range that falls outside the current scroll position to blank —
+        // both for the plain-text/CF_HTML clipboard payload placed on the OS clipboard for external
+        // paste, and would silently corrupt internal same-instance paste too if not for the
+        // clip.Cells fallback captured further below. Build a viewport request sized to the actual
+        // copied range instead, so external copy/paste (and CF_HTML) always reflects the full
+        // selection regardless of what is currently scrolled into view.
+        var fullRangeViewport = BuildFullRangeViewportForClipboard(range) ?? viewport;
+
+        var text = ClipboardSerializer.Serialize(fullRangeViewport, range);
         var sheetForHtml = _workbook.GetSheet(_currentSheetId);
         try
         {
@@ -82,7 +93,7 @@ public partial class MainWindow
             // display text, while anything HTML-unaware still gets the existing plain TSV text (M7).
             var data = new DataObject();
             data.SetText(text);
-            var html = BuildHtmlClipboardFragment(viewport, sheetForHtml, range, _workbook.Theme);
+            var html = BuildHtmlClipboardFragment(fullRangeViewport, sheetForHtml, range, _workbook.Theme);
             if (!string.IsNullOrEmpty(html))
                 data.SetData(System.Windows.DataFormats.Html, html);
             System.Windows.Clipboard.SetDataObject(data, copy: true);
@@ -101,7 +112,7 @@ public partial class MainWindow
         // Capture raw cells (including formulas) for paste formula adjustment
         var sheet = _workbook.GetSheet(_currentSheetId);
         var clipCells = new List<(CellAddress, Cell)>();
-        var pictureCells = CapturePictureCells(viewport, sheet, range);
+        var pictureCells = CapturePictureCells(fullRangeViewport, sheet, range);
         for (uint r = range.Start.Row; r <= range.End.Row; r++)
         {
             for (uint c = range.Start.Col; c <= range.End.Col; c++)
@@ -112,6 +123,50 @@ public partial class MainWindow
             }
         }
         _internalClipboard = new InternalClipboard(range, clipCells, pictureCells, text, isCut);
+    }
+
+    /// <summary>
+    /// Builds a <see cref="ViewportModel"/> that materializes every cell in <paramref name="range"/>,
+    /// independent of the current scroll position (P41). <see cref="SheetGrid"/>'s live viewport is
+    /// built from a <c>ViewportRequest</c> sized to the on-screen scroll area (see
+    /// <c>MainWindow.CreateViewport</c>/<c>ViewportService.Metrics.BuildFrozenAwareRowMetrics</c>,
+    /// which stops materializing rows/columns once it has covered that on-screen height/width) — a
+    /// selection extending past the visible viewport would otherwise serialize as blank for every
+    /// off-screen cell, both to the OS clipboard (plain text + CF_HTML) and to the internal picture
+    /// snapshot. Requesting a viewport whose top-left is the copied range's own start and whose
+    /// available height/width is sized (generously) to the range's own row/column span, mirroring
+    /// how <see cref="PrintRenderer.RenderWorksheet"/> requests a viewport sized to the print range
+    /// rather than the on-screen area, guarantees every cell in the range is present regardless of
+    /// what is currently scrolled into view. Returns null (falling back to the on-screen viewport)
+    /// if the current sheet cannot be resolved.
+    /// </summary>
+    private ViewportModel? BuildFullRangeViewportForClipboard(GridRange range)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return null;
+
+        // Generous per-row/per-column pixel bounds so the viewport's internal "stop materializing"
+        // heuristic (which walks actual row heights/column widths, not these estimates) always
+        // reaches past the end of the requested range even for tall rows / wide columns, while still
+        // being a small constant multiple of the range size rather than the whole sheet.
+        const double MaxPlausibleRowHeight = 500.0;
+        const double MaxPlausibleColWidth = 2000.0;
+
+        var rowSpan = (double)range.RowCount;
+        var colSpan = (double)range.ColCount;
+        var availableHeight = Math.Min(double.MaxValue / 2, (rowSpan + 2) * MaxPlausibleRowHeight);
+        var availableWidth = Math.Min(double.MaxValue / 2, (colSpan + 2) * MaxPlausibleColWidth);
+
+        var request = new ViewportRequest(
+            TopRow: range.Start.Row,
+            LeftCol: range.Start.Col,
+            AvailableHeight: availableHeight,
+            AvailableWidth: availableWidth,
+            IncludeObjects: false,
+            SplitPaneOffsets: null);
+
+        return _viewportService.GetViewport(_workbook, _currentSheetId, request);
     }
 
     private static List<(CellAddress Source, PictureCellSnapshot Snapshot)> CapturePictureCells(
@@ -172,8 +227,14 @@ public partial class MainWindow
         string? currentClipboardText = null;
         bool currentClipboardTextRead = false;
 
-        // If we have an internal clipboard (copied from within this app), use it with formula adjustment
-        if (_internalClipboard is { } clip)
+        // Paste Special > Text / Unicode Text (Excel semantics: paste the clipboard's plain text
+        // only, discarding any FreeX-internal formula/formatting payload) must always go through the
+        // external-clipboard plain-text path below, even right after an in-app copy where the OS
+        // clipboard text still matches the internal clipboard's text. Without this early bypass, the
+        // internal-clipboard branch below wins (its text-equality check can't tell "explicitly asked
+        // for text" from "clipboard unchanged") and silently performs a full formatted internal
+        // paste instead (review P44).
+        if (!externalTextAsText && _internalClipboard is { } clip)
         {
             currentClipboardText = TryGetClipboardText(out var clipboardReadFailed);
             currentClipboardTextRead = true;
@@ -330,7 +391,8 @@ public partial class MainWindow
                 _currentSheetId,
                 currentRange,
                 capturedRows,
-                preserveText: externalTextAsText);
+                preserveText: externalTextAsText,
+                options);
         }
 
         var fallbackOutcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateExternalPasteCommand);
@@ -848,6 +910,13 @@ public partial class MainWindow
         // Map merge-region anchor -> region, and mark covered (non-anchor) cells to skip, exactly
         // as HtmlTableWriter does for full-sheet HTML export, so a copied merged range keeps its
         // rowspan/colspan on paste into another app instead of splitting back into single cells.
+        //
+        // Unlike the full-sheet writer, a copied range can clip a merged region whose anchor
+        // (top-left cell) lies outside the copied range entirely (e.g. copy A2:B3 when A1:A3 is
+        // merged). In that case the true anchor is never visited, so we synthesize a clipped
+        // anchor at the top-left of the region's intersection with the range and span only the
+        // visible rows/cols, keeping every row's column count intact instead of silently dropping
+        // the covered cell's slot.
         var anchors = new Dictionary<(uint, uint), GridRange>();
         var covered = new HashSet<(uint, uint)>();
         if (sheet is not null)
@@ -857,11 +926,34 @@ public partial class MainWindow
                 if (!RangesOverlap(region, range))
                     continue;
 
-                anchors[(region.Start.Row, region.Start.Col)] = region;
-                foreach (var addr in region.AllCells())
+                var anchorInRange = region.Start.Row >= range.Start.Row && region.Start.Row <= range.End.Row &&
+                                     region.Start.Col >= range.Start.Col && region.Start.Col <= range.End.Col;
+                if (anchorInRange)
                 {
-                    if (addr.Row != region.Start.Row || addr.Col != region.Start.Col)
-                        covered.Add((addr.Row, addr.Col));
+                    anchors[(region.Start.Row, region.Start.Col)] = region;
+                    foreach (var addr in region.AllCells())
+                    {
+                        if (addr.Row != region.Start.Row || addr.Col != region.Start.Col)
+                            covered.Add((addr.Row, addr.Col));
+                    }
+                }
+                else
+                {
+                    // Clip the region to the copied range and treat the clipped top-left as a
+                    // synthetic anchor so the row/col slot is still filled with a spanning cell.
+                    var clippedStartRow = Math.Max(region.Start.Row, range.Start.Row);
+                    var clippedStartCol = Math.Max(region.Start.Col, range.Start.Col);
+                    var clippedEndRow = Math.Min(region.End.Row, range.End.Row);
+                    var clippedEndCol = Math.Min(region.End.Col, range.End.Col);
+                    var clippedRegion = new GridRange(
+                        new CellAddress(range.Start.Sheet, clippedStartRow, clippedStartCol),
+                        new CellAddress(range.Start.Sheet, clippedEndRow, clippedEndCol));
+                    anchors[(clippedStartRow, clippedStartCol)] = clippedRegion;
+                    foreach (var addr in clippedRegion.AllCells())
+                    {
+                        if (addr.Row != clippedStartRow || addr.Col != clippedStartCol)
+                            covered.Add((addr.Row, addr.Col));
+                    }
                 }
             }
         }

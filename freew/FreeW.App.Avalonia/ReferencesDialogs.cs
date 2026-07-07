@@ -153,6 +153,63 @@ internal sealed class CrossReferenceDialog : Window
     }
 }
 
+internal sealed class SourceConflictResolutionDialog : Window
+{
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+
+    private SourceManagementSourceConflictResolutionAction? _result;
+
+    private SourceConflictResolutionDialog(SourceManagementSourceConflict conflict)
+    {
+        var choices = SourceManagementDialogPlanner.BuildSourceConflictResolutionChoices(conflict);
+
+        Title = SourceManagementDialogPlanner.SourceConflictDialogTitle;
+        Width = 420;
+        SizeToContent = SizeToContent.Height;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        CanResize = false;
+        ShowInTaskbar = false;
+
+        var message = new TextBlock
+        {
+            Text = SourceManagementDialogPlanner.BuildSourceConflictMessage(conflict),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(16, 14, 16, 0),
+        };
+
+        var buttons = choices
+            .Select(choice => Button(choice.Label, () =>
+            {
+                _result = choice.Action;
+                Close();
+            }))
+            .Append(Button("Cancel", () => Close(), isCancel: true))
+            .ToArray();
+
+        var body = new StackPanel();
+        body.Children.Add(message);
+        body.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow(buttons, new Thickness(16, 12, 16, 14)));
+        Content = body;
+    }
+
+    public static async Task<SourceManagementSourceConflictResolutionAction?> AskAsync(
+        Window owner,
+        SourceManagementSourceConflict conflict)
+    {
+        var dialog = new SourceConflictResolutionDialog(conflict);
+        await dialog.ShowDialog(owner);
+        return dialog._result;
+    }
+
+    private static Button Button(string label, Action click, bool isDefault = false, bool isCancel = false)
+    {
+        var button = new Button { Content = label, IsDefault = isDefault, IsCancel = isCancel };
+        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 84, isDefault: isDefault);
+        button.Click += (_, _) => click();
+        return button;
+    }
+}
+
 internal sealed class CitationSourcePickerDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
@@ -358,7 +415,7 @@ internal sealed class SourceEntryDialog : Window
     private readonly ComboBox _typeBox = new() { MinWidth = 260 };
     private readonly Grid _grid = new() { Margin = new Thickness(16, 12, 16, 0) };
     private readonly Dictionary<SourceManagementSourceField, TextBox> _fields;
-    private readonly SourceManagementSourceEntry _initialEntry;
+    private SourceManagementSourceEntry _entryBaseline;
 
     public SourceManagementSourceEntry? Entry { get; private set; }
 
@@ -375,18 +432,10 @@ internal sealed class SourceEntryDialog : Window
 
         _typeChoices = SourceManagementDialogPlanner.BuildSourceTypeChoices();
         var entry = SourceManagementDialogPlanner.ProjectEntry(source);
-        _initialEntry = entry;
-        _fields = SourceManagementDialogPlanner.BuildEntryFieldPlans(entry).ToDictionary(plan => plan.Field, plan =>
-        {
-            var box = new TextBox
-            {
-                Text = plan.Text,
-                MinWidth = 260,
-                Margin = new Thickness(0, 6, 0, 0),
-            };
-            AvaloniaCompactDialogChrome.ApplyTextBox(box, DialogChromeStyle);
-            return box;
-        });
+        _entryBaseline = entry;
+        _fields = SourceManagementDialogPlanner
+            .BuildEntryFieldPlans(entry)
+            .ToDictionary(plan => plan.Field, plan => NewField(plan.Text));
 
         _typeBox.ItemsSource = _typeChoices.Select(choice => choice.Label).ToArray();
         _typeBox.SelectedIndex = SourceManagementDialogPlanner.SourceTypeSelectedIndex(entry.Type);
@@ -422,7 +471,27 @@ internal sealed class SourceEntryDialog : Window
         SourceManagementDialogPlanner.CreateEntry(
             SelectedType,
             _fields.ToDictionary(pair => pair.Key, pair => (string?)pair.Value.Text),
-            _initialEntry);
+            _entryBaseline);
+
+    private async Task EditPrimaryAuthorAsync()
+    {
+        var current = CurrentEntry();
+        var dialog = new SourceAuthorEditorDialog(current);
+        await dialog.ShowDialog(this);
+        if (dialog.State is null)
+            return;
+
+        _entryBaseline = SourceManagementDialogPlanner.ApplyPrimaryAuthorEditorState(current, dialog.State);
+        if (!_fields.TryGetValue(SourceManagementSourceField.Author, out var authorField))
+        {
+            authorField = NewField();
+            _fields[SourceManagementSourceField.Author] = authorField;
+        }
+
+        authorField.Text = _entryBaseline.Author;
+        RefreshFields();
+        authorField.Focus();
+    }
 
     private void RefreshFields()
     {
@@ -435,18 +504,51 @@ internal sealed class SourceEntryDialog : Window
         {
             if (!_fields.TryGetValue(plan.Field, out var field))
             {
-                field = new TextBox
-                {
-                    Text = plan.Text,
-                    MinWidth = 260,
-                    Margin = new Thickness(0, 6, 0, 0),
-                };
-                AvaloniaCompactDialogChrome.ApplyTextBox(field, DialogChromeStyle);
+                field = NewField(plan.Text);
                 _fields[plan.Field] = field;
             }
 
-            AddLabeledRow(_grid, row++, plan.Label, field);
+            AddLabeledRow(
+                _grid,
+                row++,
+                plan.Label,
+                plan.Field == SourceManagementSourceField.Author
+                    ? CreateAuthorField(field)
+                    : field);
         }
+    }
+
+    private Control CreateAuthorField(TextBox field)
+    {
+        var edit = new Button
+        {
+            Content = SourceManagementDialogPlanner.PrimaryAuthorEditorButtonLabel,
+            Margin = new Thickness(0, 6, 0, 0),
+        };
+        AvaloniaCompactDialogChrome.ApplyButton(edit, DialogChromeStyle, minWidth: 32);
+        ToolTip.SetTip(edit, SourceManagementDialogPlanner.PrimaryAuthorEditorButtonToolTip);
+        edit.Click += (_, _) => _ = EditPrimaryAuthorAsync();
+
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+        };
+        row.Children.Add(field);
+        row.Children.Add(edit);
+        return row;
+    }
+
+    private static TextBox NewField(string? value = null)
+    {
+        var box = new TextBox
+        {
+            Text = value ?? string.Empty,
+            MinWidth = 260,
+            Margin = new Thickness(0, 6, 0, 0),
+        };
+        AvaloniaCompactDialogChrome.ApplyTextBox(box, DialogChromeStyle);
+        return box;
     }
 
     private static void AddLabeledRow(Grid grid, int row, string label, Control field)
@@ -474,6 +576,185 @@ internal sealed class SourceEntryDialog : Window
         AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 84, isDefault: isDefault);
         button.Click += (_, _) => click();
         return button;
+    }
+}
+
+internal sealed class SourceAuthorEditorDialog : Window
+{
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+
+    private sealed record RowControls(
+        TextBox First,
+        TextBox Middle,
+        TextBox Last,
+        Grid Host);
+
+    public SourceManagementAuthorEditorState? State { get; private set; }
+
+    public SourceAuthorEditorDialog(SourceManagementSourceEntry entry)
+    {
+        var initial = SourceManagementDialogPlanner.ProjectPrimaryAuthorEditorState(entry);
+        var rowControls = new List<RowControls>();
+
+        Title = SourceManagementDialogPlanner.PrimaryAuthorEditorTitle;
+        Width = 460;
+        SizeToContent = SizeToContent.Height;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        CanResize = false;
+        ShowInTaskbar = false;
+
+        var personalMode = new RadioButton
+        {
+            Content = SourceManagementDialogPlanner.PersonalAuthorModeLabel,
+            GroupName = "PrimaryAuthorMode",
+            IsChecked = initial.Mode == SourceManagementAuthorEditorMode.Personal,
+            Margin = new Thickness(0, 0, 0, 6),
+        };
+        var corporateMode = new RadioButton
+        {
+            Content = SourceManagementDialogPlanner.CorporateAuthorModeLabel,
+            GroupName = "PrimaryAuthorMode",
+            IsChecked = initial.Mode == SourceManagementAuthorEditorMode.Corporate,
+            Margin = new Thickness(0, 8, 0, 6),
+        };
+        AvaloniaCompactDialogChrome.ApplyRadioButton(personalMode, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyRadioButton(corporateMode, DialogChromeStyle);
+
+        var peoplePanel = new StackPanel { Margin = new Thickness(18, 0, 0, 0) };
+        var rowsPanel = new StackPanel();
+        var corporateLabel = new TextBlock
+        {
+            Text = SourceManagementDialogPlanner.CorporateAuthorLabel,
+            Margin = new Thickness(18, 0, 0, 4),
+        };
+        var corporateBox = NewAuthorTextBox(initial.CorporateAuthor, minWidth: 360);
+
+        void AddPersonRow(SourceManagementAuthorPersonRow row)
+        {
+            var grid = CreatePersonRowGrid();
+            var first = NewAuthorTextBox(row.First);
+            var middle = NewAuthorTextBox(row.Middle);
+            var last = NewAuthorTextBox(row.Last, minWidth: 140);
+            AddGridChild(grid, first, 0);
+            AddGridChild(grid, middle, 1);
+            AddGridChild(grid, last, 2);
+            rowsPanel.Children.Add(grid);
+            rowControls.Add(new RowControls(first, middle, last, grid));
+        }
+
+        void RemovePersonRow()
+        {
+            if (rowControls.Count <= 1)
+            {
+                rowControls[0].First.Text = string.Empty;
+                rowControls[0].Middle.Text = string.Empty;
+                rowControls[0].Last.Text = string.Empty;
+                return;
+            }
+
+            var last = rowControls[^1];
+            rowsPanel.Children.Remove(last.Host);
+            rowControls.RemoveAt(rowControls.Count - 1);
+        }
+
+        void RefreshMode()
+        {
+            var personal = personalMode.IsChecked == true;
+            peoplePanel.IsEnabled = personal;
+            corporateLabel.IsEnabled = !personal;
+            corporateBox.IsEnabled = !personal;
+        }
+
+        IReadOnlyList<SourceManagementAuthorPersonRow> initialRows = initial.PersonalRows.Count == 0
+            ? [new SourceManagementAuthorPersonRow(string.Empty, string.Empty, string.Empty)]
+            : initial.PersonalRows;
+        foreach (var row in initialRows)
+        {
+            AddPersonRow(row);
+        }
+
+        var header = CreatePersonRowGrid();
+        AddGridChild(header, NewHeader(SourceManagementDialogPlanner.AuthorFirstNameLabel), 0);
+        AddGridChild(header, NewHeader(SourceManagementDialogPlanner.AuthorMiddleNameLabel), 1);
+        AddGridChild(header, NewHeader(SourceManagementDialogPlanner.AuthorLastNameLabel), 2);
+        peoplePanel.Children.Add(header);
+        peoplePanel.Children.Add(rowsPanel);
+
+        var addRow = Button(SourceManagementDialogPlanner.AddAuthorRowButtonLabel, () =>
+            AddPersonRow(new SourceManagementAuthorPersonRow(string.Empty, string.Empty, string.Empty)));
+        var removeRow = Button(SourceManagementDialogPlanner.RemoveAuthorRowButtonLabel, RemovePersonRow);
+        peoplePanel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow(
+            [addRow, removeRow],
+            new Thickness(0, 4, 0, 0)));
+
+        personalMode.Click += (_, _) => RefreshMode();
+        corporateMode.Click += (_, _) => RefreshMode();
+
+        var ok = Button("OK", () =>
+        {
+            var mode = corporateMode.IsChecked == true
+                ? SourceManagementAuthorEditorMode.Corporate
+                : SourceManagementAuthorEditorMode.Personal;
+            State = SourceManagementDialogPlanner.NormalizePrimaryAuthorEditorState(
+                new SourceManagementAuthorEditorState(
+                    mode,
+                    rowControls.Select(row => new SourceManagementAuthorPersonRow(
+                        row.First.Text ?? string.Empty,
+                        row.Middle.Text ?? string.Empty,
+                        row.Last.Text ?? string.Empty)).ToArray(),
+                    corporateBox.Text ?? string.Empty));
+            Close();
+        }, isDefault: true);
+        var cancel = Button("Cancel", () => Close(), isCancel: true);
+
+        var body = new StackPanel { Margin = new Thickness(16) };
+        body.Children.Add(personalMode);
+        body.Children.Add(peoplePanel);
+        body.Children.Add(corporateMode);
+        body.Children.Add(corporateLabel);
+        body.Children.Add(corporateBox);
+        body.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 14, 0, 0)));
+        Content = body;
+
+        RefreshMode();
+    }
+
+    private static Grid CreatePersonRowGrid()
+    {
+        var grid = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
+        return grid;
+    }
+
+    private static TextBlock NewHeader(string text) =>
+        new() { Text = text, Margin = new Thickness(0, 0, 6, 2) };
+
+    private static TextBox NewAuthorTextBox(string? text, double minWidth = 104)
+    {
+        var box = new TextBox
+        {
+            Text = text ?? string.Empty,
+            MinWidth = minWidth,
+            Margin = new Thickness(0, 0, 6, 0),
+        };
+        AvaloniaCompactDialogChrome.ApplyTextBox(box, DialogChromeStyle);
+        return box;
+    }
+
+    private static Button Button(string label, Action click, bool isDefault = false, bool isCancel = false)
+    {
+        var button = new Button { Content = label, IsDefault = isDefault, IsCancel = isCancel };
+        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 72, isDefault: isDefault);
+        button.Click += (_, _) => click();
+        return button;
+    }
+
+    private static void AddGridChild(Grid grid, Control child, int column)
+    {
+        Grid.SetColumn(child, column);
+        grid.Children.Add(child);
     }
 }
 
@@ -520,8 +801,8 @@ internal sealed class ManageSourcesDialog : Window
                 Button("Delete", DeleteMaster)
             ]);
 
-        var copy = Button("Copy ->", CopyMasterToCurrent);
-        var copyBack = Button("Copy <-", CopyCurrentToMaster);
+        var copy = Button("Copy ->", () => _ = CopyMasterToCurrentAsync());
+        var copyBack = Button("Copy <-", () => _ = CopyCurrentToMasterAsync());
         var centerPane = new StackPanel
         {
             VerticalAlignment = VerticalAlignment.Center,
@@ -598,24 +879,22 @@ internal sealed class ManageSourcesDialog : Window
         RefreshMasterList(plan.SelectedIndex);
     }
 
-    private void CopyMasterToCurrent()
+    private async Task CopyMasterToCurrentAsync()
     {
         var plan = SourceManagementDialogPlanner.CopyMasterToCurrent(
             _state,
             _masterList.SelectedIndex,
             _currentList.SelectedIndex);
-        _state = plan.State;
-        RefreshCurrentList(plan.SelectedIndex);
+        await ApplyCopyPlanAsync(plan, selectedIndex => RefreshCurrentList(selectedIndex));
     }
 
-    private void CopyCurrentToMaster()
+    private async Task CopyCurrentToMasterAsync()
     {
         var plan = SourceManagementDialogPlanner.CopyCurrentToMaster(
             _state,
             _currentList.SelectedIndex,
             _masterList.SelectedIndex);
-        _state = plan.State;
-        RefreshMasterList(plan.SelectedIndex);
+        await ApplyCopyPlanAsync(plan, selectedIndex => RefreshMasterList(selectedIndex));
     }
 
     private async Task AddCurrentAsync()
@@ -681,6 +960,26 @@ internal sealed class ManageSourcesDialog : Window
         _status.Text = validation.Message;
         _status.IsVisible = true;
         return false;
+    }
+
+    private async Task<bool> ApplyCopyPlanAsync(SourceManagementListMutationPlan plan, Action<int?> refresh)
+    {
+        if (plan.Conflict is not null)
+        {
+            var action = await SourceConflictResolutionDialog.AskAsync(this, plan.Conflict);
+            if (action is null)
+                return false;
+
+            plan = SourceManagementDialogPlanner.ResolveSourceConflict(
+                _state,
+                plan.Conflict,
+                action.Value);
+        }
+
+        _state = plan.State;
+        refresh(plan.SelectedIndex);
+        _status.IsVisible = false;
+        return true;
     }
 
     private void RefreshMasterList(int? selectedIndex = null)

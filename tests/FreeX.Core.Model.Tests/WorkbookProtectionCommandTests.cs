@@ -17,7 +17,10 @@ public sealed class WorkbookProtectionCommandTests
 
         command.Apply(ctx).Success.Should().BeTrue();
         wb.IsStructureProtected.Should().BeTrue();
-        wb.StructureProtectionPassword.Should().Be("secret");
+        // N57: ProtectWorkbookCommand hashes the typed password at Apply-time instead of storing
+        // it raw, so verify the stored value round-trips via the helper rather than equals plaintext.
+        wb.StructureProtectionPassword.Should().NotBe("secret");
+        ProtectionPasswordHelper.VerifyStoredPassword(wb.StructureProtectionPassword, "secret").Should().BeTrue();
 
         command.Revert(ctx);
 

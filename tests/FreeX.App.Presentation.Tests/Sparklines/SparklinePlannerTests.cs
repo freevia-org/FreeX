@@ -23,13 +23,16 @@ public sealed class SparklinePlannerTests
         File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "SparklineDialogPlanner.cs"))
             .Should()
             .BeFalse("WPF host should use the shared SparklinePlanner instead of carrying a renderer-local facade");
+        // Round-8 finding N7: the host now validates through the group-aware entry point so a
+        // multi-cell Location Range (Excel's "Insert Sparklines" multi-series dialog) expands into
+        // one sparkline per row/column instead of being rejected as a single-cell-only location.
         File.ReadAllText(hostDialogPath)
             .Should()
             .Contain("SparklinePlanner.CreateDialogResult")
             .And
             .Contain("SparklinePlanner.CreateRangeSelectionRequest")
             .And
-            .Contain("SparklinePlanner.ValidateDialogInputs")
+            .Contain("SparklinePlanner.ValidateInsertGroup")
             .And
             .NotContain("public sealed record SparklineDialogResult")
             .And

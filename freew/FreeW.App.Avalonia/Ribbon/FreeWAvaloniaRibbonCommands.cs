@@ -133,9 +133,15 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.multilevel-list", new ActionRibbonCommand(() => ApplyMultiLevelList(editor)));
         r.Register("freew.multilevel-demote", new ActionRibbonCommand(() => ChangeListLevel(editor, demote: true)));
         r.Register("freew.multilevel-promote", new ActionRibbonCommand(() => ChangeListLevel(editor, demote: false)));
-        r.Register("freew.multilevel-preset-0", new ActionRibbonCommand(editor.ApplyMultiLevelListToSelection));
-        r.Register("freew.multilevel-preset-1", new ActionRibbonCommand(editor.ApplyMultiLevelListToSelection));
-        r.Register("freew.multilevel-preset-2", new ActionRibbonCommand(editor.ApplyMultiLevelHeadingPreset));
+        r.Register("freew.multilevel-preset-0", new ActionRibbonCommand(() =>
+            ApplyMultiLevelPreset(editor, MultiLevelListFormat.DecimalNumberFormats)));
+        r.Register("freew.multilevel-preset-1", new ActionRibbonCommand(() =>
+            ApplyMultiLevelPreset(editor, MultiLevelListFormat.DecimalLowerLetterLowerRomanNumberFormats)));
+        r.Register("freew.multilevel-preset-2", new ActionRibbonCommand(() =>
+        {
+            editor.ApplyMultiLevelHeadingPreset();
+            editor.ApplyMultiLevelNumberFormats(MultiLevelListFormat.DecimalNumberFormats);
+        }));
         r.Register("freew.multilevel-define", new ActionRibbonCommand(() =>
         {
             editor.ApplyMultiLevelListToSelection();
@@ -237,6 +243,12 @@ internal static class FreeWAvaloniaRibbonCommands
         // Header / Footer — enable the page-margin region (render-ready). Region caret editing deferred.
         r.Register("freew.header", new ActionRibbonCommand(editor.EnsureHeader));
         r.Register("freew.footer", new ActionRibbonCommand(editor.EnsureFooter));
+        r.Register("freew.page-number", new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)));
+        r.Register("freew.page-number-top", new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: false)));
+        r.Register("freew.page-number-bottom", new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)));
+        r.Register("freew.page-number-current", new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.PageNumber)));
+        r.Register("freew.page-number-format", new ContextRibbonCommand(
+            context => ExecutePageNumberFormat(editor, callbacks, context)));
         r.Register("freew.datetime", new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.Date)));
         RegisterHeaderFooterCommands(r, editor);
 
@@ -520,6 +532,13 @@ internal static class FreeWAvaloniaRibbonCommands
     {
         if (editor.GetCaretFormatting().Paragraph.ListKind != ListKind.MultiLevel)
             editor.ApplyMultiLevelListToSelection();
+        editor.ApplyMultiLevelNumberFormats(MultiLevelListFormat.DecimalNumberFormats);
+    }
+
+    private static void ApplyMultiLevelPreset(DocumentView editor, IReadOnlyList<ListNumberFormat> numberFormats)
+    {
+        editor.ApplyMultiLevelListToSelection();
+        editor.ApplyMultiLevelNumberFormats(numberFormats);
     }
 
     private static void ChangeListLevel(DocumentView editor, bool demote)
@@ -608,6 +627,20 @@ internal static class FreeWAvaloniaRibbonCommands
     {
         if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var points))
             apply(points);
+    }
+
+    private static void ExecutePageNumberFormat(
+        DocumentView editor,
+        RibbonHostCallbacks callbacks,
+        RibbonCommandContext context)
+    {
+        if (PageNumberFormatDialogPlanner.TryBuildResultFromCommandValue(context.SelectedValue, out var result))
+        {
+            editor.ApplyPageNumberFormat(result);
+            return;
+        }
+
+        callbacks.OpenPageNumberFormatDialog?.Invoke();
     }
 
     private enum ColumnsPreset
@@ -1041,6 +1074,7 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.insert-caption", caption);
         r.Register("freew.insert-caption.figure", new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Figure)));
         r.Register("freew.insert-caption.table",  new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Table)));
+        r.Register("freew.insert-caption.equation", new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Equation)));
 
         // Dialog-backed commands no-op without a shell callback instead of silently choosing defaults.
         r.Register("freew.cross-reference", new ActionRibbonCommand(callbacks.OpenCrossReferenceDialog ?? (() => { })));
@@ -1053,7 +1087,13 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.bibliography", new ActionRibbonCommand(editor.InsertBibliography));
 
         r.Register("freew.tof", new ActionRibbonCommand(() => editor.InsertTableOfFigures()));
+        r.Register("freew.tof.figure", new ActionRibbonCommand(() => editor.InsertTableOfFigures(CaptionLabel.Figure)));
+        r.Register("freew.tof.table", new ActionRibbonCommand(() => editor.InsertTableOfFigures(CaptionLabel.Table)));
+        r.Register("freew.tof.equation", new ActionRibbonCommand(() => editor.InsertTableOfFigures(CaptionLabel.Equation)));
         r.Register("freew.tof-refresh", new ActionRibbonCommand(() => editor.RefreshTableOfFigures()));
+        r.Register("freew.tof-refresh.figure", new ActionRibbonCommand(() => editor.RefreshTableOfFigures(CaptionLabel.Figure)));
+        r.Register("freew.tof-refresh.table", new ActionRibbonCommand(() => editor.RefreshTableOfFigures(CaptionLabel.Table)));
+        r.Register("freew.tof-refresh.equation", new ActionRibbonCommand(() => editor.RefreshTableOfFigures(CaptionLabel.Equation)));
         r.Register("freew.index-mark", new ActionRibbonCommand(() => editor.MarkIndexEntry()));
         r.Register("freew.index-insert", new ActionRibbonCommand(editor.InsertIndex));
         r.Register("freew.index-refresh", new ActionRibbonCommand(editor.RefreshIndex));

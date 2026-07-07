@@ -281,6 +281,22 @@ public sealed class HomeDialogDepthTests
         MultilevelListDialog.Presets.Select(p => p.Name).Should().OnlyHaveUniqueItems();
     }
 
+    [StaFact]
+    public void MultilevelListDialog_OutlineLetterRomanPresetSetsNumberFormats()
+    {
+        var doc = DocOfParagraphs("Outline");
+        var view = ViewWith(doc);
+        SelectAllParagraphs(view);
+
+        MultilevelListDialog.Presets[1].Apply(view);
+
+        doc.MultiLevelList.NumberFormats.Take(3).Should().Equal(
+            ListNumberFormat.Decimal,
+            ListNumberFormat.LowerLetter,
+            ListNumberFormat.LowerRoman);
+        doc.Paragraphs.Single().Formatting.ListKind.Should().Be(ListKind.MultiLevel);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     // Collect all command ids from a control's menu (if it has one), recursively.

@@ -1,5 +1,8 @@
 using System.Linq;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.DocumentView;
+using WpfFloater = System.Windows.Documents.Floater;
+using WpfParagraph = System.Windows.Documents.Paragraph;
 
 namespace FreeW.App.Host.Tests;
 
@@ -58,6 +61,58 @@ public sealed class FloatingImageRenderTests
         return doc;
     }
 
+    private static TextDocument DocWithFloatingText(
+        ImageWrapping wrapping,
+        out InlineImage image,
+        double hOffPt = 36,
+        double vOffPt = 18,
+        HorizontalAnchor hAnchor = HorizontalAnchor.Margin,
+        VerticalAnchor vAnchor = VerticalAnchor.Page)
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("before "));
+        image = new InlineImage(MinimalPng(), widthPt: 72, heightPt: 54)
+        {
+            Wrapping = wrapping,
+            HorizontalOffsetPt = hOffPt,
+            VerticalOffsetPt = vOffPt,
+            HorizontalAnchor = hAnchor,
+            VerticalAnchor = vAnchor,
+            ZOrderIndex = 3,
+        };
+        para.Runs.Add(Run.FromImage(image));
+        para.Runs.Add(new Run(" after"));
+        doc.Blocks.Add(para);
+        return doc;
+    }
+
+    private static TextDocument DocWithFloatingShapeText(out Shape shape)
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("before "));
+        shape = new Shape(ShapeKind.Rectangle, 72, 36)
+        {
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.Square,
+                HorizontalOffsetPt = 36,
+                VerticalOffsetPt = 18,
+                ZOrderIndex = 5,
+            },
+        };
+        para.Runs.Add(Run.FromShape(shape));
+        para.Runs.Add(new Run(" after"));
+        doc.Blocks.Add(para);
+        return doc;
+    }
+
+    private static WpfParagraph RenderedParagraph(DocumentView view) =>
+        view.Document.Blocks.OfType<WpfParagraph>().Single();
+
     // ── Floating image round-trip ─────────────────────────────────────────────────────────────────
 
     [StaFact]
@@ -79,6 +134,155 @@ public sealed class FloatingImageRenderTests
         image.HorizontalAnchor.Should().Be(HorizontalAnchor.Margin);
         image.VerticalAnchor.Should().Be(VerticalAnchor.Page);
         image.ZOrderIndex.Should().Be(3);
+    }
+
+    [StaFact]
+    public void FloatingImage_WrapModesProduceReservationAndSurviveCommitInOrder()
+    {
+        foreach (var wrapping in new[] { ImageWrapping.Square, ImageWrapping.Tight, ImageWrapping.TopAndBottom })
+        {
+            var doc = DocWithFloatingText(wrapping, out var originalImage);
+            var view = new DocumentView();
+            view.LoadModel(doc);
+
+            var floater = RenderedParagraph(view).Inlines.OfType<WpfFloater>().Single();
+            floater.Tag.Should().NotBeNull();
+            if (wrapping == ImageWrapping.TopAndBottom)
+            {
+                floater.Width.Should().BeApproximately(
+                    DocumentViewLayoutPlanner.BuildPageMetrics(doc.Page).ContentWidthDip,
+                    0.01);
+            }
+            else
+            {
+                floater.Width.Should().BeApproximately(96, 0.01);
+            }
+
+            view.CommitToModel();
+
+            var committed = (Paragraph)view.Model.Blocks[0];
+            committed.Runs.Should().HaveCount(3);
+            committed.Runs[0].Text.Should().Be("before ");
+            committed.Runs[1].Image.Should().BeSameAs(originalImage);
+            committed.Runs[1].Image!.Wrapping.Should().Be(wrapping);
+            committed.Runs[2].Text.Should().Be(" after");
+        }
+    }
+
+    [StaFact]
+    public void FloatingImage_WrapReservationsHaveSharedLinePlanEvidence()
+    {
+        foreach (var wrapping in new[] { ImageWrapping.Square, ImageWrapping.Tight, ImageWrapping.TopAndBottom })
+        {
+            var doc = DocWithFloatingText(
+                wrapping,
+                out _,
+                hOffPt: 0,
+                vOffPt: 0,
+                hAnchor: HorizontalAnchor.Column,
+                vAnchor: VerticalAnchor.Paragraph);
+            var view = new DocumentView();
+            view.LoadModel(doc);
+
+            RenderedParagraph(view).Inlines.OfType<WpfFloater>()
+                .Should()
+                .ContainSingle("WPF must consume the shared wrap reservation instead of overlay-only rendering");
+
+            var surface = DocumentViewLayoutPlanner.BuildFloatingOverlaySurfacePlan(
+                doc.Page,
+                printLayout: view.PrintLayoutEnabled,
+                plainInsetDip: 48);
+            var snapshots = DocumentViewLayoutPlanner.BuildFloatingObjectSnapshots(
+                doc,
+                surface,
+                columnCount: 1);
+            var zones = DocumentViewLayoutPlanner.BuildFloatingWrapExclusionZones(snapshots);
+            var zone = zones.Single();
+            var linePlan = DocumentViewLayoutPlanner.BuildFloatingTextWrapLinePlan(
+                zones,
+                surface,
+                currentContentYDip: 0,
+                lineContentYDip: 0,
+                lineHeightDip: 18,
+                contentLeftDip: surface.ContentLeftDip,
+                columnCount: 1,
+                columnWidthDip: surface.ContentWidthDip,
+                columnGapDip: 0,
+                baseTextWidthDip: surface.ContentWidthDip);
+
+            if (wrapping == ImageWrapping.TopAndBottom)
+            {
+                linePlan.HasTopAndBottomAdvance.Should().BeTrue();
+                linePlan.PageSpaceYDip.Should().BeGreaterThanOrEqualTo(zone.Rect.BottomDip);
+            }
+            else
+            {
+                linePlan.HasLateralExclusion.Should().BeTrue();
+                linePlan.TextLeftDip().Should().BeGreaterThan(zone.Rect.RightDip);
+                linePlan.TextRightDip().Should().BeLessThanOrEqualTo(
+                    surface.ContentLeftDip + surface.ContentWidthDip);
+            }
+        }
+    }
+
+    [StaFact]
+    public void FloatingImage_BehindAndInFrontDoNotReserveButSurviveCommitInOrder()
+    {
+        foreach (var wrapping in new[] { ImageWrapping.Behind, ImageWrapping.InFront })
+        {
+            var doc = DocWithFloatingText(wrapping, out var originalImage);
+            var view = new DocumentView();
+            view.LoadModel(doc);
+
+            RenderedParagraph(view).Inlines.OfType<WpfFloater>().Should().BeEmpty();
+
+            view.CommitToModel();
+
+            var committed = (Paragraph)view.Model.Blocks[0];
+            committed.Runs.Should().HaveCount(3);
+            committed.Runs[0].Text.Should().Be("before ");
+            committed.Runs[1].Image.Should().BeSameAs(originalImage);
+            committed.Runs[1].Image!.Wrapping.Should().Be(wrapping);
+            committed.Runs[2].Text.Should().Be(" after");
+        }
+    }
+
+    [StaFact]
+    public void FloatingImage_WrapReservationInsideHyperlinkSurvivesCommit()
+    {
+        var doc = DocWithFloatingText(ImageWrapping.Square, out var originalImage);
+        var imageRun = ((Paragraph)doc.Blocks[0]).Runs[1];
+        imageRun.HyperlinkUrl = "https://example.com/floating";
+        imageRun.HyperlinkTooltip = "floating tip";
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.CommitToModel();
+
+        var committed = (Paragraph)view.Model.Blocks[0];
+        committed.Runs.Should().HaveCount(3);
+        committed.Runs[1].Image.Should().BeSameAs(originalImage);
+        committed.Runs[1].HyperlinkUrl.Should().Be("https://example.com/floating");
+        committed.Runs[1].HyperlinkTooltip.Should().Be("floating tip");
+    }
+
+    [StaFact]
+    public void FloatingShape_SquareProducesReservationAndSurvivesCommitInOrder()
+    {
+        var doc = DocWithFloatingShapeText(out var originalShape);
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        RenderedParagraph(view).Inlines.OfType<WpfFloater>().Should().ContainSingle();
+
+        view.CommitToModel();
+
+        var committed = (Paragraph)view.Model.Blocks[0];
+        committed.Runs.Should().HaveCount(3);
+        committed.Runs[0].Text.Should().Be("before ");
+        committed.Runs[1].Shape.Should().BeSameAs(originalShape);
+        committed.Runs[1].Shape!.Placement!.Wrapping.Should().Be(ImageWrapping.Square);
+        committed.Runs[2].Text.Should().Be(" after");
     }
 
     [StaFact]

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -140,6 +141,8 @@ public partial class MainWindow
         var layout = FormulaInlineEditorLayoutPlanner.Create(cx, cy, cellW, cellH);
 
         _inlineEditor.Text = text;
+        AutomationProperties.SetAutomationId(_inlineEditor, "WorksheetInlineCellEditor");
+        AutomationProperties.SetName(_inlineEditor, UiText.Format("MainWindow_AutomationName_InlineCellEditorFormat", FormatCellReference(addr)));
         _inlineEditorChromeBaseRect = layout.EditorRect;
         ApplyInlineEditorChromeFrame(FormulaInlineEditorOverflow.None);
 
@@ -838,12 +841,14 @@ public partial class MainWindow
 
     // Sheet-scope-aware Name Box reference resolution, matching formula evaluation's precedence
     // (Workbook.TryGetNamedRange(name, contextSheetId, ...): sheet-scoped names on the active sheet
-    // take precedence over a same-named workbook-global name).
+    // take precedence over a same-named workbook-global name). Also resolves cross-sheet references
+    // typed as SheetName!A1 (matching the Avalonia shell's TryParseCellAddressBoxReferenceRange).
     private bool TryParseNameBoxReferenceRange(string text, out GridRange range) =>
         WorkbookReferenceNavigator.TryParseReferenceRange(
             text,
             _currentSheetId,
-            static _ => null,
+            name => _workbook.Sheets.FirstOrDefault(sheet =>
+                string.Equals(sheet.Name, name, StringComparison.OrdinalIgnoreCase))?.Id,
             _workbook.NamedRanges,
             name => _workbook.TryGetNamedRange(name, _currentSheetId, out var scoped) ? scoped : null,
             out range);

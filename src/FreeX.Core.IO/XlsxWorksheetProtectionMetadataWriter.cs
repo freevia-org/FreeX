@@ -85,6 +85,12 @@ internal static class XlsxWorksheetProtectionMetadataWriter
 
             XlsxWorksheetProtectionNormalizer.NormalizeElement(protection);
 
+            // The modern ISO 29500 hash quartet (algorithmName/hashValue/saltValue/spinCount) only
+            // ever reaches this element via the preserved ProtectionMetadata bag applied above.
+            // ProtectSheetCommand/UnprotectSheetCommand clear sheet.ProtectionMetadata whenever the
+            // password changes (see SheetProtectionCommands.cs), so a hashValue surviving to this
+            // point is always the still-current verifier for the sheet's current password -- never a
+            // stale one left behind by a since-superseded password.
             var hasAdvancedHash = protection.Attribute("hashValue") is not null;
             if (hasAdvancedHash)
             {

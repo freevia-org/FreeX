@@ -697,6 +697,7 @@ public partial class GridView
         grid.ClearDrawingObjectLayerCache();
         grid.RefreshCommentPreviewAfterViewportChanged();
         grid.RefreshPinnedNoteBoxes();
+        grid.NotifyViewportAutomationChanged();
     }
 
     private static void OnSelectionVisualPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)

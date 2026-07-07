@@ -13,6 +13,8 @@ internal static partial class RowColumnShiftHelpers
             CaptureUIntSet(sheet.GroupHiddenRows),
             CaptureUIntSet(sheet.GroupHiddenCols),
             CaptureList(sheet.AllowEditRanges),
+            CaptureAllowEditRangePasswords(sheet),
+            CaptureAllowEditRangeUnlocked(sheet),
             sheet.PrintTitleRows,
             sheet.PrintTitleColumns,
             ClonePageBreaksMetadata(sheet.RowPageBreaksMetadata),
@@ -29,11 +31,12 @@ internal static partial class RowColumnShiftHelpers
             CaptureDrawingShapes(sheet),
             CapturePictures(sheet),
             CaptureSparklines(sheet),
-            CapturePivotTables(sheet),
+            CapturePivotTables(workbook),
             CaptureList(sheet.StructuredTables),
             CapturePivotCaches(workbook),
             CaptureList(workbook.Scenarios),
-            CaptureFormControls(sheet));
+            CaptureFormControls(sheet),
+            CaptureCrossSheetFormControlRefs(workbook, sheet));
 
     private static IReadOnlyList<StyleOnlyEntry> CaptureStyleOnlyEntries(Sheet sheet)
     {
@@ -55,6 +58,17 @@ internal static partial class RowColumnShiftHelpers
 
     private static IReadOnlyList<T> CaptureList<T>(IReadOnlyCollection<T> source) =>
         source.Count == 0 ? [] : [.. source];
+
+    // M42: AllowEditRangePasswords/UnlockedAllowEditRanges are parallel state to AllowEditRanges,
+    // keyed by the exact GridRange stored there (see Sheet.AllowEditRangePasswords doc comment).
+    // They must be captured/shifted/restored alongside AllowEditRanges itself so a row/column
+    // insert/delete never orphans a range's password (or its per-session unlock) under the old,
+    // now-stale GridRange key.
+    private static IReadOnlyList<KeyValuePair<GridRange, string?>> CaptureAllowEditRangePasswords(Sheet sheet) =>
+        sheet.AllowEditRangePasswords.Count == 0 ? [] : [.. sheet.AllowEditRangePasswords];
+
+    private static IReadOnlyList<GridRange> CaptureAllowEditRangeUnlocked(Sheet sheet) =>
+        sheet.UnlockedAllowEditRanges.Count == 0 ? [] : [.. sheet.UnlockedAllowEditRanges];
 
     private static IReadOnlyList<TextBoxAddressSnapshot> CaptureTextBoxes(Sheet sheet)
     {
@@ -88,11 +102,20 @@ internal static partial class RowColumnShiftHelpers
         var snapshots = new List<PictureAddressSnapshot>(sheet.Pictures.Count);
         foreach (var picture in sheet.Pictures)
         {
+            // P23: a same-sheet linked picture's rendered grid geometry (SourceRowCount/
+            // SourceColumnCount) and cached cell snapshot (Cells) get rewritten in place by
+            // RefreshLinkedPictureSnapshot whenever a structural edit lands inside its
+            // LinkedSourceRange (see ShiftPictures below). Snapshot them here too — alongside
+            // the range/anchor fields already captured — so RestoreAddressBearingState can put
+            // the picture's whole rendered state back on undo, not just its addressing.
             snapshots.Add(new PictureAddressSnapshot(
                 picture,
                 picture.Anchor,
                 picture.LinkedSourceRange,
-                picture.IsLinkedToSourceRange));
+                picture.IsLinkedToSourceRange,
+                picture.SourceRowCount,
+                picture.SourceColumnCount,
+                [.. picture.Cells]));
         }
 
         return snapshots;
@@ -122,16 +145,88 @@ internal static partial class RowColumnShiftHelpers
         return snapshots;
     }
 
-    private static IReadOnlyList<PivotTableAddressSnapshot> CapturePivotTables(Sheet sheet)
+    // P83: a form control's LinkedCell/ListFillRange can explicitly point at a *different* sheet
+    // than the one hosting the control (e.g. a checkbox on Sheet2 with LinkedCell "Sheet1!$A$5" —
+    // cross-sheet linked cells are supported, see FormControlInteractionService.TryResolveLinkedCell).
+    // CaptureFormControls/ShiftFormControls above only ever see the single sheet being structurally
+    // edited, so a control hosted elsewhere that references the edited sheet never gets its string
+    // ref rewritten. Capture those workbook-wide (excluding the edited sheet, which the per-sheet
+    // pass above already owns) so ShiftCrossSheetFormControlRefs can fix them up too.
+    private static IReadOnlyList<CrossSheetFormControlRefSnapshot> CaptureCrossSheetFormControlRefs(
+        Workbook workbook,
+        Sheet editedSheet)
     {
-        if (sheet.PivotTables.Count == 0)
-            return [];
+        List<CrossSheetFormControlRefSnapshot>? snapshots = null;
+        foreach (var hostSheet in workbook.Sheets)
+        {
+            if (ReferenceEquals(hostSheet, editedSheet) || hostSheet.FormControls.Count == 0)
+                continue;
 
-        var snapshots = new List<PivotTableAddressSnapshot>(sheet.PivotTables.Count);
-        foreach (var pivotTable in sheet.PivotTables)
-            snapshots.Add(new PivotTableAddressSnapshot(pivotTable, pivotTable.SourceRange, pivotTable.TargetRange, pivotTable.LastRenderedRange));
+            foreach (var control in hostSheet.FormControls)
+            {
+                if (!ReferencesSheetByName(control.LinkedCell, editedSheet.Name) &&
+                    !ReferencesSheetByName(control.ListFillRange, editedSheet.Name))
+                {
+                    continue;
+                }
 
-        return snapshots;
+                snapshots ??= [];
+                snapshots.Add(new CrossSheetFormControlRefSnapshot(control, control.LinkedCell, control.ListFillRange));
+            }
+        }
+
+        return snapshots ?? (IReadOnlyList<CrossSheetFormControlRefSnapshot>)[];
+    }
+
+    /// <summary>True when <paramref name="reference"/> contains an explicit "SheetName!" (or
+    /// 'Quoted Name'!) qualifier equal to <paramref name="sheetName"/>. Bare/unqualified refs
+    /// belong to the control's own hosting sheet, not the edited sheet, so they must return false
+    /// here — only an explicit cross-sheet qualifier makes a foreign-hosted control's ref subject
+    /// to this sheet's structural edits.</summary>
+    private static bool ReferencesSheetByName(string? reference, string sheetName)
+    {
+        if (string.IsNullOrWhiteSpace(reference))
+            return false;
+
+        var raw = reference.TrimStart();
+        if (raw.StartsWith('=')) raw = raw[1..].Trim();
+
+        foreach (var token in raw.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var bangIndex = token.LastIndexOf('!');
+            if (bangIndex < 0)
+                continue;
+
+            var tokenSheetName = NormalizeSheetReference(token[..bangIndex]);
+            if (string.Equals(tokenSheetName, sheetName, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    // N33: a pivot table's SourceRange can reference a *different* sheet than the one it is placed
+    // on (e.g. a pivot built from Sheet1!A1:D100 but placed on Sheet2, Excel's default "New
+    // Worksheet" destination). Capturing/shifting only the edited sheet's own PivotTables would miss
+    // exactly that common case — mirrors the workbook-wide walk already used for charts
+    // (CaptureChartDataRanges/ShiftChartRowsUp in RowColumnShiftHelpers.PrintAndCharts.cs) so a pivot
+    // hosted anywhere in the workbook still has its SourceRange/TargetRange corrected when the sheet
+    // either range points at is structurally edited.
+    private static IReadOnlyList<PivotTableAddressSnapshot> CapturePivotTables(Workbook workbook)
+    {
+        List<PivotTableAddressSnapshot>? snapshots = null;
+        foreach (var hostSheet in workbook.Sheets)
+        {
+            if (hostSheet.PivotTables.Count == 0)
+                continue;
+
+            snapshots ??= new List<PivotTableAddressSnapshot>();
+            foreach (var pivotTable in hostSheet.PivotTables)
+                snapshots.Add(new PivotTableAddressSnapshot(
+                    pivotTable, pivotTable.SourceRange, pivotTable.TargetRange, pivotTable.LastRenderedRange, hostSheet.Id));
+        }
+
+        return snapshots ?? (IReadOnlyList<PivotTableAddressSnapshot>)[];
     }
 
     private static IReadOnlyList<PivotCacheSourceSnapshot> CapturePivotCaches(Workbook workbook)
@@ -165,13 +260,14 @@ internal static partial class RowColumnShiftHelpers
         RestoreSet(sheet.GroupHiddenRows, snapshot.GroupHiddenRows);
         RestoreSet(sheet.GroupHiddenCols, snapshot.GroupHiddenCols);
         RestoreList(sheet.AllowEditRanges, snapshot.AllowEditRanges);
+        RestoreAllowEditRangePasswords(sheet, snapshot.AllowEditRangePasswords);
+        RestoreAllowEditRangeUnlocked(sheet, snapshot.UnlockedAllowEditRanges);
         sheet.PrintTitleRows = snapshot.PrintTitleRows;
         sheet.PrintTitleColumns = snapshot.PrintTitleColumns;
         sheet.RowPageBreaksMetadata = ClonePageBreaksMetadata(snapshot.RowPageBreaksMetadata);
         sheet.ColumnPageBreaksMetadata = ClonePageBreaksMetadata(snapshot.ColumnPageBreaksMetadata);
 
-        workbook.WatchedCells.Clear();
-        workbook.WatchedCells.AddRange(snapshot.WatchedCells);
+        RestoreWatchedCells(workbook, snapshot);
         sheet.CellWatchesMetadata = CloneCellWatchesMetadata(snapshot.CellWatchesMetadata);
         sheet.IgnoredErrorsMetadata = CloneIgnoredErrorsMetadata(snapshot.IgnoredErrorsMetadata);
         sheet.AutoFilter = snapshot.AutoFilter;
@@ -200,6 +296,16 @@ internal static partial class RowColumnShiftHelpers
             entry.Picture.Anchor = entry.Anchor;
             entry.Picture.LinkedSourceRange = entry.LinkedSourceRange;
             entry.Picture.IsLinkedToSourceRange = entry.IsLinkedToSourceRange;
+
+            // P23: undo a structural edit that had refreshed a linked picture's rendered
+            // snapshot (RefreshLinkedPictureSnapshot) must also put the geometry/cell cache back,
+            // not just the range/anchor — otherwise the picture keeps drawing the post-edit grid
+            // even though its LinkedSourceRange above was correctly restored to the pre-edit range.
+            entry.Picture.SourceRowCount = entry.SourceRowCount;
+            entry.Picture.SourceColumnCount = entry.SourceColumnCount;
+            entry.Picture.Cells.Clear();
+            entry.Picture.Cells.AddRange(entry.Cells);
+
             sheet.Pictures.Add(entry.Picture);
         }
 
@@ -211,13 +317,18 @@ internal static partial class RowColumnShiftHelpers
             sheet.Sparklines.Add(entry.Sparkline);
         }
 
-        sheet.PivotTables.Clear();
+        // N33: PivotTables is a workbook-wide snapshot (a pivot's SourceRange can point at a
+        // different sheet than the one it is placed on) — clear every host sheet that appears in
+        // the snapshot, not just the sheet being edited, mirroring RestoreChartDataRanges.
+        foreach (var hostSheetId in DistinctPivotHostSheets(snapshot.PivotTables))
+            workbook.GetSheet(hostSheetId)?.PivotTables.Clear();
+
         foreach (var entry in snapshot.PivotTables)
         {
             entry.PivotTable.SourceRange = entry.SourceRange;
             entry.PivotTable.TargetRange = entry.TargetRange;
             entry.PivotTable.LastRenderedRange = entry.LastRenderedRange;
-            sheet.PivotTables.Add(entry.PivotTable);
+            workbook.GetSheet(entry.HostSheet)?.PivotTables.Add(entry.PivotTable);
         }
 
         sheet.StructuredTables.Clear();
@@ -236,6 +347,16 @@ internal static partial class RowColumnShiftHelpers
             entry.Control.LinkedCell    = entry.LinkedCell;
             entry.Control.ListFillRange = entry.ListFillRange;
             sheet.FormControls.Add(entry.Control);
+        }
+
+        // P83: restore string refs on controls hosted on OTHER sheets that point at this sheet.
+        // These controls are never removed from their own sheet's FormControls list (only the
+        // edited sheet's own controls are cleared/re-added above), so just put the ref strings
+        // back in place — no Clear/Add dance needed.
+        foreach (var entry in snapshot.CrossSheetFormControlRefs)
+        {
+            entry.Control.LinkedCell    = entry.LinkedCell;
+            entry.Control.ListFillRange = entry.ListFillRange;
         }
     }
 
@@ -280,6 +401,8 @@ internal static partial class RowColumnShiftHelpers
         ApplyShiftedStyleOnlyEntries(sheet, snapshot.StyleOnlyEntries, shift);
         ShiftOutlineAndGroupCollections(sheet, snapshot, shift);
         RestoreList(sheet.AllowEditRanges, ShiftRanges(snapshot.AllowEditRanges, shift));
+        ShiftAllowEditRangePasswords(sheet, snapshot.AllowEditRangePasswords, shift);
+        ShiftAllowEditRangeUnlocked(sheet, snapshot.UnlockedAllowEditRanges, shift);
         ShiftPrintTitles(sheet, snapshot, shift);
         ShiftPageBreakMetadata(sheet, snapshot, shift);
 
@@ -296,11 +419,12 @@ internal static partial class RowColumnShiftHelpers
         ShiftDrawingShapes(sheet, snapshot, shift);
         ShiftPictures(workbook, sheet, snapshot, shift);
         ShiftSparklines(sheet, snapshot, shift);
-        ShiftPivotTables(sheet, snapshot, shift);
+        ShiftPivotTables(workbook, snapshot, shift);
         ShiftStructuredTables(sheet, snapshot, shift);
         ShiftPivotCaches(snapshot, shift);
         ShiftScenarios(workbook, snapshot, shift);
         ShiftFormControls(sheet, snapshot, shift);
+        ShiftCrossSheetFormControlRefs(snapshot, shift);
     }
 
     private static void ApplyShiftedStyleOnlyEntries(
@@ -398,14 +522,127 @@ internal static partial class RowColumnShiftHelpers
         return shifted;
     }
 
+    // M42: rekeys Sheet.AllowEditRangePasswords onto the post-shift GridRange so a range's own
+    // password survives a row/column insert/delete alongside AllowEditRanges itself. A range that
+    // the shift deletes entirely (ShiftRange returns null) drops its password too, matching
+    // AllowEditRanges dropping the range itself.
+    private static void ShiftAllowEditRangePasswords(
+        Sheet sheet,
+        IReadOnlyList<KeyValuePair<GridRange, string?>> passwords,
+        AddressShift shift)
+    {
+        sheet.AllowEditRangePasswords.Clear();
+        foreach (var (range, password) in passwords)
+        {
+            if (shift.ShiftRange(range) is { } shiftedRange)
+                sheet.AllowEditRangePasswords[shiftedRange] = password;
+        }
+    }
+
+    private static void RestoreAllowEditRangePasswords(
+        Sheet sheet,
+        IReadOnlyList<KeyValuePair<GridRange, string?>> passwords)
+    {
+        sheet.AllowEditRangePasswords.Clear();
+        foreach (var (range, password) in passwords)
+            sheet.AllowEditRangePasswords[range] = password;
+    }
+
+    // M42: rekeys Sheet.UnlockedAllowEditRanges (the in-memory, per-session "already entered the
+    // correct range password" gate) onto the post-shift GridRange so an already-unlocked range does
+    // not spuriously re-prompt for its password merely because a row/column shift moved it, while a
+    // range the shift deletes entirely is dropped.
+    private static void ShiftAllowEditRangeUnlocked(
+        Sheet sheet,
+        IReadOnlyList<GridRange> unlocked,
+        AddressShift shift)
+    {
+        sheet.UnlockedAllowEditRanges.Clear();
+        foreach (var range in unlocked)
+        {
+            if (shift.ShiftRange(range) is { } shiftedRange)
+                sheet.UnlockedAllowEditRanges.Add(shiftedRange);
+        }
+    }
+
+    private static void RestoreAllowEditRangeUnlocked(Sheet sheet, IReadOnlyList<GridRange> unlocked)
+    {
+        sheet.UnlockedAllowEditRanges.Clear();
+        foreach (var range in unlocked)
+            sheet.UnlockedAllowEditRanges.Add(range);
+    }
+
     private static void ShiftWatchedCells(Workbook workbook, AddressBearingStateSnapshot snapshot, AddressShift shift)
     {
-        workbook.WatchedCells.Clear();
+        // Shifted is null when the structural edit itself deleted this watch's row/column — that
+        // watch was never present in the live list post-shift, so on undo it must always come back
+        // (the delete's own removal is exactly what undo is reversing) rather than being subject to
+        // "did the user touch this" reconciliation below.
+        var pairs = new List<(CellAddress Original, CellAddress? Shifted)>(snapshot.WatchedCells.Count);
+        var shiftedCells = new List<CellAddress>(snapshot.WatchedCells.Count);
         foreach (var address in snapshot.WatchedCells)
         {
-            if (shift.ShiftAddress(address) is { } shifted)
-                workbook.WatchedCells.Add(shifted);
+            var shifted = shift.ShiftAddress(address);
+            pairs.Add((address, shifted));
+            if (shifted is { } survived)
+                shiftedCells.Add(survived);
         }
+
+        workbook.WatchedCells.Clear();
+        workbook.WatchedCells.AddRange(shiftedCells);
+
+        // Remember the exact original->shifted mapping the shift produced so a later undo
+        // (RestoreAddressBearingState) can tell the shift's own effect apart from any Watch Window
+        // add/remove the user performed on workbook.WatchedCells after this command ran but before
+        // it was undone.
+        snapshot.PostShiftWatchedCells = pairs;
+    }
+
+    /// <summary>
+    /// Restores <see cref="Workbook.WatchedCells"/> from <paramref name="snapshot"/> on undo, but
+    /// reconciles against any Watch Window add/remove the user made directly on the live list after
+    /// the row/column command ran (WatchWindowService.AddWatch/RemoveWatch are not IWorkbookCommands
+    /// and so never appear on the undo stack). If this snapshot was never run through a structural
+    /// shift (e.g. undoing a command whose Apply never reached ShiftAddressBearingState), there is
+    /// nothing to reconcile against and we fall back to the previous unconditional restore.
+    /// </summary>
+    private static void RestoreWatchedCells(Workbook workbook, AddressBearingStateSnapshot snapshot)
+    {
+        if (snapshot.PostShiftWatchedCells is not { } pairs)
+        {
+            workbook.WatchedCells.Clear();
+            workbook.WatchedCells.AddRange(snapshot.WatchedCells);
+            return;
+        }
+
+        // Consume the live list against the shifted side of each original->shifted pair, one live
+        // occurrence per pair, so duplicate addresses are handled correctly.
+        var unmatchedLive = new List<CellAddress>(workbook.WatchedCells);
+        var restored = new List<CellAddress>(snapshot.WatchedCells.Count);
+        foreach (var (original, shifted) in pairs)
+        {
+            if (shifted is not { } survived)
+            {
+                // The structural edit itself deleted this watch (its row/column was removed) — undo
+                // always brings it back, regardless of any unrelated Watch Window activity.
+                restored.Add(original);
+                continue;
+            }
+
+            var index = unmatchedLive.IndexOf(survived);
+            if (index < 0)
+                continue; // user removed this watch after the command ran; don't resurrect it.
+
+            unmatchedLive.RemoveAt(index);
+            restored.Add(original);
+        }
+
+        // Whatever remains in unmatchedLive was added by the user after the command ran (it was never
+        // produced by the shift) — keep it, unshifted, after undo instead of silently discarding it.
+        restored.AddRange(unmatchedLive);
+
+        workbook.WatchedCells.Clear();
+        workbook.WatchedCells.AddRange(restored);
     }
 
     private static WorksheetCellWatchesMetadataModel? ShiftCellWatchesMetadata(
@@ -755,6 +992,7 @@ internal static partial class RowColumnShiftHelpers
             NumberValue number => number.Value.ToString(CultureInfo.CurrentCulture),
             BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
             TextValue text => text.Value,
+            DateTimeValue dateTime => dateTime.Value.ToString(CultureInfo.CurrentCulture),
             ErrorValue error => error.Code,
             _ => value.ToString() ?? ""
         };
@@ -798,6 +1036,23 @@ internal static partial class RowColumnShiftHelpers
         }
     }
 
+    // P83: rewrite LinkedCell/ListFillRange on controls hosted on OTHER sheets that explicitly
+    // qualify a reference to the edited sheet (e.g. Sheet2's checkbox with LinkedCell
+    // "Sheet1!$A$5" when Sheet1 is the one being structurally edited). ShiftFormControlRef only
+    // rewrites tokens whose sheet-qualifier matches shift.SheetName and leaves everything else
+    // (including bare/unqualified tokens, which belong to the control's own hosting sheet) byte-
+    // for-byte unchanged, so it is safe to call unconditionally for every captured entry here —
+    // no anchor/removal handling is needed since these controls are never hosted on the edited
+    // sheet in the first place.
+    private static void ShiftCrossSheetFormControlRefs(AddressBearingStateSnapshot snapshot, AddressShift shift)
+    {
+        foreach (var entry in snapshot.CrossSheetFormControlRefs)
+        {
+            entry.Control.LinkedCell    = ShiftFormControlRef(entry.LinkedCell, shift);
+            entry.Control.ListFillRange = ShiftFormControlRef(entry.ListFillRange, shift);
+        }
+    }
+
     private static string? ShiftFormControlRef(string? reference, AddressShift shift)
     {
         if (string.IsNullOrWhiteSpace(reference))
@@ -834,11 +1089,22 @@ internal static partial class RowColumnShiftHelpers
         }
     }
 
-    private static void ShiftPivotTables(Sheet sheet, AddressBearingStateSnapshot snapshot, AddressShift shift)
+    // N33: workbook-wide (see CapturePivotTables) so a pivot table's SourceRange is corrected even
+    // when the pivot itself is hosted on a different sheet than the one being structurally edited.
+    // AddressShift.ShiftRange already no-ops a range on a sheet other than the one being shifted
+    // (range.Start.Sheet != SheetId), so it is safe to call for SourceRange/TargetRange/
+    // LastRenderedRange regardless of which of those actually lives on the edited sheet.
+    private static void ShiftPivotTables(Workbook workbook, AddressBearingStateSnapshot snapshot, AddressShift shift)
     {
-        sheet.PivotTables.Clear();
+        foreach (var hostSheetId in DistinctPivotHostSheets(snapshot.PivotTables))
+            workbook.GetSheet(hostSheetId)?.PivotTables.Clear();
+
         foreach (var entry in snapshot.PivotTables)
         {
+            var hostSheet = workbook.GetSheet(entry.HostSheet);
+            if (hostSheet is null)
+                continue;
+
             if (shift.ShiftRange(entry.SourceRange) is not { } sourceRange ||
                 shift.ShiftRange(entry.TargetRange) is not { } targetRange)
             {
@@ -850,7 +1116,20 @@ internal static partial class RowColumnShiftHelpers
             entry.PivotTable.LastRenderedRange = entry.LastRenderedRange is { } lastRenderedRange
                 ? shift.ShiftRange(lastRenderedRange)
                 : null;
-            sheet.PivotTables.Add(entry.PivotTable);
+            hostSheet.PivotTables.Add(entry.PivotTable);
+        }
+    }
+
+    private static IEnumerable<SheetId> DistinctPivotHostSheets(IReadOnlyList<PivotTableAddressSnapshot> pivotTables)
+    {
+        if (pivotTables.Count == 0)
+            yield break;
+
+        var seen = new HashSet<SheetId>();
+        foreach (var entry in pivotTables)
+        {
+            if (seen.Add(entry.HostSheet))
+                yield return entry.HostSheet;
         }
     }
 
@@ -1520,6 +1799,8 @@ internal sealed record AddressBearingStateSnapshot(
     IReadOnlyCollection<uint> GroupHiddenRows,
     IReadOnlyCollection<uint> GroupHiddenCols,
     IReadOnlyList<GridRange> AllowEditRanges,
+    IReadOnlyList<KeyValuePair<GridRange, string?>> AllowEditRangePasswords,
+    IReadOnlyList<GridRange> UnlockedAllowEditRanges,
     WorksheetRepeatRange? PrintTitleRows,
     WorksheetRepeatRange? PrintTitleColumns,
     WorksheetPageBreaksMetadataModel? RowPageBreaksMetadata,
@@ -1540,7 +1821,20 @@ internal sealed record AddressBearingStateSnapshot(
     IReadOnlyList<StructuredTableModel> StructuredTables,
     IReadOnlyList<PivotCacheSourceSnapshot> PivotCaches,
     IReadOnlyList<WorkbookScenario> Scenarios,
-    IReadOnlyList<FormControlAddressSnapshot> FormControls);
+    IReadOnlyList<FormControlAddressSnapshot> FormControls,
+    IReadOnlyList<CrossSheetFormControlRefSnapshot> CrossSheetFormControlRefs)
+{
+    /// <summary>
+    /// Records what <see cref="RowColumnShiftHelpers.ShiftWatchedCells"/> produced from
+    /// <see cref="WatchedCells"/> the one time the owning command's structural edit (insert/delete
+    /// row or column) was applied. Populated by <see cref="RowColumnShiftHelpers.ShiftAddressBearingState"/>
+    /// and consulted by <see cref="RowColumnShiftHelpers.RestoreAddressBearingState"/> so that undo can
+    /// tell "watches the shift itself moved/dropped" apart from "watches the user added or removed via
+    /// the Watch Window after the command ran" (the latter are never wrapped in an <see cref="IWorkbookCommand"/>
+    /// and so must not be silently discarded/resurrected by an unrelated undo).
+    /// </summary>
+    internal IReadOnlyList<(CellAddress Original, CellAddress? Shifted)>? PostShiftWatchedCells { get; set; }
+}
 
 internal readonly record struct StyleOnlyEntry(uint Row, uint Col, StyleId StyleId);
 
@@ -1552,7 +1846,10 @@ internal readonly record struct PictureAddressSnapshot(
     PictureModel Picture,
     CellAddress Anchor,
     GridRange? LinkedSourceRange,
-    bool IsLinkedToSourceRange);
+    bool IsLinkedToSourceRange,
+    uint SourceRowCount,
+    uint SourceColumnCount,
+    IReadOnlyList<PictureCellSnapshot> Cells);
 
 internal readonly record struct SparklineAddressSnapshot(
     SparklineModel Sparkline,
@@ -1563,7 +1860,8 @@ internal readonly record struct PivotTableAddressSnapshot(
     PivotTableModel PivotTable,
     GridRange SourceRange,
     GridRange TargetRange,
-    GridRange? LastRenderedRange);
+    GridRange? LastRenderedRange,
+    SheetId HostSheet);
 
 internal readonly record struct PivotCacheSourceSnapshot(
     PivotCacheModel Cache,
@@ -1573,5 +1871,10 @@ internal readonly record struct PivotCacheSourceSnapshot(
 internal readonly record struct FormControlAddressSnapshot(
     FormControlModel Control,
     GridRange? Anchor,
+    string? LinkedCell,
+    string? ListFillRange);
+
+internal readonly record struct CrossSheetFormControlRefSnapshot(
+    FormControlModel Control,
     string? LinkedCell,
     string? ListFillRange);

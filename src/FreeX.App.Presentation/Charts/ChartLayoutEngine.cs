@@ -178,11 +178,11 @@ public static class ChartLayoutEngine
         if (chart.XAxisLogScale && ChartTypeSupport.SupportsXAxisLogScale(chart.Type))
         {
             return AxisScale.CreateLogValueAxis(dataMin, dataMax, plot, side,
-                chart.XAxisMinimum, chart.XAxisMaximum, chart.XAxisLogBase);
+                chart.XAxisMinimum, chart.XAxisMaximum, chart.XAxisLogBase, chart.XAxisReverseOrder);
         }
 
         return AxisScale.CreateValueAxis(dataMin, dataMax, plot, side,
-            chart.XAxisMinimum, chart.XAxisMaximum, chart.XAxisMajorUnit);
+            chart.XAxisMinimum, chart.XAxisMaximum, chart.XAxisMajorUnit, reverseOrder: chart.XAxisReverseOrder);
     }
 
     /// <summary>
@@ -196,11 +196,11 @@ public static class ChartLayoutEngine
         if (chart.YAxisLogScale && ChartTypeSupport.SupportsYAxisLogScale(chart.Type))
         {
             return AxisScale.CreateLogValueAxis(dataMin, dataMax, plot, side,
-                chart.YAxisMinimum, chart.YAxisMaximum, chart.YAxisLogBase);
+                chart.YAxisMinimum, chart.YAxisMaximum, chart.YAxisLogBase, chart.YAxisReverseOrder);
         }
 
         return AxisScale.CreateValueAxis(dataMin, dataMax, plot, side,
-            chart.YAxisMinimum, chart.YAxisMaximum, chart.YAxisMajorUnit);
+            chart.YAxisMinimum, chart.YAxisMaximum, chart.YAxisMajorUnit, reverseOrder: chart.YAxisReverseOrder);
     }
 
     // ---- Pie / Doughnut -------------------------------------------------------------------
@@ -389,6 +389,7 @@ public static class ChartLayoutEngine
 
         AttachTrendline(request, seriesLayouts, x => categoryScale.Transform(x), valueScale, secondaryScale, useSecondary);
         AttachErrorBars(request, seriesLayouts, x => categoryScale.Transform(x), valueScale, secondaryScale, useSecondary);
+        AddRangeDataLabels(request, dataLabels, categoryScale, valueScale);
 
         return new ChartLayout
         {
@@ -403,6 +404,64 @@ public static class ChartLayoutEngine
             Legend = legend,
             DataLabels = dataLabels,
         };
+    }
+
+    /// <summary>
+    /// Draws Excel's "Value From Cells" data labels (<c>c15:datalabelsRange</c>,
+    /// <see cref="ChartModel.RangeDataLabels"/>) as extra label boxes positioned above the tallest
+    /// plotted value at each category (point) index, independent of <see cref="ChartModel.ShowDataLabels"/>
+    /// — mirroring the WPF renderer's AddRangeDataLabelAnnotations (ChartRenderer.DeviationOverlay.cs),
+    /// which floats the literal cached label text over the taller of the clustered column series for
+    /// that category regardless of whether ordinary value/series/category data labels are on. When two
+    /// series both label the same point, the first one wins (same precedence as the WPF path). No-op
+    /// when the chart has no range data labels or no plotted values.
+    /// </summary>
+    private static void AddRangeDataLabels(
+        ChartLayoutRequest request,
+        List<DataLabelBox> dataLabels,
+        AxisScale categoryScale,
+        AxisScale valueScale)
+    {
+        var chart = request.Chart;
+        if (chart.RangeDataLabels.Count == 0 || request.Series.Count == 0)
+            return;
+
+        // Merge labels per category (point index): mirrors the WPF path's byPoint.TryAdd, which keeps
+        // the first series' label when two series both label the same point.
+        var byPoint = new Dictionary<int, string>();
+        foreach (var label in chart.RangeDataLabels)
+        {
+            if (string.IsNullOrEmpty(label.Text))
+                continue;
+            byPoint.TryAdd(label.PointIndex, label.Text);
+        }
+
+        if (byPoint.Count == 0)
+            return;
+
+        foreach (var (pointIndex, text) in byPoint)
+        {
+            if (CategoryTopValue(request.Series, pointIndex) is not { } top)
+                continue;
+
+            var position = new LayoutPoint(categoryScale.Transform(pointIndex), valueScale.Transform(top));
+            var size = request.TextMeasurer.Measure(text, null, chart.DataLabelFontSize, false, false);
+            dataLabels.Add(new DataLabelBox(-1, pointIndex, text, position, CenteredRect(position, size)));
+        }
+    }
+
+    /// <summary>Returns the tallest plotted value across all series at <paramref name="pointIndex"/>.</summary>
+    private static double? CategoryTopValue(IReadOnlyList<ChartSeriesData> series, int pointIndex)
+    {
+        double? top = null;
+        foreach (var s in series)
+        {
+            if (pointIndex < 0 || pointIndex >= s.Values.Count || s.Values[pointIndex] is not { } v)
+                continue;
+            top = top is { } existing ? Math.Max(existing, v) : v;
+        }
+
+        return top;
     }
 
     private static SeriesLayout LayoutColumnSeries(
@@ -1015,23 +1074,81 @@ public static class ChartLayoutEngine
         string? numberFormatCode = null,
         double labelAngle = 0)
     {
+        var isXAxis = side is AxisSide.Bottom or AxisSide.Top;
+        var displayUnit = isXAxis ? chart.XAxisDisplayUnit : chart.YAxisDisplayUnit;
+        var customDisplayUnit = isXAxis ? chart.XAxisCustomDisplayUnit : chart.YAxisCustomDisplayUnit;
+        var divisor = GetAxisDisplayUnitDivisor(displayUnit, customDisplayUnit);
+
         var ticks = new List<AxisTick>();
         foreach (var value in scale.GetMajorTickValues())
         {
+            var scaledValue = divisor is { } d && d > 0 && double.IsFinite(d) ? value / d : value;
             var label = !string.IsNullOrEmpty(numberFormatCode)
-                ? NumberFormatter.Format(new NumberValue(value), numberFormatCode)
-                : ChartDataLabelTextPlanner.FormatAxisValue(numberFormat, value);
+                ? NumberFormatter.Format(new NumberValue(scaledValue), numberFormatCode)
+                : ChartDataLabelTextPlanner.FormatAxisValue(numberFormat, scaledValue);
             ticks.Add(new AxisTick(value, scale.Transform(value), label));
         }
+
+        var title = isXAxis ? chart.XAxisTitle : chart.YAxisTitle;
+        var unitLabel = GetAxisDisplayUnitLabel(displayUnit, customDisplayUnit);
+        if (!string.IsNullOrEmpty(unitLabel))
+            title = string.IsNullOrEmpty(title) ? unitLabel : $"{title} ({unitLabel})";
 
         return new AxisLayout
         {
             Side = side,
-            Title = side is AxisSide.Bottom or AxisSide.Top ? chart.XAxisTitle : chart.YAxisTitle,
+            Title = title,
             LinePosition = linePosition,
             Ticks = ticks,
             Scale = scale,
             LabelAngle = labelAngle,
+        };
+    }
+
+    /// <summary>
+    /// Resolves Excel's Format Axis &gt; Display Units (<c>&lt;c:dispUnits&gt;</c>, round-tripped via
+    /// <see cref="ChartModel.XAxisDisplayUnit"/>/<see cref="ChartModel.YAxisDisplayUnit"/> and their
+    /// custom-unit overrides) to the numeric divisor Excel scales tick labels by. Mirrors
+    /// ChartRenderer.Axes.cs GetAxisDisplayUnitDivisor (WPF) so both shells agree on tick text.
+    /// </summary>
+    private static double? GetAxisDisplayUnitDivisor(ChartAxisDisplayUnit? unit, double? customUnit)
+    {
+        if (customUnit is { } custom && double.IsFinite(custom) && custom > 0)
+            return custom;
+
+        return unit switch
+        {
+            ChartAxisDisplayUnit.Hundreds => 1e2,
+            ChartAxisDisplayUnit.Thousands => 1e3,
+            ChartAxisDisplayUnit.TenThousands => 1e4,
+            ChartAxisDisplayUnit.HundredThousands => 1e5,
+            ChartAxisDisplayUnit.Millions => 1e6,
+            ChartAxisDisplayUnit.TenMillions => 1e7,
+            ChartAxisDisplayUnit.HundredMillions => 1e8,
+            ChartAxisDisplayUnit.Billions => 1e9,
+            ChartAxisDisplayUnit.Trillions => 1e12,
+            _ => null
+        };
+    }
+
+    /// <summary>Mirrors ChartRenderer.Axes.cs GetAxisDisplayUnitLabel (WPF's axis-title suffix).</summary>
+    private static string GetAxisDisplayUnitLabel(ChartAxisDisplayUnit? unit, double? customUnit)
+    {
+        if (customUnit is { } custom && double.IsFinite(custom) && custom > 0)
+            return custom.ToString("0.###", CultureInfo.InvariantCulture);
+
+        return unit switch
+        {
+            ChartAxisDisplayUnit.Hundreds => "Hundreds",
+            ChartAxisDisplayUnit.Thousands => "Thousands",
+            ChartAxisDisplayUnit.TenThousands => "Ten Thousands",
+            ChartAxisDisplayUnit.HundredThousands => "Hundred Thousands",
+            ChartAxisDisplayUnit.Millions => "Millions",
+            ChartAxisDisplayUnit.TenMillions => "Ten Millions",
+            ChartAxisDisplayUnit.HundredMillions => "Hundred Millions",
+            ChartAxisDisplayUnit.Billions => "Billions",
+            ChartAxisDisplayUnit.Trillions => "Trillions",
+            _ => ""
         };
     }
 

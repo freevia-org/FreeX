@@ -147,6 +147,22 @@ public partial class MainWindow
 
     private string FormatNameBoxSelectionText(GridRange range)
     {
+        // Sheet-scoped names on the active sheet take precedence over a same-named workbook-global
+        // name, matching formula evaluation's resolution order (Workbook.TryGetNamedRange) and the
+        // Name Box's own reference-resolution precedence (TryParseNameBoxReferenceRange).
+        string? bestScopedName = null;
+        foreach (var (key, namedRange) in _workbook.ScopedNamedRanges)
+        {
+            if (!key.Sheet.Equals(_currentSheetId) || namedRange != range)
+                continue;
+
+            if (bestScopedName is null || string.Compare(key.Name, bestScopedName, StringComparison.OrdinalIgnoreCase) < 0)
+                bestScopedName = key.Name;
+        }
+
+        if (bestScopedName is not null)
+            return bestScopedName;
+
         string? bestName = null;
         foreach (var (name, namedRange) in _workbook.NamedRanges)
         {

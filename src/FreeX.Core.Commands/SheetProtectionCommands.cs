@@ -2,6 +2,20 @@ using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
 
+file static class ProtectionCommandPasswordHashing
+{
+    /// <summary>
+    /// Hashes a freshly-typed plaintext password (as supplied to Protect Sheet/Workbook) before it
+    /// is stored on <see cref="Sheet.ProtectionPassword"/>/<see cref="Workbook.StructureProtectionPassword"/>,
+    /// so those properties always hold a verifiable hash rather than cleartext -- see
+    /// <see cref="ProtectionPasswordHelper.ToVerifiedLegacyPasswordHash"/>.
+    /// </summary>
+    public static string? HashTypedPassword(string? typedPassword) =>
+        string.IsNullOrEmpty(typedPassword)
+            ? null
+            : ProtectionPasswordHelper.ToVerifiedLegacyPasswordHash(typedPassword);
+}
+
 /// <summary>Protect a worksheet with undo support.</summary>
 public sealed class ProtectSheetCommand : IWorkbookCommand
 {
@@ -11,6 +25,7 @@ public sealed class ProtectSheetCommand : IWorkbookCommand
     private bool _previousProtected;
     private string? _previousPassword;
     private List<SheetProtectionPermission>? _previousPermissions;
+    private NativeXmlPreserveBag? _previousProtectionMetadata;
 
     public string Label => "Protect Sheet";
 
@@ -38,11 +53,22 @@ public sealed class ProtectSheetCommand : IWorkbookCommand
         _previousProtected = sheet.IsProtected;
         _previousPassword = sheet.ProtectionPassword;
         _previousPermissions = sheet.ProtectionPermissions.ToList();
+        _previousProtectionMetadata = sheet.ProtectionMetadata;
         sheet.IsProtected = true;
-        sheet.ProtectionPassword = string.IsNullOrEmpty(_password) ? null : _password;
+        sheet.ProtectionPassword = ProtectionCommandPasswordHashing.HashTypedPassword(_password);
         sheet.ProtectionPermissions.Clear();
         foreach (var permission in _permissions.Where(Enum.IsDefined).Distinct())
             sheet.ProtectionPermissions.Add(permission);
+
+        // A freshly-typed password (or re-protecting with no password at all) supersedes whatever
+        // modern ISO 29500 verifier a prior Protect Sheet password left behind in the preserved
+        // metadata bag (see XlsxWorksheetProtectionMetadataWriter.Save). Without clearing it here,
+        // the writer would re-apply the OLD password's algorithmName/hashValue/saltValue/spinCount
+        // quartet from the preserved bag alongside (or instead of) the NEW password's legacy hash,
+        // leaving a stale verifier so Excel (which trusts the modern hash) still unlocks with the
+        // revoked password while the new one silently does nothing -- mirrors
+        // ProtectWorkbookCommand.Apply.
+        sheet.ProtectionMetadata = null;
         return new CommandOutcome(true);
     }
 
@@ -54,6 +80,7 @@ public sealed class ProtectSheetCommand : IWorkbookCommand
         sheet.ProtectionPermissions.Clear();
         foreach (var permission in _previousPermissions ?? [])
             sheet.ProtectionPermissions.Add(permission);
+        sheet.ProtectionMetadata = _previousProtectionMetadata;
     }
 }
 
@@ -65,6 +92,7 @@ public sealed class UnprotectSheetCommand : IWorkbookCommand
     private bool _previousProtected;
     private string? _previousPassword;
     private List<SheetProtectionPermission>? _previousPermissions;
+    private NativeXmlPreserveBag? _previousProtectionMetadata;
 
     public string Label => "Unprotect Sheet";
 
@@ -83,9 +111,15 @@ public sealed class UnprotectSheetCommand : IWorkbookCommand
         _previousProtected = sheet.IsProtected;
         _previousPassword = sheet.ProtectionPassword;
         _previousPermissions = sheet.ProtectionPermissions.ToList();
+        _previousProtectionMetadata = sheet.ProtectionMetadata;
         sheet.IsProtected = false;
         sheet.ProtectionPassword = null;
         sheet.ProtectionPermissions.Clear();
+
+        // Clear the preserved modern-hash verifier along with the password: a later Protect Sheet
+        // with a new password must not have this stale bag re-applied underneath it (see
+        // ProtectSheetCommand.Apply).
+        sheet.ProtectionMetadata = null;
         return new CommandOutcome(true);
     }
 
@@ -97,6 +131,7 @@ public sealed class UnprotectSheetCommand : IWorkbookCommand
         sheet.ProtectionPermissions.Clear();
         foreach (var permission in _previousPermissions ?? [])
             sheet.ProtectionPermissions.Add(permission);
+        sheet.ProtectionMetadata = _previousProtectionMetadata;
     }
 }
 
@@ -215,6 +250,7 @@ public sealed class ProtectWorkbookCommand : IWorkbookCommand
     private readonly string? _password;
     private bool _previousProtected;
     private string? _previousPassword;
+    private NativeXmlPreserveBag? _previousProtectionMetadata;
 
     public string Label => "Protect Workbook";
 
@@ -227,8 +263,19 @@ public sealed class ProtectWorkbookCommand : IWorkbookCommand
     {
         _previousProtected = ctx.Workbook.IsStructureProtected;
         _previousPassword = ctx.Workbook.StructureProtectionPassword;
+        _previousProtectionMetadata = ctx.Workbook.ProtectionMetadata;
         ctx.Workbook.IsStructureProtected = true;
-        ctx.Workbook.StructureProtectionPassword = _password;
+        ctx.Workbook.StructureProtectionPassword = ProtectionCommandPasswordHashing.HashTypedPassword(_password);
+
+        // A freshly-typed password (or re-protecting with no password at all) supersedes whatever
+        // modern ISO 29500 verifier a prior Protect Workbook password left behind in the preserved
+        // metadata bag (see XlsxWorkbookMetadataWriter.ApplyProtection). Without clearing it here,
+        // the writer would re-apply the OLD password's workbookAlgorithmName/workbookHashValue/
+        // workbookSaltValue/workbookSpinCount quartet alongside the NEW password's legacy
+        // workbookPassword hash, leaving two conflicting verifiers so Excel (which trusts the
+        // modern hash) still unlocks with the revoked password while FreeX's own reader (legacy
+        // hash first) requires the new one.
+        ctx.Workbook.ProtectionMetadata = null;
         return new CommandOutcome(true);
     }
 
@@ -236,6 +283,7 @@ public sealed class ProtectWorkbookCommand : IWorkbookCommand
     {
         ctx.Workbook.IsStructureProtected = _previousProtected;
         ctx.Workbook.StructureProtectionPassword = _previousPassword;
+        ctx.Workbook.ProtectionMetadata = _previousProtectionMetadata;
     }
 }
 
@@ -245,6 +293,7 @@ public sealed class UnprotectWorkbookCommand : IWorkbookCommand
     private readonly string? _password;
     private bool _previousProtected;
     private string? _previousPassword;
+    private NativeXmlPreserveBag? _previousProtectionMetadata;
 
     public string Label => "Unprotect Workbook";
 
@@ -260,8 +309,14 @@ public sealed class UnprotectWorkbookCommand : IWorkbookCommand
 
         _previousProtected = ctx.Workbook.IsStructureProtected;
         _previousPassword = ctx.Workbook.StructureProtectionPassword;
+        _previousProtectionMetadata = ctx.Workbook.ProtectionMetadata;
         ctx.Workbook.IsStructureProtected = false;
         ctx.Workbook.StructureProtectionPassword = null;
+
+        // Clear the preserved modern-hash verifier along with the password: a later Protect
+        // Workbook with a new password must not have this stale bag re-applied underneath it (see
+        // ProtectWorkbookCommand.Apply).
+        ctx.Workbook.ProtectionMetadata = null;
         return new CommandOutcome(true);
     }
 
@@ -269,5 +324,6 @@ public sealed class UnprotectWorkbookCommand : IWorkbookCommand
     {
         ctx.Workbook.IsStructureProtected = _previousProtected;
         ctx.Workbook.StructureProtectionPassword = _previousPassword;
+        ctx.Workbook.ProtectionMetadata = _previousProtectionMetadata;
     }
 }

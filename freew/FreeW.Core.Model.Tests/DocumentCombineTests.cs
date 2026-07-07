@@ -43,6 +43,23 @@ public class DocumentCombineTests
     }
 
     [Fact]
+    public void BothReviewersUnchanged_PreservesBlockContentControlRegion()
+    {
+        var control = BlockContentControl.BibliographyRegion();
+        var original = DocWith("References", "Entry");
+        var revisedA = DocWith("References", "Entry");
+        var revisedB = DocWith("References", "Entry");
+        foreach (var block in revisedB.Blocks)
+            block.BlockContentControl = control;
+
+        var result = DocumentCombine.Combine(original, revisedA, AuthorA, revisedB, AuthorB, DateXml);
+
+        result.Blocks.Should().HaveCount(2);
+        result.Blocks[0].BlockContentControl.Should().Be(control);
+        ReferenceEquals(result.Blocks[1].BlockContentControl, result.Blocks[0].BlockContentControl).Should().BeTrue();
+    }
+
+    [Fact]
     public void Combine_DoesNotMutateAnyInput()
     {
         var original = DocWith("the quick brown fox");

@@ -12,6 +12,7 @@ public sealed class RenameStructuredTableCommand : IWorkbookCommand
     private StructuredTableModel? _previousTable;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
+    private readonly List<PivotCacheModel> _renamedPivotCaches = [];
 
     public string Label => "Table Name";
 
@@ -52,6 +53,21 @@ public sealed class RenameStructuredTableCommand : IWorkbookCommand
         RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, renameOp, _formulaSnapshot);
         RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, renameOp, _namedFormulaSnapshot);
 
+        // N32's table-sourced pivot re-derivation (PivotTableRefreshService.Refresh) looks up the
+        // live table purely by cache.SourceTableName — if that stays pointed at the old name after a
+        // rename, the lookup fails forever and the pivot silently stops tracking the table's extent.
+        // Repoint every pivot cache that was sourced from this table so the name stays in sync.
+        _renamedPivotCaches.Clear();
+        foreach (var cache in ctx.Workbook.PivotCaches)
+        {
+            if (cache.SourceType == PivotCacheSourceType.Table &&
+                string.Equals(cache.SourceTableName, _previousTable.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                cache.SourceTableName = normalizedName;
+                _renamedPivotCaches.Add(cache);
+            }
+        }
+
         var affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
             [_previousTable.Range.Start], _formulaSnapshot);
         return new CommandOutcome(true, AffectedCells: affectedCells);
@@ -65,6 +81,11 @@ public sealed class RenameStructuredTableCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot);
+
+        foreach (var cache in _renamedPivotCaches)
+            cache.SourceTableName = _previousTable.Name;
+        _renamedPivotCaches.Clear();
+
         if (CommandGuards.TryFindStructuredTableIndex(sheet, _tableId, out var tableIndex))
             sheet.StructuredTables[tableIndex] = _previousTable;
         _previousTable = null;
@@ -78,6 +99,7 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
     private readonly GridRange _newRange;
     private StructuredTableModel? _previousTable;
     private readonly Dictionary<CellAddress, Cell?> _previousCells = [];
+    private RefreshStructuredTableTotalsCommand? _totalsRefreshCommand;
 
     public string Label => "Resize Table";
 
@@ -92,6 +114,7 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
     {
         _previousTable = null;
         _previousCells.Clear();
+        _totalsRefreshCommand = null;
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
@@ -120,16 +143,36 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
         sheet.StructuredTables[tableIndex] = resizedTable;
 
         // Excel auto-fills a calculated column's formula into every newly added row when a table
-        // grows — mirror that here so new rows aren't left blank in that column.
+        // grows — mirror that here so new rows aren't left blank in that column. When the table has
+        // a totals row, growing downward must first push that totals row's own aggregate content down
+        // to the new last row (turning the previous totals row into an ordinary data row) — otherwise
+        // the new last row would inherit TotalsRowShown semantics while still holding the old totals
+        // formula/label, and the true former totals row would get silently overwritten as if it were
+        // a plain calculated-column data cell.
+        var relocatedTotalsRowCells = RelocateTotalsRowIfNeeded(sheet, table, resizedTable);
         FillGrownCalculatedColumns(sheet, table, resizedTable);
 
-        return new CommandOutcome(true, AffectedCells: [_newRange.Start]);
+        var affectedCells = new List<CellAddress> { _newRange.Start };
+        affectedCells.AddRange(relocatedTotalsRowCells);
+
+        if (resizedTable.TotalsRowShown && resizedTable.Range.End.Row > table.Range.End.Row)
+        {
+            _totalsRefreshCommand = new RefreshStructuredTableTotalsCommand(_sheetId, _tableId);
+            var totalsRefreshOutcome = _totalsRefreshCommand.Apply(ctx);
+            if (totalsRefreshOutcome.Success && totalsRefreshOutcome.AffectedCells is { Count: > 0 } totalsAffected)
+                affectedCells.AddRange(totalsAffected);
+        }
+
+        return new CommandOutcome(true, AffectedCells: affectedCells);
     }
 
     public void Revert(ICommandContext ctx)
     {
         if (_previousTable is null)
             return;
+
+        _totalsRefreshCommand?.Revert(ctx);
+        _totalsRefreshCommand = null;
 
         var sheet = ctx.GetSheet(_sheetId);
         foreach (var (address, cell) in _previousCells)
@@ -147,15 +190,64 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
     }
 
     /// <summary>
+    /// When a table with a shown totals row grows downward (the new range's last row is past the
+    /// previous last row), Excel keeps the totals row as the very last row of the table and turns
+    /// whatever used to be the totals row into a new ordinary data row. The totals row's own
+    /// aggregate/label content lives in <see cref="StructuredTableColumnModel"/> metadata, not just
+    /// the sheet cell, so it will be correctly regenerated at its new position by the totals refresh
+    /// this command triggers below — but the sheet cell that used to hold that totals content must
+    /// first be cleared here so it doesn't linger as stale data in the row that is now part of the
+    /// data body (<see cref="FillGrownCalculatedColumns"/> only ever writes calculated-column formula
+    /// cells, and would otherwise leave every non-calculated column's old totals text/number sitting
+    /// in the new data row).
+    /// </summary>
+    private IReadOnlyList<CellAddress> RelocateTotalsRowIfNeeded(Sheet sheet, StructuredTableModel previousTable, StructuredTableModel resizedTable)
+    {
+        if (!previousTable.TotalsRowShown || !resizedTable.TotalsRowShown)
+            return [];
+        if (resizedTable.Range.End.Row <= previousTable.Range.End.Row)
+            return [];
+
+        var oldTotalsRow = previousTable.Range.End.Row;
+        var relocatedCells = new List<CellAddress>();
+        // Only clear the columns that were actually part of the OLD table. If the resize also
+        // grows the table wider, the extra columns at the old totals row were never part of the
+        // previous table -- they are ordinary (possibly user-populated) cells that become part of
+        // the grown table's data body, and must be left untouched rather than blanked.
+        for (var col = previousTable.Range.Start.Col; col <= previousTable.Range.End.Col; col++)
+        {
+            var address = new CellAddress(_sheetId, oldTotalsRow, col);
+            // Preserve the totals row's existing formatting on the cell that now becomes an
+            // ordinary data row -- only the totals content/formula is being relocated, not the
+            // cell's style.
+            var blank = Cell.FromValue(BlankValue.Instance);
+            blank.StyleId = sheet.GetCell(address)?.StyleId ?? StyleId.Default;
+            SnapshotAndSetCell(sheet, address, blank);
+            relocatedCells.Add(address);
+        }
+
+        return relocatedCells;
+    }
+
+    /// <summary>
     /// Fills each calculated column's formula into rows that are newly part of the data body after a
     /// resize — matching Excel's auto-fill-on-resize behavior for structured tables, where growing a
     /// table downward extends every calculated column's formula into the new rows instead of leaving
-    /// them blank. The totals row itself needs no separate handling here: it already tracks the
-    /// table's new last row via <see cref="StructuredTableModel.Range"/>, and its content is populated
-    /// on demand by <see cref="RefreshStructuredTableTotalsCommand"/>, same as after any other
-    /// structural change. Existing data cells are never touched; only cells the resize newly brought
-    /// into the table's data body are written, and every overwritten cell is snapshotted so Revert can
-    /// restore it exactly.
+    /// them blank. The totals row itself needs no fill here: when shown, it is relocated by
+    /// <see cref="RelocateTotalsRowIfNeeded"/> and then regenerated by
+    /// <see cref="RefreshStructuredTableTotalsCommand"/> right after this runs. Existing data cells
+    /// are never touched; only cells the resize newly brought into the table's data body are written,
+    /// and every overwritten cell is snapshotted so Revert can restore it exactly.
+    /// <para>
+    /// <see cref="StructuredTableColumnModel.CalculatedColumnFormula"/> is always stored anchored to
+    /// the table's first data-body row (matching the OOXML <c>&lt;calculatedColumnFormula&gt;</c>
+    /// convention that native XLSX loads populate, and the same normalization
+    /// <see cref="PropagateCalculatedColumnCommand"/> applies when persisting a newly detected
+    /// calculated column) — so each new row's formula must be row-shifted from that anchor row
+    /// (via <see cref="StructuredTableEditEffects.ShiftFormulaRows"/>), never written verbatim,
+    /// or every auto-expanded row would be frozen on the anchor row's operands instead of Excel's
+    /// per-row relative references.
+    /// </para>
     /// </summary>
     private void FillGrownCalculatedColumns(Sheet sheet, StructuredTableModel previousTable, StructuredTableModel resizedTable)
     {
@@ -169,6 +261,7 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
         if (newLastDataRow <= previousLastDataRow)
             return;
 
+        var (anchorRow, _) = StructuredTableEditEffects.GetDataBodyRowBounds(resizedTable);
         var firstNewRow = Math.Max(previousLastDataRow + 1, resizedTable.Range.Start.Row + 1);
         for (var columnIndex = 0; columnIndex < resizedTable.Columns.Count; columnIndex++)
         {
@@ -180,7 +273,8 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
             for (var row = firstNewRow; row <= newLastDataRow; row++)
             {
                 var address = new CellAddress(_sheetId, row, col);
-                SnapshotAndSetCell(sheet, address, Cell.FromFormula(formula));
+                var shiftedFormula = StructuredTableEditEffects.ShiftFormulaRows(formula, anchorRow, row, sheet.Name);
+                SnapshotAndSetCell(sheet, address, Cell.FromFormula(shiftedFormula));
             }
         }
     }
@@ -364,6 +458,53 @@ public sealed class ConvertStructuredTableToRangeCommand : IWorkbookCommand
 
 public static class StructuredTableDesignCommandHelpers
 {
+    /// <summary>
+    /// N33: detects the Excel "auto-expand a Table" gesture — typing a value into the row directly
+    /// below the table's last row (within its column span) or the column directly to the right of the
+    /// table's last column (within its row span) — and returns the grown range the table should be
+    /// resized to via <see cref="ResizeStructuredTableCommand"/>. Returns null when
+    /// <paramref name="editedAddress"/> is not an auto-expand gesture for <paramref name="table"/>
+    /// (e.g. it is inside the existing range, diagonal to a corner, or more than one row/column away).
+    /// Mirrors Excel: a table never auto-expands into a cell already covered by another table, and —
+    /// P105 — never auto-expands downward when the table's last row is a shown totals row: Excel
+    /// suppresses the row-expand gesture entirely directly below a totals row (the user must use the
+    /// Resize Table handle/dialog instead), so typing into that row must be treated as an ordinary,
+    /// out-of-table edit rather than growing the table and destroying the just-typed value under the
+    /// totals refresh.
+    /// </summary>
+    public static GridRange? TryGetAutoExpandRange(Sheet sheet, StructuredTableModel table, CellAddress editedAddress)
+    {
+        if (editedAddress.Sheet != table.Range.Start.Sheet)
+            return null;
+
+        var range = table.Range;
+
+        // One row below the table's current last row, still within its column span: grow downward.
+        // Never when that last row is a shown totals row — Excel does not auto-expand below one.
+        var isRowExpand = !table.TotalsRowShown &&
+            editedAddress.Row == range.End.Row + 1 &&
+            editedAddress.Col >= range.Start.Col && editedAddress.Col <= range.End.Col;
+
+        // One column to the right of the table's current last column, still within its row span:
+        // grow rightward. Excel only extends into the header/data rows, never past the totals row,
+        // so restrict to the existing row span (which already excludes any additional rows below).
+        var isColumnExpand = editedAddress.Col == range.End.Col + 1 &&
+            editedAddress.Row >= range.Start.Row && editedAddress.Row <= range.End.Row;
+
+        if (!isRowExpand && !isColumnExpand)
+            return null;
+
+        var candidate = isRowExpand
+            ? new GridRange(range.Start, new CellAddress(range.Start.Sheet, editedAddress.Row, range.End.Col))
+            : new GridRange(range.Start, new CellAddress(range.Start.Sheet, range.End.Row, editedAddress.Col));
+
+        // Never grow into a cell another table already occupies.
+        if (sheet.StructuredTables.Any(other => other.Id != table.Id && other.Range.Overlaps(candidate)))
+            return null;
+
+        return candidate;
+    }
+
     public static string? ValidateTableName(Workbook workbook, string? name, SheetId? exceptSheetId = null, int? exceptTableId = null)
     {
         var normalizedName = name?.Trim() ?? string.Empty;

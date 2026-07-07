@@ -21,6 +21,59 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    /// <summary>
+    /// Sets (or clears) the Allow-Edit-Range password for a single range with full undo support. Mirrors
+    /// WPF's private <c>SetAllowEditRangePasswordCommand</c> in MainWindow.ReviewCommands.cs: neither
+    /// <see cref="AllowEditRangeCommand"/> nor <see cref="RemoveAllowEditRangeCommand"/> touch
+    /// <see cref="Sheet.AllowEditRangePasswords"/>, so this composes alongside them to actually persist the
+    /// range's password (already hashed by the caller) with undo/redo restoring it.
+    /// </summary>
+    private sealed class SetAllowEditRangePasswordCommand : IWorkbookCommand
+    {
+        private readonly SheetId _sheetId;
+        private readonly GridRange _range;
+        private readonly string? _password;
+        private string? _previousPassword;
+        private bool _hadPreviousEntry;
+
+        public string Label => "Set Allow Edit Range Password";
+
+        public SetAllowEditRangePasswordCommand(SheetId sheetId, GridRange range, string? password)
+        {
+            _sheetId = sheetId;
+            _range = range;
+            _password = string.IsNullOrEmpty(password) ? null : password;
+        }
+
+        public CommandOutcome Apply(ICommandContext ctx)
+        {
+            var sheet = ctx.GetSheet(_sheetId);
+            _hadPreviousEntry = sheet.AllowEditRangePasswords.TryGetValue(_range, out _previousPassword);
+
+            if (_password is null)
+                sheet.AllowEditRangePasswords.Remove(_range);
+            else
+                sheet.AllowEditRangePasswords[_range] = _password;
+
+            // The password just changed while the sheet may still be protected: any prior "already
+            // unlocked this session" grant for this range no longer reflects the current password.
+            sheet.UnlockedAllowEditRanges.Remove(_range);
+
+            return new CommandOutcome(true);
+        }
+
+        public void Revert(ICommandContext ctx)
+        {
+            var sheet = ctx.GetSheet(_sheetId);
+            if (_hadPreviousEntry)
+                sheet.AllowEditRangePasswords[_range] = _previousPassword;
+            else
+                sheet.AllowEditRangePasswords.Remove(_range);
+
+            sheet.UnlockedAllowEditRanges.Remove(_range);
+        }
+    }
+
     // ── Review ▸ Protect entry point ───────────────────────────────────────────
     private void AllowEditRanges() => _ = ShowAllowEditRangeDialogAsync();
 
@@ -35,9 +88,9 @@ public sealed partial class MainWindow
         {
             Title = UiText.Get("AllowEditRange_Title"),
             Width = 430,
-            Height = 360,
+            Height = 400,
             MinWidth = 390,
-            MinHeight = 320,
+            MinHeight = 360,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -54,6 +107,15 @@ public sealed partial class MainWindow
         };
         ApplyDataOpsTextBoxChrome(rangeBox);
         AutomationProperties.SetAutomationId(rangeBox, "AllowEditRangeBox");
+
+        // Range-specific password (Excel's per-range "Range Password", distinct from the sheet password):
+        // optional, so an empty box means the range stays freely editable once reached. WPF parity
+        // (AllowEditRangeDialog.cs, _rangePasswordBox).
+        var rangePasswordBox = new TextBox { PasswordChar = '•', MinWidth = 220 };
+        ApplyDataOpsTextBoxChrome(rangePasswordBox);
+        AutomationProperties.SetName(rangePasswordBox, UiText.Get("Protection_PasswordAutomationName"));
+        AutomationProperties.SetAutomationId(rangePasswordBox, "AllowEditRangePasswordBox");
+        AutomationProperties.SetHelpText(rangePasswordBox, UiText.Get("Protection_PasswordHelpText"));
 
         var newButton = new Button { Content = UiText.Get("AllowEditRange_NewButton"), MinWidth = 82 };
         ApplyDataOpsButtonChrome(newButton);
@@ -138,10 +200,19 @@ public sealed partial class MainWindow
             }
 
             var result = AllowEditRangePlanner.CreateAddResult(range);
-            TryExecute(
-                new AllowEditRangeCommand(sheetId, result.Range!.Value),
-                UiText.Format("AllowEditRange_Added", result.Range!.Value));
+            var typedPassword = string.IsNullOrEmpty(rangePasswordBox.Text) ? null : rangePasswordBox.Text;
+            var command = new CompositeWorkbookCommand(
+                "Allow Edit Range",
+                [
+                    new AllowEditRangeCommand(sheetId, result.Range!.Value),
+                    new SetAllowEditRangePasswordCommand(
+                        sheetId,
+                        result.Range!.Value,
+                        typedPassword is null ? null : ProtectionPasswordHelper.ToVerifiedLegacyPasswordHash(typedPassword)),
+                ]);
+            TryExecute(command, UiText.Format("AllowEditRange_Added", result.Range!.Value));
             rangeBeingModified = null;
+            rangePasswordBox.Text = string.Empty;
         };
 
         modifyButton.Click += (_, _) =>
@@ -158,6 +229,10 @@ public sealed partial class MainWindow
             {
                 rangeBeingModified = originalRange;
                 rangeBox.Text = selected;
+                // Mirrors Excel/WPF: an existing range password is never redisplayed (only its hash is
+                // known), so the box is always cleared here. A blank box left on commit means "leave the
+                // stored password (if any) alone" -- see the modify branch below.
+                rangePasswordBox.Text = string.Empty;
                 return;
             }
 
@@ -168,14 +243,34 @@ public sealed partial class MainWindow
             }
 
             var result = AllowEditRangePlanner.CreateModifyResult(originalRange, updatedRange);
-            var command = new CompositeWorkbookCommand(
-                "Modify Allow Edit Range",
-                [
-                    new RemoveAllowEditRangeCommand(sheetId, result.PreviousRange!.Value),
-                    new AllowEditRangeCommand(sheetId, result.Range!.Value),
-                ]);
+            var modifyCommands = new List<IWorkbookCommand>
+            {
+                new RemoveAllowEditRangeCommand(sheetId, result.PreviousRange!.Value),
+                new AllowEditRangeCommand(sheetId, result.Range!.Value),
+            };
+
+            var typedPassword = string.IsNullOrEmpty(rangePasswordBox.Text) ? null : rangePasswordBox.Text;
+            if (typedPassword is not null)
+            {
+                modifyCommands.Add(new SetAllowEditRangePasswordCommand(
+                    sheetId,
+                    result.Range!.Value,
+                    ProtectionPasswordHelper.ToVerifiedLegacyPasswordHash(typedPassword)));
+            }
+            else if (!result.Range!.Value.Equals(result.PreviousRange!.Value) &&
+                     _session.ActiveSheet.AllowEditRangePasswords.TryGetValue(result.PreviousRange!.Value, out var carriedPassword))
+            {
+                // The range's key changed (e.g. its bounds were edited) but the password was left
+                // untouched -- carry the existing password over to the new key so it is not lost.
+                modifyCommands.Add(new SetAllowEditRangePasswordCommand(sheetId, result.Range!.Value, carriedPassword));
+            }
+
+            var command = new CompositeWorkbookCommand("Modify Allow Edit Range", modifyCommands);
             if (TryExecute(command, UiText.Format("AllowEditRange_Modified", result.Range!.Value)))
+            {
                 rangeBeingModified = null;
+                rangePasswordBox.Text = string.Empty;
+            }
         };
 
         deleteButton.Click += (_, _) =>
@@ -188,10 +283,15 @@ public sealed partial class MainWindow
             }
 
             var result = AllowEditRangePlanner.CreateRemoveResult(range);
-            TryExecute(
-                new RemoveAllowEditRangeCommand(sheetId, result.Range!.Value),
-                UiText.Format("AllowEditRange_Removed", result.Range!.Value));
+            var command = new CompositeWorkbookCommand(
+                "Remove Allow Edit Range",
+                [
+                    new RemoveAllowEditRangeCommand(sheetId, result.Range!.Value),
+                    new SetAllowEditRangePasswordCommand(sheetId, result.Range!.Value, null),
+                ]);
+            TryExecute(command, UiText.Format("AllowEditRange_Removed", result.Range!.Value));
             rangeBeingModified = null;
+            rangePasswordBox.Text = string.Empty;
         };
 
         // WPF has [OK][Cancel] at bottom; OK is an alias for Close (ranges are applied in real-time)
@@ -233,6 +333,24 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, 0, 0, 6),
         };
 
+        // Range-specific password label + box (WPF parity: AllowEditRangeDialog.cs's Protection_Password
+        // label/box sit directly under the range example text, before the OK/Cancel row).
+        var rangePasswordPanel = new StackPanel
+        {
+            Spacing = 4,
+            Margin = new Thickness(0, 6, 0, 0),
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = StripDisplayMnemonic(UiText.Get("Protection_Password")),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                },
+                rangePasswordBox,
+            },
+        };
+
         // WPF bottom button order: [OK][Cancel]
         var bottomRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, closeButton], new Thickness(0, 10, 0, 0));
         DockPanel.SetDock(bottomRow, Dock.Bottom);
@@ -252,6 +370,7 @@ public sealed partial class MainWindow
                         existingRangesGroup,
                         rangeGroup,
                         new TextBlock { Text = UiText.Get("AllowEditRange_Example"), Foreground = SecondaryInk, TextWrapping = TextWrapping.Wrap, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                        rangePasswordPanel,
                         warningText,
                     },
                 },

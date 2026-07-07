@@ -34,6 +34,60 @@ public partial class GridView
             ActualRowHeaderWidth,
             EffectiveColHeaderHeight);
 
+    /// <summary>Pixel tolerance for grabbing a manual page-break line in Page Break Preview, mirroring
+    /// <c>PageMarginGuideHitZone</c>'s tolerance for margin guides.</summary>
+    private const double PageBreakLineHitZone = 4;
+
+    /// <summary>
+    /// Hit-tests a manual (row or column) page-break line in Page Break Preview view, so the caller can
+    /// offer a drag affordance (move the break to a different row/column, or drag it off the print-area
+    /// edge to remove it) the same way <see cref="HitTestPageMarginGuide"/> does for margin guides.
+    /// Returns null outside Page Break Preview, when there is no viewport, or when the pointer is not
+    /// within <see cref="PageBreakLineHitZone"/> pixels of a manual break line.
+    /// </summary>
+    internal PageBreakLineHit? HitTestPageBreakLine(Point pos)
+    {
+        if (WorksheetViewMode != WorksheetViewMode.PageBreakPreview || Viewport is not { } viewport)
+            return null;
+
+        var logicalWidth = GetLogicalViewportWidth();
+        var logicalHeight = GetLogicalViewportHeight();
+
+        if (pos.X < ActualRowHeaderWidth || pos.Y < EffectiveColHeaderHeight ||
+            pos.X > logicalWidth || pos.Y > logicalHeight)
+            return null;
+
+        if (RowPageBreaks is { Count: > 0 } rowPageBreaks)
+        {
+            var rowBreakLookup = GetPageBreakLookup(rowPageBreaks, ref _rowPageBreakLookupCache);
+            foreach (var metric in viewport.RowMetrics)
+            {
+                if (!rowBreakLookup.Contains(metric.Row))
+                    continue;
+
+                var y = metric.TopOffset + EffectiveColHeaderHeight;
+                if (Math.Abs(pos.Y - y) <= PageBreakLineHitZone)
+                    return new PageBreakLineHit(PageBreakLineOrientation.Row, metric.Row);
+            }
+        }
+
+        if (ColumnPageBreaks is { Count: > 0 } columnPageBreaks)
+        {
+            var columnBreakLookup = GetPageBreakLookup(columnPageBreaks, ref _columnPageBreakLookupCache);
+            foreach (var metric in viewport.ColMetrics)
+            {
+                if (!columnBreakLookup.Contains(metric.Col))
+                    continue;
+
+                var x = metric.LeftOffset + ActualRowHeaderWidth;
+                if (Math.Abs(pos.X - x) <= PageBreakLineHitZone)
+                    return new PageBreakLineHit(PageBreakLineOrientation.Column, metric.Col);
+            }
+        }
+
+        return null;
+    }
+
     private WorksheetPageMarginEdge? HitTestPageMarginGuide(Point pos)
     {
         if (!ShowRulers || WorksheetViewMode != WorksheetViewMode.PageLayout || PrintArea is not { } printArea)
@@ -140,3 +194,18 @@ public partial class GridView
         return null;
     }
 }
+
+/// <summary>Which axis a hit-tested manual page-break line runs along.</summary>
+internal enum PageBreakLineOrientation
+{
+    Row,
+    Column
+}
+
+/// <summary>
+/// The manual page-break line under the pointer in Page Break Preview view: <see cref="Orientation"/>
+/// says whether it is a horizontal row break or vertical column break, and <see cref="Index"/> is the
+/// zero-based row/column the break falls before (matching <see cref="GridView.RowPageBreaks"/> /
+/// <see cref="GridView.ColumnPageBreaks"/> entries).
+/// </summary>
+internal readonly record struct PageBreakLineHit(PageBreakLineOrientation Orientation, uint Index);

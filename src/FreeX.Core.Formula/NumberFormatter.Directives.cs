@@ -4,7 +4,14 @@ namespace FreeX.Core.Formula;
 
 public static partial class NumberFormatter
 {
-    private static readonly Regex NumericElapsedTokenRegex = new(@"\[([hH])\]|\[([mM])\]|\[([sS])\]");
+    // P56: Excel/ECMA-376 elapsed-time bracket tokens allow repeating the same letter for
+    // zero-padded widths — e.g. [hh]:mm (36 hours => "36:00", not truncated/padded to 2 digits;
+    // the repeat count only signals "this is the same elapsed unit", Excel never truncates the
+    // lead unit's magnitude). Match one-or-more of the same case-insensitive letter so [hh]/[mm]/
+    // [ss] (and longer runs like [hhh]) are recognized as the elapsed-time lead token instead of
+    // silently falling through to RemoveUnquotedBracketDirectives, which used to strip the whole
+    // bracket and corrupt the format (e.g. "[hh]:mm" degenerating into a bare ":mm").
+    private static readonly Regex NumericElapsedTokenRegex = new(@"\[([hH]+)\]|\[([mM]+)\]|\[([sS]+)\]");
 
     private readonly record struct FormatDirectivePreprocessResult(
         string Format,

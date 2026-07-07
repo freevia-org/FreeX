@@ -30,11 +30,13 @@ public sealed class AllowEditRangeDialog : Window
     public AllowEditRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
     /// <summary>
-    /// The range-specific password typed into this dialog for the range in <see cref="Result"/>
-    /// (Excel's Allow Users to Edit Ranges "Range Password", distinct from the sheet password).
-    /// Null means "no password" (the range stays freely editable once reached). Only meaningful when
-    /// <see cref="RangePasswordChanged"/> is true; callers wire it into
-    /// <c>Sheet.AllowEditRangePasswords</c> alongside applying <see cref="Result"/>.
+    /// The hash of the range-specific password typed into this dialog for the range in
+    /// <see cref="Result"/> (Excel's Allow Users to Edit Ranges "Range Password", distinct from the
+    /// sheet password) -- already hashed via
+    /// <see cref="ProtectionPasswordHelper.ToVerifiedLegacyPasswordHash"/> so callers never see or
+    /// persist the typed plaintext. Null means "no password" (the range stays freely editable once
+    /// reached). Only meaningful when <see cref="RangePasswordChanged"/> is true; callers wire it
+    /// into <c>Sheet.AllowEditRangePasswords</c> alongside applying <see cref="Result"/>.
     /// </summary>
     public string? RangePassword { get; private set; }
 
@@ -222,7 +224,12 @@ public sealed class AllowEditRangeDialog : Window
             : CreateAddResult(range);
 
         var typedPassword = string.IsNullOrEmpty(_rangePasswordBox.Password) ? null : _rangePasswordBox.Password;
-        RangePassword = typedPassword;
+        // Hash the typed plaintext immediately -- never store or hand callers the raw password (see
+        // ProtectionPasswordHelper.ToVerifiedLegacyPasswordHash for why the unambiguous hash-only
+        // overload is required here rather than the round-tripping ToLegacyPasswordHash).
+        RangePassword = typedPassword is null
+            ? null
+            : ProtectionPasswordHelper.ToVerifiedLegacyPasswordHash(typedPassword);
         // Adding a brand-new range always "changes" its password (from nothing to whatever was
         // typed, including nothing). Modifying an existing range only counts as a password change
         // when the user actually typed something — a blank box means "leave the stored password

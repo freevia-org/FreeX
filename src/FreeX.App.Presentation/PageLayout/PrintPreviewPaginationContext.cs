@@ -64,7 +64,12 @@ public sealed class PrintPreviewPaginationContext
             sheet.HeaderMargin,
             sheet.FooterMargin,
             sheet.RowPageBreaks,
-            sheet.ColumnPageBreaks);
+            sheet.ColumnPageBreaks,
+            // Match the actual print/PDF job (WorkbookExportPrintPlanner), which excludes
+            // hidden/filtered rows and columns via these same predicates — otherwise the preview
+            // shows rows/columns and a page count that the real output never produces.
+            sheet.IsRowEffectivelyHidden,
+            sheet.IsColEffectivelyHidden);
 
         if (plan.PageCount <= 0)
         {

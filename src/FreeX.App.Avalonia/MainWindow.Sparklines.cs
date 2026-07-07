@@ -128,7 +128,9 @@ public sealed partial class MainWindow
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
         {
-            switch (SparklinePlanner.ValidateInsert(dataRangeBox.Text ?? string.Empty, locationBox.Text ?? string.Empty, sheetId, out _, out _))
+            // Location accepts either a single cell (one sparkline) or a multi-row/column range that
+            // expands into a sparkline group, matching Excel's "Insert Sparklines" dialog.
+            switch (SparklinePlanner.ValidateInsertGroup(dataRangeBox.Text ?? string.Empty, locationBox.Text ?? string.Empty, sheetId, out var okMembers))
             {
                 case SparklineInputValidation.InvalidDataRange:
                     ShowEditIssue(UiText.Get("Sparkline_InvalidDataRange"));
@@ -137,6 +139,11 @@ public sealed partial class MainWindow
                     ShowEditIssue(UiText.Get("Sparkline_InvalidLocation"));
                     return;
                 default:
+                    if (okMembers.Count == 0)
+                    {
+                        ShowEditIssue(UiText.Get("Sparkline_InvalidLocation"));
+                        return;
+                    }
                     dialog.Close(true);
                     break;
             }
@@ -156,18 +163,37 @@ public sealed partial class MainWindow
         if (!confirmed)
             return;
 
-        if (SparklinePlanner.ValidateInsert(
+        if (SparklinePlanner.ValidateInsertGroup(
                 dataRangeBox.Text ?? string.Empty,
                 locationBox.Text ?? string.Empty,
                 sheetId,
-                out var dataRange,
-                out var location) != SparklineInputValidation.Valid)
+                out var members) != SparklineInputValidation.Valid ||
+            members.Count == 0)
         {
             return;
         }
 
         var chosenKind = SelectedKind(typeBox);
-        var command = new AddSparklineCommand(sheetId, dataRange, location, chosenKind);
+        var firstLocation = members[0].Location;
+
+        // Every member of the group must share one nonzero GroupId so the group survives an XLSX
+        // round-trip as a single <x14:sparklineGroup>; a lone member stays ungrouped (GroupId 0),
+        // matching an independently-inserted sparkline.
+        IWorkbookCommand command;
+        if (members.Count == 1)
+        {
+            command = new AddSparklineCommand(sheetId, members[0].DataRange, members[0].Location, chosenKind);
+        }
+        else
+        {
+            var groupId = SparklineGroupIdAllocator.NextGroupId(_session.ActiveSheet.Sparklines);
+            var groupCommands = members
+                .Select(member => (IWorkbookCommand)new AddSparklineCommand(
+                    sheetId, member.DataRange, member.Location, chosenKind, groupId))
+                .ToList();
+            command = new CompositeWorkbookCommand("Insert Sparkline", groupCommands);
+        }
+
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
@@ -175,7 +201,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        RefreshShell(UiText.Format("Sparkline_Inserted", FormatCellReference(location)));
+        RefreshShell(UiText.Format("Sparkline_Inserted", FormatCellReference(firstLocation)));
     }
 
     private async Task ShowEditSparklineDialogAsync(SparklineModel sparkline)

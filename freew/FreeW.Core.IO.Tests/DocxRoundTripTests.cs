@@ -1681,6 +1681,39 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void MultiLevelList_WritesAndReadsPerLevelNumberFormats()
+    {
+        var doc = new TextDocument();
+        doc.MultiLevelList.SetNumberFormats(MultiLevelListFormat.DecimalLowerLetterLowerRomanNumberFormats);
+        doc.Blocks.Add(new Paragraph("outline item")
+        {
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.MultiLevel, ListLevel = 2 }
+        });
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        using (var numReader = new StreamReader(zip.GetEntry("word/numbering.xml")!.Open()))
+        {
+            var numbering = numReader.ReadToEnd();
+            numbering.Should().Contain("<w:numFmt w:val=\"decimal\"");
+            numbering.Should().Contain("<w:numFmt w:val=\"lowerLetter\"");
+            numbering.Should().Contain("<w:numFmt w:val=\"lowerRoman\"");
+        }
+
+        stream.Position = 0;
+        var read = DocxReader.Read(stream);
+
+        read.MultiLevelList.NumberFormats.Take(3).Should().Equal(
+            ListNumberFormat.Decimal,
+            ListNumberFormat.LowerLetter,
+            ListNumberFormat.LowerRoman);
+        read.Paragraphs.Single().Formatting.ListKind.Should().Be(ListKind.MultiLevel);
+    }
+
+    [Fact]
     public void NumberedList_StartOverride_RoundTripsAndEmitsLvlOverride()
     {
         var doc = new TextDocument();
@@ -2649,9 +2682,11 @@ public class DocxRoundTripTests
 
         var run = result.Paragraphs.Should().ContainSingle().Subject.Runs.Should().ContainSingle().Subject;
         run.Text.Should().Be("block control text");
-        run.Control.Should().NotBeNull();
-        run.Control!.Kind.Should().Be(ContentControlKind.RichText);
-        run.Control.Tag.Should().Be("BlockControl");
+        run.Control.Should().BeNull();
+        var paragraphControl = result.Blocks.Should().ContainSingle().Subject.BlockContentControl;
+        paragraphControl.Should().NotBeNull();
+        paragraphControl!.Kind.Should().Be(BlockContentControlKind.RichText);
+        paragraphControl.Tag.Should().Be("BlockControl");
     }
 
     [Fact]
@@ -2805,6 +2840,103 @@ public class DocxRoundTripTests
         control.Control.Items.Should().HaveCount(3);
         control.Control.Items.Select(i => i.DisplayText).Should().ContainInOrder("Red", "Green", "Blue");
         control.Control.Items.Select(i => i.Value).Should().ContainInOrder("R", "G", "B");
+    }
+
+    [Fact]
+    public void BlockLevelBibliographyContentControl_ReadsWordSdtWithoutFlatteningRuns()
+    {
+        var doc = ReadHandAuthoredDocx(
+            """
+            <w:sdt>
+              <w:sdtPr>
+                <w:alias w:val="Bibliography"/>
+                <w:tag w:val="Bibliography"/>
+                <w:docPartObj>
+                  <w:docPartGallery w:val="Bibliographies"/>
+                  <w:docPartUnique/>
+                </w:docPartObj>
+              </w:sdtPr>
+              <w:sdtContent>
+                <w:p><w:r><w:t>References</w:t></w:r></w:p>
+                <w:tbl>
+                  <w:tr>
+                    <w:tc><w:p><w:r><w:t>Structured entry</w:t></w:r></w:p></w:tc>
+                  </w:tr>
+                </w:tbl>
+              </w:sdtContent>
+            </w:sdt>
+            """);
+
+        doc.Blocks.Should().HaveCount(2);
+        var heading = doc.Blocks[0].Should().BeOfType<Paragraph>().Subject;
+        heading.PlainText.Should().Be("References");
+        heading.Runs.Should().OnlyContain(run => run.Control == null);
+
+        heading.BlockContentControl.Should().NotBeNull();
+        var control = heading.BlockContentControl!;
+        control.Kind.Should().Be(BlockContentControlKind.Bibliography);
+        control.Tag.Should().Be("Bibliography");
+        control.Alias.Should().Be("Bibliography");
+        control.DocPartGallery.Should().Be(BlockContentControl.BibliographyGallery);
+        control.DocPartUnique.Should().BeTrue();
+
+        var table = doc.Blocks[1].Should().BeOfType<Table>().Subject;
+        table.Rows[0].Cells[0].PlainText.Should().Be("Structured entry");
+        ReferenceEquals(table.BlockContentControl, control).Should().BeTrue();
+    }
+
+    [Fact]
+    public void BlockLevelBibliographyContentControl_RoundTripsAsOuterSdt()
+    {
+        XNamespace w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        var control = BlockContentControl.BibliographyRegion();
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Before"));
+        doc.Blocks.Add(new Paragraph("References")
+        {
+            StyleId = Citations.HeadingStyleId,
+            BlockContentControl = control,
+        });
+        doc.Blocks.Add(new Paragraph("Doe. (2024). Structured Work.")
+        {
+            StyleId = Citations.EntryStyleId,
+            BlockContentControl = control,
+        });
+        doc.Blocks.Add(new Paragraph("After"));
+
+        var documentXml = WriteDocumentXml(doc);
+        var sdt = documentXml.Root!.Element(w + "body")!.Elements(w + "sdt").Should().ContainSingle().Subject;
+        var sdtPr = sdt.Element(w + "sdtPr")!;
+        sdtPr.Element(w + "docPartObj")!
+            .Element(w + "docPartGallery")!
+            .Attribute(w + "val")!.Value.Should().Be(BlockContentControl.BibliographyGallery);
+        sdtPr.Element(w + "docPartObj")!.Element(w + "docPartUnique").Should().NotBeNull();
+        sdt.Element(w + "sdtContent")!.Elements(w + "p").Should().HaveCount(2);
+        sdt.Descendants(w + "sdt").Should().BeEmpty("the bibliography is a block-level wrapper, not run-level controls");
+
+        var result = RoundTrip(doc);
+        result.Blocks.Select(BlockPlainText).Should().Equal(
+            "Before",
+            "References",
+            "Doe. (2024). Structured Work.",
+            "After");
+
+        result.Blocks[1].BlockContentControl.Should().NotBeNull();
+        var roundTrippedControl = result.Blocks[1].BlockContentControl!;
+        roundTrippedControl.Kind.Should().Be(BlockContentControlKind.Bibliography);
+        ReferenceEquals(result.Blocks[2].BlockContentControl, roundTrippedControl).Should().BeTrue();
+        result.Blocks[0].BlockContentControl.Should().BeNull();
+        result.Blocks[3].BlockContentControl.Should().BeNull();
+        result.Blocks.OfType<Paragraph>().SelectMany(paragraph => paragraph.Runs)
+            .Should().OnlyContain(run => run.Control == null);
+
+        static string BlockPlainText(Block block) => block switch
+        {
+            Paragraph paragraph => paragraph.PlainText,
+            Table table => string.Join("\n", table.Rows.Select(row =>
+                string.Join("\t", row.Cells.Select(cell => cell.PlainText)))),
+            _ => string.Empty,
+        };
     }
 
     [Fact]

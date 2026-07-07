@@ -200,7 +200,7 @@ public sealed class FilterConditionCommand : IWorkbookCommand
         for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
         {
             var value = sheet.GetValue(row, filterCol);
-            FilterHiddenRowUpdater.SetVisible(sheet.FilterHiddenRows, row, _criterion.Matches(value));
+            FilterHiddenRowUpdater.ApplyColumnOwnedVisibility(sheet, filterCol, row, _criterion.Matches(value));
         }
 
         return new CommandOutcome(true);

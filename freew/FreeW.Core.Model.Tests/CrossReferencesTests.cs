@@ -7,6 +7,7 @@ public class CrossReferencesTests
     [InlineData(CrossRefType.Bookmark)]
     [InlineData(CrossRefType.Figure)]
     [InlineData(CrossRefType.Table)]
+    [InlineData(CrossRefType.Equation)]
     [InlineData(CrossRefType.Footnote)]
     [InlineData(CrossRefType.Endnote)]
     [InlineData(CrossRefType.NumberedItem)]
@@ -74,18 +75,21 @@ public class CrossReferencesTests
     }
 
     [Fact]
-    public void Targets_Figure_EnumeratesOnlyFigureCaptions()
+    public void Targets_CaptionTypes_EnumerateOnlyMatchingCaptions()
     {
         var doc = new TextDocument();
         doc.Blocks.Add(new Paragraph("Body"));
         doc.Blocks.Add(Captions.BuildCaption(CaptionLabel.Figure, 1, "Diagram"));
         doc.Blocks.Add(Captions.BuildCaption(CaptionLabel.Table, 2, "Data"));
+        doc.Blocks.Add(Captions.BuildCaption(CaptionLabel.Equation, 3, "Energy"));
 
         var figures = CrossReferences.Targets(doc, CrossRefType.Figure);
         var tables = CrossReferences.Targets(doc, CrossRefType.Table);
+        var equations = CrossReferences.Targets(doc, CrossRefType.Equation);
 
         figures.Should().ContainSingle().Which.Should().Be(new CrossRefTarget("Figure 1: Diagram", null, 1));
         tables.Should().ContainSingle().Which.Should().Be(new CrossRefTarget("Table 2: Data", null, 2));
+        equations.Should().ContainSingle().Which.Should().Be(new CrossRefTarget("Equation 3: Energy", null, 3));
     }
 
     [Fact]

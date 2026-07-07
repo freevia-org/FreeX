@@ -79,7 +79,16 @@ public sealed class SourceManagementDialogPlannerTests
             SourceType.BookSection,
             SourceType.ConferenceProceedings,
             SourceType.ArticleInPeriodical,
-            SourceType.ElectronicSource);
+            SourceType.ElectronicSource,
+            SourceType.Patent,
+            SourceType.Interview,
+            SourceType.Misc,
+            SourceType.Film,
+            SourceType.SoundRecording,
+            SourceType.Art,
+            SourceType.InternetSite,
+            SourceType.Performance,
+            SourceType.Case);
         choices.Select(choice => choice.Label).Should().Equal(
             "Book",
             "Journal Article",
@@ -88,13 +97,31 @@ public sealed class SourceManagementDialogPlannerTests
             "Book Section",
             "Conference Proceedings",
             "Article in a Periodical",
-            "Electronic Source");
+            "Electronic Source",
+            "Patent",
+            "Interview",
+            "Miscellaneous",
+            "Film",
+            "Sound Recording",
+            "Art",
+            "Internet Site",
+            "Performance",
+            "Case");
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.JournalArticle).Should().Be(1);
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Report).Should().Be(3);
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.BookSection).Should().Be(4);
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.ConferenceProceedings).Should().Be(5);
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.ArticleInPeriodical).Should().Be(6);
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.ElectronicSource).Should().Be(7);
+        SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Patent).Should().Be(8);
+        SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Interview).Should().Be(9);
+        SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Misc).Should().Be(10);
+        SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Film).Should().Be(11);
+        SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.SoundRecording).Should().Be(12);
+        SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Art).Should().Be(13);
+        SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.InternetSite).Should().Be(14);
+        SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Performance).Should().Be(15);
+        SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Case).Should().Be(16);
     }
 
     [Fact]
@@ -203,6 +230,136 @@ public sealed class SourceManagementDialogPlannerTests
             SourceManagementSourceField.AccessedYear,
             SourceManagementSourceField.ShortTitle,
             SourceManagementSourceField.Comments);
+
+        var patentPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.Patent);
+        patentPlans.Select(plan => plan.Field).Should().Equal(
+            SourceManagementSourceField.Tag,
+            SourceManagementSourceField.Inventor,
+            SourceManagementSourceField.Title,
+            SourceManagementSourceField.Year,
+            SourceManagementSourceField.Month,
+            SourceManagementSourceField.Day,
+            SourceManagementSourceField.PatentNumber,
+            SourceManagementSourceField.CountryRegion,
+            SourceManagementSourceField.StateProvince,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
+
+        var interviewPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.Interview);
+        interviewPlans.Select(plan => plan.Field).Should().Equal(
+            SourceManagementSourceField.Tag,
+            SourceManagementSourceField.Interviewee,
+            SourceManagementSourceField.Interviewer,
+            SourceManagementSourceField.Title,
+            SourceManagementSourceField.Year,
+            SourceManagementSourceField.Month,
+            SourceManagementSourceField.Day,
+            SourceManagementSourceField.Medium,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
+
+        var miscPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.Misc);
+        miscPlans.Select(plan => plan.Field).Should().Equal(
+            SourceManagementSourceField.Tag,
+            SourceManagementSourceField.Author,
+            SourceManagementSourceField.Title,
+            SourceManagementSourceField.Year,
+            SourceManagementSourceField.Month,
+            SourceManagementSourceField.Day,
+            SourceManagementSourceField.Medium,
+            SourceManagementSourceField.SourceKind,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
+
+        var filmPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.Film);
+        filmPlans.Select(plan => plan.Field).Should().Equal(
+            SourceManagementSourceField.Tag,
+            SourceManagementSourceField.Director,
+            SourceManagementSourceField.ProducerName,
+            SourceManagementSourceField.Writer,
+            SourceManagementSourceField.Performer,
+            SourceManagementSourceField.Title,
+            SourceManagementSourceField.Year,
+            SourceManagementSourceField.Medium,
+            SourceManagementSourceField.ProductionCompany,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
+
+        var recordingPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.SoundRecording);
+        recordingPlans.Select(plan => plan.Field).Should().Equal(
+            SourceManagementSourceField.Tag,
+            SourceManagementSourceField.Artist,
+            SourceManagementSourceField.Composer,
+            SourceManagementSourceField.Conductor,
+            SourceManagementSourceField.Performer,
+            SourceManagementSourceField.ProducerName,
+            SourceManagementSourceField.Title,
+            SourceManagementSourceField.AlbumTitle,
+            SourceManagementSourceField.Year,
+            SourceManagementSourceField.Medium,
+            SourceManagementSourceField.RecordingNumber,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
+
+        var artPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.Art);
+        artPlans.Select(plan => plan.Field).Should().Equal(
+            SourceManagementSourceField.Tag,
+            SourceManagementSourceField.Artist,
+            SourceManagementSourceField.Title,
+            SourceManagementSourceField.Year,
+            SourceManagementSourceField.Medium,
+            SourceManagementSourceField.Institution,
+            SourceManagementSourceField.City,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
+
+        var internetSitePlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.InternetSite);
+        internetSitePlans.Select(plan => plan.Field).Should().Equal(
+            SourceManagementSourceField.Tag,
+            SourceManagementSourceField.Author,
+            SourceManagementSourceField.Title,
+            SourceManagementSourceField.Year,
+            SourceManagementSourceField.Publisher,
+            SourceManagementSourceField.Url,
+            SourceManagementSourceField.AccessedDay,
+            SourceManagementSourceField.AccessedMonth,
+            SourceManagementSourceField.AccessedYear,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
+
+        var performancePlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.Performance);
+        performancePlans.Select(plan => plan.Field).Should().Equal(
+            SourceManagementSourceField.Tag,
+            SourceManagementSourceField.Performer,
+            SourceManagementSourceField.Conductor,
+            SourceManagementSourceField.Title,
+            SourceManagementSourceField.Year,
+            SourceManagementSourceField.Month,
+            SourceManagementSourceField.Day,
+            SourceManagementSourceField.Theater,
+            SourceManagementSourceField.City,
+            SourceManagementSourceField.Medium,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
+
+        var casePlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.Case);
+        casePlans.Select(plan => plan.Field).Should().Equal(
+            SourceManagementSourceField.Tag,
+            SourceManagementSourceField.Author,
+            SourceManagementSourceField.Title,
+            SourceManagementSourceField.CaseNumber,
+            SourceManagementSourceField.Court,
+            SourceManagementSourceField.Reporter,
+            SourceManagementSourceField.Year,
+            SourceManagementSourceField.Month,
+            SourceManagementSourceField.Day,
+            SourceManagementSourceField.CountryRegion,
+            SourceManagementSourceField.StateProvince,
+            SourceManagementSourceField.City,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
+        casePlans.Single(plan => plan.Field == SourceManagementSourceField.Court)
+            .Label.Should().Be("Court:");
     }
 
     [Fact]
@@ -369,6 +526,346 @@ public sealed class SourceManagementDialogPlannerTests
     }
 
     [Fact]
+    public void ProjectEntry_SeedsSourceManagerBreadthTypeFields()
+    {
+        var patent = SourceManagementDialogPlanner.ProjectEntry(new Source
+        {
+            Type = SourceType.Patent,
+            Tag = "Patent2026",
+            Inventor = "Lovelace, Ada",
+            Title = "Analytical Engine Control",
+            PatentNumber = "GB-1843-1",
+            CountryRegion = "United Kingdom",
+            StateProvince = "London",
+            Month = "July",
+            Day = "4",
+            Year = "1843"
+        });
+        var patentPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(patent);
+
+        patent.Inventor.Should().Be("Lovelace, Ada");
+        patentPlans.Single(plan => plan.Field == SourceManagementSourceField.PatentNumber)
+            .Text.Should().Be("GB-1843-1");
+        patentPlans.Single(plan => plan.Field == SourceManagementSourceField.CountryRegion)
+            .Text.Should().Be("United Kingdom");
+
+        var interview = SourceManagementDialogPlanner.ProjectEntry(new Source
+        {
+            Type = SourceType.Interview,
+            Tag = "Interview2026",
+            Interviewee = "Hopper, Grace",
+            Interviewer = "Mauchly, Jean",
+            Medium = "Recorded interview"
+        });
+        var interviewPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(interview);
+
+        interview.Interviewee.Should().Be("Hopper, Grace");
+        interviewPlans.Single(plan => plan.Field == SourceManagementSourceField.Interviewer)
+            .Text.Should().Be("Mauchly, Jean");
+        interviewPlans.Single(plan => plan.Field == SourceManagementSourceField.Medium)
+            .Text.Should().Be("Recorded interview");
+
+        var misc = SourceManagementDialogPlanner.ProjectEntry(new Source
+        {
+            Type = SourceType.Misc,
+            Tag = "Misc2026",
+            Author = "Example Archive",
+            SourceKind = "Manuscript",
+            Medium = "Scan"
+        });
+        var miscPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(misc);
+
+        misc.SourceKind.Should().Be("Manuscript");
+        miscPlans.Single(plan => plan.Field == SourceManagementSourceField.SourceKind)
+            .Text.Should().Be("Manuscript");
+
+        var film = SourceManagementDialogPlanner.ProjectEntry(new Source
+        {
+            Type = SourceType.Film,
+            Tag = "Film2026",
+            Director = "Kubrick, Stanley",
+            ProducerName = "MGM",
+            Writer = "Clarke, Arthur C.",
+            Performer = "Dullea, Keir",
+            ProductionCompany = "Metro-Goldwyn-Mayer",
+            Medium = "Film"
+        });
+        var filmPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(film);
+
+        film.Director.Should().Be("Kubrick, Stanley");
+        filmPlans.Single(plan => plan.Field == SourceManagementSourceField.ProductionCompany)
+            .Text.Should().Be("Metro-Goldwyn-Mayer");
+
+        var recording = SourceManagementDialogPlanner.ProjectEntry(new Source
+        {
+            Type = SourceType.SoundRecording,
+            Tag = "Recording2026",
+            Artist = "Holiday, Billie",
+            Composer = "Strange, Lewis Allan",
+            AlbumTitle = "Lady Sings",
+            RecordingNumber = "RS-1",
+            Medium = "LP"
+        });
+        var recordingPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(recording);
+
+        recording.Artist.Should().Be("Holiday, Billie");
+        recordingPlans.Single(plan => plan.Field == SourceManagementSourceField.AlbumTitle)
+            .Text.Should().Be("Lady Sings");
+
+        var art = SourceManagementDialogPlanner.ProjectEntry(new Source
+        {
+            Type = SourceType.Art,
+            Tag = "Art2026",
+            Artist = "Kahlo, Frida",
+            Medium = "Oil on masonite",
+            Institution = "Museo Dolores Olmedo",
+            City = "Mexico City"
+        });
+        var artPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(art);
+
+        art.Artist.Should().Be("Kahlo, Frida");
+        artPlans.Single(plan => plan.Field == SourceManagementSourceField.Institution)
+            .Text.Should().Be("Museo Dolores Olmedo");
+
+        var internetSite = SourceManagementDialogPlanner.ProjectEntry(new Source
+        {
+            Type = SourceType.InternetSite,
+            Tag = "Site2026",
+            Author = "Example Archive",
+            Publisher = "Example Site",
+            Url = "https://example.test",
+            AccessedYear = "2026"
+        });
+        var internetSitePlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(internetSite);
+
+        internetSite.Url.Should().Be("https://example.test");
+        internetSitePlans.Single(plan => plan.Field == SourceManagementSourceField.AccessedYear)
+            .Text.Should().Be("2026");
+
+        var performance = SourceManagementDialogPlanner.ProjectEntry(new Source
+        {
+            Type = SourceType.Performance,
+            Tag = "Performance2026",
+            Performer = "Royal Shakespeare Company",
+            Conductor = "Doe, Jane",
+            Theater = "Globe Theatre",
+            City = "London",
+            Month = "May",
+            Day = "8"
+        });
+        var performancePlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(performance);
+
+        performance.Performer.Should().Be("Royal Shakespeare Company");
+        performancePlans.Single(plan => plan.Field == SourceManagementSourceField.Theater)
+            .Text.Should().Be("Globe Theatre");
+
+        var caseSource = SourceManagementDialogPlanner.ProjectEntry(new Source
+        {
+            Type = SourceType.Case,
+            Tag = "Case2026",
+            Author = "Brown",
+            Title = "Brown v. Board of Education",
+            CaseNumber = "1",
+            Court = "U.S. Supreme Court",
+            Reporter = "347 U.S. 483",
+            CountryRegion = "United States",
+            StateProvince = "District of Columbia",
+            City = "Washington",
+            Month = "May",
+            Day = "17",
+            Year = "1954"
+        });
+        var casePlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(caseSource);
+
+        caseSource.CaseNumber.Should().Be("1");
+        casePlans.Single(plan => plan.Field == SourceManagementSourceField.Court)
+            .Text.Should().Be("U.S. Supreme Court");
+        casePlans.Single(plan => plan.Field == SourceManagementSourceField.Reporter)
+            .Text.Should().Be("347 U.S. 483");
+    }
+
+    [Fact]
+    public void BuildSource_PreservesSourceManagerBreadthFieldsByType()
+    {
+        var patentEntry = SourceManagementDialogPlanner.CreateEntry(
+            SourceType.Patent,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Inventor] = " Lovelace, Ada ",
+                [SourceManagementSourceField.Title] = " Analytical Engine Control ",
+                [SourceManagementSourceField.PatentNumber] = " GB-1843-1 ",
+                [SourceManagementSourceField.CountryRegion] = " United Kingdom ",
+                [SourceManagementSourceField.StateProvince] = " London ",
+                [SourceManagementSourceField.Month] = " July ",
+                [SourceManagementSourceField.Day] = " 4 ",
+                [SourceManagementSourceField.Year] = " 1843 ",
+                [SourceManagementSourceField.Url] = " ignored "
+            });
+        var patent = SourceManagementDialogPlanner.BuildSource(patentEntry);
+
+        patent.Type.Should().Be(SourceType.Patent);
+        patent.Inventor.Should().Be("Lovelace, Ada");
+        patent.PatentNumber.Should().Be("GB-1843-1");
+        patent.CountryRegion.Should().Be("United Kingdom");
+        patent.StateProvince.Should().Be("London");
+        patent.Month.Should().Be("July");
+        patent.Day.Should().Be("4");
+        patent.Url.Should().BeNull();
+
+        var interview = SourceManagementDialogPlanner.BuildSource(SourceManagementDialogPlanner.CreateEntry(
+            SourceType.Interview,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Interviewee] = " Hopper, Grace ",
+                [SourceManagementSourceField.Interviewer] = " Mauchly, Jean ",
+                [SourceManagementSourceField.Medium] = " Recorded interview ",
+                [SourceManagementSourceField.PatentNumber] = " ignored "
+            }));
+
+        interview.Interviewee.Should().Be("Hopper, Grace");
+        interview.Interviewer.Should().Be("Mauchly, Jean");
+        interview.Medium.Should().Be("Recorded interview");
+        interview.PatentNumber.Should().BeNull();
+
+        var film = SourceManagementDialogPlanner.BuildSource(SourceManagementDialogPlanner.CreateEntry(
+            SourceType.Film,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Director] = " Kubrick, Stanley ",
+                [SourceManagementSourceField.ProducerName] = " MGM ",
+                [SourceManagementSourceField.Writer] = " Clarke, Arthur C. ",
+                [SourceManagementSourceField.Performer] = " Dullea, Keir ",
+                [SourceManagementSourceField.ProductionCompany] = " Metro-Goldwyn-Mayer ",
+                [SourceManagementSourceField.Medium] = " Film ",
+                [SourceManagementSourceField.Url] = " ignored "
+            }));
+
+        film.Director.Should().Be("Kubrick, Stanley");
+        film.ProducerName.Should().Be("MGM");
+        film.Writer.Should().Be("Clarke, Arthur C.");
+        film.Performer.Should().Be("Dullea, Keir");
+        film.ProductionCompany.Should().Be("Metro-Goldwyn-Mayer");
+        film.Medium.Should().Be("Film");
+        film.Url.Should().BeNull();
+
+        var recording = SourceManagementDialogPlanner.BuildSource(SourceManagementDialogPlanner.CreateEntry(
+            SourceType.SoundRecording,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Artist] = " Holiday, Billie ",
+                [SourceManagementSourceField.Composer] = " Strange, Lewis Allan ",
+                [SourceManagementSourceField.Conductor] = " Jones, Quincy ",
+                [SourceManagementSourceField.Performer] = " Holiday, Billie ",
+                [SourceManagementSourceField.ProducerName] = " Norman Granz ",
+                [SourceManagementSourceField.AlbumTitle] = " Lady Sings ",
+                [SourceManagementSourceField.RecordingNumber] = " RS-1 ",
+                [SourceManagementSourceField.Medium] = " LP ",
+                [SourceManagementSourceField.Theater] = " ignored "
+            }));
+
+        recording.Artist.Should().Be("Holiday, Billie");
+        recording.Composer.Should().Be("Strange, Lewis Allan");
+        recording.Conductor.Should().Be("Jones, Quincy");
+        recording.Performer.Should().Be("Holiday, Billie");
+        recording.ProducerName.Should().Be("Norman Granz");
+        recording.AlbumTitle.Should().Be("Lady Sings");
+        recording.RecordingNumber.Should().Be("RS-1");
+        recording.Medium.Should().Be("LP");
+        recording.Theater.Should().BeNull();
+
+        var art = SourceManagementDialogPlanner.BuildSource(SourceManagementDialogPlanner.CreateEntry(
+            SourceType.Art,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Artist] = " Kahlo, Frida ",
+                [SourceManagementSourceField.Institution] = " Museo Dolores Olmedo ",
+                [SourceManagementSourceField.City] = " Mexico City ",
+                [SourceManagementSourceField.Medium] = " Oil on masonite ",
+                [SourceManagementSourceField.ProducerName] = " ignored "
+            }));
+
+        art.Artist.Should().Be("Kahlo, Frida");
+        art.Institution.Should().Be("Museo Dolores Olmedo");
+        art.City.Should().Be("Mexico City");
+        art.Medium.Should().Be("Oil on masonite");
+        art.ProducerName.Should().BeNull();
+
+        var internetSite = SourceManagementDialogPlanner.BuildSource(SourceManagementDialogPlanner.CreateEntry(
+            SourceType.InternetSite,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Author] = " Example Archive ",
+                [SourceManagementSourceField.Publisher] = " Example Site ",
+                [SourceManagementSourceField.Url] = " https://example.test ",
+                [SourceManagementSourceField.AccessedYear] = " 2026 ",
+                [SourceManagementSourceField.RecordingNumber] = " ignored "
+            }));
+
+        internetSite.Author.Should().Be("Example Archive");
+        internetSite.Publisher.Should().Be("Example Site");
+        internetSite.Url.Should().Be("https://example.test");
+        internetSite.AccessedYear.Should().Be("2026");
+        internetSite.RecordingNumber.Should().BeNull();
+
+        var performance = SourceManagementDialogPlanner.BuildSource(SourceManagementDialogPlanner.CreateEntry(
+            SourceType.Performance,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Performer] = " Royal Shakespeare Company ",
+                [SourceManagementSourceField.Conductor] = " Doe, Jane ",
+                [SourceManagementSourceField.Theater] = " Globe Theatre ",
+                [SourceManagementSourceField.City] = " London ",
+                [SourceManagementSourceField.Month] = " May ",
+                [SourceManagementSourceField.Day] = " 8 ",
+                [SourceManagementSourceField.Medium] = " Stage performance ",
+                [SourceManagementSourceField.AlbumTitle] = " ignored "
+            }));
+
+        performance.Performer.Should().Be("Royal Shakespeare Company");
+        performance.Conductor.Should().Be("Doe, Jane");
+        performance.Theater.Should().Be("Globe Theatre");
+        performance.City.Should().Be("London");
+        performance.Month.Should().Be("May");
+        performance.Day.Should().Be("8");
+        performance.Medium.Should().Be("Stage performance");
+        performance.AlbumTitle.Should().BeNull();
+
+        var caseSource = SourceManagementDialogPlanner.BuildSource(SourceManagementDialogPlanner.CreateEntry(
+            SourceType.Case,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Author] = " Brown ",
+                [SourceManagementSourceField.Title] = " Brown v. Board of Education ",
+                [SourceManagementSourceField.CaseNumber] = " 1 ",
+                [SourceManagementSourceField.Court] = " U.S. Supreme Court ",
+                [SourceManagementSourceField.Reporter] = " 347 U.S. 483 ",
+                [SourceManagementSourceField.CountryRegion] = " United States ",
+                [SourceManagementSourceField.StateProvince] = " District of Columbia ",
+                [SourceManagementSourceField.City] = " Washington ",
+                [SourceManagementSourceField.Month] = " May ",
+                [SourceManagementSourceField.Day] = " 17 ",
+                [SourceManagementSourceField.Year] = " 1954 ",
+                [SourceManagementSourceField.PatentNumber] = " ignored ",
+                [SourceManagementSourceField.Url] = " ignored "
+            }));
+
+        caseSource.Type.Should().Be(SourceType.Case);
+        caseSource.Author.Should().Be("Brown");
+        caseSource.Title.Should().Be("Brown v. Board of Education");
+        caseSource.CaseNumber.Should().Be("1");
+        caseSource.Court.Should().Be("U.S. Supreme Court");
+        caseSource.Reporter.Should().Be("347 U.S. 483");
+        caseSource.CountryRegion.Should().Be("United States");
+        caseSource.StateProvince.Should().Be("District of Columbia");
+        caseSource.City.Should().Be("Washington");
+        caseSource.Month.Should().Be("May");
+        caseSource.Day.Should().Be("17");
+        caseSource.Year.Should().Be("1954");
+        caseSource.PatentNumber.Should().BeNull();
+        caseSource.Url.Should().BeNull();
+    }
+
+    [Fact]
     public void CreateEntry_ImportsSemicolonSeparatedPersonalAuthors()
     {
         var entry = SourceManagementDialogPlanner.CreateEntry(
@@ -408,6 +905,116 @@ public sealed class SourceManagementDialogPlannerTests
 
         ambiguous.PersonalAuthors.Should().BeEmpty();
         ambiguous.CorporateAuthor.Should().Be("NASA; ESA");
+    }
+
+    [Fact]
+    public void PrimaryAuthorEditor_PersonalRowsNormalizeAndApplyToEntry()
+    {
+        var state = new SourceManagementAuthorEditorState(
+            SourceManagementAuthorEditorMode.Personal,
+            [
+                new SourceManagementAuthorPersonRow(" Jane ", " Q. ", " Doe "),
+                new SourceManagementAuthorPersonRow(" ", " ", " "),
+                new SourceManagementAuthorPersonRow(" Alex ", string.Empty, " Smith ")
+            ],
+            "Ignored Organization");
+
+        var normalized = SourceManagementDialogPlanner.NormalizePrimaryAuthorEditorState(state);
+        var entry = SourceManagementDialogPlanner.ApplyPrimaryAuthorEditorState(
+            new SourceManagementSourceEntry("Ref", "Old Author", string.Empty, string.Empty, string.Empty),
+            state);
+
+        normalized.Mode.Should().Be(SourceManagementAuthorEditorMode.Personal);
+        normalized.PersonalRows.Should().Equal(
+            new SourceManagementAuthorPersonRow("Jane", "Q.", "Doe"),
+            new SourceManagementAuthorPersonRow("Alex", string.Empty, "Smith"));
+        normalized.CorporateAuthor.Should().BeEmpty();
+        SourceManagementDialogPlanner.BuildPrimaryAuthorDisplayText(state)
+            .Should().Be("Jane Q. Doe; Alex Smith");
+        entry.Author.Should().Be("Jane Q. Doe; Alex Smith");
+        entry.PersonalAuthors.Should().Equal(
+            SourceAuthorPerson.Create("Jane", "Q.", "Doe"),
+            SourceAuthorPerson.Create("Alex", string.Empty, "Smith"));
+        entry.CorporateAuthor.Should().BeNull();
+    }
+
+    [Fact]
+    public void PrimaryAuthorEditor_CorporateModeAppliesAuthorAndClearsPersonalRows()
+    {
+        var state = new SourceManagementAuthorEditorState(
+            SourceManagementAuthorEditorMode.Corporate,
+            [new SourceManagementAuthorPersonRow("Jane", "Q.", "Doe")],
+            " World Health Organization ");
+
+        var entry = SourceManagementDialogPlanner.ApplyPrimaryAuthorEditorState(
+            new SourceManagementSourceEntry("Ref", "Jane Q. Doe", string.Empty, string.Empty, string.Empty)
+            {
+                PersonalAuthors = [SourceAuthorPerson.Create("Jane", "Q.", "Doe")]
+            },
+            state);
+
+        SourceManagementDialogPlanner.BuildPrimaryAuthorDisplayText(state)
+            .Should().Be("World Health Organization");
+        entry.Author.Should().Be("World Health Organization");
+        entry.PersonalAuthors.Should().BeEmpty();
+        entry.CorporateAuthor.Should().Be("World Health Organization");
+    }
+
+    [Fact]
+    public void PrimaryAuthorEditor_ProjectsExistingStructuredAuthorsThroughFieldRefresh()
+    {
+        var source = new Source
+        {
+            Type = SourceType.Book,
+            Tag = "Ada1843",
+            Author = "Ada Lovelace",
+            PersonalAuthors = [SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace")],
+            Title = "Notes"
+        };
+        var entry = SourceManagementDialogPlanner.ProjectEntry(source);
+
+        var state = SourceManagementDialogPlanner.ProjectPrimaryAuthorEditorState(entry);
+        var applied = SourceManagementDialogPlanner.ApplyPrimaryAuthorEditorState(entry, state);
+        var refreshedValues = SourceManagementDialogPlanner
+            .BuildEntryFieldPlans(applied)
+            .ToDictionary(plan => plan.Field, plan => (string?)plan.Text);
+        var refreshedEntry = SourceManagementDialogPlanner.CreateEntry(
+            SourceType.Book,
+            refreshedValues,
+            applied);
+
+        state.Mode.Should().Be(SourceManagementAuthorEditorMode.Personal);
+        state.PersonalRows.Should().ContainSingle()
+            .Which.Should().Be(new SourceManagementAuthorPersonRow("Ada", string.Empty, "Lovelace"));
+        refreshedEntry.Author.Should().Be("Ada Lovelace");
+        refreshedEntry.PersonalAuthors.Should().ContainSingle()
+            .Which.Should().Be(SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace"));
+        refreshedEntry.CorporateAuthor.Should().BeNull();
+    }
+
+    [Fact]
+    public void PrimaryAuthorEditor_FreeTextFallbackKeepsTextboxCreateEntryPolicy()
+    {
+        var entry = SourceManagementDialogPlanner.CreateEntry(
+            SourceType.Book,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Author] = "Ada Lovelace"
+            });
+
+        var state = SourceManagementDialogPlanner.ProjectPrimaryAuthorEditorState(entry);
+
+        entry.Author.Should().Be("Ada Lovelace");
+        entry.PersonalAuthors.Should().BeEmpty();
+        entry.CorporateAuthor.Should().Be("Ada Lovelace");
+        state.Mode.Should().Be(SourceManagementAuthorEditorMode.Corporate);
+        state.CorporateAuthor.Should().Be("Ada Lovelace");
+
+        var blankState = SourceManagementDialogPlanner.ProjectPrimaryAuthorEditorState(
+            new SourceManagementSourceEntry(string.Empty, string.Empty, string.Empty, string.Empty, string.Empty));
+        blankState.Mode.Should().Be(SourceManagementAuthorEditorMode.Personal);
+        blankState.PersonalRows.Should().BeEmpty();
+        blankState.CorporateAuthor.Should().BeEmpty();
     }
 
     [Fact]
@@ -1237,13 +1844,13 @@ public sealed class SourceManagementDialogPlannerTests
     }
 
     [Fact]
-    public void CopyMasterToCurrent_AppendsNonDuplicateAndSkipsDuplicateTags()
+    public void CopyMasterToCurrent_AppendsNonDuplicateAndNoOpsIdenticalSameTagSource()
     {
         var state = SourceManagementDialogPlanner.BuildInitialState(
-            currentSources: [new Source { Tag = "Existing" }],
+            currentSources: [new Source { Tag = "Existing", Author = "Shared", Title = "Same" }],
             masterSources:
             [
-                new Source { Tag = "Existing", Author = "Master Existing" },
+                new Source { Tag = " Existing ", Author = "Shared", Title = "Same" },
                 new Source { Tag = "New", Author = "Master New" }
             ]);
 
@@ -1253,6 +1860,8 @@ public sealed class SourceManagementDialogPlannerTests
             currentSelectedIndex: 0);
 
         duplicate.State.CurrentSources.Should().HaveCount(1);
+        duplicate.State.CurrentSources[0].Author.Should().Be("Shared");
+        duplicate.Conflict.Should().BeNull();
         duplicate.SelectedIndex.Should().Be(0);
 
         var added = SourceManagementDialogPlanner.CopyMasterToCurrent(
@@ -1267,13 +1876,132 @@ public sealed class SourceManagementDialogPlannerTests
     }
 
     [Fact]
+    public void CopyMasterToCurrent_WhitespaceOnlyPayloadDifferencesAreSafeNoOp()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources:
+            [
+                new Source
+                {
+                    Tag = "Existing",
+                    Author = "Shared",
+                    Title = "Same",
+                    Publisher = "Test Press",
+                    PersonalAuthors = [SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace")]
+                }
+            ],
+            masterSources:
+            [
+                new Source
+                {
+                    Tag = " Existing ",
+                    Author = " Shared ",
+                    Title = " Same ",
+                    Publisher = " Test Press ",
+                    PersonalAuthors = [new SourceAuthorPerson(" Ada ", string.Empty, " Lovelace ")]
+                }
+            ]);
+
+        var plan = SourceManagementDialogPlanner.CopyMasterToCurrent(
+            state,
+            masterSelectedIndex: 0,
+            currentSelectedIndex: 0);
+
+        plan.Conflict.Should().BeNull();
+        plan.State.Should().BeSameAs(state);
+        plan.State.CurrentSources.Should().ContainSingle().Which.Author.Should().Be("Shared");
+        plan.SelectedIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public void CopyMasterToCurrent_SameCanonicalTagDifferentPayloadReturnsConflict()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources: [new Source { Tag = "Existing", Author = "Current Existing", Title = "Current Title" }],
+            masterSources: [new Source { Tag = " Existing ", Author = "Master Existing", Title = "Master Title" }]);
+
+        var plan = SourceManagementDialogPlanner.CopyMasterToCurrent(
+            state,
+            masterSelectedIndex: 0,
+            currentSelectedIndex: 0);
+
+        plan.State.Should().BeSameAs(state);
+        plan.State.CurrentSources.Should().ContainSingle().Which.Author.Should().Be("Current Existing");
+        plan.SelectedIndex.Should().Be(0);
+        plan.Conflict.Should().NotBeNull();
+        plan.Conflict!.Tag.Should().Be("Existing");
+        plan.Conflict.CurrentSource.Author.Should().Be("Current Existing");
+        plan.Conflict.MasterSource.Author.Should().Be("Master Existing");
+        plan.Conflict.KeepAction.Should().Be(SourceManagementSourceConflictResolutionAction.KeepCurrent);
+        plan.Conflict.ReplaceAction.Should().Be(
+            SourceManagementSourceConflictResolutionAction.ReplaceCurrentFromMaster);
+        SourceManagementDialogPlanner.BuildSourceConflictResolutionChoices(plan.Conflict)
+            .Select(choice => choice.Action)
+            .Should()
+            .Equal(
+                SourceManagementSourceConflictResolutionAction.KeepCurrent,
+                SourceManagementSourceConflictResolutionAction.ReplaceCurrentFromMaster);
+    }
+
+    [Fact]
+    public void ResolveSourceConflict_CanKeepCurrent()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources: [new Source { Tag = "Existing", Author = "Current Existing" }],
+            masterSources: [new Source { Tag = "Existing", Author = "Master Existing" }]);
+        var conflict = SourceManagementDialogPlanner.CopyMasterToCurrent(
+            state,
+            masterSelectedIndex: 0,
+            currentSelectedIndex: 0).Conflict!;
+
+        var resolved = SourceManagementDialogPlanner.ResolveSourceConflict(
+            state,
+            conflict,
+            SourceManagementSourceConflictResolutionAction.KeepCurrent);
+
+        resolved.Conflict.Should().BeNull();
+        resolved.State.Should().BeSameAs(state);
+        resolved.State.CurrentSources.Should().ContainSingle().Which.Author.Should().Be("Current Existing");
+        resolved.SelectedIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public void ResolveSourceConflict_CanReplaceCurrentFromMaster()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources:
+            [
+                new Source { Tag = "Existing", Author = "Current Existing" },
+                new Source { Tag = "Other", Author = "Other" },
+                new Source { Tag = " Existing ", Author = "Duplicate Current" }
+            ],
+            masterSources: [new Source { Tag = " Existing ", Author = "Master Existing", Title = "Master Title" }]);
+        var conflict = SourceManagementDialogPlanner.CopyMasterToCurrent(
+            state,
+            masterSelectedIndex: 0,
+            currentSelectedIndex: 0).Conflict!;
+
+        var resolved = SourceManagementDialogPlanner.ResolveSourceConflict(
+            state,
+            conflict,
+            SourceManagementSourceConflictResolutionAction.ReplaceCurrentFromMaster);
+
+        resolved.Conflict.Should().BeNull();
+        resolved.State.CurrentSources.Select(source => source.Tag).Should().Equal("Existing", "Other");
+        resolved.State.CurrentSources[0].Author.Should().Be("Master Existing");
+        resolved.State.CurrentSources[0].Title.Should().Be("Master Title");
+        resolved.State.MasterSources.Should().ContainSingle().Which.Author.Should().Be("Master Existing");
+        resolved.SelectedIndex.Should().Be(0);
+    }
+
+    [Fact]
     public void CopyMasterToCurrent_UsesTrimmedTagIdentityAndKeepsCurrentSelection()
     {
         var state = SourceManagementDialogPlanner.BuildInitialState(
             currentSources: [new Source { Tag = "Smith2020", Author = "Current Smith" }],
             masterSources:
             [
-                new Source { Tag = " Smith2020 ", Author = "Master Smith" },
+                new Source { Tag = " Smith2020 ", Author = "Current Smith" },
                 new Source { Tag = "smith2020", Author = "Lowercase Smith" }
             ]);
 
@@ -1285,6 +2013,7 @@ public sealed class SourceManagementDialogPlannerTests
         duplicate.State.CurrentSources.Should().ContainSingle();
         duplicate.State.CurrentSources[0].Tag.Should().Be("Smith2020");
         duplicate.State.CurrentSources[0].Author.Should().Be("Current Smith");
+        duplicate.Conflict.Should().BeNull();
         duplicate.SelectedIndex.Should().Be(0);
 
         var distinctCase = SourceManagementDialogPlanner.CopyMasterToCurrent(
@@ -1333,13 +2062,36 @@ public sealed class SourceManagementDialogPlannerTests
     }
 
     [Fact]
-    public void CopyCurrentToMaster_UpsertsCanonicalTagAndDoesNotCopyDuplicatesTwice()
+    public void CopyCurrentToMaster_IdenticalSameTagSourceIsSafeNoOp()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources: [new Source { Tag = " Existing ", Author = "Shared Existing", Title = "Same" }],
+            masterSources:
+            [
+                new Source { Tag = "Existing", Author = "Shared Existing", Title = "Same" },
+                new Source { Tag = "Other", Author = "Other" }
+            ]);
+
+        var plan = SourceManagementDialogPlanner.CopyCurrentToMaster(
+            state,
+            currentSelectedIndex: 0,
+            masterSelectedIndex: 1);
+
+        plan.State.Should().BeSameAs(state);
+        plan.State.MasterSources.Select(source => source.Tag).Should().Equal("Existing", "Other");
+        plan.State.MasterSources[0].Author.Should().Be("Shared Existing");
+        plan.Conflict.Should().BeNull();
+        plan.SelectedIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public void CopyCurrentToMaster_SameCanonicalTagDifferentPayloadReturnsConflict()
     {
         var state = SourceManagementDialogPlanner.BuildInitialState(
             currentSources: [new Source { Tag = " Existing ", Author = "Current Existing", Title = "Updated" }],
             masterSources:
             [
-                new Source { Tag = "Existing", Author = "Old Existing" },
+                new Source { Tag = "Existing", Author = "Old Existing", Title = "Old" },
                 new Source { Tag = "Other", Author = "Other" },
                 new Source { Tag = " Existing ", Author = "Duplicate Existing" }
             ]);
@@ -1349,19 +2101,69 @@ public sealed class SourceManagementDialogPlannerTests
             currentSelectedIndex: 0,
             masterSelectedIndex: 1);
 
-        plan.State.MasterSources.Select(source => source.Tag).Should().Equal("Existing", "Other");
-        plan.State.MasterSources[0].Author.Should().Be("Current Existing");
-        plan.State.MasterSources[0].Title.Should().Be("Updated");
+        plan.State.Should().BeSameAs(state);
+        plan.State.MasterSources.Select(source => source.Author)
+            .Should()
+            .Equal("Old Existing", "Other", "Duplicate Existing");
         plan.SelectedIndex.Should().Be(0);
+        plan.Conflict.Should().NotBeNull();
+        plan.Conflict!.Tag.Should().Be("Existing");
+        plan.Conflict.CurrentSource.Author.Should().Be("Current Existing");
+        plan.Conflict.MasterSource.Author.Should().Be("Old Existing");
+        plan.Conflict.KeepAction.Should().Be(SourceManagementSourceConflictResolutionAction.KeepMaster);
+        plan.Conflict.ReplaceAction.Should().Be(
+            SourceManagementSourceConflictResolutionAction.ReplaceMasterFromCurrent);
+    }
 
-        var duplicate = SourceManagementDialogPlanner.CopyCurrentToMaster(
-            plan.State,
+    [Fact]
+    public void ResolveSourceConflict_CanKeepMaster()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources: [new Source { Tag = "Existing", Author = "Current Existing" }],
+            masterSources: [new Source { Tag = "Existing", Author = "Master Existing" }]);
+        var conflict = SourceManagementDialogPlanner.CopyCurrentToMaster(
+            state,
             currentSelectedIndex: 0,
-            masterSelectedIndex: plan.SelectedIndex);
+            masterSelectedIndex: 0).Conflict!;
 
-        duplicate.State.MasterSources.Select(source => source.Tag).Should().Equal("Existing", "Other");
-        duplicate.State.MasterSources[0].Author.Should().Be("Current Existing");
-        duplicate.SelectedIndex.Should().Be(0);
+        var resolved = SourceManagementDialogPlanner.ResolveSourceConflict(
+            state,
+            conflict,
+            SourceManagementSourceConflictResolutionAction.KeepMaster);
+
+        resolved.Conflict.Should().BeNull();
+        resolved.State.Should().BeSameAs(state);
+        resolved.State.MasterSources.Should().ContainSingle().Which.Author.Should().Be("Master Existing");
+        resolved.SelectedIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public void ResolveSourceConflict_CanReplaceMasterFromCurrent()
+    {
+        var state = SourceManagementDialogPlanner.BuildInitialState(
+            currentSources: [new Source { Tag = " Existing ", Author = "Current Existing", Title = "Updated" }],
+            masterSources:
+            [
+                new Source { Tag = "Existing", Author = "Old Existing" },
+                new Source { Tag = "Other", Author = "Other" },
+                new Source { Tag = " Existing ", Author = "Duplicate Existing" }
+            ]);
+        var conflict = SourceManagementDialogPlanner.CopyCurrentToMaster(
+            state,
+            currentSelectedIndex: 0,
+            masterSelectedIndex: 1).Conflict!;
+
+        var resolved = SourceManagementDialogPlanner.ResolveSourceConflict(
+            state,
+            conflict,
+            SourceManagementSourceConflictResolutionAction.ReplaceMasterFromCurrent);
+
+        resolved.Conflict.Should().BeNull();
+        resolved.State.MasterSources.Select(source => source.Tag).Should().Equal("Existing", "Other");
+        resolved.State.MasterSources[0].Author.Should().Be("Current Existing");
+        resolved.State.MasterSources[0].Title.Should().Be("Updated");
+        resolved.State.CurrentSources.Should().ContainSingle().Which.Author.Should().Be("Current Existing");
+        resolved.SelectedIndex.Should().Be(0);
     }
 
     [Fact]

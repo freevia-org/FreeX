@@ -71,6 +71,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         var loadedSheetsBySourceName = new Dictionary<string, Sheet>(StringComparer.OrdinalIgnoreCase);
         var pendingPivotTables = new List<(Sheet Sheet, SheetDto Dto)>();
         var pendingCrossSheetCharts = new List<(ChartModel Chart, string DataRangeSheetName)>();
+        var pendingCrossSheetPictures = new List<(PictureModel Picture, string LinkedSourceSheetName)>();
         var cellStyleTable = LoadCellStyleTable(workbook, dto.CellStyles);
         Dictionary<CellStyleDto, StyleId>? styleIdCache = null;
         var sheetIndex = 1;
@@ -323,11 +324,36 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                 }
                 catch (FormatException) { /* skip unparseable allow-edit ranges */ }
             }
+            foreach (var passwordDto in sDto.AllowEditRangePasswords ?? [])
+            {
+                if (string.IsNullOrWhiteSpace(passwordDto.Range) || string.IsNullOrEmpty(passwordDto.Password))
+                    continue;
+
+                try
+                {
+                    var range = GridRange.Parse(passwordDto.Range, sheet.Id);
+                    if (range.Start.Sheet == sheet.Id && range.End.Sheet == sheet.Id &&
+                        sheet.AllowEditRanges.Contains(range))
+                    {
+                        sheet.AllowEditRangePasswords[range] = passwordDto.Password;
+                    }
+                }
+                catch (FormatException) { /* skip unparseable allow-edit range passwords */ }
+            }
             sheet.BackgroundImage = TryLoadWorksheetBackground(sDto.BackgroundImage);
             foreach (var pictureDto in sDto.Pictures ?? [])
             {
                 if (NativeJsonVisualDtoMapper.ToPicture(pictureDto, sheet.Id) is { } picture)
+                {
                     sheet.Pictures.Add(picture);
+                    // LinkedSourceRange was parsed against this (anchor) sheet by ToPicture; when the
+                    // linked range actually lives on a different sheet (LinkedSourceSheetName differs
+                    // from the anchor sheet's own name), rebind it once every sheet exists (P24).
+                    if (picture.LinkedSourceRange is not null &&
+                        !string.IsNullOrWhiteSpace(picture.LinkedSourceSheetName) &&
+                        !string.Equals(picture.LinkedSourceSheetName, sheet.Name, StringComparison.OrdinalIgnoreCase))
+                        pendingCrossSheetPictures.Add((picture, picture.LinkedSourceSheetName));
+                }
             }
             foreach (var textBoxDto in sDto.TextBoxes ?? [])
             {
@@ -434,6 +460,18 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             chart.DataRange = new GridRange(
                 range.Start with { Sheet = dataSheet.Id },
                 range.End with { Sheet = dataSheet.Id });
+        }
+
+        // Rebind cross-sheet linked-picture source ranges the same way (P24): ToPicture parsed
+        // LinkedSourceRange against the picture's anchor sheet, so restore the real source sheet now.
+        foreach (var (picture, linkedSourceSheetName) in pendingCrossSheetPictures)
+        {
+            var sourceSheet = ResolveLoadedSheet(workbook, loadedSheetsBySourceName, linkedSourceSheetName);
+            if (sourceSheet is null || picture.LinkedSourceRange is not { } linkedRange)
+                continue;
+            picture.LinkedSourceRange = new GridRange(
+                linkedRange.Start with { Sheet = sourceSheet.Id },
+                linkedRange.End with { Sheet = sourceSheet.Id });
         }
 
         var maxLoadedSheetIndex = Math.Max(0, workbook.Sheets.Count - 1);

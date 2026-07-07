@@ -3311,6 +3311,9 @@
   <data name="InsertLoc_SplitWindowAt" xml:space="preserve">
     <value>Split window at {0}</value>
   </data>
+  <data name="InsertLoc_RemovedWindowSplit" xml:space="preserve">
+    <value>Removed window split</value>
+  </data>
   <data name="InsertLoc_CouldNotSplitWindow" xml:space="preserve">
     <value>Could not split the window.</value>
   </data>
@@ -14707,6 +14710,9 @@ Saved XPS file:&#xD;
   </data>
   <data name="MainWindow_AutomationName_FormulaBar" xml:space="preserve">
     <value>Formula Bar</value>
+  </data>
+  <data name="MainWindow_AutomationName_InlineCellEditorFormat" xml:space="preserve">
+    <value>Cell {0} editor</value>
   </data>
   <data name="MainWindow_Text_Gridlines" xml:space="preserve">
     <value>Gridlines</value>

@@ -62,6 +62,9 @@ internal sealed class PageBox : Border
     /// <summary>1-based page number (informational; shown in header strip label).</summary>
     internal int PageNumber { get; }
 
+    /// <summary>Formatted PAGE field display text for this page, including section start/style.</summary>
+    internal string PageNumberText { get; }
+
     /// <summary>
     /// The ordered footnote IDs whose text is rendered in this page's footnote region.
     /// Empty when the page has no footnotes.  Set by <see cref="PaginatedEditorPanel.Build"/>.
@@ -174,10 +177,13 @@ internal sealed class PageBox : Border
         HeaderFooter? footerSlot = null,
         string? footerSlotName = null,
         int pageCount = 1,
+        string? pageNumberText = null,
         IReadOnlyList<int>? footnoteIds = null,
         IReadOnlyList<int>? endnoteIds = null)
     {
         PageNumber = pageNumber;
+        PageNumberText = pageNumberText
+            ?? pageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture);
         PageGeometry = page;
         HeaderSlotName = headerSlotName;
         FooterSlotName = footerSlotName;
@@ -214,7 +220,7 @@ internal sealed class PageBox : Border
         {
             HeaderSubEditor = BuildHfSubEditor(
                 sourceModel, headerSlot, marginLeft, marginRight, isActivated: false,
-                hfPageNumber: pageNumber, hfPageCount: pageCount);
+                hfPageNumber: pageNumber, hfPageNumberText: pageNumberText, hfPageCount: pageCount);
             Grid.SetRow(HeaderSubEditor, 0);
             stack.Children.Add(HeaderSubEditor);
         }
@@ -283,7 +289,7 @@ internal sealed class PageBox : Border
         {
             FooterSubEditor = BuildHfSubEditor(
                 sourceModel, footerSlot, marginLeft, marginRight, isActivated: false,
-                hfPageNumber: pageNumber, hfPageCount: pageCount);
+                hfPageNumber: pageNumber, hfPageNumberText: pageNumberText, hfPageCount: pageCount);
             Grid.SetRow(FooterSubEditor, 3);
             stack.Children.Add(FooterSubEditor);
         }
@@ -325,6 +331,7 @@ internal sealed class PageBox : Border
         double marginRight,
         bool isActivated,
         int hfPageNumber = 0,
+        string? hfPageNumberText = null,
         int hfPageCount = 0)
     {
         // Build wrapper document (same pattern as MainWindow.OpenHeaderFooterPane).
@@ -363,6 +370,7 @@ internal sealed class PageBox : Border
         if (hfPageNumber > 0)
         {
             DocumentView._renderHfPageNumber = hfPageNumber;
+            DocumentView._renderHfPageNumberText = hfPageNumberText;
             DocumentView._renderHfPageCount  = hfPageCount > 0 ? hfPageCount : 1;
         }
         try
@@ -372,6 +380,7 @@ internal sealed class PageBox : Border
         finally
         {
             DocumentView._renderHfPageNumber = 0;
+            DocumentView._renderHfPageNumberText = null;
             DocumentView._renderHfPageCount  = 0;
         }
 

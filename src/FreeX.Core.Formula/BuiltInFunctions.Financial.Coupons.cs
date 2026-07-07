@@ -19,13 +19,12 @@ public static partial class BuiltInFunctions
         int frequency = (int)Math.Truncate(ToNumber(frequencyValue));
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         if (!TryGetFinancialBasis(basisValue, out int basis)) return ErrorValue.Num;
-        _ = basis;
         double settlement = ToNumber(settlementValue);
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
         DateTime pcd = CouponDateBefore(sd, md, frequency);
-        return NumberResult((sd - pcd).TotalDays);
+        return NumberResult(CouponDayCount(pcd, sd, basis));
     }
 
     private static ScalarValue Coupdays(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -49,8 +48,10 @@ public static partial class BuiltInFunctions
         DateTime ncd = CouponDateAfter(sd, md, frequency);
         if (basis == 1)
             return NumberResult((ncd - pcd).TotalDays);
-        // Other bases use 360 or 365 adjusted
-        return NumberResult(365.0 / frequency);
+        if (basis == 3)
+            return NumberResult(365.0 / frequency);
+        // Bases 0 (US 30/360), 2 (Actual/360) and 4 (European 30/360) all use a 360-day year.
+        return NumberResult(360.0 / frequency);
     }
 
     private static ScalarValue Coupdaysnc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -65,13 +66,13 @@ public static partial class BuiltInFunctions
         double maturity = ToNumber(maturityValue);
         int frequency = (int)Math.Truncate(ToNumber(frequencyValue));
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
-        if (!TryGetFinancialBasis(basisValue, out _)) return ErrorValue.Num;
+        if (!TryGetFinancialBasis(basisValue, out int basis)) return ErrorValue.Num;
         double settlement = ToNumber(settlementValue);
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
         DateTime ncd = CouponDateAfter(sd, md, frequency);
-        return NumberResult((ncd - sd).TotalDays);
+        return NumberResult(CouponDayCount(sd, ncd, basis));
     }
 
     private static ScalarValue Coupncd(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

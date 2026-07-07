@@ -208,7 +208,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         var scopeRange = CurrentScopeRange();
 
         var source = scopeRange is { } range
-            ? _sheet.ConditionalFormats.Where(r => RangesOverlap(r.AppliesTo, range))
+            ? _sheet.ConditionalFormats.Where(r => r.AllRanges.Any(ar => RangesOverlap(ar, range)))
             : (IEnumerable<ConditionalFormat>)_sheet.ConditionalFormats;
 
         var priority = 1;

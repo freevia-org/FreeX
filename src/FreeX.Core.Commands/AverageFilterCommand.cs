@@ -61,11 +61,11 @@ public sealed class AverageFilterCommand : IWorkbookCommand
 
             if (numericCount == 0)
             {
-                if (!FilterHiddenRowUpdater.ContainsAnyInRange(sheet.FilterHiddenRows, _range))
+                if (!sheet.ColumnFilterOwnedRows.TryGetValue(filterCol, out var ownedRows) || ownedRows.Count == 0)
                     return new CommandOutcome(true);
 
                 _undoSnapshot.CaptureIfNeeded(sheet);
-                FilterHiddenRowUpdater.ClearRange(sheet.FilterHiddenRows, _range);
+                FilterHiddenRowUpdater.ClearColumnOwnedRange(sheet, filterCol, _range);
                 return new CommandOutcome(true);
             }
 
@@ -76,11 +76,11 @@ public sealed class AverageFilterCommand : IWorkbookCommand
                 var value = values[offset];
                 var visible = !double.IsNaN(value) && (_above ? value > average : value < average);
                 var row = firstDataRow + (uint)offset;
-                if (sheet.FilterHiddenRows.Contains(row) == !visible)
+                if (FilterHiddenRowUpdater.IsColumnOwnedVisibilityAlreadyCorrect(sheet, filterCol, row, visible))
                     continue;
 
                 _undoSnapshot.CaptureIfNeeded(sheet);
-                FilterHiddenRowUpdater.SetHidden(sheet.FilterHiddenRows, row, !visible);
+                FilterHiddenRowUpdater.ApplyColumnOwnedVisibility(sheet, filterCol, row, visible);
             }
         }
         finally

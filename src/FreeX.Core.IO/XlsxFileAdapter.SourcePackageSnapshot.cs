@@ -1043,7 +1043,7 @@ public sealed partial class XlsxFileAdapter
                 stream.Position = Count;
         }
 
-        public void RestoreWorkbookDefinedNames(Stream stream)
+        public void RestoreWorkbookDefinedNames(Stream stream, Workbook workbook)
         {
             var sourceWorkbookDefinedNames = ReadWorkbookDefinedNames();
             if (sourceWorkbookDefinedNames is null)
@@ -1053,7 +1053,7 @@ public sealed partial class XlsxFileAdapter
                 stream.Position = 0;
 
             using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
-            RestorePatchWorkbookDefinedNames(archive, sourceWorkbookDefinedNames);
+            RestorePatchWorkbookDefinedNames(archive, sourceWorkbookDefinedNames, workbook, XlsxNamedRangeMapper.GetLiveDefinedNameKeys(workbook), ReadSourceSheetNamesByLocalId());
         }
 
         public bool TrySavePatchedCellValues(
@@ -1156,8 +1156,13 @@ public sealed partial class XlsxFileAdapter
             // duplicate-row document if it tried.  Check the ORIGINAL source bytes here, before
             // any normalizer has had a chance to modify the in-memory copy, so the guard runs on
             // exactly the bytes that were stored when the workbook was loaded.
+            // Must cover dimension-only changes (row height/hidden, no cell edits) too --
+            // ApplyDimensionChanges -> ApplyRowDimension -> FindOrCreateRow skips r-less rows just
+            // like the cell path does, and would otherwise append a duplicate <row> for the same
+            // position instead of failing safe.
             var worksheetPathsWithChanges = changes
                 .Select(c => c.WorksheetPath)
+                .Concat(dimensionChanges.Select(c => c.WorksheetPath))
                 .Distinct(StringComparer.OrdinalIgnoreCase);
             using (var sourceReadPackage = new MemoryStream(Buffer, Offset, Count, writable: false))
             using (var sourceReadArchive = new ZipArchive(sourceReadPackage, ZipArchiveMode.Read))
@@ -1183,7 +1188,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchWorkbookCalculationProperties(archive);
                 NormalizePatchWorkbookExternalReferences(archive);
                 NormalizePatchWorkbookDefinedNames(archive);
-                RestorePatchWorkbookDefinedNames(archive, sourceWorkbookDefinedNames);
+                RestorePatchWorkbookDefinedNames(archive, sourceWorkbookDefinedNames, workbook, XlsxNamedRangeMapper.GetLiveDefinedNameKeys(workbook), ReadSourceSheetNamesByLocalId());
                 NormalizePatchWorkbookOleSize(archive);
                 NormalizePatchWorkbookPivotCaches(archive);
                 NormalizePatchPivotTableDefinitions(archive);
@@ -1635,7 +1640,38 @@ public sealed partial class XlsxFileAdapter
                 : copy;
         }
 
-        private static void RestorePatchWorkbookDefinedNames(ZipArchive archive, XElement? sourceDefinedNames)
+        /// <summary>
+        /// Reads the pristine pre-edit workbook's &lt;sheets&gt; order (sheet name by its ORIGINAL
+        /// zero-based position, i.e. the localSheetId a sheet-scoped definedName's localSheetId
+        /// attribute refers to). Used by <see cref="RestorePatchWorkbookDefinedNames"/> to remap a
+        /// resurrected name's scope onto the sheet's current index after a delete/reorder (P112).
+        /// </summary>
+        private List<string> ReadSourceSheetNamesByLocalId()
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            using var sourcePackage = new MemoryStream(Buffer, Offset, Count, writable: false);
+            using var archive = new ZipArchive(sourcePackage, ZipArchiveMode.Read);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return [];
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var sheets = workbookXml.Root?.Element(workbookNs + "sheets");
+            if (sheets is null)
+                return [];
+
+            return sheets
+                .Elements(workbookNs + "sheet")
+                .Select(sheet => sheet.Attribute("name")?.Value ?? string.Empty)
+                .ToList();
+        }
+
+        private static void RestorePatchWorkbookDefinedNames(
+            ZipArchive archive,
+            XElement? sourceDefinedNames,
+            Workbook workbook,
+            HashSet<string> liveModelDefinedNameKeys,
+            IReadOnlyList<string> sourceSheetNamesByLocalId)
         {
             if (sourceDefinedNames is null)
                 return;
@@ -1649,6 +1685,13 @@ public sealed partial class XlsxFileAdapter
             var root = workbookXml.Root;
             if (root is null)
                 return;
+
+            // Current (post-edit) sheet order, for remapping a resurrected sheet-scoped name's
+            // stale localSheetId (P112): index in this list = the CURRENT localSheetId for that name.
+            var targetSheetNames = root.Element(workbookNs + "sheets")?
+                .Elements(workbookNs + "sheet")
+                .Select(sheet => sheet.Attribute("name")?.Value ?? string.Empty)
+                .ToList() ?? [];
 
             var changed = false;
             var targetDefinedNames = root.Element(workbookNs + "definedNames");
@@ -1688,7 +1731,68 @@ public sealed partial class XlsxFileAdapter
                     continue;
                 }
 
-                targetDefinedNames.Add(new XElement(sourceName));
+                // This defined name exists in the pristine pre-edit source snapshot but was dropped
+                // by the patch/full-save name write-back. Only resurrect it here when it is still
+                // live in the current workbook model (e.g. it was preserved verbatim because the
+                // save path never touched defined names for this key) - never re-add a name the user
+                // deleted from the Name Manager, and never re-add an Excel-reserved name (Print_Area
+                // etc.), which is intentionally excluded from the model round-trip and handled
+                // elsewhere.
+                //
+                // liveModelDefinedNameKeys is derived purely from workbook.NamedFormulas/
+                // ScopedNamedFormulas (via XlsxNamedRangeMapper.CreateDefinedNameEntries), which
+                // itself re-checks workbook.ValidateNamedRangeName and skips any name FreeX's
+                // (stricter-than-Excel) validator rejects. Such a name was *never loaded into the
+                // model in the first place* (see LoadWorkbookDefinedNameFormulasFromPackage), so its
+                // absence from liveModelDefinedNameKeys does not mean the user deleted it - it means
+                // FreeX simply cannot round-trip it through the model. Gating resurrection on
+                // liveness alone would then permanently drop a name the user never touched. Detect
+                // that case directly and resurrect unconditionally, matching this method's original
+                // (pre-round-8) unconditional-restore behavior for names FreeX doesn't model; keep
+                // the liveness gate only for names FreeX *can* model (where an absence genuinely
+                // means the user removed it via the Name Manager).
+                var sourceNameAttr = sourceName.Attribute("name")?.Value;
+                var isModelRepresentable = !string.IsNullOrWhiteSpace(sourceNameAttr) &&
+                    workbook.ValidateNamedRangeName(sourceNameAttr) is null &&
+                    !IsUnmodelableDefinedNameRefersTo(sourceName.Value);
+                if (isModelRepresentable &&
+                    !liveModelDefinedNameKeys.Contains(key) &&
+                    !XlsxNamedRangeMapper.IsExcelReservedDefinedName(sourceNameAttr))
+                {
+                    continue;
+                }
+
+                var resurrected = new XElement(sourceName);
+                var localSheetIdAttr = resurrected.Attribute("localSheetId");
+                if (localSheetIdAttr is not null)
+                {
+                    // Sheet-scoped: remap the OLD localSheetId (an index into the pristine pre-edit
+                    // <sheets> order) onto that same sheet's CURRENT index, since sheet delete/reorder
+                    // shifts indices but this name was never live in the model to get remapped
+                    // automatically. If the scope sheet itself no longer exists (deleted), drop the
+                    // name entirely rather than emit an out-of-range/misscoped localSheetId (P112).
+                    if (!int.TryParse(localSheetIdAttr.Value, out var oldLocalSheetId) ||
+                        oldLocalSheetId < 0 ||
+                        oldLocalSheetId >= sourceSheetNamesByLocalId.Count)
+                        continue;
+
+                    var scopeSheetName = sourceSheetNamesByLocalId[oldLocalSheetId];
+                    var newLocalSheetId = targetSheetNames.FindIndex(
+                        name => string.Equals(name, scopeSheetName, StringComparison.OrdinalIgnoreCase));
+                    if (newLocalSheetId < 0)
+                        continue;
+
+                    localSheetIdAttr.Value = newLocalSheetId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    key = DefinedNameKey(resurrected);
+
+                    // Re-check for a collision at the remapped index: ClosedXML may already have
+                    // re-emitted an entry for this name at the sheet's new index (common for
+                    // Excel-reserved names like Print_Area).
+                    if (existingKeys.Contains(key))
+                        continue;
+                }
+
+                targetDefinedNames.Add(resurrected);
                 existingKeys.Add(key);
                 changed = true;
             }
@@ -1702,6 +1806,62 @@ public sealed partial class XlsxFileAdapter
                 var localSheetId = element.Attribute("localSheetId")?.Value ?? string.Empty;
                 return $"{name}\u001f{localSheetId}";
             }
+        }
+
+        // A defined name's refersTo body never makes it into the model (NamedRanges/
+        // NamedFormulas/ScopedNamedFormulas) when it is a constant literal (e.g. 0.21 or "Hello"),
+        // an external-workbook reference (e.g. [1]Sheet1!$A$1), or a broken reference (#REF!).
+        // XlsxNamedRangeMapper.IsFormulaExpression treats all three as "not a formula" (no
+        // operator/parenthesis characters), so LoadWorkbookDefinedNameFormulasFromPackage /
+        // LoadDefinedNames silently skip them, and they are equally not a resolvable plain range
+        // reference (ClosedXML has nothing to resolve for a constant, an external workbook index,
+        // or a #REF! error). ValidateNamedRangeName only inspects the NAME text, so it happily
+        // passes all three, which previously made isModelRepresentable true for content FreeX can
+        // never model - the resurrection gate must detect that case directly (matching the same
+        // never-loaded-in-the-first-place reasoning already applied to validator-rejected names).
+        private static bool IsUnmodelableDefinedNameRefersTo(string refersTo)
+        {
+            var body = refersTo.Trim();
+            if (body.StartsWith('='))
+                body = body[1..].Trim();
+
+            if (body.Length == 0)
+                return true;
+
+            // Broken reference, anywhere in the body (Excel keeps these; FreeX has no #REF! model).
+            if (body.Contains("#REF!", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // External-workbook reference: '[<index>]SheetName!...' (optionally with the sheet name
+            // single-quoted, e.g. '[1]Sheet1'!$A$1). FreeX only models references into the current
+            // workbook, so any external-workbook marker is unmodelable regardless of what follows.
+            var externalRefOpen = body.IndexOf('[');
+            var externalRefClose = externalRefOpen >= 0 ? body.IndexOf(']', externalRefOpen + 1) : -1;
+            if (externalRefOpen >= 0 &&
+                externalRefClose > externalRefOpen &&
+                int.TryParse(
+                    body.Substring(externalRefOpen + 1, externalRefClose - externalRefOpen - 1),
+                    out _))
+            {
+                return true;
+            }
+
+            // A plain range/cell reference always contains a '!' scope separator (SheetName!$A$1) or
+            // is a bare cell/range address without one; formula expressions were already excluded by
+            // the ValidateNamedRangeName/IsFormulaExpression checks made by the caller before this
+            // helper runs on the remaining "not a formula" bodies. Anything left with no '!' and no
+            // digit-bearing cell-address shape (e.g. a text/number/boolean constant such as 0.21 or
+            // "Hello") is a constant literal, which is never loaded into the model.
+            if (!body.Contains('!'))
+            {
+                var looksLikeBareCellAddress = body.Length > 0 &&
+                    (body[0] == '$' || char.IsLetter(body[0])) &&
+                    body.Any(char.IsDigit);
+                if (!looksLikeBareCellAddress)
+                    return true;
+            }
+
+            return false;
         }
 
         private static void NormalizePatchWorkbookOleSize(ZipArchive archive)
@@ -2823,6 +2983,26 @@ public sealed partial class XlsxFileAdapter
                 return false;
             }
 
+            // A Protect/Unprotect Workbook command changes IsStructureProtected/
+            // StructureProtectionPassword/ProtectionMetadata on the live model, but the patch-save
+            // path below only carries the *original* xl/workbook.xml workbookProtection element
+            // forward (cosmetically normalized) -- it never re-derives that element from the
+            // model. Detect a protection-state delta against the source bytes here and force the
+            // full ClosedXML save (which does call XlsxWorkbookMetadataWriter.ApplyProtection off
+            // the current model) instead of silently keeping a stale verifier. See
+            // FreeXCleanupMED15Tests.ProtectWorkbookCommand_AfterUnprotectingModernHashWorkbook_DropsStaleVerifierForOldPassword.
+            var sourceProtection = XlsxWorkbookMetadataReader.LoadWorkbookMetadata(archive);
+            if (sourceProtection.Protection.IsStructureProtected != workbook.IsStructureProtected ||
+                !string.Equals(sourceProtection.Protection.PasswordHash, workbook.StructureProtectionPassword, StringComparison.Ordinal) ||
+                !string.Equals(
+                    sourceProtection.ProtectionMetadata?.Get("workbookProtection"),
+                    workbook.ProtectionMetadata?.Get("workbookProtection"),
+                    StringComparison.Ordinal))
+            {
+                blockReason = "workbook_postprocessing_protection_changed";
+                return false;
+            }
+
             var hasWorkbookOfficeRevisionAttributes = HasOfficeRevisionAttributes(workbookXml.Root);
 
             var worksheetPathMap = XlsxWorkbookWorksheetPathMap.TryCreate(archive);
@@ -2858,6 +3038,28 @@ public sealed partial class XlsxFileAdapter
                 if (!sheetsByWorksheetPath.TryGetValue(worksheetPath, out var sheet))
                 {
                     blockReason = "package_guard_unmatched_worksheet_part";
+                    return false;
+                }
+
+                // A Protect/Unprotect Sheet command changes IsProtected/ProtectionPassword/
+                // ProtectionMetadata on the live model, but the patch-save path below
+                // (NormalizePatchWorksheetProtection) only cosmetically normalizes the *original*
+                // sheetProtection element -- it never re-derives it from the model (that only
+                // happens on the full/source-independent save path via
+                // XlsxWorksheetProtectionMetadataWriter). Detect a protection-state delta against
+                // the source bytes here and force the full ClosedXML save instead of silently
+                // keeping a stale verifier or dropping a freshly-typed password. Mirrors the
+                // workbook-level guard above (workbook_postprocessing_protection_changed). See
+                // FreeXR11B7Tests.ProtectSheetCommand_AfterUnprotectingModernHashSheet_DropsStaleVerifierForOldPassword.
+                if (!TryReadSheetProtectionPackageGuardInfo(worksheetEntry, workbookNs, out var sourceSheetProtection))
+                {
+                    blockReason = "package_guard_worksheet_xml";
+                    return false;
+                }
+
+                if (WorksheetProtectionStateChanged(sourceSheetProtection, sheet))
+                {
+                    blockReason = "worksheet_postprocessing_protection_changed";
                     return false;
                 }
 
@@ -3188,6 +3390,7 @@ public sealed partial class XlsxFileAdapter
                 .Where(element => string.Equals(element.Attribute("uri")?.Value, diagramGraphicDataUri, StringComparison.Ordinal))
                 .ToList();
             var pictureElements = drawingXml.Descendants(spreadsheetDrawingNs + "pic").ToList();
+            var contentPartElements = drawingXml.Descendants(spreadsheetDrawingNs + "contentPart").ToList();
             var (sourceTextBoxes, sourceShapes) = XlsxWorksheetDrawingPartReader.ReadShapeParts(drawingXml);
 
             // Loaded here (rather than alongside the relationship-graph walk further below) so the picture
@@ -3242,14 +3445,21 @@ public sealed partial class XlsxFileAdapter
                 var connectorCount = anchor
                     .Descendants(spreadsheetDrawingNs + "cxnSp")
                     .Count(element => !element.Ancestors(markupCompatNs + "Fallback").Any());
-                if (chartCount + diagramCount + pictureCount + shapeCount + connectorCount == 0 ||
+                // Ink annotations (hand-drawn strokes anchored via <xdr:contentPart r:id="..."/>,
+                // referencing an InkML part) are not modeled anywhere in the reader/writer. The
+                // full-rewrite path (XlsxWorksheetDrawingObjectWriter) has no concept of them at all
+                // and would silently drop the annotation. Count them here so an anchor containing
+                // only a contentPart is still recognized as patch-safe (preserved verbatim) instead
+                // of forcing a lossy full rewrite.
+                var contentPartCount = anchor.Descendants(spreadsheetDrawingNs + "contentPart").Count();
+                if (chartCount + diagramCount + pictureCount + shapeCount + connectorCount + contentPartCount == 0 ||
                     anchor.Descendants(spreadsheetDrawingNs + "graphicFrame").Count() != chartCount + diagramCount)
                 {
                     return false;
                 }
             }
 
-            if ((chartElements.Count > 0 || pictureElements.Count > 0) && drawingRelsEntry is null)
+            if ((chartElements.Count > 0 || pictureElements.Count > 0 || contentPartElements.Count > 0) && drawingRelsEntry is null)
                 return false;
 
             var referencedRelationshipIds = new HashSet<string>(StringComparer.Ordinal);
@@ -3346,6 +3556,35 @@ public sealed partial class XlsxFileAdapter
                 {
                     return false;
                 }
+            }
+
+            // Ink annotations: <xdr:contentPart r:id="..."/> references an InkML (or similar) part
+            // by relationship id. Never modeled in the drawing object model, so the only safe
+            // handling is to preserve the anchor and its referenced part verbatim on the patch-save
+            // path. Validate the relationship resolves to a real package part (any content type -
+            // Office does not constrain contentPart targets to a single relationship type) and mark
+            // the relationship id as referenced so it isn't rejected as orphaned below.
+            foreach (var contentPartElement in contentPartElements)
+            {
+                var contentPartRelId = contentPartElement.Attribute(relNs + "id")?.Value;
+                if (string.IsNullOrWhiteSpace(contentPartRelId) ||
+                    !referencedRelationshipIds.Add(contentPartRelId))
+                {
+                    return false;
+                }
+
+                var contentPartRelationship = relationshipElements.FirstOrDefault(element =>
+                    RelationshipHasId(element, contentPartRelId) && RelationshipHasInternalTarget(element));
+                var contentPartTarget = contentPartRelationship?.Attribute("Target")?.Value;
+                if (contentPartRelationship is null ||
+                    string.IsNullOrWhiteSpace(contentPartTarget))
+                {
+                    return false;
+                }
+
+                var contentPartPath = XlsxPackagePath.ResolveRelationshipTarget(drawingPath, contentPartTarget);
+                if (archive.GetEntry(contentPartPath) is null)
+                    return false;
             }
 
             if (relationshipElements.Any(element =>
@@ -5018,6 +5257,101 @@ public sealed partial class XlsxFileAdapter
             }
         }
 
+        private readonly record struct XlsxWorksheetSourceProtectionInfo(
+            bool IsProtected,
+            string? PasswordHash);
+
+        /// <summary>
+        /// Streaming read of just the root-level <c>sheetProtection</c> element's protection-relevant
+        /// attributes, without loading the full worksheet XDocument (mirrors
+        /// <see cref="XlsxWorksheetGridXmlNormalizer.AnyRowMissingRowIndex"/>'s style). Encodes the
+        /// password the same way <c>XlsxFileAdapter.SheetXmlLayout</c>'s
+        /// <c>ReadSheetProtectionPasswordHash</c> does at full-load time, so the result is directly
+        /// comparable to <see cref="Sheet.ProtectionPassword"/>.
+        /// </summary>
+        private static bool TryReadSheetProtectionPackageGuardInfo(
+            ZipArchiveEntry worksheetEntry,
+            XNamespace worksheetNs,
+            out XlsxWorksheetSourceProtectionInfo info)
+        {
+            info = new XlsxWorksheetSourceProtectionInfo(false, null);
+
+            try
+            {
+                using var stream = worksheetEntry.Open();
+                using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
+                reader.MoveToContent();
+                if (reader.NodeType != XmlNodeType.Element ||
+                    reader.LocalName != "worksheet" ||
+                    !string.Equals(reader.NamespaceURI, worksheetNs.NamespaceName, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+
+                if (reader.IsEmptyElement)
+                    return true;
+
+                var rootDepth = reader.Depth;
+                while (reader.Read())
+                {
+                    if (reader.NodeType == XmlNodeType.EndElement)
+                    {
+                        if (reader.Depth == rootDepth)
+                            break;
+                        continue;
+                    }
+
+                    if (reader.NodeType != XmlNodeType.Element)
+                        continue;
+
+                    if (reader.Depth != rootDepth + 1 ||
+                        !string.Equals(reader.NamespaceURI, worksheetNs.NamespaceName, StringComparison.Ordinal) ||
+                        reader.LocalName != "sheetProtection")
+                    {
+                        continue;
+                    }
+
+                    var isProtected = XlsxWorksheetXmlValueParser.IsTruthy(reader.GetAttribute("sheet"));
+                    var legacyPassword = reader.GetAttribute("password");
+                    string? passwordHash;
+                    if (!string.IsNullOrEmpty(legacyPassword))
+                    {
+                        passwordHash = legacyPassword;
+                    }
+                    else
+                    {
+                        var hashValue = reader.GetAttribute("hashValue");
+                        passwordHash = string.IsNullOrEmpty(hashValue)
+                            ? null
+                            : ProtectionPasswordHelper.EncodeIso29500Hash(
+                                reader.GetAttribute("algorithmName"),
+                                reader.GetAttribute("spinCount"),
+                                reader.GetAttribute("saltValue"),
+                                hashValue);
+                    }
+
+                    info = new XlsxWorksheetSourceProtectionInfo(isProtected, passwordHash);
+                    return true;
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// True when the live model's sheet-protection state has diverged from what the source
+        /// bytes still hold (i.e. a Protect/Unprotect Sheet command ran since load). Compares only
+        /// what patch-save can never re-derive from the model (IsProtected + the password/hash
+        /// verifier) -- permission-boolean changes are handled separately and are safe to patch.
+        /// </summary>
+        private static bool WorksheetProtectionStateChanged(XlsxWorksheetSourceProtectionInfo source, Sheet sheet) =>
+            source.IsProtected != sheet.IsProtected ||
+            !string.Equals(source.PasswordHash, sheet.ProtectionPassword, StringComparison.Ordinal);
+
         private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
         {
             var path = XlsxPackagePath.NormalizeEntryPath(entry);
@@ -6457,34 +6791,50 @@ public sealed partial class XlsxFileAdapter
         {
             var sheet = new Sheet(patch.SheetId, patch.WorksheetPath);
             patch.Current.ApplyTo(sheet);
-            // XlsxWorksheetViewBaseline only tracks ViewMode/ShowGridlines/ShowHeadings/
-            // ShowRulers/ZoomPercent/ShowFormulas/IsRightToLeft, so the synthetic Sheet built
-            // above never carries the scroll position (topLeftCell). Seed it from the worksheet's own
+            // XlsxWorksheetViewBaseline doesn't track the scroll position (topLeftCell), so the
+            // synthetic Sheet built above never carries it. Seed it from the worksheet's own
             // existing sheetView before rewriting, so patching an unrelated view attribute
             // (e.g. zoom) doesn't silently strip the user's real scroll position.
             var (existingTopRow, existingLeftCol) = ReadExistingTopLeftCell(worksheetXml);
             sheet.ViewTopRow = existingTopRow;
             sheet.ViewLeftCol = existingLeftCol;
+
+            // XlsxWorksheetViewWriter.UpdateSheetView only knows how to emit a <pane> element for
+            // the split-pane case (state="split"); it has no support for writing a frozen-pane
+            // (state="frozen"/"frozenSplit") <pane> element, never touches an existing one, and
+            // never removes a <pane> element to represent unfreezing/un-splitting. If
+            // FrozenRows/FrozenCols or SplitRow/SplitColumn actually changed as part of this patch,
+            // that sub-change cannot be represented by the writer at all -- rather than silently
+            // reverting the user's freeze/split change (which then gets baked into the new baseline
+            // as "already on disk" and is permanently lost), escalate to a full save so the
+            // authoritative full-save writer (which does handle freeze/split correctly) applies it.
+            var (existingFrozenRows, existingFrozenCols, _, _) =
+                ReadExistingPaneState(worksheetXml);
+            if (patch.Original.FrozenRows != patch.Current.FrozenRows ||
+                patch.Original.FrozenCols != patch.Current.FrozenCols)
+            {
+                return false;
+            }
+
+            if (sheet.FrozenRows == 0 && sheet.FrozenCols == 0 &&
+                (patch.Original.SplitRow != patch.Current.SplitRow ||
+                 patch.Original.SplitColumn != patch.Current.SplitColumn) &&
+                (existingFrozenRows > 0 || existingFrozenCols > 0 ||
+                 patch.Current.SplitRow is null && patch.Current.SplitColumn is null))
+            {
+                // Either the on-disk pane is currently frozen (not split) and the writer can't
+                // convert a frozen pane into a split one, or the split is being removed entirely
+                // (writer never removes a <pane> element) -- neither is representable by the
+                // in-place writer, so escalate to a full save instead of silently reverting.
+                return false;
+            }
+
             return XlsxWorksheetViewWriter.UpdateSheetView(worksheetXml, sheet);
         }
 
         private static (uint? Row, uint? Col) ReadExistingTopLeftCell(XDocument worksheetXml)
         {
-            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            var sheetViews = worksheetXml.Root?.Element(worksheetNs + "sheetViews");
-            if (sheetViews is null)
-                return (null, null);
-
-            XElement? sheetView = null;
-            foreach (var candidateView in sheetViews.Elements(worksheetNs + "sheetView"))
-            {
-                if (string.Equals(candidateView.Attribute("workbookViewId")?.Value ?? "0", "0", StringComparison.Ordinal))
-                {
-                    sheetView = candidateView;
-                    break;
-                }
-            }
-
+            var sheetView = FindPrimarySheetView(worksheetXml);
             var topLeftCell = sheetView?.Attribute("topLeftCell")?.Value;
             if (string.IsNullOrWhiteSpace(topLeftCell))
                 return (null, null);
@@ -6492,6 +6842,42 @@ public sealed partial class XlsxFileAdapter
             return CellAddress.TryParse(topLeftCell.Split(':')[0], SheetId.New(), out var address)
                 ? (address.Row, address.Col)
                 : (null, null);
+        }
+
+        private static (uint FrozenRows, uint FrozenCols, uint? SplitRow, uint? SplitColumn) ReadExistingPaneState(
+            XDocument worksheetXml)
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var sheetView = FindPrimarySheetView(worksheetXml);
+            var pane = sheetView?.Element(worksheetNs + "pane");
+            if (pane is null)
+                return (0, 0, null, null);
+
+            var paneState = pane.Attribute("state")?.Value;
+            var rowSplit = XlsxWorksheetXmlValueParser.ParsePaneSplit(pane.Attribute("ySplit")?.Value);
+            var columnSplit = XlsxWorksheetXmlValueParser.ParsePaneSplit(pane.Attribute("xSplit")?.Value);
+            var isFrozen = paneState is "frozen" or "frozenSplit";
+            var frozenRows = isFrozen ? XlsxWorksheetXmlValueParser.ValidFrozenRowsOrZero(rowSplit ?? 0) : 0;
+            var frozenCols = isFrozen ? XlsxWorksheetXmlValueParser.ValidFrozenColumnsOrZero(columnSplit ?? 0) : 0;
+            var splitRow = isFrozen ? null : rowSplit;
+            var splitColumn = isFrozen ? null : columnSplit;
+            return (frozenRows, frozenCols, splitRow, splitColumn);
+        }
+
+        private static XElement? FindPrimarySheetView(XDocument worksheetXml)
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var sheetViews = worksheetXml.Root?.Element(worksheetNs + "sheetViews");
+            if (sheetViews is null)
+                return null;
+
+            foreach (var candidateView in sheetViews.Elements(worksheetNs + "sheetView"))
+            {
+                if (string.Equals(candidateView.Attribute("workbookViewId")?.Value ?? "0", "0", StringComparison.Ordinal))
+                    return candidateView;
+            }
+
+            return null;
         }
 
         public static bool ApplyCommentChanges(
@@ -8691,7 +9077,14 @@ public sealed partial class XlsxFileAdapter
         bool ShowRulers,
         int ZoomPercent,
         bool ShowFormulas,
-        bool IsRightToLeft)
+        bool IsRightToLeft,
+        bool ShowZeros,
+        uint FrozenRows,
+        uint FrozenCols,
+        uint? SplitRow,
+        uint? SplitColumn,
+        uint? ActiveRow,
+        uint? ActiveCol)
     {
         public static XlsxWorksheetViewBaseline Capture(Sheet sheet) =>
             new(
@@ -8701,7 +9094,14 @@ public sealed partial class XlsxFileAdapter
                 sheet.ShowRulers,
                 XlsxWorksheetValueSanitizer.ValidZoomPercentOrDefault(sheet.ZoomPercent),
                 sheet.ShowFormulas,
-                sheet.IsRightToLeft);
+                sheet.IsRightToLeft,
+                sheet.ShowZeros,
+                sheet.FrozenRows,
+                sheet.FrozenCols,
+                sheet.SplitRow,
+                sheet.SplitColumn,
+                sheet.ActiveRow,
+                sheet.ActiveCol);
 
         public int CountDifferences(XlsxWorksheetViewBaseline other)
         {
@@ -8720,6 +9120,20 @@ public sealed partial class XlsxFileAdapter
                 count++;
             if (IsRightToLeft != other.IsRightToLeft)
                 count++;
+            if (ShowZeros != other.ShowZeros)
+                count++;
+            if (FrozenRows != other.FrozenRows)
+                count++;
+            if (FrozenCols != other.FrozenCols)
+                count++;
+            if (SplitRow != other.SplitRow)
+                count++;
+            if (SplitColumn != other.SplitColumn)
+                count++;
+            if (ActiveRow != other.ActiveRow)
+                count++;
+            if (ActiveCol != other.ActiveCol)
+                count++;
 
             return count;
         }
@@ -8733,6 +9147,13 @@ public sealed partial class XlsxFileAdapter
             sheet.ZoomPercent = ZoomPercent;
             sheet.ShowFormulas = ShowFormulas;
             sheet.IsRightToLeft = IsRightToLeft;
+            sheet.ShowZeros = ShowZeros;
+            sheet.FrozenRows = FrozenRows;
+            sheet.FrozenCols = FrozenCols;
+            sheet.SplitRow = SplitRow;
+            sheet.SplitColumn = SplitColumn;
+            sheet.ActiveRow = ActiveRow;
+            sheet.ActiveCol = ActiveCol;
         }
     }
 

@@ -48,8 +48,10 @@ public sealed record FreeWVisualEvidenceNormalizedRow(
     FreeWVisualDrawingObjectExpectation DrawingObjects,
     FreeWVisualChartSmartArtExpectation ChartSmartArt,
     FreeWVisualFieldExpectation Fields,
+    FreeWVisualHeaderFooterExpectation HeaderFooters,
     FreeWVisualTableOfAuthoritiesExpectation TableOfAuthorities,
     FreeWVisualProofingDiagnosticExpectation ProofingDiagnostics,
+    FreeWVisualReviewProtectionExpectation ReviewProtection,
     FreeWVisualEvidenceTrust Trust);
 
 public sealed record FreeWVisualEvidenceNormalizedSummary(
@@ -106,7 +108,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 23;
+    public const int SummarySchemaVersion = 25;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -125,11 +127,17 @@ public static class FreeWVisualEvidenceManifestNormalizer
     [
         "f2-section-landscape"
     ];
+    public static IReadOnlyList<string> SectionPageSurfaceRendererScenarioIds { get; } =
+    [
+        "f2-section-landscape",
+        "f2-hf-images"
+    ];
     public static IReadOnlyList<string> ReviewRendererScenarioIds { get; } =
     [
         "f2-tracked-changes",
         "f2-comments",
-        "review-proofing-visual-depth"
+        "review-proofing-visual-depth",
+        "review-protection-proofing-comments-only"
     ];
     public static IReadOnlyList<string> TableRendererScenarioIds { get; } =
     [
@@ -159,6 +167,20 @@ public static class FreeWVisualEvidenceManifestNormalizer
     [
         "field-page-number-variants",
         "references-heavy-fields"
+    ];
+    public static IReadOnlyList<string> EquationRendererScenarioIds { get; } =
+    [
+        "equation-structures"
+    ];
+    public static IReadOnlyList<string> HeaderFooterRendererScenarioIds { get; } =
+    [
+        "f2-hf-basic",
+        "f2-hf-firstpage",
+        "f2-hf-oddeven",
+        "f2-hf-images",
+        "field-page-number-variants",
+        "backstage-print-preview-fidelity",
+        "backstage-pdf-export-fidelity"
     ];
 
     private static readonly string[] ReferencesHeavyRequiredComplexFieldKeywords =
@@ -256,6 +278,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
         ValidateSectionGeometryRendererPairs(rows, failures);
         ValidateReviewRendererPairs(rows, failures);
         ValidateFieldRendererPairs(rows, failures);
+        ValidateEquationRendererPairs(rows, failures);
+        ValidateHeaderFooterRendererPairs(rows, failures);
         ValidateTableRendererPairs(rows, failures);
         ValidateDrawingObjectRendererPairs(rows, failures);
         ValidateWordArtWatermarkRendererPairs(rows, failures);
@@ -664,6 +688,29 @@ public static class FreeWVisualEvidenceManifestNormalizer
                     scenario.ScenarioId,
                     scenario.MinimumExpectedOutputs));
             }
+            else if (EquationRendererScenarioIds.Contains(scenario.ScenarioId, StringComparer.OrdinalIgnoreCase))
+            {
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    WpfHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    AvaloniaHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+            }
+            else if (HeaderFooterRendererScenarioIds.Contains(scenario.ScenarioId, StringComparer.OrdinalIgnoreCase)
+                && scenario.ExpectedFeatureTags.Contains("header-footer-images", StringComparer.OrdinalIgnoreCase))
+            {
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    WpfHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    AvaloniaHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+            }
             else if (scenario.ScenarioId.StartsWith("f2-", StringComparison.OrdinalIgnoreCase))
             {
                 expected.Add(new FreeWVisualEvidenceExpectedScenario(
@@ -992,10 +1039,15 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("pixel dimensions must be positive");
         if (row.PixelStats.Width != row.PixelWidth || row.PixelStats.Height != row.PixelHeight)
             rowFailures.Add("pixel stats dimensions do not match evidence dimensions");
-        if (!string.Equals(row.OutputName, row.PageExpectation.ExpectedOutputName, StringComparison.OrdinalIgnoreCase))
-            rowFailures.Add($"output name '{row.OutputName}' does not match expected '{row.PageExpectation.ExpectedOutputName}'");
-        ValidateFeatureExpectations(row, rowFailures);
-        ValidateBackstageCaptureSource(row, rowFailures);
+        var pageExpectation = row.PageExpectation with
+        {
+            Tables = FreeWVisualEvidencePlanner.NormalizeTableFillEvidence(row.PageExpectation.Tables)
+        };
+        var normalizedRow = row with { PageExpectation = pageExpectation };
+        if (!string.Equals(row.OutputName, pageExpectation.ExpectedOutputName, StringComparison.OrdinalIgnoreCase))
+            rowFailures.Add($"output name '{row.OutputName}' does not match expected '{pageExpectation.ExpectedOutputName}'");
+        ValidateFeatureExpectations(normalizedRow, rowFailures);
+        ValidateBackstageCaptureSource(normalizedRow, rowFailures);
 
         var outputPath = ResolveOutputPath(row.OutputPath, manifestDirectory);
         var relativeOutputPath = NormalizeRelativePath(runRoot, outputPath);
@@ -1046,17 +1098,19 @@ public static class FreeWVisualEvidenceManifestNormalizer
             row.HostMetadata
                 .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.OrdinalIgnoreCase),
-            row.PageExpectation.PageNumber,
-            row.PageExpectation.PageCount,
-            row.PageExpectation.LayoutKind,
-            row.PageExpectation.ExpectedOutputName,
-            row.PageExpectation.Features,
-            row.PageExpectation.Tables,
-            row.PageExpectation.DrawingObjects,
-            row.PageExpectation.ChartSmartArt,
-            row.PageExpectation.Fields,
-            row.PageExpectation.TableOfAuthorities,
-            row.PageExpectation.ProofingDiagnostics,
+            pageExpectation.PageNumber,
+            pageExpectation.PageCount,
+            pageExpectation.LayoutKind,
+            pageExpectation.ExpectedOutputName,
+            pageExpectation.Features,
+            pageExpectation.Tables,
+            pageExpectation.DrawingObjects,
+            pageExpectation.ChartSmartArt,
+            pageExpectation.Fields,
+            pageExpectation.HeaderFooters ?? HeaderFooterVisualPlanner.EmptyExpectation,
+            pageExpectation.TableOfAuthorities,
+            pageExpectation.ProofingDiagnostics,
+            pageExpectation.ReviewProtection,
             trust);
     }
 
@@ -1088,11 +1142,26 @@ public static class FreeWVisualEvidenceManifestNormalizer
         ValidateDrawingObjectFeatureTags(row, rowFailures);
         ValidateChartSmartArtFeatureTags(row, rowFailures);
         ValidateFieldFeatureTags(row, rowFailures);
+        ValidateHeaderFooterFeatureTags(row, rowFailures);
         ValidateProofingFeatureTags(row, rowFailures);
+        ValidateReviewProtectionFeatureTags(row, rowFailures);
         if (features.Section.SectionOrdinal <= 0)
             rowFailures.Add("section ordinal must be positive");
         if (features.Section.SectionRelativePageNumber <= 0)
             rowFailures.Add("section-relative page number must be positive");
+    }
+
+    private static void ValidateHeaderFooterFeatureTags(
+        FreeWVisualEvidenceRow row,
+        List<string> rowFailures)
+    {
+        var tags = row.ExpectedFeatureTags;
+        var headerFooters = row.PageExpectation.HeaderFooters ?? HeaderFooterVisualPlanner.EmptyExpectation;
+        if (tags.Contains("header-footer-images", StringComparer.OrdinalIgnoreCase) && !headerFooters.HasImages)
+        {
+            rowFailures.Add(
+                "scenario expects header/footer image evidence but the page expectation records no header/footer images");
+        }
     }
 
     private static void ValidateReferencesHeavyTableOfAuthoritiesEvidence(
@@ -1253,6 +1322,18 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("drawing-object evidence expects WordArt but the object plan records none");
         if (tags.Contains("drawing-groups", StringComparer.OrdinalIgnoreCase) && !objects.HasGroups)
             rowFailures.Add("drawing-object evidence expects drawing groups but the object plan records none");
+        var groupChildren = NormalizeGroupChildren(objects.GroupChildren);
+        if (tags.Contains("grouped-mixed-children", StringComparer.OrdinalIgnoreCase) && !groupChildren.HasMixedTypedChildren)
+            rowFailures.Add("drawing-object evidence expects grouped image/chart/SmartArt children but the group child plan records none");
+        if (tags.Contains("grouped-child-images", StringComparer.OrdinalIgnoreCase) && groupChildren.ImageChildCount <= 0)
+            rowFailures.Add("drawing-object evidence expects grouped image children but the group child plan records none");
+        if (tags.Contains("grouped-child-charts", StringComparer.OrdinalIgnoreCase) && groupChildren.ChartChildCount <= 0)
+            rowFailures.Add("drawing-object evidence expects grouped chart children but the group child plan records none");
+        if (tags.Contains("grouped-child-smartart", StringComparer.OrdinalIgnoreCase) && groupChildren.SmartArtChildCount <= 0)
+            rowFailures.Add("drawing-object evidence expects grouped SmartArt children but the group child plan records none");
+        if (tags.Contains("grouped-child-visual-signature", StringComparer.OrdinalIgnoreCase)
+            && (groupChildren.ChildVisualSignatures is null || groupChildren.ChildVisualSignatures.Count == 0))
+            rowFailures.Add("drawing-object evidence expects grouped child visual signatures but the group child plan records none");
         if (tags.Contains("behind-text", StringComparer.OrdinalIgnoreCase) && objects.BehindTextCount <= 0)
             rowFailures.Add("drawing-object evidence expects behind-text objects but the object plan records none");
         if (tags.Contains("in-front", StringComparer.OrdinalIgnoreCase) && objects.InFrontCount <= 0)
@@ -1277,6 +1358,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("drawing-object evidence expects rendered grouped child effects but the object plan records none");
         if (tags.Contains("grouped-child-shape-effects", StringComparer.OrdinalIgnoreCase) && objects.Effects.RenderedGroupChildShapeEffectObjectCount <= 0)
             rowFailures.Add("drawing-object evidence expects rendered grouped child shape effects but the object plan records none");
+        if (tags.Contains("grouped-child-wordart-effects", StringComparer.OrdinalIgnoreCase) && objects.Effects.RenderedGroupChildWordArtEffectObjectCount <= 0)
+            rowFailures.Add("drawing-object evidence expects rendered grouped child WordArt effects but the object plan records none");
         if (tags.Contains("shadow", StringComparer.OrdinalIgnoreCase) && !objects.Effects.HasShadow)
             rowFailures.Add("drawing-object evidence expects shadow effects but the object plan records none");
         if (tags.Contains("glow", StringComparer.OrdinalIgnoreCase) && !objects.Effects.HasGlow)
@@ -1408,6 +1491,76 @@ public static class FreeWVisualEvidenceManifestNormalizer
             && proofing.LanguageTags.Count == 0)
         {
             rowFailures.Add("scenario expects proofing language evidence but the proofing diagnostics record no language tags");
+        }
+    }
+
+    private static void ValidateReviewProtectionFeatureTags(
+        FreeWVisualEvidenceRow row,
+        List<string> rowFailures)
+    {
+        var tags = row.ExpectedFeatureTags;
+        if (!tags.Contains("review-protection-state", StringComparer.OrdinalIgnoreCase)
+            && !tags.Contains("protection-command-matrix", StringComparer.OrdinalIgnoreCase)
+            && !tags.Contains("comments-only-protection", StringComparer.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var protection = row.PageExpectation.ReviewProtection;
+        if (tags.Contains("comments-only-protection", StringComparer.OrdinalIgnoreCase))
+        {
+            if (!string.Equals(protection.ProtectionMode, ProtectionMode.CommentsOnly.ToString(), StringComparison.Ordinal))
+                rowFailures.Add("scenario expects CommentsOnly protection but the page expectation records a different protection mode");
+            if (!protection.IsProtected)
+                rowFailures.Add("scenario expects active editing restrictions but the page expectation records an unprotected document");
+            if (protection.IsMarkedAsFinal || protection.MarkAsFinal.IsChecked)
+                rowFailures.Add("scenario expects Mark as Final to be unchecked for the CommentsOnly protection slice");
+            if (!protection.RestrictEditing.IsChecked)
+                rowFailures.Add("scenario expects Restrict Editing checked but the page expectation records it unchecked");
+        }
+
+        if (tags.Contains("body-edit-blocked", StringComparer.OrdinalIgnoreCase))
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.BodyTextEdit), "None", isAllowed: false);
+        if (tags.Contains("body-formatting-blocked", StringComparer.OrdinalIgnoreCase))
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.BodyFormatting), "None", isAllowed: false);
+        if (tags.Contains("proofing-replacement-blocked", StringComparer.OrdinalIgnoreCase))
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.ProofingReplacement), "None", isAllowed: false);
+        if (tags.Contains("history-blocked", StringComparer.OrdinalIgnoreCase))
+        {
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.HistoryUndo), nameof(DocumentCommandMutationKind.BodyText), isAllowed: false);
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.HistoryRedo), nameof(DocumentCommandMutationKind.BodyFormatting), isAllowed: false);
+        }
+        if (tags.Contains("comment-workflow-allowed", StringComparer.OrdinalIgnoreCase))
+        {
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.CommentInsert), "None", isAllowed: true);
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.CommentReply), "None", isAllowed: true);
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.CommentResolve), "None", isAllowed: true);
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.CommentDelete), "None", isAllowed: true);
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.HistoryUndo), nameof(DocumentCommandMutationKind.Comment), isAllowed: true);
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.HistoryRedo), nameof(DocumentCommandMutationKind.Comment), isAllowed: true);
+        }
+    }
+
+    private static void RequireProtectionDecision(
+        List<string> rowFailures,
+        FreeWVisualReviewProtectionExpectation protection,
+        string operation,
+        string mutationKind,
+        bool isAllowed)
+    {
+        var decision = protection.Operations.SingleOrDefault(item =>
+            string.Equals(item.Operation, operation, StringComparison.Ordinal)
+            && string.Equals(item.MutationKind, mutationKind, StringComparison.Ordinal));
+        if (decision is null)
+        {
+            rowFailures.Add($"scenario expects protection decision {operation}/{mutationKind} but the page expectation records none");
+            return;
+        }
+
+        if (decision.IsAllowed != isAllowed)
+        {
+            rowFailures.Add(
+                $"scenario expects protection decision {operation}/{mutationKind} allowed={BoolFlag(isAllowed)} but the page expectation records allowed={BoolFlag(decision.IsAllowed)}");
         }
     }
 
@@ -1764,6 +1917,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
                 ValidateRendererPairRow("review renderer pair", scenarioId, pageNumber, wpf, avalonia, failures);
                 ValidateReviewProofingPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+                ValidateReviewProtectionPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
             }
         }
     }
@@ -1818,6 +1972,112 @@ public static class FreeWVisualEvidenceManifestNormalizer
                     ValidateReferencesHeavyToaPairRow(pageNumber, wpf, avalonia, failures);
             }
         }
+    }
+
+    private static void ValidateEquationRendererPairs(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,
+        List<string> failures)
+    {
+        foreach (var scenarioId in EquationRendererScenarioIds)
+        {
+            var wpfRows = TrustedRowsForHostScenario(rows, WpfHostId, scenarioId);
+            var avaloniaRows = TrustedRowsForHostScenario(rows, AvaloniaHostId, scenarioId);
+            if (wpfRows.Count == 0 || avaloniaRows.Count == 0)
+                continue;
+
+            ValidateUniquePages(scenarioId, WpfHostId, wpfRows, failures);
+            ValidateUniquePages(scenarioId, AvaloniaHostId, avaloniaRows, failures);
+
+            var wpfPages = wpfRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var avaloniaPages = avaloniaRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var requiredPages = RequiredScenarioPages(scenarioId);
+            var missingAvaloniaPages = requiredPages.Except(avaloniaPages).ToList();
+            var missingWpfPages = requiredPages.Except(wpfPages).ToList();
+            if (missingAvaloniaPages.Count > 0)
+            {
+                failures.Add(
+                    $"equation renderer pair '{scenarioId}' is missing Avalonia page(s): {FormatPages(missingAvaloniaPages)}");
+            }
+
+            if (missingWpfPages.Count > 0)
+            {
+                failures.Add(
+                    $"equation renderer pair '{scenarioId}' is missing WPF page(s): {FormatPages(missingWpfPages)}");
+            }
+
+            foreach (var pageNumber in wpfPages.Intersect(avaloniaPages))
+            {
+                var wpf = wpfRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                var avalonia = avaloniaRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                if (wpf is null || avalonia is null)
+                    continue;
+
+                ValidateRendererPairRow("equation renderer pair", scenarioId, pageNumber, wpf, avalonia, failures);
+            }
+        }
+    }
+
+    private static void ValidateHeaderFooterRendererPairs(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,
+        List<string> failures)
+    {
+        foreach (var scenarioId in HeaderFooterRendererScenarioIds)
+        {
+            var wpfRows = TrustedRowsForHostScenario(rows, WpfHostId, scenarioId);
+            var avaloniaRows = TrustedRowsForHostScenario(rows, AvaloniaHostId, scenarioId);
+            if (wpfRows.Count == 0 || avaloniaRows.Count == 0)
+                continue;
+
+            ValidateUniquePages(scenarioId, WpfHostId, wpfRows, failures);
+            ValidateUniquePages(scenarioId, AvaloniaHostId, avaloniaRows, failures);
+
+            var wpfPages = wpfRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var avaloniaPages = avaloniaRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var requiredPages = RequiredScenarioPages(scenarioId);
+            var missingAvaloniaPages = requiredPages.Except(avaloniaPages).ToList();
+            var missingWpfPages = requiredPages.Except(wpfPages).ToList();
+            if (missingAvaloniaPages.Count > 0)
+            {
+                failures.Add(
+                    $"header/footer renderer pair '{scenarioId}' is missing Avalonia page(s): {FormatPages(missingAvaloniaPages)}");
+            }
+
+            if (missingWpfPages.Count > 0)
+            {
+                failures.Add(
+                    $"header/footer renderer pair '{scenarioId}' is missing WPF page(s): {FormatPages(missingWpfPages)}");
+            }
+
+            foreach (var pageNumber in wpfPages.Intersect(avaloniaPages))
+            {
+                var wpf = wpfRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                var avalonia = avaloniaRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                if (wpf is null || avalonia is null)
+                    continue;
+
+                ValidateRendererPairRow("header/footer renderer pair", scenarioId, pageNumber, wpf, avalonia, failures);
+                ValidateRequiredHeaderFooterImageEvidence(scenarioId, pageNumber, wpf, failures);
+                ValidateRequiredHeaderFooterImageEvidence(scenarioId, pageNumber, avalonia, failures);
+                ValidateHeaderFooterPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+            }
+        }
+    }
+
+    private static void ValidateRequiredHeaderFooterImageEvidence(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow row,
+        List<string> failures)
+    {
+        if (!row.ExpectedFeatureTags.Contains("header-footer-images", StringComparer.OrdinalIgnoreCase))
+            return;
+
+        var plan = row.HeaderFooters ?? HeaderFooterVisualPlanner.EmptyExpectation;
+        if (plan.HasImages && plan.ImageCount > 0)
+            return;
+
+        failures.Add(
+            $"header/footer renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)} host '{row.HostId}' expected header/footer image evidence");
     }
 
     private static void ValidateTableRendererPairs(
@@ -2150,6 +2410,30 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{pairName} alt text summaries differ: WPF '{FormatSummaries(wpfAltTextSummaries)}', Avalonia '{FormatSummaries(avaloniaAltTextSummaries)}'");
         }
 
+        var wpfGroupChildren = NormalizeGroupChildren(wpfObjects.GroupChildren);
+        var avaloniaGroupChildren = NormalizeGroupChildren(avaloniaObjects.GroupChildren);
+        if (wpfGroupChildren.ChildCount != avaloniaGroupChildren.ChildCount)
+        {
+            failures.Add(
+                $"{pairName} grouped child counts differ: WPF {wpfGroupChildren.ChildCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaGroupChildren.ChildCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        var wpfGroupChildKinds = OrderedSummaries(wpfGroupChildren.ChildKindSummaries ?? []);
+        var avaloniaGroupChildKinds = OrderedSummaries(avaloniaGroupChildren.ChildKindSummaries ?? []);
+        if (!wpfGroupChildKinds.SequenceEqual(avaloniaGroupChildKinds, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} grouped child kind summaries differ: WPF '{FormatSummaries(wpfGroupChildKinds)}', Avalonia '{FormatSummaries(avaloniaGroupChildKinds)}'");
+        }
+
+        var wpfGroupChildVisualSignatures = OrderedSummaries(wpfGroupChildren.ChildVisualSignatures ?? []);
+        var avaloniaGroupChildVisualSignatures = OrderedSummaries(avaloniaGroupChildren.ChildVisualSignatures ?? []);
+        if (!wpfGroupChildVisualSignatures.SequenceEqual(avaloniaGroupChildVisualSignatures, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} grouped child visual signatures differ: WPF '{FormatSummaries(wpfGroupChildVisualSignatures)}', Avalonia '{FormatSummaries(avaloniaGroupChildVisualSignatures)}'");
+        }
+
         var wpfEffectSummaries = OrderedSummaries(wpfObjects.Effects.EffectSummaries);
         var avaloniaEffectSummaries = OrderedSummaries(avaloniaObjects.Effects.EffectSummaries);
         if (!wpfEffectSummaries.SequenceEqual(avaloniaEffectSummaries, StringComparer.Ordinal))
@@ -2232,6 +2516,70 @@ public static class FreeWVisualEvidenceManifestNormalizer
         }
     }
 
+    private static void ValidateHeaderFooterPairRow(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia,
+        List<string> failures)
+    {
+        var pairName = $"header/footer renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        var wpfPlan = wpf.HeaderFooters ?? HeaderFooterVisualPlanner.EmptyExpectation;
+        var avaloniaPlan = avalonia.HeaderFooters ?? HeaderFooterVisualPlanner.EmptyExpectation;
+
+        if (wpfPlan.SlotCount != avaloniaPlan.SlotCount)
+        {
+            failures.Add(
+                $"{pairName} slot counts differ: WPF {wpfPlan.SlotCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaPlan.SlotCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (wpfPlan.ImageCount != avaloniaPlan.ImageCount)
+        {
+            failures.Add(
+                $"{pairName} header/footer image counts differ: WPF {wpfPlan.ImageCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaPlan.ImageCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        var wpfSlots = OrderedSummaries(wpfPlan.SlotNames ?? []);
+        var avaloniaSlots = OrderedSummaries(avaloniaPlan.SlotNames ?? []);
+        if (!wpfSlots.SequenceEqual(avaloniaSlots, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} header/footer slot names differ: WPF '{FormatSummaries(wpfSlots)}', Avalonia '{FormatSummaries(avaloniaSlots)}'");
+        }
+
+        var wpfImageSignatures = OrderedSummaries(wpfPlan.ImageSignatures ?? []);
+        var avaloniaImageSignatures = OrderedSummaries(avaloniaPlan.ImageSignatures ?? []);
+        if (!wpfImageSignatures.SequenceEqual(avaloniaImageSignatures, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} header/footer image signatures differ: WPF '{FormatSummaries(wpfImageSignatures)}', Avalonia '{FormatSummaries(avaloniaImageSignatures)}'");
+        }
+
+        var wpfSlotSignatures = BuildHeaderFooterSlotSignatures(wpfPlan.Slots ?? []);
+        var avaloniaSlotSignatures = BuildHeaderFooterSlotSignatures(avaloniaPlan.Slots ?? []);
+        if (!wpfSlotSignatures.SequenceEqual(avaloniaSlotSignatures, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} header/footer slot image summaries differ: WPF '{FormatSummaries(wpfSlotSignatures)}', Avalonia '{FormatSummaries(avaloniaSlotSignatures)}'");
+        }
+    }
+
+    private static IReadOnlyList<string> BuildHeaderFooterSlotSignatures(
+        IReadOnlyList<FreeWVisualHeaderFooterSlotPlan> slots) =>
+        slots
+            .Select(slot => string.Join(
+                "|",
+                $"slot={slot.SlotName}",
+                $"section={slot.SectionOrdinal.ToString(CultureInfo.InvariantCulture)}",
+                $"sectionPage={slot.SectionRelativePageNumber.ToString(CultureInfo.InvariantCulture)}",
+                $"page={slot.PageNumber.ToString(CultureInfo.InvariantCulture)}",
+                $"footer={BoolFlag(slot.IsFooter)}",
+                $"align={slot.Alignment}",
+                $"images={slot.ImageCount.ToString(CultureInfo.InvariantCulture)}",
+                $"signatures={string.Join(",", OrderedSummaries(slot.ImageSignatures ?? []))}"))
+            .OrderBy(signature => signature, StringComparer.Ordinal)
+            .ToList();
+
     private static void ValidateReviewProofingPairRow(
         string scenarioId,
         int pageNumber,
@@ -2239,7 +2587,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         FreeWVisualEvidenceNormalizedRow avalonia,
         List<string> failures)
     {
-        if (!string.Equals(scenarioId, "review-proofing-visual-depth", StringComparison.OrdinalIgnoreCase))
+        if (!IsReviewProofingEvidenceScenario(scenarioId))
             return;
 
         var pairName = $"review renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
@@ -2288,6 +2636,63 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{pairName} proofing diagnostic signatures differ: WPF '{FormatSummaries(wpfSignatures)}', Avalonia '{FormatSummaries(avaloniaSignatures)}'");
         }
     }
+
+    private static void ValidateReviewProtectionPairRow(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia,
+        List<string> failures)
+    {
+        if (!string.Equals(scenarioId, "review-protection-proofing-comments-only", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var pairName = $"review renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        var wpfProtection = wpf.ReviewProtection;
+        var avaloniaProtection = avalonia.ReviewProtection;
+
+        if (!string.Equals(wpfProtection.ProtectionMode, avaloniaProtection.ProtectionMode, StringComparison.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} protection modes differ: WPF '{wpfProtection.ProtectionMode}', Avalonia '{avaloniaProtection.ProtectionMode}'");
+        }
+
+        if (wpfProtection.IsProtected != avaloniaProtection.IsProtected)
+        {
+            failures.Add(
+                $"{pairName} protected states differ: WPF {BoolFlag(wpfProtection.IsProtected)}, Avalonia {BoolFlag(avaloniaProtection.IsProtected)}");
+        }
+
+        if (wpfProtection.IsMarkedAsFinal != avaloniaProtection.IsMarkedAsFinal)
+        {
+            failures.Add(
+                $"{pairName} Mark as Final states differ: WPF {BoolFlag(wpfProtection.IsMarkedAsFinal)}, Avalonia {BoolFlag(avaloniaProtection.IsMarkedAsFinal)}");
+        }
+
+        if (wpfProtection.MarkAsFinal.IsChecked != avaloniaProtection.MarkAsFinal.IsChecked)
+        {
+            failures.Add(
+                $"{pairName} Mark as Final checked states differ: WPF {BoolFlag(wpfProtection.MarkAsFinal.IsChecked)}, Avalonia {BoolFlag(avaloniaProtection.MarkAsFinal.IsChecked)}");
+        }
+
+        if (wpfProtection.RestrictEditing.IsChecked != avaloniaProtection.RestrictEditing.IsChecked)
+        {
+            failures.Add(
+                $"{pairName} Restrict Editing checked states differ: WPF {BoolFlag(wpfProtection.RestrictEditing.IsChecked)}, Avalonia {BoolFlag(avaloniaProtection.RestrictEditing.IsChecked)}");
+        }
+
+        var wpfSignatures = OrderedSummaries(wpfProtection.StableSignatures);
+        var avaloniaSignatures = OrderedSummaries(avaloniaProtection.StableSignatures);
+        if (!wpfSignatures.SequenceEqual(avaloniaSignatures, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} protection command signatures differ: WPF '{FormatSummaries(wpfSignatures)}', Avalonia '{FormatSummaries(avaloniaSignatures)}'");
+        }
+    }
+
+    private static bool IsReviewProofingEvidenceScenario(string scenarioId) =>
+        string.Equals(scenarioId, "review-proofing-visual-depth", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(scenarioId, "review-protection-proofing-comments-only", StringComparison.OrdinalIgnoreCase);
 
     private static void ValidateReferencesHeavyToaPairRow(
         int pageNumber,
@@ -2342,8 +2747,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
         List<string> failures)
     {
         var pairName = $"table renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
-        var wpfTables = wpf.Tables;
-        var avaloniaTables = avalonia.Tables;
+        var wpfTables = FreeWVisualEvidencePlanner.NormalizeTableFillEvidence(wpf.Tables);
+        var avaloniaTables = FreeWVisualEvidencePlanner.NormalizeTableFillEvidence(avalonia.Tables);
         if (wpfTables.TableCount != avaloniaTables.TableCount)
         {
             failures.Add(
@@ -2368,10 +2773,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{pairName} estimated table page counts differ: WPF {wpfTables.EstimatedPageCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaTables.EstimatedPageCount.ToString(CultureInfo.InvariantCulture)}");
         }
 
-        var wpfComparisonTables = CanonicalizeTablePlansForComparison(wpfTables);
-        var avaloniaComparisonTables = CanonicalizeTablePlansForComparison(avaloniaTables);
-        var wpfFillSignatures = TableCellFillSignaturesForComparison(wpfTables, wpfComparisonTables);
-        var avaloniaFillSignatures = TableCellFillSignaturesForComparison(avaloniaTables, avaloniaComparisonTables);
+        var wpfComparisonTables = wpfTables.Tables;
+        var avaloniaComparisonTables = avaloniaTables.Tables;
+        var wpfFillSignatures = OrderedSummaries(wpfTables.TableCellFillSignatures);
+        var avaloniaFillSignatures = OrderedSummaries(avaloniaTables.TableCellFillSignatures);
         if (!wpfFillSignatures.SequenceEqual(avaloniaFillSignatures, StringComparer.Ordinal))
         {
             failures.Add(
@@ -2508,6 +2913,9 @@ public static class FreeWVisualEvidenceManifestNormalizer
             AddTablePropertyDifference(differences, tableIndex, "repeats header row", wpfTable.RepeatsHeaderRow, avaloniaTable.RepeatsHeaderRow);
             AddTablePropertyDifference(differences, tableIndex, "has banded rows", wpfTable.HasBandedRows, avaloniaTable.HasBandedRows);
             AddTablePropertyDifference(differences, tableIndex, "has banded columns", wpfTable.HasBandedColumns, avaloniaTable.HasBandedColumns);
+            AddTablePropertyDifference(differences, tableIndex, "has first column", wpfTable.HasFirstColumn, avaloniaTable.HasFirstColumn);
+            AddTablePropertyDifference(differences, tableIndex, "has last column", wpfTable.HasLastColumn, avaloniaTable.HasLastColumn);
+            AddTablePropertyDifference(differences, tableIndex, "has last row", wpfTable.HasLastRow, avaloniaTable.HasLastRow);
             AddTablePropertyDifference(differences, tableIndex, "has merged cells", wpfTable.HasMergedCells, avaloniaTable.HasMergedCells);
             AddTablePropertyDifference(differences, tableIndex, "has vertical merges", wpfTable.HasVerticalMerges, avaloniaTable.HasVerticalMerges);
             AddTablePropertyDifference(differences, tableIndex, "has cell shading", wpfTable.HasCellShading, avaloniaTable.HasCellShading);
@@ -2647,6 +3055,9 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 BoolFlag(table.RepeatsHeaderRow),
                 BoolFlag(table.HasBandedRows),
                 BoolFlag(table.HasBandedColumns),
+                BoolFlag(table.HasFirstColumn),
+                BoolFlag(table.HasLastColumn),
+                BoolFlag(table.HasLastRow),
                 BoolFlag(table.HasMergedCells),
                 BoolFlag(table.HasVerticalMerges),
                 BoolFlag(table.HasCellShading),
@@ -2661,24 +3072,19 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 table.AutoFit,
                 table.TableStyleId ?? string.Empty,
                 string.Join(",", table.ColumnWidthsDip.Select(FormatDouble)),
-                string.Join(";", table.Cells.Select(BuildTableCellSignature).OrderBy(signature => signature, StringComparer.Ordinal))))
+                string.Join(
+                    ";",
+                    table.Cells
+                        .Select(cell => BuildTableCellSignature(table, cell))
+                        .OrderBy(signature => signature, StringComparer.Ordinal))))
             .OrderBy(signature => signature, StringComparer.Ordinal)
             .ToList();
 
-    private static List<string> TableCellFillSignaturesForComparison(
-        FreeWVisualTableExpectation tableExpectation,
-        IReadOnlyList<DocumentTableLayoutPlan> canonicalizedTables)
+    private static string BuildTableCellSignature(DocumentTableLayoutPlan table, DocumentTableCellLayoutPlan cell)
     {
-        if (tableExpectation.TableCellFillSignatures is { Count: > 0 } signatures)
-            return OrderedSummaries(signatures);
+        var fillPlan = DocumentViewLayoutPlanner.BuildTableCellEffectiveFillPlan(table, cell);
 
-        return FreeWVisualEvidencePlanner
-            .BuildTableCellFillSignatures(canonicalizedTables)
-            .ToList();
-    }
-
-    private static string BuildTableCellSignature(DocumentTableCellLayoutPlan cell) =>
-        string.Join(
+        return string.Join(
             ":",
             cell.RowIndex.ToString(CultureInfo.InvariantCulture),
             cell.CellIndex.ToString(CultureInfo.InvariantCulture),
@@ -2687,90 +3093,18 @@ public static class FreeWVisualEvidenceManifestNormalizer
             cell.RowSpan.ToString(CultureInfo.InvariantCulture),
             BoolFlag(cell.IsVerticalMergeContinuation),
             cell.ShadingColorHex ?? string.Empty,
+            fillPlan.ExplicitFillHex ?? string.Empty,
+            fillPlan.StyleDerivedFillSource ?? string.Empty,
+            fillPlan.StyleDerivedFillHex ?? string.Empty,
+            fillPlan.EffectiveFillSource ?? string.Empty,
+            fillPlan.EffectiveFillHex ?? string.Empty,
+            BoolFlag(fillPlan.StyleDerivedBold),
+            BoolFlag(fillPlan.EffectiveBold),
             BoolFlag(cell.HasCustomBorders),
             cell.TextDirection,
             cell.VerticalAlignment,
             cell.PreferredWidthDip.HasValue ? FormatDouble(cell.PreferredWidthDip.Value) : string.Empty,
             cell.HeightDip.HasValue ? FormatDouble(cell.HeightDip.Value) : string.Empty);
-
-    private static IReadOnlyList<DocumentTableLayoutPlan> CanonicalizeTablePlansForComparison(
-        FreeWVisualTableExpectation tableExpectation) =>
-        tableExpectation.Tables
-            .Select(table => CanonicalizeTablePlanForComparison(tableExpectation, table))
-            .ToList();
-
-    private static DocumentTableLayoutPlan CanonicalizeTablePlanForComparison(
-        FreeWVisualTableExpectation tableExpectation,
-        DocumentTableLayoutPlan table)
-    {
-        if (!table.HasHeaderRow || table.Cells.Count == 0)
-            return table;
-
-        var styleHeaderFill = DocumentTableStyle.FindById(table.TableStyleId ?? string.Empty)?.HeaderBand?.FillHex;
-        var cells = table.Cells
-            .Select(cell => cell.RowIndex == 0
-                && !HasExplicitHeaderCellFillSignature(tableExpectation, table, cell)
-                && IsStyleDerivedHeaderFill(cell.ShadingColorHex, styleHeaderFill, table.HasNamedStyle)
-                ? cell with { ShadingColorHex = null }
-                : cell)
-            .ToList();
-
-        return table with
-        {
-            HasCellShading = cells.Any(cell => !string.IsNullOrWhiteSpace(cell.ShadingColorHex)),
-            Cells = cells
-        };
-    }
-
-    private static bool IsStyleDerivedHeaderFill(string? shadingColorHex, string? styleHeaderFillHex, bool hasNamedStyle)
-    {
-        var normalizedShading = NormalizeHexForComparison(shadingColorHex);
-        if (normalizedShading is null)
-            return false;
-
-        return string.Equals(normalizedShading, NormalizeHexForComparison(styleHeaderFillHex), StringComparison.Ordinal)
-            || hasNamedStyle && BuiltInHeaderChromeFillHexes.Contains(normalizedShading);
-    }
-
-    private static readonly IReadOnlySet<string> BuiltInHeaderChromeFillHexes =
-        DocumentTableStyle.Catalog
-            .Select(style => NormalizeHexForComparison(style.HeaderBand?.FillHex))
-            .Where(static fill => fill is not null)
-            .Append("#D9E2F3")
-            .ToHashSet(StringComparer.Ordinal)!;
-
-    private static bool HasExplicitHeaderCellFillSignature(
-        FreeWVisualTableExpectation tableExpectation,
-        DocumentTableLayoutPlan table,
-        DocumentTableCellLayoutPlan cell)
-    {
-        if (tableExpectation.TableCellFillSignatures.Count == 0)
-            return false;
-
-        var prefix = string.Join(
-            "|",
-            "table=" + table.TableIndex.ToString(CultureInfo.InvariantCulture),
-            "row=" + cell.RowIndex.ToString(CultureInfo.InvariantCulture),
-            "cell=" + cell.CellIndex.ToString(CultureInfo.InvariantCulture),
-            "grid=" + cell.GridColumnIndex.ToString(CultureInfo.InvariantCulture));
-
-        return tableExpectation.TableCellFillSignatures.Any(signature =>
-            signature.StartsWith(prefix, StringComparison.Ordinal)
-            && signature.Contains("|source=explicit-cell|", StringComparison.Ordinal));
-    }
-
-    private static string? NormalizeHexForComparison(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return null;
-
-        var trimmed = value.Trim();
-        if (trimmed.StartsWith('#'))
-            trimmed = trimmed[1..];
-
-        return trimmed.Length == 6
-            ? "#" + trimmed.ToUpperInvariant()
-            : value.Trim().ToUpperInvariant();
     }
 
     private static List<string> BuildTablePaginationSignatures(IEnumerable<DocumentTablePaginationPlan> plans) =>
@@ -2833,6 +3167,18 @@ public static class FreeWVisualEvidenceManifestNormalizer
             FormatDouble(watermark.Opacity),
             BoolFlag(watermark.IsPicture));
     }
+
+    private static FreeWVisualDrawingObjectGroupChildExpectation NormalizeGroupChildren(
+        FreeWVisualDrawingObjectGroupChildExpectation? groupChildren) =>
+        groupChildren ?? new FreeWVisualDrawingObjectGroupChildExpectation(
+            ChildCount: 0,
+            ImageChildCount: 0,
+            ShapeChildCount: 0,
+            ChartChildCount: 0,
+            SmartArtChildCount: 0,
+            WordArtChildCount: 0,
+            ChildKindSummaries: [],
+            ChildVisualSignatures: []);
 
     private static List<string> BuildFloatingObjectSignatures(IEnumerable<DocumentFloatingObjectSnapshot> objects) =>
         objects
@@ -2936,6 +3282,13 @@ public static class FreeWVisualEvidenceManifestNormalizer
             parts.Add(
                 $"{row.DrawingObjects.FloatingObjectCount.ToString(CultureInfo.InvariantCulture)} drawing object(s), " +
                 $"{row.DrawingObjects.BehindTextCount.ToString(CultureInfo.InvariantCulture)} behind text");
+            var groupChildren = NormalizeGroupChildren(row.DrawingObjects.GroupChildren);
+            if (groupChildren.ChildCount > 0)
+            {
+                parts.Add(
+                    $"{groupChildren.ChildCount.ToString(CultureInfo.InvariantCulture)} grouped child object(s): " +
+                    string.Join("/", groupChildren.ChildKindSummaries));
+            }
             if (row.DrawingObjects.Effects.EffectObjectCount > 0)
             {
                 parts.Add(
@@ -2961,12 +3314,24 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{row.ChartSmartArt.ChartCount.ToString(CultureInfo.InvariantCulture)} chart(s), " +
                 $"{row.ChartSmartArt.SmartArtCount.ToString(CultureInfo.InvariantCulture)} SmartArt");
         }
+        if (row.HeaderFooters.ImageCount > 0)
+        {
+            parts.Add(
+                $"{row.HeaderFooters.ImageCount.ToString(CultureInfo.InvariantCulture)} header/footer image(s), " +
+                $"{row.HeaderFooters.SlotCount.ToString(CultureInfo.InvariantCulture)} slot(s)");
+        }
         if (row.ProofingDiagnostics.DiagnosticCount > 0)
         {
             parts.Add(
                 $"{row.ProofingDiagnostics.DiagnosticCount.ToString(CultureInfo.InvariantCulture)} proofing diagnostic(s), " +
                 $"{row.ProofingDiagnostics.SpellingCount.ToString(CultureInfo.InvariantCulture)} spelling, " +
                 $"{row.ProofingDiagnostics.GrammarCount.ToString(CultureInfo.InvariantCulture)} grammar");
+        }
+        if (row.ReviewProtection.IsProtected)
+        {
+            parts.Add(
+                $"protection {row.ReviewProtection.ProtectionMode}, " +
+                $"{row.ReviewProtection.Operations.Count.ToString(CultureInfo.InvariantCulture)} command decision(s)");
         }
 
         return string.Join(", ", parts);

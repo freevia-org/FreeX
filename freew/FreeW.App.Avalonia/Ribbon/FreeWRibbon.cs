@@ -255,5 +255,7 @@ internal sealed record RibbonHostCallbacks(
     /// <summary>AV-MAIL: Rules &gt; Fill-in / Ref Bookmark prompt. Optional; registry no-ops when null.</summary>
     Func<string, string, string?>? AskMergeRulePrompt = null,
     /// <summary>AV-MAIL: Rules &gt; Ask / Set Bookmark name-value prompt. Optional; registry no-ops when null.</summary>
-    Func<string, string, MailMergeRuleNameValueDialogResult?>? AskMergeRuleNameValue = null);
+    Func<string, string, MailMergeRuleNameValueDialogResult?>? AskMergeRuleNameValue = null,
+    /// <summary>Insert &gt; Page Number &gt; Format Page Numbers. Optional; selected values still apply through the editor.</summary>
+    Action? OpenPageNumberFormatDialog = null);
 

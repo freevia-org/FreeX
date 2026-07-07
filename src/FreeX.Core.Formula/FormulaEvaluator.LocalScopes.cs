@@ -33,7 +33,7 @@ public sealed partial class FormulaEvaluator
         return EvaluateNode(node.Arguments[^1], scoped);
     }
 
-    private static ScalarValue EvaluateLambda(FunctionCallNode node, IEvalContext _)
+    private static ScalarValue EvaluateLambda(FunctionCallNode node, IEvalContext context)
     {
         // LAMBDA([param1, param2, ...,] body)
         // All args except the last must be identifier (NamedRangeNode) parameter names.
@@ -53,7 +53,10 @@ public sealed partial class FormulaEvaluator
                 return ErrorValue.Value;
         }
 
-        return new LambdaValue(paramNames, node.Arguments[^1]);
+        // Capture the definition-site environment (e.g. an enclosing LET's bindings) so free
+        // variables in the body resolve lexically, not against whatever context happens to be
+        // active when the lambda is later invoked (Excel LAMBDA is a lexical closure).
+        return new LambdaValue(paramNames, node.Arguments[^1], context);
     }
 
     private static bool IsValidLocalFunctionName(string? name)

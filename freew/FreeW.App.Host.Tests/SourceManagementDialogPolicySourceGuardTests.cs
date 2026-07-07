@@ -15,6 +15,9 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         source.Should().Contain("SourceManagementDialogPlanner.BuildSourceTypeChoices(");
         source.Should().Contain("SourceManagementDialogPlanner.BuildEntryFieldPlans(");
         source.Should().Contain("SourceManagementDialogPlanner.CreateEntry(");
+        source.Should().Contain("SourceManagementDialogPlanner.ProjectPrimaryAuthorEditorState(");
+        source.Should().Contain("SourceManagementDialogPlanner.NormalizePrimaryAuthorEditorState(");
+        source.Should().Contain("SourceManagementDialogPlanner.ApplyPrimaryAuthorEditorState(");
         source.Should().Contain("fields.ToDictionary(pair => pair.Key, pair => (string?)pair.Value.Text),");
         source.Should().Contain("entry);");
         source.Should().Contain("SourceManagementDialogPlanner.BuildInitialState(");
@@ -23,6 +26,9 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         source.Should().Contain("SourceManagementDialogPlanner.DeleteMasterSource(");
         source.Should().Contain("SourceManagementDialogPlanner.CopyMasterToCurrent(");
         source.Should().Contain("SourceManagementDialogPlanner.CopyCurrentToMaster(");
+        source.Should().Contain("SourceManagementDialogPlanner.BuildSourceConflictMessage(");
+        source.Should().Contain("SourceManagementDialogPlanner.BuildSourceConflictResolutionChoices(");
+        source.Should().Contain("SourceManagementDialogPlanner.ResolveSourceConflict(");
         source.Should().Contain("SourceManagementDialogPlanner.AddCurrentSource(");
         source.Should().Contain("SourceManagementDialogPlanner.EditCurrentSource(");
         source.Should().Contain("SourceManagementDialogPlanner.DeleteCurrentSource(");
@@ -42,6 +48,13 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         source.Should().NotContain("private static string DescribeSource(Source");
         source.Should().NotContain(".Split(';')");
         source.Should().NotContain("PersonalAuthors =");
+        source.Should().NotContain("CorporateAuthor =");
+        source.Should().NotContain("SourceAuthorPerson.Create(");
+        source.Should().NotContain("SourcePayloadEquals(");
+        source.Should().NotContain("SourcePeopleEqual(");
+        source.Should().NotContain("SourceValueEquals(");
+        source.Should().NotContain("SourceManagementTagIdentity");
+        source.Should().NotContain("FindSourceIndexByTag(");
         source.Should().NotContain("workingDoc");
         source.Should().NotContain("workingMaster");
         source.Should().NotContain("new SourceRecord");

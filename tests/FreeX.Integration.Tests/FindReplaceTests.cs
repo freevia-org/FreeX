@@ -172,7 +172,10 @@ public class FindReplaceTests
         var a1 = new CellAddress(sheet.Id, 1, 1);
         var a2 = new CellAddress(sheet.Id, 2, 1);
         sheet.SetFormula(a1, "SUM(B1:B5)");
-        sheet.SetCell(a2, new TextValue("SUM literal"));
+        // "SUM literal" contains no "SUM" substring for this cell to be an unrelated distractor;
+        // the formula-cell replacement is what this test verifies (constant-cell replacement in
+        // Formulas mode is covered separately by ReplaceAll_WithFormulaLookIn_AlsoReplacesConstantCells).
+        sheet.SetCell(a2, new TextValue("unrelated literal"));
 
         var count = FindReplaceService.ReplaceAll(
             wb,
@@ -183,13 +186,39 @@ public class FindReplaceTests
 
         count.Should().Be(1);
         sheet.GetCell(a1)!.FormulaText.Should().Be("MAX(B1:B5)");
-        sheet.GetCell(a2)!.Value.Should().Be(new TextValue("SUM literal"));
+        sheet.GetCell(a2)!.Value.Should().Be(new TextValue("unrelated literal"));
 
         commandBus.Undo(wb.Id).Success.Should().BeTrue();
         sheet.GetCell(a1)!.FormulaText.Should().Be("SUM(B1:B5)");
 
         commandBus.Redo(wb.Id).Success.Should().BeTrue();
         sheet.GetCell(a1)!.FormulaText.Should().Be("MAX(B1:B5)");
+    }
+
+    [Fact]
+    public void ReplaceAll_WithFormulaLookIn_AlsoReplacesConstantCells()
+    {
+        // Excel semantics: "Look in: Formulas" is the ONLY replace mode Excel offers, and it
+        // replaces constants too — Find and Replace must agree on what counts as a match.
+        var (wb, sheet, commandBus) = Setup();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetFormula(a1, "SUM(B1:B5)");
+        sheet.SetCell(a2, new TextValue("SUM literal"));
+
+        var found = FindReplaceService.Find(wb, "SUM", new FindOptions(LookIn: FindLookIn.Formulas));
+        found.Should().HaveCount(2);
+
+        var count = FindReplaceService.ReplaceAll(
+            wb,
+            commandBus,
+            "SUM",
+            "MAX",
+            new FindOptions(LookIn: FindLookIn.Formulas));
+
+        count.Should().Be(2);
+        sheet.GetCell(a1)!.FormulaText.Should().Be("MAX(B1:B5)");
+        sheet.GetCell(a2)!.Value.Should().Be(new TextValue("MAX literal"));
     }
 
     [Fact]

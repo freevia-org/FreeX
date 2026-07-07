@@ -44,6 +44,8 @@ public sealed class FillCellsCommand : IWorkbookCommand
             return new CommandOutcome(false, "The fill range must include at least one target cell.");
         if (targets.Any(address => !CommandGuards.CanEditCell(ctx.Workbook, sheet, address)))
             return CommandGuards.RejectSheetProtected();
+        if (CommandGuards.RejectIfSplitsArray(sheet, targets) is { } splitsArrayRejection)
+            return splitsArrayRejection;
 
         _snapshot = [];
         _hyperlinkSnapshot = [];

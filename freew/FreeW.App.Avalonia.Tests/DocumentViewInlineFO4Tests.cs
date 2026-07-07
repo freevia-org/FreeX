@@ -95,24 +95,39 @@ public sealed class DocumentViewInlineFO4Tests
         double widthPt  = 360,
         double heightPt = 160,
         string? colorSchemeId = null,
-        string? styleId = null)
+        string? styleId = null,
+        Action<SmartArt>? configure = null)
     {
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
         var para = new Paragraph();
         para.Runs.Add(new Run("Before ", RunFormatting.Default));
 
-        var sa = SmartArt.Create(kind, new[] { "Step A", "Step B", "Step C" });
+        var sa = CreateInlineSmartArt(kind);
         sa.WidthPt  = widthPt;
         sa.HeightPt = heightPt;
         sa.ColorSchemeId = colorSchemeId;
         sa.StyleId = styleId;
+        configure?.Invoke(sa);
         // No Placement → inline.
         para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { SmartArt = sa });
 
         para.Runs.Add(new Run(" after.", RunFormatting.Default));
         doc.Blocks.Add(para);
         return doc;
+    }
+
+    private static SmartArt CreateInlineSmartArt(SmartArtKind kind)
+    {
+        if (kind != SmartArtKind.Hierarchy)
+            return SmartArt.Create(kind, new[] { "Step A", "Step B", "Step C" });
+
+        var root = new SmartArtNode("Root");
+        var child = root.AddChild("Child");
+        child.AddChild("Grandchild");
+        var smartArt = new SmartArt { Kind = SmartArtKind.Hierarchy };
+        smartArt.Nodes.Add(root);
+        return smartArt;
     }
 
     // ── Inline chart tests ────────────────────────────────────────────────────────────────────────
@@ -372,6 +387,23 @@ public sealed class DocumentViewInlineFO4Tests
     // ── Inline SmartArt tests ─────────────────────────────────────────────────────────────────────
 
     [Fact]
+    public async Task Inline_wordart_effect_summary_uses_shared_visual_planner()
+    {
+        string[] summaries = [];
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithInlineWordArt(WordArtStyle.GlowGold, text: "FreeW!");
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            summaries = view.InlineWordArtEffectSummaries.ToArray();
+        });
+
+        if (!ran) return;
+        summaries.Should().ContainSingle().Which.Should().Be("glow");
+    }
+
+    [Fact]
     public async Task Inline_smartart_is_collected_in_inline_list()
     {
         int count = -1;
@@ -476,6 +508,75 @@ public sealed class DocumentViewInlineFO4Tests
 
         if (!ran) return;
         nodeCount.Should().Be(3, "SmartArt with 3 nodes must expose node count 3");
+    }
+
+    [Fact]
+    public async Task Inline_smartart_hierarchy_depth_and_connectors_preserved()
+    {
+        (int NodeCount, int MaxDepth, int ConnectorCount) values = default;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithInlineSmartArt(SmartArtKind.Hierarchy);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var rect = view.InlineSmartArtRects.Single();
+            values = (rect.NodeCount, rect.MaxHierarchyDepth, rect.HierarchyConnectorCount);
+        });
+
+        if (!ran) return;
+        values.NodeCount.Should().Be(3, "root/child/grandchild should all be planned for inline hierarchy SmartArt");
+        values.MaxDepth.Should().Be(2, "inline hierarchy SmartArt should preserve grandchild depth");
+        values.ConnectorCount.Should().Be(2, "inline hierarchy SmartArt should expose parent-child connector geometry");
+    }
+
+    [Fact]
+    public async Task Inline_smartart_uses_resolved_hierarchy_layout_when_model_kind_is_stale()
+    {
+        (SmartArtKind Kind, int MaxDepth, int ConnectorCount) values = default;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithInlineSmartArt(
+                SmartArtKind.Hierarchy,
+                configure: smartArt =>
+                {
+                    smartArt.Kind = SmartArtKind.Process;
+                    smartArt.LayoutId = "orgchart1";
+                });
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var rect = view.InlineSmartArtRects.Single();
+            values = (rect.Kind, rect.MaxHierarchyDepth, rect.HierarchyConnectorCount);
+        });
+
+        if (!ran) return;
+        values.Kind.Should().Be(SmartArtKind.Hierarchy, "the resolved org-chart layout should drive Avalonia rendering");
+        values.MaxDepth.Should().Be(2);
+        values.ConnectorCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task Inline_smartart_carries_shared_cycle_layout_geometry()
+    {
+        (string? LayoutId, string? GeometryKind, int NodeCount, int ConnectorCount) values = default;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithInlineSmartArt(
+                SmartArtKind.List,
+                configure: smartArt => smartArt.LayoutId = "cycle1");
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var geometry = view.InlineSmartArtLayoutGeometries.Single();
+            values = (geometry.LayoutId, geometry.GeometryKind, geometry.GeometryNodeCount, geometry.GeometryConnectorCount);
+        });
+
+        if (!ran) return;
+        values.LayoutId.Should().Be("cycle1");
+        values.GeometryKind.Should().Be("Cycle");
+        values.NodeCount.Should().Be(3);
+        values.ConnectorCount.Should().Be(3);
     }
 
     [Fact]

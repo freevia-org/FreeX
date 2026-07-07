@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Documents;
+using System.Windows.Markup;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 
@@ -73,8 +74,23 @@ public partial class MainWindow
             {
                 var rangedDoc = new FixedDocument();
                 rangedDoc.DocumentPaginator.PageSize = document.DocumentPaginator.PageSize;
+                // Each source PageContent (and its FixedPage) is still a logical child of the
+                // source 'document'; WPF's PageContentCollection.Add throws InvalidOperationException
+                // ("already the logical child of another element") if we add one still parented
+                // elsewhere, and PageContentCollection exposes no Remove. So detach each selected
+                // page's FixedPage and re-wrap it in a fresh PageContent added to rangedDoc.
+                // 'document' is discarded once this subset is built (reassigned below, never read).
+                var selectedPages = new List<PageContent>();
                 for (var i = from - 1; i <= to - 1 && i < document.Pages.Count; i++)
-                    rangedDoc.Pages.Add(document.Pages[i]);
+                    selectedPages.Add(document.Pages[i]);
+                foreach (var page in selectedPages)
+                {
+                    var fixedPage = page.Child;
+                    page.Child = null;
+                    var moved = new PageContent();
+                    ((IAddChild)moved).AddChild(fixedPage);
+                    rangedDoc.Pages.Add(moved);
+                }
                 document = rangedDoc;
             }
         }
@@ -433,6 +449,7 @@ public partial class MainWindow
         sourcePage.UpdateLayout();
         var textOverlays = PdfTextOverlayExtractor.Extract(sourcePage);
         var linkOverlays = PdfLinkOverlayExtractor.Extract(sourcePage);
+        var cellDestinationOverlays = PdfCellDestinationOverlayExtractor.Extract(sourcePage);
 
         var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
             Math.Max(1, (int)Math.Ceiling(width)),
@@ -450,8 +467,15 @@ public partial class MainWindow
             Width = width,
             Height = height
         });
-        if (textOverlays.Count > 0 || linkOverlays.Count > 0)
-            fixedPage.Children.Add(new VisualHost { TextOverlays = textOverlays, LinkOverlays = linkOverlays });
+        if (textOverlays.Count > 0 || linkOverlays.Count > 0 || cellDestinationOverlays.Count > 0)
+        {
+            fixedPage.Children.Add(new VisualHost
+            {
+                TextOverlays = textOverlays,
+                LinkOverlays = linkOverlays,
+                CellDestinationOverlays = cellDestinationOverlays
+            });
+        }
 
         var clone = new PageContent();
         ((System.Windows.Markup.IAddChild)clone).AddChild(fixedPage);

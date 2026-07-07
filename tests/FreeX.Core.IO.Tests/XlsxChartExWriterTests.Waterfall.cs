@@ -11,7 +11,12 @@ public sealed partial class XlsxChartExWriterTests
     [Fact]
     public void Save_WritesWaterfallDefaultConnectorVisibilityAndAxes()
     {
-        var saved = SaveWorkbookWithChart(ChartType.Waterfall);
+        // O38: the chartEx writer now emits connectorLines per ChartModel.ShowSeriesLines (matching
+        // the WPF renderer's own `chart.ShowSeriesLines ? CreateSeriesLineConnectorSeries(...) : null`
+        // gate) instead of always hardcoding "1", so this "connector lines on" case must ask for it
+        // explicitly rather than relying on a bare ChartModel's default.
+        var saved = SaveWorkbookWithChart(ChartType.Waterfall, configureChart: chart =>
+            chart.ShowSeriesLines = true);
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         var chartXml = LoadChartXml(archive);
@@ -41,10 +46,37 @@ public sealed partial class XlsxChartExWriterTests
     }
 
     [Fact]
+    public void Save_WritesWaterfallConnectorVisibilityOffWhenShowSeriesLinesIsFalse()
+    {
+        // O38: a Waterfall chart with connector lines explicitly turned off must round-trip that
+        // choice into the chartEx XML instead of always claiming connectorLines="1".
+        var saved = SaveWorkbookWithChart(ChartType.Waterfall, configureChart: chart =>
+            chart.ShowSeriesLines = false);
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var chartXml = LoadChartXml(archive);
+        var series = chartXml.Root!
+            .Element(ChartExNs + "chart")!
+            .Element(ChartExNs + "plotArea")!
+            .Element(ChartExNs + "plotAreaRegion")!
+            .Elements(ChartExNs + "series")
+            .Should()
+            .ContainSingle()
+            .Subject;
+
+        var layoutPr = series.Elements(ChartExNs + "layoutPr").Should().ContainSingle().Subject;
+        layoutPr.Elements(ChartExNs + "visibility").Should().ContainSingle()
+            .Which.Attribute("connectorLines")!.Value.Should().Be("0");
+    }
+
+    [Fact]
     public void Save_WritesWaterfallSubtotalsLayoutPr()
     {
         var saved = SaveWorkbookWithChart(ChartType.Waterfall, configureChart: chart =>
-            chart.WaterfallTotalPointIndices = [0, 2]);
+        {
+            chart.WaterfallTotalPointIndices = [0, 2];
+            chart.ShowSeriesLines = true;
+        });
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         var chartXml = LoadChartXml(archive);

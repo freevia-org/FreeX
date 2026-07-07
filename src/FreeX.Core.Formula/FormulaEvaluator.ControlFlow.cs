@@ -46,14 +46,30 @@ public sealed partial class FormulaEvaluator
 
     private ScalarValue EvaluateIfConditionRange(FunctionCallNode node, IEvalContext context, RangeValue conditionRange)
     {
-        ScalarValue? trueBranch = null;
-        ScalarValue? falseBranch = null;
-        var cells = new ScalarValue[conditionRange.RowCount, conditionRange.ColCount];
+        // Excel broadcasts an array condition against vector (1xN / Nx1) branches — e.g.
+        // IF(A1:A3>0, B1:D1, 0) broadcasts the 3x1 condition against the 1x3 true branch into a
+        // 3x3 result — rather than requiring every branch to already match the condition's shape.
+        // Both branches are evaluated eagerly (matching Excel's own array-formula behaviour of
+        // computing both sides up front) so the overall result shape — the broadcast of the
+        // condition with whichever branches are actually reachable — is known before any cell is
+        // written, instead of being fixed to the condition's shape as soon as the first cell picks
+        // a branch.
+        var trueBranch = EvaluateArrayOperand(node.Arguments[1], context);
+        var falseBranch = node.Arguments.Count == 3
+            ? EvaluateArrayOperand(node.Arguments[2], context)
+            : FalseValue;
 
-        for (int r = 0; r < conditionRange.RowCount; r++)
-            for (int c = 0; c < conditionRange.ColCount; c++)
+        int rowCount = conditionRange.RowCount;
+        int colCount = conditionRange.ColCount;
+        if (!TryExpandBroadcastShape(trueBranch, ref rowCount, ref colCount) ||
+            !TryExpandBroadcastShape(falseBranch, ref rowCount, ref colCount))
+            return ErrorValue.Value;
+
+        var cells = new ScalarValue[rowCount, colCount];
+        for (int r = 0; r < rowCount; r++)
+            for (int c = 0; c < colCount; c++)
             {
-                var condition = conditionRange.Cells[r, c];
+                var condition = BroadcastElementAt(conditionRange, r, c, rowCount, colCount);
                 if (condition is ErrorValue error)
                 {
                     cells[r, c] = error;
@@ -67,19 +83,51 @@ public sealed partial class FormulaEvaluator
                     continue;
                 }
 
-                var selected = taken.Value
-                    ? trueBranch ??= EvaluateArrayOperand(node.Arguments[1], context)
-                    : falseBranch ??= node.Arguments.Count == 3
-                        ? EvaluateArrayOperand(node.Arguments[2], context)
-                        : FalseValue;
-
+                var selected = taken.Value ? trueBranch : falseBranch;
                 cells[r, c] = selected is RangeValue selectedRange
-                    ? PickRangeElementForArrayResult(selectedRange, r, c, conditionRange.RowCount, conditionRange.ColCount)
+                    ? BroadcastElementAt(selectedRange, r, c, rowCount, colCount)
                     : selected;
             }
 
         return new RangeValue(cells, conditionRange.StartRow, conditionRange.StartCol) { SheetName = conditionRange.SheetName };
     }
+
+    /// <summary>
+    /// Grows <paramref name="rowCount"/>/<paramref name="colCount"/> (the running broadcast shape) to
+    /// cover <paramref name="value"/> when it is a <see cref="RangeValue"/> whose dimensions are
+    /// broadcast-compatible (equal, or 1, on each axis) with the running shape. Returns false when
+    /// <paramref name="value"/> is a range whose shape cannot be broadcast against the running shape
+    /// (Excel's #VALUE! for mismatched array shapes); non-range scalars always succeed as a no-op.
+    /// </summary>
+    private static bool TryExpandBroadcastShape(ScalarValue value, ref int rowCount, ref int colCount)
+    {
+        if (value is not RangeValue range) return true;
+        if (!CanBroadcast(rowCount, range.RowCount) || !CanBroadcast(colCount, range.ColCount)) return false;
+        rowCount = Math.Max(rowCount, range.RowCount);
+        colCount = Math.Max(colCount, range.ColCount);
+        return true;
+    }
+
+    /// <summary>
+    /// Reads the element of <paramref name="range"/> that corresponds to broadcast position
+    /// (<paramref name="row"/>, <paramref name="col"/>) in a result shaped
+    /// <paramref name="targetRows"/> x <paramref name="targetCols"/>: an axis whose extent is 1 is
+    /// held fixed (broadcast) rather than indexed, matching Excel's array-broadcasting rules (and the
+    /// same convention <see cref="EvaluateChooseIndexRange"/> already uses for CHOOSE's index/branch
+    /// broadcasting). A range whose shape is neither an exact match nor broadcastable maps to #VALUE!.
+    /// </summary>
+    private static ScalarValue BroadcastElementAt(RangeValue range, int row, int col, int targetRows, int targetCols)
+    {
+        if (!CanBroadcast(targetRows, range.RowCount) || !CanBroadcast(targetCols, range.ColCount))
+            return ErrorValue.Value;
+
+        int r = range.RowCount == 1 ? 0 : row;
+        int c = range.ColCount == 1 ? 0 : col;
+        return range.Cells[r, c];
+    }
+
+    /// <summary>Whether a dimension of size <paramref name="source"/> can broadcast to <paramref name="target"/> (equal, or either side is 1).</summary>
+    private static bool CanBroadcast(int target, int source) => target == source || target == 1 || source == 1;
 
     private ScalarValue EvaluateIfError(FunctionCallNode node, IEvalContext context)
     {

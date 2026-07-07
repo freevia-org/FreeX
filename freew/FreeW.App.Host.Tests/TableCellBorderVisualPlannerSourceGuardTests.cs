@@ -14,6 +14,9 @@ public sealed class TableCellBorderVisualPlannerSourceGuardTests
         source.Should().Contain("private sealed class TableCellBorderChrome");
         source.Should().Contain("TableCellBorderEdgeVisualPlan edge");
         source.Should().Contain("BorderLineStyle.Double");
+        source.Should().Contain("cell => cell.EffectiveFill");
+        source.Should().Contain("DocumentTableCellEffectiveFillPlan.Empty");
+        source.Should().NotContain("ResolveCellStyle(");
         source.Should().NotContain("Use the first non-null edge colour as the cell border colour");
     }
 

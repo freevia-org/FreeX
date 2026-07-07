@@ -249,6 +249,84 @@ public static class FreeWVisualEvidenceDocumentFactory
         return doc;
     }
 
+    public static TextDocument BuildEquationStructuresDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Properties.Title = "Equation Structures Evidence";
+        doc.Properties.Author = "FreeW Visual Evidence";
+        doc.Properties.Subject = "OfficeMath visual structure parity";
+        doc.Properties.Keywords = "OfficeMath, equations, visual evidence";
+        doc.Properties.Comments = "Exercises shared equation visual planning evidence for WPF and Avalonia.";
+
+        doc.Page.MarginTopPt = 54;
+        doc.Page.MarginBottomPt = 54;
+        doc.Page.MarginLeftPt = 54;
+        doc.Page.MarginRightPt = 54;
+
+        doc.Blocks.Add(StyledParagraph("Equation Structures Evidence", "Heading1"));
+        doc.Blocks.Add(new Paragraph(
+            "This generated fixture keeps every currently modeled OfficeMath visual structure on a bounded page " +
+            "so WPF and Avalonia evidence captures use the same shared equation planner inputs."));
+
+        doc.Blocks.Add(EquationParagraph(
+            "Scripts: ",
+            new Equation([
+                MathRun.PlainText("E = m"),
+                MathRun.Superscript("c", "2"),
+                MathRun.PlainText("; "),
+                MathRun.Subscript("x", "i"),
+                MathRun.PlainText("; "),
+                MathRun.SubSuperscript("T", "n", "2")
+            ])));
+        doc.Blocks.Add(EquationParagraph(
+            "Fraction and radical: ",
+            new Equation([
+                MathRun.Fraction("a + b", "c + d"),
+                MathRun.PlainText(" = "),
+                MathRun.Radical("x + 1", "3")
+            ])));
+        doc.Blocks.Add(EquationParagraph(
+            "N-ary operator: ",
+            new Equation([
+                MathRun.NAry("\u2211", "i=1", "n", "i^2"),
+                MathRun.PlainText(" + "),
+                MathRun.NAry("\u222B", "0", "1", "f(x) dx")
+            ])));
+        doc.Blocks.Add(EquationParagraph(
+            "Matrix: ",
+            new Equation([
+                MathRun.MatrixOf(new MathMatrix([["1", "0"], ["0", "1"]]))
+            ])));
+        doc.Blocks.Add(EquationParagraph(
+            "Accents and bars: ",
+            new Equation([
+                MathRun.AccentOf("x", "\u0302"),
+                MathRun.PlainText(" "),
+                MathRun.BarOf("y"),
+                MathRun.PlainText(" "),
+                MathRun.BarOf("z", top: false)
+            ])));
+        doc.Blocks.Add(EquationParagraph(
+            "Delimiter and group character: ",
+            new Equation([
+                MathRun.Delimiter("a + b", "[", "]"),
+                MathRun.PlainText(" "),
+                MathRun.GroupCharOf("u + v", "\u23DE", "top"),
+                MathRun.PlainText(" "),
+                MathRun.GroupCharOf("r + s", "\u23DF", "bot")
+            ])));
+        doc.Blocks.Add(EquationParagraph(
+            "Function apply: ",
+            new Equation([
+                MathRun.FunctionApply("sin", "x + y"),
+                MathRun.PlainText(" + "),
+                MathRun.FunctionApply("log", "n")
+            ])));
+
+        return doc;
+    }
+
     public static TextDocument BuildSectionGeometryDocument()
     {
         var doc = TextDocument.CreateEmpty();
@@ -498,6 +576,16 @@ public static class FreeWVisualEvidenceDocumentFactory
         return doc;
     }
 
+    public static TextDocument BuildReviewProtectionProofingEvidenceDocument()
+    {
+        var doc = BuildReviewProofingVisualDepthDocument();
+        doc.Properties.Title = "Review Protection Proofing Evidence";
+        doc.Properties.Comments = "Bounded CommentsOnly protection state plus review/proofing visual evidence.";
+        doc.Protection = new ProtectionSettings(ProtectionMode.CommentsOnly);
+        doc.MarkedAsFinal = false;
+        return doc;
+    }
+
     public static TextDocument BuildComplexTableLayoutDocument()
     {
         var doc = TextDocument.CreateEmpty();
@@ -707,7 +795,7 @@ public static class FreeWVisualEvidenceDocumentFactory
         doc.Blocks.Add(new Paragraph(
             "This shared fixture exercises Word-style chart and SmartArt visual planning: named chart " +
             "palettes, quick layouts, scatter markers, data labels, axis titles, plot fills, SmartArt " +
-            "layouts, color schemes, styles, and node fill sequences."));
+            "hierarchy depth, connectors, color schemes, styles, and node fill sequences."));
 
         var chartParagraph = new Paragraph();
         chartParagraph.Runs.Add(new Run("Column chart with quick-layout annotations: "));
@@ -720,7 +808,7 @@ public static class FreeWVisualEvidenceDocumentFactory
         doc.Blocks.Add(scatterParagraph);
 
         var smartArtParagraph = new Paragraph();
-        smartArtParagraph.Runs.Add(new Run("SmartArt process colors and style: "));
+        smartArtParagraph.Runs.Add(new Run("SmartArt hierarchy colors and style: "));
         smartArtParagraph.Runs.Add(Run.FromSmartArt(BuildStyledSmartArt()));
         doc.Blocks.Add(smartArtParagraph);
 
@@ -850,6 +938,49 @@ public static class FreeWVisualEvidenceDocumentFactory
         return doc;
     }
 
+    public static TextDocument BuildMultiSectionHeaderFooterImageDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Page.HeaderDistancePt = 24;
+        doc.Page.FooterDistancePt = 24;
+        doc.Blocks.Clear();
+
+        doc.Blocks.Add(StyledParagraph("Section 1 Header Image", "Heading1"));
+        doc.Blocks.Add(new Paragraph(
+            "The first page uses a left-aligned header image so the shared evidence planner can " +
+            "record image bytes, size, slot, section, alignment, and alt text."));
+        for (var i = 1; i <= 8; i++)
+            doc.Blocks.Add(new Paragraph($"Section one body paragraph {i}: header image evidence remains stable."));
+
+        var sectionBreak = new Section(
+            new PageSettings
+            {
+                HeaderDistancePt = 24,
+                FooterDistancePt = 24
+            },
+            SectionBreakKind.NextPage);
+        sectionBreak.HeadersFooters.Header = ImageHeaderFooter(
+            "Section One Letterhead",
+            TextAlignment.Left,
+            widthPt: 96,
+            heightPt: 32);
+        doc.Blocks.Add(new Paragraph("[ Next-page section break ]") { SectionBreak = sectionBreak });
+
+        doc.FinalSectionHeadersFooters.Header = ImageHeaderFooter(
+            "Section Two Letterhead",
+            TextAlignment.Right,
+            widthPt: 84,
+            heightPt: 28);
+        doc.Blocks.Add(StyledParagraph("Section 2 Header Image", "Heading1"));
+        doc.Blocks.Add(new Paragraph(
+            "The second page uses a right-aligned header image to make cross-renderer visual evidence " +
+            "catch stale section, alignment, or image metadata."));
+        for (var i = 1; i <= 8; i++)
+            doc.Blocks.Add(new Paragraph($"Section two body paragraph {i}: the final section header differs."));
+
+        return doc;
+    }
+
     private static Paragraph StyledParagraph(string text, string styleId) =>
         new(text) { StyleId = styleId };
 
@@ -858,6 +989,26 @@ public static class FreeWVisualEvidenceDocumentFactory
         var headerFooter = new HeaderFooter();
         var paragraph = new Paragraph();
         paragraph.Runs.AddRange(runs);
+        headerFooter.Paragraphs.Add(paragraph);
+        return headerFooter;
+    }
+
+    private static HeaderFooter ImageHeaderFooter(
+        string altText,
+        TextAlignment alignment,
+        double widthPt,
+        double heightPt)
+    {
+        var headerFooter = new HeaderFooter();
+        var paragraph = new Paragraph
+        {
+            Formatting = ParagraphFormatting.Default with { Alignment = alignment }
+        };
+        paragraph.Runs.Add(Run.FromImage(new InlineImage(BuildGeneratedWatermarkPngBytes(), widthPt, heightPt)
+        {
+            AltText = altText,
+            Wrapping = ImageWrapping.Inline
+        }));
         headerFooter.Paragraphs.Add(paragraph);
         return headerFooter;
     }
@@ -1196,10 +1347,14 @@ public static class FreeWVisualEvidenceDocumentFactory
 
     private static SmartArt BuildStyledSmartArt()
     {
-        var smartArt = SmartArt.Create(SmartArtKind.Process, ["Plan", "Build", "Verify"]);
-        smartArt.WidthPt = 300;
-        smartArt.HeightPt = 110;
-        smartArt.LayoutId = "stepup1";
+        var root = new SmartArtNode("Plan");
+        var child = root.AddChild("Build");
+        child.AddChild("Verify");
+        var smartArt = new SmartArt { Kind = SmartArtKind.Hierarchy };
+        smartArt.Nodes.Add(root);
+        smartArt.WidthPt = 320;
+        smartArt.HeightPt = 140;
+        smartArt.LayoutId = "orgchart1";
         smartArt.ColorSchemeId = "accent1";
         smartArt.StyleId = "intense1";
         return smartArt;
@@ -1251,19 +1406,46 @@ public static class FreeWVisualEvidenceDocumentFactory
     {
         var group = new DrawingGroup
         {
-            WidthPt = 180,
-            HeightPt = 82,
+            WidthPt = 260,
+            HeightPt = 150,
             Placement = Placement(ImageWrapping.Square, xPt: 280, yPt: 260, zOrder: 10)
         };
+        group.Children.Add(new InlineImage(BuildGeneratedWatermarkPngBytes(), widthPt: 42, heightPt: 30)
+        {
+            AltText = "Grouped image child"
+        });
+        group.ChildOffsets.Add((0, 0));
         group.Children.Add(new Shape(ShapeKind.Ellipse, 82, 50)
         {
             FillColorHex = "#CFE2F3",
             OutlineColorHex = "#1155CC",
             Effects = new ShapeEffectLst { HasGlow = true, GlowColorHex = "4472C4", GlowRad = 63500 }
         });
-        group.ChildOffsets.Add((0, 16));
-        group.Children.Add(new WordArt("Group", WordArtStyle.FillGold, 22));
-        group.ChildOffsets.Add((70, 8));
+        group.ChildOffsets.Add((0, 40));
+        var chart = Chart.Create(
+            ChartKind.Column,
+            ["Q1", "Q2"],
+            [2.0, 3.0],
+            seriesName: "Grouped",
+            title: "Grouped chart");
+        chart.WidthPt = 108;
+        chart.HeightPt = 72;
+        chart.StyleId = 2;
+        chart.ColorSchemeId = "colorful2";
+        chart.QuickLayoutId = 5;
+        chart.ShowLegend = true;
+        group.Children.Add(chart);
+        group.ChildOffsets.Add((94, 0));
+        group.Children.Add(new WordArt("Group", WordArtStyle.GlowGold, 22));
+        group.ChildOffsets.Add((94, 82));
+        var smartArt = SmartArt.Create(SmartArtKind.Process, ["Plan", "Check"]);
+        smartArt.WidthPt = 128;
+        smartArt.HeightPt = 46;
+        smartArt.LayoutId = "process1";
+        smartArt.ColorSchemeId = "accent1";
+        smartArt.StyleId = "moderate1";
+        group.Children.Add(smartArt);
+        group.ChildOffsets.Add((0, 98));
         return group;
     }
 
@@ -1314,6 +1496,14 @@ public static class FreeWVisualEvidenceDocumentFactory
         var paragraph = new Paragraph();
         paragraph.Runs.Add(new Run(prefix));
         paragraph.Runs.Add(fieldRun);
+        return paragraph;
+    }
+
+    private static Paragraph EquationParagraph(string prefix, Equation equation)
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run(prefix));
+        paragraph.Runs.Add(Run.FromEquation(equation));
         return paragraph;
     }
 

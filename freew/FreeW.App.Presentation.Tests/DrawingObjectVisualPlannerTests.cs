@@ -139,13 +139,40 @@ public sealed class DrawingObjectVisualPlannerTests
     }
 
     [Fact]
-    public void GroupPlan_RecordsShapeAndWordArtChildrenWithLocalOffsets()
+    public void InlineWordArtPlan_RecordsPresetEffectsWithoutFloatingPlacement()
+    {
+        var wordArt = new WordArt("Inline Glow", WordArtStyle.GlowGold, fontSizePt: 24)
+        {
+            Warp = WordArtWarp.ArchUp
+        };
+
+        var plan = DrawingObjectVisualPlanner.BuildInlineWordArtPlan(wordArt);
+
+        plan.WordArt.Text.Should().Be("Inline Glow");
+        plan.WordArt.Style.Should().Be(WordArtStyle.GlowGold);
+        plan.WordArt.Warp.Should().Be(WordArtWarp.ArchUp);
+        plan.WordArt.FontSizeDip.Should().BeApproximately(32, 0.01);
+        plan.Effects.HasGlow.Should().BeTrue();
+        plan.Effects.GlowColorHex.Should().Be("#FFC000");
+        plan.Effects.Summary.Should().Be("glow");
+    }
+
+    [Fact]
+    public void GroupPlan_RecordsMixedChildrenWithLocalOffsetsAndTypedPlans()
     {
         var group = new DrawingGroup
         {
-            WidthPt = 180,
-            HeightPt = 90
+            WidthPt = 240,
+            HeightPt = 140
         };
+        var image = new InlineImage([1, 2, 3, 4], widthPt: 24, heightPt: 18)
+        {
+            CropLeft = 0.1,
+            RotationAngle = 12,
+            FlipH = true
+        };
+        group.Children.Add(image);
+        group.ChildOffsets.Add((3, 4));
         group.Children.Add(new Shape(ShapeKind.Ellipse, widthPt: 72, heightPt: 36, fillColorHex: "#CFE2F3")
         {
             Effects = new ShapeEffectLst
@@ -156,8 +183,30 @@ public sealed class DrawingObjectVisualPlannerTests
             }
         });
         group.ChildOffsets.Add((9, 6));
+        var chart = Chart.Create(
+            ChartKind.Line,
+            ["A", "B"],
+            [1.0, 2.0],
+            seriesName: "Series",
+            title: "Grouped chart");
+        chart.WidthPt = 90;
+        chart.HeightPt = 54;
+        chart.StyleId = 4;
+        chart.ColorSchemeId = "colorful2";
+        chart.QuickLayoutId = 5;
+        chart.ShowLegend = true;
+        group.Children.Add(chart);
+        group.ChildOffsets.Add((84, 0));
         group.Children.Add(new WordArt("Group", WordArtStyle.GlowGold, fontSizePt: 20));
         group.ChildOffsets.Add((72, 12));
+        var smartArt = SmartArt.Create(SmartArtKind.List, ["Plan", "Ship", "Review", "Launch"]);
+        smartArt.WidthPt = 120;
+        smartArt.HeightPt = 44;
+        smartArt.LayoutId = "matrix1";
+        smartArt.ColorSchemeId = "accent1";
+        smartArt.StyleId = "moderate1";
+        group.Children.Add(smartArt);
+        group.ChildOffsets.Add((24, 84));
 
         var plan = DrawingObjectVisualPlanner.BuildVisualPlan(
             group,
@@ -171,18 +220,43 @@ public sealed class DrawingObjectVisualPlannerTests
                 ImageWrapping.Square));
 
         plan.Kind.Should().Be(DrawingObjectVisualKind.Group);
-        plan.GroupChildren.Should().HaveCount(2);
-        plan.GroupChildren[0].OffsetXDip.Should().BeApproximately(12, 0.01);
-        plan.GroupChildren[0].OffsetYDip.Should().BeApproximately(8, 0.01);
-        plan.GroupChildren[0].Visual.Kind.Should().Be(DrawingObjectVisualKind.Shape);
-        plan.GroupChildren[0].Visual.GeometryKind.Should().Be(DrawingObjectGeometryKind.Ellipse);
-        plan.GroupChildren[0].Visual.Rect.XDip.Should().BeApproximately(112, 0.01);
-        plan.GroupChildren[0].Visual.Effects.HasGlow.Should().BeTrue();
-        plan.GroupChildren[0].Visual.Effects.GlowColorHex.Should().Be("#70AD47");
-        plan.GroupChildren[1].OffsetXDip.Should().BeApproximately(96, 0.01);
-        plan.GroupChildren[1].Visual.Kind.Should().Be(DrawingObjectVisualKind.WordArt);
-        plan.GroupChildren[1].Visual.WordArt!.Text.Should().Be("Group");
+        plan.GroupChildren.Should().HaveCount(5);
+        plan.GroupChildren.Select(child => child.Visual.Kind).Should().Equal(
+            DrawingObjectVisualKind.Image,
+            DrawingObjectVisualKind.Shape,
+            DrawingObjectVisualKind.Chart,
+            DrawingObjectVisualKind.WordArt,
+            DrawingObjectVisualKind.SmartArt);
+        plan.GroupChildren[0].OffsetXDip.Should().BeApproximately(4, 0.01);
+        plan.GroupChildren[0].OffsetYDip.Should().BeApproximately(5.33, 0.01);
+        var imagePlan = plan.GroupChildren[0].Visual.Image;
+        imagePlan.Should().NotBeNull();
+        imagePlan!.ByteLength.Should().Be(4);
+        imagePlan.HasCrop.Should().BeTrue();
+        plan.GroupChildren[0].Visual.RotationAngle.Should().Be(12);
+        plan.GroupChildren[0].Visual.FlipH.Should().BeTrue();
+        plan.GroupChildren[1].OffsetXDip.Should().BeApproximately(12, 0.01);
+        plan.GroupChildren[1].OffsetYDip.Should().BeApproximately(8, 0.01);
+        plan.GroupChildren[1].Visual.GeometryKind.Should().Be(DrawingObjectGeometryKind.Ellipse);
+        plan.GroupChildren[1].Visual.Rect.XDip.Should().BeApproximately(112, 0.01);
         plan.GroupChildren[1].Visual.Effects.HasGlow.Should().BeTrue();
-        plan.GroupChildren[1].Visual.Effects.GlowColorHex.Should().Be("#FFC000");
+        plan.GroupChildren[1].Visual.Effects.GlowColorHex.Should().Be("#70AD47");
+        var chartPlan = plan.GroupChildren[2].Visual.Chart;
+        chartPlan.Should().NotBeNull();
+        chartPlan!.Kind.Should().Be(ChartKind.Line);
+        chartPlan.StyleId.Should().Be(4);
+        chartPlan.ColorSchemeId.Should().Be("colorful2");
+        plan.GroupChildren[3].OffsetXDip.Should().BeApproximately(96, 0.01);
+        plan.GroupChildren[3].Visual.WordArt!.Text.Should().Be("Group");
+        plan.GroupChildren[3].Visual.Effects.HasGlow.Should().BeTrue();
+        plan.GroupChildren[3].Visual.Effects.GlowColorHex.Should().Be("#FFC000");
+        var smartArtPlan = plan.GroupChildren[4].Visual.SmartArt;
+        smartArtPlan.Should().NotBeNull();
+        smartArtPlan!.Kind.Should().Be(SmartArtKind.List);
+        smartArtPlan.LayoutId.Should().Be("matrix1");
+        smartArtPlan.Nodes.Should().HaveCount(4);
+        smartArtPlan.LayoutGeometry.Should().NotBeNull();
+        smartArtPlan.LayoutGeometry!.Kind.Should().Be(SmartArtLayoutGeometryKind.Matrix);
+        smartArtPlan.LayoutGeometry.Nodes.Should().HaveCount(4);
     }
 }

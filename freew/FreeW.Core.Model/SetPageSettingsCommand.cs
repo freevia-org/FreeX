@@ -66,6 +66,10 @@ public sealed class SetPageSettingsCommand(PageSettings settings) : IDocumentCom
         dst.LineNumberMode = src.LineNumberMode;
         dst.LineNumberCountBy = src.LineNumberCountBy;
         dst.LineNumberStartAt = src.LineNumberStartAt;
+        dst.PageNumberFormat = src.PageNumberFormat;
+        dst.PageNumberStartAt = src.PageNumberStartAt;
+        dst.PageNumberChapterStyleLevel = src.PageNumberChapterStyleLevel;
+        dst.PageNumberChapterSeparator = src.PageNumberChapterSeparator;
         dst.AutoHyphenation = src.AutoHyphenation;
         dst.HyphenationZonePt = src.HyphenationZonePt;
         dst.ConsecutiveHyphenLimit = src.ConsecutiveHyphenLimit;

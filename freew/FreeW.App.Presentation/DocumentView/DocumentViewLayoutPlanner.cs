@@ -56,6 +56,29 @@ public sealed record DocumentColumnLayoutPlan(
 
 public sealed record DocumentGridlineSegment(double X1, double Y1, double X2, double Y2);
 
+public sealed record DocumentTableCellEffectiveFillPlan(
+    string? ExplicitFillHex,
+    string? StyleDerivedFillSource,
+    string? StyleDerivedFillHex,
+    string? EffectiveFillSource,
+    string? EffectiveFillHex,
+    bool StyleDerivedBold,
+    bool EffectiveBold)
+{
+    public static DocumentTableCellEffectiveFillPlan Empty { get; } = new(
+        ExplicitFillHex: null,
+        StyleDerivedFillSource: null,
+        StyleDerivedFillHex: null,
+        EffectiveFillSource: null,
+        EffectiveFillHex: null,
+        StyleDerivedBold: false,
+        EffectiveBold: false);
+
+    public bool HasExplicitFill => !string.IsNullOrWhiteSpace(ExplicitFillHex);
+    public bool HasStyleDerivedFill => !string.IsNullOrWhiteSpace(StyleDerivedFillHex);
+    public bool HasEffectiveFill => !string.IsNullOrWhiteSpace(EffectiveFillHex);
+}
+
 public sealed record DocumentTableCellLayoutPlan(
     int RowIndex,
     int CellIndex,
@@ -68,7 +91,11 @@ public sealed record DocumentTableCellLayoutPlan(
     string TextDirection,
     string VerticalAlignment,
     double? PreferredWidthDip,
-    double? HeightDip);
+    double? HeightDip)
+{
+    public DocumentTableCellEffectiveFillPlan EffectiveFill { get; init; } =
+        DocumentTableCellEffectiveFillPlan.Empty;
+}
 
 public sealed record DocumentTablePaginationRowPlan(
     int RowIndex,
@@ -124,6 +151,9 @@ public sealed record DocumentTableLayoutPlan(
     bool RepeatsHeaderRow,
     bool HasBandedRows,
     bool HasBandedColumns,
+    bool HasFirstColumn,
+    bool HasLastColumn,
+    bool HasLastRow,
     bool HasMergedCells,
     bool HasVerticalMerges,
     bool HasCellShading,
@@ -249,9 +279,40 @@ public sealed record DocumentFloatingWrapExclusionZone(
     DocumentFloatRect Rect,
     ImageWrapping Wrapping);
 
+public sealed record DocumentFloatingWrapReservationPlan(
+    DocumentFloatingObjectKind Kind,
+    double WidthDip,
+    double HeightDip,
+    ImageWrapping Wrapping);
+
 public sealed record DocumentFloatingLineExclusionPlan(
     double LeftDeltaDip,
     double RightShrinkDip);
+
+public sealed record DocumentFloatingTextWrapLinePlan(
+    double RequestedContentYDip,
+    double PlannedContentYDip,
+    double PageSpaceYDip,
+    int ColumnIndex,
+    double ColumnLeftDip,
+    double ColumnWidthDip,
+    double BaseTextWidthDip,
+    double LeftDeltaDip,
+    double RightShrinkDip,
+    double EffectiveTextWidthDip,
+    double? TopAndBottomExclusionBottomDip)
+{
+    public bool HasLateralExclusion => LeftDeltaDip > 0 || RightShrinkDip > 0;
+
+    public bool HasTopAndBottomAdvance =>
+        TopAndBottomExclusionBottomDip is not null && PlannedContentYDip > RequestedContentYDip;
+
+    public double TextLeftDip(double leftInsetDip = 0) =>
+        ColumnLeftDip + leftInsetDip + LeftDeltaDip;
+
+    public double TextRightDip(double leftInsetDip = 0) =>
+        TextLeftDip(leftInsetDip) + EffectiveTextWidthDip;
+}
 
 public enum DocumentFloatingObjectKind
 {
@@ -475,7 +536,16 @@ public static class DocumentViewLayoutPlanner
                     cell.TextDirection.ToString(),
                     cell.VerticalAlignment.ToString(),
                     cell.WidthPt is > 0 ? RoundDip(PageLayout.PointsToDip(cell.WidthPt.Value)) : null,
-                    row.HeightPt is > 0 ? RoundDip(PageLayout.PointsToDip(row.HeightPt.Value)) : null));
+                    row.HeightPt is > 0 ? RoundDip(PageLayout.PointsToDip(row.HeightPt.Value)) : null)
+                {
+                    EffectiveFill = BuildTableCellEffectiveFillPlan(
+                        table,
+                        rowIndex,
+                        cellIndex,
+                        gridColumnIndex,
+                        gridSpan,
+                        gridColumnCount)
+                });
 
                 gridColumnIndex += gridSpan;
             }
@@ -489,6 +559,9 @@ public static class DocumentViewLayoutPlanner
             table.Formatting.RepeatHeaderRow,
             table.Formatting.BandedRows,
             table.Formatting.BandedColumns,
+            table.Formatting.FirstColumn,
+            table.Formatting.LastColumn,
+            table.Formatting.LastRow,
             hasMergedCells,
             hasVerticalMerges,
             hasCellShading,
@@ -510,6 +583,180 @@ public static class DocumentViewLayoutPlanner
             cells,
             BuildTablePaginationPlan(table, page ?? new PageSettings(), tableIndex));
     }
+
+    public static DocumentTableCellEffectiveFillPlan BuildTableCellEffectiveFillPlan(
+        Table table,
+        int rowIndex,
+        int cellIndex,
+        int gridColumnIndex,
+        int gridSpan,
+        int gridColumnCount)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+
+        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
+            return DocumentTableCellEffectiveFillPlan.Empty;
+        if (cellIndex < 0 || cellIndex >= table.Rows[rowIndex].Cells.Count)
+            return DocumentTableCellEffectiveFillPlan.Empty;
+
+        var cell = table.Rows[rowIndex].Cells[cellIndex];
+        return BuildTableCellEffectiveFillPlan(
+            NormalizeHexColorOrNull(cell.ShadingColorHex),
+            table.TableStyleId,
+            table.Formatting,
+            rowIndex,
+            table.Rows.Count,
+            gridColumnIndex,
+            Math.Max(1, gridSpan),
+            Math.Max(0, gridColumnCount));
+    }
+
+    public static DocumentTableCellEffectiveFillPlan BuildTableCellEffectiveFillPlan(
+        DocumentTableLayoutPlan table,
+        DocumentTableCellLayoutPlan cell)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        ArgumentNullException.ThrowIfNull(cell);
+
+        return BuildTableCellEffectiveFillPlan(
+            NormalizeHexColorOrNull(cell.ShadingColorHex),
+            table.TableStyleId,
+            BuildTableFormatting(table),
+            cell.RowIndex,
+            Math.Max(0, table.RowCount),
+            cell.GridColumnIndex,
+            Math.Max(1, cell.GridSpan),
+            Math.Max(0, table.GridColumnCount));
+    }
+
+    private static DocumentTableCellEffectiveFillPlan BuildTableCellEffectiveFillPlan(
+        string? explicitFillHex,
+        string? tableStyleId,
+        TableFormatting formatting,
+        int rowIndex,
+        int rowCount,
+        int gridColumnIndex,
+        int gridSpan,
+        int gridColumnCount)
+    {
+        var styleFillSource = (string?)null;
+        var styleFillHex = (string?)null;
+        var styleDerivedBold = false;
+
+        var catalogStyle = tableStyleId is { Length: > 0 }
+            ? DocumentTableStyle.FindById(tableStyleId)
+            : null;
+        if (catalogStyle is not null)
+        {
+            var isFirstColumn = gridColumnIndex == 0;
+            var isLastColumn = gridColumnCount > 0
+                && gridColumnIndex + Math.Max(1, gridSpan) >= gridColumnCount;
+            var (fillHex, bold) = catalogStyle.ResolveCellStyle(
+                rowIndex,
+                Math.Max(0, rowCount),
+                isFirstColumn,
+                isLastColumn,
+                formatting);
+            styleFillHex = NormalizeHexColorOrNull(fillHex);
+            styleDerivedBold = bold;
+            if (styleFillHex is not null)
+                styleFillSource = ResolveStyleDerivedCellFillSource(
+                    formatting,
+                    rowIndex,
+                    Math.Max(0, rowCount),
+                    gridColumnIndex,
+                    Math.Max(1, gridSpan),
+                    gridColumnCount,
+                    isFirstColumn,
+                    isLastColumn);
+        }
+
+        var legacyFillSource = (string?)null;
+        var legacyFillHex = (string?)null;
+        var isHeaderRow = formatting.HeaderRow && rowIndex == 0;
+        var isBandedRow = formatting.BandedRows
+            && !isHeaderRow
+            && TableBanding.IsBandedBodyRow(rowIndex, formatting.HeaderRow);
+        if (catalogStyle is null)
+        {
+            if (isHeaderRow)
+            {
+                legacyFillSource = "legacy-header-row";
+                legacyFillHex = LegacyHeaderRowFillHex;
+            }
+            else if (isBandedRow)
+            {
+                legacyFillSource = "legacy-banded-row";
+                legacyFillHex = LegacyBandedRowFillHex;
+            }
+        }
+
+        var effectiveFillSource = (string?)null;
+        var effectiveFillHex = (string?)null;
+        if (explicitFillHex is not null)
+        {
+            effectiveFillSource = "explicit-cell";
+            effectiveFillHex = explicitFillHex;
+        }
+        else if (styleFillHex is not null)
+        {
+            effectiveFillSource = styleFillSource;
+            effectiveFillHex = styleFillHex;
+        }
+        else if (legacyFillHex is not null)
+        {
+            effectiveFillSource = legacyFillSource;
+            effectiveFillHex = legacyFillHex;
+        }
+
+        return new DocumentTableCellEffectiveFillPlan(
+            ExplicitFillHex: explicitFillHex,
+            StyleDerivedFillSource: styleFillSource,
+            StyleDerivedFillHex: styleFillHex,
+            EffectiveFillSource: effectiveFillSource,
+            EffectiveFillHex: effectiveFillHex,
+            StyleDerivedBold: styleDerivedBold,
+            EffectiveBold: styleDerivedBold || (catalogStyle is null && isHeaderRow));
+    }
+
+    private static string ResolveStyleDerivedCellFillSource(
+        TableFormatting formatting,
+        int rowIndex,
+        int rowCount,
+        int gridColumnIndex,
+        int gridSpan,
+        int gridColumnCount,
+        bool isFirstColumn,
+        bool isLastColumn)
+    {
+        if (formatting.HeaderRow && rowIndex == 0)
+            return "style-derived-header";
+        if (formatting.LastRow && rowIndex == Math.Max(0, rowCount - 1))
+            return "style-derived-last-row";
+        if (formatting.FirstColumn && isFirstColumn)
+            return "style-derived-first-column";
+        if (formatting.LastColumn && isLastColumn)
+            return "style-derived-last-column";
+        if (formatting.BandedRows && TableBanding.BodyRowIndex(rowIndex, formatting.HeaderRow) >= 0)
+            return "style-derived-banded-row";
+
+        return "style-derived-cell";
+    }
+
+    private static TableFormatting BuildTableFormatting(DocumentTableLayoutPlan table) =>
+        new()
+        {
+            HeaderRow = table.HasHeaderRow,
+            RepeatHeaderRow = table.RepeatsHeaderRow,
+            BandedRows = table.HasBandedRows,
+            BandedColumns = table.HasBandedColumns,
+            FirstColumn = table.HasFirstColumn,
+            LastColumn = table.HasLastColumn,
+            LastRow = table.HasLastRow
+        };
+
+    public const string LegacyHeaderRowFillHex = "#D9E2F3";
+    public const string LegacyBandedRowFillHex = "#F2F2F2";
 
     public static DocumentTablePaginationPlan BuildTablePaginationPlan(
         Table table,
@@ -1008,6 +1255,111 @@ public static class DocumentViewLayoutPlanner
             : null;
     }
 
+    public static DocumentFloatingWrapReservationPlan? BuildFloatingWrapReservation(
+        Run run,
+        double? topAndBottomReservationWidthDip = null)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+
+        if (run.Image is { IsFloating: true } image)
+            return BuildFloatingWrapReservation(
+                DocumentFloatingObjectKind.Image,
+                image.WidthPt,
+                image.HeightPt,
+                defaultWidthPt: 120,
+                defaultHeightPt: 80,
+                image.Wrapping,
+                topAndBottomReservationWidthDip);
+
+        if (run.Shape is { IsFloating: true, Placement: { } shapePlacement } shape)
+            return BuildFloatingWrapReservation(
+                DocumentFloatingObjectKind.Shape,
+                shape.WidthPt,
+                shape.HeightPt,
+                defaultWidthPt: 120,
+                defaultHeightPt: 80,
+                shapePlacement.Wrapping,
+                topAndBottomReservationWidthDip);
+
+        if (run.Chart is { IsFloating: true, Placement: { } chartPlacement } chart)
+            return BuildFloatingWrapReservation(
+                DocumentFloatingObjectKind.Chart,
+                chart.WidthPt,
+                chart.HeightPt,
+                defaultWidthPt: 360,
+                defaultHeightPt: 216,
+                chartPlacement.Wrapping,
+                topAndBottomReservationWidthDip);
+
+        if (run.WordArt is { IsFloating: true, Placement: { } wordArtPlacement } wordArt)
+            return BuildFloatingWrapReservation(
+                DocumentFloatingObjectKind.WordArt,
+                EstimateWordArtWidthPt(wordArt),
+                EstimateWordArtHeightPt(wordArt),
+                defaultWidthPt: 72,
+                defaultHeightPt: 40,
+                wordArtPlacement.Wrapping,
+                topAndBottomReservationWidthDip);
+
+        if (run.SmartArt is { IsFloating: true, Placement: { } smartArtPlacement } smartArt)
+            return BuildFloatingWrapReservation(
+                DocumentFloatingObjectKind.SmartArt,
+                smartArt.WidthPt,
+                smartArt.HeightPt,
+                defaultWidthPt: 468,
+                defaultHeightPt: 216,
+                smartArtPlacement.Wrapping,
+                topAndBottomReservationWidthDip);
+
+        if (run.DrawingGroup is { } group)
+            return BuildFloatingWrapReservation(
+                DocumentFloatingObjectKind.Group,
+                group.WidthPt,
+                group.HeightPt,
+                defaultWidthPt: 144,
+                defaultHeightPt: 72,
+                group.Placement.Wrapping,
+                topAndBottomReservationWidthDip);
+
+        return null;
+    }
+
+    public static double BuildFloatingWrapReservationTextWidthDip(PageSettings page)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+
+        var metrics = BuildPageMetrics(page);
+        if (page.ColumnCount <= 1)
+            return metrics.ContentWidthDip;
+
+        return BuildColumnPlan(page, metrics.ContentWidthDip, usePageColumns: true).WidthDip;
+    }
+
+    private static DocumentFloatingWrapReservationPlan? BuildFloatingWrapReservation(
+        DocumentFloatingObjectKind kind,
+        double widthPt,
+        double heightPt,
+        double defaultWidthPt,
+        double defaultHeightPt,
+        ImageWrapping wrapping,
+        double? topAndBottomReservationWidthDip)
+    {
+        if (wrapping is not (ImageWrapping.Square or ImageWrapping.Tight or ImageWrapping.TopAndBottom))
+            return null;
+
+        var resolvedWidthPt = widthPt > 0 ? widthPt : defaultWidthPt;
+        var resolvedHeightPt = heightPt > 0 ? heightPt : defaultHeightPt;
+        var widthDip = wrapping == ImageWrapping.TopAndBottom && topAndBottomReservationWidthDip is > 0
+            ? topAndBottomReservationWidthDip.Value
+            : PageLayout.PointsToDip(resolvedWidthPt);
+
+        return new DocumentFloatingWrapReservationPlan(
+            kind,
+            Math.Max(1, widthDip),
+            Math.Max(1, PageLayout.PointsToDip(resolvedHeightPt)),
+            wrapping);
+    }
+
     public static DocumentFloatingLineExclusionPlan BuildSquareTightWrapExclusion(
         IEnumerable<DocumentFloatingWrapExclusionZone> zones,
         double lineTopDip,
@@ -1067,6 +1419,102 @@ public static class DocumentViewLayoutPlanner
         }
 
         return new DocumentFloatingLineExclusionPlan(maxLeftDeltaDip, maxRightShrinkDip);
+    }
+
+    public static DocumentFloatingTextWrapLinePlan BuildFloatingTextWrapLinePlan(
+        IEnumerable<DocumentFloatingWrapExclusionZone> zones,
+        DocumentViewSurfacePlan surface,
+        double currentContentYDip,
+        double lineContentYDip,
+        double lineHeightDip,
+        double contentLeftDip,
+        int columnCount,
+        double columnWidthDip,
+        double columnGapDip,
+        double baseTextWidthDip,
+        double wrapGapDip = DefaultWrapGapDip,
+        double minimumLineWidthDip = DefaultMinimumLineWidthDip)
+    {
+        ArgumentNullException.ThrowIfNull(zones);
+        ArgumentNullException.ThrowIfNull(surface);
+
+        var zoneList = zones as IReadOnlyList<DocumentFloatingWrapExclusionZone>
+            ?? zones.ToList();
+        var safeColumnCount = Math.Max(1, columnCount);
+        var safeColumnWidthDip = Math.Max(0, columnWidthDip);
+        var safeColumnGapDip = Math.Max(0, columnGapDip);
+        var safeLineHeightDip = Math.Max(1, lineHeightDip);
+        var minimumWidthDip = Math.Max(1, minimumLineWidthDip);
+        var safeBaseTextWidthDip = double.IsFinite(baseTextWidthDip)
+            ? Math.Max(minimumWidthDip, baseTextWidthDip)
+            : minimumWidthDip;
+        var requestedContentYDip = double.IsFinite(lineContentYDip)
+            ? Math.Max(0, lineContentYDip)
+            : 0;
+        var plannedContentYDip = requestedContentYDip;
+        var mutableCurrentContentYDip = double.IsFinite(currentContentYDip)
+            ? Math.Max(0, currentContentYDip)
+            : requestedContentYDip;
+        double? appliedTopAndBottomBottomDip = null;
+
+        for (var guard = 0; guard < 200; guard++)
+        {
+            var pageSpaceYDip = surface.ContentYToPageSpaceY(plannedContentYDip, safeColumnCount);
+            var exclusionBottomDip = BuildTopAndBottomWrapExclusionBottom(
+                zoneList,
+                pageSpaceYDip,
+                safeLineHeightDip,
+                contentLeftDip,
+                safeColumnCount,
+                safeColumnWidthDip,
+                safeColumnGapDip,
+                minimumWidthDip);
+            if (exclusionBottomDip is null)
+                break;
+
+            var targetContentYDip = BuildContentYAfterTopAndBottomWrapExclusion(
+                surface,
+                mutableCurrentContentYDip,
+                plannedContentYDip,
+                exclusionBottomDip.Value,
+                safeColumnCount);
+            if (!double.IsFinite(targetContentYDip) || targetContentYDip <= mutableCurrentContentYDip)
+                break;
+
+            appliedTopAndBottomBottomDip = exclusionBottomDip.Value;
+            mutableCurrentContentYDip = targetContentYDip;
+            plannedContentYDip = targetContentYDip;
+        }
+
+        var safeTextAreaHeightDip = Math.Max(1, surface.TextAreaHeightDip);
+        var slot = Math.Max(0, (int)(plannedContentYDip / safeTextAreaHeightDip));
+        var columnIndex = safeColumnCount > 1 ? slot % safeColumnCount : 0;
+        var columnLeftDip = contentLeftDip + columnIndex * (safeColumnWidthDip + safeColumnGapDip);
+        var plannedPageSpaceYDip = surface.ContentYToPageSpaceY(plannedContentYDip, safeColumnCount);
+        var lateral = BuildSquareTightWrapExclusion(
+            zoneList,
+            plannedPageSpaceYDip,
+            safeLineHeightDip,
+            columnLeftDip,
+            safeColumnWidthDip,
+            wrapGapDip,
+            minimumWidthDip);
+        var effectiveTextWidthDip = Math.Max(
+            minimumWidthDip,
+            safeBaseTextWidthDip - lateral.LeftDeltaDip - lateral.RightShrinkDip);
+
+        return new DocumentFloatingTextWrapLinePlan(
+            requestedContentYDip,
+            plannedContentYDip,
+            plannedPageSpaceYDip,
+            columnIndex,
+            columnLeftDip,
+            safeColumnWidthDip,
+            safeBaseTextWidthDip,
+            lateral.LeftDeltaDip,
+            lateral.RightShrinkDip,
+            effectiveTextWidthDip,
+            appliedTopAndBottomBottomDip);
     }
 
     public static double? BuildTopAndBottomWrapExclusionBottom(

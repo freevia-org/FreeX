@@ -10,7 +10,7 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand
     private readonly IReadOnlyList<SheetId> _sheetIds;
     private readonly SheetId _sourceSheetId;
     private readonly IReadOnlyList<(CellAddress Address, Cell NewCell)> _sourceEdits;
-    private List<(SheetId SheetId, CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
+    private List<(SheetId SheetId, CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly, bool HadRichTextRuns, IReadOnlyList<CellTextRun>? OldRichTextRuns, bool HadHyperlink, string? OldHyperlink, bool HadHyperlinkMetadata, HyperlinkMetadata? OldHyperlinkMetadata)>? _snapshot;
 
     public string Label => "Edit Grouped Sheets";
 
@@ -50,13 +50,34 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand
             {
                 var address = RemapAddress(sourceAddress, sheetId);
                 var oldCell = sheet.GetCell(address)?.Clone();
-                _snapshot.Add((sheetId, address, oldCell, sheet.GetStyleOnly(address.Row, address.Col)));
+                var hadRichTextRuns = sheet.RichTextRuns.TryGetValue(address, out var oldRuns);
+                var hadHyperlink = sheet.Hyperlinks.TryGetValue(address, out var oldHyperlink);
+                var hadHyperlinkMetadata = sheet.HyperlinkMetadata.TryGetValue(address, out var oldHyperlinkMetadata);
+                _snapshot.Add((
+                    sheetId,
+                    address,
+                    oldCell,
+                    sheet.GetStyleOnly(address.Row, address.Col),
+                    hadRichTextRuns,
+                    oldRuns,
+                    hadHyperlink,
+                    oldHyperlink,
+                    hadHyperlinkMetadata,
+                    oldHyperlinkMetadata));
 
                 var appliedCell = sourceCell.Clone();
                 if (oldCell is not null)
                     appliedCell.StyleId = oldCell.StyleId;
 
                 sheet.SetCell(address, appliedCell);
+
+                // The cell's content is being replaced, so any rich-text runs and hyperlink that
+                // belonged to the old content are stale and must not carry over to the new content
+                // (matching EditCellsCommand's handling of the same dictionaries).
+                sheet.RichTextRuns.Remove(address);
+                sheet.Hyperlinks.Remove(address);
+                sheet.HyperlinkMetadata.Remove(address);
+
                 affected.Add(address);
             }
         }
@@ -69,7 +90,7 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand
         if (_snapshot is null)
             return;
 
-        foreach (var (sheetId, address, oldCell, oldStyleOnly) in _snapshot)
+        foreach (var (sheetId, address, oldCell, oldStyleOnly, hadRichTextRuns, oldRichTextRuns, hadHyperlink, oldHyperlink, hadHyperlinkMetadata, oldHyperlinkMetadata) in _snapshot)
         {
             var sheet = ctx.GetSheet(sheetId);
             if (oldCell is null)
@@ -81,6 +102,21 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand
             {
                 sheet.SetCell(address, oldCell.Clone());
             }
+
+            if (hadRichTextRuns && oldRichTextRuns is not null)
+                sheet.RichTextRuns[address] = oldRichTextRuns;
+            else
+                sheet.RichTextRuns.Remove(address);
+
+            if (hadHyperlink && oldHyperlink is not null)
+                sheet.Hyperlinks[address] = oldHyperlink;
+            else
+                sheet.Hyperlinks.Remove(address);
+
+            if (hadHyperlinkMetadata && oldHyperlinkMetadata is not null)
+                sheet.HyperlinkMetadata[address] = oldHyperlinkMetadata;
+            else
+                sheet.HyperlinkMetadata.Remove(address);
         }
     }
 

@@ -5324,7 +5324,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialCouponFunctions()
     {
         AssertFormulaFinancialCouponFunctionContrastLocations("COUPDAYBS($A1,$C1,$D1,$E1)>10", "B2", "B3", "B8");
-        AssertFormulaFinancialCouponFunctionContrastLocations("COUPDAYS($A1,$C1,$D1)>180", "B1", "B2", "B4");
+        AssertFormulaFinancialCouponFunctionContrastLocations("COUPDAYS($A1,$C1,$D1)>=180", "B1", "B2", "B4");
         AssertFormulaFinancialCouponFunctionContrastLocations("COUPDAYSNC($A1,$C1,$D1,$E1)>100", "B1", "B2", "B4");
         AssertFormulaFinancialCouponFunctionContrastLocations("COUPNCD($A1,$C1,$D1,$E1)=DATE(2020,7,1)", "B2");
         AssertFormulaFinancialCouponFunctionContrastLocations("COUPNUM($A1,$C1,$D1,$E1)>=2", "B2", "B3", "B8");
@@ -5334,7 +5334,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialCouponWrappersAndErrors()
     {
-        AssertFormulaFinancialCouponFunctionContrastLocations("SUM(COUPDAYBS($A1,$C1,$D1,$E1),COUPDAYSNC($A1,$C1,$D1,$E1))>=182", "B1", "B2", "B4");
+        AssertFormulaFinancialCouponFunctionContrastLocations("SUM(COUPDAYBS($A1,$C1,$D1,$E1),COUPDAYSNC($A1,$C1,$D1,$E1))>=180", "B1", "B2", "B4");
         AssertFormulaFinancialCouponFunctionContrastLocations("IF(COUPNUM($A1,$C1,$D1,$E1)>1,TRUE,FALSE)", "B2", "B3", "B8");
         AssertFormulaFinancialCouponFunctionContrastLocations("AND(ISNUMBER(COUPNCD($A1,$C1,$D1,$E1)),COUPPCD($A1,$C1,$D1,$E1)<=DATE(2020,7,1))", "B1", "B2", "B3", "B4", "B8");
         AssertFormulaFinancialCouponFunctionContrastLocations("ISNA(COUPDAYBS($A1,$C1,$D1,$E1))", "B5");

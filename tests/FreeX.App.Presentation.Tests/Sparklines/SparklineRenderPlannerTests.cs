@@ -18,7 +18,9 @@ public sealed class SparklineRenderPlannerTests
     public void ReadSeries_ReadsNumberDateAndBoolCells_SkipsBlanks()
     {
         var (_, sheet) = BuildSheet();
-        // A1:A4 — number, bool, blank (skipped), number.
+        // A1:A4 — number, bool, blank, number. Round-8 finding N5: the blank at A3 is no longer
+        // dropped — the default DisplayEmptyCellsAs (Gap) keeps its position in the series as NaN
+        // so the layout engine breaks the line there, matching Excel's default gap behavior.
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(3));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new BoolValue(true));
         sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new NumberValue(9));
@@ -32,7 +34,11 @@ public sealed class SparklineRenderPlannerTests
 
         var series = SparklineRenderPlanner.ReadSeries(sheet, sparkline);
 
-        series.Should().Equal(3, 1, 9);
+        series.Should().HaveCount(4);
+        series[0].Should().Be(3);
+        series[1].Should().Be(1);
+        double.IsNaN(series[2]).Should().BeTrue("the blank cell keeps its position as NaN under the default Gap display");
+        series[3].Should().Be(9);
     }
 
     [Fact]
@@ -122,11 +128,15 @@ public sealed class SparklineRenderPlannerTests
     public void Plan_DropsEmptySeries()
     {
         var (_, sheet) = BuildSheet();
-        // No numeric cells in the range → empty series → no instruction.
+        // Round-8 finding N5: a single blank cell is no longer an empty series — the default
+        // DisplayEmptyCellsAs (Gap) keeps its position as NaN, so Plan would emit an instruction
+        // for it. Only a data range over the supported-cell cap now yields a genuinely empty
+        // series (SparklineSeriesReader.ReadSeries returns [] outright), so use that to exercise
+        // Plan's "no instruction for an empty series" drop path.
         var sparkline = new SparklineModel
         {
             Location = new CellAddress(sheet.Id, 2, 1),
-            DataRange = Range(sheet.Id, 1, 1, 1, 1),
+            DataRange = Range(sheet.Id, 1, 1, (uint)(SparklineRangeLimits.MaxDataCellCount + 1), 1),
         };
         sheet.Sparklines.Add(sparkline);
 

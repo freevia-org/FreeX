@@ -149,6 +149,37 @@ public static class ChartStylePlanner
         return null;
     }
 
+    /// <summary>
+    /// Resolves the per-point fill color for a bar/column series point when Excel's "Vary colors by
+    /// point" (<c>c:varyColors</c>) is on and this is the chart's only plotted series -- the only
+    /// shape Excel itself applies varyColors to for bar/column charts (a per-series legend still
+    /// needs one color per series, so multi-series charts ignore the flag). An explicit
+    /// per-point <c:dPt> fill (<see cref="ResolvePointFillColor"/>) always takes precedence over the
+    /// palette-by-point-index cycling this method performs. Returns null when varyColors does not
+    /// apply (flag unset, multi-series chart, or an explicit per-point override already exists), in
+    /// which case the caller should fall back to its normal series-level/palette-by-series color.
+    /// </summary>
+    public static CellColor? ResolveVaryColorsPointFill(
+        ChartModel chart,
+        int seriesIndex,
+        int pointIndex,
+        int plottedSeriesCount,
+        WorkbookTheme theme,
+        IReadOnlyList<CellColor> palette)
+    {
+        ArgumentNullException.ThrowIfNull(chart);
+        ArgumentNullException.ThrowIfNull(theme);
+        ArgumentNullException.ThrowIfNull(palette);
+
+        if (ResolvePointFillColor(chart, seriesIndex, pointIndex, theme) is { } explicitFill)
+            return explicitFill;
+
+        if (chart.VaryColorsByPoint != true || plottedSeriesCount != 1)
+            return null;
+
+        return GetPaletteColor(palette, pointIndex);
+    }
+
     public static ChartSeriesPaint ResolveSeriesPaint(
         ChartModel chart,
         int seriesIndex,

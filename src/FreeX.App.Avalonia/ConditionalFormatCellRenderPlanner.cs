@@ -16,7 +16,11 @@ public readonly record struct CfDataBarRenderInstruction(
     bool Gradient,
     bool Border,
     double HorizontalInset,
-    double VerticalInset)
+    double VerticalInset,
+    bool IsNegative = false,
+    double AxisFraction = 0d,
+    PresentationRgb? AxisColor = null,
+    PresentationRgb? BorderColor = null)
 {
     /// <summary>Signed extent of the bar, always ≥ 0.</summary>
     public double FractionWidth => EndFraction - StartFraction;
@@ -73,7 +77,11 @@ public static class ConditionalFormatCellRenderPlanner
             bar.Gradient,
             bar.Border,
             layout.HorizontalInset,
-            layout.VerticalInset);
+            layout.VerticalInset,
+            bar.IsNegative,
+            bar.AxisFraction,
+            bar.AxisColor is { } axisColor ? PresentationRgb.FromRgbColor(axisColor) : null,
+            bar.BorderColor is { } borderColor ? PresentationRgb.FromRgbColor(borderColor) : null);
     }
 
     /// <summary>

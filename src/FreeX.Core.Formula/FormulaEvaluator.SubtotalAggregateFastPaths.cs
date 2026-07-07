@@ -286,12 +286,26 @@ public sealed partial class FormulaEvaluator
                 return DirectRangeFastPathState.Unsupported;
             }
 
+            // Excel scope precedence: a sheet-scoped named FORMULA outranks a same-named
+            // workbook-global named RANGE. Defer to the general (slow) argument-expansion path,
+            // which resolves that precedence correctly, instead of summing the wrong global range.
+            if (IsSheetScopedName(named.Name, context, out var sheetScopedIsFormula) && sheetScopedIsFormula)
+            {
+                range = default;
+                result = BlankValue.Instance;
+                return DirectRangeFastPathState.Unsupported;
+            }
+
             var resolved = context.TryResolveNamedRange(named.Name);
             if (resolved is null)
             {
+                // Not a resolvable range - it may be a workbook-global named FORMULA
+                // (e.g. a dynamic OFFSET/COUNTA range). Defer to the slow path, which
+                // evaluates named formulas via TryEvaluateNamedFormula, instead of
+                // short-circuiting to #NAME?.
                 range = default;
-                result = ErrorValue.Name;
-                return DirectRangeFastPathState.Error;
+                result = BlankValue.Instance;
+                return DirectRangeFastPathState.Unsupported;
             }
 
             var gridRange = resolved.Value;

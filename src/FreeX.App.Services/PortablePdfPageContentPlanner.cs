@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
@@ -164,11 +165,16 @@ public static class PortablePdfPageContentPlanner
             return "=" + cell.FormulaText;
 
         var style = workbook.GetStyle(styleId);
-        return NumberFormatter.FormatWithColor(
+        var displayText = NumberFormatter.FormatWithColor(
             cell.Value,
             style.NumberFormat,
             workbook.IndexedColors,
             workbook.Theme,
             workbook.Uses1904DateSystem).Text;
+
+        // N47: honor Page Setup > Sheet > "Cell errors as" (blank/dashes/#N/A) the same way the WPF
+        // PrintRenderer path does via PagePrintTextPlanner.FormatPrintedCellText, so error cells print
+        // consistently substituted on the Avalonia/portable PDF path too.
+        return PagePrintTextPlanner.FormatPrintedCellText(displayText, sheet.PrintErrorValue);
     }
 }

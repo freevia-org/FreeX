@@ -79,7 +79,19 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand
                 if (!CommandGuards.CanEditCell(ctx.Workbook, sheet, address))
                     return CommandGuards.RejectSheetProtected();
             }
+
+            // O47 (meta of N56): a destination cell's pre-existing comment is unconditionally
+            // removed/overwritten by WritePayload even when the corresponding source cell has no
+            // comment, so the guard must cover destination cells too, not just the source range.
+            if ((HasComments(sheet, _sourceRange.AllCells()) || HasComments(sheet, destinationCells)) &&
+                !sheet.ProtectionPermissions.Contains(SheetProtectionPermission.EditObjects))
+            {
+                return CommandGuards.RejectSheetProtected();
+            }
         }
+
+        if (CommandGuards.RejectIfSplitsArray(sheet, destinationCells) is { } splitsArrayRejection)
+            return splitsArrayRejection;
 
         _snapshot = CaptureCellSnapshots(sheet, destinationCells);
 
@@ -276,6 +288,17 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand
 
     private static ThreadedComment CloneThreadedComment(ThreadedComment comment) =>
         comment with { Replies = comment.Replies.Select(reply => reply with { }).ToList() };
+
+    private static bool HasComments(Sheet sheet, IEnumerable<CellAddress> addresses)
+    {
+        foreach (var address in addresses)
+        {
+            if (sheet.Comments.ContainsKey(address) || sheet.ThreadedComments.ContainsKey(address))
+                return true;
+        }
+
+        return false;
+    }
 
     private static int GetSafeListCapacity(long cellCount) =>
         cellCount is > 0 and <= 1_000_000 ? (int)cellCount : 0;

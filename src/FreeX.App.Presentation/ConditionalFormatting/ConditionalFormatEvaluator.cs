@@ -51,7 +51,12 @@ public static class ConditionalFormatEvaluator
         // values fill to its left. Otherwise the engine's left-anchored layout is reproduced
         // exactly (axis at 0, bar from 0 to length).
         var axisAtNone = string.Equals(rule.DataBarAxisPosition, "none", StringComparison.OrdinalIgnoreCase);
-        if (!axisAtNone && min < 0 && max > 0)
+        // min < 0 <= max: matches the engine's negative-axis condition (see
+        // ViewportConditionalFormatEvaluator.Thresholds.cs), which must also accept max == 0 so an
+        // all-negative range (whose automatic maximum clamps to zero upstream) still resolves the
+        // axis at the right edge with bars growing leftward in the negative fill color, rather than
+        // falling through to the left-anchored positive-only path below.
+        if (!axisAtNone && min < 0 && max >= 0)
         {
             var axisFraction = (0 - min) / (max - min);
             var negativeFill = rule.DataBarNegativeFillColor.HasValue
@@ -60,7 +65,7 @@ public static class ConditionalFormatEvaluator
 
             if (cellValue >= 0)
             {
-                var t = Math.Clamp((cellValue - 0) / (max - 0), 0d, 1d);
+                var t = max > 0d ? Math.Clamp((cellValue - 0) / (max - 0), 0d, 1d) : 0d;
                 var length = (minLength + (maxLength - minLength) * t) * (1 - axisFraction);
                 if (length <= 0)
                     return null;

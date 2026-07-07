@@ -82,7 +82,8 @@ public sealed class AxisScale
         double? explicitMin = null,
         double? explicitMax = null,
         double? explicitStep = null,
-        int targetTickCount = 7)
+        int targetTickCount = 7,
+        bool reverseOrder = false)
     {
         var (min, max) = NormalizeRange(dataMin, dataMax);
 
@@ -112,6 +113,12 @@ public sealed class AxisScale
             screenMax = plot.Right;
         }
 
+        // Excel's "Values in reverse order" (OOXML scaling orientation="maxMin") flips which screen
+        // edge the minimum/maximum map onto — mirrors the WPF renderer's StartPosition/EndPosition
+        // swap (ChartRenderer.Axes.cs ApplyAxisReverseOrder) so bars/lines/gridlines all reverse.
+        if (reverseOrder)
+            (screenMin, screenMax) = (screenMax, screenMin);
+
         return new AxisScale(actualMin, actualMax, step, screenMin, screenMax, isVertical);
     }
 
@@ -130,7 +137,8 @@ public sealed class AxisScale
         AxisSide side,
         double? explicitMin = null,
         double? explicitMax = null,
-        double? logBase = null)
+        double? logBase = null,
+        bool reverseOrder = false)
     {
         var effectiveBase = logBase is { } b && b > 1 ? b : 10;
 
@@ -184,6 +192,9 @@ public sealed class AxisScale
             screenMin = plot.Left;
             screenMax = plot.Right;
         }
+
+        if (reverseOrder)
+            (screenMin, screenMax) = (screenMax, screenMin);
 
         // MajorStep is expressed in log space (one decade) for GetMajorTickValues' benefit.
         return new AxisScale(actualMin, actualMax, 1, screenMin, screenMax, isVertical, isLogarithmic: true, logBase: effectiveBase);

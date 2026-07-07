@@ -127,7 +127,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
 
             if (targetView is not null)
             {
-                if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceView, targetView))
+                if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceView, targetView, ModeledSheetViewMergeAttributes))
                     changed = true;
                 if (XlsxWorksheetSheetViewNormalizer.NormalizeSheetViewElement(targetView))
                     changed = true;

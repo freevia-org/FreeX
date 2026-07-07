@@ -314,7 +314,7 @@ public partial class ConditionalFormatTests
             source.IndexOf("private static IEnumerable<(CellAddress Address, ScalarValue Value)> EnumerateAggregateValues", StringComparison.Ordinal)];
 
         resolveTopBottom.Should().Contain("rankedValues.Sort(");
-        resolveTopBottom.Should().Contain("new HashSet<CellAddress>(take)");
+        resolveTopBottom.Should().Contain("new HashSet<CellAddress>(effectiveTake)");
         resolveTopBottom.Should().Contain("left.Index.CompareTo(right.Index)");
         resolveTopBottom.Should().NotContain(".OrderBy(");
         resolveTopBottom.Should().NotContain(".OrderByDescending(");

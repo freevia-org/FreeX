@@ -422,7 +422,7 @@ static void RenderDocumentComposite(
                 var hfSlot = ResolveHfSlotByName(ownerHf, hSlotName);
                 if (hfSlot is not null && !hfSlot.IsEmpty)
                 {
-                    var hfPage = RenderHfSlot(hfSlot, doc, thisPageWDip, hfH, i + 1, pageCount);
+                    var hfPage = RenderHfSlot(hfSlot, doc, thisPageWDip, hfH, i + 1, box.PageNumberText, pageCount);
                     if (hfPage is not null)
                     {
                         var hfVis = new DrawingVisual();
@@ -439,7 +439,7 @@ static void RenderDocumentComposite(
                 var fSlot = ResolveHfSlotByName(ownerHf, fSlotName);
                 if (fSlot is not null && !fSlot.IsEmpty)
                 {
-                    var hfPage = RenderHfSlot(fSlot, doc, thisPageWDip, hfH, i + 1, pageCount);
+                    var hfPage = RenderHfSlot(fSlot, doc, thisPageWDip, hfH, i + 1, box.PageNumberText, pageCount);
                     if (hfPage is not null)
                     {
                         var hfVis = new DrawingVisual();
@@ -1387,7 +1387,7 @@ static HeaderFooter? ResolveHfSlotByName(SectionHeadersFooters hf, string slotNa
 /// Returns null if the slot is empty or rendering fails.
 /// </summary>
 static DocumentPage? RenderHfSlot(HeaderFooter slot, TextDocument sourceDoc,
-    double pageWDip, double heightDip, int pageNumber, int pageCount)
+    double pageWDip, double heightDip, int pageNumber, string pageNumberText, int pageCount)
 {
     try
     {
@@ -1403,6 +1403,7 @@ static DocumentPage? RenderHfSlot(HeaderFooter slot, TextDocument sourceDoc,
 
         // Inject PAGE/NUMPAGES context.
         DocumentView._renderHfPageNumber = pageNumber;
+        DocumentView._renderHfPageNumberText = pageNumberText;
         DocumentView._renderHfPageCount  = pageCount > 0 ? pageCount : 1;
         var hfView = new DocumentView { Width = pageWDip };
         try
@@ -1412,6 +1413,7 @@ static DocumentPage? RenderHfSlot(HeaderFooter slot, TextDocument sourceDoc,
         finally
         {
             DocumentView._renderHfPageNumber = 0;
+            DocumentView._renderHfPageNumberText = null;
             DocumentView._renderHfPageCount  = 0;
         }
 
@@ -1740,6 +1742,18 @@ static void GenerateF2FlowCorpus(string outDir)
         Console.WriteLine("  wrote references-heavy-fields.docx");
     }
 
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildEquationStructuresDocument();
+        DocxWriter.Write(doc, Path.Combine(outDir, "equation-structures.docx"));
+        Console.WriteLine("  wrote equation-structures.docx");
+    }
+
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildMultiSectionHeaderFooterImageDocument();
+        DocxWriter.Write(doc, Path.Combine(outDir, "f2-hf-images.docx"));
+        Console.WriteLine("  wrote f2-hf-images.docx");
+    }
+
     // ─── 4. Footnotes ────────────────────────────────────────────────────────────────────────────
     {
         var doc = FreeWVisualEvidenceDocumentFactory.BuildFootnotePlacementDocument();
@@ -1864,6 +1878,12 @@ static void GenerateF2FlowCorpus(string outDir)
         var doc = FreeWVisualEvidenceDocumentFactory.BuildReviewProofingVisualDepthDocument();
         DocxWriter.Write(doc, Path.Combine(outDir, "review-proofing-visual-depth.docx"));
         Console.WriteLine("  wrote review-proofing-visual-depth.docx");
+    }
+
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildReviewProtectionProofingEvidenceDocument();
+        DocxWriter.Write(doc, Path.Combine(outDir, "review-protection-proofing-comments-only.docx"));
+        Console.WriteLine("  wrote review-protection-proofing-comments-only.docx");
     }
 
     {

@@ -18,6 +18,7 @@ using Avalonia.Media.Immutable;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using System.Globalization;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.Backstage;
@@ -406,6 +407,12 @@ public sealed partial class MainWindow : Window
     private readonly IPlatformPrinter _platformPrinter;
     private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
     private readonly ContentControl _sheetGridHost = new();
+    // The active cell's Border from the most recent BuildSheetGrid pass. Cells are plain Borders
+    // rebuilt on every RefreshShell (see CreateInteractiveCellBorder), so this is refreshed each
+    // pass and used to move REAL keyboard focus onto the active cell (see MoveFocusToActiveCellBorder)
+    // so a screen reader (Orca/AT-SPI, VoiceOver) actually observes a focus change while navigating
+    // the grid, instead of focus sitting statically on _sheetGridHost the whole time.
+    private Border? _activeCellBorder;
     private readonly ContentControl _sheetTabsHost = new();
     private readonly ScrollViewer _sheetScrollViewer = new();
     private readonly ScrollViewer _sheetTabsScroller = new();
@@ -705,6 +712,23 @@ public sealed partial class MainWindow : Window
     internal Control RebuildSheetGridForTest() => BuildSheetGrid();
 
     /// <summary>
+    /// Test-only accessor for the persistent worksheet grid host (survives RefreshShell/
+    /// BuildSheetGrid rebuilds — see its field comment), so headless accessibility regression tests
+    /// can move real keyboard focus onto it before driving navigation, exactly as a screen-reader
+    /// user tabbing into the grid would. Not used by production code paths.
+    /// </summary>
+    internal Control SheetGridHostForTest => _sheetGridHost;
+
+    /// <summary>
+    /// Test-only accessor for the active cell's real Border control (see
+    /// <see cref="_activeCellBorder"/>/<see cref="MoveFocusToActiveCellBorder"/>), so headless
+    /// accessibility regression tests can assert which control keyboard focus actually lands on
+    /// after grid navigation, and read its AutomationProperties Name/AutomationId. Not used by
+    /// production code paths.
+    /// </summary>
+    internal Control? ActiveCellBorderForTest => _activeCellBorder;
+
+    /// <summary>
     /// Test-only accessor for the Name Box's current text (K23 regression coverage), so headless
     /// tests can seed typed input before driving <see cref="RaiseCellAddressBoxKeyDownForTest"/> and
     /// assert the box's resulting displayed text. Not used by production code paths.
@@ -729,6 +753,33 @@ public sealed partial class MainWindow : Window
     /// without needing to open a real Avalonia flyout. Not used by production code paths.
     /// </summary>
     internal IReadOnlyList<string> CellAddressAutocompleteNamesForTest() => BuildCellAddressAutocompleteNames();
+
+    /// <summary>
+    /// Test-only accessor for the Formula Bar's current text, so headless tests can seed typed
+    /// input before driving <see cref="RaiseFormulaBoxKeyDownForTest"/>. Not used by production
+    /// code paths.
+    /// </summary>
+    internal string? FormulaBoxTextForTest
+    {
+        get => _formulaBox.Text;
+        set => _formulaBox.Text = value;
+    }
+
+    /// <summary>
+    /// Test-only seam that drives the real Formula Bar KeyDown handling (Enter/Tab commit-and-move,
+    /// line-break insertion) with a caller-supplied <see cref="KeyEventArgs"/>, so assertions can run
+    /// against the resulting <see cref="Session"/> state rather than only a source-string proxy. Not
+    /// used by production code paths.
+    /// </summary>
+    internal void RaiseFormulaBoxKeyDownForTest(KeyEventArgs e) => FormulaBox_KeyDown(_formulaBox, e);
+
+    /// <summary>
+    /// Test-only seam that drives the real worksheet pointer-wheel handling (row/column panning,
+    /// Ctrl+wheel zoom) with a caller-supplied <see cref="PointerWheelEventArgs"/>, so assertions can
+    /// run against the resulting <see cref="Session"/> state rather than only a source-string proxy.
+    /// Not used by production code paths.
+    /// </summary>
+    internal void RaisePointerWheelChangedForTest(PointerWheelEventArgs e) => SheetScrollViewer_PointerWheelChanged(_sheetGridHost, e);
 
     private readonly RecentColorsStore _recentColors = new();
     private MacOsLaunchSmokeDialogSnapshot _launchSmokeDialogEvidence = MacOsLaunchSmokeDialogSnapshot.Empty;
@@ -761,6 +812,13 @@ public sealed partial class MainWindow : Window
     internal Func<Task<bool>>? ConfirmSelectionMoveOverwriteOverrideForTest;
     private IReadOnlyDictionary<(uint Row, uint Col), SparklineCellEntry> _sparklinesByCell =
         new Dictionary<(uint Row, uint Col), SparklineCellEntry>();
+    // Set by BuildSheetGrid for the sheet just rendered. When true, CreateCell must NOT paint an
+    // opaque white base fill on unfilled cells — doing so would occlude the tiled worksheet
+    // background image painted on the parent Grid's Background (mirrors WPF's
+    // GridView.Rendering.cs "WorksheetBackground == null ? Brushes.White : null" gate).
+    private bool _activeSheetHasBackgroundImage;
+    private WorksheetBackgroundImage? _worksheetBackgroundBrushSource;
+    private ImageBrush? _worksheetBackgroundBrushCache;
     // Pivot overlay adornments rebuilt on each sheet-grid refresh.
     // Maps (row, col) → the portable target model used to open the pivot header dropdown menu.
     private Dictionary<(uint Row, uint Col), PivotHeaderDropdownTargetModel> _pivotHeaderDropdownTargets = [];
@@ -1149,7 +1207,7 @@ public sealed partial class MainWindow : Window
                     // Home ▸ Styles: Cell Styles gallery.
                     ["home.cellStyles"] = () => _ = ShowCellStylesGalleryAsync(),
                     // Review ▸ Delete Comment; View ▸ Split / Normal.
-                    ["review.deleteComment"] = DeleteActiveCellComment,
+                    ["review.deleteComment"] = DeleteActiveCellThreadedComment,
                     ["view.split"] = SplitPanesAtActiveCell,
                     ["view.normal"] = SetNormalView,
                     // Insert ▸ Comment (reuse New Comment); Insert ▸ Header & Footer (Page Setup).
@@ -1301,7 +1359,7 @@ public sealed partial class MainWindow : Window
                     ["Previous Comment"] = () => NavigateReviewThreadedComment(previous: true),
                     ["Show Comments"] = () => _ = ShowNotesListAsync(),
                     ["Edit Note"] = () => _ = ShowEditNoteDialogAsync(),
-                    ["Delete Note"] = DeleteActiveCellComment,
+                    ["Delete Note"] = DeleteActiveCellNote,
                     ["Share"] = () => _ = ShareWorkbookAsync(),
 
                     // View ▸ Show ▸ Ruler.
@@ -3644,7 +3702,15 @@ public sealed partial class MainWindow : Window
         var formulaSelectionStart = _formulaBox.SelectionStart;
         var formulaSelectionEnd = _formulaBox.SelectionEnd;
 
+        // Captured BEFORE the rebuild: the outgoing active-cell Border (if focused) is about to be
+        // detached from the visual tree by the Content reassignment below, at which point Avalonia
+        // clears its focus (InputElement.OnDetachedFromVisualTreeCore), so checking focus AFTER the
+        // rebuild would always see "nothing focused" and this would never re-focus the new cell.
+        var gridHadFocus = IsGridFocused();
+
         _sheetGridHost.Content = BuildSheetGrid();
+        if (gridHadFocus)
+            MoveFocusToActiveCellBorder();
         _sheetTabsHost.Content = BuildSheetTabs();
         UpdateSheetTabNavigationVisibility();
         if (!_cellAddressBoxHasPendingEdit)
@@ -3698,6 +3764,48 @@ public sealed partial class MainWindow : Window
             FreeX.App.Avalonia.Pivot.PivotSourceContext.FindActivePivot(_session.ActiveSheet, _session.ActiveCell) is not null);
         UpdateSaveButton();
         _refreshRibbonToggleStates?.Invoke();
+    }
+
+    /// <summary>
+    /// True when the currently focused element is <see cref="_sheetGridHost"/> itself or one of its
+    /// descendants (i.e. a previous active-cell Border) — meaning the user is actively navigating
+    /// the worksheet grid rather than editing the formula bar/inline editor or interacting with a
+    /// dialog/toolbar/menu. Must be captured BEFORE <see cref="BuildSheetGrid"/> replaces
+    /// <see cref="_sheetGridHost"/>'s Content, since detaching the currently-focused old Border
+    /// clears focus entirely (Avalonia's InputElement.OnDetachedFromVisualTreeCore) rather than
+    /// leaving it on _sheetGridHost or any ancestor.
+    /// </summary>
+    private bool IsGridFocused()
+    {
+        var focused = FocusManager?.GetFocusedElement();
+        return ReferenceEquals(focused, _sheetGridHost) ||
+               (focused is Control focusedControl && IsDescendantOf(focusedControl, _sheetGridHost));
+    }
+
+    /// <summary>
+    /// Moves real keyboard focus onto the active cell's Border after a grid rebuild. Without this,
+    /// focus never leaves <see cref="_sheetGridHost"/> (a single static "Worksheet"-named element),
+    /// so a screen reader has no focus-change signal at all while the user arrows from cell to
+    /// cell — the per-cell AutomationId/Name set in CreateInteractiveCellBorder are otherwise dead
+    /// weight since nothing ever focuses them. Mirrors, in spirit, what WPF's
+    /// GridViewAutomationPeer.NotifySelectionChanged achieves via
+    /// RaiseAutomationEvent(AutomationFocusChanged): Avalonia's AT-SPI/UIA bridges key off real
+    /// FocusManager focus transitions rather than an app-raised event, so this real Focus() call is
+    /// the Avalonia-native way to produce the same observable behavior. Caller gates this on
+    /// <see cref="IsGridFocused"/> (captured pre-rebuild) so focus is only stolen from the grid
+    /// itself, never from the formula bar, a dialog, or the ribbon.
+    /// </summary>
+    private void MoveFocusToActiveCellBorder() => _activeCellBorder?.Focus();
+
+    private static bool IsDescendantOf(Visual node, Visual ancestor)
+    {
+        for (var current = node.GetVisualParent(); current is not null; current = current.GetVisualParent())
+        {
+            if (ReferenceEquals(current, ancestor))
+                return true;
+        }
+
+        return false;
     }
 
     private void UpdateViewportScrollBars()
@@ -4092,6 +4200,7 @@ public sealed partial class MainWindow : Window
     private Control BuildSheetGrid()
     {
         _activeDataValidationDropdown = null;
+        _activeCellBorder = null;
         var viewport = _session.Viewport;
         var showHeadings = _session.ActiveSheet.ShowHeadings;
         var zoomFactor = GetActiveZoomFactor();
@@ -4121,9 +4230,10 @@ public sealed partial class MainWindow : Window
 
         _sparklinesByCell = BuildSparklineCellLookup(_session.ActiveSheet);
         BuildPivotAdornmentLookups(_session.Workbook, _session.ActiveSheet);
+        _activeSheetHasBackgroundImage = _session.ActiveSheet.BackgroundImage != null;
         var grid = new AvaloniaGrid
         {
-            Background = Brushes.White,
+            Background = (IBrush?)BuildWorksheetBackgroundBrush(_session.ActiveSheet.BackgroundImage) ?? Brushes.White,
         };
 
         if (showHeadings)
@@ -5342,9 +5452,18 @@ public sealed partial class MainWindow : Window
         var columnCount = Math.Max(1u, pictureGrid.ColumnCount);
         var cellWidth = frameWidth / columnCount;
         var cellHeight = frameHeight / rowCount;
-        var cellLookup = pictureGrid.Cells
-            .Where(cell => cell.RowOffset < rowCount && cell.ColumnOffset < columnCount)
-            .ToDictionary(cell => (cell.RowOffset, cell.ColumnOffset));
+        // Built as a manual last-wins loop rather than .ToDictionary(...): PictureModel.Cells is a
+        // plain List<PictureCellSnapshot> with no uniqueness constraint on (RowOffset, ColumnOffset),
+        // and a hand-edited or adversarial .fxl file can legitimately contain duplicate offsets. A
+        // straight ToDictionary throws ArgumentException on the second duplicate and crashes the
+        // render; last-wins keeps the render resilient and picks the later (later-drawn) entry,
+        // matching normal "last write wins" dictionary-assignment semantics.
+        var cellLookup = new Dictionary<(uint RowOffset, uint ColumnOffset), PictureCellSnapshot>();
+        foreach (var cell in pictureGrid.Cells)
+        {
+            if (cell.RowOffset < rowCount && cell.ColumnOffset < columnCount)
+                cellLookup[(cell.RowOffset, cell.ColumnOffset)] = cell;
+        }
 
         // Fills/patterns render first so grid separator lines, text, and cell borders sit above
         // them — mirroring WPF's RenderPicture draw order (DrawPictureCellStyle before the grid
@@ -5538,6 +5657,45 @@ public sealed partial class MainWindow : Window
         }
 
         return marker;
+    }
+
+    /// <summary>
+    /// Builds (and caches) the tiled ImageBrush used to paint a worksheet's Page Layout ▸ Background
+    /// picture behind the sheet grid — the Avalonia counterpart to WPF's
+    /// GridView.DrawingObjects.Pictures.cs GetWorksheetBackgroundBrush/RenderWorksheetBackground.
+    /// Returns null (no background) when the sheet has none or the bytes fail to decode.
+    /// </summary>
+    private ImageBrush? BuildWorksheetBackgroundBrush(WorksheetBackgroundImage? background)
+    {
+        if (background == null)
+        {
+            _worksheetBackgroundBrushSource = null;
+            _worksheetBackgroundBrushCache = null;
+            return null;
+        }
+
+        if (_worksheetBackgroundBrushCache is { } cached && ReferenceEquals(_worksheetBackgroundBrushSource, background))
+            return cached;
+
+        if (!TryCreateDrawingBitmap(background.ImageBytes, out var bitmap))
+        {
+            _worksheetBackgroundBrushSource = null;
+            _worksheetBackgroundBrushCache = null;
+            return null;
+        }
+
+        var brush = new ImageBrush(bitmap)
+        {
+            TileMode = TileMode.Tile,
+            Stretch = Stretch.None,
+            AlignmentX = AlignmentX.Left,
+            AlignmentY = AlignmentY.Top,
+            DestinationRect = new RelativeRect(0, 0, bitmap.PixelSize.Width, bitmap.PixelSize.Height, RelativeUnit.Absolute),
+        };
+
+        _worksheetBackgroundBrushSource = background;
+        _worksheetBackgroundBrushCache = brush;
+        return brush;
     }
 
     private static bool TryCreateDrawingBitmap(byte[] imageBytes, out Bitmap bitmap)
@@ -6834,11 +6992,16 @@ public sealed partial class MainWindow : Window
         }
 
         var style = cell.Style;
-        IBrush background;
+        IBrush? background;
         if (style?.GradientFill is { } gradientFill && CellGradientBrush.Build(gradientFill) is { } gradientBrush)
             background = gradientBrush;
         else if (style?.ResolveFillColor(_session.Workbook.Theme) is { } fillColor)
             background = Brush(fillColor);
+        else if (_activeSheetHasBackgroundImage)
+            // Let the sheet grid's tiled background-image Brush (set in BuildSheetGrid) show through
+            // instead of occluding it with an opaque base fill — mirrors WPF's
+            // "WorksheetBackground == null ? Brushes.White : null" gate in GridView.Rendering.cs.
+            background = null;
         else
             background = Brushes.White;
 
@@ -6908,12 +7071,13 @@ public sealed partial class MainWindow : Window
             patternBrush: patternBrush,
             richRuns: richRuns,
             mergeRegion: mergeRegion,
-            flowDirection: flowDirection);
+            flowDirection: flowDirection,
+            commentDisplay: cell.CommentDisplay);
     }
 
     private Border CreateInteractiveCellBorder(
         string text,
-        IBrush background,
+        IBrush? background,
         IBrush foreground,
         TextAlignment textAlignment,
         AvaloniaVerticalAlignment verticalAlignment,
@@ -6939,7 +7103,8 @@ public sealed partial class MainWindow : Window
         IBrush? patternBrush = null,
         IReadOnlyList<ResolvedCellTextRun>? richRuns = null,
         GridRange? mergeRegion = null,
-        FlowDirection flowDirection = FlowDirection.LeftToRight)
+        FlowDirection flowDirection = FlowDirection.LeftToRight,
+        CellCommentDisplay? commentDisplay = null)
     {
         var border = CreateCellBorder(
             text,
@@ -6968,7 +7133,18 @@ public sealed partial class MainWindow : Window
             sparklineLayer,
             patternBrush: patternBrush,
             richRuns: richRuns,
-            flowDirection: flowDirection);
+            flowDirection: flowDirection,
+            commentDisplay: commentDisplay);
+
+        // Comment/note corner indicator + hover card: mirrors WPF's GridView.Rendering.cs
+        // DrawCommentIndicator (small top-right triangle, red for a legacy note, purple for a
+        // threaded comment or a cell that mixes both) and GridView.CommentPreview.cs (hover shows
+        // the thread's title/body). Without this a Linux/macOS reviewer has no way to tell which
+        // cells carry comments except by navigating Review ▸ Next/Previous Comment.
+        if (commentDisplay is { } comment)
+        {
+            ToolTip.SetTip(border, FormatCommentTooltip(comment));
+        }
 
         // Per-cell accessible name/id so a screen reader (Orca/AT-SPI on Linux, VoiceOver on macOS)
         // can announce which cell has focus, its address, and its value while navigating the grid —
@@ -6979,6 +7155,21 @@ public sealed partial class MainWindow : Window
         var columnName = CellAddress.NumberToColumnName(address.Col);
         AutomationProperties.SetAutomationId(border, $"Cell_{columnName}{address.Row}");
         AutomationProperties.SetName(border, FormatCellAccessibleName(columnName, address.Row, text));
+
+        // The active cell (not just any selected cell) is made a REAL focusable/focus-tracked
+        // element so keyboard focus actually moves as the user arrows around the grid, matching
+        // WPF's GridViewAutomationPeer.NotifySelectionChanged (GridView.cs), which raises
+        // AutomationFocusChanged/SelectionItemPatternOnElementSelected on every active-cell move.
+        // Avalonia has no direct equivalent of RaiseAutomationEvent for arbitrary UIA/AT-SPI
+        // events; instead its automation bridges observe real FocusManager focus changes, so
+        // moving actual keyboard focus here (see MoveFocusToActiveCellBorder, called after each
+        // BuildSheetGrid/RefreshShell pass) is what makes a screen reader announce the new
+        // cell's name/address on every navigation instead of staying silent on _sheetGridHost.
+        if (address == _session.ActiveCell)
+        {
+            border.Focusable = true;
+            _activeCellBorder = border;
+        }
 
         // Excel treats a merged region as a single unit for the fill handle: if the selection's
         // bottom-right corner lands anywhere inside this cell's merge (not just on the merge's own
@@ -7054,7 +7245,7 @@ public sealed partial class MainWindow : Window
             border.Cursor = new Cursor(StandardCursorType.Ibeam);
             border.Child = CreateInlineCellEditor(
                 address,
-                background,
+                background ?? Brushes.White,
                 foreground,
                 textAlignment,
                 fontWeight,
@@ -7130,8 +7321,12 @@ public sealed partial class MainWindow : Window
             }
             else if (intent.Action == ExcelEditKeyAction.CommitAndMove && intent.Target is { } target)
             {
-                var rowDelta = GetCellIndexDelta(address.Row, target.Row);
-                var colDelta = GetCellIndexDelta(address.Col, target.Col);
+                var adjustedTarget = ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(
+                    _session.Workbook.GetSheet(address.Sheet),
+                    address,
+                    target);
+                var rowDelta = GetCellIndexDelta(address.Row, adjustedTarget.Row);
+                var colDelta = GetCellIndexDelta(address.Col, adjustedTarget.Col);
                 CommitInlineCellEdit(rowDelta, colDelta);
                 args.Handled = true;
             }
@@ -7730,8 +7925,10 @@ public sealed partial class MainWindow : Window
                 ResolveActiveCellThreadedComment(resolved: false);
                 break;
             case WorksheetContextMenuAction.DeleteComment:
+                DeleteActiveCellThreadedComment();
+                break;
             case WorksheetContextMenuAction.DeleteNote:
-                DeleteActiveCellComment();
+                DeleteActiveCellNote();
                 break;
             case WorksheetContextMenuAction.ShowNotes:
                 _ = ShowNotesListAsync();
@@ -7766,7 +7963,7 @@ public sealed partial class MainWindow : Window
 
     private static Border CreateCellBorder(
         string text,
-        IBrush background,
+        IBrush? background,
         IBrush foreground,
         TextAlignment textAlignment,
         AvaloniaVerticalAlignment verticalAlignment,
@@ -7792,7 +7989,8 @@ public sealed partial class MainWindow : Window
         double horizontalPadding = 8,
         IBrush? patternBrush = null,
         IReadOnlyList<ResolvedCellTextRun>? richRuns = null,
-        FlowDirection flowDirection = FlowDirection.LeftToRight)
+        FlowDirection flowDirection = FlowDirection.LeftToRight,
+        CellCommentDisplay? commentDisplay = null)
     {
         var effectiveText = FormatTextForRotation(text, textRotation);
         var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;
@@ -7911,6 +8109,17 @@ public sealed partial class MainWindow : Window
             cellContent = overlayHost;
         }
 
+        // Comment/note corner indicator: small top-right triangle, drawn above selection wash so it
+        // stays visible on a selected cell too. Color mirrors WPF's CommentIndicatorBrush — red for a
+        // legacy note, purple (#7C379E) for a threaded comment or a cell that mixes both kinds.
+        if (commentDisplay is { } indicatorComment)
+        {
+            var indicatorHost = new AvaloniaGrid { ClipToBounds = true };
+            indicatorHost.Children.Add(cellContent);
+            indicatorHost.Children.Add(CreateCommentIndicatorLayer(indicatorComment.Kind, zoomFactor));
+            cellContent = indicatorHost;
+        }
+
         // Gridline/selection border thickness scales with zoom so it grows together with cell
         // content/text — matching Excel/WPF where the whole grid (gridlines included) is scaled by a
         // single RenderTransform (see MainWindow.ViewCommands.cs), instead of staying a razor-thin
@@ -7987,18 +8196,33 @@ public sealed partial class MainWindow : Window
         var verticalInset = bar.VerticalInset * zoomFactor;
         var color = Color.FromRgb(bar.FillColor.R, bar.FillColor.G, bar.FillColor.B);
 
-        IBrush fill = bar.Gradient
-            ? new LinearGradientBrush
+        // P53: mirror WPF's gradient direction (GridView.ConditionalDataBars.cs) — a negative bar's
+        // gradient flows from solid (away from the axis) to faded (toward the axis), i.e. the
+        // reverse of a positive bar's light-to-solid left-to-right ramp.
+        IBrush fill;
+        if (bar.Gradient)
+        {
+            var gradientBrush = new LinearGradientBrush
             {
                 StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
                 EndPoint = new RelativePoint(1, 0, RelativeUnit.Relative),
-                GradientStops =
-                {
-                    new GradientStop(Color.FromArgb(90, color.R, color.G, color.B), 0),
-                    new GradientStop(color, 1),
-                },
+            };
+            if (bar.IsNegative)
+            {
+                gradientBrush.GradientStops.Add(new GradientStop(color, 0));
+                gradientBrush.GradientStops.Add(new GradientStop(Color.FromArgb(90, color.R, color.G, color.B), 1));
             }
-            : new SolidColorBrush(color);
+            else
+            {
+                gradientBrush.GradientStops.Add(new GradientStop(Color.FromArgb(90, color.R, color.G, color.B), 0));
+                gradientBrush.GradientStops.Add(new GradientStop(color, 1));
+            }
+            fill = gradientBrush;
+        }
+        else
+        {
+            fill = new SolidColorBrush(color);
+        }
 
         var rectangle = new AvaloniaRectangle
         {
@@ -8010,13 +8234,36 @@ public sealed partial class MainWindow : Window
         };
         if (bar.Border)
         {
-            rectangle.Stroke = new SolidColorBrush(color);
+            // P53: use the authored border color when supplied, matching WPF, instead of always
+            // stroking with the bar's own fill color.
+            var borderColor = bar.BorderColor is { } bc
+                ? Color.FromRgb(bc.R, bc.G, bc.B)
+                : color;
+            rectangle.Stroke = new SolidColorBrush(borderColor);
             rectangle.StrokeThickness = 0.75 * zoomFactor;
+        }
+
+        // P53: zero-crossing axis line for a negative-axis data bar, mirroring WPF's
+        // GridView.ConditionalDataBars.cs (drawn only when the axis sits strictly inside the cell).
+        Control? axisLine = null;
+        if (bar.AxisFraction > 0d && bar.AxisFraction < 1d)
+        {
+            var axisColor = bar.AxisColor is { } ac
+                ? Color.FromRgb(ac.R, ac.G, ac.B)
+                : Colors.Black;
+            axisLine = new AvaloniaRectangle
+            {
+                Fill = new SolidColorBrush(axisColor),
+                Width = Math.Max(1d, 1d * zoomFactor),
+                Margin = new Thickness(0, verticalInset, 0, verticalInset),
+                IsHitTestVisible = false,
+            };
         }
 
         // Width is resolved relative to the cell's drawable content area via a binding-free
         // panel that places the fraction-sized rectangle at arrange time.
-        return new ConditionalDataBarPanel(rectangle, bar.StartFraction, bar.FractionWidth, horizontalInset);
+        return new ConditionalDataBarPanel(
+            rectangle, bar.StartFraction, bar.FractionWidth, horizontalInset, axisLine, bar.AxisFraction);
     }
 
     private static Control CreateConditionalIconLayer(CfIconRenderInstruction icon, double zoomFactor)
@@ -8041,6 +8288,54 @@ public sealed partial class MainWindow : Window
                 Child = glyph,
             },
         };
+    }
+
+    /// <summary>
+    /// Small filled top-right corner triangle marking a cell that carries a legacy note and/or a
+    /// threaded comment — the Avalonia counterpart of WPF's DrawCommentIndicator
+    /// (GridView.Rendering.cs). Colors match CommentIndicatorBrush exactly: red for a Note-only
+    /// cell, purple #7C379E for ThreadedComment or Mixed (Excel suppresses the note color once a
+    /// thread coexists on the same cell).
+    /// </summary>
+    private static Control CreateCommentIndicatorLayer(CellCommentDisplayKind kind, double zoomFactor)
+    {
+        const double size = 7;
+        var scaledSize = size * zoomFactor;
+        var brush = kind == CellCommentDisplayKind.Note
+            ? Brushes.Red
+            : Brush(0x7C, 0x37, 0x9E);
+
+        var geometry = new StreamGeometry();
+        using (var context = geometry.Open())
+        {
+            context.BeginFigure(new Point(scaledSize, 0), isFilled: true);
+            context.LineTo(new Point(scaledSize, scaledSize));
+            context.LineTo(new Point(0, 0));
+            context.EndFigure(isClosed: true);
+        }
+
+        return new global::Avalonia.Controls.Shapes.Path
+        {
+            Data = geometry,
+            Fill = brush,
+            Stretch = Stretch.None,
+            Width = scaledSize,
+            Height = scaledSize,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
+            IsHitTestVisible = false,
+        };
+    }
+
+    /// <summary>
+    /// Hover-card text for a cell's comment/note, mirroring WPF's GridView.CommentPreview.cs
+    /// (title on the first line, body below).
+    /// </summary>
+    private static string FormatCommentTooltip(CellCommentDisplay comment)
+    {
+        var title = comment.Title;
+        var body = comment.Body;
+        return string.IsNullOrEmpty(title) ? body : $"{title}{Environment.NewLine}{body}";
     }
 
     private static AvaloniaGrid CreateOrientedCellContent(
@@ -14087,8 +14382,12 @@ public sealed partial class MainWindow : Window
             }
             else if (CommitFormulaBox())
             {
-                var rowDelta = GetCellIndexDelta(current.Row, target.Row);
-                var colDelta = GetCellIndexDelta(current.Col, target.Col);
+                var adjustedTarget = ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(
+                    _session.Workbook.GetSheet(current.Sheet),
+                    current,
+                    target);
+                var rowDelta = GetCellIndexDelta(current.Row, adjustedTarget.Row);
+                var colDelta = GetCellIndexDelta(current.Col, adjustedTarget.Col);
                 _session.MoveActiveCell(rowDelta, colDelta);
                 RefreshShell("Ready");
                 FocusShellRegion(ShellFocusTarget.Worksheet);
@@ -18766,13 +19065,38 @@ public sealed partial class MainWindow : Window
 
         var rangeReference = FormatRangeReference(_session.SelectedRange);
         var copyResult = _session.TryCopySelectedRangeText();
-        if (!copyResult.Success)
+        if (!copyResult.Success || copyResult.Text is not { } copiedText)
         {
             ShowEditIssue(copyResult.ErrorMessage ?? UiText.Get("MainLoc_CopyFailed"));
             return;
         }
 
-        await clipboard.SetTextAsync(copyResult.Text);
+        // Place plain text AND an HTML table fragment on the OS clipboard together, matching real
+        // Excel and the WPF host's M7 CF_HTML export: destinations that understand HTML (LibreOffice
+        // Writer/Calc, browsers, Word/Outlook) pick up bold/fill/merges/number-format display styling
+        // instead of only flattened TSV text. Only single-range selections build the HTML fragment
+        // (mirroring TryCopySelectedRangeText's own single-range Viewport/SelectedRange usage) —
+        // multi-area selections keep the existing plain-text-only behavior.
+        using var transfer = new DataTransfer();
+        if (_session.SelectedRanges.Count > 1)
+        {
+            transfer.Add(DataTransferItem.CreateText(copiedText));
+        }
+        else
+        {
+            AddClipboardTextAndHtml(transfer, copiedText, _session.Viewport, _session.ActiveSheet, _session.SelectedRange, _session.Workbook.Theme);
+        }
+
+        try
+        {
+            await clipboard.SetDataAsync(transfer);
+        }
+        catch
+        {
+            // Some backends may reject a custom platform format; fall back to plain text only.
+            await clipboard.SetTextAsync(copiedText);
+        }
+
         RefreshShell(UiText.Format("MainLoc_CopiedX", rangeReference));
     }
 
@@ -21102,6 +21426,15 @@ public sealed partial class MainWindow : Window
         args.Key == Key.Down && args.KeyModifiers == KeyModifiers.Alt;
 
     /// <summary>
+    /// The worksheet-cell context-menu shortcut (Menu key / Shift+F10) — the same key combo used for
+    /// the sheet-tab context menu (<see cref="IsSheetTabContextMenuKey"/>), Excel's universal
+    /// "open the context menu for whatever's focused" gesture applied to the active grid cell/range.
+    /// </summary>
+    private static bool IsWorksheetContextMenuKey(KeyEventArgs args) =>
+        args.Key == Key.Apps ||
+        args.Key == Key.F10 && args.KeyModifiers == KeyModifiers.Shift;
+
+    /// <summary>
     /// True for Ctrl/Cmd(+Shift)+Arrow, Ctrl/Cmd+Home, and Ctrl/Cmd(+Shift)+End - the Excel
     /// used-range navigation/extend shortcuts that must still reach <see cref="NavigateActiveCell"/>
     /// even though the command modifier is held (mirrors the WPF host's
@@ -21142,9 +21475,24 @@ public sealed partial class MainWindow : Window
         {
             if (!_formulaBox.IsFocused)
             {
-                e.Handled = OpenActiveDataValidationDropdown();
+                // Mirror WPF's OpenActiveDropdown fallback chain: data-validation dropdown first,
+                // then the AutoFilter column dropdown when the active cell is a filter-button cell
+                // (see OpenActiveAutoFilterDropdown in MainWindow.AutoFilter.cs).
+                e.Handled = OpenActiveDataValidationDropdown() || OpenActiveAutoFilterDropdown();
             }
 
+            return;
+        }
+
+        if (IsWorksheetContextMenuKey(e) && !IsTextEditingEventSource(e))
+        {
+            // Menu key / Shift+F10 over the worksheet grid: open the same cell context menu the
+            // pointer-driven right-click path opens (OpenWorksheetCellContextMenu), anchored on the
+            // active cell's Border so it appears where the user is actually looking — mirrors WPF's
+            // KeyboardCommandShortcut.OpenContextMenu -> OpenKeyboardContextMenu.
+            var anchor = (Control?)_activeCellBorder ?? _sheetGridHost;
+            OpenWorksheetCellContextMenu(anchor);
+            e.Handled = true;
             return;
         }
 
@@ -21742,6 +22090,7 @@ public sealed partial class MainWindow : Window
             return;
 
         var pageRows = Math.Max(1, _session.Viewport.RowMetrics.Count - 1);
+        var pageCols = Math.Max(1, _session.Viewport.ColMetrics.Count - 1);
         var extendSelection = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         var useDataBoundary = ExcelWorksheetNavigationPlanner.ShouldUseDataBoundary(navigationKey, navigationModifiers, _endMode);
         var ctrlHeld = e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta);
@@ -21751,7 +22100,16 @@ public sealed partial class MainWindow : Window
         if (_endMode)
             _endMode = false;
 
-        CellAddress? target = navigationKey switch
+        // Alt+PageUp/Alt+PageDown resolve to a horizontal screen-page move (Excel/WPF parity)
+        // before falling back to the vertical PageUp/PageDown handling below.
+        CellAddress? target = ExcelWorksheetNavigationPlanner.GetHorizontalPageTarget(
+            navigationKey,
+            navigationKey,
+            navigationModifiers,
+            current,
+            pageCols);
+
+        target ??= navigationKey switch
         {
             ExcelWorksheetNavigationKey.Up => useDataBoundary
                 ? ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(sheet, current, -1)
@@ -21873,6 +22231,19 @@ public sealed partial class MainWindow : Window
 
         var vertical = e.Delta.Y;
         var horizontal = e.Delta.X;
+
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            // Ctrl+Scroll = zoom (mirrors the WPF host's SheetGrid_MouseWheel).
+            var wheelScroll = Math.Abs(horizontal) > Math.Abs(vertical) ? horizontal : vertical;
+            var notches = wheelScroll > 0 ? 1 : wheelScroll < 0 ? -1 : 0;
+            if (notches != 0)
+                ApplyZoomPercent(_session.ZoomPercent + notches * StatusBarZoomSliderPlanner.ZoomStepPercent, "Zoom failed.");
+
+            e.Handled = true;
+            return;
+        }
+
         var rowDelta = 0;
         var colDelta = 0;
         if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) ||
@@ -22968,10 +23339,20 @@ public sealed partial class MainWindow : Window
 
     private void ShowEditIssue(string message)
     {
+        // Announce the failure to screen readers: the Avalonia shell has no owned modal message box
+        // for validation/commit failures (unlike WPF's ShowOwnedMessage), so _statusText's live
+        // region is the only accessible signal that the edit did NOT succeed.
+        EnsureStatusTextLiveRegion();
         _statusText.Text = message;
         _statusText.Foreground = Brush(143, 74, 18);
         UpdateSaveButton();
     }
+
+    /// <summary>Test-only seam driving the real <see cref="ShowEditIssue"/> production code path.</summary>
+    internal void InvokeShowEditIssueForTest(string message) => ShowEditIssue(message);
+
+    /// <summary>Test-only seam exposing <see cref="_statusText"/> for accessibility assertions.</summary>
+    internal TextBlock StatusTextForTest => _statusText;
 
     private void ShowHelpIssue(string message)
     {
@@ -23610,17 +23991,45 @@ public sealed partial class MainWindow : Window
             _session.Workbook.GetSheet(address.Sheet),
             _session.Workbook);
 
+    // Cache for UseR1C1ReferenceStyle: avoids a File.ReadAllText + JsonSerializer.Deserialize round
+    // trip through AppOptionsStore.Load() on every RefreshShell (selecting a cell, typing, pasting,
+    // undo/redo all funnel through FormatEditText -> UseR1C1ReferenceStyle). We still need to notice
+    // when the Options dialog (MainWindow.Options.cs) persists a change via AppOptionsStore.Save, so
+    // the cache is keyed on the options file's last-write time: a cheap File.Exists/GetLastWriteTimeUtc
+    // stat call is orders of magnitude cheaper than re-reading and re-parsing the whole JSON document,
+    // and only the read+parse work is redone when the timestamp actually moves (i.e. right after a
+    // save). Mirrors WPF's live <c>_options.UseR1C1ReferenceStyle</c> field (MainWindow.Editing.cs,
+    // MainWindow.FormulaReferenceEditing.cs), which is populated once and updated in place on save.
+    private static bool? _cachedUseR1C1ReferenceStyle;
+    private static DateTime _cachedUseR1C1ReferenceStyleWriteTimeUtc;
+    private static string? _cachedUseR1C1ReferenceStyleStorePath;
+
     /// <summary>
-    /// Reads the persisted "R1C1 Reference Style" toggle (Options ▸ Formulas) directly from disk on
-    /// every call rather than caching it on a field: the Options dialog (MainWindow.Options.cs) already
-    /// persists the flag via <see cref="AppOptionsStore.Save"/> as soon as the user clicks OK, and this
-    /// keeps every R1C1-aware call site (formula-bar display, cell-text commit, name-box commit) in
-    /// sync with that persisted value without needing a second, easily-stale in-memory copy. Mirrors
-    /// WPF's live <c>_options.UseR1C1ReferenceStyle</c> field (MainWindow.Editing.cs,
-    /// MainWindow.FormulaReferenceEditing.cs) but sourced from the shared options store instead of a
-    /// per-window field, since the Avalonia shell does not keep one.
+    /// Reads the persisted "R1C1 Reference Style" toggle (Options ▸ Formulas), caching the parsed value
+    /// and only re-loading from disk when the underlying options file's last-write time changes (see the
+    /// cache fields above for why).
     /// </summary>
-    private static bool UseR1C1ReferenceStyle => AppOptionsStore.Load().UseR1C1ReferenceStyle;
+    private static bool UseR1C1ReferenceStyle
+    {
+        get
+        {
+            var storePath = AppOptionsStore.StorePath;
+            var writeTimeUtc = File.Exists(storePath) ? File.GetLastWriteTimeUtc(storePath) : DateTime.MinValue;
+
+            if (_cachedUseR1C1ReferenceStyle is { } cached &&
+                _cachedUseR1C1ReferenceStyleStorePath == storePath &&
+                _cachedUseR1C1ReferenceStyleWriteTimeUtc == writeTimeUtc)
+            {
+                return cached;
+            }
+
+            var value = AppOptionsStore.Load().UseR1C1ReferenceStyle;
+            _cachedUseR1C1ReferenceStyle = value;
+            _cachedUseR1C1ReferenceStyleStorePath = storePath;
+            _cachedUseR1C1ReferenceStyleWriteTimeUtc = writeTimeUtc;
+            return value;
+        }
+    }
 
     private static string FormatScalarValue(ScalarValue? value) => value switch
     {

@@ -25,15 +25,41 @@ internal static class XlsxConditionalFormatClosedXmlMapper
 
         foreach (var xlCf in xlSheet.ConditionalFormats)
         {
-            var xlRange = xlCf.Range;
             var sheetId = sheet.Id;
+
+            // A rule's sqref can list multiple non-contiguous ranges (e.g. "A1:A5 C1:C5"); ClosedXML
+            // exposes every one of them via IXLConditionalFormat.Ranges (xlCf.Range is only the first).
+            // Read them all here -- the first becomes AppliesTo and the rest AdditionalRanges -- the
+            // same way XlsxDataValidationClosedXmlMapper.Load handles multi-range data validations,
+            // so a classic (CellIs/Expression) rule doesn't silently lose every range after the first
+            // on load (P50).
+            var xlRanges = xlCf.Ranges.Select(range => range.RangeAddress).ToArray();
+            if (xlRanges.Length == 0)
+            {
+                NextPriority();
+                continue;
+            }
+
+            var firstRange = xlRanges[0];
             var start = new CellAddress(sheetId,
-                (uint)xlRange.RangeAddress.FirstAddress.RowNumber,
-                (uint)xlRange.RangeAddress.FirstAddress.ColumnNumber);
+                (uint)firstRange.FirstAddress.RowNumber,
+                (uint)firstRange.FirstAddress.ColumnNumber);
             var end = new CellAddress(sheetId,
-                (uint)xlRange.RangeAddress.LastAddress.RowNumber,
-                (uint)xlRange.RangeAddress.LastAddress.ColumnNumber);
+                (uint)firstRange.LastAddress.RowNumber,
+                (uint)firstRange.LastAddress.ColumnNumber);
             var appliesTo = new GridRange(start, end);
+            List<GridRange>? additionalRanges = null;
+            if (xlRanges.Length > 1)
+            {
+                additionalRanges = new List<GridRange>(xlRanges.Length - 1);
+                for (var i = 1; i < xlRanges.Length; i++)
+                {
+                    var range = xlRanges[i];
+                    additionalRanges.Add(new GridRange(
+                        new CellAddress(sheetId, (uint)range.FirstAddress.RowNumber, (uint)range.FirstAddress.ColumnNumber),
+                        new CellAddress(sheetId, (uint)range.LastAddress.RowNumber, (uint)range.LastAddress.ColumnNumber)));
+                }
+            }
 
             if (xlCf.ConditionalFormatType == XLConditionalFormatType.CellIs)
             {
@@ -51,6 +77,7 @@ internal static class XlsxConditionalFormatClosedXmlMapper
                 var fmt = new ConditionalFormat
                 {
                     AppliesTo = appliesTo,
+                    AdditionalRanges = additionalRanges,
                     Priority = NextPriority(),
                     RuleType = CfRuleType.CellValue,
                     Operator = op.Value,
@@ -77,6 +104,7 @@ internal static class XlsxConditionalFormatClosedXmlMapper
                 var fmt = new ConditionalFormat
                 {
                     AppliesTo = appliesTo,
+                    AdditionalRanges = additionalRanges,
                     Priority = NextPriority(),
                     RuleType = CfRuleType.Formula,
                     FormulaText = formula,

@@ -248,8 +248,8 @@ internal static class FreeWRibbonCommands
                 capturedPreset.Apply(editor);
             }));
         }
-        // "Define New Multilevel List" dialog: captures backed options (number of levels, start-at) and
-        // applies the backed subset (ListKind.MultiLevel + optional ListStartOverride on level 0/1).
+        // "Define New Multilevel List" dialog: captures backed options (number of levels, start-at, and
+        // the first three per-level number styles).
         registry.Register("freew.multilevel-define", new DefineMultilevelListCommand(editor));
         Routed("freew.cut", ApplicationCommands.Cut);
         Routed("freew.copy", ApplicationCommands.Copy);
@@ -1162,6 +1162,9 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.citation-style", new CitationStyleCommand(editor));
         // Insert tab — References: insert a numbered figure/table caption under the caret's block.
         registry.Register("freew.caption", new InsertCaptionCommand(editor));
+        registry.Register("freew.insert-caption.figure", new InsertCaptionLabelCommand(editor, CaptionLabel.Figure));
+        registry.Register("freew.insert-caption.table", new InsertCaptionLabelCommand(editor, CaptionLabel.Table));
+        registry.Register("freew.insert-caption.equation", new InsertCaptionLabelCommand(editor, CaptionLabel.Equation));
         // Insert tab — References: insert a cross-reference (heading/bookmark/caption/footnote) at the caret.
         registry.Register("freew.cross-reference", new InsertCrossReferenceCommand(editor));
         // Insert tab — References: mark the selection (or a prompted term) for the document index, and
@@ -1172,7 +1175,13 @@ internal static class FreeWRibbonCommands
         // Insert tab — References: generate a Table of Figures from the document's figure captions at the
         // caret, and rebuild it in place (remove the prior region + re-insert). Both route through the bus.
         registry.Register("freew.tof", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfFigures(); }));
+        registry.Register("freew.tof.figure", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfFigures(CaptionLabel.Figure); }));
+        registry.Register("freew.tof.table", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfFigures(CaptionLabel.Table); }));
+        registry.Register("freew.tof.equation", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfFigures(CaptionLabel.Equation); }));
         registry.Register("freew.tof-refresh", new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfFigures(); }));
+        registry.Register("freew.tof-refresh.figure", new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfFigures(CaptionLabel.Figure); }));
+        registry.Register("freew.tof-refresh.table", new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfFigures(CaptionLabel.Table); }));
+        registry.Register("freew.tof-refresh.equation", new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfFigures(CaptionLabel.Equation); }));
         // Insert tab — References: mark the selection as a legal citation (a hidden TA field), and insert /
         // rebuild a Table of Authorities built from those marks, grouped by category (reversibly via the bus).
         registry.Register("freew.mark-citation", new MarkCitationCommand(editor));
@@ -2243,13 +2252,13 @@ internal static class FreeWRibbonCommands
     }
 
     // Home > Paragraph > Multilevel List > Define New Multilevel List: opens the definition dialog and
-    // applies the backed subset (ListKind.MultiLevel with optional ListStartOverride on level 0/1).
+    // applies the backed subset (ListKind.MultiLevel, optional start override, and modelled number styles).
     private sealed class DefineMultilevelListCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var def = MultilevelListDialog.Prompt(Window.GetWindow(editor));
+            var def = MultilevelListDialog.Prompt(Window.GetWindow(editor), editor.Model.MultiLevelList.NumberFormats);
             if (def is null)
                 return;
             editor.Focus();
@@ -2261,6 +2270,7 @@ internal static class FreeWRibbonCommands
             {
                 editor.ApplyListStartOverrides(def.Level0StartAt, def.Level1StartAt);
             }
+            editor.ApplyMultiLevelNumberFormats(def.NumberFormats);
         }
     }
 
@@ -4483,7 +4493,7 @@ internal static class FreeWRibbonCommands
         {
             editor.Focus();
             var owner = Window.GetWindow(editor);
-            var defaultLabel = editor.IsCaretInTable() ? CaptionLabel.Table : CaptionLabel.Figure;
+            var defaultLabel = editor.IsCaretInTable() ? Captions.TableLabelText : Captions.FigureLabelText;
 
             var label = CaptionLabelPicker.Ask(owner, defaultLabel);
             if (label is null)
@@ -4494,15 +4504,30 @@ internal static class FreeWRibbonCommands
                 return; // cancelled — leave the model untouched
 
             editor.Focus();
-            editor.InsertCaption(label.Value, text.Trim());
+            editor.InsertCaption(label, text.Trim());
         }
     }
 
-    // A tiny modal dialog choosing the caption label (Figure or Table), seeded with a default. Returns
+    private sealed class InsertCaptionLabelCommand(DocumentView editor, CaptionLabel label) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var text = TextPrompt.Ask(owner, "Insert Caption", "Caption text (optional):", string.Empty);
+            if (text is null)
+                return;
+
+            editor.Focus();
+            editor.InsertCaption(label, text.Trim());
+        }
+    }
+
+    // A tiny modal dialog choosing the caption label, seeded with a default. Returns
     // the chosen label, or null if cancelled.
     private static class CaptionLabelPicker
     {
-        public static CaptionLabel? Ask(Window? owner, CaptionLabel defaultLabel)
+        public static string? Ask(Window? owner, string defaultLabel)
         {
             var list = new System.Windows.Controls.ListBox
             {
@@ -4510,11 +4535,11 @@ internal static class FreeWRibbonCommands
                 MinHeight = 60,
                 Margin = new Thickness(0, 0, 0, 12)
             };
-            list.Items.Add(CaptionLabel.Figure);
-            list.Items.Add(CaptionLabel.Table);
+            foreach (var label in Captions.BuiltInLabelTexts)
+                list.Items.Add(label);
             list.SelectedItem = defaultLabel;
 
-            CaptionLabel? result = null;
+            string? result = null;
             var dialog = new Window
             {
                 Title = "Insert Caption",
@@ -4526,10 +4551,11 @@ internal static class FreeWRibbonCommands
             };
 
             var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var newLabel = new System.Windows.Controls.Button { Content = "New Label...", MinWidth = 96, Margin = new Thickness(0, 0, 8, 0) };
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
             void Choose()
             {
-                if (list.SelectedItem is CaptionLabel chosen)
+                if (list.SelectedItem is string chosen)
                 {
                     result = chosen;
                     dialog.DialogResult = true;
@@ -4537,12 +4563,21 @@ internal static class FreeWRibbonCommands
             }
             ok.Click += (_, _) => Choose();
             list.MouseDoubleClick += (_, _) => Choose();
+            newLabel.Click += (_, _) =>
+            {
+                var custom = TextPrompt.Ask(dialog, "New Label", "Label:", string.Empty);
+                if (string.IsNullOrWhiteSpace(custom))
+                    return;
+                result = Captions.NormalizeLabelText(custom);
+                dialog.DialogResult = true;
+            };
 
             var buttons = new System.Windows.Controls.StackPanel
             {
                 Orientation = System.Windows.Controls.Orientation.Horizontal,
                 HorizontalAlignment = HorizontalAlignment.Right
             };
+            buttons.Children.Add(newLabel);
             buttons.Children.Add(ok);
             buttons.Children.Add(cancel);
 
@@ -4819,11 +4854,9 @@ internal static class FreeWRibbonCommands
         public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: editor.SpellCheckEnabled);
     }
 
-    // Review > Tracking > Track Changes: a stateful toggle over the editor's Track Changes mode. Live
-    // keystroke tracking is out of scope in a RichTextBox, so as a pragmatic gesture, turning the toggle
-    // ON with a non-empty selection marks that selection as a tracked insertion (so the feature does
-    // something visible and the round-trip is exercisable from the UI). The author comes from the
-    // document Author property (falling back to the OS user); the date is stamped at mark time.
+    // Review > Tracking > Track Changes: a stateful toggle over the editor's Track Changes mode. Body
+    // text edits are now recorded by the WPF editor; when switching on over a non-empty selection we still
+    // mark that selection immediately, matching the visible feedback users expect from Word.
     private sealed class TrackChangesToggleCommand(DocumentView editor) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -4835,13 +4868,8 @@ internal static class FreeWRibbonCommands
             // live tracking. This keeps the toggle useful without brittle per-keystroke interception.
             if (editor.TrackChangesEnabled && !editor.Selection.IsEmpty)
             {
-                var author = editor.Model.Properties.Author;
-                if (string.IsNullOrWhiteSpace(author))
-                    author = Environment.UserName;
-                author = author?.Trim() ?? string.Empty;
-
                 var dateXml = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
-                editor.MarkSelectionAsRevision(RevisionKind.Inserted, author, dateXml);
+                editor.MarkSelectionAsRevision(RevisionKind.Inserted, editor.RevisionAuthor, dateXml);
             }
         }
 
@@ -5549,6 +5577,25 @@ internal static class FreeWRibbonCommands
                     fields.ToDictionary(pair => pair.Key, pair => (string?)pair.Value.Text),
                     entry);
 
+            void EditPrimaryAuthor()
+            {
+                var current = CurrentEntry();
+                var state = AuthorEditorDialog.Ask(dialog, current);
+                if (state is null)
+                    return;
+
+                entry = SourceManagementDialogPlanner.ApplyPrimaryAuthorEditorState(current, state);
+                if (!fields.TryGetValue(SourceManagementSourceField.Author, out var authorField))
+                {
+                    authorField = NewField();
+                    fields[SourceManagementSourceField.Author] = authorField;
+                }
+
+                authorField.Text = entry.Author;
+                RefreshFields();
+                authorField.Focus();
+            }
+
             void RefreshFields()
             {
                 fieldPanel.Children.Clear();
@@ -5560,7 +5607,10 @@ internal static class FreeWRibbonCommands
                         fields[plan.Field] = box;
                     }
 
-                    AddRow(fieldPanel, plan.Label, box);
+                    if (plan.Field == SourceManagementSourceField.Author)
+                        AddAuthorRow(fieldPanel, plan.Label, box, EditPrimaryAuthor);
+                    else
+                        AddRow(fieldPanel, plan.Label, box);
                 }
             }
 
@@ -5598,10 +5648,221 @@ internal static class FreeWRibbonCommands
         private static System.Windows.Controls.TextBox NewField(string? value = null) =>
             new() { Text = value ?? string.Empty, MinWidth = 320, Margin = new Thickness(0, 0, 0, 10) };
 
+        private static void AddAuthorRow(
+            System.Windows.Controls.Panel panel,
+            string label,
+            System.Windows.Controls.TextBox field,
+            Action edit)
+        {
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+            var row = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal
+            };
+            row.Children.Add(field);
+
+            var editButton = new System.Windows.Controls.Button
+            {
+                Content = SourceManagementDialogPlanner.PrimaryAuthorEditorButtonLabel,
+                MinWidth = 32,
+                Margin = new Thickness(6, 0, 0, 10),
+                ToolTip = SourceManagementDialogPlanner.PrimaryAuthorEditorButtonToolTip
+            };
+            editButton.Click += (_, _) => edit();
+            row.Children.Add(editButton);
+            panel.Children.Add(row);
+        }
+
         private static void AddRow(System.Windows.Controls.Panel panel, string label, System.Windows.Controls.Control control)
         {
             panel.Children.Add(new System.Windows.Controls.TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
             panel.Children.Add(control);
+        }
+    }
+
+    private static class AuthorEditorDialog
+    {
+        private sealed record RowControls(
+            System.Windows.Controls.TextBox First,
+            System.Windows.Controls.TextBox Middle,
+            System.Windows.Controls.TextBox Last,
+            System.Windows.Controls.Grid Host);
+
+        public static SourceManagementAuthorEditorState? Ask(Window? owner, SourceManagementSourceEntry entry)
+        {
+            var initial = SourceManagementDialogPlanner.ProjectPrimaryAuthorEditorState(entry);
+            var rowControls = new List<RowControls>();
+            SourceManagementAuthorEditorState? result = null;
+
+            var dialog = new Window
+            {
+                Title = SourceManagementDialogPlanner.PrimaryAuthorEditorTitle,
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var personalMode = new System.Windows.Controls.RadioButton
+            {
+                Content = SourceManagementDialogPlanner.PersonalAuthorModeLabel,
+                GroupName = "PrimaryAuthorMode",
+                IsChecked = initial.Mode == SourceManagementAuthorEditorMode.Personal,
+                Margin = new Thickness(0, 0, 0, 6)
+            };
+            var corporateMode = new System.Windows.Controls.RadioButton
+            {
+                Content = SourceManagementDialogPlanner.CorporateAuthorModeLabel,
+                GroupName = "PrimaryAuthorMode",
+                IsChecked = initial.Mode == SourceManagementAuthorEditorMode.Corporate,
+                Margin = new Thickness(0, 8, 0, 6)
+            };
+            var peoplePanel = new System.Windows.Controls.StackPanel { Margin = new Thickness(18, 0, 0, 0) };
+            var rowsPanel = new System.Windows.Controls.StackPanel();
+            var corporateLabel = new System.Windows.Controls.TextBlock
+            {
+                Text = SourceManagementDialogPlanner.CorporateAuthorLabel,
+                Margin = new Thickness(18, 0, 0, 4)
+            };
+            var corporateBox = NewAuthorTextBox(initial.CorporateAuthor, minWidth: 360);
+
+            void AddPersonRow(SourceManagementAuthorPersonRow row)
+            {
+                var grid = CreatePersonRowGrid();
+                var first = NewAuthorTextBox(row.First);
+                var middle = NewAuthorTextBox(row.Middle);
+                var last = NewAuthorTextBox(row.Last, minWidth: 140);
+                AddGridChild(grid, first, 0);
+                AddGridChild(grid, middle, 1);
+                AddGridChild(grid, last, 2);
+                rowsPanel.Children.Add(grid);
+                rowControls.Add(new RowControls(first, middle, last, grid));
+            }
+
+            void RemovePersonRow()
+            {
+                if (rowControls.Count <= 1)
+                {
+                    rowControls[0].First.Clear();
+                    rowControls[0].Middle.Clear();
+                    rowControls[0].Last.Clear();
+                    return;
+                }
+
+                var last = rowControls[^1];
+                rowsPanel.Children.Remove(last.Host);
+                rowControls.RemoveAt(rowControls.Count - 1);
+            }
+
+            void RefreshMode()
+            {
+                var personal = personalMode.IsChecked == true;
+                peoplePanel.IsEnabled = personal;
+                corporateLabel.IsEnabled = !personal;
+                corporateBox.IsEnabled = !personal;
+            }
+
+            IReadOnlyList<SourceManagementAuthorPersonRow> initialRows = initial.PersonalRows.Count == 0
+                ? [new SourceManagementAuthorPersonRow(string.Empty, string.Empty, string.Empty)]
+                : initial.PersonalRows;
+            foreach (var row in initialRows)
+            {
+                AddPersonRow(row);
+            }
+
+            var header = CreatePersonRowGrid();
+            AddGridChild(header, NewHeader(SourceManagementDialogPlanner.AuthorFirstNameLabel), 0);
+            AddGridChild(header, NewHeader(SourceManagementDialogPlanner.AuthorMiddleNameLabel), 1);
+            AddGridChild(header, NewHeader(SourceManagementDialogPlanner.AuthorLastNameLabel), 2);
+            peoplePanel.Children.Add(header);
+            peoplePanel.Children.Add(rowsPanel);
+
+            var addRow = new System.Windows.Controls.Button
+            {
+                Content = SourceManagementDialogPlanner.AddAuthorRowButtonLabel,
+                MinWidth = 72,
+                Margin = new Thickness(0, 4, 8, 0)
+            };
+            addRow.Click += (_, _) => AddPersonRow(new SourceManagementAuthorPersonRow(string.Empty, string.Empty, string.Empty));
+            var removeRow = new System.Windows.Controls.Button
+            {
+                Content = SourceManagementDialogPlanner.RemoveAuthorRowButtonLabel,
+                MinWidth = 72,
+                Margin = new Thickness(0, 4, 0, 0)
+            };
+            removeRow.Click += (_, _) => RemovePersonRow();
+            peoplePanel.Children.Add(new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                Children = { addRow, removeRow }
+            });
+
+            personalMode.Checked += (_, _) => RefreshMode();
+            corporateMode.Checked += (_, _) => RefreshMode();
+
+            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            ok.Click += (_, _) =>
+            {
+                var mode = corporateMode.IsChecked == true
+                    ? SourceManagementAuthorEditorMode.Corporate
+                    : SourceManagementAuthorEditorMode.Personal;
+                result = SourceManagementDialogPlanner.NormalizePrimaryAuthorEditorState(
+                    new SourceManagementAuthorEditorState(
+                        mode,
+                        rowControls.Select(row => new SourceManagementAuthorPersonRow(
+                            row.First.Text ?? string.Empty,
+                            row.Middle.Text ?? string.Empty,
+                            row.Last.Text ?? string.Empty)).ToArray(),
+                        corporateBox.Text ?? string.Empty));
+                dialog.DialogResult = true;
+            };
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 14, 0, 0)
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(personalMode);
+            panel.Children.Add(peoplePanel);
+            panel.Children.Add(corporateMode);
+            panel.Children.Add(corporateLabel);
+            panel.Children.Add(corporateBox);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+
+            RefreshMode();
+            return dialog.ShowDialog() == true ? result : null;
+        }
+
+        private static System.Windows.Controls.Grid CreatePersonRowGrid()
+        {
+            var grid = new System.Windows.Controls.Grid { Margin = new Thickness(0, 0, 0, 4) };
+            grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = new GridLength(110) });
+            grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = new GridLength(110) });
+            grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = new GridLength(140) });
+            return grid;
+        }
+
+        private static System.Windows.Controls.TextBlock NewHeader(string text) =>
+            new() { Text = text, Margin = new Thickness(0, 0, 6, 2) };
+
+        private static System.Windows.Controls.TextBox NewAuthorTextBox(string? text, double minWidth = 104) =>
+            new() { Text = text ?? string.Empty, MinWidth = minWidth, Margin = new Thickness(0, 0, 6, 0) };
+
+        private static void AddGridChild(
+            System.Windows.Controls.Grid grid,
+            UIElement child,
+            int column)
+        {
+            System.Windows.Controls.Grid.SetColumn(child, column);
+            grid.Children.Add(child);
         }
     }
 
@@ -5668,6 +5929,52 @@ internal static class FreeWRibbonCommands
             void ShowValidation(SourceManagementValidation validation) =>
                 DialogMessageHelper.ShowWarning(dialog, validation.Message, dialog.Title);
 
+            bool ApplyCopyPlan(SourceManagementListMutationPlan plan, Action<int?> refresh)
+            {
+                if (plan.Conflict is not null)
+                {
+                    var action = AskConflictResolution(plan.Conflict);
+                    if (action is null)
+                        return false;
+
+                    plan = SourceManagementDialogPlanner.ResolveSourceConflict(
+                        state,
+                        plan.Conflict,
+                        action.Value);
+                }
+
+                state = plan.State;
+                refresh(plan.SelectedIndex);
+                return true;
+            }
+
+            SourceManagementSourceConflictResolutionAction? AskConflictResolution(
+                SourceManagementSourceConflict conflict)
+            {
+                var choices = SourceManagementDialogPlanner.BuildSourceConflictResolutionChoices(conflict);
+                var message = string.Join(
+                    Environment.NewLine,
+                    SourceManagementDialogPlanner.BuildSourceConflictMessage(conflict),
+                    string.Empty,
+                    $"Yes: {choices[0].Label}",
+                    $"No: {choices[1].Label}",
+                    "Cancel: Do nothing");
+                var answer = MessageBox.Show(
+                    dialog,
+                    message,
+                    SourceManagementDialogPlanner.SourceConflictDialogTitle,
+                    MessageBoxButton.YesNoCancel,
+                    MessageBoxImage.Warning,
+                    MessageBoxResult.Cancel);
+
+                return answer switch
+                {
+                    MessageBoxResult.Yes => choices[0].Action,
+                    MessageBoxResult.No => choices[1].Action,
+                    _ => null
+                };
+            }
+
             void SelectIndex(System.Windows.Controls.ListBox list, int selectedIndex, int count)
             {
                 list.SelectedIndex = count == 0 ? -1 : Math.Clamp(selectedIndex, 0, count - 1);
@@ -5725,8 +6032,7 @@ internal static class FreeWRibbonCommands
                     state,
                     masterList.SelectedIndex,
                     docList.SelectedIndex);
-                state = plan.State;
-                RefreshDocList(plan.SelectedIndex);
+                ApplyCopyPlan(plan, selectedIndex => RefreshDocList(selectedIndex));
             }
 
             void CopyToMaster()
@@ -5735,8 +6041,7 @@ internal static class FreeWRibbonCommands
                     state,
                     docList.SelectedIndex,
                     masterList.SelectedIndex);
-                state = plan.State;
-                RefreshMasterList(plan.SelectedIndex);
+                ApplyCopyPlan(plan, selectedIndex => RefreshMasterList(selectedIndex));
             }
 
             // ── current-doc actions ───────────────────────────────────────────────────────────
@@ -7960,18 +8265,165 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Insert > Header & Footer > Page Number > Format Page Numbers…: shows a simple dialog where the
-    // user can set the starting page number (a common use case). For now shows an informational message
-    // — a full format dialog (number style, chapter numbering, start-at) is out of scope for this wave.
+    // Insert > Header & Footer > Page Number > Format Page Numbers: apply the shared
+    // number style, chapter prefix, and start/continue settings.
     private sealed class PageNumberFormatCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            DialogMessageHelper.ShowInfo(
-                Window.GetWindow(editor),
-                "Page number format options (number style, chapter numbering, start-at) are not yet implemented.",
-                "Format Page Numbers");
+            if (PageNumberFormatDialogPlanner.TryBuildResultFromCommandValue(context.SelectedValue, out var contextResult))
+            {
+                editor.ApplyPageNumberFormat(contextResult);
+                return;
+            }
+
+            if (PageNumberFormatDialog.Prompt(Window.GetWindow(editor), editor.Model.Page) is { } result)
+                editor.ApplyPageNumberFormat(result);
+        }
+    }
+
+    private static class PageNumberFormatDialog
+    {
+        public static PageNumberFormatDialogResult? Prompt(Window? owner, PageSettings page)
+        {
+            var state = PageNumberFormatDialogPlanner.BuildInitialState(page);
+            PageNumberFormatDialogResult? result = null;
+
+            var formatBox = new System.Windows.Controls.ComboBox
+            {
+                MinWidth = 180,
+                ItemsSource = PageNumberFormatDialogPlanner.FormatItems.Select(item => item.Label).ToArray(),
+                SelectedIndex = state.FormatIndex,
+                Margin = new Thickness(0, 2, 0, 10)
+            };
+            var includeChapter = new System.Windows.Controls.CheckBox
+            {
+                Content = PageNumberFormatDialogPlanner.IncludeChapterNumberLabel,
+                IsChecked = state.IncludeChapterNumber,
+                Margin = new Thickness(0, 0, 0, 6)
+            };
+            var chapterStyleBox = new System.Windows.Controls.ComboBox
+            {
+                MinWidth = 160,
+                ItemsSource = PageNumberFormatDialogPlanner.ChapterStyleItems.Select(item => item.Label).ToArray(),
+                SelectedIndex = state.ChapterStyleIndex,
+                Margin = new Thickness(0, 2, 0, 8)
+            };
+            var chapterSeparatorBox = new System.Windows.Controls.ComboBox
+            {
+                MinWidth = 140,
+                ItemsSource = PageNumberFormatDialogPlanner.ChapterSeparatorItems.Select(item => item.Label).ToArray(),
+                SelectedIndex = state.ChapterSeparatorIndex,
+                Margin = new Thickness(0, 2, 0, 10)
+            };
+            void UpdateChapterControlState()
+            {
+                var enabled = includeChapter.IsChecked == true;
+                chapterStyleBox.IsEnabled = enabled;
+                chapterSeparatorBox.IsEnabled = enabled;
+            }
+            includeChapter.Checked += (_, _) => UpdateChapterControlState();
+            includeChapter.Unchecked += (_, _) => UpdateChapterControlState();
+            UpdateChapterControlState();
+            var continueRadio = new System.Windows.Controls.RadioButton
+            {
+                Content = PageNumberFormatDialogPlanner.ContinueLabel,
+                GroupName = "PageNumbering",
+                IsChecked = state.ContinueFromPreviousSection,
+                Margin = new Thickness(0, 2, 0, 4)
+            };
+            var startRadio = new System.Windows.Controls.RadioButton
+            {
+                Content = PageNumberFormatDialogPlanner.StartAtLabel,
+                GroupName = "PageNumbering",
+                IsChecked = !state.ContinueFromPreviousSection,
+                Margin = new Thickness(0, 2, 8, 4)
+            };
+            var startBox = new System.Windows.Controls.TextBox
+            {
+                Text = state.StartAtText,
+                Width = 72,
+                Margin = new Thickness(0, 0, 0, 4)
+            };
+            var status = new System.Windows.Controls.TextBlock
+            {
+                Foreground = Brushes.Firebrick,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 6, 0, 0)
+            };
+
+            var dialog = new Window
+            {
+                Title = PageNumberFormatDialogPlanner.Title,
+                Owner = owner,
+                SizeToContent = SizeToContent.WidthAndHeight,
+                WindowStartupLocation = owner is null
+                    ? WindowStartupLocation.CenterScreen
+                    : WindowStartupLocation.CenterOwner,
+                ResizeMode = ResizeMode.NoResize
+            };
+
+            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            ok.Click += (_, _) =>
+            {
+                if (!PageNumberFormatDialogPlanner.TryBuildResult(
+                        new PageNumberFormatDialogInput(
+                            formatBox.SelectedIndex,
+                            continueRadio.IsChecked == true,
+                            startBox.Text,
+                            includeChapter.IsChecked == true,
+                            chapterStyleBox.SelectedIndex,
+                            chapterSeparatorBox.SelectedIndex),
+                        out result,
+                        out var error))
+                {
+                    status.Text = error ?? PageNumberFormatDialogPlanner.InvalidStartAtMessage;
+                    return;
+                }
+
+                dialog.DialogResult = true;
+            };
+
+            var startRow = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                Margin = new Thickness(0, 0, 0, 4)
+            };
+            startRow.Children.Add(startRadio);
+            startRow.Children.Add(startBox);
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 12, 0, 0)
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16), MinWidth = 280 };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = PageNumberFormatDialogPlanner.NumberFormatLabel });
+            panel.Children.Add(formatBox);
+            panel.Children.Add(includeChapter);
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = PageNumberFormatDialogPlanner.ChapterStartsWithStyleLabel });
+            panel.Children.Add(chapterStyleBox);
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = PageNumberFormatDialogPlanner.ChapterSeparatorLabel });
+            panel.Children.Add(chapterSeparatorBox);
+            panel.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = PageNumberFormatDialogPlanner.PageNumberingLabel,
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 4, 0, 2)
+            });
+            panel.Children.Add(continueRadio);
+            panel.Children.Add(startRow);
+            panel.Children.Add(status);
+            panel.Children.Add(buttons);
+
+            dialog.Content = panel;
+            return dialog.ShowDialog() == true ? result : null;
         }
     }
 

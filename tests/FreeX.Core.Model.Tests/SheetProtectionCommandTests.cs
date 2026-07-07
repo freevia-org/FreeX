@@ -24,7 +24,10 @@ public class SheetProtectionCommandTests
 
         outcome.Success.Should().BeTrue();
         sheet.IsProtected.Should().BeTrue();
-        sheet.ProtectionPassword.Should().Be("secret");
+        // N57: ProtectSheetCommand hashes the typed password at Apply-time instead of storing it
+        // raw, so verify the stored value round-trips via the helper rather than equals plaintext.
+        sheet.ProtectionPassword.Should().NotBe("secret");
+        ProtectionPasswordHelper.VerifyStoredPassword(sheet.ProtectionPassword, "secret").Should().BeTrue();
 
         cmd.Revert(ctx);
 

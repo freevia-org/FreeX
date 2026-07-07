@@ -5,7 +5,10 @@ namespace FreeW.App.Presentation.Ribbon;
 public sealed record BibliographyRegionPlan(
     IReadOnlyList<int> DeleteIndicesDescending,
     int InsertIndex,
-    IReadOnlyList<Paragraph> Paragraphs);
+    IReadOnlyList<Paragraph> Paragraphs)
+{
+    public BlockContentControl? BlockContentControl { get; init; }
+}
 
 public static class BibliographyRegionPlanner
 {
@@ -19,10 +22,15 @@ public static class BibliographyRegionPlanner
         var resolvedStyle = style ?? document.BibliographyStyle;
         Citations.EnsureStyles(document);
 
+        var paragraphs = BuildBibliographyRegionParagraphs(document, resolvedStyle, out var control);
+
         return new BibliographyRegionPlan(
             DeleteIndicesDescending: [],
             InsertIndex: Math.Clamp(insertAt, 0, document.Blocks.Count),
-            Paragraphs: Citations.BuildBibliography(document, resolvedStyle));
+            Paragraphs: paragraphs)
+        {
+            BlockContentControl = control
+        };
     }
 
     public static BibliographyRegionPlan BuildRefreshPlan(
@@ -45,9 +53,26 @@ public static class BibliographyRegionPlanner
 
         existingIndices.Reverse();
 
+        var paragraphs = BuildBibliographyRegionParagraphs(document, resolvedStyle, out var control);
+
         return new BibliographyRegionPlan(
             DeleteIndicesDescending: existingIndices,
             InsertIndex: Math.Clamp(insertAt, 0, document.Blocks.Count),
-            Paragraphs: Citations.BuildBibliography(document, resolvedStyle));
+            Paragraphs: paragraphs)
+        {
+            BlockContentControl = control
+        };
+    }
+
+    private static IReadOnlyList<Paragraph> BuildBibliographyRegionParagraphs(
+        TextDocument document,
+        CitationStyle style,
+        out BlockContentControl control)
+    {
+        control = BlockContentControl.BibliographyRegion();
+        var paragraphs = Citations.BuildBibliography(document, style);
+        foreach (var paragraph in paragraphs)
+            paragraph.BlockContentControl = control;
+        return paragraphs;
     }
 }

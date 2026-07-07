@@ -119,6 +119,14 @@ public static class ChartTypeSupport
         type is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn or ChartType.ThreeDColumn
             or ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar or ChartType.ThreeDBar;
 
+    /// <summary>
+    /// Whether the OOXML plot-chart element for this type has a &lt;c:dLbls&gt; member in its schema.
+    /// CT_SurfaceChart and CT_Surface3DChart (ECMA-376) have no dLbls member (only wireframe/ser/bandFmts/axId),
+    /// so writing data labels there produces a schema-invalid chart part.
+    /// </summary>
+    public static bool SupportsDataLabels(ChartType type) =>
+        type is not (ChartType.Surface or ChartType.ThreeDSurface);
+
     public static int GetDataSeriesCount(ChartModel chart)
     {
         // One series per "strip": a column of DataRange by default, a row when SeriesInRows.

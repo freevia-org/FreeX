@@ -140,6 +140,8 @@ public sealed partial class Sheet
             copy.ProtectionPermissions.Add(permission);
         foreach (var range in AllowEditRanges)
             copy.AllowEditRanges.Add(RemapRange(range, newId));
+        foreach (var (range, password) in AllowEditRangePasswords)
+            copy.AllowEditRangePasswords[RemapRange(range, newId)] = password;
         foreach (var property in CustomProperties)
             copy.CustomProperties.Add(property);
 
@@ -443,6 +445,8 @@ public sealed partial class Sheet
             copy.ActiveValueFilterColumns[col] = [.. allowedValues];
         foreach (var row in ValueFilterHiddenRows)
             copy.ValueFilterHiddenRows.Add(row);
+        foreach (var (col, ownedRows) in ColumnFilterOwnedRows)
+            copy.ColumnFilterOwnedRows[col] = [.. ownedRows];
         foreach (var col in HiddenCols)
             copy.HiddenCols.Add(col);
 

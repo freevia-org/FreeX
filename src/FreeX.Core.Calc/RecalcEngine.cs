@@ -28,6 +28,14 @@ public sealed class RecalcEngine
     private readonly HashSet<CellAddress> _volatileCells = [];
     private readonly Dictionary<DependencyPlanCacheKey, FormulaDependencyPlan> _dependencyPlanCache = [];
     private readonly Queue<DependencyPlanCacheKey> _dependencyPlanCacheOrder = [];
+    // Anchors that most recently evaluated to #SPILL! because IsSpillBlocked found an occupied
+    // target cell. The blocking cell (e.g. a plain value pasted into the spill range) has no
+    // dependency-graph edge back to the anchor — its formula's static references never included
+    // it — so an edit that only clears the blocker would otherwise never re-dirty the anchor and
+    // the stale #SPILL! would persist until a full recalc. Tracked here (not in Sheet, which has
+    // no notion of "why" a spill is blocked) and retried as extra changed-roots every recalc pass
+    // so a cleared blocker makes the anchor spill again immediately, matching Excel.
+    private readonly HashSet<CellAddress> _spillBlockedAnchors = [];
 
     public RecalcEngine(DependencyGraph graph, FormulaEvaluator evaluator)
     {
@@ -63,7 +71,12 @@ public sealed class RecalcEngine
         if (plan.OrderedCells.Count == 0 &&
             plan.CyclicCells.Count == 0 &&
             _volatileCells.Count == 0 &&
-            changedFormulaCells is null)
+            changedFormulaCells is null &&
+            // A cleared/edited cell that was blocking a #SPILL! anchor has no dependency-graph edge
+            // back to that anchor (P73), so the traversal above is empty even though the anchor now
+            // needs to re-spill. Fall through to the spill-anchor retry pass below instead of
+            // short-circuiting here.
+            !(resolveSpillDependents && _spillBlockedAnchors.Count > 0))
         {
             return EmptyReport;
         }
@@ -127,7 +140,20 @@ public sealed class RecalcEngine
                 foreach (var addr in plan.OrderedCells)
                     dirtyCells.Add(addr);
 
-                evaluationPlan = _graph.GetEvaluationOrder(dirtyCells);
+                // Volatile functions (OFFSET/INDIRECT/CELL/...) can dynamically read a cell that has
+                // no registered dependency edge back to them (only their static argument cells get an
+                // edge - see CollectReferences' FunctionCallNode case). Left unordered relative to an
+                // unrelated dirty cell they dynamically read, Kahn's ready-queue (backed by HashSet
+                // enumeration) picks an arbitrary order between two cells that both reach in-degree 0
+                // at the same time - so the volatile cell can run first and observe that cell's
+                // pre-edit value for this pass (P78; self-heals only next recalc since volatiles
+                // always re-run). GetEvaluationOrder's deprioritized-tie-break keeps every REAL
+                // dependency edge intact (a non-volatile cell that statically references a volatile
+                // one is still correctly ordered after it) while making volatile cells lose every
+                // ready-queue tie against a non-volatile cell, so by the time a volatile cell
+                // evaluates, every unrelated same-pass dirty cell has already settled.
+                evaluationPlan = _graph.GetEvaluationOrder(dirtyCells, deprioritized: _volatileCells);
+
                 if (evaluationPlan.CyclicCells.Count > 0)
                 {
                     if (workbook.IterativeCalculation)
@@ -189,6 +215,7 @@ public sealed class RecalcEngine
                     sheet.ClearSpillRange(addr);
                     if (hadSpill) spillTargetsMayHaveChanged = true;
                     cell.Value = ImplicitIntersection.Resolve(implicitRange, addr.Row, addr.Col);
+                    _spillBlockedAnchors.Remove(addr);
                     AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, addr);
                 }
                 else if (result is RangeValue rv)
@@ -198,6 +225,10 @@ public sealed class RecalcEngine
                     {
                         cell.Value = ErrorValue.Spill;
                         if (hadSpill) spillTargetsMayHaveChanged = true;
+                        // Remember this anchor so a later recalc (triggered by an edit that clears
+                        // the blocking cell, which has no dependency-graph edge back to us) retries
+                        // it instead of leaving a stale #SPILL! forever. See field comment.
+                        _spillBlockedAnchors.Add(addr);
                         AddError(ref errors, addr, "#SPILL!");
                     }
                     else
@@ -205,6 +236,7 @@ public sealed class RecalcEngine
                         cell.Value = rv.Cells[0, 0];
                         sheet.SetSpillRange(addr, rv);
                         spillTargetsMayHaveChanged = true;
+                        _spillBlockedAnchors.Remove(addr);
                         AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, addr);
                     }
                 }
@@ -213,6 +245,7 @@ public sealed class RecalcEngine
                     sheet.ClearSpillRange(addr);
                     if (hadSpill) spillTargetsMayHaveChanged = true;
                     cell.Value = result;
+                    _spillBlockedAnchors.Remove(addr);
                     AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, addr);
                 }
             }
@@ -234,6 +267,7 @@ public sealed class RecalcEngine
                 sheet.ClearSpillRange(addr);
                 if (hadSpill) spillTargetsMayHaveChanged = true;
                 cell.Value = ErrorValue.Value;
+                _spillBlockedAnchors.Remove(addr);
                 AddError(ref errors, addr, "#VALUE!");
             }
             catch (FormulaEvalException ex)
@@ -241,6 +275,7 @@ public sealed class RecalcEngine
                 sheet.ClearSpillRange(addr);
                 if (hadSpill) spillTargetsMayHaveChanged = true;
                 cell.Value = new ErrorValue(ex.ErrorCode);
+                _spillBlockedAnchors.Remove(addr);
                 AddError(ref errors, addr, ex.ErrorCode);
             }
             catch (Exception)
@@ -255,6 +290,7 @@ public sealed class RecalcEngine
                 sheet.ClearSpillRange(addr);
                 if (hadSpill) spillTargetsMayHaveChanged = true;
                 cell.Value = ErrorValue.Value;
+                _spillBlockedAnchors.Remove(addr);
                 AddError(ref errors, addr, "#VALUE!");
 #endif
             }
@@ -303,7 +339,100 @@ public sealed class RecalcEngine
             }
         }
 
+        // Retry anchors that were showing #SPILL! as of some earlier pass. Excel re-spills the
+        // instant the cell(s) blocking a dynamic array are cleared/moved away, even when the edit
+        // that cleared them (e.g. deleting a plain value that happened to sit in the spill range)
+        // has no dependency-graph edge back to the anchor's formula (its precedents are only its
+        // own static references, which never included the blocking cell). Without this, a blocked
+        // anchor's #SPILL! is stuck until a full recalc / F9. Gated to the outermost call only —
+        // the retry itself runs through the normal Recalculate path (resolveSpillDependents: false)
+        // so it cannot re-enter this block and recurse.
+        if (resolveSpillDependents && _spillBlockedAnchors.Count > 0)
+        {
+            List<CellAddress>? retryAnchors = null;
+            List<CellAddress>? staleAnchors = null;
+            foreach (var anchor in _spillBlockedAnchors)
+            {
+                var sheet = workbook.GetSheet(anchor.Sheet);
+                var cell = sheet?.GetCell(anchor);
+                if (cell is null || !cell.HasFormula || cell.Value is not ErrorValue { Code: "#SPILL!" })
+                {
+                    // No longer this engine's concern (cell cleared, overwritten, or already
+                    // resolved by some other path) — stop tracking it so the set cannot grow
+                    // without bound across a long editing session.
+                    (staleAnchors ??= []).Add(anchor);
+                    continue;
+                }
+
+                (retryAnchors ??= []).Add(anchor);
+            }
+
+            if (staleAnchors is not null)
+            {
+                foreach (var stale in staleAnchors)
+                    _spillBlockedAnchors.Remove(stale);
+            }
+
+            if (retryAnchors is not null)
+            {
+                var retryReport = Recalculate(workbook, retryAnchors, resolveSpillDependents: false);
+                report = MergeRecalcReports(report, retryReport);
+            }
+        }
+
+        // Excel's "Precision as displayed" option (calcPr/@fullPrecision="0") permanently rounds
+        // stored numeric values to the precision shown on screen once a workbook uses it, rather
+        // than retaining full internal (~15 significant digit) precision. Doing this faithfully
+        // requires resolving each cell's effective *displayed* decimal-place count from its number
+        // format (and column width / General-format significant-digit rules), which lives in the
+        // number-format rendering layer above Core.Calc — RecalcEngine has no such dependency and
+        // must not acquire a new cross-tier one just for this. Only apply the top-level (outermost,
+        // resolveSpillDependents == true) pass so recursive spill-dependent follow-ups do not redo
+        // the (currently minimal) rounding pass redundantly.
+        if (resolveSpillDependents && !workbook.FullPrecision)
+            ApplyPrecisionAsDisplayed(workbook, report.RecalculatedCells);
+
         return report;
+    }
+
+    /// <summary>
+    /// Honor <see cref="Workbook.FullPrecision"/> == false ("Precision as displayed") for the given
+    /// set of just-recalculated cells.
+    /// TODO(N30 follow-up, needs FreeX.Core.Presentation/number-format access which Core.Calc cannot
+    /// reference): this currently only clamps stored values to Excel's ~15 significant-digit display
+    /// ceiling, which is a no-op for ordinary double-precision results and does not yet round to each
+    /// cell's actual displayed decimal count (its number format, e.g. "0.00" -> 2 decimals). A full
+    /// fix needs to resolve each cell's effective displayed-decimal-place count (number format +
+    /// General-format significant-digit rules) and round to that instead.
+    /// </summary>
+    private static void ApplyPrecisionAsDisplayed(Workbook workbook, IReadOnlyList<CellAddress> recalculatedCells)
+    {
+        for (var i = 0; i < recalculatedCells.Count; i++)
+        {
+            var addr = recalculatedCells[i];
+            var sheet = workbook.GetSheet(addr.Sheet);
+            var cell = sheet?.GetCell(addr);
+            if (cell?.Value is NumberValue { Value: var raw } && double.IsFinite(raw))
+                cell.Value = new NumberValue(RoundToSignificantDigits(raw, 15));
+        }
+    }
+
+    /// <summary>Round <paramref name="value"/> to at most <paramref name="digits"/> significant decimal digits.</summary>
+    private static double RoundToSignificantDigits(double value, int digits)
+    {
+        if (value == 0)
+            return 0;
+
+        var scale = digits - (int)Math.Floor(Math.Log10(Math.Abs(value))) - 1;
+        // Math.Round(double, int) only accepts digits in [0, 15] and throws ArgumentOutOfRangeException
+        // for negative values (which occur whenever |value| >= 10^digits, e.g. any value >= 1e15 when
+        // digits == 15). Clamping to [-15, 15] does NOT avoid this -- it must be clamped to [0, 15].
+        // A negative "scale" would mean rounding to the left of the decimal point (tens/hundreds/...),
+        // which Math.Round cannot express directly; since callers only ask for at most 15 significant
+        // digits and doubles carry ~15-17 significant digits anyway, clamping to 0 is a safe no-op for
+        // values that already exceed that many integer digits (nothing meaningful left to round off).
+        scale = Math.Clamp(scale, 0, 15);
+        return Math.Round(value, scale, MidpointRounding.AwayFromZero);
     }
 
     /// <summary>
@@ -1011,9 +1140,21 @@ public sealed class RecalcEngine
             case NamedRangeNode named:
             {
                 cacheableForDependencyPlan = false;
-                // Sheet-scope-first: a name scoped to defaultSheetId takes precedence
-                // over a same-named workbook-global name (Excel rule §18.2.6).
-                if (workbook is not null && workbook.TryGetNamedRange(named.Name, defaultSheetId, out var namedRange))
+                // Sheet-scope-first, and scope wins over kind: a sheet-scoped named FORMULA must
+                // take precedence over a same-named workbook-global named RANGE, exactly like
+                // FormulaEvaluator.IsSheetScopedName/EvaluateNamedRange resolve it (Excel rule
+                // §18.2.6 is per-name, not per-kind). Workbook.TryGetNamedRange only distinguishes
+                // scoped-range vs global-range and falls through to the global range dictionary
+                // when no scoped RANGE exists — it does not know about a scoped FORMULA of the same
+                // name shadowing that global range, so calling it first (as this case used to)
+                // would register a dependency on the wrong cells whenever the scoped name is a
+                // formula. Check for an explicit sheet-scoped FORMULA first, mirroring the eval
+                // side's precedence exactly, before ever consulting the range resolver.
+                var sheetScopedIsFormula = workbook is not null &&
+                    workbook.ScopedNamedFormulas.ContainsKey((named.Name, defaultSheetId));
+
+                if (!sheetScopedIsFormula &&
+                    workbook is not null && workbook.TryGetNamedRange(named.Name, defaultSheetId, out var namedRange))
                 {
                     refs.AddRange(namedRange);
                     return false;

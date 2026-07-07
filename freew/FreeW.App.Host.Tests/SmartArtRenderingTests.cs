@@ -45,6 +45,10 @@ public sealed class SmartArtRenderingTests
         return view;
     }
 
+    private static Border NodeBorder(DocumentView view, string text) =>
+        LogicalDescendants<Border>(view.Document)
+            .Single(b => b.Child is TextBlock { Text: var nodeText } && nodeText == text);
+
     // ── Bug #4: node color cycling ───────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -184,7 +188,11 @@ public sealed class SmartArtRenderingTests
             .Select(tb => tb!.Text)
             .ToList();
 
-        Assert.Equal(new[] { "Root", "Child", "SecondRoot" }, renderedNodeTexts);
+        Assert.Equal(new[] { "Root", "Child", "Grandchild", "SecondRoot" }, renderedNodeTexts);
+
+        var connectors = LogicalDescendants<Line>(view.Document);
+        Assert.True(connectors.Count >= 2,
+            $"expected hierarchy connectors for Root->Child and Child->Grandchild; got {connectors.Count}");
 
         var secondRootBorder = LogicalDescendants<Border>(view.Document)
             .Single(b => b.Child is TextBlock { Text: "SecondRoot" });
@@ -204,6 +212,40 @@ public sealed class SmartArtRenderingTests
     /// differ from the fill of the node box that precedes it. Before the fix the arrow had the same
     /// color as the box (invisible), making the topology indistinguishable from a list.
     /// </summary>
+    [StaFact]
+    public void CycleLayout_RendersSharedGeometryConnectorsAndNodePositions()
+    {
+        var sa = SmartArt.Create(SmartArtKind.List, ["North", "East", "South", "West"]);
+        sa.LayoutId = "cycle1";
+        var view = ViewWithSmartArt(sa);
+
+        var north = NodeBorder(view, "North");
+        Assert.InRange(Canvas.GetLeft(north), 73, 75);
+        Assert.InRange(Canvas.GetTop(north), 10, 12);
+
+        var connectorLines = LogicalDescendants<Line>(view.Document);
+        Assert.True(connectorLines.Count >= 4,
+            $"expected shared cycle geometry to render connector lines; got {connectorLines.Count}");
+    }
+
+    [StaFact]
+    public void MatrixLayout_RendersSharedTwoByTwoNodeGrid()
+    {
+        var sa = SmartArt.Create(SmartArtKind.List, ["A", "B", "C", "D"]);
+        sa.LayoutId = "matrix1";
+        var view = ViewWithSmartArt(sa);
+
+        var a = NodeBorder(view, "A");
+        var b = NodeBorder(view, "B");
+        var c = NodeBorder(view, "C");
+        var d = NodeBorder(view, "D");
+
+        Assert.True(Canvas.GetLeft(b) > Canvas.GetLeft(a), "B should be in the second matrix column");
+        Assert.True(Canvas.GetTop(c) > Canvas.GetTop(a), "C should be in the second matrix row");
+        Assert.True(Canvas.GetLeft(d) > Canvas.GetLeft(c), "D should be in the second matrix column");
+        Assert.True(Canvas.GetTop(d) > Canvas.GetTop(b), "D should be in the second matrix row");
+    }
+
     [StaFact]
     public void ProcessDiagram_ArrowFillDiffersFromAdjacentBoxFill()
     {

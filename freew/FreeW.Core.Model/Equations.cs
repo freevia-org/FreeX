@@ -9,11 +9,14 @@ namespace FreeW.Core.Model;
 // ordered list of MathRun parts; each part is either plain math text (m:r/m:t) or one of the common OMML
 // structures — superscript (m:sSup), subscript (m:sSub), sub-superscript (m:sSubSup), fraction (m:f),
 // radical (m:rad), n-ary (m:nary, sum/integral/product with limits), an accented character (m:acc),
-// an over/under-bar (m:bar), a bracketed delimiter (m:d) or a matrix (m:m). Each structure stores its
-// component slots as plain math text (mirroring how Superscript
-// already stores Base/Sup as strings); a Matrix additionally carries a small grid of text cells. That
+// an over/under-bar (m:bar), a bracketed delimiter (m:d) or a matrix (m:m). Most structure slots store
+// plain math text; scripts carry optional nested base/sub/sup equations, fractions additionally carry
+// optional nested numerator/denominator equations, radicals carry an optional nested radicand, n-ary
+// operators carry optional nested lower/upper/operand equations, and delimiters carry an optional nested
+// content equation so common OfficeMath slots can round-trip without a broad recursive-slot rewrite.
+// A Matrix additionally carries a small grid of text cells. That
 // covers the high-value structures from Word's Equation tools while staying well short of the full
-// (recursive) OMML schema — richer constructs degrade to their plain math text on read so nothing throws.
+// recursive OMML schema — richer constructs degrade to their plain math text on read so nothing throws.
 
 /// <summary>
 /// The kind of an OMML math fragment carried by a <see cref="MathRun"/>.
@@ -54,20 +57,22 @@ public enum MathRunKind
 /// can pattern-match on <see cref="Kind"/>.
 /// <list type="bullet">
 /// <item><see cref="MathRunKind.Text"/> → <see cref="Text"/>.</item>
-/// <item><see cref="MathRunKind.Superscript"/> → <see cref="Base"/> raised to <see cref="Sup"/>.</item>
-/// <item><see cref="MathRunKind.Subscript"/> → <see cref="Base"/> with subscript <see cref="Sub"/>.</item>
-/// <item><see cref="MathRunKind.SubSuperscript"/> → <see cref="Base"/> with <see cref="Sub"/> and <see cref="Sup"/>.</item>
-/// <item><see cref="MathRunKind.Fraction"/> → <see cref="Numerator"/> over <see cref="Denominator"/>.</item>
-/// <item><see cref="MathRunKind.Radical"/> → <see cref="Base"/> under a root of degree <see cref="Degree"/> (empty = square root).</item>
-/// <item><see cref="MathRunKind.NAry"/> → operator <see cref="Operator"/> from <see cref="Sub"/> to <see cref="Sup"/> over <see cref="Base"/>.</item>
+/// <item><see cref="MathRunKind.Superscript"/> → <see cref="ScriptBaseEquation"/>/<see cref="Base"/> raised to <see cref="ScriptSupEquation"/>/<see cref="Sup"/>.</item>
+/// <item><see cref="MathRunKind.Subscript"/> → <see cref="ScriptBaseEquation"/>/<see cref="Base"/> with subscript <see cref="ScriptSubEquation"/>/<see cref="Sub"/>.</item>
+/// <item><see cref="MathRunKind.SubSuperscript"/> → <see cref="ScriptBaseEquation"/>/<see cref="Base"/> with <see cref="ScriptSubEquation"/>/<see cref="Sub"/> and <see cref="ScriptSupEquation"/>/<see cref="Sup"/>.</item>
+/// <item><see cref="MathRunKind.Fraction"/> → <see cref="NumeratorEquation"/>/<see cref="Numerator"/> over <see cref="DenominatorEquation"/>/<see cref="Denominator"/>.</item>
+/// <item><see cref="MathRunKind.Radical"/> → <see cref="RadicandEquation"/>/<see cref="Base"/> under a root of degree <see cref="Degree"/> (empty = square root).</item>
+/// <item><see cref="MathRunKind.NAry"/> → operator <see cref="Operator"/> from <see cref="NAryLowerLimitEquation"/>/<see cref="Sub"/> to <see cref="NAryUpperLimitEquation"/>/<see cref="Sup"/> over <see cref="NAryOperandEquation"/>/<see cref="Base"/>.</item>
 /// <item><see cref="MathRunKind.Accent"/> → <see cref="Base"/> with the accent glyph <see cref="Accent"/> over it.</item>
 /// <item><see cref="MathRunKind.Bar"/> → <see cref="Base"/> with a bar above (<see cref="BarTop"/> true) or below it.</item>
-/// <item><see cref="MathRunKind.Delimiter"/> → <see cref="Base"/> wrapped in <see cref="OpenChar"/>/<see cref="CloseChar"/>.</item>
+/// <item><see cref="MathRunKind.Delimiter"/> → <see cref="DelimiterContentEquation"/>/<see cref="Base"/> wrapped in <see cref="OpenChar"/>/<see cref="CloseChar"/>.</item>
 /// <item><see cref="MathRunKind.Matrix"/> → <see cref="Matrix"/>.</item>
 /// </list>
 /// </summary>
 public sealed record MathRun
 {
+    public const int MaxNestedEquationDepth = 16;
+
     /// <summary>The fragment kind.</summary>
     public MathRunKind Kind { get; init; } = MathRunKind.Text;
 
@@ -86,11 +91,44 @@ public sealed record MathRun
     /// <summary>The subscript / lower-limit slot (subscript, sub-superscript, n-ary).</summary>
     public string Sub { get; init; } = string.Empty;
 
+    /// <summary>Optional structured base equation for nested OMML script slots.</summary>
+    public Equation? ScriptBaseEquation { get; init; }
+
+    /// <summary>Optional structured subscript equation for nested OMML script slots.</summary>
+    public Equation? ScriptSubEquation { get; init; }
+
+    /// <summary>Optional structured superscript equation for nested OMML script slots.</summary>
+    public Equation? ScriptSupEquation { get; init; }
+
     /// <summary>The numerator of a fraction (only meaningful for <see cref="MathRunKind.Fraction"/>).</summary>
     public string Numerator { get; init; } = string.Empty;
 
     /// <summary>The denominator of a fraction (only meaningful for <see cref="MathRunKind.Fraction"/>).</summary>
     public string Denominator { get; init; } = string.Empty;
+
+    /// <summary>Optional structured numerator equation for nested OMML fraction slots.</summary>
+    public Equation? NumeratorEquation { get; init; }
+
+    /// <summary>Optional structured denominator equation for nested OMML fraction slots.</summary>
+    public Equation? DenominatorEquation { get; init; }
+
+    /// <summary>Optional structured radicand equation for nested OMML radical slots.</summary>
+    public Equation? RadicandEquation { get; init; }
+
+    /// <summary>Optional structured content equation for nested OMML delimiter slots.</summary>
+    public Equation? DelimiterContentEquation { get; init; }
+
+    /// <summary>Optional structured argument equation for nested OMML function-apply slots.</summary>
+    public Equation? FunctionArgumentEquation { get; init; }
+
+    /// <summary>Optional structured lower-limit equation for nested OMML n-ary slots.</summary>
+    public Equation? NAryLowerLimitEquation { get; init; }
+
+    /// <summary>Optional structured upper-limit equation for nested OMML n-ary slots.</summary>
+    public Equation? NAryUpperLimitEquation { get; init; }
+
+    /// <summary>Optional structured operand/body equation for nested OMML n-ary slots.</summary>
+    public Equation? NAryOperandEquation { get; init; }
 
     /// <summary>The radical's degree (empty = square root; non-empty = nth root). Only for <see cref="MathRunKind.Radical"/>.</summary>
     public string Degree { get; init; } = string.Empty;
@@ -135,17 +173,84 @@ public sealed record MathRun
     public static MathRun Superscript(string @base, string sup) =>
         new() { Kind = MathRunKind.Superscript, Base = @base, Sup = sup };
 
+    /// <summary>Creates a superscript fragment (m:sSup) whose base and exponent are structured equations.</summary>
+    public static MathRun Superscript(Equation baseEquation, Equation supEquation)
+    {
+        ArgumentNullException.ThrowIfNull(baseEquation);
+        ArgumentNullException.ThrowIfNull(supEquation);
+
+        return new()
+        {
+            Kind = MathRunKind.Superscript,
+            Base = baseEquation.LinearText,
+            Sup = supEquation.LinearText,
+            ScriptBaseEquation = baseEquation,
+            ScriptSupEquation = supEquation
+        };
+    }
+
     /// <summary>Creates a subscript fragment (m:sSub): <paramref name="@base"/> with subscript <paramref name="sub"/>.</summary>
     public static MathRun Subscript(string @base, string sub) =>
         new() { Kind = MathRunKind.Subscript, Base = @base, Sub = sub };
+
+    /// <summary>Creates a subscript fragment (m:sSub) whose base and subscript are structured equations.</summary>
+    public static MathRun Subscript(Equation baseEquation, Equation subEquation)
+    {
+        ArgumentNullException.ThrowIfNull(baseEquation);
+        ArgumentNullException.ThrowIfNull(subEquation);
+
+        return new()
+        {
+            Kind = MathRunKind.Subscript,
+            Base = baseEquation.LinearText,
+            Sub = subEquation.LinearText,
+            ScriptBaseEquation = baseEquation,
+            ScriptSubEquation = subEquation
+        };
+    }
 
     /// <summary>Creates a sub-superscript fragment (m:sSubSup): <paramref name="@base"/> with both <paramref name="sub"/> and <paramref name="sup"/>.</summary>
     public static MathRun SubSuperscript(string @base, string sub, string sup) =>
         new() { Kind = MathRunKind.SubSuperscript, Base = @base, Sub = sub, Sup = sup };
 
+    /// <summary>Creates a sub-superscript fragment (m:sSubSup) whose base, subscript and superscript are structured equations.</summary>
+    public static MathRun SubSuperscript(Equation baseEquation, Equation subEquation, Equation supEquation)
+    {
+        ArgumentNullException.ThrowIfNull(baseEquation);
+        ArgumentNullException.ThrowIfNull(subEquation);
+        ArgumentNullException.ThrowIfNull(supEquation);
+
+        return new()
+        {
+            Kind = MathRunKind.SubSuperscript,
+            Base = baseEquation.LinearText,
+            Sub = subEquation.LinearText,
+            Sup = supEquation.LinearText,
+            ScriptBaseEquation = baseEquation,
+            ScriptSubEquation = subEquation,
+            ScriptSupEquation = supEquation
+        };
+    }
+
     /// <summary>Creates a fraction fragment (m:f): <paramref name="numerator"/> over <paramref name="denominator"/>.</summary>
     public static MathRun Fraction(string numerator, string denominator) =>
         new() { Kind = MathRunKind.Fraction, Numerator = numerator, Denominator = denominator };
+
+    /// <summary>Creates a fraction fragment (m:f) whose numerator and denominator are structured equations.</summary>
+    public static MathRun Fraction(Equation numerator, Equation denominator)
+    {
+        ArgumentNullException.ThrowIfNull(numerator);
+        ArgumentNullException.ThrowIfNull(denominator);
+
+        return new()
+        {
+            Kind = MathRunKind.Fraction,
+            Numerator = numerator.LinearText,
+            Denominator = denominator.LinearText,
+            NumeratorEquation = numerator,
+            DenominatorEquation = denominator
+        };
+    }
 
     /// <summary>
     /// Creates a radical fragment (m:rad): the root of <paramref name="radicand"/>. A null/empty
@@ -155,11 +260,49 @@ public sealed record MathRun
         new() { Kind = MathRunKind.Radical, Base = radicand, Degree = degree ?? string.Empty };
 
     /// <summary>
+    /// Creates a radical fragment (m:rad) whose radicand is a structured equation. The degree remains
+    /// text-only for this bounded slice.
+    /// </summary>
+    public static MathRun Radical(Equation radicand, string degree = "")
+    {
+        ArgumentNullException.ThrowIfNull(radicand);
+
+        return new()
+        {
+            Kind = MathRunKind.Radical,
+            Base = radicand.LinearText,
+            Degree = degree ?? string.Empty,
+            RadicandEquation = radicand
+        };
+    }
+
+    /// <summary>
     /// Creates an n-ary fragment (m:nary): <paramref name="@operator"/> (e.g. ∑/∫/∏) applied to
     /// <paramref name="operand"/> with lower limit <paramref name="sub"/> and upper limit <paramref name="sup"/>.
     /// </summary>
     public static MathRun NAry(string @operator, string sub, string sup, string operand) =>
         new() { Kind = MathRunKind.NAry, Operator = @operator, Sub = sub, Sup = sup, Base = operand };
+
+    /// <summary>
+    /// Creates an n-ary fragment (m:nary) whose lower limit, upper limit and operand are structured equations.
+    /// Null limit equations are treated as empty text slots.
+    /// </summary>
+    public static MathRun NAry(string @operator, Equation? lowerLimit, Equation? upperLimit, Equation operand)
+    {
+        ArgumentNullException.ThrowIfNull(operand);
+
+        return new()
+        {
+            Kind = MathRunKind.NAry,
+            Operator = @operator,
+            Sub = lowerLimit?.LinearText ?? string.Empty,
+            Sup = upperLimit?.LinearText ?? string.Empty,
+            Base = operand.LinearText,
+            NAryLowerLimitEquation = lowerLimit,
+            NAryUpperLimitEquation = upperLimit,
+            NAryOperandEquation = operand
+        };
+    }
 
     /// <summary>
     /// Creates an accent fragment (m:acc): <paramref name="@base"/> with the accent glyph
@@ -179,6 +322,21 @@ public sealed record MathRun
     public static MathRun Delimiter(string content, string open = "(", string close = ")") =>
         new() { Kind = MathRunKind.Delimiter, Base = content, OpenChar = open, CloseChar = close };
 
+    /// <summary>Creates a delimiter fragment (m:d) whose content is a structured equation.</summary>
+    public static MathRun Delimiter(Equation content, string open = "(", string close = ")")
+    {
+        ArgumentNullException.ThrowIfNull(content);
+
+        return new()
+        {
+            Kind = MathRunKind.Delimiter,
+            Base = content.LinearText,
+            OpenChar = open,
+            CloseChar = close,
+            DelimiterContentEquation = content
+        };
+    }
+
     /// <summary>Creates a matrix fragment (m:m) from a grid.</summary>
     public static MathRun MatrixOf(MathMatrix matrix) =>
         new() { Kind = MathRunKind.Matrix, Matrix = matrix };
@@ -186,6 +344,20 @@ public sealed record MathRun
     /// <summary>Creates a function-application fragment (m:func): <paramref name="funcName"/> applied to <paramref name="argument"/>.</summary>
     public static MathRun FunctionApply(string funcName, string argument) =>
         new() { Kind = MathRunKind.FunctionApply, FuncName = funcName, Base = argument };
+
+    /// <summary>Creates a function-application fragment (m:func) whose argument is a structured equation.</summary>
+    public static MathRun FunctionApply(string funcName, Equation argument)
+    {
+        ArgumentNullException.ThrowIfNull(argument);
+
+        return new()
+        {
+            Kind = MathRunKind.FunctionApply,
+            FuncName = funcName,
+            Base = argument.LinearText,
+            FunctionArgumentEquation = argument
+        };
+    }
 
     /// <summary>Creates a group-character fragment (m:groupChr): <paramref name="@base"/> grouped by <paramref name="groupChr"/>.</summary>
     public static MathRun GroupCharOf(string @base, string groupChr = "\u23DE", string groupChrPos = "top") =>
@@ -201,24 +373,44 @@ public sealed record MathRun
     /// A best-effort linear (plain-text) rendering of this fragment, used for the host run's fallback
     /// text and for the editor's lightweight visual stand-in.
     /// </summary>
-    public string LinearText => Kind switch
+    public string LinearText => LinearTextWithDepth(0);
+
+    internal string LinearTextWithDepth(int depth) => Kind switch
     {
-        MathRunKind.Superscript => $"{Base}^{Sup}",
-        MathRunKind.Subscript => $"{Base}_{Sub}",
-        MathRunKind.SubSuperscript => $"{Base}_{Sub}^{Sup}",
-        MathRunKind.Fraction => $"{Numerator}/{Denominator}",
-        MathRunKind.Radical => string.IsNullOrEmpty(Degree) ? $"√({Base})" : $"{Degree}√({Base})",
-        MathRunKind.NAry => $"{Operator}({Sub}..{Sup}) {Base}".TrimEnd(),
+        MathRunKind.Superscript => $"{SlotLinearText(ScriptBaseEquation, Base, depth)}^{SlotLinearText(ScriptSupEquation, Sup, depth)}",
+        MathRunKind.Subscript => $"{SlotLinearText(ScriptBaseEquation, Base, depth)}_{SlotLinearText(ScriptSubEquation, Sub, depth)}",
+        MathRunKind.SubSuperscript => $"{SlotLinearText(ScriptBaseEquation, Base, depth)}_{SlotLinearText(ScriptSubEquation, Sub, depth)}^{SlotLinearText(ScriptSupEquation, Sup, depth)}",
+        MathRunKind.Fraction => $"{SlotLinearText(NumeratorEquation, Numerator, depth)}/{SlotLinearText(DenominatorEquation, Denominator, depth)}",
+        MathRunKind.Radical => string.IsNullOrEmpty(Degree)
+            ? $"√({SlotLinearText(RadicandEquation, Base, depth)})"
+            : $"{Degree}√({SlotLinearText(RadicandEquation, Base, depth)})",
+        MathRunKind.NAry => $"{Operator}({SlotLinearText(NAryLowerLimitEquation, Sub, depth)}..{SlotLinearText(NAryUpperLimitEquation, Sup, depth)}) {SlotLinearText(NAryOperandEquation, Base, depth)}".TrimEnd(),
         MathRunKind.Accent => $"{Base}{Accent}",
         MathRunKind.Bar => BarTop ? $"‾{Base}‾" : $"_{Base}_",
-        MathRunKind.Delimiter => $"{OpenChar}{Base}{CloseChar}",
+        MathRunKind.Delimiter => $"{OpenChar}{SlotLinearText(DelimiterContentEquation, Base, depth)}{CloseChar}",
         MathRunKind.Matrix => Matrix?.LinearText ?? string.Empty,
-        MathRunKind.FunctionApply => string.IsNullOrEmpty(FuncName) ? Base : $"{FuncName}({Base})",
+        MathRunKind.FunctionApply => FunctionLinearText(depth),
         MathRunKind.GroupChar => string.Equals(GroupChrPos, "bot", StringComparison.OrdinalIgnoreCase)
             ? $"{Base}{GroupChr}"
             : $"{GroupChr}{Base}",
         _ => Text
     };
+
+    private string FunctionLinearText(int depth)
+    {
+        var argument = SlotLinearText(FunctionArgumentEquation, Base, depth);
+        return string.IsNullOrEmpty(FuncName) ? argument : $"{FuncName}({argument})";
+    }
+
+    private static string SlotLinearText(Equation? equation, string fallback, int depth)
+    {
+        if (equation is null)
+            return fallback;
+
+        return depth >= MaxNestedEquationDepth
+            ? fallback
+            : equation.LinearTextWithDepth(depth + 1);
+    }
 }
 
 /// <summary>
@@ -274,5 +466,13 @@ public sealed class Equation
     public static Equation FromText(string text) => new([MathRun.PlainText(text)]);
 
     /// <summary>A best-effort linear (plain-text) rendering of the whole equation (fragments concatenated).</summary>
-    public string LinearText => string.Concat(Runs.Select(r => r.LinearText));
+    public string LinearText => LinearTextWithDepth(0);
+
+    internal string LinearTextWithDepth(int depth)
+    {
+        if (depth > MathRun.MaxNestedEquationDepth)
+            return string.Empty;
+
+        return string.Concat(Runs.Select(r => r.LinearTextWithDepth(depth)));
+    }
 }

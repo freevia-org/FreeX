@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Security.Cryptography;
+using FreeW.Core.Model;
 using FreeW.App.Presentation.DocumentView;
 
 namespace FreeW.App.Presentation.Tests;
@@ -15,8 +16,10 @@ public sealed class VisualEvidencePlannerTests
             "f2-hf-basic",
             "f2-hf-firstpage",
             "f2-hf-oddeven",
+            "f2-hf-images",
             "field-page-number-variants",
             "references-heavy-fields",
+            "equation-structures",
             "f2-footnotes",
             "f2-endnotes",
             "f2-columns",
@@ -25,6 +28,7 @@ public sealed class VisualEvidencePlannerTests
             "f2-tracked-changes",
             "f2-comments",
             "review-proofing-visual-depth",
+            "review-protection-proofing-comments-only",
             "table-layout-complex",
             "table-pagination-repeat-header",
             "table-page-composition-stress",
@@ -71,6 +75,20 @@ public sealed class VisualEvidencePlannerTests
         reviewProofingScenario.Composition.ExpectsTrackedChanges.Should().BeTrue();
         reviewProofingScenario.Composition.ExpectsComments.Should().BeTrue();
 
+        var reviewProtectionScenario = FreeWVisualEvidencePlanner.ResolveScenario("review-protection-proofing-comments-only");
+        reviewProtectionScenario.ExpectedFeatureTags.Should().Contain([
+            "review",
+            "proofing",
+            "comments-only-protection",
+            "review-protection-state",
+            "protection-command-matrix",
+            "proofing-replacement-blocked",
+            "comment-workflow-allowed"]);
+        reviewProtectionScenario.ExpectedOutputNamePattern.Should()
+            .Be("review-protection-proofing-comments-only_p{page}.png");
+        reviewProtectionScenario.Composition.ExpectsTrackedChanges.Should().BeTrue();
+        reviewProtectionScenario.Composition.ExpectsComments.Should().BeTrue();
+
         var fieldScenario = FreeWVisualEvidencePlanner.ResolveScenario("field-page-number-variants");
         fieldScenario.ExpectedFeatureTags.Should().Contain([
             "fields",
@@ -96,8 +114,34 @@ public sealed class VisualEvidencePlannerTests
         referencesScenario.ExpectedOutputNamePattern.Should().Be("references-heavy-fields_p{page}.png");
         referencesScenario.MinimumExpectedOutputs.Should().Be(2);
 
+        var equationScenario = FreeWVisualEvidencePlanner.ResolveScenario("equation-structures");
+        equationScenario.ExpectedFeatureTags.Should().Contain([
+            "equations",
+            "officemath",
+            "math-run-structures",
+            "shared-equation-visual-planner",
+            "scripts",
+            "fractions",
+            "radicals",
+            "n-ary-operators",
+            "matrices",
+            "accents",
+            "bars",
+            "delimiters",
+            "group-characters",
+            "function-apply"]);
+        equationScenario.ExpectedOutputNamePattern.Should().Be("equation-structures_p{page}.png");
+        equationScenario.MinimumExpectedOutputs.Should().Be(1);
+
         var floatingScenario = FreeWVisualEvidencePlanner.ResolveScenario("page-composition-floating-image");
         floatingScenario.Composition.ExpectsFloatingObjects.Should().BeTrue();
+
+        var hfImageScenario = FreeWVisualEvidencePlanner.ResolveScenario("f2-hf-images");
+        hfImageScenario.ExpectedFeatureTags.Should().Contain(["header-footer", "header-footer-images", "multi-section"]);
+        hfImageScenario.ExpectedOutputNamePattern.Should().Be("f2-hf-images_p{page}.png");
+        hfImageScenario.MinimumExpectedOutputs.Should().Be(2);
+        hfImageScenario.Composition.ExpectsHeadersFooters.Should().BeTrue();
+        FreeWVisualEvidenceManifestNormalizer.SectionPageSurfaceRendererScenarioIds.Should().Contain("f2-hf-images");
 
         var previewScenario = FreeWVisualEvidencePlanner.ResolveScenario("backstage-print-preview-fidelity");
         previewScenario.ExpectedFeatureTags.Should().Contain(["backstage", "print-preview", "fixed-layout", "header-footer", "columns", "page-border", "watermark"]);
@@ -181,6 +225,7 @@ public sealed class VisualEvidencePlannerTests
             "wordart-effects",
             "grouped-child-effects",
             "grouped-child-shape-effects",
+            "grouped-child-wordart-effects",
             "shadow",
             "glow",
             "reflection",
@@ -376,6 +421,7 @@ public sealed class VisualEvidencePlannerTests
         var tracked = FreeWVisualEvidenceDocumentFactory.BuildTrackedChangesReviewDocument();
         var comments = FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument();
         var reviewProofing = FreeWVisualEvidenceDocumentFactory.BuildReviewProofingVisualDepthDocument();
+        var reviewProtection = FreeWVisualEvidenceDocumentFactory.BuildReviewProtectionProofingEvidenceDocument();
 
         var revisions = tracked.Blocks
             .OfType<Paragraph>()
@@ -483,6 +529,77 @@ public sealed class VisualEvidencePlannerTests
             "kind=Spelling|word=recieve|normalized=recieve|language=en-GB|block=5|run=2|runOffset=0|paragraphOffset=26|length=7",
             "kind=Spelling|word=acommodate|normalized=acommodate|language=fr-FR|block=5|run=3|runOffset=0|paragraphOffset=34|length=10",
             "kind=Grammar|word=the|normalized=the|language=en-US|block=5|run=5|runOffset=0|paragraphOffset=49|length=3"
+        ]);
+
+        reviewProtection.Protection.Mode.Should().Be(ProtectionMode.CommentsOnly);
+        reviewProtection.MarkedAsFinal.Should().BeFalse();
+        var reviewProtectionExpectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "review-protection-proofing-comments-only",
+            reviewProtection.Page,
+            pageNumber: 1,
+            pageCount: 1,
+            outputName: "review-protection-proofing-comments-only_p1.png",
+            document: reviewProtection);
+        reviewProtectionExpectation.ExpectedOutputName.Should().Be("review-protection-proofing-comments-only_p1.png");
+        reviewProtectionExpectation.Composition.ExpectsTrackedChanges.Should().BeTrue();
+        reviewProtectionExpectation.Composition.ExpectsComments.Should().BeTrue();
+        reviewProtectionExpectation.ProofingDiagnostics.DiagnosticCount.Should().Be(4);
+        reviewProtectionExpectation.ReviewProtection.ProtectionMode.Should().Be(nameof(ProtectionMode.CommentsOnly));
+        reviewProtectionExpectation.ReviewProtection.IsProtected.Should().BeTrue();
+        reviewProtectionExpectation.ReviewProtection.IsMarkedAsFinal.Should().BeFalse();
+        reviewProtectionExpectation.ReviewProtection.MarkAsFinal.IsChecked.Should().BeFalse();
+        reviewProtectionExpectation.ReviewProtection.RestrictEditing.IsChecked.Should().BeTrue();
+        reviewProtectionExpectation.ReviewProtection.IsBodyEditingLocked.Should().BeTrue();
+        reviewProtectionExpectation.ReviewProtection.IsBodyFormattingLocked.Should().BeTrue();
+        reviewProtectionExpectation.ReviewProtection.IsHistoryLocked.Should().BeTrue();
+        reviewProtectionExpectation.ReviewProtection.IsCommentWorkflowAllowed.Should().BeTrue();
+        reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
+            operation.Operation == nameof(RestrictEditingOperationKind.BodyTextEdit)
+            && operation.MutationKind == "None"
+            && !operation.IsAllowed
+            && operation.BlockReason == nameof(RestrictEditingBlockReason.CommentsOnly));
+        reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
+            operation.Operation == nameof(RestrictEditingOperationKind.BodyFormatting)
+            && operation.MutationKind == "None"
+            && !operation.IsAllowed
+            && operation.BlockReason == nameof(RestrictEditingBlockReason.CommentsOnly));
+        reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
+            operation.Operation == nameof(RestrictEditingOperationKind.ProofingReplacement)
+            && operation.MutationKind == "None"
+            && !operation.IsAllowed
+            && operation.BlockReason == nameof(RestrictEditingBlockReason.CommentsOnly));
+        reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
+            operation.Operation == nameof(RestrictEditingOperationKind.HistoryUndo)
+            && operation.MutationKind == nameof(DocumentCommandMutationKind.BodyText)
+            && !operation.IsAllowed
+            && operation.BlockReason == nameof(RestrictEditingBlockReason.CommentsOnly));
+        reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
+            operation.Operation == nameof(RestrictEditingOperationKind.HistoryRedo)
+            && operation.MutationKind == nameof(DocumentCommandMutationKind.BodyFormatting)
+            && !operation.IsAllowed
+            && operation.BlockReason == nameof(RestrictEditingBlockReason.CommentsOnly));
+        reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
+            operation.Operation == nameof(RestrictEditingOperationKind.CommentInsert)
+            && operation.IsAllowed);
+        reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
+            operation.Operation == nameof(RestrictEditingOperationKind.CommentReply)
+            && operation.IsAllowed);
+        reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
+            operation.Operation == nameof(RestrictEditingOperationKind.CommentResolve)
+            && operation.IsAllowed);
+        reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
+            operation.Operation == nameof(RestrictEditingOperationKind.CommentDelete)
+            && operation.IsAllowed);
+        reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
+            operation.Operation == nameof(RestrictEditingOperationKind.HistoryUndo)
+            && operation.MutationKind == nameof(DocumentCommandMutationKind.Comment)
+            && operation.IsAllowed);
+        reviewProtectionExpectation.ReviewProtection.StableSignatures.Should().Contain([
+            "operation=BodyTextEdit|mutation=None|allowed=0|requiresTrackedChanges=0|blockReason=CommentsOnly|protection=CommentsOnly",
+            "operation=BodyFormatting|mutation=None|allowed=0|requiresTrackedChanges=0|blockReason=CommentsOnly|protection=CommentsOnly",
+            "operation=ProofingReplacement|mutation=None|allowed=0|requiresTrackedChanges=0|blockReason=CommentsOnly|protection=CommentsOnly",
+            "operation=HistoryUndo|mutation=BodyText|allowed=0|requiresTrackedChanges=0|blockReason=CommentsOnly|protection=CommentsOnly",
+            "operation=CommentInsert|mutation=None|allowed=1|requiresTrackedChanges=0|blockReason=None|protection=CommentsOnly"
         ]);
     }
 
@@ -689,6 +806,10 @@ public sealed class VisualEvidencePlannerTests
     public void SharedSectionGeometrySurfacePlans_BuildPageSizedSectionSlices()
     {
         var document = FreeWVisualEvidenceDocumentFactory.BuildSectionGeometryDocument();
+        document.Sections[0].Page.PageNumberFormat = PageNumberFormat.LowerRoman;
+        document.Sections[0].Page.PageNumberStartAt = 3;
+        document.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
+        document.Page.PageNumberStartAt = 10;
 
         var surfacePlans = FreeWVisualEvidencePlanner.BuildSectionGeometrySurfacePlans(document, pageCount: 2);
 
@@ -699,6 +820,8 @@ public sealed class VisualEvidencePlannerTests
         surfacePlans[0].Document.Page.WidthPt.Should().Be(612);
         surfacePlans[0].Document.Page.HeightPt.Should().Be(792);
         surfacePlans[0].Document.Page.Landscape.Should().BeFalse();
+        surfacePlans[0].Document.Page.PageNumberFormat.Should().Be(PageNumberFormat.LowerRoman);
+        surfacePlans[0].Document.Page.PageNumberStartAt.Should().Be(3);
         surfacePlans[0].CaptureWidthDip.Should().BeApproximately(864, 0.01);
         surfacePlans[0].CaptureHeightDip.Should().BeApproximately(1104, 0.01);
 
@@ -707,6 +830,8 @@ public sealed class VisualEvidencePlannerTests
         surfacePlans[1].Document.Page.WidthPt.Should().Be(792);
         surfacePlans[1].Document.Page.HeightPt.Should().Be(612);
         surfacePlans[1].Document.Page.Landscape.Should().BeTrue();
+        surfacePlans[1].Document.Page.PageNumberFormat.Should().Be(PageNumberFormat.UpperRoman);
+        surfacePlans[1].Document.Page.PageNumberStartAt.Should().Be(10);
         surfacePlans[1].CaptureWidthDip.Should().BeApproximately(1104, 0.01);
         surfacePlans[1].CaptureHeightDip.Should().BeApproximately(864, 0.01);
         surfacePlans[1].Document.Blocks.OfType<Paragraph>().First().PlainText.Should().Contain("Section 2");
@@ -718,6 +843,40 @@ public sealed class VisualEvidencePlannerTests
                 .Should()
                 .OnlyContain(paragraph => paragraph.SectionBreak == null);
         }
+    }
+
+    [Fact]
+    public void EquationStructuresDocument_CoversModeledEquationKinds()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildEquationStructuresDocument();
+
+        var equations = document.Blocks
+            .OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Where(run => run.Equation is not null)
+            .Select(run => run.Equation!)
+            .ToList();
+        var kinds = equations
+            .SelectMany(equation => equation.Runs)
+            .Select(run => run.Kind)
+            .Distinct()
+            .ToList();
+
+        equations.Should().HaveCountGreaterThanOrEqualTo(7);
+        kinds.Should().Contain([
+            MathRunKind.Text,
+            MathRunKind.Superscript,
+            MathRunKind.Subscript,
+            MathRunKind.SubSuperscript,
+            MathRunKind.Fraction,
+            MathRunKind.Radical,
+            MathRunKind.NAry,
+            MathRunKind.Accent,
+            MathRunKind.Bar,
+            MathRunKind.Delimiter,
+            MathRunKind.Matrix,
+            MathRunKind.FunctionApply,
+            MathRunKind.GroupChar]);
     }
 
     [Fact]
@@ -798,6 +957,47 @@ public sealed class VisualEvidencePlannerTests
         var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
 
         foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.FieldRendererScenarioIds)
+        {
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
+        }
+    }
+
+    [Fact]
+    public void DefaultExpectedScenarios_RequiresPairedEquationRendererEvidence()
+    {
+        var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
+
+        foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.EquationRendererScenarioIds)
+        {
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
+        }
+    }
+
+    [Fact]
+    public void DefaultExpectedScenarios_RequiresPairedHeaderFooterImageEvidence()
+    {
+        var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
+        var imageScenarioIds = FreeWVisualEvidenceManifestNormalizer.HeaderFooterRendererScenarioIds
+            .Where(scenarioId => FreeWVisualEvidencePlanner
+                .ResolveScenario(scenarioId)
+                .ExpectedFeatureTags
+                .Contains("header-footer-images", StringComparer.OrdinalIgnoreCase));
+
+        foreach (var scenarioId in imageScenarioIds)
         {
             expected.Should().Contain(e =>
                 e.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
@@ -894,12 +1094,14 @@ public sealed class VisualEvidencePlannerTests
 
             plan.WordApplicationProgId.Should().Be("Word.Application");
             plan.MaxPagesPerDocument.Should().Be(3);
-            plan.ExpectedFixtureCount.Should().Be(23);
-            plan.ExpectedBaselinePngCount.Should().Be(69);
+            plan.ExpectedFixtureCount.Should().Be(25);
+            plan.ExpectedBaselinePngCount.Should().Be(75);
             plan.Fixtures.Select(f => f.DocumentName).Should().Contain([
                 "f2-hf-basic.docx",
+                "f2-hf-images.docx",
                 "field-page-number-variants.docx",
                 "references-heavy-fields.docx",
+                "equation-structures.docx",
                 "review-proofing-visual-depth.docx",
                 "table-layout-complex.docx",
                 "table-pagination-repeat-header.docx",
@@ -923,6 +1125,10 @@ public sealed class VisualEvidencePlannerTests
                 .ExpectedBaselinePaths.Should().Contain("field-page-number-variants/field-page-number-variants_p1.png");
             plan.Fixtures.Single(f => f.ScenarioId == "references-heavy-fields")
                 .ExpectedBaselinePaths.Should().Contain("references-heavy-fields/references-heavy-fields_p2.png");
+            plan.Fixtures.Single(f => f.ScenarioId == "equation-structures")
+                .ExpectedBaselinePaths.Should().Contain("equation-structures/equation-structures_p1.png");
+            plan.Fixtures.Single(f => f.ScenarioId == "f2-hf-images")
+                .ExpectedBaselinePaths.Should().Contain("f2-hf-images/f2-hf-images_p2.png");
             plan.Fixtures.Single(f => f.ScenarioId == "review-proofing-visual-depth")
                 .ExpectedBaselinePaths.Should().Contain("review-proofing-visual-depth/review-proofing-visual-depth_p1.png");
             plan.Fixtures.Single(f => f.ScenarioId == "object-format-position-size-style")
@@ -1111,6 +1317,79 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void BuildPageExpectation_RecordsSharedHeaderFooterImageEvidence()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildMultiSectionHeaderFooterImageDocument();
+
+        var page1 = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "f2-hf-images",
+            document.Page,
+            pageNumber: 1,
+            pageCount: 2,
+            outputName: "f2-hf-images_p1.png",
+            headerSlotName: "header",
+            document: document);
+        var page2 = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "f2-hf-images",
+            document.Page,
+            pageNumber: 2,
+            pageCount: 2,
+            outputName: "f2-hf-images_p2.png",
+            headerSlotName: "header",
+            document: document);
+
+        page1.HeaderFooters.HasImages.Should().BeTrue();
+        page1.HeaderFooters.ImageCount.Should().Be(1);
+        page1.HeaderFooters.SlotNames.Should().Contain("header");
+        page1.HeaderFooters.ImageSignatures.Single().Should().Contain("section=1");
+        page1.HeaderFooters.ImageSignatures.Single().Should().Contain("slot=header");
+        page1.HeaderFooters.ImageSignatures.Single().Should().Contain("alt=Section One Letterhead");
+        page1.HeaderFooters.Slots.Single().Lines.Single().Runs
+            .Should().Contain(run => run.Kind == HeaderFooterVisualPlanner.ImageRunKind
+                && run.WidthDip > 0
+                && run.HeightDip > 0);
+
+        page2.HeaderFooters.ImageCount.Should().Be(1);
+        page2.HeaderFooters.ImageSignatures.Single().Should().Contain("section=2");
+        page2.HeaderFooters.ImageSignatures.Single().Should().Contain("align=Right");
+        page2.HeaderFooters.ImageSignatures.Single().Should().Contain("alt=Section Two Letterhead");
+    }
+
+    [Fact]
+    public void BuildSectionGeometrySurfacePlans_PreserveSelectedSectionHeaderFooterImages()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildMultiSectionHeaderFooterImageDocument();
+
+        var surfaces = FreeWVisualEvidencePlanner.BuildSectionGeometrySurfacePlans(document, pageCount: 2);
+
+        surfaces.Should().HaveCount(2);
+        surfaces[0].PagePlan.SectionOrdinal.Should().Be(1);
+        surfaces[1].PagePlan.SectionOrdinal.Should().Be(2);
+
+        var page1HeaderFooters = FreeWVisualEvidencePlanner.BuildHeaderFooterExpectation(
+            surfaces[0].Document,
+            pageNumber: 1,
+            pageCount: 1);
+        var page2HeaderFooters = FreeWVisualEvidencePlanner.BuildHeaderFooterExpectation(
+            surfaces[1].Document,
+            pageNumber: 1,
+            pageCount: 1);
+
+        page1HeaderFooters.HasImages.Should().BeTrue();
+        page1HeaderFooters.ImageSignatures.Single().Should().Contain("alt=Section One Letterhead");
+        page1HeaderFooters.ImageSignatures.Single().Should().Contain("align=Left");
+        page2HeaderFooters.HasImages.Should().BeTrue();
+        page2HeaderFooters.ImageSignatures.Single().Should().Contain("alt=Section Two Letterhead");
+        page2HeaderFooters.ImageSignatures.Single().Should().Contain("align=Right");
+        page2HeaderFooters.ImageSignatures.Single().Should().Contain("bytes=");
+
+        surfaces[1].Document.Blocks
+            .OfType<Paragraph>()
+            .Select(p => p.PlainText)
+            .Should().Contain(text => text.Contains("Section 2 Header Image", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void BuildPageExpectation_RecordsSharedComplexTableLayout()
     {
         var document = FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument();
@@ -1143,11 +1422,23 @@ public sealed class VisualEvidencePlannerTests
         expectation.Tables.HasNamedStyle.Should().BeTrue();
         expectation.Tables.Tables.Single().TableStyleId.Should().Be("GridTable4");
         expectation.Tables.Tables.Single().ColumnWidthsDip.Should().HaveCount(4);
-        expectation.Tables.TableCellFillSignatures.Should().HaveCount(8);
+        var headerCellFill = expectation.Tables.Tables.Single().Cells
+            .Single(cell => cell.RowIndex == 0 && cell.CellIndex == 0)
+            .EffectiveFill;
+        headerCellFill.StyleDerivedFillSource.Should().Be("style-derived-header");
+        headerCellFill.StyleDerivedFillHex.Should().Be("#2F5496");
+        headerCellFill.EffectiveFillHex.Should().Be("#2F5496");
+        headerCellFill.StyleDerivedBold.Should().BeTrue();
+        headerCellFill.EffectiveBold.Should().BeTrue();
+        expectation.Tables.TableCellFillSignatures.Count.Should().BeGreaterThan(8);
         expectation.Tables.TableCellFillSignatures.Should().Contain(signature =>
             signature.Contains("source=style-derived-header", StringComparison.Ordinal)
             && signature.Contains("fill=#2F5496", StringComparison.Ordinal)
             && signature.Contains("gridSpan=2", StringComparison.Ordinal));
+        expectation.Tables.TableCellFillSignatures.Should().Contain(signature =>
+            signature.Contains("source=style-derived-banded-row", StringComparison.Ordinal)
+            && signature.Contains("fill=#BDD7EE", StringComparison.Ordinal)
+            && signature.Contains("row=1", StringComparison.Ordinal));
         expectation.Tables.TableCellFillSignatures.Should().Contain(signature =>
             signature.Contains("source=explicit-cell", StringComparison.Ordinal)
             && signature.Contains("fill=#EAF2F8", StringComparison.Ordinal)
@@ -1160,6 +1451,58 @@ public sealed class VisualEvidencePlannerTests
             cell.GridSpan == 2 && cell.RowSpan == 1);
         expectation.Tables.Tables.Single().Cells.Should().Contain(cell =>
             cell.RowSpan == 2 && cell.IsVerticalMergeContinuation == false);
+    }
+
+    [Fact]
+    public void BuildTableExpectation_PreservesExplicitHeaderShadingThatMatchesStyleFill()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var table = new Table
+        {
+            Formatting = new TableFormatting
+            {
+                HeaderRow = true,
+                BandedRows = true
+            },
+            TableStyleId = "GridTable4"
+        };
+        table.Rows.Add(new TableRow
+        {
+            Cells =
+            {
+                new TableCell("Header") { ShadingColorHex = "#2F5496" },
+                new TableCell("Header 2")
+            }
+        });
+        table.Rows.Add(new TableRow
+        {
+            Cells =
+            {
+                new TableCell("Body 1"),
+                new TableCell("Body 2")
+            }
+        });
+        document.Blocks.Add(table);
+
+        var expectation = FreeWVisualEvidencePlanner.BuildTableExpectation(document);
+        var headerCell = expectation.Tables.Single().Cells.Single(cell => cell.RowIndex == 0 && cell.CellIndex == 0);
+
+        headerCell.ShadingColorHex.Should().Be("#2F5496");
+        headerCell.EffectiveFill.ExplicitFillHex.Should().Be("#2F5496");
+        headerCell.EffectiveFill.StyleDerivedFillSource.Should().Be("style-derived-header");
+        headerCell.EffectiveFill.StyleDerivedFillHex.Should().Be("#2F5496");
+        headerCell.EffectiveFill.EffectiveFillSource.Should().Be("explicit-cell");
+        expectation.TableCellFillSignatures.Should().Contain(signature =>
+            signature.Contains("row=0", StringComparison.Ordinal)
+            && signature.Contains("cell=0", StringComparison.Ordinal)
+            && signature.Contains("source=style-derived-header", StringComparison.Ordinal)
+            && signature.Contains("fill=#2F5496", StringComparison.Ordinal));
+        expectation.TableCellFillSignatures.Should().Contain(signature =>
+            signature.Contains("row=0", StringComparison.Ordinal)
+            && signature.Contains("cell=0", StringComparison.Ordinal)
+            && signature.Contains("source=explicit-cell", StringComparison.Ordinal)
+            && signature.Contains("fill=#2F5496", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1286,13 +1629,32 @@ public sealed class VisualEvidencePlannerTests
             "SmartArt",
             "WordArt",
             "Group"]);
+        expectation.DrawingObjects.GroupChildren.ChildCount.Should().Be(5);
+        expectation.DrawingObjects.GroupChildren.ImageChildCount.Should().Be(1);
+        expectation.DrawingObjects.GroupChildren.ShapeChildCount.Should().Be(1);
+        expectation.DrawingObjects.GroupChildren.ChartChildCount.Should().Be(1);
+        expectation.DrawingObjects.GroupChildren.SmartArtChildCount.Should().Be(1);
+        expectation.DrawingObjects.GroupChildren.WordArtChildCount.Should().Be(1);
+        expectation.DrawingObjects.GroupChildren.HasMixedTypedChildren.Should().BeTrue();
+        expectation.DrawingObjects.GroupChildren.ChildKindSummaries.Should().Contain([
+            "Group0Child0:Image",
+            "Group0Child1:Shape",
+            "Group0Child2:Chart",
+            "Group0Child3:WordArt",
+            "Group0Child4:SmartArt"]);
+        expectation.DrawingObjects.GroupChildren.ChildVisualSignatures.Should().Contain(signature =>
+            signature.StartsWith("Group0Child2:Chart:", StringComparison.Ordinal)
+            && signature.Contains("kind=Column", StringComparison.Ordinal));
+        expectation.DrawingObjects.GroupChildren.ChildVisualSignatures.Should().Contain(signature =>
+            signature.StartsWith("Group0Child4:SmartArt:", StringComparison.Ordinal)
+            && signature.Contains("nodes=Plan:", StringComparison.Ordinal));
         expectation.DrawingObjects.Effects.EffectObjectCount.Should().Be(3);
         expectation.DrawingObjects.Effects.ShapeEffectObjectCount.Should().Be(1);
         expectation.DrawingObjects.Effects.ImageEffectObjectCount.Should().Be(1);
         expectation.DrawingObjects.Effects.WordArtEffectObjectCount.Should().Be(1);
-        expectation.DrawingObjects.Effects.RenderedGroupChildEffectObjectCount.Should().Be(1);
+        expectation.DrawingObjects.Effects.RenderedGroupChildEffectObjectCount.Should().Be(2);
         expectation.DrawingObjects.Effects.RenderedGroupChildShapeEffectObjectCount.Should().Be(1);
-        expectation.DrawingObjects.Effects.RenderedGroupChildWordArtEffectObjectCount.Should().Be(0);
+        expectation.DrawingObjects.Effects.RenderedGroupChildWordArtEffectObjectCount.Should().Be(1);
         expectation.DrawingObjects.Effects.PlannedGroupChildEffectObjectCount.Should().Be(0);
         expectation.DrawingObjects.Effects.PlannedGroupChildShapeEffectObjectCount.Should().Be(0);
         expectation.DrawingObjects.Effects.PlannedGroupChildWordArtEffectObjectCount.Should().Be(0);
@@ -1305,7 +1667,9 @@ public sealed class VisualEvidencePlannerTests
             "Image:shadow+glow+reflection+artistic:GlowDiffused",
             "WordArt:glow"]);
         expectation.DrawingObjects.Effects.RenderedGroupChildEffectSummaries.Should().Contain(
-            "GroupChild0:Shape:glow");
+            "GroupChild1:Shape:glow");
+        expectation.DrawingObjects.Effects.RenderedGroupChildEffectSummaries.Should().Contain(
+            "GroupChild3:WordArt:glow");
         expectation.DrawingObjects.Effects.PlannedGroupChildEffectSummaries.Should().BeEmpty();
     }
 
@@ -1410,7 +1774,8 @@ public sealed class VisualEvidencePlannerTests
             signature.Contains("categoryAxis=Height", StringComparison.Ordinal) &&
             signature.Contains("valueAxis=Weight", StringComparison.Ordinal));
         expectation.ChartSmartArt.SmartArtVisualSignatures.Should().ContainSingle(signature =>
-            signature.Contains("layout=stepup1", StringComparison.Ordinal) &&
+            signature.Contains("layout=orgchart1", StringComparison.Ordinal) &&
+            signature.Contains("hierarchy=maxDepth=2/nodes=3/connectors=2", StringComparison.Ordinal) &&
             signature.Contains("colorScheme=accent1", StringComparison.Ordinal) &&
             signature.Contains("style=intense1", StringComparison.Ordinal) &&
             signature.Contains("#38517D", StringComparison.Ordinal) &&
@@ -1419,8 +1784,12 @@ public sealed class VisualEvidencePlannerTests
         expectation.ChartSmartArt.Charts.Should().Contain(plan =>
             plan.Kind == ChartKind.Scatter &&
             plan.GeometryKind == ChartVisualGeometryKind.MarkerOnly);
-        expectation.ChartSmartArt.SmartArts.Single().LayoutId.Should().Be("stepup1");
-        expectation.ChartSmartArt.SmartArts.Single().Nodes.Select(node => node.FillHex)
+        var smartArt = expectation.ChartSmartArt.SmartArts.Single();
+        smartArt.LayoutId.Should().Be("orgchart1");
+        smartArt.HierarchyGeometry.Should().NotBeNull();
+        smartArt.HierarchyGeometry!.MaxDepth.Should().Be(2);
+        smartArt.HierarchyGeometry.Connectors.Should().HaveCount(2);
+        smartArt.Nodes.Select(node => node.FillHex)
             .Should().ContainInOrder("#38517D", "#486DAF", "#679AD6");
     }
 
@@ -1661,7 +2030,9 @@ public sealed class VisualEvidencePlannerTests
             var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(summary);
             markdown.Should().Contain("Scenario Coverage");
             markdown.Should().Contain("avalonia-page-layout-shot");
-            markdown.Should().Contain("1 rendered grouped child effect object(s): GroupChild0:Shape:glow");
+            markdown.Should().Contain(
+                "5 grouped child object(s): Group0Child0:Image/Group0Child1:Shape/Group0Child2:Chart/Group0Child3:WordArt/Group0Child4:SmartArt");
+            markdown.Should().Contain("2 rendered grouped child effect object(s): GroupChild1:Shape:glow/GroupChild3:WordArt:glow");
             markdown.Should().NotContain("planned grouped child effect object(s)");
         }
         finally
@@ -1699,7 +2070,7 @@ public sealed class VisualEvidencePlannerTests
                     {
                         Effects = avaloniaRow.PageExpectation.DrawingObjects.Effects with
                         {
-                            RenderedGroupChildEffectSummaries = ["GroupChild0:Shape:shadow"]
+                            RenderedGroupChildEffectSummaries = ["GroupChild1:Shape:shadow"]
                         }
                     }
                 }
@@ -1735,8 +2106,143 @@ public sealed class VisualEvidencePlannerTests
             summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("drawing-object renderer pair 'drawing-objects-complex' page 1", StringComparison.Ordinal)
                 && f.Contains("rendered grouped child effect summaries differ", StringComparison.Ordinal)
-                && f.Contains("WPF 'GroupChild0:Shape:glow'", StringComparison.Ordinal)
-                && f.Contains("Avalonia 'GroupChild0:Shape:shadow'", StringComparison.Ordinal));
+                && f.Contains("WPF 'GroupChild1:Shape:glow/GroupChild3:WordArt:glow'", StringComparison.Ordinal)
+                && f.Contains("Avalonia 'GroupChild1:Shape:shadow'", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RequiresMatchingGroupedMixedChildVisualEvidence()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "drawing-objects-complex";
+            var wpfRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaWithoutSmartArtChildSignature = avaloniaRow with
+            {
+                PageExpectation = avaloniaRow.PageExpectation with
+                {
+                    DrawingObjects = avaloniaRow.PageExpectation.DrawingObjects with
+                    {
+                        GroupChildren = avaloniaRow.PageExpectation.DrawingObjects.GroupChildren with
+                        {
+                            ChildVisualSignatures = avaloniaRow.PageExpectation.DrawingObjects.GroupChildren.ChildVisualSignatures
+                                .Where(signature => !signature.StartsWith("Group0Child4:SmartArt:", StringComparison.Ordinal))
+                                .ToList()
+                        }
+                    }
+                }
+            };
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [wpfRow],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [avaloniaWithoutSmartArtChildSignature],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("drawing-object renderer pair 'drawing-objects-complex' page 1", StringComparison.Ordinal)
+                && f.Contains("grouped child visual signatures differ", StringComparison.Ordinal)
+                && f.Contains("Group0Child4:SmartArt", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RequiresRenderedGroupedChildWordArtEffectEvidence()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "drawing-objects-complex";
+            var wpfRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var wpfWithoutWordArtChildEffect = RemoveRenderedGroupChildWordArtEffect(wpfRow);
+            var avaloniaWithoutWordArtChildEffect = RemoveRenderedGroupChildWordArtEffect(avaloniaRow);
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [wpfWithoutWordArtChildEffect],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [avaloniaWithoutWordArtChildEffect],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("drawing-object evidence expects rendered grouped child WordArt effects but the object plan records none", StringComparison.Ordinal));
         }
         finally
         {
@@ -1973,6 +2479,9 @@ public sealed class VisualEvidencePlannerTests
                 row.Tables.TableCellFillSignatures.Any(signature =>
                     signature.Contains("source=style-derived-header", StringComparison.Ordinal)
                     && signature.Contains("fill=#2F5496", StringComparison.Ordinal)));
+            summary.Evidence.Should().OnlyContain(row =>
+                row.Tables.Tables.Single().Cells.Single(cell => cell.RowIndex == 0 && cell.CellIndex == 0)
+                    .ShadingColorHex == null);
             summary.Trust.Failures.Should().NotContain(f =>
                 f.Contains("table renderer pair 'table-layout-complex' page 1", StringComparison.Ordinal)
                 && f.Contains("table plan signatures differ", StringComparison.Ordinal));
@@ -1984,7 +2493,7 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
-    public void BuildNormalizedSummaryFromFiles_AllowsBuiltInHeaderChromeVarianceInTablePlanEvidence()
+    public void BuildNormalizedSummaryFromFiles_RequiresPlannedStyleDerivedHeaderFillEvidence()
     {
         var root = CreateTempRoot();
         try
@@ -2057,7 +2566,99 @@ public sealed class VisualEvidencePlannerTests
                         1)
                 ]);
 
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("table renderer pair 'table-layout-complex' page 1", StringComparison.Ordinal)
+                && f.Contains("table cell fill signatures differ", StringComparison.Ordinal)
+                && f.Contains("#4472C4", StringComparison.Ordinal));
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("table renderer pair 'table-layout-complex' page 1", StringComparison.Ordinal)
+                && f.Contains("table plan signatures differ", StringComparison.Ordinal)
+                && f.Contains("shading color differs", StringComparison.Ordinal)
+                && f.Contains("#4472C4", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_AllowsStyleDerivedBandedRowVarianceInTablePlanEvidence()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "table-layout-complex";
+            var wpfRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var wpfTablePlan = wpfRow.PageExpectation.Tables.Tables.Single();
+            var wpfCells = wpfTablePlan.Cells.ToList();
+            var styleDerivedBodyCellIndex = wpfCells.FindIndex(cell =>
+                cell.RowIndex == 1
+                && cell.ShadingColorHex is null
+                && cell.GridColumnIndex == 1);
+            styleDerivedBodyCellIndex.Should().BeGreaterThanOrEqualTo(0);
+            wpfCells[styleDerivedBodyCellIndex] =
+                wpfCells[styleDerivedBodyCellIndex] with { ShadingColorHex = "#BDD7EE" };
+            var wpfWithMaterializedBandedRowFill = wpfRow with
+            {
+                PageExpectation = wpfRow.PageExpectation with
+                {
+                    Tables = wpfRow.PageExpectation.Tables with
+                    {
+                        Tables = [wpfTablePlan with { Cells = wpfCells }]
+                    }
+                }
+            };
+            var avaloniaRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [wpfWithMaterializedBandedRowFill],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [avaloniaRow],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
             summary.Trust.Passed.Should().BeTrue();
+            summary.Evidence.Should().OnlyContain(row =>
+                row.Tables.TableCellFillSignatures.Any(signature =>
+                    signature.Contains("source=style-derived-banded-row", StringComparison.Ordinal)
+                    && signature.Contains("fill=#BDD7EE", StringComparison.Ordinal)));
+            summary.Evidence.Should().OnlyContain(row =>
+                row.Tables.Tables.Single().Cells
+                    .Where(cell => cell.RowIndex == 1 && cell.GridColumnIndex == 1)
+                    .All(cell => cell.ShadingColorHex == null));
             summary.Trust.Failures.Should().NotContain(f =>
                 f.Contains("table renderer pair 'table-layout-complex' page 1", StringComparison.Ordinal)
                 && f.Contains("table plan signatures differ", StringComparison.Ordinal));
@@ -2309,6 +2910,142 @@ public sealed class VisualEvidencePlannerTests
                 f.Contains("field renderer pair 'field-page-number-variants' page 2", StringComparison.Ordinal)
                 && f.Contains("complex field keywords differ", StringComparison.Ordinal)
                 && f.Contains("TITLE", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RequiresMatchingHeaderFooterImageEvidence()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "f2-hf-images";
+            var wpfRows = Enumerable.Range(1, 2)
+                .Select(page => BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                    scenarioId,
+                    page,
+                    pageCount: 2))
+                .ToList();
+            var avaloniaRows = Enumerable.Range(1, 2)
+                .Select(page => BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        page,
+                        pageCount: 2))
+                .ToList();
+            avaloniaRows[0] = avaloniaRows[0] with
+            {
+                PageExpectation = avaloniaRows[0].PageExpectation with
+                {
+                    HeaderFooters = avaloniaRows[0].PageExpectation.HeaderFooters with
+                    {
+                        ImageSignatures = ["slot=header|section=1|page=1|image=missing"]
+                    }
+                }
+            };
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                wpfRows,
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                avaloniaRows,
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        2),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        2)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("header/footer renderer pair 'f2-hf-images' page 1", StringComparison.Ordinal)
+                && f.Contains("header/footer image signatures differ", StringComparison.Ordinal)
+                && f.Contains("image=missing", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RejectsHeaderFooterImageScenarioWithoutImages()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "f2-hf-images";
+            var wpfRows = Enumerable.Range(1, 2)
+                .Select(page => RemoveHeaderFooterImages(BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                    scenarioId,
+                    page,
+                    pageCount: 2)))
+                .ToList();
+            var avaloniaRows = Enumerable.Range(1, 2)
+                .Select(page => RemoveHeaderFooterImages(BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                    scenarioId,
+                    page,
+                    pageCount: 2)))
+                .ToList();
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                wpfRows,
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                avaloniaRows,
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        2),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        2)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("scenario expects header/footer image evidence", StringComparison.Ordinal));
         }
         finally
         {
@@ -3383,6 +4120,88 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void BuildNormalizedSummaryFromFiles_ValidatesReviewProtectionCommandMatrix()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            const string scenarioId = "review-protection-proofing-comments-only";
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        pageNumber: 1,
+                        pageCount: 1)
+                ],
+                new DateTimeOffset(2026, 7, 6, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        pageNumber: 1,
+                        pageCount: 1)
+                ],
+                new DateTimeOffset(2026, 7, 6, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeTrue();
+            summary.Evidence.Should().OnlyContain(row => row.ProofingDiagnostics.DiagnosticCount == 4);
+            summary.Evidence.Should().OnlyContain(row => row.ReviewProtection.ProtectionMode == nameof(ProtectionMode.CommentsOnly));
+            summary.Evidence.Should().OnlyContain(row => row.ReviewProtection.RestrictEditing.IsChecked);
+            summary.Evidence.Should().OnlyContain(row => !row.ReviewProtection.MarkAsFinal.IsChecked);
+            summary.Evidence.Should().OnlyContain(row => row.ReviewProtection.IsCommentWorkflowAllowed);
+            summary.Evidence.SelectMany(row => row.ReviewProtection.StableSignatures)
+                .Should().Contain(signature =>
+                    signature.Contains("operation=ProofingReplacement", StringComparison.Ordinal)
+                    && signature.Contains("allowed=0", StringComparison.Ordinal)
+                    && signature.Contains("blockReason=CommentsOnly", StringComparison.Ordinal));
+            summary.Evidence.SelectMany(row => row.ReviewProtection.StableSignatures)
+                .Should().Contain(signature =>
+                    signature.Contains("operation=HistoryUndo", StringComparison.Ordinal)
+                    && signature.Contains("mutation=Comment", StringComparison.Ordinal)
+                    && signature.Contains("allowed=1", StringComparison.Ordinal));
+
+            var json = FreeWVisualEvidenceManifestNormalizer.ToJson(summary);
+            using var doc = JsonDocument.Parse(json);
+            var firstProtection = doc.RootElement.GetProperty("evidence")[0].GetProperty("reviewProtection");
+            firstProtection.GetProperty("protectionMode").GetString().Should().Be(nameof(ProtectionMode.CommentsOnly));
+            firstProtection.GetProperty("restrictEditing").GetProperty("isChecked").GetBoolean().Should().BeTrue();
+            firstProtection.GetProperty("markAsFinal").GetProperty("isChecked").GetBoolean().Should().BeFalse();
+
+            var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(summary);
+            markdown.Should().Contain("protection CommentsOnly");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void BuildNormalizedSummaryFromFiles_RejectsCrossHostReviewProofingDiagnosticDrift()
     {
         var root = CreateTempRoot();
@@ -3453,6 +4272,80 @@ public sealed class VisualEvidencePlannerTests
                 f.Contains("review renderer pair 'review-proofing-visual-depth' page 1", StringComparison.Ordinal)
                 && f.Contains("proofing diagnostic signatures differ", StringComparison.Ordinal)
                 && f.Contains("kind=Grammar", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RejectsCrossHostReviewProtectionCommandDrift()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            const string scenarioId = "review-protection-proofing-comments-only";
+            var wpfRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var driftedAvaloniaRow = avaloniaRow with
+            {
+                PageExpectation = avaloniaRow.PageExpectation with
+                {
+                    ReviewProtection = avaloniaRow.PageExpectation.ReviewProtection with
+                    {
+                        StableSignatures = avaloniaRow.PageExpectation.ReviewProtection.StableSignatures
+                            .Select(signature => signature.Contains("operation=ProofingReplacement", StringComparison.Ordinal)
+                                ? signature.Replace("allowed=0", "allowed=1", StringComparison.Ordinal)
+                                : signature)
+                            .ToList()
+                    }
+                }
+            };
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [wpfRow],
+                new DateTimeOffset(2026, 7, 6, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [driftedAvaloniaRow],
+                new DateTimeOffset(2026, 7, 6, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("review renderer pair 'review-protection-proofing-comments-only' page 1", StringComparison.Ordinal)
+                && f.Contains("protection command signatures differ", StringComparison.Ordinal)
+                && f.Contains("operation=ProofingReplacement", StringComparison.Ordinal));
         }
         finally
         {
@@ -4452,6 +5345,33 @@ public sealed class VisualEvidencePlannerTests
         return FreeWVisualEvidencePlanner.BuildEvidenceRow(capture);
     }
 
+    private static FreeWVisualEvidenceRow RemoveRenderedGroupChildWordArtEffect(FreeWVisualEvidenceRow row) =>
+        row with
+        {
+            PageExpectation = row.PageExpectation with
+            {
+                DrawingObjects = row.PageExpectation.DrawingObjects with
+                {
+                    Effects = row.PageExpectation.DrawingObjects.Effects with
+                    {
+                        RenderedGroupChildEffectObjectCount = 1,
+                        RenderedGroupChildShapeEffectObjectCount = 1,
+                        RenderedGroupChildWordArtEffectObjectCount = 0,
+                        RenderedGroupChildEffectSummaries = ["GroupChild1:Shape:glow"]
+                    }
+                }
+            }
+        };
+
+    private static FreeWVisualEvidenceRow RemoveHeaderFooterImages(FreeWVisualEvidenceRow row) =>
+        row with
+        {
+            PageExpectation = row.PageExpectation with
+            {
+                HeaderFooters = HeaderFooterVisualPlanner.EmptyExpectation
+            }
+        };
+
     private static FreeWVisualEvidenceRow BuildFileBackedRow(
         string root,
         string hostId,
@@ -4543,11 +5463,14 @@ public sealed class VisualEvidencePlannerTests
         {
             "f2-footnotes" => FreeWVisualEvidenceDocumentFactory.BuildFootnotePlacementDocument(),
             "f2-endnotes" => FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument(),
+            "f2-hf-images" => FreeWVisualEvidenceDocumentFactory.BuildMultiSectionHeaderFooterImageDocument(),
             "field-page-number-variants" => FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument(),
             "references-heavy-fields" => FreeWVisualEvidenceDocumentFactory.BuildReferencesHeavyFieldDocument(),
+            "equation-structures" => FreeWVisualEvidenceDocumentFactory.BuildEquationStructuresDocument(),
             "f2-tracked-changes" => FreeWVisualEvidenceDocumentFactory.BuildTrackedChangesReviewDocument(),
             "f2-comments" => FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument(),
             "review-proofing-visual-depth" => FreeWVisualEvidenceDocumentFactory.BuildReviewProofingVisualDepthDocument(),
+            "review-protection-proofing-comments-only" => FreeWVisualEvidenceDocumentFactory.BuildReviewProtectionProofingEvidenceDocument(),
             "table-layout-complex" => FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument(),
             "table-pagination-repeat-header" => FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument(),
             "table-page-composition-stress" => FreeWVisualEvidenceDocumentFactory.BuildTablePageCompositionStressDocument(),

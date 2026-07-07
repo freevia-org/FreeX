@@ -84,6 +84,10 @@ public sealed class FloatingObjectRenderTests
         return result;
     }
 
+    private static byte[] MinimalPng() =>
+        Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=");
+
     [StaFact]
     public void FloatingShape_SurvivesCommitToModel()
     {
@@ -219,6 +223,81 @@ public sealed class FloatingObjectRenderTests
         effect.Color.Should().Be(Color.FromRgb(0x44, 0x72, 0xC4));
         effect.ShadowDepth.Should().Be(0);
         effect.BlurRadius.Should().BeApproximately(63500 / 12700.0 * 96.0 / 72.0, 0.01);
+    }
+
+    [StaFact]
+    public void FloatingOverlay_RendersGroupedMixedChildrenWithoutPlaceholderLabels()
+    {
+        var image = new InlineImage(MinimalPng(), widthPt: 32, heightPt: 24)
+        {
+            AltText = "Grouped image"
+        };
+        var chart = Chart.Create(
+            ChartKind.Column,
+            ["Q1", "Q2"],
+            [4.0, 7.0],
+            seriesName: "Revenue",
+            title: "Grouped sales");
+        chart.WidthPt = 104;
+        chart.HeightPt = 72;
+        chart.StyleId = 2;
+        chart.ColorSchemeId = "colorful2";
+        chart.QuickLayoutId = 5;
+        chart.ShowLegend = true;
+        var smartArt = SmartArt.Create(SmartArtKind.Process, ["Plan", "Build"]);
+        smartArt.WidthPt = 128;
+        smartArt.HeightPt = 46;
+        smartArt.LayoutId = "process1";
+        smartArt.ColorSchemeId = "accent1";
+        smartArt.StyleId = "moderate1";
+
+        var group = new FreeW.Core.Model.DrawingGroup
+        {
+            WidthPt = 190,
+            HeightPt = 116,
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.Square,
+                HorizontalOffsetPt = 36,
+                VerticalOffsetPt = 18,
+                ZOrderIndex = 6
+            }
+        };
+        group.Children.Add(image);
+        group.ChildOffsets.Add((0, 0));
+        group.Children.Add(chart);
+        group.ChildOffsets.Add((44, 0));
+        group.Children.Add(smartArt);
+        group.ChildOffsets.Add((0, 66));
+
+        var doc = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromDrawingGroup(group));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.LoadModel(doc);
+        view.SetFloatingCanvas(canvas);
+
+        var groupRoot = canvas.Children.OfType<Border>().Single(border => ReferenceEquals(border.Tag, group));
+        LogicalDescendants<System.Windows.Controls.Image>(groupRoot)
+            .Should()
+            .ContainSingle(imageElement => ReferenceEquals(imageElement.Tag, image));
+
+        var chartRoot = LogicalDescendants<Border>(groupRoot).Single(border => ReferenceEquals(border.Tag, chart));
+        chartRoot.Child.Should().NotBeOfType<TextBlock>(
+            "grouped charts should render through the typed chart visual instead of the old child placeholder");
+
+        var smartArtRoot = LogicalDescendants<Border>(groupRoot).Single(border => ReferenceEquals(border.Tag, smartArt));
+        smartArtRoot.Child.Should().NotBeOfType<TextBlock>(
+            "grouped SmartArt should render through the typed diagram visual instead of the old child placeholder");
+
+        var texts = LogicalDescendants<TextBlock>(groupRoot)
+            .Select(textBlock => textBlock.Text)
+            .ToList();
+        texts.Should().Contain(["Grouped sales", "Q1", "Plan", "Build"]);
+        texts.Should().NotContain(["Image", "Column Chart", "SmartArt"]);
     }
 
     [StaFact]

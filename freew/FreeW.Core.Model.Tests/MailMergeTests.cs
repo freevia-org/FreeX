@@ -122,6 +122,24 @@ public class MailMergeTests
     }
 
     [Fact]
+    public void MergeRecord_PreservesBlockContentControlRegion()
+    {
+        var control = BlockContentControl.BibliographyRegion();
+        var template = new TextDocument();
+        var paragraph = new Paragraph
+        {
+            BlockContentControl = control,
+        };
+        paragraph.Runs.Add(new Run($"{MailMerge.FieldOpen}Name{MailMerge.FieldClose}"));
+        template.Blocks.Add(paragraph);
+
+        var merged = MailMerge.MergeRecord(template, new Dictionary<string, string> { ["Name"] = "Ada" });
+
+        merged.PlainText.Should().Be("Ada");
+        merged.Blocks[0].BlockContentControl.Should().Be(control);
+    }
+
+    [Fact]
     public void MergeAll_ProducesOneDocumentPerRow_InOrder()
     {
         var template = new TextDocument();
@@ -951,6 +969,27 @@ public class MailMergeTests
         merged[1].PlainText.Should().Contain("Bob");
         merged[2].PlainText.Should().Contain("Carol");
         state.SkippedIndices.Should().BeEquivalentTo([0, 3]);
+    }
+
+    [Fact]
+    public void MergeAllWithRules_PreservesBlockContentControlRegion()
+    {
+        var control = BlockContentControl.BibliographyRegion();
+        var template = new TextDocument();
+        var paragraph = new Paragraph
+        {
+            BlockContentControl = control,
+        };
+        paragraph.Runs.Add(new Run(
+            $"{MailMerge.FieldOpen}{MergeRuleEvaluator.BuildIfInstruction("Tier", MergeConditionOperator.Equal, "VIP", "Priority", "Standard")}{MailMerge.FieldClose}"));
+        template.Blocks.Add(paragraph);
+        var data = new MergeData(["Tier"], [["VIP"]]);
+
+        var merged = MailMerge.MergeAllWithRules(template, data, new MergeState());
+
+        merged.Should().ContainSingle();
+        merged[0].PlainText.Should().Be("Priority");
+        merged[0].Blocks[0].BlockContentControl.Should().Be(control);
     }
 
     [Fact]

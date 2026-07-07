@@ -269,7 +269,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.DataLabelBorderColor,
                 chart.DataLabelBorderThickness),
             ToDataLabelTextProperties(chart, chartNs, drawingNs),
-            new XElement(chartNs + "dLblPos", new XAttribute("val", ToXlsxDataLabelPosition(chart.DataLabelPosition))),
+            GatedDataLabelPositionXml(chart, chartNs),
             new XElement(chartNs + "showLegendKey", new XAttribute("val", chart.ShowDataLabelLegendKey ? "1" : "0")),
             new XElement(chartNs + "showVal", new XAttribute("val", chart.ShowDataLabelValue ? "1" : "0")),
             new XElement(chartNs + "showCatName", new XAttribute("val", chart.ShowDataLabelCategoryName ? "1" : "0")),
@@ -331,6 +331,60 @@ internal static partial class XlsxChartXmlWriter
             ChartDataLabelPosition.OutsideEnd => "outEnd",
             _ => "bestFit"
         };
+
+    /// <summary>
+    /// Builds the chart-level &lt;c:dLblPos&gt; element for <paramref name="chart"/>'s data labels,
+    /// gated to the c:dLblPos values ISO/IEC 29500 §21.2.2.44 (and Excel itself) actually accepts for
+    /// the chart's plot-group family — otherwise Excel rejects the whole chart part with a repair
+    /// prompt. Per family:
+    ///   - Pie/3-D pie: ctr, inEnd, outEnd, bestFit are all valid (bestFit only here).
+    ///   - Doughnut: ctr, inEnd, outEnd are valid; bestFit is NOT (doughnut has no "best fit" model).
+    ///   - Stacked/percent-stacked bar or column: only ctr is valid.
+    ///   - Area (incl. 3-D area), radar, surface, stock: c:dLblPos has no valid value at all — the
+    ///     element must be omitted entirely.
+    ///   - Clustered/3-D bar or column: ctr, inEnd, outEnd, inBase are valid; FreeX's model never
+    ///     produces inBase, but bestFit is invalid here too, so it is remapped down to ctr.
+    ///   - Line, 3-D line, scatter, bubble: only ctr, l, r, t, b are valid; FreeX's model never
+    ///     produces l/r/t/b, so every position (including outEnd/inEnd/bestFit) is gated to ctr.
+    /// </summary>
+    private static XElement? GatedDataLabelPositionXml(ChartModel chart, XNamespace chartNs)
+    {
+        var position = ToXlsxDataLabelPosition(chart.DataLabelPosition);
+        var gated = GateDataLabelPosition(position, chart.Type);
+        return gated is null ? null : new XElement(chartNs + "dLblPos", new XAttribute("val", gated));
+    }
+
+    private static string? GateDataLabelPosition(string position, ChartType chartType)
+    {
+        var isStacked = chartType is ChartType.StackedColumn or ChartType.PercentStackedColumn
+            or ChartType.StackedBar or ChartType.PercentStackedBar;
+        if (isStacked)
+            return "ctr"; // Only ctr is valid for stacked/percent-stacked bar or column.
+
+        var isPie = chartType is ChartType.Pie or ChartType.ThreeDPie;
+        if (isPie)
+            return position; // ctr, inEnd, outEnd, bestFit are all valid for 2-D/3-D pie.
+
+        if (chartType == ChartType.Doughnut)
+            return position == "bestFit" ? "ctr" : position;
+
+        var hasNoValidPosition = chartType is ChartType.Area or ChartType.ThreeDArea
+            or ChartType.Radar or ChartType.Surface or ChartType.ThreeDSurface or ChartType.Stock;
+        if (hasNoValidPosition)
+            return null;
+
+        // Line/3-D line, scatter, bubble only accept ctr, l, r, t, b — FreeX's model never produces
+        // l/r/t/b, and inEnd/outEnd/bestFit are all invalid here (Excel rejects the chart part with a
+        // repair prompt), so gate every position down to ctr for this family.
+        var isLineScatterOrBubble = chartType is ChartType.Line or ChartType.ThreeDLine
+            or ChartType.Scatter or ChartType.Bubble;
+        if (isLineScatterOrBubble)
+            return "ctr";
+
+        // Clustered/3-D bar/column and everything else FreeX can author: bestFit is not a valid value
+        // outside pie, so fall back to ctr.
+        return position == "bestFit" ? "ctr" : position;
+    }
 
     private static string ToXlsxDataLabelSeparator(ChartDataLabelSeparator separator) =>
         separator switch

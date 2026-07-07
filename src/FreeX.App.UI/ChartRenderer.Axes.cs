@@ -52,10 +52,12 @@ public static partial class ChartRenderer
                     if (chart.XAxisMinorUnit is { } minorUnit)
                         axis.MinorStep = minorUnit;
                 }
+                var xDisplayUnitDivisor = GetAxisDisplayUnitDivisor(chart.XAxisDisplayUnit, chart.XAxisCustomDisplayUnit);
                 if (ChartTypeSupport.SupportsXAxisBounds(chart.Type) &&
                     chart.XAxisNumberFormat != ChartDataLabelNumberFormat.General &&
                     axis.LabelFormatter is null)
                     axis.LabelFormatter = value => ChartDataLabelTextPlanner.FormatAxisValue(chart.XAxisNumberFormat, value);
+                ApplyAxisDisplayUnit(axis, xDisplayUnitDivisor, chart.XAxisDisplayUnit, chart.XAxisCustomDisplayUnit);
                 ApplyGridlineStyle(
                     axis,
                     chart.ShowXAxisMajorGridlines,
@@ -82,10 +84,12 @@ public static partial class ChartRenderer
                     if (chart.YAxisMinorUnit is { } minorUnit)
                         axis.MinorStep = minorUnit;
                 }
+                var yDisplayUnitDivisor = GetAxisDisplayUnitDivisor(chart.YAxisDisplayUnit, chart.YAxisCustomDisplayUnit);
                 if (ChartTypeSupport.SupportsYAxisBounds(chart.Type) &&
                     chart.YAxisNumberFormat != ChartDataLabelNumberFormat.General &&
                     axis.LabelFormatter is null)
                     axis.LabelFormatter = value => ChartDataLabelTextPlanner.FormatAxisValue(chart.YAxisNumberFormat, value);
+                ApplyAxisDisplayUnit(axis, yDisplayUnitDivisor, chart.YAxisDisplayUnit, chart.YAxisCustomDisplayUnit);
                 ApplyGridlineStyle(
                     axis,
                     chart.ShowYAxisMajorGridlines,
@@ -265,4 +269,81 @@ public static partial class ChartRenderer
 
     private static double GetPositiveAxisValue(double value) =>
         double.IsNaN(value) || value <= 0 ? double.NaN : value;
+
+    /// <summary>
+    /// Resolves Excel's Format Axis &gt; Display Units (<c>&lt;c:dispUnits&gt;</c>, round-tripped via
+    /// <see cref="ChartModel.XAxisDisplayUnit"/>/<see cref="ChartModel.YAxisDisplayUnit"/> and their
+    /// custom-unit overrides) to the numeric divisor Excel scales tick labels by. A custom unit
+    /// (<c>&lt;c:custUnit&gt;</c>) always wins when present and positive-finite, matching the writer's
+    /// own precedence (XlsxChartXmlWriter.Axes.cs ToAxisDisplayUnitXml). Returns null when no display
+    /// unit is set, so callers can distinguish "no scaling" from "scale by 1".
+    /// </summary>
+    private static double? GetAxisDisplayUnitDivisor(ChartAxisDisplayUnit? unit, double? customUnit)
+    {
+        if (customUnit is { } custom && double.IsFinite(custom) && custom > 0)
+            return custom;
+
+        return unit switch
+        {
+            ChartAxisDisplayUnit.Hundreds => 1e2,
+            ChartAxisDisplayUnit.Thousands => 1e3,
+            ChartAxisDisplayUnit.TenThousands => 1e4,
+            ChartAxisDisplayUnit.HundredThousands => 1e5,
+            ChartAxisDisplayUnit.Millions => 1e6,
+            ChartAxisDisplayUnit.TenMillions => 1e7,
+            ChartAxisDisplayUnit.HundredMillions => 1e8,
+            ChartAxisDisplayUnit.Billions => 1e9,
+            ChartAxisDisplayUnit.Trillions => 1e12,
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Applies Excel's axis Display Unit to <paramref name="axis"/>: tick labels are divided by
+    /// <paramref name="divisor"/> (so an axis maximum of 3,000,000 with unit=Millions reads "3"), and
+    /// the axis title gains a "(Millions)"-style suffix so the scale is still communicated even though
+    /// the raw values are no longer shown (Excel draws this as a separate rotated display-units label;
+    /// appending it to the axis title is the closest single-line equivalent this renderer already has
+    /// a slot for). No-ops when no display unit is set, so unaffected charts render unchanged.
+    /// </summary>
+    private static void ApplyAxisDisplayUnit(Axis axis, double? divisor, ChartAxisDisplayUnit? unit, double? customUnit)
+    {
+        if (divisor is not { } scale || scale <= 0 || !double.IsFinite(scale))
+            return;
+
+        var innerFormatter = axis.LabelFormatter;
+        axis.LabelFormatter = value =>
+        {
+            var scaled = value / scale;
+            return innerFormatter is not null
+                ? innerFormatter(scaled)
+                : scaled.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+        };
+
+        var unitLabel = GetAxisDisplayUnitLabel(unit, customUnit);
+        if (string.IsNullOrEmpty(unitLabel))
+            return;
+
+        axis.Title = string.IsNullOrEmpty(axis.Title) ? unitLabel : $"{axis.Title} ({unitLabel})";
+    }
+
+    private static string GetAxisDisplayUnitLabel(ChartAxisDisplayUnit? unit, double? customUnit)
+    {
+        if (customUnit is { } custom && double.IsFinite(custom) && custom > 0)
+            return custom.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+
+        return unit switch
+        {
+            ChartAxisDisplayUnit.Hundreds => "Hundreds",
+            ChartAxisDisplayUnit.Thousands => "Thousands",
+            ChartAxisDisplayUnit.TenThousands => "Ten Thousands",
+            ChartAxisDisplayUnit.HundredThousands => "Hundred Thousands",
+            ChartAxisDisplayUnit.Millions => "Millions",
+            ChartAxisDisplayUnit.TenMillions => "Ten Millions",
+            ChartAxisDisplayUnit.HundredMillions => "Hundred Millions",
+            ChartAxisDisplayUnit.Billions => "Billions",
+            ChartAxisDisplayUnit.Trillions => "Trillions",
+            _ => ""
+        };
+    }
 }

@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
 using Free.Shared.AppServices;
 using Free.Shared.IO;
 using Free.Shared.Shell.Wpf;
@@ -42,6 +44,7 @@ internal sealed class FileCommands
     private readonly FreeWOptions _options;
 
     private readonly DocumentPersistenceWorkflow _persistence;
+    private readonly Func<DocumentSaveCompatibilityPlan, bool> _confirmSaveCompatibility;
 
     public FileCommands(
         Window window,
@@ -50,12 +53,15 @@ internal sealed class FileCommands
         FreeWOptions? options = null,
         IReadOnlyList<IDocumentFileAdapter>? adapters = null,
         Func<RecentFilesStore>? loadRecentFilesStore = null,
-        IUserMessageService? messageService = null)
+        IUserMessageService? messageService = null,
+        Func<DocumentSaveCompatibilityPlan, bool>? confirmSaveCompatibility = null)
     {
         _window = window;
         _editor = editor;
         _options = options ?? new FreeWOptions();
         _persistence = new DocumentPersistenceWorkflow(adapters);
+        _confirmSaveCompatibility = confirmSaveCompatibility ??
+            (plan => SaveCompatibilityWarningDialog.Show(_window, plan));
         _workflow = new SisterWpfFileCommandWorkflow(
             "FreeW",
             () => _options.RecentFilesCap,
@@ -232,6 +238,9 @@ internal sealed class FileCommands
         try
         {
             _editor.CommitToModel();
+            if (!ConfirmSaveCompatibility(target))
+                return false;
+
             _persistence.Save(_editor.Model, target);
             return true;
         }
@@ -265,6 +274,9 @@ internal sealed class FileCommands
         try
         {
             _editor.CommitToModel();
+            if (!ConfirmSaveCompatibility(target))
+                return false;
+
             _persistence.Save(_editor.Model, target);
             SetSaved(target.Path, suppressRecentFiles: false);
             return true;
@@ -310,6 +322,12 @@ internal sealed class FileCommands
         return true;
     }
 
+    private bool ConfirmSaveCompatibility(DocumentSaveTarget target)
+    {
+        var plan = _persistence.BuildSaveCompatibilityPlan(_editor.Model, target);
+        return !plan.RequiresConfirmation || _confirmSaveCompatibility(plan);
+    }
+
     private string? PromptOpenPath(string? initialDirectory = null)
     {
         var plan = _persistence.BuildOpenDialogPlan();
@@ -349,4 +367,74 @@ internal sealed class FileCommands
 
     private void ShowError(string summary, Exception ex) =>
         _workflow.ShowError(summary, ex);
+
+    private sealed class SaveCompatibilityWarningDialog : Window
+    {
+        private SaveCompatibilityWarningDialog(DocumentSaveCompatibilityPlan plan)
+        {
+            ArgumentNullException.ThrowIfNull(plan);
+
+            Title = plan.Title;
+            Width = 520;
+            SizeToContent = SizeToContent.Height;
+            ResizeMode = ResizeMode.NoResize;
+            WindowStartupLocation = WindowStartupLocation.CenterOwner;
+
+            var message = new TextBlock
+            {
+                Text = plan.Message,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(16),
+            };
+
+            var continueButton = new Button
+            {
+                Content = plan.ContinueButtonText,
+                MinWidth = 90,
+                IsDefault = true,
+            };
+            continueButton.Click += (_, _) => DialogResult = true;
+
+            var cancelButton = new Button
+            {
+                Content = plan.CancelButtonText,
+                MinWidth = 90,
+                Margin = new Thickness(8, 0, 0, 0),
+                IsCancel = true,
+            };
+            cancelButton.Click += (_, _) => DialogResult = false;
+
+            var buttons = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(16, 0, 16, 16),
+            };
+            buttons.Children.Add(continueButton);
+            buttons.Children.Add(cancelButton);
+
+            Content = new StackPanel
+            {
+                Children =
+                {
+                    message,
+                    new Border
+                    {
+                        BorderBrush = Brushes.Gainsboro,
+                        BorderThickness = new Thickness(0, 1, 0, 0),
+                        Child = buttons,
+                    },
+                },
+            };
+        }
+
+        public static bool Show(Window owner, DocumentSaveCompatibilityPlan plan)
+        {
+            var dialog = new SaveCompatibilityWarningDialog(plan)
+            {
+                Owner = owner,
+            };
+            return dialog.ShowDialog() == true;
+        }
+    }
 }

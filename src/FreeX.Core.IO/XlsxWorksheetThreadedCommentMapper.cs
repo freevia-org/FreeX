@@ -25,9 +25,14 @@ internal static class XlsxWorksheetThreadedCommentMapper
 
     public static IReadOnlySet<string> GetSourcePackagePartExclusions(ZipArchive archive, Workbook workbook)
     {
-        if (!workbook.Sheets.Any(HasThreadedComments))
-            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
+        // Always exclude the source package's referenced threaded-comment/person parts, even when
+        // the in-memory model no longer has ANY threaded comments (e.g. the user deleted every
+        // comment before saving). Save/NormalizePackageGraph below both early-return in that case
+        // (nothing left to (re)write), so if these source parts were not excluded here,
+        // XlsxPackageMetadataMerger.CopyUnknownPackageParts/MergeRelationshipParts would copy the
+        // deleted comments' XML and worksheet/workbook relationships straight back from the source
+        // package, silently resurrecting a deletion the user just made. When the model still has
+        // comments, excluding the stale source parts is harmless: Save writes fresh replacements.
         var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var path in GetReferencedThreadedCommentAndPersonPartPaths(archive))
         {
@@ -73,7 +78,7 @@ internal static class XlsxWorksheetThreadedCommentMapper
         if (authorsByName.Count == 0)
             return;
 
-        WritePersonsPart(archive, authorsByName);
+        WritePersonsPart(archive, authorsByName, GetNonAuthoringMentionedPersons(workbook, authorsByName));
         EnsureWorkbookPersonRelationship(archive);
 
         // Allocate next-free threaded comment part indices, checking existing archive entries to
@@ -153,21 +158,82 @@ internal static class XlsxWorksheetThreadedCommentMapper
 
     private static IReadOnlyDictionary<string, string> CreateAuthorIds(Workbook workbook)
     {
+        // Prefer a preserved source personId (kept only when the comment/reply also carries
+        // @mention metadata that references it, see ThreadedComment.SourcePersonId) over a
+        // freshly minted per-author guid, so a preserved mentionpersonId reference still resolves
+        // to a person id present in the rewritten xl/persons/person.xml. When an author has more
+        // than one candidate source id, the first one encountered (in the same deterministic
+        // ordering used below) wins.
+        var sourcePersonIdsByAuthor = workbook.Sheets
+            .SelectMany(sheet => sheet.ThreadedComments.Values.SelectMany(GetThreadAuthorsWithSourcePersonId))
+            .Where(pair => pair.Author.Length > 0 && pair.SourcePersonId is not null)
+            .GroupBy(pair => pair.Author, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First().SourcePersonId!, StringComparer.Ordinal);
+
         var authors = workbook.Sheets
-            .SelectMany(sheet => sheet.ThreadedComments.Values.SelectMany(GetThreadAuthors))
+            .SelectMany(sheet => sheet.ThreadedComments.Values.SelectMany(GetThreadAuthorsWithSourcePersonId))
+            .Select(pair => pair.Author)
             .Where(author => author.Length > 0)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
-            .ToDictionary(author => author, author => CreateStableGuid("person", author), StringComparer.Ordinal);
+            .ToDictionary(
+                author => author,
+                author => sourcePersonIdsByAuthor.TryGetValue(author, out var sourcePersonId)
+                    ? sourcePersonId
+                    : CreateStableGuid("person", author),
+                StringComparer.Ordinal);
 
         return authors;
     }
 
-    private static IEnumerable<string> GetThreadAuthors(ThreadedComment comment)
+    private static IEnumerable<(string Author, string? SourcePersonId)> GetThreadAuthorsWithSourcePersonId(
+        ThreadedComment comment)
     {
-        yield return NormalizeAuthor(comment.Author);
+        yield return (NormalizeAuthor(comment.Author), comment.SourcePersonId);
         foreach (var reply in comment.Replies)
-            yield return NormalizeAuthor(reply.Author);
+            yield return (NormalizeAuthor(reply.Author), reply.SourcePersonId);
+    }
+
+    /// <summary>
+    /// Collects a display name, by source person id, for every @-mentioned person captured on load
+    /// (<see cref="ThreadedComment.MentionedPersonDisplayNames"/> / <see cref="CommentReply.MentionedPersonDisplayNames"/>)
+    /// whose id is not already one of the ids <paramref name="authorsByName"/> assigned to a
+    /// comment/reply author. Without these, a mentioned person who never posts a comment/reply
+    /// would get no &lt;person&gt; record on save, leaving their preserved mentionpersonId dangling
+    /// (see R12-comments-notes-3).
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> GetNonAuthoringMentionedPersons(
+        Workbook workbook,
+        IReadOnlyDictionary<string, string> authorsByName)
+    {
+        var authorPersonIds = authorsByName.Values.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var mentioned = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var sheet in workbook.Sheets)
+        {
+            foreach (var comment in sheet.ThreadedComments.Values)
+            {
+                AddNonAuthoringMentionedPersons(comment.MentionedPersonDisplayNames, authorPersonIds, mentioned);
+                foreach (var reply in comment.Replies)
+                    AddNonAuthoringMentionedPersons(reply.MentionedPersonDisplayNames, authorPersonIds, mentioned);
+            }
+        }
+
+        return mentioned;
+    }
+
+    private static void AddNonAuthoringMentionedPersons(
+        IReadOnlyDictionary<string, string>? mentionedPersonDisplayNames,
+        IReadOnlySet<string> authorPersonIds,
+        Dictionary<string, string> mentioned)
+    {
+        if (mentionedPersonDisplayNames is null)
+            return;
+
+        foreach (var (personId, displayName) in mentionedPersonDisplayNames)
+        {
+            if (!authorPersonIds.Contains(personId))
+                mentioned.TryAdd(personId, displayName);
+        }
     }
 
     private static IReadOnlyList<string> ReadThreadedCommentPartPaths(ZipArchive archive, string worksheetPath)
@@ -284,6 +350,7 @@ internal static class XlsxWorksheetThreadedCommentMapper
                 var author = authorsByPersonId.TryGetValue(personId, out var displayName)
                     ? displayName
                     : "FreeX";
+                var mentionsXml = ReadMentionsXml(comment);
                 parsedComments.Add(new ParsedThreadedComment(
                     hasAddress ? address.Row : null,
                     hasAddress ? address.Col : null,
@@ -293,7 +360,15 @@ internal static class XlsxWorksheetThreadedCommentMapper
                     author,
                     ParseDateTimeOffset(comment.Attribute("dT")?.Value),
                     XlsxWorksheetXmlValueParser.IsTruthy(comment.Attribute("done")?.Value),
-                    comment.Element(ThreadedCommentNs + "extLst")?.ToString(SaveOptions.DisableFormatting)));
+                    mentionsXml,
+                    // Only preserve the source personId when there is @mention metadata to keep
+                    // resolvable; comments without mentions let the writer mint/reuse the normal
+                    // deterministic per-author guid instead.
+                    mentionsXml is not null ? NormalizeId(comment.Attribute("personId")?.Value) : null,
+                    // Capture a display name for every @-mentioned person so a mention referencing
+                    // someone who never authors a comment/reply still gets a <person> record
+                    // written back on save (see ReadMentionedPersonDisplayNames).
+                    ReadMentionedPersonDisplayNames(comment, authorsByPersonId)));
             }
 
             var repliesByParentId = parsedComments
@@ -317,7 +392,9 @@ internal static class XlsxWorksheetThreadedCommentMapper
                     ModifiedAtUtc = GetThreadModifiedAt(root.TimestampUtc, replies),
                     IsResolved = root.IsResolved,
                     Id = root.Id,
-                    MentionsXml = root.MentionsXml
+                    MentionsXml = root.MentionsXml,
+                    SourcePersonId = root.SourcePersonId,
+                    MentionedPersonDisplayNames = root.MentionedPersonDisplayNames
                 };
                 if (replies.Count > 0)
                     threadedComment = threadedComment with { Replies = replies };
@@ -331,16 +408,69 @@ internal static class XlsxWorksheetThreadedCommentMapper
         }
     }
 
-    private static void WritePersonsPart(ZipArchive archive, IReadOnlyDictionary<string, string> authorsByName)
+    /// <summary>
+    /// Captures the CT_ThreadedComment @mention metadata that follows &lt;text&gt;: the real
+    /// &lt;mentions&gt; child element (per the 2018 threadedcomments schema) followed by any
+    /// &lt;extLst&gt; child, in schema order. Both are optional and FreeX does not model @mention
+    /// linkage, so the raw fragment(s) are concatenated verbatim for round-tripping on save.
+    /// </summary>
+    private static string? ReadMentionsXml(XElement comment)
+    {
+        var mentions = comment.Element(ThreadedCommentNs + "mentions")?.ToString(SaveOptions.DisableFormatting);
+        var extLst = comment.Element(ThreadedCommentNs + "extLst")?.ToString(SaveOptions.DisableFormatting);
+        return (mentions, extLst) switch
+        {
+            (null, null) => null,
+            (not null, null) => mentions,
+            (null, not null) => extLst,
+            (not null, not null) => mentions + extLst
+        };
+    }
+
+    /// <summary>
+    /// Resolves a display name (via the source persons part already loaded into
+    /// <paramref name="authorsByPersonId"/>) for every distinct <c>mentionpersonId</c> referenced
+    /// under this comment's real &lt;mentions&gt; child and/or &lt;extLst&gt;-nested
+    /// <c>mtc:mentions</c> block, regardless of which shape carries it. A mentioned person who
+    /// never authors any comment/reply would otherwise have no <c>&lt;person&gt;</c> record
+    /// written back on save (person.xml is rewritten solely from comment/reply authors), leaving
+    /// the mention dangling after the round trip.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string>? ReadMentionedPersonDisplayNames(
+        XElement comment,
+        IReadOnlyDictionary<string, string> authorsByPersonId)
+    {
+        Dictionary<string, string>? result = null;
+        foreach (var mentionElement in comment.Descendants().Where(element => element.Name.LocalName == "mention"))
+        {
+            var mentionPersonId = NormalizeId(mentionElement.Attribute("mentionpersonId")?.Value);
+            if (mentionPersonId is null || !authorsByPersonId.TryGetValue(mentionPersonId, out var displayName))
+                continue;
+
+            result ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            result[mentionPersonId] = displayName;
+        }
+
+        return result;
+    }
+
+    private static void WritePersonsPart(
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> authorsByName,
+        IReadOnlyDictionary<string, string> nonAuthoringMentionedPersonsById)
     {
         var personsXml = new XDocument(
             new XElement(
                 ThreadedCommentNs + "personList",
-                authorsByName.Select(pair =>
-                    new XElement(
+                authorsByName
+                    .Select(pair => new XElement(
                         ThreadedCommentNs + "person",
                         new XAttribute("displayName", pair.Key),
-                        new XAttribute("id", pair.Value)))));
+                        new XAttribute("id", pair.Value)))
+                    .Concat(nonAuthoringMentionedPersonsById.Select(pair => new XElement(
+                        ThreadedCommentNs + "person",
+                        new XAttribute("displayName", pair.Value),
+                        new XAttribute("id", pair.Key))))));
 
         XlsxPackageXmlEditor.ReplaceXml(archive, PersonsPath, personsXml);
         XlsxPackageXmlEditor.EnsureSpecificContentType(archive, PersonsPath, PersonContentType);
@@ -467,11 +597,17 @@ internal static class XlsxWorksheetThreadedCommentMapper
 
         try
         {
-            element.Add(XElement.Parse(mentionsXml, LoadOptions.PreserveWhitespace));
+            // The preserved payload can be up to two sibling elements (<mentions> followed by
+            // <extLst>, per CT_ThreadedComment child order), and XElement.Parse requires a single
+            // root, so wrap the fragment in a throwaway root and re-emit each child in the order
+            // it was captured.
+            var wrapped = XElement.Parse($"<w>{mentionsXml}</w>", LoadOptions.PreserveWhitespace);
+            foreach (var child in wrapped.Elements())
+                element.Add(new XElement(child));
         }
         catch (XmlException)
         {
-            // Keep saves resilient if the preserved extLst fragment is somehow malformed.
+            // Keep saves resilient if the preserved mentions/extLst fragment is somehow malformed.
         }
     }
 
@@ -610,7 +746,9 @@ internal static class XlsxWorksheetThreadedCommentMapper
             CreatedAtUtc = comment.TimestampUtc,
             ModifiedAtUtc = comment.TimestampUtc,
             Id = comment.Id,
-            MentionsXml = comment.MentionsXml
+            MentionsXml = comment.MentionsXml,
+            SourcePersonId = comment.SourcePersonId,
+            MentionedPersonDisplayNames = comment.MentionedPersonDisplayNames
         };
 
     private static DateTimeOffset? GetThreadModifiedAt(
@@ -643,5 +781,7 @@ internal static class XlsxWorksheetThreadedCommentMapper
         string Author,
         DateTimeOffset? TimestampUtc,
         bool IsResolved,
-        string? MentionsXml);
+        string? MentionsXml,
+        string? SourcePersonId,
+        IReadOnlyDictionary<string, string>? MentionedPersonDisplayNames);
 }
