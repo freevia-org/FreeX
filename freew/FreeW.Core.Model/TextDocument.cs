@@ -1304,6 +1304,21 @@ public enum SourceType
 
     /// <summary>A Word miscellaneous source for lightly structured material.</summary>
     Misc = 10,
+
+    /// <summary>A Word film source (adds director, producer, writer, performer and production fields).</summary>
+    Film = 11,
+
+    /// <summary>A Word sound recording source (adds artist/composer/performer and album fields).</summary>
+    SoundRecording = 12,
+
+    /// <summary>A Word art source (adds artist, medium and holding/location fields).</summary>
+    Art = 13,
+
+    /// <summary>A Word internet site source (adds site/publisher, URL and accessed-date fields).</summary>
+    InternetSite = 14,
+
+    /// <summary>A Word performance source (adds performer/conductor, theater and date fields).</summary>
+    Performance = 15,
 }
 
 /// <summary>
@@ -1403,6 +1418,27 @@ public sealed class Source
     /// <summary>The interviewer role for a <see cref="SourceType.Interview"/>; null when unknown.</summary>
     public string? Interviewer { get; init; }
 
+    /// <summary>The artist role for <see cref="SourceType.Art"/> or <see cref="SourceType.SoundRecording"/>; null when unknown.</summary>
+    public string? Artist { get; init; }
+
+    /// <summary>The composer role for <see cref="SourceType.SoundRecording"/>; null when unknown.</summary>
+    public string? Composer { get; init; }
+
+    /// <summary>The conductor role for <see cref="SourceType.SoundRecording"/> or <see cref="SourceType.Performance"/>; null when unknown.</summary>
+    public string? Conductor { get; init; }
+
+    /// <summary>The director role for <see cref="SourceType.Film"/>; null when unknown.</summary>
+    public string? Director { get; init; }
+
+    /// <summary>The performer role for <see cref="SourceType.Film"/>, <see cref="SourceType.SoundRecording"/>, or <see cref="SourceType.Performance"/>; null when unknown.</summary>
+    public string? Performer { get; init; }
+
+    /// <summary>The producer role for <see cref="SourceType.Film"/> or <see cref="SourceType.SoundRecording"/>; null when unknown.</summary>
+    public string? ProducerName { get; init; }
+
+    /// <summary>The writer role for <see cref="SourceType.Film"/>; null when unknown.</summary>
+    public string? Writer { get; init; }
+
     /// <summary>The year of publication. Empty when unknown.</summary>
     public string Year { get; init; } = string.Empty;
 
@@ -1444,6 +1480,18 @@ public sealed class Source
 
     /// <summary>A source-specific type/kind string for miscellaneous Word sources; null when unknown.</summary>
     public string? SourceKind { get; init; }
+
+    /// <summary>The album title for a <see cref="SourceType.SoundRecording"/>; null when unknown.</summary>
+    public string? AlbumTitle { get; init; }
+
+    /// <summary>The production company for a <see cref="SourceType.Film"/>; null when unknown.</summary>
+    public string? ProductionCompany { get; init; }
+
+    /// <summary>The recording number for a <see cref="SourceType.SoundRecording"/>; null when unknown.</summary>
+    public string? RecordingNumber { get; init; }
+
+    /// <summary>The theater or venue for a <see cref="SourceType.Performance"/>; null when unknown.</summary>
+    public string? Theater { get; init; }
 
     /// <summary>A shortened citation title; null when unknown.</summary>
     public string? ShortTitle { get; init; }

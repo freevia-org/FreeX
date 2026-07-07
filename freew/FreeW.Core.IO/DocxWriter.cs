@@ -5452,6 +5452,11 @@ public static class DocxWriter
         SourceType.Patent => "Patent",
         SourceType.Interview => "Interview",
         SourceType.Misc => "Misc",
+        SourceType.Film => "Film",
+        SourceType.SoundRecording => "SoundRecording",
+        SourceType.Art => "Art",
+        SourceType.InternetSite => "InternetSite",
+        SourceType.Performance => "Performance",
         _ => "Book",
     };
 
@@ -5496,6 +5501,10 @@ public static class DocxWriter
             AddBibliographyField(element, "StateProvince", source.StateProvince);
             AddBibliographyField(element, "Medium", source.Medium);
             AddBibliographyField(element, "Type", source.SourceKind);
+            AddBibliographyField(element, "AlbumTitle", source.AlbumTitle);
+            AddBibliographyField(element, "ProductionCompany", source.ProductionCompany);
+            AddBibliographyField(element, "RecordingNumber", source.RecordingNumber);
+            AddBibliographyField(element, "Theater", source.Theater);
             AddBibliographyField(element, "ShortTitle", source.ShortTitle);
             AddBibliographyField(element, "Comments", source.Comments);
             AddBibliographyField(element, "JournalName", source.Journal);
@@ -5545,6 +5554,13 @@ public static class DocxWriter
         AddRole(roles, "Inventor", [], source.Inventor);
         AddRole(roles, "Interviewee", [], source.Interviewee);
         AddRole(roles, "Interviewer", [], source.Interviewer);
+        AddRole(roles, "Artist", [], source.Artist);
+        AddRole(roles, "Composer", [], source.Composer);
+        AddRole(roles, "Conductor", [], source.Conductor);
+        AddRole(roles, "Director", [], source.Director);
+        AddRole(roles, "Performer", [], source.Performer);
+        AddRole(roles, "ProducerName", [], source.ProducerName);
+        AddRole(roles, "Writer", [], source.Writer);
 
         return roles.Count == 0 ? null : new XElement(B + "Author", roles);
 

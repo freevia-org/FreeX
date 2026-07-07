@@ -14,6 +14,13 @@ public enum SourceManagementSourceField
     Inventor,
     Interviewee,
     Interviewer,
+    Artist,
+    Composer,
+    Conductor,
+    Director,
+    Performer,
+    ProducerName,
+    Writer,
     Year,
     Month,
     Day,
@@ -30,6 +37,10 @@ public enum SourceManagementSourceField
     StateProvince,
     Medium,
     SourceKind,
+    AlbumTitle,
+    ProductionCompany,
+    RecordingNumber,
+    Theater,
     Journal,
     Volume,
     Issue,
@@ -83,6 +94,20 @@ public sealed record SourceManagementSourceEntry(
 
     public string Interviewer { get; init; } = string.Empty;
 
+    public string Artist { get; init; } = string.Empty;
+
+    public string Composer { get; init; } = string.Empty;
+
+    public string Conductor { get; init; } = string.Empty;
+
+    public string Director { get; init; } = string.Empty;
+
+    public string Performer { get; init; } = string.Empty;
+
+    public string ProducerName { get; init; } = string.Empty;
+
+    public string Writer { get; init; } = string.Empty;
+
     public string Month { get; init; } = string.Empty;
 
     public string Day { get; init; } = string.Empty;
@@ -98,6 +123,14 @@ public sealed record SourceManagementSourceEntry(
     public string Medium { get; init; } = string.Empty;
 
     public string SourceKind { get; init; } = string.Empty;
+
+    public string AlbumTitle { get; init; } = string.Empty;
+
+    public string ProductionCompany { get; init; } = string.Empty;
+
+    public string RecordingNumber { get; init; } = string.Empty;
+
+    public string Theater { get; init; } = string.Empty;
 
     public IReadOnlyList<SourceAuthorPerson> PersonalAuthors { get; init; } = [];
 
@@ -282,7 +315,12 @@ public static class SourceManagementDialogPlanner
         new(SourceType.ElectronicSource, "Electronic Source"),
         new(SourceType.Patent, "Patent"),
         new(SourceType.Interview, "Interview"),
-        new(SourceType.Misc, "Miscellaneous")
+        new(SourceType.Misc, "Miscellaneous"),
+        new(SourceType.Film, "Film"),
+        new(SourceType.SoundRecording, "Sound Recording"),
+        new(SourceType.Art, "Art"),
+        new(SourceType.InternetSite, "Internet Site"),
+        new(SourceType.Performance, "Performance")
     ];
 
     private static readonly IReadOnlyDictionary<SourceType, IReadOnlyList<SourceManagementSourceField>> SourceFieldOrders =
@@ -443,6 +481,77 @@ public static class SourceManagementDialogPlanner
                 SourceManagementSourceField.SourceKind,
                 SourceManagementSourceField.ShortTitle,
                 SourceManagementSourceField.Comments
+            ],
+            [SourceType.Film] =
+            [
+                SourceManagementSourceField.Tag,
+                SourceManagementSourceField.Director,
+                SourceManagementSourceField.ProducerName,
+                SourceManagementSourceField.Writer,
+                SourceManagementSourceField.Performer,
+                SourceManagementSourceField.Title,
+                SourceManagementSourceField.Year,
+                SourceManagementSourceField.Medium,
+                SourceManagementSourceField.ProductionCompany,
+                SourceManagementSourceField.ShortTitle,
+                SourceManagementSourceField.Comments
+            ],
+            [SourceType.SoundRecording] =
+            [
+                SourceManagementSourceField.Tag,
+                SourceManagementSourceField.Artist,
+                SourceManagementSourceField.Composer,
+                SourceManagementSourceField.Conductor,
+                SourceManagementSourceField.Performer,
+                SourceManagementSourceField.ProducerName,
+                SourceManagementSourceField.Title,
+                SourceManagementSourceField.AlbumTitle,
+                SourceManagementSourceField.Year,
+                SourceManagementSourceField.Medium,
+                SourceManagementSourceField.RecordingNumber,
+                SourceManagementSourceField.ShortTitle,
+                SourceManagementSourceField.Comments
+            ],
+            [SourceType.Art] =
+            [
+                SourceManagementSourceField.Tag,
+                SourceManagementSourceField.Artist,
+                SourceManagementSourceField.Title,
+                SourceManagementSourceField.Year,
+                SourceManagementSourceField.Medium,
+                SourceManagementSourceField.Institution,
+                SourceManagementSourceField.City,
+                SourceManagementSourceField.ShortTitle,
+                SourceManagementSourceField.Comments
+            ],
+            [SourceType.InternetSite] =
+            [
+                SourceManagementSourceField.Tag,
+                SourceManagementSourceField.Author,
+                SourceManagementSourceField.Title,
+                SourceManagementSourceField.Year,
+                SourceManagementSourceField.Publisher,
+                SourceManagementSourceField.Url,
+                SourceManagementSourceField.AccessedDay,
+                SourceManagementSourceField.AccessedMonth,
+                SourceManagementSourceField.AccessedYear,
+                SourceManagementSourceField.ShortTitle,
+                SourceManagementSourceField.Comments
+            ],
+            [SourceType.Performance] =
+            [
+                SourceManagementSourceField.Tag,
+                SourceManagementSourceField.Performer,
+                SourceManagementSourceField.Conductor,
+                SourceManagementSourceField.Title,
+                SourceManagementSourceField.Year,
+                SourceManagementSourceField.Month,
+                SourceManagementSourceField.Day,
+                SourceManagementSourceField.Theater,
+                SourceManagementSourceField.City,
+                SourceManagementSourceField.Medium,
+                SourceManagementSourceField.ShortTitle,
+                SourceManagementSourceField.Comments
             ]
         };
 
@@ -459,6 +568,13 @@ public static class SourceManagementDialogPlanner
             [SourceManagementSourceField.Inventor] = "Inventor:",
             [SourceManagementSourceField.Interviewee] = "Interviewee:",
             [SourceManagementSourceField.Interviewer] = "Interviewer:",
+            [SourceManagementSourceField.Artist] = "Artist:",
+            [SourceManagementSourceField.Composer] = "Composer:",
+            [SourceManagementSourceField.Conductor] = "Conductor:",
+            [SourceManagementSourceField.Director] = "Director:",
+            [SourceManagementSourceField.Performer] = "Performer:",
+            [SourceManagementSourceField.ProducerName] = "Producer:",
+            [SourceManagementSourceField.Writer] = "Writer:",
             [SourceManagementSourceField.Year] = "Year:",
             [SourceManagementSourceField.Month] = "Month:",
             [SourceManagementSourceField.Day] = "Day:",
@@ -475,6 +591,10 @@ public static class SourceManagementDialogPlanner
             [SourceManagementSourceField.StateProvince] = "State / province:",
             [SourceManagementSourceField.Medium] = "Medium:",
             [SourceManagementSourceField.SourceKind] = "Type:",
+            [SourceManagementSourceField.AlbumTitle] = "Album title:",
+            [SourceManagementSourceField.ProductionCompany] = "Production company:",
+            [SourceManagementSourceField.RecordingNumber] = "Recording number:",
+            [SourceManagementSourceField.Theater] = "Theater:",
             [SourceManagementSourceField.Journal] = "Journal:",
             [SourceManagementSourceField.Volume] = "Volume:",
             [SourceManagementSourceField.Issue] = "Issue:",
@@ -548,6 +668,13 @@ public static class SourceManagementDialogPlanner
             Inventor = source?.Inventor ?? string.Empty,
             Interviewee = source?.Interviewee ?? string.Empty,
             Interviewer = source?.Interviewer ?? string.Empty,
+            Artist = source?.Artist ?? string.Empty,
+            Composer = source?.Composer ?? string.Empty,
+            Conductor = source?.Conductor ?? string.Empty,
+            Director = source?.Director ?? string.Empty,
+            Performer = source?.Performer ?? string.Empty,
+            ProducerName = source?.ProducerName ?? string.Empty,
+            Writer = source?.Writer ?? string.Empty,
             Month = source?.Month ?? string.Empty,
             Day = source?.Day ?? string.Empty,
             ChapterNumber = source?.ChapterNumber ?? string.Empty,
@@ -556,6 +683,10 @@ public static class SourceManagementDialogPlanner
             StateProvince = source?.StateProvince ?? string.Empty,
             Medium = source?.Medium ?? string.Empty,
             SourceKind = source?.SourceKind ?? string.Empty,
+            AlbumTitle = source?.AlbumTitle ?? string.Empty,
+            ProductionCompany = source?.ProductionCompany ?? string.Empty,
+            RecordingNumber = source?.RecordingNumber ?? string.Empty,
+            Theater = source?.Theater ?? string.Empty,
             PersonalAuthors = ClonePersonalAuthors(source?.PersonalAuthors ?? []),
             CorporateAuthor = source?.CorporateAuthor,
             Editor = SourceAuthorPerson.FormatDisplayText(source?.Editors ?? []),
@@ -720,6 +851,13 @@ public static class SourceManagementDialogPlanner
             Inventor = TrimmedValue(values, SourceManagementSourceField.Inventor),
             Interviewee = TrimmedValue(values, SourceManagementSourceField.Interviewee),
             Interviewer = TrimmedValue(values, SourceManagementSourceField.Interviewer),
+            Artist = TrimmedValue(values, SourceManagementSourceField.Artist),
+            Composer = TrimmedValue(values, SourceManagementSourceField.Composer),
+            Conductor = TrimmedValue(values, SourceManagementSourceField.Conductor),
+            Director = TrimmedValue(values, SourceManagementSourceField.Director),
+            Performer = TrimmedValue(values, SourceManagementSourceField.Performer),
+            ProducerName = TrimmedValue(values, SourceManagementSourceField.ProducerName),
+            Writer = TrimmedValue(values, SourceManagementSourceField.Writer),
             Month = TrimmedValue(values, SourceManagementSourceField.Month),
             Day = TrimmedValue(values, SourceManagementSourceField.Day),
             ChapterNumber = TrimmedValue(values, SourceManagementSourceField.ChapterNumber),
@@ -728,6 +866,10 @@ public static class SourceManagementDialogPlanner
             StateProvince = TrimmedValue(values, SourceManagementSourceField.StateProvince),
             Medium = TrimmedValue(values, SourceManagementSourceField.Medium),
             SourceKind = TrimmedValue(values, SourceManagementSourceField.SourceKind),
+            AlbumTitle = TrimmedValue(values, SourceManagementSourceField.AlbumTitle),
+            ProductionCompany = TrimmedValue(values, SourceManagementSourceField.ProductionCompany),
+            RecordingNumber = TrimmedValue(values, SourceManagementSourceField.RecordingNumber),
+            Theater = TrimmedValue(values, SourceManagementSourceField.Theater),
             PersonalAuthors = author.PersonalAuthors,
             CorporateAuthor = author.CorporateAuthor,
             Editor = editors.DisplayText,
@@ -833,14 +975,21 @@ public static class SourceManagementDialogPlanner
             Inventor = type == SourceType.Patent ? NullIfWhiteSpace(entry.Inventor) : null,
             Interviewee = type == SourceType.Interview ? NullIfWhiteSpace(entry.Interviewee) : null,
             Interviewer = type == SourceType.Interview ? NullIfWhiteSpace(entry.Interviewer) : null,
+            Artist = type is SourceType.Art or SourceType.SoundRecording ? NullIfWhiteSpace(entry.Artist) : null,
+            Composer = type == SourceType.SoundRecording ? NullIfWhiteSpace(entry.Composer) : null,
+            Conductor = type is SourceType.SoundRecording or SourceType.Performance ? NullIfWhiteSpace(entry.Conductor) : null,
+            Director = type == SourceType.Film ? NullIfWhiteSpace(entry.Director) : null,
+            Performer = type is SourceType.Film or SourceType.SoundRecording or SourceType.Performance ? NullIfWhiteSpace(entry.Performer) : null,
+            ProducerName = type is SourceType.Film or SourceType.SoundRecording ? NullIfWhiteSpace(entry.ProducerName) : null,
+            Writer = type == SourceType.Film ? NullIfWhiteSpace(entry.Writer) : null,
             Year = entry.Year.Trim(),
-            Month = type is SourceType.Patent or SourceType.Interview or SourceType.Misc ? NullIfWhiteSpace(entry.Month) : null,
-            Day = type is SourceType.Patent or SourceType.Interview or SourceType.Misc ? NullIfWhiteSpace(entry.Day) : null,
-            Institution = type == SourceType.Report ? NullIfWhiteSpace(entry.Institution) : null,
-            Publisher = type is SourceType.Book or SourceType.WebSite or SourceType.Report or SourceType.BookSection or SourceType.ConferenceProceedings or SourceType.ElectronicSource
+            Month = type is SourceType.Patent or SourceType.Interview or SourceType.Misc or SourceType.Performance ? NullIfWhiteSpace(entry.Month) : null,
+            Day = type is SourceType.Patent or SourceType.Interview or SourceType.Misc or SourceType.Performance ? NullIfWhiteSpace(entry.Day) : null,
+            Institution = type is SourceType.Report or SourceType.Art ? NullIfWhiteSpace(entry.Institution) : null,
+            Publisher = type is SourceType.Book or SourceType.WebSite or SourceType.Report or SourceType.BookSection or SourceType.ConferenceProceedings or SourceType.ElectronicSource or SourceType.InternetSite
                 ? NullIfWhiteSpace(entry.Publisher)
                 : null,
-            City = type is SourceType.Book or SourceType.Report or SourceType.BookSection or SourceType.ConferenceProceedings ? NullIfWhiteSpace(entry.City) : null,
+            City = type is SourceType.Book or SourceType.Report or SourceType.BookSection or SourceType.ConferenceProceedings or SourceType.Art or SourceType.Performance ? NullIfWhiteSpace(entry.City) : null,
             Edition = type is SourceType.Book or SourceType.BookSection ? NullIfWhiteSpace(entry.Edition) : null,
             StandardNumber = type is SourceType.Book or SourceType.JournalArticle or SourceType.Report or SourceType.BookSection or SourceType.ConferenceProceedings or SourceType.ArticleInPeriodical
                 ? NullIfWhiteSpace(entry.StandardNumber)
@@ -849,8 +998,12 @@ public static class SourceManagementDialogPlanner
             PatentNumber = type == SourceType.Patent ? NullIfWhiteSpace(entry.PatentNumber) : null,
             CountryRegion = type == SourceType.Patent ? NullIfWhiteSpace(entry.CountryRegion) : null,
             StateProvince = type == SourceType.Patent ? NullIfWhiteSpace(entry.StateProvince) : null,
-            Medium = type is SourceType.Interview or SourceType.Misc ? NullIfWhiteSpace(entry.Medium) : null,
+            Medium = type is SourceType.Interview or SourceType.Misc or SourceType.Film or SourceType.SoundRecording or SourceType.Art or SourceType.Performance ? NullIfWhiteSpace(entry.Medium) : null,
             SourceKind = type == SourceType.Misc ? NullIfWhiteSpace(entry.SourceKind) : null,
+            AlbumTitle = type == SourceType.SoundRecording ? NullIfWhiteSpace(entry.AlbumTitle) : null,
+            ProductionCompany = type == SourceType.Film ? NullIfWhiteSpace(entry.ProductionCompany) : null,
+            RecordingNumber = type == SourceType.SoundRecording ? NullIfWhiteSpace(entry.RecordingNumber) : null,
+            Theater = type == SourceType.Performance ? NullIfWhiteSpace(entry.Theater) : null,
             ShortTitle = NullIfWhiteSpace(entry.ShortTitle),
             Comments = NullIfWhiteSpace(entry.Comments),
             Journal = IsPeriodicalSource(type) ? NullIfWhiteSpace(entry.Journal) : null,
@@ -884,6 +1037,13 @@ public static class SourceManagementDialogPlanner
             Inventor = source.Inventor,
             Interviewee = source.Interviewee,
             Interviewer = source.Interviewer,
+            Artist = source.Artist,
+            Composer = source.Composer,
+            Conductor = source.Conductor,
+            Director = source.Director,
+            Performer = source.Performer,
+            ProducerName = source.ProducerName,
+            Writer = source.Writer,
             Year = source.Year,
             Month = source.Month,
             Day = source.Day,
@@ -898,6 +1058,10 @@ public static class SourceManagementDialogPlanner
             StateProvince = source.StateProvince,
             Medium = source.Medium,
             SourceKind = source.SourceKind,
+            AlbumTitle = source.AlbumTitle,
+            ProductionCompany = source.ProductionCompany,
+            RecordingNumber = source.RecordingNumber,
+            Theater = source.Theater,
             ShortTitle = source.ShortTitle,
             Comments = source.Comments,
             Journal = source.Journal,
@@ -1266,6 +1430,13 @@ public static class SourceManagementDialogPlanner
         && SourceValueEquals(left.Inventor, right.Inventor)
         && SourceValueEquals(left.Interviewee, right.Interviewee)
         && SourceValueEquals(left.Interviewer, right.Interviewer)
+        && SourceValueEquals(left.Artist, right.Artist)
+        && SourceValueEquals(left.Composer, right.Composer)
+        && SourceValueEquals(left.Conductor, right.Conductor)
+        && SourceValueEquals(left.Director, right.Director)
+        && SourceValueEquals(left.Performer, right.Performer)
+        && SourceValueEquals(left.ProducerName, right.ProducerName)
+        && SourceValueEquals(left.Writer, right.Writer)
         && SourceValueEquals(left.Year, right.Year)
         && SourceValueEquals(left.Month, right.Month)
         && SourceValueEquals(left.Day, right.Day)
@@ -1280,6 +1451,10 @@ public static class SourceManagementDialogPlanner
         && SourceValueEquals(left.StateProvince, right.StateProvince)
         && SourceValueEquals(left.Medium, right.Medium)
         && SourceValueEquals(left.SourceKind, right.SourceKind)
+        && SourceValueEquals(left.AlbumTitle, right.AlbumTitle)
+        && SourceValueEquals(left.ProductionCompany, right.ProductionCompany)
+        && SourceValueEquals(left.RecordingNumber, right.RecordingNumber)
+        && SourceValueEquals(left.Theater, right.Theater)
         && SourceValueEquals(left.ShortTitle, right.ShortTitle)
         && SourceValueEquals(left.Comments, right.Comments)
         && SourceValueEquals(left.Journal, right.Journal)
@@ -1403,6 +1578,13 @@ public static class SourceManagementDialogPlanner
         || entry.Inventor.Length > 0
         || entry.Interviewee.Length > 0
         || entry.Interviewer.Length > 0
+        || entry.Artist.Length > 0
+        || entry.Composer.Length > 0
+        || entry.Conductor.Length > 0
+        || entry.Director.Length > 0
+        || entry.Performer.Length > 0
+        || entry.ProducerName.Length > 0
+        || entry.Writer.Length > 0
         || entry.Year.Length > 0
         || entry.Month.Length > 0
         || entry.Day.Length > 0
@@ -1419,6 +1601,10 @@ public static class SourceManagementDialogPlanner
         || entry.StateProvince.Length > 0
         || entry.Medium.Length > 0
         || entry.SourceKind.Length > 0
+        || entry.AlbumTitle.Length > 0
+        || entry.ProductionCompany.Length > 0
+        || entry.RecordingNumber.Length > 0
+        || entry.Theater.Length > 0
         || entry.Journal.Length > 0
         || entry.Volume.Length > 0
         || entry.Issue.Length > 0
@@ -1445,6 +1631,13 @@ public static class SourceManagementDialogPlanner
             SourceManagementSourceField.Inventor => entry.Inventor,
             SourceManagementSourceField.Interviewee => entry.Interviewee,
             SourceManagementSourceField.Interviewer => entry.Interviewer,
+            SourceManagementSourceField.Artist => entry.Artist,
+            SourceManagementSourceField.Composer => entry.Composer,
+            SourceManagementSourceField.Conductor => entry.Conductor,
+            SourceManagementSourceField.Director => entry.Director,
+            SourceManagementSourceField.Performer => entry.Performer,
+            SourceManagementSourceField.ProducerName => entry.ProducerName,
+            SourceManagementSourceField.Writer => entry.Writer,
             SourceManagementSourceField.Year => entry.Year,
             SourceManagementSourceField.Month => entry.Month,
             SourceManagementSourceField.Day => entry.Day,
@@ -1461,6 +1654,10 @@ public static class SourceManagementDialogPlanner
             SourceManagementSourceField.StateProvince => entry.StateProvince,
             SourceManagementSourceField.Medium => entry.Medium,
             SourceManagementSourceField.SourceKind => entry.SourceKind,
+            SourceManagementSourceField.AlbumTitle => entry.AlbumTitle,
+            SourceManagementSourceField.ProductionCompany => entry.ProductionCompany,
+            SourceManagementSourceField.RecordingNumber => entry.RecordingNumber,
+            SourceManagementSourceField.Theater => entry.Theater,
             SourceManagementSourceField.Journal => entry.Journal,
             SourceManagementSourceField.Volume => entry.Volume,
             SourceManagementSourceField.Issue => entry.Issue,
@@ -1674,7 +1871,7 @@ public static class SourceManagementDialogPlanner
         type is SourceType.JournalArticle or SourceType.ArticleInPeriodical;
 
     private static bool IsElectronicSource(SourceType type) =>
-        type is SourceType.WebSite or SourceType.ElectronicSource;
+        type is SourceType.WebSite or SourceType.ElectronicSource or SourceType.InternetSite;
 
     private static string? NullIfWhiteSpace(string value)
     {

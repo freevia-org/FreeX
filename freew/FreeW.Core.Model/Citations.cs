@@ -624,6 +624,10 @@ public static class Citations
     //  - Patent:         patent number, jurisdiction, date
     //  - Interview:      interviewer, medium, date
     //  - Misc:           source kind, medium, date
+    //  - Film:           producer/writer/performer, production company, medium
+    //  - SoundRecording: album/contributors, recording number, medium
+    //  - Art:            medium, institution, city
+    //  - Performance:    conductor, theater, city, medium, date
     // Returns an empty list when nothing applies so callers can drop the segment entirely.
     private static List<string> SourceDetail(Source source)
     {
@@ -642,6 +646,7 @@ public static class Citations
                 break;
             case SourceType.WebSite:
             case SourceType.ElectronicSource:
+            case SourceType.InternetSite:
                 AddIfPresent(parts, source.Publisher);
                 AddIfPresent(parts, source.Url);
                 if (AccessedDateText(source) is { } accessed)
@@ -667,6 +672,43 @@ public static class Citations
                 break;
             case SourceType.Misc:
                 AddIfPresent(parts, source.SourceKind);
+                AddIfPresent(parts, source.Medium);
+                AddIfPresent(parts, SourceDateText(source));
+                break;
+            case SourceType.Film:
+                if (NonEmpty(source.ProducerName) is { } producer)
+                    parts.Add($"produced by {producer}");
+                if (NonEmpty(source.Writer) is { } writer)
+                    parts.Add($"written by {writer}");
+                if (NonEmpty(source.Performer) is { } performer)
+                    parts.Add($"performed by {performer}");
+                AddIfPresent(parts, source.ProductionCompany);
+                AddIfPresent(parts, source.Medium);
+                break;
+            case SourceType.SoundRecording:
+                AddIfPresent(parts, source.AlbumTitle);
+                if (NonEmpty(source.Composer) is { } composer)
+                    parts.Add($"composed by {composer}");
+                if (NonEmpty(source.Conductor) is { } conductor)
+                    parts.Add($"conducted by {conductor}");
+                if (NonEmpty(source.Performer) is { } recordingPerformer)
+                    parts.Add($"performed by {recordingPerformer}");
+                if (NonEmpty(source.ProducerName) is { } recordingProducer)
+                    parts.Add($"produced by {recordingProducer}");
+                if (NonEmpty(source.RecordingNumber) is { } recordingNumber)
+                    parts.Add($"recording {recordingNumber}");
+                AddIfPresent(parts, source.Medium);
+                break;
+            case SourceType.Art:
+                AddIfPresent(parts, source.Medium);
+                AddIfPresent(parts, source.Institution);
+                AddIfPresent(parts, source.City);
+                break;
+            case SourceType.Performance:
+                if (NonEmpty(source.Conductor) is { } performanceConductor)
+                    parts.Add($"conducted by {performanceConductor}");
+                AddIfPresent(parts, source.Theater);
+                AddIfPresent(parts, source.City);
                 AddIfPresent(parts, source.Medium);
                 AddIfPresent(parts, SourceDateText(source));
                 break;
@@ -729,6 +771,12 @@ public static class Citations
         {
             SourceType.Patent when NonEmpty(source.Inventor) is { } inventor => inventor,
             SourceType.Interview when NonEmpty(source.Interviewee) is { } interviewee => interviewee,
+            SourceType.Film when NonEmpty(source.Director) is { } director => director,
+            SourceType.SoundRecording when NonEmpty(source.Artist) is { } artist => artist,
+            SourceType.SoundRecording when NonEmpty(source.Performer) is { } performer => performer,
+            SourceType.SoundRecording when NonEmpty(source.Composer) is { } composer => composer,
+            SourceType.Art when NonEmpty(source.Artist) is { } artArtist => artArtist,
+            SourceType.Performance when NonEmpty(source.Performer) is { } performancePerformer => performancePerformer,
             _ => source.Author?.Trim() ?? string.Empty,
         };
 
@@ -1106,7 +1154,7 @@ public static class Citations
         type is SourceType.JournalArticle or SourceType.ArticleInPeriodical;
 
     private static bool IsElectronicSource(SourceType type) =>
-        type is SourceType.WebSite or SourceType.ElectronicSource;
+        type is SourceType.WebSite or SourceType.ElectronicSource or SourceType.InternetSite;
 
     private static void AddContributorRoleSegments(List<string> parts, Source source, bool terminate = false)
     {
@@ -1208,6 +1256,13 @@ public static class Citations
         && Same(left.Inventor, right.Inventor)
         && Same(left.Interviewee, right.Interviewee)
         && Same(left.Interviewer, right.Interviewer)
+        && Same(left.Artist, right.Artist)
+        && Same(left.Composer, right.Composer)
+        && Same(left.Conductor, right.Conductor)
+        && Same(left.Director, right.Director)
+        && Same(left.Performer, right.Performer)
+        && Same(left.ProducerName, right.ProducerName)
+        && Same(left.Writer, right.Writer)
         && Same(left.Year, right.Year)
         && Same(left.Month, right.Month)
         && Same(left.Day, right.Day)
@@ -1222,6 +1277,10 @@ public static class Citations
         && Same(left.StateProvince, right.StateProvince)
         && Same(left.Medium, right.Medium)
         && Same(left.SourceKind, right.SourceKind)
+        && Same(left.AlbumTitle, right.AlbumTitle)
+        && Same(left.ProductionCompany, right.ProductionCompany)
+        && Same(left.RecordingNumber, right.RecordingNumber)
+        && Same(left.Theater, right.Theater)
         && Same(left.ShortTitle, right.ShortTitle)
         && Same(left.Comments, right.Comments)
         && Same(left.Journal, right.Journal)

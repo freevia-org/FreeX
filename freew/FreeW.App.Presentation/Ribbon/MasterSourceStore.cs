@@ -64,6 +64,13 @@ public sealed class SourceRecord
     public string? Inventor { get; set; }
     public string? Interviewee { get; set; }
     public string? Interviewer { get; set; }
+    public string? Artist { get; set; }
+    public string? Composer { get; set; }
+    public string? Conductor { get; set; }
+    public string? Director { get; set; }
+    public string? Performer { get; set; }
+    public string? ProducerName { get; set; }
+    public string? Writer { get; set; }
     public string Year { get; set; } = string.Empty;
     public string? Month { get; set; }
     public string? Day { get; set; }
@@ -78,6 +85,10 @@ public sealed class SourceRecord
     public string? StateProvince { get; set; }
     public string? Medium { get; set; }
     public string? SourceKind { get; set; }
+    public string? AlbumTitle { get; set; }
+    public string? ProductionCompany { get; set; }
+    public string? RecordingNumber { get; set; }
+    public string? Theater { get; set; }
     public string? ShortTitle { get; set; }
     public string? Comments { get; set; }
     public string? Journal { get; set; }
@@ -114,6 +125,13 @@ public sealed class SourceRecord
         Inventor = Inventor,
         Interviewee = Interviewee,
         Interviewer = Interviewer,
+        Artist = Artist,
+        Composer = Composer,
+        Conductor = Conductor,
+        Director = Director,
+        Performer = Performer,
+        ProducerName = ProducerName,
+        Writer = Writer,
         Year = Year,
         Month = Month,
         Day = Day,
@@ -128,6 +146,10 @@ public sealed class SourceRecord
         StateProvince = StateProvince,
         Medium = Medium,
         SourceKind = SourceKind,
+        AlbumTitle = AlbumTitle,
+        ProductionCompany = ProductionCompany,
+        RecordingNumber = RecordingNumber,
+        Theater = Theater,
         ShortTitle = ShortTitle,
         Comments = Comments,
         Journal = Journal,
@@ -169,6 +191,13 @@ public sealed class SourceRecord
             Inventor = source.Inventor,
             Interviewee = source.Interviewee,
             Interviewer = source.Interviewer,
+            Artist = source.Artist,
+            Composer = source.Composer,
+            Conductor = source.Conductor,
+            Director = source.Director,
+            Performer = source.Performer,
+            ProducerName = source.ProducerName,
+            Writer = source.Writer,
             Year = source.Year,
             Month = source.Month,
             Day = source.Day,
@@ -183,6 +212,10 @@ public sealed class SourceRecord
             StateProvince = source.StateProvince,
             Medium = source.Medium,
             SourceKind = source.SourceKind,
+            AlbumTitle = source.AlbumTitle,
+            ProductionCompany = source.ProductionCompany,
+            RecordingNumber = source.RecordingNumber,
+            Theater = source.Theater,
             ShortTitle = source.ShortTitle,
             Comments = source.Comments,
             Journal = source.Journal,

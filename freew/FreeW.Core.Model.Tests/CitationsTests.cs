@@ -948,6 +948,11 @@ public class CitationsTests
         ((int)SourceType.Patent).Should().Be(8);
         ((int)SourceType.Interview).Should().Be(9);
         ((int)SourceType.Misc).Should().Be(10);
+        ((int)SourceType.Film).Should().Be(11);
+        ((int)SourceType.SoundRecording).Should().Be(12);
+        ((int)SourceType.Art).Should().Be(13);
+        ((int)SourceType.InternetSite).Should().Be(14);
+        ((int)SourceType.Performance).Should().Be(15);
     }
 
     [Fact]
@@ -991,6 +996,82 @@ public class CitationsTests
             .Should().Be("Hopper, Grace. Compiler Notes. interview by Mauchly, Jean, Recorded interview, 1968.");
         Citations.FormatBibliographyEntry(misc, CitationStyle.Ieee)
             .Should().Be("Example Archive, \"Loose note,\" Manuscript, Scan, 2026.");
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_MediaBreadthTypes_UseModeledFields()
+    {
+        var film = new Source
+        {
+            Type = SourceType.Film,
+            Director = "Kubrick, Stanley",
+            ProducerName = "MGM",
+            Writer = "Clarke, Arthur C.",
+            Performer = "Dullea, Keir",
+            Title = "2001: A Space Odyssey",
+            Year = "1968",
+            ProductionCompany = "Metro-Goldwyn-Mayer",
+            Medium = "Film"
+        };
+        var recording = new Source
+        {
+            Type = SourceType.SoundRecording,
+            Artist = "Holiday, Billie",
+            Composer = "Strange, Lewis Allan",
+            Conductor = "Jones, Quincy",
+            Title = "Strange Fruit",
+            AlbumTitle = "Lady Sings",
+            Year = "1956",
+            RecordingNumber = "RS-1",
+            Medium = "LP"
+        };
+        var art = new Source
+        {
+            Type = SourceType.Art,
+            Artist = "Kahlo, Frida",
+            Title = "The Broken Column",
+            Year = "1944",
+            Medium = "Oil on masonite",
+            Institution = "Museo Dolores Olmedo",
+            City = "Mexico City"
+        };
+        var internetSite = new Source
+        {
+            Type = SourceType.InternetSite,
+            Author = "Example Archive",
+            Title = "Example Home",
+            Year = "2026",
+            Publisher = "Example Site",
+            Url = "https://example.test",
+            AccessedDay = "7",
+            AccessedMonth = "July",
+            AccessedYear = "2026"
+        };
+        var performance = new Source
+        {
+            Type = SourceType.Performance,
+            Performer = "Royal Shakespeare Company",
+            Conductor = "Doe, Jane",
+            Title = "Hamlet",
+            Year = "2026",
+            Month = "May",
+            Day = "8",
+            Theater = "Globe Theatre",
+            City = "London",
+            Medium = "Stage performance"
+        };
+
+        Citations.FormatInText(film, CitationStyle.Apa).Should().Be("(Kubrick, 1968)");
+        Citations.FormatBibliographyEntry(film, CitationStyle.Apa)
+            .Should().Be("Kubrick, Stanley. (1968). 2001: A Space Odyssey. produced by MGM, written by Clarke, Arthur C., performed by Dullea, Keir, Metro-Goldwyn-Mayer, Film.");
+        Citations.FormatBibliographyEntry(recording, CitationStyle.Chicago)
+            .Should().Be("Holiday, Billie. Strange Fruit. Lady Sings, composed by Strange, Lewis Allan, conducted by Jones, Quincy, recording RS-1, LP, 1956.");
+        Citations.FormatBibliographyEntry(art, CitationStyle.Ieee)
+            .Should().Be("Kahlo, Frida, \"The Broken Column,\" Oil on masonite, Museo Dolores Olmedo, Mexico City, 1944.");
+        Citations.FormatBibliographyEntry(internetSite, CitationStyle.Apa)
+            .Should().Be("Example Archive. (2026). Example Home. Example Site, https://example.test, accessed 7 July 2026.");
+        Citations.FormatBibliographyEntry(performance, CitationStyle.Chicago)
+            .Should().Be("Royal Shakespeare Company. Hamlet. conducted by Doe, Jane, Globe Theatre, London, Stage performance, 8 May 2026, 2026.");
     }
 
     [Fact]

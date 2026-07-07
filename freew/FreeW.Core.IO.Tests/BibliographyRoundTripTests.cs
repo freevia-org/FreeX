@@ -479,6 +479,117 @@ public class BibliographyRoundTripTests
     }
 
     [Fact]
+    public void MediaSourceManagerBreadthTypes_AllFields_SurviveRoundTrip()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Sources.Add(new Source
+        {
+            Tag = "Film2026",
+            Type = SourceType.Film,
+            Director = "Kubrick, Stanley",
+            ProducerName = "MGM",
+            Writer = "Clarke, Arthur C.",
+            Performer = "Dullea, Keir",
+            Title = "2001: A Space Odyssey",
+            Year = "1968",
+            ProductionCompany = "Metro-Goldwyn-Mayer",
+            Medium = "Film",
+            ShortTitle = "2001",
+            Comments = "Film note"
+        });
+        doc.Sources.Add(new Source
+        {
+            Tag = "Recording2026",
+            Type = SourceType.SoundRecording,
+            Artist = "Holiday, Billie",
+            Composer = "Strange, Lewis Allan",
+            Conductor = "Jones, Quincy",
+            Performer = "Holiday, Billie",
+            ProducerName = "Norman Granz",
+            Title = "Strange Fruit",
+            AlbumTitle = "Lady Sings",
+            Year = "1956",
+            Medium = "LP",
+            RecordingNumber = "RS-1",
+            ShortTitle = "Strange Fruit",
+            Comments = "Recording note"
+        });
+        doc.Sources.Add(new Source
+        {
+            Tag = "Art2026",
+            Type = SourceType.Art,
+            Artist = "Kahlo, Frida",
+            Title = "The Broken Column",
+            Year = "1944",
+            Medium = "Oil on masonite",
+            Institution = "Museo Dolores Olmedo",
+            City = "Mexico City",
+            ShortTitle = "Broken Column",
+            Comments = "Art note"
+        });
+        doc.Sources.Add(new Source
+        {
+            Tag = "Site2026",
+            Type = SourceType.InternetSite,
+            Author = "Example Archive",
+            Title = "Example Home",
+            Year = "2026",
+            Publisher = "Example Site",
+            Url = "https://example.test",
+            AccessedDay = "7",
+            AccessedMonth = "July",
+            AccessedYear = "2026",
+            ShortTitle = "Example",
+            Comments = "Site note"
+        });
+        doc.Sources.Add(new Source
+        {
+            Tag = "Performance2026",
+            Type = SourceType.Performance,
+            Performer = "Royal Shakespeare Company",
+            Conductor = "Doe, Jane",
+            Title = "Hamlet",
+            Year = "2026",
+            Month = "May",
+            Day = "8",
+            Theater = "Globe Theatre",
+            City = "London",
+            Medium = "Stage performance",
+            ShortTitle = "Hamlet",
+            Comments = "Performance note"
+        });
+
+        var result = RoundTrip(doc);
+
+        result.Sources.Should().HaveCount(5);
+        result.Sources[0].Type.Should().Be(SourceType.Film);
+        result.Sources[0].Director.Should().Be("Kubrick, Stanley");
+        result.Sources[0].ProducerName.Should().Be("MGM");
+        result.Sources[0].Writer.Should().Be("Clarke, Arthur C.");
+        result.Sources[0].Performer.Should().Be("Dullea, Keir");
+        result.Sources[0].ProductionCompany.Should().Be("Metro-Goldwyn-Mayer");
+        result.Sources[1].Type.Should().Be(SourceType.SoundRecording);
+        result.Sources[1].Artist.Should().Be("Holiday, Billie");
+        result.Sources[1].Composer.Should().Be("Strange, Lewis Allan");
+        result.Sources[1].Conductor.Should().Be("Jones, Quincy");
+        result.Sources[1].AlbumTitle.Should().Be("Lady Sings");
+        result.Sources[1].RecordingNumber.Should().Be("RS-1");
+        result.Sources[2].Type.Should().Be(SourceType.Art);
+        result.Sources[2].Artist.Should().Be("Kahlo, Frida");
+        result.Sources[2].Institution.Should().Be("Museo Dolores Olmedo");
+        result.Sources[2].City.Should().Be("Mexico City");
+        result.Sources[3].Type.Should().Be(SourceType.InternetSite);
+        result.Sources[3].Url.Should().Be("https://example.test");
+        result.Sources[3].AccessedYear.Should().Be("2026");
+        result.Sources[4].Type.Should().Be(SourceType.Performance);
+        result.Sources[4].Performer.Should().Be("Royal Shakespeare Company");
+        result.Sources[4].Conductor.Should().Be("Doe, Jane");
+        result.Sources[4].Theater.Should().Be("Globe Theatre");
+        result.Sources[4].Month.Should().Be("May");
+        result.Sources[4].Day.Should().Be("8");
+    }
+
+    [Fact]
     public void MultipleSources_PreserveOrderAndCount()
     {
         var doc = TextDocument.CreateEmpty();
@@ -698,6 +809,91 @@ public class BibliographyRoundTripTests
     }
 
     [Fact]
+    public void BibliographyPart_WritesMediaBreadthTokensFieldsAndRoles()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Sources.Add(new Source
+        {
+            Tag = "Film2026",
+            Type = SourceType.Film,
+            Director = "Kubrick, Stanley",
+            ProducerName = "MGM",
+            Writer = "Clarke, Arthur C.",
+            Performer = "Dullea, Keir",
+            ProductionCompany = "Metro-Goldwyn-Mayer"
+        });
+        doc.Sources.Add(new Source
+        {
+            Tag = "Recording2026",
+            Type = SourceType.SoundRecording,
+            Artist = "Holiday, Billie",
+            Composer = "Strange, Lewis Allan",
+            Conductor = "Jones, Quincy",
+            AlbumTitle = "Lady Sings",
+            RecordingNumber = "RS-1"
+        });
+        doc.Sources.Add(new Source
+        {
+            Tag = "Art2026",
+            Type = SourceType.Art,
+            Artist = "Kahlo, Frida",
+            Medium = "Oil on masonite"
+        });
+        doc.Sources.Add(new Source
+        {
+            Tag = "Site2026",
+            Type = SourceType.InternetSite,
+            Url = "https://example.test",
+            AccessedYear = "2026"
+        });
+        doc.Sources.Add(new Source
+        {
+            Tag = "Performance2026",
+            Type = SourceType.Performance,
+            Performer = "Royal Shakespeare Company",
+            Conductor = "Doe, Jane",
+            Theater = "Globe Theatre"
+        });
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        using var zip = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
+        using var entry = zip.GetEntry("word/bibliography/sources.xml")!.Open();
+        var sources = XDocument.Load(entry).Root!.Elements(B + "Source").ToList();
+
+        sources[0].Element(B + "SourceType")!.Value.Should().Be("Film");
+        sources[0].Element(B + "ProductionCompany")!.Value.Should().Be("Metro-Goldwyn-Mayer");
+        sources[0].Element(B + "Author")!.Element(B + "Director")!
+            .Element(B + "Corporate")!.Value.Should().Be("Kubrick, Stanley");
+        sources[0].Element(B + "Author")!.Element(B + "ProducerName")!
+            .Element(B + "Corporate")!.Value.Should().Be("MGM");
+        sources[0].Element(B + "Author")!.Element(B + "Writer")!
+            .Element(B + "Corporate")!.Value.Should().Be("Clarke, Arthur C.");
+        sources[0].Element(B + "Author")!.Element(B + "Performer")!
+            .Element(B + "Corporate")!.Value.Should().Be("Dullea, Keir");
+        sources[1].Element(B + "SourceType")!.Value.Should().Be("SoundRecording");
+        sources[1].Element(B + "AlbumTitle")!.Value.Should().Be("Lady Sings");
+        sources[1].Element(B + "RecordingNumber")!.Value.Should().Be("RS-1");
+        sources[1].Element(B + "Author")!.Element(B + "Artist")!
+            .Element(B + "Corporate")!.Value.Should().Be("Holiday, Billie");
+        sources[1].Element(B + "Author")!.Element(B + "Composer")!
+            .Element(B + "Corporate")!.Value.Should().Be("Strange, Lewis Allan");
+        sources[1].Element(B + "Author")!.Element(B + "Conductor")!
+            .Element(B + "Corporate")!.Value.Should().Be("Jones, Quincy");
+        sources[2].Element(B + "SourceType")!.Value.Should().Be("Art");
+        sources[2].Element(B + "Author")!.Element(B + "Artist")!
+            .Element(B + "Corporate")!.Value.Should().Be("Kahlo, Frida");
+        sources[2].Element(B + "Medium")!.Value.Should().Be("Oil on masonite");
+        sources[3].Element(B + "SourceType")!.Value.Should().Be("InternetSite");
+        sources[3].Element(B + "URL")!.Value.Should().Be("https://example.test");
+        sources[3].Element(B + "YearAccessed")!.Value.Should().Be("2026");
+        sources[4].Element(B + "SourceType")!.Value.Should().Be("Performance");
+        sources[4].Element(B + "Theater")!.Value.Should().Be("Globe Theatre");
+        sources[4].Element(B + "Author")!.Element(B + "Performer")!
+            .Element(B + "Corporate")!.Value.Should().Be("Royal Shakespeare Company");
+    }
+
+    [Fact]
     public void WordStyleNewSourceTypeTokens_ReadBackToModeledTypes()
     {
         var result = ReadDocxWithSourcesXml(
@@ -788,6 +984,94 @@ public class BibliographyRoundTripTests
         result.Sources[2].Author.Should().Be("Example Archive");
         result.Sources[2].SourceKind.Should().Be("Manuscript");
         result.Sources[2].Medium.Should().Be("Scan");
+    }
+
+    [Fact]
+    public void WordStyleMediaBreadthTokens_ReadBackToModeledTypes()
+    {
+        var result = ReadDocxWithSourcesXml(
+            """
+            <b:Sources xmlns:b="http://schemas.openxmlformats.org/officeDocument/2006/bibliography">
+              <b:Source>
+                <b:Tag>Film2026</b:Tag>
+                <b:SourceType>Film</b:SourceType>
+                <b:Author>
+                  <b:Director><b:Corporate>Kubrick, Stanley</b:Corporate></b:Director>
+                  <b:ProducerName><b:Corporate>MGM</b:Corporate></b:ProducerName>
+                  <b:Writer><b:Corporate>Clarke, Arthur C.</b:Corporate></b:Writer>
+                  <b:Performer><b:Corporate>Dullea, Keir</b:Corporate></b:Performer>
+                </b:Author>
+                <b:Title>2001: A Space Odyssey</b:Title>
+                <b:ProductionCompany>Metro-Goldwyn-Mayer</b:ProductionCompany>
+              </b:Source>
+              <b:Source>
+                <b:Tag>Recording2026</b:Tag>
+                <b:SourceType>SoundRecording</b:SourceType>
+                <b:Author>
+                  <b:Artist><b:Corporate>Holiday, Billie</b:Corporate></b:Artist>
+                  <b:Composer><b:Corporate>Strange, Lewis Allan</b:Corporate></b:Composer>
+                  <b:Conductor><b:Corporate>Jones, Quincy</b:Corporate></b:Conductor>
+                </b:Author>
+                <b:Title>Strange Fruit</b:Title>
+                <b:AlbumTitle>Lady Sings</b:AlbumTitle>
+                <b:RecordingNumber>RS-1</b:RecordingNumber>
+              </b:Source>
+              <b:Source>
+                <b:Tag>Art2026</b:Tag>
+                <b:SourceType>Art</b:SourceType>
+                <b:Author><b:Artist><b:Corporate>Kahlo, Frida</b:Corporate></b:Artist></b:Author>
+                <b:Title>The Broken Column</b:Title>
+                <b:Institution>Museo Dolores Olmedo</b:Institution>
+                <b:City>Mexico City</b:City>
+              </b:Source>
+              <b:Source>
+                <b:Tag>Site2026</b:Tag>
+                <b:SourceType>InternetSite</b:SourceType>
+                <b:Title>Example Home</b:Title>
+                <b:URL>https://example.test</b:URL>
+                <b:YearAccessed>2026</b:YearAccessed>
+              </b:Source>
+              <b:Source>
+                <b:Tag>Performance2026</b:Tag>
+                <b:SourceType>Performance</b:SourceType>
+                <b:Author>
+                  <b:Performer><b:Corporate>Royal Shakespeare Company</b:Corporate></b:Performer>
+                  <b:Conductor><b:Corporate>Doe, Jane</b:Corporate></b:Conductor>
+                </b:Author>
+                <b:Title>Hamlet</b:Title>
+                <b:Theater>Globe Theatre</b:Theater>
+                <b:Month>May</b:Month>
+                <b:Day>8</b:Day>
+              </b:Source>
+            </b:Sources>
+            """);
+
+        result.Sources.Should().HaveCount(5);
+        result.Sources[0].Type.Should().Be(SourceType.Film);
+        result.Sources[0].Director.Should().Be("Kubrick, Stanley");
+        result.Sources[0].ProducerName.Should().Be("MGM");
+        result.Sources[0].Writer.Should().Be("Clarke, Arthur C.");
+        result.Sources[0].Performer.Should().Be("Dullea, Keir");
+        result.Sources[0].ProductionCompany.Should().Be("Metro-Goldwyn-Mayer");
+        result.Sources[1].Type.Should().Be(SourceType.SoundRecording);
+        result.Sources[1].Artist.Should().Be("Holiday, Billie");
+        result.Sources[1].Composer.Should().Be("Strange, Lewis Allan");
+        result.Sources[1].Conductor.Should().Be("Jones, Quincy");
+        result.Sources[1].AlbumTitle.Should().Be("Lady Sings");
+        result.Sources[1].RecordingNumber.Should().Be("RS-1");
+        result.Sources[2].Type.Should().Be(SourceType.Art);
+        result.Sources[2].Artist.Should().Be("Kahlo, Frida");
+        result.Sources[2].Institution.Should().Be("Museo Dolores Olmedo");
+        result.Sources[2].City.Should().Be("Mexico City");
+        result.Sources[3].Type.Should().Be(SourceType.InternetSite);
+        result.Sources[3].Url.Should().Be("https://example.test");
+        result.Sources[3].AccessedYear.Should().Be("2026");
+        result.Sources[4].Type.Should().Be(SourceType.Performance);
+        result.Sources[4].Performer.Should().Be("Royal Shakespeare Company");
+        result.Sources[4].Conductor.Should().Be("Doe, Jane");
+        result.Sources[4].Theater.Should().Be("Globe Theatre");
+        result.Sources[4].Month.Should().Be("May");
+        result.Sources[4].Day.Should().Be("8");
     }
 
     [Fact]

@@ -82,7 +82,12 @@ public sealed class SourceManagementDialogPlannerTests
             SourceType.ElectronicSource,
             SourceType.Patent,
             SourceType.Interview,
-            SourceType.Misc);
+            SourceType.Misc,
+            SourceType.Film,
+            SourceType.SoundRecording,
+            SourceType.Art,
+            SourceType.InternetSite,
+            SourceType.Performance);
         choices.Select(choice => choice.Label).Should().Equal(
             "Book",
             "Journal Article",
@@ -94,7 +99,12 @@ public sealed class SourceManagementDialogPlannerTests
             "Electronic Source",
             "Patent",
             "Interview",
-            "Miscellaneous");
+            "Miscellaneous",
+            "Film",
+            "Sound Recording",
+            "Art",
+            "Internet Site",
+            "Performance");
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.JournalArticle).Should().Be(1);
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Report).Should().Be(3);
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.BookSection).Should().Be(4);
@@ -104,6 +114,11 @@ public sealed class SourceManagementDialogPlannerTests
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Patent).Should().Be(8);
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Interview).Should().Be(9);
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Misc).Should().Be(10);
+        SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Film).Should().Be(11);
+        SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.SoundRecording).Should().Be(12);
+        SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Art).Should().Be(13);
+        SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.InternetSite).Should().Be(14);
+        SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Performance).Should().Be(15);
     }
 
     [Fact]
@@ -250,6 +265,77 @@ public sealed class SourceManagementDialogPlannerTests
             SourceManagementSourceField.Day,
             SourceManagementSourceField.Medium,
             SourceManagementSourceField.SourceKind,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
+
+        var filmPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.Film);
+        filmPlans.Select(plan => plan.Field).Should().Equal(
+            SourceManagementSourceField.Tag,
+            SourceManagementSourceField.Director,
+            SourceManagementSourceField.ProducerName,
+            SourceManagementSourceField.Writer,
+            SourceManagementSourceField.Performer,
+            SourceManagementSourceField.Title,
+            SourceManagementSourceField.Year,
+            SourceManagementSourceField.Medium,
+            SourceManagementSourceField.ProductionCompany,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
+
+        var recordingPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.SoundRecording);
+        recordingPlans.Select(plan => plan.Field).Should().Equal(
+            SourceManagementSourceField.Tag,
+            SourceManagementSourceField.Artist,
+            SourceManagementSourceField.Composer,
+            SourceManagementSourceField.Conductor,
+            SourceManagementSourceField.Performer,
+            SourceManagementSourceField.ProducerName,
+            SourceManagementSourceField.Title,
+            SourceManagementSourceField.AlbumTitle,
+            SourceManagementSourceField.Year,
+            SourceManagementSourceField.Medium,
+            SourceManagementSourceField.RecordingNumber,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
+
+        var artPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.Art);
+        artPlans.Select(plan => plan.Field).Should().Equal(
+            SourceManagementSourceField.Tag,
+            SourceManagementSourceField.Artist,
+            SourceManagementSourceField.Title,
+            SourceManagementSourceField.Year,
+            SourceManagementSourceField.Medium,
+            SourceManagementSourceField.Institution,
+            SourceManagementSourceField.City,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
+
+        var internetSitePlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.InternetSite);
+        internetSitePlans.Select(plan => plan.Field).Should().Equal(
+            SourceManagementSourceField.Tag,
+            SourceManagementSourceField.Author,
+            SourceManagementSourceField.Title,
+            SourceManagementSourceField.Year,
+            SourceManagementSourceField.Publisher,
+            SourceManagementSourceField.Url,
+            SourceManagementSourceField.AccessedDay,
+            SourceManagementSourceField.AccessedMonth,
+            SourceManagementSourceField.AccessedYear,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
+
+        var performancePlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.Performance);
+        performancePlans.Select(plan => plan.Field).Should().Equal(
+            SourceManagementSourceField.Tag,
+            SourceManagementSourceField.Performer,
+            SourceManagementSourceField.Conductor,
+            SourceManagementSourceField.Title,
+            SourceManagementSourceField.Year,
+            SourceManagementSourceField.Month,
+            SourceManagementSourceField.Day,
+            SourceManagementSourceField.Theater,
+            SourceManagementSourceField.City,
+            SourceManagementSourceField.Medium,
             SourceManagementSourceField.ShortTitle,
             SourceManagementSourceField.Comments);
     }
@@ -470,6 +556,86 @@ public sealed class SourceManagementDialogPlannerTests
         misc.SourceKind.Should().Be("Manuscript");
         miscPlans.Single(plan => plan.Field == SourceManagementSourceField.SourceKind)
             .Text.Should().Be("Manuscript");
+
+        var film = SourceManagementDialogPlanner.ProjectEntry(new Source
+        {
+            Type = SourceType.Film,
+            Tag = "Film2026",
+            Director = "Kubrick, Stanley",
+            ProducerName = "MGM",
+            Writer = "Clarke, Arthur C.",
+            Performer = "Dullea, Keir",
+            ProductionCompany = "Metro-Goldwyn-Mayer",
+            Medium = "Film"
+        });
+        var filmPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(film);
+
+        film.Director.Should().Be("Kubrick, Stanley");
+        filmPlans.Single(plan => plan.Field == SourceManagementSourceField.ProductionCompany)
+            .Text.Should().Be("Metro-Goldwyn-Mayer");
+
+        var recording = SourceManagementDialogPlanner.ProjectEntry(new Source
+        {
+            Type = SourceType.SoundRecording,
+            Tag = "Recording2026",
+            Artist = "Holiday, Billie",
+            Composer = "Strange, Lewis Allan",
+            AlbumTitle = "Lady Sings",
+            RecordingNumber = "RS-1",
+            Medium = "LP"
+        });
+        var recordingPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(recording);
+
+        recording.Artist.Should().Be("Holiday, Billie");
+        recordingPlans.Single(plan => plan.Field == SourceManagementSourceField.AlbumTitle)
+            .Text.Should().Be("Lady Sings");
+
+        var art = SourceManagementDialogPlanner.ProjectEntry(new Source
+        {
+            Type = SourceType.Art,
+            Tag = "Art2026",
+            Artist = "Kahlo, Frida",
+            Medium = "Oil on masonite",
+            Institution = "Museo Dolores Olmedo",
+            City = "Mexico City"
+        });
+        var artPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(art);
+
+        art.Artist.Should().Be("Kahlo, Frida");
+        artPlans.Single(plan => plan.Field == SourceManagementSourceField.Institution)
+            .Text.Should().Be("Museo Dolores Olmedo");
+
+        var internetSite = SourceManagementDialogPlanner.ProjectEntry(new Source
+        {
+            Type = SourceType.InternetSite,
+            Tag = "Site2026",
+            Author = "Example Archive",
+            Publisher = "Example Site",
+            Url = "https://example.test",
+            AccessedYear = "2026"
+        });
+        var internetSitePlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(internetSite);
+
+        internetSite.Url.Should().Be("https://example.test");
+        internetSitePlans.Single(plan => plan.Field == SourceManagementSourceField.AccessedYear)
+            .Text.Should().Be("2026");
+
+        var performance = SourceManagementDialogPlanner.ProjectEntry(new Source
+        {
+            Type = SourceType.Performance,
+            Tag = "Performance2026",
+            Performer = "Royal Shakespeare Company",
+            Conductor = "Doe, Jane",
+            Theater = "Globe Theatre",
+            City = "London",
+            Month = "May",
+            Day = "8"
+        });
+        var performancePlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(performance);
+
+        performance.Performer.Should().Be("Royal Shakespeare Company");
+        performancePlans.Single(plan => plan.Field == SourceManagementSourceField.Theater)
+            .Text.Should().Be("Globe Theatre");
     }
 
     [Fact]
@@ -514,6 +680,109 @@ public sealed class SourceManagementDialogPlannerTests
         interview.Interviewer.Should().Be("Mauchly, Jean");
         interview.Medium.Should().Be("Recorded interview");
         interview.PatentNumber.Should().BeNull();
+
+        var film = SourceManagementDialogPlanner.BuildSource(SourceManagementDialogPlanner.CreateEntry(
+            SourceType.Film,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Director] = " Kubrick, Stanley ",
+                [SourceManagementSourceField.ProducerName] = " MGM ",
+                [SourceManagementSourceField.Writer] = " Clarke, Arthur C. ",
+                [SourceManagementSourceField.Performer] = " Dullea, Keir ",
+                [SourceManagementSourceField.ProductionCompany] = " Metro-Goldwyn-Mayer ",
+                [SourceManagementSourceField.Medium] = " Film ",
+                [SourceManagementSourceField.Url] = " ignored "
+            }));
+
+        film.Director.Should().Be("Kubrick, Stanley");
+        film.ProducerName.Should().Be("MGM");
+        film.Writer.Should().Be("Clarke, Arthur C.");
+        film.Performer.Should().Be("Dullea, Keir");
+        film.ProductionCompany.Should().Be("Metro-Goldwyn-Mayer");
+        film.Medium.Should().Be("Film");
+        film.Url.Should().BeNull();
+
+        var recording = SourceManagementDialogPlanner.BuildSource(SourceManagementDialogPlanner.CreateEntry(
+            SourceType.SoundRecording,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Artist] = " Holiday, Billie ",
+                [SourceManagementSourceField.Composer] = " Strange, Lewis Allan ",
+                [SourceManagementSourceField.Conductor] = " Jones, Quincy ",
+                [SourceManagementSourceField.Performer] = " Holiday, Billie ",
+                [SourceManagementSourceField.ProducerName] = " Norman Granz ",
+                [SourceManagementSourceField.AlbumTitle] = " Lady Sings ",
+                [SourceManagementSourceField.RecordingNumber] = " RS-1 ",
+                [SourceManagementSourceField.Medium] = " LP ",
+                [SourceManagementSourceField.Theater] = " ignored "
+            }));
+
+        recording.Artist.Should().Be("Holiday, Billie");
+        recording.Composer.Should().Be("Strange, Lewis Allan");
+        recording.Conductor.Should().Be("Jones, Quincy");
+        recording.Performer.Should().Be("Holiday, Billie");
+        recording.ProducerName.Should().Be("Norman Granz");
+        recording.AlbumTitle.Should().Be("Lady Sings");
+        recording.RecordingNumber.Should().Be("RS-1");
+        recording.Medium.Should().Be("LP");
+        recording.Theater.Should().BeNull();
+
+        var art = SourceManagementDialogPlanner.BuildSource(SourceManagementDialogPlanner.CreateEntry(
+            SourceType.Art,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Artist] = " Kahlo, Frida ",
+                [SourceManagementSourceField.Institution] = " Museo Dolores Olmedo ",
+                [SourceManagementSourceField.City] = " Mexico City ",
+                [SourceManagementSourceField.Medium] = " Oil on masonite ",
+                [SourceManagementSourceField.ProducerName] = " ignored "
+            }));
+
+        art.Artist.Should().Be("Kahlo, Frida");
+        art.Institution.Should().Be("Museo Dolores Olmedo");
+        art.City.Should().Be("Mexico City");
+        art.Medium.Should().Be("Oil on masonite");
+        art.ProducerName.Should().BeNull();
+
+        var internetSite = SourceManagementDialogPlanner.BuildSource(SourceManagementDialogPlanner.CreateEntry(
+            SourceType.InternetSite,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Author] = " Example Archive ",
+                [SourceManagementSourceField.Publisher] = " Example Site ",
+                [SourceManagementSourceField.Url] = " https://example.test ",
+                [SourceManagementSourceField.AccessedYear] = " 2026 ",
+                [SourceManagementSourceField.RecordingNumber] = " ignored "
+            }));
+
+        internetSite.Author.Should().Be("Example Archive");
+        internetSite.Publisher.Should().Be("Example Site");
+        internetSite.Url.Should().Be("https://example.test");
+        internetSite.AccessedYear.Should().Be("2026");
+        internetSite.RecordingNumber.Should().BeNull();
+
+        var performance = SourceManagementDialogPlanner.BuildSource(SourceManagementDialogPlanner.CreateEntry(
+            SourceType.Performance,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Performer] = " Royal Shakespeare Company ",
+                [SourceManagementSourceField.Conductor] = " Doe, Jane ",
+                [SourceManagementSourceField.Theater] = " Globe Theatre ",
+                [SourceManagementSourceField.City] = " London ",
+                [SourceManagementSourceField.Month] = " May ",
+                [SourceManagementSourceField.Day] = " 8 ",
+                [SourceManagementSourceField.Medium] = " Stage performance ",
+                [SourceManagementSourceField.AlbumTitle] = " ignored "
+            }));
+
+        performance.Performer.Should().Be("Royal Shakespeare Company");
+        performance.Conductor.Should().Be("Doe, Jane");
+        performance.Theater.Should().Be("Globe Theatre");
+        performance.City.Should().Be("London");
+        performance.Month.Should().Be("May");
+        performance.Day.Should().Be("8");
+        performance.Medium.Should().Be("Stage performance");
+        performance.AlbumTitle.Should().BeNull();
     }
 
     [Fact]

@@ -508,6 +508,13 @@ public static class DocxReader
             var inventor = ReadBibliographyContributorDisplay(element, "Inventor");
             var interviewee = ReadBibliographyContributorDisplay(element, "Interviewee");
             var interviewer = ReadBibliographyContributorDisplay(element, "Interviewer");
+            var artist = ReadBibliographyContributorDisplay(element, "Artist");
+            var composer = ReadBibliographyContributorDisplay(element, "Composer");
+            var conductor = ReadBibliographyContributorDisplay(element, "Conductor");
+            var director = ReadBibliographyContributorDisplay(element, "Director");
+            var performer = ReadBibliographyContributorDisplay(element, "Performer");
+            var producerName = ReadBibliographyContributorDisplay(element, "ProducerName");
+            var writer = ReadBibliographyContributorDisplay(element, "Writer");
             var dayAccessed = Field(element, "DayAccessed");
             var monthAccessed = Field(element, "MonthAccessed");
             var yearAccessed = Field(element, "YearAccessed");
@@ -528,6 +535,13 @@ public static class DocxReader
                 Inventor = inventor,
                 Interviewee = interviewee,
                 Interviewer = interviewer,
+                Artist = artist,
+                Composer = composer,
+                Conductor = conductor,
+                Director = director,
+                Performer = performer,
+                ProducerName = producerName,
+                Writer = writer,
                 Year = Field(element, "Year") ?? string.Empty,
                 Month = Field(element, "Month"),
                 Day = Field(element, "Day"),
@@ -542,6 +556,10 @@ public static class DocxReader
                 StateProvince = Field(element, "StateProvince"),
                 Medium = Field(element, "Medium"),
                 SourceKind = Field(element, "Type"),
+                AlbumTitle = Field(element, "AlbumTitle"),
+                ProductionCompany = Field(element, "ProductionCompany"),
+                RecordingNumber = Field(element, "RecordingNumber"),
+                Theater = Field(element, "Theater"),
                 ShortTitle = Field(element, "ShortTitle"),
                 Comments = Field(element, "Comments"),
                 Journal = Field(element, "JournalName"),
@@ -647,6 +665,11 @@ public static class DocxReader
         "Patent" => SourceType.Patent,
         "Interview" => SourceType.Interview,
         "Misc" => SourceType.Misc,
+        "Film" => SourceType.Film,
+        "SoundRecording" => SourceType.SoundRecording,
+        "Art" => SourceType.Art,
+        "InternetSite" => SourceType.InternetSite,
+        "Performance" => SourceType.Performance,
         _ => SourceType.Book,
     };
 
