@@ -920,4 +920,70 @@ public sealed class InsertDepth2Tests
             MathRunKind.GroupChar);
         linearText.Should().Be("xhat_y_[a + b]z\u23DF");
     }
+
+    [Fact]
+    public async Task EquationVisualPlanner_function_apply_lays_out_shared_function_structure()
+    {
+        EquationVisualElementKind[] elementKinds = [];
+        (string LinearText, string FunctionName, string FunctionArgument)[] elementSlots = [];
+        string[] texts = [];
+        EquationVisualSegmentRole[] roles = [];
+        (EquationVisualBaselineRole BaselineRole, double FontSizeScale, bool Italic)[] styles = [];
+        MathRunKind[] kinds = [];
+        var placedText = string.Empty;
+        var linearText = string.Empty;
+        var placedGlyphCount = 0;
+
+        var ran = await OnUiThread(() =>
+        {
+            var view = MakeView("");
+            view.InsertEquation(new Equation([MathRun.FunctionApply("sin", "x + y")]));
+
+            var elements = view.EquationVisualElements;
+            elementKinds = elements.Select(element => element.Kind).ToArray();
+            elementSlots = elements
+                .Select(element => (element.LinearText, element.FunctionName, element.FunctionArgument))
+                .ToArray();
+            var segments = view.EquationVisualSegments;
+            texts = segments.Select(segment => segment.Text).ToArray();
+            roles = segments.Select(segment => segment.Role).ToArray();
+            styles = segments
+                .Select(segment => (segment.BaselineRole, segment.FontSizeScale, segment.Italic))
+                .ToArray();
+            placedText = string.Concat(view.GetPlacedForBlock(0).Select(placed => placed.Ch));
+            placedGlyphCount = view.PlacedGlyphCount;
+
+            var eqRun = view.Document.Blocks.OfType<Paragraph>()
+                .SelectMany(p => p.Runs)
+                .Single(run => run.Equation is not null);
+            kinds = eqRun.Equation!.Runs.Select(run => run.Kind).ToArray();
+            linearText = eqRun.Equation!.LinearText;
+        });
+
+        if (!ran) return;
+
+        elementKinds.Should().Equal(EquationVisualElementKind.FunctionApply);
+        elementSlots[0].Should().Be(("sin(x + y)", "sin", "x + y"));
+        texts.Should().Equal(
+            "sin",
+            EquationVisualPlanner.FunctionOpenDelimiterText,
+            "x + y",
+            EquationVisualPlanner.FunctionCloseDelimiterText);
+        roles.Should().Equal(
+            EquationVisualSegmentRole.FunctionName,
+            EquationVisualSegmentRole.FunctionOpenDelimiter,
+            EquationVisualSegmentRole.FunctionArgument,
+            EquationVisualSegmentRole.FunctionCloseDelimiter);
+        roles.Should().NotContain(EquationVisualSegmentRole.LinearFallback);
+        styles[0].Italic.Should().BeFalse();
+        styles[1].Italic.Should().BeFalse();
+        styles[2].Italic.Should().BeTrue();
+        styles[0].FontSizeScale.Should().Be(EquationVisualPlanner.StructureFontSizeScale);
+        styles[2].FontSizeScale.Should().Be(EquationVisualPlanner.StructureFontSizeScale);
+        placedText.Should().Be("sin(x + y)");
+        placedGlyphCount.Should().Be(10,
+            "Avalonia should lay out function display segments instead of a single raw linear fallback segment");
+        kinds.Should().Equal(MathRunKind.FunctionApply);
+        linearText.Should().Be("sin(x + y)");
+    }
 }

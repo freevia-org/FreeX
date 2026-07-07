@@ -629,6 +629,48 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
+    public void EquationVisualPlanner_FunctionApplyRendersStructuredNameArgumentAndRoundTrips()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var equation = new Equation([MathRun.FunctionApply("sin", "x + y")]);
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var functionPanel = LogicalDescendants<StackPanel>(view.Document)
+            .Single(panel => Equals(panel.Tag, EquationVisualElementKind.FunctionApply));
+        var visualText = LogicalDescendants<TextBlock>(functionPanel)
+            .Select(TextBlockText)
+            .Where(text => text.Length > 0)
+            .ToList();
+        visualText.Should().Equal(
+            "sin",
+            EquationVisualPlanner.FunctionOpenDelimiterText,
+            "x + y",
+            EquationVisualPlanner.FunctionCloseDelimiterText);
+        visualText.Should().NotContain("sin(x + y)",
+            "function application should render as styled function/argument parts instead of raw linear fallback");
+
+        var visualRuns = LogicalDescendants<TextBlock>(functionPanel)
+            .SelectMany(textBlock => textBlock.Inlines.OfType<System.Windows.Documents.Run>())
+            .ToList();
+        visualRuns.Single(run => run.Text == "sin").FontStyle.Should().Be(FontStyles.Normal);
+        visualRuns.Single(run => run.Text == "x + y").FontStyle.Should().Be(FontStyles.Italic);
+
+        view.CommitToModel();
+        var recovered = FirstRun(view.Model);
+        recovered.Equation.Should().NotBeNull();
+        var run = recovered.Equation!.Runs.Should().ContainSingle().Subject;
+        run.Kind.Should().Be(MathRunKind.FunctionApply);
+        run.FuncName.Should().Be("sin");
+        run.Base.Should().Be("x + y");
+    }
+
+    [StaFact]
     public void InsertEquation_PlacesStructuredEquationAtCaret()
     {
         var view = new DocumentView();

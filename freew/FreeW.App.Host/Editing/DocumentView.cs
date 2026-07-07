@@ -9930,7 +9930,7 @@ public sealed class DocumentView : RichTextBox
     /// Renders an inline equation as an InlineUIContainer hosting a Border that carries the model
     /// <see cref="Equation"/> on its Tag (so CommitToModel round-trips it, mirroring shapes). The border
     /// consumes the shared equation visual planner so simple scripts render as styled math segments and
-    /// lightweight fraction/radical/n-ary/matrix structures render with visual cues.
+    /// lightweight fraction/radical/n-ary/matrix/function structures render with visual cues.
     /// </summary>
     private static InlineUIContainer BuildEquationRun(Equation equation)
     {
@@ -9978,6 +9978,7 @@ public sealed class DocumentView : RichTextBox
             EquationVisualElementKind.Bar => BuildEquationBarElement(element),
             EquationVisualElementKind.Delimiter => BuildEquationDelimiterElement(element),
             EquationVisualElementKind.GroupChar => BuildEquationGroupCharElement(element),
+            EquationVisualElementKind.FunctionApply => BuildEquationFunctionApplyElement(element),
             _ => BuildEquationTextBlock(element.Segments)
         };
     }
@@ -10208,6 +10209,32 @@ public sealed class DocumentView : RichTextBox
         }
 
         return stack;
+    }
+
+    private static FrameworkElement BuildEquationFunctionApplyElement(EquationVisualElement element)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 0, 2, 0),
+            Tag = EquationVisualElementKind.FunctionApply
+        };
+
+        AddEquationFunctionPart(panel, EquationVisualSegmentRole.FunctionName, new Thickness(1, 0, 0, 0));
+        AddEquationFunctionPart(panel, EquationVisualSegmentRole.FunctionOpenDelimiter, new Thickness(1, 0, 0, 0));
+        AddEquationFunctionPart(panel, EquationVisualSegmentRole.FunctionArgument, new Thickness(0, 0, 0, 0));
+        AddEquationFunctionPart(panel, EquationVisualSegmentRole.FunctionCloseDelimiter, new Thickness(0, 0, 1, 0));
+        return panel;
+
+        void AddEquationFunctionPart(StackPanel target, EquationVisualSegmentRole role, Thickness margin)
+        {
+            var segment = SegmentWithRole(element, role);
+            if (segment.Text.Length == 0)
+                return;
+
+            target.Children.Add(BuildEquationStructureTextBlock(segment, WpfTextAlignment.Center, margin));
+        }
     }
 
     private static Border BuildEquationBarLine(Thickness margin) =>

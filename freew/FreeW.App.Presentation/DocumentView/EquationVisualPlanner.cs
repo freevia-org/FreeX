@@ -32,6 +32,10 @@ public enum EquationVisualSegmentRole
     DelimiterClose,
     GroupCharMark,
     GroupCharBase,
+    FunctionName,
+    FunctionOpenDelimiter,
+    FunctionArgument,
+    FunctionCloseDelimiter,
     LinearFallback
 }
 
@@ -45,7 +49,8 @@ public enum EquationVisualElementKind
     Accent,
     Bar,
     Delimiter,
-    GroupChar
+    GroupChar,
+    FunctionApply
 }
 
 public enum EquationVisualBaselineRole
@@ -94,6 +99,8 @@ public sealed record EquationVisualElement(
     public string CloseDelimiter { get; init; } = string.Empty;
     public string GroupCharacter { get; init; } = string.Empty;
     public string GroupCharacterPosition { get; init; } = string.Empty;
+    public string FunctionName { get; init; } = string.Empty;
+    public string FunctionArgument { get; init; } = string.Empty;
 
     public int MatrixRowCount => MatrixRows.Count;
 
@@ -240,6 +247,24 @@ public sealed record EquationVisualElement(
             GroupCharacter = groupCharacter,
             GroupCharacterPosition = groupCharacterPosition
         };
+
+    public static EquationVisualElement FunctionApply(
+        string linearText,
+        string functionName,
+        string argument,
+        IReadOnlyList<EquationVisualSegment> segments) =>
+        new(
+            EquationVisualElementKind.FunctionApply,
+            linearText,
+            segments,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty)
+        {
+            FunctionName = functionName,
+            FunctionArgument = argument
+        };
 }
 
 public sealed record EquationVisualPlan(
@@ -267,6 +292,8 @@ public static class EquationVisualPlanner
     public const string MatrixRowSeparatorText = "; ";
     public const string OverbarCueText = "\u00af";
     public const string UnderbarCueText = "_";
+    public const string FunctionOpenDelimiterText = "(";
+    public const string FunctionCloseDelimiterText = ")";
 
     private static EquationVisualStyle NormalStyle { get; } = new(
         DefaultMathFontFamily,
@@ -328,6 +355,20 @@ public static class EquationVisualPlanner
         DefaultMathFontFamily,
         Italic: false,
         DelimiterFontSizeScale,
+        EquationVisualBaselineRole.Normal,
+        BaselineOffsetEm: 0.0);
+
+    private static EquationVisualStyle FunctionNameStyle { get; } = new(
+        DefaultMathFontFamily,
+        Italic: false,
+        StructureFontSizeScale,
+        EquationVisualBaselineRole.Normal,
+        BaselineOffsetEm: 0.0);
+
+    private static EquationVisualStyle FunctionDelimiterStyle { get; } = new(
+        DefaultMathFontFamily,
+        Italic: false,
+        StructureFontSizeScale,
         EquationVisualBaselineRole.Normal,
         BaselineOffsetEm: 0.0);
 
@@ -431,6 +472,10 @@ public static class EquationVisualPlanner
 
             case MathRunKind.GroupChar:
                 AddGroupCharElement(run, segments, elements);
+                break;
+
+            case MathRunKind.FunctionApply:
+                AddFunctionApplyElement(run, segments, elements);
                 break;
 
             default:
@@ -689,6 +734,30 @@ public static class EquationVisualPlanner
             run.Base,
             run.GroupChr,
             run.GroupChrPos,
+            runSegments));
+    }
+
+    private static void AddFunctionApplyElement(
+        MathRun run,
+        List<EquationVisualSegment> segments,
+        List<EquationVisualElement> elements)
+    {
+        var runSegments = new List<EquationVisualSegment>();
+        AddIfAny(runSegments, run.FuncName, EquationVisualSegmentRole.FunctionName, FunctionNameStyle);
+        if (!string.IsNullOrEmpty(run.FuncName))
+            AddIfAny(runSegments, FunctionOpenDelimiterText, EquationVisualSegmentRole.FunctionOpenDelimiter, FunctionDelimiterStyle);
+        AddIfAny(runSegments, run.Base, EquationVisualSegmentRole.FunctionArgument, StructureStyle);
+        if (!string.IsNullOrEmpty(run.FuncName))
+            AddIfAny(runSegments, FunctionCloseDelimiterText, EquationVisualSegmentRole.FunctionCloseDelimiter, FunctionDelimiterStyle);
+
+        if (runSegments.Count == 0)
+            return;
+
+        segments.AddRange(runSegments);
+        elements.Add(EquationVisualElement.FunctionApply(
+            run.LinearText,
+            run.FuncName,
+            run.Base,
             runSegments));
     }
 

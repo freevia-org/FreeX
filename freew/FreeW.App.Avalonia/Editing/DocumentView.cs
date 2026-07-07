@@ -157,7 +157,8 @@ public sealed class DocumentView : Control
     private readonly List<(EquationVisualElementKind Kind, string LinearText, string Numerator, string Denominator,
         string Radicand, string Degree, string Operator, string LowerLimit, string UpperLimit, string Operand,
         IReadOnlyList<EquationVisualMatrixRow> MatrixRows, string BaseText, string Accent, bool BarTop,
-        string OpenDelimiter, string CloseDelimiter, string GroupCharacter, string GroupCharacterPosition)>
+        string OpenDelimiter, string CloseDelimiter, string GroupCharacter, string GroupCharacterPosition,
+        string FunctionName, string FunctionArgument)>
         _equationVisualElements = new();
     private readonly Dictionary<InlineImage, Bitmap?> _bitmapCache = new();
     private byte[]? _watermarkBitmapCacheBytes;
@@ -2795,7 +2796,8 @@ public sealed class DocumentView : Control
     public IReadOnlyList<(EquationVisualElementKind Kind, string LinearText, string Numerator, string Denominator,
         string Radicand, string Degree, string Operator, string LowerLimit, string UpperLimit, string Operand,
         IReadOnlyList<EquationVisualMatrixRow> MatrixRows, string BaseText, string Accent, bool BarTop,
-        string OpenDelimiter, string CloseDelimiter, string GroupCharacter, string GroupCharacterPosition)>
+        string OpenDelimiter, string CloseDelimiter, string GroupCharacter, string GroupCharacterPosition,
+        string FunctionName, string FunctionArgument)>
         EquationVisualElements
     {
         get
@@ -13528,7 +13530,9 @@ public sealed class DocumentView : Control
             element.OpenDelimiter,
             element.CloseDelimiter,
             element.GroupCharacter,
-            element.GroupCharacterPosition));
+            element.GroupCharacterPosition,
+            element.FunctionName,
+            element.FunctionArgument));
 
         foreach (var segment in element.Segments)
             AddEquationVisualSegment(segment, baseFormatting, cells);
