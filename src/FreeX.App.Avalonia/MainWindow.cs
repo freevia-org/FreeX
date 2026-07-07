@@ -16766,25 +16766,25 @@ public sealed partial class MainWindow : Window
         var selectAllButton = new Button
         {
             Content = "Select All",
-            Width = 112,
-            MinWidth = 112,
+            Width = 88,
+            MinWidth = 88,
             Margin = new Thickness(0, 0, 8, 0),
         };
         AutomationProperties.SetName(selectAllButton, "Select All");
         AutomationProperties.SetAutomationId(selectAllButton, "RemoveDuplicatesSelectAllButton");
         AutomationProperties.SetHelpText(selectAllButton, "Select all columns for duplicate comparison.");
-        ApplyDialogButtonChrome(selectAllButton, width: 112);
+        ApplyDialogButtonChrome(selectAllButton, width: 88);
 
         var unselectAllButton = new Button
         {
             Content = "Unselect All",
-            Width = 112,
-            MinWidth = 112,
+            Width = 88,
+            MinWidth = 88,
         };
         AutomationProperties.SetName(unselectAllButton, "Unselect All");
         AutomationProperties.SetAutomationId(unselectAllButton, "RemoveDuplicatesUnselectAllButton");
         AutomationProperties.SetHelpText(unselectAllButton, "Clear all selected duplicate comparison columns.");
-        ApplyDialogButtonChrome(unselectAllButton, width: 112);
+        ApplyDialogButtonChrome(unselectAllButton, width: 88);
 
         var errorText = new TextBlock
         {
@@ -16905,26 +16905,17 @@ public sealed partial class MainWindow : Window
         dialog.Content = new Border
         {
             Padding = new Thickness(12),
-            Child = new AvaloniaGrid
+            Child = new StackPanel
             {
-                RowDefinitions =
-                {
-                    new RowDefinition { Height = GridLength.Auto },
-                    new RowDefinition { Height = GridLength.Auto },
-                    new RowDefinition { Height = GridLength.Auto },
-                    new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
-                    new RowDefinition { Height = GridLength.Auto },
-                    new RowDefinition { Height = GridLength.Auto },
-                },
                 Children =
                 {
                     hasHeadersBox,
-                    Positioned(1, new TextBlock
+                    new TextBlock
                     {
                         Text = "Columns:",
-                        Margin = new Thickness(0, 0, 0, 8),
-                    }),
-                    Positioned(2, new StackPanel
+                        Margin = new Thickness(0, 0, 0, 4),
+                    },
+                    new StackPanel
                     {
                         Orientation = Orientation.Horizontal,
                         Margin = new Thickness(0, 0, 0, 8),
@@ -16933,14 +16924,15 @@ public sealed partial class MainWindow : Window
                             selectAllButton,
                             unselectAllButton,
                         },
-                    }),
-                    Positioned(3, new ScrollViewer
+                    },
+                    new ScrollViewer
                     {
+                        Height = 160,
                         VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                         Content = columnsPanel,
-                    }),
-                    Positioned(4, errorText),
-                    Positioned(5, new StackPanel
+                    },
+                    errorText,
+                    new StackPanel
                     {
                         Orientation = Orientation.Horizontal,
                         HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
@@ -16951,7 +16943,7 @@ public sealed partial class MainWindow : Window
                             okButton,
                             cancelButton,
                         },
-                    }),
+                    },
                 },
             },
         };
@@ -16959,12 +16951,6 @@ public sealed partial class MainWindow : Window
 
         await dialog.ShowDialog(this);
         return result;
-
-        static Control Positioned(int row, Control control)
-        {
-            AvaloniaGrid.SetRow(control, row);
-            return control;
-        }
     }
 
     private static string FormatRemoveDuplicatesStatus(

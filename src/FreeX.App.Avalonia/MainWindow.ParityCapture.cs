@@ -739,6 +739,9 @@ public sealed partial class MainWindow
         if (!previousSheetId.Equals(sheetId))
             _session.SelectSheet(sheetId);
 
+        var sheet = _session.ActiveSheet;
+        var previousHeaders = CaptureHeaderCells(sheet, row: 1, startColumn: 1, columnCount: 4);
+        SeedRemoveDuplicatesParityHeaders(sheet);
         _session.SelectRange(new GridRange(
             new CellAddress(sheetId, 1, 1),
             new CellAddress(sheetId, 4, 4)));
@@ -750,10 +753,38 @@ public sealed partial class MainWindow
         }
         finally
         {
+            RestoreHeaderCells(sheet, row: 1, startColumn: 1, previousHeaders);
             if (!previousSheetId.Equals(_session.ActiveSheet.Id))
                 _session.SelectSheet(previousSheetId);
             _session.SelectRange(previousSelection);
             RefreshShell(_statusText.Text ?? "Ready");
+        }
+    }
+
+    private static Cell?[] CaptureHeaderCells(Sheet sheet, uint row, uint startColumn, int columnCount)
+    {
+        var cells = new Cell?[columnCount];
+        for (var index = 0; index < cells.Length; index++)
+            cells[index] = sheet.GetCell(row, startColumn + (uint)index)?.Clone();
+        return cells;
+    }
+
+    private static void SeedRemoveDuplicatesParityHeaders(Sheet sheet)
+    {
+        string[] headers = ["Region", "Product", "Revenue", "Units"];
+        for (var index = 0; index < headers.Length; index++)
+            sheet.SetCell(new CellAddress(sheet.Id, 1, (uint)(index + 1)), Cell.FromValue(new TextValue(headers[index])));
+    }
+
+    private static void RestoreHeaderCells(Sheet sheet, uint row, uint startColumn, IReadOnlyList<Cell?> cells)
+    {
+        for (var index = 0; index < cells.Count; index++)
+        {
+            var address = new CellAddress(sheet.Id, row, startColumn + (uint)index);
+            if (cells[index] is { } cell)
+                sheet.SetCell(address, cell);
+            else
+                sheet.ClearCell(address);
         }
     }
 

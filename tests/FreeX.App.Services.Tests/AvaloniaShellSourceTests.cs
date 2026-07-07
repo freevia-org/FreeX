@@ -3134,6 +3134,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("RemoveDuplicatesPlanner.CreatePlan(");
         source.Should().Contain("RenderColumns(RemoveDuplicatesPlanner.SelectAll(CaptureColumns()))");
         source.Should().Contain("RenderColumns(RemoveDuplicatesPlanner.ClearAll(CaptureColumns()))");
+        source.Should().Contain("ApplyDialogButtonChrome(selectAllButton, width: 88);");
+        source.Should().Contain("ApplyDialogButtonChrome(unselectAllButton, width: 88);");
+        source.Should().Contain("Child = new StackPanel");
+        source.Should().Contain("Height = 160");
         source.Should().Contain("private static string FormatRemoveDuplicatesStatus(");
 
         sessionSource.Should().Contain("public WorkbookRemoveDuplicatesResult ExecuteRemoveDuplicatesPlan(RemoveDuplicatesPlan plan)");
@@ -3148,7 +3152,11 @@ public sealed class AvaloniaShellSourceTests
         plannerSource.Should().Contain("public RemoveDuplicateRowsCommand CreateCommand(SheetId sheetId)");
         parityCaptureSource.Should().Contain("(\"dialog.RemoveDuplicates\", () => ShowRemoveDuplicatesParityDialogAsync()),");
         parityCaptureSource.Should().Contain("private async Task ShowRemoveDuplicatesParityDialogAsync()");
+        parityCaptureSource.Should().Contain("var previousHeaders = CaptureHeaderCells(sheet, row: 1, startColumn: 1, columnCount: 4);");
+        parityCaptureSource.Should().Contain("SeedRemoveDuplicatesParityHeaders(sheet);");
         parityCaptureSource.Should().Contain("await ShowRemoveDuplicatesInputDialogAsync(forceHasHeaders: true);");
+        parityCaptureSource.Should().Contain("RestoreHeaderCells(sheet, row: 1, startColumn: 1, previousHeaders);");
+        parityCaptureSource.Should().Contain("string[] headers = [\"Region\", \"Product\", \"Revenue\", \"Units\"];");
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowRemoveDuplicatesDialogAsync()", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);
