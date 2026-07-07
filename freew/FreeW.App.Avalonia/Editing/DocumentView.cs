@@ -4258,44 +4258,40 @@ public sealed class DocumentView : Control
 
     // ── AV-WRAP: wrap-exclusion helpers ───────────────────────────────────────────────────────────────
 
+    private DocumentFloatingTextWrapLinePlan BuildFloatingTextWrapLinePlan(
+        double estimatedLineHeight,
+        double baseTextWidthDip,
+        double? lineContentYDip = null,
+        double? currentContentYDip = null)
+    {
+        var wrapColumnWidth = _colCount > 1 ? _colWidth : _contentWidth;
+        var peekContentY = lineContentYDip ?? PeekFirstLineContentY(estimatedLineHeight);
+        return DocumentViewLayoutPlanner.BuildFloatingTextWrapLinePlan(
+            _wrapExclusions,
+            _surfacePlan,
+            currentContentYDip ?? _layoutContentY,
+            peekContentY,
+            estimatedLineHeight,
+            _contentLeft,
+            _colCount,
+            wrapColumnWidth,
+            _colGap,
+            baseTextWidthDip);
+    }
+
     /// <summary>
     /// Advances <c>_layoutContentY</c> past any TopAndBottom exclusion zones that would overlap
     /// a line of <paramref name="estimatedLineHeight"/> at the current position.
-    /// Loops until no TopAndBottom zone overlaps, capping at 200 iterations to prevent infinite loops
-    /// for pathological documents.
-    /// Only active when there are TopAndBottom exclusions registered.
-    /// BB2: In multi-column layout a TopAndBottom float blocks the entire page-width Y-band, so we
-    /// advance to the LAST column on the affected page (making all columns skip past the float's Y-band).
+    /// BB2: the shared planner advances to the last column slot on the affected page, so every column
+    /// skips the blocked Y-band.
     /// </summary>
-    private void AdvancePastTopAndBottomExclusions(double estimatedLineHeight)
+    private void AdvancePastTopAndBottomExclusions(double estimatedLineHeight, double baseTextWidthDip)
     {
         if (_wrapExclusions.Count == 0) return;
-        for (var guard = 0; guard < 200; guard++)
-        {
-            var peekContentY  = PeekFirstLineContentY(estimatedLineHeight);
-            var peekPageSpaceY = ContentYToPageSpaceY(peekContentY);
-            var wrapColumnWidth = _colCount > 1 ? _colWidth : _contentWidth;
-            var exclusionBottom = DocumentViewLayoutPlanner.BuildTopAndBottomWrapExclusionBottom(
-                _wrapExclusions,
-                peekPageSpaceY,
-                estimatedLineHeight,
-                _contentLeft,
-                _colCount,
-                wrapColumnWidth,
-                _colGap);
-            if (exclusionBottom is null) break; // no overlap: done
 
-            var targetContentY = DocumentViewLayoutPlanner.BuildContentYAfterTopAndBottomWrapExclusion(
-                _surfacePlan,
-                _layoutContentY,
-                peekContentY,
-                exclusionBottom.Value,
-                _colCount);
-
-            if (targetContentY <= _layoutContentY)
-                break; // safety: do not regress
-            _layoutContentY = targetContentY;
-        }
+        var plan = BuildFloatingTextWrapLinePlan(estimatedLineHeight, baseTextWidthDip);
+        if (plan.HasTopAndBottomAdvance && plan.PlannedContentYDip > _layoutContentY)
+            _layoutContentY = plan.PlannedContentYDip;
     }
 
     private void LayoutParagraphPaged(int blockIndex, Paragraph paragraph, double textWidth, double leftInset = 0, string? marker = null)
@@ -4399,30 +4395,11 @@ public sealed class DocumentView : Control
 
         var lineIndex = 0;
 
-        // AV-WRAP: pre-compute the column geometry for exclusion queries.
-        // These are the same values used in EmitLinePaged to identify the column.
-        var wrapColW = _colCount > 1 ? _colWidth : _contentWidth;
-
-        // AV-WRAP: Helper that peeks the page-space Y of the CURRENT line-being-built, then
-        // queries Square/Tight exclusions to get the adjusted wrap budget for that line.
-        // This mirrors the values EmitLinePaged will compute when actually emitting the line.
-        // estimatedH: estimated line height (max of heights[lineStart..i)).
-        double PeekLineAvail(double estimatedH, int fromIdx, double baseAlignWidth)
+        // AV-WRAP: ask the shared presentation planner for the current line's effective width.
+        double PeekLineAvail(double estimatedH, double baseAlignWidth)
         {
             if (_wrapExclusions.Count == 0) return baseAlignWidth;
-            var peekContentY   = PeekFirstLineContentY(estimatedH);
-            var peekPageSpaceY = ContentYToPageSpaceY(peekContentY);
-            // Peek the column for the line (mirrors EmitLinePaged slot logic).
-            var slot       = _layoutTextAreaHeight > 0 ? (int)(peekContentY / _layoutTextAreaHeight) : 0;
-            var colIdx     = slot % _colCount;
-            var cLeft      = _contentLeft + colIdx * (_colWidth + _colGap);
-            var exclusion  = DocumentViewLayoutPlanner.BuildSquareTightWrapExclusion(
-                _wrapExclusions,
-                peekPageSpaceY,
-                estimatedH,
-                cLeft,
-                wrapColW);
-            return Math.Max(20, baseAlignWidth - exclusion.LeftDeltaDip - exclusion.RightShrinkDip);
+            return BuildFloatingTextWrapLinePlan(estimatedH, baseAlignWidth).EffectiveTextWidthDip;
         }
 
         while (i < cells.Count)
@@ -4457,14 +4434,14 @@ public sealed class DocumentView : Control
             var lineH2 = DefaultFontSizePt * PxPerPoint * 1.3;
             for (var c2 = lineStart; c2 <= i && c2 < heights.Length; c2++)
                 if (heights[c2] > lineH2) lineH2 = heights[c2];
-            var lineAvail = PeekLineAvail(lineH2, lineStart, lineAlignWidth);
+            var lineAvail = PeekLineAvail(lineH2, lineAlignWidth);
 
             if (lineWidth + measured[i] > lineAvail && i > lineStart)
             {
                 var breakAt = lastBreak >= lineStart ? lastBreak + 1 : i;
                 // AV-WRAP: push past any TopAndBottom exclusion zones before emitting.
                 if (_wrapExclusions.Count > 0)
-                    AdvancePastTopAndBottomExclusions(lineH2);
+                    AdvancePastTopAndBottomExclusions(lineH2, lineAlignWidth);
                 EmitLinePaged(blockIndex, cells, measured, heights, lineStart, breakAt, alignment,
                     lineAlignWidth, paraLeftInset + lineExtraInset, pf);
                 lineIndex++;
@@ -4499,7 +4476,7 @@ public sealed class DocumentView : Control
                 var lineH = DefaultFontSizePt * PxPerPoint * 1.3;
                 for (var c2 = lineStart; c2 < cells.Count; c2++)
                     if (heights[c2] > lineH) lineH = heights[c2];
-                AdvancePastTopAndBottomExclusions(lineH);
+                AdvancePastTopAndBottomExclusions(lineH, lineAlignWidth);
             }
             EmitLinePaged(blockIndex, cells, measured, heights, lineStart, cells.Count, alignment,
                 lineAlignWidth, paraLeftInset + lineExtraInset, pf, isLast: true);
@@ -4535,7 +4512,6 @@ public sealed class DocumentView : Control
 
         // Ensure the whole line fits on one page (push to next page if it overflows).
         var contentY = ReserveContentY(lineHeight);
-        var pageSpaceY = ContentYToPageSpaceY(contentY);
 
         // Word-spacing expansion for justify (last line stays left).
         // OO1 fix: exclude the trailing space from BOTH the visible-width sum and the gap-add loop.
@@ -4574,27 +4550,39 @@ public sealed class DocumentView : Control
             }
         }
 
+        var pageSpaceY = ContentYToPageSpaceY(contentY);
+
         // AV-COL: compute the left edge of the column this line lands in.
         // slot = which column-slot (0-based across all pages); colIndex = slot % _colCount.
-        var lineSlot     = _layoutTextAreaHeight > 0 ? (int)(contentY / _layoutTextAreaHeight) : 0;
-        var lineColIndex = lineSlot % _colCount;
-        var colLeft      = _contentLeft + lineColIndex * (_colWidth + _colGap);
-        var colW         = _colCount > 1 ? _colWidth : _contentWidth;
+        var lineSlot = _layoutTextAreaHeight > 0 ? (int)(contentY / _layoutTextAreaHeight) : 0;
+        var colLeft = _contentLeft + (lineSlot % _colCount) * (_colWidth + _colGap);
 
-        // AV-WRAP: apply Square/Tight exclusion zones for this line.
-        // TopAndBottom is handled in LayoutParagraphPaged (advances _layoutContentY before we arrive here).
-        var lineExclusion = _wrapExclusions.Count > 0
-            ? DocumentViewLayoutPlanner.BuildSquareTightWrapExclusion(
-                _wrapExclusions,
-                pageSpaceY,
+        DocumentFloatingTextWrapLinePlan? wrapLinePlan = null;
+        if (_wrapExclusions.Count > 0)
+        {
+            wrapLinePlan = BuildFloatingTextWrapLinePlan(
                 lineHeight,
-                colLeft,
-                colW)
-            : new DocumentFloatingLineExclusionPlan(0, 0);
-        var wrapLeftDelta = lineExclusion.LeftDeltaDip;
-        var wrapRightShrink = lineExclusion.RightShrinkDip;
+                availableWidth,
+                lineContentYDip: contentY,
+                currentContentYDip: contentY);
+            if (wrapLinePlan.HasTopAndBottomAdvance && wrapLinePlan.PlannedContentYDip > contentY)
+            {
+                _layoutContentY = wrapLinePlan.PlannedContentYDip;
+                contentY = ReserveContentY(lineHeight);
+                wrapLinePlan = BuildFloatingTextWrapLinePlan(
+                    lineHeight,
+                    availableWidth,
+                    lineContentYDip: contentY,
+                    currentContentYDip: contentY);
+            }
+
+            pageSpaceY = wrapLinePlan.PageSpaceYDip;
+            colLeft = wrapLinePlan.ColumnLeftDip;
+        }
+
+        var wrapLeftDelta = wrapLinePlan?.LeftDeltaDip ?? 0;
         var effectiveLeftInset = leftInset + wrapLeftDelta;
-        var effectiveWidth     = availableWidth - wrapLeftDelta - wrapRightShrink;
+        var effectiveWidth = wrapLinePlan?.EffectiveTextWidthDip ?? availableWidth;
         if (effectiveWidth < 20) effectiveWidth = 20; // safety floor
 
         // AV-TAB: detect whether this line contains any tab characters.

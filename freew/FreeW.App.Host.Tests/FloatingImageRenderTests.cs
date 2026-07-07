@@ -61,7 +61,13 @@ public sealed class FloatingImageRenderTests
         return doc;
     }
 
-    private static TextDocument DocWithFloatingText(ImageWrapping wrapping, out InlineImage image)
+    private static TextDocument DocWithFloatingText(
+        ImageWrapping wrapping,
+        out InlineImage image,
+        double hOffPt = 36,
+        double vOffPt = 18,
+        HorizontalAnchor hAnchor = HorizontalAnchor.Margin,
+        VerticalAnchor vAnchor = VerticalAnchor.Page)
     {
         var doc = new TextDocument();
         doc.Blocks.Clear();
@@ -70,10 +76,10 @@ public sealed class FloatingImageRenderTests
         image = new InlineImage(MinimalPng(), widthPt: 72, heightPt: 54)
         {
             Wrapping = wrapping,
-            HorizontalOffsetPt = 36,
-            VerticalOffsetPt = 18,
-            HorizontalAnchor = HorizontalAnchor.Margin,
-            VerticalAnchor = VerticalAnchor.Page,
+            HorizontalOffsetPt = hOffPt,
+            VerticalOffsetPt = vOffPt,
+            HorizontalAnchor = hAnchor,
+            VerticalAnchor = vAnchor,
             ZOrderIndex = 3,
         };
         para.Runs.Add(Run.FromImage(image));
@@ -160,6 +166,62 @@ public sealed class FloatingImageRenderTests
             committed.Runs[1].Image.Should().BeSameAs(originalImage);
             committed.Runs[1].Image!.Wrapping.Should().Be(wrapping);
             committed.Runs[2].Text.Should().Be(" after");
+        }
+    }
+
+    [StaFact]
+    public void FloatingImage_WrapReservationsHaveSharedLinePlanEvidence()
+    {
+        foreach (var wrapping in new[] { ImageWrapping.Square, ImageWrapping.Tight, ImageWrapping.TopAndBottom })
+        {
+            var doc = DocWithFloatingText(
+                wrapping,
+                out _,
+                hOffPt: 0,
+                vOffPt: 0,
+                hAnchor: HorizontalAnchor.Column,
+                vAnchor: VerticalAnchor.Paragraph);
+            var view = new DocumentView();
+            view.LoadModel(doc);
+
+            RenderedParagraph(view).Inlines.OfType<WpfFloater>()
+                .Should()
+                .ContainSingle("WPF must consume the shared wrap reservation instead of overlay-only rendering");
+
+            var surface = DocumentViewLayoutPlanner.BuildFloatingOverlaySurfacePlan(
+                doc.Page,
+                printLayout: view.PrintLayoutEnabled,
+                plainInsetDip: 48);
+            var snapshots = DocumentViewLayoutPlanner.BuildFloatingObjectSnapshots(
+                doc,
+                surface,
+                columnCount: 1);
+            var zones = DocumentViewLayoutPlanner.BuildFloatingWrapExclusionZones(snapshots);
+            var zone = zones.Single();
+            var linePlan = DocumentViewLayoutPlanner.BuildFloatingTextWrapLinePlan(
+                zones,
+                surface,
+                currentContentYDip: 0,
+                lineContentYDip: 0,
+                lineHeightDip: 18,
+                contentLeftDip: surface.ContentLeftDip,
+                columnCount: 1,
+                columnWidthDip: surface.ContentWidthDip,
+                columnGapDip: 0,
+                baseTextWidthDip: surface.ContentWidthDip);
+
+            if (wrapping == ImageWrapping.TopAndBottom)
+            {
+                linePlan.HasTopAndBottomAdvance.Should().BeTrue();
+                linePlan.PageSpaceYDip.Should().BeGreaterThanOrEqualTo(zone.Rect.BottomDip);
+            }
+            else
+            {
+                linePlan.HasLateralExclusion.Should().BeTrue();
+                linePlan.TextLeftDip().Should().BeGreaterThan(zone.Rect.RightDip);
+                linePlan.TextRightDip().Should().BeLessThanOrEqualTo(
+                    surface.ContentLeftDip + surface.ContentWidthDip);
+            }
         }
     }
 
