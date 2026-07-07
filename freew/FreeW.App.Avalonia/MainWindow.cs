@@ -1742,20 +1742,32 @@ public sealed class MainWindow : Window
         return SaveToTargetAsync(target);
     }
 
-    private Task<bool> SaveToTargetAsync(DocumentSaveTarget target)
+    private async Task<bool> SaveToTargetAsync(DocumentSaveTarget target)
     {
         try
         {
+            if (!await ConfirmSaveCompatibilityAsync(target))
+            {
+                _status.Text = "Save canceled.";
+                return false;
+            }
+
             _documentPersistence.Save(_editor.Document, target);
             MarkDocumentSavedWithPath(target.Path);
             _status.Text = SisterAppFileTextPlanner.FormatSaved(Path.GetFileName(target.Path));
-            return Task.FromResult(true);
+            return true;
         }
         catch (Exception ex)
         {
             _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.SaveCommand, ex.Message);
-            return Task.FromResult(false);
+            return false;
         }
+    }
+
+    private async Task<bool> ConfirmSaveCompatibilityAsync(DocumentSaveTarget target)
+    {
+        var plan = _documentPersistence.BuildSaveCompatibilityPlan(_editor.Document, target);
+        return !plan.RequiresConfirmation || await SaveCompatibilityWarningDialog.ShowAsync(this, plan);
     }
 
     /// <summary>
