@@ -458,10 +458,28 @@ public class BibliographyRoundTripTests
             ShortTitle = "Loose note",
             Comments = "Misc note"
         });
+        doc.Sources.Add(new Source
+        {
+            Tag = "Case2026",
+            Type = SourceType.Case,
+            Author = "Brown",
+            Title = "Brown v. Board of Education",
+            Year = "1954",
+            Month = "May",
+            Day = "17",
+            CaseNumber = "1",
+            Court = "U.S. Supreme Court",
+            Reporter = "347 U.S. 483",
+            CountryRegion = "United States",
+            StateProvince = "District of Columbia",
+            City = "Washington",
+            ShortTitle = "Brown",
+            Comments = "Case note"
+        });
 
         var result = RoundTrip(doc);
 
-        result.Sources.Should().HaveCount(3);
+        result.Sources.Should().HaveCount(4);
         result.Sources[0].Type.Should().Be(SourceType.Patent);
         result.Sources[0].Inventor.Should().Be("Lovelace, Ada");
         result.Sources[0].PatentNumber.Should().Be("GB-1843-1");
@@ -474,8 +492,15 @@ public class BibliographyRoundTripTests
         result.Sources[2].Type.Should().Be(SourceType.Misc);
         result.Sources[2].SourceKind.Should().Be("Manuscript");
         result.Sources[2].Medium.Should().Be("Scan");
-        result.Sources.Select(source => source.Day).Should().Equal("4", "9", "2");
-        result.Sources.Select(source => source.Month).Should().Equal("July", "April", "June");
+        result.Sources[3].Type.Should().Be(SourceType.Case);
+        result.Sources[3].CaseNumber.Should().Be("1");
+        result.Sources[3].Court.Should().Be("U.S. Supreme Court");
+        result.Sources[3].Reporter.Should().Be("347 U.S. 483");
+        result.Sources[3].CountryRegion.Should().Be("United States");
+        result.Sources[3].StateProvince.Should().Be("District of Columbia");
+        result.Sources[3].City.Should().Be("Washington");
+        result.Sources.Select(source => source.Day).Should().Equal("4", "9", "2", "17");
+        result.Sources.Select(source => source.Month).Should().Equal("July", "April", "June", "May");
     }
 
     [Fact]
@@ -785,6 +810,17 @@ public class BibliographyRoundTripTests
             SourceKind = "Manuscript",
             Medium = "Scan"
         });
+        doc.Sources.Add(new Source
+        {
+            Tag = "Case2026",
+            Type = SourceType.Case,
+            Title = "Brown v. Board of Education",
+            CaseNumber = "1",
+            Court = "U.S. Supreme Court",
+            Reporter = "347 U.S. 483",
+            CountryRegion = "United States",
+            StateProvince = "District of Columbia"
+        });
 
         using var stream = new MemoryStream();
         DocxWriter.Write(doc, stream);
@@ -806,6 +842,12 @@ public class BibliographyRoundTripTests
         sources[2].Element(B + "SourceType")!.Value.Should().Be("Misc");
         sources[2].Element(B + "Type")!.Value.Should().Be("Manuscript");
         sources[2].Element(B + "Medium")!.Value.Should().Be("Scan");
+        sources[3].Element(B + "SourceType")!.Value.Should().Be("Case");
+        sources[3].Element(B + "CaseNumber")!.Value.Should().Be("1");
+        sources[3].Element(B + "Court")!.Value.Should().Be("U.S. Supreme Court");
+        sources[3].Element(B + "Reporter")!.Value.Should().Be("347 U.S. 483");
+        sources[3].Element(B + "CountryRegion")!.Value.Should().Be("United States");
+        sources[3].Element(B + "StateProvince")!.Value.Should().Be("District of Columbia");
     }
 
     [Fact]
@@ -967,10 +1009,25 @@ public class BibliographyRoundTripTests
                 <b:Type>Manuscript</b:Type>
                 <b:Medium>Scan</b:Medium>
               </b:Source>
+              <b:Source>
+                <b:Tag>Case2026</b:Tag>
+                <b:SourceType>Case</b:SourceType>
+                <b:Author><b:Author><b:Corporate>Brown</b:Corporate></b:Author></b:Author>
+                <b:Title>Brown v. Board of Education</b:Title>
+                <b:CaseNumber>1</b:CaseNumber>
+                <b:Court>U.S. Supreme Court</b:Court>
+                <b:Reporter>347 U.S. 483</b:Reporter>
+                <b:CountryRegion>United States</b:CountryRegion>
+                <b:StateProvince>District of Columbia</b:StateProvince>
+                <b:City>Washington</b:City>
+                <b:Month>May</b:Month>
+                <b:Day>17</b:Day>
+                <b:Year>1954</b:Year>
+              </b:Source>
             </b:Sources>
             """);
 
-        result.Sources.Should().HaveCount(3);
+        result.Sources.Should().HaveCount(4);
         result.Sources[0].Type.Should().Be(SourceType.Patent);
         result.Sources[0].Inventor.Should().Be("Lovelace, Ada");
         result.Sources[0].PatentNumber.Should().Be("GB-1843-1");
@@ -984,6 +1041,17 @@ public class BibliographyRoundTripTests
         result.Sources[2].Author.Should().Be("Example Archive");
         result.Sources[2].SourceKind.Should().Be("Manuscript");
         result.Sources[2].Medium.Should().Be("Scan");
+        result.Sources[3].Type.Should().Be(SourceType.Case);
+        result.Sources[3].Author.Should().Be("Brown");
+        result.Sources[3].CaseNumber.Should().Be("1");
+        result.Sources[3].Court.Should().Be("U.S. Supreme Court");
+        result.Sources[3].Reporter.Should().Be("347 U.S. 483");
+        result.Sources[3].CountryRegion.Should().Be("United States");
+        result.Sources[3].StateProvince.Should().Be("District of Columbia");
+        result.Sources[3].City.Should().Be("Washington");
+        result.Sources[3].Month.Should().Be("May");
+        result.Sources[3].Day.Should().Be("17");
+        result.Sources[3].Year.Should().Be("1954");
     }
 
     [Fact]

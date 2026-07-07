@@ -33,6 +33,9 @@ public enum SourceManagementSourceField
     ShortTitle,
     Comments,
     PatentNumber,
+    CaseNumber,
+    Court,
+    Reporter,
     CountryRegion,
     StateProvince,
     Medium,
@@ -115,6 +118,12 @@ public sealed record SourceManagementSourceEntry(
     public string ChapterNumber { get; init; } = string.Empty;
 
     public string PatentNumber { get; init; } = string.Empty;
+
+    public string CaseNumber { get; init; } = string.Empty;
+
+    public string Court { get; init; } = string.Empty;
+
+    public string Reporter { get; init; } = string.Empty;
 
     public string CountryRegion { get; init; } = string.Empty;
 
@@ -320,7 +329,8 @@ public static class SourceManagementDialogPlanner
         new(SourceType.SoundRecording, "Sound Recording"),
         new(SourceType.Art, "Art"),
         new(SourceType.InternetSite, "Internet Site"),
-        new(SourceType.Performance, "Performance")
+        new(SourceType.Performance, "Performance"),
+        new(SourceType.Case, "Case")
     ];
 
     private static readonly IReadOnlyDictionary<SourceType, IReadOnlyList<SourceManagementSourceField>> SourceFieldOrders =
@@ -552,6 +562,23 @@ public static class SourceManagementDialogPlanner
                 SourceManagementSourceField.Medium,
                 SourceManagementSourceField.ShortTitle,
                 SourceManagementSourceField.Comments
+            ],
+            [SourceType.Case] =
+            [
+                SourceManagementSourceField.Tag,
+                SourceManagementSourceField.Author,
+                SourceManagementSourceField.Title,
+                SourceManagementSourceField.CaseNumber,
+                SourceManagementSourceField.Court,
+                SourceManagementSourceField.Reporter,
+                SourceManagementSourceField.Year,
+                SourceManagementSourceField.Month,
+                SourceManagementSourceField.Day,
+                SourceManagementSourceField.CountryRegion,
+                SourceManagementSourceField.StateProvince,
+                SourceManagementSourceField.City,
+                SourceManagementSourceField.ShortTitle,
+                SourceManagementSourceField.Comments
             ]
         };
 
@@ -587,6 +614,9 @@ public static class SourceManagementDialogPlanner
             [SourceManagementSourceField.ShortTitle] = "Short title:",
             [SourceManagementSourceField.Comments] = "Comments:",
             [SourceManagementSourceField.PatentNumber] = "Patent number:",
+            [SourceManagementSourceField.CaseNumber] = "Case number:",
+            [SourceManagementSourceField.Court] = "Court:",
+            [SourceManagementSourceField.Reporter] = "Reporter:",
             [SourceManagementSourceField.CountryRegion] = "Country / region:",
             [SourceManagementSourceField.StateProvince] = "State / province:",
             [SourceManagementSourceField.Medium] = "Medium:",
@@ -679,6 +709,9 @@ public static class SourceManagementDialogPlanner
             Day = source?.Day ?? string.Empty,
             ChapterNumber = source?.ChapterNumber ?? string.Empty,
             PatentNumber = source?.PatentNumber ?? string.Empty,
+            CaseNumber = source?.CaseNumber ?? string.Empty,
+            Court = source?.Court ?? string.Empty,
+            Reporter = source?.Reporter ?? string.Empty,
             CountryRegion = source?.CountryRegion ?? string.Empty,
             StateProvince = source?.StateProvince ?? string.Empty,
             Medium = source?.Medium ?? string.Empty,
@@ -862,6 +895,9 @@ public static class SourceManagementDialogPlanner
             Day = TrimmedValue(values, SourceManagementSourceField.Day),
             ChapterNumber = TrimmedValue(values, SourceManagementSourceField.ChapterNumber),
             PatentNumber = TrimmedValue(values, SourceManagementSourceField.PatentNumber),
+            CaseNumber = TrimmedValue(values, SourceManagementSourceField.CaseNumber),
+            Court = TrimmedValue(values, SourceManagementSourceField.Court),
+            Reporter = TrimmedValue(values, SourceManagementSourceField.Reporter),
             CountryRegion = TrimmedValue(values, SourceManagementSourceField.CountryRegion),
             StateProvince = TrimmedValue(values, SourceManagementSourceField.StateProvince),
             Medium = TrimmedValue(values, SourceManagementSourceField.Medium),
@@ -983,21 +1019,24 @@ public static class SourceManagementDialogPlanner
             ProducerName = type is SourceType.Film or SourceType.SoundRecording ? NullIfWhiteSpace(entry.ProducerName) : null,
             Writer = type == SourceType.Film ? NullIfWhiteSpace(entry.Writer) : null,
             Year = entry.Year.Trim(),
-            Month = type is SourceType.Patent or SourceType.Interview or SourceType.Misc or SourceType.Performance ? NullIfWhiteSpace(entry.Month) : null,
-            Day = type is SourceType.Patent or SourceType.Interview or SourceType.Misc or SourceType.Performance ? NullIfWhiteSpace(entry.Day) : null,
+            Month = type is SourceType.Patent or SourceType.Interview or SourceType.Misc or SourceType.Performance or SourceType.Case ? NullIfWhiteSpace(entry.Month) : null,
+            Day = type is SourceType.Patent or SourceType.Interview or SourceType.Misc or SourceType.Performance or SourceType.Case ? NullIfWhiteSpace(entry.Day) : null,
             Institution = type is SourceType.Report or SourceType.Art ? NullIfWhiteSpace(entry.Institution) : null,
             Publisher = type is SourceType.Book or SourceType.WebSite or SourceType.Report or SourceType.BookSection or SourceType.ConferenceProceedings or SourceType.ElectronicSource or SourceType.InternetSite
                 ? NullIfWhiteSpace(entry.Publisher)
                 : null,
-            City = type is SourceType.Book or SourceType.Report or SourceType.BookSection or SourceType.ConferenceProceedings or SourceType.Art or SourceType.Performance ? NullIfWhiteSpace(entry.City) : null,
+            City = type is SourceType.Book or SourceType.Report or SourceType.BookSection or SourceType.ConferenceProceedings or SourceType.Art or SourceType.Performance or SourceType.Case ? NullIfWhiteSpace(entry.City) : null,
             Edition = type is SourceType.Book or SourceType.BookSection ? NullIfWhiteSpace(entry.Edition) : null,
             StandardNumber = type is SourceType.Book or SourceType.JournalArticle or SourceType.Report or SourceType.BookSection or SourceType.ConferenceProceedings or SourceType.ArticleInPeriodical
                 ? NullIfWhiteSpace(entry.StandardNumber)
                 : null,
             ChapterNumber = type == SourceType.BookSection ? NullIfWhiteSpace(entry.ChapterNumber) : null,
             PatentNumber = type == SourceType.Patent ? NullIfWhiteSpace(entry.PatentNumber) : null,
-            CountryRegion = type == SourceType.Patent ? NullIfWhiteSpace(entry.CountryRegion) : null,
-            StateProvince = type == SourceType.Patent ? NullIfWhiteSpace(entry.StateProvince) : null,
+            CaseNumber = type == SourceType.Case ? NullIfWhiteSpace(entry.CaseNumber) : null,
+            Court = type == SourceType.Case ? NullIfWhiteSpace(entry.Court) : null,
+            Reporter = type == SourceType.Case ? NullIfWhiteSpace(entry.Reporter) : null,
+            CountryRegion = type is SourceType.Patent or SourceType.Case ? NullIfWhiteSpace(entry.CountryRegion) : null,
+            StateProvince = type is SourceType.Patent or SourceType.Case ? NullIfWhiteSpace(entry.StateProvince) : null,
             Medium = type is SourceType.Interview or SourceType.Misc or SourceType.Film or SourceType.SoundRecording or SourceType.Art or SourceType.Performance ? NullIfWhiteSpace(entry.Medium) : null,
             SourceKind = type == SourceType.Misc ? NullIfWhiteSpace(entry.SourceKind) : null,
             AlbumTitle = type == SourceType.SoundRecording ? NullIfWhiteSpace(entry.AlbumTitle) : null,
@@ -1054,6 +1093,9 @@ public static class SourceManagementDialogPlanner
             StandardNumber = source.StandardNumber,
             ChapterNumber = source.ChapterNumber,
             PatentNumber = source.PatentNumber,
+            CaseNumber = source.CaseNumber,
+            Court = source.Court,
+            Reporter = source.Reporter,
             CountryRegion = source.CountryRegion,
             StateProvince = source.StateProvince,
             Medium = source.Medium,
@@ -1447,6 +1489,9 @@ public static class SourceManagementDialogPlanner
         && SourceValueEquals(left.StandardNumber, right.StandardNumber)
         && SourceValueEquals(left.ChapterNumber, right.ChapterNumber)
         && SourceValueEquals(left.PatentNumber, right.PatentNumber)
+        && SourceValueEquals(left.CaseNumber, right.CaseNumber)
+        && SourceValueEquals(left.Court, right.Court)
+        && SourceValueEquals(left.Reporter, right.Reporter)
         && SourceValueEquals(left.CountryRegion, right.CountryRegion)
         && SourceValueEquals(left.StateProvince, right.StateProvince)
         && SourceValueEquals(left.Medium, right.Medium)
@@ -1597,6 +1642,9 @@ public static class SourceManagementDialogPlanner
         || entry.ShortTitle.Length > 0
         || entry.Comments.Length > 0
         || entry.PatentNumber.Length > 0
+        || entry.CaseNumber.Length > 0
+        || entry.Court.Length > 0
+        || entry.Reporter.Length > 0
         || entry.CountryRegion.Length > 0
         || entry.StateProvince.Length > 0
         || entry.Medium.Length > 0
@@ -1650,6 +1698,9 @@ public static class SourceManagementDialogPlanner
             SourceManagementSourceField.ShortTitle => entry.ShortTitle,
             SourceManagementSourceField.Comments => entry.Comments,
             SourceManagementSourceField.PatentNumber => entry.PatentNumber,
+            SourceManagementSourceField.CaseNumber => entry.CaseNumber,
+            SourceManagementSourceField.Court => entry.Court,
+            SourceManagementSourceField.Reporter => entry.Reporter,
             SourceManagementSourceField.CountryRegion => entry.CountryRegion,
             SourceManagementSourceField.StateProvince => entry.StateProvince,
             SourceManagementSourceField.Medium => entry.Medium,

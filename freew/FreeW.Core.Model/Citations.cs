@@ -622,6 +622,7 @@ public static class Citations
     //  - WebSite / ElectronicSource: Publisher, Url, "accessed AccessedDate"
     //  - Report:         Institution, City, Publisher
     //  - Patent:         patent number, jurisdiction, date
+    //  - Case:           case number, court, reporter, jurisdiction, date
     //  - Interview:      interviewer, medium, date
     //  - Misc:           source kind, medium, date
     //  - Film:           producer/writer/performer, production company, medium
@@ -662,6 +663,16 @@ public static class Citations
                     parts.Add($"patent {patentNumber}");
                 AddIfPresent(parts, source.CountryRegion);
                 AddIfPresent(parts, source.StateProvince);
+                AddIfPresent(parts, SourceDateText(source));
+                break;
+            case SourceType.Case:
+                if (NonEmpty(source.CaseNumber) is { } caseNumber)
+                    parts.Add($"case no. {caseNumber}");
+                AddIfPresent(parts, source.Court);
+                AddIfPresent(parts, source.Reporter);
+                AddIfPresent(parts, source.CountryRegion);
+                AddIfPresent(parts, source.StateProvince);
+                AddIfPresent(parts, source.City);
                 AddIfPresent(parts, SourceDateText(source));
                 break;
             case SourceType.Interview:
@@ -1273,6 +1284,9 @@ public static class Citations
         && Same(left.StandardNumber, right.StandardNumber)
         && Same(left.ChapterNumber, right.ChapterNumber)
         && Same(left.PatentNumber, right.PatentNumber)
+        && Same(left.CaseNumber, right.CaseNumber)
+        && Same(left.Court, right.Court)
+        && Same(left.Reporter, right.Reporter)
         && Same(left.CountryRegion, right.CountryRegion)
         && Same(left.StateProvince, right.StateProvince)
         && Same(left.Medium, right.Medium)

@@ -1319,6 +1319,9 @@ public enum SourceType
 
     /// <summary>A Word performance source (adds performer/conductor, theater and date fields).</summary>
     Performance = 15,
+
+    /// <summary>A Word bibliography case source (distinct from Table of Authorities citation marks).</summary>
+    Case = 16,
 }
 
 /// <summary>
@@ -1469,10 +1472,19 @@ public sealed class Source
     /// <summary>The patent number for a <see cref="SourceType.Patent"/>; null when unknown.</summary>
     public string? PatentNumber { get; init; }
 
-    /// <summary>The country/region jurisdiction for a <see cref="SourceType.Patent"/>; null when unknown.</summary>
+    /// <summary>The case number for a <see cref="SourceType.Case"/>; null when unknown.</summary>
+    public string? CaseNumber { get; init; }
+
+    /// <summary>The court for a <see cref="SourceType.Case"/>; null when unknown.</summary>
+    public string? Court { get; init; }
+
+    /// <summary>The reporter for a <see cref="SourceType.Case"/>; null when unknown.</summary>
+    public string? Reporter { get; init; }
+
+    /// <summary>The country/region jurisdiction for a <see cref="SourceType.Patent"/> or <see cref="SourceType.Case"/>; null when unknown.</summary>
     public string? CountryRegion { get; init; }
 
-    /// <summary>The state/province jurisdiction for a <see cref="SourceType.Patent"/>; null when unknown.</summary>
+    /// <summary>The state/province jurisdiction for a <see cref="SourceType.Patent"/> or <see cref="SourceType.Case"/>; null when unknown.</summary>
     public string? StateProvince { get; init; }
 
     /// <summary>A source-specific medium, such as an interview medium or miscellaneous format; null when unknown.</summary>

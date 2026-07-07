@@ -552,6 +552,9 @@ public static class DocxReader
                 StandardNumber = Field(element, "StandardNumber"),
                 ChapterNumber = Field(element, "ChapterNumber"),
                 PatentNumber = Field(element, "PatentNumber"),
+                CaseNumber = Field(element, "CaseNumber"),
+                Court = Field(element, "Court"),
+                Reporter = Field(element, "Reporter"),
                 CountryRegion = Field(element, "CountryRegion"),
                 StateProvince = Field(element, "StateProvince"),
                 Medium = Field(element, "Medium"),
@@ -670,6 +673,7 @@ public static class DocxReader
         "Art" => SourceType.Art,
         "InternetSite" => SourceType.InternetSite,
         "Performance" => SourceType.Performance,
+        "Case" => SourceType.Case,
         _ => SourceType.Book,
     };
 

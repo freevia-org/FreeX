@@ -953,6 +953,7 @@ public class CitationsTests
         ((int)SourceType.Art).Should().Be(13);
         ((int)SourceType.InternetSite).Should().Be(14);
         ((int)SourceType.Performance).Should().Be(15);
+        ((int)SourceType.Case).Should().Be(16);
     }
 
     [Fact]
@@ -988,6 +989,20 @@ public class CitationsTests
             SourceKind = "Manuscript",
             Medium = "Scan"
         };
+        var caseSource = new Source
+        {
+            Type = SourceType.Case,
+            Author = "Brown",
+            Title = "Brown v. Board of Education",
+            Year = "1954",
+            Month = "May",
+            Day = "17",
+            CaseNumber = "1",
+            Court = "U.S. Supreme Court",
+            Reporter = "347 U.S. 483",
+            CountryRegion = "United States",
+            StateProvince = "District of Columbia"
+        };
 
         Citations.FormatInText(patent, CitationStyle.Apa).Should().Be("(Lovelace, 1843)");
         Citations.FormatBibliographyEntry(patent, CitationStyle.Apa)
@@ -996,6 +1011,8 @@ public class CitationsTests
             .Should().Be("Hopper, Grace. Compiler Notes. interview by Mauchly, Jean, Recorded interview, 1968.");
         Citations.FormatBibliographyEntry(misc, CitationStyle.Ieee)
             .Should().Be("Example Archive, \"Loose note,\" Manuscript, Scan, 2026.");
+        Citations.FormatBibliographyEntry(caseSource, CitationStyle.Apa)
+            .Should().Be("Brown. (1954). Brown v. Board of Education. case no. 1, U.S. Supreme Court, 347 U.S. 483, United States, District of Columbia, 17 May 1954.");
     }
 
     [Fact]

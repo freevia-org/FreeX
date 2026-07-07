@@ -81,6 +81,9 @@ public sealed class SourceRecord
     public string? StandardNumber { get; set; }
     public string? ChapterNumber { get; set; }
     public string? PatentNumber { get; set; }
+    public string? CaseNumber { get; set; }
+    public string? Court { get; set; }
+    public string? Reporter { get; set; }
     public string? CountryRegion { get; set; }
     public string? StateProvince { get; set; }
     public string? Medium { get; set; }
@@ -142,6 +145,9 @@ public sealed class SourceRecord
         StandardNumber = StandardNumber,
         ChapterNumber = ChapterNumber,
         PatentNumber = PatentNumber,
+        CaseNumber = CaseNumber,
+        Court = Court,
+        Reporter = Reporter,
         CountryRegion = CountryRegion,
         StateProvince = StateProvince,
         Medium = Medium,
@@ -208,6 +214,9 @@ public sealed class SourceRecord
             StandardNumber = source.StandardNumber,
             ChapterNumber = source.ChapterNumber,
             PatentNumber = source.PatentNumber,
+            CaseNumber = source.CaseNumber,
+            Court = source.Court,
+            Reporter = source.Reporter,
             CountryRegion = source.CountryRegion,
             StateProvince = source.StateProvince,
             Medium = source.Medium,

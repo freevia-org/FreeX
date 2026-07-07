@@ -5457,6 +5457,7 @@ public static class DocxWriter
         SourceType.Art => "Art",
         SourceType.InternetSite => "InternetSite",
         SourceType.Performance => "Performance",
+        SourceType.Case => "Case",
         _ => "Book",
     };
 
@@ -5497,6 +5498,9 @@ public static class DocxWriter
             AddBibliographyField(element, "StandardNumber", source.StandardNumber);
             AddBibliographyField(element, "ChapterNumber", source.ChapterNumber);
             AddBibliographyField(element, "PatentNumber", source.PatentNumber);
+            AddBibliographyField(element, "CaseNumber", source.CaseNumber);
+            AddBibliographyField(element, "Court", source.Court);
+            AddBibliographyField(element, "Reporter", source.Reporter);
             AddBibliographyField(element, "CountryRegion", source.CountryRegion);
             AddBibliographyField(element, "StateProvince", source.StateProvince);
             AddBibliographyField(element, "Medium", source.Medium);

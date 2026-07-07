@@ -87,7 +87,8 @@ public sealed class SourceManagementDialogPlannerTests
             SourceType.SoundRecording,
             SourceType.Art,
             SourceType.InternetSite,
-            SourceType.Performance);
+            SourceType.Performance,
+            SourceType.Case);
         choices.Select(choice => choice.Label).Should().Equal(
             "Book",
             "Journal Article",
@@ -104,7 +105,8 @@ public sealed class SourceManagementDialogPlannerTests
             "Sound Recording",
             "Art",
             "Internet Site",
-            "Performance");
+            "Performance",
+            "Case");
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.JournalArticle).Should().Be(1);
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Report).Should().Be(3);
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.BookSection).Should().Be(4);
@@ -119,6 +121,7 @@ public sealed class SourceManagementDialogPlannerTests
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Art).Should().Be(13);
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.InternetSite).Should().Be(14);
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Performance).Should().Be(15);
+        SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Case).Should().Be(16);
     }
 
     [Fact]
@@ -338,6 +341,25 @@ public sealed class SourceManagementDialogPlannerTests
             SourceManagementSourceField.Medium,
             SourceManagementSourceField.ShortTitle,
             SourceManagementSourceField.Comments);
+
+        var casePlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.Case);
+        casePlans.Select(plan => plan.Field).Should().Equal(
+            SourceManagementSourceField.Tag,
+            SourceManagementSourceField.Author,
+            SourceManagementSourceField.Title,
+            SourceManagementSourceField.CaseNumber,
+            SourceManagementSourceField.Court,
+            SourceManagementSourceField.Reporter,
+            SourceManagementSourceField.Year,
+            SourceManagementSourceField.Month,
+            SourceManagementSourceField.Day,
+            SourceManagementSourceField.CountryRegion,
+            SourceManagementSourceField.StateProvince,
+            SourceManagementSourceField.City,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
+        casePlans.Single(plan => plan.Field == SourceManagementSourceField.Court)
+            .Label.Should().Be("Court:");
     }
 
     [Fact]
@@ -636,6 +658,30 @@ public sealed class SourceManagementDialogPlannerTests
         performance.Performer.Should().Be("Royal Shakespeare Company");
         performancePlans.Single(plan => plan.Field == SourceManagementSourceField.Theater)
             .Text.Should().Be("Globe Theatre");
+
+        var caseSource = SourceManagementDialogPlanner.ProjectEntry(new Source
+        {
+            Type = SourceType.Case,
+            Tag = "Case2026",
+            Author = "Brown",
+            Title = "Brown v. Board of Education",
+            CaseNumber = "1",
+            Court = "U.S. Supreme Court",
+            Reporter = "347 U.S. 483",
+            CountryRegion = "United States",
+            StateProvince = "District of Columbia",
+            City = "Washington",
+            Month = "May",
+            Day = "17",
+            Year = "1954"
+        });
+        var casePlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(caseSource);
+
+        caseSource.CaseNumber.Should().Be("1");
+        casePlans.Single(plan => plan.Field == SourceManagementSourceField.Court)
+            .Text.Should().Be("U.S. Supreme Court");
+        casePlans.Single(plan => plan.Field == SourceManagementSourceField.Reporter)
+            .Text.Should().Be("347 U.S. 483");
     }
 
     [Fact]
@@ -783,6 +829,40 @@ public sealed class SourceManagementDialogPlannerTests
         performance.Day.Should().Be("8");
         performance.Medium.Should().Be("Stage performance");
         performance.AlbumTitle.Should().BeNull();
+
+        var caseSource = SourceManagementDialogPlanner.BuildSource(SourceManagementDialogPlanner.CreateEntry(
+            SourceType.Case,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Author] = " Brown ",
+                [SourceManagementSourceField.Title] = " Brown v. Board of Education ",
+                [SourceManagementSourceField.CaseNumber] = " 1 ",
+                [SourceManagementSourceField.Court] = " U.S. Supreme Court ",
+                [SourceManagementSourceField.Reporter] = " 347 U.S. 483 ",
+                [SourceManagementSourceField.CountryRegion] = " United States ",
+                [SourceManagementSourceField.StateProvince] = " District of Columbia ",
+                [SourceManagementSourceField.City] = " Washington ",
+                [SourceManagementSourceField.Month] = " May ",
+                [SourceManagementSourceField.Day] = " 17 ",
+                [SourceManagementSourceField.Year] = " 1954 ",
+                [SourceManagementSourceField.PatentNumber] = " ignored ",
+                [SourceManagementSourceField.Url] = " ignored "
+            }));
+
+        caseSource.Type.Should().Be(SourceType.Case);
+        caseSource.Author.Should().Be("Brown");
+        caseSource.Title.Should().Be("Brown v. Board of Education");
+        caseSource.CaseNumber.Should().Be("1");
+        caseSource.Court.Should().Be("U.S. Supreme Court");
+        caseSource.Reporter.Should().Be("347 U.S. 483");
+        caseSource.CountryRegion.Should().Be("United States");
+        caseSource.StateProvince.Should().Be("District of Columbia");
+        caseSource.City.Should().Be("Washington");
+        caseSource.Month.Should().Be("May");
+        caseSource.Day.Should().Be("17");
+        caseSource.Year.Should().Be("1954");
+        caseSource.PatentNumber.Should().BeNull();
+        caseSource.Url.Should().BeNull();
     }
 
     [Fact]

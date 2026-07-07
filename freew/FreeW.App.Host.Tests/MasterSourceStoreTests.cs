@@ -427,6 +427,22 @@ public sealed class MasterSourceStoreTests
                         Month = "May",
                         Day = "8",
                         Medium = "Stage performance"
+                    }),
+                    SourceRecord.FromSource(new Source
+                    {
+                        Tag = "Case2026",
+                        Type = SourceType.Case,
+                        Author = "Brown",
+                        Title = "Brown v. Board of Education",
+                        CaseNumber = "1",
+                        Court = "U.S. Supreme Court",
+                        Reporter = "347 U.S. 483",
+                        CountryRegion = "United States",
+                        StateProvince = "District of Columbia",
+                        City = "Washington",
+                        Month = "May",
+                        Day = "17",
+                        Year = "1954"
                     })
                 ]
             };
@@ -435,7 +451,7 @@ public sealed class MasterSourceStoreTests
             settingsStore.Save(store);
             var sources = JsonSettingsStore<MasterSourceStore>.ForPath(path).Load().ToSources();
 
-            sources.Should().HaveCount(8);
+            sources.Should().HaveCount(9);
             sources[0].Type.Should().Be(SourceType.Patent);
             sources[0].Inventor.Should().Be("Lovelace, Ada");
             sources[0].PatentNumber.Should().Be("GB-1843-1");
@@ -466,6 +482,13 @@ public sealed class MasterSourceStoreTests
             sources[7].Type.Should().Be(SourceType.Performance);
             sources[7].Performer.Should().Be("Royal Shakespeare Company");
             sources[7].Theater.Should().Be("Globe Theatre");
+            sources[8].Type.Should().Be(SourceType.Case);
+            sources[8].CaseNumber.Should().Be("1");
+            sources[8].Court.Should().Be("U.S. Supreme Court");
+            sources[8].Reporter.Should().Be("347 U.S. 483");
+            sources[8].CountryRegion.Should().Be("United States");
+            sources[8].StateProvince.Should().Be("District of Columbia");
+            sources[8].City.Should().Be("Washington");
         }
         finally
         {
