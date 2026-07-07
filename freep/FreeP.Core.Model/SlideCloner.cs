@@ -118,6 +118,12 @@ public static class SlideCloner
             CategoryAxis = CloneChartAxis(src.CategoryAxis),
             ValueAxis    = CloneChartAxis(src.ValueAxis),
             DataTable    = src.DataTable is null ? null : CloneChartDataTableSettings(src.DataTable),
+            DoughnutHolePercent = src.DoughnutHolePercent,
+            FirstSliceAngleDegrees = src.FirstSliceAngleDegrees,
+            ScatterStyle = src.ScatterStyle,
+            RadarStyle = src.RadarStyle,
+            DataLabels = src.DataLabels,
+            SecondaryValueAxis = src.SecondaryValueAxis is null ? null : CloneChartAxis(src.SecondaryValueAxis),
             RegenerateWorkbookOnSave = src.RegenerateWorkbookOnSave,
             SourcePartPath = src.SourcePartPath,
         };

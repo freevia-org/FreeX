@@ -43,6 +43,29 @@ public sealed class ChartTests : IDisposable
         chart.Series.Should().BeEmpty();
         chart.Legend.Should().BeNull();
         chart.VaryColors.Should().BeFalse();
+        chart.FirstSliceAngleDegrees.Should().BeNull();
+    }
+
+    [Fact]
+    public void SlideCloner_ChartPreservesFirstSliceAngle()
+    {
+        var slide = new Slide();
+        var chart = BuildDoughnutChart(holeSize: 65);
+        chart.FirstSliceAngleDegrees = 135;
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.Chart,
+            Chart = chart
+        });
+
+        var clone = SlideCloner.CloneSlide(slide);
+
+        var clonedChart = clone.Shapes.Single().Chart!;
+        clonedChart.Should().NotBeSameAs(chart);
+        clonedChart.ChartType.Should().Be(ChartType.Doughnut);
+        clonedChart.DoughnutHolePercent.Should().Be(65);
+        clonedChart.FirstSliceAngleDegrees.Should().Be(135);
     }
 
     [Fact]
@@ -195,6 +218,53 @@ public sealed class ChartTests : IDisposable
         var reloaded = PptxPackageReader.Read(path);
         var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
         rt.VaryColors.Should().BeTrue();
+    }
+
+    [Fact]
+    public void RoundTrip_PieChart_FirstSliceAnglePreservedInPackageAndModel()
+    {
+        var chart = BuildPieChart();
+        chart.FirstSliceAngleDegrees = 270;
+        chart.DataLabels = new ChartDataLabels { ShowPercent = true };
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            var pieChart = chartDoc.Descendants(ChartNs + "pieChart").Single();
+            pieChart.Element(ChartNs + "firstSliceAng")
+                ?.Attribute("val")
+                ?.Value
+                .Should()
+                .Be("270");
+            ChartChildIndex(pieChart, "dLbls").Should().BeLessThan(ChartChildIndex(pieChart, "firstSliceAng"));
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.ChartType.Should().Be(ChartType.Pie);
+        rt.FirstSliceAngleDegrees.Should().Be(270);
+    }
+
+    [Fact]
+    public void RoundTrip_PieChart_AbsentFirstSliceAngleStaysAbsentAndDefault()
+    {
+        var chart = BuildPieChart();
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            chartDoc.Descendants(ChartNs + "pieChart")
+                .Single()
+                .Element(ChartNs + "firstSliceAng")
+                .Should()
+                .BeNull();
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.FirstSliceAngleDegrees.Should().BeNull();
     }
 
     [Fact]
@@ -537,6 +607,34 @@ public sealed class ChartTests : IDisposable
                         .First(s => s.Kind == SlideShapeKind.Chart).Chart!;
 
         rt.DoughnutHolePercent.Should().Be(60, "hole size survives round-trip");
+    }
+
+    [Fact]
+    public void RoundTrip_DoughnutChart_FirstSliceAnglePreservedInPackageAndModel()
+    {
+        var chart = BuildDoughnutChart(holeSize: 60);
+        chart.FirstSliceAngleDegrees = 45;
+        chart.DataLabels = new ChartDataLabels { ShowValue = true };
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            var doughnutChart = chartDoc.Descendants(ChartNs + "doughnutChart").Single();
+            doughnutChart.Element(ChartNs + "firstSliceAng")
+                ?.Attribute("val")
+                ?.Value
+                .Should()
+                .Be("45");
+            ChartChildIndex(doughnutChart, "dLbls").Should().BeLessThan(ChartChildIndex(doughnutChart, "firstSliceAng"));
+            ChartChildIndex(doughnutChart, "firstSliceAng").Should().BeLessThan(ChartChildIndex(doughnutChart, "holeSize"));
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.ChartType.Should().Be(ChartType.Doughnut);
+        rt.FirstSliceAngleDegrees.Should().Be(45);
+        rt.DoughnutHolePercent.Should().Be(60);
     }
 
     // ── 5c: Round-trip — scatter ─────────────────────────────────────────────
@@ -1004,6 +1102,14 @@ public sealed class ChartTests : IDisposable
             ?? throw new FileNotFoundException($"chart{chartIndex}.xml not found");
         using var stream = entry.Open();
         return XDocument.Load(stream);
+    }
+
+    private static int ChartChildIndex(XElement chartElement, string localName)
+    {
+        var children = chartElement.Elements().ToList();
+        var index = children.FindIndex(element => element.Name == ChartNs + localName);
+        index.Should().BeGreaterThanOrEqualTo(0, $"{localName} should be present in {chartElement.Name.LocalName}");
+        return index;
     }
 
     private static XDocument LoadWorkbookSheetDoc(ZipArchive archive, int chartIndex)

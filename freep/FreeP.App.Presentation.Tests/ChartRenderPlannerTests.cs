@@ -1455,6 +1455,31 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildPieSlicePrimitives_UsesAuthoredFirstSliceAngle()
+    {
+        var series = new ChartSeries { Name = "Share" };
+        series.Values.AddRange(new double?[] { 1, 3 });
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Pie,
+            FirstSliceAngleDegrees = 90
+        };
+        chart.Series.Add(series);
+
+        var slices = ChartRenderPlanner.BuildPieSlicePrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        slices.Should().HaveCount(2);
+        slices[0].StartAngle.Should().BeApproximately(0, 0.0001);
+        slices[0].EndAngle.Should().BeApproximately(Math.PI / 2, 0.0001);
+        slices[0].OuterStart.X.Should().BeApproximately(142.5, 0.0001);
+        slices[0].OuterStart.Y.Should().BeApproximately(50, 0.0001);
+        slices[0].OuterEnd.X.Should().BeApproximately(100, 0.0001);
+        slices[0].OuterEnd.Y.Should().BeApproximately(92.5, 0.0001);
+    }
+
+    [Fact]
     public void BuildPieSlicePrimitives_VaryColorsUsesPointFallbackPalette()
     {
         var series = new ChartSeries { Name = "Share" };
@@ -1513,6 +1538,35 @@ public sealed class ChartRenderPlannerTests
         slices[2].PointIndex.Should().Be(0);
         slices[2].InnerRadius.Should().BeApproximately(32.725, 0.0001);
         slices[2].OuterRadius.Should().BeApproximately(42.5, 0.0001);
+    }
+
+    [Fact]
+    public void BuildDoughnutSlicePrimitives_UsesAuthoredFirstSliceAngleForEveryRing()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Doughnut,
+            FirstSliceAngleDegrees = 180,
+            DoughnutHolePercent = 50
+        };
+
+        var inner = new ChartSeries { Name = "Inner" };
+        inner.Values.AddRange(new double?[] { 1, 1 });
+        chart.Series.Add(inner);
+
+        var outer = new ChartSeries { Name = "Outer" };
+        outer.Values.AddRange(new double?[] { 1, 1 });
+        chart.Series.Add(outer);
+
+        var slices = ChartRenderPlanner.BuildDoughnutSlicePrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        slices.Should().HaveCount(4);
+        slices[0].SeriesIndex.Should().Be(0);
+        slices[0].StartAngle.Should().BeApproximately(Math.PI / 2, 0.0001);
+        slices[2].SeriesIndex.Should().Be(1);
+        slices[2].StartAngle.Should().BeApproximately(Math.PI / 2, 0.0001);
     }
 
     [Fact]
