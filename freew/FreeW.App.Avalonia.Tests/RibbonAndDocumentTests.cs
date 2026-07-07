@@ -135,6 +135,8 @@ public class RibbonAndDocumentTests
         mainWindow.Should().Contain("_fileWorkflow.SaveAsync(");
         mainWindow.Should().Contain("_documentPersistence.Open(path)");
         mainWindow.Should().Contain("_documentPersistence.Save(_editor.Document, target)");
+        mainWindow.Should().Contain("_documentPersistence.BuildSaveCompatibilityPlan(_editor.Document, target)");
+        mainWindow.Should().Contain("SaveCompatibilityWarningDialog.ShowAsync(this, plan)");
         mainWindow.Should().Contain("_documentPersistence.BuildSavePickerPlan(");
         mainWindow.Should().Contain("_fileWorkflow.MarkDirty();");
         // suppressRecentFiles was true (stub) and is now false so files register in the store.
@@ -153,6 +155,28 @@ public class RibbonAndDocumentTests
         mainWindow.Should().NotContain("private string? _currentPath");
         mainWindow.Should().NotContain("DocumentFileFormatResolver.FindSaveAdapter(");
         mainWindow.Should().NotContain("File.Create(path)");
+    }
+
+    [Fact]
+    public void Avalonia_shell_confirms_shared_save_compatibility_plan_before_writing()
+    {
+        var mainWindow = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
+        var dialogSource = File.ReadAllText(FindRepoFile(
+            "freew",
+            "FreeW.App.Avalonia",
+            "SaveCompatibilityWarningDialog.cs"));
+
+        var confirmationIndex = mainWindow.IndexOf("if (!await ConfirmSaveCompatibilityAsync(target))");
+        var saveIndex = mainWindow.IndexOf("_documentPersistence.Save(_editor.Document, target)");
+
+        confirmationIndex.Should().BeGreaterThanOrEqualTo(0);
+        saveIndex.Should().BeGreaterThan(confirmationIndex);
+        dialogSource.Should().Contain("DocumentSaveCompatibilityPlan");
+        dialogSource.Should().Contain("plan.Message");
+        dialogSource.Should().Contain("plan.ContinueButtonText");
+        dialogSource.Should().Contain("plan.CancelButtonText");
+        dialogSource.Should().Contain("Close(true)");
+        dialogSource.Should().Contain("Close(false)");
     }
 
     [Fact]

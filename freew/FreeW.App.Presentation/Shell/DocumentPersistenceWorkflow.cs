@@ -151,6 +151,9 @@ public sealed class DocumentPersistenceWorkflow
         return true;
     }
 
+    public DocumentSaveCompatibilityPlan BuildSaveCompatibilityPlan(TextDocument document, DocumentSaveTarget target) =>
+        DocumentSaveCompatibilityPlanner.Build(document, target);
+
     public void Save(TextDocument document, DocumentSaveTarget target)
     {
         ArgumentNullException.ThrowIfNull(document);
