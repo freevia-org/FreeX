@@ -126,11 +126,37 @@ public sealed class EquationVisualPlannerTests
     }
 
     [Fact]
+    public void EquationVisualPlanner_NAry_BuildsStructuredLargeOperatorElement()
+    {
+        var plan = EquationVisualPlanner.Build(new Equation([MathRun.NAry("\u2211", "i=1", "n", "i")]));
+
+        plan.LinearText.Should().Be("\u2211(i=1..n) i");
+        plan.Elements.Should().ContainSingle();
+        plan.Elements[0].Kind.Should().Be(EquationVisualElementKind.NAry);
+        plan.Elements[0].LinearText.Should().Be("\u2211(i=1..n) i");
+        plan.Elements[0].Operator.Should().Be("\u2211");
+        plan.Elements[0].LowerLimit.Should().Be("i=1");
+        plan.Elements[0].UpperLimit.Should().Be("n");
+        plan.Elements[0].Operand.Should().Be("i");
+        plan.Segments.Select(segment => segment.Text).Should().Equal("\u2211", "i=1", "n", "i");
+        plan.Segments.Select(segment => segment.Role).Should().Equal(
+            EquationVisualSegmentRole.NAryOperator,
+            EquationVisualSegmentRole.NAryLowerLimit,
+            EquationVisualSegmentRole.NAryUpperLimit,
+            EquationVisualSegmentRole.NAryOperand);
+        plan.Segments[0].Style.FontSizeScale.Should().Be(EquationVisualPlanner.LargeOperatorFontSizeScale);
+        plan.Segments[0].Style.Italic.Should().BeFalse();
+        plan.Segments[1].Style.BaselineRole.Should().Be(EquationVisualBaselineRole.Subscript);
+        plan.Segments[2].Style.BaselineRole.Should().Be(EquationVisualBaselineRole.Superscript);
+        plan.Segments[3].Style.FontSizeScale.Should().Be(EquationVisualPlanner.StructureFontSizeScale);
+        plan.Segments.Should().NotContain(segment => segment.Role == EquationVisualSegmentRole.LinearFallback);
+    }
+
+    [Fact]
     public void EquationVisualPlanner_UnsupportedStructuredKinds_RetainLinearFallbackSegments()
     {
         var runs = new[]
         {
-            MathRun.NAry("SUM", "i=1", "n", "i"),
             MathRun.AccentOf("x", "hat"),
             MathRun.BarOf("x"),
             MathRun.Delimiter("x + y", "[", "]"),

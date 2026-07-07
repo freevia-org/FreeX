@@ -441,6 +441,51 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
+    public void EquationVisualPlanner_NAryRendersLargeOperatorWithLimitsAndRoundTrips()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var equation = new Equation([MathRun.NAry("\u2211", "i=1", "n", "i")]);
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var naryPanel = LogicalDescendants<StackPanel>(view.Document)
+            .Single(panel => Equals(panel.Tag, EquationVisualElementKind.NAry));
+        var visualText = LogicalDescendants<TextBlock>(naryPanel)
+            .Select(TextBlockText)
+            .Where(text => text.Length > 0)
+            .ToList();
+        visualText.Should().Contain("\u2211");
+        visualText.Should().Contain("i=1");
+        visualText.Should().Contain("n");
+        visualText.Should().Contain("i");
+        visualText.Should().NotContain("\u2211(i=1..n) i",
+            "the WPF equation visual should not render n-ary operators as raw linear fallback");
+
+        var operatorText = LogicalDescendants<TextBlock>(naryPanel)
+            .Single(text => TextBlockText(text) == "\u2211");
+        var operandText = LogicalDescendants<TextBlock>(naryPanel)
+            .Single(text => TextBlockText(text) == "i");
+        var operatorRun = operatorText.Inlines.OfType<System.Windows.Documents.Run>().Single();
+        var operandRun = operandText.Inlines.OfType<System.Windows.Documents.Run>().Single();
+        operatorRun.FontSize.Should().BeGreaterThan(operandRun.FontSize);
+
+        view.CommitToModel();
+        var recovered = FirstRun(view.Model);
+        recovered.Equation.Should().NotBeNull();
+        var run = recovered.Equation!.Runs.Should().ContainSingle().Subject;
+        run.Kind.Should().Be(MathRunKind.NAry);
+        run.Operator.Should().Be("\u2211");
+        run.Sub.Should().Be("i=1");
+        run.Sup.Should().Be("n");
+        run.Base.Should().Be("i");
+    }
+
+    [StaFact]
     public void InsertEquation_PlacesStructuredEquationAtCaret()
     {
         var view = new DocumentView();

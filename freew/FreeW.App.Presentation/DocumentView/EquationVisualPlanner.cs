@@ -14,6 +14,10 @@ public enum EquationVisualSegmentRole
     RadicalDegree,
     RadicalSign,
     RadicalRadicand,
+    NAryOperator,
+    NAryLowerLimit,
+    NAryUpperLimit,
+    NAryOperand,
     LinearFallback
 }
 
@@ -21,7 +25,8 @@ public enum EquationVisualElementKind
 {
     Segments,
     Fraction,
-    Radical
+    Radical,
+    NAry
 }
 
 public enum EquationVisualBaselineRole
@@ -50,7 +55,11 @@ public sealed record EquationVisualElement(
     string Numerator,
     string Denominator,
     string Radicand,
-    string Degree)
+    string Degree,
+    string Operator = "",
+    string LowerLimit = "",
+    string UpperLimit = "",
+    string Operand = "")
 {
     public static EquationVisualElement FromSegments(
         string linearText,
@@ -70,6 +79,26 @@ public sealed record EquationVisualElement(
         string degree,
         IReadOnlyList<EquationVisualSegment> segments) =>
         new(EquationVisualElementKind.Radical, linearText, segments, string.Empty, string.Empty, radicand, degree);
+
+    public static EquationVisualElement NAry(
+        string linearText,
+        string @operator,
+        string lowerLimit,
+        string upperLimit,
+        string operand,
+        IReadOnlyList<EquationVisualSegment> segments) =>
+        new(
+            EquationVisualElementKind.NAry,
+            linearText,
+            segments,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            @operator,
+            lowerLimit,
+            upperLimit,
+            operand);
 }
 
 public sealed record EquationVisualPlan(
@@ -86,6 +115,7 @@ public static class EquationVisualPlanner
     public const double StructureFontSizeScale = 0.9;
     public const double SuperscriptBaselineOffsetEm = 0.25;
     public const double SubscriptBaselineOffsetEm = -0.18;
+    public const double LargeOperatorFontSizeScale = 1.45;
     public const string FractionBarText = "\u2044";
     public const string RadicalSignText = "\u221a";
 
@@ -114,6 +144,13 @@ public static class EquationVisualPlanner
         DefaultMathFontFamily,
         Italic: true,
         StructureFontSizeScale,
+        EquationVisualBaselineRole.Normal,
+        BaselineOffsetEm: 0.0);
+
+    private static EquationVisualStyle LargeOperatorStyle { get; } = new(
+        DefaultMathFontFamily,
+        Italic: false,
+        LargeOperatorFontSizeScale,
         EquationVisualBaselineRole.Normal,
         BaselineOffsetEm: 0.0);
 
@@ -195,6 +232,10 @@ public static class EquationVisualPlanner
                 AddRadicalElement(run, segments, elements);
                 break;
 
+            case MathRunKind.NAry:
+                AddNAryElement(run, segments, elements);
+                break;
+
             default:
                 AddSegmentElement(
                     run.LinearText,
@@ -251,6 +292,30 @@ public static class EquationVisualPlanner
 
         segments.AddRange(runSegments);
         elements.Add(EquationVisualElement.Radical(run.LinearText, run.Base, run.Degree, runSegments));
+    }
+
+    private static void AddNAryElement(
+        MathRun run,
+        List<EquationVisualSegment> segments,
+        List<EquationVisualElement> elements)
+    {
+        var runSegments = new List<EquationVisualSegment>();
+        AddIfAny(runSegments, run.Operator, EquationVisualSegmentRole.NAryOperator, LargeOperatorStyle);
+        AddIfAny(runSegments, run.Sub, EquationVisualSegmentRole.NAryLowerLimit, SubscriptStyle);
+        AddIfAny(runSegments, run.Sup, EquationVisualSegmentRole.NAryUpperLimit, SuperscriptStyle);
+        AddIfAny(runSegments, run.Base, EquationVisualSegmentRole.NAryOperand, StructureStyle);
+
+        if (runSegments.Count == 0)
+            return;
+
+        segments.AddRange(runSegments);
+        elements.Add(EquationVisualElement.NAry(
+            run.LinearText,
+            run.Operator,
+            run.Sub,
+            run.Sup,
+            run.Base,
+            runSegments));
     }
 
     private static EquationVisualSegment? Segment(
