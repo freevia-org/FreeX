@@ -666,12 +666,13 @@ public sealed class ReferencesTabTests
             .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
             .ToList();
         toa.Select(paragraph => paragraph.PlainText)
-            .Should().Equal("Table of Authorities", "Statutes", "17 U.S.C. 107");
+            .Should().Equal("Table of Authorities", "Statutes", "17 U.S.C. 107\t1");
 
         var entry = toa.Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
         entry.Formatting.TabStops.Should().ContainSingle()
             .Which.Leader.Should().Be(TabLeader.None);
-        entry.Runs.Single().Formatting.Italic.Should().BeTrue();
+        entry.Runs.Select(run => run.Text).Should().Equal("17 U.S.C. 107", "\t", "1");
+        entry.Runs[0].Formatting.Italic.Should().BeTrue();
     }
 
     [Fact]
@@ -689,6 +690,39 @@ public sealed class ReferencesTabTests
         entry.PlainText.Should().Be("Brown v. Board\t1, 2");
         entry.Runs.Select(run => run.Text).Should().Equal("Brown v. Board", "\t", "1, 2");
     }
+
+    [Fact]
+    public Task Table_of_authorities_insert_resolves_mark_position_inside_long_paragraph_after_page_transition() =>
+        RunOnUiThread(() =>
+        {
+            var filler = string.Join(
+                " ",
+                Enumerable.Repeat("The quick brown fox jumps over the lazy dog.", 80));
+            var paragraph = new Paragraph
+            {
+                Runs =
+                {
+                    new Run(filler + " "),
+                    Run.CitationMark(new Citation("Late Case", CitationCategory.Cases))
+                }
+            };
+            var view = ViewWith(paragraph);
+            view.Document.Page.WidthPt = 300;
+            view.Document.Page.HeightPt = 220;
+            view.Document.Page.MarginTopPt = 18;
+            view.Document.Page.MarginBottomPt = 18;
+            view.Document.Page.MarginLeftPt = 18;
+            view.Document.Page.MarginRightPt = 18;
+            view.Measure(new global::Avalonia.Size(800, 4000));
+
+            view.InsertTableOfAuthorities();
+
+            var entry = view.Document.Blocks.OfType<Paragraph>()
+                .Single(block => block.StyleId == TableOfAuthorities.EntryStyleId);
+            entry.PlainText.Should().MatchRegex(@"^Late Case\t[1-9][0-9]*$");
+            entry.Runs.Select(run => run.Text).Should().HaveCount(3);
+            entry.Runs[2].Text.Should().NotBe("1");
+        });
 
     [Fact]
     public void Table_of_authorities_refresh_consumes_shared_render_plan_metadata()

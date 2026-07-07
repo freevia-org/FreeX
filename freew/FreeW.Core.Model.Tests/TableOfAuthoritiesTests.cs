@@ -582,6 +582,27 @@ public class TableOfAuthoritiesTests
     }
 
     [Fact]
+    public void Build_FromDocument_LiveSinglePageResolverSuppliesPageOneWithoutChangingFallback()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(CitationMarkParagraph("Case A"));
+
+        TableOfAuthorities.Build(doc)
+            .Single(p => p.StyleId == TableOfAuthorities.EntryStyleId)
+            .PlainText.Should().Be("Case A");
+
+        var entry = TableOfAuthorities.Build(
+                doc,
+                ToaOptions.Default,
+                (_, _, _, _) => TableOfAuthorities.CreatePageReference(1))
+            .Single(p => p.StyleId == TableOfAuthorities.EntryStyleId);
+
+        entry.PlainText.Should().Be("Case A\t1");
+        entry.Runs.Select(run => run.Text).Should().Equal("Case A", "\t", "1");
+    }
+
+    [Fact]
     public void Build_FromDocument_UsePassimWithPageReferencesUsesPageReferenceSegment()
     {
         var doc = TextDocument.CreateEmpty();

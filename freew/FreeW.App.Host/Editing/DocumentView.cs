@@ -12551,8 +12551,14 @@ public sealed class DocumentView : RichTextBox
         try
         {
             var pagination = PaginationEngine.Compute(this);
-            if (pagination.PageCount <= 1 || pagination.PageBreakYsDip.Count == 0)
-                return null;
+            var pageCount = Math.Max(1, pagination.PageCount);
+            if (pageCount == 1 || pagination.PageBreakYsDip.Count == 0)
+            {
+                return (_, blockIndex, runIndex, _) =>
+                    IsModelCitationRun(blockIndex, runIndex)
+                        ? TableOfAuthorities.CreatePageReference(1)
+                        : null;
+            }
 
             var firstRect = Document.ContentStart.GetCharacterRect(LogicalDirection.Forward);
             if (firstRect.IsEmpty)
@@ -12579,10 +12585,8 @@ public sealed class DocumentView : RichTextBox
                     pageIndex++;
                 }
 
-                var pageNumber = Math.Min(Math.Max(1, pageIndex + 1), Math.Max(1, pagination.PageCount));
-                return new ToaCitationPageReference(
-                    pageNumber,
-                    pageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                var pageNumber = Math.Min(Math.Max(1, pageIndex + 1), pageCount);
+                return TableOfAuthorities.CreatePageReference(pageNumber);
             };
         }
         catch (InvalidOperationException)
@@ -12590,6 +12594,14 @@ public sealed class DocumentView : RichTextBox
             return null;
         }
     }
+
+    private bool IsModelCitationRun(int modelBlockIndex, int runIndex) =>
+        modelBlockIndex >= 0
+        && modelBlockIndex < _model.Blocks.Count
+        && _model.Blocks[modelBlockIndex] is ModelParagraph paragraph
+        && runIndex >= 0
+        && runIndex < paragraph.Runs.Count
+        && paragraph.Runs[runIndex].Citation is not null;
 
     private int ModelRunStartOffset(int modelBlockIndex, int runIndex)
     {

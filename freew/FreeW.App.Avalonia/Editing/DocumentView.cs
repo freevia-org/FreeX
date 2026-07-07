@@ -11512,18 +11512,105 @@ public sealed class DocumentView : Control
         try
         {
             Relayout(_laidOutWidth > 0 ? _laidOutWidth : FallbackWidth);
-            if (_pageCount <= 1)
+            var pageCount = Math.Max(1, _pageCount);
+            var hasExplicitPageBoundary = HasTableOfAuthoritiesExplicitPageBoundary(_doc);
+            if (pageCount == 1 && hasExplicitPageBoundary)
                 return null;
 
-            var assignments = ComputeBlockPageAssignments(Math.Max(1, _pageCount));
-            return assignments.Length == 0
-                ? null
-                : (_, blockIndex, _, _) => TableOfAuthorities.ResolveFromBlockPageAssignments(assignments, blockIndex);
+            return (_, blockIndex, runIndex, _) => ResolveTableOfAuthoritiesCitationPage(
+                blockIndex,
+                runIndex,
+                pageCount,
+                hasExplicitPageBoundary);
         }
         catch (InvalidOperationException)
         {
             return null;
         }
+    }
+
+    private ToaCitationPageReference? ResolveTableOfAuthoritiesCitationPage(
+        int blockIndex,
+        int runIndex,
+        int pageCount,
+        bool hasExplicitPageBoundary)
+    {
+        if (blockIndex < 0
+            || blockIndex >= _doc.Blocks.Count
+            || _doc.Blocks[blockIndex] is not Paragraph paragraph
+            || runIndex < 0
+            || runIndex >= paragraph.Runs.Count
+            || paragraph.Runs[runIndex].Citation is null)
+        {
+            return null;
+        }
+
+        var offset = ModelRunStartOffset(paragraph, runIndex);
+        if (TryResolvePlacedPageForBlockOffset(blockIndex, offset, pageCount, out var pageIndex))
+            return TableOfAuthorities.CreatePageReference(pageIndex + 1);
+
+        return pageCount == 1 && !hasExplicitPageBoundary
+            ? TableOfAuthorities.CreatePageReference(1)
+            : null;
+    }
+
+    private static bool HasTableOfAuthoritiesExplicitPageBoundary(TextDocument document) =>
+        document.Blocks.OfType<Paragraph>().Any(paragraph =>
+            paragraph.Formatting.PageBreakBefore
+            || paragraph.Runs.Any(run => run.IsPageBreak)
+            || paragraph.SectionBreak is { BreakKind: SectionBreakKind.NextPage or SectionBreakKind.EvenPage or SectionBreakKind.OddPage });
+
+    private static int ModelRunStartOffset(Paragraph paragraph, int runIndex)
+    {
+        var offset = 0;
+        for (var i = 0; i < runIndex; i++)
+            offset += paragraph.Runs[i].Text.Length;
+        return offset;
+    }
+
+    private bool TryResolvePlacedPageForBlockOffset(
+        int blockIndex,
+        int offset,
+        int pageCount,
+        out int pageIndex)
+    {
+        PlacedChar? atOrAfter = null;
+        PlacedChar? before = null;
+
+        foreach (var pc in _placed)
+        {
+            if (pc.Block != blockIndex || pc.IsCell)
+                continue;
+
+            if (pc.Offset >= offset
+                && (atOrAfter is null
+                    || pc.Offset < atOrAfter.Value.Offset
+                    || (pc.Offset == atOrAfter.Value.Offset && atOrAfter.Value.Sentinel && !pc.Sentinel)))
+            {
+                atOrAfter = pc;
+            }
+
+            if (pc.Offset <= offset
+                && (before is null
+                    || pc.Offset > before.Value.Offset
+                    || (pc.Offset == before.Value.Offset && before.Value.Sentinel && !pc.Sentinel)))
+            {
+                before = pc;
+            }
+        }
+
+        var resolved = atOrAfter ?? before;
+        if (resolved is not { } placed)
+        {
+            pageIndex = 0;
+            return false;
+        }
+
+        pageIndex = Math.Clamp(
+            PageIndexFromPageSpaceY(placed.Y),
+            0,
+            Math.Max(0, pageCount - 1));
+        return true;
     }
 
     public void ShowNotes()

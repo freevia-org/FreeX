@@ -74,9 +74,9 @@ public sealed class MarkCitationEditorTests
 
         toa.Should().Contain(TableOfAuthorities.HeadingText);
         toa.Should().Contain("Cases");
-        toa.Should().Contain("Roe v. Wade");
+        toa.Should().Contain("Roe v. Wade\t1");
         toa.Should().Contain("Statutes");
-        toa.Should().Contain("42 U.S.C. § 1983");
+        toa.Should().Contain("42 U.S.C. § 1983\t1");
     }
 
     [StaFact]
@@ -101,8 +101,9 @@ public sealed class MarkCitationEditorTests
             .Single(p => p.StyleId == TableOfAuthorities.EntryStyleId);
         entry.Formatting.TabStops.Should().ContainSingle()
             .Which.Leader.Should().Be(TabLeader.Underline);
-        entry.PlainText.Should().Be("Formatted Case");
-        entry.Runs.Single().Formatting.Bold.Should().BeTrue();
+        entry.PlainText.Should().Be("Formatted Case\t1");
+        entry.Runs.Select(run => run.Text).Should().Equal("Formatted Case", "\t", "1");
+        entry.Runs[0].Formatting.Bold.Should().BeTrue();
     }
 
     [StaFact]
@@ -210,7 +211,7 @@ public sealed class MarkCitationEditorTests
         view.Model.Blocks.OfType<Paragraph>()
             .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
             .Select(paragraph => paragraph.PlainText)
-            .Should().Equal("Table of Authorities", "Cases", "Roe v. Wade passim");
+            .Should().Equal("Table of Authorities", "Cases", "Roe v. Wade\tpassim");
         view.Model.Blocks.OfType<Paragraph>().Select(paragraph => paragraph.PlainText)
             .Should().NotContain("Old Case")
             .And.EndWith("After");
@@ -219,7 +220,8 @@ public sealed class MarkCitationEditorTests
             .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
         entry.Formatting.TabStops.Should().Equal(
             new TabStop(530, TabStopAlignment.Right, TabLeader.Dashes));
-        var entryFormatting = entry.Runs.Single().Formatting;
+        entry.Runs.Select(run => run.Text).Should().Equal("Roe v. Wade", "\t", "passim");
+        var entryFormatting = entry.Runs[0].Formatting;
         entryFormatting.Bold.Should().BeTrue();
         entryFormatting.Underline.Should().BeTrue();
         entryFormatting.ColorHex.Should().Be("#C00000");
@@ -267,7 +269,7 @@ public sealed class MarkCitationEditorTests
                 "Body text",
                 "Table of Authorities",
                 "Cases",
-                "Late Case");
+                "Late Case\t1");
     }
 
     private static Paragraph CitationMarkParagraph(string longCitation, bool formatted)

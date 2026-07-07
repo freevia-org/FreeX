@@ -610,19 +610,24 @@ public static class TableOfAuthorities
             : null;
     }
 
-    private static ToaCitationPageResolver? ToBlockPageAssignmentResolver(
-        IReadOnlyList<int>? blockPageAssignments) =>
-        blockPageAssignments is null
-            ? null
-            : (_, blockIndex, _, _) => ResolveFromBlockPageAssignments(blockPageAssignments, blockIndex);
-
-    private static ToaCitationPageReference CreatePageReference(int pageNumber)
+    /// <summary>
+    /// Creates normalized page-reference evidence for a live host resolver. Hosts should only call this
+    /// when they have real layout evidence; no-layout callers must keep passing no resolver so entries stay
+    /// text-only instead of receiving invented page numbers.
+    /// </summary>
+    public static ToaCitationPageReference CreatePageReference(int pageNumber)
     {
         var safePageNumber = Math.Max(1, pageNumber);
         return new ToaCitationPageReference(
             safePageNumber,
             safePageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
+
+    private static ToaCitationPageResolver? ToBlockPageAssignmentResolver(
+        IReadOnlyList<int>? blockPageAssignments) =>
+        blockPageAssignments is null
+            ? null
+            : (_, blockIndex, _, _) => ResolveFromBlockPageAssignments(blockPageAssignments, blockIndex);
 
     private static bool HasExplicitPageBoundary(TextDocument document) =>
         document.Blocks.OfType<Paragraph>().Any(paragraph =>
