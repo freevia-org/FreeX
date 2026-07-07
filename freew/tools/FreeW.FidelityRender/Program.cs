@@ -1743,6 +1743,12 @@ static void GenerateF2FlowCorpus(string outDir)
     }
 
     {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildEquationStructuresDocument();
+        DocxWriter.Write(doc, Path.Combine(outDir, "equation-structures.docx"));
+        Console.WriteLine("  wrote equation-structures.docx");
+    }
+
+    {
         var doc = FreeWVisualEvidenceDocumentFactory.BuildMultiSectionHeaderFooterImageDocument();
         DocxWriter.Write(doc, Path.Combine(outDir, "f2-hf-images.docx"));
         Console.WriteLine("  wrote f2-hf-images.docx");

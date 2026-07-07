@@ -117,6 +117,28 @@ public sealed class VisualEvidenceBaselinePolicyTests
     }
 
     [Fact]
+    public void WordBaselinePolicy_KeepsEquationStructuresDirectlyComparable()
+    {
+        var row = BuildRow(
+            "equation-structures",
+            FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+            "equation-structures_p1.png",
+            pageNumber: 1,
+            pageCount: 1);
+
+        var policy = FreeWVisualBaselineComparisonPlanner.ResolveWordBaselinePolicy(row);
+        var candidates = FreeWVisualBaselineComparisonPlanner.BuildBaselineCandidateRelativePaths(row);
+
+        policy.IsComparable.Should().BeTrue();
+        policy.BaselineScenarioId.Should().Be("equation-structures");
+        FreeWVisualBaselineComparisonPlanner.BuildBaselineMatchKey(row)
+            .Should().Be("equation-structures/p1/equation-structures_p1.png");
+        candidates.Should().Contain([
+            "equation-structures/equation-structures_p1.png",
+            "equation-structures_p1.png"]);
+    }
+
+    [Fact]
     public void WordBaselineUnavailableComparison_ReportsCandidatesAndReasonWithoutFailingTrust()
     {
         var row = BuildRow(

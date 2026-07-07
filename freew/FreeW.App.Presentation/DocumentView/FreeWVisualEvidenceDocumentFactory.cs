@@ -249,6 +249,84 @@ public static class FreeWVisualEvidenceDocumentFactory
         return doc;
     }
 
+    public static TextDocument BuildEquationStructuresDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Properties.Title = "Equation Structures Evidence";
+        doc.Properties.Author = "FreeW Visual Evidence";
+        doc.Properties.Subject = "OfficeMath visual structure parity";
+        doc.Properties.Keywords = "OfficeMath, equations, visual evidence";
+        doc.Properties.Comments = "Exercises shared equation visual planning evidence for WPF and Avalonia.";
+
+        doc.Page.MarginTopPt = 54;
+        doc.Page.MarginBottomPt = 54;
+        doc.Page.MarginLeftPt = 54;
+        doc.Page.MarginRightPt = 54;
+
+        doc.Blocks.Add(StyledParagraph("Equation Structures Evidence", "Heading1"));
+        doc.Blocks.Add(new Paragraph(
+            "This generated fixture keeps every currently modeled OfficeMath visual structure on a bounded page " +
+            "so WPF and Avalonia evidence captures use the same shared equation planner inputs."));
+
+        doc.Blocks.Add(EquationParagraph(
+            "Scripts: ",
+            new Equation([
+                MathRun.PlainText("E = m"),
+                MathRun.Superscript("c", "2"),
+                MathRun.PlainText("; "),
+                MathRun.Subscript("x", "i"),
+                MathRun.PlainText("; "),
+                MathRun.SubSuperscript("T", "n", "2")
+            ])));
+        doc.Blocks.Add(EquationParagraph(
+            "Fraction and radical: ",
+            new Equation([
+                MathRun.Fraction("a + b", "c + d"),
+                MathRun.PlainText(" = "),
+                MathRun.Radical("x + 1", "3")
+            ])));
+        doc.Blocks.Add(EquationParagraph(
+            "N-ary operator: ",
+            new Equation([
+                MathRun.NAry("\u2211", "i=1", "n", "i^2"),
+                MathRun.PlainText(" + "),
+                MathRun.NAry("\u222B", "0", "1", "f(x) dx")
+            ])));
+        doc.Blocks.Add(EquationParagraph(
+            "Matrix: ",
+            new Equation([
+                MathRun.MatrixOf(new MathMatrix([["1", "0"], ["0", "1"]]))
+            ])));
+        doc.Blocks.Add(EquationParagraph(
+            "Accents and bars: ",
+            new Equation([
+                MathRun.AccentOf("x", "\u0302"),
+                MathRun.PlainText(" "),
+                MathRun.BarOf("y"),
+                MathRun.PlainText(" "),
+                MathRun.BarOf("z", top: false)
+            ])));
+        doc.Blocks.Add(EquationParagraph(
+            "Delimiter and group character: ",
+            new Equation([
+                MathRun.Delimiter("a + b", "[", "]"),
+                MathRun.PlainText(" "),
+                MathRun.GroupCharOf("u + v", "\u23DE", "top"),
+                MathRun.PlainText(" "),
+                MathRun.GroupCharOf("r + s", "\u23DF", "bot")
+            ])));
+        doc.Blocks.Add(EquationParagraph(
+            "Function apply: ",
+            new Equation([
+                MathRun.FunctionApply("sin", "x + y"),
+                MathRun.PlainText(" + "),
+                MathRun.FunctionApply("log", "n")
+            ])));
+
+        return doc;
+    }
+
     public static TextDocument BuildSectionGeometryDocument()
     {
         var doc = TextDocument.CreateEmpty();
@@ -1408,6 +1486,14 @@ public static class FreeWVisualEvidenceDocumentFactory
         var paragraph = new Paragraph();
         paragraph.Runs.Add(new Run(prefix));
         paragraph.Runs.Add(fieldRun);
+        return paragraph;
+    }
+
+    private static Paragraph EquationParagraph(string prefix, Equation equation)
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run(prefix));
+        paragraph.Runs.Add(Run.FromEquation(equation));
         return paragraph;
     }
 

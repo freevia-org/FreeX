@@ -78,6 +78,7 @@ static int RenderAll(string outDir)
     var fieldPageNumberP3Path = VisualEvidenceOutputPath(outDir, "field-page-number-variants", 3);
     var referencesHeavyP1Path = VisualEvidenceOutputPath(outDir, "references-heavy-fields", 1);
     var referencesHeavyP2Path = VisualEvidenceOutputPath(outDir, "references-heavy-fields", 2);
+    var equationStructuresPath = VisualEvidenceOutputPath(outDir, "equation-structures", 1);
     var headerFooterImagesP1Path = VisualEvidenceOutputPath(outDir, "f2-hf-images", 1);
     var headerFooterImagesP2Path = VisualEvidenceOutputPath(outDir, "f2-hf-images", 2);
     var sectionLandscapeP1Path = VisualEvidenceOutputPath(outDir, "f2-section-landscape", 1);
@@ -267,6 +268,16 @@ static int RenderAll(string outDir)
         pageNumber: 2,
         pageCount: 2,
         viewportOffsetY: 1100);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, equationStructuresPath,
+        width: 960, height: 1200,
+        label: "Equation Structures",
+        scenarioId: "equation-structures",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildEquationStructuresDocument,
+        pageNumber: 1,
+        pageCount: 1);
     if (rc != 0) return rc;
 
     rc = RenderMode(DocumentViewMode.PrintLayout, sectionLandscapeP1Path,

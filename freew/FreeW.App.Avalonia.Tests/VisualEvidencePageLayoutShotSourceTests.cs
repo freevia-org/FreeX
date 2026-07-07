@@ -66,6 +66,9 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"references-heavy-fields\", 1)");
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"references-heavy-fields\", 2)");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildReferencesHeavyFieldDocument");
+        source.Should().Contain("equation-structures");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"equation-structures\", 1)");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildEquationStructuresDocument");
         source.Should().Contain("ResolveAvaloniaHeaderSlotName(document, pageNumber)");
         source.Should().Contain("ResolveAvaloniaFooterSlotName(document, pageNumber)");
         source.Should().Contain("table-layout-complex");
