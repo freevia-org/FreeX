@@ -1306,7 +1306,7 @@ public static class FreeWVisualEvidencePlanner
             return EmptyTableExpectation;
 
         var tableCellFillSignatures = BuildTableCellFillSignatures(tables);
-        return new FreeWVisualTableExpectation(
+        var expectation = new FreeWVisualTableExpectation(
             TableCount: tables.Count,
             TotalRows: tables.Sum(table => table.RowCount),
             TotalCells: tables.Sum(table => table.Cells.Count),
@@ -1335,6 +1335,27 @@ public static class FreeWVisualEvidencePlanner
             TableCellFillSignatures: tableCellFillSignatures,
             Tables: tables,
             PaginationPlans: tables.Select(table => table.Pagination).ToList());
+
+        return NormalizeTableFillEvidence(expectation);
+    }
+
+    public static FreeWVisualTableExpectation NormalizeTableFillEvidence(FreeWVisualTableExpectation tableExpectation)
+    {
+        ArgumentNullException.ThrowIfNull(tableExpectation);
+
+        if (tableExpectation.Tables.Count == 0)
+            return tableExpectation;
+
+        var tables = tableExpectation.Tables
+            .Select(table => NormalizeTableFillEvidence(tableExpectation, table))
+            .ToList();
+        return tableExpectation with
+        {
+            HasCellShading = tables.Any(table => table.HasCellShading),
+            TableCellFillSignatures = BuildTableCellFillSignatures(tables),
+            Tables = tables,
+            PaginationPlans = tables.Select(table => table.Pagination).ToList()
+        };
     }
 
     public static IReadOnlyList<string> BuildTableCellFillSignatures(
@@ -2441,8 +2462,7 @@ public static class FreeWVisualEvidencePlanner
                     fillPlan.StyleDerivedFillHex);
             }
 
-            if (fillPlan.ExplicitFillHex is not null
-                && !string.Equals(fillPlan.ExplicitFillHex, fillPlan.StyleDerivedFillHex, StringComparison.Ordinal))
+            if (fillPlan.ExplicitFillHex is not null)
             {
                 yield return BuildTableCellFillSignature(
                     table,
@@ -2469,6 +2489,84 @@ public static class FreeWVisualEvidencePlanner
             "vMergeContinue=" + BoolFlag(cell.IsVerticalMergeContinuation),
             "source=" + source,
             "fill=" + fillHex);
+
+    private static DocumentTableLayoutPlan NormalizeTableFillEvidence(
+        FreeWVisualTableExpectation tableExpectation,
+        DocumentTableLayoutPlan table)
+    {
+        var cells = table.Cells
+            .Select(cell => ShouldClearMaterializedStyleFill(tableExpectation, table, cell)
+                ? cell with { ShadingColorHex = null }
+                : cell)
+            .ToList();
+
+        return table with
+        {
+            HasCellShading = cells.Any(cell => !string.IsNullOrWhiteSpace(cell.ShadingColorHex)),
+            Cells = cells
+        };
+    }
+
+    private static bool ShouldClearMaterializedStyleFill(
+        FreeWVisualTableExpectation tableExpectation,
+        DocumentTableLayoutPlan table,
+        DocumentTableCellLayoutPlan cell)
+    {
+        if (HasExplicitCellFillSignature(tableExpectation, table, cell))
+            return false;
+
+        var normalizedShading = NormalizeFillHex(cell.ShadingColorHex);
+        if (normalizedShading is null)
+            return false;
+
+        var styleOnlyCell = cell with { ShadingColorHex = null };
+        var styleOnlyFill = DocumentViewLayoutPlanner.BuildTableCellEffectiveFillPlan(table, styleOnlyCell);
+        var plannedFill = NormalizeFillHex(styleOnlyFill.EffectiveFillHex);
+        if (plannedFill is null)
+            return false;
+
+        var plannedSource = styleOnlyFill.EffectiveFillSource ?? string.Empty;
+        if (!plannedSource.StartsWith("style-derived-", StringComparison.Ordinal)
+            && !plannedSource.StartsWith("legacy-", StringComparison.Ordinal))
+            return false;
+
+        return string.Equals(normalizedShading, plannedFill, StringComparison.Ordinal);
+    }
+
+    private static bool HasExplicitCellFillSignature(
+        FreeWVisualTableExpectation tableExpectation,
+        DocumentTableLayoutPlan table,
+        DocumentTableCellLayoutPlan cell)
+    {
+        var signatures = tableExpectation.TableCellFillSignatures ?? [];
+        if (signatures.Count == 0)
+            return false;
+
+        var prefix = string.Join(
+            "|",
+            "table=" + table.TableIndex.ToString(CultureInfo.InvariantCulture),
+            "row=" + cell.RowIndex.ToString(CultureInfo.InvariantCulture),
+            "cell=" + cell.CellIndex.ToString(CultureInfo.InvariantCulture),
+            "grid=" + cell.GridColumnIndex.ToString(CultureInfo.InvariantCulture));
+
+        return signatures.Any(signature =>
+            signature.StartsWith(prefix, StringComparison.Ordinal)
+            && signature.Contains("|source=explicit-cell|", StringComparison.Ordinal));
+    }
+
+    private static string? NormalizeFillHex(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var trimmed = value.Trim();
+        if (trimmed.StartsWith('#'))
+            trimmed = trimmed[1..];
+
+        return trimmed.Length == 6
+            ? "#" + trimmed.ToUpperInvariant()
+            : value.Trim().ToUpperInvariant();
+    }
 
     private static string BoolFlag(bool value) => value ? "1" : "0";
 
