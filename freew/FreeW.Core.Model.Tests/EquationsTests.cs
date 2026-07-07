@@ -11,6 +11,46 @@ public class EquationsTests
     }
 
     [Fact]
+    public void MathRun_Fraction_CanCarryNestedEquations()
+    {
+        var numerator = new Equation([
+            MathRun.PlainText("a+"),
+            MathRun.Superscript("x", "2")
+        ]);
+        var denominator = new Equation([
+            MathRun.PlainText("b+"),
+            MathRun.Subscript("y", "1")
+        ]);
+
+        var fraction = MathRun.Fraction(numerator, denominator);
+
+        fraction.Kind.Should().Be(MathRunKind.Fraction);
+        fraction.Numerator.Should().Be("a+x^2");
+        fraction.Denominator.Should().Be("b+y_1");
+        fraction.NumeratorEquation.Should().BeSameAs(numerator);
+        fraction.DenominatorEquation.Should().BeSameAs(denominator);
+        fraction.LinearText.Should().Be("a+x^2/b+y_1");
+    }
+
+    [Fact]
+    public void MathRun_Fraction_LinearText_IsDepthBoundedForCyclicNestedSlots()
+    {
+        var equation = new Equation();
+        equation.Runs.Add(new MathRun
+        {
+            Kind = MathRunKind.Fraction,
+            NumeratorEquation = equation,
+            Denominator = "b"
+        });
+
+        var linearText = equation.LinearText;
+
+        linearText.Should().NotBeEmpty();
+        linearText.Length.Should().BeLessThan(100);
+        linearText.Should().EndWith("/b");
+    }
+
+    [Fact]
     public void MathRun_LinearText_RendersNewStructures()
     {
         MathRun.Subscript("x", "i").LinearText.Should().Be("x_i");

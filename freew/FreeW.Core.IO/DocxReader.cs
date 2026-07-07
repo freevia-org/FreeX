@@ -1648,53 +1648,98 @@ public static class DocxReader
     private static Equation ReadOMath(XElement oMath)
     {
         var equation = new Equation();
-        foreach (var child in oMath.Elements())
+        foreach (var run in ReadMathRuns(oMath.Elements()))
+            equation.Runs.Add(run);
+        return equation;
+    }
+
+    private static IEnumerable<MathRun> ReadMathRuns(IEnumerable<XElement> elements)
+    {
+        foreach (var child in elements)
         {
             if (child.Name == M + "r")
-                equation.Runs.Add(MathRun.PlainText(MathTextOf(child)));
+                yield return MathRun.PlainText(MathTextOf(child));
             else if (child.Name == M + "sSup")
-                equation.Runs.Add(MathRun.Superscript(
+                yield return MathRun.Superscript(
                     MathTextOf(child.Element(M + "e")),
-                    MathTextOf(child.Element(M + "sup"))));
+                    MathTextOf(child.Element(M + "sup")));
             else if (child.Name == M + "sSub")
-                equation.Runs.Add(MathRun.Subscript(
+                yield return MathRun.Subscript(
                     MathTextOf(child.Element(M + "e")),
-                    MathTextOf(child.Element(M + "sub"))));
+                    MathTextOf(child.Element(M + "sub")));
             else if (child.Name == M + "sSubSup")
-                equation.Runs.Add(MathRun.SubSuperscript(
+                yield return MathRun.SubSuperscript(
                     MathTextOf(child.Element(M + "e")),
                     MathTextOf(child.Element(M + "sub")),
-                    MathTextOf(child.Element(M + "sup"))));
+                    MathTextOf(child.Element(M + "sup")));
             else if (child.Name == M + "f")
-                equation.Runs.Add(MathRun.Fraction(
-                    MathTextOf(child.Element(M + "num")),
-                    MathTextOf(child.Element(M + "den"))));
+                yield return ReadFraction(child);
             else if (child.Name == M + "rad")
-                equation.Runs.Add(ReadRadical(child));
+                yield return ReadRadical(child);
             else if (child.Name == M + "nary")
-                equation.Runs.Add(ReadNAry(child));
+                yield return ReadNAry(child);
             else if (child.Name == M + "acc")
-                equation.Runs.Add(ReadAccent(child));
+                yield return ReadAccent(child);
             else if (child.Name == M + "bar")
-                equation.Runs.Add(ReadBar(child));
+                yield return ReadBar(child);
             else if (child.Name == M + "d")
-                equation.Runs.Add(ReadDelimiter(child));
+                yield return ReadDelimiter(child);
             else if (child.Name == M + "m")
-                equation.Runs.Add(MathRun.MatrixOf(ReadMatrix(child)));
+                yield return MathRun.MatrixOf(ReadMatrix(child));
             else if (child.Name == M + "func")
-                equation.Runs.Add(ReadFunctionApply(child));
+                yield return ReadFunctionApply(child);
             else if (child.Name == M + "groupChr")
-                equation.Runs.Add(ReadGroupChar(child));
+                yield return ReadGroupChar(child);
             else
             {
                 // Unknown OMML construct: keep its text so the equation degrades rather than disappears.
                 var fallback = MathTextOf(child);
                 if (fallback.Length > 0)
-                    equation.Runs.Add(MathRun.PlainText(fallback));
+                    yield return MathRun.PlainText(fallback);
             }
         }
-        return equation;
     }
+
+    private static MathRun ReadFraction(XElement fraction)
+    {
+        var numerator = fraction.Element(M + "num");
+        var denominator = fraction.Element(M + "den");
+        var numeratorText = MathTextOf(numerator);
+        var denominatorText = MathTextOf(denominator);
+        var hasNestedNumerator = HasStructuredMathSlot(numerator);
+        var hasNestedDenominator = HasStructuredMathSlot(denominator);
+
+        return hasNestedNumerator || hasNestedDenominator
+            ? new MathRun
+            {
+                Kind = MathRunKind.Fraction,
+                Numerator = numeratorText,
+                Denominator = denominatorText,
+                NumeratorEquation = hasNestedNumerator ? ReadMathSlot(numerator) : null,
+                DenominatorEquation = hasNestedDenominator ? ReadMathSlot(denominator) : null
+            }
+            : MathRun.Fraction(numeratorText, denominatorText);
+    }
+
+    private static Equation ReadMathSlot(XElement? slot) =>
+        slot is null ? new Equation() : new Equation(ReadMathRuns(slot.Elements()));
+
+    private static bool HasStructuredMathSlot(XElement? slot) =>
+        slot is not null && slot.Elements().Any(IsStructuredMathElement);
+
+    private static bool IsStructuredMathElement(XElement element) =>
+        element.Name == M + "sSup" ||
+        element.Name == M + "sSub" ||
+        element.Name == M + "sSubSup" ||
+        element.Name == M + "f" ||
+        element.Name == M + "rad" ||
+        element.Name == M + "nary" ||
+        element.Name == M + "acc" ||
+        element.Name == M + "bar" ||
+        element.Name == M + "d" ||
+        element.Name == M + "m" ||
+        element.Name == M + "func" ||
+        element.Name == M + "groupChr";
 
     /// <summary>
     /// Reads a radical (m:rad). When m:radPr/m:degHide is "1" (or m:deg is empty) it is a square root

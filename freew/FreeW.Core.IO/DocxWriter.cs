@@ -2539,7 +2539,7 @@ public static class DocxWriter
     {
         var oMath = new XElement(M + "oMath");
         foreach (var run in equation.Runs)
-            oMath.Add(BuildMathRun(run));
+            oMath.Add(BuildMathRun(run, depth: 0));
         return oMath;
     }
 
@@ -2548,7 +2548,7 @@ public static class DocxWriter
     /// m:nary / m:acc / m:bar / m:d / m:m, or a plain m:r for text. Mirrors the reader (see
     /// <c>DocxReader.ReadOMath</c>).
     /// </summary>
-    private static XElement BuildMathRun(MathRun run) => run.Kind switch
+    private static XElement BuildMathRun(MathRun run, int depth) => run.Kind switch
     {
         MathRunKind.Superscript => new XElement(M + "sSup",
             new XElement(M + "e", MathText(run.Base)),
@@ -2560,9 +2560,7 @@ public static class DocxWriter
             new XElement(M + "e", MathText(run.Base)),
             new XElement(M + "sub", MathText(run.Sub)),
             new XElement(M + "sup", MathText(run.Sup))),
-        MathRunKind.Fraction => new XElement(M + "f",
-            new XElement(M + "num", MathText(run.Numerator)),
-            new XElement(M + "den", MathText(run.Denominator))),
+        MathRunKind.Fraction => BuildFraction(run, depth),
         MathRunKind.Radical => BuildRadical(run),
         MathRunKind.NAry => BuildNAry(run),
         MathRunKind.Accent => BuildAccent(run),
@@ -2573,6 +2571,27 @@ public static class DocxWriter
         MathRunKind.GroupChar => BuildGroupChar(run),
         _ => MathText(run.Text)
     };
+
+    private static XElement BuildFraction(MathRun run, int depth) =>
+        new(M + "f",
+            BuildMathSlot(M + "num", run.NumeratorEquation, run.Numerator, depth),
+            BuildMathSlot(M + "den", run.DenominatorEquation, run.Denominator, depth));
+
+    private static XElement BuildMathSlot(XName slotName, Equation? equation, string fallback, int depth)
+    {
+        var slot = new XElement(slotName);
+        if (equation is not null && depth < MathRun.MaxNestedEquationDepth)
+        {
+            foreach (var childRun in equation.Runs)
+                slot.Add(BuildMathRun(childRun, depth + 1));
+        }
+        else
+        {
+            slot.Add(MathText(fallback));
+        }
+
+        return slot;
+    }
 
     /// <summary>
     /// Builds a radical (m:rad). A square root sets m:radPr/m:degHide and emits an empty m:deg; an nth

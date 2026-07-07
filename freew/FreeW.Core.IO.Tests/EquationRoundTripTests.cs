@@ -22,6 +22,20 @@ public class EquationRoundTripTests
         return DocxReader.Read(stream);
     }
 
+    private static TextDocument ReadDocumentXml(string documentXml)
+    {
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var entry = zip.CreateEntry("word/document.xml");
+            using var writer = new StreamWriter(entry.Open());
+            writer.Write(documentXml);
+        }
+
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
     private static XDocument WriteDocumentXml(TextDocument document)
     {
         using var stream = new MemoryStream();
@@ -95,6 +109,98 @@ public class EquationRoundTripTests
         roundTripped.Runs[0].Numerator.Should().Be("1");
         roundTripped.Runs[0].Denominator.Should().Be("2");
         roundTripped.LinearText.Should().Be("1/2");
+    }
+
+    [Fact]
+    public void NestedFractionSlots_SurviveRoundTripAndEmitDirectSlotChildren()
+    {
+        var equation = new Equation([
+            MathRun.Fraction(
+                new Equation([
+                    MathRun.PlainText("a+"),
+                    MathRun.Superscript("x", "2")
+                ]),
+                new Equation([
+                    MathRun.PlainText("b+"),
+                    MathRun.Subscript("y", "1")
+                ]))
+        ]);
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(paragraph);
+
+        var read = RoundTrip(doc);
+        var xml = WriteDocumentXml(doc);
+
+        var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Equation is not null).Equation!;
+        roundTripped.Runs.Should().ContainSingle();
+        var fraction = roundTripped.Runs[0];
+        fraction.Kind.Should().Be(MathRunKind.Fraction);
+        fraction.Numerator.Should().Be("a+x2");
+        fraction.Denominator.Should().Be("b+y1");
+        fraction.NumeratorEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        fraction.NumeratorEquation.Runs[1].Base.Should().Be("x");
+        fraction.NumeratorEquation.Runs[1].Sup.Should().Be("2");
+        fraction.DenominatorEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        fraction.DenominatorEquation.Runs[1].Base.Should().Be("y");
+        fraction.DenominatorEquation.Runs[1].Sub.Should().Be("1");
+        roundTripped.LinearText.Should().Be("a+x^2/b+y_1");
+
+        var writtenFraction = xml.Descendants(M + "f").Single();
+        var num = writtenFraction.Element(M + "num")!;
+        var den = writtenFraction.Element(M + "den")!;
+        num.Elements(M + "oMath").Should().BeEmpty();
+        den.Elements(M + "oMath").Should().BeEmpty();
+        num.Elements(M + "r").Should().ContainSingle();
+        num.Elements(M + "sSup").Should().ContainSingle();
+        den.Elements(M + "r").Should().ContainSingle();
+        den.Elements(M + "sSub").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void RawNestedFractionSlots_ReadAsNestedEquations()
+    {
+        var documentXml = $$"""
+            <w:document xmlns:w="{{W.NamespaceName}}" xmlns:m="{{M.NamespaceName}}">
+              <w:body>
+                <w:p>
+                  <m:oMath>
+                    <m:f>
+                      <m:num>
+                        <m:r><m:t>a+</m:t></m:r>
+                        <m:sSup>
+                          <m:e><m:r><m:t>x</m:t></m:r></m:e>
+                          <m:sup><m:r><m:t>2</m:t></m:r></m:sup>
+                        </m:sSup>
+                      </m:num>
+                      <m:den>
+                        <m:r><m:t>b+</m:t></m:r>
+                        <m:sSub>
+                          <m:e><m:r><m:t>y</m:t></m:r></m:e>
+                          <m:sub><m:r><m:t>1</m:t></m:r></m:sub>
+                        </m:sSub>
+                      </m:den>
+                    </m:f>
+                  </m:oMath>
+                </w:p>
+              </w:body>
+            </w:document>
+            """;
+
+        var read = ReadDocumentXml(documentXml);
+
+        var equation = read.Paragraphs.Single().Runs.Single(run => run.Equation is not null).Equation!;
+        equation.Runs.Should().ContainSingle();
+        var fraction = equation.Runs[0];
+        fraction.Kind.Should().Be(MathRunKind.Fraction);
+        fraction.NumeratorEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        fraction.DenominatorEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        equation.LinearText.Should().Be("a+x^2/b+y_1");
     }
 
     [Fact]

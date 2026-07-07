@@ -87,6 +87,68 @@ public sealed class EquationVisualPlannerTests
     }
 
     [Fact]
+    public void EquationVisualPlanner_NestedFractionSlots_SurfaceSharedSlotPlansAndKeepFlattenedSegments()
+    {
+        var plan = EquationVisualPlanner.Build(new Equation([
+            MathRun.Fraction(
+                new Equation([
+                    MathRun.PlainText("a+"),
+                    MathRun.Superscript("x", "2")
+                ]),
+                new Equation([
+                    MathRun.PlainText("b+"),
+                    MathRun.Subscript("y", "1")
+                ]))
+        ]));
+
+        plan.LinearText.Should().Be("a+x^2/b+y_1");
+        plan.Elements.Should().ContainSingle();
+        var fraction = plan.Elements[0];
+        fraction.Kind.Should().Be(EquationVisualElementKind.Fraction);
+        fraction.Numerator.Should().Be("a+x^2");
+        fraction.Denominator.Should().Be("b+y_1");
+        fraction.NumeratorPlan.Should().NotBeNull();
+        fraction.NumeratorPlan!.Segments.Select(segment => segment.Role)
+            .Should().Equal(
+                EquationVisualSegmentRole.Text,
+                EquationVisualSegmentRole.Base,
+                EquationVisualSegmentRole.Superscript);
+        fraction.DenominatorPlan.Should().NotBeNull();
+        fraction.DenominatorPlan!.Segments.Select(segment => segment.Role)
+            .Should().Equal(
+                EquationVisualSegmentRole.Text,
+                EquationVisualSegmentRole.Base,
+                EquationVisualSegmentRole.Subscript);
+
+        plan.Segments.Select(segment => segment.Text).Should().Equal(
+            "a+x^2",
+            EquationVisualPlanner.FractionBarText,
+            "b+y_1");
+        plan.Segments.Select(segment => segment.Role).Should().Equal(
+            EquationVisualSegmentRole.FractionNumerator,
+            EquationVisualSegmentRole.FractionBar,
+            EquationVisualSegmentRole.FractionDenominator);
+        plan.Segments.Should().NotContain(segment => segment.Role == EquationVisualSegmentRole.LinearFallback);
+    }
+
+    [Fact]
+    public void EquationVisualPlanner_NestedFractionSlots_AreDepthBounded()
+    {
+        var equation = new Equation();
+        equation.Runs.Add(new MathRun
+        {
+            Kind = MathRunKind.Fraction,
+            NumeratorEquation = equation,
+            Denominator = "b"
+        });
+
+        var plan = EquationVisualPlanner.Build(equation);
+
+        plan.LinearText.Should().EndWith("/b");
+        plan.Elements.Should().NotBeEmpty();
+    }
+
+    [Fact]
     public void EquationVisualPlanner_Radical_BuildsStructuredElementAndDisplaySegments()
     {
         var plan = EquationVisualPlanner.Build(new Equation([MathRun.Radical("x + 1", "3")]));

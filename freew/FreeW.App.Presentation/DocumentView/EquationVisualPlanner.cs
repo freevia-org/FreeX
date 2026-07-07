@@ -101,6 +101,8 @@ public sealed record EquationVisualElement(
     public string GroupCharacterPosition { get; init; } = string.Empty;
     public string FunctionName { get; init; } = string.Empty;
     public string FunctionArgument { get; init; } = string.Empty;
+    public EquationVisualPlan? NumeratorPlan { get; init; }
+    public EquationVisualPlan? DenominatorPlan { get; init; }
 
     public int MatrixRowCount => MatrixRows.Count;
 
@@ -122,8 +124,14 @@ public sealed record EquationVisualElement(
         string linearText,
         string numerator,
         string denominator,
-        IReadOnlyList<EquationVisualSegment> segments) =>
-        new(EquationVisualElementKind.Fraction, linearText, segments, numerator, denominator, string.Empty, string.Empty);
+        IReadOnlyList<EquationVisualSegment> segments,
+        EquationVisualPlan? numeratorPlan = null,
+        EquationVisualPlan? denominatorPlan = null) =>
+        new(EquationVisualElementKind.Fraction, linearText, segments, numerator, denominator, string.Empty, string.Empty)
+        {
+            NumeratorPlan = numeratorPlan,
+            DenominatorPlan = denominatorPlan
+        };
 
     public static EquationVisualElement Radical(
         string linearText,
@@ -376,10 +384,15 @@ public static class EquationVisualPlanner
     {
         ArgumentNullException.ThrowIfNull(equation);
 
+        return Build(equation, depth: 0);
+    }
+
+    private static EquationVisualPlan Build(Equation equation, int depth)
+    {
         var segments = new List<EquationVisualSegment>();
         var elements = new List<EquationVisualElement>();
         foreach (var run in equation.Runs)
-            AddRunVisual(run, segments, elements);
+            AddRunVisual(run, segments, elements, depth);
 
         if (segments.Count == 0 && equation.LinearText.Length > 0)
         {
@@ -402,7 +415,8 @@ public static class EquationVisualPlanner
     private static void AddRunVisual(
         MathRun run,
         List<EquationVisualSegment> segments,
-        List<EquationVisualElement> elements)
+        List<EquationVisualElement> elements,
+        int depth)
     {
         switch (run.Kind)
         {
@@ -443,7 +457,7 @@ public static class EquationVisualPlanner
                 break;
 
             case MathRunKind.Fraction:
-                AddFractionElement(run, segments, elements);
+                AddFractionElement(run, segments, elements, depth);
                 break;
 
             case MathRunKind.Radical:
@@ -505,19 +519,36 @@ public static class EquationVisualPlanner
     private static void AddFractionElement(
         MathRun run,
         List<EquationVisualSegment> segments,
-        List<EquationVisualElement> elements)
+        List<EquationVisualElement> elements,
+        int depth)
     {
+        var numeratorPlan = BuildSlotPlan(run.NumeratorEquation, depth);
+        var denominatorPlan = BuildSlotPlan(run.DenominatorEquation, depth);
+        var numeratorText = numeratorPlan?.LinearText ?? run.Numerator;
+        var denominatorText = denominatorPlan?.LinearText ?? run.Denominator;
+
         var runSegments = new List<EquationVisualSegment>();
-        AddIfAny(runSegments, run.Numerator, EquationVisualSegmentRole.FractionNumerator, StructureStyle);
+        AddIfAny(runSegments, numeratorText, EquationVisualSegmentRole.FractionNumerator, StructureStyle);
         AddIfAny(runSegments, FractionBarText, EquationVisualSegmentRole.FractionBar, NormalStyle);
-        AddIfAny(runSegments, run.Denominator, EquationVisualSegmentRole.FractionDenominator, StructureStyle);
+        AddIfAny(runSegments, denominatorText, EquationVisualSegmentRole.FractionDenominator, StructureStyle);
 
         if (runSegments.Count == 0)
             return;
 
         segments.AddRange(runSegments);
-        elements.Add(EquationVisualElement.Fraction(run.LinearText, run.Numerator, run.Denominator, runSegments));
+        elements.Add(EquationVisualElement.Fraction(
+            run.LinearText,
+            numeratorText,
+            denominatorText,
+            runSegments,
+            numeratorPlan,
+            denominatorPlan));
     }
+
+    private static EquationVisualPlan? BuildSlotPlan(Equation? equation, int depth) =>
+        equation is null || depth >= MathRun.MaxNestedEquationDepth
+            ? null
+            : Build(equation, depth + 1);
 
     private static void AddRadicalElement(
         MathRun run,
