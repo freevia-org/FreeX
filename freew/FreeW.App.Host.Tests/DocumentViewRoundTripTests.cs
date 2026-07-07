@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Documents;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.DocumentView;
@@ -28,6 +30,20 @@ public sealed class DocumentViewRoundTripTests
 
     private static Run FirstRun(TextDocument document, int blockIndex = 0) =>
         ((Paragraph)document.Blocks[blockIndex]).Runs[0];
+
+    private static List<T> LogicalDescendants<T>(DependencyObject root) where T : DependencyObject
+    {
+        var result = new List<T>();
+        foreach (var child in LogicalTreeHelper.GetChildren(root))
+        {
+            if (child is not DependencyObject dependencyObject)
+                continue;
+            if (dependencyObject is T typed)
+                result.Add(typed);
+            result.AddRange(LogicalDescendants<T>(dependencyObject));
+        }
+        return result;
+    }
 
     [StaFact]
     public void PlainText_RoundTrips()
@@ -333,6 +349,36 @@ public sealed class DocumentViewRoundTripTests
         runs[1].Kind.Should().Be(MathRunKind.NAry);
         runs[2].Kind.Should().Be(MathRunKind.Matrix);
         runs[2].Matrix!.RowCount.Should().Be(2);
+    }
+
+    [StaFact]
+    public void EquationVisualPlanner_SuperscriptRendersAsStyledInlineSegmentsAndRoundTrips()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var equation = new Equation([MathRun.PlainText("E = m"), MathRun.Superscript("c", "2")]);
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var mathText = LogicalDescendants<TextBlock>(view.Document)
+            .FirstOrDefault(textBlock => textBlock.FontFamily.Source.Contains("Cambria Math", StringComparison.Ordinal));
+
+        mathText.Should().NotBeNull("the WPF equation visual should use the shared math display plan");
+        var visualRuns = mathText!.Inlines.OfType<System.Windows.Documents.Run>().ToList();
+        visualRuns.Select(run => run.Text).Should().Equal("E = m", "c", "2");
+        visualRuns.Should().NotContain(run => run.Text.Contains('^') || run.Text.Contains('_'),
+            "script markers should be represented by WPF baseline styling instead of literal characters");
+        visualRuns[2].BaselineAlignment.Should().Be(BaselineAlignment.Superscript);
+        visualRuns[2].FontSize.Should().BeLessThan(visualRuns[1].FontSize);
+
+        view.CommitToModel();
+        var recovered = FirstRun(view.Model);
+        recovered.Equation.Should().NotBeNull();
+        recovered.Equation!.Runs.Select(run => run.Kind).Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
     }
 
     [StaFact]

@@ -9929,10 +9929,21 @@ public sealed class DocumentView : RichTextBox
     /// <summary>
     /// Renders an inline equation as an InlineUIContainer hosting a Border that carries the model
     /// <see cref="Equation"/> on its Tag (so CommitToModel round-trips it, mirroring shapes). The border
-    /// shows the equation's linear form in a serif/italic face as a lightweight visual stand-in.
+    /// consumes the shared equation visual planner so simple scripts render as styled math segments while
+    /// more complex structures keep their deterministic linear fallback.
     /// </summary>
     private static InlineUIContainer BuildEquationRun(Equation equation)
     {
+        var plan = EquationVisualPlanner.Build(equation);
+        var text = new TextBlock
+        {
+            FontFamily = new FontFamily(plan.MathFontFamily),
+            FontSize = DefaultFontSizePt * PxPerPoint,
+            FontStyle = plan.Italic ? FontStyles.Italic : FontStyles.Normal
+        };
+        foreach (var segment in plan.Segments)
+            AppendEquationVisualSegment(text, segment);
+
         var element = new Border
         {
             Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF6, 0xFB)),
@@ -9940,15 +9951,27 @@ public sealed class DocumentView : RichTextBox
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(3),
             Padding = new Thickness(4, 1, 4, 1),
-            Child = new TextBlock
-            {
-                Text = equation.LinearText,
-                FontFamily = new FontFamily("Cambria, Times New Roman, serif"),
-                FontStyle = FontStyles.Italic
-            },
+            Child = text,
             Tag = equation // carries the model equation so CommitToModel can round-trip it
         };
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Center };
+    }
+
+    private static void AppendEquationVisualSegment(TextBlock text, EquationVisualSegment segment)
+    {
+        var run = new WpfRun(segment.Text)
+        {
+            FontFamily = new FontFamily(segment.Style.FontFamily),
+            FontSize = DefaultFontSizePt * PxPerPoint * segment.Style.FontSizeScale,
+            FontStyle = segment.Style.Italic ? FontStyles.Italic : FontStyles.Normal,
+            BaselineAlignment = segment.Style.BaselineRole switch
+            {
+                EquationVisualBaselineRole.Superscript => BaselineAlignment.Superscript,
+                EquationVisualBaselineRole.Subscript => BaselineAlignment.Subscript,
+                _ => BaselineAlignment.Baseline
+            }
+        };
+        text.Inlines.Add(run);
     }
 
     /// <summary>

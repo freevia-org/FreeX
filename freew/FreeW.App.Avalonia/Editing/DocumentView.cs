@@ -152,6 +152,8 @@ public sealed class DocumentView : Control
     private readonly List<FloatingChartData>    _inlineCharts    = new();
     private readonly List<FloatingWordArtData>  _inlineWordArts  = new();
     private readonly List<FloatingSmartArtData> _inlineSmartArts = new();
+    private readonly List<(string Text, EquationVisualSegmentRole Role, EquationVisualBaselineRole BaselineRole,
+        double FontSizeScale, string FontFamily, bool Italic)> _equationVisualSegments = new();
     private readonly Dictionary<InlineImage, Bitmap?> _bitmapCache = new();
     private byte[]? _watermarkBitmapCacheBytes;
     private Bitmap? _watermarkBitmapCache;
@@ -2775,6 +2777,16 @@ public sealed class DocumentView : Control
         }
     }
 
+    public IReadOnlyList<(string Text, EquationVisualSegmentRole Role, EquationVisualBaselineRole BaselineRole,
+        double FontSizeScale, string FontFamily, bool Italic)> EquationVisualSegments
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _equationVisualSegments.ToList();
+        }
+    }
+
     private static string ToHex(Color color) => $"#{color.R:X2}{color.G:X2}{color.B:X2}";
 
     // ---- PDF export ------------------------------------------------------------------------------
@@ -2950,6 +2962,7 @@ public sealed class DocumentView : Control
         _inlineCharts.Clear();
         _inlineWordArts.Clear();
         _inlineSmartArts.Clear();
+        _equationVisualSegments.Clear();
         _cellHits.Clear();
         _headerFooterItems.Clear();
         _noteItems.Clear();           // AV-NOTERENDER
@@ -3062,6 +3075,7 @@ public sealed class DocumentView : Control
                 _inlineCharts.Clear();
                 _inlineWordArts.Clear();
                 _inlineSmartArts.Clear();
+                _equationVisualSegments.Clear();
                 _cellHits.Clear();
                 _tabLeaderSpans.Clear();
                 _layoutContentY = 0;
@@ -4264,7 +4278,7 @@ public sealed class DocumentView : Control
 
     private void LayoutParagraphPaged(int blockIndex, Paragraph paragraph, double textWidth, double leftInset = 0, string? marker = null)
     {
-        var rawCells = IsEditable(paragraph) ? ParaCells(paragraph) : FallbackCells(paragraph.PlainText);
+        var rawCells = IsEditable(paragraph) ? ParaCells(paragraph) : DisplayCells(paragraph);
         // Resolve named-style formatting for display only; editing re-derives raw cells from the model.
         var cells = paragraph.StyleId is null
             ? rawCells
@@ -13443,6 +13457,58 @@ public sealed class DocumentView : Control
         }
         return cells;
     }
+
+    private List<Cell> DisplayCells(Paragraph paragraph)
+    {
+        if (paragraph.Runs.All(run => run.Equation is null))
+            return FallbackCells(paragraph.PlainText);
+
+        var cells = new List<Cell>();
+        foreach (var run in paragraph.Runs)
+        {
+            if (run.Equation is { } equation)
+            {
+                AddEquationDisplayCells(equation, run.Formatting, cells);
+                continue;
+            }
+
+            foreach (var ch in run.Text)
+                cells.Add(new Cell(ch, run.Formatting));
+        }
+        return cells;
+    }
+
+    private void AddEquationDisplayCells(Equation equation, RunFormatting baseFormatting, List<Cell> cells)
+    {
+        var plan = EquationVisualPlanner.Build(equation);
+        foreach (var segment in plan.Segments)
+        {
+            _equationVisualSegments.Add((
+                segment.Text,
+                segment.Role,
+                segment.Style.BaselineRole,
+                segment.Style.FontSizeScale,
+                segment.Style.FontFamily,
+                segment.Style.Italic));
+
+            var fmt = ApplyEquationVisualStyle(baseFormatting, segment.Style);
+            foreach (var ch in segment.Text)
+                cells.Add(new Cell(ch, fmt));
+        }
+    }
+
+    private static RunFormatting ApplyEquationVisualStyle(RunFormatting baseFormatting, EquationVisualStyle style) =>
+        baseFormatting with
+        {
+            FontFamily = style.FontFamily,
+            Italic = style.Italic,
+            VerticalAlign = style.BaselineRole switch
+            {
+                EquationVisualBaselineRole.Superscript => VerticalAlign.Superscript,
+                EquationVisualBaselineRole.Subscript => VerticalAlign.Subscript,
+                _ => VerticalAlign.Baseline
+            }
+        };
 
     private static List<Cell> FallbackCells(string text)
     {
