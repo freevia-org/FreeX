@@ -829,7 +829,7 @@ public sealed class FreePRibbonDefinitionProfileTests
         var workflowEvidence = root.GetProperty("workflowEvidence")
             .EnumerateArray()
             .ToArray();
-        workflowEvidence.Should().HaveCount(10);
+        workflowEvidence.Should().HaveCount(27);
         root.GetProperty("summary").GetProperty("workflowEvidenceRows").GetInt32()
             .Should()
             .Be(workflowEvidence.Length);
@@ -845,7 +845,24 @@ public sealed class FreePRibbonDefinitionProfileTests
                 "freep.export.backstage.package-handoff",
                 "freep.table.inline-text.workflow-depth",
                 "freep.header-footer.placeholder-creation",
-                "freep.chart.number-format-rendering");
+                "freep.chart.number-format-rendering",
+                "freep.chart.edge-manual-layout",
+                "freep.chart.pie-first-slice-angle",
+                "freep.omml.transparent-phantom-spacing",
+                "freep.smartart.continuous-block-process",
+                "freep.smartart.basic-process",
+                "freep.smartart.segmented-process",
+                "freep.smartart.chevron-process",
+                "freep.smartart.basic-block-list",
+                "freep.smartart.vertical-box-list",
+                "freep.smartart.stacked-list",
+                "freep.smartart.picture-caption-list",
+                "freep.smartart.basic-cycle",
+                "freep.smartart.radial-cycle",
+                "freep.smartart.gear-cycle",
+                "freep.smartart.vertical-bullet-list",
+                "freep.smartart.basic-hierarchy",
+                "freep.smartart.org-chart");
 
         workflowEvidence.Should().OnlyContain(row =>
             row.GetProperty("status").GetString()!.StartsWith("shared-", StringComparison.Ordinal) &&
