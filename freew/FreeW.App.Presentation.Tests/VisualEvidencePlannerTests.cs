@@ -28,6 +28,7 @@ public sealed class VisualEvidencePlannerTests
             "f2-tracked-changes",
             "f2-comments",
             "review-proofing-visual-depth",
+            "review-protection-proofing-comments-only",
             "table-layout-complex",
             "table-pagination-repeat-header",
             "table-page-composition-stress",
@@ -73,6 +74,20 @@ public sealed class VisualEvidencePlannerTests
         reviewProofingScenario.ExpectedOutputNamePattern.Should().Be("review-proofing-visual-depth_p{page}.png");
         reviewProofingScenario.Composition.ExpectsTrackedChanges.Should().BeTrue();
         reviewProofingScenario.Composition.ExpectsComments.Should().BeTrue();
+
+        var reviewProtectionScenario = FreeWVisualEvidencePlanner.ResolveScenario("review-protection-proofing-comments-only");
+        reviewProtectionScenario.ExpectedFeatureTags.Should().Contain([
+            "review",
+            "proofing",
+            "comments-only-protection",
+            "review-protection-state",
+            "protection-command-matrix",
+            "proofing-replacement-blocked",
+            "comment-workflow-allowed"]);
+        reviewProtectionScenario.ExpectedOutputNamePattern.Should()
+            .Be("review-protection-proofing-comments-only_p{page}.png");
+        reviewProtectionScenario.Composition.ExpectsTrackedChanges.Should().BeTrue();
+        reviewProtectionScenario.Composition.ExpectsComments.Should().BeTrue();
 
         var fieldScenario = FreeWVisualEvidencePlanner.ResolveScenario("field-page-number-variants");
         fieldScenario.ExpectedFeatureTags.Should().Contain([
@@ -406,6 +421,7 @@ public sealed class VisualEvidencePlannerTests
         var tracked = FreeWVisualEvidenceDocumentFactory.BuildTrackedChangesReviewDocument();
         var comments = FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument();
         var reviewProofing = FreeWVisualEvidenceDocumentFactory.BuildReviewProofingVisualDepthDocument();
+        var reviewProtection = FreeWVisualEvidenceDocumentFactory.BuildReviewProtectionProofingEvidenceDocument();
 
         var revisions = tracked.Blocks
             .OfType<Paragraph>()
@@ -513,6 +529,77 @@ public sealed class VisualEvidencePlannerTests
             "kind=Spelling|word=recieve|normalized=recieve|language=en-GB|block=5|run=2|runOffset=0|paragraphOffset=26|length=7",
             "kind=Spelling|word=acommodate|normalized=acommodate|language=fr-FR|block=5|run=3|runOffset=0|paragraphOffset=34|length=10",
             "kind=Grammar|word=the|normalized=the|language=en-US|block=5|run=5|runOffset=0|paragraphOffset=49|length=3"
+        ]);
+
+        reviewProtection.Protection.Mode.Should().Be(ProtectionMode.CommentsOnly);
+        reviewProtection.MarkedAsFinal.Should().BeFalse();
+        var reviewProtectionExpectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "review-protection-proofing-comments-only",
+            reviewProtection.Page,
+            pageNumber: 1,
+            pageCount: 1,
+            outputName: "review-protection-proofing-comments-only_p1.png",
+            document: reviewProtection);
+        reviewProtectionExpectation.ExpectedOutputName.Should().Be("review-protection-proofing-comments-only_p1.png");
+        reviewProtectionExpectation.Composition.ExpectsTrackedChanges.Should().BeTrue();
+        reviewProtectionExpectation.Composition.ExpectsComments.Should().BeTrue();
+        reviewProtectionExpectation.ProofingDiagnostics.DiagnosticCount.Should().Be(4);
+        reviewProtectionExpectation.ReviewProtection.ProtectionMode.Should().Be(nameof(ProtectionMode.CommentsOnly));
+        reviewProtectionExpectation.ReviewProtection.IsProtected.Should().BeTrue();
+        reviewProtectionExpectation.ReviewProtection.IsMarkedAsFinal.Should().BeFalse();
+        reviewProtectionExpectation.ReviewProtection.MarkAsFinal.IsChecked.Should().BeFalse();
+        reviewProtectionExpectation.ReviewProtection.RestrictEditing.IsChecked.Should().BeTrue();
+        reviewProtectionExpectation.ReviewProtection.IsBodyEditingLocked.Should().BeTrue();
+        reviewProtectionExpectation.ReviewProtection.IsBodyFormattingLocked.Should().BeTrue();
+        reviewProtectionExpectation.ReviewProtection.IsHistoryLocked.Should().BeTrue();
+        reviewProtectionExpectation.ReviewProtection.IsCommentWorkflowAllowed.Should().BeTrue();
+        reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
+            operation.Operation == nameof(RestrictEditingOperationKind.BodyTextEdit)
+            && operation.MutationKind == "None"
+            && !operation.IsAllowed
+            && operation.BlockReason == nameof(RestrictEditingBlockReason.CommentsOnly));
+        reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
+            operation.Operation == nameof(RestrictEditingOperationKind.BodyFormatting)
+            && operation.MutationKind == "None"
+            && !operation.IsAllowed
+            && operation.BlockReason == nameof(RestrictEditingBlockReason.CommentsOnly));
+        reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
+            operation.Operation == nameof(RestrictEditingOperationKind.ProofingReplacement)
+            && operation.MutationKind == "None"
+            && !operation.IsAllowed
+            && operation.BlockReason == nameof(RestrictEditingBlockReason.CommentsOnly));
+        reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
+            operation.Operation == nameof(RestrictEditingOperationKind.HistoryUndo)
+            && operation.MutationKind == nameof(DocumentCommandMutationKind.BodyText)
+            && !operation.IsAllowed
+            && operation.BlockReason == nameof(RestrictEditingBlockReason.CommentsOnly));
+        reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
+            operation.Operation == nameof(RestrictEditingOperationKind.HistoryRedo)
+            && operation.MutationKind == nameof(DocumentCommandMutationKind.BodyFormatting)
+            && !operation.IsAllowed
+            && operation.BlockReason == nameof(RestrictEditingBlockReason.CommentsOnly));
+        reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
+            operation.Operation == nameof(RestrictEditingOperationKind.CommentInsert)
+            && operation.IsAllowed);
+        reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
+            operation.Operation == nameof(RestrictEditingOperationKind.CommentReply)
+            && operation.IsAllowed);
+        reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
+            operation.Operation == nameof(RestrictEditingOperationKind.CommentResolve)
+            && operation.IsAllowed);
+        reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
+            operation.Operation == nameof(RestrictEditingOperationKind.CommentDelete)
+            && operation.IsAllowed);
+        reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
+            operation.Operation == nameof(RestrictEditingOperationKind.HistoryUndo)
+            && operation.MutationKind == nameof(DocumentCommandMutationKind.Comment)
+            && operation.IsAllowed);
+        reviewProtectionExpectation.ReviewProtection.StableSignatures.Should().Contain([
+            "operation=BodyTextEdit|mutation=None|allowed=0|requiresTrackedChanges=0|blockReason=CommentsOnly|protection=CommentsOnly",
+            "operation=BodyFormatting|mutation=None|allowed=0|requiresTrackedChanges=0|blockReason=CommentsOnly|protection=CommentsOnly",
+            "operation=ProofingReplacement|mutation=None|allowed=0|requiresTrackedChanges=0|blockReason=CommentsOnly|protection=CommentsOnly",
+            "operation=HistoryUndo|mutation=BodyText|allowed=0|requiresTrackedChanges=0|blockReason=CommentsOnly|protection=CommentsOnly",
+            "operation=CommentInsert|mutation=None|allowed=1|requiresTrackedChanges=0|blockReason=None|protection=CommentsOnly"
         ]);
     }
 
@@ -4033,6 +4120,88 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void BuildNormalizedSummaryFromFiles_ValidatesReviewProtectionCommandMatrix()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            const string scenarioId = "review-protection-proofing-comments-only";
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        pageNumber: 1,
+                        pageCount: 1)
+                ],
+                new DateTimeOffset(2026, 7, 6, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        pageNumber: 1,
+                        pageCount: 1)
+                ],
+                new DateTimeOffset(2026, 7, 6, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeTrue();
+            summary.Evidence.Should().OnlyContain(row => row.ProofingDiagnostics.DiagnosticCount == 4);
+            summary.Evidence.Should().OnlyContain(row => row.ReviewProtection.ProtectionMode == nameof(ProtectionMode.CommentsOnly));
+            summary.Evidence.Should().OnlyContain(row => row.ReviewProtection.RestrictEditing.IsChecked);
+            summary.Evidence.Should().OnlyContain(row => !row.ReviewProtection.MarkAsFinal.IsChecked);
+            summary.Evidence.Should().OnlyContain(row => row.ReviewProtection.IsCommentWorkflowAllowed);
+            summary.Evidence.SelectMany(row => row.ReviewProtection.StableSignatures)
+                .Should().Contain(signature =>
+                    signature.Contains("operation=ProofingReplacement", StringComparison.Ordinal)
+                    && signature.Contains("allowed=0", StringComparison.Ordinal)
+                    && signature.Contains("blockReason=CommentsOnly", StringComparison.Ordinal));
+            summary.Evidence.SelectMany(row => row.ReviewProtection.StableSignatures)
+                .Should().Contain(signature =>
+                    signature.Contains("operation=HistoryUndo", StringComparison.Ordinal)
+                    && signature.Contains("mutation=Comment", StringComparison.Ordinal)
+                    && signature.Contains("allowed=1", StringComparison.Ordinal));
+
+            var json = FreeWVisualEvidenceManifestNormalizer.ToJson(summary);
+            using var doc = JsonDocument.Parse(json);
+            var firstProtection = doc.RootElement.GetProperty("evidence")[0].GetProperty("reviewProtection");
+            firstProtection.GetProperty("protectionMode").GetString().Should().Be(nameof(ProtectionMode.CommentsOnly));
+            firstProtection.GetProperty("restrictEditing").GetProperty("isChecked").GetBoolean().Should().BeTrue();
+            firstProtection.GetProperty("markAsFinal").GetProperty("isChecked").GetBoolean().Should().BeFalse();
+
+            var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(summary);
+            markdown.Should().Contain("protection CommentsOnly");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void BuildNormalizedSummaryFromFiles_RejectsCrossHostReviewProofingDiagnosticDrift()
     {
         var root = CreateTempRoot();
@@ -4103,6 +4272,80 @@ public sealed class VisualEvidencePlannerTests
                 f.Contains("review renderer pair 'review-proofing-visual-depth' page 1", StringComparison.Ordinal)
                 && f.Contains("proofing diagnostic signatures differ", StringComparison.Ordinal)
                 && f.Contains("kind=Grammar", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RejectsCrossHostReviewProtectionCommandDrift()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            const string scenarioId = "review-protection-proofing-comments-only";
+            var wpfRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var driftedAvaloniaRow = avaloniaRow with
+            {
+                PageExpectation = avaloniaRow.PageExpectation with
+                {
+                    ReviewProtection = avaloniaRow.PageExpectation.ReviewProtection with
+                    {
+                        StableSignatures = avaloniaRow.PageExpectation.ReviewProtection.StableSignatures
+                            .Select(signature => signature.Contains("operation=ProofingReplacement", StringComparison.Ordinal)
+                                ? signature.Replace("allowed=0", "allowed=1", StringComparison.Ordinal)
+                                : signature)
+                            .ToList()
+                    }
+                }
+            };
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [wpfRow],
+                new DateTimeOffset(2026, 7, 6, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [driftedAvaloniaRow],
+                new DateTimeOffset(2026, 7, 6, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("review renderer pair 'review-protection-proofing-comments-only' page 1", StringComparison.Ordinal)
+                && f.Contains("protection command signatures differ", StringComparison.Ordinal)
+                && f.Contains("operation=ProofingReplacement", StringComparison.Ordinal));
         }
         finally
         {
@@ -5227,6 +5470,7 @@ public sealed class VisualEvidencePlannerTests
             "f2-tracked-changes" => FreeWVisualEvidenceDocumentFactory.BuildTrackedChangesReviewDocument(),
             "f2-comments" => FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument(),
             "review-proofing-visual-depth" => FreeWVisualEvidenceDocumentFactory.BuildReviewProofingVisualDepthDocument(),
+            "review-protection-proofing-comments-only" => FreeWVisualEvidenceDocumentFactory.BuildReviewProtectionProofingEvidenceDocument(),
             "table-layout-complex" => FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument(),
             "table-pagination-repeat-header" => FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument(),
             "table-page-composition-stress" => FreeWVisualEvidenceDocumentFactory.BuildTablePageCompositionStressDocument(),

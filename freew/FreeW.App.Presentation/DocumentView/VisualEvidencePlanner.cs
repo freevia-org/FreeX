@@ -280,6 +280,29 @@ public sealed record FreeWVisualProofingDiagnosticExpectation(
     IReadOnlyList<string> StableSignatures,
     IReadOnlyList<FreeWVisualProofingDiagnosticSignature> Diagnostics);
 
+public sealed record FreeWVisualProtectionOperationExpectation(
+    string Operation,
+    string MutationKind,
+    bool IsAllowed,
+    bool RequiresTrackedChanges,
+    string BlockReason,
+    string ProtectionMode,
+    string StableSignature);
+
+public sealed record FreeWVisualReviewProtectionExpectation(
+    string ProtectionMode,
+    bool IsProtected,
+    bool IsMarkedAsFinal,
+    ReviewProtectionCommandState MarkAsFinal,
+    ReviewProtectionCommandState RestrictEditing,
+    bool IsBodyEditingLocked,
+    bool IsBodyFormattingLocked,
+    bool IsCommentWorkflowAllowed,
+    bool IsHistoryLocked,
+    bool ShouldForceTrackChanges,
+    IReadOnlyList<FreeWVisualProtectionOperationExpectation> Operations,
+    IReadOnlyList<string> StableSignatures);
+
 public sealed record FreeWVisualPageExpectation(
     int PageNumber,
     int PageCount,
@@ -295,6 +318,7 @@ public sealed record FreeWVisualPageExpectation(
     FreeWVisualHeaderFooterExpectation HeaderFooters,
     FreeWVisualTableOfAuthoritiesExpectation TableOfAuthorities,
     FreeWVisualProofingDiagnosticExpectation ProofingDiagnostics,
+    FreeWVisualReviewProtectionExpectation ReviewProtection,
     string? HeaderSlotName,
     string? FooterSlotName,
     bool HasFootnotes,
@@ -368,7 +392,7 @@ public static class FreeWVisualEvidencePlanner
 {
     public const string ManifestFileName = "freew_visual_evidence_manifest.json";
     public const string SchemaId = "freew.visual-evidence.v1";
-    public const int SchemaVersion = 16;
+    public const int SchemaVersion = 17;
     public const string SectionGeometryPageSurfaceRenderStatus = "section-page-surface";
 
     private const int MaxTrackedColorCount = 4096;
@@ -380,6 +404,22 @@ public static class FreeWVisualEvidencePlanner
         RunFieldKind.Subject,
         RunFieldKind.Keywords,
         RunFieldKind.DocComments
+    ];
+
+    private static readonly RestrictEditingEvidenceOperation[] ReviewProtectionEvidenceOperations =
+    [
+        new(RestrictEditingOperationKind.BodyTextEdit),
+        new(RestrictEditingOperationKind.BodyTextDelete),
+        new(RestrictEditingOperationKind.BodyFormatting),
+        new(RestrictEditingOperationKind.ProofingReplacement),
+        new(RestrictEditingOperationKind.HistoryUndo, DocumentCommandMutationKind.BodyText),
+        new(RestrictEditingOperationKind.HistoryRedo, DocumentCommandMutationKind.BodyFormatting),
+        new(RestrictEditingOperationKind.CommentInsert),
+        new(RestrictEditingOperationKind.CommentReply),
+        new(RestrictEditingOperationKind.CommentResolve),
+        new(RestrictEditingOperationKind.CommentDelete),
+        new(RestrictEditingOperationKind.HistoryUndo, DocumentCommandMutationKind.Comment),
+        new(RestrictEditingOperationKind.HistoryRedo, DocumentCommandMutationKind.Comment)
     ];
 
     private static readonly FreeWVisualCompositionExpectation BodyPrintComposition = new(
@@ -586,6 +626,39 @@ public static class FreeWVisualEvidencePlanner
                 "body-text"
             ],
             "review-proofing-visual-depth_p{page}.png",
+            1,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition with { ExpectsTrackedChanges = true, ExpectsComments = true }),
+        new(
+            "review-protection-proofing-comments-only",
+            "Shared Review proofing and CommentsOnly protection command evidence.",
+            [
+                "review",
+                "proofing",
+                "protection",
+                "restrict-editing",
+                "comments-only-protection",
+                "review-protection-state",
+                "protection-command-matrix",
+                "proofing-replacement-blocked",
+                "body-edit-blocked",
+                "body-formatting-blocked",
+                "history-blocked",
+                "comment-workflow-allowed",
+                "print-layout",
+                "tracked-changes",
+                "revision-marks",
+                "format-revisions",
+                "comments",
+                "comment-anchors",
+                "comment-replies",
+                "resolved-comments",
+                "table-comment-anchors",
+                "proofing-language",
+                "proofing-diagnostics",
+                "body-text"
+            ],
+            "review-protection-proofing-comments-only_p{page}.png",
             1,
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition with { ExpectsTrackedChanges = true, ExpectsComments = true }),
@@ -989,6 +1062,7 @@ public static class FreeWVisualEvidencePlanner
         var headerFooters = BuildHeaderFooterExpectation(document, pageNumber, pageCount);
         var tableOfAuthorities = BuildTableOfAuthoritiesExpectation(document);
         var proofingDiagnostics = BuildProofingDiagnosticExpectation(document);
+        var reviewProtection = BuildReviewProtectionExpectation(document);
 
         var expectedOutputName = ExpectedOutputName(scenario.ScenarioId, pageNumber, outputName);
         return new FreeWVisualPageExpectation(
@@ -1006,6 +1080,7 @@ public static class FreeWVisualEvidencePlanner
             headerFooters,
             tableOfAuthorities,
             proofingDiagnostics,
+            reviewProtection,
             headerSlotName,
             footerSlotName,
             hasFootnotes,
@@ -2030,6 +2105,61 @@ public static class FreeWVisualEvidencePlanner
             StableSignature: stableSignature);
     }
 
+    public static FreeWVisualReviewProtectionExpectation BuildReviewProtectionExpectation(TextDocument? document)
+    {
+        var protection = document?.Protection ?? ProtectionSettings.Unprotected;
+        var isMarkedAsFinal = document?.MarkedAsFinal ?? false;
+        var statePlan = ReviewProtectionStatePlanner.Build(protection, isMarkedAsFinal);
+        var policy = RestrictEditingEnforcementPolicy.From(protection, isMarkedAsFinal);
+        var operations = ReviewProtectionEvidenceOperations
+            .Select(operation => BuildReviewProtectionOperationExpectation(policy, operation))
+            .ToList();
+
+        return new FreeWVisualReviewProtectionExpectation(
+            ProtectionMode: protection.Mode.ToString(),
+            IsProtected: protection.IsProtected,
+            IsMarkedAsFinal: isMarkedAsFinal,
+            MarkAsFinal: statePlan.MarkAsFinal,
+            RestrictEditing: statePlan.RestrictEditing,
+            IsBodyEditingLocked: policy.IsBodyEditingLocked,
+            IsBodyFormattingLocked: policy.IsBodyFormattingLocked,
+            IsCommentWorkflowAllowed: policy.IsCommentWorkflowAllowed,
+            IsHistoryLocked: policy.IsHistoryLocked,
+            ShouldForceTrackChanges: policy.ShouldForceTrackChanges,
+            Operations: operations,
+            StableSignatures: operations
+                .Select(operation => operation.StableSignature)
+                .OrderBy(signature => signature, StringComparer.Ordinal)
+                .ToList());
+    }
+
+    private static FreeWVisualProtectionOperationExpectation BuildReviewProtectionOperationExpectation(
+        RestrictEditingEnforcementPolicy policy,
+        RestrictEditingEvidenceOperation operation)
+    {
+        var decision = operation.MutationKind is null
+            ? policy.DecisionFor(operation.Operation)
+            : policy.DecisionForHistory(operation.Operation, operation.MutationKind);
+        var mutationKind = operation.MutationKind?.ToString() ?? "None";
+        var stableSignature = string.Join(
+            "|",
+            $"operation={operation.Operation}",
+            $"mutation={mutationKind}",
+            $"allowed={BoolFlag(decision.IsAllowed)}",
+            $"requiresTrackedChanges={BoolFlag(decision.RequiresTrackedChanges)}",
+            $"blockReason={decision.BlockReason}",
+            $"protection={decision.ProtectionMode}");
+
+        return new FreeWVisualProtectionOperationExpectation(
+            Operation: operation.Operation.ToString(),
+            MutationKind: mutationKind,
+            IsAllowed: decision.IsAllowed,
+            RequiresTrackedChanges: decision.RequiresTrackedChanges,
+            BlockReason: decision.BlockReason.ToString(),
+            ProtectionMode: decision.ProtectionMode.ToString(),
+            StableSignature: stableSignature);
+    }
+
     public static void EnsureTrusted(FreeWVisualEvidenceRow row)
     {
         ArgumentNullException.ThrowIfNull(row);
@@ -2326,6 +2456,10 @@ public static class FreeWVisualEvidencePlanner
         LanguageTags: [],
         StableSignatures: [],
         Diagnostics: []);
+
+    private sealed record RestrictEditingEvidenceOperation(
+        RestrictEditingOperationKind Operation,
+        DocumentCommandMutationKind? MutationKind = null);
 
     private static IEnumerable<(Run Run, bool HeaderFooter, string? HeaderFooterSlotName)> EnumerateFieldRunSnapshots(
         TextDocument document)

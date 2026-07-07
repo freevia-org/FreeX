@@ -51,6 +51,7 @@ public sealed record FreeWVisualEvidenceNormalizedRow(
     FreeWVisualHeaderFooterExpectation HeaderFooters,
     FreeWVisualTableOfAuthoritiesExpectation TableOfAuthorities,
     FreeWVisualProofingDiagnosticExpectation ProofingDiagnostics,
+    FreeWVisualReviewProtectionExpectation ReviewProtection,
     FreeWVisualEvidenceTrust Trust);
 
 public sealed record FreeWVisualEvidenceNormalizedSummary(
@@ -107,7 +108,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 24;
+    public const int SummarySchemaVersion = 25;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -135,7 +136,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
     [
         "f2-tracked-changes",
         "f2-comments",
-        "review-proofing-visual-depth"
+        "review-proofing-visual-depth",
+        "review-protection-proofing-comments-only"
     ];
     public static IReadOnlyList<string> TableRendererScenarioIds { get; } =
     [
@@ -1108,6 +1110,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             pageExpectation.HeaderFooters ?? HeaderFooterVisualPlanner.EmptyExpectation,
             pageExpectation.TableOfAuthorities,
             pageExpectation.ProofingDiagnostics,
+            pageExpectation.ReviewProtection,
             trust);
     }
 
@@ -1141,6 +1144,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         ValidateFieldFeatureTags(row, rowFailures);
         ValidateHeaderFooterFeatureTags(row, rowFailures);
         ValidateProofingFeatureTags(row, rowFailures);
+        ValidateReviewProtectionFeatureTags(row, rowFailures);
         if (features.Section.SectionOrdinal <= 0)
             rowFailures.Add("section ordinal must be positive");
         if (features.Section.SectionRelativePageNumber <= 0)
@@ -1487,6 +1491,76 @@ public static class FreeWVisualEvidenceManifestNormalizer
             && proofing.LanguageTags.Count == 0)
         {
             rowFailures.Add("scenario expects proofing language evidence but the proofing diagnostics record no language tags");
+        }
+    }
+
+    private static void ValidateReviewProtectionFeatureTags(
+        FreeWVisualEvidenceRow row,
+        List<string> rowFailures)
+    {
+        var tags = row.ExpectedFeatureTags;
+        if (!tags.Contains("review-protection-state", StringComparer.OrdinalIgnoreCase)
+            && !tags.Contains("protection-command-matrix", StringComparer.OrdinalIgnoreCase)
+            && !tags.Contains("comments-only-protection", StringComparer.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var protection = row.PageExpectation.ReviewProtection;
+        if (tags.Contains("comments-only-protection", StringComparer.OrdinalIgnoreCase))
+        {
+            if (!string.Equals(protection.ProtectionMode, ProtectionMode.CommentsOnly.ToString(), StringComparison.Ordinal))
+                rowFailures.Add("scenario expects CommentsOnly protection but the page expectation records a different protection mode");
+            if (!protection.IsProtected)
+                rowFailures.Add("scenario expects active editing restrictions but the page expectation records an unprotected document");
+            if (protection.IsMarkedAsFinal || protection.MarkAsFinal.IsChecked)
+                rowFailures.Add("scenario expects Mark as Final to be unchecked for the CommentsOnly protection slice");
+            if (!protection.RestrictEditing.IsChecked)
+                rowFailures.Add("scenario expects Restrict Editing checked but the page expectation records it unchecked");
+        }
+
+        if (tags.Contains("body-edit-blocked", StringComparer.OrdinalIgnoreCase))
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.BodyTextEdit), "None", isAllowed: false);
+        if (tags.Contains("body-formatting-blocked", StringComparer.OrdinalIgnoreCase))
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.BodyFormatting), "None", isAllowed: false);
+        if (tags.Contains("proofing-replacement-blocked", StringComparer.OrdinalIgnoreCase))
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.ProofingReplacement), "None", isAllowed: false);
+        if (tags.Contains("history-blocked", StringComparer.OrdinalIgnoreCase))
+        {
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.HistoryUndo), nameof(DocumentCommandMutationKind.BodyText), isAllowed: false);
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.HistoryRedo), nameof(DocumentCommandMutationKind.BodyFormatting), isAllowed: false);
+        }
+        if (tags.Contains("comment-workflow-allowed", StringComparer.OrdinalIgnoreCase))
+        {
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.CommentInsert), "None", isAllowed: true);
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.CommentReply), "None", isAllowed: true);
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.CommentResolve), "None", isAllowed: true);
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.CommentDelete), "None", isAllowed: true);
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.HistoryUndo), nameof(DocumentCommandMutationKind.Comment), isAllowed: true);
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.HistoryRedo), nameof(DocumentCommandMutationKind.Comment), isAllowed: true);
+        }
+    }
+
+    private static void RequireProtectionDecision(
+        List<string> rowFailures,
+        FreeWVisualReviewProtectionExpectation protection,
+        string operation,
+        string mutationKind,
+        bool isAllowed)
+    {
+        var decision = protection.Operations.SingleOrDefault(item =>
+            string.Equals(item.Operation, operation, StringComparison.Ordinal)
+            && string.Equals(item.MutationKind, mutationKind, StringComparison.Ordinal));
+        if (decision is null)
+        {
+            rowFailures.Add($"scenario expects protection decision {operation}/{mutationKind} but the page expectation records none");
+            return;
+        }
+
+        if (decision.IsAllowed != isAllowed)
+        {
+            rowFailures.Add(
+                $"scenario expects protection decision {operation}/{mutationKind} allowed={BoolFlag(isAllowed)} but the page expectation records allowed={BoolFlag(decision.IsAllowed)}");
         }
     }
 
@@ -1843,6 +1917,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
                 ValidateRendererPairRow("review renderer pair", scenarioId, pageNumber, wpf, avalonia, failures);
                 ValidateReviewProofingPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+                ValidateReviewProtectionPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
             }
         }
     }
@@ -2512,7 +2587,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         FreeWVisualEvidenceNormalizedRow avalonia,
         List<string> failures)
     {
-        if (!string.Equals(scenarioId, "review-proofing-visual-depth", StringComparison.OrdinalIgnoreCase))
+        if (!IsReviewProofingEvidenceScenario(scenarioId))
             return;
 
         var pairName = $"review renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
@@ -2561,6 +2636,63 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{pairName} proofing diagnostic signatures differ: WPF '{FormatSummaries(wpfSignatures)}', Avalonia '{FormatSummaries(avaloniaSignatures)}'");
         }
     }
+
+    private static void ValidateReviewProtectionPairRow(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia,
+        List<string> failures)
+    {
+        if (!string.Equals(scenarioId, "review-protection-proofing-comments-only", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var pairName = $"review renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        var wpfProtection = wpf.ReviewProtection;
+        var avaloniaProtection = avalonia.ReviewProtection;
+
+        if (!string.Equals(wpfProtection.ProtectionMode, avaloniaProtection.ProtectionMode, StringComparison.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} protection modes differ: WPF '{wpfProtection.ProtectionMode}', Avalonia '{avaloniaProtection.ProtectionMode}'");
+        }
+
+        if (wpfProtection.IsProtected != avaloniaProtection.IsProtected)
+        {
+            failures.Add(
+                $"{pairName} protected states differ: WPF {BoolFlag(wpfProtection.IsProtected)}, Avalonia {BoolFlag(avaloniaProtection.IsProtected)}");
+        }
+
+        if (wpfProtection.IsMarkedAsFinal != avaloniaProtection.IsMarkedAsFinal)
+        {
+            failures.Add(
+                $"{pairName} Mark as Final states differ: WPF {BoolFlag(wpfProtection.IsMarkedAsFinal)}, Avalonia {BoolFlag(avaloniaProtection.IsMarkedAsFinal)}");
+        }
+
+        if (wpfProtection.MarkAsFinal.IsChecked != avaloniaProtection.MarkAsFinal.IsChecked)
+        {
+            failures.Add(
+                $"{pairName} Mark as Final checked states differ: WPF {BoolFlag(wpfProtection.MarkAsFinal.IsChecked)}, Avalonia {BoolFlag(avaloniaProtection.MarkAsFinal.IsChecked)}");
+        }
+
+        if (wpfProtection.RestrictEditing.IsChecked != avaloniaProtection.RestrictEditing.IsChecked)
+        {
+            failures.Add(
+                $"{pairName} Restrict Editing checked states differ: WPF {BoolFlag(wpfProtection.RestrictEditing.IsChecked)}, Avalonia {BoolFlag(avaloniaProtection.RestrictEditing.IsChecked)}");
+        }
+
+        var wpfSignatures = OrderedSummaries(wpfProtection.StableSignatures);
+        var avaloniaSignatures = OrderedSummaries(avaloniaProtection.StableSignatures);
+        if (!wpfSignatures.SequenceEqual(avaloniaSignatures, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} protection command signatures differ: WPF '{FormatSummaries(wpfSignatures)}', Avalonia '{FormatSummaries(avaloniaSignatures)}'");
+        }
+    }
+
+    private static bool IsReviewProofingEvidenceScenario(string scenarioId) =>
+        string.Equals(scenarioId, "review-proofing-visual-depth", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(scenarioId, "review-protection-proofing-comments-only", StringComparison.OrdinalIgnoreCase);
 
     private static void ValidateReferencesHeavyToaPairRow(
         int pageNumber,
@@ -3194,6 +3326,12 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{row.ProofingDiagnostics.DiagnosticCount.ToString(CultureInfo.InvariantCulture)} proofing diagnostic(s), " +
                 $"{row.ProofingDiagnostics.SpellingCount.ToString(CultureInfo.InvariantCulture)} spelling, " +
                 $"{row.ProofingDiagnostics.GrammarCount.ToString(CultureInfo.InvariantCulture)} grammar");
+        }
+        if (row.ReviewProtection.IsProtected)
+        {
+            parts.Add(
+                $"protection {row.ReviewProtection.ProtectionMode}, " +
+                $"{row.ReviewProtection.Operations.Count.ToString(CultureInfo.InvariantCulture)} command decision(s)");
         }
 
         return string.Join(", ", parts);

@@ -576,6 +576,16 @@ public static class FreeWVisualEvidenceDocumentFactory
         return doc;
     }
 
+    public static TextDocument BuildReviewProtectionProofingEvidenceDocument()
+    {
+        var doc = BuildReviewProofingVisualDepthDocument();
+        doc.Properties.Title = "Review Protection Proofing Evidence";
+        doc.Properties.Comments = "Bounded CommentsOnly protection state plus review/proofing visual evidence.";
+        doc.Protection = new ProtectionSettings(ProtectionMode.CommentsOnly);
+        doc.MarkedAsFinal = false;
+        return doc;
+    }
+
     public static TextDocument BuildComplexTableLayoutDocument()
     {
         var doc = TextDocument.CreateEmpty();

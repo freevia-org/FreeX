@@ -1881,6 +1881,12 @@ static void GenerateF2FlowCorpus(string outDir)
     }
 
     {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildReviewProtectionProofingEvidenceDocument();
+        DocxWriter.Write(doc, Path.Combine(outDir, "review-protection-proofing-comments-only.docx"));
+        Console.WriteLine("  wrote review-protection-proofing-comments-only.docx");
+    }
+
+    {
         var doc = FreeWVisualEvidenceDocumentFactory.BuildBackstagePrintExportDocument(
             "Backstage Print Preview Fidelity",
             "This generated document is rendered through FreeW.FidelityRender for the backstage print preview evidence contract.");

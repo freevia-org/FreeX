@@ -32,6 +32,7 @@ public sealed class RestrictEditingEnforcementPolicyTests
     [Theory]
     [InlineData(RestrictEditingOperationKind.BodyTextEdit)]
     [InlineData(RestrictEditingOperationKind.BodyTextDelete)]
+    [InlineData(RestrictEditingOperationKind.ProofingReplacement)]
     [InlineData(RestrictEditingOperationKind.BodyFormatting)]
     [InlineData(RestrictEditingOperationKind.CommentInsert)]
     [InlineData(RestrictEditingOperationKind.CommentReply)]
@@ -53,6 +54,7 @@ public sealed class RestrictEditingEnforcementPolicyTests
 
     [Theory]
     [InlineData(RestrictEditingOperationKind.BodyTextEdit)]
+    [InlineData(RestrictEditingOperationKind.ProofingReplacement)]
     [InlineData(RestrictEditingOperationKind.BodyFormatting)]
     [InlineData(RestrictEditingOperationKind.CommentInsert)]
     [InlineData(RestrictEditingOperationKind.FormFieldEdit)]
@@ -84,6 +86,7 @@ public sealed class RestrictEditingEnforcementPolicyTests
     [Theory]
     [InlineData(RestrictEditingOperationKind.BodyTextEdit)]
     [InlineData(RestrictEditingOperationKind.BodyTextDelete)]
+    [InlineData(RestrictEditingOperationKind.ProofingReplacement)]
     [InlineData(RestrictEditingOperationKind.BodyFormatting)]
     [InlineData(RestrictEditingOperationKind.HistoryUndo)]
     [InlineData(RestrictEditingOperationKind.HistoryRedo)]
@@ -106,6 +109,8 @@ public sealed class RestrictEditingEnforcementPolicyTests
 
         policy.IsCommentWorkflowAllowed.Should().BeTrue();
         policy.DecisionFor(RestrictEditingOperationKind.BodyTextEdit).BlockReason
+            .Should().Be(RestrictEditingBlockReason.CommentsOnly);
+        policy.DecisionFor(RestrictEditingOperationKind.ProofingReplacement).BlockReason
             .Should().Be(RestrictEditingBlockReason.CommentsOnly);
         policy.DecisionFor(RestrictEditingOperationKind.BodyFormatting).IsAllowed.Should().BeFalse();
         policy.DecisionFor(RestrictEditingOperationKind.FormFieldEdit).IsAllowed.Should().BeFalse();

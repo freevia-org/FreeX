@@ -86,6 +86,7 @@ static int RenderAll(string outDir)
     var trackedChangesPath = VisualEvidenceOutputPath(outDir, "f2-tracked-changes", 1);
     var commentsPath = VisualEvidenceOutputPath(outDir, "f2-comments", 1);
     var reviewProofingDepthPath = VisualEvidenceOutputPath(outDir, "review-proofing-visual-depth", 1);
+    var reviewProtectionProofingPath = VisualEvidenceOutputPath(outDir, "review-protection-proofing-comments-only", 1);
     var tableLayoutPath = VisualEvidenceOutputPath(outDir, "table-layout-complex", 1);
     var tablePaginationP1Path = VisualEvidenceOutputPath(outDir, "table-pagination-repeat-header", 1);
     var tablePaginationP2Path = VisualEvidenceOutputPath(outDir, "table-pagination-repeat-header", 2);
@@ -327,6 +328,16 @@ static int RenderAll(string outDir)
         scenarioId: "review-proofing-visual-depth",
         evidence: evidence,
         documentFactory: FreeWVisualEvidenceDocumentFactory.BuildReviewProofingVisualDepthDocument,
+        pageNumber: 1,
+        pageCount: 1);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, reviewProtectionProofingPath,
+        width: 960, height: 1400,
+        label: "Review Protection Proofing Comments Only",
+        scenarioId: "review-protection-proofing-comments-only",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildReviewProtectionProofingEvidenceDocument,
         pageNumber: 1,
         pageCount: 1);
     if (rc != 0) return rc;

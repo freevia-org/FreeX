@@ -30,6 +30,8 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument");
         source.Should().Contain("review-proofing-visual-depth.docx");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildReviewProofingVisualDepthDocument");
+        source.Should().Contain("review-protection-proofing-comments-only.docx");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildReviewProtectionProofingEvidenceDocument");
         source.Should().Contain("field-page-number-variants.docx");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument");
         source.Should().Contain("references-heavy-fields.docx");

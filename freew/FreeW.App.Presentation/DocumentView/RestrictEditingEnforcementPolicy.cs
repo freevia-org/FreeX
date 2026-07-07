@@ -9,6 +9,7 @@ public enum RestrictEditingOperationKind
 {
     BodyTextEdit,
     BodyTextDelete,
+    ProofingReplacement,
     BodyFormatting,
     CommentInsert,
     CommentReply,
@@ -127,6 +128,7 @@ public readonly record struct RestrictEditingEnforcementPolicy(
     {
         var requiresTracking = operation is RestrictEditingOperationKind.BodyTextEdit
             or RestrictEditingOperationKind.BodyTextDelete
+            or RestrictEditingOperationKind.ProofingReplacement
             or RestrictEditingOperationKind.BodyFormatting
             or RestrictEditingOperationKind.HistoryUndo
             or RestrictEditingOperationKind.HistoryRedo;

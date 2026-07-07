@@ -56,6 +56,9 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("review-proofing-visual-depth");
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"review-proofing-visual-depth\", 1)");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildReviewProofingVisualDepthDocument");
+        source.Should().Contain("review-protection-proofing-comments-only");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"review-protection-proofing-comments-only\", 1)");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildReviewProtectionProofingEvidenceDocument");
         source.Should().Contain("ReviewRendererScenarioIds");
         source.Should().Contain("field-page-number-variants");
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"field-page-number-variants\", 1)");

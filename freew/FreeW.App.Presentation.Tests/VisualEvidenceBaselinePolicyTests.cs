@@ -216,6 +216,7 @@ public sealed class VisualEvidenceBaselinePolicyTests
             HeaderFooters: expectation.HeaderFooters,
             TableOfAuthorities: expectation.TableOfAuthorities,
             ProofingDiagnostics: expectation.ProofingDiagnostics,
+            ReviewProtection: expectation.ReviewProtection,
             Trust: new FreeWVisualEvidenceTrust(true, []));
     }
 }
