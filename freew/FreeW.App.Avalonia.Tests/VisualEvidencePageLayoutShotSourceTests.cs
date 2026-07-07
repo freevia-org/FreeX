@@ -69,8 +69,16 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("equation-structures");
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"equation-structures\", 1)");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildEquationStructuresDocument");
-        source.Should().Contain("ResolveAvaloniaHeaderSlotName(document, pageNumber)");
-        source.Should().Contain("ResolveAvaloniaFooterSlotName(document, pageNumber)");
+        source.Should().Contain("ResolveAvaloniaHeaderSlotName(expectationDocument, pageNumber)");
+        source.Should().Contain("ResolveAvaloniaFooterSlotName(expectationDocument, pageNumber)");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-hf-images\", 1)");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-hf-images\", 2)");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildMultiSectionHeaderFooterImageDocument");
+        source.Should().Contain("ResolveSectionPageSurfacePlan(scenarioId, sourceDocument, pageNumber, pageCount)");
+        source.Should().Contain("SectionPageSurfaceRendererScenarioIds");
+        source.Should().Contain("\"avalonia-section-page-surface\"");
+        source.Should().Contain("sectionPageSurfaceEvidence");
+        source.Should().Contain("evidenceDocument: sectionPageSurface is null ? null : sourceDocument");
         source.Should().Contain("table-layout-complex");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument");
         source.Should().Contain("table-pagination-repeat-header");

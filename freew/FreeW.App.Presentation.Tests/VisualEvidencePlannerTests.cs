@@ -126,6 +126,7 @@ public sealed class VisualEvidencePlannerTests
         hfImageScenario.ExpectedOutputNamePattern.Should().Be("f2-hf-images_p{page}.png");
         hfImageScenario.MinimumExpectedOutputs.Should().Be(2);
         hfImageScenario.Composition.ExpectsHeadersFooters.Should().BeTrue();
+        FreeWVisualEvidenceManifestNormalizer.SectionPageSurfaceRendererScenarioIds.Should().Contain("f2-hf-images");
 
         var previewScenario = FreeWVisualEvidencePlanner.ResolveScenario("backstage-print-preview-fidelity");
         previewScenario.ExpectedFeatureTags.Should().Contain(["backstage", "print-preview", "fixed-layout", "header-footer", "columns", "page-border", "watermark"]);
@@ -1265,6 +1266,40 @@ public sealed class VisualEvidencePlannerTests
         page2.HeaderFooters.ImageSignatures.Single().Should().Contain("section=2");
         page2.HeaderFooters.ImageSignatures.Single().Should().Contain("align=Right");
         page2.HeaderFooters.ImageSignatures.Single().Should().Contain("alt=Section Two Letterhead");
+    }
+
+    [Fact]
+    public void BuildSectionGeometrySurfacePlans_PreserveSelectedSectionHeaderFooterImages()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildMultiSectionHeaderFooterImageDocument();
+
+        var surfaces = FreeWVisualEvidencePlanner.BuildSectionGeometrySurfacePlans(document, pageCount: 2);
+
+        surfaces.Should().HaveCount(2);
+        surfaces[0].PagePlan.SectionOrdinal.Should().Be(1);
+        surfaces[1].PagePlan.SectionOrdinal.Should().Be(2);
+
+        var page1HeaderFooters = FreeWVisualEvidencePlanner.BuildHeaderFooterExpectation(
+            surfaces[0].Document,
+            pageNumber: 1,
+            pageCount: 1);
+        var page2HeaderFooters = FreeWVisualEvidencePlanner.BuildHeaderFooterExpectation(
+            surfaces[1].Document,
+            pageNumber: 1,
+            pageCount: 1);
+
+        page1HeaderFooters.HasImages.Should().BeTrue();
+        page1HeaderFooters.ImageSignatures.Single().Should().Contain("alt=Section One Letterhead");
+        page1HeaderFooters.ImageSignatures.Single().Should().Contain("align=Left");
+        page2HeaderFooters.HasImages.Should().BeTrue();
+        page2HeaderFooters.ImageSignatures.Single().Should().Contain("alt=Section Two Letterhead");
+        page2HeaderFooters.ImageSignatures.Single().Should().Contain("align=Right");
+        page2HeaderFooters.ImageSignatures.Single().Should().Contain("bytes=");
+
+        surfaces[1].Document.Blocks
+            .OfType<Paragraph>()
+            .Select(p => p.PlainText)
+            .Should().Contain(text => text.Contains("Section 2 Header Image", StringComparison.Ordinal));
     }
 
     [Fact]
