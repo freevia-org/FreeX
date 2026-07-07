@@ -450,6 +450,93 @@ public sealed class DocumentViewLayoutPlannerTests
     }
 
     [Fact]
+    public void BuildFloatingTextWrapLinePlan_RepresentsSquareTightLineInsets()
+    {
+        var surface = new DocumentViewSurfacePlan(
+            DocumentViewLayoutKind.WebLayout,
+            PageWidthDip: 400,
+            PageHeightDip: 800,
+            MarginLeftDip: 0,
+            MarginTopDip: 0,
+            MarginRightDip: 0,
+            MarginBottomDip: 0,
+            PageLeftDip: 0,
+            ContentLeftDip: 100,
+            ContentWidthDip: 300,
+            TextAreaHeightDip: 800,
+            DeskPaddingDip: 0,
+            PageGapDip: 0);
+        var leftZone = DocumentViewLayoutPlanner.BuildWrapExclusionZone(
+            new DocumentFloatRect(100, 0, 80, 60),
+            ImageWrapping.Square);
+        var rightZone = DocumentViewLayoutPlanner.BuildWrapExclusionZone(
+            new DocumentFloatRect(320, 0, 70, 60),
+            ImageWrapping.Tight);
+
+        var plan = DocumentViewLayoutPlanner.BuildFloatingTextWrapLinePlan(
+            [leftZone!, rightZone!],
+            surface,
+            currentContentYDip: 10,
+            lineContentYDip: 10,
+            lineHeightDip: 16,
+            contentLeftDip: 100,
+            columnCount: 1,
+            columnWidthDip: 300,
+            columnGapDip: 0,
+            baseTextWidthDip: 300);
+
+        plan.HasLateralExclusion.Should().BeTrue();
+        plan.HasTopAndBottomAdvance.Should().BeFalse();
+        plan.ColumnIndex.Should().Be(0);
+        plan.ColumnLeftDip.Should().Be(100);
+        plan.LeftDeltaDip.Should().BeApproximately(89, 0.01);
+        plan.RightShrinkDip.Should().BeApproximately(89, 0.01);
+        plan.EffectiveTextWidthDip.Should().BeApproximately(122, 0.01);
+        plan.TextLeftDip().Should().BeApproximately(189, 0.01);
+        plan.TextRightDip().Should().BeApproximately(311, 0.01);
+    }
+
+    [Fact]
+    public void BuildFloatingTextWrapLinePlan_AdvancesPastTopAndBottomBand()
+    {
+        var surface = new DocumentViewSurfacePlan(
+            DocumentViewLayoutKind.WebLayout,
+            PageWidthDip: 400,
+            PageHeightDip: 800,
+            MarginLeftDip: 0,
+            MarginTopDip: 0,
+            MarginRightDip: 0,
+            MarginBottomDip: 0,
+            PageLeftDip: 0,
+            ContentLeftDip: 100,
+            ContentWidthDip: 300,
+            TextAreaHeightDip: 800,
+            DeskPaddingDip: 0,
+            PageGapDip: 0);
+        var zone = DocumentViewLayoutPlanner.BuildWrapExclusionZone(
+            new DocumentFloatRect(100, 20, 300, 40),
+            ImageWrapping.TopAndBottom);
+
+        var plan = DocumentViewLayoutPlanner.BuildFloatingTextWrapLinePlan(
+            [zone!],
+            surface,
+            currentContentYDip: 30,
+            lineContentYDip: 30,
+            lineHeightDip: 14,
+            contentLeftDip: 100,
+            columnCount: 1,
+            columnWidthDip: 300,
+            columnGapDip: 0,
+            baseTextWidthDip: 300);
+
+        plan.HasTopAndBottomAdvance.Should().BeTrue();
+        plan.TopAndBottomExclusionBottomDip.Should().BeApproximately(60, 0.01);
+        plan.PlannedContentYDip.Should().BeApproximately(60, 0.01);
+        plan.PageSpaceYDip.Should().BeApproximately(60, 0.01);
+        plan.EffectiveTextWidthDip.Should().BeApproximately(300, 0.01);
+    }
+
+    [Fact]
     public void BuildFloatingHandleGeometry_HitTestsMovesAndResizesSelectionRects()
     {
         var rect = new DocumentFloatRect(10, 20, 100, 80);
@@ -883,6 +970,7 @@ public sealed class DocumentViewLayoutPlannerSourceGuardTests
         hostSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingObjectSnapshots(");
         hostSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(");
         hostSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingWrapReservation(");
+        hostSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingWrapReservationTextWidthDip(");
         hostSource.Should().Contain("DrawingObjectVisualPlanner.BuildVisualPlan(");
         hostSource.Should().Contain("BuildGroupPlannedChildVisual(");
         hostSource.Should().Contain("DrawingObjectVisualKind.Image when child is InlineImage image");
@@ -900,8 +988,9 @@ public sealed class DocumentViewLayoutPlannerSourceGuardTests
         avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(");
         avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.HitTestFloatingObject(");
         avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingGroupChildSnapshots(");
-        avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildSquareTightWrapExclusion(");
-        avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildTopAndBottomWrapExclusionBottom(");
+        avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingTextWrapLinePlan(");
+        avaloniaSource.Should().NotContain("DocumentViewLayoutPlanner.BuildSquareTightWrapExclusion(");
+        avaloniaSource.Should().NotContain("DocumentViewLayoutPlanner.BuildTopAndBottomWrapExclusionBottom(");
         avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingHandleRects(");
         avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingResizeRect(");
         avaloniaSource.Should().Contain("BuildGridlines(");

@@ -8105,14 +8105,7 @@ public sealed class DocumentView : RichTextBox
 
     private static double FloatingWrapReservationTextWidthDip(TextDocument document)
     {
-        var pageMetrics = DocumentViewLayoutPlanner.BuildPageMetrics(document.Page);
-        if (document.Page.ColumnCount <= 1)
-            return pageMetrics.ContentWidthDip;
-
-        return DocumentViewLayoutPlanner.BuildColumnPlan(
-            document.Page,
-            pageMetrics.ContentWidthDip,
-            usePageColumns: true).WidthDip;
+        return DocumentViewLayoutPlanner.BuildFloatingWrapReservationTextWidthDip(document.Page);
     }
 
     private static Floater BuildFloatingWrapReservationFloater(AnchorMarker marker, ModelRun run, DocumentFloatingWrapReservationPlan reservation)

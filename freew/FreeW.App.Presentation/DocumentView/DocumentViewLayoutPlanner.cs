@@ -289,6 +289,31 @@ public sealed record DocumentFloatingLineExclusionPlan(
     double LeftDeltaDip,
     double RightShrinkDip);
 
+public sealed record DocumentFloatingTextWrapLinePlan(
+    double RequestedContentYDip,
+    double PlannedContentYDip,
+    double PageSpaceYDip,
+    int ColumnIndex,
+    double ColumnLeftDip,
+    double ColumnWidthDip,
+    double BaseTextWidthDip,
+    double LeftDeltaDip,
+    double RightShrinkDip,
+    double EffectiveTextWidthDip,
+    double? TopAndBottomExclusionBottomDip)
+{
+    public bool HasLateralExclusion => LeftDeltaDip > 0 || RightShrinkDip > 0;
+
+    public bool HasTopAndBottomAdvance =>
+        TopAndBottomExclusionBottomDip is not null && PlannedContentYDip > RequestedContentYDip;
+
+    public double TextLeftDip(double leftInsetDip = 0) =>
+        ColumnLeftDip + leftInsetDip + LeftDeltaDip;
+
+    public double TextRightDip(double leftInsetDip = 0) =>
+        TextLeftDip(leftInsetDip) + EffectiveTextWidthDip;
+}
+
 public enum DocumentFloatingObjectKind
 {
     Image,
@@ -1299,6 +1324,17 @@ public static class DocumentViewLayoutPlanner
         return null;
     }
 
+    public static double BuildFloatingWrapReservationTextWidthDip(PageSettings page)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+
+        var metrics = BuildPageMetrics(page);
+        if (page.ColumnCount <= 1)
+            return metrics.ContentWidthDip;
+
+        return BuildColumnPlan(page, metrics.ContentWidthDip, usePageColumns: true).WidthDip;
+    }
+
     private static DocumentFloatingWrapReservationPlan? BuildFloatingWrapReservation(
         DocumentFloatingObjectKind kind,
         double widthPt,
@@ -1383,6 +1419,102 @@ public static class DocumentViewLayoutPlanner
         }
 
         return new DocumentFloatingLineExclusionPlan(maxLeftDeltaDip, maxRightShrinkDip);
+    }
+
+    public static DocumentFloatingTextWrapLinePlan BuildFloatingTextWrapLinePlan(
+        IEnumerable<DocumentFloatingWrapExclusionZone> zones,
+        DocumentViewSurfacePlan surface,
+        double currentContentYDip,
+        double lineContentYDip,
+        double lineHeightDip,
+        double contentLeftDip,
+        int columnCount,
+        double columnWidthDip,
+        double columnGapDip,
+        double baseTextWidthDip,
+        double wrapGapDip = DefaultWrapGapDip,
+        double minimumLineWidthDip = DefaultMinimumLineWidthDip)
+    {
+        ArgumentNullException.ThrowIfNull(zones);
+        ArgumentNullException.ThrowIfNull(surface);
+
+        var zoneList = zones as IReadOnlyList<DocumentFloatingWrapExclusionZone>
+            ?? zones.ToList();
+        var safeColumnCount = Math.Max(1, columnCount);
+        var safeColumnWidthDip = Math.Max(0, columnWidthDip);
+        var safeColumnGapDip = Math.Max(0, columnGapDip);
+        var safeLineHeightDip = Math.Max(1, lineHeightDip);
+        var minimumWidthDip = Math.Max(1, minimumLineWidthDip);
+        var safeBaseTextWidthDip = double.IsFinite(baseTextWidthDip)
+            ? Math.Max(minimumWidthDip, baseTextWidthDip)
+            : minimumWidthDip;
+        var requestedContentYDip = double.IsFinite(lineContentYDip)
+            ? Math.Max(0, lineContentYDip)
+            : 0;
+        var plannedContentYDip = requestedContentYDip;
+        var mutableCurrentContentYDip = double.IsFinite(currentContentYDip)
+            ? Math.Max(0, currentContentYDip)
+            : requestedContentYDip;
+        double? appliedTopAndBottomBottomDip = null;
+
+        for (var guard = 0; guard < 200; guard++)
+        {
+            var pageSpaceYDip = surface.ContentYToPageSpaceY(plannedContentYDip, safeColumnCount);
+            var exclusionBottomDip = BuildTopAndBottomWrapExclusionBottom(
+                zoneList,
+                pageSpaceYDip,
+                safeLineHeightDip,
+                contentLeftDip,
+                safeColumnCount,
+                safeColumnWidthDip,
+                safeColumnGapDip,
+                minimumWidthDip);
+            if (exclusionBottomDip is null)
+                break;
+
+            var targetContentYDip = BuildContentYAfterTopAndBottomWrapExclusion(
+                surface,
+                mutableCurrentContentYDip,
+                plannedContentYDip,
+                exclusionBottomDip.Value,
+                safeColumnCount);
+            if (!double.IsFinite(targetContentYDip) || targetContentYDip <= mutableCurrentContentYDip)
+                break;
+
+            appliedTopAndBottomBottomDip = exclusionBottomDip.Value;
+            mutableCurrentContentYDip = targetContentYDip;
+            plannedContentYDip = targetContentYDip;
+        }
+
+        var safeTextAreaHeightDip = Math.Max(1, surface.TextAreaHeightDip);
+        var slot = Math.Max(0, (int)(plannedContentYDip / safeTextAreaHeightDip));
+        var columnIndex = safeColumnCount > 1 ? slot % safeColumnCount : 0;
+        var columnLeftDip = contentLeftDip + columnIndex * (safeColumnWidthDip + safeColumnGapDip);
+        var plannedPageSpaceYDip = surface.ContentYToPageSpaceY(plannedContentYDip, safeColumnCount);
+        var lateral = BuildSquareTightWrapExclusion(
+            zoneList,
+            plannedPageSpaceYDip,
+            safeLineHeightDip,
+            columnLeftDip,
+            safeColumnWidthDip,
+            wrapGapDip,
+            minimumWidthDip);
+        var effectiveTextWidthDip = Math.Max(
+            minimumWidthDip,
+            safeBaseTextWidthDip - lateral.LeftDeltaDip - lateral.RightShrinkDip);
+
+        return new DocumentFloatingTextWrapLinePlan(
+            requestedContentYDip,
+            plannedContentYDip,
+            plannedPageSpaceYDip,
+            columnIndex,
+            columnLeftDip,
+            safeColumnWidthDip,
+            safeBaseTextWidthDip,
+            lateral.LeftDeltaDip,
+            lateral.RightShrinkDip,
+            effectiveTextWidthDip,
+            appliedTopAndBottomBottomDip);
     }
 
     public static double? BuildTopAndBottomWrapExclusionBottom(
