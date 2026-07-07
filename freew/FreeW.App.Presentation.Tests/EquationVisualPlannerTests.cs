@@ -268,6 +268,72 @@ public sealed class EquationVisualPlannerTests
     }
 
     [Fact]
+    public void EquationVisualPlanner_NestedNArySlots_SurfaceSharedSlotPlansAndKeepFlattenedSegments()
+    {
+        var plan = EquationVisualPlanner.Build(new Equation([
+            MathRun.NAry(
+                "\u2211",
+                new Equation([
+                    MathRun.PlainText("i="),
+                    MathRun.Subscript("j", "1")
+                ]),
+                new Equation([MathRun.Superscript("n", "2")]),
+                new Equation([MathRun.Fraction("1", "i")]))
+        ]));
+
+        plan.LinearText.Should().Be("\u2211(i=j_1..n^2) 1/i");
+        plan.Elements.Should().ContainSingle();
+        var nary = plan.Elements[0];
+        nary.Kind.Should().Be(EquationVisualElementKind.NAry);
+        nary.Operator.Should().Be("\u2211");
+        nary.LowerLimit.Should().Be("i=j_1");
+        nary.UpperLimit.Should().Be("n^2");
+        nary.Operand.Should().Be("1/i");
+        nary.NAryLowerLimitPlan.Should().NotBeNull();
+        nary.NAryLowerLimitPlan!.Segments.Select(segment => segment.Role)
+            .Should().Equal(
+                EquationVisualSegmentRole.Text,
+                EquationVisualSegmentRole.Base,
+                EquationVisualSegmentRole.Subscript);
+        nary.NAryUpperLimitPlan.Should().NotBeNull();
+        nary.NAryUpperLimitPlan!.Segments.Select(segment => segment.Role)
+            .Should().Equal(
+                EquationVisualSegmentRole.Base,
+                EquationVisualSegmentRole.Superscript);
+        nary.NAryOperandPlan.Should().NotBeNull();
+        nary.NAryOperandPlan!.Elements.Should().ContainSingle(element => element.Kind == EquationVisualElementKind.Fraction);
+
+        plan.Segments.Select(segment => segment.Text).Should().Equal("\u2211", "i=j_1", "n^2", "1/i");
+        plan.Segments.Select(segment => segment.Role).Should().Equal(
+            EquationVisualSegmentRole.NAryOperator,
+            EquationVisualSegmentRole.NAryLowerLimit,
+            EquationVisualSegmentRole.NAryUpperLimit,
+            EquationVisualSegmentRole.NAryOperand);
+        plan.Segments.Should().NotContain(segment => segment.Role == EquationVisualSegmentRole.LinearFallback);
+    }
+
+    [Fact]
+    public void EquationVisualPlanner_NestedNArySlots_AreDepthBounded()
+    {
+        var equation = new Equation();
+        equation.Runs.Add(new MathRun
+        {
+            Kind = MathRunKind.NAry,
+            Operator = "\u2211",
+            Sub = "i=1",
+            Sup = "n",
+            Base = "x",
+            NAryLowerLimitEquation = equation
+        });
+
+        var plan = EquationVisualPlanner.Build(equation);
+
+        plan.LinearText.Should().Contain("\u2211(i=1..n) x");
+        plan.LinearText.Length.Should().BeLessThan(500);
+        plan.Elements.Should().NotBeEmpty();
+    }
+
+    [Fact]
     public void EquationVisualPlanner_Matrix_BuildsStructuredRowsCellsAndDisplaySegments()
     {
         var plan = EquationVisualPlanner.Build(new Equation([MathRun.MatrixOf(MathMatrix.Identity2x2())]));

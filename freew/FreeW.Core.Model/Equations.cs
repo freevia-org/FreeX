@@ -11,9 +11,10 @@ namespace FreeW.Core.Model;
 // radical (m:rad), n-ary (m:nary, sum/integral/product with limits), an accented character (m:acc),
 // an over/under-bar (m:bar), a bracketed delimiter (m:d) or a matrix (m:m). Most structure slots store
 // plain math text (mirroring how Superscript already stores Base/Sup as strings); fractions additionally
-// carry optional nested numerator/denominator equations, radicals carry an optional nested radicand, and
-// delimiters carry an optional nested content equation so common OfficeMath slots can round-trip without
-// a broad recursive-slot rewrite. A Matrix additionally carries a small grid of text cells. That
+// carry optional nested numerator/denominator equations, radicals carry an optional nested radicand,
+// n-ary operators carry optional nested lower/upper/operand equations, and delimiters carry an optional
+// nested content equation so common OfficeMath slots can round-trip without a broad recursive-slot rewrite.
+// A Matrix additionally carries a small grid of text cells. That
 // covers the high-value structures from Word's Equation tools while staying well short of the full
 // recursive OMML schema — richer constructs degrade to their plain math text on read so nothing throws.
 
@@ -61,7 +62,7 @@ public enum MathRunKind
 /// <item><see cref="MathRunKind.SubSuperscript"/> → <see cref="Base"/> with <see cref="Sub"/> and <see cref="Sup"/>.</item>
 /// <item><see cref="MathRunKind.Fraction"/> → <see cref="NumeratorEquation"/>/<see cref="Numerator"/> over <see cref="DenominatorEquation"/>/<see cref="Denominator"/>.</item>
 /// <item><see cref="MathRunKind.Radical"/> → <see cref="RadicandEquation"/>/<see cref="Base"/> under a root of degree <see cref="Degree"/> (empty = square root).</item>
-/// <item><see cref="MathRunKind.NAry"/> → operator <see cref="Operator"/> from <see cref="Sub"/> to <see cref="Sup"/> over <see cref="Base"/>.</item>
+/// <item><see cref="MathRunKind.NAry"/> → operator <see cref="Operator"/> from <see cref="NAryLowerLimitEquation"/>/<see cref="Sub"/> to <see cref="NAryUpperLimitEquation"/>/<see cref="Sup"/> over <see cref="NAryOperandEquation"/>/<see cref="Base"/>.</item>
 /// <item><see cref="MathRunKind.Accent"/> → <see cref="Base"/> with the accent glyph <see cref="Accent"/> over it.</item>
 /// <item><see cref="MathRunKind.Bar"/> → <see cref="Base"/> with a bar above (<see cref="BarTop"/> true) or below it.</item>
 /// <item><see cref="MathRunKind.Delimiter"/> → <see cref="DelimiterContentEquation"/>/<see cref="Base"/> wrapped in <see cref="OpenChar"/>/<see cref="CloseChar"/>.</item>
@@ -110,6 +111,15 @@ public sealed record MathRun
 
     /// <summary>Optional structured argument equation for nested OMML function-apply slots.</summary>
     public Equation? FunctionArgumentEquation { get; init; }
+
+    /// <summary>Optional structured lower-limit equation for nested OMML n-ary slots.</summary>
+    public Equation? NAryLowerLimitEquation { get; init; }
+
+    /// <summary>Optional structured upper-limit equation for nested OMML n-ary slots.</summary>
+    public Equation? NAryUpperLimitEquation { get; init; }
+
+    /// <summary>Optional structured operand/body equation for nested OMML n-ary slots.</summary>
+    public Equation? NAryOperandEquation { get; init; }
 
     /// <summary>The radical's degree (empty = square root; non-empty = nth root). Only for <see cref="MathRunKind.Radical"/>.</summary>
     public string Degree { get; init; } = string.Empty;
@@ -214,6 +224,27 @@ public sealed record MathRun
         new() { Kind = MathRunKind.NAry, Operator = @operator, Sub = sub, Sup = sup, Base = operand };
 
     /// <summary>
+    /// Creates an n-ary fragment (m:nary) whose lower limit, upper limit and operand are structured equations.
+    /// Null limit equations are treated as empty text slots.
+    /// </summary>
+    public static MathRun NAry(string @operator, Equation? lowerLimit, Equation? upperLimit, Equation operand)
+    {
+        ArgumentNullException.ThrowIfNull(operand);
+
+        return new()
+        {
+            Kind = MathRunKind.NAry,
+            Operator = @operator,
+            Sub = lowerLimit?.LinearText ?? string.Empty,
+            Sup = upperLimit?.LinearText ?? string.Empty,
+            Base = operand.LinearText,
+            NAryLowerLimitEquation = lowerLimit,
+            NAryUpperLimitEquation = upperLimit,
+            NAryOperandEquation = operand
+        };
+    }
+
+    /// <summary>
     /// Creates an accent fragment (m:acc): <paramref name="@base"/> with the accent glyph
     /// <paramref name="accent"/> over it (default a combining circumflex/hat).
     /// </summary>
@@ -293,7 +324,7 @@ public sealed record MathRun
         MathRunKind.Radical => string.IsNullOrEmpty(Degree)
             ? $"√({SlotLinearText(RadicandEquation, Base, depth)})"
             : $"{Degree}√({SlotLinearText(RadicandEquation, Base, depth)})",
-        MathRunKind.NAry => $"{Operator}({Sub}..{Sup}) {Base}".TrimEnd(),
+        MathRunKind.NAry => $"{Operator}({SlotLinearText(NAryLowerLimitEquation, Sub, depth)}..{SlotLinearText(NAryUpperLimitEquation, Sup, depth)}) {SlotLinearText(NAryOperandEquation, Base, depth)}".TrimEnd(),
         MathRunKind.Accent => $"{Base}{Accent}",
         MathRunKind.Bar => BarTop ? $"‾{Base}‾" : $"_{Base}_",
         MathRunKind.Delimiter => $"{OpenChar}{SlotLinearText(DelimiterContentEquation, Base, depth)}{CloseChar}",

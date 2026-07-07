@@ -51,6 +51,46 @@ public class EquationsTests
     }
 
     [Fact]
+    public void MathRun_NAry_CanCarryNestedSlotEquations()
+    {
+        var lowerLimit = new Equation([MathRun.Subscript("i", "1")]);
+        var upperLimit = new Equation([MathRun.Superscript("n", "2")]);
+        var operand = new Equation([MathRun.Fraction("1", "i")]);
+
+        var nary = MathRun.NAry("\u2211", lowerLimit, upperLimit, operand);
+
+        nary.Kind.Should().Be(MathRunKind.NAry);
+        nary.Sub.Should().Be("i_1");
+        nary.Sup.Should().Be("n^2");
+        nary.Base.Should().Be("1/i");
+        nary.NAryLowerLimitEquation.Should().BeSameAs(lowerLimit);
+        nary.NAryUpperLimitEquation.Should().BeSameAs(upperLimit);
+        nary.NAryOperandEquation.Should().BeSameAs(operand);
+        nary.LinearText.Should().Be("\u2211(i_1..n^2) 1/i");
+    }
+
+    [Fact]
+    public void MathRun_NAry_LinearText_IsDepthBoundedForCyclicNestedSlots()
+    {
+        var equation = new Equation();
+        equation.Runs.Add(new MathRun
+        {
+            Kind = MathRunKind.NAry,
+            Operator = "\u2211",
+            Sub = "i=1",
+            Sup = "n",
+            Base = "x",
+            NAryLowerLimitEquation = equation
+        });
+
+        var linearText = equation.LinearText;
+
+        linearText.Should().NotBeEmpty();
+        linearText.Length.Should().BeLessThan(500);
+        linearText.Should().Contain("\u2211(i=1..n) x");
+    }
+
+    [Fact]
     public void MathRun_Radical_CanCarryNestedRadicandEquation()
     {
         var radicand = new Equation([

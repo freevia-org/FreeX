@@ -1787,11 +1787,30 @@ public static class DocxReader
     private static MathRun ReadNAry(XElement nary)
     {
         var chr = nary.Element(M + "naryPr")?.Element(M + "chr")?.Attribute(M + "val")?.Value;
-        return MathRun.NAry(
-            string.IsNullOrEmpty(chr) ? "∑" : chr,
-            MathTextOf(nary.Element(M + "sub")),
-            MathTextOf(nary.Element(M + "sup")),
-            MathTextOf(nary.Element(M + "e")));
+        var sub = nary.Element(M + "sub");
+        var sup = nary.Element(M + "sup");
+        var operand = nary.Element(M + "e");
+        var subText = MathTextOf(sub);
+        var supText = MathTextOf(sup);
+        var operandText = MathTextOf(operand);
+        var hasNestedSub = HasStructuredMathSlot(sub);
+        var hasNestedSup = HasStructuredMathSlot(sup);
+        var hasNestedOperand = HasStructuredMathSlot(operand);
+        var op = string.IsNullOrEmpty(chr) ? "∑" : chr;
+
+        return hasNestedSub || hasNestedSup || hasNestedOperand
+            ? new MathRun
+            {
+                Kind = MathRunKind.NAry,
+                Operator = op,
+                Sub = subText,
+                Sup = supText,
+                Base = operandText,
+                NAryLowerLimitEquation = hasNestedSub ? ReadMathSlot(sub) : null,
+                NAryUpperLimitEquation = hasNestedSup ? ReadMathSlot(sup) : null,
+                NAryOperandEquation = hasNestedOperand ? ReadMathSlot(operand) : null
+            }
+            : MathRun.NAry(op, subText, supText, operandText);
     }
 
     /// <summary>

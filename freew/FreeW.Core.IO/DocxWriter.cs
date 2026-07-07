@@ -2616,7 +2616,7 @@ public static class DocxWriter
             new XElement(M + "sup", MathText(run.Sup))),
         MathRunKind.Fraction => BuildFraction(run, depth),
         MathRunKind.Radical => BuildRadical(run, depth),
-        MathRunKind.NAry => BuildNAry(run),
+        MathRunKind.NAry => BuildNAry(run, depth),
         MathRunKind.Accent => BuildAccent(run),
         MathRunKind.Bar => BuildBar(run),
         MathRunKind.Delimiter => BuildDelimiter(run, depth),
@@ -2669,19 +2669,24 @@ public static class DocxWriter
     /// Builds an n-ary operator (m:nary): m:naryPr carries the operator glyph (m:chr) plus subscript/
     /// superscript-limit visibility; m:sub / m:sup hold the limits and m:e the operand.
     /// </summary>
-    private static XElement BuildNAry(MathRun run)
+    private static XElement BuildNAry(MathRun run, int depth)
     {
         var pr = new XElement(M + "naryPr");
         if (!string.IsNullOrEmpty(run.Operator))
             pr.Add(new XElement(M + "chr", new XAttribute(M + "val", run.Operator)));
-        pr.Add(new XElement(M + "subHide", new XAttribute(M + "val", string.IsNullOrEmpty(run.Sub) ? "1" : "0")));
-        pr.Add(new XElement(M + "supHide", new XAttribute(M + "val", string.IsNullOrEmpty(run.Sup) ? "1" : "0")));
+        pr.Add(new XElement(M + "subHide", new XAttribute(M + "val", IsMathSlotHidden(run.NAryLowerLimitEquation, run.Sub, depth) ? "1" : "0")));
+        pr.Add(new XElement(M + "supHide", new XAttribute(M + "val", IsMathSlotHidden(run.NAryUpperLimitEquation, run.Sup, depth) ? "1" : "0")));
         return new XElement(M + "nary",
             pr,
-            new XElement(M + "sub", MathText(run.Sub)),
-            new XElement(M + "sup", MathText(run.Sup)),
-            new XElement(M + "e", MathText(run.Base)));
+            BuildMathSlot(M + "sub", run.NAryLowerLimitEquation, run.Sub, depth),
+            BuildMathSlot(M + "sup", run.NAryUpperLimitEquation, run.Sup, depth),
+            BuildMathSlot(M + "e", run.NAryOperandEquation, run.Base, depth));
     }
+
+    private static bool IsMathSlotHidden(Equation? equation, string fallback, int depth) =>
+        string.IsNullOrEmpty(equation is not null && depth < MathRun.MaxNestedEquationDepth
+            ? equation.LinearText
+            : fallback);
 
     /// <summary>
     /// Builds an accent (m:acc): m:accPr/m:chr carries the accent glyph (hat/bar/vec/dot/tilde); the

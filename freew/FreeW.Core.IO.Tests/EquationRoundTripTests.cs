@@ -376,6 +376,143 @@ public class EquationRoundTripTests
     }
 
     [Fact]
+    public void NestedNArySlots_SurviveRoundTripAndEmitDirectSlotChildren()
+    {
+        var equation = new Equation([
+            MathRun.NAry(
+                "\u2211",
+                new Equation([
+                    MathRun.PlainText("i="),
+                    MathRun.Subscript("j", "1")
+                ]),
+                new Equation([MathRun.Superscript("n", "2")]),
+                new Equation([MathRun.Fraction("1", "i")]))
+        ]);
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(paragraph);
+
+        var read = RoundTrip(doc);
+        var xml = WriteDocumentXml(doc);
+
+        var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Equation is not null).Equation!;
+        roundTripped.Runs.Should().ContainSingle();
+        var nary = roundTripped.Runs[0];
+        nary.Kind.Should().Be(MathRunKind.NAry);
+        nary.Operator.Should().Be("\u2211");
+        nary.NAryLowerLimitEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        nary.NAryLowerLimitEquation.Runs[1].Base.Should().Be("j");
+        nary.NAryLowerLimitEquation.Runs[1].Sub.Should().Be("1");
+        nary.NAryUpperLimitEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Superscript);
+        nary.NAryUpperLimitEquation.Runs[0].Base.Should().Be("n");
+        nary.NAryUpperLimitEquation.Runs[0].Sup.Should().Be("2");
+        nary.NAryOperandEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Fraction);
+        nary.NAryOperandEquation.Runs[0].Numerator.Should().Be("1");
+        nary.NAryOperandEquation.Runs[0].Denominator.Should().Be("i");
+        roundTripped.LinearText.Should().Be("\u2211(i=j_1..n^2) 1/i");
+
+        var writtenNAry = xml.Descendants(M + "nary").Single();
+        var pr = writtenNAry.Element(M + "naryPr")!;
+        pr.Element(M + "subHide")!.Attribute(M + "val")!.Value.Should().Be("0");
+        pr.Element(M + "supHide")!.Attribute(M + "val")!.Value.Should().Be("0");
+        var sub = writtenNAry.Element(M + "sub")!;
+        var sup = writtenNAry.Element(M + "sup")!;
+        var operand = writtenNAry.Element(M + "e")!;
+        sub.Elements(M + "oMath").Should().BeEmpty();
+        sup.Elements(M + "oMath").Should().BeEmpty();
+        operand.Elements(M + "oMath").Should().BeEmpty();
+        sub.Elements(M + "r").Should().ContainSingle();
+        sub.Elements(M + "sSub").Should().ContainSingle();
+        sup.Elements(M + "sSup").Should().ContainSingle();
+        operand.Elements(M + "f").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void StructuredNAryEmptyLimits_EmitHiddenLimitProperties()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(new Equation([
+            MathRun.NAry(
+                "\u2211",
+                new Equation(),
+                new Equation(),
+                Equation.FromText("x"))
+        ])));
+        doc.Blocks.Add(paragraph);
+
+        var xml = WriteDocumentXml(doc);
+
+        var writtenNAry = xml.Descendants(M + "nary").Single();
+        var pr = writtenNAry.Element(M + "naryPr")!;
+        pr.Element(M + "subHide")!.Attribute(M + "val")!.Value.Should().Be("1");
+        pr.Element(M + "supHide")!.Attribute(M + "val")!.Value.Should().Be("1");
+        writtenNAry.Element(M + "sub")!.Elements().Should().BeEmpty();
+        writtenNAry.Element(M + "sup")!.Elements().Should().BeEmpty();
+        writtenNAry.Element(M + "e")!.Elements(M + "r").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void RawNestedNArySlots_ReadAsNestedEquations()
+    {
+        var documentXml = $$"""
+            <w:document xmlns:w="{{W.NamespaceName}}" xmlns:m="{{M.NamespaceName}}">
+              <w:body>
+                <w:p>
+                  <m:oMath>
+                    <m:nary>
+                      <m:naryPr>
+                        <m:chr m:val="&#x2211;" />
+                        <m:subHide m:val="0" />
+                        <m:supHide m:val="0" />
+                      </m:naryPr>
+                      <m:sub>
+                        <m:r><m:t>i=</m:t></m:r>
+                        <m:sSub>
+                          <m:e><m:r><m:t>j</m:t></m:r></m:e>
+                          <m:sub><m:r><m:t>1</m:t></m:r></m:sub>
+                        </m:sSub>
+                      </m:sub>
+                      <m:sup>
+                        <m:sSup>
+                          <m:e><m:r><m:t>n</m:t></m:r></m:e>
+                          <m:sup><m:r><m:t>2</m:t></m:r></m:sup>
+                        </m:sSup>
+                      </m:sup>
+                      <m:e>
+                        <m:f>
+                          <m:num><m:r><m:t>1</m:t></m:r></m:num>
+                          <m:den><m:r><m:t>i</m:t></m:r></m:den>
+                        </m:f>
+                      </m:e>
+                    </m:nary>
+                  </m:oMath>
+                </w:p>
+              </w:body>
+            </w:document>
+            """;
+
+        var read = ReadDocumentXml(documentXml);
+
+        var equation = read.Paragraphs.Single().Runs.Single(run => run.Equation is not null).Equation!;
+        equation.Runs.Should().ContainSingle();
+        var nary = equation.Runs[0];
+        nary.Kind.Should().Be(MathRunKind.NAry);
+        nary.Operator.Should().Be("\u2211");
+        nary.NAryLowerLimitEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        nary.NAryUpperLimitEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Superscript);
+        nary.NAryOperandEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Fraction);
+        equation.LinearText.Should().Be("\u2211(i=j_1..n^2) 1/i");
+    }
+
+    [Fact]
     public void AccentEquation_SurvivesRoundTrip()
     {
         var read = RoundTripEquation(new Equation([MathRun.AccentOf("x", "→")]));

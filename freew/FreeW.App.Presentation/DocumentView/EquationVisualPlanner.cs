@@ -106,6 +106,9 @@ public sealed record EquationVisualElement(
     public EquationVisualPlan? RadicandPlan { get; init; }
     public EquationVisualPlan? DelimiterContentPlan { get; init; }
     public EquationVisualPlan? FunctionArgumentPlan { get; init; }
+    public EquationVisualPlan? NAryLowerLimitPlan { get; init; }
+    public EquationVisualPlan? NAryUpperLimitPlan { get; init; }
+    public EquationVisualPlan? NAryOperandPlan { get; init; }
 
     public int MatrixRowCount => MatrixRows.Count;
 
@@ -153,7 +156,10 @@ public sealed record EquationVisualElement(
         string lowerLimit,
         string upperLimit,
         string operand,
-        IReadOnlyList<EquationVisualSegment> segments) =>
+        IReadOnlyList<EquationVisualSegment> segments,
+        EquationVisualPlan? lowerLimitPlan = null,
+        EquationVisualPlan? upperLimitPlan = null,
+        EquationVisualPlan? operandPlan = null) =>
         new(
             EquationVisualElementKind.NAry,
             linearText,
@@ -165,7 +171,12 @@ public sealed record EquationVisualElement(
             @operator,
             lowerLimit,
             upperLimit,
-            operand);
+            operand)
+        {
+            NAryLowerLimitPlan = lowerLimitPlan,
+            NAryUpperLimitPlan = upperLimitPlan,
+            NAryOperandPlan = operandPlan
+        };
 
     public static EquationVisualElement Matrix(
         string linearText,
@@ -476,7 +487,7 @@ public static class EquationVisualPlanner
                 break;
 
             case MathRunKind.NAry:
-                AddNAryElement(run, segments, elements);
+                AddNAryElement(run, segments, elements, depth);
                 break;
 
             case MathRunKind.Matrix:
@@ -590,13 +601,21 @@ public static class EquationVisualPlanner
     private static void AddNAryElement(
         MathRun run,
         List<EquationVisualSegment> segments,
-        List<EquationVisualElement> elements)
+        List<EquationVisualElement> elements,
+        int depth)
     {
+        var lowerLimitPlan = BuildSlotPlan(run.NAryLowerLimitEquation, depth);
+        var upperLimitPlan = BuildSlotPlan(run.NAryUpperLimitEquation, depth);
+        var operandPlan = BuildSlotPlan(run.NAryOperandEquation, depth);
+        var lowerLimitText = lowerLimitPlan?.LinearText ?? run.Sub;
+        var upperLimitText = upperLimitPlan?.LinearText ?? run.Sup;
+        var operandText = operandPlan?.LinearText ?? run.Base;
+
         var runSegments = new List<EquationVisualSegment>();
         AddIfAny(runSegments, run.Operator, EquationVisualSegmentRole.NAryOperator, LargeOperatorStyle);
-        AddIfAny(runSegments, run.Sub, EquationVisualSegmentRole.NAryLowerLimit, SubscriptStyle);
-        AddIfAny(runSegments, run.Sup, EquationVisualSegmentRole.NAryUpperLimit, SuperscriptStyle);
-        AddIfAny(runSegments, run.Base, EquationVisualSegmentRole.NAryOperand, StructureStyle);
+        AddIfAny(runSegments, lowerLimitText, EquationVisualSegmentRole.NAryLowerLimit, SubscriptStyle);
+        AddIfAny(runSegments, upperLimitText, EquationVisualSegmentRole.NAryUpperLimit, SuperscriptStyle);
+        AddIfAny(runSegments, operandText, EquationVisualSegmentRole.NAryOperand, StructureStyle);
 
         if (runSegments.Count == 0)
             return;
@@ -605,10 +624,13 @@ public static class EquationVisualPlanner
         elements.Add(EquationVisualElement.NAry(
             run.LinearText,
             run.Operator,
-            run.Sub,
-            run.Sup,
-            run.Base,
-            runSegments));
+            lowerLimitText,
+            upperLimitText,
+            operandText,
+            runSegments,
+            lowerLimitPlan,
+            upperLimitPlan,
+            operandPlan));
     }
 
     private static void AddMatrixElement(
