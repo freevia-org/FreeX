@@ -18,6 +18,11 @@ public enum EquationVisualSegmentRole
     NAryLowerLimit,
     NAryUpperLimit,
     NAryOperand,
+    MatrixOpenDelimiter,
+    MatrixCell,
+    MatrixColumnSeparator,
+    MatrixRowSeparator,
+    MatrixCloseDelimiter,
     LinearFallback
 }
 
@@ -26,7 +31,8 @@ public enum EquationVisualElementKind
     Segments,
     Fraction,
     Radical,
-    NAry
+    NAry,
+    Matrix
 }
 
 public enum EquationVisualBaselineRole
@@ -48,6 +54,12 @@ public sealed record EquationVisualSegment(
     EquationVisualSegmentRole Role,
     EquationVisualStyle Style);
 
+public sealed record EquationVisualMatrixCell(int RowIndex, int ColumnIndex, string Text);
+
+public sealed record EquationVisualMatrixRow(
+    int RowIndex,
+    IReadOnlyList<EquationVisualMatrixCell> Cells);
+
 public sealed record EquationVisualElement(
     EquationVisualElementKind Kind,
     string LinearText,
@@ -61,6 +73,14 @@ public sealed record EquationVisualElement(
     string UpperLimit = "",
     string Operand = "")
 {
+    public IReadOnlyList<EquationVisualMatrixRow> MatrixRows { get; init; } = [];
+
+    public int MatrixRowCount => MatrixRows.Count;
+
+    public int MatrixColumnCount => MatrixRows.Count == 0
+        ? 0
+        : MatrixRows.Max(row => row.Cells.Count);
+
     public static EquationVisualElement FromSegments(
         string linearText,
         IReadOnlyList<EquationVisualSegment> segments) =>
@@ -99,6 +119,26 @@ public sealed record EquationVisualElement(
             lowerLimit,
             upperLimit,
             operand);
+
+    public static EquationVisualElement Matrix(
+        string linearText,
+        IReadOnlyList<EquationVisualMatrixRow> rows,
+        IReadOnlyList<EquationVisualSegment> segments) =>
+        new(
+            EquationVisualElementKind.Matrix,
+            linearText,
+            segments,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty)
+        {
+            MatrixRows = rows
+        };
 }
 
 public sealed record EquationVisualPlan(
@@ -118,6 +158,10 @@ public static class EquationVisualPlanner
     public const double LargeOperatorFontSizeScale = 1.45;
     public const string FractionBarText = "\u2044";
     public const string RadicalSignText = "\u221a";
+    public const string MatrixOpenDelimiterText = "[";
+    public const string MatrixCloseDelimiterText = "]";
+    public const string MatrixColumnSeparatorText = "  ";
+    public const string MatrixRowSeparatorText = "; ";
 
     private static EquationVisualStyle NormalStyle { get; } = new(
         DefaultMathFontFamily,
@@ -151,6 +195,20 @@ public static class EquationVisualPlanner
         DefaultMathFontFamily,
         Italic: false,
         LargeOperatorFontSizeScale,
+        EquationVisualBaselineRole.Normal,
+        BaselineOffsetEm: 0.0);
+
+    private static EquationVisualStyle MatrixDelimiterStyle { get; } = new(
+        DefaultMathFontFamily,
+        Italic: false,
+        FontSizeScale: 1.0,
+        EquationVisualBaselineRole.Normal,
+        BaselineOffsetEm: 0.0);
+
+    private static EquationVisualStyle MatrixSeparatorStyle { get; } = new(
+        DefaultMathFontFamily,
+        Italic: false,
+        StructureFontSizeScale,
         EquationVisualBaselineRole.Normal,
         BaselineOffsetEm: 0.0);
 
@@ -236,6 +294,10 @@ public static class EquationVisualPlanner
                 AddNAryElement(run, segments, elements);
                 break;
 
+            case MathRunKind.Matrix:
+                AddMatrixElement(run, segments, elements);
+                break;
+
             default:
                 AddSegmentElement(
                     run.LinearText,
@@ -316,6 +378,82 @@ public static class EquationVisualPlanner
             run.Sup,
             run.Base,
             runSegments));
+    }
+
+    private static void AddMatrixElement(
+        MathRun run,
+        List<EquationVisualSegment> segments,
+        List<EquationVisualElement> elements)
+    {
+        if (run.Matrix is null)
+        {
+            AddSegmentElement(
+                run.LinearText,
+                segments,
+                elements,
+                Segment(run.LinearText, EquationVisualSegmentRole.LinearFallback, NormalStyle));
+            return;
+        }
+
+        var matrixRows = BuildMatrixRows(run.Matrix);
+        var runSegments = new List<EquationVisualSegment>
+        {
+            new(MatrixOpenDelimiterText, EquationVisualSegmentRole.MatrixOpenDelimiter, MatrixDelimiterStyle)
+        };
+
+        for (var rowIndex = 0; rowIndex < matrixRows.Count; rowIndex++)
+        {
+            if (rowIndex > 0)
+                runSegments.Add(new EquationVisualSegment(
+                    MatrixRowSeparatorText,
+                    EquationVisualSegmentRole.MatrixRowSeparator,
+                    MatrixSeparatorStyle));
+
+            var row = matrixRows[rowIndex];
+            for (var columnIndex = 0; columnIndex < row.Cells.Count; columnIndex++)
+            {
+                if (columnIndex > 0)
+                    runSegments.Add(new EquationVisualSegment(
+                        MatrixColumnSeparatorText,
+                        EquationVisualSegmentRole.MatrixColumnSeparator,
+                        MatrixSeparatorStyle));
+
+                var cell = row.Cells[columnIndex];
+                runSegments.Add(new EquationVisualSegment(
+                    cell.Text,
+                    EquationVisualSegmentRole.MatrixCell,
+                    StructureStyle));
+            }
+        }
+
+        runSegments.Add(new EquationVisualSegment(
+            MatrixCloseDelimiterText,
+            EquationVisualSegmentRole.MatrixCloseDelimiter,
+            MatrixDelimiterStyle));
+
+        segments.AddRange(runSegments);
+        elements.Add(EquationVisualElement.Matrix(run.LinearText, matrixRows, runSegments));
+    }
+
+    private static IReadOnlyList<EquationVisualMatrixRow> BuildMatrixRows(MathMatrix matrix)
+    {
+        var columnCount = matrix.ColumnCount;
+        var rows = new List<EquationVisualMatrixRow>();
+
+        for (var rowIndex = 0; rowIndex < matrix.Rows.Count; rowIndex++)
+        {
+            var sourceRow = matrix.Rows[rowIndex];
+            var cells = new List<EquationVisualMatrixCell>();
+            for (var columnIndex = 0; columnIndex < columnCount; columnIndex++)
+            {
+                var text = columnIndex < sourceRow.Count ? sourceRow[columnIndex] : string.Empty;
+                cells.Add(new EquationVisualMatrixCell(rowIndex, columnIndex, text));
+            }
+
+            rows.Add(new EquationVisualMatrixRow(rowIndex, cells));
+        }
+
+        return rows;
     }
 
     private static EquationVisualSegment? Segment(

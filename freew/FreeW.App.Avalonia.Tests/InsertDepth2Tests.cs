@@ -755,4 +755,79 @@ public sealed class InsertDepth2Tests
         kinds.Should().Equal(MathRunKind.NAry);
         linearText.Should().Be("\u2211(i=1..n) i");
     }
+
+    [Fact]
+    public async Task EquationVisualPlanner_matrix_lays_out_shared_grid_structure()
+    {
+        EquationVisualElementKind[] elementKinds = [];
+        IReadOnlyList<EquationVisualMatrixRow> matrixRows = Array.Empty<EquationVisualMatrixRow>();
+        string[] texts = [];
+        EquationVisualSegmentRole[] roles = [];
+        double[] fontSizeScales = [];
+        MathRunKind[] kinds = [];
+        var placedText = string.Empty;
+        var linearText = string.Empty;
+        var placedGlyphCount = 0;
+
+        var ran = await OnUiThread(() =>
+        {
+            var view = MakeView("");
+            view.InsertEquation(new Equation([MathRun.MatrixOf(MathMatrix.Identity2x2())]));
+
+            var elements = view.EquationVisualElements;
+            elementKinds = elements.Select(element => element.Kind).ToArray();
+            matrixRows = elements.Single().MatrixRows;
+            var segments = view.EquationVisualSegments;
+            texts = segments.Select(segment => segment.Text).ToArray();
+            roles = segments.Select(segment => segment.Role).ToArray();
+            fontSizeScales = segments.Select(segment => segment.FontSizeScale).ToArray();
+            placedText = string.Concat(view.GetPlacedForBlock(0).Select(placed => placed.Ch));
+            placedGlyphCount = view.PlacedGlyphCount;
+
+            var eqRun = view.Document.Blocks.OfType<Paragraph>()
+                .SelectMany(p => p.Runs)
+                .Single(run => run.Equation is not null);
+            kinds = eqRun.Equation!.Runs.Select(run => run.Kind).ToArray();
+            linearText = eqRun.Equation!.LinearText;
+        });
+
+        if (!ran) return;
+
+        elementKinds.Should().Equal(EquationVisualElementKind.Matrix);
+        matrixRows.Should().HaveCount(2);
+        matrixRows[0].Cells.Select(cell => (cell.RowIndex, cell.ColumnIndex, cell.Text))
+            .Should().Equal((0, 0, "1"), (0, 1, "0"));
+        matrixRows[1].Cells.Select(cell => (cell.RowIndex, cell.ColumnIndex, cell.Text))
+            .Should().Equal((1, 0, "0"), (1, 1, "1"));
+        texts.Should().Equal(
+            EquationVisualPlanner.MatrixOpenDelimiterText,
+            "1",
+            EquationVisualPlanner.MatrixColumnSeparatorText,
+            "0",
+            EquationVisualPlanner.MatrixRowSeparatorText,
+            "0",
+            EquationVisualPlanner.MatrixColumnSeparatorText,
+            "1",
+            EquationVisualPlanner.MatrixCloseDelimiterText);
+        roles.Should().Equal(
+            EquationVisualSegmentRole.MatrixOpenDelimiter,
+            EquationVisualSegmentRole.MatrixCell,
+            EquationVisualSegmentRole.MatrixColumnSeparator,
+            EquationVisualSegmentRole.MatrixCell,
+            EquationVisualSegmentRole.MatrixRowSeparator,
+            EquationVisualSegmentRole.MatrixCell,
+            EquationVisualSegmentRole.MatrixColumnSeparator,
+            EquationVisualSegmentRole.MatrixCell,
+            EquationVisualSegmentRole.MatrixCloseDelimiter);
+        fontSizeScales[1].Should().Be(EquationVisualPlanner.StructureFontSizeScale);
+        fontSizeScales[3].Should().Be(EquationVisualPlanner.StructureFontSizeScale);
+        placedText.Should().Be(
+            $"{EquationVisualPlanner.MatrixOpenDelimiterText}1{EquationVisualPlanner.MatrixColumnSeparatorText}" +
+            $"0{EquationVisualPlanner.MatrixRowSeparatorText}0{EquationVisualPlanner.MatrixColumnSeparatorText}" +
+            $"1{EquationVisualPlanner.MatrixCloseDelimiterText}");
+        placedGlyphCount.Should().Be(12,
+            "Avalonia should lay out matrix display segments instead of the raw linear fallback with commas");
+        kinds.Should().Equal(MathRunKind.Matrix);
+        linearText.Should().Be("[1, 0; 0, 1]");
+    }
 }

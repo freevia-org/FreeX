@@ -16,6 +16,7 @@ public sealed class EquationVisualPlannerSourceGuardTests
         source.Should().Contain("EquationVisualElementKind.Fraction");
         source.Should().Contain("EquationVisualElementKind.Radical");
         source.Should().Contain("EquationVisualElementKind.NAry");
+        source.Should().Contain("EquationVisualElementKind.Matrix");
         source.Should().Contain("EquationVisualBaselineRole.Superscript");
         source.Should().NotContain("Text = equation.LinearText");
     }
