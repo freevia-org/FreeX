@@ -218,6 +218,67 @@ public sealed class ChartSmartArtVisualPlannerTests
         signature.Should().Contain("lines=");
     }
 
+    [Theory]
+    [InlineData("cycle1", "Cycle", 4, 4, 200, 160)]
+    [InlineData("radial1", "Radial", 4, 3, 220, 180)]
+    [InlineData("matrix1", "Matrix", 4, 0, 182, 94)]
+    [InlineData("horizbullet1", "HorizontalList", 4, 0, 320, 46)]
+    [InlineData("stepup1", "StepUp", 4, 3, 266, 130)]
+    [InlineData("stepdown1", "StepDown", 4, 3, 266, 130)]
+    public void SmartArtPlan_ProvidesReusableLayoutGeometryForBreadthLayouts(
+        string layoutId,
+        string expectedKind,
+        int expectedNodes,
+        int expectedConnectors,
+        double expectedWidth,
+        double expectedHeight)
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.List, ["Alpha", "Beta", "Gamma", "Delta"]);
+        smartArt.LayoutId = layoutId;
+
+        var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt);
+
+        plan.LayoutGeometry.Should().NotBeNull();
+        var geometry = plan.LayoutGeometry!;
+        geometry.Kind.ToString().Should().Be(expectedKind);
+        geometry.Nodes.Should().HaveCount(expectedNodes);
+        geometry.Connectors.Should().HaveCount(expectedConnectors);
+        geometry.NaturalWidth.Should().BeApproximately(expectedWidth, 0.01);
+        geometry.NaturalHeight.Should().BeApproximately(expectedHeight, 0.01);
+
+        var signature = ChartSmartArtVisualPlanner.BuildSmartArtVisualSignature(plan);
+        signature.Should().Contain(
+            $"geometry=kind={expectedKind}/nodes={expectedNodes}/connectors={expectedConnectors}/size={expectedWidth}x{expectedHeight}");
+    }
+
+    [Fact]
+    public void SmartArtPlan_LayoutGeometryUsesStableNodePlacements()
+    {
+        var cycle = SmartArt.Create(SmartArtKind.List, ["North", "East", "South", "West"]);
+        cycle.LayoutId = "cycle1";
+        var cycleGeometry = ChartSmartArtVisualPlanner.BuildSmartArtPlan(cycle).LayoutGeometry!;
+        cycleGeometry.Nodes[0].X.Should().BeApproximately(74, 0.01);
+        cycleGeometry.Nodes[0].Y.Should().BeApproximately(11, 0.01);
+        cycleGeometry.Connectors.Select(c => (c.SourceNodeIndex, c.TargetNodeIndex))
+            .Should().ContainInOrder((0, 1), (1, 2), (2, 3), (3, 0));
+
+        var radial = SmartArt.Create(SmartArtKind.List, ["Hub", "North", "East", "West"]);
+        radial.LayoutId = "radial1";
+        var radialGeometry = ChartSmartArtVisualPlanner.BuildSmartArtPlan(radial).LayoutGeometry!;
+        radialGeometry.Nodes[0].X.Should().BeApproximately(82, 0.01);
+        radialGeometry.Nodes[0].Y.Should().BeApproximately(72, 0.01);
+        radialGeometry.Nodes[1].X.Should().BeApproximately(86, 0.01);
+        radialGeometry.Nodes[1].Y.Should().BeApproximately(20, 0.01);
+        radialGeometry.Connectors.Select(c => (c.SourceNodeIndex, c.TargetNodeIndex))
+            .Should().ContainInOrder((0, 1), (0, 2), (0, 3));
+
+        var matrix = SmartArt.Create(SmartArtKind.List, ["A", "B", "C", "D"]);
+        matrix.LayoutId = "matrix1";
+        var matrixGeometry = ChartSmartArtVisualPlanner.BuildSmartArtPlan(matrix).LayoutGeometry!;
+        matrixGeometry.Nodes[2].X.Should().BeApproximately(8, 0.01);
+        matrixGeometry.Nodes[2].Y.Should().BeApproximately(52, 0.01);
+    }
+
     [Fact]
     public void SmartArtPlan_ResolvedLayoutKindOverridesStaleModelKind()
     {

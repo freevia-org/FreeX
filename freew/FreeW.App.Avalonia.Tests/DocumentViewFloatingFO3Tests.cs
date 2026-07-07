@@ -594,6 +594,32 @@ public sealed class DocumentViewFloatingFO3Tests
     }
 
     [Fact]
+    public async Task Floating_smartart_carries_shared_radial_layout_geometry()
+    {
+        (string? LayoutId, string? GeometryKind, int NodeCount, int ConnectorCount) values = default;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingSmartArt(
+                SmartArtKind.List,
+                ImageWrapping.Square,
+                0,
+                0,
+                configure: smartArt => smartArt.LayoutId = "radial1");
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var geometry = view.FloatingSmartArtLayoutGeometries.Single();
+            values = (geometry.LayoutId, geometry.GeometryKind, geometry.GeometryNodeCount, geometry.GeometryConnectorCount);
+        });
+
+        if (!ran) return;
+        values.LayoutId.Should().Be("radial1");
+        values.GeometryKind.Should().Be("Radial");
+        values.NodeCount.Should().Be(3);
+        values.ConnectorCount.Should().Be(2);
+    }
+
+    [Fact]
     public async Task Floating_smartart_zorder_preserved()
     {
         int zOrder = -999;

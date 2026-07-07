@@ -35,24 +35,24 @@ internal static class SmartArtRenderer
         {
             // ── List layouts ────────────────────────────────────────────────────────────────────────
             "list1" or "vertbullet1" => BuildVerticalList(plan.Nodes, strokeThickness),
-            "horizbullet1"           => BuildHorizontalList(plan.Nodes, strokeThickness),
+            "horizbullet1"           => BuildPlannedLayout(plan, strokeThickness),
 
             // ── Process layouts ─────────────────────────────────────────────────────────────────────
             "process1"               => BuildProcess(plan.Nodes, strokeThickness),
-            "stepup1"                => BuildStepProcess(plan.Nodes, strokeThickness, ascending: true),
-            "stepdown1"              => BuildStepProcess(plan.Nodes, strokeThickness, ascending: false),
+            "stepup1"                => BuildPlannedLayout(plan, strokeThickness),
+            "stepdown1"              => BuildPlannedLayout(plan, strokeThickness),
 
             // ── Cycle ────────────────────────────────────────────────────────────────────────────────
-            "cycle1"                 => BuildCycle(plan.Nodes, strokeThickness),
+            "cycle1"                 => BuildPlannedLayout(plan, strokeThickness),
 
             // ── Hierarchy ───────────────────────────────────────────────────────────────────────────
             "hierarchy1" or "orgchart1" => BuildHierarchy(plan, strokeThickness),
 
             // ── Radial ──────────────────────────────────────────────────────────────────────────────
-            "radial1"                => BuildRadial(plan.Nodes, strokeThickness),
+            "radial1"                => BuildPlannedLayout(plan, strokeThickness),
 
             // ── Matrix ──────────────────────────────────────────────────────────────────────────────
-            "matrix1"                => BuildMatrix(plan.Nodes, strokeThickness),
+            "matrix1"                => BuildPlannedLayout(plan, strokeThickness),
 
             // ── Fallback (unknown layout) ────────────────────────────────────────────────────────────
             _                        => BuildVerticalList(plan.Nodes, strokeThickness)
@@ -324,6 +324,130 @@ internal static class SmartArtRenderer
 
     private static double ConnectorThickness(SmartArtNodeVisualPlan node, double strokeThickness) =>
         Math.Max(strokeThickness, node.BorderThickness > 0 ? node.BorderThickness : strokeThickness);
+
+    private static FrameworkElement BuildPlannedLayout(
+        SmartArtVisualPlan plan,
+        double strokeThickness)
+    {
+        if (plan.LayoutGeometry is not { Nodes.Count: > 0 } geometry)
+            return BuildVerticalList(plan.Nodes, strokeThickness);
+
+        var canvas = new Canvas
+        {
+            Width = Math.Max(1, geometry.NaturalWidth),
+            Height = Math.Max(1, geometry.NaturalHeight),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(6)
+        };
+
+        foreach (var connector in geometry.Connectors)
+            AddPlannedConnector(canvas, plan.Nodes, connector, strokeThickness);
+
+        foreach (var nodeGeometry in geometry.Nodes)
+        {
+            if (nodeGeometry.NodeIndex < 0 || nodeGeometry.NodeIndex >= plan.Nodes.Count)
+                continue;
+
+            var box = MakeNodeBox(
+                plan.Nodes[nodeGeometry.NodeIndex],
+                strokeThickness,
+                margin: new Thickness(0),
+                padding: new Thickness(4, 2, 4, 2),
+                width: nodeGeometry.Width);
+            box.Height = nodeGeometry.Height;
+            Canvas.SetLeft(box, nodeGeometry.X);
+            Canvas.SetTop(box, nodeGeometry.Y);
+            canvas.Children.Add(box);
+        }
+
+        return new Viewbox
+        {
+            Stretch = Stretch.Uniform,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            Child = canvas
+        };
+    }
+
+    private static void AddPlannedConnector(
+        Canvas canvas,
+        IReadOnlyList<SmartArtNodeVisualPlan> nodes,
+        SmartArtLayoutConnectorGeometry connector,
+        double strokeThickness)
+    {
+        if (connector.SourceNodeIndex < 0 || connector.SourceNodeIndex >= nodes.Count)
+            return;
+
+        var source = nodes[connector.SourceNodeIndex];
+        var brush = new SolidColorBrush(ParseHex(source.ConnectorHex));
+        var thickness = ConnectorThickness(source, strokeThickness);
+        var start = new Point(connector.X1, connector.Y1);
+        var end = new Point(connector.X2, connector.Y2);
+
+        canvas.Children.Add(new Line
+        {
+            X1 = start.X,
+            Y1 = start.Y,
+            X2 = end.X,
+            Y2 = end.Y,
+            Stroke = brush,
+            StrokeThickness = thickness,
+            Opacity = 0.7
+        });
+
+        if (connector.Kind == SmartArtLayoutConnectorKind.Arrow)
+            AddArrowHead(canvas, brush, thickness, start, end);
+    }
+
+    private static void AddArrowHead(
+        Canvas canvas,
+        Brush brush,
+        double thickness,
+        Point start,
+        Point end)
+    {
+        var dx = end.X - start.X;
+        var dy = end.Y - start.Y;
+        var length = Math.Sqrt(dx * dx + dy * dy);
+        if (length <= 0.001)
+            return;
+
+        var ux = dx / length;
+        var uy = dy / length;
+        var px = -uy;
+        var py = ux;
+        const double arrowLength = 6;
+        const double arrowWidth = 4;
+
+        var p1 = new Point(
+            end.X - ux * arrowLength + px * arrowWidth,
+            end.Y - uy * arrowLength + py * arrowWidth);
+        var p2 = new Point(
+            end.X - ux * arrowLength - px * arrowWidth,
+            end.Y - uy * arrowLength - py * arrowWidth);
+
+        canvas.Children.Add(new Line
+        {
+            X1 = end.X,
+            Y1 = end.Y,
+            X2 = p1.X,
+            Y2 = p1.Y,
+            Stroke = brush,
+            StrokeThickness = thickness,
+            Opacity = 0.7
+        });
+        canvas.Children.Add(new Line
+        {
+            X1 = end.X,
+            Y1 = end.Y,
+            X2 = p2.X,
+            Y2 = p2.Y,
+            Stroke = brush,
+            StrokeThickness = thickness,
+            Opacity = 0.7
+        });
+    }
 
     // Radial layout: central hub + satellite nodes arranged around it.
     private static FrameworkElement BuildRadial(

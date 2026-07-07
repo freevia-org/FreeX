@@ -2484,6 +2484,22 @@ public sealed class DocumentView : Control
         }
     }
 
+    /// <summary>Snapshot of shared layout geometry plans used by floating SmartArt diagrams.</summary>
+    public IReadOnlyList<(string LayoutId, string? GeometryKind, int GeometryNodeCount, int GeometryConnectorCount)> FloatingSmartArtLayoutGeometries
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _floatingSmartArts
+                .Select(s => (
+                    s.LayoutId,
+                    s.LayoutGeometry?.Kind.ToString(),
+                    s.LayoutGeometry?.Nodes.Count ?? 0,
+                    s.LayoutGeometry?.Connectors.Count ?? 0))
+                .ToList();
+        }
+    }
+
     /// <summary>Number of floating drawing groups collected during the last layout pass.</summary>
     public int FloatingGroupCount
     {
@@ -2580,6 +2596,22 @@ public sealed class DocumentView : Control
                     first?.ShadowDepth ?? 0,
                     first?.ConnectorHex);
             }).ToList();
+        }
+    }
+
+    /// <summary>Snapshot of shared layout geometry plans used by inline SmartArt diagrams.</summary>
+    public IReadOnlyList<(string LayoutId, string? GeometryKind, int GeometryNodeCount, int GeometryConnectorCount)> InlineSmartArtLayoutGeometries
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _inlineSmartArts
+                .Select(s => (
+                    s.LayoutId,
+                    s.LayoutGeometry?.Kind.ToString(),
+                    s.LayoutGeometry?.Nodes.Count ?? 0,
+                    s.LayoutGeometry?.Connectors.Count ?? 0))
+                .ToList();
         }
     }
 
@@ -14314,6 +14346,7 @@ public sealed class DocumentView : Control
         public List<string>     NodeTexts = [];
         public List<SmartArtNodeVisualPlan> NodePlans = [];
         public SmartArtHierarchyGeometryPlan? HierarchyGeometry;
+        public SmartArtLayoutGeometryPlan? LayoutGeometry;
         public List<Color>      NodeFills = [];
         public Color            NodeTextColor = Colors.White;
     }
@@ -14410,6 +14443,7 @@ public sealed class DocumentView : Control
             NodeTexts = plan.Nodes.Select(n => n.Text).ToList(),
             NodePlans = plan.Nodes.ToList(),
             HierarchyGeometry = plan.HierarchyGeometry,
+            LayoutGeometry = plan.LayoutGeometry,
             NodeFills = plan.Nodes.Select(n => ToAvaloniaChartColor(n.FillHex)).ToList(),
             NodeTextColor = plan.Nodes.Count > 0
                 ? ToAvaloniaChartColor(plan.Nodes[0].TextHex)
@@ -15416,6 +15450,15 @@ public sealed class DocumentView : Control
                 Math.Max(1, areaH - nodePad));
             DrawSmartArtHierarchy(context, sd, hierarchy, hierarchyTarget);
         }
+        else if (sd.LayoutGeometry is { Nodes.Count: > 0 } layoutGeometry)
+        {
+            var layoutTarget = new Rect(
+                rect.X + nodePad,
+                areaTop + nodePad,
+                areaW,
+                Math.Max(1, areaH - nodePad));
+            DrawSmartArtLayoutGeometry(context, sd, layoutGeometry, layoutTarget);
+        }
         else
         {
             // List / Process: horizontal row of boxes with right-arrow connectors.
@@ -15449,6 +15492,83 @@ public sealed class DocumentView : Control
                 }
             }
         }
+    }
+
+    private void DrawSmartArtLayoutGeometry(
+        DrawingContext context,
+        FloatingSmartArtData sd,
+        SmartArtLayoutGeometryPlan layout,
+        Rect target)
+    {
+        var naturalWidth = Math.Max(1, layout.NaturalWidth);
+        var naturalHeight = Math.Max(1, layout.NaturalHeight);
+        var scale = Math.Min(target.Width / naturalWidth, target.Height / naturalHeight);
+        if (!double.IsFinite(scale) || scale <= 0)
+            scale = 1;
+
+        var contentWidth = naturalWidth * scale;
+        var contentHeight = naturalHeight * scale;
+        var offsetX = target.X + Math.Max(0, (target.Width - contentWidth) / 2);
+        var offsetY = target.Y + Math.Max(0, (target.Height - contentHeight) / 2);
+
+        Point ScalePoint(double x, double y) =>
+            new(offsetX + x * scale, offsetY + y * scale);
+
+        Rect ScaleRect(SmartArtLayoutNodeGeometry node) =>
+            new(
+                offsetX + node.X * scale,
+                offsetY + node.Y * scale,
+                node.Width * scale,
+                node.Height * scale);
+
+        foreach (var connector in layout.Connectors)
+        {
+            if (connector.SourceNodeIndex < 0 || connector.SourceNodeIndex >= sd.NodePlans.Count)
+                continue;
+
+            var start = ScalePoint(connector.X1, connector.Y1);
+            var end = ScalePoint(connector.X2, connector.Y2);
+            var pen = SmartArtConnectorPenAt(sd, connector.SourceNodeIndex);
+            context.DrawLine(pen, start, end);
+            if (connector.Kind == SmartArtLayoutConnectorKind.Arrow)
+                DrawSmartArtArrowHead(context, pen, start, end);
+        }
+
+        foreach (var node in layout.Nodes)
+        {
+            if (node.NodeIndex < 0 || node.NodeIndex >= sd.NodeTexts.Count)
+                continue;
+
+            var nodeRect = ScaleRect(node);
+            DrawSmartArtNodeBox(context, sd, node.NodeIndex, nodeRect);
+            DrawSmartArtNodeText(context, sd.NodeTexts[node.NodeIndex], nodeRect, SmartArtTextColorAt(sd, node.NodeIndex));
+        }
+    }
+
+    private static void DrawSmartArtArrowHead(DrawingContext context, Pen pen, Point start, Point end)
+    {
+        var dx = end.X - start.X;
+        var dy = end.Y - start.Y;
+        var length = Math.Sqrt(dx * dx + dy * dy);
+        if (length <= 0.001)
+            return;
+
+        var ux = dx / length;
+        var uy = dy / length;
+        var px = -uy;
+        var py = ux;
+        const double arrowLength = 6;
+        const double arrowWidth = 4;
+
+        var p1 = new Point(
+            end.X - ux * arrowLength + px * arrowWidth,
+            end.Y - uy * arrowLength + py * arrowWidth);
+        var p2 = new Point(
+            end.X - ux * arrowLength - px * arrowWidth,
+            end.Y - uy * arrowLength - py * arrowWidth);
+
+        context.DrawLine(pen, end, p1);
+        context.DrawLine(pen, end, p2);
     }
 
     private void DrawSmartArtHierarchy(

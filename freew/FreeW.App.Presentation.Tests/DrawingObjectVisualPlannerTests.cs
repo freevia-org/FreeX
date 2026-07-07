@@ -199,10 +199,10 @@ public sealed class DrawingObjectVisualPlannerTests
         group.ChildOffsets.Add((84, 0));
         group.Children.Add(new WordArt("Group", WordArtStyle.GlowGold, fontSizePt: 20));
         group.ChildOffsets.Add((72, 12));
-        var smartArt = SmartArt.Create(SmartArtKind.Process, ["Plan", "Ship"]);
+        var smartArt = SmartArt.Create(SmartArtKind.List, ["Plan", "Ship", "Review", "Launch"]);
         smartArt.WidthPt = 120;
         smartArt.HeightPt = 44;
-        smartArt.LayoutId = "process1";
+        smartArt.LayoutId = "matrix1";
         smartArt.ColorSchemeId = "accent1";
         smartArt.StyleId = "moderate1";
         group.Children.Add(smartArt);
@@ -252,7 +252,11 @@ public sealed class DrawingObjectVisualPlannerTests
         plan.GroupChildren[3].Visual.Effects.GlowColorHex.Should().Be("#FFC000");
         var smartArtPlan = plan.GroupChildren[4].Visual.SmartArt;
         smartArtPlan.Should().NotBeNull();
-        smartArtPlan!.Kind.Should().Be(SmartArtKind.Process);
-        smartArtPlan.Nodes.Should().HaveCount(2);
+        smartArtPlan!.Kind.Should().Be(SmartArtKind.List);
+        smartArtPlan.LayoutId.Should().Be("matrix1");
+        smartArtPlan.Nodes.Should().HaveCount(4);
+        smartArtPlan.LayoutGeometry.Should().NotBeNull();
+        smartArtPlan.LayoutGeometry!.Kind.Should().Be(SmartArtLayoutGeometryKind.Matrix);
+        smartArtPlan.LayoutGeometry.Nodes.Should().HaveCount(4);
     }
 }

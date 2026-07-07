@@ -557,6 +557,29 @@ public sealed class DocumentViewInlineFO4Tests
     }
 
     [Fact]
+    public async Task Inline_smartart_carries_shared_cycle_layout_geometry()
+    {
+        (string? LayoutId, string? GeometryKind, int NodeCount, int ConnectorCount) values = default;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithInlineSmartArt(
+                SmartArtKind.List,
+                configure: smartArt => smartArt.LayoutId = "cycle1");
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var geometry = view.InlineSmartArtLayoutGeometries.Single();
+            values = (geometry.LayoutId, geometry.GeometryKind, geometry.GeometryNodeCount, geometry.GeometryConnectorCount);
+        });
+
+        if (!ran) return;
+        values.LayoutId.Should().Be("cycle1");
+        values.GeometryKind.Should().Be("Cycle");
+        values.NodeCount.Should().Be(3);
+        values.ConnectorCount.Should().Be(3);
+    }
+
+    [Fact]
     public async Task Inline_smartart_carries_planned_style_values()
     {
         (string? Fill, string? Border, double BorderThickness, double CornerRadius,
