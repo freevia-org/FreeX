@@ -9,7 +9,9 @@ public sealed class EquationVisualPlannerSourceGuardTests
 
         source.Should().Contain("DisplayCells(paragraph)");
         source.Should().Contain("EquationVisualPlanner.Build(equation)");
+        source.Should().Contain("AddEquationVisualElement");
         source.Should().Contain("ApplyEquationVisualStyle");
+        source.Should().Contain("EquationVisualElements");
         source.Should().Contain("run.Equation is null");
         source.Should().NotContain("hasInlineEquation");
     }

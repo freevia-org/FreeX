@@ -45,6 +45,9 @@ public sealed class DocumentViewRoundTripTests
         return result;
     }
 
+    private static string TextBlockText(TextBlock textBlock) =>
+        textBlock.Text + string.Concat(textBlock.Inlines.OfType<System.Windows.Documents.Run>().Select(run => run.Text));
+
     [StaFact]
     public void PlainText_RoundTrips()
     {
@@ -379,6 +382,62 @@ public sealed class DocumentViewRoundTripTests
         var recovered = FirstRun(view.Model);
         recovered.Equation.Should().NotBeNull();
         recovered.Equation!.Runs.Select(run => run.Kind).Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+    }
+
+    [StaFact]
+    public void EquationVisualPlanner_FractionAndRadicalRenderStructuredElementsAndRoundTrip()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var equation = new Equation([
+            MathRun.Fraction("a + b", "c"),
+            MathRun.Radical("x + 1", "3")
+        ]);
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var structuredKinds = LogicalDescendants<StackPanel>(view.Document)
+            .Where(panel => panel.Tag is EquationVisualElementKind)
+            .Select(panel => (EquationVisualElementKind)panel.Tag)
+            .ToList();
+        structuredKinds.Should().Contain(EquationVisualElementKind.Fraction);
+        structuredKinds.Should().Contain(EquationVisualElementKind.Radical);
+
+        var visualText = LogicalDescendants<TextBlock>(view.Document)
+            .Select(TextBlockText)
+            .Where(text => text.Length > 0)
+            .ToList();
+        visualText.Should().Contain("a + b");
+        visualText.Should().Contain("c");
+        visualText.Should().Contain(EquationVisualPlanner.RadicalSignText);
+        visualText.Should().Contain("3");
+        visualText.Should().Contain("x + 1");
+        visualText.Should().NotContain("a + b/c",
+            "the WPF equation visual should not render fractions as the raw linear fallback");
+        visualText.Should().NotContain($"3{EquationVisualPlanner.RadicalSignText}(x + 1)",
+            "the WPF equation visual should not render radicals as the raw linear fallback");
+
+        var fractionPanel = LogicalDescendants<StackPanel>(view.Document)
+            .Single(panel => Equals(panel.Tag, EquationVisualElementKind.Fraction));
+        LogicalDescendants<Border>(fractionPanel).Should().Contain(border => Math.Abs(border.Height - 1) < 0.01);
+        var radicalPanel = LogicalDescendants<StackPanel>(view.Document)
+            .Single(panel => Equals(panel.Tag, EquationVisualElementKind.Radical));
+        LogicalDescendants<Border>(radicalPanel).Should()
+            .Contain(border => border.BorderThickness.Top > 0 && border.BorderThickness.Bottom == 0);
+
+        view.CommitToModel();
+        var recovered = FirstRun(view.Model);
+        recovered.Equation.Should().NotBeNull();
+        var runs = recovered.Equation!.Runs;
+        runs.Select(run => run.Kind).Should().Equal(MathRunKind.Fraction, MathRunKind.Radical);
+        runs[0].Numerator.Should().Be("a + b");
+        runs[0].Denominator.Should().Be("c");
+        runs[1].Base.Should().Be("x + 1");
+        runs[1].Degree.Should().Be("3");
     }
 
     [StaFact]

@@ -625,4 +625,73 @@ public sealed class InsertDepth2Tests
             "the rendered default equation should place E = m plus c and 2, without the linear fallback caret");
         kinds.Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
     }
+
+    [Fact]
+    public async Task EquationVisualPlanner_fraction_and_radical_lay_out_shared_structure()
+    {
+        EquationVisualElementKind[] elementKinds = [];
+        (string LinearText, string Numerator, string Denominator, string Radicand, string Degree)[] elementSlots = [];
+        string[] texts = [];
+        EquationVisualSegmentRole[] roles = [];
+        double[] fontSizeScales = [];
+        MathRunKind[] kinds = [];
+        var placedText = string.Empty;
+        var linearText = string.Empty;
+        var placedGlyphCount = 0;
+
+        var ran = await OnUiThread(() =>
+        {
+            var view = MakeView("");
+            view.InsertEquation(new Equation([
+                MathRun.Fraction("a + b", "c"),
+                MathRun.Radical("x + 1", "3")
+            ]));
+
+            var elements = view.EquationVisualElements;
+            elementKinds = elements.Select(element => element.Kind).ToArray();
+            elementSlots = elements
+                .Select(element => (element.LinearText, element.Numerator, element.Denominator, element.Radicand, element.Degree))
+                .ToArray();
+            var segments = view.EquationVisualSegments;
+            texts = segments.Select(segment => segment.Text).ToArray();
+            roles = segments.Select(segment => segment.Role).ToArray();
+            fontSizeScales = segments.Select(segment => segment.FontSizeScale).ToArray();
+            placedText = string.Concat(view.GetPlacedForBlock(0).Select(placed => placed.Ch));
+            placedGlyphCount = view.PlacedGlyphCount;
+
+            var eqRun = view.Document.Blocks.OfType<Paragraph>()
+                .SelectMany(p => p.Runs)
+                .Single(run => run.Equation is not null);
+            kinds = eqRun.Equation!.Runs.Select(run => run.Kind).ToArray();
+            linearText = eqRun.Equation!.LinearText;
+        });
+
+        if (!ran) return;
+
+        elementKinds.Should().Equal(EquationVisualElementKind.Fraction, EquationVisualElementKind.Radical);
+        elementSlots[0].Should().Be(("a + b/c", "a + b", "c", string.Empty, string.Empty));
+        elementSlots[1].Should().Be(($"3{EquationVisualPlanner.RadicalSignText}(x + 1)", string.Empty, string.Empty, "x + 1", "3"));
+        texts.Should().Equal(
+            "a + b",
+            EquationVisualPlanner.FractionBarText,
+            "c",
+            "3",
+            EquationVisualPlanner.RadicalSignText,
+            "x + 1");
+        roles.Should().Equal(
+            EquationVisualSegmentRole.FractionNumerator,
+            EquationVisualSegmentRole.FractionBar,
+            EquationVisualSegmentRole.FractionDenominator,
+            EquationVisualSegmentRole.RadicalDegree,
+            EquationVisualSegmentRole.RadicalSign,
+            EquationVisualSegmentRole.RadicalRadicand);
+        fontSizeScales[0].Should().Be(EquationVisualPlanner.StructureFontSizeScale);
+        fontSizeScales[2].Should().Be(EquationVisualPlanner.StructureFontSizeScale);
+        fontSizeScales[3].Should().Be(EquationVisualPlanner.ScriptFontSizeScale);
+        placedText.Should().Be($"a + b{EquationVisualPlanner.FractionBarText}c3{EquationVisualPlanner.RadicalSignText}x + 1");
+        placedGlyphCount.Should().Be(14,
+            "Avalonia should lay out fraction/radical display segments instead of the raw linear fallback parentheses");
+        kinds.Should().Equal(MathRunKind.Fraction, MathRunKind.Radical);
+        linearText.Should().Be($"a + b/c3{EquationVisualPlanner.RadicalSignText}(x + 1)");
+    }
 }

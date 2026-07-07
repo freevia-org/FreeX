@@ -65,12 +65,71 @@ public sealed class EquationVisualPlannerTests
     }
 
     [Fact]
-    public void EquationVisualPlanner_NonScriptKinds_RetainLinearFallbackSegments()
+    public void EquationVisualPlanner_Fraction_BuildsStructuredElementAndDisplaySegments()
+    {
+        var plan = EquationVisualPlanner.Build(new Equation([MathRun.Fraction("a + b", "c")]));
+
+        plan.LinearText.Should().Be("a + b/c");
+        plan.Elements.Should().ContainSingle();
+        plan.Elements[0].Kind.Should().Be(EquationVisualElementKind.Fraction);
+        plan.Elements[0].LinearText.Should().Be("a + b/c");
+        plan.Elements[0].Numerator.Should().Be("a + b");
+        plan.Elements[0].Denominator.Should().Be("c");
+        plan.Segments.Select(segment => segment.Text).Should().Equal(
+            "a + b",
+            EquationVisualPlanner.FractionBarText,
+            "c");
+        plan.Segments.Select(segment => segment.Role).Should().Equal(
+            EquationVisualSegmentRole.FractionNumerator,
+            EquationVisualSegmentRole.FractionBar,
+            EquationVisualSegmentRole.FractionDenominator);
+        plan.Segments.Should().NotContain(segment => segment.Role == EquationVisualSegmentRole.LinearFallback);
+    }
+
+    [Fact]
+    public void EquationVisualPlanner_Radical_BuildsStructuredElementAndDisplaySegments()
+    {
+        var plan = EquationVisualPlanner.Build(new Equation([MathRun.Radical("x + 1", "3")]));
+
+        plan.LinearText.Should().Be("3√(x + 1)");
+        plan.Elements.Should().ContainSingle();
+        plan.Elements[0].Kind.Should().Be(EquationVisualElementKind.Radical);
+        plan.Elements[0].LinearText.Should().Be("3√(x + 1)");
+        plan.Elements[0].Radicand.Should().Be("x + 1");
+        plan.Elements[0].Degree.Should().Be("3");
+        plan.Segments.Select(segment => segment.Text).Should().Equal(
+            "3",
+            EquationVisualPlanner.RadicalSignText,
+            "x + 1");
+        plan.Segments.Select(segment => segment.Role).Should().Equal(
+            EquationVisualSegmentRole.RadicalDegree,
+            EquationVisualSegmentRole.RadicalSign,
+            EquationVisualSegmentRole.RadicalRadicand);
+        plan.Segments[0].Style.BaselineRole.Should().Be(EquationVisualBaselineRole.Superscript);
+        plan.Segments.Should().NotContain(segment => segment.Role == EquationVisualSegmentRole.LinearFallback);
+    }
+
+    [Fact]
+    public void EquationVisualPlanner_SquareRadical_OmitsDegreeSegment()
+    {
+        var plan = EquationVisualPlanner.Build(new Equation([MathRun.Radical("x")]));
+
+        plan.LinearText.Should().Be("√(x)");
+        plan.Elements[0].Kind.Should().Be(EquationVisualElementKind.Radical);
+        plan.Elements[0].Degree.Should().BeEmpty();
+        plan.Segments.Select(segment => segment.Text).Should().Equal(
+            EquationVisualPlanner.RadicalSignText,
+            "x");
+        plan.Segments.Select(segment => segment.Role).Should().Equal(
+            EquationVisualSegmentRole.RadicalSign,
+            EquationVisualSegmentRole.RadicalRadicand);
+    }
+
+    [Fact]
+    public void EquationVisualPlanner_UnsupportedStructuredKinds_RetainLinearFallbackSegments()
     {
         var runs = new[]
         {
-            MathRun.Fraction("a", "b"),
-            MathRun.Radical("x", "3"),
             MathRun.NAry("SUM", "i=1", "n", "i"),
             MathRun.AccentOf("x", "hat"),
             MathRun.BarOf("x"),
@@ -89,6 +148,8 @@ public sealed class EquationVisualPlannerTests
             plan.Segments[0].Text.Should().Be(run.LinearText);
             plan.Segments[0].Role.Should().Be(EquationVisualSegmentRole.LinearFallback);
             plan.Segments[0].Style.BaselineRole.Should().Be(EquationVisualBaselineRole.Normal);
+            plan.Elements.Should().ContainSingle();
+            plan.Elements[0].Kind.Should().Be(EquationVisualElementKind.Segments);
         }
     }
 }
