@@ -149,6 +149,59 @@ public sealed class EquationVisualPlannerTests
     }
 
     [Fact]
+    public void EquationVisualPlanner_NestedRadicalRadicand_SurfacesSharedSlotPlanAndKeepsFlattenedSegments()
+    {
+        var plan = EquationVisualPlanner.Build(new Equation([
+            MathRun.Radical(
+                new Equation([
+                    MathRun.PlainText("a+"),
+                    MathRun.Superscript("x", "2")
+                ]),
+                "3")
+        ]));
+
+        plan.LinearText.Should().Be("3\u221a(a+x^2)");
+        plan.Elements.Should().ContainSingle();
+        var radical = plan.Elements[0];
+        radical.Kind.Should().Be(EquationVisualElementKind.Radical);
+        radical.Radicand.Should().Be("a+x^2");
+        radical.Degree.Should().Be("3");
+        radical.RadicandPlan.Should().NotBeNull();
+        radical.RadicandPlan!.Segments.Select(segment => segment.Role)
+            .Should().Equal(
+                EquationVisualSegmentRole.Text,
+                EquationVisualSegmentRole.Base,
+                EquationVisualSegmentRole.Superscript);
+
+        plan.Segments.Select(segment => segment.Text).Should().Equal(
+            "3",
+            EquationVisualPlanner.RadicalSignText,
+            "a+x^2");
+        plan.Segments.Select(segment => segment.Role).Should().Equal(
+            EquationVisualSegmentRole.RadicalDegree,
+            EquationVisualSegmentRole.RadicalSign,
+            EquationVisualSegmentRole.RadicalRadicand);
+        plan.Segments.Should().NotContain(segment => segment.Role == EquationVisualSegmentRole.LinearFallback);
+    }
+
+    [Fact]
+    public void EquationVisualPlanner_NestedRadicalRadicand_IsDepthBounded()
+    {
+        var equation = new Equation();
+        equation.Runs.Add(new MathRun
+        {
+            Kind = MathRunKind.Radical,
+            Base = "x",
+            RadicandEquation = equation
+        });
+
+        var plan = EquationVisualPlanner.Build(equation);
+
+        plan.LinearText.Should().Contain("\u221a(x)");
+        plan.Elements.Should().NotBeEmpty();
+    }
+
+    [Fact]
     public void EquationVisualPlanner_Radical_BuildsStructuredElementAndDisplaySegments()
     {
         var plan = EquationVisualPlanner.Build(new Equation([MathRun.Radical("x + 1", "3")]));

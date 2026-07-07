@@ -204,6 +204,83 @@ public class EquationRoundTripTests
     }
 
     [Fact]
+    public void NestedRadicalRadicand_SurvivesRoundTripAndEmitsDirectSlotChildren()
+    {
+        var equation = new Equation([
+            MathRun.Radical(
+                new Equation([
+                    MathRun.PlainText("a+"),
+                    MathRun.Superscript("x", "2")
+                ]),
+                "3")
+        ]);
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(paragraph);
+
+        var read = RoundTrip(doc);
+        var xml = WriteDocumentXml(doc);
+
+        var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Equation is not null).Equation!;
+        roundTripped.Runs.Should().ContainSingle();
+        var radical = roundTripped.Runs[0];
+        radical.Kind.Should().Be(MathRunKind.Radical);
+        radical.Base.Should().Be("a+x2");
+        radical.Degree.Should().Be("3");
+        radical.RadicandEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        radical.RadicandEquation.Runs[1].Base.Should().Be("x");
+        radical.RadicandEquation.Runs[1].Sup.Should().Be("2");
+        roundTripped.LinearText.Should().Be("3\u221a(a+x^2)");
+
+        var writtenRadical = xml.Descendants(M + "rad").Single();
+        writtenRadical.Elements().Select(element => element.Name.LocalName)
+            .Should().Equal("radPr", "deg", "e");
+        var radicand = writtenRadical.Element(M + "e")!;
+        radicand.Elements(M + "oMath").Should().BeEmpty();
+        radicand.Elements(M + "r").Should().ContainSingle();
+        radicand.Elements(M + "sSup").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void RawNestedRadicalRadicand_ReadsAsNestedEquation()
+    {
+        var documentXml = $$"""
+            <w:document xmlns:w="{{W.NamespaceName}}" xmlns:m="{{M.NamespaceName}}">
+              <w:body>
+                <w:p>
+                  <m:oMath>
+                    <m:rad>
+                      <m:radPr><m:degHide m:val="0" /></m:radPr>
+                      <m:deg><m:r><m:t>3</m:t></m:r></m:deg>
+                      <m:e>
+                        <m:r><m:t>a+</m:t></m:r>
+                        <m:sSup>
+                          <m:e><m:r><m:t>x</m:t></m:r></m:e>
+                          <m:sup><m:r><m:t>2</m:t></m:r></m:sup>
+                        </m:sSup>
+                      </m:e>
+                    </m:rad>
+                  </m:oMath>
+                </w:p>
+              </w:body>
+            </w:document>
+            """;
+
+        var read = ReadDocumentXml(documentXml);
+
+        var equation = read.Paragraphs.Single().Runs.Single(run => run.Equation is not null).Equation!;
+        equation.Runs.Should().ContainSingle();
+        var radical = equation.Runs[0];
+        radical.Kind.Should().Be(MathRunKind.Radical);
+        radical.Degree.Should().Be("3");
+        radical.RadicandEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        equation.LinearText.Should().Be("3\u221a(a+x^2)");
+    }
+
+    [Fact]
     public void Equation_EmitsInlineOMathWithMathNamespaceDeclared()
     {
         var doc = new TextDocument();

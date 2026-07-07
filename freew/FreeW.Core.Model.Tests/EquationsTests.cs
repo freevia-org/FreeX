@@ -51,6 +51,41 @@ public class EquationsTests
     }
 
     [Fact]
+    public void MathRun_Radical_CanCarryNestedRadicandEquation()
+    {
+        var radicand = new Equation([
+            MathRun.PlainText("a+"),
+            MathRun.Superscript("x", "2")
+        ]);
+
+        var radical = MathRun.Radical(radicand, "3");
+
+        radical.Kind.Should().Be(MathRunKind.Radical);
+        radical.Base.Should().Be("a+x^2");
+        radical.Degree.Should().Be("3");
+        radical.RadicandEquation.Should().BeSameAs(radicand);
+        radical.LinearText.Should().Be("3\u221a(a+x^2)");
+    }
+
+    [Fact]
+    public void MathRun_Radical_LinearText_IsDepthBoundedForCyclicNestedRadicand()
+    {
+        var equation = new Equation();
+        equation.Runs.Add(new MathRun
+        {
+            Kind = MathRunKind.Radical,
+            Base = "x",
+            RadicandEquation = equation
+        });
+
+        var linearText = equation.LinearText;
+
+        linearText.Should().NotBeEmpty();
+        linearText.Length.Should().BeLessThan(100);
+        linearText.Should().Contain("\u221a(x)");
+    }
+
+    [Fact]
     public void MathRun_LinearText_RendersNewStructures()
     {
         MathRun.Subscript("x", "i").LinearText.Should().Be("x_i");

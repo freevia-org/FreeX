@@ -59,7 +59,7 @@ public enum MathRunKind
 /// <item><see cref="MathRunKind.Subscript"/> → <see cref="Base"/> with subscript <see cref="Sub"/>.</item>
 /// <item><see cref="MathRunKind.SubSuperscript"/> → <see cref="Base"/> with <see cref="Sub"/> and <see cref="Sup"/>.</item>
 /// <item><see cref="MathRunKind.Fraction"/> → <see cref="NumeratorEquation"/>/<see cref="Numerator"/> over <see cref="DenominatorEquation"/>/<see cref="Denominator"/>.</item>
-/// <item><see cref="MathRunKind.Radical"/> → <see cref="Base"/> under a root of degree <see cref="Degree"/> (empty = square root).</item>
+/// <item><see cref="MathRunKind.Radical"/> → <see cref="RadicandEquation"/>/<see cref="Base"/> under a root of degree <see cref="Degree"/> (empty = square root).</item>
 /// <item><see cref="MathRunKind.NAry"/> → operator <see cref="Operator"/> from <see cref="Sub"/> to <see cref="Sup"/> over <see cref="Base"/>.</item>
 /// <item><see cref="MathRunKind.Accent"/> → <see cref="Base"/> with the accent glyph <see cref="Accent"/> over it.</item>
 /// <item><see cref="MathRunKind.Bar"/> → <see cref="Base"/> with a bar above (<see cref="BarTop"/> true) or below it.</item>
@@ -100,6 +100,9 @@ public sealed record MathRun
 
     /// <summary>Optional structured denominator equation for nested OMML fraction slots.</summary>
     public Equation? DenominatorEquation { get; init; }
+
+    /// <summary>Optional structured radicand equation for nested OMML radical slots.</summary>
+    public Equation? RadicandEquation { get; init; }
 
     /// <summary>The radical's degree (empty = square root; non-empty = nth root). Only for <see cref="MathRunKind.Radical"/>.</summary>
     public string Degree { get; init; } = string.Empty;
@@ -180,6 +183,23 @@ public sealed record MathRun
         new() { Kind = MathRunKind.Radical, Base = radicand, Degree = degree ?? string.Empty };
 
     /// <summary>
+    /// Creates a radical fragment (m:rad) whose radicand is a structured equation. The degree remains
+    /// text-only for this bounded slice.
+    /// </summary>
+    public static MathRun Radical(Equation radicand, string degree = "")
+    {
+        ArgumentNullException.ThrowIfNull(radicand);
+
+        return new()
+        {
+            Kind = MathRunKind.Radical,
+            Base = radicand.LinearText,
+            Degree = degree ?? string.Empty,
+            RadicandEquation = radicand
+        };
+    }
+
+    /// <summary>
     /// Creates an n-ary fragment (m:nary): <paramref name="@operator"/> (e.g. ∑/∫/∏) applied to
     /// <paramref name="operand"/> with lower limit <paramref name="sub"/> and upper limit <paramref name="sup"/>.
     /// </summary>
@@ -234,7 +254,9 @@ public sealed record MathRun
         MathRunKind.Subscript => $"{Base}_{Sub}",
         MathRunKind.SubSuperscript => $"{Base}_{Sub}^{Sup}",
         MathRunKind.Fraction => $"{SlotLinearText(NumeratorEquation, Numerator, depth)}/{SlotLinearText(DenominatorEquation, Denominator, depth)}",
-        MathRunKind.Radical => string.IsNullOrEmpty(Degree) ? $"√({Base})" : $"{Degree}√({Base})",
+        MathRunKind.Radical => string.IsNullOrEmpty(Degree)
+            ? $"√({SlotLinearText(RadicandEquation, Base, depth)})"
+            : $"{Degree}√({SlotLinearText(RadicandEquation, Base, depth)})",
         MathRunKind.NAry => $"{Operator}({Sub}..{Sup}) {Base}".TrimEnd(),
         MathRunKind.Accent => $"{Base}{Accent}",
         MathRunKind.Bar => BarTop ? $"‾{Base}‾" : $"_{Base}_",

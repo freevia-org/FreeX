@@ -1750,7 +1750,17 @@ public static class DocxReader
         var degHide = rad.Element(M + "radPr")?.Element(M + "degHide")?.Attribute(M + "val")?.Value;
         var degText = MathTextOf(rad.Element(M + "deg"));
         var degree = degHide == "1" ? string.Empty : degText;
-        return MathRun.Radical(MathTextOf(rad.Element(M + "e")), degree);
+        var radicand = rad.Element(M + "e");
+        var radicandText = MathTextOf(radicand);
+        return HasStructuredMathSlot(radicand)
+            ? new MathRun
+            {
+                Kind = MathRunKind.Radical,
+                Base = radicandText,
+                Degree = degree,
+                RadicandEquation = ReadMathSlot(radicand)
+            }
+            : MathRun.Radical(radicandText, degree);
     }
 
     /// <summary>

@@ -2561,7 +2561,7 @@ public static class DocxWriter
             new XElement(M + "sub", MathText(run.Sub)),
             new XElement(M + "sup", MathText(run.Sup))),
         MathRunKind.Fraction => BuildFraction(run, depth),
-        MathRunKind.Radical => BuildRadical(run),
+        MathRunKind.Radical => BuildRadical(run, depth),
         MathRunKind.NAry => BuildNAry(run),
         MathRunKind.Accent => BuildAccent(run),
         MathRunKind.Bar => BuildBar(run),
@@ -2598,7 +2598,7 @@ public static class DocxWriter
     /// root carries the degree in m:deg. The radicand is the m:e element. The reader keys off m:degHide
     /// and the m:deg text to recover <see cref="MathRun.Degree"/>.
     /// </summary>
-    private static XElement BuildRadical(MathRun run)
+    private static XElement BuildRadical(MathRun run, int depth)
     {
         var isSquare = string.IsNullOrEmpty(run.Degree);
         var deg = isSquare
@@ -2608,7 +2608,7 @@ public static class DocxWriter
             new XElement(M + "radPr",
                 new XElement(M + "degHide", new XAttribute(M + "val", isSquare ? "1" : "0"))),
             deg,
-            new XElement(M + "e", MathText(run.Base)));
+            BuildMathSlot(M + "e", run.RadicandEquation, run.Base, depth));
     }
 
     /// <summary>

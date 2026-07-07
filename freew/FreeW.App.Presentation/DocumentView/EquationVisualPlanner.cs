@@ -103,6 +103,7 @@ public sealed record EquationVisualElement(
     public string FunctionArgument { get; init; } = string.Empty;
     public EquationVisualPlan? NumeratorPlan { get; init; }
     public EquationVisualPlan? DenominatorPlan { get; init; }
+    public EquationVisualPlan? RadicandPlan { get; init; }
 
     public int MatrixRowCount => MatrixRows.Count;
 
@@ -137,8 +138,12 @@ public sealed record EquationVisualElement(
         string linearText,
         string radicand,
         string degree,
-        IReadOnlyList<EquationVisualSegment> segments) =>
-        new(EquationVisualElementKind.Radical, linearText, segments, string.Empty, string.Empty, radicand, degree);
+        IReadOnlyList<EquationVisualSegment> segments,
+        EquationVisualPlan? radicandPlan = null) =>
+        new(EquationVisualElementKind.Radical, linearText, segments, string.Empty, string.Empty, radicand, degree)
+        {
+            RadicandPlan = radicandPlan
+        };
 
     public static EquationVisualElement NAry(
         string linearText,
@@ -461,7 +466,7 @@ public static class EquationVisualPlanner
                 break;
 
             case MathRunKind.Radical:
-                AddRadicalElement(run, segments, elements);
+                AddRadicalElement(run, segments, elements, depth);
                 break;
 
             case MathRunKind.NAry:
@@ -553,18 +558,27 @@ public static class EquationVisualPlanner
     private static void AddRadicalElement(
         MathRun run,
         List<EquationVisualSegment> segments,
-        List<EquationVisualElement> elements)
+        List<EquationVisualElement> elements,
+        int depth)
     {
+        var radicandPlan = BuildSlotPlan(run.RadicandEquation, depth);
+        var radicandText = radicandPlan?.LinearText ?? run.Base;
+
         var runSegments = new List<EquationVisualSegment>();
         AddIfAny(runSegments, run.Degree, EquationVisualSegmentRole.RadicalDegree, SuperscriptStyle);
         AddIfAny(runSegments, RadicalSignText, EquationVisualSegmentRole.RadicalSign, NormalStyle);
-        AddIfAny(runSegments, run.Base, EquationVisualSegmentRole.RadicalRadicand, StructureStyle);
+        AddIfAny(runSegments, radicandText, EquationVisualSegmentRole.RadicalRadicand, StructureStyle);
 
         if (runSegments.Count == 0)
             return;
 
         segments.AddRange(runSegments);
-        elements.Add(EquationVisualElement.Radical(run.LinearText, run.Base, run.Degree, runSegments));
+        elements.Add(EquationVisualElement.Radical(
+            run.LinearText,
+            radicandText,
+            run.Degree,
+            runSegments,
+            radicandPlan));
     }
 
     private static void AddNAryElement(
