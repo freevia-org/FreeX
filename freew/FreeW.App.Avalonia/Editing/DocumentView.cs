@@ -155,7 +155,8 @@ public sealed class DocumentView : Control
     private readonly List<(string Text, EquationVisualSegmentRole Role, EquationVisualBaselineRole BaselineRole,
         double FontSizeScale, string FontFamily, bool Italic)> _equationVisualSegments = new();
     private readonly List<(EquationVisualElementKind Kind, string LinearText, string Numerator, string Denominator,
-        string Radicand, string Degree)> _equationVisualElements = new();
+        string Radicand, string Degree, string Operator, string LowerLimit, string UpperLimit, string Operand)>
+        _equationVisualElements = new();
     private readonly Dictionary<InlineImage, Bitmap?> _bitmapCache = new();
     private byte[]? _watermarkBitmapCacheBytes;
     private Bitmap? _watermarkBitmapCache;
@@ -2790,7 +2791,8 @@ public sealed class DocumentView : Control
     }
 
     public IReadOnlyList<(EquationVisualElementKind Kind, string LinearText, string Numerator, string Denominator,
-        string Radicand, string Degree)> EquationVisualElements
+        string Radicand, string Degree, string Operator, string LowerLimit, string UpperLimit, string Operand)>
+        EquationVisualElements
     {
         get
         {
@@ -13510,7 +13512,11 @@ public sealed class DocumentView : Control
             element.Numerator,
             element.Denominator,
             element.Radicand,
-            element.Degree));
+            element.Degree,
+            element.Operator,
+            element.LowerLimit,
+            element.UpperLimit,
+            element.Operand));
 
         foreach (var segment in element.Segments)
             AddEquationVisualSegment(segment, baseFormatting, cells);

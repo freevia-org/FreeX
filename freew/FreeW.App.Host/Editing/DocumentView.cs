@@ -9972,6 +9972,7 @@ public sealed class DocumentView : RichTextBox
         {
             EquationVisualElementKind.Fraction => BuildEquationFractionElement(element),
             EquationVisualElementKind.Radical => BuildEquationRadicalElement(element),
+            EquationVisualElementKind.NAry => BuildEquationNAryElement(element),
             _ => BuildEquationTextBlock(element.Segments)
         };
     }
@@ -10048,6 +10049,60 @@ public sealed class DocumentView : RichTextBox
         });
 
         return panel;
+    }
+
+    private static FrameworkElement BuildEquationNAryElement(EquationVisualElement element)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 0, 2, 0),
+            Tag = EquationVisualElementKind.NAry
+        };
+
+        var limits = new Grid
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(1, 0, 1, 0)
+        };
+        limits.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        limits.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        limits.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        AddNAryLimitText(
+            limits,
+            row: 0,
+            SegmentWithRole(element, EquationVisualSegmentRole.NAryUpperLimit),
+            new Thickness(0, 0, 0, -2));
+        AddNAryLimitText(
+            limits,
+            row: 1,
+            SegmentWithRole(element, EquationVisualSegmentRole.NAryOperator),
+            new Thickness(0, -1, 0, -1));
+        AddNAryLimitText(
+            limits,
+            row: 2,
+            SegmentWithRole(element, EquationVisualSegmentRole.NAryLowerLimit),
+            new Thickness(0, -2, 0, 0));
+
+        panel.Children.Add(limits);
+        panel.Children.Add(BuildEquationStructureTextBlock(
+            SegmentWithRole(element, EquationVisualSegmentRole.NAryOperand),
+            WpfTextAlignment.Left,
+            new Thickness(3, 0, 0, 0)));
+
+        return panel;
+    }
+
+    private static void AddNAryLimitText(Grid grid, int row, EquationVisualSegment segment, Thickness margin)
+    {
+        if (segment.Text.Length == 0)
+            return;
+
+        var text = BuildEquationStructureTextBlock(segment, WpfTextAlignment.Center, margin);
+        Grid.SetRow(text, row);
+        grid.Children.Add(text);
     }
 
     private static EquationVisualSegment SegmentWithRole(EquationVisualElement element, EquationVisualSegmentRole role)

@@ -12,6 +12,8 @@ public sealed class EquationVisualPlannerSourceGuardTests
         source.Should().Contain("AddEquationVisualElement");
         source.Should().Contain("ApplyEquationVisualStyle");
         source.Should().Contain("EquationVisualElements");
+        source.Should().Contain("LowerLimit");
+        source.Should().Contain("UpperLimit");
         source.Should().Contain("run.Equation is null");
         source.Should().NotContain("hasInlineEquation");
     }

@@ -694,4 +694,65 @@ public sealed class InsertDepth2Tests
         kinds.Should().Equal(MathRunKind.Fraction, MathRunKind.Radical);
         linearText.Should().Be($"a + b/c3{EquationVisualPlanner.RadicalSignText}(x + 1)");
     }
+
+    [Fact]
+    public async Task EquationVisualPlanner_nary_lays_out_shared_large_operator_structure()
+    {
+        EquationVisualElementKind[] elementKinds = [];
+        (string LinearText, string Operator, string LowerLimit, string UpperLimit, string Operand)[] elementSlots = [];
+        string[] texts = [];
+        EquationVisualSegmentRole[] roles = [];
+        (EquationVisualBaselineRole BaselineRole, double FontSizeScale, bool Italic)[] styles = [];
+        MathRunKind[] kinds = [];
+        var placedText = string.Empty;
+        var linearText = string.Empty;
+        var placedGlyphCount = 0;
+
+        var ran = await OnUiThread(() =>
+        {
+            var view = MakeView("");
+            view.InsertEquation(new Equation([MathRun.NAry("\u2211", "i=1", "n", "i")]));
+
+            var elements = view.EquationVisualElements;
+            elementKinds = elements.Select(element => element.Kind).ToArray();
+            elementSlots = elements
+                .Select(element => (element.LinearText, element.Operator, element.LowerLimit, element.UpperLimit, element.Operand))
+                .ToArray();
+            var segments = view.EquationVisualSegments;
+            texts = segments.Select(segment => segment.Text).ToArray();
+            roles = segments.Select(segment => segment.Role).ToArray();
+            styles = segments
+                .Select(segment => (segment.BaselineRole, segment.FontSizeScale, segment.Italic))
+                .ToArray();
+            placedText = string.Concat(view.GetPlacedForBlock(0).Select(placed => placed.Ch));
+            placedGlyphCount = view.PlacedGlyphCount;
+
+            var eqRun = view.Document.Blocks.OfType<Paragraph>()
+                .SelectMany(p => p.Runs)
+                .Single(run => run.Equation is not null);
+            kinds = eqRun.Equation!.Runs.Select(run => run.Kind).ToArray();
+            linearText = eqRun.Equation!.LinearText;
+        });
+
+        if (!ran) return;
+
+        elementKinds.Should().Equal(EquationVisualElementKind.NAry);
+        elementSlots[0].Should().Be(("\u2211(i=1..n) i", "\u2211", "i=1", "n", "i"));
+        texts.Should().Equal("\u2211", "i=1", "n", "i");
+        roles.Should().Equal(
+            EquationVisualSegmentRole.NAryOperator,
+            EquationVisualSegmentRole.NAryLowerLimit,
+            EquationVisualSegmentRole.NAryUpperLimit,
+            EquationVisualSegmentRole.NAryOperand);
+        styles[0].FontSizeScale.Should().Be(EquationVisualPlanner.LargeOperatorFontSizeScale);
+        styles[0].Italic.Should().BeFalse();
+        styles[1].BaselineRole.Should().Be(EquationVisualBaselineRole.Subscript);
+        styles[2].BaselineRole.Should().Be(EquationVisualBaselineRole.Superscript);
+        styles[3].FontSizeScale.Should().Be(EquationVisualPlanner.StructureFontSizeScale);
+        placedText.Should().Be("\u2211i=1ni");
+        placedGlyphCount.Should().Be(6,
+            "Avalonia should lay out n-ary display segments instead of the raw linear fallback limits");
+        kinds.Should().Equal(MathRunKind.NAry);
+        linearText.Should().Be("\u2211(i=1..n) i");
+    }
 }
