@@ -529,6 +529,106 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
+    public void EquationVisualPlanner_DecoratorsRenderStructuredElementsAndRoundTrip()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var equation = new Equation([
+            MathRun.AccentOf("x", "hat"),
+            MathRun.BarOf("y"),
+            MathRun.BarOf("z", top: false),
+            MathRun.Delimiter("a + b", "[", "]"),
+            MathRun.GroupCharOf("n", "\u23DE", "top"),
+            MathRun.GroupCharOf("m", "\u23DF", "bot")
+        ]);
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var structuredKinds = LogicalDescendants<StackPanel>(view.Document)
+            .Where(panel => panel.Tag is EquationVisualElementKind)
+            .Select(panel => (EquationVisualElementKind)panel.Tag)
+            .ToList();
+        structuredKinds.Should().Contain(EquationVisualElementKind.Accent);
+        structuredKinds.Should().Contain(EquationVisualElementKind.Bar);
+        structuredKinds.Should().Contain(EquationVisualElementKind.Delimiter);
+        structuredKinds.Should().Contain(EquationVisualElementKind.GroupChar);
+
+        var accentPanel = LogicalDescendants<StackPanel>(view.Document)
+            .Single(panel => Equals(panel.Tag, EquationVisualElementKind.Accent));
+        LogicalDescendants<TextBlock>(accentPanel)
+            .Select(TextBlockText)
+            .Where(text => text.Length > 0)
+            .Should().Equal("hat", "x");
+
+        var barPanels = LogicalDescendants<StackPanel>(view.Document)
+            .Where(panel => Equals(panel.Tag, EquationVisualElementKind.Bar))
+            .ToList();
+        barPanels.Should().HaveCount(2);
+        barPanels.Should().OnlyContain(panel => LogicalDescendants<Border>(panel)
+            .Count(border => Math.Abs(border.Height - 1) < 0.01) == 1);
+        LogicalDescendants<TextBlock>(barPanels[0]).Select(TextBlockText).Should().Contain("y");
+        LogicalDescendants<TextBlock>(barPanels[1]).Select(TextBlockText).Should().Contain("z");
+
+        var delimiterPanel = LogicalDescendants<StackPanel>(view.Document)
+            .Single(panel => Equals(panel.Tag, EquationVisualElementKind.Delimiter));
+        LogicalDescendants<TextBlock>(delimiterPanel)
+            .Select(TextBlockText)
+            .Where(text => text.Length > 0)
+            .Should().Equal("[", "a + b", "]");
+
+        var groupPanels = LogicalDescendants<StackPanel>(view.Document)
+            .Where(panel => Equals(panel.Tag, EquationVisualElementKind.GroupChar))
+            .ToList();
+        groupPanels.Should().HaveCount(2);
+        LogicalDescendants<TextBlock>(groupPanels[0])
+            .Select(TextBlockText)
+            .Where(text => text.Length > 0)
+            .Should().Equal("\u23DE", "n");
+        LogicalDescendants<TextBlock>(groupPanels[1])
+            .Select(TextBlockText)
+            .Where(text => text.Length > 0)
+            .Should().Equal("m", "\u23DF");
+
+        var allVisualText = LogicalDescendants<TextBlock>(view.Document)
+            .Select(TextBlockText)
+            .Where(text => text.Length > 0)
+            .ToList();
+        allVisualText.Should().NotContain(equation.Runs[0].LinearText,
+            "accent should render as a stacked mark/base pair instead of raw linear fallback");
+        allVisualText.Should().NotContain(equation.Runs[3].LinearText,
+            "delimiters should render as wrapped segments instead of one raw fallback string");
+
+        view.CommitToModel();
+        var recovered = FirstRun(view.Model);
+        recovered.Equation.Should().NotBeNull();
+        var runs = recovered.Equation!.Runs;
+        runs.Select(run => run.Kind).Should().Equal(
+            MathRunKind.Accent,
+            MathRunKind.Bar,
+            MathRunKind.Bar,
+            MathRunKind.Delimiter,
+            MathRunKind.GroupChar,
+            MathRunKind.GroupChar);
+        runs[0].Base.Should().Be("x");
+        runs[0].Accent.Should().Be("hat");
+        runs[1].Base.Should().Be("y");
+        runs[1].BarTop.Should().BeTrue();
+        runs[2].Base.Should().Be("z");
+        runs[2].BarTop.Should().BeFalse();
+        runs[3].Base.Should().Be("a + b");
+        runs[3].OpenChar.Should().Be("[");
+        runs[3].CloseChar.Should().Be("]");
+        runs[4].GroupChr.Should().Be("\u23DE");
+        runs[4].GroupChrPos.Should().Be("top");
+        runs[5].GroupChr.Should().Be("\u23DF");
+        runs[5].GroupChrPos.Should().Be("bot");
+    }
+
+    [StaFact]
     public void InsertEquation_PlacesStructuredEquationAtCaret()
     {
         var view = new DocumentView();

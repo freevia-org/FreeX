@@ -9974,6 +9974,10 @@ public sealed class DocumentView : RichTextBox
             EquationVisualElementKind.Radical => BuildEquationRadicalElement(element),
             EquationVisualElementKind.NAry => BuildEquationNAryElement(element),
             EquationVisualElementKind.Matrix => BuildEquationMatrixElement(element),
+            EquationVisualElementKind.Accent => BuildEquationAccentElement(element),
+            EquationVisualElementKind.Bar => BuildEquationBarElement(element),
+            EquationVisualElementKind.Delimiter => BuildEquationDelimiterElement(element),
+            EquationVisualElementKind.GroupChar => BuildEquationGroupCharElement(element),
             _ => BuildEquationTextBlock(element.Segments)
         };
     }
@@ -10095,6 +10099,125 @@ public sealed class DocumentView : RichTextBox
 
         return panel;
     }
+
+    private static FrameworkElement BuildEquationAccentElement(EquationVisualElement element)
+    {
+        var stack = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 0, 2, 0),
+            Tag = EquationVisualElementKind.Accent
+        };
+
+        stack.Children.Add(BuildEquationStructureTextBlock(
+            SegmentWithRole(element, EquationVisualSegmentRole.AccentMark),
+            WpfTextAlignment.Center,
+            new Thickness(0, 0, 0, -3)));
+        stack.Children.Add(BuildEquationStructureTextBlock(
+            SegmentWithRole(element, EquationVisualSegmentRole.AccentBase),
+            WpfTextAlignment.Center,
+            new Thickness(0, -3, 0, 0)));
+        return stack;
+    }
+
+    private static FrameworkElement BuildEquationBarElement(EquationVisualElement element)
+    {
+        var stack = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 0, 2, 0),
+            MinWidth = 14,
+            Tag = EquationVisualElementKind.Bar
+        };
+
+        var baseText = BuildEquationStructureTextBlock(
+            SegmentWithRole(element, EquationVisualSegmentRole.BarBase),
+            WpfTextAlignment.Center);
+        if (element.BarTop)
+        {
+            stack.Children.Add(BuildEquationBarLine(new Thickness(0, 0, 0, -1)));
+            stack.Children.Add(baseText);
+        }
+        else
+        {
+            stack.Children.Add(baseText);
+            stack.Children.Add(BuildEquationBarLine(new Thickness(0, -1, 0, 0)));
+        }
+
+        return stack;
+    }
+
+    private static FrameworkElement BuildEquationDelimiterElement(EquationVisualElement element)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(1, 0, 1, 0),
+            Tag = EquationVisualElementKind.Delimiter
+        };
+
+        panel.Children.Add(BuildEquationStructureTextBlock(
+            SegmentWithRole(element, EquationVisualSegmentRole.DelimiterOpen),
+            WpfTextAlignment.Center,
+            new Thickness(1, 0, 1, 0)));
+        panel.Children.Add(BuildEquationStructureTextBlock(
+            SegmentWithRole(element, EquationVisualSegmentRole.DelimiterContent),
+            WpfTextAlignment.Center,
+            new Thickness(1, 0, 1, 0)));
+        panel.Children.Add(BuildEquationStructureTextBlock(
+            SegmentWithRole(element, EquationVisualSegmentRole.DelimiterClose),
+            WpfTextAlignment.Center,
+            new Thickness(1, 0, 1, 0)));
+
+        return panel;
+    }
+
+    private static FrameworkElement BuildEquationGroupCharElement(EquationVisualElement element)
+    {
+        var stack = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 0, 2, 0),
+            Tag = EquationVisualElementKind.GroupChar
+        };
+
+        var mark = BuildEquationStructureTextBlock(
+            SegmentWithRole(element, EquationVisualSegmentRole.GroupCharMark),
+            WpfTextAlignment.Center,
+            new Thickness(0, 0, 0, -3));
+        var baseText = BuildEquationStructureTextBlock(
+            SegmentWithRole(element, EquationVisualSegmentRole.GroupCharBase),
+            WpfTextAlignment.Center,
+            new Thickness(0, -3, 0, 0));
+
+        if (element.GroupCharacterTop)
+        {
+            stack.Children.Add(mark);
+            stack.Children.Add(baseText);
+        }
+        else
+        {
+            baseText.Margin = new Thickness(0, 0, 0, -3);
+            mark.Margin = new Thickness(0, -3, 0, 0);
+            stack.Children.Add(baseText);
+            stack.Children.Add(mark);
+        }
+
+        return stack;
+    }
+
+    private static Border BuildEquationBarLine(Thickness margin) =>
+        new()
+        {
+            Background = Brushes.Black,
+            Height = 1,
+            MinWidth = 14,
+            Margin = margin
+        };
 
     private static FrameworkElement BuildEquationMatrixElement(EquationVisualElement element)
     {
