@@ -48,6 +48,7 @@ public sealed record FreeWVisualEvidenceNormalizedRow(
     FreeWVisualDrawingObjectExpectation DrawingObjects,
     FreeWVisualChartSmartArtExpectation ChartSmartArt,
     FreeWVisualFieldExpectation Fields,
+    FreeWVisualHeaderFooterExpectation HeaderFooters,
     FreeWVisualTableOfAuthoritiesExpectation TableOfAuthorities,
     FreeWVisualProofingDiagnosticExpectation ProofingDiagnostics,
     FreeWVisualEvidenceTrust Trust);
@@ -106,7 +107,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 23;
+    public const int SummarySchemaVersion = 24;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -159,6 +160,16 @@ public static class FreeWVisualEvidenceManifestNormalizer
     [
         "field-page-number-variants",
         "references-heavy-fields"
+    ];
+    public static IReadOnlyList<string> HeaderFooterRendererScenarioIds { get; } =
+    [
+        "f2-hf-basic",
+        "f2-hf-firstpage",
+        "f2-hf-oddeven",
+        "f2-hf-images",
+        "field-page-number-variants",
+        "backstage-print-preview-fidelity",
+        "backstage-pdf-export-fidelity"
     ];
 
     private static readonly string[] ReferencesHeavyRequiredComplexFieldKeywords =
@@ -256,6 +267,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         ValidateSectionGeometryRendererPairs(rows, failures);
         ValidateReviewRendererPairs(rows, failures);
         ValidateFieldRendererPairs(rows, failures);
+        ValidateHeaderFooterRendererPairs(rows, failures);
         ValidateTableRendererPairs(rows, failures);
         ValidateDrawingObjectRendererPairs(rows, failures);
         ValidateWordArtWatermarkRendererPairs(rows, failures);
@@ -664,6 +676,18 @@ public static class FreeWVisualEvidenceManifestNormalizer
                     scenario.ScenarioId,
                     scenario.MinimumExpectedOutputs));
             }
+            else if (HeaderFooterRendererScenarioIds.Contains(scenario.ScenarioId, StringComparer.OrdinalIgnoreCase)
+                && scenario.ExpectedFeatureTags.Contains("header-footer-images", StringComparer.OrdinalIgnoreCase))
+            {
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    WpfHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+                expected.Add(new FreeWVisualEvidenceExpectedScenario(
+                    AvaloniaHostId,
+                    scenario.ScenarioId,
+                    scenario.MinimumExpectedOutputs));
+            }
             else if (scenario.ScenarioId.StartsWith("f2-", StringComparison.OrdinalIgnoreCase))
             {
                 expected.Add(new FreeWVisualEvidenceExpectedScenario(
@@ -1055,6 +1079,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             row.PageExpectation.DrawingObjects,
             row.PageExpectation.ChartSmartArt,
             row.PageExpectation.Fields,
+            row.PageExpectation.HeaderFooters ?? HeaderFooterVisualPlanner.EmptyExpectation,
             row.PageExpectation.TableOfAuthorities,
             row.PageExpectation.ProofingDiagnostics,
             trust);
@@ -1088,11 +1113,25 @@ public static class FreeWVisualEvidenceManifestNormalizer
         ValidateDrawingObjectFeatureTags(row, rowFailures);
         ValidateChartSmartArtFeatureTags(row, rowFailures);
         ValidateFieldFeatureTags(row, rowFailures);
+        ValidateHeaderFooterFeatureTags(row, rowFailures);
         ValidateProofingFeatureTags(row, rowFailures);
         if (features.Section.SectionOrdinal <= 0)
             rowFailures.Add("section ordinal must be positive");
         if (features.Section.SectionRelativePageNumber <= 0)
             rowFailures.Add("section-relative page number must be positive");
+    }
+
+    private static void ValidateHeaderFooterFeatureTags(
+        FreeWVisualEvidenceRow row,
+        List<string> rowFailures)
+    {
+        var tags = row.ExpectedFeatureTags;
+        var headerFooters = row.PageExpectation.HeaderFooters ?? HeaderFooterVisualPlanner.EmptyExpectation;
+        if (tags.Contains("header-footer-images", StringComparer.OrdinalIgnoreCase) && !headerFooters.HasImages)
+        {
+            rowFailures.Add(
+                "scenario expects header/footer image evidence but the page expectation records no header/footer images");
+        }
     }
 
     private static void ValidateReferencesHeavyTableOfAuthoritiesEvidence(
@@ -1822,6 +1861,69 @@ public static class FreeWVisualEvidenceManifestNormalizer
         }
     }
 
+    private static void ValidateHeaderFooterRendererPairs(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,
+        List<string> failures)
+    {
+        foreach (var scenarioId in HeaderFooterRendererScenarioIds)
+        {
+            var wpfRows = TrustedRowsForHostScenario(rows, WpfHostId, scenarioId);
+            var avaloniaRows = TrustedRowsForHostScenario(rows, AvaloniaHostId, scenarioId);
+            if (wpfRows.Count == 0 || avaloniaRows.Count == 0)
+                continue;
+
+            ValidateUniquePages(scenarioId, WpfHostId, wpfRows, failures);
+            ValidateUniquePages(scenarioId, AvaloniaHostId, avaloniaRows, failures);
+
+            var wpfPages = wpfRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var avaloniaPages = avaloniaRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var requiredPages = RequiredScenarioPages(scenarioId);
+            var missingAvaloniaPages = requiredPages.Except(avaloniaPages).ToList();
+            var missingWpfPages = requiredPages.Except(wpfPages).ToList();
+            if (missingAvaloniaPages.Count > 0)
+            {
+                failures.Add(
+                    $"header/footer renderer pair '{scenarioId}' is missing Avalonia page(s): {FormatPages(missingAvaloniaPages)}");
+            }
+
+            if (missingWpfPages.Count > 0)
+            {
+                failures.Add(
+                    $"header/footer renderer pair '{scenarioId}' is missing WPF page(s): {FormatPages(missingWpfPages)}");
+            }
+
+            foreach (var pageNumber in wpfPages.Intersect(avaloniaPages))
+            {
+                var wpf = wpfRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                var avalonia = avaloniaRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                if (wpf is null || avalonia is null)
+                    continue;
+
+                ValidateRendererPairRow("header/footer renderer pair", scenarioId, pageNumber, wpf, avalonia, failures);
+                ValidateRequiredHeaderFooterImageEvidence(scenarioId, pageNumber, wpf, failures);
+                ValidateRequiredHeaderFooterImageEvidence(scenarioId, pageNumber, avalonia, failures);
+                ValidateHeaderFooterPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+            }
+        }
+    }
+
+    private static void ValidateRequiredHeaderFooterImageEvidence(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow row,
+        List<string> failures)
+    {
+        if (!row.ExpectedFeatureTags.Contains("header-footer-images", StringComparer.OrdinalIgnoreCase))
+            return;
+
+        var plan = row.HeaderFooters ?? HeaderFooterVisualPlanner.EmptyExpectation;
+        if (plan.HasImages && plan.ImageCount > 0)
+            return;
+
+        failures.Add(
+            $"header/footer renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)} host '{row.HostId}' expected header/footer image evidence");
+    }
+
     private static void ValidateTableRendererPairs(
         IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,
         List<string> failures)
@@ -2233,6 +2335,70 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{pairName} header/footer field slots differ: WPF '{FormatSummaries(wpfSlots)}', Avalonia '{FormatSummaries(avaloniaSlots)}'");
         }
     }
+
+    private static void ValidateHeaderFooterPairRow(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia,
+        List<string> failures)
+    {
+        var pairName = $"header/footer renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        var wpfPlan = wpf.HeaderFooters ?? HeaderFooterVisualPlanner.EmptyExpectation;
+        var avaloniaPlan = avalonia.HeaderFooters ?? HeaderFooterVisualPlanner.EmptyExpectation;
+
+        if (wpfPlan.SlotCount != avaloniaPlan.SlotCount)
+        {
+            failures.Add(
+                $"{pairName} slot counts differ: WPF {wpfPlan.SlotCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaPlan.SlotCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (wpfPlan.ImageCount != avaloniaPlan.ImageCount)
+        {
+            failures.Add(
+                $"{pairName} header/footer image counts differ: WPF {wpfPlan.ImageCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaPlan.ImageCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        var wpfSlots = OrderedSummaries(wpfPlan.SlotNames ?? []);
+        var avaloniaSlots = OrderedSummaries(avaloniaPlan.SlotNames ?? []);
+        if (!wpfSlots.SequenceEqual(avaloniaSlots, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} header/footer slot names differ: WPF '{FormatSummaries(wpfSlots)}', Avalonia '{FormatSummaries(avaloniaSlots)}'");
+        }
+
+        var wpfImageSignatures = OrderedSummaries(wpfPlan.ImageSignatures ?? []);
+        var avaloniaImageSignatures = OrderedSummaries(avaloniaPlan.ImageSignatures ?? []);
+        if (!wpfImageSignatures.SequenceEqual(avaloniaImageSignatures, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} header/footer image signatures differ: WPF '{FormatSummaries(wpfImageSignatures)}', Avalonia '{FormatSummaries(avaloniaImageSignatures)}'");
+        }
+
+        var wpfSlotSignatures = BuildHeaderFooterSlotSignatures(wpfPlan.Slots ?? []);
+        var avaloniaSlotSignatures = BuildHeaderFooterSlotSignatures(avaloniaPlan.Slots ?? []);
+        if (!wpfSlotSignatures.SequenceEqual(avaloniaSlotSignatures, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} header/footer slot image summaries differ: WPF '{FormatSummaries(wpfSlotSignatures)}', Avalonia '{FormatSummaries(avaloniaSlotSignatures)}'");
+        }
+    }
+
+    private static IReadOnlyList<string> BuildHeaderFooterSlotSignatures(
+        IReadOnlyList<FreeWVisualHeaderFooterSlotPlan> slots) =>
+        slots
+            .Select(slot => string.Join(
+                "|",
+                $"slot={slot.SlotName}",
+                $"section={slot.SectionOrdinal.ToString(CultureInfo.InvariantCulture)}",
+                $"sectionPage={slot.SectionRelativePageNumber.ToString(CultureInfo.InvariantCulture)}",
+                $"page={slot.PageNumber.ToString(CultureInfo.InvariantCulture)}",
+                $"footer={BoolFlag(slot.IsFooter)}",
+                $"align={slot.Alignment}",
+                $"images={slot.ImageCount.ToString(CultureInfo.InvariantCulture)}",
+                $"signatures={string.Join(",", OrderedSummaries(slot.ImageSignatures ?? []))}"))
+            .OrderBy(signature => signature, StringComparer.Ordinal)
+            .ToList();
 
     private static void ValidateReviewProofingPairRow(
         string scenarioId,
@@ -3057,6 +3223,12 @@ public static class FreeWVisualEvidenceManifestNormalizer
             parts.Add(
                 $"{row.ChartSmartArt.ChartCount.ToString(CultureInfo.InvariantCulture)} chart(s), " +
                 $"{row.ChartSmartArt.SmartArtCount.ToString(CultureInfo.InvariantCulture)} SmartArt");
+        }
+        if (row.HeaderFooters.ImageCount > 0)
+        {
+            parts.Add(
+                $"{row.HeaderFooters.ImageCount.ToString(CultureInfo.InvariantCulture)} header/footer image(s), " +
+                $"{row.HeaderFooters.SlotCount.ToString(CultureInfo.InvariantCulture)} slot(s)");
         }
         if (row.ProofingDiagnostics.DiagnosticCount > 0)
         {

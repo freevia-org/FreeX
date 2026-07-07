@@ -15,6 +15,7 @@ public sealed class VisualEvidencePlannerTests
             "f2-hf-basic",
             "f2-hf-firstpage",
             "f2-hf-oddeven",
+            "f2-hf-images",
             "field-page-number-variants",
             "references-heavy-fields",
             "f2-footnotes",
@@ -98,6 +99,12 @@ public sealed class VisualEvidencePlannerTests
 
         var floatingScenario = FreeWVisualEvidencePlanner.ResolveScenario("page-composition-floating-image");
         floatingScenario.Composition.ExpectsFloatingObjects.Should().BeTrue();
+
+        var hfImageScenario = FreeWVisualEvidencePlanner.ResolveScenario("f2-hf-images");
+        hfImageScenario.ExpectedFeatureTags.Should().Contain(["header-footer", "header-footer-images", "multi-section"]);
+        hfImageScenario.ExpectedOutputNamePattern.Should().Be("f2-hf-images_p{page}.png");
+        hfImageScenario.MinimumExpectedOutputs.Should().Be(2);
+        hfImageScenario.Composition.ExpectsHeadersFooters.Should().BeTrue();
 
         var previewScenario = FreeWVisualEvidencePlanner.ResolveScenario("backstage-print-preview-fidelity");
         previewScenario.ExpectedFeatureTags.Should().Contain(["backstage", "print-preview", "fixed-layout", "header-footer", "columns", "page-border", "watermark"]);
@@ -820,6 +827,29 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void DefaultExpectedScenarios_RequiresPairedHeaderFooterImageEvidence()
+    {
+        var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
+        var imageScenarioIds = FreeWVisualEvidenceManifestNormalizer.HeaderFooterRendererScenarioIds
+            .Where(scenarioId => FreeWVisualEvidencePlanner
+                .ResolveScenario(scenarioId)
+                .ExpectedFeatureTags
+                .Contains("header-footer-images", StringComparer.OrdinalIgnoreCase));
+
+        foreach (var scenarioId in imageScenarioIds)
+        {
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
+            expected.Should().Contain(e =>
+                e.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId &&
+                e.ScenarioId == scenarioId &&
+                e.MinimumExpectedOutputs == FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
+        }
+    }
+
+    [Fact]
     public void DefaultExpectedScenarios_RequiresPairedTableRendererEvidence()
     {
         var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
@@ -903,10 +933,11 @@ public sealed class VisualEvidencePlannerTests
 
             plan.WordApplicationProgId.Should().Be("Word.Application");
             plan.MaxPagesPerDocument.Should().Be(3);
-            plan.ExpectedFixtureCount.Should().Be(23);
-            plan.ExpectedBaselinePngCount.Should().Be(69);
+            plan.ExpectedFixtureCount.Should().Be(24);
+            plan.ExpectedBaselinePngCount.Should().Be(72);
             plan.Fixtures.Select(f => f.DocumentName).Should().Contain([
                 "f2-hf-basic.docx",
+                "f2-hf-images.docx",
                 "field-page-number-variants.docx",
                 "references-heavy-fields.docx",
                 "review-proofing-visual-depth.docx",
@@ -932,6 +963,8 @@ public sealed class VisualEvidencePlannerTests
                 .ExpectedBaselinePaths.Should().Contain("field-page-number-variants/field-page-number-variants_p1.png");
             plan.Fixtures.Single(f => f.ScenarioId == "references-heavy-fields")
                 .ExpectedBaselinePaths.Should().Contain("references-heavy-fields/references-heavy-fields_p2.png");
+            plan.Fixtures.Single(f => f.ScenarioId == "f2-hf-images")
+                .ExpectedBaselinePaths.Should().Contain("f2-hf-images/f2-hf-images_p2.png");
             plan.Fixtures.Single(f => f.ScenarioId == "review-proofing-visual-depth")
                 .ExpectedBaselinePaths.Should().Contain("review-proofing-visual-depth/review-proofing-visual-depth_p1.png");
             plan.Fixtures.Single(f => f.ScenarioId == "object-format-position-size-style")
@@ -1117,6 +1150,45 @@ public sealed class VisualEvidencePlannerTests
         expectation.Fields.HasComplexFields.Should().BeTrue();
         expectation.Fields.HasHeaderFooterFields.Should().BeTrue();
         expectation.Fields.ComplexFieldKeywords.Should().Contain(["PAGE", "NUMPAGES", "TITLE", "AUTHOR"]);
+    }
+
+    [Fact]
+    public void BuildPageExpectation_RecordsSharedHeaderFooterImageEvidence()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildMultiSectionHeaderFooterImageDocument();
+
+        var page1 = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "f2-hf-images",
+            document.Page,
+            pageNumber: 1,
+            pageCount: 2,
+            outputName: "f2-hf-images_p1.png",
+            headerSlotName: "header",
+            document: document);
+        var page2 = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "f2-hf-images",
+            document.Page,
+            pageNumber: 2,
+            pageCount: 2,
+            outputName: "f2-hf-images_p2.png",
+            headerSlotName: "header",
+            document: document);
+
+        page1.HeaderFooters.HasImages.Should().BeTrue();
+        page1.HeaderFooters.ImageCount.Should().Be(1);
+        page1.HeaderFooters.SlotNames.Should().Contain("header");
+        page1.HeaderFooters.ImageSignatures.Single().Should().Contain("section=1");
+        page1.HeaderFooters.ImageSignatures.Single().Should().Contain("slot=header");
+        page1.HeaderFooters.ImageSignatures.Single().Should().Contain("alt=Section One Letterhead");
+        page1.HeaderFooters.Slots.Single().Lines.Single().Runs
+            .Should().Contain(run => run.Kind == HeaderFooterVisualPlanner.ImageRunKind
+                && run.WidthDip > 0
+                && run.HeightDip > 0);
+
+        page2.HeaderFooters.ImageCount.Should().Be(1);
+        page2.HeaderFooters.ImageSignatures.Single().Should().Contain("section=2");
+        page2.HeaderFooters.ImageSignatures.Single().Should().Contain("align=Right");
+        page2.HeaderFooters.ImageSignatures.Single().Should().Contain("alt=Section Two Letterhead");
     }
 
     [Fact]
@@ -2466,6 +2538,142 @@ public sealed class VisualEvidencePlannerTests
                 f.Contains("field renderer pair 'field-page-number-variants' page 2", StringComparison.Ordinal)
                 && f.Contains("complex field keywords differ", StringComparison.Ordinal)
                 && f.Contains("TITLE", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RequiresMatchingHeaderFooterImageEvidence()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "f2-hf-images";
+            var wpfRows = Enumerable.Range(1, 2)
+                .Select(page => BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                    scenarioId,
+                    page,
+                    pageCount: 2))
+                .ToList();
+            var avaloniaRows = Enumerable.Range(1, 2)
+                .Select(page => BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        page,
+                        pageCount: 2))
+                .ToList();
+            avaloniaRows[0] = avaloniaRows[0] with
+            {
+                PageExpectation = avaloniaRows[0].PageExpectation with
+                {
+                    HeaderFooters = avaloniaRows[0].PageExpectation.HeaderFooters with
+                    {
+                        ImageSignatures = ["slot=header|section=1|page=1|image=missing"]
+                    }
+                }
+            };
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                wpfRows,
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                avaloniaRows,
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        2),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        2)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("header/footer renderer pair 'f2-hf-images' page 1", StringComparison.Ordinal)
+                && f.Contains("header/footer image signatures differ", StringComparison.Ordinal)
+                && f.Contains("image=missing", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RejectsHeaderFooterImageScenarioWithoutImages()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "f2-hf-images";
+            var wpfRows = Enumerable.Range(1, 2)
+                .Select(page => RemoveHeaderFooterImages(BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                    scenarioId,
+                    page,
+                    pageCount: 2)))
+                .ToList();
+            var avaloniaRows = Enumerable.Range(1, 2)
+                .Select(page => RemoveHeaderFooterImages(BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                    scenarioId,
+                    page,
+                    pageCount: 2)))
+                .ToList();
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                wpfRows,
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                avaloniaRows,
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        2),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        2)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("scenario expects header/footer image evidence", StringComparison.Ordinal));
         }
         finally
         {
@@ -4627,6 +4835,15 @@ public sealed class VisualEvidencePlannerTests
             }
         };
 
+    private static FreeWVisualEvidenceRow RemoveHeaderFooterImages(FreeWVisualEvidenceRow row) =>
+        row with
+        {
+            PageExpectation = row.PageExpectation with
+            {
+                HeaderFooters = HeaderFooterVisualPlanner.EmptyExpectation
+            }
+        };
+
     private static FreeWVisualEvidenceRow BuildFileBackedRow(
         string root,
         string hostId,
@@ -4718,6 +4935,7 @@ public sealed class VisualEvidencePlannerTests
         {
             "f2-footnotes" => FreeWVisualEvidenceDocumentFactory.BuildFootnotePlacementDocument(),
             "f2-endnotes" => FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument(),
+            "f2-hf-images" => FreeWVisualEvidenceDocumentFactory.BuildMultiSectionHeaderFooterImageDocument(),
             "field-page-number-variants" => FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument(),
             "references-heavy-fields" => FreeWVisualEvidenceDocumentFactory.BuildReferencesHeavyFieldDocument(),
             "f2-tracked-changes" => FreeWVisualEvidenceDocumentFactory.BuildTrackedChangesReviewDocument(),

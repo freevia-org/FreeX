@@ -278,6 +278,7 @@ public sealed record FreeWVisualPageExpectation(
     FreeWVisualDrawingObjectExpectation DrawingObjects,
     FreeWVisualChartSmartArtExpectation ChartSmartArt,
     FreeWVisualFieldExpectation Fields,
+    FreeWVisualHeaderFooterExpectation HeaderFooters,
     FreeWVisualTableOfAuthoritiesExpectation TableOfAuthorities,
     FreeWVisualProofingDiagnosticExpectation ProofingDiagnostics,
     string? HeaderSlotName,
@@ -353,7 +354,7 @@ public static class FreeWVisualEvidencePlanner
 {
     public const string ManifestFileName = "freew_visual_evidence_manifest.json";
     public const string SchemaId = "freew.visual-evidence.v1";
-    public const int SchemaVersion = 15;
+    public const int SchemaVersion = 16;
     public const string SectionGeometryPageSurfaceRenderStatus = "section-page-surface";
 
     private const int MaxTrackedColorCount = 4096;
@@ -414,6 +415,14 @@ public static class FreeWVisualEvidencePlanner
             "F2 odd/even header/footer page composition.",
             ["f2", "page-composition", "print-layout", "header-footer", "odd-even-pages", "multi-page", "body-text"],
             "f2-hf-oddeven_p{page}.png",
+            2,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition with { ExpectsHeadersFooters = true }),
+        new(
+            "f2-hf-images",
+            "F2 multi-section header image page composition.",
+            ["f2", "page-composition", "print-layout", "header-footer", "header-footer-images", "multi-section", "body-text"],
+            "f2-hf-images_p{page}.png",
             2,
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition with { ExpectsHeadersFooters = true }),
@@ -932,6 +941,7 @@ public static class FreeWVisualEvidencePlanner
         var drawingObjects = BuildDrawingObjectExpectation(document, surface, features.Columns.Count);
         var chartSmartArt = BuildChartSmartArtExpectation(document);
         var fields = BuildFieldExpectation(document);
+        var headerFooters = BuildHeaderFooterExpectation(document, pageNumber, pageCount);
         var tableOfAuthorities = BuildTableOfAuthoritiesExpectation(document);
         var proofingDiagnostics = BuildProofingDiagnosticExpectation(document);
 
@@ -948,6 +958,7 @@ public static class FreeWVisualEvidencePlanner
             drawingObjects,
             chartSmartArt,
             fields,
+            headerFooters,
             tableOfAuthorities,
             proofingDiagnostics,
             headerSlotName,
@@ -956,6 +967,13 @@ public static class FreeWVisualEvidencePlanner
             hasEndnotes,
             isSyntheticPage);
     }
+
+    public static FreeWVisualHeaderFooterExpectation BuildHeaderFooterExpectation(
+        TextDocument? document,
+        int pageNumber,
+        int pageCount,
+        IReadOnlyList<int>? blockPageAssignments = null) =>
+        HeaderFooterVisualPlanner.BuildExpectation(document, pageNumber, pageCount, blockPageAssignments);
 
     public static FreeWVisualPageFeatureExpectation BuildPageFeatures(
         PageSettings page,
