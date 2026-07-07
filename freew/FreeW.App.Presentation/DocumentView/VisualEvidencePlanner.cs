@@ -138,6 +138,19 @@ public sealed record FreeWVisualTableExpectation(
     IReadOnlyList<DocumentTableLayoutPlan> Tables,
     IReadOnlyList<DocumentTablePaginationPlan> PaginationPlans);
 
+public sealed record FreeWVisualDrawingObjectGroupChildExpectation(
+    int ChildCount,
+    int ImageChildCount,
+    int ShapeChildCount,
+    int ChartChildCount,
+    int SmartArtChildCount,
+    int WordArtChildCount,
+    IReadOnlyList<string> ChildKindSummaries,
+    IReadOnlyList<string> ChildVisualSignatures)
+{
+    public bool HasMixedTypedChildren => ImageChildCount > 0 && ChartChildCount > 0 && SmartArtChildCount > 0;
+}
+
 public sealed record FreeWVisualDrawingObjectExpectation(
     int FloatingObjectCount,
     int BehindTextCount,
@@ -153,6 +166,7 @@ public sealed record FreeWVisualDrawingObjectExpectation(
     bool HasZOrder,
     int AltTextObjectCount,
     IReadOnlyList<string> AltTextSummaries,
+    FreeWVisualDrawingObjectGroupChildExpectation GroupChildren,
     FreeWVisualDrawingObjectEffectExpectation Effects,
     IReadOnlyList<DocumentFloatingObjectSnapshot> Objects);
 
@@ -679,6 +693,11 @@ public static class FreeWVisualEvidencePlanner
                 "grouped-child-effects",
                 "grouped-child-shape-effects",
                 "grouped-child-wordart-effects",
+                "grouped-mixed-children",
+                "grouped-child-images",
+                "grouped-child-charts",
+                "grouped-child-smartart",
+                "grouped-child-visual-signature",
                 "shadow",
                 "glow",
                 "reflection",
@@ -1336,6 +1355,7 @@ public static class FreeWVisualEvidencePlanner
             HasZOrder: objects.Select(o => o.ZOrderIndex).Distinct().Count() > 1,
             AltTextObjectCount: altTextSummaries.Count,
             AltTextSummaries: altTextSummaries,
+            GroupChildren: BuildDrawingObjectGroupChildExpectation(document, objects),
             Effects: BuildDrawingObjectEffectExpectation(document, objects),
             Objects: objects);
     }
@@ -1367,6 +1387,110 @@ public static class FreeWVisualEvidencePlanner
             .OrderBy(summary => summary, StringComparer.Ordinal)
             .ToList();
     }
+
+    private static FreeWVisualDrawingObjectGroupChildExpectation BuildDrawingObjectGroupChildExpectation(
+        TextDocument document,
+        IReadOnlyList<DocumentFloatingObjectSnapshot> objects)
+    {
+        var kindSummaries = new List<string>();
+        var visualSignatures = new List<string>();
+        var imageChildren = 0;
+        var shapeChildren = 0;
+        var chartChildren = 0;
+        var smartArtChildren = 0;
+        var wordArtChildren = 0;
+        var groupOrdinal = 0;
+
+        foreach (var snapshot in objects.Where(o => o.Kind == DocumentFloatingObjectKind.Group))
+        {
+            if (!TryGetRun(document, snapshot, out var run) || run.DrawingGroup is not { } group)
+                continue;
+
+            var groupPlan = DrawingObjectVisualPlanner.BuildVisualPlan(group, snapshot);
+            foreach (var child in groupPlan.GroupChildren)
+            {
+                switch (child.Visual.Kind)
+                {
+                    case DrawingObjectVisualKind.Image:
+                        imageChildren++;
+                        break;
+                    case DrawingObjectVisualKind.Shape:
+                        shapeChildren++;
+                        break;
+                    case DrawingObjectVisualKind.Chart:
+                        chartChildren++;
+                        break;
+                    case DrawingObjectVisualKind.SmartArt:
+                        smartArtChildren++;
+                        break;
+                    case DrawingObjectVisualKind.WordArt:
+                        wordArtChildren++;
+                        break;
+                }
+
+                kindSummaries.Add(BuildGroupChildKindSummary(groupOrdinal, child));
+                visualSignatures.Add(BuildGroupChildVisualSignature(groupOrdinal, child));
+            }
+
+            groupOrdinal++;
+        }
+
+        return new FreeWVisualDrawingObjectGroupChildExpectation(
+            kindSummaries.Count,
+            imageChildren,
+            shapeChildren,
+            chartChildren,
+            smartArtChildren,
+            wordArtChildren,
+            kindSummaries,
+            visualSignatures);
+    }
+
+    private static string BuildGroupChildKindSummary(
+        int groupOrdinal,
+        DrawingObjectGroupChildVisualPlan child) =>
+        "Group"
+        + groupOrdinal.ToString(CultureInfo.InvariantCulture)
+        + "Child"
+        + child.ChildIndex.ToString(CultureInfo.InvariantCulture)
+        + ":"
+        + child.Visual.Kind;
+
+    private static string BuildGroupChildVisualSignature(
+        int groupOrdinal,
+        DrawingObjectGroupChildVisualPlan child)
+    {
+        var prefix = BuildGroupChildKindSummary(groupOrdinal, child);
+        return child.Visual.Kind switch
+        {
+            DrawingObjectVisualKind.Image when child.Visual.Image is { } image =>
+                prefix
+                + ":format=" + image.Format
+                + ";bytes=" + image.ByteLength.ToString(CultureInfo.InvariantCulture)
+                + ";crop=" + EvidenceBool(image.HasCrop)
+                + ";adjustments=" + EvidenceBool(image.HasAdjustments)
+                + ";recolor=" + EvidenceBool(image.HasRecolor)
+                + ";effects=" + EvidenceBool(image.HasEffects)
+                + ";artistic=" + EvidenceBool(image.HasArtisticEffect),
+            DrawingObjectVisualKind.Chart when child.Visual.Chart is { } chart =>
+                prefix + ":" + ChartSmartArtVisualPlanner.BuildChartVisualSignature(chart),
+            DrawingObjectVisualKind.SmartArt when child.Visual.SmartArt is { } smartArt =>
+                prefix + ":" + ChartSmartArtVisualPlanner.BuildSmartArtVisualSignature(smartArt),
+            _ =>
+                prefix
+                + ":rect="
+                + EvidenceDouble(child.Visual.Rect.WidthDip)
+                + "x"
+                + EvidenceDouble(child.Visual.Rect.HeightDip)
+                + ";effects="
+                + child.Visual.Effects.Summary.Replace(", ", "+", StringComparison.Ordinal)
+        };
+    }
+
+    private static string EvidenceBool(bool value) => value ? "1" : "0";
+
+    private static string EvidenceDouble(double value) =>
+        value.ToString("0.###", CultureInfo.InvariantCulture);
 
     private static FreeWVisualDrawingObjectEffectExpectation BuildDrawingObjectEffectExpectation(
         TextDocument document,
@@ -2062,6 +2186,15 @@ public static class FreeWVisualEvidencePlanner
         HasZOrder: false,
         AltTextObjectCount: 0,
         AltTextSummaries: [],
+        GroupChildren: new FreeWVisualDrawingObjectGroupChildExpectation(
+            ChildCount: 0,
+            ImageChildCount: 0,
+            ShapeChildCount: 0,
+            ChartChildCount: 0,
+            SmartArtChildCount: 0,
+            WordArtChildCount: 0,
+            ChildKindSummaries: [],
+            ChildVisualSignatures: []),
         Effects: new FreeWVisualDrawingObjectEffectExpectation(
             EffectObjectCount: 0,
             ShapeEffectObjectCount: 0,

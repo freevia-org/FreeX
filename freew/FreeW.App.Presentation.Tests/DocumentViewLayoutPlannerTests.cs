@@ -845,6 +845,13 @@ public sealed class DocumentViewLayoutPlannerSourceGuardTests
         hostSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingObjectSnapshots(");
         hostSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(");
         hostSource.Should().Contain("DrawingObjectVisualPlanner.BuildVisualPlan(");
+        hostSource.Should().Contain("BuildGroupPlannedChildVisual(");
+        hostSource.Should().Contain("DrawingObjectVisualKind.Image when child is InlineImage image");
+        hostSource.Should().Contain("BuildFloatingImageVisual(image, plan.Rect, enableSelection: false)");
+        hostSource.Should().Contain("DrawingObjectVisualKind.Chart when child is Chart chart");
+        hostSource.Should().Contain("BuildFloatingChartVisual(chart, plan.Rect, enableSelection: false)");
+        hostSource.Should().Contain("DrawingObjectVisualKind.SmartArt when child is SmartArt smartArt");
+        hostSource.Should().Contain("BuildFloatingSmartArtVisual(smartArt, plan.Rect, enableSelection: false)");
 
         avaloniaSource.Should().Contain("using FreeW.App.Presentation.DocumentView;");
         avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildSurfacePlan(");

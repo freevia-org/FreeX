@@ -4,8 +4,11 @@ namespace FreeW.App.Presentation.DocumentView;
 
 public enum DrawingObjectVisualKind
 {
+    Image,
     Shape,
+    Chart,
     WordArt,
+    SmartArt,
     Group
 }
 
@@ -119,6 +122,15 @@ public sealed record DrawingObjectInlineWordArtPlan(
     DrawingObjectWordArtPlan WordArt,
     DrawingObjectEffectsPlan Effects);
 
+public sealed record DrawingObjectImagePlan(
+    ImageFormat Format,
+    int ByteLength,
+    bool HasCrop,
+    bool HasAdjustments,
+    bool HasRecolor,
+    bool HasEffects,
+    bool HasArtisticEffect);
+
 public sealed record DrawingObjectGroupChildVisualPlan(
     int ChildIndex,
     double OffsetXDip,
@@ -141,7 +153,10 @@ public sealed record DrawingObjectVisualPlan(
     DrawingObjectTextPlan? Text,
     DrawingObjectWordArtPlan? WordArt,
     DrawingObjectEffectsPlan Effects,
-    IReadOnlyList<DrawingObjectGroupChildVisualPlan> GroupChildren);
+    IReadOnlyList<DrawingObjectGroupChildVisualPlan> GroupChildren,
+    DrawingObjectImagePlan? Image,
+    ChartVisualPlan? Chart,
+    SmartArtVisualPlan? SmartArt);
 
 public static class DrawingObjectVisualPlanner
 {
@@ -170,7 +185,10 @@ public static class DrawingObjectVisualPlanner
             shape.HasText ? new DrawingObjectTextPlan(shape.PlainText, shape.TextDirection) : null,
             WordArt: null,
             Effects: BuildEffectsPlan(shape.Effects),
-            GroupChildren: []);
+            GroupChildren: [],
+            Image: null,
+            Chart: null,
+            SmartArt: null);
     }
 
     public static DrawingObjectVisualPlan BuildVisualPlan(
@@ -197,7 +215,97 @@ public static class DrawingObjectVisualPlanner
             Text: null,
             WordArt: inlinePlan.WordArt,
             Effects: inlinePlan.Effects,
-            GroupChildren: []);
+            GroupChildren: [],
+            Image: null,
+            Chart: null,
+            SmartArt: null);
+    }
+
+    public static DrawingObjectVisualPlan BuildVisualPlan(
+        InlineImage image,
+        DocumentFloatingObjectSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        return new DrawingObjectVisualPlan(
+            DrawingObjectVisualKind.Image,
+            snapshot.Rect,
+            snapshot.Wrapping,
+            snapshot.ZOrderIndex,
+            snapshot.BehindText,
+            image.RotationAngle,
+            image.FlipH,
+            image.FlipV,
+            GeometryKind: null,
+            CustomGeometry: null,
+            Fill: DrawingObjectFillPlan.None,
+            Outline: new DrawingObjectOutlinePlan(false, null, 0, null),
+            Text: null,
+            WordArt: null,
+            Effects: DrawingObjectEffectsPlan.None,
+            GroupChildren: [],
+            Image: BuildImagePlan(image),
+            Chart: null,
+            SmartArt: null);
+    }
+
+    public static DrawingObjectVisualPlan BuildVisualPlan(
+        Chart chart,
+        DocumentFloatingObjectSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(chart);
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        return new DrawingObjectVisualPlan(
+            DrawingObjectVisualKind.Chart,
+            snapshot.Rect,
+            snapshot.Wrapping,
+            snapshot.ZOrderIndex,
+            snapshot.BehindText,
+            RotationAngle: 0,
+            FlipH: false,
+            FlipV: false,
+            GeometryKind: null,
+            CustomGeometry: null,
+            Fill: DrawingObjectFillPlan.None,
+            Outline: new DrawingObjectOutlinePlan(false, null, 0, null),
+            Text: null,
+            WordArt: null,
+            Effects: DrawingObjectEffectsPlan.None,
+            GroupChildren: [],
+            Image: null,
+            Chart: ChartSmartArtVisualPlanner.BuildChartPlan(chart),
+            SmartArt: null);
+    }
+
+    public static DrawingObjectVisualPlan BuildVisualPlan(
+        SmartArt smartArt,
+        DocumentFloatingObjectSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(smartArt);
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        return new DrawingObjectVisualPlan(
+            DrawingObjectVisualKind.SmartArt,
+            snapshot.Rect,
+            snapshot.Wrapping,
+            snapshot.ZOrderIndex,
+            snapshot.BehindText,
+            RotationAngle: 0,
+            FlipH: false,
+            FlipV: false,
+            GeometryKind: null,
+            CustomGeometry: null,
+            Fill: DrawingObjectFillPlan.None,
+            Outline: new DrawingObjectOutlinePlan(false, null, 0, null),
+            Text: null,
+            WordArt: null,
+            Effects: DrawingObjectEffectsPlan.None,
+            GroupChildren: [],
+            Image: null,
+            Chart: null,
+            SmartArt: ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt));
     }
 
     public static DrawingObjectInlineWordArtPlan BuildInlineWordArtPlan(WordArt wordArt)
@@ -226,8 +334,11 @@ public static class DrawingObjectVisualPlanner
             var child = group.Children[childSnapshot.ChildIndex];
             DrawingObjectVisualPlan? childPlan = child switch
             {
+                InlineImage image => BuildVisualPlan(image, ChildSnapshot(snapshot, childSnapshot, image)),
                 Shape shape => BuildVisualPlan(shape, ChildSnapshot(snapshot, childSnapshot, shape)),
+                Chart chart => BuildVisualPlan(chart, ChildSnapshot(snapshot, childSnapshot, chart)),
                 WordArt wordArt => BuildVisualPlan(wordArt, ChildSnapshot(snapshot, childSnapshot, wordArt)),
+                SmartArt smartArt => BuildVisualPlan(smartArt, ChildSnapshot(snapshot, childSnapshot, smartArt)),
                 _ => null
             };
 
@@ -257,8 +368,27 @@ public static class DrawingObjectVisualPlanner
             Text: null,
             WordArt: null,
             Effects: DrawingObjectEffectsPlan.None,
-            GroupChildren: children);
+            GroupChildren: children,
+            Image: null,
+            Chart: null,
+            SmartArt: null);
     }
+
+    private static DocumentFloatingObjectSnapshot ChildSnapshot(
+        DocumentFloatingObjectSnapshot groupSnapshot,
+        DocumentFloatingGroupChildSnapshot childSnapshot,
+        InlineImage image) =>
+        new(
+            DocumentFloatingObjectKind.Image,
+            groupSnapshot.BlockIndex,
+            groupSnapshot.RunIndex,
+            childSnapshot.Rect,
+            groupSnapshot.BehindText,
+            groupSnapshot.ZOrderIndex,
+            groupSnapshot.Wrapping,
+            image.RotationAngle,
+            image.FlipH,
+            image.FlipV);
 
     private static DocumentFloatingObjectSnapshot ChildSnapshot(
         DocumentFloatingObjectSnapshot groupSnapshot,
@@ -279,9 +409,35 @@ public static class DrawingObjectVisualPlanner
     private static DocumentFloatingObjectSnapshot ChildSnapshot(
         DocumentFloatingObjectSnapshot groupSnapshot,
         DocumentFloatingGroupChildSnapshot childSnapshot,
+        Chart _) =>
+        new(
+            DocumentFloatingObjectKind.Chart,
+            groupSnapshot.BlockIndex,
+            groupSnapshot.RunIndex,
+            childSnapshot.Rect,
+            groupSnapshot.BehindText,
+            groupSnapshot.ZOrderIndex,
+            groupSnapshot.Wrapping);
+
+    private static DocumentFloatingObjectSnapshot ChildSnapshot(
+        DocumentFloatingObjectSnapshot groupSnapshot,
+        DocumentFloatingGroupChildSnapshot childSnapshot,
         WordArt _) =>
         new(
             DocumentFloatingObjectKind.WordArt,
+            groupSnapshot.BlockIndex,
+            groupSnapshot.RunIndex,
+            childSnapshot.Rect,
+            groupSnapshot.BehindText,
+            groupSnapshot.ZOrderIndex,
+            groupSnapshot.Wrapping);
+
+    private static DocumentFloatingObjectSnapshot ChildSnapshot(
+        DocumentFloatingObjectSnapshot groupSnapshot,
+        DocumentFloatingGroupChildSnapshot childSnapshot,
+        SmartArt _) =>
+        new(
+            DocumentFloatingObjectKind.SmartArt,
             groupSnapshot.BlockIndex,
             groupSnapshot.RunIndex,
             childSnapshot.Rect,
@@ -385,6 +541,16 @@ public static class DrawingObjectVisualPlanner
             outline,
             bold);
     }
+
+    private static DrawingObjectImagePlan BuildImagePlan(InlineImage image) =>
+        new(
+            image.Format,
+            image.Bytes.Length,
+            image.HasCrop,
+            image.HasAdjustments,
+            image.HasRecolor,
+            image.HasEffects,
+            image.HasArtisticEffect);
 
     private static DrawingObjectEffectsPlan BuildWordArtEffectsPlan(WordArtStyle style) =>
         style switch

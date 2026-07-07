@@ -1379,6 +1379,25 @@ public sealed class VisualEvidencePlannerTests
             "SmartArt",
             "WordArt",
             "Group"]);
+        expectation.DrawingObjects.GroupChildren.ChildCount.Should().Be(5);
+        expectation.DrawingObjects.GroupChildren.ImageChildCount.Should().Be(1);
+        expectation.DrawingObjects.GroupChildren.ShapeChildCount.Should().Be(1);
+        expectation.DrawingObjects.GroupChildren.ChartChildCount.Should().Be(1);
+        expectation.DrawingObjects.GroupChildren.SmartArtChildCount.Should().Be(1);
+        expectation.DrawingObjects.GroupChildren.WordArtChildCount.Should().Be(1);
+        expectation.DrawingObjects.GroupChildren.HasMixedTypedChildren.Should().BeTrue();
+        expectation.DrawingObjects.GroupChildren.ChildKindSummaries.Should().Contain([
+            "Group0Child0:Image",
+            "Group0Child1:Shape",
+            "Group0Child2:Chart",
+            "Group0Child3:WordArt",
+            "Group0Child4:SmartArt"]);
+        expectation.DrawingObjects.GroupChildren.ChildVisualSignatures.Should().Contain(signature =>
+            signature.StartsWith("Group0Child2:Chart:", StringComparison.Ordinal)
+            && signature.Contains("kind=Column", StringComparison.Ordinal));
+        expectation.DrawingObjects.GroupChildren.ChildVisualSignatures.Should().Contain(signature =>
+            signature.StartsWith("Group0Child4:SmartArt:", StringComparison.Ordinal)
+            && signature.Contains("nodes=Plan:", StringComparison.Ordinal));
         expectation.DrawingObjects.Effects.EffectObjectCount.Should().Be(3);
         expectation.DrawingObjects.Effects.ShapeEffectObjectCount.Should().Be(1);
         expectation.DrawingObjects.Effects.ImageEffectObjectCount.Should().Be(1);
@@ -1398,9 +1417,9 @@ public sealed class VisualEvidencePlannerTests
             "Image:shadow+glow+reflection+artistic:GlowDiffused",
             "WordArt:glow"]);
         expectation.DrawingObjects.Effects.RenderedGroupChildEffectSummaries.Should().Contain(
-            "GroupChild0:Shape:glow");
+            "GroupChild1:Shape:glow");
         expectation.DrawingObjects.Effects.RenderedGroupChildEffectSummaries.Should().Contain(
-            "GroupChild1:WordArt:glow");
+            "GroupChild3:WordArt:glow");
         expectation.DrawingObjects.Effects.PlannedGroupChildEffectSummaries.Should().BeEmpty();
     }
 
@@ -1756,7 +1775,9 @@ public sealed class VisualEvidencePlannerTests
             var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(summary);
             markdown.Should().Contain("Scenario Coverage");
             markdown.Should().Contain("avalonia-page-layout-shot");
-            markdown.Should().Contain("2 rendered grouped child effect object(s): GroupChild0:Shape:glow/GroupChild1:WordArt:glow");
+            markdown.Should().Contain(
+                "5 grouped child object(s): Group0Child0:Image/Group0Child1:Shape/Group0Child2:Chart/Group0Child3:WordArt/Group0Child4:SmartArt");
+            markdown.Should().Contain("2 rendered grouped child effect object(s): GroupChild1:Shape:glow/GroupChild3:WordArt:glow");
             markdown.Should().NotContain("planned grouped child effect object(s)");
         }
         finally
@@ -1794,7 +1815,7 @@ public sealed class VisualEvidencePlannerTests
                     {
                         Effects = avaloniaRow.PageExpectation.DrawingObjects.Effects with
                         {
-                            RenderedGroupChildEffectSummaries = ["GroupChild0:Shape:shadow"]
+                            RenderedGroupChildEffectSummaries = ["GroupChild1:Shape:shadow"]
                         }
                     }
                 }
@@ -1830,8 +1851,83 @@ public sealed class VisualEvidencePlannerTests
             summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("drawing-object renderer pair 'drawing-objects-complex' page 1", StringComparison.Ordinal)
                 && f.Contains("rendered grouped child effect summaries differ", StringComparison.Ordinal)
-                && f.Contains("WPF 'GroupChild0:Shape:glow/GroupChild1:WordArt:glow'", StringComparison.Ordinal)
-                && f.Contains("Avalonia 'GroupChild0:Shape:shadow'", StringComparison.Ordinal));
+                && f.Contains("WPF 'GroupChild1:Shape:glow/GroupChild3:WordArt:glow'", StringComparison.Ordinal)
+                && f.Contains("Avalonia 'GroupChild1:Shape:shadow'", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RequiresMatchingGroupedMixedChildVisualEvidence()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "drawing-objects-complex";
+            var wpfRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaWithoutSmartArtChildSignature = avaloniaRow with
+            {
+                PageExpectation = avaloniaRow.PageExpectation with
+                {
+                    DrawingObjects = avaloniaRow.PageExpectation.DrawingObjects with
+                    {
+                        GroupChildren = avaloniaRow.PageExpectation.DrawingObjects.GroupChildren with
+                        {
+                            ChildVisualSignatures = avaloniaRow.PageExpectation.DrawingObjects.GroupChildren.ChildVisualSignatures
+                                .Where(signature => !signature.StartsWith("Group0Child4:SmartArt:", StringComparison.Ordinal))
+                                .ToList()
+                        }
+                    }
+                }
+            };
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [wpfRow],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [avaloniaWithoutSmartArtChildSignature],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("drawing-object renderer pair 'drawing-objects-complex' page 1", StringComparison.Ordinal)
+                && f.Contains("grouped child visual signatures differ", StringComparison.Ordinal)
+                && f.Contains("Group0Child4:SmartArt", StringComparison.Ordinal));
         }
         finally
         {
@@ -4837,7 +4933,7 @@ public sealed class VisualEvidencePlannerTests
                         RenderedGroupChildEffectObjectCount = 1,
                         RenderedGroupChildShapeEffectObjectCount = 1,
                         RenderedGroupChildWordArtEffectObjectCount = 0,
-                        RenderedGroupChildEffectSummaries = ["GroupChild0:Shape:glow"]
+                        RenderedGroupChildEffectSummaries = ["GroupChild1:Shape:glow"]
                     }
                 }
             }
