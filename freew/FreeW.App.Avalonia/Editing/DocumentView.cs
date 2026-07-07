@@ -156,7 +156,8 @@ public sealed class DocumentView : Control
         double FontSizeScale, string FontFamily, bool Italic)> _equationVisualSegments = new();
     private readonly List<(EquationVisualElementKind Kind, string LinearText, string Numerator, string Denominator,
         string Radicand, string Degree, string Operator, string LowerLimit, string UpperLimit, string Operand,
-        IReadOnlyList<EquationVisualMatrixRow> MatrixRows)>
+        IReadOnlyList<EquationVisualMatrixRow> MatrixRows, string BaseText, string Accent, bool BarTop,
+        string OpenDelimiter, string CloseDelimiter, string GroupCharacter, string GroupCharacterPosition)>
         _equationVisualElements = new();
     private readonly Dictionary<InlineImage, Bitmap?> _bitmapCache = new();
     private byte[]? _watermarkBitmapCacheBytes;
@@ -2793,7 +2794,8 @@ public sealed class DocumentView : Control
 
     public IReadOnlyList<(EquationVisualElementKind Kind, string LinearText, string Numerator, string Denominator,
         string Radicand, string Degree, string Operator, string LowerLimit, string UpperLimit, string Operand,
-        IReadOnlyList<EquationVisualMatrixRow> MatrixRows)>
+        IReadOnlyList<EquationVisualMatrixRow> MatrixRows, string BaseText, string Accent, bool BarTop,
+        string OpenDelimiter, string CloseDelimiter, string GroupCharacter, string GroupCharacterPosition)>
         EquationVisualElements
     {
         get
@@ -13519,7 +13521,14 @@ public sealed class DocumentView : Control
             element.LowerLimit,
             element.UpperLimit,
             element.Operand,
-            element.MatrixRows));
+            element.MatrixRows,
+            element.BaseText,
+            element.Accent,
+            element.BarTop,
+            element.OpenDelimiter,
+            element.CloseDelimiter,
+            element.GroupCharacter,
+            element.GroupCharacterPosition));
 
         foreach (var segment in element.Segments)
             AddEquationVisualSegment(segment, baseFormatting, cells);

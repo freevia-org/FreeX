@@ -23,6 +23,15 @@ public enum EquationVisualSegmentRole
     MatrixColumnSeparator,
     MatrixRowSeparator,
     MatrixCloseDelimiter,
+    AccentMark,
+    AccentBase,
+    BarMark,
+    BarBase,
+    DelimiterOpen,
+    DelimiterContent,
+    DelimiterClose,
+    GroupCharMark,
+    GroupCharBase,
     LinearFallback
 }
 
@@ -32,7 +41,11 @@ public enum EquationVisualElementKind
     Fraction,
     Radical,
     NAry,
-    Matrix
+    Matrix,
+    Accent,
+    Bar,
+    Delimiter,
+    GroupChar
 }
 
 public enum EquationVisualBaselineRole
@@ -74,12 +87,24 @@ public sealed record EquationVisualElement(
     string Operand = "")
 {
     public IReadOnlyList<EquationVisualMatrixRow> MatrixRows { get; init; } = [];
+    public string BaseText { get; init; } = string.Empty;
+    public string Accent { get; init; } = string.Empty;
+    public bool BarTop { get; init; } = true;
+    public string OpenDelimiter { get; init; } = string.Empty;
+    public string CloseDelimiter { get; init; } = string.Empty;
+    public string GroupCharacter { get; init; } = string.Empty;
+    public string GroupCharacterPosition { get; init; } = string.Empty;
 
     public int MatrixRowCount => MatrixRows.Count;
 
     public int MatrixColumnCount => MatrixRows.Count == 0
         ? 0
         : MatrixRows.Max(row => row.Cells.Count);
+
+    public bool GroupCharacterTop => !string.Equals(
+        GroupCharacterPosition,
+        "bot",
+        StringComparison.OrdinalIgnoreCase);
 
     public static EquationVisualElement FromSegments(
         string linearText,
@@ -139,6 +164,82 @@ public sealed record EquationVisualElement(
         {
             MatrixRows = rows
         };
+
+    public static EquationVisualElement AccentElement(
+        string linearText,
+        string baseText,
+        string accent,
+        IReadOnlyList<EquationVisualSegment> segments) =>
+        new(
+            EquationVisualElementKind.Accent,
+            linearText,
+            segments,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty)
+        {
+            BaseText = baseText,
+            Accent = accent
+        };
+
+    public static EquationVisualElement Bar(
+        string linearText,
+        string baseText,
+        bool barTop,
+        IReadOnlyList<EquationVisualSegment> segments) =>
+        new(
+            EquationVisualElementKind.Bar,
+            linearText,
+            segments,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty)
+        {
+            BaseText = baseText,
+            BarTop = barTop
+        };
+
+    public static EquationVisualElement Delimiter(
+        string linearText,
+        string baseText,
+        string openDelimiter,
+        string closeDelimiter,
+        IReadOnlyList<EquationVisualSegment> segments) =>
+        new(
+            EquationVisualElementKind.Delimiter,
+            linearText,
+            segments,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty)
+        {
+            BaseText = baseText,
+            OpenDelimiter = openDelimiter,
+            CloseDelimiter = closeDelimiter
+        };
+
+    public static EquationVisualElement GroupChar(
+        string linearText,
+        string baseText,
+        string groupCharacter,
+        string groupCharacterPosition,
+        IReadOnlyList<EquationVisualSegment> segments) =>
+        new(
+            EquationVisualElementKind.GroupChar,
+            linearText,
+            segments,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty)
+        {
+            BaseText = baseText,
+            GroupCharacter = groupCharacter,
+            GroupCharacterPosition = groupCharacterPosition
+        };
 }
 
 public sealed record EquationVisualPlan(
@@ -156,12 +257,16 @@ public static class EquationVisualPlanner
     public const double SuperscriptBaselineOffsetEm = 0.25;
     public const double SubscriptBaselineOffsetEm = -0.18;
     public const double LargeOperatorFontSizeScale = 1.45;
+    public const double DecoratorFontSizeScale = 0.85;
+    public const double DelimiterFontSizeScale = 1.25;
     public const string FractionBarText = "\u2044";
     public const string RadicalSignText = "\u221a";
     public const string MatrixOpenDelimiterText = "[";
     public const string MatrixCloseDelimiterText = "]";
     public const string MatrixColumnSeparatorText = "  ";
     public const string MatrixRowSeparatorText = "; ";
+    public const string OverbarCueText = "\u00af";
+    public const string UnderbarCueText = "_";
 
     private static EquationVisualStyle NormalStyle { get; } = new(
         DefaultMathFontFamily,
@@ -209,6 +314,20 @@ public static class EquationVisualPlanner
         DefaultMathFontFamily,
         Italic: false,
         StructureFontSizeScale,
+        EquationVisualBaselineRole.Normal,
+        BaselineOffsetEm: 0.0);
+
+    private static EquationVisualStyle DecoratorStyle { get; } = new(
+        DefaultMathFontFamily,
+        Italic: false,
+        DecoratorFontSizeScale,
+        EquationVisualBaselineRole.Normal,
+        BaselineOffsetEm: 0.0);
+
+    private static EquationVisualStyle DelimiterStyle { get; } = new(
+        DefaultMathFontFamily,
+        Italic: false,
+        DelimiterFontSizeScale,
         EquationVisualBaselineRole.Normal,
         BaselineOffsetEm: 0.0);
 
@@ -296,6 +415,22 @@ public static class EquationVisualPlanner
 
             case MathRunKind.Matrix:
                 AddMatrixElement(run, segments, elements);
+                break;
+
+            case MathRunKind.Accent:
+                AddAccentElement(run, segments, elements);
+                break;
+
+            case MathRunKind.Bar:
+                AddBarElement(run, segments, elements);
+                break;
+
+            case MathRunKind.Delimiter:
+                AddDelimiterElement(run, segments, elements);
+                break;
+
+            case MathRunKind.GroupChar:
+                AddGroupCharElement(run, segments, elements);
                 break;
 
             default:
@@ -454,6 +589,124 @@ public static class EquationVisualPlanner
         }
 
         return rows;
+    }
+
+    private static void AddAccentElement(
+        MathRun run,
+        List<EquationVisualSegment> segments,
+        List<EquationVisualElement> elements)
+    {
+        var runSegments = new List<EquationVisualSegment>();
+        AddIfAny(runSegments, AccentCueText(run.Accent), EquationVisualSegmentRole.AccentMark, DecoratorStyle);
+        AddIfAny(runSegments, run.Base, EquationVisualSegmentRole.AccentBase, StructureStyle);
+
+        if (runSegments.Count == 0)
+            return;
+
+        segments.AddRange(runSegments);
+        elements.Add(EquationVisualElement.AccentElement(
+            run.LinearText,
+            run.Base,
+            run.Accent,
+            runSegments));
+    }
+
+    private static void AddBarElement(
+        MathRun run,
+        List<EquationVisualSegment> segments,
+        List<EquationVisualElement> elements)
+    {
+        var runSegments = new List<EquationVisualSegment>();
+        var markText = run.BarTop ? OverbarCueText : UnderbarCueText;
+        if (run.BarTop)
+        {
+            AddIfAny(runSegments, markText, EquationVisualSegmentRole.BarMark, DecoratorStyle);
+            AddIfAny(runSegments, run.Base, EquationVisualSegmentRole.BarBase, StructureStyle);
+        }
+        else
+        {
+            AddIfAny(runSegments, run.Base, EquationVisualSegmentRole.BarBase, StructureStyle);
+            AddIfAny(runSegments, markText, EquationVisualSegmentRole.BarMark, DecoratorStyle);
+        }
+
+        if (runSegments.Count == 0)
+            return;
+
+        segments.AddRange(runSegments);
+        elements.Add(EquationVisualElement.Bar(
+            run.LinearText,
+            run.Base,
+            run.BarTop,
+            runSegments));
+    }
+
+    private static void AddDelimiterElement(
+        MathRun run,
+        List<EquationVisualSegment> segments,
+        List<EquationVisualElement> elements)
+    {
+        var runSegments = new List<EquationVisualSegment>();
+        AddIfAny(runSegments, run.OpenChar, EquationVisualSegmentRole.DelimiterOpen, DelimiterStyle);
+        AddIfAny(runSegments, run.Base, EquationVisualSegmentRole.DelimiterContent, StructureStyle);
+        AddIfAny(runSegments, run.CloseChar, EquationVisualSegmentRole.DelimiterClose, DelimiterStyle);
+
+        if (runSegments.Count == 0)
+            return;
+
+        segments.AddRange(runSegments);
+        elements.Add(EquationVisualElement.Delimiter(
+            run.LinearText,
+            run.Base,
+            run.OpenChar,
+            run.CloseChar,
+            runSegments));
+    }
+
+    private static void AddGroupCharElement(
+        MathRun run,
+        List<EquationVisualSegment> segments,
+        List<EquationVisualElement> elements)
+    {
+        var groupOnTop = !string.Equals(run.GroupChrPos, "bot", StringComparison.OrdinalIgnoreCase);
+        var runSegments = new List<EquationVisualSegment>();
+        if (groupOnTop)
+        {
+            AddIfAny(runSegments, run.GroupChr, EquationVisualSegmentRole.GroupCharMark, DecoratorStyle);
+            AddIfAny(runSegments, run.Base, EquationVisualSegmentRole.GroupCharBase, StructureStyle);
+        }
+        else
+        {
+            AddIfAny(runSegments, run.Base, EquationVisualSegmentRole.GroupCharBase, StructureStyle);
+            AddIfAny(runSegments, run.GroupChr, EquationVisualSegmentRole.GroupCharMark, DecoratorStyle);
+        }
+
+        if (runSegments.Count == 0)
+            return;
+
+        segments.AddRange(runSegments);
+        elements.Add(EquationVisualElement.GroupChar(
+            run.LinearText,
+            run.Base,
+            run.GroupChr,
+            run.GroupChrPos,
+            runSegments));
+    }
+
+    private static string AccentCueText(string accent)
+    {
+        if (string.IsNullOrEmpty(accent))
+            return "^";
+
+        return accent switch
+        {
+            "\u0302" => "^",
+            "\u0303" => "~",
+            "\u0304" => OverbarCueText,
+            "\u0307" => ".",
+            "\u0308" => "..",
+            "\u20d7" => "\u2192",
+            _ => accent
+        };
     }
 
     private static EquationVisualSegment? Segment(

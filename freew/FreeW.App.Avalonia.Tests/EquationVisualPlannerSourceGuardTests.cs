@@ -15,6 +15,9 @@ public sealed class EquationVisualPlannerSourceGuardTests
         source.Should().Contain("LowerLimit");
         source.Should().Contain("UpperLimit");
         source.Should().Contain("MatrixRows");
+        source.Should().Contain("BaseText");
+        source.Should().Contain("OpenDelimiter");
+        source.Should().Contain("GroupCharacterPosition");
         source.Should().Contain("run.Equation is null");
         source.Should().NotContain("hasInlineEquation");
     }

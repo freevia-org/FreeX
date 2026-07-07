@@ -195,28 +195,120 @@ public sealed class EquationVisualPlannerTests
     }
 
     [Fact]
-    public void EquationVisualPlanner_UnsupportedStructuredKinds_RetainLinearFallbackSegments()
+    public void EquationVisualPlanner_Accent_BuildsStructuredMarkOverBaseElement()
     {
-        var runs = new[]
-        {
-            MathRun.AccentOf("x", "hat"),
+        var run = MathRun.AccentOf("x", "hat");
+        var plan = EquationVisualPlanner.Build(new Equation([run]));
+
+        plan.LinearText.Should().Be(run.LinearText);
+        plan.Elements.Should().ContainSingle();
+        plan.Elements[0].Kind.Should().Be(EquationVisualElementKind.Accent);
+        plan.Elements[0].BaseText.Should().Be("x");
+        plan.Elements[0].Accent.Should().Be("hat");
+        plan.Segments.Select(segment => segment.Text).Should().Equal("hat", "x");
+        plan.Segments.Select(segment => segment.Role).Should().Equal(
+            EquationVisualSegmentRole.AccentMark,
+            EquationVisualSegmentRole.AccentBase);
+        plan.Segments[0].Style.FontSizeScale.Should().Be(EquationVisualPlanner.DecoratorFontSizeScale);
+        plan.Segments[0].Style.Italic.Should().BeFalse();
+        plan.Segments[1].Style.FontSizeScale.Should().Be(EquationVisualPlanner.StructureFontSizeScale);
+        plan.Segments.Should().NotContain(segment => segment.Role == EquationVisualSegmentRole.LinearFallback);
+    }
+
+    [Fact]
+    public void EquationVisualPlanner_Bar_BuildsStructuredTopAndBottomBarElements()
+    {
+        var plan = EquationVisualPlanner.Build(new Equation([
             MathRun.BarOf("x"),
-            MathRun.Delimiter("x + y", "[", "]"),
-            MathRun.FunctionApply("sin", "x"),
-            MathRun.GroupCharOf("x", "over", "top")
-        };
+            MathRun.BarOf("y", top: false)
+        ]));
 
-        foreach (var run in runs)
-        {
-            var plan = EquationVisualPlanner.Build(new Equation([run]));
+        plan.Elements.Select(element => element.Kind).Should().Equal(
+            EquationVisualElementKind.Bar,
+            EquationVisualElementKind.Bar);
+        plan.Elements[0].BaseText.Should().Be("x");
+        plan.Elements[0].BarTop.Should().BeTrue();
+        plan.Elements[1].BaseText.Should().Be("y");
+        plan.Elements[1].BarTop.Should().BeFalse();
+        plan.Segments.Select(segment => segment.Text).Should().Equal(
+            EquationVisualPlanner.OverbarCueText,
+            "x",
+            "y",
+            EquationVisualPlanner.UnderbarCueText);
+        plan.Segments.Select(segment => segment.Role).Should().Equal(
+            EquationVisualSegmentRole.BarMark,
+            EquationVisualSegmentRole.BarBase,
+            EquationVisualSegmentRole.BarBase,
+            EquationVisualSegmentRole.BarMark);
+        plan.Segments.Where(segment => segment.Role == EquationVisualSegmentRole.BarMark)
+            .Should().OnlyContain(segment => segment.Style.Italic == false);
+        plan.Segments.Should().NotContain(segment => segment.Role == EquationVisualSegmentRole.LinearFallback);
+    }
 
-            plan.LinearText.Should().Be(run.LinearText);
-            plan.Segments.Should().ContainSingle();
-            plan.Segments[0].Text.Should().Be(run.LinearText);
-            plan.Segments[0].Role.Should().Be(EquationVisualSegmentRole.LinearFallback);
-            plan.Segments[0].Style.BaselineRole.Should().Be(EquationVisualBaselineRole.Normal);
-            plan.Elements.Should().ContainSingle();
-            plan.Elements[0].Kind.Should().Be(EquationVisualElementKind.Segments);
-        }
+    [Fact]
+    public void EquationVisualPlanner_Delimiter_BuildsStructuredWrappedContentElement()
+    {
+        var run = MathRun.Delimiter("x + y", "[", "]");
+        var plan = EquationVisualPlanner.Build(new Equation([run]));
+
+        plan.LinearText.Should().Be(run.LinearText);
+        plan.Elements.Should().ContainSingle();
+        plan.Elements[0].Kind.Should().Be(EquationVisualElementKind.Delimiter);
+        plan.Elements[0].BaseText.Should().Be("x + y");
+        plan.Elements[0].OpenDelimiter.Should().Be("[");
+        plan.Elements[0].CloseDelimiter.Should().Be("]");
+        plan.Segments.Select(segment => segment.Text).Should().Equal("[", "x + y", "]");
+        plan.Segments.Select(segment => segment.Role).Should().Equal(
+            EquationVisualSegmentRole.DelimiterOpen,
+            EquationVisualSegmentRole.DelimiterContent,
+            EquationVisualSegmentRole.DelimiterClose);
+        plan.Segments[0].Style.FontSizeScale.Should().Be(EquationVisualPlanner.DelimiterFontSizeScale);
+        plan.Segments[2].Style.FontSizeScale.Should().Be(EquationVisualPlanner.DelimiterFontSizeScale);
+        plan.Segments.Should().NotContain(segment => segment.Role == EquationVisualSegmentRole.LinearFallback);
+    }
+
+    [Fact]
+    public void EquationVisualPlanner_GroupChar_BuildsStructuredTopAndBottomGroupElements()
+    {
+        var plan = EquationVisualPlanner.Build(new Equation([
+            MathRun.GroupCharOf("x", "\u23DE", "top"),
+            MathRun.GroupCharOf("y", "\u23DF", "bot")
+        ]));
+
+        plan.Elements.Select(element => element.Kind).Should().Equal(
+            EquationVisualElementKind.GroupChar,
+            EquationVisualElementKind.GroupChar);
+        plan.Elements[0].BaseText.Should().Be("x");
+        plan.Elements[0].GroupCharacter.Should().Be("\u23DE");
+        plan.Elements[0].GroupCharacterPosition.Should().Be("top");
+        plan.Elements[0].GroupCharacterTop.Should().BeTrue();
+        plan.Elements[1].BaseText.Should().Be("y");
+        plan.Elements[1].GroupCharacter.Should().Be("\u23DF");
+        plan.Elements[1].GroupCharacterPosition.Should().Be("bot");
+        plan.Elements[1].GroupCharacterTop.Should().BeFalse();
+        plan.Segments.Select(segment => segment.Text).Should().Equal("\u23DE", "x", "y", "\u23DF");
+        plan.Segments.Select(segment => segment.Role).Should().Equal(
+            EquationVisualSegmentRole.GroupCharMark,
+            EquationVisualSegmentRole.GroupCharBase,
+            EquationVisualSegmentRole.GroupCharBase,
+            EquationVisualSegmentRole.GroupCharMark);
+        plan.Segments.Where(segment => segment.Role == EquationVisualSegmentRole.GroupCharMark)
+            .Should().OnlyContain(segment => segment.Style.FontSizeScale == EquationVisualPlanner.DecoratorFontSizeScale);
+        plan.Segments.Should().NotContain(segment => segment.Role == EquationVisualSegmentRole.LinearFallback);
+    }
+
+    [Fact]
+    public void EquationVisualPlanner_FunctionApply_RetainsLinearFallbackSegment()
+    {
+        var run = MathRun.FunctionApply("sin", "x");
+        var plan = EquationVisualPlanner.Build(new Equation([run]));
+
+        plan.LinearText.Should().Be(run.LinearText);
+        plan.Segments.Should().ContainSingle();
+        plan.Segments[0].Text.Should().Be(run.LinearText);
+        plan.Segments[0].Role.Should().Be(EquationVisualSegmentRole.LinearFallback);
+        plan.Segments[0].Style.BaselineRole.Should().Be(EquationVisualBaselineRole.Normal);
+        plan.Elements.Should().ContainSingle();
+        plan.Elements[0].Kind.Should().Be(EquationVisualElementKind.Segments);
     }
 }

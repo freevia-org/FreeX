@@ -830,4 +830,94 @@ public sealed class InsertDepth2Tests
         kinds.Should().Equal(MathRunKind.Matrix);
         linearText.Should().Be("[1, 0; 0, 1]");
     }
+
+    [Fact]
+    public async Task EquationVisualPlanner_decorators_lay_out_shared_structure()
+    {
+        EquationVisualElementKind[] elementKinds = [];
+        (string BaseText, string Accent, bool BarTop, string OpenDelimiter, string CloseDelimiter,
+            string GroupCharacter, string GroupCharacterPosition)[] elementSlots = [];
+        string[] texts = [];
+        EquationVisualSegmentRole[] roles = [];
+        (EquationVisualBaselineRole BaselineRole, double FontSizeScale, bool Italic)[] styles = [];
+        MathRunKind[] kinds = [];
+        var placedText = string.Empty;
+        var linearText = string.Empty;
+        var placedGlyphCount = 0;
+
+        var ran = await OnUiThread(() =>
+        {
+            var view = MakeView("");
+            view.InsertEquation(new Equation([
+                MathRun.AccentOf("x", "hat"),
+                MathRun.BarOf("y", top: false),
+                MathRun.Delimiter("a + b", "[", "]"),
+                MathRun.GroupCharOf("z", "\u23DF", "bot")
+            ]));
+
+            var elements = view.EquationVisualElements;
+            elementKinds = elements.Select(element => element.Kind).ToArray();
+            elementSlots = elements
+                .Select(element => (
+                    element.BaseText,
+                    element.Accent,
+                    element.BarTop,
+                    element.OpenDelimiter,
+                    element.CloseDelimiter,
+                    element.GroupCharacter,
+                    element.GroupCharacterPosition))
+                .ToArray();
+            var segments = view.EquationVisualSegments;
+            texts = segments.Select(segment => segment.Text).ToArray();
+            roles = segments.Select(segment => segment.Role).ToArray();
+            styles = segments
+                .Select(segment => (segment.BaselineRole, segment.FontSizeScale, segment.Italic))
+                .ToArray();
+            placedText = string.Concat(view.GetPlacedForBlock(0).Select(placed => placed.Ch));
+            placedGlyphCount = view.PlacedGlyphCount;
+
+            var eqRun = view.Document.Blocks.OfType<Paragraph>()
+                .SelectMany(p => p.Runs)
+                .Single(run => run.Equation is not null);
+            kinds = eqRun.Equation!.Runs.Select(run => run.Kind).ToArray();
+            linearText = eqRun.Equation!.LinearText;
+        });
+
+        if (!ran) return;
+
+        elementKinds.Should().Equal(
+            EquationVisualElementKind.Accent,
+            EquationVisualElementKind.Bar,
+            EquationVisualElementKind.Delimiter,
+            EquationVisualElementKind.GroupChar);
+        elementSlots[0].Should().Be(("x", "hat", true, string.Empty, string.Empty, string.Empty, string.Empty));
+        elementSlots[1].Should().Be(("y", string.Empty, false, string.Empty, string.Empty, string.Empty, string.Empty));
+        elementSlots[2].Should().Be(("a + b", string.Empty, true, "[", "]", string.Empty, string.Empty));
+        elementSlots[3].Should().Be(("z", string.Empty, true, string.Empty, string.Empty, "\u23DF", "bot"));
+        texts.Should().Equal("hat", "x", "y", EquationVisualPlanner.UnderbarCueText, "[", "a + b", "]", "z", "\u23DF");
+        roles.Should().Equal(
+            EquationVisualSegmentRole.AccentMark,
+            EquationVisualSegmentRole.AccentBase,
+            EquationVisualSegmentRole.BarBase,
+            EquationVisualSegmentRole.BarMark,
+            EquationVisualSegmentRole.DelimiterOpen,
+            EquationVisualSegmentRole.DelimiterContent,
+            EquationVisualSegmentRole.DelimiterClose,
+            EquationVisualSegmentRole.GroupCharBase,
+            EquationVisualSegmentRole.GroupCharMark);
+        styles[0].FontSizeScale.Should().Be(EquationVisualPlanner.DecoratorFontSizeScale);
+        styles[0].Italic.Should().BeFalse();
+        styles[1].FontSizeScale.Should().Be(EquationVisualPlanner.StructureFontSizeScale);
+        styles[3].FontSizeScale.Should().Be(EquationVisualPlanner.DecoratorFontSizeScale);
+        styles[4].FontSizeScale.Should().Be(EquationVisualPlanner.DelimiterFontSizeScale);
+        placedText.Should().Be($"hatxy{EquationVisualPlanner.UnderbarCueText}[a + b]z\u23DF");
+        placedGlyphCount.Should().Be(15,
+            "Avalonia should lay out decorator display segments instead of raw linear fallback strings");
+        kinds.Should().Equal(
+            MathRunKind.Accent,
+            MathRunKind.Bar,
+            MathRunKind.Delimiter,
+            MathRunKind.GroupChar);
+        linearText.Should().Be("xhat_y_[a + b]z\u23DF");
+    }
 }
