@@ -86,6 +86,42 @@ public class EquationsTests
     }
 
     [Fact]
+    public void MathRun_Delimiter_CanCarryNestedContentEquation()
+    {
+        var content = new Equation([
+            MathRun.PlainText("a+"),
+            MathRun.Superscript("x", "2")
+        ]);
+
+        var delimiter = MathRun.Delimiter(content, "[", "]");
+
+        delimiter.Kind.Should().Be(MathRunKind.Delimiter);
+        delimiter.Base.Should().Be("a+x^2");
+        delimiter.OpenChar.Should().Be("[");
+        delimiter.CloseChar.Should().Be("]");
+        delimiter.DelimiterContentEquation.Should().BeSameAs(content);
+        delimiter.LinearText.Should().Be("[a+x^2]");
+    }
+
+    [Fact]
+    public void MathRun_Delimiter_LinearText_IsDepthBoundedForCyclicNestedContent()
+    {
+        var equation = new Equation();
+        equation.Runs.Add(new MathRun
+        {
+            Kind = MathRunKind.Delimiter,
+            Base = "x",
+            DelimiterContentEquation = equation
+        });
+
+        var linearText = equation.LinearText;
+
+        linearText.Should().NotBeEmpty();
+        linearText.Length.Should().BeLessThan(100);
+        linearText.Should().Contain("(x)");
+    }
+
+    [Fact]
     public void MathRun_LinearText_RendersNewStructures()
     {
         MathRun.Subscript("x", "i").LinearText.Should().Be("x_i");

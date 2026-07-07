@@ -11,8 +11,9 @@ namespace FreeW.Core.Model;
 // radical (m:rad), n-ary (m:nary, sum/integral/product with limits), an accented character (m:acc),
 // an over/under-bar (m:bar), a bracketed delimiter (m:d) or a matrix (m:m). Most structure slots store
 // plain math text (mirroring how Superscript already stores Base/Sup as strings); fractions additionally
-// carry optional nested numerator/denominator equations so common OfficeMath fraction slots can round-trip
-// without a broad recursive-slot rewrite. A Matrix additionally carries a small grid of text cells. That
+// carry optional nested numerator/denominator equations, radicals carry an optional nested radicand, and
+// delimiters carry an optional nested content equation so common OfficeMath slots can round-trip without
+// a broad recursive-slot rewrite. A Matrix additionally carries a small grid of text cells. That
 // covers the high-value structures from Word's Equation tools while staying well short of the full
 // recursive OMML schema — richer constructs degrade to their plain math text on read so nothing throws.
 
@@ -63,7 +64,7 @@ public enum MathRunKind
 /// <item><see cref="MathRunKind.NAry"/> → operator <see cref="Operator"/> from <see cref="Sub"/> to <see cref="Sup"/> over <see cref="Base"/>.</item>
 /// <item><see cref="MathRunKind.Accent"/> → <see cref="Base"/> with the accent glyph <see cref="Accent"/> over it.</item>
 /// <item><see cref="MathRunKind.Bar"/> → <see cref="Base"/> with a bar above (<see cref="BarTop"/> true) or below it.</item>
-/// <item><see cref="MathRunKind.Delimiter"/> → <see cref="Base"/> wrapped in <see cref="OpenChar"/>/<see cref="CloseChar"/>.</item>
+/// <item><see cref="MathRunKind.Delimiter"/> → <see cref="DelimiterContentEquation"/>/<see cref="Base"/> wrapped in <see cref="OpenChar"/>/<see cref="CloseChar"/>.</item>
 /// <item><see cref="MathRunKind.Matrix"/> → <see cref="Matrix"/>.</item>
 /// </list>
 /// </summary>
@@ -103,6 +104,9 @@ public sealed record MathRun
 
     /// <summary>Optional structured radicand equation for nested OMML radical slots.</summary>
     public Equation? RadicandEquation { get; init; }
+
+    /// <summary>Optional structured content equation for nested OMML delimiter slots.</summary>
+    public Equation? DelimiterContentEquation { get; init; }
 
     /// <summary>The radical's degree (empty = square root; non-empty = nth root). Only for <see cref="MathRunKind.Radical"/>.</summary>
     public string Degree { get; init; } = string.Empty;
@@ -224,6 +228,21 @@ public sealed record MathRun
     public static MathRun Delimiter(string content, string open = "(", string close = ")") =>
         new() { Kind = MathRunKind.Delimiter, Base = content, OpenChar = open, CloseChar = close };
 
+    /// <summary>Creates a delimiter fragment (m:d) whose content is a structured equation.</summary>
+    public static MathRun Delimiter(Equation content, string open = "(", string close = ")")
+    {
+        ArgumentNullException.ThrowIfNull(content);
+
+        return new()
+        {
+            Kind = MathRunKind.Delimiter,
+            Base = content.LinearText,
+            OpenChar = open,
+            CloseChar = close,
+            DelimiterContentEquation = content
+        };
+    }
+
     /// <summary>Creates a matrix fragment (m:m) from a grid.</summary>
     public static MathRun MatrixOf(MathMatrix matrix) =>
         new() { Kind = MathRunKind.Matrix, Matrix = matrix };
@@ -260,7 +279,7 @@ public sealed record MathRun
         MathRunKind.NAry => $"{Operator}({Sub}..{Sup}) {Base}".TrimEnd(),
         MathRunKind.Accent => $"{Base}{Accent}",
         MathRunKind.Bar => BarTop ? $"‾{Base}‾" : $"_{Base}_",
-        MathRunKind.Delimiter => $"{OpenChar}{Base}{CloseChar}",
+        MathRunKind.Delimiter => $"{OpenChar}{SlotLinearText(DelimiterContentEquation, Base, depth)}{CloseChar}",
         MathRunKind.Matrix => Matrix?.LinearText ?? string.Empty,
         MathRunKind.FunctionApply => string.IsNullOrEmpty(FuncName) ? Base : $"{FuncName}({Base})",
         MathRunKind.GroupChar => string.Equals(GroupChrPos, "bot", StringComparison.OrdinalIgnoreCase)

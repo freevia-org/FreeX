@@ -104,6 +104,7 @@ public sealed record EquationVisualElement(
     public EquationVisualPlan? NumeratorPlan { get; init; }
     public EquationVisualPlan? DenominatorPlan { get; init; }
     public EquationVisualPlan? RadicandPlan { get; init; }
+    public EquationVisualPlan? DelimiterContentPlan { get; init; }
 
     public int MatrixRowCount => MatrixRows.Count;
 
@@ -226,7 +227,8 @@ public sealed record EquationVisualElement(
         string baseText,
         string openDelimiter,
         string closeDelimiter,
-        IReadOnlyList<EquationVisualSegment> segments) =>
+        IReadOnlyList<EquationVisualSegment> segments,
+        EquationVisualPlan? delimiterContentPlan = null) =>
         new(
             EquationVisualElementKind.Delimiter,
             linearText,
@@ -238,7 +240,8 @@ public sealed record EquationVisualElement(
         {
             BaseText = baseText,
             OpenDelimiter = openDelimiter,
-            CloseDelimiter = closeDelimiter
+            CloseDelimiter = closeDelimiter,
+            DelimiterContentPlan = delimiterContentPlan
         };
 
     public static EquationVisualElement GroupChar(
@@ -486,7 +489,7 @@ public static class EquationVisualPlanner
                 break;
 
             case MathRunKind.Delimiter:
-                AddDelimiterElement(run, segments, elements);
+                AddDelimiterElement(run, segments, elements, depth);
                 break;
 
             case MathRunKind.GroupChar:
@@ -733,11 +736,15 @@ public static class EquationVisualPlanner
     private static void AddDelimiterElement(
         MathRun run,
         List<EquationVisualSegment> segments,
-        List<EquationVisualElement> elements)
+        List<EquationVisualElement> elements,
+        int depth)
     {
+        var delimiterContentPlan = BuildSlotPlan(run.DelimiterContentEquation, depth);
+        var contentText = delimiterContentPlan?.LinearText ?? run.Base;
+
         var runSegments = new List<EquationVisualSegment>();
         AddIfAny(runSegments, run.OpenChar, EquationVisualSegmentRole.DelimiterOpen, DelimiterStyle);
-        AddIfAny(runSegments, run.Base, EquationVisualSegmentRole.DelimiterContent, StructureStyle);
+        AddIfAny(runSegments, contentText, EquationVisualSegmentRole.DelimiterContent, StructureStyle);
         AddIfAny(runSegments, run.CloseChar, EquationVisualSegmentRole.DelimiterClose, DelimiterStyle);
 
         if (runSegments.Count == 0)
@@ -746,10 +753,11 @@ public static class EquationVisualPlanner
         segments.AddRange(runSegments);
         elements.Add(EquationVisualElement.Delimiter(
             run.LinearText,
-            run.Base,
+            contentText,
             run.OpenChar,
             run.CloseChar,
-            runSegments));
+            runSegments,
+            delimiterContentPlan));
     }
 
     private static void AddGroupCharElement(

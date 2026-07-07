@@ -1807,10 +1807,21 @@ public static class DocxReader
         var dPr = d.Element(M + "dPr");
         var open = dPr?.Element(M + "begChr")?.Attribute(M + "val")?.Value;
         var close = dPr?.Element(M + "endChr")?.Attribute(M + "val")?.Value;
-        return MathRun.Delimiter(
-            MathTextOf(d.Element(M + "e")),
-            string.IsNullOrEmpty(open) ? "(" : open,
-            string.IsNullOrEmpty(close) ? ")" : close);
+        var content = d.Element(M + "e");
+        var contentText = MathTextOf(content);
+        return HasStructuredMathSlot(content)
+            ? new MathRun
+            {
+                Kind = MathRunKind.Delimiter,
+                Base = contentText,
+                OpenChar = string.IsNullOrEmpty(open) ? "(" : open,
+                CloseChar = string.IsNullOrEmpty(close) ? ")" : close,
+                DelimiterContentEquation = ReadMathSlot(content)
+            }
+            : MathRun.Delimiter(
+                contentText,
+                string.IsNullOrEmpty(open) ? "(" : open,
+                string.IsNullOrEmpty(close) ? ")" : close);
     }
 
     /// <summary>

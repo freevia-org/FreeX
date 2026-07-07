@@ -383,6 +383,58 @@ public sealed class EquationVisualPlannerTests
     }
 
     [Fact]
+    public void EquationVisualPlanner_NestedDelimiterContent_SurfacesSharedSlotPlanAndKeepsFlattenedSegments()
+    {
+        var plan = EquationVisualPlanner.Build(new Equation([
+            MathRun.Delimiter(
+                new Equation([
+                    MathRun.PlainText("a+"),
+                    MathRun.Superscript("x", "2")
+                ]),
+                "[",
+                "]")
+        ]));
+
+        plan.LinearText.Should().Be("[a+x^2]");
+        plan.Elements.Should().ContainSingle();
+        var delimiter = plan.Elements[0];
+        delimiter.Kind.Should().Be(EquationVisualElementKind.Delimiter);
+        delimiter.BaseText.Should().Be("a+x^2");
+        delimiter.OpenDelimiter.Should().Be("[");
+        delimiter.CloseDelimiter.Should().Be("]");
+        delimiter.DelimiterContentPlan.Should().NotBeNull();
+        delimiter.DelimiterContentPlan!.Segments.Select(segment => segment.Role)
+            .Should().Equal(
+                EquationVisualSegmentRole.Text,
+                EquationVisualSegmentRole.Base,
+                EquationVisualSegmentRole.Superscript);
+
+        plan.Segments.Select(segment => segment.Text).Should().Equal("[", "a+x^2", "]");
+        plan.Segments.Select(segment => segment.Role).Should().Equal(
+            EquationVisualSegmentRole.DelimiterOpen,
+            EquationVisualSegmentRole.DelimiterContent,
+            EquationVisualSegmentRole.DelimiterClose);
+        plan.Segments.Should().NotContain(segment => segment.Role == EquationVisualSegmentRole.LinearFallback);
+    }
+
+    [Fact]
+    public void EquationVisualPlanner_NestedDelimiterContent_IsDepthBounded()
+    {
+        var equation = new Equation();
+        equation.Runs.Add(new MathRun
+        {
+            Kind = MathRunKind.Delimiter,
+            Base = "x",
+            DelimiterContentEquation = equation
+        });
+
+        var plan = EquationVisualPlanner.Build(equation);
+
+        plan.LinearText.Should().Contain("(x)");
+        plan.Elements.Should().NotBeEmpty();
+    }
+
+    [Fact]
     public void EquationVisualPlanner_GroupChar_BuildsStructuredTopAndBottomGroupElements()
     {
         var plan = EquationVisualPlanner.Build(new Equation([

@@ -2565,7 +2565,7 @@ public static class DocxWriter
         MathRunKind.NAry => BuildNAry(run),
         MathRunKind.Accent => BuildAccent(run),
         MathRunKind.Bar => BuildBar(run),
-        MathRunKind.Delimiter => BuildDelimiter(run),
+        MathRunKind.Delimiter => BuildDelimiter(run, depth),
         MathRunKind.Matrix => BuildMatrix(run.Matrix),
         MathRunKind.FunctionApply => BuildFunctionApply(run),
         MathRunKind.GroupChar => BuildGroupChar(run),
@@ -2658,12 +2658,12 @@ public static class DocxWriter
     /// Builds a delimiter (m:d): m:dPr carries the begin/end glyphs (m:begChr / m:endChr); a single
     /// m:e holds the bracketed content.
     /// </summary>
-    private static XElement BuildDelimiter(MathRun run) =>
+    private static XElement BuildDelimiter(MathRun run, int depth) =>
         new(M + "d",
             new XElement(M + "dPr",
                 new XElement(M + "begChr", new XAttribute(M + "val", run.OpenChar)),
                 new XElement(M + "endChr", new XAttribute(M + "val", run.CloseChar))),
-            new XElement(M + "e", MathText(run.Base)));
+            BuildMathSlot(M + "e", run.DelimiterContentEquation, run.Base, depth));
 
     /// <summary>
     /// Builds a matrix (m:m): one m:mr per row, each holding one m:e (cell) per column. An absent/empty
