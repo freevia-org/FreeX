@@ -154,6 +154,8 @@ public sealed class DocumentView : Control
     private readonly List<FloatingSmartArtData> _inlineSmartArts = new();
     private readonly List<(string Text, EquationVisualSegmentRole Role, EquationVisualBaselineRole BaselineRole,
         double FontSizeScale, string FontFamily, bool Italic)> _equationVisualSegments = new();
+    private readonly List<(EquationVisualElementKind Kind, string LinearText, string Numerator, string Denominator,
+        string Radicand, string Degree)> _equationVisualElements = new();
     private readonly Dictionary<InlineImage, Bitmap?> _bitmapCache = new();
     private byte[]? _watermarkBitmapCacheBytes;
     private Bitmap? _watermarkBitmapCache;
@@ -2787,6 +2789,16 @@ public sealed class DocumentView : Control
         }
     }
 
+    public IReadOnlyList<(EquationVisualElementKind Kind, string LinearText, string Numerator, string Denominator,
+        string Radicand, string Degree)> EquationVisualElements
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _equationVisualElements.ToList();
+        }
+    }
+
     private static string ToHex(Color color) => $"#{color.R:X2}{color.G:X2}{color.B:X2}";
 
     // ---- PDF export ------------------------------------------------------------------------------
@@ -2963,6 +2975,7 @@ public sealed class DocumentView : Control
         _inlineWordArts.Clear();
         _inlineSmartArts.Clear();
         _equationVisualSegments.Clear();
+        _equationVisualElements.Clear();
         _cellHits.Clear();
         _headerFooterItems.Clear();
         _noteItems.Clear();           // AV-NOTERENDER
@@ -3076,6 +3089,7 @@ public sealed class DocumentView : Control
                 _inlineWordArts.Clear();
                 _inlineSmartArts.Clear();
                 _equationVisualSegments.Clear();
+                _equationVisualElements.Clear();
                 _cellHits.Clear();
                 _tabLeaderSpans.Clear();
                 _layoutContentY = 0;
@@ -13481,34 +13495,65 @@ public sealed class DocumentView : Control
     private void AddEquationDisplayCells(Equation equation, RunFormatting baseFormatting, List<Cell> cells)
     {
         var plan = EquationVisualPlanner.Build(equation);
-        foreach (var segment in plan.Segments)
-        {
-            _equationVisualSegments.Add((
-                segment.Text,
-                segment.Role,
-                segment.Style.BaselineRole,
-                segment.Style.FontSizeScale,
-                segment.Style.FontFamily,
-                segment.Style.Italic));
-
-            var fmt = ApplyEquationVisualStyle(baseFormatting, segment.Style);
-            foreach (var ch in segment.Text)
-                cells.Add(new Cell(ch, fmt));
-        }
+        foreach (var element in plan.Elements)
+            AddEquationVisualElement(element, baseFormatting, cells);
     }
 
-    private static RunFormatting ApplyEquationVisualStyle(RunFormatting baseFormatting, EquationVisualStyle style) =>
-        baseFormatting with
+    private void AddEquationVisualElement(
+        EquationVisualElement element,
+        RunFormatting baseFormatting,
+        List<Cell> cells)
+    {
+        _equationVisualElements.Add((
+            element.Kind,
+            element.LinearText,
+            element.Numerator,
+            element.Denominator,
+            element.Radicand,
+            element.Degree));
+
+        foreach (var segment in element.Segments)
+            AddEquationVisualSegment(segment, baseFormatting, cells);
+    }
+
+    private void AddEquationVisualSegment(
+        EquationVisualSegment segment,
+        RunFormatting baseFormatting,
+        List<Cell> cells)
+    {
+        _equationVisualSegments.Add((
+            segment.Text,
+            segment.Role,
+            segment.Style.BaselineRole,
+            segment.Style.FontSizeScale,
+            segment.Style.FontFamily,
+            segment.Style.Italic));
+
+        var fmt = ApplyEquationVisualStyle(baseFormatting, segment.Style);
+        foreach (var ch in segment.Text)
+            cells.Add(new Cell(ch, fmt));
+    }
+
+    private static RunFormatting ApplyEquationVisualStyle(RunFormatting baseFormatting, EquationVisualStyle style)
+    {
+        var verticalAlign = style.BaselineRole switch
+        {
+            EquationVisualBaselineRole.Superscript => VerticalAlign.Superscript,
+            EquationVisualBaselineRole.Subscript => VerticalAlign.Subscript,
+            _ => VerticalAlign.Baseline
+        };
+
+        var styled = baseFormatting with
         {
             FontFamily = style.FontFamily,
             Italic = style.Italic,
-            VerticalAlign = style.BaselineRole switch
-            {
-                EquationVisualBaselineRole.Superscript => VerticalAlign.Superscript,
-                EquationVisualBaselineRole.Subscript => VerticalAlign.Subscript,
-                _ => VerticalAlign.Baseline
-            }
+            VerticalAlign = verticalAlign
         };
+
+        return verticalAlign == VerticalAlign.Baseline && Math.Abs(style.FontSizeScale - 1.0) > 0.001
+            ? styled with { FontSizePt = (baseFormatting.FontSizePt ?? DefaultFontSizePt) * style.FontSizeScale }
+            : styled;
+    }
 
     private static List<Cell> FallbackCells(string text)
     {

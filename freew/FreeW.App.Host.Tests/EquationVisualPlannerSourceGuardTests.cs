@@ -12,6 +12,9 @@ public sealed class EquationVisualPlannerSourceGuardTests
 
         source.Should().Contain("EquationVisualPlanner.Build(equation)");
         source.Should().Contain("AppendEquationVisualSegment");
+        source.Should().Contain("BuildEquationVisualElement");
+        source.Should().Contain("EquationVisualElementKind.Fraction");
+        source.Should().Contain("EquationVisualElementKind.Radical");
         source.Should().Contain("EquationVisualBaselineRole.Superscript");
         source.Should().NotContain("Text = equation.LinearText");
     }

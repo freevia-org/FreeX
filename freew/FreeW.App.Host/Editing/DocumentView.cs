@@ -9929,21 +9929,13 @@ public sealed class DocumentView : RichTextBox
     /// <summary>
     /// Renders an inline equation as an InlineUIContainer hosting a Border that carries the model
     /// <see cref="Equation"/> on its Tag (so CommitToModel round-trips it, mirroring shapes). The border
-    /// consumes the shared equation visual planner so simple scripts render as styled math segments while
-    /// more complex structures keep their deterministic linear fallback.
+    /// consumes the shared equation visual planner so simple scripts render as styled math segments and
+    /// lightweight fraction/radical structures render with stacked/root visual cues.
     /// </summary>
     private static InlineUIContainer BuildEquationRun(Equation equation)
     {
         var plan = EquationVisualPlanner.Build(equation);
-        var text = new TextBlock
-        {
-            FontFamily = new FontFamily(plan.MathFontFamily),
-            FontSize = DefaultFontSizePt * PxPerPoint,
-            FontStyle = plan.Italic ? FontStyles.Italic : FontStyles.Normal
-        };
-        foreach (var segment in plan.Segments)
-            AppendEquationVisualSegment(text, segment);
-
+        var content = BuildEquationVisualContent(plan);
         var element = new Border
         {
             Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF6, 0xFB)),
@@ -9951,10 +9943,135 @@ public sealed class DocumentView : RichTextBox
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(3),
             Padding = new Thickness(4, 1, 4, 1),
-            Child = text,
+            Child = content,
             Tag = equation // carries the model equation so CommitToModel can round-trip it
         };
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Center };
+    }
+
+    private static FrameworkElement BuildEquationVisualContent(EquationVisualPlan plan)
+    {
+        if (plan.Elements.All(element => element.Kind == EquationVisualElementKind.Segments))
+            return BuildEquationTextBlock(plan.Segments);
+
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        foreach (var element in plan.Elements)
+            panel.Children.Add(BuildEquationVisualElement(element));
+
+        return panel;
+    }
+
+    private static FrameworkElement BuildEquationVisualElement(EquationVisualElement element)
+    {
+        return element.Kind switch
+        {
+            EquationVisualElementKind.Fraction => BuildEquationFractionElement(element),
+            EquationVisualElementKind.Radical => BuildEquationRadicalElement(element),
+            _ => BuildEquationTextBlock(element.Segments)
+        };
+    }
+
+    private static TextBlock BuildEquationTextBlock(IReadOnlyList<EquationVisualSegment> segments)
+    {
+        var text = new TextBlock
+        {
+            FontFamily = new FontFamily(EquationVisualPlanner.DefaultMathFontFamily),
+            FontSize = DefaultFontSizePt * PxPerPoint,
+            FontStyle = FontStyles.Italic,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        foreach (var segment in segments)
+            AppendEquationVisualSegment(text, segment);
+
+        return text;
+    }
+
+    private static FrameworkElement BuildEquationFractionElement(EquationVisualElement element)
+    {
+        var numerator = SegmentWithRole(element, EquationVisualSegmentRole.FractionNumerator);
+        var denominator = SegmentWithRole(element, EquationVisualSegmentRole.FractionDenominator);
+        var stack = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 0, 2, 0),
+            Tag = EquationVisualElementKind.Fraction
+        };
+
+        stack.Children.Add(BuildEquationStructureTextBlock(numerator, WpfTextAlignment.Center));
+        stack.Children.Add(new Border
+        {
+            Background = Brushes.Black,
+            Height = 1,
+            MinWidth = 14,
+            Margin = new Thickness(0, 0, 0, 0)
+        });
+        stack.Children.Add(BuildEquationStructureTextBlock(denominator, WpfTextAlignment.Center));
+        return stack;
+    }
+
+    private static FrameworkElement BuildEquationRadicalElement(EquationVisualElement element)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 0, 2, 0),
+            Tag = EquationVisualElementKind.Radical
+        };
+
+        if (SegmentWithRole(element, EquationVisualSegmentRole.RadicalDegree) is { Text.Length: > 0 } degree)
+        {
+            panel.Children.Add(BuildEquationStructureTextBlock(
+                degree,
+                WpfTextAlignment.Center,
+                new Thickness(0, 0, -1, 7)));
+        }
+
+        panel.Children.Add(BuildEquationStructureTextBlock(
+            SegmentWithRole(element, EquationVisualSegmentRole.RadicalSign),
+            WpfTextAlignment.Center));
+        panel.Children.Add(new Border
+        {
+            BorderBrush = Brushes.Black,
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Padding = new Thickness(1, 0, 1, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = BuildEquationStructureTextBlock(
+                SegmentWithRole(element, EquationVisualSegmentRole.RadicalRadicand),
+                WpfTextAlignment.Center)
+        });
+
+        return panel;
+    }
+
+    private static EquationVisualSegment SegmentWithRole(EquationVisualElement element, EquationVisualSegmentRole role)
+    {
+        return element.Segments.FirstOrDefault(segment => segment.Role == role)
+            ?? new EquationVisualSegment(string.Empty, role, new EquationVisualStyle(
+                EquationVisualPlanner.DefaultMathFontFamily,
+                Italic: true,
+                FontSizeScale: 1.0,
+                EquationVisualBaselineRole.Normal,
+                BaselineOffsetEm: 0.0));
+    }
+
+    private static TextBlock BuildEquationStructureTextBlock(
+        EquationVisualSegment segment,
+        WpfTextAlignment textAlignment,
+        Thickness? margin = null)
+    {
+        var text = BuildEquationTextBlock([segment]);
+        text.TextAlignment = textAlignment;
+        text.Margin = margin ?? new Thickness(0);
+        text.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+        text.LineHeight = Math.Max(1, text.FontSize * 1.05);
+        return text;
     }
 
     private static void AppendEquationVisualSegment(TextBlock text, EquationVisualSegment segment)
