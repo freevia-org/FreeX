@@ -242,7 +242,7 @@ public static class Citations
     {
         ArgumentNullException.ThrowIfNull(source);
 
-        var author = FormatInTextAuthor(source.Author);
+        var author = FormatInTextAuthor(ResponsibleName(source));
         var year = source.Year?.Trim() ?? string.Empty;
 
         string inner;
@@ -621,6 +621,9 @@ public static class Citations
     //  - ConferenceProceedings: ConferenceName, "pp. Pages", City: Publisher
     //  - WebSite / ElectronicSource: Publisher, Url, "accessed AccessedDate"
     //  - Report:         Institution, City, Publisher
+    //  - Patent:         patent number, jurisdiction, date
+    //  - Interview:      interviewer, medium, date
+    //  - Misc:           source kind, medium, date
     // Returns an empty list when nothing applies so callers can drop the segment entirely.
     private static List<string> SourceDetail(Source source)
     {
@@ -648,6 +651,24 @@ public static class Citations
                 AddIfPresent(parts, source.Institution);
                 AddIfPresent(parts, source.City);
                 AddIfPresent(parts, source.Publisher);
+                break;
+            case SourceType.Patent:
+                if (NonEmpty(source.PatentNumber) is { } patentNumber)
+                    parts.Add($"patent {patentNumber}");
+                AddIfPresent(parts, source.CountryRegion);
+                AddIfPresent(parts, source.StateProvince);
+                AddIfPresent(parts, SourceDateText(source));
+                break;
+            case SourceType.Interview:
+                if (NonEmpty(source.Interviewer) is { } interviewer)
+                    parts.Add($"interview by {interviewer}");
+                AddIfPresent(parts, source.Medium);
+                AddIfPresent(parts, SourceDateText(source));
+                break;
+            case SourceType.Misc:
+                AddIfPresent(parts, source.SourceKind);
+                AddIfPresent(parts, source.Medium);
+                AddIfPresent(parts, SourceDateText(source));
                 break;
             case SourceType.BookSection:
                 AddIfPresent(parts, source.BookTitle);
@@ -689,12 +710,34 @@ public static class Citations
         return structured.Length > 0 ? string.Join(" ", structured) : NonEmpty(source.Accessed);
     }
 
+    private static string? SourceDateText(Source source)
+    {
+        var structured = new[]
+            {
+                NonEmpty(source.Day),
+                NonEmpty(source.Month),
+                NonEmpty(source.Year)
+            }
+            .Where(part => part is not null)
+            .ToArray();
+
+        return structured.Length > 1 ? string.Join(" ", structured) : null;
+    }
+
+    private static string ResponsibleName(Source source) =>
+        source.Type switch
+        {
+            SourceType.Patent when NonEmpty(source.Inventor) is { } inventor => inventor,
+            SourceType.Interview when NonEmpty(source.Interviewee) is { } interviewee => interviewee,
+            _ => source.Author?.Trim() ?? string.Empty,
+        };
+
     // APA: Author. (Year). Title. <detail>.
     private static string FormatApaEntry(Source source)
     {
         var segments = new List<string>(4);
 
-        var author = source.Author?.Trim() ?? string.Empty;
+        var author = ResponsibleName(source);
         if (author.Length > 0)
             segments.Add(WithPeriod(author));
 
@@ -719,7 +762,7 @@ public static class Citations
     {
         var segments = new List<string>(3);
 
-        var author = source.Author?.Trim() ?? string.Empty;
+        var author = ResponsibleName(source);
         if (author.Length > 0)
             segments.Add(WithPeriod(author));
 
@@ -748,7 +791,7 @@ public static class Citations
         var before = new List<string>(1);
         var after = new List<string>(4);
 
-        var author = source.Author?.Trim() ?? string.Empty;
+        var author = ResponsibleName(source);
         if (author.Length > 0)
             before.Add(author);
 
@@ -782,7 +825,7 @@ public static class Citations
     {
         var segments = new List<string>(5);
 
-        var author = source.Author?.Trim() ?? string.Empty;
+        var author = ResponsibleName(source);
         if (author.Length > 0)
             segments.Add(WithPeriod(author));
 
@@ -869,7 +912,7 @@ public static class Citations
     {
         var segments = new List<string>(4);
 
-        var author = source.Author?.Trim() ?? string.Empty;
+        var author = ResponsibleName(source);
         var year = source.Year?.Trim() ?? string.Empty;
 
         // Author Year combined: "Author Year," or just "Author." or just "Year," etc.
@@ -897,7 +940,7 @@ public static class Citations
     {
         var segments = new List<string>(5);
 
-        var author = source.Author?.Trim() ?? string.Empty;
+        var author = ResponsibleName(source);
         if (author.Length > 0)
             segments.Add(WithPeriod(author));
 
@@ -970,7 +1013,7 @@ public static class Citations
     {
         var segments = new List<string>(5);
 
-        var author = source.Author?.Trim() ?? string.Empty;
+        var author = ResponsibleName(source);
         var year = source.Year?.Trim() ?? string.Empty;
 
         // Author in ALL-CAPS + year: "AUTHOR, Year."
@@ -1140,7 +1183,7 @@ public static class Citations
         }
 
         var ordered = document.Sources
-            .OrderBy(s => s.Author?.Trim() ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(ResponsibleName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(s => s.Title?.Trim() ?? string.Empty, StringComparer.OrdinalIgnoreCase)
             .ThenBy(s => s.Tag?.Trim() ?? string.Empty, StringComparer.OrdinalIgnoreCase);
 
@@ -1162,13 +1205,23 @@ public static class Citations
         && Same(left.Title, right.Title)
         && Same(left.BookTitle, right.BookTitle)
         && Same(left.ConferenceName, right.ConferenceName)
+        && Same(left.Inventor, right.Inventor)
+        && Same(left.Interviewee, right.Interviewee)
+        && Same(left.Interviewer, right.Interviewer)
         && Same(left.Year, right.Year)
+        && Same(left.Month, right.Month)
+        && Same(left.Day, right.Day)
         && Same(left.Institution, right.Institution)
         && Same(left.Publisher, right.Publisher)
         && Same(left.City, right.City)
         && Same(left.Edition, right.Edition)
         && Same(left.StandardNumber, right.StandardNumber)
         && Same(left.ChapterNumber, right.ChapterNumber)
+        && Same(left.PatentNumber, right.PatentNumber)
+        && Same(left.CountryRegion, right.CountryRegion)
+        && Same(left.StateProvince, right.StateProvince)
+        && Same(left.Medium, right.Medium)
+        && Same(left.SourceKind, right.SourceKind)
         && Same(left.ShortTitle, right.ShortTitle)
         && Same(left.Comments, right.Comments)
         && Same(left.Journal, right.Journal)

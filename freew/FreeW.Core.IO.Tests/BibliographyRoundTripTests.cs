@@ -412,6 +412,73 @@ public class BibliographyRoundTripTests
     }
 
     [Fact]
+    public void SourceManagerBreadthTypes_AllFields_SurviveRoundTrip()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Sources.Add(new Source
+        {
+            Tag = "Patent2026",
+            Type = SourceType.Patent,
+            Inventor = "Lovelace, Ada",
+            Title = "Analytical Engine Control",
+            Year = "1843",
+            Month = "July",
+            Day = "4",
+            PatentNumber = "GB-1843-1",
+            CountryRegion = "United Kingdom",
+            StateProvince = "London",
+            ShortTitle = "Engine Control",
+            Comments = "Patent note"
+        });
+        doc.Sources.Add(new Source
+        {
+            Tag = "Interview2026",
+            Type = SourceType.Interview,
+            Interviewee = "Hopper, Grace",
+            Interviewer = "Mauchly, Jean",
+            Title = "Compiler Notes",
+            Year = "1968",
+            Month = "April",
+            Day = "9",
+            Medium = "Recorded interview",
+            ShortTitle = "Compiler interview",
+            Comments = "Interview note"
+        });
+        doc.Sources.Add(new Source
+        {
+            Tag = "Misc2026",
+            Type = SourceType.Misc,
+            Author = "Example Archive",
+            Title = "Loose note",
+            Year = "2026",
+            Month = "June",
+            Day = "2",
+            SourceKind = "Manuscript",
+            Medium = "Scan",
+            ShortTitle = "Loose note",
+            Comments = "Misc note"
+        });
+
+        var result = RoundTrip(doc);
+
+        result.Sources.Should().HaveCount(3);
+        result.Sources[0].Type.Should().Be(SourceType.Patent);
+        result.Sources[0].Inventor.Should().Be("Lovelace, Ada");
+        result.Sources[0].PatentNumber.Should().Be("GB-1843-1");
+        result.Sources[0].CountryRegion.Should().Be("United Kingdom");
+        result.Sources[0].StateProvince.Should().Be("London");
+        result.Sources[1].Type.Should().Be(SourceType.Interview);
+        result.Sources[1].Interviewee.Should().Be("Hopper, Grace");
+        result.Sources[1].Interviewer.Should().Be("Mauchly, Jean");
+        result.Sources[1].Medium.Should().Be("Recorded interview");
+        result.Sources[2].Type.Should().Be(SourceType.Misc);
+        result.Sources[2].SourceKind.Should().Be("Manuscript");
+        result.Sources[2].Medium.Should().Be("Scan");
+        result.Sources.Select(source => source.Day).Should().Equal("4", "9", "2");
+        result.Sources.Select(source => source.Month).Should().Equal("July", "April", "June");
+    }
+
+    [Fact]
     public void MultipleSources_PreserveOrderAndCount()
     {
         var doc = TextDocument.CreateEmpty();
@@ -580,6 +647,57 @@ public class BibliographyRoundTripTests
     }
 
     [Fact]
+    public void BibliographyPart_WritesSourceManagerBreadthTokensFieldsAndRoles()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Sources.Add(new Source
+        {
+            Tag = "Patent2026",
+            Type = SourceType.Patent,
+            Inventor = "Lovelace, Ada",
+            Title = "Analytical Engine Control",
+            PatentNumber = "GB-1843-1",
+            CountryRegion = "United Kingdom"
+        });
+        doc.Sources.Add(new Source
+        {
+            Tag = "Interview2026",
+            Type = SourceType.Interview,
+            Interviewee = "Hopper, Grace",
+            Interviewer = "Mauchly, Jean",
+            Medium = "Recorded interview"
+        });
+        doc.Sources.Add(new Source
+        {
+            Tag = "Misc2026",
+            Type = SourceType.Misc,
+            SourceKind = "Manuscript",
+            Medium = "Scan"
+        });
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        using var zip = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
+        using var entry = zip.GetEntry("word/bibliography/sources.xml")!.Open();
+        var sources = XDocument.Load(entry).Root!.Elements(B + "Source").ToList();
+
+        sources[0].Element(B + "SourceType")!.Value.Should().Be("Patent");
+        sources[0].Element(B + "PatentNumber")!.Value.Should().Be("GB-1843-1");
+        sources[0].Element(B + "CountryRegion")!.Value.Should().Be("United Kingdom");
+        sources[0].Element(B + "Author")!.Element(B + "Inventor")!
+            .Element(B + "Corporate")!.Value.Should().Be("Lovelace, Ada");
+        sources[1].Element(B + "SourceType")!.Value.Should().Be("Interview");
+        sources[1].Element(B + "Author")!.Element(B + "Interviewee")!
+            .Element(B + "Corporate")!.Value.Should().Be("Hopper, Grace");
+        sources[1].Element(B + "Author")!.Element(B + "Interviewer")!
+            .Element(B + "Corporate")!.Value.Should().Be("Mauchly, Jean");
+        sources[1].Element(B + "Medium")!.Value.Should().Be("Recorded interview");
+        sources[2].Element(B + "SourceType")!.Value.Should().Be("Misc");
+        sources[2].Element(B + "Type")!.Value.Should().Be("Manuscript");
+        sources[2].Element(B + "Medium")!.Value.Should().Be("Scan");
+    }
+
+    [Fact]
     public void WordStyleNewSourceTypeTokens_ReadBackToModeledTypes()
     {
         var result = ReadDocxWithSourcesXml(
@@ -613,6 +731,63 @@ public class BibliographyRoundTripTests
         result.Sources[1].AccessedDay.Should().Be("4");
         result.Sources[1].AccessedMonth.Should().Be("July");
         result.Sources[1].AccessedYear.Should().Be("2026");
+    }
+
+    [Fact]
+    public void WordStyleSourceManagerBreadthTokens_ReadBackToModeledTypes()
+    {
+        var result = ReadDocxWithSourcesXml(
+            """
+            <b:Sources xmlns:b="http://schemas.openxmlformats.org/officeDocument/2006/bibliography">
+              <b:Source>
+                <b:Tag>Patent2026</b:Tag>
+                <b:SourceType>Patent</b:SourceType>
+                <b:Author>
+                  <b:Inventor><b:Corporate>Lovelace, Ada</b:Corporate></b:Inventor>
+                </b:Author>
+                <b:Title>Analytical Engine Control</b:Title>
+                <b:PatentNumber>GB-1843-1</b:PatentNumber>
+                <b:CountryRegion>United Kingdom</b:CountryRegion>
+                <b:StateProvince>London</b:StateProvince>
+                <b:Month>July</b:Month>
+                <b:Day>4</b:Day>
+                <b:Year>1843</b:Year>
+              </b:Source>
+              <b:Source>
+                <b:Tag>Interview2026</b:Tag>
+                <b:SourceType>Interview</b:SourceType>
+                <b:Author>
+                  <b:Interviewee><b:Corporate>Hopper, Grace</b:Corporate></b:Interviewee>
+                  <b:Interviewer><b:Corporate>Mauchly, Jean</b:Corporate></b:Interviewer>
+                </b:Author>
+                <b:Title>Compiler Notes</b:Title>
+                <b:Medium>Recorded interview</b:Medium>
+              </b:Source>
+              <b:Source>
+                <b:Tag>Misc2026</b:Tag>
+                <b:SourceType>Misc</b:SourceType>
+                <b:Author><b:Author><b:Corporate>Example Archive</b:Corporate></b:Author></b:Author>
+                <b:Title>Loose note</b:Title>
+                <b:Type>Manuscript</b:Type>
+                <b:Medium>Scan</b:Medium>
+              </b:Source>
+            </b:Sources>
+            """);
+
+        result.Sources.Should().HaveCount(3);
+        result.Sources[0].Type.Should().Be(SourceType.Patent);
+        result.Sources[0].Inventor.Should().Be("Lovelace, Ada");
+        result.Sources[0].PatentNumber.Should().Be("GB-1843-1");
+        result.Sources[0].Month.Should().Be("July");
+        result.Sources[0].Day.Should().Be("4");
+        result.Sources[1].Type.Should().Be(SourceType.Interview);
+        result.Sources[1].Interviewee.Should().Be("Hopper, Grace");
+        result.Sources[1].Interviewer.Should().Be("Mauchly, Jean");
+        result.Sources[1].Medium.Should().Be("Recorded interview");
+        result.Sources[2].Type.Should().Be(SourceType.Misc);
+        result.Sources[2].Author.Should().Be("Example Archive");
+        result.Sources[2].SourceKind.Should().Be("Manuscript");
+        result.Sources[2].Medium.Should().Be("Scan");
     }
 
     [Fact]

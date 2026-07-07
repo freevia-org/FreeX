@@ -61,13 +61,23 @@ public sealed class SourceRecord
     public string Title { get; set; } = string.Empty;
     public string? BookTitle { get; set; }
     public string? ConferenceName { get; set; }
+    public string? Inventor { get; set; }
+    public string? Interviewee { get; set; }
+    public string? Interviewer { get; set; }
     public string Year { get; set; } = string.Empty;
+    public string? Month { get; set; }
+    public string? Day { get; set; }
     public string? Institution { get; set; }
     public string? Publisher { get; set; }
     public string? City { get; set; }
     public string? Edition { get; set; }
     public string? StandardNumber { get; set; }
     public string? ChapterNumber { get; set; }
+    public string? PatentNumber { get; set; }
+    public string? CountryRegion { get; set; }
+    public string? StateProvince { get; set; }
+    public string? Medium { get; set; }
+    public string? SourceKind { get; set; }
     public string? ShortTitle { get; set; }
     public string? Comments { get; set; }
     public string? Journal { get; set; }
@@ -101,13 +111,23 @@ public sealed class SourceRecord
         Title = Title,
         BookTitle = BookTitle,
         ConferenceName = ConferenceName,
+        Inventor = Inventor,
+        Interviewee = Interviewee,
+        Interviewer = Interviewer,
         Year = Year,
+        Month = Month,
+        Day = Day,
         Institution = Institution,
         Publisher = Publisher,
         City = City,
         Edition = Edition,
         StandardNumber = StandardNumber,
         ChapterNumber = ChapterNumber,
+        PatentNumber = PatentNumber,
+        CountryRegion = CountryRegion,
+        StateProvince = StateProvince,
+        Medium = Medium,
+        SourceKind = SourceKind,
         ShortTitle = ShortTitle,
         Comments = Comments,
         Journal = Journal,
@@ -146,13 +166,23 @@ public sealed class SourceRecord
             Title = source.Title,
             BookTitle = source.BookTitle,
             ConferenceName = source.ConferenceName,
+            Inventor = source.Inventor,
+            Interviewee = source.Interviewee,
+            Interviewer = source.Interviewer,
             Year = source.Year,
+            Month = source.Month,
+            Day = source.Day,
             Institution = source.Institution,
             Publisher = source.Publisher,
             City = source.City,
             Edition = source.Edition,
             StandardNumber = source.StandardNumber,
             ChapterNumber = source.ChapterNumber,
+            PatentNumber = source.PatentNumber,
+            CountryRegion = source.CountryRegion,
+            StateProvince = source.StateProvince,
+            Medium = source.Medium,
+            SourceKind = source.SourceKind,
             ShortTitle = source.ShortTitle,
             Comments = source.Comments,
             Journal = source.Journal,

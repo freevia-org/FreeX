@@ -505,6 +505,9 @@ public static class DocxReader
             var author = ReadBibliographyAuthor(element);
             var editors = ReadBibliographyPersonalContributors(element, "Editor");
             var translators = ReadBibliographyPersonalContributors(element, "Translator");
+            var inventor = ReadBibliographyContributorDisplay(element, "Inventor");
+            var interviewee = ReadBibliographyContributorDisplay(element, "Interviewee");
+            var interviewer = ReadBibliographyContributorDisplay(element, "Interviewer");
             var dayAccessed = Field(element, "DayAccessed");
             var monthAccessed = Field(element, "MonthAccessed");
             var yearAccessed = Field(element, "YearAccessed");
@@ -522,13 +525,23 @@ public static class DocxReader
                 Title = Field(element, "Title") ?? string.Empty,
                 BookTitle = Field(element, "BookTitle"),
                 ConferenceName = Field(element, "ConferenceName"),
+                Inventor = inventor,
+                Interviewee = interviewee,
+                Interviewer = interviewer,
                 Year = Field(element, "Year") ?? string.Empty,
+                Month = Field(element, "Month"),
+                Day = Field(element, "Day"),
                 Institution = Field(element, "Institution"),
                 Publisher = Field(element, "Publisher"),
                 City = Field(element, "City"),
                 Edition = Field(element, "Edition"),
                 StandardNumber = Field(element, "StandardNumber"),
                 ChapterNumber = Field(element, "ChapterNumber"),
+                PatentNumber = Field(element, "PatentNumber"),
+                CountryRegion = Field(element, "CountryRegion"),
+                StateProvince = Field(element, "StateProvince"),
+                Medium = Field(element, "Medium"),
+                SourceKind = Field(element, "Type"),
                 ShortTitle = Field(element, "ShortTitle"),
                 Comments = Field(element, "Comments"),
                 Journal = Field(element, "JournalName"),
@@ -582,6 +595,24 @@ public static class DocxReader
         return ReadPeople(role).ToList();
     }
 
+    private static string? ReadBibliographyContributorDisplay(XElement source, string roleName)
+    {
+        var role = source.Element(B + "Author")?.Element(B + roleName);
+        if (role is null)
+            return null;
+
+        var corporate = role.Element(B + "Corporate")?.Value;
+        if (!string.IsNullOrWhiteSpace(corporate))
+            return corporate.Trim();
+
+        var people = ReadPeople(role).ToList();
+        if (people.Count > 0)
+            return SourceAuthorPerson.FormatDisplayText(people);
+
+        var value = (role.Value ?? string.Empty).Trim();
+        return value.Length == 0 ? null : value;
+    }
+
     private static IEnumerable<SourceAuthorPerson> ReadPeople(XElement role) =>
         role.Element(B + "NameList")?
             .Elements(B + "Person")
@@ -613,6 +644,9 @@ public static class DocxReader
         "ConferenceProceedings" => SourceType.ConferenceProceedings,
         "ArticleInAPeriodical" => SourceType.ArticleInPeriodical,
         "ElectronicSource" => SourceType.ElectronicSource,
+        "Patent" => SourceType.Patent,
+        "Interview" => SourceType.Interview,
+        "Misc" => SourceType.Misc,
         _ => SourceType.Book,
     };
 

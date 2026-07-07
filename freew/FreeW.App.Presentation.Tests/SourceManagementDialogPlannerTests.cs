@@ -79,7 +79,10 @@ public sealed class SourceManagementDialogPlannerTests
             SourceType.BookSection,
             SourceType.ConferenceProceedings,
             SourceType.ArticleInPeriodical,
-            SourceType.ElectronicSource);
+            SourceType.ElectronicSource,
+            SourceType.Patent,
+            SourceType.Interview,
+            SourceType.Misc);
         choices.Select(choice => choice.Label).Should().Equal(
             "Book",
             "Journal Article",
@@ -88,13 +91,19 @@ public sealed class SourceManagementDialogPlannerTests
             "Book Section",
             "Conference Proceedings",
             "Article in a Periodical",
-            "Electronic Source");
+            "Electronic Source",
+            "Patent",
+            "Interview",
+            "Miscellaneous");
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.JournalArticle).Should().Be(1);
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Report).Should().Be(3);
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.BookSection).Should().Be(4);
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.ConferenceProceedings).Should().Be(5);
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.ArticleInPeriodical).Should().Be(6);
         SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.ElectronicSource).Should().Be(7);
+        SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Patent).Should().Be(8);
+        SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Interview).Should().Be(9);
+        SourceManagementDialogPlanner.SourceTypeSelectedIndex(SourceType.Misc).Should().Be(10);
     }
 
     [Fact]
@@ -201,6 +210,46 @@ public sealed class SourceManagementDialogPlannerTests
             SourceManagementSourceField.AccessedDay,
             SourceManagementSourceField.AccessedMonth,
             SourceManagementSourceField.AccessedYear,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
+
+        var patentPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.Patent);
+        patentPlans.Select(plan => plan.Field).Should().Equal(
+            SourceManagementSourceField.Tag,
+            SourceManagementSourceField.Inventor,
+            SourceManagementSourceField.Title,
+            SourceManagementSourceField.Year,
+            SourceManagementSourceField.Month,
+            SourceManagementSourceField.Day,
+            SourceManagementSourceField.PatentNumber,
+            SourceManagementSourceField.CountryRegion,
+            SourceManagementSourceField.StateProvince,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
+
+        var interviewPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.Interview);
+        interviewPlans.Select(plan => plan.Field).Should().Equal(
+            SourceManagementSourceField.Tag,
+            SourceManagementSourceField.Interviewee,
+            SourceManagementSourceField.Interviewer,
+            SourceManagementSourceField.Title,
+            SourceManagementSourceField.Year,
+            SourceManagementSourceField.Month,
+            SourceManagementSourceField.Day,
+            SourceManagementSourceField.Medium,
+            SourceManagementSourceField.ShortTitle,
+            SourceManagementSourceField.Comments);
+
+        var miscPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(SourceType.Misc);
+        miscPlans.Select(plan => plan.Field).Should().Equal(
+            SourceManagementSourceField.Tag,
+            SourceManagementSourceField.Author,
+            SourceManagementSourceField.Title,
+            SourceManagementSourceField.Year,
+            SourceManagementSourceField.Month,
+            SourceManagementSourceField.Day,
+            SourceManagementSourceField.Medium,
+            SourceManagementSourceField.SourceKind,
             SourceManagementSourceField.ShortTitle,
             SourceManagementSourceField.Comments);
     }
@@ -366,6 +415,105 @@ public sealed class SourceManagementDialogPlannerTests
             .Text.Should().Be("https://example.test/notes");
         electronicPlans.Single(plan => plan.Field == SourceManagementSourceField.AccessedYear)
             .Text.Should().Be("2026");
+    }
+
+    [Fact]
+    public void ProjectEntry_SeedsSourceManagerBreadthTypeFields()
+    {
+        var patent = SourceManagementDialogPlanner.ProjectEntry(new Source
+        {
+            Type = SourceType.Patent,
+            Tag = "Patent2026",
+            Inventor = "Lovelace, Ada",
+            Title = "Analytical Engine Control",
+            PatentNumber = "GB-1843-1",
+            CountryRegion = "United Kingdom",
+            StateProvince = "London",
+            Month = "July",
+            Day = "4",
+            Year = "1843"
+        });
+        var patentPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(patent);
+
+        patent.Inventor.Should().Be("Lovelace, Ada");
+        patentPlans.Single(plan => plan.Field == SourceManagementSourceField.PatentNumber)
+            .Text.Should().Be("GB-1843-1");
+        patentPlans.Single(plan => plan.Field == SourceManagementSourceField.CountryRegion)
+            .Text.Should().Be("United Kingdom");
+
+        var interview = SourceManagementDialogPlanner.ProjectEntry(new Source
+        {
+            Type = SourceType.Interview,
+            Tag = "Interview2026",
+            Interviewee = "Hopper, Grace",
+            Interviewer = "Mauchly, Jean",
+            Medium = "Recorded interview"
+        });
+        var interviewPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(interview);
+
+        interview.Interviewee.Should().Be("Hopper, Grace");
+        interviewPlans.Single(plan => plan.Field == SourceManagementSourceField.Interviewer)
+            .Text.Should().Be("Mauchly, Jean");
+        interviewPlans.Single(plan => plan.Field == SourceManagementSourceField.Medium)
+            .Text.Should().Be("Recorded interview");
+
+        var misc = SourceManagementDialogPlanner.ProjectEntry(new Source
+        {
+            Type = SourceType.Misc,
+            Tag = "Misc2026",
+            Author = "Example Archive",
+            SourceKind = "Manuscript",
+            Medium = "Scan"
+        });
+        var miscPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(misc);
+
+        misc.SourceKind.Should().Be("Manuscript");
+        miscPlans.Single(plan => plan.Field == SourceManagementSourceField.SourceKind)
+            .Text.Should().Be("Manuscript");
+    }
+
+    [Fact]
+    public void BuildSource_PreservesSourceManagerBreadthFieldsByType()
+    {
+        var patentEntry = SourceManagementDialogPlanner.CreateEntry(
+            SourceType.Patent,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Inventor] = " Lovelace, Ada ",
+                [SourceManagementSourceField.Title] = " Analytical Engine Control ",
+                [SourceManagementSourceField.PatentNumber] = " GB-1843-1 ",
+                [SourceManagementSourceField.CountryRegion] = " United Kingdom ",
+                [SourceManagementSourceField.StateProvince] = " London ",
+                [SourceManagementSourceField.Month] = " July ",
+                [SourceManagementSourceField.Day] = " 4 ",
+                [SourceManagementSourceField.Year] = " 1843 ",
+                [SourceManagementSourceField.Url] = " ignored "
+            });
+        var patent = SourceManagementDialogPlanner.BuildSource(patentEntry);
+
+        patent.Type.Should().Be(SourceType.Patent);
+        patent.Inventor.Should().Be("Lovelace, Ada");
+        patent.PatentNumber.Should().Be("GB-1843-1");
+        patent.CountryRegion.Should().Be("United Kingdom");
+        patent.StateProvince.Should().Be("London");
+        patent.Month.Should().Be("July");
+        patent.Day.Should().Be("4");
+        patent.Url.Should().BeNull();
+
+        var interview = SourceManagementDialogPlanner.BuildSource(SourceManagementDialogPlanner.CreateEntry(
+            SourceType.Interview,
+            new Dictionary<SourceManagementSourceField, string?>
+            {
+                [SourceManagementSourceField.Interviewee] = " Hopper, Grace ",
+                [SourceManagementSourceField.Interviewer] = " Mauchly, Jean ",
+                [SourceManagementSourceField.Medium] = " Recorded interview ",
+                [SourceManagementSourceField.PatentNumber] = " ignored "
+            }));
+
+        interview.Interviewee.Should().Be("Hopper, Grace");
+        interview.Interviewer.Should().Be("Mauchly, Jean");
+        interview.Medium.Should().Be("Recorded interview");
+        interview.PatentNumber.Should().BeNull();
     }
 
     [Fact]

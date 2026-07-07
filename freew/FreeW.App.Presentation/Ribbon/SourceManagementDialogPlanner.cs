@@ -11,7 +11,12 @@ public enum SourceManagementSourceField
     Title,
     BookTitle,
     ConferenceName,
+    Inventor,
+    Interviewee,
+    Interviewer,
     Year,
+    Month,
+    Day,
     ChapterNumber,
     Institution,
     Publisher,
@@ -20,6 +25,11 @@ public enum SourceManagementSourceField
     StandardNumber,
     ShortTitle,
     Comments,
+    PatentNumber,
+    CountryRegion,
+    StateProvince,
+    Medium,
+    SourceKind,
     Journal,
     Volume,
     Issue,
@@ -67,7 +77,27 @@ public sealed record SourceManagementSourceEntry(
 
     public string ConferenceName { get; init; } = string.Empty;
 
+    public string Inventor { get; init; } = string.Empty;
+
+    public string Interviewee { get; init; } = string.Empty;
+
+    public string Interviewer { get; init; } = string.Empty;
+
+    public string Month { get; init; } = string.Empty;
+
+    public string Day { get; init; } = string.Empty;
+
     public string ChapterNumber { get; init; } = string.Empty;
+
+    public string PatentNumber { get; init; } = string.Empty;
+
+    public string CountryRegion { get; init; } = string.Empty;
+
+    public string StateProvince { get; init; } = string.Empty;
+
+    public string Medium { get; init; } = string.Empty;
+
+    public string SourceKind { get; init; } = string.Empty;
 
     public IReadOnlyList<SourceAuthorPerson> PersonalAuthors { get; init; } = [];
 
@@ -249,7 +279,10 @@ public static class SourceManagementDialogPlanner
         new(SourceType.BookSection, "Book Section"),
         new(SourceType.ConferenceProceedings, "Conference Proceedings"),
         new(SourceType.ArticleInPeriodical, "Article in a Periodical"),
-        new(SourceType.ElectronicSource, "Electronic Source")
+        new(SourceType.ElectronicSource, "Electronic Source"),
+        new(SourceType.Patent, "Patent"),
+        new(SourceType.Interview, "Interview"),
+        new(SourceType.Misc, "Miscellaneous")
     ];
 
     private static readonly IReadOnlyDictionary<SourceType, IReadOnlyList<SourceManagementSourceField>> SourceFieldOrders =
@@ -370,6 +403,46 @@ public static class SourceManagementDialogPlanner
                 SourceManagementSourceField.AccessedYear,
                 SourceManagementSourceField.ShortTitle,
                 SourceManagementSourceField.Comments
+            ],
+            [SourceType.Patent] =
+            [
+                SourceManagementSourceField.Tag,
+                SourceManagementSourceField.Inventor,
+                SourceManagementSourceField.Title,
+                SourceManagementSourceField.Year,
+                SourceManagementSourceField.Month,
+                SourceManagementSourceField.Day,
+                SourceManagementSourceField.PatentNumber,
+                SourceManagementSourceField.CountryRegion,
+                SourceManagementSourceField.StateProvince,
+                SourceManagementSourceField.ShortTitle,
+                SourceManagementSourceField.Comments
+            ],
+            [SourceType.Interview] =
+            [
+                SourceManagementSourceField.Tag,
+                SourceManagementSourceField.Interviewee,
+                SourceManagementSourceField.Interviewer,
+                SourceManagementSourceField.Title,
+                SourceManagementSourceField.Year,
+                SourceManagementSourceField.Month,
+                SourceManagementSourceField.Day,
+                SourceManagementSourceField.Medium,
+                SourceManagementSourceField.ShortTitle,
+                SourceManagementSourceField.Comments
+            ],
+            [SourceType.Misc] =
+            [
+                SourceManagementSourceField.Tag,
+                SourceManagementSourceField.Author,
+                SourceManagementSourceField.Title,
+                SourceManagementSourceField.Year,
+                SourceManagementSourceField.Month,
+                SourceManagementSourceField.Day,
+                SourceManagementSourceField.Medium,
+                SourceManagementSourceField.SourceKind,
+                SourceManagementSourceField.ShortTitle,
+                SourceManagementSourceField.Comments
             ]
         };
 
@@ -383,7 +456,12 @@ public static class SourceManagementDialogPlanner
             [SourceManagementSourceField.Title] = "Title:",
             [SourceManagementSourceField.BookTitle] = "Book title:",
             [SourceManagementSourceField.ConferenceName] = "Conference name:",
+            [SourceManagementSourceField.Inventor] = "Inventor:",
+            [SourceManagementSourceField.Interviewee] = "Interviewee:",
+            [SourceManagementSourceField.Interviewer] = "Interviewer:",
             [SourceManagementSourceField.Year] = "Year:",
+            [SourceManagementSourceField.Month] = "Month:",
+            [SourceManagementSourceField.Day] = "Day:",
             [SourceManagementSourceField.ChapterNumber] = "Chapter number:",
             [SourceManagementSourceField.Institution] = "Institution:",
             [SourceManagementSourceField.Publisher] = "Publisher / Site name (optional):",
@@ -392,6 +470,11 @@ public static class SourceManagementDialogPlanner
             [SourceManagementSourceField.StandardNumber] = "Standard number:",
             [SourceManagementSourceField.ShortTitle] = "Short title:",
             [SourceManagementSourceField.Comments] = "Comments:",
+            [SourceManagementSourceField.PatentNumber] = "Patent number:",
+            [SourceManagementSourceField.CountryRegion] = "Country / region:",
+            [SourceManagementSourceField.StateProvince] = "State / province:",
+            [SourceManagementSourceField.Medium] = "Medium:",
+            [SourceManagementSourceField.SourceKind] = "Type:",
             [SourceManagementSourceField.Journal] = "Journal:",
             [SourceManagementSourceField.Volume] = "Volume:",
             [SourceManagementSourceField.Issue] = "Issue:",
@@ -462,7 +545,17 @@ public static class SourceManagementDialogPlanner
             Institution = source?.Institution ?? string.Empty,
             BookTitle = source?.BookTitle ?? string.Empty,
             ConferenceName = source?.ConferenceName ?? string.Empty,
+            Inventor = source?.Inventor ?? string.Empty,
+            Interviewee = source?.Interviewee ?? string.Empty,
+            Interviewer = source?.Interviewer ?? string.Empty,
+            Month = source?.Month ?? string.Empty,
+            Day = source?.Day ?? string.Empty,
             ChapterNumber = source?.ChapterNumber ?? string.Empty,
+            PatentNumber = source?.PatentNumber ?? string.Empty,
+            CountryRegion = source?.CountryRegion ?? string.Empty,
+            StateProvince = source?.StateProvince ?? string.Empty,
+            Medium = source?.Medium ?? string.Empty,
+            SourceKind = source?.SourceKind ?? string.Empty,
             PersonalAuthors = ClonePersonalAuthors(source?.PersonalAuthors ?? []),
             CorporateAuthor = source?.CorporateAuthor,
             Editor = SourceAuthorPerson.FormatDisplayText(source?.Editors ?? []),
@@ -624,7 +717,17 @@ public static class SourceManagementDialogPlanner
             Institution = TrimmedValue(values, SourceManagementSourceField.Institution),
             BookTitle = TrimmedValue(values, SourceManagementSourceField.BookTitle),
             ConferenceName = TrimmedValue(values, SourceManagementSourceField.ConferenceName),
+            Inventor = TrimmedValue(values, SourceManagementSourceField.Inventor),
+            Interviewee = TrimmedValue(values, SourceManagementSourceField.Interviewee),
+            Interviewer = TrimmedValue(values, SourceManagementSourceField.Interviewer),
+            Month = TrimmedValue(values, SourceManagementSourceField.Month),
+            Day = TrimmedValue(values, SourceManagementSourceField.Day),
             ChapterNumber = TrimmedValue(values, SourceManagementSourceField.ChapterNumber),
+            PatentNumber = TrimmedValue(values, SourceManagementSourceField.PatentNumber),
+            CountryRegion = TrimmedValue(values, SourceManagementSourceField.CountryRegion),
+            StateProvince = TrimmedValue(values, SourceManagementSourceField.StateProvince),
+            Medium = TrimmedValue(values, SourceManagementSourceField.Medium),
+            SourceKind = TrimmedValue(values, SourceManagementSourceField.SourceKind),
             PersonalAuthors = author.PersonalAuthors,
             CorporateAuthor = author.CorporateAuthor,
             Editor = editors.DisplayText,
@@ -727,7 +830,12 @@ public static class SourceManagementDialogPlanner
             Title = entry.Title.Trim(),
             BookTitle = type == SourceType.BookSection ? NullIfWhiteSpace(entry.BookTitle) : null,
             ConferenceName = type == SourceType.ConferenceProceedings ? NullIfWhiteSpace(entry.ConferenceName) : null,
+            Inventor = type == SourceType.Patent ? NullIfWhiteSpace(entry.Inventor) : null,
+            Interviewee = type == SourceType.Interview ? NullIfWhiteSpace(entry.Interviewee) : null,
+            Interviewer = type == SourceType.Interview ? NullIfWhiteSpace(entry.Interviewer) : null,
             Year = entry.Year.Trim(),
+            Month = type is SourceType.Patent or SourceType.Interview or SourceType.Misc ? NullIfWhiteSpace(entry.Month) : null,
+            Day = type is SourceType.Patent or SourceType.Interview or SourceType.Misc ? NullIfWhiteSpace(entry.Day) : null,
             Institution = type == SourceType.Report ? NullIfWhiteSpace(entry.Institution) : null,
             Publisher = type is SourceType.Book or SourceType.WebSite or SourceType.Report or SourceType.BookSection or SourceType.ConferenceProceedings or SourceType.ElectronicSource
                 ? NullIfWhiteSpace(entry.Publisher)
@@ -738,6 +846,11 @@ public static class SourceManagementDialogPlanner
                 ? NullIfWhiteSpace(entry.StandardNumber)
                 : null,
             ChapterNumber = type == SourceType.BookSection ? NullIfWhiteSpace(entry.ChapterNumber) : null,
+            PatentNumber = type == SourceType.Patent ? NullIfWhiteSpace(entry.PatentNumber) : null,
+            CountryRegion = type == SourceType.Patent ? NullIfWhiteSpace(entry.CountryRegion) : null,
+            StateProvince = type == SourceType.Patent ? NullIfWhiteSpace(entry.StateProvince) : null,
+            Medium = type is SourceType.Interview or SourceType.Misc ? NullIfWhiteSpace(entry.Medium) : null,
+            SourceKind = type == SourceType.Misc ? NullIfWhiteSpace(entry.SourceKind) : null,
             ShortTitle = NullIfWhiteSpace(entry.ShortTitle),
             Comments = NullIfWhiteSpace(entry.Comments),
             Journal = IsPeriodicalSource(type) ? NullIfWhiteSpace(entry.Journal) : null,
@@ -768,13 +881,23 @@ public static class SourceManagementDialogPlanner
             Title = source.Title,
             BookTitle = source.BookTitle,
             ConferenceName = source.ConferenceName,
+            Inventor = source.Inventor,
+            Interviewee = source.Interviewee,
+            Interviewer = source.Interviewer,
             Year = source.Year,
+            Month = source.Month,
+            Day = source.Day,
             Institution = source.Institution,
             Publisher = source.Publisher,
             City = source.City,
             Edition = source.Edition,
             StandardNumber = source.StandardNumber,
             ChapterNumber = source.ChapterNumber,
+            PatentNumber = source.PatentNumber,
+            CountryRegion = source.CountryRegion,
+            StateProvince = source.StateProvince,
+            Medium = source.Medium,
+            SourceKind = source.SourceKind,
             ShortTitle = source.ShortTitle,
             Comments = source.Comments,
             Journal = source.Journal,
@@ -1140,13 +1263,23 @@ public static class SourceManagementDialogPlanner
         && SourceValueEquals(left.Title, right.Title)
         && SourceValueEquals(left.BookTitle, right.BookTitle)
         && SourceValueEquals(left.ConferenceName, right.ConferenceName)
+        && SourceValueEquals(left.Inventor, right.Inventor)
+        && SourceValueEquals(left.Interviewee, right.Interviewee)
+        && SourceValueEquals(left.Interviewer, right.Interviewer)
         && SourceValueEquals(left.Year, right.Year)
+        && SourceValueEquals(left.Month, right.Month)
+        && SourceValueEquals(left.Day, right.Day)
         && SourceValueEquals(left.Institution, right.Institution)
         && SourceValueEquals(left.Publisher, right.Publisher)
         && SourceValueEquals(left.City, right.City)
         && SourceValueEquals(left.Edition, right.Edition)
         && SourceValueEquals(left.StandardNumber, right.StandardNumber)
         && SourceValueEquals(left.ChapterNumber, right.ChapterNumber)
+        && SourceValueEquals(left.PatentNumber, right.PatentNumber)
+        && SourceValueEquals(left.CountryRegion, right.CountryRegion)
+        && SourceValueEquals(left.StateProvince, right.StateProvince)
+        && SourceValueEquals(left.Medium, right.Medium)
+        && SourceValueEquals(left.SourceKind, right.SourceKind)
         && SourceValueEquals(left.ShortTitle, right.ShortTitle)
         && SourceValueEquals(left.Comments, right.Comments)
         && SourceValueEquals(left.Journal, right.Journal)
@@ -1267,7 +1400,12 @@ public static class SourceManagementDialogPlanner
         || entry.Title.Length > 0
         || entry.BookTitle.Length > 0
         || entry.ConferenceName.Length > 0
+        || entry.Inventor.Length > 0
+        || entry.Interviewee.Length > 0
+        || entry.Interviewer.Length > 0
         || entry.Year.Length > 0
+        || entry.Month.Length > 0
+        || entry.Day.Length > 0
         || entry.ChapterNumber.Length > 0
         || entry.Institution.Length > 0
         || entry.Publisher.Length > 0
@@ -1276,6 +1414,11 @@ public static class SourceManagementDialogPlanner
         || entry.StandardNumber.Length > 0
         || entry.ShortTitle.Length > 0
         || entry.Comments.Length > 0
+        || entry.PatentNumber.Length > 0
+        || entry.CountryRegion.Length > 0
+        || entry.StateProvince.Length > 0
+        || entry.Medium.Length > 0
+        || entry.SourceKind.Length > 0
         || entry.Journal.Length > 0
         || entry.Volume.Length > 0
         || entry.Issue.Length > 0
@@ -1299,7 +1442,12 @@ public static class SourceManagementDialogPlanner
             SourceManagementSourceField.Title => entry.Title,
             SourceManagementSourceField.BookTitle => entry.BookTitle,
             SourceManagementSourceField.ConferenceName => entry.ConferenceName,
+            SourceManagementSourceField.Inventor => entry.Inventor,
+            SourceManagementSourceField.Interviewee => entry.Interviewee,
+            SourceManagementSourceField.Interviewer => entry.Interviewer,
             SourceManagementSourceField.Year => entry.Year,
+            SourceManagementSourceField.Month => entry.Month,
+            SourceManagementSourceField.Day => entry.Day,
             SourceManagementSourceField.ChapterNumber => entry.ChapterNumber,
             SourceManagementSourceField.Institution => entry.Institution,
             SourceManagementSourceField.Publisher => entry.Publisher,
@@ -1308,6 +1456,11 @@ public static class SourceManagementDialogPlanner
             SourceManagementSourceField.StandardNumber => entry.StandardNumber,
             SourceManagementSourceField.ShortTitle => entry.ShortTitle,
             SourceManagementSourceField.Comments => entry.Comments,
+            SourceManagementSourceField.PatentNumber => entry.PatentNumber,
+            SourceManagementSourceField.CountryRegion => entry.CountryRegion,
+            SourceManagementSourceField.StateProvince => entry.StateProvince,
+            SourceManagementSourceField.Medium => entry.Medium,
+            SourceManagementSourceField.SourceKind => entry.SourceKind,
             SourceManagementSourceField.Journal => entry.Journal,
             SourceManagementSourceField.Volume => entry.Volume,
             SourceManagementSourceField.Issue => entry.Issue,

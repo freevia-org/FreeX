@@ -945,6 +945,52 @@ public class CitationsTests
         ((int)SourceType.ConferenceProceedings).Should().Be(5);
         ((int)SourceType.ArticleInPeriodical).Should().Be(6);
         ((int)SourceType.ElectronicSource).Should().Be(7);
+        ((int)SourceType.Patent).Should().Be(8);
+        ((int)SourceType.Interview).Should().Be(9);
+        ((int)SourceType.Misc).Should().Be(10);
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_SourceManagerBreadthTypes_UseModeledFields()
+    {
+        var patent = new Source
+        {
+            Type = SourceType.Patent,
+            Inventor = "Lovelace, Ada",
+            Title = "Analytical Engine Control",
+            Year = "1843",
+            Month = "July",
+            Day = "4",
+            PatentNumber = "GB-1843-1",
+            CountryRegion = "United Kingdom",
+            StateProvince = "London"
+        };
+        var interview = new Source
+        {
+            Type = SourceType.Interview,
+            Interviewee = "Hopper, Grace",
+            Interviewer = "Mauchly, Jean",
+            Title = "Compiler Notes",
+            Year = "1968",
+            Medium = "Recorded interview"
+        };
+        var misc = new Source
+        {
+            Type = SourceType.Misc,
+            Author = "Example Archive",
+            Title = "Loose note",
+            Year = "2026",
+            SourceKind = "Manuscript",
+            Medium = "Scan"
+        };
+
+        Citations.FormatInText(patent, CitationStyle.Apa).Should().Be("(Lovelace, 1843)");
+        Citations.FormatBibliographyEntry(patent, CitationStyle.Apa)
+            .Should().Be("Lovelace, Ada. (1843). Analytical Engine Control. patent GB-1843-1, United Kingdom, London, 4 July 1843.");
+        Citations.FormatBibliographyEntry(interview, CitationStyle.Chicago)
+            .Should().Be("Hopper, Grace. Compiler Notes. interview by Mauchly, Jean, Recorded interview, 1968.");
+        Citations.FormatBibliographyEntry(misc, CitationStyle.Ieee)
+            .Should().Be("Example Archive, \"Loose note,\" Manuscript, Scan, 2026.");
     }
 
     [Fact]

@@ -336,6 +336,74 @@ public sealed class MasterSourceStoreTests
     }
 
     [Fact]
+    public void MasterStore_JsonRoundTrip_PreservesSourceManagerBreadthFields()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"master-sources-breadth-{Guid.NewGuid()}.json");
+        try
+        {
+            var store = new MasterSourceStore
+            {
+                Sources =
+                [
+                    SourceRecord.FromSource(new Source
+                    {
+                        Tag = "Patent2026",
+                        Type = SourceType.Patent,
+                        Inventor = "Lovelace, Ada",
+                        Title = "Analytical Engine Control",
+                        Year = "1843",
+                        Month = "July",
+                        Day = "4",
+                        PatentNumber = "GB-1843-1",
+                        CountryRegion = "United Kingdom",
+                        StateProvince = "London"
+                    }),
+                    SourceRecord.FromSource(new Source
+                    {
+                        Tag = "Interview2026",
+                        Type = SourceType.Interview,
+                        Interviewee = "Hopper, Grace",
+                        Interviewer = "Mauchly, Jean",
+                        Medium = "Recorded interview"
+                    }),
+                    SourceRecord.FromSource(new Source
+                    {
+                        Tag = "Misc2026",
+                        Type = SourceType.Misc,
+                        Author = "Example Archive",
+                        SourceKind = "Manuscript",
+                        Medium = "Scan"
+                    })
+                ]
+            };
+            var settingsStore = JsonSettingsStore<MasterSourceStore>.ForPath(path);
+
+            settingsStore.Save(store);
+            var sources = JsonSettingsStore<MasterSourceStore>.ForPath(path).Load().ToSources();
+
+            sources.Should().HaveCount(3);
+            sources[0].Type.Should().Be(SourceType.Patent);
+            sources[0].Inventor.Should().Be("Lovelace, Ada");
+            sources[0].PatentNumber.Should().Be("GB-1843-1");
+            sources[0].CountryRegion.Should().Be("United Kingdom");
+            sources[0].StateProvince.Should().Be("London");
+            sources[0].Month.Should().Be("July");
+            sources[0].Day.Should().Be("4");
+            sources[1].Type.Should().Be(SourceType.Interview);
+            sources[1].Interviewee.Should().Be("Hopper, Grace");
+            sources[1].Interviewer.Should().Be("Mauchly, Jean");
+            sources[1].Medium.Should().Be("Recorded interview");
+            sources[2].Type.Should().Be(SourceType.Misc);
+            sources[2].SourceKind.Should().Be("Manuscript");
+            sources[2].Medium.Should().Be("Scan");
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void MasterStore_AddOrUpdate_ReplacesExistingTag()
     {
         var store = new MasterSourceStore();

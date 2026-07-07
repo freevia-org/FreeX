@@ -5449,6 +5449,9 @@ public static class DocxWriter
         SourceType.ConferenceProceedings => "ConferenceProceedings",
         SourceType.ArticleInPeriodical => "ArticleInAPeriodical",
         SourceType.ElectronicSource => "ElectronicSource",
+        SourceType.Patent => "Patent",
+        SourceType.Interview => "Interview",
+        SourceType.Misc => "Misc",
         _ => "Book",
     };
 
@@ -5480,12 +5483,19 @@ public static class DocxWriter
             AddBibliographyField(element, "BookTitle", source.BookTitle);
             AddBibliographyField(element, "ConferenceName", source.ConferenceName);
             AddBibliographyField(element, "Year", source.Year);
+            AddBibliographyField(element, "Month", source.Month);
+            AddBibliographyField(element, "Day", source.Day);
             AddBibliographyField(element, "Institution", source.Institution);
             AddBibliographyField(element, "Publisher", source.Publisher);
             AddBibliographyField(element, "City", source.City);
             AddBibliographyField(element, "Edition", source.Edition);
             AddBibliographyField(element, "StandardNumber", source.StandardNumber);
             AddBibliographyField(element, "ChapterNumber", source.ChapterNumber);
+            AddBibliographyField(element, "PatentNumber", source.PatentNumber);
+            AddBibliographyField(element, "CountryRegion", source.CountryRegion);
+            AddBibliographyField(element, "StateProvince", source.StateProvince);
+            AddBibliographyField(element, "Medium", source.Medium);
+            AddBibliographyField(element, "Type", source.SourceKind);
             AddBibliographyField(element, "ShortTitle", source.ShortTitle);
             AddBibliographyField(element, "Comments", source.Comments);
             AddBibliographyField(element, "JournalName", source.Journal);
@@ -5532,6 +5542,9 @@ public static class DocxWriter
         AddRole(roles, "Author", source.PersonalAuthors, corporate);
         AddRole(roles, "Editor", source.Editors, corporate: null);
         AddRole(roles, "Translator", source.Translators, corporate: null);
+        AddRole(roles, "Inventor", [], source.Inventor);
+        AddRole(roles, "Interviewee", [], source.Interviewee);
+        AddRole(roles, "Interviewer", [], source.Interviewer);
 
         return roles.Count == 0 ? null : new XElement(B + "Author", roles);
 

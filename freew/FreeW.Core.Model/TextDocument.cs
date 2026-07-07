@@ -1295,6 +1295,15 @@ public enum SourceType
 
     /// <summary>A Word electronic source (adds URL and accessed date fields).</summary>
     ElectronicSource = 7,
+
+    /// <summary>A Word patent source (adds inventor, patent number and filing/jurisdiction fields).</summary>
+    Patent = 8,
+
+    /// <summary>A Word interview source (adds interviewee/interviewer, medium and date fields).</summary>
+    Interview = 9,
+
+    /// <summary>A Word miscellaneous source for lightly structured material.</summary>
+    Misc = 10,
 }
 
 /// <summary>
@@ -1385,8 +1394,23 @@ public sealed class Source
     /// <summary>The conference or proceedings name for <see cref="SourceType.ConferenceProceedings"/>; null when unknown.</summary>
     public string? ConferenceName { get; init; }
 
+    /// <summary>The inventor role for a <see cref="SourceType.Patent"/>; null when unknown.</summary>
+    public string? Inventor { get; init; }
+
+    /// <summary>The interviewee role for a <see cref="SourceType.Interview"/>; null when unknown.</summary>
+    public string? Interviewee { get; init; }
+
+    /// <summary>The interviewer role for a <see cref="SourceType.Interview"/>; null when unknown.</summary>
+    public string? Interviewer { get; init; }
+
     /// <summary>The year of publication. Empty when unknown.</summary>
     public string Year { get; init; } = string.Empty;
+
+    /// <summary>The month value used by Word bibliography source types that carry a full date; null when unknown.</summary>
+    public string? Month { get; init; }
+
+    /// <summary>The day value used by Word bibliography source types that carry a full date; null when unknown.</summary>
+    public string? Day { get; init; }
 
     /// <summary>The institution responsible for a report; null when unknown / not applicable.</summary>
     public string? Institution { get; init; }
@@ -1405,6 +1429,21 @@ public sealed class Source
 
     /// <summary>The chapter number for a <see cref="SourceType.BookSection"/>; null when unknown.</summary>
     public string? ChapterNumber { get; init; }
+
+    /// <summary>The patent number for a <see cref="SourceType.Patent"/>; null when unknown.</summary>
+    public string? PatentNumber { get; init; }
+
+    /// <summary>The country/region jurisdiction for a <see cref="SourceType.Patent"/>; null when unknown.</summary>
+    public string? CountryRegion { get; init; }
+
+    /// <summary>The state/province jurisdiction for a <see cref="SourceType.Patent"/>; null when unknown.</summary>
+    public string? StateProvince { get; init; }
+
+    /// <summary>A source-specific medium, such as an interview medium or miscellaneous format; null when unknown.</summary>
+    public string? Medium { get; init; }
+
+    /// <summary>A source-specific type/kind string for miscellaneous Word sources; null when unknown.</summary>
+    public string? SourceKind { get; init; }
 
     /// <summary>A shortened citation title; null when unknown.</summary>
     public string? ShortTitle { get; init; }
