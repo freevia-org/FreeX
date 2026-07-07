@@ -342,9 +342,10 @@ internal static partial class XlsxChartXmlWriter
     ///   - Stacked/percent-stacked bar or column: only ctr is valid.
     ///   - Area (incl. 3-D area), radar, surface, stock: c:dLblPos has no valid value at all — the
     ///     element must be omitted entirely.
-    ///   - Clustered/3-D bar or column, line, 3-D line, scatter, bubble: ctr, inEnd, outEnd, inBase
-    ///     (bar/column) or ctr, l, r, t, b (line/scatter) are valid; FreeX's model never produces
-    ///     inBase/l/r/t/b, but bestFit is invalid here too, so it is remapped down to ctr.
+    ///   - Clustered/3-D bar or column: ctr, inEnd, outEnd, inBase are valid; FreeX's model never
+    ///     produces inBase, but bestFit is invalid here too, so it is remapped down to ctr.
+    ///   - Line, 3-D line, scatter, bubble: only ctr, l, r, t, b are valid; FreeX's model never
+    ///     produces l/r/t/b, so every position (including outEnd/inEnd/bestFit) is gated to ctr.
     /// </summary>
     private static XElement? GatedDataLabelPositionXml(ChartModel chart, XNamespace chartNs)
     {
@@ -372,8 +373,16 @@ internal static partial class XlsxChartXmlWriter
         if (hasNoValidPosition)
             return null;
 
-        // Clustered/3-D bar/column, line/3-D line, scatter, bubble and everything else FreeX can
-        // author: bestFit is not a valid value outside pie, so fall back to ctr.
+        // Line/3-D line, scatter, bubble only accept ctr, l, r, t, b — FreeX's model never produces
+        // l/r/t/b, and inEnd/outEnd/bestFit are all invalid here (Excel rejects the chart part with a
+        // repair prompt), so gate every position down to ctr for this family.
+        var isLineScatterOrBubble = chartType is ChartType.Line or ChartType.ThreeDLine
+            or ChartType.Scatter or ChartType.Bubble;
+        if (isLineScatterOrBubble)
+            return "ctr";
+
+        // Clustered/3-D bar/column and everything else FreeX can author: bestFit is not a valid value
+        // outside pie, so fall back to ctr.
         return position == "bestFit" ? "ctr" : position;
     }
 

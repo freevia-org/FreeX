@@ -110,6 +110,9 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
                     return CommandGuards.RejectSheetProtected();
         }
 
+        if (CommandGuards.RejectIfSplitsArray(sheet, cells.Select(c => c.Address)) is { } splitsArrayRejection)
+            return splitsArrayRejection;
+
         _snapshot = [];
         foreach (var (address, cell, sourceAddress) in cells)
         {

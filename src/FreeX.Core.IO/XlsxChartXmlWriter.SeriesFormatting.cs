@@ -19,7 +19,7 @@ internal static partial class XlsxChartXmlWriter
             .Select(group => group.Last())
             .Where(HasPointDataLabelFormatting)
             .OrderBy(format => format.PointIndex)
-            .Select(format => ToPointDataLabelXml(format, chartNs, drawingNs))
+            .Select(format => ToPointDataLabelXml(format, chart.Type, chartNs, drawingNs))
             .ToArray();
         ChartSeriesDataLabelFormat? seriesDefaults = null;
         foreach (var format in chart.SeriesDataLabelFormats)
@@ -35,7 +35,7 @@ internal static partial class XlsxChartXmlWriter
             ? null
             : new XElement(chartNs + "dLbls",
                 labels,
-                seriesDefaults is null ? null : ToSeriesDataLabelDefaultsXml(seriesDefaults, chartNs, drawingNs));
+                seriesDefaults is null ? null : ToSeriesDataLabelDefaultsXml(seriesDefaults, chart.Type, chartNs, drawingNs));
     }
 
     private static bool HasPointDataLabelFormatting(ChartPointDataLabelFormat format) =>
@@ -81,6 +81,7 @@ internal static partial class XlsxChartXmlWriter
 
     private static IEnumerable<XElement?> ToSeriesDataLabelDefaultsXml(
         ChartSeriesDataLabelFormat format,
+        ChartType chartType,
         XNamespace chartNs,
         XNamespace drawingNs)
     {
@@ -94,8 +95,12 @@ internal static partial class XlsxChartXmlWriter
             format.BorderColor,
             format.BorderThickness);
         yield return ToSeriesDataLabelTextProperties(format, chartNs, drawingNs);
-        yield return format.Position is { } position
-            ? new XElement(chartNs + "dLblPos", new XAttribute("val", ToXlsxDataLabelPosition(position)))
+        // R11-xlsx-charts-2: gate the same as the chart-level dLblPos (GatedDataLabelPositionXml) —
+        // an ungated position can survive a chart-type change (e.g. clustered column -> area/stacked)
+        // into a family that has no valid dLblPos at all, or only accepts ctr, and Excel repairs/drops
+        // the whole chart on open.
+        yield return format.Position is { } position && GateDataLabelPosition(ToXlsxDataLabelPosition(position), chartType) is { } gatedSeriesPosition
+            ? new XElement(chartNs + "dLblPos", new XAttribute("val", gatedSeriesPosition))
             : null;
         yield return ToPointDataLabelBoolXml("showLegendKey", format.ShowLegendKey, chartNs);
         yield return ToPointDataLabelBoolXml("showVal", format.ShowValue, chartNs);
@@ -110,6 +115,7 @@ internal static partial class XlsxChartXmlWriter
 
     private static XElement ToPointDataLabelXml(
         ChartPointDataLabelFormat format,
+        ChartType chartType,
         XNamespace chartNs,
         XNamespace drawingNs) =>
         new(chartNs + "dLbl",
@@ -127,8 +133,12 @@ internal static partial class XlsxChartXmlWriter
                 format.BorderColor,
                 format.BorderThickness),
             ToPointDataLabelTextProperties(format, chartNs, drawingNs),
-            format.Position is { } position
-                ? new XElement(chartNs + "dLblPos", new XAttribute("val", ToXlsxDataLabelPosition(position)))
+            // R11-xlsx-charts-2: gate the same as the chart-level dLblPos — an ungated per-point
+            // position can survive a chart-type change into a family with no valid dLblPos at all
+            // (e.g. area) or one that only accepts ctr (e.g. stacked column), and Excel repairs/drops
+            // the whole chart on open.
+            format.Position is { } position && GateDataLabelPosition(ToXlsxDataLabelPosition(position), chartType) is { } gatedPosition
+                ? new XElement(chartNs + "dLblPos", new XAttribute("val", gatedPosition))
                 : null,
             ToPointDataLabelBoolXml("showLegendKey", format.ShowLegendKey, chartNs),
             ToPointDataLabelBoolXml("showVal", format.ShowValue, chartNs),

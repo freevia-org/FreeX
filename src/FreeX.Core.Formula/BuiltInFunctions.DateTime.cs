@@ -246,7 +246,8 @@ public static partial class BuiltInFunctions
         try
         {
             var result = dt.AddMonths(months);
-            return new NumberValue(DateToSerial(result, uses1904DateSystem));
+            var serial = DateToSerial(result, uses1904DateSystem);
+            return serial < (uses1904DateSystem ? 0 : 1) ? ErrorValue.Num : new NumberValue(serial);
         }
         catch { return ErrorValue.Num; }
     }
@@ -472,7 +473,8 @@ public static partial class BuiltInFunctions
         {
             var target = dt.AddMonths(months + 1);
             var eomonth = new DateTime(target.Year, target.Month, 1).AddDays(-1);
-            return new NumberValue(DateToSerial(eomonth, uses1904DateSystem));
+            var serial = DateToSerial(eomonth, uses1904DateSystem);
+            return serial < (uses1904DateSystem ? 0 : 1) ? ErrorValue.Num : new NumberValue(serial);
         }
         catch { return ErrorValue.Num; }
     }
@@ -589,6 +591,9 @@ public static partial class BuiltInFunctions
     private static ScalarValue WorkdayScalar(ScalarValue startDate, int days, HashSet<DateTime> holidays, bool uses1904DateSystem)
     {
         if (!TrySerialToDateTime(startDate, uses1904DateSystem, out var current)) return ErrorValue.Num;
+        // WORKDAY always returns a whole-day serial — Excel discards any time-of-day
+        // fraction carried by the start date before walking forward/back.
+        current = current.Date;
         int sign = days < 0 ? -1 : 1;
         int remaining = Math.Abs(days);
         // Skip full weeks when there are no holidays — 5 workdays = 7 calendar days

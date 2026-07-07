@@ -85,15 +85,12 @@ internal static class XlsxWorksheetProtectionMetadataWriter
 
             XlsxWorksheetProtectionNormalizer.NormalizeElement(protection);
 
-            // NOTE (deferred P93): re-protecting a modern-hash sheet with a NEW password after load
-            // can silently keep the stale ISO 29500 verifier (the old password still unlocks). We
-            // cannot reliably detect that here from writer state alone -- a preserved hashValue
-            // coexisting with a non-"iso29500:" ProtectionPassword is indistinguishable from a
-            // legitimately-loaded sheet whose model just carries a legacy password mirror, so gating
-            // on it breaks the XlsxNonChartSchemaValidation SanitizesInvalidSheetProtection
-            // round-trips. The correct fix belongs at the command layer (Unprotect/Protect must
-            // invalidate the preserved ProtectionMetadata hash bag when the password changes) -- left
-            // as a follow-up.
+            // The modern ISO 29500 hash quartet (algorithmName/hashValue/saltValue/spinCount) only
+            // ever reaches this element via the preserved ProtectionMetadata bag applied above.
+            // ProtectSheetCommand/UnprotectSheetCommand clear sheet.ProtectionMetadata whenever the
+            // password changes (see SheetProtectionCommands.cs), so a hashValue surviving to this
+            // point is always the still-current verifier for the sheet's current password -- never a
+            // stale one left behind by a since-superseded password.
             var hasAdvancedHash = protection.Attribute("hashValue") is not null;
             if (hasAdvancedHash)
             {

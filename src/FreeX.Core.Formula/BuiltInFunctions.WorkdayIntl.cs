@@ -108,6 +108,9 @@ public static partial class BuiltInFunctions
     private static ScalarValue WorkdayIntlScalar(ScalarValue startDate, ScalarValue daysValue, bool[] mask, HashSet<DateTime> holidays, bool uses1904DateSystem)
     {
         if (!TrySerialToDateTime(startDate, uses1904DateSystem, out var current)) return ErrorValue.Num;
+        // WORKDAY.INTL always returns a whole-day serial — Excel discards any time-of-day
+        // fraction carried by the start date before walking forward/back.
+        current = current.Date;
         double rawDays = ToNumber(daysValue);
         if (!double.IsFinite(rawDays)) return ErrorValue.Num;
         if (rawDays < int.MinValue + 1 || rawDays > int.MaxValue) return ErrorValue.Num;

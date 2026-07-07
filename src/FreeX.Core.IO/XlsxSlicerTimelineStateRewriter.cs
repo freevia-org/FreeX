@@ -110,7 +110,9 @@ internal static class XlsxSlicerTimelineStateRewriter
             if (model is null)
                 continue;
 
-            if (RewriteSlicerCacheSelection(root, model))
+            var changed = RewriteSlicerCacheSelection(root, model);
+            changed |= RewriteNativeCacheItemSelection(root, model, workbook);
+            if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(archive, cachePath, cacheXml);
         }
     }
@@ -175,6 +177,136 @@ internal static class XlsxSlicerTimelineStateRewriter
                 string.Equals(element.Attribute("uri")?.Value, SlicerSelectionExtensionUri, StringComparison.OrdinalIgnoreCase) &&
                 !element.HasElements)
             .Remove();
+    }
+
+    /// <summary>
+    /// R11-xlsx-pivot-slicer-1: a pivot slicer cache's NATIVE selection form is
+    /// <c>&lt;data&gt;&lt;tabular&gt;&lt;items&gt;&lt;i x="N" s="1"/&gt;</c> (see
+    /// <see cref="XlsxSlicerTimelineMetadataReader"/>'s <c>ReadSlicerCacheItems</c>) — Excel reads the
+    /// selection from THESE flags, never from the FreeX-private extLst that
+    /// <see cref="RewriteSlicerCacheSelection"/> reconciles. On a source-preserved workbook these native
+    /// <c>&lt;i s="1"&gt;</c> flags are copied verbatim, so a FreeX-side selection change (which only
+    /// updates <see cref="SlicerModel.SelectedItems"/>, not <see cref="SlicerModel.CacheItems"/>) never
+    /// reached them and Excel kept showing the stale selection. This resolves each cache item's caption
+    /// from the pivot cache field's shared items (mirroring FreeX.Core.Commands.SlicerItemResolver's
+    /// normalization) and rewrites its <c>s</c>
+    /// flag to match whether that caption is in the model's current <see cref="SlicerModel.SelectedItems"/>.
+    /// No-op when the part carries no native tabular items, or when every flag already matches the model
+    /// (idempotent re-save of an unchanged workbook stays byte-stable).
+    /// </summary>
+    private static bool RewriteNativeCacheItemSelection(XElement cacheRoot, SlicerModel model, Workbook workbook)
+    {
+        var itemsElement = cacheRoot
+            .Descendants()
+            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "items", StringComparison.OrdinalIgnoreCase));
+        if (itemsElement is null)
+            return false;
+
+        var field = ResolveSharedItemsField(workbook, model);
+        var sharedItems = field?.SharedItems;
+        var selected = new HashSet<string>(model.SelectedItems, StringComparer.OrdinalIgnoreCase);
+
+        var changed = false;
+        foreach (var itemElement in itemsElement.Elements())
+        {
+            if (!string.Equals(itemElement.Name.LocalName, "i", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (!int.TryParse(itemElement.Attribute("x")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index))
+                continue;
+            if (sharedItems is null || index < 0 || index >= sharedItems.Count)
+                continue;
+
+            var caption = NormalizeSharedItemCaption(sharedItems[index], field);
+            if (string.IsNullOrEmpty(caption))
+                continue;
+
+            var shouldBeSelected = selected.Contains(caption);
+            changed |= SetSelectedFlag(itemElement, shouldBeSelected);
+        }
+
+        return changed;
+    }
+
+    /// <summary>
+    /// Sets/clears the <c>s</c> (selected) boolean attribute on a native <c>&lt;i&gt;</c> cache item.
+    /// Excel's default for an absent <c>s</c> is unselected, so a false value REMOVES the attribute rather
+    /// than writing <c>s="0"</c>, keeping an all-cleared re-save shaped like Excel's own output.
+    /// </summary>
+    private static bool SetSelectedFlag(XElement itemElement, bool selected)
+    {
+        var current = string.Equals(itemElement.Attribute("s")?.Value, "1", StringComparison.Ordinal);
+        if (current == selected)
+            return false;
+
+        if (selected)
+            itemElement.SetAttributeValue("s", "1");
+        else
+            itemElement.SetAttributeValue("s", null);
+        return true;
+    }
+
+    /// <summary>
+    /// Finds the pivot cache field backing this slicer's <see cref="SlicerModel.SourceFieldName"/>, the
+    /// same association FreeX.Core.Commands.SlicerItemResolver uses (name match against
+    /// every field with non-empty shared items across the workbook's pivot caches).
+    /// </summary>
+    private static PivotCacheFieldModel? ResolveSharedItemsField(Workbook workbook, SlicerModel slicer)
+    {
+        var fieldName = slicer.SourceFieldName;
+        if (string.IsNullOrWhiteSpace(fieldName))
+            return null;
+
+        foreach (var cache in workbook.PivotCaches)
+        {
+            foreach (var candidateField in cache.Fields)
+            {
+                if (string.Equals(candidateField.Name, fieldName, StringComparison.OrdinalIgnoreCase) &&
+                    candidateField.SharedItems is { Count: > 0 })
+                {
+                    return candidateField;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Reformats a raw pivot-cache shared-item attribute string into the same caption
+    /// FreeX.Core.Commands.SlicerItemResolver would resolve for that value (its
+    /// NormalizeSharedItemCaption), so the caption compared here against
+    /// <see cref="SlicerModel.SelectedItems"/> matches what the UI/refresh path uses. Text items pass
+    /// through unchanged; numbers/dates are reformatted using the field's element kind (or containment
+    /// flags when no per-item kind was preserved) and current-culture formatting.
+    /// </summary>
+    private static string NormalizeSharedItemCaption(string raw, PivotCacheFieldModel? field)
+    {
+        if (field is null || string.IsNullOrEmpty(raw))
+            return raw;
+
+        if (field.ContainsDate && !field.ContainsString && !field.ContainsNumber)
+        {
+            if (!DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+                return raw;
+
+            return field.Grouping switch
+            {
+                PivotFieldGrouping.Year => date.Year.ToString(CultureInfo.InvariantCulture),
+                PivotFieldGrouping.Quarter => $"{date.Year}-Q{((date.Month - 1) / 3) + 1}",
+                PivotFieldGrouping.Month => date.ToString("yyyy-MM", CultureInfo.InvariantCulture),
+                PivotFieldGrouping.Day => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                _ => date.ToShortDateString()
+            };
+        }
+
+        if (field.ContainsNumber && !field.ContainsString && !field.ContainsDate)
+        {
+            return double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+                ? number.ToString(CultureInfo.CurrentCulture)
+                : raw;
+        }
+
+        return raw;
     }
 
     private static void RewriteTimelineState(ZipArchive archive, Workbook workbook)

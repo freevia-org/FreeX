@@ -25,6 +25,7 @@ public sealed class ProtectSheetCommand : IWorkbookCommand
     private bool _previousProtected;
     private string? _previousPassword;
     private List<SheetProtectionPermission>? _previousPermissions;
+    private NativeXmlPreserveBag? _previousProtectionMetadata;
 
     public string Label => "Protect Sheet";
 
@@ -52,11 +53,22 @@ public sealed class ProtectSheetCommand : IWorkbookCommand
         _previousProtected = sheet.IsProtected;
         _previousPassword = sheet.ProtectionPassword;
         _previousPermissions = sheet.ProtectionPermissions.ToList();
+        _previousProtectionMetadata = sheet.ProtectionMetadata;
         sheet.IsProtected = true;
         sheet.ProtectionPassword = ProtectionCommandPasswordHashing.HashTypedPassword(_password);
         sheet.ProtectionPermissions.Clear();
         foreach (var permission in _permissions.Where(Enum.IsDefined).Distinct())
             sheet.ProtectionPermissions.Add(permission);
+
+        // A freshly-typed password (or re-protecting with no password at all) supersedes whatever
+        // modern ISO 29500 verifier a prior Protect Sheet password left behind in the preserved
+        // metadata bag (see XlsxWorksheetProtectionMetadataWriter.Save). Without clearing it here,
+        // the writer would re-apply the OLD password's algorithmName/hashValue/saltValue/spinCount
+        // quartet from the preserved bag alongside (or instead of) the NEW password's legacy hash,
+        // leaving a stale verifier so Excel (which trusts the modern hash) still unlocks with the
+        // revoked password while the new one silently does nothing -- mirrors
+        // ProtectWorkbookCommand.Apply.
+        sheet.ProtectionMetadata = null;
         return new CommandOutcome(true);
     }
 
@@ -68,6 +80,7 @@ public sealed class ProtectSheetCommand : IWorkbookCommand
         sheet.ProtectionPermissions.Clear();
         foreach (var permission in _previousPermissions ?? [])
             sheet.ProtectionPermissions.Add(permission);
+        sheet.ProtectionMetadata = _previousProtectionMetadata;
     }
 }
 
@@ -79,6 +92,7 @@ public sealed class UnprotectSheetCommand : IWorkbookCommand
     private bool _previousProtected;
     private string? _previousPassword;
     private List<SheetProtectionPermission>? _previousPermissions;
+    private NativeXmlPreserveBag? _previousProtectionMetadata;
 
     public string Label => "Unprotect Sheet";
 
@@ -97,9 +111,15 @@ public sealed class UnprotectSheetCommand : IWorkbookCommand
         _previousProtected = sheet.IsProtected;
         _previousPassword = sheet.ProtectionPassword;
         _previousPermissions = sheet.ProtectionPermissions.ToList();
+        _previousProtectionMetadata = sheet.ProtectionMetadata;
         sheet.IsProtected = false;
         sheet.ProtectionPassword = null;
         sheet.ProtectionPermissions.Clear();
+
+        // Clear the preserved modern-hash verifier along with the password: a later Protect Sheet
+        // with a new password must not have this stale bag re-applied underneath it (see
+        // ProtectSheetCommand.Apply).
+        sheet.ProtectionMetadata = null;
         return new CommandOutcome(true);
     }
 
@@ -111,6 +131,7 @@ public sealed class UnprotectSheetCommand : IWorkbookCommand
         sheet.ProtectionPermissions.Clear();
         foreach (var permission in _previousPermissions ?? [])
             sheet.ProtectionPermissions.Add(permission);
+        sheet.ProtectionMetadata = _previousProtectionMetadata;
     }
 }
 

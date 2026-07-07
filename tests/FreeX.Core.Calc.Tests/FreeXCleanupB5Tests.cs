@@ -70,8 +70,14 @@ public class FreeXCleanupB5Tests
     [Fact]
     public void DataBar_DefaultAutomaticThresholds_AllNegativeRange_UsesZeroBaselineNotActualMaximum()
     {
-        // A1:A3 = -30, -20, -10. Automatic maximum is max(0, actual max) = 0, so bars grow toward
-        // zero: the cell closest to zero (-10) gets the longest bar, matching Excel.
+        // A1:A3 = -30, -20, -10. Automatic maximum is max(0, actual max) = 0, so the resolved scale
+        // is -30..0 and every value is <= 0 -- Excel therefore places the axis at the right edge
+        // (fraction 1.0) and draws every bar growing leftward from it in the negative fill color,
+        // with the value furthest from zero (-30) producing the longest bar and the value closest
+        // to zero (-10) the shortest. (See R11-conditional-format-1: before the fix, the
+        // negative-axis branch required max > 0 strictly, which this clamped max == 0 fails, so
+        // evaluation fell through to the left-anchored positive path and inverted both the length
+        // ordering and the fill color.)
         var (wb, sheet) = MakeWorkbook();
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(-30)));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(-20)));
@@ -82,15 +88,33 @@ public class FreeXCleanupB5Tests
             AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1)),
             Priority = 1,
             RuleType = CfRuleType.DataBar,
-            DataBarColor = new RgbColor(99, 142, 198)
+            DataBarColor = new RgbColor(99, 142, 198),
+            DataBarNegativeFillColor = new RgbColor(255, 0, 0)
         });
 
         var viewport = GetViewport(wb, sheet);
 
-        var closestToZero = GetCell(viewport, 3, 1);
+        var mostNegative = GetCell(viewport, 1, 1);   // -30, furthest from zero -> longest bar
+        var closestToZero = GetCell(viewport, 3, 1);  // -10, closest to zero -> shortest bar
+
+        mostNegative.ConditionalDataBar.Should().NotBeNull();
         closestToZero.ConditionalDataBar.Should().NotBeNull();
-        closestToZero.ConditionalDataBar!.Value.EndFraction.Should().BeApproximately(
-            20d / 30d, 0.0001, "automatic maximum is max(0, actual max) = 0, so -10 is 20/30 of the -30..0 span");
+
+        var mostBar = mostNegative.ConditionalDataBar!.Value;
+        var closestBar = closestToZero.ConditionalDataBar!.Value;
+
+        mostBar.IsNegative.Should().BeTrue("an all-negative range must use the negative-axis path, not the positive fallthrough");
+        closestBar.IsNegative.Should().BeTrue();
+        mostBar.FillColor.Should().Be(new RgbColor(255, 0, 0), "negative fill color must be used, not the positive DataBarColor");
+        closestBar.FillColor.Should().Be(new RgbColor(255, 0, 0));
+
+        mostBar.AxisFraction.Should().BeApproximately(1.0, 0.0001, "axis sits at the right edge since max clamps to 0");
+        mostBar.EndFraction.Should().BeApproximately(1.0, 0.0001);
+        mostBar.StartFraction.Should().BeApproximately(0.0, 0.0001, "-30 is the range minimum, so its bar fills the entire width");
+
+        var mostLength = mostBar.EndFraction - mostBar.StartFraction;
+        var closestLength = closestBar.EndFraction - closestBar.StartFraction;
+        mostLength.Should().BeGreaterThan(closestLength, "-30 (furthest from zero) must have a longer bar than -10 (closest to zero)");
     }
 
     [Fact]

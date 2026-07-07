@@ -508,19 +508,29 @@ internal static partial class ViewportConditionalFormatEvaluator
             if (maxLength < minLength)
                 (minLength, maxLength) = (maxLength, minLength);
 
-            // Negative-axis path: when the range straddles zero and axisPosition is not "none",
-            // place the axis. "Middle" pins the axis at Excel's fixed 50% position regardless of
-            // the min/max skew; "Automatic" (unset) places it proportionally at the zero crossing.
-            // Positive bars extend rightward from the axis; negative bars extend leftward from the
-            // axis using the negative fill color.
+            // Negative-axis path: when the range straddles zero (or is entirely negative, which
+            // the zero clamp above pins to max == 0 -- i.e. the axis sits at the right edge) and
+            // axisPosition is not "none", place the axis. "Middle" pins the axis at Excel's fixed
+            // 50% position regardless of the min/max skew; "Automatic" (unset) places it
+            // proportionally at the zero crossing. Positive bars extend rightward from the axis;
+            // negative bars extend leftward from the axis using the negative fill color. An
+            // all-negative range (max <= 0) has no positive bars to draw, but every value must
+            // still go through the negative branch below so the longest (most negative) bar is
+            // the most negative value, growing leftward from the axis in the negative color --
+            // not the positive-path fallthrough, which would invert both length and color.
             var axisAtNone = string.Equals(cf.DataBarAxisPosition, "none", StringComparison.OrdinalIgnoreCase);
             var axisAtMiddle = string.Equals(cf.DataBarAxisPosition, "middle", StringComparison.OrdinalIgnoreCase);
-            if (!axisAtNone && min < 0 && max > 0)
+            if (!axisAtNone && min < 0 && max >= 0)
             {
+                // min < 0 <= max here, so max - min > 0 always; no divide-by-zero guard needed.
                 var axisFraction = axisAtMiddle ? 0.5d : (0d - min) / (max - min);
                 if (cellValue >= 0)
                 {
-                    var t = Math.Clamp((cellValue - 0d) / (max - 0d), 0d, 1d);
+                    // max can be exactly 0 for an all-negative (or all-zero) range where the
+                    // automatic-maximum zero clamp pins max at 0; the only cell that can reach
+                    // this branch then is cellValue == 0 itself, which is always a full-length
+                    // "positive" segment of zero width (t is irrelevant / avoid a 0/0 NaN).
+                    var t = max > 0d ? Math.Clamp(cellValue / max, 0d, 1d) : 0d;
                     var length = (minLength + (maxLength - minLength) * t) * (1d - axisFraction);
                     if (length <= 0)
                     {

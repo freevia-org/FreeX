@@ -25,6 +25,7 @@ public static class OpcMediaTypes
             ["bmp"] = "image/bmp",
             ["tif"] = "image/tiff",
             ["tiff"] = "image/tiff",
+            ["webp"] = "image/webp",
             ["svg"] = "image/svg+xml",
             ["wmf"] = "image/x-wmf",
             ["emf"] = "image/x-emf",
@@ -273,19 +274,32 @@ public static class OpcMediaTypes
         if (extension.Equals(".gif", StringComparison.OrdinalIgnoreCase))
             return "image/gif";
 
+        if (extension.Equals(".tif", StringComparison.OrdinalIgnoreCase) ||
+            extension.Equals(".tiff", StringComparison.OrdinalIgnoreCase))
+            return "image/tiff";
+
+        if (extension.Equals(".webp", StringComparison.OrdinalIgnoreCase))
+            return "image/webp";
+
         return "image/png";
     }
 
     public static string GetImageExtension(string contentType, bool includeDot = false)
     {
-        var extension = contentType.AsSpan().Trim().Equals("image/jpeg", StringComparison.OrdinalIgnoreCase) ||
-                        contentType.AsSpan().Trim().Equals("image/jpg", StringComparison.OrdinalIgnoreCase)
+        var trimmed = contentType.AsSpan().Trim();
+        var extension = trimmed.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase) ||
+                        trimmed.Equals("image/jpg", StringComparison.OrdinalIgnoreCase)
             ? "jpg"
-            : contentType.AsSpan().Trim().Equals("image/bmp", StringComparison.OrdinalIgnoreCase)
+            : trimmed.Equals("image/bmp", StringComparison.OrdinalIgnoreCase)
                 ? "bmp"
-                : contentType.AsSpan().Trim().Equals("image/gif", StringComparison.OrdinalIgnoreCase)
+                : trimmed.Equals("image/gif", StringComparison.OrdinalIgnoreCase)
                     ? "gif"
-                    : "png";
+                    : trimmed.Equals("image/tiff", StringComparison.OrdinalIgnoreCase) ||
+                      trimmed.Equals("image/tif", StringComparison.OrdinalIgnoreCase)
+                        ? "tiff"
+                        : trimmed.Equals("image/webp", StringComparison.OrdinalIgnoreCase)
+                            ? "webp"
+                            : "png";
 
         return includeDot ? $".{extension}" : extension;
     }

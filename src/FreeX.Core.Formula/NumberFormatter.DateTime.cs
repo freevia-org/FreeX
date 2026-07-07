@@ -493,6 +493,16 @@ public static partial class NumberFormatter
                 sb.Append(remSeconds.ToString("D2"));
                 i += 2;
             }
+            else if (format[i] == 'm' && elapsedMatch.Groups[1].Success) // single m after [h]
+            {
+                sb.Append(remMinutes);
+                i += 1;
+            }
+            else if (format[i] == 's') // single s (remainder seconds after [h] or [m] lead)
+            {
+                sb.Append(remSeconds);
+                i += 1;
+            }
             else if (i == fractionalDotIndex)
             {
                 sb.Append('.');

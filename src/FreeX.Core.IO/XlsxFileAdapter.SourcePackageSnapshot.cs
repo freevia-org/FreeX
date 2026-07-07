@@ -1156,8 +1156,13 @@ public sealed partial class XlsxFileAdapter
             // duplicate-row document if it tried.  Check the ORIGINAL source bytes here, before
             // any normalizer has had a chance to modify the in-memory copy, so the guard runs on
             // exactly the bytes that were stored when the workbook was loaded.
+            // Must cover dimension-only changes (row height/hidden, no cell edits) too --
+            // ApplyDimensionChanges -> ApplyRowDimension -> FindOrCreateRow skips r-less rows just
+            // like the cell path does, and would otherwise append a duplicate <row> for the same
+            // position instead of failing safe.
             var worksheetPathsWithChanges = changes
                 .Select(c => c.WorksheetPath)
+                .Concat(dimensionChanges.Select(c => c.WorksheetPath))
                 .Distinct(StringComparer.OrdinalIgnoreCase);
             using (var sourceReadPackage = new MemoryStream(Buffer, Offset, Count, writable: false))
             using (var sourceReadArchive = new ZipArchive(sourceReadPackage, ZipArchiveMode.Read))
@@ -3033,6 +3038,28 @@ public sealed partial class XlsxFileAdapter
                 if (!sheetsByWorksheetPath.TryGetValue(worksheetPath, out var sheet))
                 {
                     blockReason = "package_guard_unmatched_worksheet_part";
+                    return false;
+                }
+
+                // A Protect/Unprotect Sheet command changes IsProtected/ProtectionPassword/
+                // ProtectionMetadata on the live model, but the patch-save path below
+                // (NormalizePatchWorksheetProtection) only cosmetically normalizes the *original*
+                // sheetProtection element -- it never re-derives it from the model (that only
+                // happens on the full/source-independent save path via
+                // XlsxWorksheetProtectionMetadataWriter). Detect a protection-state delta against
+                // the source bytes here and force the full ClosedXML save instead of silently
+                // keeping a stale verifier or dropping a freshly-typed password. Mirrors the
+                // workbook-level guard above (workbook_postprocessing_protection_changed). See
+                // FreeXR11B7Tests.ProtectSheetCommand_AfterUnprotectingModernHashSheet_DropsStaleVerifierForOldPassword.
+                if (!TryReadSheetProtectionPackageGuardInfo(worksheetEntry, workbookNs, out var sourceSheetProtection))
+                {
+                    blockReason = "package_guard_worksheet_xml";
+                    return false;
+                }
+
+                if (WorksheetProtectionStateChanged(sourceSheetProtection, sheet))
+                {
+                    blockReason = "worksheet_postprocessing_protection_changed";
                     return false;
                 }
 
@@ -5229,6 +5256,101 @@ public sealed partial class XlsxFileAdapter
                 return false;
             }
         }
+
+        private readonly record struct XlsxWorksheetSourceProtectionInfo(
+            bool IsProtected,
+            string? PasswordHash);
+
+        /// <summary>
+        /// Streaming read of just the root-level <c>sheetProtection</c> element's protection-relevant
+        /// attributes, without loading the full worksheet XDocument (mirrors
+        /// <see cref="XlsxWorksheetGridXmlNormalizer.AnyRowMissingRowIndex"/>'s style). Encodes the
+        /// password the same way <c>XlsxFileAdapter.SheetXmlLayout</c>'s
+        /// <c>ReadSheetProtectionPasswordHash</c> does at full-load time, so the result is directly
+        /// comparable to <see cref="Sheet.ProtectionPassword"/>.
+        /// </summary>
+        private static bool TryReadSheetProtectionPackageGuardInfo(
+            ZipArchiveEntry worksheetEntry,
+            XNamespace worksheetNs,
+            out XlsxWorksheetSourceProtectionInfo info)
+        {
+            info = new XlsxWorksheetSourceProtectionInfo(false, null);
+
+            try
+            {
+                using var stream = worksheetEntry.Open();
+                using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
+                reader.MoveToContent();
+                if (reader.NodeType != XmlNodeType.Element ||
+                    reader.LocalName != "worksheet" ||
+                    !string.Equals(reader.NamespaceURI, worksheetNs.NamespaceName, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+
+                if (reader.IsEmptyElement)
+                    return true;
+
+                var rootDepth = reader.Depth;
+                while (reader.Read())
+                {
+                    if (reader.NodeType == XmlNodeType.EndElement)
+                    {
+                        if (reader.Depth == rootDepth)
+                            break;
+                        continue;
+                    }
+
+                    if (reader.NodeType != XmlNodeType.Element)
+                        continue;
+
+                    if (reader.Depth != rootDepth + 1 ||
+                        !string.Equals(reader.NamespaceURI, worksheetNs.NamespaceName, StringComparison.Ordinal) ||
+                        reader.LocalName != "sheetProtection")
+                    {
+                        continue;
+                    }
+
+                    var isProtected = XlsxWorksheetXmlValueParser.IsTruthy(reader.GetAttribute("sheet"));
+                    var legacyPassword = reader.GetAttribute("password");
+                    string? passwordHash;
+                    if (!string.IsNullOrEmpty(legacyPassword))
+                    {
+                        passwordHash = legacyPassword;
+                    }
+                    else
+                    {
+                        var hashValue = reader.GetAttribute("hashValue");
+                        passwordHash = string.IsNullOrEmpty(hashValue)
+                            ? null
+                            : ProtectionPasswordHelper.EncodeIso29500Hash(
+                                reader.GetAttribute("algorithmName"),
+                                reader.GetAttribute("spinCount"),
+                                reader.GetAttribute("saltValue"),
+                                hashValue);
+                    }
+
+                    info = new XlsxWorksheetSourceProtectionInfo(isProtected, passwordHash);
+                    return true;
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// True when the live model's sheet-protection state has diverged from what the source
+        /// bytes still hold (i.e. a Protect/Unprotect Sheet command ran since load). Compares only
+        /// what patch-save can never re-derive from the model (IsProtected + the password/hash
+        /// verifier) -- permission-boolean changes are handled separately and are safe to patch.
+        /// </summary>
+        private static bool WorksheetProtectionStateChanged(XlsxWorksheetSourceProtectionInfo source, Sheet sheet) =>
+            source.IsProtected != sheet.IsProtected ||
+            !string.Equals(source.PasswordHash, sheet.ProtectionPassword, StringComparison.Ordinal);
 
         private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
         {

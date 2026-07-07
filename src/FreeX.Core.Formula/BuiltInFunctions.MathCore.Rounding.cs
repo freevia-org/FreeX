@@ -261,10 +261,12 @@ public static partial class BuiltInFunctions
         if (n == 0) return new NumberValue(1);
         double sign = n > 0 ? 1 : -1;
         double abs = Math.Ceiling(Math.Abs(n));
-        if (abs > int.MaxValue) return ErrorValue.Num;
-        int iabs = (int)abs;
-        if (iabs % 2 == 0) iabs++;
-        return new NumberValue(sign * iabs);
+        // Adjust to the next odd magnitude using double arithmetic throughout so
+        // magnitudes beyond int.MaxValue (Excel supports up to ~9.9e307) don't
+        // spuriously error via a narrowing (int) cast.
+        if (abs % 2 == 0) abs++;
+        if (!double.IsFinite(abs)) return ErrorValue.Num;
+        return new NumberValue(sign * abs);
     }
 
     private static ScalarValue Even(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -281,10 +283,12 @@ public static partial class BuiltInFunctions
         if (n == 0) return new NumberValue(0);
         double sign = n > 0 ? 1 : -1;
         double abs = Math.Ceiling(Math.Abs(n));
-        if (abs > int.MaxValue - 1) return ErrorValue.Num;
-        int iabs = (int)abs;
-        if (iabs % 2 != 0) iabs++;
-        return new NumberValue(sign * iabs);
+        // Adjust to the next even magnitude using double arithmetic throughout so
+        // magnitudes beyond int.MaxValue (Excel supports up to ~9.9e307) don't
+        // spuriously error via a narrowing (int) cast.
+        if (abs % 2 != 0) abs++;
+        if (!double.IsFinite(abs)) return ErrorValue.Num;
+        return new NumberValue(sign * abs);
     }
 
     // Truncate toward zero using Excel's 15-significant-digit correction to avoid

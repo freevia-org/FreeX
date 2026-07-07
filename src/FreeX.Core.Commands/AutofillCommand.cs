@@ -17,6 +17,8 @@ public sealed class AutofillCommand : IWorkbookCommand
     private readonly GridRange _fillRange;
     private readonly bool _ctrlHeld;
     private List<(CellAddress Addr, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
+    private List<(CellAddress Address, bool HadTarget, string? Target, bool HadMetadata, HyperlinkMetadata? Metadata)>? _hyperlinkSnapshot;
+    private List<(CellAddress Address, bool HadRuns, IReadOnlyList<CellTextRun>? Runs)>? _richTextRunsSnapshot;
 
     public string Label => "Autofill";
 
@@ -58,6 +60,8 @@ public sealed class AutofillCommand : IWorkbookCommand
                     return CommandGuards.RejectSheetProtected();
             }
         }
+        if (CommandGuards.RejectIfSplitsArray(sheet, _fillRange.AllCells()) is { } splitsArrayRejection)
+            return splitsArrayRejection;
 
         var sourceAddr = GetSourceEdgeAddress(plan);
         var sourceCell = sheet.GetCell(sourceAddr);
@@ -76,6 +80,8 @@ public sealed class AutofillCommand : IWorkbookCommand
 
         var capacity = GetFillCellCapacity();
         _snapshot = new List<(CellAddress Addr, Cell? OldCell, StyleId? OldStyleOnly)>(capacity);
+        _hyperlinkSnapshot = new List<(CellAddress Address, bool HadTarget, string? Target, bool HadMetadata, HyperlinkMetadata? Metadata)>(capacity);
+        _richTextRunsSnapshot = new List<(CellAddress Address, bool HadRuns, IReadOnlyList<CellTextRun>? Runs)>(capacity);
         var writtenCells = new List<CellAddress>(capacity);
 
         for (var row = _fillRange.Start.Row; row <= _fillRange.End.Row; row++)
@@ -86,11 +92,13 @@ public sealed class AutofillCommand : IWorkbookCommand
                 var oldCell = sheet.GetCell(addr);
                 var oldStyleOnly = oldCell is null ? sheet.GetStyleOnly(row, col) : null;
                 _snapshot.Add((addr, oldCell?.Clone(), oldStyleOnly));
+                SnapshotAnnotations(sheet, addr);
                 writtenCells.Add(addr);
 
                 if (sourceCell is null)
                 {
                     sheet.ClearCell(addr);
+                    ClearAnnotations(sheet, addr);
                     continue;
                 }
 
@@ -99,15 +107,18 @@ public sealed class AutofillCommand : IWorkbookCommand
                     : Math.Abs((int)addr.Col - (int)sourceAddr.Col);
 
                 Cell newCell;
+                CellAddress annotationSourceAddr;
                 if (scalarSeries is not null)
                 {
                     newCell = Cell.FromValue(scalarSeries.CreateValue(scalarSeries.LastValue + scalarSeries.Step * offset));
                     newCell.StyleId = sourceCell.StyleId;
+                    annotationSourceAddr = sourceAddr;
                 }
                 else if (listSeries is not null)
                 {
                     newCell = Cell.FromValue(listSeries.ValueAt(offset));
                     newCell.StyleId = sourceCell.StyleId;
+                    annotationSourceAddr = sourceAddr;
                 }
                 else
                 {
@@ -121,6 +132,7 @@ public sealed class AutofillCommand : IWorkbookCommand
                     if (patternSourceCell is null)
                     {
                         sheet.ClearCell(addr);
+                        ClearAnnotations(sheet, addr);
                         continue;
                     }
 
@@ -139,9 +151,11 @@ public sealed class AutofillCommand : IWorkbookCommand
                     }
 
                     newCell.StyleId = patternSourceCell.StyleId;
+                    annotationSourceAddr = patternSourceAddr;
                 }
 
                 sheet.SetCell(addr, newCell);
+                CopyAnnotations(sheet, annotationSourceAddr, addr);
             }
         }
 
@@ -162,9 +176,13 @@ public sealed class AutofillCommand : IWorkbookCommand
                     return CommandGuards.RejectSheetProtected();
             }
         }
+        if (CommandGuards.RejectIfSplitsArray(sheet, _fillRange.AllCells()) is { } splitsArrayRejection)
+            return splitsArrayRejection;
 
         var capacity = GetFillCellCapacity();
         _snapshot = new List<(CellAddress Addr, Cell? OldCell, StyleId? OldStyleOnly)>(capacity);
+        _hyperlinkSnapshot = new List<(CellAddress Address, bool HadTarget, string? Target, bool HadMetadata, HyperlinkMetadata? Metadata)>(capacity);
+        _richTextRunsSnapshot = new List<(CellAddress Address, bool HadRuns, IReadOnlyList<CellTextRun>? Runs)>(capacity);
         var writtenCells = new List<CellAddress>(capacity);
 
         for (var row = _fillRange.Start.Row; row <= _fillRange.End.Row; row++)
@@ -175,16 +193,20 @@ public sealed class AutofillCommand : IWorkbookCommand
                 var oldCell = sheet.GetCell(addr);
                 var oldStyleOnly = oldCell is null ? sheet.GetStyleOnly(row, col) : null;
                 _snapshot.Add((addr, oldCell?.Clone(), oldStyleOnly));
+                SnapshotAnnotations(sheet, addr);
                 writtenCells.Add(addr);
 
                 // Clear Contents semantics (like ClearContentsCommand): drop the value but keep
                 // the cell's formatting in place, matching Excel's fill-handle-inward gesture.
+                // Clear Contents also drops hyperlinks and rich-text run formatting, so this must
+                // clear the parallel annotation dictionaries the same way ClearContentsCommand does.
                 var cleared = Cell.FromValue(BlankValue.Instance);
                 if (oldCell is not null)
                     cleared.StyleId = oldCell.StyleId;
                 else if (oldStyleOnly.HasValue)
                     cleared.StyleId = oldStyleOnly.Value;
                 sheet.SetCell(addr, cleared);
+                ClearAnnotations(sheet, addr);
             }
         }
 
@@ -210,6 +232,79 @@ public sealed class AutofillCommand : IWorkbookCommand
                 sheet.SetCell(addr, oldCell.Clone());
             }
         }
+
+        if (_hyperlinkSnapshot is not null)
+        {
+            foreach (var (address, hadTarget, target, hadMetadata, metadata) in _hyperlinkSnapshot)
+            {
+                if (hadTarget && target is not null)
+                    sheet.Hyperlinks[address] = target;
+                else
+                    sheet.Hyperlinks.Remove(address);
+
+                if (hadMetadata && metadata is not null)
+                    sheet.HyperlinkMetadata[address] = metadata;
+                else
+                    sheet.HyperlinkMetadata.Remove(address);
+            }
+        }
+
+        if (_richTextRunsSnapshot is not null)
+        {
+            foreach (var (address, hadRuns, runs) in _richTextRunsSnapshot)
+            {
+                if (hadRuns && runs is not null)
+                    sheet.RichTextRuns[address] = runs;
+                else
+                    sheet.RichTextRuns.Remove(address);
+            }
+        }
+    }
+
+    /// <summary>Snapshots a destination cell's hyperlink/rich-text annotations before overwriting it, for undo.</summary>
+    private void SnapshotAnnotations(Sheet sheet, CellAddress addr)
+    {
+        _hyperlinkSnapshot!.Add((
+            addr,
+            sheet.Hyperlinks.TryGetValue(addr, out var oldTarget),
+            oldTarget,
+            sheet.HyperlinkMetadata.TryGetValue(addr, out var oldMetadata),
+            oldMetadata));
+        _richTextRunsSnapshot!.Add((
+            addr,
+            sheet.RichTextRuns.TryGetValue(addr, out var oldRuns),
+            oldRuns));
+    }
+
+    /// <summary>
+    /// Copies (or removes) a destination cell's hyperlink/rich-text annotations to match the
+    /// source cell that produced its new value, so a fill never leaves stale annotations behind
+    /// (mirrors FillCellsCommand.Apply).
+    /// </summary>
+    private static void CopyAnnotations(Sheet sheet, CellAddress source, CellAddress target)
+    {
+        if (sheet.Hyperlinks.TryGetValue(source, out var sourceTarget))
+            sheet.Hyperlinks[target] = sourceTarget;
+        else
+            sheet.Hyperlinks.Remove(target);
+
+        if (sheet.HyperlinkMetadata.TryGetValue(source, out var sourceMetadata))
+            sheet.HyperlinkMetadata[target] = sourceMetadata;
+        else
+            sheet.HyperlinkMetadata.Remove(target);
+
+        if (sheet.RichTextRuns.TryGetValue(source, out var sourceRuns))
+            sheet.RichTextRuns[target] = sourceRuns;
+        else
+            sheet.RichTextRuns.Remove(target);
+    }
+
+    /// <summary>Drops a destination cell's hyperlink/rich-text annotations (Clear Contents semantics).</summary>
+    private static void ClearAnnotations(Sheet sheet, CellAddress addr)
+    {
+        sheet.Hyperlinks.Remove(addr);
+        sheet.HyperlinkMetadata.Remove(addr);
+        sheet.RichTextRuns.Remove(addr);
     }
 
 

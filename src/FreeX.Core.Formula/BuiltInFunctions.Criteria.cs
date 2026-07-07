@@ -171,8 +171,20 @@ public static partial class BuiltInFunctions
 
         private bool MatchesTextComparison(ScalarValue cellValue)
         {
-            var cellText = cellValue is TextValue tv ? tv.Value : ToText(cellValue);
-            int cmp = string.Compare(cellText, _text, StringComparison.OrdinalIgnoreCase);
+            // Excel rule: ordering ("<", "<=", ">", ">=") against a text-valued criterion is only
+            // ever satisfied by an actual text cell — a number, boolean, date, or blank cell never
+            // compares as greater/less than a text threshold (ordering across types is undefined,
+            // mirroring MatchesNumericComparison's cross-type exclusion for numeric criteria).
+            if (cellValue is not TextValue tv)
+            {
+                return _op switch
+                {
+                    CriteriaComparisonOp.NotEqual => true,
+                    _ => false
+                };
+            }
+
+            int cmp = string.Compare(tv.Value, _text, StringComparison.OrdinalIgnoreCase);
             return _op switch
             {
                 CriteriaComparisonOp.GreaterThan => cmp > 0,

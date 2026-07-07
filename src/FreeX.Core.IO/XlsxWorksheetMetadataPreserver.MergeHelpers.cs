@@ -157,6 +157,26 @@ internal static partial class XlsxWorksheetMetadataPreserver
         return $"{element.Name}\u001f{address}";
     }
 
+    // "sheet"/"password" are modeled directly on Sheet.IsProtected/Sheet.ProtectionPassword, every
+    // permission boolean is modeled via Sheet.ProtectionPermissions, and the modern ISO 29500 hash
+    // quartet (algorithmName/hashValue/saltValue/spinCount) is carried verbatim through
+    // Sheet.ProtectionMetadata (see XlsxWorksheetLayoutMetadataReader.ReadWorksheetProtectionMetadata
+    // / XlsxWorksheetProtectionMetadataWriter.Save) -- all model-governed, none of it may be blindly
+    // copied back from the stale pre-edit source element once a target sheetProtection element
+    // already exists (that would resurrect a revoked password's modern-hash verifier alongside, or
+    // instead of, a freshly-set legacy password; see
+    // FreeXR11B7Tests.ProtectSheetCommand_AfterUnprotectingModernHashSheet_DropsStaleVerifierForOldPassword).
+    private static readonly XName[] ModeledSheetProtectionAttributes =
+    [
+        "sheet",
+        "password",
+        "algorithmName",
+        "hashValue",
+        "saltValue",
+        "spinCount",
+        .. XlsxSheetProtectionPermissionMapper.AttributeNames.Select(name => (XName)name)
+    ];
+
     private static bool MergeWorksheetSheetProtection(
         XElement? sourceSheetProtection,
         XElement targetRoot,
@@ -172,13 +192,21 @@ internal static partial class XlsxWorksheetMetadataPreserver
         var targetSheetProtection = targetRoot.Element(workbookNs + "sheetProtection");
         if (targetSheetProtection is null)
         {
-            targetRoot.Add(new XElement(sourceSheetProtection));
+            var clone = new XElement(sourceSheetProtection);
+            foreach (var attributeName in ModeledSheetProtectionAttributes)
+                clone.Attribute(attributeName)?.Remove();
+
+            if (!clone.HasAttributes && !clone.HasElements)
+                return false;
+
+            targetRoot.Add(clone);
             return true;
         }
 
         return XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(
             sourceSheetProtection,
-            targetSheetProtection);
+            targetSheetProtection,
+            ModeledSheetProtectionAttributes);
     }
 
     private static bool MergeMissingNativeChildren(

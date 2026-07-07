@@ -27,6 +27,12 @@ public sealed partial class MainWindow
     // Read-side (importing a foreign app's HTML clipboard payload back into styled cells) is NOT
     // implemented here, matching the WPF shell's scope — plain-text paste continues to work
     // unchanged via the existing clipboard text path.
+    //
+    // The Windows-registered "HTML Format" name IS the Win32 CF_HTML clipboard format, and every
+    // CF_HTML consumer (Word/Outlook/browsers/Excel) requires the mandatory descriptor header
+    // (Version:/StartHTML:/EndHTML:/StartFragment:/EndFragment: byte offsets) before the actual
+    // markup — see WPF's MainWindow.ClipboardCommands.cs WrapAsCfHtml. The bare "text/html" item
+    // (recognized directly by GTK/X11/macOS/browser destinations) stays as the raw fragment.
 
     private static readonly DataFormat<string> HtmlPlatformFormat = DataFormat.CreateStringPlatformFormat("text/html");
     private static readonly DataFormat<string> HtmlWindowsPlatformFormat = DataFormat.CreateStringPlatformFormat("HTML Format");
@@ -39,6 +45,9 @@ public sealed partial class MainWindow
     /// </summary>
     internal static string? BuildHtmlClipboardFragmentForTest(ViewportModel viewport, Sheet? sheet, GridRange range, WorkbookTheme theme) =>
         BuildHtmlClipboardFragment(viewport, sheet, range, theme);
+
+    /// <summary>Test-only seam exposing <see cref="WrapAsCfHtml"/> for the CF_HTML header framing.</summary>
+    internal static string WrapAsCfHtmlForTest(string fragment) => WrapAsCfHtml(fragment);
 
     /// <summary>
     /// Builds the <see cref="DataTransferItem"/> list to add to a copy's <see cref="DataTransfer"/> for
@@ -55,7 +64,7 @@ public sealed partial class MainWindow
             return;
 
         transfer.Add(DataTransferItem.Create(HtmlPlatformFormat, html));
-        transfer.Add(DataTransferItem.Create(HtmlWindowsPlatformFormat, html));
+        transfer.Add(DataTransferItem.Create(HtmlWindowsPlatformFormat, WrapAsCfHtml(html)));
     }
 
     /// <summary>
@@ -220,4 +229,39 @@ public sealed partial class MainWindow
             .Replace("&", "&amp;", StringComparison.Ordinal)
             .Replace("<", "&lt;", StringComparison.Ordinal)
             .Replace(">", "&gt;", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Wraps an HTML fragment with the mandatory Win32 CF_HTML descriptor header (Version:/
+    /// StartHTML:/EndHTML:/StartFragment:/EndFragment: byte offsets) so it is a valid CF_HTML
+    /// payload for the "HTML Format" clipboard name. Mirrors WPF's WrapAsCfHtml exactly (byte
+    /// offsets are UTF-8 byte counts, matching how Win32 clipboard consumers read CF_HTML).
+    /// </summary>
+    private static string WrapAsCfHtml(string fragment)
+    {
+        const string header =
+            "Version:0.9\r\n" +
+            "StartHTML:0000000000\r\n" +
+            "EndHTML:0000000000\r\n" +
+            "StartFragment:0000000000\r\n" +
+            "EndFragment:0000000000\r\n";
+
+        const string htmlStart = "<html><body>\r\n<!--StartFragment-->";
+        const string htmlEnd = "<!--EndFragment-->\r\n</body></html>";
+
+        var startHtml = Utf8Length(header);
+        var startFragment = startHtml + Utf8Length(htmlStart);
+        var endFragment = startFragment + Utf8Length(fragment);
+        var endHtml = endFragment + Utf8Length(htmlEnd);
+
+        var filledHeader =
+            "Version:0.9\r\n" +
+            $"StartHTML:{startHtml:D10}\r\n" +
+            $"EndHTML:{endHtml:D10}\r\n" +
+            $"StartFragment:{startFragment:D10}\r\n" +
+            $"EndFragment:{endFragment:D10}\r\n";
+
+        return filledHeader + htmlStart + fragment + htmlEnd;
+    }
+
+    private static int Utf8Length(string text) => Encoding.UTF8.GetByteCount(text);
 }

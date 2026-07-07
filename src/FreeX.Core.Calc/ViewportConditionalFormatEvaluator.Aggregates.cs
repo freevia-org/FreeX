@@ -181,10 +181,27 @@ internal static partial class ViewportConditionalFormatEvaluator
         Sheet sheet,
         ConditionalFormat cf)
     {
+        // A rule's sqref can list multiple ranges that overlap each other (e.g. "A1:B2 B2:C3"),
+        // and Excel treats the covered cell set as a set — each cell counted once regardless of
+        // how many of the rule's ranges include it. Without de-duplication a cell in the overlap
+        // is visited once per covering range, skewing sum/average/stdDev/count and distorting the
+        // Top10 ranking and percentile/percent thresholds. Single-range rules (the common case)
+        // never allocate the tracking set.
+        HashSet<CellAddress>? seen = null;
+        var multiRange = cf.AllRanges.Count() > 1;
         foreach (var range in cf.AllRanges)
         {
             foreach (var item in EnumerateAggregateValues(sheet, range))
+            {
+                if (multiRange)
+                {
+                    seen ??= new HashSet<CellAddress>();
+                    if (!seen.Add(item.Address))
+                        continue;
+                }
+
                 yield return item;
+            }
         }
     }
 
