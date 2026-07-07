@@ -10,10 +10,10 @@ namespace FreeW.Core.Model;
 // structures — superscript (m:sSup), subscript (m:sSub), sub-superscript (m:sSubSup), fraction (m:f),
 // radical (m:rad), n-ary (m:nary, sum/integral/product with limits), an accented character (m:acc),
 // an over/under-bar (m:bar), a bracketed delimiter (m:d) or a matrix (m:m). Most structure slots store
-// plain math text (mirroring how Superscript already stores Base/Sup as strings); fractions additionally
-// carry optional nested numerator/denominator equations, radicals carry an optional nested radicand,
-// n-ary operators carry optional nested lower/upper/operand equations, and delimiters carry an optional
-// nested content equation so common OfficeMath slots can round-trip without a broad recursive-slot rewrite.
+// plain math text; scripts carry optional nested base/sub/sup equations, fractions additionally carry
+// optional nested numerator/denominator equations, radicals carry an optional nested radicand, n-ary
+// operators carry optional nested lower/upper/operand equations, and delimiters carry an optional nested
+// content equation so common OfficeMath slots can round-trip without a broad recursive-slot rewrite.
 // A Matrix additionally carries a small grid of text cells. That
 // covers the high-value structures from Word's Equation tools while staying well short of the full
 // recursive OMML schema — richer constructs degrade to their plain math text on read so nothing throws.
@@ -57,9 +57,9 @@ public enum MathRunKind
 /// can pattern-match on <see cref="Kind"/>.
 /// <list type="bullet">
 /// <item><see cref="MathRunKind.Text"/> → <see cref="Text"/>.</item>
-/// <item><see cref="MathRunKind.Superscript"/> → <see cref="Base"/> raised to <see cref="Sup"/>.</item>
-/// <item><see cref="MathRunKind.Subscript"/> → <see cref="Base"/> with subscript <see cref="Sub"/>.</item>
-/// <item><see cref="MathRunKind.SubSuperscript"/> → <see cref="Base"/> with <see cref="Sub"/> and <see cref="Sup"/>.</item>
+/// <item><see cref="MathRunKind.Superscript"/> → <see cref="ScriptBaseEquation"/>/<see cref="Base"/> raised to <see cref="ScriptSupEquation"/>/<see cref="Sup"/>.</item>
+/// <item><see cref="MathRunKind.Subscript"/> → <see cref="ScriptBaseEquation"/>/<see cref="Base"/> with subscript <see cref="ScriptSubEquation"/>/<see cref="Sub"/>.</item>
+/// <item><see cref="MathRunKind.SubSuperscript"/> → <see cref="ScriptBaseEquation"/>/<see cref="Base"/> with <see cref="ScriptSubEquation"/>/<see cref="Sub"/> and <see cref="ScriptSupEquation"/>/<see cref="Sup"/>.</item>
 /// <item><see cref="MathRunKind.Fraction"/> → <see cref="NumeratorEquation"/>/<see cref="Numerator"/> over <see cref="DenominatorEquation"/>/<see cref="Denominator"/>.</item>
 /// <item><see cref="MathRunKind.Radical"/> → <see cref="RadicandEquation"/>/<see cref="Base"/> under a root of degree <see cref="Degree"/> (empty = square root).</item>
 /// <item><see cref="MathRunKind.NAry"/> → operator <see cref="Operator"/> from <see cref="NAryLowerLimitEquation"/>/<see cref="Sub"/> to <see cref="NAryUpperLimitEquation"/>/<see cref="Sup"/> over <see cref="NAryOperandEquation"/>/<see cref="Base"/>.</item>
@@ -90,6 +90,15 @@ public sealed record MathRun
 
     /// <summary>The subscript / lower-limit slot (subscript, sub-superscript, n-ary).</summary>
     public string Sub { get; init; } = string.Empty;
+
+    /// <summary>Optional structured base equation for nested OMML script slots.</summary>
+    public Equation? ScriptBaseEquation { get; init; }
+
+    /// <summary>Optional structured subscript equation for nested OMML script slots.</summary>
+    public Equation? ScriptSubEquation { get; init; }
+
+    /// <summary>Optional structured superscript equation for nested OMML script slots.</summary>
+    public Equation? ScriptSupEquation { get; init; }
 
     /// <summary>The numerator of a fraction (only meaningful for <see cref="MathRunKind.Fraction"/>).</summary>
     public string Numerator { get; init; } = string.Empty;
@@ -164,13 +173,64 @@ public sealed record MathRun
     public static MathRun Superscript(string @base, string sup) =>
         new() { Kind = MathRunKind.Superscript, Base = @base, Sup = sup };
 
+    /// <summary>Creates a superscript fragment (m:sSup) whose base and exponent are structured equations.</summary>
+    public static MathRun Superscript(Equation baseEquation, Equation supEquation)
+    {
+        ArgumentNullException.ThrowIfNull(baseEquation);
+        ArgumentNullException.ThrowIfNull(supEquation);
+
+        return new()
+        {
+            Kind = MathRunKind.Superscript,
+            Base = baseEquation.LinearText,
+            Sup = supEquation.LinearText,
+            ScriptBaseEquation = baseEquation,
+            ScriptSupEquation = supEquation
+        };
+    }
+
     /// <summary>Creates a subscript fragment (m:sSub): <paramref name="@base"/> with subscript <paramref name="sub"/>.</summary>
     public static MathRun Subscript(string @base, string sub) =>
         new() { Kind = MathRunKind.Subscript, Base = @base, Sub = sub };
 
+    /// <summary>Creates a subscript fragment (m:sSub) whose base and subscript are structured equations.</summary>
+    public static MathRun Subscript(Equation baseEquation, Equation subEquation)
+    {
+        ArgumentNullException.ThrowIfNull(baseEquation);
+        ArgumentNullException.ThrowIfNull(subEquation);
+
+        return new()
+        {
+            Kind = MathRunKind.Subscript,
+            Base = baseEquation.LinearText,
+            Sub = subEquation.LinearText,
+            ScriptBaseEquation = baseEquation,
+            ScriptSubEquation = subEquation
+        };
+    }
+
     /// <summary>Creates a sub-superscript fragment (m:sSubSup): <paramref name="@base"/> with both <paramref name="sub"/> and <paramref name="sup"/>.</summary>
     public static MathRun SubSuperscript(string @base, string sub, string sup) =>
         new() { Kind = MathRunKind.SubSuperscript, Base = @base, Sub = sub, Sup = sup };
+
+    /// <summary>Creates a sub-superscript fragment (m:sSubSup) whose base, subscript and superscript are structured equations.</summary>
+    public static MathRun SubSuperscript(Equation baseEquation, Equation subEquation, Equation supEquation)
+    {
+        ArgumentNullException.ThrowIfNull(baseEquation);
+        ArgumentNullException.ThrowIfNull(subEquation);
+        ArgumentNullException.ThrowIfNull(supEquation);
+
+        return new()
+        {
+            Kind = MathRunKind.SubSuperscript,
+            Base = baseEquation.LinearText,
+            Sub = subEquation.LinearText,
+            Sup = supEquation.LinearText,
+            ScriptBaseEquation = baseEquation,
+            ScriptSubEquation = subEquation,
+            ScriptSupEquation = supEquation
+        };
+    }
 
     /// <summary>Creates a fraction fragment (m:f): <paramref name="numerator"/> over <paramref name="denominator"/>.</summary>
     public static MathRun Fraction(string numerator, string denominator) =>
@@ -317,9 +377,9 @@ public sealed record MathRun
 
     internal string LinearTextWithDepth(int depth) => Kind switch
     {
-        MathRunKind.Superscript => $"{Base}^{Sup}",
-        MathRunKind.Subscript => $"{Base}_{Sub}",
-        MathRunKind.SubSuperscript => $"{Base}_{Sub}^{Sup}",
+        MathRunKind.Superscript => $"{SlotLinearText(ScriptBaseEquation, Base, depth)}^{SlotLinearText(ScriptSupEquation, Sup, depth)}",
+        MathRunKind.Subscript => $"{SlotLinearText(ScriptBaseEquation, Base, depth)}_{SlotLinearText(ScriptSubEquation, Sub, depth)}",
+        MathRunKind.SubSuperscript => $"{SlotLinearText(ScriptBaseEquation, Base, depth)}_{SlotLinearText(ScriptSubEquation, Sub, depth)}^{SlotLinearText(ScriptSupEquation, Sup, depth)}",
         MathRunKind.Fraction => $"{SlotLinearText(NumeratorEquation, Numerator, depth)}/{SlotLinearText(DenominatorEquation, Denominator, depth)}",
         MathRunKind.Radical => string.IsNullOrEmpty(Degree)
             ? $"√({SlotLinearText(RadicandEquation, Base, depth)})"

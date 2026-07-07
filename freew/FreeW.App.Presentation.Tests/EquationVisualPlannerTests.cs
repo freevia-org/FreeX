@@ -65,6 +65,90 @@ public sealed class EquationVisualPlannerTests
     }
 
     [Fact]
+    public void EquationVisualPlanner_NestedScriptSlots_SurfaceSharedSlotPlansAndKeepFlattenedSegments()
+    {
+        var baseEquation = new Equation([
+            MathRun.PlainText("a+"),
+            MathRun.Subscript("x", "1")
+        ]);
+        var subEquation = new Equation([
+            MathRun.PlainText("i+"),
+            MathRun.Superscript("j", "2")
+        ]);
+        var supEquation = new Equation([
+            MathRun.PlainText("n+"),
+            MathRun.Subscript("k", "0")
+        ]);
+
+        var plan = EquationVisualPlanner.Build(new Equation([
+            MathRun.Superscript(baseEquation, supEquation),
+            MathRun.Subscript(baseEquation, subEquation),
+            MathRun.SubSuperscript(baseEquation, subEquation, supEquation)
+        ]));
+
+        plan.LinearText.Should().Be("a+x_1^n+k_0a+x_1_i+j^2a+x_1_i+j^2^n+k_0");
+        plan.Elements.Select(element => element.Kind).Should().Equal(
+            EquationVisualElementKind.Segments,
+            EquationVisualElementKind.Segments,
+            EquationVisualElementKind.Segments);
+
+        var superscript = plan.Elements[0];
+        superscript.BaseText.Should().Be("a+x_1");
+        superscript.ScriptSuperscriptText.Should().Be("n+k_0");
+        superscript.ScriptBasePlan.Should().NotBeNull();
+        superscript.ScriptBasePlan!.Segments.Select(segment => segment.Role)
+            .Should().Equal(
+                EquationVisualSegmentRole.Text,
+                EquationVisualSegmentRole.Base,
+                EquationVisualSegmentRole.Subscript);
+        superscript.ScriptSubscriptPlan.Should().BeNull();
+        superscript.ScriptSuperscriptPlan.Should().NotBeNull();
+        superscript.ScriptSuperscriptPlan!.Segments.Select(segment => segment.Role)
+            .Should().Equal(
+                EquationVisualSegmentRole.Text,
+                EquationVisualSegmentRole.Base,
+                EquationVisualSegmentRole.Subscript);
+
+        var subscript = plan.Elements[1];
+        subscript.BaseText.Should().Be("a+x_1");
+        subscript.ScriptSubscriptText.Should().Be("i+j^2");
+        subscript.ScriptBasePlan.Should().NotBeNull();
+        subscript.ScriptSubscriptPlan.Should().NotBeNull();
+        subscript.ScriptSubscriptPlan!.Segments.Select(segment => segment.Role)
+            .Should().Equal(
+                EquationVisualSegmentRole.Text,
+                EquationVisualSegmentRole.Base,
+                EquationVisualSegmentRole.Superscript);
+        subscript.ScriptSuperscriptPlan.Should().BeNull();
+
+        var subSuperscript = plan.Elements[2];
+        subSuperscript.BaseText.Should().Be("a+x_1");
+        subSuperscript.ScriptSubscriptText.Should().Be("i+j^2");
+        subSuperscript.ScriptSuperscriptText.Should().Be("n+k_0");
+        subSuperscript.ScriptBasePlan.Should().NotBeNull();
+        subSuperscript.ScriptSubscriptPlan.Should().NotBeNull();
+        subSuperscript.ScriptSuperscriptPlan.Should().NotBeNull();
+
+        plan.Segments.Select(segment => segment.Text).Should().Equal(
+            "a+x_1",
+            "n+k_0",
+            "a+x_1",
+            "i+j^2",
+            "a+x_1",
+            "i+j^2",
+            "n+k_0");
+        plan.Segments.Select(segment => segment.Role).Should().Equal(
+            EquationVisualSegmentRole.Base,
+            EquationVisualSegmentRole.Superscript,
+            EquationVisualSegmentRole.Base,
+            EquationVisualSegmentRole.Subscript,
+            EquationVisualSegmentRole.Base,
+            EquationVisualSegmentRole.Subscript,
+            EquationVisualSegmentRole.Superscript);
+        plan.Segments.Should().NotContain(segment => segment.Role == EquationVisualSegmentRole.LinearFallback);
+    }
+
+    [Fact]
     public void EquationVisualPlanner_Fraction_BuildsStructuredElementAndDisplaySegments()
     {
         var plan = EquationVisualPlanner.Build(new Equation([MathRun.Fraction("a + b", "c")]));

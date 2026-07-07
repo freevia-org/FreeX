@@ -93,6 +93,169 @@ public class EquationRoundTripTests
     }
 
     [Fact]
+    public void NestedScriptSlots_SurviveRoundTripAndEmitDirectSlotChildren()
+    {
+        var baseEquation = new Equation([
+            MathRun.PlainText("a+"),
+            MathRun.Subscript("x", "1")
+        ]);
+        var subEquation = new Equation([
+            MathRun.PlainText("i+"),
+            MathRun.Superscript("j", "2")
+        ]);
+        var supEquation = new Equation([
+            MathRun.PlainText("n+"),
+            MathRun.Subscript("k", "0")
+        ]);
+        var equation = new Equation([
+            MathRun.Superscript(baseEquation, supEquation),
+            MathRun.Subscript(baseEquation, subEquation),
+            MathRun.SubSuperscript(baseEquation, subEquation, supEquation)
+        ]);
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(paragraph);
+
+        var read = RoundTrip(doc);
+        var xml = WriteDocumentXml(doc);
+
+        var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Equation is not null).Equation!;
+        roundTripped.Runs.Select(run => run.Kind).Should().Equal(
+            MathRunKind.Superscript,
+            MathRunKind.Subscript,
+            MathRunKind.SubSuperscript);
+        var superscript = roundTripped.Runs[0];
+        superscript.Base.Should().Be("a+x1");
+        superscript.Sup.Should().Be("n+k0");
+        superscript.ScriptBaseEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        superscript.ScriptSupEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        var subscript = roundTripped.Runs[1];
+        subscript.ScriptBaseEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        subscript.ScriptSubEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        var subSuperscript = roundTripped.Runs[2];
+        subSuperscript.ScriptBaseEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        subSuperscript.ScriptSubEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        subSuperscript.ScriptSupEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        roundTripped.LinearText.Should().Be("a+x_1^n+k_0a+x_1_i+j^2a+x_1_i+j^2^n+k_0");
+
+        var oMath = xml.Descendants(M + "oMath").Single();
+        var writtenSuperscript = oMath.Elements(M + "sSup").Single();
+        writtenSuperscript.Element(M + "e")!.Elements(M + "oMath").Should().BeEmpty();
+        writtenSuperscript.Element(M + "e")!.Elements(M + "sSub").Should().ContainSingle();
+        writtenSuperscript.Element(M + "sup")!.Elements(M + "sSub").Should().ContainSingle();
+
+        var writtenSubscript = oMath.Elements(M + "sSub").Single();
+        writtenSubscript.Element(M + "e")!.Elements(M + "sSub").Should().ContainSingle();
+        writtenSubscript.Element(M + "sub")!.Elements(M + "sSup").Should().ContainSingle();
+
+        var writtenSubSuperscript = oMath.Elements(M + "sSubSup").Single();
+        writtenSubSuperscript.Element(M + "e")!.Elements(M + "sSub").Should().ContainSingle();
+        writtenSubSuperscript.Element(M + "sub")!.Elements(M + "sSup").Should().ContainSingle();
+        writtenSubSuperscript.Element(M + "sup")!.Elements(M + "sSub").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void RawNestedScriptSlots_ReadAsNestedEquations()
+    {
+        var documentXml = $$"""
+            <w:document xmlns:w="{{W.NamespaceName}}" xmlns:m="{{M.NamespaceName}}">
+              <w:body>
+                <w:p>
+                  <m:oMath>
+                    <m:sSup>
+                      <m:e>
+                        <m:r><m:t>a+</m:t></m:r>
+                        <m:sSub>
+                          <m:e><m:r><m:t>x</m:t></m:r></m:e>
+                          <m:sub><m:r><m:t>1</m:t></m:r></m:sub>
+                        </m:sSub>
+                      </m:e>
+                      <m:sup>
+                        <m:r><m:t>n+</m:t></m:r>
+                        <m:sSub>
+                          <m:e><m:r><m:t>k</m:t></m:r></m:e>
+                          <m:sub><m:r><m:t>0</m:t></m:r></m:sub>
+                        </m:sSub>
+                      </m:sup>
+                    </m:sSup>
+                    <m:sSub>
+                      <m:e>
+                        <m:r><m:t>a+</m:t></m:r>
+                        <m:sSub>
+                          <m:e><m:r><m:t>x</m:t></m:r></m:e>
+                          <m:sub><m:r><m:t>1</m:t></m:r></m:sub>
+                        </m:sSub>
+                      </m:e>
+                      <m:sub>
+                        <m:r><m:t>i+</m:t></m:r>
+                        <m:sSup>
+                          <m:e><m:r><m:t>j</m:t></m:r></m:e>
+                          <m:sup><m:r><m:t>2</m:t></m:r></m:sup>
+                        </m:sSup>
+                      </m:sub>
+                    </m:sSub>
+                    <m:sSubSup>
+                      <m:e>
+                        <m:r><m:t>a+</m:t></m:r>
+                        <m:sSub>
+                          <m:e><m:r><m:t>x</m:t></m:r></m:e>
+                          <m:sub><m:r><m:t>1</m:t></m:r></m:sub>
+                        </m:sSub>
+                      </m:e>
+                      <m:sub>
+                        <m:r><m:t>i+</m:t></m:r>
+                        <m:sSup>
+                          <m:e><m:r><m:t>j</m:t></m:r></m:e>
+                          <m:sup><m:r><m:t>2</m:t></m:r></m:sup>
+                        </m:sSup>
+                      </m:sub>
+                      <m:sup>
+                        <m:r><m:t>n+</m:t></m:r>
+                        <m:sSub>
+                          <m:e><m:r><m:t>k</m:t></m:r></m:e>
+                          <m:sub><m:r><m:t>0</m:t></m:r></m:sub>
+                        </m:sSub>
+                      </m:sup>
+                    </m:sSubSup>
+                  </m:oMath>
+                </w:p>
+              </w:body>
+            </w:document>
+            """;
+
+        var read = ReadDocumentXml(documentXml);
+
+        var equation = read.Paragraphs.Single().Runs.Single(run => run.Equation is not null).Equation!;
+        equation.Runs.Select(run => run.Kind).Should().Equal(
+            MathRunKind.Superscript,
+            MathRunKind.Subscript,
+            MathRunKind.SubSuperscript);
+        equation.Runs[0].ScriptBaseEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        equation.Runs[0].ScriptSupEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        equation.Runs[1].ScriptBaseEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        equation.Runs[1].ScriptSubEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        equation.Runs[2].ScriptBaseEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        equation.Runs[2].ScriptSubEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        equation.Runs[2].ScriptSupEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        equation.LinearText.Should().Be("a+x_1^n+k_0a+x_1_i+j^2a+x_1_i+j^2^n+k_0");
+    }
+
+    [Fact]
     public void FractionEquation_SurvivesRoundTrip()
     {
         var equation = new Equation([MathRun.Fraction("1", "2")]);

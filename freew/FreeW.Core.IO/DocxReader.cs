@@ -1677,18 +1677,11 @@ public static class DocxReader
             if (child.Name == M + "r")
                 yield return MathRun.PlainText(MathTextOf(child));
             else if (child.Name == M + "sSup")
-                yield return MathRun.Superscript(
-                    MathTextOf(child.Element(M + "e")),
-                    MathTextOf(child.Element(M + "sup")));
+                yield return ReadSuperscript(child);
             else if (child.Name == M + "sSub")
-                yield return MathRun.Subscript(
-                    MathTextOf(child.Element(M + "e")),
-                    MathTextOf(child.Element(M + "sub")));
+                yield return ReadSubscript(child);
             else if (child.Name == M + "sSubSup")
-                yield return MathRun.SubSuperscript(
-                    MathTextOf(child.Element(M + "e")),
-                    MathTextOf(child.Element(M + "sub")),
-                    MathTextOf(child.Element(M + "sup")));
+                yield return ReadSubSuperscript(child);
             else if (child.Name == M + "f")
                 yield return ReadFraction(child);
             else if (child.Name == M + "rad")
@@ -1715,6 +1708,74 @@ public static class DocxReader
                     yield return MathRun.PlainText(fallback);
             }
         }
+    }
+
+    private static MathRun ReadSuperscript(XElement script)
+    {
+        var baseSlot = script.Element(M + "e");
+        var sup = script.Element(M + "sup");
+        var baseText = MathTextOf(baseSlot);
+        var supText = MathTextOf(sup);
+        var hasNestedBase = HasStructuredMathSlot(baseSlot);
+        var hasNestedSup = HasStructuredMathSlot(sup);
+
+        return hasNestedBase || hasNestedSup
+            ? new MathRun
+            {
+                Kind = MathRunKind.Superscript,
+                Base = baseText,
+                Sup = supText,
+                ScriptBaseEquation = hasNestedBase ? ReadMathSlot(baseSlot) : null,
+                ScriptSupEquation = hasNestedSup ? ReadMathSlot(sup) : null
+            }
+            : MathRun.Superscript(baseText, supText);
+    }
+
+    private static MathRun ReadSubscript(XElement script)
+    {
+        var baseSlot = script.Element(M + "e");
+        var sub = script.Element(M + "sub");
+        var baseText = MathTextOf(baseSlot);
+        var subText = MathTextOf(sub);
+        var hasNestedBase = HasStructuredMathSlot(baseSlot);
+        var hasNestedSub = HasStructuredMathSlot(sub);
+
+        return hasNestedBase || hasNestedSub
+            ? new MathRun
+            {
+                Kind = MathRunKind.Subscript,
+                Base = baseText,
+                Sub = subText,
+                ScriptBaseEquation = hasNestedBase ? ReadMathSlot(baseSlot) : null,
+                ScriptSubEquation = hasNestedSub ? ReadMathSlot(sub) : null
+            }
+            : MathRun.Subscript(baseText, subText);
+    }
+
+    private static MathRun ReadSubSuperscript(XElement script)
+    {
+        var baseSlot = script.Element(M + "e");
+        var sub = script.Element(M + "sub");
+        var sup = script.Element(M + "sup");
+        var baseText = MathTextOf(baseSlot);
+        var subText = MathTextOf(sub);
+        var supText = MathTextOf(sup);
+        var hasNestedBase = HasStructuredMathSlot(baseSlot);
+        var hasNestedSub = HasStructuredMathSlot(sub);
+        var hasNestedSup = HasStructuredMathSlot(sup);
+
+        return hasNestedBase || hasNestedSub || hasNestedSup
+            ? new MathRun
+            {
+                Kind = MathRunKind.SubSuperscript,
+                Base = baseText,
+                Sub = subText,
+                Sup = supText,
+                ScriptBaseEquation = hasNestedBase ? ReadMathSlot(baseSlot) : null,
+                ScriptSubEquation = hasNestedSub ? ReadMathSlot(sub) : null,
+                ScriptSupEquation = hasNestedSup ? ReadMathSlot(sup) : null
+            }
+            : MathRun.SubSuperscript(baseText, subText, supText);
     }
 
     private static MathRun ReadFraction(XElement fraction)

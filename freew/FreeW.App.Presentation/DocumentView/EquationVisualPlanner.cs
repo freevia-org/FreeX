@@ -101,6 +101,11 @@ public sealed record EquationVisualElement(
     public string GroupCharacterPosition { get; init; } = string.Empty;
     public string FunctionName { get; init; } = string.Empty;
     public string FunctionArgument { get; init; } = string.Empty;
+    public string ScriptSubscriptText { get; init; } = string.Empty;
+    public string ScriptSuperscriptText { get; init; } = string.Empty;
+    public EquationVisualPlan? ScriptBasePlan { get; init; }
+    public EquationVisualPlan? ScriptSubscriptPlan { get; init; }
+    public EquationVisualPlan? ScriptSuperscriptPlan { get; init; }
     public EquationVisualPlan? NumeratorPlan { get; init; }
     public EquationVisualPlan? DenominatorPlan { get; init; }
     public EquationVisualPlan? RadicandPlan { get; init; }
@@ -125,6 +130,25 @@ public sealed record EquationVisualElement(
         string linearText,
         IReadOnlyList<EquationVisualSegment> segments) =>
         new(EquationVisualElementKind.Segments, linearText, segments, string.Empty, string.Empty, string.Empty, string.Empty);
+
+    public static EquationVisualElement Script(
+        string linearText,
+        string baseText,
+        string subscriptText,
+        string superscriptText,
+        IReadOnlyList<EquationVisualSegment> segments,
+        EquationVisualPlan? basePlan = null,
+        EquationVisualPlan? subscriptPlan = null,
+        EquationVisualPlan? superscriptPlan = null) =>
+        new(EquationVisualElementKind.Segments, linearText, segments, string.Empty, string.Empty, string.Empty, string.Empty)
+        {
+            BaseText = baseText,
+            ScriptSubscriptText = subscriptText,
+            ScriptSuperscriptText = superscriptText,
+            ScriptBasePlan = basePlan,
+            ScriptSubscriptPlan = subscriptPlan,
+            ScriptSuperscriptPlan = superscriptPlan
+        };
 
     public static EquationVisualElement Fraction(
         string linearText,
@@ -451,31 +475,15 @@ public static class EquationVisualPlanner
                 break;
 
             case MathRunKind.Superscript:
-                AddSegmentElement(
-                    run.LinearText,
-                    segments,
-                    elements,
-                    Segment(run.Base, EquationVisualSegmentRole.Base, NormalStyle),
-                    Segment(run.Sup, EquationVisualSegmentRole.Superscript, SuperscriptStyle));
+                AddScriptElement(run, segments, elements, depth, includeSubscript: false, includeSuperscript: true);
                 break;
 
             case MathRunKind.Subscript:
-                AddSegmentElement(
-                    run.LinearText,
-                    segments,
-                    elements,
-                    Segment(run.Base, EquationVisualSegmentRole.Base, NormalStyle),
-                    Segment(run.Sub, EquationVisualSegmentRole.Subscript, SubscriptStyle));
+                AddScriptElement(run, segments, elements, depth, includeSubscript: true, includeSuperscript: false);
                 break;
 
             case MathRunKind.SubSuperscript:
-                AddSegmentElement(
-                    run.LinearText,
-                    segments,
-                    elements,
-                    Segment(run.Base, EquationVisualSegmentRole.Base, NormalStyle),
-                    Segment(run.Sub, EquationVisualSegmentRole.Subscript, SubscriptStyle),
-                    Segment(run.Sup, EquationVisualSegmentRole.Superscript, SuperscriptStyle));
+                AddScriptElement(run, segments, elements, depth, includeSubscript: true, includeSuperscript: true);
                 break;
 
             case MathRunKind.Fraction:
@@ -536,6 +544,43 @@ public static class EquationVisualPlanner
 
         segments.AddRange(runSegments);
         elements.Add(EquationVisualElement.FromSegments(linearText, runSegments));
+    }
+
+    private static void AddScriptElement(
+        MathRun run,
+        List<EquationVisualSegment> segments,
+        List<EquationVisualElement> elements,
+        int depth,
+        bool includeSubscript,
+        bool includeSuperscript)
+    {
+        var basePlan = BuildSlotPlan(run.ScriptBaseEquation, depth);
+        var subscriptPlan = includeSubscript ? BuildSlotPlan(run.ScriptSubEquation, depth) : null;
+        var superscriptPlan = includeSuperscript ? BuildSlotPlan(run.ScriptSupEquation, depth) : null;
+        var baseText = basePlan?.LinearText ?? run.Base;
+        var subscriptText = subscriptPlan?.LinearText ?? run.Sub;
+        var superscriptText = superscriptPlan?.LinearText ?? run.Sup;
+
+        var runSegments = new List<EquationVisualSegment>();
+        AddIfAny(runSegments, baseText, EquationVisualSegmentRole.Base, NormalStyle);
+        if (includeSubscript)
+            AddIfAny(runSegments, subscriptText, EquationVisualSegmentRole.Subscript, SubscriptStyle);
+        if (includeSuperscript)
+            AddIfAny(runSegments, superscriptText, EquationVisualSegmentRole.Superscript, SuperscriptStyle);
+
+        if (runSegments.Count == 0)
+            return;
+
+        segments.AddRange(runSegments);
+        elements.Add(EquationVisualElement.Script(
+            run.LinearText,
+            baseText,
+            includeSubscript ? subscriptText : string.Empty,
+            includeSuperscript ? superscriptText : string.Empty,
+            runSegments,
+            basePlan,
+            subscriptPlan,
+            superscriptPlan));
     }
 
     private static void AddFractionElement(

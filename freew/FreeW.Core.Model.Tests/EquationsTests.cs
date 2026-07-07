@@ -33,6 +33,69 @@ public class EquationsTests
     }
 
     [Fact]
+    public void MathRun_Scripts_CanCarryNestedSlotEquations()
+    {
+        var baseEquation = new Equation([
+            MathRun.PlainText("a+"),
+            MathRun.Subscript("x", "1")
+        ]);
+        var subEquation = new Equation([
+            MathRun.PlainText("i+"),
+            MathRun.Superscript("j", "2")
+        ]);
+        var supEquation = new Equation([
+            MathRun.PlainText("n+"),
+            MathRun.Subscript("k", "0")
+        ]);
+
+        var superscript = MathRun.Superscript(baseEquation, supEquation);
+        var subscript = MathRun.Subscript(baseEquation, subEquation);
+        var subSuperscript = MathRun.SubSuperscript(baseEquation, subEquation, supEquation);
+
+        superscript.Kind.Should().Be(MathRunKind.Superscript);
+        superscript.Base.Should().Be("a+x_1");
+        superscript.Sup.Should().Be("n+k_0");
+        superscript.ScriptBaseEquation.Should().BeSameAs(baseEquation);
+        superscript.ScriptSupEquation.Should().BeSameAs(supEquation);
+        superscript.LinearText.Should().Be("a+x_1^n+k_0");
+
+        subscript.Kind.Should().Be(MathRunKind.Subscript);
+        subscript.Base.Should().Be("a+x_1");
+        subscript.Sub.Should().Be("i+j^2");
+        subscript.ScriptBaseEquation.Should().BeSameAs(baseEquation);
+        subscript.ScriptSubEquation.Should().BeSameAs(subEquation);
+        subscript.LinearText.Should().Be("a+x_1_i+j^2");
+
+        subSuperscript.Kind.Should().Be(MathRunKind.SubSuperscript);
+        subSuperscript.Base.Should().Be("a+x_1");
+        subSuperscript.Sub.Should().Be("i+j^2");
+        subSuperscript.Sup.Should().Be("n+k_0");
+        subSuperscript.ScriptBaseEquation.Should().BeSameAs(baseEquation);
+        subSuperscript.ScriptSubEquation.Should().BeSameAs(subEquation);
+        subSuperscript.ScriptSupEquation.Should().BeSameAs(supEquation);
+        subSuperscript.LinearText.Should().Be("a+x_1_i+j^2^n+k_0");
+    }
+
+    [Fact]
+    public void MathRun_Script_LinearText_IsDepthBoundedForCyclicNestedBase()
+    {
+        var equation = new Equation();
+        equation.Runs.Add(new MathRun
+        {
+            Kind = MathRunKind.Superscript,
+            Base = "x",
+            Sup = "2",
+            ScriptBaseEquation = equation
+        });
+
+        var linearText = equation.LinearText;
+
+        linearText.Should().NotBeEmpty();
+        linearText.Length.Should().BeLessThan(100);
+        linearText.Should().EndWith("^2");
+    }
+
+    [Fact]
     public void MathRun_Fraction_LinearText_IsDepthBoundedForCyclicNestedSlots()
     {
         var equation = new Equation();
