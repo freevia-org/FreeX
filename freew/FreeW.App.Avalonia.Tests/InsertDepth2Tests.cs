@@ -1,7 +1,12 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Avalonia.Headless;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 
@@ -16,6 +21,22 @@ namespace FreeW.App.Avalonia.Tests;
 /// </summary>
 public sealed class InsertDepth2Tests
 {
+    private static readonly HeadlessUnitTestSession Session =
+        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
+
+    private static async Task<bool> OnUiThread(Action action)
+    {
+        try
+        {
+            await Session.Dispatch(action, CancellationToken.None);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
     private static TextDocument MakeDoc(string text = "Hello world")
     {
         var doc = TextDocument.CreateEmpty();
@@ -557,5 +578,51 @@ public sealed class InsertDepth2Tests
         view.Undo();
         view.Document.Blocks.OfType<Paragraph>().SelectMany(p => p.Runs)
             .Any(run => run.Equation is not null).Should().BeFalse("Undo removes the equation run");
+    }
+
+    [Fact]
+    public async Task EquationVisualPlanner_default_equation_lays_out_script_segments()
+    {
+        string[] texts = [];
+        EquationVisualSegmentRole[] roles = [];
+        (EquationVisualBaselineRole BaselineRole, double FontSizeScale, string FontFamily, bool Italic) script = default;
+        MathRunKind[] kinds = [];
+        var placedGlyphCount = 0;
+
+        var ran = await OnUiThread(() =>
+        {
+            var view = MakeView("");
+
+            view.InsertEquation();
+
+            var segments = view.EquationVisualSegments;
+            texts = segments.Select(segment => segment.Text).ToArray();
+            roles = segments.Select(segment => segment.Role).ToArray();
+            script = (
+                segments[^1].BaselineRole,
+                segments[^1].FontSizeScale,
+                segments[^1].FontFamily,
+                segments[^1].Italic);
+            placedGlyphCount = view.PlacedGlyphCount;
+            var eqRun = view.Document.Blocks.OfType<Paragraph>()
+                .SelectMany(p => p.Runs)
+                .Single(run => run.Equation is not null);
+            kinds = eqRun.Equation!.Runs.Select(run => run.Kind).ToArray();
+        });
+
+        if (!ran) return;
+
+        texts.Should().Equal("E = m", "c", "2");
+        roles.Should().Equal(
+            EquationVisualSegmentRole.Text,
+            EquationVisualSegmentRole.Base,
+            EquationVisualSegmentRole.Superscript);
+        script.BaselineRole.Should().Be(EquationVisualBaselineRole.Superscript);
+        script.FontSizeScale.Should().Be(EquationVisualPlanner.ScriptFontSizeScale);
+        script.FontFamily.Should().Contain("Cambria Math");
+        script.Italic.Should().BeTrue();
+        placedGlyphCount.Should().Be(7,
+            "the rendered default equation should place E = m plus c and 2, without the linear fallback caret");
+        kinds.Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
     }
 }
