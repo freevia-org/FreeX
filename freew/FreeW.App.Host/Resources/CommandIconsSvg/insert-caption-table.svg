@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Insert table caption">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="5.5" y="6.5" width="21" height="13" rx="1.5" fill="#ffffff" stroke="#242424" stroke-width="1.4"/>
+  <path d="M5.5 11h21M5.5 15h21M12 6.5v13M19 6.5v13" fill="none" stroke="#4472c4" stroke-width="1.1"/>
+  <path d="M8.5 23h15M10.5 26h11" fill="none" stroke="#8a8a8a" stroke-width="1.2" stroke-linecap="round"/>
+  <circle cx="24" cy="20" r="3.25" fill="#4472c4"/>
+  <path d="M24 18.2v3.6M22.2 20h3.6" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round"/>
+</svg>

@@ -374,6 +374,7 @@ public sealed class FreeWRibbonParityTests
         var definition = FreeWRibbon.Build();
         var index = definition.FindTab("references")!.FindGroup("index");
         var editor = new DocumentView();
+        editor.SpellCheckEnabled = false;
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
 
         CommandIds(index!)

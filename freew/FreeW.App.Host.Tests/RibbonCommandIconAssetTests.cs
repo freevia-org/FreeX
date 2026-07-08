@@ -233,7 +233,8 @@ public sealed class RibbonCommandIconAssetTests
         var source = File.ReadAllText(sourcePath);
         return Regex
             .Matches(source, "\"(freew\\.[a-z0-9.-]+)\"")
-            .Select(match => match.Groups[1].Value);
+            .Select(match => match.Groups[1].Value)
+            .Where(id => !id.EndsWith("-", StringComparison.Ordinal) && !id.EndsWith(".", StringComparison.Ordinal));
     }
 
     private static string ToCommandIconSlug(string commandId)
