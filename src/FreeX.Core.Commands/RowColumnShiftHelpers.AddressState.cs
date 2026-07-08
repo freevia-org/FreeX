@@ -36,7 +36,8 @@ internal static partial class RowColumnShiftHelpers
             CapturePivotCaches(workbook),
             CaptureList(workbook.Scenarios),
             CaptureFormControls(sheet),
-            CaptureCrossSheetFormControlRefs(workbook, sheet));
+            CaptureCrossSheetFormControlRefs(workbook, sheet),
+            CaptureCrossSheetPictureRefs(workbook, sheet));
 
     private static IReadOnlyList<StyleOnlyEntry> CaptureStyleOnlyEntries(Sheet sheet)
     {
@@ -140,7 +141,7 @@ internal static partial class RowColumnShiftHelpers
 
         var snapshots = new List<FormControlAddressSnapshot>(sheet.FormControls.Count);
         foreach (var control in sheet.FormControls)
-            snapshots.Add(new FormControlAddressSnapshot(control, control.Anchor, control.LinkedCell, control.ListFillRange));
+            snapshots.Add(new FormControlAddressSnapshot(control, control.Anchor, control.AnchorOffsets, control.LinkedCell, control.ListFillRange));
 
         return snapshots;
     }
@@ -176,6 +177,44 @@ internal static partial class RowColumnShiftHelpers
         }
 
         return snapshots ?? (IReadOnlyList<CrossSheetFormControlRefSnapshot>)[];
+    }
+
+    // R14-camera-linked-picture-1: a linked picture's LinkedSourceRange (Paste Special > Linked
+    // Picture — our "camera" tool) is a GridRange whose Start.Sheet can point at a *different*
+    // sheet than the one hosting the picture (e.g. a picture on Sheet1 linked to Sheet2!A1:B3).
+    // CapturePictures/ShiftPictures above only ever see the single sheet being structurally
+    // edited, so a picture hosted elsewhere whose source range references the edited sheet never
+    // gets its LinkedSourceRange shifted or its cached Cells/geometry refreshed — it keeps drawing
+    // the pre-edit cells at the wrong coordinates. Capture those workbook-wide (excluding the
+    // edited sheet, which the per-sheet pass above already owns) so ShiftCrossSheetPictureRefs can
+    // fix them up too, mirroring CaptureCrossSheetFormControlRefs for form controls.
+    private static IReadOnlyList<CrossSheetPictureRefSnapshot> CaptureCrossSheetPictureRefs(
+        Workbook workbook,
+        Sheet editedSheet)
+    {
+        List<CrossSheetPictureRefSnapshot>? snapshots = null;
+        foreach (var hostSheet in workbook.Sheets)
+        {
+            if (ReferenceEquals(hostSheet, editedSheet) || hostSheet.Pictures.Count == 0)
+                continue;
+
+            foreach (var picture in hostSheet.Pictures)
+            {
+                if (picture.LinkedSourceRange is not { } sourceRange || sourceRange.Start.Sheet != editedSheet.Id)
+                    continue;
+
+                snapshots ??= [];
+                snapshots.Add(new CrossSheetPictureRefSnapshot(
+                    picture,
+                    sourceRange,
+                    picture.IsLinkedToSourceRange,
+                    picture.SourceRowCount,
+                    picture.SourceColumnCount,
+                    [.. picture.Cells]));
+            }
+        }
+
+        return snapshots ?? (IReadOnlyList<CrossSheetPictureRefSnapshot>)[];
     }
 
     /// <summary>True when <paramref name="reference"/> contains an explicit "SheetName!" (or
@@ -344,6 +383,7 @@ internal static partial class RowColumnShiftHelpers
         foreach (var entry in snapshot.FormControls)
         {
             entry.Control.Anchor        = entry.Anchor;
+            entry.Control.AnchorOffsets = entry.AnchorOffsets;
             entry.Control.LinkedCell    = entry.LinkedCell;
             entry.Control.ListFillRange = entry.ListFillRange;
             sheet.FormControls.Add(entry.Control);
@@ -357,6 +397,22 @@ internal static partial class RowColumnShiftHelpers
         {
             entry.Control.LinkedCell    = entry.LinkedCell;
             entry.Control.ListFillRange = entry.ListFillRange;
+        }
+
+        // R14-camera-linked-picture-1: restore LinkedSourceRange (+ the geometry/cell cache a
+        // structural edit may have refreshed) on pictures hosted on OTHER sheets whose source
+        // range points at this sheet. These pictures are never removed from their own sheet's
+        // Pictures list (only the edited sheet's own pictures are cleared/re-added above), so just
+        // put the range/cache fields back in place — no Clear/Add dance needed, mirroring
+        // CrossSheetFormControlRefs above.
+        foreach (var entry in snapshot.CrossSheetPictureRefs)
+        {
+            entry.Picture.LinkedSourceRange = entry.LinkedSourceRange;
+            entry.Picture.IsLinkedToSourceRange = entry.IsLinkedToSourceRange;
+            entry.Picture.SourceRowCount = entry.SourceRowCount;
+            entry.Picture.SourceColumnCount = entry.SourceColumnCount;
+            entry.Picture.Cells.Clear();
+            entry.Picture.Cells.AddRange(entry.Cells);
         }
     }
 
@@ -418,6 +474,7 @@ internal static partial class RowColumnShiftHelpers
         ShiftTextBoxes(sheet, snapshot, shift);
         ShiftDrawingShapes(sheet, snapshot, shift);
         ShiftPictures(workbook, sheet, snapshot, shift);
+        ShiftCrossSheetPictureRefs(workbook, snapshot, shift);
         ShiftSparklines(sheet, snapshot, shift);
         ShiftPivotTables(workbook, snapshot, shift);
         ShiftStructuredTables(sheet, snapshot, shift);
@@ -975,27 +1032,47 @@ internal static partial class RowColumnShiftHelpers
                 picture.Cells.Add(new PictureCellSnapshot(
                     row - sourceRange.Start.Row,
                     col - sourceRange.Start.Col,
-                    FormatPictureCellText(value),
+                    FormatPictureCellText(value, style.NumberFormat, workbook.Uses1904DateSystem),
                     style.Clone(),
                     value is NumberValue or DateTimeValue));
             }
         }
     }
 
-    /// <summary>Mirrors DrawingInputParser.FormatPictureCellText (App.Presentation layer, not
-    /// referenceable from Core.Commands) so linked-picture snapshot refreshes render the same text
-    /// Excel/FreeX would show for each scalar value kind.</summary>
-    private static string FormatPictureCellText(ScalarValue value) =>
-        value switch
+    /// <summary>
+    /// Renders a linked picture's cell text using the source cell's own number format, so a linked
+    /// picture keeps showing the formatted value (e.g. "$1,234.50") on every refresh, exactly as it
+    /// did at the moment it was pasted (Excel camera parity; see R14-camera-linked-picture-2). A raw
+    /// <c>ToString(CultureInfo.CurrentCulture)</c> would silently strip currency/percent/date/custom
+    /// formats after the first structural edit to the source range.
+    /// </summary>
+    private static string FormatPictureCellText(ScalarValue value, string numberFormat, bool uses1904DateSystem) =>
+        FreeX.Core.Formula.NumberFormatter.Format(value, numberFormat, uses1904DateSystem);
+
+    // R14-camera-linked-picture-1: shifts/refreshes pictures hosted on OTHER sheets whose
+    // LinkedSourceRange points at the sheet being structurally edited (mirrors
+    // ShiftCrossSheetFormControlRefs for form controls). The picture's own Anchor never moves —
+    // only its Anchor's *hosting* sheet's edits would move that, and this entry's picture lives on
+    // a different sheet — so only LinkedSourceRange (and, when it moved, the refreshed
+    // geometry/cell cache) are touched here.
+    private static void ShiftCrossSheetPictureRefs(Workbook workbook, AddressBearingStateSnapshot snapshot, AddressShift shift)
+    {
+        foreach (var entry in snapshot.CrossSheetPictureRefs)
         {
-            BlankValue => "",
-            NumberValue number => number.Value.ToString(CultureInfo.CurrentCulture),
-            BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
-            TextValue text => text.Value,
-            DateTimeValue dateTime => dateTime.Value.ToString(CultureInfo.CurrentCulture),
-            ErrorValue error => error.Code,
-            _ => value.ToString() ?? ""
-        };
+            var shiftedRange = shift.ShiftRange(entry.LinkedSourceRange);
+            entry.Picture.LinkedSourceRange = shiftedRange;
+            entry.Picture.IsLinkedToSourceRange = entry.IsLinkedToSourceRange && shiftedRange is not null;
+
+            if (entry.Picture.IsLinkedToSourceRange &&
+                shiftedRange is { } newRange &&
+                newRange != entry.LinkedSourceRange)
+            {
+                var sourceSheet = workbook.GetSheet(newRange.Start.Sheet);
+                if (sourceSheet is not null)
+                    RefreshLinkedPictureSnapshot(workbook, sourceSheet, entry.Picture, newRange);
+            }
+        }
+    }
 
     private static void ShiftFormControls(Sheet sheet, AddressBearingStateSnapshot snapshot, AddressShift shift)
     {
@@ -1006,22 +1083,38 @@ internal static partial class RowColumnShiftHelpers
             // falls within the deleted zone, ShiftRange returns null — drop the control (mirrors
             // how TextBoxes / DrawingShapes are handled).
             GridRange? newAnchor;
+            var removed = false;
             if (entry.Anchor is { } anchor)
             {
                 newAnchor = shift.ShiftRange(anchor);
                 if (newAnchor is null)
-                {
-                    // Anchor was entirely deleted — remove this control.
-                    // Still restore control state so callers don't see stale refs.
-                    entry.Control.Anchor        = null;
-                    entry.Control.LinkedCell    = null;
-                    entry.Control.ListFillRange = null;
-                    continue;
-                }
+                    removed = true;
             }
             else
             {
                 newAnchor = null;
+            }
+
+            // R14-form-controls-1: the sub-cell EMU AnchorOffsets (preferred over the whole-cell
+            // Anchor by FormControlRenderPlanner.TryCreateAnchorRange/HasSubCellOffsets whenever
+            // present — the normal case for XLSX-loaded controls) must shift in lockstep with
+            // Anchor, or the control keeps rendering/hit-testing at its pre-shift position even
+            // though its logical Anchor cell moved. A VML-only control (Anchor null, AnchorOffsets
+            // set) has no whole-cell anchor to drive removal, so ShiftAnchorOffsets' own deletion
+            // signal is what removes it when its row/column is deleted.
+            var newAnchorOffsets = ShiftAnchorOffsets(entry.AnchorOffsets, shift, out var offsetsDeleted);
+            if (!removed && entry.Anchor is null && offsetsDeleted)
+                removed = true;
+
+            if (removed)
+            {
+                // Anchor (or, for a VML-only control, AnchorOffsets) was entirely deleted — remove
+                // this control. Still restore control state so callers don't see stale refs.
+                entry.Control.Anchor        = null;
+                entry.Control.AnchorOffsets = null;
+                entry.Control.LinkedCell    = null;
+                entry.Control.ListFillRange = null;
+                continue;
             }
 
             // Rewrite the LinkedCell and ListFillRange string references via the same
@@ -1030,10 +1123,41 @@ internal static partial class RowColumnShiftHelpers
             var newListFillRange = ShiftFormControlRef(entry.ListFillRange, shift);
 
             entry.Control.Anchor        = newAnchor;
+            entry.Control.AnchorOffsets = newAnchorOffsets;
             entry.Control.LinkedCell    = newLinkedCell;
             entry.Control.ListFillRange = newListFillRange;
             sheet.FormControls.Add(entry.Control);
         }
+    }
+
+    /// <summary>
+    /// Shifts a form control's sub-cell <see cref="DrawingAnchorRange"/> the same way the whole-cell
+    /// <see cref="GridRange"/> Anchor is shifted: bridges the 0-based offset row/col to the 1-based
+    /// <see cref="CellAddress"/> row/col <see cref="AddressShift.ShiftRange"/> expects (mirroring
+    /// FormControlRenderPlanner.TryCreateAnchorRange's whole-cell fallback conversion), applies the
+    /// shift, and converts back — preserving each point's EMU sub-cell offset, which never changes.
+    /// Sets <paramref name="deleted"/> when the offsets' row/column span was entirely removed by the
+    /// shift (mirrors ShiftRange returning null for a fully-deleted GridRange).
+    /// </summary>
+    private static DrawingAnchorRange? ShiftAnchorOffsets(DrawingAnchorRange? offsets, AddressShift shift, out bool deleted)
+    {
+        deleted = false;
+        if (offsets is null)
+            return null;
+
+        var range = new GridRange(
+            new CellAddress(shift.SheetId, offsets.From.Row + 1, offsets.From.Column + 1),
+            new CellAddress(shift.SheetId, offsets.To.Row + 1, offsets.To.Column + 1));
+
+        if (shift.ShiftRange(range) is not { } shiftedRange)
+        {
+            deleted = true;
+            return null;
+        }
+
+        return new DrawingAnchorRange(
+            new DrawingAnchorPoint(shiftedRange.Start.Col - 1, offsets.From.ColumnOffsetEmu, shiftedRange.Start.Row - 1, offsets.From.RowOffsetEmu),
+            new DrawingAnchorPoint(shiftedRange.End.Col - 1, offsets.To.ColumnOffsetEmu, shiftedRange.End.Row - 1, offsets.To.RowOffsetEmu));
     }
 
     // P83: rewrite LinkedCell/ListFillRange on controls hosted on OTHER sheets that explicitly
@@ -1822,7 +1946,8 @@ internal sealed record AddressBearingStateSnapshot(
     IReadOnlyList<PivotCacheSourceSnapshot> PivotCaches,
     IReadOnlyList<WorkbookScenario> Scenarios,
     IReadOnlyList<FormControlAddressSnapshot> FormControls,
-    IReadOnlyList<CrossSheetFormControlRefSnapshot> CrossSheetFormControlRefs)
+    IReadOnlyList<CrossSheetFormControlRefSnapshot> CrossSheetFormControlRefs,
+    IReadOnlyList<CrossSheetPictureRefSnapshot> CrossSheetPictureRefs)
 {
     /// <summary>
     /// Records what <see cref="RowColumnShiftHelpers.ShiftWatchedCells"/> produced from
@@ -1871,6 +1996,7 @@ internal readonly record struct PivotCacheSourceSnapshot(
 internal readonly record struct FormControlAddressSnapshot(
     FormControlModel Control,
     GridRange? Anchor,
+    DrawingAnchorRange? AnchorOffsets,
     string? LinkedCell,
     string? ListFillRange);
 
@@ -1878,3 +2004,11 @@ internal readonly record struct CrossSheetFormControlRefSnapshot(
     FormControlModel Control,
     string? LinkedCell,
     string? ListFillRange);
+
+internal readonly record struct CrossSheetPictureRefSnapshot(
+    PictureModel Picture,
+    GridRange LinkedSourceRange,
+    bool IsLinkedToSourceRange,
+    uint SourceRowCount,
+    uint SourceColumnCount,
+    IReadOnlyList<PictureCellSnapshot> Cells);

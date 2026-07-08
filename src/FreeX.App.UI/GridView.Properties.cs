@@ -105,6 +105,23 @@ public partial class GridView
         set => SetValue(SelectedRangeProperty, value);
     }
 
+    /// <summary>
+    /// The true active/anchor cell of the current selection (e.g. where a Shift+arrow
+    /// extension started, or F2/typing will edit), which is not always the same cell as
+    /// <see cref="SelectedRange"/>'s normalized top-left <c>Start</c> corner (an upward or
+    /// leftward extension moves Start away from the anchor). Hosts should keep this in sync
+    /// with their own active-cell/anchor tracking; when left unset, automation falls back to
+    /// <see cref="SelectedRange"/>'s Start so existing callers are unaffected.
+    /// </summary>
+    public static readonly DependencyProperty ActiveCellProperty =
+        DependencyProperty.Register(nameof(ActiveCell), typeof(CellAddress?), typeof(GridView),
+            new FrameworkPropertyMetadata(null, OnActiveCellChanged));
+    public CellAddress? ActiveCell
+    {
+        get => (CellAddress?)GetValue(ActiveCellProperty);
+        set => SetValue(ActiveCellProperty, value);
+    }
+
     public static readonly DependencyProperty QuickAnalysisPreviewRangeProperty =
         DependencyProperty.Register(nameof(QuickAnalysisPreviewRange), typeof(GridRange?), typeof(GridView),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
@@ -708,6 +725,12 @@ public partial class GridView
             grid.UpdateCommentPreviewForSelection();
             grid.NotifySelectionAutomationChanged();
         }
+    }
+
+    private static void OnActiveCellChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is GridView grid)
+            grid.NotifySelectionAutomationChanged();
     }
 
     // Merge lookup (rebuilt once per render pass, O(1) per cell)

@@ -53,7 +53,9 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
         RemovedRowCount = 0;
 
         // ── 1. Identify surviving rows (de-duplicate) ──────────────────────
-        var seen = new HashSet<string>(StringComparer.Ordinal);
+        // Excel's Remove Duplicates treats text case-insensitively (e.g. "MAY"/"may" are
+        // duplicates), so row keys must be compared with OrdinalIgnoreCase, not Ordinal.
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var survivingRows = new List<uint>();
         for (uint row = _range.Start.Row; row <= _range.End.Row; row++)
         {

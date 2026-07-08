@@ -171,6 +171,17 @@ public sealed partial class NativeJsonAdapter
                     .Select(pair => new UIntStringListDto { Index = pair.Key, Values = [.. pair.Value] })
                     .ToList(),
                 ValueFilterHiddenRows = s.ValueFilterHiddenRows.Where(NativeJsonValueSanitizer.IsValidRowIndex).OrderBy(row => row).ToList(),
+                // R14-meta-1: persist alongside the siblings above so a reload can reconstruct which
+                // rows each column-owned filter mechanism owns (see FilterCommand.cs, finding R14-meta-1).
+                ColumnFilterOwnedRows = s.ColumnFilterOwnedRows
+                    .Where(pair => NativeJsonValueSanitizer.IsValidColumnIndex(pair.Key))
+                    .OrderBy(pair => pair.Key)
+                    .Select(pair => new UIntUintListDto
+                    {
+                        Index = pair.Key,
+                        Values = [.. pair.Value.Where(NativeJsonValueSanitizer.IsValidRowIndex).OrderBy(row => row)],
+                    })
+                    .ToList(),
                 HiddenCols = s.HiddenCols.Where(NativeJsonValueSanitizer.IsValidColumnIndex).OrderBy(column => column).ToList(),
                 RowOutlineLevels = s.RowOutlineLevels
                     .Where(pair => NativeJsonValueSanitizer.IsValidRowIndex(pair.Key) && NativeJsonValueSanitizer.IsValidOutlineLevel(pair.Value))

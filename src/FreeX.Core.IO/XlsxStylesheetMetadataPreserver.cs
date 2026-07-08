@@ -647,7 +647,9 @@ internal static class XlsxStylesheetMetadataPreserver
                 if (sourceStyleXf is null)
                     continue;
 
-                targetCellStyleXfs.Add(new XElement(sourceStyleXf));
+                var clonedStyleXf = new XElement(sourceStyleXf);
+                RemapNamedStyleXfChildIndices(clonedStyleXf, sourceRoot, targetRoot, workbookNs);
+                targetCellStyleXfs.Add(clonedStyleXf);
                 newXfIndex = targetStyleXfCountBeforeMerge + appendedXfIndexBySourceIndex.Count;
                 appendedXfIndexBySourceIndex[sourceXfId] = newXfIndex;
             }
@@ -669,5 +671,136 @@ internal static class XlsxStylesheetMetadataPreserver
             "count",
             targetCellStyles.Elements(workbookNs + "cellStyle").Count().ToString(CultureInfo.InvariantCulture));
         return true;
+    }
+
+    /// <summary>
+    /// A recovered named-style <c>cellStyleXfs</c> entry is copied verbatim from the source, but its
+    /// numFmtId/fontId/fillId/borderId children reference the SOURCE stylesheet's fonts/fills/borders/numFmts
+    /// index space. ClosedXML rebuilds those lists from scratch with its own ordering and size, so the copied
+    /// indices generally point at unrelated (or out-of-range) records in the target. Remap each child reference
+    /// to the equivalent record in the target's lists, appending it there first if no equivalent exists yet.
+    /// </summary>
+    private static void RemapNamedStyleXfChildIndices(
+        XElement xf,
+        XElement? sourceRoot,
+        XElement targetRoot,
+        XNamespace workbookNs)
+    {
+        RemapIndexedRecordReference(xf, sourceRoot, targetRoot, workbookNs, "fontId", "fonts", "font");
+        RemapIndexedRecordReference(xf, sourceRoot, targetRoot, workbookNs, "fillId", "fills", "fill");
+        RemapIndexedRecordReference(xf, sourceRoot, targetRoot, workbookNs, "borderId", "borders", "border");
+        RemapNumFmtIdReference(xf, sourceRoot, targetRoot, workbookNs);
+    }
+
+    private static void RemapIndexedRecordReference(
+        XElement xf,
+        XElement? sourceRoot,
+        XElement targetRoot,
+        XNamespace workbookNs,
+        string attributeName,
+        string listElementName,
+        string itemElementName)
+    {
+        if (!TryGetIntAttribute(xf, attributeName, out var sourceIndex))
+            return;
+
+        var sourceItems = sourceRoot?.Element(workbookNs + listElementName)?.Elements(workbookNs + itemElementName).ToList();
+        if (sourceItems is not { Count: > 0 } || sourceIndex < 0 || sourceIndex >= sourceItems.Count)
+            return;
+
+        var sourceItem = sourceItems[sourceIndex];
+        var sourceItemXml = sourceItem.ToString(SaveOptions.DisableFormatting);
+
+        var targetList = targetRoot.Element(workbookNs + listElementName);
+        if (targetList is null)
+            return; // fonts/fills/borders always exist in a rebuilt stylesheet; defensively skip if not
+
+        var targetItems = targetList.Elements(workbookNs + itemElementName).ToList();
+        var targetIndex = -1;
+        for (var i = 0; i < targetItems.Count; i++)
+        {
+            if (string.Equals(targetItems[i].ToString(SaveOptions.DisableFormatting), sourceItemXml, StringComparison.Ordinal))
+            {
+                targetIndex = i;
+                break;
+            }
+        }
+
+        if (targetIndex < 0)
+        {
+            targetList.Add(new XElement(sourceItem));
+            targetIndex = targetItems.Count;
+            targetList.SetAttributeValue(
+                "count",
+                targetList.Elements(workbookNs + itemElementName).Count().ToString(CultureInfo.InvariantCulture));
+        }
+
+        xf.SetAttributeValue(attributeName, targetIndex.ToString(CultureInfo.InvariantCulture));
+    }
+
+    private static void RemapNumFmtIdReference(
+        XElement xf,
+        XElement? sourceRoot,
+        XElement targetRoot,
+        XNamespace workbookNs)
+    {
+        if (!TryGetIntAttribute(xf, "numFmtId", out var sourceNumFmtId) || sourceNumFmtId < 164)
+            return; // built-in number format ids are universal — no remap needed
+
+        var sourceFormatCode = sourceRoot?
+            .Element(workbookNs + "numFmts")?
+            .Elements(workbookNs + "numFmt")
+            .FirstOrDefault(element => TryGetIntAttribute(element, "numFmtId", out var id) && id == sourceNumFmtId)?
+            .Attribute("formatCode")?.Value;
+        if (string.IsNullOrEmpty(sourceFormatCode))
+            return;
+
+        var targetNumFmts = targetRoot.Element(workbookNs + "numFmts");
+        if (targetNumFmts is null)
+        {
+            targetNumFmts = new XElement(workbookNs + "numFmts");
+            var firstFormatPeer = targetRoot.Elements().FirstOrDefault(element =>
+                element.Name == workbookNs + "fonts" ||
+                element.Name == workbookNs + "fills" ||
+                element.Name == workbookNs + "borders" ||
+                element.Name == workbookNs + "cellStyleXfs" ||
+                element.Name == workbookNs + "cellXfs");
+            if (firstFormatPeer is null)
+                targetRoot.AddFirst(targetNumFmts);
+            else
+                firstFormatPeer.AddBeforeSelf(targetNumFmts);
+        }
+
+        var existingEntries = targetNumFmts.Elements(workbookNs + "numFmt").ToList();
+        var existingMatch = existingEntries.FirstOrDefault(element =>
+            string.Equals(element.Attribute("formatCode")?.Value, sourceFormatCode, StringComparison.Ordinal));
+
+        int targetNumFmtId;
+        if (existingMatch is not null && TryGetIntAttribute(existingMatch, "numFmtId", out var matchedId))
+        {
+            targetNumFmtId = matchedId;
+        }
+        else
+        {
+            var usedIds = existingEntries
+                .Select(element => TryGetIntAttribute(element, "numFmtId", out var id) ? id : (int?)null)
+                .Where(id => id is not null)
+                .Select(id => id!.Value)
+                .ToHashSet();
+            var nextId = Math.Max(164, usedIds.Count == 0 ? 164 : usedIds.Max() + 1);
+            while (usedIds.Contains(nextId))
+                nextId++;
+
+            targetNumFmtId = nextId;
+            targetNumFmts.Add(new XElement(
+                workbookNs + "numFmt",
+                new XAttribute("numFmtId", targetNumFmtId.ToString(CultureInfo.InvariantCulture)),
+                new XAttribute("formatCode", sourceFormatCode)));
+            targetNumFmts.SetAttributeValue(
+                "count",
+                targetNumFmts.Elements(workbookNs + "numFmt").Count().ToString(CultureInfo.InvariantCulture));
+        }
+
+        xf.SetAttributeValue("numFmtId", targetNumFmtId.ToString(CultureInfo.InvariantCulture));
     }
 }

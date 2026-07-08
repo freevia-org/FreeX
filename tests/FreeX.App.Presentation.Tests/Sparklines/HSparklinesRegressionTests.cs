@@ -24,14 +24,15 @@ public sealed class HSparklinesRegressionTests
     [Fact]
     public void VisitColumnLayout_OverrideMaxAbsSmallerThanData_RescalesUnclampedBar()
     {
-        // Use a value whose scaled height (against the smaller override) stays below maxBarHeight,
-        // so the rescale is directly observable rather than masked by clamping.
-        var values = new List<double> { 10, 1 };
+        // Mixed-sign data keeps the centered axis (half cell height per side) so this regression
+        // stays focused on the override clamping math, independent of the R14 all-one-sign
+        // zero-baseline fix (which only changes the axis/height for same-signed data).
+        var values = new List<double> { 10, -1 };
         var maxBarHeight = Cell.Height / 2; // 20
 
         var withOverride = SparklineLayoutEngine.CalculateColumnLayout(values, Cell, winLoss: false, overrideMaxAbs: 2.0);
 
-        // bar for value=1: |1|/2 * 20 = 10 (unclamped, since 10 <= maxBarHeight).
+        // bar for value=-1: |-1|/2 * 20 = 10 (unclamped, since 10 <= maxBarHeight).
         withOverride.Bars[1].Rect.Height.Should().Be(10,
             because: "a Custom axis max smaller than the data max must still rescale bars against it");
 

@@ -280,7 +280,7 @@ public sealed partial class XlsxFileAdapter
         var background = XlsxWorksheetBackgroundReaderWriter.Read(archive, worksheetPath, worksheetXml);
         var headerFooterPictures = XlsxHeaderFooterPictureReaderWriter.Read(archive, worksheetPath, worksheetXml);
         var drawingParts = XlsxWorksheetDrawingPartReader.ReadParts(archive, worksheetPath, worksheetXml);
-        var sparklines = XlsxSparklineMapper.Read(worksheetXml);
+        var sparklines = XlsxSparklineMapper.Read(worksheetXml, workbookTheme, indexedColors);
         var formControls = XlsxFormControlMapper.ReadWorksheet(archive, worksheetPath, worksheetXml);
         var advancedConditionalFormats = ReadAdvancedConditionalFormats(
             worksheetXml, worksheetNs, differentialStyles, workbookTheme, indexedColors, out var classicConditionalFormatPriorities);

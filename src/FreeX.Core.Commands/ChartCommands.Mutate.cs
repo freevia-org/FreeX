@@ -200,7 +200,7 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
     private bool? _previousSeriesInRows;
     private List<ChartSeriesColumnMapping>? _previousSeriesColumnMappings;
     private List<ChartSeriesVerbatimFormulas>? _previousVerbatimSeriesFormulas;
-    private bool _clearedMappingsForOrientationChange;
+    private bool _clearedMappingsForSourceChange;
 
     public string Label => "Select Chart Data";
 
@@ -248,14 +248,17 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
         _previousFirstRowIsHeader = chart.FirstRowIsHeader;
         _previousFirstColIsCategories = chart.FirstColIsCategories;
         _previousSeriesInRows = chart.SeriesInRows;
-        if (nextSeriesInRows != chart.SeriesInRows)
+        if (nextSeriesInRows != chart.SeriesInRows || _dataRange != chart.DataRange)
         {
-            // Column-based series mappings and per-series verbatim formulas describe the old
-            // orientation; keeping them would mis-index series (renderer) or override the newly
-            // oriented range formulas (XLSX writer).
+            // Column-based series mappings and per-series verbatim formulas describe the OLD
+            // source (either the old orientation or the old DataRange); keeping them would
+            // mis-index series (renderer) or override the newly selected range's formulas (XLSX
+            // writer: XlsxChartXmlWriter.Series.cs prefers verbatim?.ValFormula over the
+            // range-computed formula), silently reverting a plain "Select Data" range edit on
+            // reload. Clear on ANY data-range or orientation change, not just orientation flips.
             _previousSeriesColumnMappings = chart.SeriesColumnMappings;
             _previousVerbatimSeriesFormulas = chart.VerbatimSeriesFormulas;
-            _clearedMappingsForOrientationChange = true;
+            _clearedMappingsForSourceChange = true;
             chart.SeriesColumnMappings = [];
             chart.VerbatimSeriesFormulas = null;
         }
@@ -279,7 +282,7 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
         chart.FirstRowIsHeader = _previousFirstRowIsHeader.Value;
         chart.FirstColIsCategories = _previousFirstColIsCategories.Value;
         chart.SeriesInRows = _previousSeriesInRows ?? chart.SeriesInRows;
-        if (_clearedMappingsForOrientationChange)
+        if (_clearedMappingsForSourceChange)
         {
             chart.SeriesColumnMappings = _previousSeriesColumnMappings ?? [];
             chart.VerbatimSeriesFormulas = _previousVerbatimSeriesFormulas;
@@ -291,7 +294,7 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
         _previousSeriesInRows = null;
         _previousSeriesColumnMappings = null;
         _previousVerbatimSeriesFormulas = null;
-        _clearedMappingsForOrientationChange = false;
+        _clearedMappingsForSourceChange = false;
     }
 }
 

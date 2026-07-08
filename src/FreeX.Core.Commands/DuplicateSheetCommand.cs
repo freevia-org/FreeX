@@ -37,6 +37,12 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
         var copy = source.Clone(copyId, name);
         copy.ResetViewStateToA1();
 
+        // Sheet.Clone copies CodeName (the VBA identifier) verbatim from the source; regenerate
+        // it here so the copy gets a fresh, workbook-unique codeName, matching Excel's Duplicate
+        // Sheet behavior and avoiding two sheets sharing the same codeName on save.
+        if (!string.IsNullOrWhiteSpace(copy.CodeName))
+            copy.CodeName = DuplicateSheetCodeNameGenerator.GenerateUniqueCodeName(ctx.Workbook);
+
         DuplicateSheetDrawingCloner.CopyDrawingCollections(source, copy, copyId);
 
         _insertIndex = sourceIndex + 1;

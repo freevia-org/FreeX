@@ -14590,8 +14590,7 @@ public sealed partial class MainWindow : Window
 
         if (!result.Success)
         {
-            _statusText.Text = result.ErrorMessage ?? "Edit failed";
-            _statusText.Foreground = Brush(143, 74, 18);
+            ShowEditIssue(result.ErrorMessage ?? "Edit failed");
             return false;
         }
 
@@ -19092,7 +19091,12 @@ public sealed partial class MainWindow : Window
         }
         else
         {
-            AddClipboardTextAndHtml(transfer, copiedText, _session.Viewport, _session.ActiveSheet, _session.SelectedRange, _session.Workbook.Theme);
+            // R14-clipboard-formats-deep-1: _session.Viewport only materializes the on-screen scroll
+            // position and truncates any part of the selection scrolled out of view. Prefer the
+            // full-range viewport TryCopySelectedRangeText() built for the same range (falling back to
+            // the on-screen one only if a result somehow carries none) so the CF_HTML fragment always
+            // reflects the complete selection, matching the plain-text payload it is paired with.
+            AddClipboardTextAndHtml(transfer, copiedText, copyResult.Viewport ?? _session.Viewport, _session.ActiveSheet, _session.SelectedRange, _session.Workbook.Theme);
         }
 
         try
@@ -23412,6 +23416,9 @@ public sealed partial class MainWindow : Window
 
     private void ShowSaveIssue(string message)
     {
+        // Same accessibility rationale as ShowEditIssue: this is the only signal a failed/blocked
+        // save-adjacent action produced, so it must be an announced live region.
+        EnsureStatusTextLiveRegion();
         _statusText.Text = message;
         _statusText.Foreground = Brush(143, 74, 18);
     }
@@ -23423,6 +23430,9 @@ public sealed partial class MainWindow : Window
 
     private void ShowExportIssue(string message)
     {
+        // Same accessibility rationale as ShowEditIssue: no owned modal dialog reports export
+        // failures, so _statusText's live region is the only accessible signal.
+        EnsureStatusTextLiveRegion();
         _statusText.Text = message;
         _statusText.Foreground = Brush(143, 74, 18);
         UpdateSaveButton();
@@ -23430,6 +23440,9 @@ public sealed partial class MainWindow : Window
 
     private void ShowShareStatus(string message, bool isWarning)
     {
+        if (isWarning)
+            EnsureStatusTextLiveRegion();
+
         _statusText.Text = message;
         _statusText.Foreground = isWarning
             ? Brush(143, 74, 18)
@@ -23439,6 +23452,9 @@ public sealed partial class MainWindow : Window
 
     private void ShowOpenIssue(string message)
     {
+        // Same accessibility rationale as ShowEditIssue: no owned modal dialog reports open
+        // failures, so _statusText's live region is the only accessible signal.
+        EnsureStatusTextLiveRegion();
         _statusText.Text = message;
         _statusText.Foreground = Brush(143, 74, 18);
     }
@@ -23462,6 +23478,9 @@ public sealed partial class MainWindow : Window
 
     private void ShowHelpIssue(string message)
     {
+        // Same accessibility rationale as ShowEditIssue: no owned modal dialog reports Help failures,
+        // so _statusText's live region is the only accessible signal.
+        EnsureStatusTextLiveRegion();
         _statusText.Text = message;
         _statusText.Foreground = Brush(143, 74, 18);
     }

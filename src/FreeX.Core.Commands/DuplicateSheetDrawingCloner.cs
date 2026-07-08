@@ -62,7 +62,37 @@ internal static class DuplicateSheetDrawingCloner
 
         foreach (var sparkline in source.Sparklines)
             copy.Sparklines.Add(CloneSparkline(sparkline, copyId));
+
+        foreach (var control in source.FormControls)
+            copy.FormControls.Add(CloneFormControl(control, copyId));
     }
+
+    private static FormControlModel CloneFormControl(FormControlModel control, SheetId copyId) =>
+        new()
+        {
+            Kind = control.Kind,
+            Name = control.Name,
+            Caption = control.Caption,
+            ShapeId = control.ShapeId,
+            Anchor = RemapRange(control.Anchor, copyId),
+            AnchorOffsets = control.AnchorOffsets,
+            // LinkedCell/ListFillRange are copied verbatim (not sheet-rewritten), mirroring how
+            // Sheet.Clone leaves cell formulas unrewritten (DuplicateSheetCommand's named-range
+            // copy): an unqualified reference (the common case, e.g. "$D$3") implicitly means
+            // "this control's own hosting sheet" — see RowColumnShiftHelpers.ShiftFormControlRef —
+            // so copying it verbatim onto the duplicate correctly follows the control to the copy,
+            // matching Excel's Duplicate Sheet behavior for linked form controls.
+            LinkedCell = control.LinkedCell,
+            ListFillRange = control.ListFillRange,
+            IsChecked = control.IsChecked,
+            Value = control.Value,
+            Min = control.Min,
+            Max = control.Max,
+            Increment = control.Increment,
+            PageChange = control.PageChange,
+            SelectedIndex = control.SelectedIndex,
+            SelectedText = control.SelectedText
+        };
 
     private static SparklineModel CloneSparkline(SparklineModel sparkline, SheetId copyId) =>
         new()
@@ -211,7 +241,16 @@ internal static class DuplicateSheetDrawingCloner
             CropTop = picture.CropTop,
             CropRight = picture.CropRight,
             CropBottom = picture.CropBottom,
-            IsSourceLoaded = picture.IsSourceLoaded
+            // A source-loaded picture's on-disk part is preserved by keying source drawing parts by
+            // sheet NAME (XlsxFileAdapter.SavePostProcessing.GetSourceDrawingPathsBySheet); the
+            // duplicate always gets a brand-new name (e.g. "Sheet1 (2)") that is absent from the
+            // source package, so no source part is ever mapped to it and the writer's
+            // !IsSourceLoaded-only emission (XlsxWorksheetDrawingObjectWriter.IsSupportedPicture)
+            // skips it too — the picture would be silently dropped on save. The already-copied raw
+            // ImageBytes/ContentType fully support authoring it fresh instead, so mark the clone as
+            // NOT source-loaded so it round-trips through the normal picture writer like any other
+            // authored picture, matching Excel (the pasted copy is a normal embedded picture).
+            IsSourceLoaded = false
         };
 
         foreach (var cell in picture.Cells)
@@ -280,6 +319,7 @@ internal static class DuplicateSheetDrawingCloner
             LegendBorderThickness = chart.LegendBorderThickness,
             LegendFontSize = chart.LegendFontSize,
             LegendEntries = chart.LegendEntries.ToList(),
+            SeriesColumnMappings = chart.SeriesColumnMappings.ToList(),
             SeriesRangeDataLabels = chart.SeriesRangeDataLabels.ToList(),
             VerbatimSeriesFormulas = chart.VerbatimSeriesFormulas?.ToList(),
             EmbeddedSeriesData = chart.EmbeddedSeriesData?.ToList(),

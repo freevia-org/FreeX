@@ -116,6 +116,8 @@ internal static class XlsxSourceDrawingGeometryRewriter
     {
         var changed = false;
 
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
         var sourcePictures = sheet.Pictures.Where(picture => picture.IsSourceLoaded).ToList();
         var pictureElements = drawingRoot.Descendants(SpreadsheetDrawingNs + "pic").ToList();
         var pictureAnchors = pictureElements.Skip(Math.Max(0, pictureElements.Count - sourcePictures.Count));
@@ -127,12 +129,14 @@ internal static class XlsxSourceDrawingGeometryRewriter
             {
                 changed = true;
             }
+
+            if (RewritePictureVisualProperties(pictureElement, picture, drawingNs))
+                changed = true;
         }
 
         var sourceTextBoxes = sheet.TextBoxes.Where(textBox => textBox.IsSourceLoaded).ToList();
         var sourceShapes = sheet.DrawingShapes.Where(shape => shape.IsSourceLoaded).ToList();
 
-        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
         var textBoxElements = new List<XElement>();
         var shapeElements = new List<XElement>();
         foreach (var shapeElement in drawingRoot.Descendants(SpreadsheetDrawingNs + "sp"))
@@ -283,6 +287,135 @@ internal static class XlsxSourceDrawingGeometryRewriter
         }
 
         return changed;
+    }
+
+    /// <summary>
+    /// R14-image-media-1 fix: beyond anchor geometry, a source-loaded picture's crop (<c>a:srcRect</c>),
+    /// rotation/flip (<c>a:xfrm</c> <c>rot</c>/<c>flipH</c>/<c>flipV</c>), and alt text
+    /// (<c>xdr:cNvPr</c> <c>descr</c>) must also be patched into the preserved drawing XML, using the same
+    /// EMU/percent math as the writer (<see cref="XlsxWorksheetDrawingObjectWriter"/>) so a save-then-reload
+    /// round-trips the edit exactly like a freshly-written picture. Returns true when the XML was modified.
+    /// </summary>
+    private static bool RewritePictureVisualProperties(XElement pictureElement, PictureModel picture, XNamespace drawingNs)
+    {
+        var changed = false;
+
+        var spPr = pictureElement.Element(SpreadsheetDrawingNs + "spPr");
+        var xfrm = spPr?.Element(drawingNs + "xfrm");
+        if (xfrm is null && spPr is not null &&
+            (NormalizeRotation(picture.RotationDegrees) != 0 || picture.FlipHorizontal || picture.FlipVertical))
+        {
+            // CT_ShapeProperties requires xfrm (when present) to be the first child of spPr.
+            xfrm = new XElement(drawingNs + "xfrm");
+            spPr.AddFirst(xfrm);
+            changed = true;
+        }
+
+        if (xfrm is not null)
+            changed |= SetPictureTransform(xfrm, picture);
+
+        var blipFill = pictureElement.Element(SpreadsheetDrawingNs + "blipFill");
+        if (blipFill is not null)
+            changed |= SetSourceRectangle(blipFill, drawingNs, picture);
+
+        var cNvPr = pictureElement
+            .Element(SpreadsheetDrawingNs + "nvPicPr")?
+            .Element(SpreadsheetDrawingNs + "cNvPr");
+        if (cNvPr is not null)
+            changed |= SetOrRemoveAttribute(cNvPr, "descr", string.IsNullOrWhiteSpace(picture.AltText) ? null : picture.AltText);
+
+        return changed;
+    }
+
+    private static bool SetPictureTransform(XElement xfrm, PictureModel picture)
+    {
+        var rotation = NormalizeRotation(picture.RotationDegrees);
+        var rotEmu = rotation == 0 ? null : ((long)Math.Round(rotation * 60000)).ToString(CultureInfo.InvariantCulture);
+
+        var changed = false;
+        changed |= SetOrRemoveAttribute(xfrm, "rot", rotEmu);
+        changed |= SetOrRemoveAttribute(xfrm, "flipH", picture.FlipHorizontal ? "1" : null);
+        changed |= SetOrRemoveAttribute(xfrm, "flipV", picture.FlipVertical ? "1" : null);
+        return changed;
+    }
+
+    private static double NormalizeRotation(double rotationDegrees)
+    {
+        if (!double.IsFinite(rotationDegrees))
+            return 0;
+        var normalized = rotationDegrees % 360;
+        return normalized < 0 ? normalized + 360 : normalized;
+    }
+
+    private static bool HasPictureCrop(PictureModel picture) =>
+        picture.CropLeft > 0 ||
+        picture.CropTop > 0 ||
+        picture.CropRight > 0 ||
+        picture.CropBottom > 0;
+
+    private static bool SetSourceRectangle(XElement blipFill, XNamespace drawingNs, PictureModel picture)
+    {
+        var srcRect = blipFill.Element(drawingNs + "srcRect");
+        if (!HasPictureCrop(picture))
+        {
+            if (srcRect is null)
+                return false;
+
+            srcRect.Remove();
+            return true;
+        }
+
+        var left = ToSourceRectanglePercent(picture.CropLeft);
+        var top = ToSourceRectanglePercent(picture.CropTop);
+        var right = ToSourceRectanglePercent(picture.CropRight);
+        var bottom = ToSourceRectanglePercent(picture.CropBottom);
+
+        if (srcRect is not null)
+        {
+            var changed = false;
+            changed |= SetOrRemoveAttribute(srcRect, "l", left);
+            changed |= SetOrRemoveAttribute(srcRect, "t", top);
+            changed |= SetOrRemoveAttribute(srcRect, "r", right);
+            changed |= SetOrRemoveAttribute(srcRect, "b", bottom);
+            return changed;
+        }
+
+        // CT_BlipFillProperties requires srcRect (when present) immediately after blip and before the
+        // fill-mode element (stretch/tile); insert right after blip rather than appending at the end.
+        var newSrcRect = new XElement(drawingNs + "srcRect",
+            new XAttribute("l", left),
+            new XAttribute("t", top),
+            new XAttribute("r", right),
+            new XAttribute("b", bottom));
+        var blip = blipFill.Element(drawingNs + "blip");
+        if (blip is not null)
+            blip.AddAfterSelf(newSrcRect);
+        else
+            blipFill.AddFirst(newSrcRect);
+
+        return true;
+    }
+
+    private static string ToSourceRectanglePercent(double ratio) =>
+        ((int)Math.Round(Math.Clamp(ratio, 0, 1) * 100000d)).ToString(CultureInfo.InvariantCulture);
+
+    private static bool SetOrRemoveAttribute(XElement element, string attributeName, string? value)
+    {
+        var existing = element.Attribute(attributeName);
+        if (value is null)
+        {
+            if (existing is null)
+                return false;
+
+            existing.Remove();
+            return true;
+        }
+
+        if (existing is not null && string.Equals(existing.Value, value, StringComparison.Ordinal))
+            return false;
+
+        element.SetAttributeValue(attributeName, value);
+        return true;
     }
 
     private static bool SetOffsetElement(XElement marker, string elementName, double pixels)

@@ -88,6 +88,7 @@ public sealed partial class NativeJsonAdapter
             DoubleUnderline = dto.DoubleUnderline,
             IndentLevel = Math.Clamp(dto.IndentLevel, 0, 15),
             TextRotation = NativeJsonValueSanitizer.ValidTextRotationOrDefault(dto.TextRotation),
+            ReadingOrder = NativeJsonValueSanitizer.ValidEnumOrDefault(dto.ReadingOrder, CellReadingOrder.Context),
             Locked = dto.Locked,
             Hidden = dto.Hidden,
             NativeDifferentialAttributes = dto.NativeDifferentialAttributes,
@@ -133,6 +134,7 @@ public sealed partial class NativeJsonAdapter
             DoubleUnderline = style.DoubleUnderline,
             IndentLevel = style.IndentLevel,
             TextRotation = style.TextRotation,
+            ReadingOrder = style.ReadingOrder,
             Locked = style.Locked,
             Hidden = style.Hidden,
             NativeDifferentialAttributes = style.NativeDifferentialAttributes,
@@ -170,6 +172,7 @@ public sealed partial class NativeJsonAdapter
             DoubleUnderline = safeStyle.DoubleUnderline,
             IndentLevel = safeStyle.IndentLevel,
             TextRotation = safeStyle.TextRotation,
+            ReadingOrder = safeStyle.ReadingOrder,
             Locked = safeStyle.Locked,
             Hidden = safeStyle.Hidden,
             NativeDifferentialAttributes = safeStyle.NativeDifferentialAttributes,
@@ -270,6 +273,7 @@ public sealed partial class NativeJsonAdapter
                 && x.DoubleUnderline == y.DoubleUnderline
                 && x.IndentLevel == y.IndentLevel
                 && x.TextRotation == y.TextRotation
+                && x.ReadingOrder == y.ReadingOrder
                 && x.Locked == y.Locked
                 && x.Hidden == y.Hidden
                 && DictionaryEquals(x.NativeDifferentialAttributes, y.NativeDifferentialAttributes)
@@ -308,6 +312,7 @@ public sealed partial class NativeJsonAdapter
             hash.Add(obj.DoubleUnderline);
             hash.Add(obj.IndentLevel);
             hash.Add(obj.TextRotation);
+            hash.Add(obj.ReadingOrder);
             hash.Add(obj.Locked);
             hash.Add(obj.Hidden);
             hash.Add(GetDictionaryHashCode(obj.NativeDifferentialAttributes));

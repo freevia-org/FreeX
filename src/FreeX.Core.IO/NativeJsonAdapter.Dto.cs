@@ -503,6 +503,14 @@ public sealed partial class NativeJsonAdapter
         // empty, so the next filter recompute treats it as "no active filters" and unhides everything.
         public List<UIntStringListDto> ActiveValueFilterColumns { get; set; } = [];
         public List<uint> ValueFilterHiddenRows { get; set; } = [];
+        // R14-meta-1: sheet.ColumnFilterOwnedRows is the row-ownership bookkeeping every column-owned
+        // filter mechanism (condition/Top-Bottom/average AND the value-list side above) relies on to
+        // decide whether a row another column still owns may be un-hidden (see
+        // FreeX.Core.Commands.FilterCommand.IsHiddenByAnyColumnOwnedFilter/
+        // IsHiddenByAnyOtherActiveMechanism). Without persisting it, a reload leaves it empty even
+        // though FilterHiddenRows/ActiveValueFilterColumns/ValueFilterHiddenRows all survive, so the
+        // next un-hide decision on ANY column wrongly treats every OTHER column's filter as inactive.
+        public List<UIntUintListDto> ColumnFilterOwnedRows { get; set; } = [];
         public List<uint> HiddenCols { get; set; } = [];
         public List<UIntIntDto> RowOutlineLevels { get; set; } = [];
         public List<UIntIntDto> ColOutlineLevels { get; set; } = [];
@@ -902,6 +910,8 @@ public sealed partial class NativeJsonAdapter
         public bool DoubleUnderline { get; set; }
         public int IndentLevel { get; set; }
         public int TextRotation { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public CellReadingOrder ReadingOrder { get; set; } = CellReadingOrder.Context;
         public bool Locked { get; set; } = true;
         public bool Hidden { get; set; }
         public IReadOnlyDictionary<string, string>? NativeDifferentialAttributes { get; set; }
@@ -1024,6 +1034,12 @@ public sealed partial class NativeJsonAdapter
     {
         public uint Index { get; set; }
         public List<string> Values { get; set; } = [];
+    }
+
+    private class UIntUintListDto
+    {
+        public uint Index { get; set; }
+        public List<uint> Values { get; set; } = [];
     }
 
     private class PageMarginsDto

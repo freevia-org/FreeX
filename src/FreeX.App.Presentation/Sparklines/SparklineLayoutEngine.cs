@@ -194,7 +194,10 @@ public static class SparklineLayoutEngine
     /// Lays out a column or win/loss sparkline. When <paramref name="winLoss"/> is false, each bar's
     /// height is scaled by its magnitude relative to the largest absolute value; when true, every
     /// non-zero value yields a fixed half-height bar keyed only on its sign. Bars are centered in
-    /// even-width slots; negative values grow downward from the horizontal midline.
+    /// even-width slots. When the data is entirely one sign the zero baseline sits at the matching
+    /// cell edge (bottom for all-positive, top for all-negative) so the largest bar fills the full
+    /// cell height, matching Excel; mixed-sign data keeps the bars centered on the horizontal
+    /// midline, each side capped at half height.
     /// </summary>
     public static SparklineColumnLayout CalculateColumnLayout(IReadOnlyList<double> values, LayoutRect rect, bool winLoss)
     {
@@ -267,10 +270,46 @@ public static class SparklineLayoutEngine
         if (maxAbs < Epsilon)
             maxAbs = 1;
 
-        var axis = rect.Top + (rect.Height / 2);
+        // Excel's column sparkline places the zero baseline at the cell edge — not the vertical
+        // midline — whenever the data is entirely one sign, so the largest bar fills the full cell
+        // height instead of only the half nearest its side. Mixed-sign data keeps the traditional
+        // centered axis with each side capped at half height. Win/loss bars are always fixed
+        // half-height keyed on sign alone, so they keep the centered axis regardless of data shape.
+        var hasPositive = false;
+        var hasNegative = false;
+        if (!winLoss)
+        {
+            foreach (var value in values)
+            {
+                if (!double.IsFinite(value))
+                    continue;
+                if (value > 0)
+                    hasPositive = true;
+                else if (value < 0)
+                    hasNegative = true;
+            }
+        }
+
+        double axis;
+        double maxBarHeight;
+        if (hasPositive && !hasNegative)
+        {
+            axis = rect.Bottom;
+            maxBarHeight = rect.Height;
+        }
+        else if (hasNegative && !hasPositive)
+        {
+            axis = rect.Top;
+            maxBarHeight = rect.Height;
+        }
+        else
+        {
+            axis = rect.Top + (rect.Height / 2);
+            maxBarHeight = rect.Height / 2;
+        }
+
         var slot = rect.Width / values.Count;
         var barWidth = Math.Min(slot, Math.Max(1, slot * 0.65));
-        var maxBarHeight = rect.Height / 2;
 
         for (var i = 0; i < values.Count; i++)
         {
@@ -282,7 +321,7 @@ public static class SparklineLayoutEngine
             var value = winLoss ? Math.Sign(values[i]) : values[i];
             var height = winLoss
                 ? rect.Height / 2
-                : Math.Abs(value) / maxAbs * rect.Height / 2;
+                : Math.Abs(value) / maxAbs * maxBarHeight;
             height = Math.Min(maxBarHeight, Math.Max(1, height));
             var x = rect.Left + (i * slot) + ((slot - barWidth) / 2);
             var y = value >= 0 ? axis - height : axis;

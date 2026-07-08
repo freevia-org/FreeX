@@ -268,6 +268,23 @@ public partial class MainWindow
             HorizontalScroll.Maximum = plan.Horizontal.Maximum;
             HorizontalScroll.Value = plan.Horizontal.Value;
         }
+
+        // The target cell may be out of view in an independently-scrolled split pane (bottom-left's
+        // own vertical offset or top-right's own horizontal offset) that the main scrollbars above
+        // cannot reach -- update that pane's offset directly, mirroring TryScrollIndependentSplitPane
+        // / OnSplitPaneScrollbarScrolled.
+        if (plan.BottomLeftTopRow is not null || plan.TopRightLeftCol is not null)
+        {
+            var offsets = _splitPaneViewportOffsets.TryGetValue(_currentSheetId, out var existing)
+                ? existing
+                : new SplitPaneViewportOffsets();
+            if (plan.BottomLeftTopRow is { } newBottomLeftTopRow)
+                offsets = offsets with { BottomLeftTopRow = newBottomLeftTopRow };
+            if (plan.TopRightLeftCol is { } newTopRightLeftCol)
+                offsets = offsets with { TopRightLeftCol = newTopRightLeftCol };
+            _splitPaneViewportOffsets[_currentSheetId] = offsets;
+            UpdateViewport();
+        }
     }
 
     private readonly record struct TableContextRefreshKey(

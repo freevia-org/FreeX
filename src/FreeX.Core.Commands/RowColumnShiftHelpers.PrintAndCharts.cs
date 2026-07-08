@@ -109,6 +109,108 @@ internal static partial class RowColumnShiftHelpers
                     chart.DataRange = ShiftRangeColumnsDown(chart.DataRange, start, count) ?? chart.DataRange;
     }
 
+    // ── Chart series-column-mapping shifting ──────────────────────────────────
+    // ChartSeriesColumnMapping.ValueColumn is an ABSOLUTE worksheet column index (see
+    // ChartModel.Support.cs), parsed once at load time from each series' <c:val> range so the
+    // renderer can plot exactly the mapped columns (combo charts that skip columns, or list
+    // series out of column order — see ChartRenderer.SeriesFormatting.cs HasAuthoritativeSeriesColumns).
+    // It must be shifted in lockstep with DataRange on column insert/delete, or a mapping silently
+    // keeps pointing at its old absolute column while the underlying data physically moved,
+    // rendering a phantom/blank series in the inserted gap and dropping the real series that moved
+    // into the mapped column's old slot (R14-chart-editing-1). Row insert/delete does not touch
+    // this — the mapping is column-only — so there is no corresponding row-shift variant.
+
+    /// <summary>
+    /// Snapshot of a single sheet's charts' <see cref="ChartModel.SeriesColumnMappings"/> lists,
+    /// keyed by the hosting sheet and chart index, for undo.
+    /// </summary>
+    internal sealed class ChartSeriesColumnMappingsWorkbookSnapshot
+    {
+        public required SheetId HostSheet { get; init; }
+        public required List<List<ChartSeriesColumnMapping>> Charts { get; init; }
+    }
+
+    internal static List<ChartSeriesColumnMappingsWorkbookSnapshot> CaptureChartSeriesColumnMappings(Workbook workbook)
+    {
+        var result = new List<ChartSeriesColumnMappingsWorkbookSnapshot>(workbook.Sheets.Count);
+        foreach (var s in workbook.Sheets)
+        {
+            if (s.Charts.Count == 0) continue;
+            result.Add(new ChartSeriesColumnMappingsWorkbookSnapshot
+            {
+                HostSheet = s.Id,
+                Charts = s.Charts.Select(c => new List<ChartSeriesColumnMapping>(c.SeriesColumnMappings)).ToList()
+            });
+        }
+        return result;
+    }
+
+    internal static void RestoreChartSeriesColumnMappings(
+        Workbook workbook, List<ChartSeriesColumnMappingsWorkbookSnapshot>? snapshot)
+    {
+        if (snapshot is null) return;
+        foreach (var entry in snapshot)
+        {
+            var sheet = workbook.GetSheet(entry.HostSheet);
+            if (sheet is null) continue;
+            for (int i = 0; i < sheet.Charts.Count && i < entry.Charts.Count; i++)
+                sheet.Charts[i].SeriesColumnMappings = entry.Charts[i];
+        }
+    }
+
+    /// <summary>
+    /// Shifts every mapped value column at or after <paramref name="start"/> up by
+    /// <paramref name="count"/>, mirroring <see cref="ShiftRangeColumnsUp"/> for the chart's
+    /// DataRange so a mapping still points at the same (now relocated) worksheet column.
+    /// </summary>
+    internal static void ShiftChartSeriesColumnMappingsUp(Workbook workbook, SheetId sheetId, uint start, uint count)
+    {
+        foreach (var s in workbook.Sheets)
+            foreach (var chart in s.Charts)
+            {
+                if (chart.DataRange.Start.Sheet != sheetId || chart.SeriesColumnMappings.Count == 0)
+                    continue;
+
+                for (int i = 0; i < chart.SeriesColumnMappings.Count; i++)
+                {
+                    var mapping = chart.SeriesColumnMappings[i];
+                    if (mapping.ValueColumn >= start)
+                        chart.SeriesColumnMappings[i] = mapping with
+                        {
+                            ValueColumn = Math.Min(mapping.ValueColumn + count, CellAddress.MaxCol)
+                        };
+                }
+            }
+    }
+
+    /// <summary>
+    /// Shifts every mapped value column after the deleted span down by <paramref name="count"/>,
+    /// mirroring <see cref="ShiftRangeColumnsDown"/>. A mapping whose column falls inside the
+    /// deleted span itself is dropped (the worksheet column it named no longer exists), matching
+    /// how an overlapping DataRange shrinks rather than keeping a stale column reference.
+    /// </summary>
+    internal static void ShiftChartSeriesColumnMappingsDown(Workbook workbook, SheetId sheetId, uint start, uint count)
+    {
+        var end = start + count - 1;
+        foreach (var s in workbook.Sheets)
+            foreach (var chart in s.Charts)
+            {
+                if (chart.DataRange.Start.Sheet != sheetId || chart.SeriesColumnMappings.Count == 0)
+                    continue;
+
+                var shifted = new List<ChartSeriesColumnMapping>(chart.SeriesColumnMappings.Count);
+                foreach (var mapping in chart.SeriesColumnMappings)
+                {
+                    if (mapping.ValueColumn > end)
+                        shifted.Add(mapping with { ValueColumn = mapping.ValueColumn - count });
+                    else if (mapping.ValueColumn < start)
+                        shifted.Add(mapping);
+                    // else: the mapped column itself was deleted — drop the mapping.
+                }
+                chart.SeriesColumnMappings = shifted;
+            }
+    }
+
     // ── Verbatim series formula / data-label formula shifting ─────────────────
     // VerbatimSeriesFormulas holds multi-area or non-rectangular series formula
     // strings that cannot be expressed as a single GridRange. They must also be

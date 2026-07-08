@@ -108,7 +108,21 @@ public partial class MainWindow : Window, IWorkbookWindow
     }
     private int _workbookDirtyGeneration => _documentState.DirtyGeneration;
     private bool _closeAfterSaveInProgress;
-    private CellAddress? _selectionAnchor;
+    private CellAddress? _selectionAnchorField;
+    // The true active/anchor cell of the current selection (e.g. where a Shift+arrow
+    // extension started; F2/typing edits this cell — see MainWindow.Editing.cs). Kept mirrored
+    // onto SheetGrid.ActiveCell so the grid's UI Automation peer can announce the real active
+    // cell instead of SelectedRange's normalized top-left Start corner, which is a different
+    // cell whenever the selection was extended upward or leftward (R14-accessibility-automation-2).
+    private CellAddress? _selectionAnchor
+    {
+        get => _selectionAnchorField;
+        set
+        {
+            _selectionAnchorField = value;
+            SheetGrid.ActiveCell = value;
+        }
+    }
     private CellAddress? _selectionCursor;
     private ExcelSelectionMode _selectionMode = ExcelSelectionMode.Normal;
     // Remembers each sheet's selection within this window so switching sheets restores it (Excel parity).

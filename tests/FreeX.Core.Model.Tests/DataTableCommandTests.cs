@@ -28,8 +28,13 @@ public sealed class DataTableCommandTests
 
         command.Apply(ctx).Success.Should().BeTrue();
 
-        sheet.GetCell(2, 4)!.FormulaText.Should().Be("C2*2");
-        sheet.GetCell(3, 4)!.FormulaText.Should().Be("C3*2");
+        // Column D's header (D1) is the plain label "Result", not a formula, so — matching Excel,
+        // which never invents a formula for a column that doesn't have one — every body cell in
+        // that column just repeats the constant "Result" rather than borrowing column C's formula.
+        sheet.GetCell(2, 4)!.FormulaText.Should().BeNull();
+        sheet.GetCell(2, 4)!.Value.Should().Be(new TextValue("Result"));
+        sheet.GetCell(3, 4)!.FormulaText.Should().BeNull();
+        sheet.GetCell(3, 4)!.Value.Should().Be(new TextValue("Result"));
 
         command.Revert(ctx);
 

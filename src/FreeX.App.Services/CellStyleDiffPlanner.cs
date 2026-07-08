@@ -67,6 +67,8 @@ public static class CellStyleDiffPlanner
             BorderBottom: new CellBorder(BorderStyle.None),
             BorderLeft: new CellBorder(BorderStyle.None),
             BorderRight: new CellBorder(BorderStyle.None),
+            BorderDiagonalDown: new CellBorder(BorderStyle.None),
+            BorderDiagonalUp: new CellBorder(BorderStyle.None),
             Locked: true,
             Hidden: false);
 

@@ -143,8 +143,9 @@ public partial class MainWindow
             !CellAddress.TryParse(endStr, sourceSheet.Id, out var end))
             return 0;
 
+        // Excel populates list-style controls from the FIRST COLUMN of ListFillRange only, so the
+        // item count is the row count regardless of how many columns the range spans.
         var rows = Math.Max(end.Row, start.Row) - Math.Min(end.Row, start.Row) + 1;
-        var cols = Math.Max(end.Col, start.Col) - Math.Min(end.Col, start.Col) + 1;
-        return (int)(rows * cols);
+        return (int)rows;
     }
 }

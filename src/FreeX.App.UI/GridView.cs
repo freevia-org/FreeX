@@ -49,13 +49,18 @@ public partial class GridView : FrameworkElement
     /// it does not gate on IsLoaded: unlike a status-bar TextBlock, GridView's automation peer
     /// (and the per-cell peers it tracks) can legitimately be queried and kept in sync before the
     /// control is attached to a visual tree (e.g. hosted in an offscreen/print preview surface).
+    /// Prefers <see cref="ActiveCell"/> (the host's true anchor/active cell) over
+    /// <see cref="SelectedRange"/>'s normalized Start corner: a Shift+Up/Left extension keeps the
+    /// anchor where the user started selecting, but renormalizes Start to the top-left corner, so
+    /// using Start alone would announce the wrong cell (and its wrong value) whenever the
+    /// selection was extended upward or leftward.
     /// </summary>
     private void NotifySelectionAutomationChanged()
     {
         if (UIElementAutomationPeer.FromElement(this) is not GridViewAutomationPeer peer)
             return;
 
-        peer.NotifySelectionChanged(SelectedRange?.Start);
+        peer.NotifySelectionChanged(ActiveCell ?? SelectedRange?.Start);
     }
 
     /// <summary>
@@ -81,7 +86,7 @@ public partial class GridView : FrameworkElement
     {
         private readonly Dictionary<(uint Row, uint Col), GridViewCellAutomationPeer> _cellPeers = [];
 
-        private CellAddress? _lastNotifiedActiveCell = owner.SelectedRange?.Start;
+        private CellAddress? _lastNotifiedActiveCell = owner.ActiveCell ?? owner.SelectedRange?.Start;
 
         private string? _lastNotifiedActiveCellDisplayText;
 
@@ -256,8 +261,9 @@ public partial class GridView : FrameworkElement
             };
 
         /// <summary>
-        /// Raises UIA selection/focus notifications for the new active cell (the top-left
-        /// corner of the current selection). Called whenever SelectedRange/SelectedRanges
+        /// Raises UIA selection/focus notifications for the new active cell (the host's
+        /// tracked anchor/active cell, or the top-left corner of the current selection when
+        /// no anchor is tracked). Called whenever ActiveCell/SelectedRange/SelectedRanges
         /// changes so screen readers announce cell navigation with the cell's address and
         /// current value, matching Excel's behavior on arrow-key/Tab/Enter movement.
         /// </summary>

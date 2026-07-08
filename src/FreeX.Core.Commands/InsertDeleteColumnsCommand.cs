@@ -32,6 +32,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
     private List<uint>? _columnPageBreakSnapshot;
     private List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? _chartSnapshot;
     private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
+    private List<RowColumnShiftHelpers.ChartSeriesColumnMappingsWorkbookSnapshot>? _chartSeriesColumnMappingsSnapshot;
     private AddressBearingStateSnapshot? _addressStateSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
@@ -114,7 +115,9 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.ShiftSortedSetUp(sheet.ColumnPageBreaks, _beforeCol, _count);
         _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(ctx.Workbook);
         _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
+        _chartSeriesColumnMappingsSnapshot = RowColumnShiftHelpers.CaptureChartSeriesColumnMappings(ctx.Workbook);
         RowColumnShiftHelpers.ShiftChartColumnsUp(ctx.Workbook, _sheetId, _beforeCol, _count);
+        RowColumnShiftHelpers.ShiftChartSeriesColumnMappingsUp(ctx.Workbook, _sheetId, _beforeCol, _count);
         RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, new InsertColsOp(sheet.Name, _beforeCol, _count));
         RowColumnShiftHelpers.ShiftAddressBearingColumnsUp(ctx.Workbook, sheet, _addressStateSnapshot, _beforeCol, _count);
 
@@ -180,6 +183,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreSortedSet(sheet.ColumnPageBreaks, _columnPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(ctx.Workbook, _chartSnapshot);
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
+        RowColumnShiftHelpers.RestoreChartSeriesColumnMappings(ctx.Workbook, _chartSeriesColumnMappingsSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
     }
 
@@ -300,6 +304,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
     private List<uint>? _columnPageBreakSnapshot;
     private List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? _chartSnapshot;
     private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
+    private List<RowColumnShiftHelpers.ChartSeriesColumnMappingsWorkbookSnapshot>? _chartSeriesColumnMappingsSnapshot;
     private AddressBearingStateSnapshot? _addressStateSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
@@ -381,7 +386,9 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.ShiftSortedSetDown(sheet.ColumnPageBreaks, _startCol, _count);
         _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(ctx.Workbook);
         _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
+        _chartSeriesColumnMappingsSnapshot = RowColumnShiftHelpers.CaptureChartSeriesColumnMappings(ctx.Workbook);
         RowColumnShiftHelpers.ShiftChartColumnsDown(ctx.Workbook, _sheetId, _startCol, _count);
+        RowColumnShiftHelpers.ShiftChartSeriesColumnMappingsDown(ctx.Workbook, _sheetId, _startCol, _count);
         RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, new DeleteColsOp(sheet.Name, _startCol, _count));
         RowColumnShiftHelpers.ShiftAddressBearingColumnsDown(ctx.Workbook, sheet, _addressStateSnapshot, _startCol, _count);
 
@@ -450,6 +457,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreSortedSet(sheet.ColumnPageBreaks, _columnPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(ctx.Workbook, _chartSnapshot);
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
+        RowColumnShiftHelpers.RestoreChartSeriesColumnMappings(ctx.Workbook, _chartSeriesColumnMappingsSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
     }
 

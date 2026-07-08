@@ -126,6 +126,13 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             foreach (var row in sDto.ValueFilterHiddenRows ?? [])
                 if (NativeJsonValueSanitizer.IsValidRowIndex(row))
                     sheet.ValueFilterHiddenRows.Add(row);
+            // R14-meta-1: restore which rows each column-owned filter mechanism (condition/Top-Bottom/
+            // average/value-list) still owns, or the next un-hide decision on any OTHER column wrongly
+            // treats every column's filter as inactive (see FilterCommand.cs, finding R14-meta-1).
+            foreach (var entry in (sDto.ColumnFilterOwnedRows ?? []).OfType<UIntUintListDto>())
+                if (NativeJsonValueSanitizer.IsValidColumnIndex(entry.Index))
+                    sheet.ColumnFilterOwnedRows[entry.Index] =
+                        [.. entry.Values.Where(NativeJsonValueSanitizer.IsValidRowIndex)];
             foreach (var column in sDto.HiddenCols ?? [])
                 if (NativeJsonValueSanitizer.IsValidColumnIndex(column))
                     sheet.HiddenCols.Add(column);

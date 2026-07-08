@@ -1163,15 +1163,33 @@ public partial class GridView
         double rowHeaderWidth,
         double columnHeaderHeight)
     {
+        RowMetric row;
+        double rowOriginY;
         var lookups = GetRenderMetricLookups(viewport);
-        if (!lookups.Rows.TryGetValue(range.Start.Row, out var row) ||
-            !lookups.Columns.TryGetValue(range.Start.Col, out var column))
+        if (lookups.Rows.TryGetValue(range.Start.Row, out var mainRow))
+        {
+            row = mainRow;
+            rowOriginY = columnHeaderHeight;
+        }
+        else if (!TryResolveSplitPaneRowMetric(viewport, range.Start.Row, columnHeaderHeight, out row, out rowOriginY))
         {
             return null;
         }
 
-        var left = column.LeftOffset + rowHeaderWidth;
-        var top = row.TopOffset + columnHeaderHeight;
+        ColMetric column;
+        double colOriginX;
+        if (lookups.Columns.TryGetValue(range.Start.Col, out var mainColumn))
+        {
+            column = mainColumn;
+            colOriginX = rowHeaderWidth;
+        }
+        else if (!TryResolveSplitPaneColumnMetric(viewport, range.Start.Col, rowHeaderWidth, out column, out colOriginX))
+        {
+            return null;
+        }
+
+        var left = column.LeftOffset + colOriginX;
+        var top = row.TopOffset + rowOriginY;
         var right = left + column.Width;
         var bottom = top + row.Height;
         if (right <= left || bottom <= top)
@@ -1183,6 +1201,69 @@ public partial class GridView
             HasLeftEdge: true,
             HasBottomEdge: true,
             HasRightEdge: true);
+    }
+
+    // Window > Split keeps its fixed-pane rows/columns (SplitPanes.TopRows/LeftColumns/BottomLeftRows/
+    // TopRightColumns) OUTSIDE viewport.RowMetrics/ColMetrics once the scrollable main pane has scrolled
+    // past them (those lists are only ever rebuilt from the main pane's own scroll offset). Fall back to
+    // the split-pane-fixed lists — mirroring SplitPaneCellLayoutPlanner's own row/column resolution — so
+    // a selected cell in a fixed pane keeps its outline once the main pane scrolls.
+    private bool TryResolveSplitPaneRowMetric(
+        ViewportModel viewport,
+        uint row,
+        double columnHeaderHeight,
+        out RowMetric metric,
+        out double originY)
+    {
+        if (viewport.SplitPanes is { } splitPanes)
+        {
+            if (FindRowMetric(splitPanes.TopRows ?? [], row) is { } topRow)
+            {
+                metric = topRow;
+                originY = columnHeaderHeight;
+                return true;
+            }
+
+            if (FindRowMetric(splitPanes.BottomLeftRows ?? viewport.RowMetrics, row) is { } bottomRow)
+            {
+                metric = bottomRow;
+                originY = CalculateSplitDividerLayout(viewport).HorizontalY ?? columnHeaderHeight;
+                return true;
+            }
+        }
+
+        metric = null!;
+        originY = 0;
+        return false;
+    }
+
+    private bool TryResolveSplitPaneColumnMetric(
+        ViewportModel viewport,
+        uint col,
+        double rowHeaderWidth,
+        out ColMetric metric,
+        out double originX)
+    {
+        if (viewport.SplitPanes is { } splitPanes)
+        {
+            if (FindColMetric(splitPanes.LeftColumns ?? [], col) is { } leftColumn)
+            {
+                metric = leftColumn;
+                originX = rowHeaderWidth;
+                return true;
+            }
+
+            if (FindColMetric(splitPanes.TopRightColumns ?? viewport.ColMetrics, col) is { } rightColumn)
+            {
+                metric = rightColumn;
+                originX = CalculateSplitDividerLayout(viewport).VerticalX ?? rowHeaderWidth;
+                return true;
+            }
+        }
+
+        metric = null!;
+        originX = 0;
+        return false;
     }
 
     private static bool IsSingleCellRange(GridRange range) =>

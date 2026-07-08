@@ -10,7 +10,10 @@ internal static class XlsxSparklineMapper
     // The URI that identifies the sparkline <ext> inside the worksheet extLst.
     private const string SparklineExtUri = "{05C60535-1F16-4fd2-B633-F4F36F0B64E0}";
 
-    public static IReadOnlyList<SparklineModel> Read(XDocument worksheetXml)
+    public static IReadOnlyList<SparklineModel> Read(
+        XDocument worksheetXml,
+        WorkbookTheme theme,
+        WorkbookIndexedColorPalette indexedColors)
     {
         var extensionList = FindChildByLocalName(worksheetXml.Root, "extLst");
         if (extensionList is null)
@@ -53,14 +56,14 @@ internal static class XlsxSparklineMapper
             var emptyCells    = ParseEmptyCells(group, "displayEmptyCellsAs");
 
             // ── color sub-elements ─────────────────────────────────────────────
-            var seriesColor   = ReadColorElement(group, "colorSeries");
-            var negativeColor = ReadColorElement(group, "colorNegative");
-            var axisColor     = ReadColorElement(group, "colorAxis");
-            var markersColor  = ReadColorElement(group, "colorMarkers");
-            var firstColor    = ReadColorElement(group, "colorFirst");
-            var lastColor     = ReadColorElement(group, "colorLast");
-            var highColor     = ReadColorElement(group, "colorHigh");
-            var lowColor      = ReadColorElement(group, "colorLow");
+            var seriesColor   = ReadColorElement(group, "colorSeries", theme, indexedColors);
+            var negativeColor = ReadColorElement(group, "colorNegative", theme, indexedColors);
+            var axisColor     = ReadColorElement(group, "colorAxis", theme, indexedColors);
+            var markersColor  = ReadColorElement(group, "colorMarkers", theme, indexedColors);
+            var firstColor    = ReadColorElement(group, "colorFirst", theme, indexedColors);
+            var lastColor     = ReadColorElement(group, "colorLast", theme, indexedColors);
+            var highColor     = ReadColorElement(group, "colorHigh", theme, indexedColors);
+            var lowColor      = ReadColorElement(group, "colorLow", theme, indexedColors);
 
             // ── date axis ──────────────────────────────────────────────────────
             var dateAxisRange = ReadDateAxisRange(group, tempSheet);
@@ -387,31 +390,21 @@ internal static class XlsxSparklineMapper
         }
     }
 
-    private static CellColor? ReadColorElement(XElement group, string localName)
+    private static CellColor? ReadColorElement(
+        XElement group,
+        string localName,
+        WorkbookTheme theme,
+        WorkbookIndexedColorPalette indexedColors)
     {
         var el = group.Elements().FirstOrDefault(e =>
             string.Equals(e.Name.LocalName, localName, StringComparison.OrdinalIgnoreCase));
         if (el is null)
             return null;
 
-        // Try rgb attribute first (AARRGGBB hex string)
-        var rgb = el.Attribute("rgb")?.Value;
-        if (!string.IsNullOrWhiteSpace(rgb) && rgb.Length >= 6)
-        {
-            // Strip leading alpha bytes if present (AARRGGBB → RRGGBB)
-            var hex = rgb.TrimStart('#');
-            if (hex.Length == 8)
-                hex = hex[2..]; // drop AA
-            if (hex.Length == 6 &&
-                byte.TryParse(hex[0..2], NumberStyles.HexNumber, null, out var r) &&
-                byte.TryParse(hex[2..4], NumberStyles.HexNumber, null, out var g) &&
-                byte.TryParse(hex[4..6], NumberStyles.HexNumber, null, out var b))
-            {
-                return new CellColor(r, g, b);
-            }
-        }
-
-        return null;
+        // Resolves rgb, theme+tint, and indexed colors alike (Excel writes theme colors by default from
+        // the Insert Sparklines dialog, e.g. <x14:colorSeries theme="4" tint="-0.4999"/>); without this the
+        // color was silently dropped, rendering with FreeX's hardcoded default instead of the file's accent.
+        return XlsxColorReader.TryReadCellColor(el, theme, indexedColors, out var color) ? color : null;
     }
 
     // ── Attribute parsers ──────────────────────────────────────────────────────

@@ -329,7 +329,11 @@ public partial class GridView
 
             // Resolve colors.
             var seriesColor = sparkline.SeriesColor ?? DefaultPositiveCellColor;
-            var negativeColor = sparkline.NegativeColor ?? DefaultNegativeCellColor;
+            // Column/win-loss negative bars only use the negative color when "Negative Points" is
+            // enabled; otherwise Excel paints them in the series color like any other bar.
+            var negativeColor = sparkline.ShowNegativePoints
+                ? sparkline.NegativeColor ?? DefaultNegativeCellColor
+                : seriesColor;
             var axisColor = sparkline.AxisColor ?? DefaultAxisCellColor;
 
             dc.PushClip(GetCellClipGeometry(rect));

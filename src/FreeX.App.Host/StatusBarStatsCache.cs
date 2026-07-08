@@ -24,5 +24,8 @@ public sealed class StatusBarStatsCache
     public StatusBarCalculator.Stats GetOrCalculate(Sheet sheet, GridRange range, ulong revision) =>
         StatusBarCalculator.ToStats(_cache.GetOrCalculate(sheet, range, revision));
 
+    public StatusBarCalculator.Stats GetOrCalculate(Sheet sheet, IReadOnlyList<GridRange> ranges, ulong revision) =>
+        StatusBarCalculator.ToStats(_cache.GetOrCalculate(sheet, ranges, revision));
+
     public void Clear() => _cache.Clear();
 }

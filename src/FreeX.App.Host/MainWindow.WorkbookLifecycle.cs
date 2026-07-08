@@ -196,6 +196,7 @@ public partial class MainWindow
             SheetGrid.HiddenRows = null;
             SheetGrid.HiddenColumns = null;
             SheetGrid.SelectedRange = null;
+            SheetGrid.ActiveCell = null;
             SheetGrid.SelectedRanges = null;
             SheetGrid.QuickAnalysisPreviewRange = null;
             SheetGrid.QuickAnalysisPreviewVisual = QuickAnalysisPreviewVisualKind.None;

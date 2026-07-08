@@ -20,9 +20,14 @@ public sealed class WorkbookSessionDataTableTests
             Address(sheet, 4, 3),
             Address(sheet, 4, 4));
         sheet.GetCell(Address(sheet, 3, 3))!.FormulaText.Should().Be("B3*2");
-        sheet.GetCell(Address(sheet, 3, 4))!.FormulaText.Should().Be("B3*2");
+        // Column D's header (D2) is entirely blank — it never carried a formula of its own — so
+        // (matching Excel and R14-data-tables-whatif-3) that column repeats the constant 0 rather
+        // than borrowing column C's formula.
+        sheet.GetCell(Address(sheet, 3, 4))!.FormulaText.Should().BeNull();
+        sheet.GetCell(Address(sheet, 3, 4))!.Value.Should().Be(new NumberValue(0));
         sheet.GetCell(Address(sheet, 4, 3))!.FormulaText.Should().Be("B4*2");
-        sheet.GetCell(Address(sheet, 4, 4))!.FormulaText.Should().Be("B4*2");
+        sheet.GetCell(Address(sheet, 4, 4))!.FormulaText.Should().BeNull();
+        sheet.GetCell(Address(sheet, 4, 4))!.Value.Should().Be(new NumberValue(0));
         session.IsDirty.Should().BeTrue();
         session.CanUndo.Should().BeTrue();
         session.ActiveCell.Should().Be(plan.OutputRange.Start);
@@ -42,7 +47,9 @@ public sealed class WorkbookSessionDataTableTests
         undo.Success.Should().BeTrue();
         redo.Success.Should().BeTrue();
         sheet.GetCell(Address(sheet, 3, 3))!.FormulaText.Should().Be("B3*2");
-        sheet.GetCell(Address(sheet, 4, 4))!.FormulaText.Should().Be("B4*2");
+        // Column D's header (D2) is blank, so it holds the repeated constant 0, not a formula.
+        sheet.GetCell(Address(sheet, 4, 4))!.FormulaText.Should().BeNull();
+        sheet.GetCell(Address(sheet, 4, 4))!.Value.Should().Be(new NumberValue(0));
 
         session.UndoLastEdit().Success.Should().BeTrue();
         sheet.GetCell(Address(sheet, 3, 3)).Should().BeNull();

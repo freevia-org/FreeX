@@ -25,8 +25,11 @@ public sealed class FreeXReview10DataTableTests
     [Fact]
     public void OneVariableDataTableCommand_IndirectInputReferenceProducesVaryingResults()
     {
-        // A1 = input (overridden per trial), B1 = intermediate "=A1*2", C1 = data-table
-        // formula "=B1+1" (referencing the input cell only THROUGH B1, never directly).
+        // A1 = input (overridden per trial), B1 = intermediate "=A1*2", D1 = data-table
+        // formula "=B1+1" (referencing the input cell only THROUGH B1, never directly). D1 sits
+        // one row up and one column to the right of the trial-value column (matching
+        // DataTablePlanner.GetDefaultFormulaCell's convention, and real Excel's data-table
+        // layout), so it is itself the result column's own header — not a fallback default.
         // Table range C1:D3 (column-oriented): trial values in C2/C3, results written to D2/D3.
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
@@ -34,7 +37,7 @@ public sealed class FreeXReview10DataTableTests
 
         var inputCell = new CellAddress(sheet.Id, 1, 1);     // A1
         var intermediateCell = new CellAddress(sheet.Id, 1, 2); // B1
-        var formulaCell = new CellAddress(sheet.Id, 1, 3);   // C1
+        var formulaCell = new CellAddress(sheet.Id, 1, 4);   // D1
 
         sheet.SetCell(inputCell, new NumberValue(5));
         sheet.SetFormula(intermediateCell, "A1*2");

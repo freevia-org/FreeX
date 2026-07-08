@@ -62,17 +62,15 @@ public static class FormControlListResolver
         if (!TryResolveRange(control.ListFillRange.Trim(), sheet, workbook, out var resolved))
             return null;
 
-        // SelectedIndex is 1-based; walk the range row-major to the n-th cell.
+        // SelectedIndex is 1-based; Excel populates list-style controls from the FIRST COLUMN of
+        // ListFillRange only (a multi-column range never contributes its 2nd+ columns as items).
         var zeroBased = selectedIndex - 1;
-        var columnCount = (long)(resolved.EndCol - resolved.StartCol) + 1;
         var rowCount = (long)(resolved.EndRow - resolved.StartRow) + 1;
-        if (zeroBased >= rowCount * columnCount)
+        if (zeroBased >= rowCount)
             return null;
 
-        var rowOffset = zeroBased / columnCount;
-        var colOffset = zeroBased % columnCount;
-        var row = resolved.StartRow + (uint)rowOffset;
-        var col = resolved.StartCol + (uint)colOffset;
+        var row = resolved.StartRow + (uint)zeroBased;
+        var col = resolved.StartCol;
 
         var value = resolved.Sheet.GetCell(row, col)?.Value ?? BlankValue.Instance;
         var text = ToDisplayText(value);

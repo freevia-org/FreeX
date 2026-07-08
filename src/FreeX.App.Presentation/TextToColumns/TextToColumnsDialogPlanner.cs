@@ -183,8 +183,11 @@ public static class TextToColumnsDialogPlanner
     /// <paramref name="sourceRange"/> into the cell edits that realize it. For each source row, the
     /// non-skipped fields are written across consecutive columns starting at the source column; a
     /// <see cref="TextToColumnsColumnFormat.Skip"/> column is dropped (it neither produces an edit nor
-    /// consumes a target column). Values are converted from their format hint. Every written cell is
-    /// emitted (including blanks), so shorter rows overwrite stale values left over from a previous split.
+    /// consumes a target column). Values are converted from their format hint, and each field's leading
+    /// and trailing whitespace is trimmed, matching Excel's General-format Text to Columns behavior. Only
+    /// the columns an individual row actually splits into are written; columns beyond a shorter row's
+    /// field count are left untouched (matching Excel, which does not clear stale trailing cells left
+    /// over from a previous, wider split).
     /// </summary>
     public static IReadOnlyList<(CellAddress Address, Cell NewCell)> MapToEdits(
         SheetId sheetId,

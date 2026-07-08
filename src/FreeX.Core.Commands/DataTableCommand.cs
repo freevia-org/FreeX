@@ -62,20 +62,31 @@ public sealed class OneVariableDataTableCommand : IWorkbookCommand
             // caller-supplied _formulaCell keeps using the already-validated formula text verbatim
             // (so an explicitly-passed formula cell that isn't itself the header-column cell for its
             // row, e.g. a corner cell, still behaves exactly as before); every other row looks up its
-            // own header-column formula, falling back to the default formula when that row has none.
+            // own header-column formula. When that row's header cell holds a constant (or is blank)
+            // instead of a formula, its result does not depend on the trial input at all, so Excel
+            // just repeats that constant (0 for a blank header) rather than reusing an unrelated
+            // formula — see NonFormulaHeaderValue.
             for (uint col = _tableRange.Start.Col + 1; col <= _tableRange.End.Col; col++)
             {
                 var trialInputAddress = new CellAddress(_tableRange.Start.Sheet, _tableRange.Start.Row, col);
                 for (uint row = _tableRange.Start.Row + 1; row <= _tableRange.End.Row; row++)
                 {
-                    var rowFormula = row == _formulaCell.Row
-                        ? defaultFormula
-                        : sheet.GetCell(new CellAddress(_tableRange.Start.Sheet, row, _tableRange.Start.Col))?.FormulaText
-                            ?? defaultFormula;
-
                     var outputAddress = new CellAddress(_tableRange.Start.Sheet, row, col);
                     _snapshot.Add((outputAddress, sheet.GetCell(outputAddress)?.Clone()));
-                    sheet.SetCell(outputAddress, Cell.FromFormula(DataTableFormulaRewriter.ReplaceCellReference(rowFormula!, _inputCell, trialInputAddress, sheet)));
+
+                    if (row == _formulaCell.Row)
+                    {
+                        sheet.SetCell(outputAddress, Cell.FromFormula(DataTableFormulaRewriter.ReplaceCellReference(defaultFormula!, _inputCell, trialInputAddress, sheet)));
+                    }
+                    else
+                    {
+                        var headerCell = sheet.GetCell(new CellAddress(_tableRange.Start.Sheet, row, _tableRange.Start.Col));
+                        if (headerCell?.FormulaText is { } rowFormula && !string.IsNullOrWhiteSpace(rowFormula))
+                            sheet.SetCell(outputAddress, Cell.FromFormula(DataTableFormulaRewriter.ReplaceCellReference(rowFormula, _inputCell, trialInputAddress, sheet)));
+                        else
+                            sheet.SetCell(outputAddress, Cell.FromValue(NonFormulaHeaderValue(headerCell)));
+                    }
+
                     affected.Add(outputAddress);
                 }
             }
@@ -86,21 +97,31 @@ public sealed class OneVariableDataTableCommand : IWorkbookCommand
             // its own result formula in the header row (Excel: multiple result columns each read
             // from their own column's formula cell, e.g. PMT in B1 and CUMIPMT in C1). The column
             // hosting the caller-supplied _formulaCell keeps using the already-validated formula
-            // text verbatim; every other column looks up its own header-row formula, falling back
-            // to the default formula when that column has none.
+            // text verbatim; every other column looks up its own header-row formula. When that
+            // column's header cell holds a constant (or is blank) instead of a formula, Excel just
+            // repeats that constant (0 for a blank header) down the column rather than reusing an
+            // unrelated formula — see NonFormulaHeaderValue.
             for (uint row = _tableRange.Start.Row + 1; row <= _tableRange.End.Row; row++)
             {
                 var trialInputAddress = new CellAddress(_tableRange.Start.Sheet, row, _tableRange.Start.Col);
                 for (uint col = _tableRange.Start.Col + 1; col <= _tableRange.End.Col; col++)
                 {
-                    var colFormula = col == _formulaCell.Col
-                        ? defaultFormula
-                        : sheet.GetCell(new CellAddress(_tableRange.Start.Sheet, _tableRange.Start.Row, col))?.FormulaText
-                            ?? defaultFormula;
-
                     var outputAddress = new CellAddress(_tableRange.Start.Sheet, row, col);
                     _snapshot.Add((outputAddress, sheet.GetCell(outputAddress)?.Clone()));
-                    sheet.SetCell(outputAddress, Cell.FromFormula(DataTableFormulaRewriter.ReplaceCellReference(colFormula!, _inputCell, trialInputAddress, sheet)));
+
+                    if (col == _formulaCell.Col)
+                    {
+                        sheet.SetCell(outputAddress, Cell.FromFormula(DataTableFormulaRewriter.ReplaceCellReference(defaultFormula!, _inputCell, trialInputAddress, sheet)));
+                    }
+                    else
+                    {
+                        var headerCell = sheet.GetCell(new CellAddress(_tableRange.Start.Sheet, _tableRange.Start.Row, col));
+                        if (headerCell?.FormulaText is { } colFormula && !string.IsNullOrWhiteSpace(colFormula))
+                            sheet.SetCell(outputAddress, Cell.FromFormula(DataTableFormulaRewriter.ReplaceCellReference(colFormula, _inputCell, trialInputAddress, sheet)));
+                        else
+                            sheet.SetCell(outputAddress, Cell.FromValue(NonFormulaHeaderValue(headerCell)));
+                    }
+
                     affected.Add(outputAddress);
                 }
             }
@@ -127,6 +148,13 @@ public sealed class OneVariableDataTableCommand : IWorkbookCommand
         _applied = false;
     }
 
+    /// <summary>
+    /// The result to write for a body column/row whose header cell holds a constant (or is blank)
+    /// rather than a formula. Such a header's value never depends on the trial input, so Excel
+    /// simply repeats that constant down the whole column/row — a blank header repeats 0.
+    /// </summary>
+    private static ScalarValue NonFormulaHeaderValue(Cell? headerCell) =>
+        headerCell is null || headerCell.Value is BlankValue ? new NumberValue(0) : headerCell.Value;
 }
 
 public sealed class TwoVariableDataTableCommand : IWorkbookCommand
@@ -322,16 +350,41 @@ internal static class DataTableFormulaRewriter
         // substituted here. A same-sheet-qualified reference (Sheet1!A1) is handled separately
         // below via the qualified pattern, since it refers to the very same cell as the bare form.
         var barePattern = $@"(?<![A-Za-z0-9_!'\]])\$?{Regex.Escape(CellAddress.NumberToColumnName(from.Col))}\$?{from.Row}(?![A-Za-z0-9_])";
-        var result = Regex.Replace(formula, barePattern, to.ToA1(), RegexOptions.IgnoreCase);
+        var result = ReplaceOutsideStringLiterals(formula, barePattern, to.ToA1());
 
         if (sheet is not null)
         {
             var qualifiedPattern = BuildSameSheetQualifiedPattern(sheet.Name, from);
             if (qualifiedPattern is not null)
-                result = Regex.Replace(result, qualifiedPattern, to.ToA1(), RegexOptions.IgnoreCase);
+                result = ReplaceOutsideStringLiterals(result, qualifiedPattern, to.ToA1());
         }
 
         return result;
+    }
+
+    /// <summary>Matches an Excel string literal: a double-quoted run where an embedded quote is
+    /// escaped by doubling it (e.g. <c>"say ""hi"""</c>), so cell-like text inside a literal is
+    /// never mistaken for a formula reference.</summary>
+    private static readonly Regex StringLiteralRegex = new(@"""(?:[^""]|"""")*""", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Runs <paramref name="pattern"/> against <paramref name="formula"/>, replacing every match with
+    /// <paramref name="replacement"/> EXCEPT matches that fall inside a quoted string literal (Excel
+    /// substitutes values, not formula text, so a cell-address-shaped label such as "B3 over" must
+    /// stay literal text, never be rewritten to the trial-cell address).
+    /// </summary>
+    private static string ReplaceOutsideStringLiterals(string formula, string pattern, string replacement)
+    {
+        var literalSpans = StringLiteralRegex.Matches(formula);
+        return Regex.Replace(formula, pattern, match =>
+        {
+            foreach (Match literal in literalSpans)
+            {
+                if (match.Index >= literal.Index && match.Index < literal.Index + literal.Length)
+                    return match.Value; // inside a string literal — leave the text untouched
+            }
+            return replacement;
+        }, RegexOptions.IgnoreCase);
     }
 
     /// <summary>
@@ -375,6 +428,7 @@ internal static class DataTableFormulaRewriter
         // ancestor path (visited), never against this set — only the recursive call one level down
         // folds these into the ancestor set, so a genuine cycle (A -> B -> A) is what actually stops.
         var expandedThisPass = new HashSet<CellAddress>();
+        var literalSpans = StringLiteralRegex.Matches(formula);
         var expanded = Regex.Replace(
             formula,
             // Trailing lookahead also excludes '(' so a function name that happens to look like a
@@ -383,6 +437,12 @@ internal static class DataTableFormulaRewriter
             @"(?<![A-Za-z0-9_!'\]])\$?(?<col>[A-Za-z]{1,3})\$?(?<row>[0-9]+)(?![A-Za-z0-9_(])",
             match =>
             {
+                foreach (Match literal in literalSpans)
+                {
+                    if (match.Index >= literal.Index && match.Index < literal.Index + literal.Length)
+                        return match.Value; // inside a string literal — never treat as a reference
+                }
+
                 var colName = match.Groups["col"].Value.ToUpperInvariant();
                 if (!uint.TryParse(match.Groups["row"].Value, out var row) || row == 0)
                     return match.Value;

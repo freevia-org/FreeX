@@ -193,7 +193,11 @@ public class SheetTabCommandTests
         copiedPicture.LinkedSourceSheetName.Should().Be(copy.Name);
         copiedPicture.Title.Should().Be("Snapshot title");
         copiedPicture.AltText.Should().Be("Copied range");
-        copiedPicture.IsSourceLoaded.Should().BeTrue();
+        // R14-image-media-2: a source-loaded picture's on-disk part is only preserved by sheet
+        // NAME, which the duplicate never matches (new name) — so the clone must be authored
+        // (IsSourceLoaded=false) using its already-copied ImageBytes, or the picture is silently
+        // dropped on save. See DuplicateSheetDrawingCloner.ClonePicture.
+        copiedPicture.IsSourceLoaded.Should().BeFalse();
         copiedPicture.Cells.Should().ContainSingle().Which.Text.Should().Be("hello");
         var copiedImage = copy.Pictures[1];
         copiedImage.Name.Should().Be("Logo");
@@ -208,7 +212,8 @@ public class SheetTabCommandTests
         copiedImage.CropTop.Should().Be(0.2);
         copiedImage.CropRight.Should().Be(0.3);
         copiedImage.CropBottom.Should().Be(0.4);
-        copiedImage.IsSourceLoaded.Should().BeTrue();
+        // R14-image-media-2: see comment above on copiedPicture.IsSourceLoaded.
+        copiedImage.IsSourceLoaded.Should().BeFalse();
         var copiedChart = copy.Charts.Should().ContainSingle().Subject;
         copiedChart.Name.Should().Be("Sales Trend");
         copiedChart.Type.Should().Be(ChartType.Line);

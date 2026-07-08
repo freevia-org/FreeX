@@ -216,6 +216,22 @@ internal static class XlsxWorksheetDrawingObjectWriter
         void AddPictureAnchor(PictureModel picture)
         {
             var currentPictureIndex = nextPictureIndex++;
+            if (picture.ImageBytes is not { Length: > 0 })
+            {
+                // No raster to embed — an authored CellRangeSnapshot ("camera" / Paste Special >
+                // Linked Picture) object that was never rasterized. Rather than silently dropping
+                // the object (data loss — see IsSupportedPicture), reconstruct it as a vector
+                // <xdr:grpSp> of per-cell rectangle+text shapes from the cached Cells snapshot, so
+                // the range's content still round-trips through .xlsx as a real drawing object
+                // instead of vanishing on save.
+                anchors.Add(ToOneCellPictureSnapshotAnchor(
+                    picture,
+                    currentPictureIndex,
+                    spreadsheetDrawingNs,
+                    drawingNs));
+                return;
+            }
+
             var contentType = string.IsNullOrWhiteSpace(picture.ContentType) ? "image/png" : picture.ContentType;
             var extension = XlsxPackagePath.GetImageExtension(contentType).TrimStart('.');
             var mediaPath = $"xl/media/freexPicture{currentPictureIndex}.{extension}";
@@ -332,6 +348,164 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         new XAttribute("prst", "rect"),
                         new XElement(drawingNs + "avLst")))),
             new XElement(spreadsheetDrawingNs + "clientData"));
+
+    /// <summary>
+    /// Reconstructs a CellRangeSnapshot picture (a "camera" / Paste Special &gt; Linked Picture /
+    /// Paste Picture object with no rasterized <see cref="PictureModel.ImageBytes"/>) as a vector
+    /// <c>&lt;xdr:grpSp&gt;</c> — one background rectangle plus one rectangle+text shape per cached
+    /// <see cref="PictureModel.Cells"/> entry — instead of dropping the object. This mirrors the
+    /// on-screen "camera" renderer (<c>GridView.RenderPicture</c>/the Avalonia equivalent), which
+    /// also draws this picture kind from the same Cells snapshot rather than from a bitmap.
+    /// </summary>
+    private static XElement ToOneCellPictureSnapshotAnchor(
+        PictureModel picture,
+        int pictureIndex,
+        XNamespace spreadsheetDrawingNs,
+        XNamespace drawingNs)
+    {
+        var widthEmu = Math.Max(1, DrawingMlUnits.PixelsToEmu(picture.Width));
+        var heightEmu = Math.Max(1, DrawingMlUnits.PixelsToEmu(picture.Height));
+        var rows = Math.Max(1u, picture.SourceRowCount);
+        var cols = Math.Max(1u, picture.SourceColumnCount);
+        var cellWidthEmu = Math.Max(1, widthEmu / cols);
+        var cellHeightEmu = Math.Max(1, heightEmu / rows);
+
+        // Manual last-wins loop rather than .ToDictionary(...): PictureModel.Cells has no
+        // uniqueness constraint on (RowOffset, ColumnOffset) — see the matching comment on the
+        // on-screen renderer (GridView.RenderPicture) — so a straight ToDictionary could throw on
+        // a hand-edited/adversarial .fxl file. Last-wins keeps saving resilient.
+        var cellLookup = new Dictionary<(uint Row, uint Col), PictureCellSnapshot>();
+        foreach (var cell in picture.Cells)
+        {
+            if (cell.RowOffset < rows && cell.ColumnOffset < cols)
+                cellLookup[(cell.RowOffset, cell.ColumnOffset)] = cell;
+        }
+
+        var groupId = 10000L + pictureIndex;
+        var children = new List<XElement>
+        {
+            ToPictureSnapshotBackgroundShape(groupId + 1, widthEmu, heightEmu, spreadsheetDrawingNs, drawingNs)
+        };
+
+        var cellSerial = 1;
+        foreach (var cell in cellLookup.Values.OrderBy(c => c.RowOffset).ThenBy(c => c.ColumnOffset))
+        {
+            children.Add(ToPictureSnapshotCellShape(
+                cell,
+                groupId * 1000 + cellSerial++,
+                cell.ColumnOffset * cellWidthEmu,
+                cell.RowOffset * cellHeightEmu,
+                cellWidthEmu,
+                cellHeightEmu,
+                spreadsheetDrawingNs,
+                drawingNs));
+        }
+
+        var rotation = NormalizeRotation(picture.RotationDegrees);
+        return new(spreadsheetDrawingNs + "oneCellAnchor",
+            new XElement(spreadsheetDrawingNs + "from",
+                new XElement(spreadsheetDrawingNs + "col", Math.Max(0, (long)picture.Anchor.Col - 1).ToString(CultureInfo.InvariantCulture)),
+                new XElement(spreadsheetDrawingNs + "colOff", "0"),
+                new XElement(spreadsheetDrawingNs + "row", Math.Max(0, (long)picture.Anchor.Row - 1).ToString(CultureInfo.InvariantCulture)),
+                new XElement(spreadsheetDrawingNs + "rowOff", "0")),
+            new XElement(spreadsheetDrawingNs + "ext",
+                new XAttribute("cx", widthEmu),
+                new XAttribute("cy", heightEmu)),
+            new XElement(spreadsheetDrawingNs + "grpSp",
+                new XElement(spreadsheetDrawingNs + "nvGrpSpPr",
+                    new XElement(spreadsheetDrawingNs + "cNvPr",
+                        new XAttribute("id", groupId),
+                        new XAttribute("name", DrawingName(picture.Name, $"Picture {pictureIndex}")),
+                        string.IsNullOrWhiteSpace(picture.Title) ? null : new XAttribute("title", picture.Title),
+                        string.IsNullOrWhiteSpace(picture.AltText) ? null : new XAttribute("descr", picture.AltText)),
+                    new XElement(spreadsheetDrawingNs + "cNvGrpSpPr")),
+                new XElement(spreadsheetDrawingNs + "grpSpPr",
+                    new XElement(drawingNs + "xfrm",
+                        rotation == 0 ? null : new XAttribute("rot", (long)Math.Round(rotation * 60000)),
+                        picture.FlipHorizontal ? new XAttribute("flipH", "1") : null,
+                        picture.FlipVertical ? new XAttribute("flipV", "1") : null,
+                        new XElement(drawingNs + "off", new XAttribute("x", 0), new XAttribute("y", 0)),
+                        new XElement(drawingNs + "ext", new XAttribute("cx", widthEmu), new XAttribute("cy", heightEmu)),
+                        new XElement(drawingNs + "chOff", new XAttribute("x", 0), new XAttribute("y", 0)),
+                        new XElement(drawingNs + "chExt", new XAttribute("cx", widthEmu), new XAttribute("cy", heightEmu)))),
+                children),
+            new XElement(spreadsheetDrawingNs + "clientData"));
+    }
+
+    private static XElement ToPictureSnapshotBackgroundShape(
+        long shapeId,
+        long widthEmu,
+        long heightEmu,
+        XNamespace spreadsheetDrawingNs,
+        XNamespace drawingNs) =>
+        new(spreadsheetDrawingNs + "sp",
+            new XElement(spreadsheetDrawingNs + "nvSpPr",
+                new XElement(spreadsheetDrawingNs + "cNvPr",
+                    new XAttribute("id", shapeId),
+                    new XAttribute("name", "Background")),
+                new XElement(spreadsheetDrawingNs + "cNvSpPr")),
+            new XElement(spreadsheetDrawingNs + "spPr",
+                new XElement(drawingNs + "xfrm",
+                    new XElement(drawingNs + "off", new XAttribute("x", 0), new XAttribute("y", 0)),
+                    new XElement(drawingNs + "ext", new XAttribute("cx", widthEmu), new XAttribute("cy", heightEmu))),
+                new XElement(drawingNs + "prstGeom",
+                    new XAttribute("prst", "rect"),
+                    new XElement(drawingNs + "avLst")),
+                new XElement(drawingNs + "solidFill", XlsxDrawingColorWriter.ToRgbColorElement(new CellColor(255, 255, 255), drawingNs)),
+                new XElement(drawingNs + "ln",
+                    new XAttribute("w", DrawingMlUnits.PointsToEmu(0.75)),
+                    new XElement(drawingNs + "solidFill", XlsxDrawingColorWriter.ToRgbColorElement(new CellColor(120, 120, 120), drawingNs)))));
+
+    private static XElement ToPictureSnapshotCellShape(
+        PictureCellSnapshot cell,
+        long shapeId,
+        long offsetXEmu,
+        long offsetYEmu,
+        long widthEmu,
+        long heightEmu,
+        XNamespace spreadsheetDrawingNs,
+        XNamespace drawingNs)
+    {
+        var style = cell.Style;
+        var fill = style is not null ? ToSolidFill(style.FillThemeColor, style.FillColor, drawingNs) : null;
+
+        var rPr = new XElement(drawingNs + "rPr", new XAttribute("lang", "en-US"));
+        if (style is { FontSize: > 0 })
+            rPr.Add(new XAttribute("sz", ((int)Math.Round(style.FontSize * 100)).ToString(CultureInfo.InvariantCulture)));
+        if (style?.Bold == true)
+            rPr.Add(new XAttribute("b", "1"));
+        if (style?.Italic == true)
+            rPr.Add(new XAttribute("i", "1"));
+        if (style?.Underline == true)
+            rPr.Add(new XAttribute("u", "sng"));
+        var textFill = style is not null ? ToSolidFill(style.FontThemeColor, style.FontColor, drawingNs) : null;
+        if (textFill is not null)
+            rPr.Add(textFill);
+
+        return new(spreadsheetDrawingNs + "sp",
+            new XElement(spreadsheetDrawingNs + "nvSpPr",
+                new XElement(spreadsheetDrawingNs + "cNvPr",
+                    new XAttribute("id", shapeId),
+                    new XAttribute("name", $"Cell {cell.RowOffset}_{cell.ColumnOffset}")),
+                new XElement(spreadsheetDrawingNs + "cNvSpPr")),
+            new XElement(spreadsheetDrawingNs + "spPr",
+                new XElement(drawingNs + "xfrm",
+                    new XElement(drawingNs + "off", new XAttribute("x", offsetXEmu), new XAttribute("y", offsetYEmu)),
+                    new XElement(drawingNs + "ext", new XAttribute("cx", widthEmu), new XAttribute("cy", heightEmu))),
+                new XElement(drawingNs + "prstGeom",
+                    new XAttribute("prst", "rect"),
+                    new XElement(drawingNs + "avLst")),
+                fill ?? new XElement(drawingNs + "noFill")),
+            string.IsNullOrEmpty(cell.Text)
+                ? null
+                : new XElement(spreadsheetDrawingNs + "txBody",
+                    new XElement(drawingNs + "bodyPr"),
+                    new XElement(drawingNs + "lstStyle"),
+                    new XElement(drawingNs + "p",
+                        new XElement(drawingNs + "r",
+                            rPr,
+                            new XElement(drawingNs + "t", cell.Text)))));
+    }
 
     private static bool HasPictureCrop(PictureModel picture) =>
         picture.CropLeft > 0 ||
@@ -814,19 +988,22 @@ internal static class XlsxWorksheetDrawingObjectWriter
         return normalized < 0 ? normalized + 360 : normalized;
     }
 
-    // A camera / "Paste Link Picture" object (Kind == CellRangeSnapshot) is, on the wire, still just
-    // a raster picture anchored on the sheet — Excel itself stores it as a normal <xdr:pic> backed by
-    // a rendered bitmap of the source range, plus the linked-range metadata FreeX tracks separately
-    // via IsLinkedToSourceRange/LinkedSourceRange. Excluding every CellRangeSnapshot picture (rather
-    // than only those that genuinely have no raster to embed) silently dropped the object even when a
-    // bitmap snapshot IS available, so only pictures with no embeddable image at all are unsupported.
+    // A camera / "Paste Link Picture" / "Paste Picture" object (Kind == CellRangeSnapshot) is, on
+    // the wire, still just a picture anchored on the sheet — Excel itself stores it as a normal
+    // <xdr:pic> backed by a rendered bitmap of the source range, plus the linked-range metadata
+    // FreeX tracks separately via IsLinkedToSourceRange/LinkedSourceRange. FreeX never rasterizes
+    // these at paste time (PasteRangeAsPictureCommand only records the cell-content/style snapshot
+    // in Cells), so ImageBytes is always null for them. Requiring ImageBytes here would silently
+    // drop the object (and its content) on every .xlsx save; instead a CellRangeSnapshot picture
+    // with no raster is still "supported" — AddPictureAnchor reconstructs it as a vector <xdr:grpSp>
+    // of per-cell shapes from Cells (see ToOneCellPictureSnapshotAnchor) rather than an <xdr:pic>.
     private static bool IsSupportedPicture(PictureModel picture) =>
         !picture.IsSourceLoaded &&
-        picture.ImageBytes is { Length: > 0 } &&
         double.IsFinite(picture.Width) &&
         double.IsFinite(picture.Height) &&
         picture.Width > 0 &&
-        picture.Height > 0;
+        picture.Height > 0 &&
+        (picture.ImageBytes is { Length: > 0 } || picture.Kind == PictureKind.CellRangeSnapshot);
 
     private static bool IsSupportedTextBox(TextBoxModel textBox) =>
         !textBox.IsSourceLoaded &&

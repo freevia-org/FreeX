@@ -351,9 +351,10 @@ public static class FormControlInteractionService
             !CellAddress.TryParse(cellPart[(colon + 1)..], sheet.Id, out var end))
             return 0;
 
+        // Excel populates list-style controls from the FIRST COLUMN of ListFillRange only, so the
+        // item count is the row count regardless of how many columns the range spans.
         var rows = (int)(Math.Max(end.Row, start.Row) - Math.Min(end.Row, start.Row) + 1);
-        var cols = (int)(Math.Max(end.Col, start.Col) - Math.Min(end.Col, start.Col) + 1);
-        return rows * cols;
+        return rows;
     }
 
     // ── Linked-cell resolution ────────────────────────────────────────────────
@@ -380,9 +381,12 @@ public static class FormControlInteractionService
     ///   <item><c>A1</c> — relative same-sheet</item>
     ///   <item><c>Sheet2!$A$1</c> — cross-sheet with or without dollars</item>
     ///   <item><c>'My Sheet'!A1</c> — quoted sheet name</item>
+    ///   <item><c>MyFlag</c> — a defined name (workbook-scoped or scoped to the control's sheet),
+    ///     resolved to the top-left cell of the name's target range, matching Excel where the
+    ///     Cell link field of a form control may hold a defined name.</item>
     /// </list>
     /// Returns <see langword="false"/> and sets <paramref name="address"/> to
-    /// <c>default</c> when the string is empty, malformed, or the sheet cannot be found.
+    /// <c>default</c> when the string is empty, malformed, or the sheet/name cannot be found.
     /// </summary>
     public static bool TryResolveLinkedCell(
         string? linkedCell,
@@ -425,7 +429,18 @@ public static class FormControlInteractionService
             sheetId = fallbackSheetId;
         }
 
-        return CellAddress.TryParse(cellPart, sheetId, out address);
+        if (CellAddress.TryParse(cellPart, sheetId, out address))
+            return true;
+
+        // Not a plain A1 reference — the Cell link field may hold a defined name (Excel allows
+        // this). Only attempted for the unqualified (no '!') form, which is how Excel writes it.
+        if (bangIdx < 0 && workbook.TryGetNamedRange(cellPart, fallbackSheetId, out var namedRange))
+        {
+            address = namedRange.Start;
+            return true;
+        }
+
+        return false;
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

@@ -124,7 +124,11 @@ internal sealed class SparklineCellPanel : Panel
 
         // Resolve colors with Excel defaults.
         var seriesColor  = _sparkline.SeriesColor  ?? DefaultPositiveColor;
-        var negativeColor = _sparkline.NegativeColor ?? DefaultNegativeColor;
+        // Column/win-loss negative bars only use the negative color when "Negative Points" is
+        // enabled; otherwise Excel paints them in the series color like any other bar.
+        var negativeColor = _sparkline.ShowNegativePoints
+            ? _sparkline.NegativeColor ?? DefaultNegativeColor
+            : seriesColor;
         var axisColor    = _sparkline.AxisColor     ?? DefaultAxisColor;
 
         // Draw axis line first (behind the sparkline).

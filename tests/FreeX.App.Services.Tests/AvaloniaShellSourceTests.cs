@@ -1693,7 +1693,12 @@ public sealed class AvaloniaShellSourceTests
         // instead of the plain SetTextAsync used by Cut (which does not need HTML — Excel's own
         // Cut clipboard payload is plain-text-only in practice for this shell's parity target).
         source.Should().Contain("using var transfer = new DataTransfer();");
-        source.Should().Contain("AddClipboardTextAndHtml(transfer, copiedText, _session.Viewport, _session.ActiveSheet, _session.SelectedRange, _session.Workbook.Theme);");
+        // R14-clipboard-formats-deep-1: the on-screen _session.Viewport truncates any part of the
+        // selection scrolled out of view, so the CF_HTML fragment must be built from the full-range
+        // viewport TryCopySelectedRangeText() already constructed for the same range (falling back to
+        // the on-screen Viewport only if a result somehow carries none), mirroring the WPF host's P41
+        // fix (MainWindow.BuildFullRangeViewportForClipboard).
+        source.Should().Contain("AddClipboardTextAndHtml(transfer, copiedText, copyResult.Viewport ?? _session.Viewport, _session.ActiveSheet, _session.SelectedRange, _session.Workbook.Theme);");
         source.Should().Contain("await clipboard.SetDataAsync(transfer);");
         source.Should().Contain("var text = await clipboard.TryGetTextAsync();");
         source.Should().Contain("_session.ShouldPreferExternalClipboardImage(text)");

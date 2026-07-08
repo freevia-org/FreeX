@@ -19,7 +19,11 @@ internal static class ConsolidationLabelPlanBuilder
         var bodyStartCol = useLeftColumnLabels ? 1u : 0u;
         var rows = new List<string>();
         var cols = new List<string>();
-        var buckets = new Dictionary<(string Row, string Col), ConsolidationBucket>();
+        // Row/column labels are deduped case-insensitively (ConsolidationRules.AddUnique), matching
+        // Excel's category-label merge. The bucket dictionary must key on the same case-insensitive
+        // equality, otherwise a source label that differs only in case (e.g. "Apples" vs "apples")
+        // lands in its own orphan bucket that BuildWrites never looks up, silently dropping its values.
+        var buckets = new Dictionary<(string Row, string Col), ConsolidationBucket>(LabelKeyComparer);
 
         foreach (var range in sourceRanges)
             CollectRange(ctx, range, rows, cols, buckets, useTopRowLabels, useLeftColumnLabels, bodyStartRow, bodyStartCol, rowCount, colCount);
@@ -154,5 +158,19 @@ internal static class ConsolidationLabelPlanBuilder
         public int NonEmptyCount { get; set; }
 
         public List<CellAddress> SourceAddresses { get; } = [];
+    }
+
+    private static readonly IEqualityComparer<(string Row, string Col)> LabelKeyComparer = new CaseInsensitiveLabelKeyComparer();
+
+    private sealed class CaseInsensitiveLabelKeyComparer : IEqualityComparer<(string Row, string Col)>
+    {
+        public bool Equals((string Row, string Col) x, (string Row, string Col) y) =>
+            string.Equals(x.Row, y.Row, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(x.Col, y.Col, StringComparison.OrdinalIgnoreCase);
+
+        public int GetHashCode((string Row, string Col) obj) =>
+            HashCode.Combine(
+                StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Row),
+                StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Col));
     }
 }

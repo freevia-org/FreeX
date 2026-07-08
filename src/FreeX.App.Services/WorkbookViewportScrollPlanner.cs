@@ -22,7 +22,9 @@ public readonly record struct WorkbookViewportCellRevealAxisPlan(
 
 public readonly record struct WorkbookViewportCellRevealPlan(
     WorkbookViewportCellRevealAxisPlan Vertical,
-    WorkbookViewportCellRevealAxisPlan Horizontal);
+    WorkbookViewportCellRevealAxisPlan Horizontal,
+    uint? BottomLeftTopRow = null,
+    uint? TopRightLeftCol = null);
 
 public static class WorkbookViewportScrollPlanner
 {
@@ -176,19 +178,89 @@ public static class WorkbookViewportScrollPlanner
 
         var frozenRows = sheet?.FrozenRows ?? 0;
         var frozenColumns = sheet?.FrozenCols ?? 0;
-        return new WorkbookViewportCellRevealPlan(
-            PlanCellRevealAxis(
+
+        // Window > Split (viewport.SplitPanes) is distinct from Freeze Panes: the split's top/left
+        // panes are pinned (never scroll) and the bottom-left/top-right panes can be scrolled
+        // *independently* of the main scrollbars via the host's own per-pane offsets (see
+        // MainWindow.Viewport.cs's _splitPaneViewportOffsets / TryScrollIndependentSplitPane).
+        // SetSplitPanesCommand always zeroes FrozenRows/FrozenCols, so a plain frozen-pane-shaped
+        // reveal here would only ever move the main (bottom-right) scrollbars -- it can never reach
+        // a cell that's out of view in an independently-scrolled bottom-left or top-right pane.
+        var splitPanes = viewport.SplitPanes;
+        var splitRow = splitPanes?.Row;
+        var splitColumn = splitPanes?.Column;
+        var isFourWaySplit = splitRow.HasValue && splitColumn.HasValue;
+        var targetIsInPinnedTopRows = splitRow is { } sr && target.Row < sr;
+        var targetIsInPinnedLeftColumns = splitColumn is { } sc && target.Col < sc;
+
+        uint? bottomLeftTopRow = null;
+        WorkbookViewportCellRevealAxisPlan verticalPlan;
+        if (targetIsInPinnedTopRows)
+        {
+            // Always fully shown in the pinned top pane(s), regardless of the bottom panes' scroll.
+            verticalPlan = new WorkbookViewportCellRevealAxisPlan(false, currentVerticalMaximum, 0);
+        }
+        else if (isFourWaySplit && targetIsInPinnedLeftColumns)
+        {
+            var bottomLeftRows = splitPanes!.BottomLeftRows ?? viewport.RowMetrics;
+            bottomLeftTopRow = PlanSplitPaneOffsetReveal(
+                target.Row,
+                CellAddress.MaxRow,
+                GetScrollableRowWindow(bottomLeftRows, frozenCount: 0, target.Row));
+            verticalPlan = new WorkbookViewportCellRevealAxisPlan(false, currentVerticalMaximum, 0);
+        }
+        else
+        {
+            verticalPlan = PlanCellRevealAxis(
                 target.Row,
                 frozenRows,
                 CellAddress.MaxRow,
                 currentVerticalMaximum,
-                GetScrollableRowWindow(viewport, frozenRows, target.Row)),
-            PlanCellRevealAxis(
+                GetScrollableRowWindow(viewport.RowMetrics, frozenRows, target.Row));
+        }
+
+        uint? topRightLeftCol = null;
+        WorkbookViewportCellRevealAxisPlan horizontalPlan;
+        if (targetIsInPinnedLeftColumns)
+        {
+            horizontalPlan = new WorkbookViewportCellRevealAxisPlan(false, currentHorizontalMaximum, 0);
+        }
+        else if (isFourWaySplit && targetIsInPinnedTopRows)
+        {
+            var topRightColumns = splitPanes!.TopRightColumns ?? viewport.ColMetrics;
+            topRightLeftCol = PlanSplitPaneOffsetReveal(
+                target.Col,
+                CellAddress.MaxCol,
+                GetScrollableColumnWindow(topRightColumns, frozenCount: 0, target.Col));
+            horizontalPlan = new WorkbookViewportCellRevealAxisPlan(false, currentHorizontalMaximum, 0);
+        }
+        else
+        {
+            horizontalPlan = PlanCellRevealAxis(
                 target.Col,
                 frozenColumns,
                 CellAddress.MaxCol,
                 currentHorizontalMaximum,
-                GetScrollableColumnWindow(viewport, frozenColumns, target.Col)));
+                GetScrollableColumnWindow(viewport.ColMetrics, frozenColumns, target.Col));
+        }
+
+        return new WorkbookViewportCellRevealPlan(verticalPlan, horizontalPlan, bottomLeftTopRow, topRightLeftCol);
+    }
+
+    private static uint? PlanSplitPaneOffsetReveal(
+        uint targetIndex,
+        uint absoluteLimit,
+        ScrollableMetricWindow window)
+    {
+        if (window.Count == 0 || window.ContainsTarget)
+            return null;
+
+        return CalculateScrollValueToRevealCell(
+            targetIndex,
+            window.First,
+            window.Last,
+            absoluteLimit,
+            (uint)window.Count);
     }
 
     public static uint CalculateScrollValueToRevealCell(
@@ -416,14 +488,14 @@ public static class WorkbookViewportScrollPlanner
         Math.Min(CellAddress.MaxCol, Math.Max(1, sheet.FrozenCols + 1));
 
     private static ScrollableMetricWindow GetScrollableRowWindow(
-        ViewportModel viewport,
-        uint frozenRows,
+        IReadOnlyList<RowMetric> rowMetrics,
+        uint frozenCount,
         uint targetRow)
     {
         var result = new ScrollableMetricWindow();
-        foreach (var metric in viewport.RowMetrics)
+        foreach (var metric in rowMetrics)
         {
-            if (metric.Row <= frozenRows)
+            if (metric.Row <= frozenCount)
                 continue;
 
             result = result.Include(metric.Row, metric.Row == targetRow);
@@ -433,14 +505,14 @@ public static class WorkbookViewportScrollPlanner
     }
 
     private static ScrollableMetricWindow GetScrollableColumnWindow(
-        ViewportModel viewport,
-        uint frozenColumns,
+        IReadOnlyList<ColMetric> colMetrics,
+        uint frozenCount,
         uint targetColumn)
     {
         var result = new ScrollableMetricWindow();
-        foreach (var metric in viewport.ColMetrics)
+        foreach (var metric in colMetrics)
         {
-            if (metric.Col <= frozenColumns)
+            if (metric.Col <= frozenCount)
                 continue;
 
             result = result.Include(metric.Col, metric.Col == targetColumn);

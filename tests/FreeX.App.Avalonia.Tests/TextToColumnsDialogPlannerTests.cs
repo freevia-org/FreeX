@@ -68,7 +68,7 @@ public sealed class TextToColumnsDialogPlannerTests
 
         var edits = TextToColumnsDialogPlanner.MapToEdits(sheet.Id, result, range);
 
-        // Row 1 -> B1,C1,D1; row 2 -> B2,C2 (and a blank D2 to clear stale values).
+        // Row 1 -> B1,C1,D1; row 2 -> B2,C2 (D2 is left untouched, matching Excel).
         edits.Should().Contain(e => e.Address == new CellAddress(sheet.Id, 1, 2) && Text(e.NewCell) == "a");
         edits.Should().Contain(e => e.Address == new CellAddress(sheet.Id, 1, 3) && Text(e.NewCell) == "b");
         edits.Should().Contain(e => e.Address == new CellAddress(sheet.Id, 1, 4) && Text(e.NewCell) == "c");

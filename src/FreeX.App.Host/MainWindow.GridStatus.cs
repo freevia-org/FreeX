@@ -24,9 +24,14 @@ public partial class MainWindow
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         var selectedRange = SheetGrid.SelectedRange;
-        WorkbookSelectionStats? stats = sheet is not null && selectedRange is { } range
-            ? StatusBarCalculator.ToShared(_statusBarStatsCache.GetOrCalculate(sheet, range, _navigationCacheRevision))
-            : null;
+        var selectedRanges = SheetGrid.SelectedRanges;
+        WorkbookSelectionStats? stats = sheet is null
+            ? null
+            : selectedRanges is { Count: > 0 }
+                ? StatusBarCalculator.ToShared(_statusBarStatsCache.GetOrCalculate(sheet, selectedRanges, _navigationCacheRevision))
+                : selectedRange is { } range
+                    ? StatusBarCalculator.ToShared(_statusBarStatsCache.GetOrCalculate(sheet, range, _navigationCacheRevision))
+                    : null;
 
         var plan = StatusBarRefreshPlanner.Build(
             sheet,

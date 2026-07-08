@@ -113,11 +113,12 @@ public sealed class SparklineLayoutEngineTests
         layout.Bars.Should().ContainSingle();
         var bar = layout.Bars[0];
         bar.IsNegative.Should().BeFalse();
-        // single value, slot=100, barWidth=min(100,max(1,65))=65; height = 10/10 * 40/2 = 20.
+        // single value, slot=100, barWidth=min(100,max(1,65))=65; all-positive data puts the zero
+        // baseline at the cell bottom, so the max value fills the full cell height: 10/10 * 40 = 40.
         bar.Rect.Width.Should().Be(65);
-        bar.Rect.Height.Should().Be(20);
-        var axis = 20 + 40 / 2.0; // 40
-        bar.Rect.Top.Should().Be(axis - 20); // grows up
+        bar.Rect.Height.Should().Be(40);
+        var axis = 60d; // rect.Bottom (20 + 40)
+        bar.Rect.Top.Should().Be(axis - 40); // grows up from the bottom, filling the whole cell
         bar.Rect.Left.Should().Be(10 + (100 - 65) / 2.0);
     }
 
@@ -128,9 +129,11 @@ public sealed class SparklineLayoutEngineTests
 
         var bar = layout.Bars[0];
         bar.IsNegative.Should().BeTrue();
-        var axis = 40d;
-        bar.Rect.Top.Should().Be(axis); // grows down from axis
-        bar.Rect.Height.Should().Be(20);
+        // all-negative data puts the zero baseline at the cell top, so the largest-magnitude value
+        // fills the full cell height: 10/10 * 40 = 40.
+        var axis = 20d; // rect.Top
+        bar.Rect.Top.Should().Be(axis); // grows down from the top, filling the whole cell
+        bar.Rect.Height.Should().Be(40);
     }
 
     [Fact]
@@ -147,9 +150,10 @@ public sealed class SparklineLayoutEngineTests
         var layout = SparklineLayoutEngine.CalculateColumnLayout([5, 10], Cell, winLoss: false);
 
         layout.Bars.Should().HaveCount(2);
-        // maxAbs=10; first bar height = 5/10 * 40/2 = 10; second = 20.
-        layout.Bars[0].Rect.Height.Should().Be(10);
-        layout.Bars[1].Rect.Height.Should().Be(20);
+        // all-positive data: maxAbs=10, full cell height (40) available; first bar height =
+        // 5/10 * 40 = 20; second (the max) fills the full 40.
+        layout.Bars[0].Rect.Height.Should().Be(20);
+        layout.Bars[1].Rect.Height.Should().Be(40);
     }
 
     [Fact]
@@ -197,9 +201,9 @@ public sealed class SparklineLayoutEngineTests
     {
         var layout = SparklineLayoutEngine.CalculateColumnLayout([4, 4, 4], Cell, winLoss: false);
 
-        // maxAbs=4; each height = 4/4 * 20 = 20.
+        // all-positive data: maxAbs=4, full cell height (40) available; each height = 4/4 * 40 = 40.
         layout.Bars.Should().HaveCount(3);
-        layout.Bars.Should().OnlyContain(b => b.Rect.Height == 20);
+        layout.Bars.Should().OnlyContain(b => b.Rect.Height == 40);
     }
 
     [Fact]

@@ -1,4 +1,3 @@
-using System.Globalization;
 using FreeX.App.Presentation.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
@@ -1862,9 +1861,18 @@ public sealed class WorkbookSession
             return WorkbookClipboardTextResult.Succeeded(blockText);
         }
 
-        var text = ClipboardSerializer.Serialize(Viewport, SelectedRange);
-        _internalClipboard = CaptureInternalClipboard(SelectedRange, text, isCut: false);
-        return WorkbookClipboardTextResult.Succeeded(text);
+        // R14-clipboard-formats-deep-1: Viewport only materializes the on-screen scroll position
+        // (BuildViewport() sizes it to ActiveSheet.ViewTopRow/ViewLeftCol + _viewportHeight/
+        // _viewportWidth). Serializing straight off that truncates any part of a selection that
+        // scrolled out of view to blank in both the plain-text clipboard payload and the CF_HTML
+        // fragment (built by the Avalonia shell from the Viewport this result carries). Build a
+        // viewport sized to the copied range itself instead, mirroring the WPF host's
+        // BuildFullRangeViewportForClipboard (P41), so external copy/paste always reflects the full
+        // selection regardless of what is currently scrolled into view.
+        var fullRangeViewport = BuildFullRangeViewportForClipboard(SelectedRange);
+        var text = ClipboardSerializer.Serialize(fullRangeViewport, SelectedRange);
+        _internalClipboard = CaptureInternalClipboard(SelectedRange, text, isCut: false, fullRangeViewport);
+        return WorkbookClipboardTextResult.Succeeded(text, fullRangeViewport);
     }
 
     public string CutSelectedRangeText()
@@ -1881,9 +1889,46 @@ public sealed class WorkbookSession
         if (TryCreateMultiRangeClipboardTextResult("Cut", out var result))
             return result;
 
-        var text = ClipboardSerializer.Serialize(Viewport, SelectedRange);
-        _internalClipboard = CaptureInternalClipboard(SelectedRange, text, isCut: true);
-        return WorkbookClipboardTextResult.Succeeded(text);
+        // Same rationale as TryCopySelectedRangeText: use a full-range viewport, not the on-screen
+        // Viewport, so cutting a selection taller/wider than the visible area does not blank out the
+        // off-screen part of the clipboard payload (R14-clipboard-formats-deep-1).
+        var fullRangeViewport = BuildFullRangeViewportForClipboard(SelectedRange);
+        var text = ClipboardSerializer.Serialize(fullRangeViewport, SelectedRange);
+        _internalClipboard = CaptureInternalClipboard(SelectedRange, text, isCut: true, fullRangeViewport);
+        return WorkbookClipboardTextResult.Succeeded(text, fullRangeViewport);
+    }
+
+    /// <summary>
+    /// Builds a <see cref="ViewportModel"/> that materializes every cell in <paramref name="range"/>,
+    /// independent of the current scroll position. Mirrors the WPF host's
+    /// <c>MainWindow.BuildFullRangeViewportForClipboard</c> (P41 / R14-clipboard-formats-deep-1):
+    /// requesting a viewport whose top-left is the range's own start and whose available
+    /// height/width is sized (generously) to the range's own row/column span guarantees every cell
+    /// in the range is present regardless of what is currently scrolled into view.
+    /// </summary>
+    private ViewportModel BuildFullRangeViewportForClipboard(GridRange range)
+    {
+        // Generous per-row/per-column pixel bounds so the viewport's internal "stop materializing"
+        // heuristic (which walks actual row heights/column widths, not these estimates) always
+        // reaches past the end of the requested range even for tall rows / wide columns, while still
+        // being a small constant multiple of the range size rather than the whole sheet.
+        const double MaxPlausibleRowHeight = 500.0;
+        const double MaxPlausibleColWidth = 2000.0;
+
+        var rowSpan = (double)range.RowCount;
+        var colSpan = (double)range.ColCount;
+        var availableHeight = Math.Min(double.MaxValue / 2, (rowSpan + 2) * MaxPlausibleRowHeight);
+        var availableWidth = Math.Min(double.MaxValue / 2, (colSpan + 2) * MaxPlausibleColWidth);
+
+        var request = new ViewportRequest(
+            TopRow: range.Start.Row,
+            LeftCol: range.Start.Col,
+            AvailableHeight: availableHeight,
+            AvailableWidth: availableWidth,
+            IncludeObjects: false,
+            SplitPaneOffsets: null);
+
+        return _viewportService.GetViewport(Workbook, range.Start.Sheet, request);
     }
 
     public WorkbookCellEditResult PasteClipboardTextAtActiveCell(
@@ -4326,7 +4371,7 @@ public sealed class WorkbookSession
                 picture.Cells.Add(new PictureCellSnapshot(
                     row - sourceRange.Start.Row,
                     col - sourceRange.Start.Col,
-                    FormatPictureCellText(value),
+                    FormatPictureCellText(value, style.NumberFormat),
                     style.Clone(),
                     value is NumberValue or DateTimeValue));
             }
@@ -4804,11 +4849,11 @@ public sealed class WorkbookSession
         return (areas[^1].End.Row, sourceColumn);
     }
 
-    private InternalClipboard CaptureInternalClipboard(GridRange range, string text, bool isCut)
+    private InternalClipboard CaptureInternalClipboard(GridRange range, string text, bool isCut, ViewportModel viewport)
     {
         var sheet = Workbook.GetSheet(range.Start.Sheet);
         var cells = new List<(CellAddress Source, Cell Cell)>();
-        var pictureCells = CapturePictureCells(range, sheet);
+        var pictureCells = CapturePictureCells(range, sheet, viewport);
         foreach (var address in range.AllCells())
         {
             var cell = sheet?.GetCell(address)?.Clone() ?? Cell.FromValue(BlankValue.Instance);
@@ -4818,10 +4863,11 @@ public sealed class WorkbookSession
         return new InternalClipboard(range, cells, pictureCells, text, isCut);
     }
 
-    private List<(CellAddress Source, PictureCellSnapshot Snapshot)> CapturePictureCells(GridRange range, Sheet? sheet)
+    private List<(CellAddress Source, PictureCellSnapshot Snapshot)> CapturePictureCells(
+        GridRange range, Sheet? sheet, ViewportModel viewport)
     {
-        var displayCells = new Dictionary<(uint Row, uint Col), DisplayCell>(Viewport.Cells.Count);
-        foreach (var cell in Viewport.Cells)
+        var displayCells = new Dictionary<(uint Row, uint Col), DisplayCell>(viewport.Cells.Count);
+        foreach (var cell in viewport.Cells)
             displayCells[(cell.Row, cell.Col)] = cell;
 
         var result = new List<(CellAddress, PictureCellSnapshot)>();
@@ -4841,12 +4887,15 @@ public sealed class WorkbookSession
             }
 
             var cell = sheet?.GetCell(address);
+            var fallbackStyleId = cell?.StyleId
+                ?? sheet?.GetStyleOnly(address.Row, address.Col)
+                ?? StyleId.Default;
             result.Add((
                 address,
                 new PictureCellSnapshot(
                     address.Row - range.Start.Row,
                     address.Col - range.Start.Col,
-                    FormatPictureCellText(cell?.Value ?? BlankValue.Instance),
+                    FormatPictureCellText(cell?.Value ?? BlankValue.Instance, Workbook.GetStyle(fallbackStyleId).NumberFormat),
                     null,
                     cell?.Value is NumberValue or DateTimeValue)));
         }
@@ -5133,17 +5182,15 @@ public sealed class WorkbookSession
         return Math.Max(1, Math.Ceiling(value));
     }
 
-    private static string FormatPictureCellText(ScalarValue value) =>
-        value switch
-        {
-            BlankValue => "",
-            NumberValue number => number.Value.ToString(CultureInfo.CurrentCulture),
-            BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
-            TextValue text => text.Value,
-            DateTimeValue dateTime => dateTime.Value.ToString(CultureInfo.CurrentCulture),
-            ErrorValue error => error.Code,
-            _ => value.ToString() ?? ""
-        };
+    /// <summary>
+    /// Renders a linked picture's cell text using the source cell's own number format, so a linked
+    /// picture keeps showing the formatted value (e.g. "$1,234.50") on every refresh, exactly as it
+    /// did at the moment it was pasted (Excel camera parity; see R14-camera-linked-picture-2). A raw
+    /// <c>ToString(CultureInfo.CurrentCulture)</c> would silently strip currency/percent/date/custom
+    /// formats after the first source-cell edit.
+    /// </summary>
+    private string FormatPictureCellText(ScalarValue value, string numberFormat) =>
+        FreeX.Core.Formula.NumberFormatter.Format(value, numberFormat, Workbook.Uses1904DateSystem);
 
     private static IReadOnlyList<FileFormatDescriptor> BuildFormats(
         IReadOnlyList<IFileAdapter> adapters,
@@ -5252,8 +5299,19 @@ public sealed class WorkbookSession
 public sealed record WorkbookClipboardTextResult(
     bool Success,
     string? Text,
-    string? ErrorMessage)
+    string? ErrorMessage,
+    ViewportModel? Viewport = null)
 {
+    /// <summary>
+    /// Succeeds with the full-range viewport (see <c>WorkbookSession.BuildFullRangeViewportForClipboard</c>)
+    /// the text was serialized from, so callers building a CF_HTML fragment for the same copy/cut
+    /// (e.g. the Avalonia shell's clipboard handler) render off the same complete range instead of
+    /// re-reading the on-screen-only <see cref="WorkbookSession.Viewport"/> and truncating any part of
+    /// the selection that is scrolled out of view (R14-clipboard-formats-deep-1).
+    /// </summary>
+    public static WorkbookClipboardTextResult Succeeded(string text, ViewportModel viewport) =>
+        new(true, text, null, viewport);
+
     public static WorkbookClipboardTextResult Succeeded(string text) =>
         new(true, text, null);
 

@@ -145,8 +145,8 @@ public static class TextToColumnsApplyPlanner
                 result.ColumnCount,
                 result.ColumnFormats,
                 advancedOptions,
-                fillMissingFields: true,
-                trimFields: false);
+                fillMissingFields: false,
+                trimFields: true);
         }
 
         return edits;

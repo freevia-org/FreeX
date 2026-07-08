@@ -116,27 +116,28 @@ public sealed class SparklineLayoutEngineOverloadTests
     [Fact]
     public void CalculateColumnLayout_WithoutOverrideMaxAbs_ScalesBarsByLocalMax()
     {
-        // Local maxAbs=5; max bar height = rect.Height/2 = 10; bar height = 10.
+        // Single all-positive value: the zero baseline sits at the cell bottom (R14 fix), so the
+        // local max fills the full cell height (20), not half.
         var values = new double[] { 5 };
         var rect   = new LayoutRect(0, 0, 20, 20);
 
         var layout = SparklineLayoutEngine.CalculateColumnLayout(values, rect, winLoss: false, overrideMaxAbs: null);
 
         layout.Bars.Should().HaveCount(1);
-        layout.Bars[0].Rect.Height.Should().BeApproximately(10, 0.01);
+        layout.Bars[0].Rect.Height.Should().BeApproximately(20, 0.01);
     }
 
     [Fact]
     public void CalculateColumnLayout_WithOverrideMaxAbs_ScalesBarsByGroupMax()
     {
-        // Local maxAbs=5 but group maxAbs=10 → bar height = 5/10 * 10 = 5.
+        // Local maxAbs=5 but group maxAbs=10 → bar height = 5/10 * full cell height (20) = 10.
         var values = new double[] { 5 };
         var rect   = new LayoutRect(0, 0, 20, 20);
 
         var layout = SparklineLayoutEngine.CalculateColumnLayout(values, rect, winLoss: false, overrideMaxAbs: 10.0);
 
         layout.Bars.Should().HaveCount(1);
-        layout.Bars[0].Rect.Height.Should().BeApproximately(5, 0.01);
+        layout.Bars[0].Rect.Height.Should().BeApproximately(10, 0.01);
     }
 
     [Fact]
@@ -518,7 +519,7 @@ public sealed class SparklinePanelRenderTests
         {
             var customNeg = new CellColor(128, 0, 64);
             var values    = new double[] { 1, -1, 1 };
-            var sparkline = new SparklineModel { Kind = SparklineKind.WinLoss, NegativeColor = customNeg };
+            var sparkline = new SparklineModel { Kind = SparklineKind.WinLoss, NegativeColor = customNeg, ShowNegativePoints = true };
             var panel     = new SparklineCellPanel(values, sparkline);
 
             panel.Measure(new Size(60, 20));
@@ -555,8 +556,10 @@ public sealed class SparklinePanelRenderTests
     {
         await Session.Dispatch(() =>
         {
-            // value=5 with local maxAbs=5 → full half bar.
-            // With groupMaxAbs=10 → half bar.
+            // Single all-positive value: the zero baseline sits at the cell bottom, so the bar can
+            // reach the full available height rather than only half.
+            // value=5 with local maxAbs=5 → full-height bar.
+            // With groupMaxAbs=10 → half-height bar.
             var values    = new double[] { 5 };
             var sparkline = new SparklineModel { Kind = SparklineKind.Column };
             var rect      = new Rect(0, 0, 20, 20);
@@ -572,8 +575,8 @@ public sealed class SparklinePanelRenderTests
             var barLocal = panelLocal.Children.OfType<Rectangle>().Single();
             var barGroup = panelGroup.Children.OfType<Rectangle>().Single();
 
-            // Local max=5: bar height = 5/5 * (20-6)/2 ≈ 7 (inset applied).
-            // Group max=10: bar height = 5/10 * (20-6)/2 ≈ 3.5.
+            // Local max=5: bar height = 5/5 * (20-6) ≈ 14 (inset applied).
+            // Group max=10: bar height = 5/10 * (20-6) ≈ 7.
             barGroup.Height.Should().BeLessThan(barLocal.Height,
                 "group-scaled bar is shorter because the common maxAbs is larger");
         }, CancellationToken.None);

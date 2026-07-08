@@ -1,6 +1,6 @@
-using System.Globalization;
 using FluentAssertions;
 using FreeX.Core.Commands;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Model.Tests;
@@ -67,8 +67,11 @@ public sealed class FreeXCleanupMED5Tests
         afterUndo.Cells.Should().HaveCount(4, "P23: undo must restore the pre-insert 2x2 cell snapshot, not the post-insert 3x2 one");
     }
 
-    // ── P25: a linked picture's refreshed cell snapshot must format DateTimeValue cells as a ───
-    // ── plain date-serial string, not the record's synthesized ToString() garbage. ─────────────
+    // ── P25: a linked picture's refreshed cell snapshot must format DateTimeValue cells using ──
+    // ── the cell's own display formatting, not the record's synthesized ToString() garbage. ────
+    // ── (R14-camera-linked-picture-2 made this format-aware -- matching NumberFormatter.Format, ─
+    // ── the same call ViewportService.GetDisplayText uses to render the live grid -- instead of ─
+    // ── the raw OLE-automation numeric serial the picture used to show regardless of format.) ───
 
     [Fact]
     public void InsertRow_AboveLinkedPictureRange_FormatsDateCellAsNumberNotRecordToString()
@@ -102,9 +105,15 @@ public sealed class FreeXCleanupMED5Tests
         var dateCell = refreshed.Cells.Should().ContainSingle(c => c.RowOffset == 1 && c.ColumnOffset == 1).Subject;
 
         dateCell.Text.Should().NotContain("DateTimeValue", "P25: a date cell must never render the record's synthesized ToString()");
+        // Excel's camera always shows a cell exactly as the grid displays it. This cell has no
+        // explicit number format (style default "General"), and FreeX's General format renders a
+        // DateTimeValue as a short date string (NumberFormatter -> FormatGeneralDateTime), the same
+        // as ViewportService.GetDisplayText would show for this cell in the live grid -- not the raw
+        // OLE-automation numeric serial.
         dateCell.Text.Should().Be(
-            DateTimeValue.FromDateTime(date).Value.ToString(CultureInfo.CurrentCulture),
-            "the date must be formatted as its OLE-automation numeric serial, matching NumberValue's formatting");
+            NumberFormatter.Format(DateTimeValue.FromDateTime(date), "General", uses1904DateSystem: false),
+            "a linked picture must render the cell's display text (matching the live grid and Excel's " +
+            "camera), not a raw unformatted numeric serial");
         dateCell.IsNumericOrDate.Should().BeTrue();
     }
 

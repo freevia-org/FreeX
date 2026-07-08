@@ -52,6 +52,15 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
         {
             var stack = GetOrCreateStack(workbookId);
             stack.Push(command, EstimateBytes(command), GetAffectedCells(command, outcome), GetHistoryLabel(command));
+
+            // R14-undo-redo-depth-2: a plain Execute is never itself repeatable (only
+            // ExecuteRepeatable registers a factory for F4/Repeat Last Action). If an earlier
+            // ExecuteRepeatable call left a factory registered for this workbook, this new
+            // command is now "the last thing the user did" and that stale factory no longer
+            // describes it — leaving it in place would let RepeatLast silently replay the old,
+            // unrelated command against whatever is selected now. Clear it so CanRepeat
+            // correctly reports nothing pending instead of resurrecting stale state.
+            _repeatableCommandFactories.Remove(workbookId);
             NotifyStackChanged(workbookId);
         }
 
