@@ -76,7 +76,7 @@ public sealed class TestDistributionPlanTests
         source[defaultSectionIndex..uiSectionIndex].Should().NotContain("FreeX.UiTests.slnx");
         source[defaultSectionIndex..uiSectionIndex].Should().NotContain("dotnet restore FreeX.slnx");
         source[defaultSectionIndex..uiSectionIndex].Should().NotContain("--disable-build-servers");
-        source[uiSectionIndex..].Should().Contain("dotnet test FreeX.UiTests.slnx --configuration Release --no-build");
+        source[uiSectionIndex..].Should().Contain("dotnet test tests\\FreeX.App.UI.Tests\\FreeX.App.UI.Tests.csproj --configuration Release --no-build");
         source[uiSectionIndex..].Should().Contain("Tester Release");
         source[uiSectionIndex..].Should().Contain("still runs both the default and UI test lanes");
     }

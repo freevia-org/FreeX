@@ -121,8 +121,8 @@ public sealed class CrashRecoverySharedWorkbookDedupTests
 
         // An unsaved shared workbook has no OriginalFilePath yet; DisplayName is the fallback
         // identity signal for "New Window" siblings of the same never-saved document.
-        var older = WriteCandidate(store, "recovery-3-w0", originalFilePath: null, displayName: "Book2", now.AddMinutes(-1));
-        var newer = WriteCandidate(store, "recovery-3-w1", originalFilePath: null, displayName: "Book2", now);
+        var older = WriteCandidate(store, "recovery-3-launch-w0", originalFilePath: null, displayName: "Book2", now.AddMinutes(-1));
+        var newer = WriteCandidate(store, "recovery-3-launch-w1", originalFilePath: null, displayName: "Book2", now);
 
         var deduped = InvokeDeduplicate([older, newer]);
 

@@ -103,7 +103,7 @@ jobs:
 
       - name: UI tests
         shell: pwsh
-        run: dotnet test FreeX.UiTests.slnx --configuration Release --no-build --logger "trx;LogFileName=ui-tests.trx"
+        run: dotnet test tests\FreeX.App.UI.Tests\FreeX.App.UI.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=ui-tests.trx"
 
       - name: Upload test results
         if: always()

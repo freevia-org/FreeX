@@ -2,6 +2,7 @@ using System.Collections;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Automation.Peers;
+using System.Windows.Automation.Provider;
 using FluentAssertions;
 using FreeX.App.UI;
 using FreeX.Core.Model;
@@ -80,7 +81,7 @@ public sealed class FreeXCleanupMED4Tests
             var peer = UIElementAutomationPeer.CreatePeerForElement(grid);
 
             // Force peer creation for the initial 2x2 viewport (rows 1-2, cols 1-2).
-            _ = peer.GetChildren();
+            PopulateVisibleCellPeers(peer);
             GetCellPeerCacheCount(peer).Should().Be(4);
 
             // Simulate scrolling through many disjoint viewports, as happens when a UIA client
@@ -88,7 +89,7 @@ public sealed class FreeXCleanupMED4Tests
             for (uint page = 2; page <= 50; page++)
             {
                 grid.Viewport = GridViewTestHelpers.CreateTwoByTwoViewport(startRow: page * 1000, startColumn: page * 100);
-                _ = peer.GetChildren();
+                PopulateVisibleCellPeers(peer);
             }
 
             // Before the fix, every visited (row, col) pair stayed cached forever: 50 pages x 4
@@ -158,7 +159,7 @@ public sealed class FreeXCleanupMED4Tests
             };
 
             var peer = UIElementAutomationPeer.CreatePeerForElement(grid);
-            _ = peer.GetChildren().Single();
+            grid.Viewport = new ViewportModel(cells, [new RowMetric(1, 20, 0)], [new ColMetric(1, 64, 0)]);
             GetLastNotifiedActiveCellDisplayText(peer).Should().Be("2");
 
             // Re-assigning an equal Viewport (e.g. an unrelated render-cache refresh) must not
@@ -175,6 +176,16 @@ public sealed class FreeXCleanupMED4Tests
         field.Should().NotBeNull();
         var dictionary = field!.GetValue(peer).Should().BeAssignableTo<IDictionary>().Subject;
         return dictionary.Count;
+    }
+
+    private static void PopulateVisibleCellPeers(AutomationPeer peer)
+    {
+        var gridProvider = peer.GetPattern(PatternInterface.Grid).Should().BeAssignableTo<IGridProvider>().Subject;
+        for (var row = 0; row < gridProvider.RowCount; row++)
+        {
+            for (var column = 0; column < gridProvider.ColumnCount; column++)
+                _ = gridProvider.GetItem(row, column);
+        }
     }
 
     private static string? GetLastNotifiedActiveCellDisplayText(AutomationPeer peer)

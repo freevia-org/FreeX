@@ -41,7 +41,7 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1");
         workflow.Should().Contain("dotnet build FreeX.slnx --configuration Release");
         workflow.Should().Contain("dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build --logger \"trx;LogFileName=default-tests.trx\"");
-        workflow.Should().Contain("dotnet test FreeX.UiTests.slnx --configuration Release --no-build --logger \"trx;LogFileName=ui-tests.trx\"");
+        workflow.Should().Contain("dotnet test tests\\FreeX.App.UI.Tests\\FreeX.App.UI.Tests.csproj --configuration Release --no-build --logger \"trx;LogFileName=ui-tests.trx\"");
         workflow.Should().NotContain("dotnet restore FreeX.slnx");
         workflow.Should().NotContain("--disable-build-servers");
         workflow.Should().NotContain("-p:UseSharedCompilation=false");

@@ -96,9 +96,9 @@ Default agent verification does not run the UI lane and does not use `dotnet tes
 
 Run the UI lane separately only when a task explicitly requests UI tests, touches WPF app/host behavior or UI test infrastructure, changes UI documentation/inventory, or prepares a tester-release/public-preview candidate:
 
-0. `dotnet test FreeX.UiTests.slnx --configuration Release --no-build --logger "trx;LogFileName=ui-tests.trx"`
+0. `dotnet test tests\FreeX.App.UI.Tests\FreeX.App.UI.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=ui-tests.trx"`
 
-Success means the UI Release test lane reports zero failed tests. The `Tester Release` workflow remains a full release gate and still runs both the default and UI test lanes before publishing.
+Success means the UI Release smoke lane reports zero failed tests. The `Tester Release` workflow remains a full release gate and still runs both the default and UI test lanes before publishing.
 
 ## macOS Portable Lane
 
