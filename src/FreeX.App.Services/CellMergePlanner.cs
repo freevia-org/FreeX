@@ -187,3 +187,23 @@ public sealed class RejectSpillOverlapCommand : IWorkbookCommand
 
     public void Revert(ICommandContext ctx) { }
 }
+
+/// <summary>
+/// A command that genuinely does nothing and reports itself as a no-op. Returned in place of the real
+/// unmerge command(s) when the requested range overlaps no merged region at all (e.g. "Unmerge Cells" run
+/// over a plain, never-merged selection) — matching Excel, which leaves the workbook and undo history
+/// untouched rather than recording a phantom edit. Callers that must hand a concrete
+/// <see cref="IWorkbookCommand"/> to a factory-shaped API (one command per sheet) use this instead of
+/// silently building a command whose Apply would otherwise report success without changing anything;
+/// CommandBus skips the undo stack for Success+IsNoOp outcomes, so nothing is pushed.
+/// </summary>
+public sealed class NoOpWorkbookCommand : IWorkbookCommand
+{
+    public static readonly NoOpWorkbookCommand Instance = new();
+
+    public string Label => "";
+
+    public CommandOutcome Apply(ICommandContext ctx) => new(true, IsNoOp: true);
+
+    public void Revert(ICommandContext ctx) { }
+}

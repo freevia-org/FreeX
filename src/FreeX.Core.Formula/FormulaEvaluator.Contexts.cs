@@ -139,9 +139,24 @@ public sealed partial class FormulaEvaluator
             if (external is { } resolved)
             {
                 // A resolvable external sheet caches only the cells a formula actually referenced at
-                // last refresh; an uncached cell within it is a real blank, not a #REF! error.
-                resolved.Link.TryGetCachedValue(resolved.SheetIndex, row, col, out var cachedValue);
-                return cachedValue ?? BlankValue.Instance;
+                // last refresh; an uncached cell within it is a real blank, not a #REF! error — but
+                // ONLY when the link's sheetDataSet cache exists at all. When the producer wrote no
+                // (or an incomplete) sheetDataSet, there is no way to tell "genuinely blank" apart
+                // from "never refreshed", and the formula's own cell already carries the correct
+                // value Excel cached directly in the worksheet's <f>/<v> pair at load time (see
+                // XlsxClosedXmlCellMapper.MapFormulaValue). Recomputing here and returning Blank would
+                // silently overwrite that loaded value with 0/blank on every recalc. Throwing routes
+                // through RecalcEngine's existing external-workbook-reference guard (see
+                // RecalcEngine.IsLikelyExternalWorkbookReferenceFormula, which matches on the same
+                // bracketed sheet-name text this quoted form also contains) so the cell's last-known
+                // value is preserved instead — exactly like the unquoted '[1]Sheet1!A1' form that
+                // never parses at all.
+                if (resolved.Link.TryGetCachedValue(resolved.SheetIndex, row, col, out var cachedValue))
+                    return cachedValue ?? BlankValue.Instance;
+
+                throw new FormulaParseException(
+                    $"External reference '{sheetName}' has no cached value for this cell; " +
+                    "preserving the last-known loaded value instead of recomputing to blank.");
             }
 
             return ErrorValue.Ref;

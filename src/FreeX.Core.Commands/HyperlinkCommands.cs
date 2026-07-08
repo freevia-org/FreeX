@@ -15,6 +15,8 @@ public sealed class SetHyperlinkCommand : IWorkbookCommand
     private HyperlinkMetadata? _oldMetadata;
     private bool _hadOldTarget;
     private bool _hadOldMetadata;
+    private bool _hadOldRichTextRuns;
+    private IReadOnlyList<CellTextRun>? _oldRichTextRuns;
 
     public string Label => "Insert Hyperlink";
 
@@ -41,6 +43,7 @@ public sealed class SetHyperlinkCommand : IWorkbookCommand
         _oldCell = sheet.GetCell(_address)?.Clone();
         _hadOldTarget = sheet.Hyperlinks.TryGetValue(_address, out _oldTarget);
         _hadOldMetadata = sheet.HyperlinkMetadata.TryGetValue(_address, out _oldMetadata);
+        _hadOldRichTextRuns = sheet.RichTextRuns.TryGetValue(_address, out _oldRichTextRuns);
 
         var newCell = Cell.FromValue(new TextValue(_displayText));
         if (_oldCell is not null)
@@ -52,6 +55,11 @@ public sealed class SetHyperlinkCommand : IWorkbookCommand
         sheet.SetCell(_address, newCell);
         sheet.Hyperlinks[_address] = _target;
         sheet.HyperlinkMetadata[_address] = _metadata;
+
+        // The display text is being replaced wholesale, so any rich-text runs that belonged to the
+        // old content are stale (their character offsets no longer line up with the new text) and
+        // must not carry over onto the hyperlink text (matching GroupedEditCellsCommand's handling).
+        sheet.RichTextRuns.Remove(_address);
         return new CommandOutcome(true, AffectedCells: [_address]);
     }
 
@@ -71,6 +79,10 @@ public sealed class SetHyperlinkCommand : IWorkbookCommand
             sheet.HyperlinkMetadata[_address] = _oldMetadata;
         else
             sheet.HyperlinkMetadata.Remove(_address);
+        if (_hadOldRichTextRuns && _oldRichTextRuns is not null)
+            sheet.RichTextRuns[_address] = _oldRichTextRuns;
+        else
+            sheet.RichTextRuns.Remove(_address);
     }
 }
 

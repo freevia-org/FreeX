@@ -18,7 +18,10 @@ internal static class OdsFormulaConverter
 {
     /// <summary>
     /// Converts an A1 formula body (no leading '=') to OpenFormula bracketed syntax. Sheet names that
-    /// need quoting are wrapped in single quotes per ODF.
+    /// need quoting are wrapped in single quotes per ODF. FreeX's parser (like Excel's US locale) uses
+    /// ',' as the function-argument separator, but OpenFormula requires ';' (Parser.cs only accepts
+    /// ';' inside array constants); every top-level, non-string-literal ',' is therefore translated to
+    /// ';' so multi-argument functions (IF, VLOOKUP, SUMIF, ...) stay valid in LibreOffice/Calc.
     /// </summary>
     public static string ToOdf(string a1Formula)
     {
@@ -44,7 +47,7 @@ internal static class OdsFormulaConverter
                 continue;
             }
 
-            builder.Append(c);
+            builder.Append(c == ',' ? ';' : c);
             i++;
         }
 
@@ -54,7 +57,8 @@ internal static class OdsFormulaConverter
     /// <summary>
     /// Converts an OpenFormula bracketed formula body to FreeX A1 form. Bracketed references become
     /// plain A1 (current-sheet) or <c>Sheet!A1</c> (cross-sheet); a leading <c>of:</c> namespace prefix
-    /// on function names is stripped.
+    /// on function names is stripped. OpenFormula's ';' argument separator is translated back to the
+    /// ',' FreeX's parser expects (mirror of the translation <see cref="ToOdf"/> performs).
     /// </summary>
     public static string ToA1(string odfFormula)
     {
@@ -94,7 +98,7 @@ internal static class OdsFormulaConverter
                 continue;
             }
 
-            builder.Append(c);
+            builder.Append(c == ';' ? ',' : c);
             i++;
         }
 

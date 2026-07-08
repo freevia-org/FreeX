@@ -180,6 +180,9 @@ public partial class MainWindow
         outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateRepeatCommand);
         if (outcome.Success)
         {
+            if (outcome.IsNoOp)
+                return true;
+
             MarkWorkbookDirty();
             _repeatPostAction = null;
             InvalidateNavigationCaches();

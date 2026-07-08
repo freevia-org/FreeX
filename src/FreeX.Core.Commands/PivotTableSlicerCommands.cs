@@ -109,6 +109,10 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
 
         slicer.SelectedItems.Clear();
         slicer.SelectedItems.AddRange(_selectedItems.Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(StringComparer.CurrentCultureIgnoreCase));
+        // This command is the ONLY place a user selection change (including a Clear-Filter, which
+        // passes an empty list) reaches the model, so mark the selection as explicitly captured — an
+        // empty SelectedItems from here on means "user cleared to select-all", not "never touched".
+        slicer.SelectionCaptured = true;
         // H10: a slicer can be connected to a field that was never dragged into Row/Column/PageFields.
         // Excel still filters the pivot in that case (the field acts as a page/report filter); without
         // this, ReplaceSelectedItems below would be a no-op against all three lists and the command
@@ -145,6 +149,7 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
 
         slicer.SelectedItems.Clear();
         slicer.SelectedItems.AddRange(normalizedSelection);
+        slicer.SelectionCaptured = true;
 
         // Applying a value filter on the referenced table column is the Excel-equivalent of a table
         // slicer selection: it hides every row whose value in that column isn't selected, mirroring
@@ -186,6 +191,7 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
 
     private sealed record TableSlicerSelectionSnapshot(
         IReadOnlyList<string> SelectedItems,
+        bool SelectionCaptured,
         int TableId,
         int ColumnOffset,
         StructuredTableFilterColumnModel? PreviousFilterColumn)
@@ -193,6 +199,7 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
         public static TableSlicerSelectionSnapshot Capture(SlicerModel slicer, StructuredTableModel table, int columnOffset) =>
             new(
                 slicer.SelectedItems.ToList(),
+                slicer.SelectionCaptured,
                 table.Id,
                 columnOffset,
                 table.FilterColumns.FirstOrDefault(filter => filter.ColumnId == columnOffset));
@@ -201,6 +208,7 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
         {
             slicer.SelectedItems.Clear();
             slicer.SelectedItems.AddRange(SelectedItems);
+            slicer.SelectionCaptured = SelectionCaptured;
 
             if (PivotTableSlicerCommandLookups.FindSourceTable(ctx.Workbook, TableId) is not { } source)
                 return;
@@ -216,6 +224,7 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
 
     private sealed record SlicerSelectionSnapshot(
         IReadOnlyList<string> SelectedItems,
+        bool SelectionCaptured,
         IReadOnlyList<PivotFieldModel> RowFields,
         IReadOnlyList<PivotFieldModel> ColumnFields,
         IReadOnlyList<PivotFieldModel> PageFields,
@@ -224,6 +233,7 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
         public static SlicerSelectionSnapshot Capture(SlicerModel slicer, PivotTableModel pivotTable) =>
             new(
                 slicer.SelectedItems.ToList(),
+                slicer.SelectionCaptured,
                 pivotTable.RowFields.ToList(),
                 pivotTable.ColumnFields.ToList(),
                 pivotTable.PageFields.ToList(),
@@ -233,6 +243,7 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
         {
             slicer.SelectedItems.Clear();
             slicer.SelectedItems.AddRange(SelectedItems);
+            slicer.SelectionCaptured = SelectionCaptured;
             PivotTableCommandCollections.Replace(pivotTable.RowFields, RowFields);
             PivotTableCommandCollections.Replace(pivotTable.ColumnFields, ColumnFields);
             PivotTableCommandCollections.Replace(pivotTable.PageFields, PageFields);

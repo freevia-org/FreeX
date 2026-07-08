@@ -100,8 +100,14 @@ public sealed class DbfFileAdapter : IFileAdapter
 
                 if (c < CellAddress.MaxCol)
                 {
-                    var raw = encoding.GetString(bytes, fieldOffset, field.Length);
-                    var value = ConvertField(field, raw);
+                    // Pass the raw field bytes through (not a text-decoded string): the binary
+                    // 'I'/'+'/'T'/'@' types must reconstruct their bytes exactly, and a code-page
+                    // round-trip through Encoding.GetString is lossy for any byte outside the
+                    // encoding's identity range (e.g. CP1252 remaps 0x80-0x9F to different code
+                    // points, and OEM code pages remap the whole high range) — decoding to text and
+                    // then rebuilding bytes via `raw[i] & 0xFF` silently corrupts the value.
+                    var fieldBytes = bytes.AsSpan(fieldOffset, field.Length);
+                    var value = ConvertField(field, fieldBytes, encoding);
                     if (value is not BlankValue)
                         sheet.SetCell(new CellAddress(sheet.Id, outRow, (uint)(c + 1)), Cell.FromValue(value));
                 }
@@ -157,13 +163,13 @@ public sealed class DbfFileAdapter : IFileAdapter
         return fields;
     }
 
-    private static ScalarValue ConvertField(DbfField field, string raw)
+    private static ScalarValue ConvertField(DbfField field, ReadOnlySpan<byte> rawBytes, Encoding encoding)
     {
         switch (field.Type)
         {
             case 'C': // character
             {
-                var trimmed = raw.TrimEnd();
+                var trimmed = encoding.GetString(rawBytes).TrimEnd();
                 return trimmed.Length == 0 ? BlankValue.Instance : new TextValue(trimmed);
             }
             case 'N': // numeric (ASCII-formatted, right-justified)
@@ -171,7 +177,7 @@ public sealed class DbfFileAdapter : IFileAdapter
             case 'B': // double (dBASE: ASCII; some store binary, but ASCII is the III/IV norm)
             case 'O': // legacy "ordinal" — treat as ASCII numeric
             {
-                var token = raw.Trim();
+                var token = encoding.GetString(rawBytes).Trim();
                 if (token.Length == 0)
                     return BlankValue.Instance;
                 return double.TryParse(token, NumberStyles.Float | NumberStyles.AllowLeadingSign,
@@ -182,11 +188,16 @@ public sealed class DbfFileAdapter : IFileAdapter
             case 'I': // 4-byte little-endian integer (binary)
             case '+': // autoincrement (4-byte integer)
             {
-                return ParseBinaryInt32(raw);
+                return ParseBinaryInt32(rawBytes);
+            }
+            case 'T': // datetime: 8 bytes binary — Julian day number + milliseconds since midnight
+            case '@':
+            {
+                return ParseBinaryDateTime(rawBytes);
             }
             case 'D': // date: 8 chars yyyymmdd
             {
-                var token = raw.Trim();
+                var token = encoding.GetString(rawBytes).Trim();
                 if (token.Length == 8 &&
                     DateTime.TryParseExact(token, "yyyyMMdd", CultureInfo.InvariantCulture,
                         DateTimeStyles.None, out var date))
@@ -197,7 +208,7 @@ public sealed class DbfFileAdapter : IFileAdapter
             }
             case 'L': // logical: T/t/Y/y true, F/f/N/n false, ? unknown
             {
-                var token = raw.Trim();
+                var token = encoding.GetString(rawBytes).Trim();
                 if (token.Length == 0)
                     return BlankValue.Instance;
                 char c = char.ToUpperInvariant(token[0]);
@@ -216,20 +227,59 @@ public sealed class DbfFileAdapter : IFileAdapter
                 return BlankValue.Instance;
             default:
             {
-                var trimmed = raw.TrimEnd();
+                var trimmed = encoding.GetString(rawBytes).TrimEnd();
                 return trimmed.Length == 0 ? BlankValue.Instance : new TextValue(trimmed);
             }
         }
     }
 
-    private static ScalarValue ParseBinaryInt32(string raw)
+    private static ScalarValue ParseBinaryInt32(ReadOnlySpan<byte> raw)
     {
-        // The raw string was decoded from 4 bytes; recover them via the code-page-independent low bytes.
-        // We re-extract the underlying bytes by char code (each char came from a single-byte code page).
+        // Read the 4 little-endian bytes directly — no code-page round-trip involved, so this is
+        // correct for every high-bit byte value regardless of which encoding ResolveEncoding picked
+        // (previously this recovered bytes from an already-decoded string via `raw[i] & 0xFF`, which
+        // is only a 1:1 byte<->char map for Latin-1; CP1252 remaps 0x80-0x9F and OEM code pages
+        // remap the entire high range, silently corrupting the reconstructed integer).
         if (raw.Length < 4)
             return BlankValue.Instance;
-        int v = (raw[0] & 0xFF) | ((raw[1] & 0xFF) << 8) | ((raw[2] & 0xFF) << 16) | ((raw[3] & 0xFF) << 24);
+        int v = raw[0] | (raw[1] << 8) | (raw[2] << 16) | (raw[3] << 24);
         return new NumberValue(v);
+    }
+
+    private static ScalarValue ParseBinaryDateTime(ReadOnlySpan<byte> raw)
+    {
+        // dBASE/Visual FoxPro 'T'/'@' datetime: first 4 bytes = Julian Day Number (little-endian,
+        // civil-calendar convention where JDN 2440588 = 1970-01-01), next 4 bytes = milliseconds
+        // since midnight (little-endian). A record that never had a value in this field stores all
+        // zero bytes.
+        if (raw.Length < 8)
+            return BlankValue.Instance;
+
+        int julianDay = raw[0] | (raw[1] << 8) | (raw[2] << 16) | (raw[3] << 24);
+        int millis = raw[4] | (raw[5] << 8) | (raw[6] << 16) | (raw[7] << 24);
+        if (julianDay == 0 && millis == 0)
+            return BlankValue.Instance;
+
+        // Fliegel & Van Flandern's JDN → Gregorian-calendar conversion (civil day boundaries).
+        int a = julianDay + 32044;
+        int b = (4 * a + 3) / 146097;
+        int c = a - 146097 * b / 4;
+        int d = (4 * c + 3) / 1461;
+        int e = c - 1461 * d / 4;
+        int m = (5 * e + 2) / 153;
+        int day = e - (153 * m + 2) / 5 + 1;
+        int month = m + 3 - 12 * (m / 10);
+        int year = 100 * b + d - 4800 + m / 10;
+
+        try
+        {
+            var date = new DateTime(year, month, day, 0, 0, 0, DateTimeKind.Unspecified).AddMilliseconds(millis);
+            return DateTimeValue.FromDateTime(date);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return BlankValue.Instance;
+        }
     }
 
     private static Encoding ResolveEncoding(byte languageDriver)

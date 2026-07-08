@@ -336,4 +336,58 @@ internal static partial class RowColumnShiftHelpers
         foreach (var (key, value) in snapshot)
             target[key] = value;
     }
+
+    /// <summary>
+    /// Deep-clones a column-keyed row-set dictionary (<c>Sheet.ColumnFilterOwnedRows</c>) for
+    /// snapshot/restore. The generic <see cref="CaptureDictionary{TKey,TValue}"/> only copies the
+    /// key/value pairs — for a <see cref="HashSet{T}"/> value that aliases the same instance a
+    /// subsequent row shift then mutates in place, which would silently corrupt the "before"
+    /// snapshot. Cloning each column's row set keeps the snapshot independent (finding R13-meta-1).
+    /// </summary>
+    internal static Dictionary<uint, HashSet<uint>>? CaptureRowSetDictionary(Dictionary<uint, HashSet<uint>> source)
+    {
+        if (source.Count == 0)
+            return null;
+
+        var snapshot = new Dictionary<uint, HashSet<uint>>(source.Count);
+        foreach (var (key, rows) in source)
+            snapshot[key] = [.. rows];
+
+        return snapshot;
+    }
+
+    /// <summary>
+    /// Row-insert counterpart of <see cref="ShiftSetUpFrom"/>, applied to every column's owned-row
+    /// set in <c>Sheet.ColumnFilterOwnedRows</c> so inserting rows doesn't leave a stale (pre-shift)
+    /// row index behind — mirrors the sibling shift of <c>FilterHiddenRows</c> /
+    /// <c>ValueFilterHiddenRows</c> (finding R13-meta-1).
+    /// </summary>
+    internal static void ShiftRowSetDictionaryUpFrom(Dictionary<uint, HashSet<uint>> values, uint start, uint count)
+    {
+        foreach (var rows in values.Values)
+            ShiftSetUpFrom(rows, start, count);
+    }
+
+    /// <summary>
+    /// Insert-undo counterpart of <see cref="ShiftRowSetDictionaryUpFrom"/> — the exact inverse
+    /// shift, mirroring how <c>FilterHiddenRows</c> / <c>ValueFilterHiddenRows</c> are unshifted on
+    /// <c>InsertRowsCommand.Revert</c>.
+    /// </summary>
+    internal static void ShiftRowSetDictionaryDownFrom(Dictionary<uint, HashSet<uint>> values, uint start, uint count)
+    {
+        foreach (var rows in values.Values)
+            ShiftSetDownFrom(rows, start, count);
+    }
+
+    /// <summary>
+    /// Row-delete counterpart of <see cref="DeleteSetRangeAndShiftDown"/>: removes owned rows that
+    /// fall within the deleted range and shifts surviving rows down, per column (finding
+    /// R13-meta-1). Deletion undo restores the full pre-delete snapshot instead of un-shifting (see
+    /// <c>DeleteRowsCommand</c>, mirroring <c>FilterHiddenRows</c>).
+    /// </summary>
+    internal static void DeleteRowSetDictionaryRangeAndShiftDown(Dictionary<uint, HashSet<uint>> values, uint start, uint count)
+    {
+        foreach (var rows in values.Values)
+            DeleteSetRangeAndShiftDown(rows, start, count);
+    }
 }

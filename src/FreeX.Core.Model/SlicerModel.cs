@@ -9,6 +9,18 @@ public sealed class SlicerModel
     public string? SourceFieldName { get; init; }
     public string? StyleName { get; init; }
     public List<string> SelectedItems { get; } = [];
+
+    /// <summary>
+    /// True once <see cref="SelectedItems"/> has been explicitly set by a user action (a
+    /// <c>SetSlicerSelectionCommand</c> apply), as opposed to still holding its post-load default. An
+    /// empty <see cref="SelectedItems"/> is ambiguous on its own: it means either "the model never
+    /// touched the selection" (native <c>s</c> flags on a loaded workbook must be preserved verbatim) or
+    /// "the user explicitly cleared the filter to select-all" (native <c>s</c> flags must be stripped so
+    /// the clear round-trips). This flag disambiguates the two for the Core.IO slicer/timeline state
+    /// rewriter that runs on save of a source-preserved workbook.
+    /// </summary>
+    public bool SelectionCaptured { get; set; }
+
     public string PackagePart { get; init; } = "";
     public DrawingAnchorRange? DrawingAnchor { get; init; }
     public string? DrawingShapeName { get; init; }

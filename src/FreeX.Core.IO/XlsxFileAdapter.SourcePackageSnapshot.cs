@@ -6627,6 +6627,17 @@ public sealed partial class XlsxFileAdapter
 
                 if (change.Kind == XlsxCellValuePatchKind.DeletedCell)
                 {
+                    // A cell whose <f> element carries attributes (t="shared"/"array"/"dataTable",
+                    // ref, si, ...) can be the master of a shared/array formula group that other
+                    // cells reference by si index. Removing the <c> element outright would delete
+                    // the only place the formula text/ref is stored, orphaning sibling cells with
+                    // <f t="shared" si="N"/> and no master -- corrupting the package. Bail to the
+                    // full-save fallback (mirrors the guard in RewriteFormulaTextAndCachedCellValue)
+                    // so the whole package is regenerated consistently instead of patched in place.
+                    var deletedFormula = cell.Element(worksheetNs + "f");
+                    if (deletedFormula is not null && deletedFormula.HasAttributes)
+                        return false;
+
                     cell.Remove();
                 }
                 else if (change.Kind == XlsxCellValuePatchKind.FormulaTextAndCachedValue)

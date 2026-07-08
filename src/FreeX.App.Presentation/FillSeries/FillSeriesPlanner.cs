@@ -221,6 +221,21 @@ public static class FillSeriesPlanner
                 continue;
             }
 
+            // Excel treats every row/column in the selection as its own series line: if that
+            // line's own leading cell (the top cell of its column for "Series in Columns", or the
+            // leading cell of its row for "Series in Rows") already holds a number, that value is
+            // the seed for this line and is preserved as-is rather than being overwritten and
+            // chained into from the previous line's running value. Just like the range's own start
+            // cell (handled above), the running value for the REST of that line must advance one
+            // step past this seed, not sit on the seed itself -- otherwise the next cell in the line
+            // would be written with the seed's own value instead of seed + step.
+            if (IsSeriesLineStart(address, range, seriesIn) &&
+                sheet.GetValue(address.Row, address.Col) is NumberValue lineSeed)
+            {
+                value = lineSeed.Value + step;
+                continue;
+            }
+
             if (IsPastStopValue(value, step, stopValue))
                 break;
 
@@ -274,13 +289,16 @@ public static class FillSeriesPlanner
             return [];
 
         var edits = new List<(CellAddress, Cell)>();
-        var value = startValue.Value;
+        var seed = startValue.Value;
+        var value = seed;
         var preserveEndOfMonth = IsLastDayOfMonth(startValue.ToDateTime());
+        var stepIndex = 0;
         foreach (var address in EnumerateSeriesAddresses(sheet.Id, range, seriesIn))
         {
             if (address.Row == range.Start.Row && address.Col == range.Start.Col)
             {
-                value = NextDateSerial(value, step, dateUnit, preserveEndOfMonth);
+                stepIndex++;
+                value = NextDateSerial(seed, value, step, dateUnit, preserveEndOfMonth, stepIndex);
                 continue;
             }
 
@@ -288,7 +306,8 @@ public static class FillSeriesPlanner
                 break;
 
             edits.Add((address, Cell.FromValue(new DateTimeValue(value))));
-            value = NextDateSerial(value, step, dateUnit, preserveEndOfMonth);
+            stepIndex++;
+            value = NextDateSerial(seed, value, step, dateUnit, preserveEndOfMonth, stepIndex);
         }
 
         return edits;
@@ -314,6 +333,15 @@ public static class FillSeriesPlanner
         }
     }
 
+    /// <summary>
+    /// True when <paramref name="address"/> is the leading cell of its own series line: the top cell of a
+    /// column when filling "Series in Columns", or the leading cell of a row when filling "Series in Rows".
+    /// </summary>
+    private static bool IsSeriesLineStart(CellAddress address, GridRange range, FillSeriesDirection seriesIn) =>
+        seriesIn == FillSeriesDirection.Columns
+            ? address.Row == range.Start.Row
+            : address.Col == range.Start.Col;
+
     private static bool IsPastStopValue(double value, double step, double? stopValue)
     {
         if (stopValue is not { } stop)
@@ -330,21 +358,30 @@ public static class FillSeriesPlanner
         return ascending ? value > stop : value < stop;
     }
 
-    private static double NextDateSerial(double value, double step, FillSeriesDateUnit dateUnit, bool preserveEndOfMonth)
+    /// <summary>
+    /// Computes the next date serial in a Fill ▸ Series ▸ Date sequence. Day and Weekday units have no
+    /// per-target clamping, so they safely chain off <paramref name="previousValue"/>. Month and Year units
+    /// clamp the day-of-month when the target month is shorter than the seed's day (e.g. 30-Jan + 1 month =
+    /// 28-Feb), and Excel always measures that clamp against the ORIGINAL seed date, not the previous
+    /// (already-clamped) result — otherwise a short month like February permanently truncates every later
+    /// date in the series. <paramref name="stepIndex"/> is the 1-based count of calendar-unit steps from the
+    /// seed to this target, so Month/Year compute <c>seed.AddMonths(step * stepIndex)</c> directly.
+    /// </summary>
+    private static double NextDateSerial(double seedValue, double previousValue, double step, FillSeriesDateUnit dateUnit, bool preserveEndOfMonth, int stepIndex)
     {
         if (dateUnit == FillSeriesDateUnit.Day)
-            return value + step;
+            return previousValue + step;
 
         var wholeStep = (int)Math.Truncate(step);
         if (wholeStep == 0)
-            return value;
+            return previousValue;
 
         return dateUnit switch
         {
-            FillSeriesDateUnit.Weekday => AddWeekdays(value, wholeStep),
-            FillSeriesDateUnit.Month => AddMonths(value, wholeStep, preserveEndOfMonth),
-            FillSeriesDateUnit.Year => AddYears(value, wholeStep, preserveEndOfMonth),
-            _ => value + step,
+            FillSeriesDateUnit.Weekday => AddWeekdays(previousValue, wholeStep),
+            FillSeriesDateUnit.Month => AddMonths(seedValue, wholeStep * stepIndex, preserveEndOfMonth),
+            FillSeriesDateUnit.Year => AddYears(seedValue, wholeStep * stepIndex, preserveEndOfMonth),
+            _ => previousValue + step,
         };
     }
 

@@ -70,6 +70,22 @@ public sealed class WorkbookCellEditService
     public bool CanRepeatLastEdit(WorkbookId workbookId) =>
         _commandBus.CanRepeat(workbookId);
 
+    /// <summary>
+    /// Current depth of the undo stack. Exposed so <see cref="WorkbookSession"/> can record a
+    /// save-point depth (mirroring the WPF host's <c>WorkbookDocumentState.SavedUndoDepth</c>) and
+    /// detect when Undo/Redo returns the workbook to that point.
+    /// </summary>
+    public int GetUndoStackDepth(WorkbookId workbookId) =>
+        _commandBus.GetUndoStackDepth(workbookId);
+
+    /// <summary>
+    /// Current monotonic version token of the undo stack. See
+    /// <see cref="ICommandBus.GetUndoStackVersion"/> for why this, not depth alone, is the robust
+    /// save-point identity check.
+    /// </summary>
+    public long GetUndoStackVersion(WorkbookId workbookId) =>
+        _commandBus.GetUndoStackVersion(workbookId);
+
     public RecalcReport? RecalculateIfAutomatic(Workbook workbook, IReadOnlyList<CellAddress> affectedCells)
     {
         ArgumentNullException.ThrowIfNull(workbook);

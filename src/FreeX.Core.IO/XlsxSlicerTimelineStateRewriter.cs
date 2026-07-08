@@ -192,17 +192,23 @@ internal static class XlsxSlicerTimelineStateRewriter
     /// normalization) and rewrites its <c>s</c>
     /// flag to match whether that caption is in the model's current <see cref="SlicerModel.SelectedItems"/>.
     /// No-op when the part carries no native tabular items, or when every flag already matches the model
-    /// (idempotent re-save of an unchanged workbook stays byte-stable). Also a strict no-op when the
-    /// model's <see cref="SlicerModel.SelectedItems"/> is empty: that list is populated ONLY by the host
-    /// UI's <c>SlicerItemResolver.ResolvePivotCacheItems</c> (never by the Core.IO load path), and that
-    /// resolver deliberately skips projecting a selection when every item is selected. So an empty
-    /// <c>SelectedItems</c> at save time means "the model never captured/changed the selection" — NOT "the
-    /// user deselected everything" — and must leave the preserved native <c>s</c> flags untouched rather
-    /// than being read as "nothing is selected" and stripping every flag.
+    /// (idempotent re-save of an unchanged workbook stays byte-stable). Also a no-op when
+    /// <see cref="SlicerModel.SelectedItems"/> is empty AND <see cref="SlicerModel.SelectionCaptured"/> is
+    /// false: an empty selection is otherwise ambiguous — it is the model's post-load default (the Core.IO
+    /// load path never populates it from these native flags; only the host UI's
+    /// <c>SlicerItemResolver.ResolvePivotCacheItems</c> projects a PARTIAL native selection into it, and even
+    /// that resolver deliberately skips projecting when every item is selected) AND it is what a user's
+    /// explicit Clear-Filter (<c>SetSlicerSelectionCommand</c> with an empty list) produces.
+    /// <see cref="SlicerModel.SelectionCaptured"/> disambiguates only this empty case: false means "the
+    /// model never captured/changed the selection" (leave the preserved native <c>s</c> flags untouched);
+    /// true with an empty <see cref="SlicerModel.SelectedItems"/> means "the user explicitly cleared the
+    /// filter to select-all" and every native <c>s</c> flag must be stripped so the clear round-trips instead
+    /// of silently reverting to the stale native selection. A non-empty <see cref="SlicerModel.SelectedItems"/>
+    /// always rewrites the native flags to match it, regardless of <see cref="SlicerModel.SelectionCaptured"/>.
     /// </summary>
     private static bool RewriteNativeCacheItemSelection(XElement cacheRoot, SlicerModel model, Workbook workbook)
     {
-        if (model.SelectedItems.Count == 0)
+        if (model.SelectedItems.Count == 0 && !model.SelectionCaptured)
             return false;
 
         var itemsElement = cacheRoot

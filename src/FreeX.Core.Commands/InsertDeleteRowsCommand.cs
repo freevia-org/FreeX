@@ -20,7 +20,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
-    private List<(SheetId Sheet, CellAddress Address, string OldBookmark)>? _otherSheetHyperlinkBookmarkSnapshot;
+    private List<RowColumnShiftHelpers.HyperlinkOtherSheetChange>? _otherSheetHyperlinkBookmarkSnapshot;
     private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _conditionalFormatSnapshot;
@@ -71,6 +71,10 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         // currently owns, and FilterCommand.RecomputeHiddenRows uses it to decide which rows it may
         // safely un-hide. Left unshifted, it would go stale the moment rows move.
         RowColumnShiftHelpers.ShiftSetUpFrom(sheet.ValueFilterHiddenRows, _beforeRow, _count);
+        // R13-meta-1: sheet.ColumnFilterOwnedRows' HashSet row VALUES must shift the same way, or a
+        // column's condition/color/Top-Bottom/Average filter forgets which row it actually owns and
+        // orphans a permanently-hidden row the next time that column's filter is cleared/recomputed.
+        RowColumnShiftHelpers.ShiftRowSetDictionaryUpFrom(sheet.ColumnFilterOwnedRows, _beforeRow, _count);
 
         _rowHeightSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RowHeights);
         RowColumnShiftHelpers.ShiftIndexesUp(sheet.RowHeights, _beforeRow, _count);
@@ -160,6 +164,8 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.ShiftSetDownFrom(sheet.HiddenRows, _beforeRow + _count, _count);
         RowColumnShiftHelpers.ShiftSetDownFrom(sheet.FilterHiddenRows, _beforeRow + _count, _count);
         RowColumnShiftHelpers.ShiftSetDownFrom(sheet.ValueFilterHiddenRows, _beforeRow + _count, _count);
+        // R13-meta-1: undo the ColumnFilterOwnedRows shift in lockstep with the sibling sets above.
+        RowColumnShiftHelpers.ShiftRowSetDictionaryDownFrom(sheet.ColumnFilterOwnedRows, _beforeRow + _count, _count);
 
         if (_mergeSnapshot is not null)
             sheet.ReplaceMergedRegions(_mergeSnapshot);

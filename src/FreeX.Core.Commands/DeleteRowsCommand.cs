@@ -18,13 +18,14 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
     private List<uint>? _hiddenRowsSnapshot;
     private List<uint>? _filterHiddenRowsSnapshot;
     private List<uint>? _valueFilterHiddenRowsSnapshot;
+    private Dictionary<uint, HashSet<uint>>? _columnFilterOwnedRowsSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _commentSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _commentAuthorsSnapshot;
     private List<CellAddress>? _shownCommentsSnapshot;
     private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
-    private List<(SheetId Sheet, CellAddress Address, string OldBookmark)>? _otherSheetHyperlinkBookmarkSnapshot;
+    private List<RowColumnShiftHelpers.HyperlinkOtherSheetChange>? _otherSheetHyperlinkBookmarkSnapshot;
     private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _conditionalFormatSnapshot;
@@ -80,6 +81,12 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         // may safely un-hide on the next recompute.
         _valueFilterHiddenRowsSnapshot = RowColumnShiftHelpers.CaptureSet(sheet.ValueFilterHiddenRows);
         RowColumnShiftHelpers.DeleteSetRangeAndShiftDown(sheet.ValueFilterHiddenRows, _startRow, _count);
+
+        // R13-meta-1: sheet.ColumnFilterOwnedRows' HashSet row VALUES must delete/shift the same way
+        // as FilterHiddenRows/ValueFilterHiddenRows above, or a column's condition/color/Top-Bottom/
+        // Average filter keeps pointing at a stale row index and orphans a permanently-hidden row.
+        _columnFilterOwnedRowsSnapshot = RowColumnShiftHelpers.CaptureRowSetDictionary(sheet.ColumnFilterOwnedRows);
+        RowColumnShiftHelpers.DeleteRowSetDictionaryRangeAndShiftDown(sheet.ColumnFilterOwnedRows, _startRow, _count);
 
         _rowHeightSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RowHeights);
         RowColumnShiftHelpers.ShiftIndexesDown(sheet.RowHeights, _startRow, _count);
@@ -202,6 +209,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreSet(sheet.HiddenRows, _hiddenRowsSnapshot);
         RowColumnShiftHelpers.RestoreSet(sheet.FilterHiddenRows, _filterHiddenRowsSnapshot);
         RowColumnShiftHelpers.RestoreSet(sheet.ValueFilterHiddenRows, _valueFilterHiddenRowsSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.ColumnFilterOwnedRows, _columnFilterOwnedRowsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.Comments, _commentSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.CommentAuthors, _commentAuthorsSnapshot);
         RowColumnShiftHelpers.RestoreAddressSet(sheet.ShownComments, _shownCommentsSnapshot);

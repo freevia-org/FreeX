@@ -169,12 +169,15 @@ public sealed class AutosaveSnapshotStore
 
                     var candidate = new AutosaveRecoveryCandidate(snapshotPath, sidecarPath, sidecar);
 
-                    // A snapshot is an OPC/ZIP package (.docx/.xlsx/.pptx). If it is not a readable
-                    // archive (e.g. truncated by a crash mid-write), it can never be recovered — quarantine
-                    // it and skip, so it is NEVER offered. This stops the modal "Could not recover the
-                    // document: End of Central Directory record could not be found" error at the source,
-                    // rather than surfacing it once on the open attempt.
-                    if (!IsReadableArchive(snapshotPath))
+                    // A snapshot is either an OPC/ZIP package (FreeW .docx / FreeP .pptx) or, for
+                    // FreeX, a plain JSON document (NativeJsonAdapter.Save writes JSON, not a ZIP —
+                    // this store's ".fxl" naming is shared cosmetic, not a format promise). If it is
+                    // not readable in whichever format it actually is (e.g. truncated by a crash
+                    // mid-write), it can never be recovered — quarantine it and skip, so it is NEVER
+                    // offered. This stops the modal "Could not recover the document: End of Central
+                    // Directory record could not be found" (or JSON parse) error at the source, rather
+                    // than surfacing it once on the open attempt.
+                    if (!IsReadableSnapshot(snapshotPath))
                     {
                         QuarantineCandidate(candidate);
                         continue;
@@ -208,22 +211,51 @@ public sealed class AutosaveSnapshotStore
     }
 
     /// <summary>
-    /// True if <paramref name="path"/> is a readable ZIP/OPC archive. A snapshot that fails this check
-    /// is a truncated/corrupt package (e.g. the writing process was killed mid-write) and is
-    /// unrecoverable. Cheap — only opens the central directory, does not read entry contents.
+    /// True if <paramref name="path"/> is a readable snapshot in whichever format it was actually
+    /// written in. FreeW/FreeP snapshots are OPC/ZIP packages (.docx/.pptx); FreeX snapshots are
+    /// plain JSON (<c>NativeJsonAdapter.Save</c> — see <see cref="AutosaveSidecar"/> doc). The two
+    /// formats have distinct corruption signatures (a truncated ZIP fails its central-directory
+    /// read; truncated/malformed JSON fails to parse), so detect which one this file actually is
+    /// by its leading magic bytes and validate accordingly — a snapshot that fails validation for
+    /// its own format is a truncated/corrupt write (e.g. the writing process was killed mid-write)
+    /// and is unrecoverable. Cheap — never reads more than the ZIP central directory or does a full
+    /// JSON parse pass; no entry contents / DTO materialization.
     /// </summary>
-    private static bool IsReadableArchive(string path)
+    private static bool IsReadableSnapshot(string path)
     {
         try
         {
-            using var archive = ZipFile.OpenRead(path);
-            _ = archive.Entries.Count;
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            if (LooksLikeZipArchive(stream))
+            {
+                stream.Position = 0;
+                using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+                _ = archive.Entries.Count;
+                return true;
+            }
+
+            stream.Position = 0;
+            using var document = JsonDocument.Parse(stream);
             return true;
         }
         catch
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Detects a ZIP/OPC package by its leading local-file-header signature ("PK"). Every ZIP
+    /// central-directory/local-file-header variant (including an empty archive's end-of-central-
+    /// directory record) starts with these two bytes, and no valid JSON document can (JSON's first
+    /// non-whitespace byte is always one of <c>{ [ " - t f n</c> or a digit), so this cannot
+    /// misclassify a genuine FreeX JSON snapshot as a ZIP.
+    /// </summary>
+    private static bool LooksLikeZipArchive(Stream stream)
+    {
+        Span<byte> header = stackalloc byte[2];
+        var read = stream.Read(header);
+        return read == 2 && header[0] == (byte)'P' && header[1] == (byte)'K';
     }
 
     /// <summary>

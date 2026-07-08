@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
@@ -392,6 +393,17 @@ public sealed class RecalcEngine
         if (resolveSpillDependents && !workbook.FullPrecision)
             ApplyPrecisionAsDisplayed(workbook, report.RecalculatedCells);
 
+        // Recalculation writes fresh values directly into Cell.Value across the whole pass above
+        // (main loop, iterative/cyclic calc, spill-dependent follow-ups, precision rounding) without
+        // going through Sheet.SetCell/SetFormula, so none of that bumps Sheet.ContentVersion on its
+        // own. Caches keyed on ContentVersion (e.g. the conditional-format evaluation context) must
+        // still see those sheets as changed -- notably a same-sheet volatile recalc (F9) and a
+        // cross-sheet dependency update (this sheet holds a formula referencing another sheet that
+        // just changed) both land here. Gated to the outermost call only: by the time it returns,
+        // `report` already reflects every recursive follow-up pass merged in above.
+        if (resolveSpillDependents)
+            NotifySheetsRecalculated(workbook, report);
+
         return report;
     }
 
@@ -589,17 +601,31 @@ public sealed class RecalcEngine
     }
 
     /// <summary>
+    /// Structural shape of an OOXML external-workbook reference: a bracketed workbook token
+    /// (filename or link index, e.g. <c>[Book1.xlsx]</c> / <c>[1]</c>) immediately followed — with
+    /// only an optional (possibly quoted) sheet-name run in between, and no further brackets — by
+    /// the <c>!</c> that sheet-qualifies the reference. Requires the closing <c>]</c> to actually be
+    /// present, unlike a bare <c>Contains('[')</c> check, so a merely-malformed formula that happens
+    /// to contain an unmatched bracket (e.g. <c>=SUM([</c>) or a structured-table-reference typo
+    /// (e.g. <c>=SUM(Table1[Column1</c>) does not get misclassified as a preservable external link.
+    /// </summary>
+    private static readonly Regex ExternalWorkbookReferencePattern =
+        new(@"\[[^\[\]]+\][^!\[\]]*!", RegexOptions.Compiled);
+
+    /// <summary>
     /// Heuristic match for a formula that references another workbook, e.g. <c>[Book1.xlsx]Sheet1!A1</c>
     /// or a defined-name form like <c>[1]Sheet1!A1</c>. The Lexer/Parser have no concept of this OOXML
     /// external-reference syntax (a bracketed workbook token immediately followed by a sheet-qualified
     /// cell/range reference), so parsing such a formula always throws <see cref="FormulaParseException"/>
     /// — even though the file's Excel-computed cached value was loaded correctly and is still perfectly
-    /// valid. This mirrors the same bracket heuristic <c>XlsxClosedXmlCellMapper.ShouldUseCachedExternalFormulaValue</c>
-    /// uses to decide whether to trust ClosedXML's cached value at load time, so recalc and load agree
-    /// on which formulas are "external" for this purpose.
+    /// valid. Unlike <c>XlsxClosedXmlCellMapper.ShouldUseCachedExternalFormulaValue</c> (which only ever
+    /// runs after ClosedXML itself has already thrown trying to evaluate a formula it can't handle, so a
+    /// bare bracket check there cannot misfire on a merely-malformed formula), this heuristic must be
+    /// structural: it runs for ANY unparseable formula, so it needs to actually resemble the external
+    /// reference shape rather than just contain a '[' somewhere.
     /// </summary>
     private static bool IsLikelyExternalWorkbookReferenceFormula(string? formulaText) =>
-        formulaText is not null && formulaText.Contains('[', StringComparison.Ordinal);
+        formulaText is not null && ExternalWorkbookReferencePattern.IsMatch(formulaText);
 
     /// <summary>
     /// Run a bounded fixed-point iteration over a set of cyclic cells when
@@ -939,6 +965,34 @@ public sealed class RecalcEngine
         cyclic.AddRange(second.CyclicCells);
 
         return new RecalcReport(recalculated, errors, cyclic);
+    }
+
+    /// <summary>
+    /// Bumps <see cref="Sheet.ContentVersion"/> once per distinct sheet touched by this recalc pass
+    /// (recalculated, cyclic, and errored cells all count -- every branch that writes a fresh value
+    /// into a cell also lands its address in one of those three lists). See the call site's comment
+    /// for why this is necessary: RecalcEngine mutates Cell.Value in place without routing through
+    /// Sheet.SetCell/SetFormula.
+    /// </summary>
+    private static void NotifySheetsRecalculated(Workbook workbook, RecalcReport report)
+    {
+        if (report.RecalculatedCells.Count == 0 && report.CyclicCells.Count == 0 && report.Errors.Count == 0)
+            return;
+
+        HashSet<SheetId>? notified = null;
+        void Notify(SheetId sheetId)
+        {
+            notified ??= [];
+            if (!notified.Add(sheetId)) return;
+            workbook.GetSheet(sheetId)?.NotifyContentRecalculated();
+        }
+
+        for (var i = 0; i < report.RecalculatedCells.Count; i++)
+            Notify(report.RecalculatedCells[i].Sheet);
+        for (var i = 0; i < report.CyclicCells.Count; i++)
+            Notify(report.CyclicCells[i].Sheet);
+        for (var i = 0; i < report.Errors.Count; i++)
+            Notify(report.Errors[i].Cell.Sheet);
     }
 
     /// <summary>Rebuild dependencies and evaluate formula cells on a single worksheet.</summary>

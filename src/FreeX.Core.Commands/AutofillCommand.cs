@@ -439,11 +439,23 @@ public sealed class AutofillCommand : IWorkbookCommand
             DateTimeValue date => date.Value,
             _ => 0
         }).ToList();
-        var lastValue = plan.Direction is FillDirection.Up or FillDirection.Left ? numbers[0] : numbers[^1];
         var naturalSlope = ComputeLinearFitSlope(numbers);
+        // Excel's fill handle continues the least-squares regression line itself, not a step
+        // applied from the raw edge value: for a non-collinear source (e.g. 1, 2, 6) the fitted
+        // line's intercept differs from any single sampled point, so anchoring on the actual
+        // first/last value would offset every filled cell by that fitted-vs-actual gap. Anchor on
+        // the regression line's value at the source's edge index instead, so
+        // anchor + step*offset always lies on the fitted line (this reduces to the plain edge
+        // value -- the old behavior -- whenever the source is already perfectly linear, since the
+        // line then passes exactly through every sampled point).
+        var meanX = (numbers.Count - 1) / 2.0;
+        var intercept = numbers.Average() - naturalSlope * meanX;
+        var anchor = plan.Direction is FillDirection.Up or FillDirection.Left
+            ? intercept
+            : intercept + naturalSlope * (numbers.Count - 1);
         var step = plan.Direction is FillDirection.Up or FillDirection.Left ? -naturalSlope : naturalSlope;
 
-        return new ScalarSeries(lastValue, step, plan.Axis, createValue);
+        return new ScalarSeries(anchor, step, plan.Axis, createValue);
     }
 
     /// <summary>
@@ -614,6 +626,13 @@ public sealed class AutofillCommand : IWorkbookCommand
         return (n * sumXY - sumX * sumY) / denominator;
     }
 
+    /// <param name="LastValue">
+    /// The series' anchor value at the fill's starting edge (offset 0): for
+    /// <see cref="TryCreateForcedSingleCellSeries"/> this is the literal seed cell value, but for
+    /// <see cref="TryCreateScalarSeries"/> it is the least-squares regression line's fitted value
+    /// at the source's edge index (not necessarily the actual sampled cell value), so that
+    /// <c>LastValue + Step * offset</c> always lies on the fitted trend line.
+    /// </param>
     private sealed record ScalarSeries(
         double LastValue,
         double Step,

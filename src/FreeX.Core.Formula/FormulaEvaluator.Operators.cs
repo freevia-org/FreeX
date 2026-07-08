@@ -283,7 +283,17 @@ public sealed partial class FormulaEvaluator
     }
 
     private static ScalarValue ConcatOp(ScalarValue left, ScalarValue right)
-        => ElementwiseOp(left, right, (l, r) => new TextValue(ValueToString(l) + ValueToString(r)));
+        => ElementwiseOp(left, right, ConcatScalarOp);
+
+    private static ScalarValue ConcatScalarOp(ScalarValue left, ScalarValue right)
+    {
+        // Per-element error propagation: when concatenating over arrays (e.g. A1:A3&"x"),
+        // an error value inside the range must propagate as that error, not be stringified
+        // to its error code text (matching every other elementwise operator's behavior).
+        if (left is ErrorValue errL) return errL;
+        if (right is ErrorValue errR) return errR;
+        return new TextValue(ValueToString(left) + ValueToString(right));
+    }
 
     private static ScalarValue ElementwiseOp(
         ScalarValue left,

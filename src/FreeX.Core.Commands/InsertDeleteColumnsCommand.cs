@@ -15,13 +15,14 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
     private List<GridRange>? _mergeSnapshot;
     private List<KeyValuePair<uint, double>>? _columnWidthSnapshot;
     private List<KeyValuePair<uint, IReadOnlyList<string>>>? _activeValueFilterColumnsSnapshot;
+    private List<KeyValuePair<uint, HashSet<uint>>>? _columnFilterOwnedRowsSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _commentSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _commentAuthorsSnapshot;
     private List<CellAddress>? _shownCommentsSnapshot;
     private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
-    private List<(SheetId Sheet, CellAddress Address, string OldBookmark)>? _otherSheetHyperlinkBookmarkSnapshot;
+    private List<RowColumnShiftHelpers.HyperlinkOtherSheetChange>? _otherSheetHyperlinkBookmarkSnapshot;
     private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _conditionalFormatSnapshot;
@@ -75,6 +76,12 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         // apply to whatever column ends up at its old (now stale) index.
         _activeValueFilterColumnsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ActiveValueFilterColumns);
         RowColumnShiftHelpers.ShiftIndexesUp(sheet.ActiveValueFilterColumns, _beforeCol, _count);
+
+        // R13-meta-2: sheet.ColumnFilterOwnedRows is the identically column-keyed row-ownership map
+        // added alongside ActiveValueFilterColumns and must shift the same way, or a filter column's
+        // owned-hidden-row bookkeeping is mis-attributed to whatever column ends up at its old index.
+        _columnFilterOwnedRowsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ColumnFilterOwnedRows);
+        RowColumnShiftHelpers.ShiftIndexesUp(sheet.ColumnFilterOwnedRows, _beforeCol, _count);
 
         _commentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
         RowColumnShiftHelpers.ShiftCommentColumnsUp(sheet.Comments, _beforeCol, _count);
@@ -157,6 +164,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
 
         RowColumnShiftHelpers.RestoreDictionary(sheet.ColumnWidths, _columnWidthSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.ActiveValueFilterColumns, _activeValueFilterColumnsSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.ColumnFilterOwnedRows, _columnFilterOwnedRowsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.Comments, _commentSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.CommentAuthors, _commentAuthorsSnapshot);
         RowColumnShiftHelpers.RestoreAddressSet(sheet.ShownComments, _shownCommentsSnapshot);
@@ -274,6 +282,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
     private List<GridRange>? _mergeSnapshot;
     private List<KeyValuePair<uint, double>>? _columnWidthSnapshot;
     private List<KeyValuePair<uint, IReadOnlyList<string>>>? _activeValueFilterColumnsSnapshot;
+    private List<KeyValuePair<uint, HashSet<uint>>>? _columnFilterOwnedRowsSnapshot;
     private List<uint>? _hiddenColsSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _commentSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _commentAuthorsSnapshot;
@@ -281,7 +290,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
     private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
-    private List<(SheetId Sheet, CellAddress Address, string OldBookmark)>? _otherSheetHyperlinkBookmarkSnapshot;
+    private List<RowColumnShiftHelpers.HyperlinkOtherSheetChange>? _otherSheetHyperlinkBookmarkSnapshot;
     private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _conditionalFormatSnapshot;
@@ -335,6 +344,11 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         // column that was deleted (or lies after the deletion point) leaves a stale/misaligned key.
         _activeValueFilterColumnsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ActiveValueFilterColumns);
         RowColumnShiftHelpers.ShiftIndexesDown(sheet.ActiveValueFilterColumns, _startCol, _count);
+
+        // R13-meta-2: same key-space as ActiveValueFilterColumns — must shift/drop entries the same
+        // way, or a filter column's owned-hidden-row bookkeeping goes stale/misaligned after delete.
+        _columnFilterOwnedRowsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ColumnFilterOwnedRows);
+        RowColumnShiftHelpers.ShiftIndexesDown(sheet.ColumnFilterOwnedRows, _startCol, _count);
 
         _commentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
         RowColumnShiftHelpers.ShiftCommentColumnsDown(sheet.Comments, _startCol, _count);
@@ -418,6 +432,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
 
         RowColumnShiftHelpers.RestoreDictionary(sheet.ColumnWidths, _columnWidthSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.ActiveValueFilterColumns, _activeValueFilterColumnsSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.ColumnFilterOwnedRows, _columnFilterOwnedRowsSnapshot);
         RowColumnShiftHelpers.RestoreSet(sheet.HiddenCols, _hiddenColsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.Comments, _commentSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.CommentAuthors, _commentAuthorsSnapshot);

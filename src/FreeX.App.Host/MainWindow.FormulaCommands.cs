@@ -537,6 +537,7 @@ public partial class MainWindow
     private void CalcSheetBtn_Click(object sender, RoutedEventArgs e)
     {
         _recalcEngine.RecalculateSheetFormulas(_workbook, _currentSheetId);
+        InvalidateNavigationCaches();
         UpdateViewport();
     }
     private void CalcOptionsBtn_Click(object sender, RoutedEventArgs e)

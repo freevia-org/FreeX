@@ -194,6 +194,22 @@ public sealed partial class XlsxFileAdapter
                                 }
                         }
                     }
+                    else if (cell.ArrayMode == FormulaArrayMode.Dynamic && cell.Value is ErrorValue { Code: "#SPILL!" })
+                    {
+                        // A dynamic-array formula that is currently #SPILL!-blocked (RecalcEngine clears
+                        // its spill range and leaves no _spillAnchors/_provisional entry for
+                        // TryGetSpillExtent/TryGetArrayExtent above to find, so hasExtent is false here
+                        // even though the formula is still array-shaped). Writing it as a plain
+                        // xlCell.FormulaA1 would lose its array-ness entirely (no t="array" ref at all),
+                        // and XlsxFileAdapter.cs's loader demotes any reloaded formula without
+                        // HasArrayFormula to legacy Implicit mode permanently — so after the blocker is
+                        // removed, the formula would resolve via implicit intersection instead of
+                        // re-spilling. Write it as a single-cell array formula (t="array" ref=anchor)
+                        // instead: that keeps HasArrayFormula true on reload (ArrayMode stays Dynamic),
+                        // so the next recalc correctly re-evaluates via EvaluateSpilling and re-spills
+                        // once the blocking cell is cleared.
+                        xlSheet.Range((int)row, (int)col, (int)row, (int)col).FormulaArrayA1 = formula;
+                    }
                     else
                     {
                         xlCell.FormulaA1 = formula;

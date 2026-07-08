@@ -19019,6 +19019,14 @@ public sealed partial class MainWindow : Window
         }
 
         RefreshShell(successStatus);
+
+        // Undo/Redo can return the workbook to its last-saved state (WorkbookSession clears
+        // IsDirty via its own save-point tracking). When that happens, any autosave snapshot
+        // written while the workbook was dirty is now stale — delete it so a later crash does not
+        // offer already-undone content as a false "recover unsaved changes?" prompt, mirroring the
+        // WPF host's ExecuteUndo/ExecuteRedo (NotifyAutosaveSaved after TryMarkCleanIfAtSavePoint).
+        if (!_session.IsDirty)
+            _autosaveCoordinator?.NotifyAutosaveSaved();
     }
 
     private async Task CutSelectedRangeToClipboardAsync()
@@ -20202,6 +20210,28 @@ public sealed partial class MainWindow : Window
     private void ApplySelectedRangeCommaStyle()
     {
         ApplySelectedRangeNumberFormat(CommaNumberFormat, "Applied comma style to", "Comma style failed.");
+    }
+
+    /// <summary>
+    /// Applies one of Excel's Ctrl+Shift+digit number-format shortcuts (General/Number/Time/Date/
+    /// Currency/Percentage/Scientific), reusing the same <see cref="NumberFormatShortcutService"/>
+    /// format strings the WPF host's <c>ApplyNumberFormatShortcut</c> applies, so the two shells stay
+    /// byte-identical on the resulting format code.
+    /// </summary>
+    private void ApplySelectedRangeNumberFormatShortcut(NumberFormatShortcut shortcut)
+    {
+        var (successAction, failureMessage) = shortcut switch
+        {
+            NumberFormatShortcut.General => ("Applied General format to", "Number format failed."),
+            NumberFormatShortcut.Number => ("Applied Number format to", "Number format failed."),
+            NumberFormatShortcut.Currency => ("Applied currency format to", "Currency format failed."),
+            NumberFormatShortcut.Percentage => ("Applied percent format to", "Percent format failed."),
+            NumberFormatShortcut.Date => ("Applied Date format to", "Number format failed."),
+            NumberFormatShortcut.Time => ("Applied Time format to", "Number format failed."),
+            NumberFormatShortcut.Scientific => ("Applied Scientific format to", "Number format failed."),
+            _ => ("Applied Number format to", "Number format failed."),
+        };
+        ApplySelectedRangeNumberFormat(NumberFormatShortcutService.GetFormat(shortcut), successAction, failureMessage);
     }
 
     private void ApplySelectedRangeNumberFormat(string numberFormat, string successAction, string failureMessage)
@@ -21717,6 +21747,21 @@ public sealed partial class MainWindow : Window
             e.Handled = true;
             await CopySelectedRangeToClipboardAsync();
         }
+        else if (e.Key == Key.V && HasCommandAndShiftModifiers(e.KeyModifiers))
+        {
+            // Ctrl+Shift+V ("Paste Values") — Excel/WPF paste the literal computed value only, with
+            // no formula and no source formatting. Must be checked before the bare Key.V fallback
+            // below, which performs a full (formula + formatting) paste.
+            e.Handled = true;
+            await PasteSpecialClipboardTextAsync(PasteCellsMode.Values, default, "Values");
+        }
+        else if (e.Key == Key.V && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Alt))
+        {
+            // Ctrl+Alt+V ("Paste Special...") — opens the same dialog as the ribbon's Paste Special
+            // item / WPF's PasteSpecialBtn_Click, instead of falling through to a full paste.
+            e.Handled = true;
+            await ShowPasteSpecialDialogAsync();
+        }
         else if (e.Key == Key.V)
         {
             e.Handled = true;
@@ -21759,6 +21804,60 @@ public sealed partial class MainWindow : Window
             e.Handled = true;
             FlashFillSelectedRange();
         }
+        else if (e.Key is Key.D2 or Key.NumPad2 && HasOnlyControlModifier(e.KeyModifiers))
+        {
+            // Ctrl+2 is Excel's alternate Bold toggle (alongside Ctrl+B, already handled above).
+            e.Handled = true;
+            ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: true);
+        }
+        else if (e.Key is Key.D3 or Key.NumPad3 && HasOnlyControlModifier(e.KeyModifiers))
+        {
+            // Ctrl+3 is Excel's alternate Italic toggle (alongside Ctrl+I, already handled above).
+            e.Handled = true;
+            ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: true);
+        }
+        else if (e.Key == Key.Oem3 && HasCommandAndShiftModifiers(e.KeyModifiers))
+        {
+            e.Handled = true;
+            ApplySelectedRangeNumberFormatShortcut(NumberFormatShortcut.General);
+        }
+        else if (e.Key is Key.D1 or Key.NumPad1 && HasCommandAndShiftModifiers(e.KeyModifiers))
+        {
+            e.Handled = true;
+            ApplySelectedRangeNumberFormatShortcut(NumberFormatShortcut.Number);
+        }
+        else if (e.Key is Key.D2 or Key.NumPad2 && HasCommandAndShiftModifiers(e.KeyModifiers))
+        {
+            e.Handled = true;
+            ApplySelectedRangeNumberFormatShortcut(NumberFormatShortcut.Time);
+        }
+        else if (e.Key is Key.D3 or Key.NumPad3 && HasCommandAndShiftModifiers(e.KeyModifiers))
+        {
+            e.Handled = true;
+            ApplySelectedRangeNumberFormatShortcut(NumberFormatShortcut.Date);
+        }
+        else if (e.Key is Key.D4 or Key.NumPad4 && HasCommandAndShiftModifiers(e.KeyModifiers))
+        {
+            e.Handled = true;
+            ApplySelectedRangeNumberFormatShortcut(NumberFormatShortcut.Currency);
+        }
+        else if (e.Key is Key.D5 or Key.NumPad5 && HasCommandAndShiftModifiers(e.KeyModifiers))
+        {
+            e.Handled = true;
+            ApplySelectedRangeNumberFormatShortcut(NumberFormatShortcut.Percentage);
+        }
+        else if (e.Key is Key.D6 or Key.NumPad6 && HasCommandAndShiftModifiers(e.KeyModifiers))
+        {
+            e.Handled = true;
+            ApplySelectedRangeNumberFormatShortcut(NumberFormatShortcut.Scientific);
+        }
+        else if (e.Key == Key.D7 && HasCommandAndShiftModifiers(e.KeyModifiers))
+        {
+            // Ctrl+Shift+7 ("Outline Border") — applies a border around the outside edge of the
+            // selection, matching the WPF host's ApplyOutlineBorderShortcut / BorderKeyboardShortcut.Outline.
+            e.Handled = true;
+            ApplySelectedRangeBorderPreset(CellBorderPreset.Outside);
+        }
         else if (e.Key is Key.D4 or Key.NumPad4 && HasOnlyControlModifier(e.KeyModifiers))
         {
             e.Handled = true;
@@ -21798,6 +21897,13 @@ public sealed partial class MainWindow : Window
         {
             e.Handled = true;
             await ShowPrintPreviewDialogAsync();
+        }
+        else if (e.Key == Key.O && HasCommandAndShiftModifiers(e.KeyModifiers))
+        {
+            // Ctrl+Shift+O ("Select Cells with Comments") — must be checked before the bare Key.O
+            // fallback below, which opens the file-Open dialog.
+            e.Handled = true;
+            SelectGoToSpecial(GoToSpecialKind.Comments);
         }
         else if (e.Key == Key.O)
         {

@@ -154,21 +154,39 @@ internal static class XlsxWorksheetViewWriter
                 changed = true;
             }
 
-            if (!string.Equals(activeSelection.Attribute("activeCell")?.Value, activeCell, StringComparison.Ordinal) ||
-                !string.Equals(activeSelection.Attribute("sqref")?.Value, activeCell, StringComparison.Ordinal))
+            if (!string.Equals(activeSelection.Attribute("activeCell")?.Value, activeCell, StringComparison.Ordinal))
             {
+                // Stale selection (names a different cell than the model's current active cell):
+                // the model wins -- collapse sqref to the single active cell too. The collapsed
+                // sqref is now a single area, so any activeCellId (an index into a multi-area sqref
+                // list per ECMA-376 CT_Selection) referencing a since-discarded area is no longer
+                // valid and must be cleared, or it points past the new single-area sqref and forces
+                // Excel to repair the file on open.
                 changed |= XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(activeSelection, "activeCell", activeCell);
                 changed |= XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(activeSelection, "sqref", activeCell);
+                changed |= XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(activeSelection, "activeCellId", null);
             }
+            // else: the native selection already names the model's active cell -- preserve its
+            // sqref (and activeCellId) verbatim, including a multi-cell/multi-area range the model
+            // does not itself track, so an unrelated view-only save (e.g. zoom) never narrows a
+            // genuine preserved selection down to a single cell.
         }
 
         if (sheet.FrozenRows == 0 && sheet.FrozenCols == 0 &&
             (sheet.SplitRow.HasValue || sheet.SplitColumn.HasValue))
         {
+            // OOXML defines xSplit/ySplit under state="split" as twentieths-of-a-point pane-bar
+            // pixel positions, NOT row/column counts (unlike state="frozen"/"frozenSplit", where
+            // they genuinely are literal counts). Sheet.SplitRow/SplitColumn model the split as a
+            // row/column index (the first row/column below/right of the divider), so it must be
+            // converted to the cumulative pixel position of that boundary -- summing the actual
+            // (or default) row heights/column widths above it -- before being written as xSplit/
+            // ySplit, or Excel renders the divider at the raw index value's twips position
+            // (effectively no split for any typical split index).
             var pane = new XElement(
                 worksheetNs + "pane",
-                sheet.SplitColumn is { } splitColumn ? new XAttribute("xSplit", splitColumn) : null,
-                sheet.SplitRow is { } splitRow ? new XAttribute("ySplit", splitRow) : null,
+                sheet.SplitColumn is { } splitColumn ? new XAttribute("xSplit", SplitColumnToTwips(sheet, splitColumn)) : null,
+                sheet.SplitRow is { } splitRow ? new XAttribute("ySplit", SplitRowToTwips(sheet, splitRow)) : null,
                 new XAttribute("state", "split"));
             var existingPanes = sheetView.Elements(worksheetNs + "pane").ToList();
             if (existingPanes.Count != 1 ||
@@ -189,6 +207,47 @@ internal static class XlsxWorksheetViewWriter
                col is > 0 and <= CellAddress.MaxCol
             ? $"{CellAddress.NumberToColumnName(col.Value)}{row.Value}"
             : null;
+    }
+
+    // 20 twentieths-of-a-point per point * 72/96 points per pixel (96 DPI, matching the
+    // pixels<->points conversion XlsxFileAdapter already uses for row heights) = 15.
+    private const double TwipsPerPixel = 15.0;
+
+    private static string SplitRowToTwips(Sheet sheet, uint splitRow)
+    {
+        double heightPixels = 0;
+        for (var row = 1u; row < splitRow; row++)
+            heightPixels += sheet.RowHeights.TryGetValue(row, out var height) ? height : sheet.DefaultRowHeight;
+
+        return FormatTwips(heightPixels);
+    }
+
+    private static string SplitColumnToTwips(Sheet sheet, uint splitColumn)
+    {
+        double widthPixels = 0;
+        for (var col = 1u; col < splitColumn; col++)
+        {
+            var characterWidth = sheet.ColumnWidths.TryGetValue(col, out var width) ? width : sheet.DefaultColumnWidth;
+            widthPixels += CharacterWidthToPixels(characterWidth);
+        }
+
+        return FormatTwips(widthPixels);
+    }
+
+    private static string FormatTwips(double pixels) =>
+        Math.Max(0, Math.Round(pixels * TwipsPerPixel, MidpointRounding.AwayFromZero))
+            .ToString(CultureInfo.InvariantCulture);
+
+    // Mirrors FreeX.Core.Calc.ColumnWidthPixelMapper.ColumnWidthToPixels (duplicated here rather
+    // than adding a Core.IO -> Core.Calc project reference for a single small formula).
+    private static double CharacterWidthToPixels(double width)
+    {
+        if (!double.IsFinite(width) || width <= 0)
+            return 0;
+
+        return width < 1
+            ? Math.Round(width * 12.0, MidpointRounding.AwayFromZero)
+            : Math.Round(width * 7.0 + 5.0, MidpointRounding.AwayFromZero);
     }
 
     private static XDocument LoadXml(ZipArchiveEntry entry)

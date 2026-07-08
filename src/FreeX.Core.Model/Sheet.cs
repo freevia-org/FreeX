@@ -169,6 +169,17 @@ public sealed partial class Sheet
     /// </summary>
     public int ContentVersion => _contentVersion;
 
+    /// <summary>
+    /// Bumps <see cref="ContentVersion"/> without otherwise mutating sheet state. The recalc engine
+    /// writes fresh formula results straight into <see cref="Cell.Value"/> (it does not go through
+    /// <see cref="SetCell(CellAddress, ScalarValue)"/>/<see cref="SetFormula"/>, which would wrongly
+    /// clear the formula/reset array mode), so those value changes would otherwise never be visible
+    /// to caches keyed on <see cref="ContentVersion"/> — e.g. conditional-format evaluation context,
+    /// which must be rebuilt whenever a dependent cell's value changes as a result of a cross-sheet
+    /// edit or a volatile (F9) recalculation, not just a direct edit to this sheet.
+    /// </summary>
+    public void NotifyContentRecalculated() => _contentVersion++;
+
     /// <summary>Display name of the sheet (shown on tab).</summary>
     public string Name { get; set; }
 

@@ -28,7 +28,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
-    private List<(SheetId Sheet, CellAddress Address, string OldBookmark)>? _otherSheetHyperlinkBookmarkSnapshot;
+    private List<RowColumnShiftHelpers.HyperlinkOtherSheetChange>? _otherSheetHyperlinkBookmarkSnapshot;
     private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
     private List<GridRange>? _mergeSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dvRuleSnapshot;
@@ -644,7 +644,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
     private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
-    private List<(SheetId Sheet, CellAddress Address, string OldBookmark)>? _otherSheetHyperlinkBookmarkSnapshot;
+    private List<RowColumnShiftHelpers.HyperlinkOtherSheetChange>? _otherSheetHyperlinkBookmarkSnapshot;
     private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
     private List<GridRange>? _mergeSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dvRuleSnapshot;

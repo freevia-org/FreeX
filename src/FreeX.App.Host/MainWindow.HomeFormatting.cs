@@ -220,10 +220,32 @@ public partial class MainWindow
         if (SheetGrid.SelectedRange is not { } range) return;
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Unmerge Cells",
-                sheetId => new UnmergeCellsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))))
+                sheetId => CreateUnmergeCellsCommand(
+                    sheetId,
+                    GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))))
             return;
 
         UpdateViewport();
+    }
+
+    // The selection is NOT auto-expanded to cover whole merges before this runs (SelectedRange may be a
+    // single cell inside a larger merge, or a block spanning several merges), so an exact-range
+    // UnmergeCellsCommand(range) would need SelectedRange to equal a stored merged region verbatim and
+    // would silently no-op otherwise. Mirror the Avalonia shell / Format-Cells dialog path
+    // (CellMergePlanner.CreateUnmergeCommands / WorkbookSession.UnmergeSelectedRange): unmerge every
+    // merged region that OVERLAPS the selection, one UnmergeCellsCommand per region.
+    private IWorkbookCommand CreateUnmergeCellsCommand(SheetId sheetId, GridRange range)
+    {
+        if (_workbook.GetSheet(sheetId) is not { } sheet)
+            return new UnmergeCellsCommand(sheetId, range);
+
+        var commands = CellMergePlanner.CreateUnmergeCommands(sheet, sheetId, range);
+        return commands.Count switch
+        {
+            0 => NoOpWorkbookCommand.Instance,
+            1 => commands[0],
+            _ => new CompositeWorkbookCommand("Unmerge Cells", commands)
+        };
     }
 
     private IWorkbookCommand CreateMergeAndCenterCommand(

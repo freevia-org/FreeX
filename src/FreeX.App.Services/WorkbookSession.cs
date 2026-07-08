@@ -163,6 +163,23 @@ public sealed class WorkbookSession
     private FindResult? _lastFindResult;
     private FindResult? _lastReplaceResult;
 
+    /// <summary>
+    /// The undo-stack depth at the time the workbook was last saved, or <c>-1</c> when no save
+    /// point has been recorded yet (never saved this session). Mirrors the WPF host's
+    /// <c>WorkbookDocumentState.SavedUndoDepth</c> so <see cref="UndoLastEdit"/>/<see cref="RedoLastEdit"/>
+    /// can clear <see cref="IsDirty"/> when the stack returns to this depth, instead of leaving it
+    /// permanently true after any edit-then-undo-to-save-point sequence.
+    /// </summary>
+    private int _savedUndoDepth = -1;
+
+    /// <summary>
+    /// The undo stack's monotonic version token at the last save point, or <c>null</c> when no
+    /// save point has been recorded. Used alongside <see cref="_savedUndoDepth"/> as a robust
+    /// identity check immune to depth-cap trim/refill aliasing (mirrors
+    /// <c>WorkbookDocumentState.SavedUndoStackVersion</c>).
+    /// </summary>
+    private long? _savedUndoStackVersion;
+
     internal WorkbookSession(
         StartupWorkbookLoadResult source,
         IReadOnlyList<IFileAdapter> adapters,
@@ -2967,6 +2984,10 @@ public sealed class WorkbookSession
             return result;
 
         ApplySuccessfulHistoryResult(result, sheetIdsBefore, hiddenStatesBefore);
+        // ApplySuccessfulHistoryResult always ends by calling MarkDirty(); restore the clean state
+        // when the undo stack has returned to the last save point (WPF host parity — see
+        // TryMarkCleanIfAtSavePoint).
+        TryMarkCleanIfAtSavePoint();
         return result;
     }
 
@@ -2979,6 +3000,9 @@ public sealed class WorkbookSession
             return result;
 
         ApplySuccessfulHistoryResult(result, sheetIdsBefore, hiddenStatesBefore);
+        // Same rationale as UndoLastEdit(): restore the clean state when redo returns the stack to
+        // the save point (e.g. undo past the save point then redo back to it).
+        TryMarkCleanIfAtSavePoint();
         return result;
     }
 
@@ -3034,6 +3058,7 @@ public sealed class WorkbookSession
         CurrentFileAccessIdentity = resolvedIdentity;
         CurrentXlsxFeatureReport = null;
         Workbook.Name = Path.GetFileName(path);
+        RecordUndoSavePoint();
     }
 
     /// <summary>
@@ -3080,7 +3105,10 @@ public sealed class WorkbookSession
         ArgumentNullException.ThrowIfNull(plan);
 
         if (plan.MarkSaved)
+        {
             IsDirty = false;
+            RecordUndoSavePoint();
+        }
 
         if (plan.ApplyFileContext && plan.FileContext is { } fileContext)
         {
@@ -4111,6 +4139,39 @@ public sealed class WorkbookSession
     {
         IsDirty = true;
         DirtyGeneration++;
+    }
+
+    /// <summary>Captures the undo stack's current depth/version as the "clean" save point.</summary>
+    private void RecordUndoSavePoint()
+    {
+        _savedUndoDepth = _cellEditService.GetUndoStackDepth(Workbook.Id);
+        _savedUndoStackVersion = _cellEditService.GetUndoStackVersion(Workbook.Id);
+    }
+
+    /// <summary>
+    /// If the undo stack has returned to the recorded save point (matching both depth and, when
+    /// recorded, version), clears <see cref="IsDirty"/> and returns <c>true</c>. Called after
+    /// Undo/Redo — which unconditionally routes through <see cref="MarkDirty"/> via
+    /// <see cref="ApplySuccessfulHistoryResult"/> — to restore the clean state the WPF host already
+    /// restores via <c>WorkbookDocumentState.TryMarkCleanIfAtSavePoint</c>. Leaves
+    /// <see cref="IsDirty"/> untouched (i.e. still <c>true</c>) when no save point was recorded or
+    /// the stack has not returned to it.
+    /// </summary>
+    private bool TryMarkCleanIfAtSavePoint()
+    {
+        if (_savedUndoDepth < 0)
+            return false;
+
+        var currentUndoDepth = _cellEditService.GetUndoStackDepth(Workbook.Id);
+        if (currentUndoDepth != _savedUndoDepth)
+            return false;
+
+        if (_savedUndoStackVersion is { } savedVersion &&
+            _cellEditService.GetUndoStackVersion(Workbook.Id) != savedVersion)
+            return false;
+
+        IsDirty = false;
+        return true;
     }
 
     /// <summary>

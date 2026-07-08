@@ -156,6 +156,8 @@ public sealed class FillSeriesPlannerTests
     [Fact]
     public void BuildLinearSeriesEdits_UsesColumnMajorOrderForExcelSeriesInColumns()
     {
+        // A single seed with the rest of the selection blank: Excel enumerates column-major and,
+        // since the second column has no seed of its own, continues the running series into it.
         var sheet = new Sheet(SheetId.New(), "Sheet1");
         var range = new GridRange(
             new CellAddress(sheet.Id, 2, 2),
@@ -169,6 +171,27 @@ public sealed class FillSeriesPlannerTests
             new CellAddress(sheet.Id, 2, 3),
             new CellAddress(sheet.Id, 3, 3));
         edits.Select(edit => ((NumberValue)edit.NewCell.Value).Value).Should().Equal(12, 14, 16);
+    }
+
+    [Fact]
+    public void BuildLinearSeriesEdits_TreatsEachColumnAsItsOwnSeriesWhenBothColumnsHaveSeeds()
+    {
+        // Excel treats "Series in Columns" as independent per-column series: each column's own
+        // top cell is its seed, and a column that already has a value is never overwritten or
+        // chained into from the previous column's running value.
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 2),
+            new CellAddress(sheet.Id, 2, 3));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new NumberValue(50));
+
+        var edits = FillSeriesPlanner.BuildLinearSeriesEdits(sheet, range, step: 2, FillSeriesDirection.Columns);
+
+        edits.Select(edit => edit.Address).Should().Equal(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 2, 3));
+        edits.Select(edit => ((NumberValue)edit.NewCell.Value).Value).Should().Equal(12, 52);
     }
 
     [Fact]

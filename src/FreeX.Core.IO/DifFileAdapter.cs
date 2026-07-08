@@ -90,7 +90,13 @@ public sealed class DifFileAdapter : IFileAdapter
             }
             else if (typeId == StringTypeId)
             {
-                sheet.SetCell(addr, Cell.FromValue(new TextValue(Unquote(contentLine))));
+                // WriteEmpty emits the exact same "1,0" / "\"\"" chunk as a genuine empty-string cell
+                // (DIF has no distinct blank marker for a text vector), so — matching the writer's own
+                // documented convention that an empty string vector is a gap — leave the address
+                // unoccupied here instead of materializing a spurious TextValue("") cell.
+                var text = Unquote(contentLine);
+                if (text.Length > 0)
+                    sheet.SetCell(addr, Cell.FromValue(new TextValue(text)));
             }
         }
 

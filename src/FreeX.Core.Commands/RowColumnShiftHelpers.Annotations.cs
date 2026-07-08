@@ -246,7 +246,15 @@ internal static partial class RowColumnShiftHelpers
 
             var bookmark = meta.Bookmark;
             if (string.IsNullOrEmpty(bookmark))
+            {
+                // No Bookmark recorded — FreeX's own Insert Hyperlink dialog stores the
+                // sheet-qualified ref straight into sheet.Hyperlinks[addr] and leaves
+                // Bookmark unset (see SheetCommands.cs RenameSheetCommand for the same
+                // fallback). That raw target string is what HyperlinkNavigationPlanner and
+                // CreateXlsxHyperlink actually read, so it must be shifted here too.
+                ShiftRawHyperlinkTarget(sheet, pair.Key, op, affectedSheetName);
                 continue;
+            }
 
             // Only rewrite bookmarks targeting the affected sheet.
             // The bookmark is in the form "SheetName!CellRef".
@@ -277,20 +285,59 @@ internal static partial class RowColumnShiftHelpers
     }
 
     /// <summary>
-    /// Rewrites 'Place in This Document' hyperlink bookmarks that target
-    /// <paramref name="affectedSheetName"/> across EVERY sheet in the workbook — a
-    /// hyperlink lives on whichever sheet it was inserted on, which may differ from
-    /// the sheet the structural edit (<paramref name="op"/>) happened on (e.g. a
+    /// Rewrites the raw sheet-qualified target string in <see cref="Sheet.Hyperlinks"/>[<paramref name="addr"/>]
+    /// for a 'Place in This Document' hyperlink whose <see cref="HyperlinkMetadata.Bookmark"/> is empty — the
+    /// representation FreeX's own Insert Hyperlink dialog produces when the user types a ref directly into the
+    /// address field instead of using the Bookmark picker. Mutates <see cref="Sheet.Hyperlinks"/> in place; safe
+    /// to call mid-iteration of <see cref="Sheet.HyperlinkMetadata"/> since it never touches that dictionary.
+    /// </summary>
+    private static void ShiftRawHyperlinkTarget(
+        Sheet sheet, CellAddress addr, RewriteOperation op, string affectedSheetName)
+    {
+        if (!sheet.Hyperlinks.TryGetValue(addr, out var target) || string.IsNullOrEmpty(target))
+            return;
+
+        // The target is in the form "SheetName!CellRef" (or 'Sheet Name'!CellRef). If there is
+        // no '!' it is a named range reference — leave it alone.
+        var bangIndex = target.IndexOf('!', StringComparison.Ordinal);
+        if (bangIndex < 0)
+            return;
+
+        var sheetPart = target[..bangIndex].Trim('\'');
+        if (!string.Equals(sheetPart, affectedSheetName, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var rewritten = FormulaRewriter.Rewrite(target, op, affectedSheetName);
+        if (rewritten is null || rewritten == target)
+            return;
+
+        sheet.Hyperlinks[addr] = rewritten;
+    }
+
+    /// <summary>
+    /// One captured "other sheet" hyperlink change from <see cref="ShiftHyperlinkBookmarks"/> —
+    /// exactly one of <see cref="OldBookmark"/> / <see cref="OldTarget"/> is non-null, matching
+    /// which of the two representations (Bookmark-populated vs. raw sheet.Hyperlinks target) the
+    /// hyperlink at <see cref="Address"/> used before the shift.
+    /// </summary>
+    internal readonly record struct HyperlinkOtherSheetChange(
+        SheetId Sheet, CellAddress Address, string? OldBookmark, string? OldTarget);
+
+    /// <summary>
+    /// Rewrites 'Place in This Document' hyperlink bookmarks (and, when Bookmark is empty, the
+    /// raw sheet.Hyperlinks target string) that target <paramref name="affectedSheetName"/> across
+    /// EVERY sheet in the workbook — a hyperlink lives on whichever sheet it was inserted on, which
+    /// may differ from the sheet the structural edit (<paramref name="op"/>) happened on (e.g. a
     /// bookmark on Sheet2 can read "Sheet1!A10"). Mirrors the all-sheets sweep
     /// RenameSheetCommand performs for the same reason. <paramref name="editedSheet"/>
-    /// is rewritten in place (its dictionary is already snapshotted by the caller for
+    /// is rewritten in place (its dictionaries are already snapshotted by the caller for
     /// undo); every OTHER sheet's changes are captured into a returned snapshot list
     /// so the caller can restore them on <c>Revert</c>.
     /// </summary>
-    internal static List<(SheetId Sheet, CellAddress Address, string OldBookmark)> ShiftHyperlinkBookmarks(
+    internal static List<HyperlinkOtherSheetChange> ShiftHyperlinkBookmarks(
         Workbook workbook, Sheet editedSheet, RewriteOperation op, string affectedSheetName)
     {
-        var otherSheetSnapshot = new List<(SheetId Sheet, CellAddress Address, string OldBookmark)>();
+        var otherSheetSnapshot = new List<HyperlinkOtherSheetChange>();
         foreach (var sheet in workbook.Sheets)
         {
             if (ReferenceEquals(sheet, editedSheet))
@@ -302,27 +349,46 @@ internal static partial class RowColumnShiftHelpers
             if (sheet.HyperlinkMetadata.Count == 0)
                 continue;
 
-            List<KeyValuePair<CellAddress, string>>? before = null;
+            List<KeyValuePair<CellAddress, string>>? beforeBookmark = null;
+            List<KeyValuePair<CellAddress, string>>? beforeTarget = null;
             foreach (var pair in sheet.HyperlinkMetadata)
             {
-                if (pair.Value.LinkType == HyperlinkTargetKind.PlaceInThisDocument &&
-                    !string.IsNullOrEmpty(pair.Value.Bookmark))
+                if (pair.Value.LinkType != HyperlinkTargetKind.PlaceInThisDocument)
+                    continue;
+
+                if (!string.IsNullOrEmpty(pair.Value.Bookmark))
                 {
-                    (before ??= []).Add(new KeyValuePair<CellAddress, string>(pair.Key, pair.Value.Bookmark));
+                    (beforeBookmark ??= []).Add(new KeyValuePair<CellAddress, string>(pair.Key, pair.Value.Bookmark));
+                }
+                else if (sheet.Hyperlinks.TryGetValue(pair.Key, out var target) && !string.IsNullOrEmpty(target))
+                {
+                    (beforeTarget ??= []).Add(new KeyValuePair<CellAddress, string>(pair.Key, target));
                 }
             }
 
             ShiftHyperlinkBookmarksOnSheet(sheet, op, affectedSheetName);
 
-            if (before is null)
-                continue;
-
-            foreach (var (addr, oldBookmark) in before)
+            if (beforeBookmark is not null)
             {
-                if (sheet.HyperlinkMetadata.TryGetValue(addr, out var meta) &&
-                    !string.Equals(meta.Bookmark, oldBookmark, StringComparison.Ordinal))
+                foreach (var (addr, oldBookmark) in beforeBookmark)
                 {
-                    otherSheetSnapshot.Add((sheet.Id, addr, oldBookmark));
+                    if (sheet.HyperlinkMetadata.TryGetValue(addr, out var meta) &&
+                        !string.Equals(meta.Bookmark, oldBookmark, StringComparison.Ordinal))
+                    {
+                        otherSheetSnapshot.Add(new HyperlinkOtherSheetChange(sheet.Id, addr, oldBookmark, null));
+                    }
+                }
+            }
+
+            if (beforeTarget is not null)
+            {
+                foreach (var (addr, oldTarget) in beforeTarget)
+                {
+                    if (sheet.Hyperlinks.TryGetValue(addr, out var newTarget) &&
+                        !string.Equals(newTarget, oldTarget, StringComparison.Ordinal))
+                    {
+                        otherSheetSnapshot.Add(new HyperlinkOtherSheetChange(sheet.Id, addr, null, oldTarget));
+                    }
                 }
             }
         }
@@ -331,20 +397,30 @@ internal static partial class RowColumnShiftHelpers
     }
 
     /// <summary>
-    /// Restores bookmarks captured by the "other sheets" portion of
+    /// Restores bookmarks/targets captured by the "other sheets" portion of
     /// <see cref="ShiftHyperlinkBookmarks(Workbook, Sheet, RewriteOperation, string)"/> on undo.
     /// </summary>
     internal static void RestoreHyperlinkBookmarks(
-        Workbook workbook, List<(SheetId Sheet, CellAddress Address, string OldBookmark)>? snapshot)
+        Workbook workbook, List<HyperlinkOtherSheetChange>? snapshot)
     {
         if (snapshot is null || snapshot.Count == 0)
             return;
 
-        foreach (var (sheetId, addr, oldBookmark) in snapshot)
+        foreach (var change in snapshot)
         {
-            var sheet = workbook.Sheets.FirstOrDefault(s => s.Id == sheetId);
-            if (sheet is not null && sheet.HyperlinkMetadata.TryGetValue(addr, out var meta))
-                sheet.HyperlinkMetadata[addr] = meta with { Bookmark = oldBookmark };
+            var sheet = workbook.Sheets.FirstOrDefault(s => s.Id == change.Sheet);
+            if (sheet is null)
+                continue;
+
+            if (change.OldBookmark is not null)
+            {
+                if (sheet.HyperlinkMetadata.TryGetValue(change.Address, out var meta))
+                    sheet.HyperlinkMetadata[change.Address] = meta with { Bookmark = change.OldBookmark };
+            }
+            else if (change.OldTarget is not null)
+            {
+                sheet.Hyperlinks[change.Address] = change.OldTarget;
+            }
         }
     }
 }

@@ -25,8 +25,26 @@ public sealed class OdsFormulaConverterTests
     [Fact]
     public void ToOdf_LeavesStringLiteralsUntouched()
     {
+        // The argument-separating commas become ODF ';' (see ToOdf_TranslatesArgumentSeparators),
+        // but the string literal's contents are passed through verbatim either way.
         OdsFormulaConverter.ToOdf("IF(A1=\"B2 is text\",1,0)")
-            .Should().Be("IF([.A1]=\"B2 is text\",1,0)");
+            .Should().Be("IF([.A1]=\"B2 is text\";1;0)");
+    }
+
+    [Theory]
+    [InlineData("IF(A1>0,1,2)", "IF([.A1]>0;1;2)")]
+    [InlineData("VLOOKUP(A1,B1:C10,2,FALSE)", "VLOOKUP([.A1];[.B1:.C10];2;FALSE)")]
+    public void ToOdf_TranslatesArgumentSeparatorsToSemicolons(string a1, string expectedOdf)
+    {
+        OdsFormulaConverter.ToOdf(a1).Should().Be(expectedOdf);
+    }
+
+    [Theory]
+    [InlineData("IF([.A1]>0;1;2)", "IF(A1>0,1,2)")]
+    [InlineData("VLOOKUP([.A1];[.B1:.C10];2;FALSE())", "VLOOKUP(A1,B1:C10,2,FALSE())")]
+    public void ToA1_TranslatesArgumentSeparatorsToCommas(string odf, string expectedA1)
+    {
+        OdsFormulaConverter.ToA1(odf).Should().Be(expectedA1);
     }
 
     [Fact]

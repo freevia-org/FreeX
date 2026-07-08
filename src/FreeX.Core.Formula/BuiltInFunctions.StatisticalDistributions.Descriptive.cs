@@ -56,22 +56,24 @@ public static partial class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
 
         // Collect data values — allow scalar or range
+        // (TryCellNumber coerces DateTimeValue to its serial number too, matching every other
+        // numeric aggregate — a hand-rolled `is NumberValue` check would silently drop date cells.)
         var dataList = new List<double>();
         if (args[0] is RangeValue rvd)
         {
             foreach (var v in rvd.Flatten())
-                if (v is NumberValue nv) dataList.Add(nv.Value);
+                if (TryCellNumber(v, out double dv)) dataList.Add(dv);
         }
-        else if (args[0] is NumberValue nva) dataList.Add(nva.Value);
+        else if (TryCellNumber(args[0], out double dva)) dataList.Add(dva);
 
         // Collect bins (sorted)
         var binsList = new List<double>();
         if (args[1] is RangeValue rvb)
         {
             foreach (var v in rvb.Flatten())
-                if (v is NumberValue nv) binsList.Add(nv.Value);
+                if (TryCellNumber(v, out double bv)) binsList.Add(bv);
         }
-        else if (args[1] is NumberValue nvb) binsList.Add(nvb.Value);
+        else if (TryCellNumber(args[1], out double bva)) binsList.Add(bva);
 
         binsList.Sort();
         int binsCount = binsList.Count;

@@ -111,7 +111,7 @@ public sealed class FilterCommand : IWorkbookCommand
         // there by one of those other mechanisms and must survive this recompute untouched.
         if (sheet.ActiveValueFilterColumns.Count == 0)
         {
-            FilterHiddenRowUpdater.ClearOwnedRows(sheet.FilterHiddenRows, range, sheet.ValueFilterHiddenRows);
+            FilterHiddenRowUpdater.ClearOwnedRows(sheet, range, sheet.ValueFilterHiddenRows);
             sheet.ValueFilterHiddenRows.Clear();
             return;
         }
@@ -151,9 +151,15 @@ public sealed class FilterCommand : IWorkbookCommand
             }
             else if (previouslyOwnedRows is not null && previouslyOwnedRows.Contains(row))
             {
-                // Only relinquish rows THIS mechanism previously hid. A row hidden by some other
-                // filter (Top10/Average/color/custom-criterion on another column) is left alone.
-                sheet.FilterHiddenRows.Remove(row);
+                // Only relinquish rows THIS mechanism previously hid, and only when no OTHER
+                // active mechanism (a condition/average/top-bottom/color filter on ANY column,
+                // tracked in sheet.ColumnFilterOwnedRows) still needs the row hidden. Mirrors
+                // ApplyColumnOwnedVisibility's symmetric ownership check on the condition side
+                // (finding R13-meta-3) — without it, clearing/loosening a value filter could
+                // un-hide a row a still-active condition/color/Top-Bottom filter on another
+                // column is responsible for hiding, breaking Excel's AND-across-columns semantics.
+                if (!FilterHiddenRowUpdater.IsHiddenByAnyColumnOwnedFilter(sheet, row))
+                    sheet.FilterHiddenRows.Remove(row);
             }
         }
     }
@@ -487,13 +493,16 @@ internal static class FilterHiddenRowUpdater
     /// Like <see cref="ClearRange"/>, but only un-hides rows in <paramref name="ownedRows"/> — rows
     /// hidden for some other reason (e.g. a Top10/Average/color/custom-criterion filter on another
     /// column) are left hidden. Used when the value-filter mechanism has no active columns left and
-    /// must relinquish only the rows it previously owned (see finding G7).
+    /// must relinquish only the rows it previously owned (see finding G7). Also consults
+    /// <see cref="Sheet.ColumnFilterOwnedRows"/> (finding R13-meta-3) so a row still owned by an
+    /// active condition/average/top-bottom/color filter on any column is never un-hidden here.
     /// </summary>
-    public static void ClearOwnedRows(HashSet<uint> filterHiddenRows, GridRange range, IReadOnlyCollection<uint> ownedRows)
+    public static void ClearOwnedRows(Sheet sheet, GridRange range, IReadOnlyCollection<uint> ownedRows)
     {
         if (ownedRows.Count == 0)
             return;
 
+        var filterHiddenRows = sheet.FilterHiddenRows;
         var firstDataRow = range.Start.Row + 1;
         var lastDataRow = range.End.Row;
         if (filterHiddenRows.Count == 0 || firstDataRow > lastDataRow)
@@ -501,7 +510,7 @@ internal static class FilterHiddenRowUpdater
 
         foreach (var row in ownedRows)
         {
-            if (row >= firstDataRow && row <= lastDataRow)
+            if (row >= firstDataRow && row <= lastDataRow && !IsHiddenByAnyColumnOwnedFilter(sheet, row))
                 filterHiddenRows.Remove(row);
         }
     }
@@ -549,6 +558,25 @@ internal static class FilterHiddenRowUpdater
         foreach (var (col, owned) in sheet.ColumnFilterOwnedRows)
         {
             if (col != excludeCol && owned.Contains(row))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// True when any condition/average/top-bottom/color filter, on ANY column, currently owns
+    /// (and therefore is responsible for hiding) <paramref name="row"/>. This is the value-filter
+    /// side's counterpart to <see cref="IsHiddenByAnyOtherActiveMechanism"/> — the value-filter
+    /// recompute/clear paths have no single "owning column" of their own (a value filter can span
+    /// several columns via <see cref="Sheet.ActiveValueFilterColumns"/>), so there is no column to
+    /// exclude: any owned row must survive relinquishment (finding R13-meta-3).
+    /// </summary>
+    public static bool IsHiddenByAnyColumnOwnedFilter(Sheet sheet, uint row)
+    {
+        foreach (var owned in sheet.ColumnFilterOwnedRows.Values)
+        {
+            if (owned.Contains(row))
                 return true;
         }
 
