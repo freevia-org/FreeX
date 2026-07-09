@@ -65,13 +65,21 @@ public sealed record WorkbookTheme(
     public WorkbookTheme WithName(string name) =>
         this with { Name = string.IsNullOrWhiteSpace(name) ? Office.Name : name.Trim() };
 
-    public WorkbookTheme WithFonts(string majorFontName, string minorFontName) =>
-        this with
+    public WorkbookTheme WithFonts(string majorFontName, string minorFontName)
+    {
+        var normalizedMajor = string.IsNullOrWhiteSpace(majorFontName) ? Office.MajorFontName : majorFontName.Trim();
+        var normalizedMinor = string.IsNullOrWhiteSpace(minorFontName) ? Office.MinorFontName : minorFontName.Trim();
+
+        // Mirror WithEffects/RenameNativeFormatScheme: rather than discarding the source fontScheme XML
+        // (which would drop its East-Asian <a:ea>/complex-script <a:cs> typefaces and re-emit them empty),
+        // patch only the major/minor <a:latin> typefaces in place and preserve everything else.
+        return this with
         {
-            MajorFontName = string.IsNullOrWhiteSpace(majorFontName) ? Office.MajorFontName : majorFontName.Trim(),
-            MinorFontName = string.IsNullOrWhiteSpace(minorFontName) ? Office.MinorFontName : minorFontName.Trim(),
-            NativeFontSchemeXml = null
+            MajorFontName = normalizedMajor,
+            MinorFontName = normalizedMinor,
+            NativeFontSchemeXml = PatchNativeFontScheme(NativeFontSchemeXml, normalizedMajor, normalizedMinor)
         };
+    }
 
     public WorkbookTheme WithEffects(string effectsName)
     {
@@ -139,6 +147,40 @@ public sealed record WorkbookTheme(
         var renamedFormatScheme = new XElement(formatScheme);
         renamedFormatScheme.SetAttributeValue("name", effectsName);
         return renamedFormatScheme.ToString(SaveOptions.DisableFormatting);
+    }
+
+    private static string? PatchNativeFontScheme(string? fontSchemeXml, string majorFontName, string minorFontName)
+    {
+        var fontScheme = TryParseFontScheme(fontSchemeXml);
+        if (fontScheme is null)
+            return null;
+
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var patchedFontScheme = new XElement(fontScheme);
+        patchedFontScheme.Element(drawingNs + "majorFont")?
+            .Element(drawingNs + "latin")?
+            .SetAttributeValue("typeface", majorFontName);
+        patchedFontScheme.Element(drawingNs + "minorFont")?
+            .Element(drawingNs + "latin")?
+            .SetAttributeValue("typeface", minorFontName);
+        return patchedFontScheme.ToString(SaveOptions.DisableFormatting);
+    }
+
+    private static XElement? TryParseFontScheme(string? fontSchemeXml)
+    {
+        if (string.IsNullOrWhiteSpace(fontSchemeXml))
+            return null;
+
+        try
+        {
+            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            var fontScheme = XElement.Parse(fontSchemeXml);
+            return fontScheme.Name == drawingNs + "fontScheme" ? fontScheme : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static WorkbookThemeEffectDefaults? ReadFormatSchemeEffectDefaults(string? formatSchemeXml)
