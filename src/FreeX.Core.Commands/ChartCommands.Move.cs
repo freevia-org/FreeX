@@ -101,11 +101,25 @@ public sealed class MoveChartToNewSheetCommand : IWorkbookCommand
         if (chart.IsPivotChart)
             return ChartCommandGuards.SelectedChartIsPivotChart();
 
-        var target = ctx.Workbook.AddSheet(_sheetName);
+        Sheet target;
+        if (_createdSheetId is { } existingSheetId)
+        {
+            // R17: redo. Workbook.AddSheet always mints a brand-new SheetId, which would give
+            // the re-created chart-holding sheet a DIFFERENT id than the first Apply produced --
+            // breaking any later redo-stack command that captured the original id. Re-create with
+            // the SAME id captured below instead, via the "reinsert an existing sheet instance"
+            // overload (mirrors AddSheetCommand's R16 redo fix).
+            target = new Sheet(existingSheetId, _sheetName);
+            ctx.Workbook.InsertSheet(ctx.Workbook.Sheets.Count, target);
+        }
+        else
+        {
+            target = ctx.Workbook.AddSheet(_sheetName);
+            _createdSheetId = target.Id;
+        }
         target.ResetViewStateToA1();
         source.Charts.Remove(chart);
         target.Charts.Add(chart);
-        _createdSheetId = target.Id;
         _movedChart = chart;
         return new CommandOutcome(true, AffectedCells: [chart.DataRange.Start]);
     }
@@ -124,7 +138,6 @@ public sealed class MoveChartToNewSheetCommand : IWorkbookCommand
         }
 
         ctx.Workbook.RemoveSheet(_createdSheetId.Value);
-        _createdSheetId = null;
         _movedChart = null;
     }
 }

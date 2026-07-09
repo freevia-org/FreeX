@@ -194,20 +194,23 @@ public sealed partial class XlsxFileAdapter
                                 }
                         }
                     }
-                    else if (cell.ArrayMode == FormulaArrayMode.Dynamic && cell.Value is ErrorValue { Code: "#SPILL!" })
+                    else if (hasExtent ||
+                             (cell.ArrayMode == FormulaArrayMode.Dynamic && cell.Value is ErrorValue { Code: "#SPILL!" }))
                     {
-                        // A dynamic-array formula that is currently #SPILL!-blocked (RecalcEngine clears
-                        // its spill range and leaves no _spillAnchors/_provisional entry for
-                        // TryGetSpillExtent/TryGetArrayExtent above to find, so hasExtent is false here
-                        // even though the formula is still array-shaped). Writing it as a plain
-                        // xlCell.FormulaA1 would lose its array-ness entirely (no t="array" ref at all),
-                        // and XlsxFileAdapter.cs's loader demotes any reloaded formula without
-                        // HasArrayFormula to legacy Implicit mode permanently — so after the blocker is
-                        // removed, the formula would resolve via implicit intersection instead of
-                        // re-spilling. Write it as a single-cell array formula (t="array" ref=anchor)
-                        // instead: that keeps HasArrayFormula true on reload (ArrayMode stays Dynamic),
-                        // so the next recalc correctly re-evaluates via EvaluateSpilling and re-spills
-                        // once the blocking cell is cleared.
+                        // Either (a) a known 1x1 dynamic-array/CSE array result — hasExtent is true but
+                        // the extent is exactly 1x1 (e.g. UNIQUE() collapsing to a single equal value),
+                        // so the multi-cell branch above didn't fire — or (b) a dynamic-array formula
+                        // that is currently #SPILL!-blocked (RecalcEngine clears its spill range and
+                        // leaves no _spillAnchors/_provisional entry for TryGetSpillExtent/
+                        // TryGetArrayExtent above to find, so hasExtent is false here even though the
+                        // formula is still array-shaped). Writing either as a plain xlCell.FormulaA1
+                        // would lose its array-ness entirely (no t="array" ref at all), and
+                        // XlsxFileAdapter.cs's loader demotes any reloaded formula without
+                        // HasArrayFormula to legacy Implicit mode permanently — so the identity would
+                        // never re-spill again after an edit / once the blocker is removed. Write it as
+                        // a single-cell array formula (t="array" ref=anchor) instead: that keeps
+                        // HasArrayFormula true on reload (ArrayMode stays Dynamic), so the next recalc
+                        // correctly re-evaluates via EvaluateSpilling and re-spills as needed.
                         xlSheet.Range((int)row, (int)col, (int)row, (int)col).FormulaArrayA1 = formula;
                     }
                     else
@@ -437,7 +440,13 @@ public sealed partial class XlsxFileAdapter
             if (scaleToFit.ScalePercent is { } scalePercent)
                 xlSheet.PageSetup.Scale = scalePercent;
             else if (scaleToFit.FitToPagesWide.HasValue || scaleToFit.FitToPagesTall.HasValue)
-                xlSheet.PageSetup.FitToPages(scaleToFit.FitToPagesWide ?? 1, scaleToFit.FitToPagesTall ?? 1);
+                // A null axis means "automatic/unbounded" (e.g. fitToHeight=0 loaded as null at line
+                // 750-753 above: "fit all columns on one page, as many pages tall as needed"). Pass 0
+                // — not 1 — for the unset axis so it round-trips as unbounded instead of being coerced
+                // into an explicit 1-page cap (which would wrongly shrink a tall/wide report onto a
+                // single page). ClosedXML's own load path treats a <= 0 PagesWide/PagesTall as unset
+                // (see line 750-753), so writing 0 here is the correct inverse of that read.
+                xlSheet.PageSetup.FitToPages(scaleToFit.FitToPagesWide ?? 0, scaleToFit.FitToPagesTall ?? 0);
             if (sheet.PrintTitleRows is { } titleRows && IsValidRepeatRange(titleRows, CellAddress.MaxRow))
                 xlSheet.PageSetup.SetRowsToRepeatAtTop((int)titleRows.Start, (int)titleRows.End);
             if (sheet.PrintTitleColumns is { } titleColumns && IsValidRepeatRange(titleColumns, CellAddress.MaxCol))

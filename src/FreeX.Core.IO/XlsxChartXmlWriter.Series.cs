@@ -497,9 +497,9 @@ internal static partial class XlsxChartXmlWriter
 
     /// <summary>
     /// Emits one <c>&lt;c:dPt&gt;</c> element per data point that needs a per-point override —
-    /// either the exploded-slice distance (pie-family series index 0 only, matching Excel) or
-    /// an explicit per-point fill color (<see cref="ChartModel.PointFillColors"/>). Child element
-    /// order follows CT_DPt: idx, then explosion, then spPr.
+    /// either an exploded-slice distance or an explicit per-point fill color
+    /// (<see cref="ChartModel.PointFillColors"/>). Child element order follows CT_DPt: idx,
+    /// then explosion, then spPr.
     /// </summary>
     private static IEnumerable<XElement> ToDataPointsXml(
         ChartModel chart,
@@ -508,25 +508,35 @@ internal static partial class XlsxChartXmlWriter
         XNamespace drawingNs)
     {
         var pointCount = ChartTypeSupport.GetDataPointCount(chart);
-        var explodedIndex = seriesIndex == 0 &&
+        var explodedPoints = chart.ExplodedSlices
+            .Where(point => point.SeriesIndex == seriesIndex &&
+                point.PointIndex >= 0 && point.PointIndex < pointCount &&
+                point.Distance > 0)
+            .ToDictionary(point => point.PointIndex, point => point.Distance);
+
+        // Fall back to the scalar single-explosion representation (used by the pie-format UI
+        // commands, which only ever set one exploded slice) when no per-point data was read.
+        if (explodedPoints.Count == 0 &&
+            seriesIndex == 0 &&
             chart.ExplodedSliceIndex >= 0 &&
             chart.ExplodedSliceIndex < pointCount &&
-            chart.ExplodedSliceDistance > 0
-            ? chart.ExplodedSliceIndex
-            : (int?)null;
+            chart.ExplodedSliceDistance > 0)
+        {
+            explodedPoints[chart.ExplodedSliceIndex] = chart.ExplodedSliceDistance;
+        }
 
         var pointIndexes = chart.PointFillColors
             .Where(point => point.SeriesIndex == seriesIndex)
             .Select(point => point.PointIndex)
-            .Concat(explodedIndex is { } idx ? [idx] : [])
+            .Concat(explodedPoints.Keys)
             .Distinct()
             .OrderBy(index => index);
 
         foreach (var pointIndex in pointIndexes)
         {
-            var explosion = pointIndex == explodedIndex
+            var explosion = explodedPoints.TryGetValue(pointIndex, out var distance)
                 ? new XElement(chartNs + "explosion",
-                    new XAttribute("val", Math.Clamp((int)Math.Round(chart.ExplodedSliceDistance * 100), 0, 50)))
+                    new XAttribute("val", Math.Clamp((int)Math.Round(distance * 100), 0, 50)))
                 : null;
             var spPr = ToPointShapeProperties(chart, seriesIndex, pointIndex, chartNs, drawingNs);
 

@@ -232,6 +232,7 @@ public class ProtectionGuardCoverageTests
         ["SetPaperSizeCommand"] = "Paper size; not protection-blocked.",
         ["SetScaleToFitCommand"] = "Scale-to-fit; not protection-blocked.",
         ["SetPrintAreaCommand"] = "Print area; not protection-blocked.",
+        ["SetPrintAreasCommand"] = "Multi-region print area; not protection-blocked.",
         ["ClearPrintAreaCommand"] = "Clear print area; not protection-blocked.",
         ["SetPrintOptionsCommand"] = "Print options; not protection-blocked.",
 

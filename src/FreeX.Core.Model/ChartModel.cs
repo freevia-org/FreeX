@@ -114,6 +114,17 @@ public sealed class ChartModel
     public double FirstSliceAngle { get; set; }
     public int ExplodedSliceIndex { get; set; } = -1;
     public double ExplodedSliceDistance { get; set; } = 0.1;
+
+    /// <summary>
+    /// Per-data-point explosion overrides for pie/doughnut slices, read from
+    /// <c>&lt;c:dPt&gt;</c> elements with an explicit <c>&lt;c:explosion&gt;</c> value greater
+    /// than zero. Mirrors <see cref="PointFillColors"/> in shape. Populated for every exploded
+    /// point (not just the first) so a chart where all slices are exploded round-trips without
+    /// losing all but one. <see cref="ExplodedSliceIndex"/>/<see cref="ExplodedSliceDistance"/>
+    /// remain the scalar single-explosion representation used by the pie-format UI commands;
+    /// when this list is empty the writer falls back to that scalar pair.
+    /// </summary>
+    public List<ChartPointExplosion> ExplodedSlices { get; set; } = [];
     public double? XAxisMinimum { get; set; }
     public double? XAxisMaximum { get; set; }
     public double? XAxisMajorUnit { get; set; }
@@ -410,3 +421,10 @@ public sealed class ChartModel
     public CellColor? ResolveTrendlineColor(WorkbookTheme theme) =>
         TrendlineThemeColor?.Resolve(theme) ?? TrendlineColor;
 }
+
+/// <summary>
+/// A per-data-point explosion override for a pie/doughnut slice (<c>&lt;c:dPt&gt;/&lt;c:explosion&gt;</c>).
+/// <see cref="Distance"/> is normalized 0-0.5 (matching <see cref="ChartModel.ExplodedSliceDistance"/>),
+/// i.e. an OOXML <c>explosion val="25"</c> (25%) becomes 0.25.
+/// </summary>
+public sealed record ChartPointExplosion(int SeriesIndex, int PointIndex, double Distance);

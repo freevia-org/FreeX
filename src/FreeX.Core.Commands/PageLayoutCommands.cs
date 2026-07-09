@@ -34,6 +34,45 @@ public sealed class SetPrintAreaCommand : IWorkbookCommand
     }
 }
 
+/// <summary>
+/// Sets all of the worksheet's print areas (single- or multi-region) with undo support. Unlike
+/// <see cref="SetPrintAreaCommand"/>, which always collapses to one region, this preserves every
+/// region passed in (mirroring Excel's comma-separated <c>_xlnm.Print_Area</c> defined name).
+/// </summary>
+public sealed class SetPrintAreasCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly IReadOnlyList<GridRange> _printAreas;
+    private List<GridRange>? _previousPrintAreas;
+
+    public string Label => "Set Print Area";
+
+    public SetPrintAreasCommand(SheetId sheetId, IReadOnlyList<GridRange> printAreas)
+    {
+        _sheetId = sheetId;
+        _printAreas = printAreas;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        foreach (var area in _printAreas)
+        {
+            if (area.Start.Sheet != _sheetId || area.End.Sheet != _sheetId)
+                return new CommandOutcome(false, "Print area must be on the target sheet.");
+        }
+
+        var sheet = ctx.GetSheet(_sheetId);
+        _previousPrintAreas = sheet.PrintAreas.ToList();
+        sheet.SetPrintAreas(_printAreas);
+        return new CommandOutcome(true);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        ctx.GetSheet(_sheetId).SetPrintAreas(_previousPrintAreas ?? []);
+    }
+}
+
 /// <summary>Clears the worksheet print area with undo support.</summary>
 public sealed class ClearPrintAreaCommand : IWorkbookCommand
 {

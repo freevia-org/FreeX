@@ -852,6 +852,22 @@ public sealed partial class NativeJsonAdapter
         public string? SourceSheetName { get; set; }
         public int? SourceTableId { get; set; }
         public int? SourceTableColumnId { get; set; }
+
+        /// <summary>
+        /// R17-slicer-timeline-cache-2: a pivot slicer's available tiles (<see cref="SlicerModel.CacheItems"/>)
+        /// so a native .fxl round-trip keeps every unselected tile, not just the ones in
+        /// <see cref="SelectedItems"/> (the pivot-item resolver gates entirely on CacheItems.Count > 0).
+        /// </summary>
+        public List<SlicerCacheItemDto>? CacheItems { get; set; }
+
+        /// <summary>Mirrors <see cref="SlicerModel.SelectionCaptured"/> so a cleared filter round-trips too.</summary>
+        public bool SelectionCaptured { get; set; }
+    }
+
+    private class SlicerCacheItemDto
+    {
+        public int Index { get; set; }
+        public bool IsSelected { get; set; }
     }
 
     private class TimelineDto

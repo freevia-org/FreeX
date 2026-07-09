@@ -37,8 +37,8 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
         if (sheet.StructuredTables.Any(t => t.Range.Overlaps(_range)))
             return new CommandOutcome(false, "A table cannot overlap another table.");
 
-        var id = NextTableId(sheet);
-        var name = NextTableName(sheet);
+        var id = NextTableId(ctx.Workbook);
+        var name = NextTableName(ctx.Workbook);
         var table = new StructuredTableModel
         {
             Id = id,
@@ -67,17 +67,40 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
         sheet.StructuredTables.RemoveAll(table => table.Id == _createdTableId.Value);
     }
 
-    private static int NextTableId(Sheet sheet) =>
-        sheet.StructuredTables.Count == 0 ? 1 : sheet.StructuredTables.Max(table => table.Id) + 1;
+    // Table ids and names are OOXML workbook-wide identifiers (not per-sheet) — Excel requires every
+    // table in the workbook to have a unique id and a unique name, and a structured reference like
+    // Table1[Col] resolves against whichever sheet actually hosts that name. Scanning only the sheet
+    // the new table is being created on would reuse id=1/"Table1" from a table already on another
+    // sheet, producing a duplicate id+name that Excel reports as corrupt content and that makes
+    // Table1[...] references ambiguous. Scan every sheet's StructuredTables instead.
+    private static int NextTableId(Workbook workbook)
+    {
+        var maxId = 0;
+        foreach (var otherSheet in workbook.Sheets)
+        foreach (var table in otherSheet.StructuredTables)
+            maxId = Math.Max(maxId, table.Id);
 
-    private static string NextTableName(Sheet sheet)
+        return maxId + 1;
+    }
+
+    private static string NextTableName(Workbook workbook)
     {
         for (var index = 1; index <= 10000; index++)
         {
             var name = $"Table{index.ToString(CultureInfo.InvariantCulture)}";
-            if (sheet.StructuredTables.All(table =>
-                    !string.Equals(table.Name, name, StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(table.DisplayName, name, StringComparison.OrdinalIgnoreCase)))
+            var isUsed = false;
+            foreach (var otherSheet in workbook.Sheets)
+            {
+                if (otherSheet.StructuredTables.Any(table =>
+                        string.Equals(table.Name, name, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(table.DisplayName, name, StringComparison.OrdinalIgnoreCase)))
+                {
+                    isUsed = true;
+                    break;
+                }
+            }
+
+            if (!isUsed)
                 return name;
         }
 

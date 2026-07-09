@@ -219,6 +219,7 @@ internal static class XlsxSlicerTimelineStateRewriter
 
         var field = ResolveSharedItemsField(workbook, model);
         var sharedItems = field?.SharedItems;
+        var kinds = field?.SharedItemKinds;
         var selected = new HashSet<string>(model.SelectedItems, StringComparer.OrdinalIgnoreCase);
 
         var changed = false;
@@ -231,7 +232,8 @@ internal static class XlsxSlicerTimelineStateRewriter
             if (sharedItems is null || index < 0 || index >= sharedItems.Count)
                 continue;
 
-            var caption = NormalizeSharedItemCaption(sharedItems[index], field);
+            var kind = kinds is not null && index < kinds.Count ? kinds[index] : (char?)null;
+            var caption = NormalizeSharedItemCaption(sharedItems[index], kind, field);
             if (string.IsNullOrEmpty(caption))
                 continue;
 
@@ -288,18 +290,26 @@ internal static class XlsxSlicerTimelineStateRewriter
 
     /// <summary>
     /// Reformats a raw pivot-cache shared-item attribute string into the same caption
-    /// FreeX.Core.Commands.SlicerItemResolver would resolve for that value (its
+    /// FreeX.Core.Commands.SlicerItemResolver would resolve for that value (its own
     /// NormalizeSharedItemCaption), so the caption compared here against
     /// <see cref="SlicerModel.SelectedItems"/> matches what the UI/refresh path uses. Text items pass
-    /// through unchanged; numbers/dates are reformatted using the field's element kind (or containment
-    /// flags when no per-item kind was preserved) and current-culture formatting.
+    /// through unchanged; numbers/dates are reformatted using current-culture formatting.
+    /// <para>
+    /// R17-slicer-timeline-cache-1: keys off the per-item <paramref name="kind"/> char ('d'/'n'/'s'/...,
+    /// from <see cref="PivotCacheFieldModel.SharedItemKinds"/>) exactly like the resolver does, falling
+    /// back to the field-level Contains* flags only when no per-item kind was preserved. A MIXED-type
+    /// field (both dates and text/numbers) fails the field-level "exclusively one kind" gate for every
+    /// item, so keying only on those flags left every item's raw ISO/invariant string un-formatted —
+    /// mismatching the resolver's per-item-kind caption and silently dropping a selected date/number
+    /// tile's <c>s="1"</c> flag on save.
+    /// </para>
     /// </summary>
-    private static string NormalizeSharedItemCaption(string raw, PivotCacheFieldModel? field)
+    private static string NormalizeSharedItemCaption(string raw, char? kind, PivotCacheFieldModel? field)
     {
         if (field is null || string.IsNullOrEmpty(raw))
             return raw;
 
-        if (field.ContainsDate && !field.ContainsString && !field.ContainsNumber)
+        if (kind == 'd' || (kind is null && field.ContainsDate && !field.ContainsString && !field.ContainsNumber))
         {
             if (!DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
                 return raw;
@@ -314,7 +324,7 @@ internal static class XlsxSlicerTimelineStateRewriter
             };
         }
 
-        if (field.ContainsNumber && !field.ContainsString && !field.ContainsDate)
+        if (kind == 'n' || (kind is null && field.ContainsNumber && !field.ContainsString && !field.ContainsDate))
         {
             return double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
                 ? number.ToString(CultureInfo.CurrentCulture)
@@ -438,8 +448,22 @@ internal static class XlsxSlicerTimelineStateRewriter
             .FirstOrDefault(element => string.Equals(element.Name.LocalName, "selection", StringComparison.OrdinalIgnoreCase));
         if (selection is not null)
         {
-            changed |= SetOptionalAttribute(selection, "startDate", NormalizeSelectedDate(model.SelectedStartDate));
-            changed |= SetOptionalAttribute(selection, "endDate", NormalizeSelectedDate(model.SelectedEndDate));
+            if (selectedStart is null && selectedEnd is null)
+            {
+                // R17-slicer-timeline-cache-3: a native <selection> is CT_TimelineRange, whose startDate/
+                // endDate are REQUIRED. A cleared filter (both model dates null) must not leave a
+                // <selection/> stub with neither attribute — that is schema-invalid and Excel repairs/drops
+                // the whole timeline. Remove the element itself (not the parent <state>, which also carries
+                // the untouched <bounds> available-range) so a cleared filter round-trips as "no selection"
+                // instead of an invalid one.
+                selection.Remove();
+                changed = true;
+            }
+            else
+            {
+                changed |= SetOptionalAttribute(selection, "startDate", NormalizeSelectedDate(model.SelectedStartDate));
+                changed |= SetOptionalAttribute(selection, "endDate", NormalizeSelectedDate(model.SelectedEndDate));
+            }
         }
 
         return changed;

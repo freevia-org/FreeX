@@ -46,7 +46,7 @@ public static partial class XlsxChartPartReader
             if (XlsxChartSeriesFormatReader.TryReadSeriesFill(series, modelSeriesIndex, out var format))
                 result.SeriesFormats.Add(format);
 
-            ApplyPieExplosion(series, result);
+            ApplyPieExplosion(series, modelSeriesIndex, result);
             XlsxChartSeriesFormatReader.ApplyPiePointFills(series, modelSeriesIndex, result);
             XlsxChartDataLabelReader.ApplyPointDataLabels(series, modelSeriesIndex, result);
             XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
@@ -76,25 +76,34 @@ public static partial class XlsxChartPartReader
         return true;
     }
 
-    private static void ApplyPieExplosion(XElement series, ChartModel chart)
+    /// <summary>
+    /// Reads every exploded <c>&lt;c:dPt&gt;</c> point on the series into
+    /// <see cref="ChartModel.ExplodedSlices"/> (not just the first — a fully-exploded pie has
+    /// one <c>dPt</c> per slice). The first exploded point read is also mirrored onto the
+    /// scalar <see cref="ChartModel.ExplodedSliceIndex"/>/<see cref="ChartModel.ExplodedSliceDistance"/>
+    /// for callers that only understand the single-explosion representation.
+    /// </summary>
+    private static void ApplyPieExplosion(XElement series, int seriesIndex, ChartModel chart)
     {
-        XElement? explodedPoint = null;
+        var sawFirst = false;
         foreach (var point in series.Elements(ChartNs + "dPt"))
         {
-            if (!int.TryParse(point.Element(ChartNs + "explosion")?.Attribute("val")?.Value, out var value) || value <= 0)
+            if (!int.TryParse(point.Element(ChartNs + "explosion")?.Attribute("val")?.Value, out var explosion) || explosion <= 0)
+                continue;
+            if (!int.TryParse(point.Element(ChartNs + "idx")?.Attribute("val")?.Value, out var index))
                 continue;
 
-            explodedPoint = point;
-            break;
+            index = Math.Max(0, index);
+            var distance = Math.Clamp(explosion / 100.0, 0, 0.5);
+            chart.ExplodedSlices.Add(new ChartPointExplosion(seriesIndex, index, distance));
+
+            if (!sawFirst)
+            {
+                chart.ExplodedSliceIndex = index;
+                chart.ExplodedSliceDistance = distance;
+                sawFirst = true;
+            }
         }
-
-        if (explodedPoint is null)
-            return;
-
-        if (int.TryParse(explodedPoint.Element(ChartNs + "idx")?.Attribute("val")?.Value, out var index))
-            chart.ExplodedSliceIndex = Math.Max(0, index);
-        if (int.TryParse(explodedPoint.Element(ChartNs + "explosion")?.Attribute("val")?.Value, out var explosion))
-            chart.ExplodedSliceDistance = Math.Clamp(explosion / 100.0, 0, 0.5);
     }
 
     private static bool TryReadBubbleChart(

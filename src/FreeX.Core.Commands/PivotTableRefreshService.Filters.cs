@@ -408,7 +408,14 @@ public static partial class PivotTableRefreshService
             interval = 1;
         var number = Number(value);
         var bucketStart = start + Math.Floor((number - start) / interval) * interval;
-        var bucketEnd = bucketStart + interval - 1;
+
+        // Excel labels integer-interval groups as an inclusive range ("0-9", "10-19", the
+        // upper bound is one less than the next bucket's start) but fractional-interval
+        // groups as a half-open range ("0-0.5", "0.5-1", the upper bound IS the next
+        // bucket's start). Using the inclusive "-1" form for a fractional interval would
+        // understate the range, or even put the end before the start.
+        var isIntegerInterval = interval == Math.Floor(interval);
+        var bucketEnd = isIntegerInterval ? bucketStart + interval - 1 : bucketStart + interval;
         return $"{bucketStart:0.########}-{bucketEnd:0.########}";
     }
 
@@ -488,8 +495,8 @@ public static partial class PivotTableRefreshService
         /// </summary>
         internal static int CompareKeyText(string left, string right)
         {
-            var leftIsNumber = double.TryParse(left, NumberStyles.Float, CultureInfo.CurrentCulture, out var leftNumber);
-            var rightIsNumber = double.TryParse(right, NumberStyles.Float, CultureInfo.CurrentCulture, out var rightNumber);
+            var leftIsNumber = TryGetLabelSortNumber(left, out var leftNumber);
+            var rightIsNumber = TryGetLabelSortNumber(right, out var rightNumber);
 
             if (leftIsNumber && rightIsNumber)
                 return leftNumber.CompareTo(rightNumber);
@@ -499,6 +506,49 @@ public static partial class PivotTableRefreshService
                 return 1;
 
             return StringComparer.CurrentCultureIgnoreCase.Compare(left, right);
+        }
+
+        /// <summary>
+        /// Resolves the number that should drive ordering for a pivot label. A plain numeric
+        /// label parses outright; a numeric-group bucket label such as "10-19" or "0-0.5"
+        /// (produced by <see cref="NumberRangeKeyText"/>) doesn't parse as a single number, so
+        /// falls back to the bucket's numeric start, so groups sort ascending by value instead
+        /// of lexicographically (e.g. "20-29" before "100-109", not after).
+        /// </summary>
+        private static bool TryGetLabelSortNumber(string text, out double number) =>
+            double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out number) ||
+            TryParseNumberRangeLabelStart(text, out number);
+
+        /// <summary>
+        /// Parses the leading number out of a "{start}-{end}" numeric-group bucket label (see
+        /// <see cref="NumberRangeKeyText"/>), returning that start value. Requires both halves
+        /// to parse as numbers with end >= start, which rules out unrelated hyphenated labels
+        /// that otherwise look similar, such as a "yyyy-MM" month-grouped date label (e.g.
+        /// "2026-01", where the second segment is smaller than the first) or a "yyyy-MM-dd"
+        /// day-grouped label (whose tail doesn't parse as a single number at all).
+        /// </summary>
+        private static bool TryParseNumberRangeLabelStart(string text, out double start)
+        {
+            start = 0;
+            if (string.IsNullOrEmpty(text))
+                return false;
+
+            var searchFrom = text[0] == '-' ? 1 : 0;
+            var separatorIndex = text.IndexOf('-', searchFrom);
+            if (separatorIndex <= 0)
+                return false;
+
+            var startText = text[..separatorIndex];
+            var endText = text[(separatorIndex + 1)..];
+            if (!double.TryParse(startText, NumberStyles.Float, CultureInfo.CurrentCulture, out var startValue) ||
+                !double.TryParse(endText, NumberStyles.Float, CultureInfo.CurrentCulture, out var endValue) ||
+                endValue < startValue)
+            {
+                return false;
+            }
+
+            start = startValue;
+            return true;
         }
     }
 

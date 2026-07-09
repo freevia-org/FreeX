@@ -28,7 +28,13 @@ public sealed partial class NativeJsonAdapter
                 ShowCaption = slicer.ShowCaption,
                 SourceSheetName = slicer.SourceSheetName,
                 SourceTableId = slicer.SourceTableId,
-                SourceTableColumnId = slicer.SourceTableColumnId
+                SourceTableColumnId = slicer.SourceTableColumnId,
+                CacheItems = slicer.CacheItems.Count == 0
+                    ? null
+                    : slicer.CacheItems
+                        .Select(item => new SlicerCacheItemDto { Index = item.Index, IsSelected = item.IsSelected })
+                        .ToList(),
+                SelectionCaptured = slicer.SelectionCaptured
             })
             .ToList();
     }
@@ -85,7 +91,11 @@ public sealed partial class NativeJsonAdapter
                 ShowCaption = dto.ShowCaption,
                 SourceSheetName = dto.SourceSheetName,
                 SourceTableId = dto.SourceTableId,
-                SourceTableColumnId = dto.SourceTableColumnId
+                SourceTableColumnId = dto.SourceTableColumnId,
+                CacheItems = (dto.CacheItems ?? [])
+                    .Select(item => new SlicerCacheItem(item.Index, item.IsSelected))
+                    .ToList(),
+                SelectionCaptured = dto.SelectionCaptured
             };
             foreach (var item in dto.SelectedItems ?? [])
                 slicer.SelectedItems.Add(item);

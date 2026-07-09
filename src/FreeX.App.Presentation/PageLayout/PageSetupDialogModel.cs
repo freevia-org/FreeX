@@ -399,7 +399,7 @@ public static class PageSetupDialogModel
             FitToTallText = FormatFitTo(scaleToFit.FitToPagesTall),
             FirstPageNumberText = sheet.FirstPageNumber?.ToString(CultureInfo.InvariantCulture) ?? "",
             PrintQualityDpiText = sheet.PrintQualityDpi?.ToString(CultureInfo.InvariantCulture) ?? "",
-            PrintAreaText = FormatPrintArea(sheet.PrintArea, sheet.Id),
+            PrintAreaText = FormatPrintAreas(sheet.PrintAreas, sheet.Id),
             RepeatRowsText = FormatRepeatRows(sheet.PrintTitleRows),
             RepeatColumnsText = FormatRepeatColumns(sheet.PrintTitleColumns),
             PrintGridlines = sheet.PrintGridlines,
@@ -558,6 +558,34 @@ public static class PageSetupDialogModel
     public static bool TryParsePrintArea(string input, SheetId sheetId, out GridRange? printArea) =>
         PageLayoutInputParser.TryParseOptionalPrintArea(input, sheetId, out printArea);
 
+    /// <summary>
+    /// Parses the print-area free-text field as a comma-separated list of ranges (Excel's multi-region
+    /// print area, e.g. "A1:C10,E1:G10"). Blank input yields an empty list (clear all regions); any
+    /// invalid segment fails the whole parse.
+    /// </summary>
+    public static bool TryParsePrintAreas(string input, SheetId sheetId, out IReadOnlyList<GridRange> printAreas)
+    {
+        printAreas = [];
+        var trimmed = (input ?? string.Empty).Trim();
+        if (trimmed.Length == 0)
+            return true;
+
+        var areas = new List<GridRange>();
+        foreach (var segment in trimmed.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!TryParsePrintArea(segment, sheetId, out var area) || area is not { } range)
+                return false;
+
+            areas.Add(range);
+        }
+
+        if (areas.Count == 0)
+            return false;
+
+        printAreas = areas;
+        return true;
+    }
+
     private static PageSetupRequestBuildResult TryBuildRequest(Sheet sheet, PageSetupDialogFields fields)
     {
         ArgumentNullException.ThrowIfNull(sheet);
@@ -592,7 +620,7 @@ public static class PageSetupDialogModel
         if (!TryParsePrintQualityDpi(fields.PrintQualityDpiText, out var printQualityDpi))
             return PageSetupRequestBuildResult.Fail("Print quality must be a positive DPI value or blank.", PageSetupValidationTarget.PrintQuality);
 
-        if (!TryParsePrintArea(fields.PrintAreaText, sheet.Id, out var printArea))
+        if (!TryParsePrintAreas(fields.PrintAreaText, sheet.Id, out var printAreas))
             return PageSetupRequestBuildResult.Fail("Print area must be a cell range like A1:D20.", PageSetupValidationTarget.PrintArea);
 
         if (!PageLayoutInputParser.TryParseRepeatRows(fields.RepeatRowsText, out var repeatRows))
@@ -603,7 +631,7 @@ public static class PageSetupDialogModel
 
         return PageSetupRequestBuildResult.Ok(new PageSetupCommandRequest
         {
-            PrintArea = printArea,
+            PrintAreas = printAreas,
             Orientation = fields.Orientation,
             PaperSize = fields.PaperSize,
             Margins = margins,
@@ -746,6 +774,12 @@ public static class PageSetupDialogModel
         var end = CellAddress.NumberToColumnName(range.End.Col) + range.End.Row.ToString(CultureInfo.InvariantCulture);
         return start == end ? start : $"{start}:{end}";
     }
+
+    /// <summary>Formats every configured print area, comma-separated, so multi-region areas round-trip.</summary>
+    private static string FormatPrintAreas(IReadOnlyList<GridRange> printAreas, SheetId sheetId) =>
+        string.Join(",", printAreas
+            .Where(range => range.Start.Sheet == sheetId)
+            .Select(range => FormatPrintArea(range, sheetId)));
 
     private static string FormatRepeatRows(WorksheetRepeatRange? range)
     {

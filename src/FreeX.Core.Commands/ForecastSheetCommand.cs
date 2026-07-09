@@ -32,9 +32,23 @@ public sealed class ForecastSheetCommand : IWorkbookCommand
         if (sourceSheet is null)
             return new CommandOutcome(false, "Forecast Sheet source range must belong to this workbook.");
 
-        var forecastSheet = ctx.Workbook.AddSheet(GetForecastSheetName(ctx.Workbook));
+        Sheet forecastSheet;
+        if (_addedSheetId is { } existingSheetId)
+        {
+            // R17: redo. Workbook.AddSheet always mints a brand-new SheetId, which would give
+            // the re-created forecast sheet a DIFFERENT id than the first Apply produced --
+            // breaking any later redo-stack command that captured the original id. Re-create
+            // with the SAME id captured below instead, via the "reinsert an existing sheet
+            // instance" overload (mirrors AddSheetCommand's R16 redo fix).
+            forecastSheet = new Sheet(existingSheetId, GetForecastSheetName(ctx.Workbook));
+            ctx.Workbook.InsertSheet(ctx.Workbook.Sheets.Count, forecastSheet);
+        }
+        else
+        {
+            forecastSheet = ctx.Workbook.AddSheet(GetForecastSheetName(ctx.Workbook));
+            _addedSheetId = forecastSheet.Id;
+        }
         forecastSheet.ResetViewStateToA1();
-        _addedSheetId = forecastSheet.Id;
 
         var timelineHeader = sourceSheet.GetCell(_sourceRange.Start)?.Clone()
             ?? Cell.FromValue(new TextValue("Timeline"));
@@ -89,7 +103,6 @@ public sealed class ForecastSheetCommand : IWorkbookCommand
     {
         if (_addedSheetId is { } sheetId)
             ctx.Workbook.RemoveSheet(sheetId);
-        _addedSheetId = null;
     }
 
     private double GetTimelineStep(Sheet sourceSheet)

@@ -52,7 +52,7 @@ public static class FormControlInteractionService
                     {
                         var min = control.Min ?? 0;
                         var max = control.Max ?? 30000;
-                        control.Value = Math.Clamp((int)Math.Round(stepValue.Value), min, max);
+                        control.Value = ClampToRange((int)Math.Round(stepValue.Value), min, max);
                     }
                     break;
 
@@ -95,6 +95,18 @@ public static class FormControlInteractionService
         NumberValue n => n.Value != 0,
         _ => false,
     };
+
+    /// <summary>
+    /// Clamps <paramref name="value"/> into [<paramref name="min"/>, <paramref name="max"/>], same as
+    /// <see cref="Math.Clamp(int, int, int)"/> — except <see cref="Math.Clamp(int, int, int)"/> THROWS
+    /// an <see cref="ArgumentException"/> when <paramref name="min"/> exceeds <paramref name="max"/>,
+    /// which a malformed spinner/scroll-bar (e.g. an XLSX-loaded control whose Min defaults above an
+    /// explicit Max) can trigger on every step/sync. A control with an inverted range has no valid
+    /// window to clamp into, so it collapses to the single value <paramref name="min"/>, matching
+    /// Excel's own tolerance of a degenerate/reversed range (it never crashes on this input).
+    /// </summary>
+    private static int ClampToRange(int value, int min, int max) =>
+        min > max ? min : Math.Clamp(value, min, max);
 
     // ── CheckBox ──────────────────────────────────────────────────────────────
 
@@ -260,7 +272,7 @@ public static class FormControlInteractionService
             return null;
 
         var priorValue = control.Value;
-        var newValue = Math.Clamp(current + delta * increment, min, max);
+        var newValue = ClampToRange(current + delta * increment, min, max);
         control.Value = newValue;
 
         // No linked cell → nothing to write; the model step above is the whole of Excel's

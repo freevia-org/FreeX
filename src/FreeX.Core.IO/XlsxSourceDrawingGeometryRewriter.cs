@@ -183,6 +183,9 @@ internal static class XlsxSourceDrawingGeometryRewriter
             {
                 changed = true;
             }
+
+            if (RewriteTextBoxVisualProperties(textBoxElement, textBox, drawingNs))
+                changed = true;
         }
 
         var shapeAnchors = shapeElements.Skip(Math.Max(0, shapeElements.Count - sourceShapes.Count));
@@ -194,6 +197,154 @@ internal static class XlsxSourceDrawingGeometryRewriter
             {
                 changed = true;
             }
+
+            if (RewriteShapeAltTextAndTitle(shapeElement, shape.AltText, shape.Title))
+                changed = true;
+        }
+
+        return changed;
+    }
+
+    /// <summary>
+    /// R17 fix: beyond anchor geometry, an edited source-loaded text box's body text
+    /// (<c>SetTextBoxTextCommand</c> mutates <see cref="TextBoxModel.Text"/> without clearing
+    /// <see cref="TextBoxModel.IsSourceLoaded"/>) and its alt text/title (<c>cNvPr@descr</c>/
+    /// <c>@title</c>) must be patched into the preserved drawing XML the same way
+    /// <see cref="RewritePictureVisualProperties"/> already does for pictures, so a save-then-reload
+    /// keeps the edit instead of silently replaying the original source text. Returns true when the
+    /// XML was modified.
+    /// </summary>
+    private static bool RewriteTextBoxVisualProperties(XElement textBoxElement, TextBoxModel textBox, XNamespace drawingNs)
+    {
+        var changed = RewriteShapeAltTextAndTitle(textBoxElement, textBox.AltText, textBox.Title);
+
+        var txBody = textBoxElement.Element(SpreadsheetDrawingNs + "txBody");
+        if (txBody is not null && RewriteTextBodyPlainText(txBody, textBox.Text ?? "", drawingNs))
+            changed = true;
+
+        return changed;
+    }
+
+    /// <summary>
+    /// R17-drawing-hyperlink-name-3 fix: patches <c>cNvPr@descr</c>/<c>@title</c> for a shape,
+    /// connector (<c>xdr:cxnSp</c>), or text box element — <see cref="RewritePictureVisualProperties"/>
+    /// already did this for pictures, but the shape/text-box loops never patched it, silently
+    /// dropping an alt-text/title edit on a source-loaded shape or text box. Uses
+    /// <c>Descendants</c> (not a fixed <c>nvSpPr</c>/<c>nvCxnSpPr</c> element chain) so it finds the
+    /// <c>cNvPr</c> regardless of which non-visual-properties wrapper the element uses, mirroring
+    /// <c>XlsxWorksheetDrawingParts.ReadFirstNonVisualAttribute</c>. Returns true when the XML was
+    /// modified.
+    /// </summary>
+    private static bool RewriteShapeAltTextAndTitle(XElement element, string? altText, string? title)
+    {
+        var cNvPr = element.Descendants(SpreadsheetDrawingNs + "cNvPr").FirstOrDefault();
+        if (cNvPr is null)
+            return false;
+
+        var changed = false;
+        changed |= SetOrRemoveAttribute(cNvPr, "descr", string.IsNullOrWhiteSpace(altText) ? null : altText);
+        changed |= SetOrRemoveAttribute(cNvPr, "title", string.IsNullOrWhiteSpace(title) ? null : title);
+        return changed;
+    }
+
+    /// <summary>
+    /// Patches a preserved <c>&lt;xdr:txBody&gt;</c>'s <c>&lt;a:t&gt;</c> run text so it matches
+    /// <paramref name="newText"/> (the in-memory <see cref="TextBoxModel.Text"/>, which uses
+    /// <c>\n</c> as its paragraph separator — see
+    /// <c>XlsxWorksheetDrawingParts.ReadShapeTextBodyPlainText</c>), while leaving each paragraph's
+    /// run/formatting elements (<c>rPr</c> etc.) untouched. Only the FIRST run (or field) in each
+    /// paragraph receives the new text; any additional runs/fields/line-breaks in that paragraph are
+    /// removed, mirroring the "one run per line" simplification the reader/writer already use for
+    /// shape/text-box text (<c>ReadShapeTextBodyPlainText</c> / <c>ToShapeTxBody</c>). When the new
+    /// text has more or fewer lines than the preserved body has paragraphs, trailing paragraphs are
+    /// cloned from (or trimmed down from) the last existing paragraph so formatting still carries
+    /// over onto newly-added lines. Returns true when the XML was modified.
+    /// </summary>
+    private static bool RewriteTextBodyPlainText(XElement txBody, string newText, XNamespace drawingNs)
+    {
+        var paragraphs = txBody.Elements(drawingNs + "p").ToList();
+        if (paragraphs.Count == 0)
+            return false;
+
+        var lines = newText.Split('\n');
+        var changed = false;
+
+        // Grow: clone the last paragraph as a formatting template for any extra new lines.
+        var template = paragraphs[^1];
+        while (paragraphs.Count < lines.Length)
+        {
+            var clone = new XElement(template);
+            template.AddAfterSelf(clone);
+            paragraphs.Add(clone);
+            template = clone;
+            changed = true;
+        }
+
+        // Shrink: drop trailing paragraphs beyond what the new text needs.
+        while (paragraphs.Count > lines.Length)
+        {
+            paragraphs[^1].Remove();
+            paragraphs.RemoveAt(paragraphs.Count - 1);
+            changed = true;
+        }
+
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (SetParagraphPlainText(paragraphs[i], lines[i], drawingNs))
+                changed = true;
+        }
+
+        return changed;
+    }
+
+    /// <summary>
+    /// Sets a single paragraph's text to <paramref name="text"/>: the first <c>&lt;a:r&gt;</c> (or
+    /// <c>&lt;a:fld&gt;</c>) run's <c>&lt;a:t&gt;</c> receives the text (a bare run is created if the
+    /// paragraph had none), and any additional runs/fields/<c>&lt;a:br/&gt;</c> breaks are removed so
+    /// the paragraph doesn't end up with stale leftover text appended after the new content.
+    /// </summary>
+    private static bool SetParagraphPlainText(XElement paragraph, string text, XNamespace drawingNs)
+    {
+        var changed = false;
+        var contentNodes = paragraph.Elements()
+            .Where(e => e.Name == drawingNs + "r" || e.Name == drawingNs + "fld")
+            .ToList();
+
+        XElement firstRun;
+        if (contentNodes.Count > 0)
+        {
+            firstRun = contentNodes[0];
+            for (var i = 1; i < contentNodes.Count; i++)
+            {
+                contentNodes[i].Remove();
+                changed = true;
+            }
+        }
+        else
+        {
+            firstRun = new XElement(drawingNs + "r", new XElement(drawingNs + "t", text));
+            paragraph.Add(firstRun);
+            return true;
+        }
+
+        foreach (var lineBreak in paragraph.Elements(drawingNs + "br").ToList())
+        {
+            lineBreak.Remove();
+            changed = true;
+        }
+
+        var t = firstRun.Element(drawingNs + "t");
+        if (t is null)
+        {
+            t = new XElement(drawingNs + "t");
+            firstRun.Add(t);
+            changed = true;
+        }
+
+        if (!string.Equals(t.Value, text, StringComparison.Ordinal))
+        {
+            t.Value = text;
+            changed = true;
         }
 
         return changed;

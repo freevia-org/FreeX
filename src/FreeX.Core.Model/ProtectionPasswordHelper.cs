@@ -118,17 +118,27 @@ public static class ProtectionPasswordHelper
     public static string ToVerifiedLegacyPasswordHash(string plaintextPassword) =>
         ComputeLegacyPasswordHash(plaintextPassword);
 
+    /// <summary>
+    /// Implements the ECMA-376/MS-OFFCRYPTO "Binary Document Password Verifier Derivation Method
+    /// 1" legacy password hash exactly as specified: a 15-bit accumulator is rotated left by one
+    /// bit and then XORed with each character, walking the password from its last character to
+    /// its first, then rotated once more and XORed with the password length and the fixed
+    /// constant 0xCE4B. Every intermediate value is masked to 15 bits by the rotate step itself
+    /// (<c>&amp; 0x7fff</c>), so — unlike a naive "shift each character by its index" formulation
+    /// — this can never overflow <see cref="int"/> regardless of password length, and the final
+    /// accumulator is always within [0, 0xFFFF] so <c>ToString("X4")</c> is always exactly 4 hex
+    /// digits for any input, including passwords far longer than 24 characters.
+    /// </summary>
     private static string ComputeLegacyPasswordHash(string password)
     {
         var hash = 0;
-        for (var index = 0; index < password.Length; index++)
+        for (var index = password.Length - 1; index >= 0; index--)
         {
-            var value = password[index] << (index + 1);
-            var rotatedBits = value >> 15;
-            value &= 0x7fff;
-            hash ^= value | rotatedBits;
+            hash = ((hash >> 14) & 0x1) | ((hash << 1) & 0x7fff);
+            hash ^= password[index];
         }
 
+        hash = ((hash >> 14) & 0x1) | ((hash << 1) & 0x7fff);
         hash ^= password.Length;
         hash ^= 0xCE4B;
         return hash.ToString("X4", CultureInfo.InvariantCulture);

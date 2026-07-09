@@ -271,13 +271,30 @@ public sealed partial class Sheet
         return clonedPt;
     }
 
-    private static StructuredTableModel CloneStructuredTable(StructuredTableModel table, SheetId newId)
+    /// <summary>
+    /// R17-table-listobject-3: re-numbers and renames the structured table at <paramref name="index"/>
+    /// on this sheet in place, preserving every other piece of table metadata (columns, filters,
+    /// native XML, etc.). Used by <c>DuplicateSheetCommand</c> to give a cloned sheet's tables a
+    /// workbook-unique identity — <see cref="Clone"/> otherwise copies <see cref="StructuredTables"/>
+    /// verbatim, leaving the duplicate sharing the same table Id/Name as the source.
+    /// </summary>
+    public void ReidentifyStructuredTable(int index, int newTableId, string newName)
+    {
+        var table = StructuredTables[index];
+        StructuredTables[index] = CloneStructuredTable(table, table.Range.Start.Sheet, newTableId, newName);
+    }
+
+    private static StructuredTableModel CloneStructuredTable(
+        StructuredTableModel table,
+        SheetId newId,
+        int? overrideTableId = null,
+        string? overrideName = null)
     {
         var clonedTable = new StructuredTableModel
         {
-            Id = table.Id,
-            Name = table.Name,
-            DisplayName = table.DisplayName,
+            Id = overrideTableId ?? table.Id,
+            Name = overrideName ?? table.Name,
+            DisplayName = overrideName ?? table.DisplayName,
             Range = RemapRange(table.Range, newId),
             HasAutoFilter = table.HasAutoFilter,
             TotalsRowShown = table.TotalsRowShown,

@@ -1168,16 +1168,23 @@ internal static partial class RowColumnShiftHelpers
     // for-byte unchanged, so it is safe to call unconditionally for every captured entry here —
     // no anchor/removal handling is needed since these controls are never hosted on the edited
     // sheet in the first place.
+    //
+    // R17-form-controls-linkedcell-2: allowBareToken:false is required here — a bare/unqualified
+    // token (e.g. "$B$1") always means "on the control's OWN hosting sheet" in Excel, never on
+    // whatever sheet happens to be structurally edited. Every entry reaching this method lives on
+    // a sheet OTHER than shift.SheetId (see comment above), so a bare token must never be parsed
+    // against shift.SheetId/shifted — only an explicit "Sheet1!..." qualifier that matches
+    // shift.SheetName may be rewritten.
     private static void ShiftCrossSheetFormControlRefs(AddressBearingStateSnapshot snapshot, AddressShift shift)
     {
         foreach (var entry in snapshot.CrossSheetFormControlRefs)
         {
-            entry.Control.LinkedCell    = ShiftFormControlRef(entry.LinkedCell, shift);
-            entry.Control.ListFillRange = ShiftFormControlRef(entry.ListFillRange, shift);
+            entry.Control.LinkedCell    = ShiftFormControlRef(entry.LinkedCell, shift, allowBareToken: false);
+            entry.Control.ListFillRange = ShiftFormControlRef(entry.ListFillRange, shift, allowBareToken: false);
         }
     }
 
-    private static string? ShiftFormControlRef(string? reference, AddressShift shift)
+    private static string? ShiftFormControlRef(string? reference, AddressShift shift, bool allowBareToken = true)
     {
         if (string.IsNullOrWhiteSpace(reference))
             return reference;
@@ -1189,7 +1196,9 @@ internal static partial class RowColumnShiftHelpers
             raw = raw[1..].Trim();
 
         // Reuse the existing ShiftReference path (handles "A1", "$A$5", "Sheet1!$A$1:$A$3", etc.).
-        var shifted = ShiftReference(raw, shift);
+        // allowBareToken:false (used for cross-sheet controls) suppresses shifting an unqualified
+        // token, which always belongs to the control's own hosting sheet, not shift.SheetId.
+        var shifted = ShiftReference(raw, shift, allowBareToken);
         if (shifted is null)
             return null; // ref was entirely deleted
 
@@ -1658,7 +1667,7 @@ internal static partial class RowColumnShiftHelpers
         string.IsNullOrWhiteSpace(referenceSheetName) ||
         string.Equals(referenceSheetName, sheetName, StringComparison.OrdinalIgnoreCase);
 
-    private static string? ShiftReference(string? reference, AddressShift shift)
+    private static string? ShiftReference(string? reference, AddressShift shift, bool allowBareToken = true)
     {
         if (string.IsNullOrWhiteSpace(reference))
             return reference;
@@ -1671,7 +1680,7 @@ internal static partial class RowColumnShiftHelpers
         var parsedAny = false;
         foreach (var token in tokens)
         {
-            if (!TryShiftReferenceToken(token, shift, out var shiftedToken, out var parsed))
+            if (!TryShiftReferenceToken(token, shift, out var shiftedToken, out var parsed, allowBareToken))
             {
                 shiftedTokens.Add(token);
                 continue;
@@ -1694,11 +1703,12 @@ internal static partial class RowColumnShiftHelpers
         string token,
         AddressShift shift,
         out string? shiftedToken,
-        out bool parsed)
+        out bool parsed,
+        bool allowBareToken = true)
     {
         shiftedToken = null;
         parsed = false;
-        if (!TryParseReferenceToken(token, shift, out var reference, out var appliesToSheet))
+        if (!TryParseReferenceToken(token, shift, out var reference, out var appliesToSheet, allowBareToken))
             return false;
 
         parsed = true;
@@ -1729,7 +1739,8 @@ internal static partial class RowColumnShiftHelpers
         string token,
         AddressShift shift,
         out ParsedRangeReference reference,
-        out bool appliesToSheet)
+        out bool appliesToSheet,
+        bool allowBareToken = true)
     {
         reference = default;
         appliesToSheet = true;
@@ -1747,6 +1758,16 @@ internal static partial class RowColumnShiftHelpers
             }
 
             localReference = localReference[(bangIndex + 1)..];
+        }
+        else if (!allowBareToken)
+        {
+            // R17-form-controls-linkedcell-2: an unqualified/bare token (no "Sheet!" prefix)
+            // always targets the reference-owner's OWN sheet, never shift.SheetId. Callers that
+            // know the owner lives on a different sheet than the one being structurally edited
+            // (e.g. ShiftCrossSheetFormControlRefs) pass allowBareToken:false so a bare token is
+            // left completely untouched instead of being misinterpreted as shift.SheetId.
+            appliesToSheet = false;
+            return false;
         }
 
         var parts = localReference.Split(':');

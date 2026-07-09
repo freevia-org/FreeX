@@ -58,14 +58,16 @@ public sealed partial class PivotTableRefreshServiceTests
 
         // The blank cell (row 4) and the text cell ("N/A", row 5) must NOT be folded into
         // the "0-9" bucket alongside the genuinely-numeric price of 2 (row 2); they form
-        // their own "(blank)" group instead. "(blank)" sorts before the numeric-range
-        // bucket captions under the pivot's default string ordering.
-        Text(sheet, "D3").Should().Be("(blank)");
-        Number(sheet, "E3").Should().Be(100);
-        Text(sheet, "D4").Should().Be("0-9");
-        Number(sheet, "E4").Should().Be(10);
-        Text(sheet, "D5").Should().Be("10-19");
-        Number(sheet, "E5").Should().Be(70);
+        // their own "(blank)" group instead. Numeric-range buckets now sort as numbers
+        // (R17-pivot-cache-deep-2), so they come first in ascending order and the genuinely
+        // non-numeric "(blank)" group sorts AFTER them (numbers-before-text, matching
+        // PivotKeyComparer's convention), consistent with Excel placing "(blank)" last.
+        Text(sheet, "D3").Should().Be("0-9");
+        Number(sheet, "E3").Should().Be(10);
+        Text(sheet, "D4").Should().Be("10-19");
+        Number(sheet, "E4").Should().Be(70);
+        Text(sheet, "D5").Should().Be("(blank)");
+        Number(sheet, "E5").Should().Be(100);
         Text(sheet, "D6").Should().Be("Grand Total");
         Number(sheet, "E6").Should().Be(180);
     }

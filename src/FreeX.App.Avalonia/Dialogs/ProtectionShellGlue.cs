@@ -44,10 +44,20 @@ internal static class ProtectionShellGlue
     /// the optional password. Window protection is not modelled by Core, so only the structure flag and
     /// password survive the projection. Callers validate the password/confirm pair before calling this.
     /// </summary>
+    /// <remarks>
+    /// When structure protection is off (e.g. a "Windows only" request that Core cannot model), the
+    /// password is dropped rather than carried through: <see cref="ProtectWorkbookCommand"/> would
+    /// otherwise store a password on an unprotected workbook, leaving a passworded-but-unlocked
+    /// <c>workbookProtection</c> element on disk. Callers should still warn the user before reaching
+    /// this point (see the Avalonia Protect Workbook dialog), but this is a safety net for any other
+    /// caller of this glue.
+    /// </remarks>
     public static ProtectWorkbookCommand BuildProtectWorkbookCommand(ProtectWorkbookOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        return new ProtectWorkbookCommand(options.ToCorePassword(), options.ToCoreStructureProtected());
+        var structureProtected = options.ToCoreStructureProtected();
+        var password = structureProtected ? options.ToCorePassword() : null;
+        return new ProtectWorkbookCommand(password, structureProtected);
     }
 
     /// <summary>

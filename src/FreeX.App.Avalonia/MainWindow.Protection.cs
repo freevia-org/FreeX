@@ -369,8 +369,13 @@ public sealed partial class MainWindow
             {
                 warningText.IsVisible = false;
 
-                if (structureBox.IsChecked != true && windowsBox.IsChecked != true)
+                if (structureBox.IsChecked != true)
                 {
+                    // Core has no model for window-only protection (see ProtectWorkbookOptions
+                    // remarks), so "Structure" unchecked — even with "Windows" checked — protects
+                    // nothing. Warn with the same message as the both-unchecked case instead of
+                    // reporting success while writing a passworded-but-unlocked
+                    // <workbookProtection> element.
                     ShowWarning(UiText.Get("ShellLoc_SelectStructureOrWindows"));
                     return;
                 }

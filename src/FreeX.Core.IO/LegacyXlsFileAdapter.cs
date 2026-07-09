@@ -2104,15 +2104,20 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
         if (IsPrintAreaDefinedName(definedName.NameName))
         {
+            Sheet? printSheet = null;
+            var printAreas = new List<GridRange>();
             foreach (var reference in SplitFormulaReferences(refersTo))
             {
                 if (TryParseNamedRangeRefersTo(workbook, reference, out var printArea) &&
                     workbook.GetSheet(printArea.Start.Sheet) is { } sheet)
                 {
-                    sheet.PrintArea = printArea;
-                    break;
+                    printSheet ??= sheet;
+                    printAreas.Add(printArea);
                 }
             }
+
+            if (printSheet is not null && printAreas.Count > 0)
+                printSheet.SetPrintAreas(printAreas);
 
             return true;
         }

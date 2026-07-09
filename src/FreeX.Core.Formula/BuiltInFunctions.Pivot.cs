@@ -96,10 +96,18 @@ public static partial class BuiltInFunctions
                 continue;
 
             if (!string.IsNullOrWhiteSpace(pageField.SelectedItem))
-                return string.Equals(pageField.SelectedItem, expected, StringComparison.OrdinalIgnoreCase);
+            {
+                if (!string.Equals(pageField.SelectedItem, expected, StringComparison.OrdinalIgnoreCase))
+                    return false;
+                continue;
+            }
 
             if (pageField.SelectedItems is { Count: > 0 } selectedItems)
-                return selectedItems.Contains(expected, StringComparer.OrdinalIgnoreCase);
+            {
+                if (!selectedItems.Contains(expected, StringComparer.OrdinalIgnoreCase))
+                    return false;
+                continue;
+            }
         }
 
         return true;

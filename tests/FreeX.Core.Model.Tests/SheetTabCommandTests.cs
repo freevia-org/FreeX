@@ -254,7 +254,11 @@ public class SheetTabCommandTests
         copiedTextBox.OutlineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25));
         copiedTextBox.Title.Should().Be("Narrative title");
         copiedTextBox.AltText.Should().Be("Text box note");
-        copiedTextBox.IsSourceLoaded.Should().BeTrue();
+        // R17-drawing-hyperlink-name-1: cloned shapes/text boxes are forced IsSourceLoaded=false
+        // (like ClonePicture) so the writer re-emits them fresh on the duplicated sheet — a
+        // source-loaded clone would be silently dropped on save (its source drawing part is keyed
+        // by the ORIGINAL sheet name).
+        copiedTextBox.IsSourceLoaded.Should().BeFalse();
         var copiedShape = copy.DrawingShapes.Should().ContainSingle().Subject;
         copiedShape.Name.Should().Be("Process Step");
         copiedShape.Anchor.Should().Be(new CellAddress(copy.Id, 4, 2));
@@ -270,7 +274,7 @@ public class SheetTabCommandTests
         copiedShape.OutlineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4, -0.1));
         copiedShape.HasShadowEffect.Should().BeTrue();
         copiedShape.EffectPreset.Should().Be(DrawingShapeEffectPreset.Glow);
-        copiedShape.IsSourceLoaded.Should().BeTrue();
+        copiedShape.IsSourceLoaded.Should().BeFalse(); // R17-drawing-hyperlink-name-1 (see text box note above).
         copy.DrawingObjectZOrder.Should().Equal(
             new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, copiedImage.Id),
             new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, copiedShape.Id),

@@ -434,6 +434,13 @@ public partial class MainWindow
         SheetGrid.NativeTimelines = nativeVisualFilters?.Timelines;
         if (keepObjectData && sheet is not null && sheet.FormControls.Count > 0)
         {
+            // R17-form-controls-linkedcell-1: mirror the Avalonia shell (MainWindow.FormControls.cs)
+            // and re-derive each control's IsChecked/Value/SelectedIndex from its linked cell's
+            // current value BEFORE resolving selected-item text, so a direct cell edit or formula
+            // recalc (not just a click on the control itself) is reflected on every viewport refresh
+            // instead of leaving the WPF checkbox/spinner/scrollbar/list-box stale.
+            FreeX.Core.Commands.FormControlInteractionService.SyncControlsFromLinkedCells(sheet, _workbook);
+
             // Resolve each list control's selected-item text (ListFillRange[SelectedIndex]) into the
             // render-model's SelectedText so the GridView draws the selection without raw workbook access.
             FreeX.Core.Commands.FormControlListResolver.PopulateSelectedText(sheet, _workbook);

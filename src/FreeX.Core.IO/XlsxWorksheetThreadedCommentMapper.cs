@@ -343,7 +343,11 @@ internal static class XlsxWorksheetThreadedCommentMapper
                     continue;
 
                 var text = comment.Element(ThreadedCommentNs + "text")?.Value ?? "";
-                if (string.IsNullOrWhiteSpace(text))
+                // Only drop whitespace-only replies here; a whitespace-only root must be kept
+                // for now even though its own text is empty, because it may still have real
+                // replies grouped under it below. A genuinely empty root (no text, no replies)
+                // is filtered out later once repliesByParentId is known.
+                if (parentId is not null && string.IsNullOrWhiteSpace(text))
                     continue;
 
                 var personId = comment.Attribute("personId")?.Value ?? "";
@@ -385,6 +389,13 @@ internal static class XlsxWorksheetThreadedCommentMapper
                     repliesByParentId.TryGetValue(root.Id, out var parsedReplies)
                     ? parsedReplies.Select(ToCommentReply).ToList()
                     : [];
+
+                // A whitespace-only root with no replies is genuinely empty; drop it, matching
+                // prior behavior. A whitespace-only root that DOES have replies is a valid Excel
+                // state (empty root comment, real reply text) and must be preserved so its
+                // replies are not orphaned and dropped.
+                if (replies.Count == 0 && string.IsNullOrWhiteSpace(root.Text))
+                    continue;
 
                 var threadedComment = new ThreadedComment(root.Text, root.Author)
                 {

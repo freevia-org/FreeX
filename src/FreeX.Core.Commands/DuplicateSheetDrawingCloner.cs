@@ -147,7 +147,14 @@ internal static class DuplicateSheetDrawingCloner
             OutlineColor = textBox.OutlineColor,
             FillThemeColor = textBox.FillThemeColor,
             OutlineThemeColor = textBox.OutlineThemeColor,
-            IsSourceLoaded = textBox.IsSourceLoaded
+            // A source-loaded text box's on-disk part is preserved by keying source drawing parts
+            // by sheet NAME (XlsxFileAdapter.SavePostProcessing.GetSourceDrawingPathsBySheet); the
+            // duplicate always gets a brand-new sheet name (e.g. "Sheet1 (2)") that is absent from
+            // the source package, so no source part is ever mapped to it and the writer's
+            // IsSourceLoaded-skipping emission drops it — the text box would be silently dropped on
+            // save. Mark the clone as NOT source-loaded so it round-trips through the normal text
+            // box writer like any other authored text box, mirroring ClonePicture below.
+            IsSourceLoaded = false
         };
 
     private static DrawingShapeModel CloneDrawingShape(DrawingShapeModel shape, SheetId copyId) =>
@@ -176,7 +183,14 @@ internal static class DuplicateSheetDrawingCloner
             HasShadowEffect = shape.HasShadowEffect,
             EffectPreset = shape.EffectPreset,
             UsesThemeEffects = shape.UsesThemeEffects,
-            IsSourceLoaded = shape.IsSourceLoaded,
+            // A source-loaded shape's on-disk part is preserved by keying source drawing parts by
+            // sheet NAME (XlsxFileAdapter.SavePostProcessing.GetSourceDrawingPathsBySheet); the
+            // duplicate always gets a brand-new sheet name (e.g. "Sheet1 (2)") that is absent from
+            // the source package, so no source part is ever mapped to it and the writer's
+            // IsSourceLoaded-skipping emission drops it — the shape would be silently dropped on
+            // save. Mark the clone as NOT source-loaded so it round-trips through the normal shape
+            // writer like any other authored shape, mirroring ClonePicture below.
+            IsSourceLoaded = false,
             OutlineWidthPoints = shape.OutlineWidthPoints,
             OutlineHasNoFill = shape.OutlineHasNoFill,
             OutlineDash = shape.OutlineDash,

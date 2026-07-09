@@ -445,23 +445,36 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             }
 
             // Shift the merge if it starts at or right of the insert point
+            GridRange shifted;
             if (merge.Start.Col >= insertBeforeCol)
             {
-                result.Add(new GridRange(
+                shifted = new GridRange(
                     new CellAddress(merge.Start.Sheet, merge.Start.Row, merge.Start.Col + count),
-                    new CellAddress(merge.End.Sheet, merge.End.Row, merge.End.Col + count)));
+                    new CellAddress(merge.End.Sheet, merge.End.Row, merge.End.Col + count));
             }
             else if (merge.End.Col >= insertBeforeCol)
             {
                 // Merge spans the insertion point: expand it
-                result.Add(new GridRange(
+                shifted = new GridRange(
                     merge.Start,
-                    new CellAddress(merge.End.Sheet, merge.End.Row, merge.End.Col + count)));
+                    new CellAddress(merge.End.Sheet, merge.End.Row, merge.End.Col + count));
             }
             else
             {
                 result.Add(merge);
+                continue;
             }
+
+            // R17-meta-2: a merged region whose entire shifted position falls past the last
+            // column runs off the sheet and is dropped, mirroring
+            // RowColumnShiftHelpers.TryInsertColumnsIntoMergedRegion; one whose right edge merely
+            // overshoots is clamped back to the last column instead of left out-of-bounds.
+            if (shifted.Start.Col > CellAddress.MaxCol)
+                continue;
+
+            result.Add(shifted.End.Col > CellAddress.MaxCol
+                ? new GridRange(shifted.Start, new CellAddress(shifted.End.Sheet, shifted.End.Row, CellAddress.MaxCol))
+                : shifted);
         }
 
         return result;
@@ -484,22 +497,36 @@ public sealed class InsertCellsCommand : IWorkbookCommand
                 continue;
             }
 
+            GridRange shifted;
             if (merge.Start.Row >= insertBeforeRow)
             {
-                result.Add(new GridRange(
+                shifted = new GridRange(
                     new CellAddress(merge.Start.Sheet, merge.Start.Row + count, merge.Start.Col),
-                    new CellAddress(merge.End.Sheet, merge.End.Row + count, merge.End.Col)));
+                    new CellAddress(merge.End.Sheet, merge.End.Row + count, merge.End.Col));
             }
             else if (merge.End.Row >= insertBeforeRow)
             {
-                result.Add(new GridRange(
+                shifted = new GridRange(
                     merge.Start,
-                    new CellAddress(merge.End.Sheet, merge.End.Row + count, merge.End.Col)));
+                    new CellAddress(merge.End.Sheet, merge.End.Row + count, merge.End.Col));
             }
             else
             {
                 result.Add(merge);
+                continue;
             }
+
+            // R17-meta-2: a merged region whose entire shifted position falls past the last
+            // row runs off the sheet and is dropped, mirroring
+            // RowColumnShiftHelpers.TryInsertColumnsIntoMergedRegion (row analogue); one whose
+            // bottom edge merely overshoots is clamped back to the last row instead of left
+            // out-of-bounds.
+            if (shifted.Start.Row > CellAddress.MaxRow)
+                continue;
+
+            result.Add(shifted.End.Row > CellAddress.MaxRow
+                ? new GridRange(shifted.Start, new CellAddress(shifted.End.Sheet, CellAddress.MaxRow, shifted.End.Col))
+                : shifted);
         }
 
         return result;

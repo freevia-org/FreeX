@@ -264,6 +264,11 @@ public sealed partial class XlsxFileAdapter
                 ManualMin           = sparkline.ManualMin,
                 ManualMax           = sparkline.ManualMax,
                 DisplayEmptyCellsAs = sparkline.DisplayEmptyCellsAs,
+                DateAxisRange       = sparkline.DateAxisRange is { } dateAxisRange
+                    ? new GridRange(
+                        new CellAddress(sheet.Id, dateAxisRange.Start.Row, dateAxisRange.Start.Col),
+                        new CellAddress(sheet.Id, dateAxisRange.End.Row, dateAxisRange.End.Col))
+                    : null,
             });
         }
         foreach (var formControl in layout.FormControls)

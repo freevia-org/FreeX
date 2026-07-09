@@ -117,10 +117,24 @@ public sealed class AddChartSheetCommand : IWorkbookCommand
         if (ChartTypeSupport.GetDataPointCount(candidate) <= 0)
             return ChartCommandGuards.ChartDataRangeRequiresDataPoint();
 
-        var target = ctx.Workbook.AddSheet(GetUniqueChartSheetName(ctx.Workbook));
+        Sheet target;
+        if (_createdSheetId is { } existingSheetId)
+        {
+            // R17: redo. Workbook.AddSheet always mints a brand-new SheetId, which would give
+            // the re-created chart sheet a DIFFERENT id than the first Apply produced --
+            // breaking any later redo-stack command that captured the original id. Re-create
+            // with the SAME id captured below instead, via the "reinsert an existing sheet
+            // instance" overload (mirrors AddSheetCommand's R16 redo fix).
+            target = new Sheet(existingSheetId, GetUniqueChartSheetName(ctx.Workbook));
+            ctx.Workbook.InsertSheet(ctx.Workbook.Sheets.Count, target);
+        }
+        else
+        {
+            target = ctx.Workbook.AddSheet(GetUniqueChartSheetName(ctx.Workbook));
+            _createdSheetId = target.Id;
+        }
         target.ResetViewStateToA1();
         target.Charts.Add(candidate);
-        _createdSheetId = target.Id;
         return new CommandOutcome(true, AffectedCells: [_dataRange.Start]);
     }
 
@@ -130,7 +144,6 @@ public sealed class AddChartSheetCommand : IWorkbookCommand
             return;
 
         ctx.Workbook.RemoveSheet(_createdSheetId.Value);
-        _createdSheetId = null;
     }
 
     private static string GetUniqueChartSheetName(Workbook workbook)

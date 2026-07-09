@@ -1159,19 +1159,25 @@ public sealed partial class Sheet
     }
 
     /// <summary>
-    /// Get the bounding range of all non-empty cells, or null if the sheet is empty.
+    /// Get the bounding range of all non-empty cells, or null if the sheet is empty. Excel's used
+    /// range (and Ctrl+End) also extends over cells that carry formatting but no value, so the
+    /// result additionally accounts for style-only cells (<see cref="_styleOnly"/>/<see cref="_styleOnlyRuns"/>).
     /// </summary>
     public GridRange? GetUsedRange()
     {
-        if (!_usedRangeCacheDirty)
-            return _usedRangeCache;
-
-        if (_cells.Count == 0 && _spillValues.Count == 0)
+        if (_usedRangeCacheDirty)
         {
-            _usedRangeCache = null;
+            _usedRangeCache = ComputeValueUsedRange();
             _usedRangeCacheDirty = false;
-            return null;
         }
+
+        return MergeStyleOnlyIntoUsedRange(_usedRangeCache);
+    }
+
+    private GridRange? ComputeValueUsedRange()
+    {
+        if (_cells.Count == 0 && _spillValues.Count == 0)
+            return null;
 
         uint minRow = uint.MaxValue, maxRow = 0, minCol = uint.MaxValue, maxCol = 0;
         foreach (var (row, col) in _cells.Keys)
@@ -1193,17 +1199,64 @@ public sealed partial class Sheet
         }
 
         if (maxRow == 0)
-        {
-            _usedRangeCache = null;
-            _usedRangeCacheDirty = false;
             return null;
-        }
 
-        _usedRangeCache = new GridRange(
+        return new GridRange(
             new CellAddress(Id, minRow, minCol),
             new CellAddress(Id, maxRow, maxCol));
-        _usedRangeCacheDirty = false;
-        return _usedRangeCache;
+    }
+
+    /// <summary>
+    /// Widens <paramref name="valueRange"/> (the cached value/spill bounding box) to also cover any
+    /// style-only (formatting-only, empty) cells. Style-only writes don't flow through
+    /// <see cref="TrackUsedRangeCellSet"/>/<see cref="TrackUsedRangeCellCleared"/>, so this is
+    /// recomputed on every call instead of being folded into the incremental cache — cheap since it
+    /// only walks the (typically small) style-only overlay dictionary plus the compressed run list,
+    /// not the full grid.
+    /// </summary>
+    private GridRange? MergeStyleOnlyIntoUsedRange(GridRange? valueRange)
+    {
+        if (_styleOnly.Count == 0 && _styleOnlyRuns is not { Count: > 0 })
+            return valueRange;
+
+        uint minRow, maxRow, minCol, maxCol;
+        if (valueRange is { } range)
+        {
+            minRow = range.Start.Row;
+            maxRow = range.End.Row;
+            minCol = range.Start.Col;
+            maxCol = range.End.Col;
+        }
+        else
+        {
+            minRow = uint.MaxValue;
+            maxRow = 0;
+            minCol = uint.MaxValue;
+            maxCol = 0;
+        }
+
+        foreach (var (row, col) in _styleOnly.Keys)
+        {
+            if (row < minRow) minRow = row;
+            if (row > maxRow) maxRow = row;
+            if (col < minCol) minCol = col;
+            if (col > maxCol) maxCol = col;
+        }
+
+        if (_styleOnlyRuns is { Count: > 0 } runs)
+        {
+            foreach (var run in runs)
+            {
+                if (run.Row < minRow) minRow = run.Row;
+                if (run.Row > maxRow) maxRow = run.Row;
+                if (run.StartCol < minCol) minCol = run.StartCol;
+                if (run.EndCol > maxCol) maxCol = run.EndCol;
+            }
+        }
+
+        return new GridRange(
+            new CellAddress(Id, minRow, minCol),
+            new CellAddress(Id, maxRow, maxCol));
     }
 
     private void TrackUsedRangeCellSet(uint row, uint col)
