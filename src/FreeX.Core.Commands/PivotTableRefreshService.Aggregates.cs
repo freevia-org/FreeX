@@ -142,7 +142,14 @@ public static partial class PivotTableRefreshService
         // null means fall back: parent-row -> grand total in the same column,
         // parent-column -> the full row total in the same row.
         IEnumerable<IReadOnlyList<ScalarValue>>? ParentRowRows = null,
-        IEnumerable<IReadOnlyList<ScalarValue>>? ParentColumnRows = null);
+        IEnumerable<IReadOnlyList<ScalarValue>>? ParentColumnRows = null,
+        // R15-pivot-tables-deep-2: scope for "Running Total In" / "Difference From" base-item
+        // lookups. In a matrix pivot (row + column fields) this must be the CURRENT COLUMN's
+        // rows (across all row groups), not the whole-grid GrandTotalRows, so each column
+        // accumulates/bases its own running total instead of sharing one grid-wide total.
+        // null means fall back to GrandTotalRows (correct for single-axis pivots, where the
+        // two are already equivalent).
+        IEnumerable<IReadOnlyList<ScalarValue>>? RunningTotalScopeRows = null);
 
     // Returns double? — null means "write a blank cell" (FIX 2 propagation).
     private static double? DisplayAggregate(
@@ -153,13 +160,18 @@ public static partial class PivotTableRefreshService
         IReadOnlyList<string> headers)
     {
         var value = Aggregate(rows, dataField, pivotTable, headers);
+        // R15-pivot-tables-deep-2: base the running total / difference-from lookups on the
+        // current column's own rows (RunningTotalScopeRows) when the writer supplied one
+        // (matrix pivots); fall back to GrandTotalRows for single-axis pivots where the two
+        // sets are already equivalent.
+        var runningTotalScopeRows = context.RunningTotalScopeRows ?? context.GrandTotalRows;
         if (dataField.ShowValuesAs == PivotShowValuesAs.RunningTotalIn)
-            return ReferenceEquals(rows, context.GrandTotalRows)
+            return ReferenceEquals(rows, runningTotalScopeRows)
                 ? value
-                : RunningTotal(rows, context.GrandTotalRows, dataField, pivotTable, headers);
+                : RunningTotal(rows, runningTotalScopeRows, dataField, pivotTable, headers);
         if (dataField.ShowValuesAs is PivotShowValuesAs.DifferenceFrom or PivotShowValuesAs.PercentDifferenceFrom)
         {
-            var baseValue = BaseItemAggregate(context.GrandTotalRows, dataField, pivotTable, headers);
+            var baseValue = BaseItemAggregate(runningTotalScopeRows, dataField, pivotTable, headers);
             var numericValue = value ?? 0;
             var difference = numericValue - baseValue;
             return dataField.ShowValuesAs == PivotShowValuesAs.PercentDifferenceFrom
@@ -319,23 +331,48 @@ public static partial class PivotTableRefreshService
         if (dataField.BaseFieldIndex is not { } baseFieldIndex || !IsValidField(baseFieldIndex, headers.Count))
             return AggregateDouble(rows, dataField with { ShowValuesAs = PivotShowValuesAs.None }, pivotTable, headers);
 
-        var currentItem = FirstBaseFieldItem(rows, baseFieldIndex);
+        // R15-pivot-tables-deep-1: identify items by their DISPLAYED group text (so a
+        // date/number-grouped base field accumulates over the displayed buckets) and order
+        // them with the same numeric-aware comparer used for row/column display
+        // (PivotKeyComparer), not plain lexicographic OrdinalIgnoreCase. Otherwise numeric
+        // base fields like 1,2,3,10,11,20 accumulate in the wrong order (e.g. "10" would only
+        // include {"1","10"} instead of {1,2,3,10}).
+        var baseField = FindFieldModel(pivotTable, baseFieldIndex);
+        string ItemKey(IReadOnlyList<ScalarValue> row) =>
+            baseField is null ? KeyText(row[baseFieldIndex]) : GroupKeyText(row[baseFieldIndex], baseField);
+
+        var currentItem = FirstBaseFieldItem(rows, ItemKey);
         if (currentItem is null)
             return 0;
 
-        // FIX 3: Use OrdinalIgnoreCase for item identity comparisons
         var orderedItems = totalRows
-            .Select(row => KeyText(row[baseFieldIndex]))
+            .Select(ItemKey)
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Order(StringComparer.OrdinalIgnoreCase)
+            .Order(Comparer<string>.Create(PivotKeyComparer.CompareKeyText))
             .ToList();
         var currentIndex = FindOrdinalIgnoreCaseIndex(orderedItems, currentItem);
         if (currentIndex < 0)
             return 0;
 
         var included = new HashSet<string>(orderedItems.Take(currentIndex + 1), StringComparer.OrdinalIgnoreCase);
-        var runningRows = totalRows.Where(row => included.Contains(KeyText(row[baseFieldIndex])));
+        var runningRows = totalRows.Where(row => included.Contains(ItemKey(row)));
         return AggregateDouble(runningRows, dataField with { ShowValuesAs = PivotShowValuesAs.None }, pivotTable, headers);
+    }
+
+    // Finds the PivotFieldModel (row/column/page) for a source field index, so its display
+    // grouping (date/number buckets) can be applied via GroupKeyText.
+    private static PivotFieldModel? FindFieldModel(PivotTableModel pivotTable, int sourceFieldIndex)
+    {
+        foreach (var field in pivotTable.RowFields)
+            if (field.SourceFieldIndex == sourceFieldIndex)
+                return field;
+        foreach (var field in pivotTable.ColumnFields)
+            if (field.SourceFieldIndex == sourceFieldIndex)
+                return field;
+        foreach (var field in pivotTable.PageFields)
+            if (field.SourceFieldIndex == sourceFieldIndex)
+                return field;
+        return null;
     }
 
     private static double BaseItemAggregate(
@@ -401,6 +438,16 @@ public static partial class PivotTableRefreshService
     {
         foreach (var row in rows)
             return KeyText(row[baseFieldIndex]);
+
+        return null;
+    }
+
+    private static string? FirstBaseFieldItem(
+        IEnumerable<IReadOnlyList<ScalarValue>> rows,
+        Func<IReadOnlyList<ScalarValue>, string> itemKey)
+    {
+        foreach (var row in rows)
+            return itemKey(row);
 
         return null;
     }

@@ -40,6 +40,16 @@ internal static class XlsxChartAxisReader
             return;
         }
 
+        // For bar-direction charts the value axis is HORIZONTAL (rendered at the bottom / X) and the
+        // category axis is VERTICAL (rendered at the left / Y) — the reverse of every other chart
+        // family. That means the axis scaling AND orientation each need to be routed to the field the
+        // renderer/sanitizer actually reads for that physical position (see the comment further below),
+        // not the field that would be "natural" for a category vs. value axis.
+        var valueAxisOnX = chart.Type is ChartType.Bar
+            or ChartType.StackedBar
+            or ChartType.PercentStackedBar
+            or ChartType.ThreeDBar;
+
         var categoryAxis = plotArea.Element(ChartNs + "dateAx") ?? plotArea.Element(ChartNs + "catAx");
         chart.XAxisIsDateAxis = categoryAxis?.Name == ChartNs + "dateAx";
         chart.XAxisTitle = ReadAxisTitle(categoryAxis);
@@ -47,7 +57,13 @@ internal static class XlsxChartAxisReader
         chart.HideXAxis = ReadBool(categoryAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
         chart.XAxisPosition = FromXlsxAxisPosition(categoryAxis?.Element(ChartNs + "axPos")?.Attribute("val")?.Value, ChartAxisPosition.Bottom);
         ApplyAxisTitleFormatting(categoryAxis, chart, isXAxis: true);
-        ApplyCategoryAxisProperties(categoryAxis, chart);
+        // Route the category axis's own reverse-order flag to whichever field the renderer reads for
+        // the category axis's PHYSICAL position: YAxisReverseOrder for the left axis (bar-family),
+        // XAxisReverseOrder for the bottom axis (everything else). Must happen before
+        // ApplyValueAxisProperties below, which — for bar-family charts — also writes
+        // XAxisReverseOrder (from the value axis, now on the bottom); routing the category flag to Y
+        // instead of X means that write no longer clobbers this one.
+        ApplyCategoryAxisProperties(categoryAxis, chart, categoryAxisOnY: valueAxisOnX);
         ApplyAxisLabelFormatting(categoryAxis, chart, useXAxis: true);
         var valueAxis = plotArea.Element(ChartNs + "valAx");
         chart.YAxisTitle = ReadAxisTitle(valueAxis);
@@ -61,10 +77,6 @@ internal static class XlsxChartAxisReader
         // (SupportsXAxisBounds(Bar)==true) read it from. Routing it to Y* would be wiped by the
         // sanitizer (SupportsYAxisBounds(Bar)==false), silently dropping e.g. a fixed 0..1 progress
         // axis. Column/line/etc. keep the value axis on Y as before.
-        var valueAxisOnX = chart.Type is ChartType.Bar
-            or ChartType.StackedBar
-            or ChartType.PercentStackedBar
-            or ChartType.ThreeDBar;
         ApplyValueAxisProperties(valueAxis, chart, useXAxis: valueAxisOnX);
         ApplyAxisLabelFormatting(valueAxis, chart, useXAxis: false);
     }
@@ -365,7 +377,7 @@ internal static class XlsxChartAxisReader
         chart.YAxisCustomDisplayUnit = customDisplayUnit;
     }
 
-    private static void ApplyCategoryAxisProperties(XElement? axisElement, ChartModel chart)
+    private static void ApplyCategoryAxisProperties(XElement? axisElement, ChartModel chart, bool categoryAxisOnY)
     {
         if (axisElement is null)
             return;
@@ -374,7 +386,11 @@ internal static class XlsxChartAxisReader
             chart,
             ReadAxisGridline(axisElement.Element(ChartNs + "majorGridlines")),
             ReadAxisGridline(axisElement.Element(ChartNs + "minorGridlines")));
-        chart.XAxisReverseOrder = IsReverseOrientation(axisElement.Element(ChartNs + "scaling"));
+        var categoryReverseOrder = IsReverseOrientation(axisElement.Element(ChartNs + "scaling"));
+        if (categoryAxisOnY)
+            chart.YAxisReverseOrder = categoryReverseOrder;
+        else
+            chart.XAxisReverseOrder = categoryReverseOrder;
         chart.XAxisMajorTickStyle = FromXlsxTickMark(axisElement.Element(ChartNs + "majorTickMark")?.Attribute("val")?.Value, ChartAxisTickStyle.Outside);
         chart.XAxisMinorTickStyle = FromXlsxTickMark(axisElement.Element(ChartNs + "minorTickMark")?.Attribute("val")?.Value, ChartAxisTickStyle.None);
         var tickLabelPositionValue = axisElement.Element(ChartNs + "tickLblPos")?.Attribute("val")?.Value;
@@ -403,6 +419,11 @@ internal static class XlsxChartAxisReader
             chart.XAxisBaseTimeUnit = FromXlsxDateAxisUnit(axisElement.Element(ChartNs + "baseTimeUnit")?.Attribute("val")?.Value);
             chart.XAxisMajorTimeUnit = FromXlsxDateAxisUnit(axisElement.Element(ChartNs + "majorTimeUnit")?.Attribute("val")?.Value);
             chart.XAxisMinorTimeUnit = FromXlsxDateAxisUnit(axisElement.Element(ChartNs + "minorTimeUnit")?.Attribute("val")?.Value);
+            // The writer always emits a numeric <c:majorUnit>/<c:minorUnit> alongside the time-unit
+            // elements on a date axis (ToAxisUnitXml("majorUnit", chart.XAxisMajorUnit, ...)); read them
+            // back too, otherwise a round-tripped date axis loses its explicit major/minor unit count.
+            chart.XAxisMajorUnit = ReadDouble(axisElement.Element(ChartNs + "majorUnit")?.Attribute("val")?.Value);
+            chart.XAxisMinorUnit = ReadDouble(axisElement.Element(ChartNs + "minorUnit")?.Attribute("val")?.Value);
         }
         ApplyXAxisLineProperties(chart, ReadAxisLine(axisElement.Element(ChartNs + "spPr")));
 

@@ -1023,7 +1023,7 @@ public partial class MainWindow
                             : MessageBoxButton.YesNoCancel;
                         var result = ShowOwnedMessage(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
                             buttons, icon);
-                        if (result == MessageBoxResult.Cancel && dvRule.AlertStyle == DvAlertStyle.Warning)
+                        if (ShouldRestoreOnCancel(dvRule.AlertStyle, result))
                         {
                             RefreshValidationDropdown();
                             RestoreFormulaBarToCommittedValue(addr);
@@ -1044,10 +1044,21 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Decides whether a Cancel response to an AskToContinue data-validation alert should discard
+    /// the invalid entry and restore the cell's previously committed value. Excel's Information
+    /// style offers only OK/Cancel (Cancel discards), and its Warning style offers Yes/No/Cancel
+    /// (Cancel also discards, while No instead leaves the invalid entry for the user to fix). Stop
+    /// style never reaches AskToContinue (it's always Block), so it never restores here.
+    /// </summary>
+    internal static bool ShouldRestoreOnCancel(DvAlertStyle alertStyle, MessageBoxResult result) =>
+        result == MessageBoxResult.Cancel && alertStyle != DvAlertStyle.Stop;
+
+    /// <summary>
     /// Discards the in-progress edit and restores the formula bar to the cell's currently
-    /// committed value/formula, mirroring what Escape does while editing. Used when a Warning-style
-    /// data validation alert is dismissed with Cancel: Excel discards the invalid entry entirely
-    /// rather than leaving it for the user to fix (that's what No does instead).
+    /// committed value/formula, mirroring what Escape does while editing. Used when an
+    /// AskToContinue-style data validation alert (Information or Warning) is dismissed with
+    /// Cancel: Excel discards the invalid entry entirely rather than leaving it for the user to
+    /// fix (that's what No does instead).
     /// </summary>
     private void RestoreFormulaBarToCommittedValue(CellAddress addr)
     {

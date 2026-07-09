@@ -29,9 +29,10 @@ public static class CellColorPalettePlanner
     public static CellColorPalettePlan BuildMenuPlan(
         IEnumerable<CellColor>? recentColors = null,
         int recentColorCapacity = DefaultRecentColorCapacity,
-        bool includeCustomSpectrum = true)
+        bool includeCustomSpectrum = true,
+        WorkbookTheme? theme = null)
     {
-        var themePalette = BuildThemePalette();
+        var themePalette = BuildThemePalette(theme);
         var standardSwatches = BuildStandardSwatches();
         var recentSwatches = BuildRecentSwatches(recentColors, recentColorCapacity);
         var sections = new List<CellColorPaletteSection>
@@ -52,26 +53,54 @@ public static class CellColorPalettePlanner
         return new CellColorPalettePlan(sections);
     }
 
-    public static IReadOnlyList<CellColorSwatch> BuildDefaultSwatches() =>
-        BuildThemePalette().SelectMany(column => column.Shades)
+    public static IReadOnlyList<CellColorSwatch> BuildDefaultSwatches(WorkbookTheme? theme = null) =>
+        BuildThemePalette(theme).SelectMany(column => column.Shades)
             .Concat(BuildStandardSwatches())
             .DistinctBy(swatch => swatch.Hex)
             .ToList();
 
-    public static IReadOnlyList<CellColorThemeColumn> BuildThemePalette() =>
-        new[]
+    /// <summary>
+    /// Builds the Excel-style 10-column theme color gallery: the two Text/Background pairs (fixed,
+    /// independent of the workbook theme) plus Accent 1-6, whose base swatch and five tint/shade rows
+    /// are derived from <paramref name="theme"/> (falling back to <see cref="WorkbookTheme.Office"/> —
+    /// the real default Aptos theme — when the caller has no active workbook theme to pass). Previously
+    /// the Accent columns hardcoded the legacy Office 2013-2021 palette (Accent 1 = #4472C4) even though
+    /// <see cref="WorkbookTheme.Office"/> has long since moved to the Aptos palette (Accent 1 = #156082),
+    /// so the color picker's "theme colors" never matched the workbook's actual theme.
+    /// </summary>
+    public static IReadOnlyList<CellColorThemeColumn> BuildThemePalette(WorkbookTheme? theme = null)
+    {
+        var activeTheme = theme ?? WorkbookTheme.Office;
+        return new[]
         {
             Column("Text/Background Dark 1", "#000000", "#7F7F7F", "#595959", "#3F3F3F", "#262626", "#0D0D0D"),
             Column("Text/Background Light 1", "#FFFFFF", "#F2F2F2", "#D9D9D9", "#BFBFBF", "#A6A6A6", "#808080"),
             Column("Text/Background Dark 2", "#44546A", "#D6DCE4", "#ADB9CA", "#8497B0", "#323E4F", "#222A35"),
             Column("Text/Background Light 2", "#E7E6E6", "#D0CECE", "#AEAAAA", "#757171", "#3A3838", "#171616"),
-            Column("Accent 1", "#4472C4", "#D9E2F3", "#B4C6E7", "#8EAADB", "#2F5597", "#1F3864"),
-            Column("Accent 2", "#ED7D31", "#FCE4D6", "#F8CBAD", "#F4B183", "#C55A11", "#833C0C"),
-            Column("Accent 3", "#A5A5A5", "#EDEDED", "#DBDBDB", "#C9C9C9", "#7B7B7B", "#525252"),
-            Column("Accent 4", "#FFC000", "#FFF2CC", "#FFE699", "#FFD966", "#BF9000", "#7F6000"),
-            Column("Accent 5", "#5B9BD5", "#DDEBF7", "#BDD7EE", "#9DC3E6", "#2E75B6", "#1F4E79"),
-            Column("Accent 6", "#70AD47", "#E2F0D9", "#C6E0B4", "#A9D18E", "#548235", "#375623")
+            ThemeAccentColumn("Accent 1", activeTheme, WorkbookThemeColorSlot.Accent1),
+            ThemeAccentColumn("Accent 2", activeTheme, WorkbookThemeColorSlot.Accent2),
+            ThemeAccentColumn("Accent 3", activeTheme, WorkbookThemeColorSlot.Accent3),
+            ThemeAccentColumn("Accent 4", activeTheme, WorkbookThemeColorSlot.Accent4),
+            ThemeAccentColumn("Accent 5", activeTheme, WorkbookThemeColorSlot.Accent5),
+            ThemeAccentColumn("Accent 6", activeTheme, WorkbookThemeColorSlot.Accent6)
         };
+    }
+
+    /// <summary>
+    /// Standard Excel theme-column shade tints for an Accent slot: the base color, then Lighter 80%/60%/
+    /// 40%, then Darker 25%/50% (the same tint fractions the legacy hardcoded Accent columns used).
+    /// </summary>
+    private static readonly double[] ThemeAccentShadeTints = [0d, 0.8d, 0.6d, 0.4d, -0.25d, -0.5d];
+
+    private static CellColorThemeColumn ThemeAccentColumn(string name, WorkbookTheme theme, WorkbookThemeColorSlot slot) =>
+        new(
+            name,
+            ThemeAccentShadeTints
+                .Select(tint => ThemeSwatch(theme.ResolveColor(slot, tint)))
+                .ToList());
+
+    private static CellColorSwatch ThemeSwatch(CellColor color) =>
+        new(FormatHexColor(color), color);
 
     public static IReadOnlyList<CellColorSwatch> BuildStandardSwatches() =>
         new[]

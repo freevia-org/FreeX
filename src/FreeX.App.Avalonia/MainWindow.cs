@@ -4181,7 +4181,7 @@ public sealed partial class MainWindow : Window
         };
         yield return clearColorItem;
 
-        foreach (var swatch in CellColorPalettePlanner.BuildDefaultSwatches())
+        foreach (var swatch in CellColorPalettePlanner.BuildDefaultSwatches(_session.Workbook.Theme))
         {
             var menuItem = new MenuItem
             {
@@ -4350,7 +4350,14 @@ public sealed partial class MainWindow : Window
             ? BuildPageBreakPreviewOverlay(viewport, showHeadings, zoomFactor)
             : null;
 
-        if (overlay.Children.Count == 0 && pageBreakOverlay is null)
+        // Excel draws the manual (dashed blue) page-break lines in EVERY view mode, including
+        // Normal, once the sheet has at least one manual break - not just in Page Layout / Page
+        // Break Preview (see GridView.Overlays.cs RenderManualPageBreaks for the WPF equivalent,
+        // which is called unconditionally regardless of WorksheetViewMode). Build it independently
+        // of pageBreakOverlay above so Normal view gets it too.
+        var manualPageBreakOverlay = BuildManualPageBreakOverlay(viewport, showHeadings, zoomFactor);
+
+        if (overlay.Children.Count == 0 && pageBreakOverlay is null && manualPageBreakOverlay is null)
             return grid;
 
         var composite = new AvaloniaGrid
@@ -4360,10 +4367,116 @@ public sealed partial class MainWindow : Window
         };
         if (pageBreakOverlay is not null)
             composite.Children.Add(pageBreakOverlay);
+        if (manualPageBreakOverlay is not null)
+            composite.Children.Add(manualPageBreakOverlay);
         if (overlay.Children.Count > 0)
             composite.Children.Add(overlay);
 
         return composite;
+    }
+
+    private static readonly IBrush ManualPageBreakLineBrush = Brush(0, 103, 192);
+
+    /// <summary>
+    /// Builds the dashed-blue manual (user-inserted) row/column page-break lines shown in every grid
+    /// view mode once the active sheet has at least one manual break — matching Excel and the WPF
+    /// shell's <c>GridView.Overlays.cs RenderManualPageBreaks</c>, which draws these unconditionally
+    /// rather than only in Page Layout / Page Break Preview. Returns null when the sheet has no manual
+    /// breaks, or none of them fall within the current viewport.
+    /// </summary>
+    private Canvas? BuildManualPageBreakOverlay(ViewportModel viewport, bool showHeadings, double zoomFactor)
+    {
+        var sheet = _session.ActiveSheet;
+        var rowBreaks = sheet.RowPageBreaks;
+        var colBreaks = sheet.ColumnPageBreaks;
+        if (rowBreaks is not { Count: > 0 } && colBreaks is not { Count: > 0 })
+            return null;
+
+        var displayViewport = PageBreakPreviewInstructionBuilder.ProjectToDisplaySpace(
+            viewport,
+            zoomFactor,
+            MinimumDisplayedColumnWidth,
+            MinimumDisplayedRowHeight);
+
+        var rowHeaderWidth = showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0;
+        var columnHeaderHeight = showHeadings ? HeaderRowHeight * zoomFactor : 0;
+        var actualWidth = CalculateDisplayedGridWidth(viewport, showHeadings, zoomFactor);
+        var actualHeight = CalculateDisplayedGridHeight(viewport, showHeadings, zoomFactor);
+
+        var lines = BuildManualPageBreakLineInstructions(
+            displayViewport, rowBreaks, colBreaks, rowHeaderWidth, columnHeaderHeight, actualWidth, actualHeight);
+        if (lines.Count == 0)
+            return null;
+
+        var overlay = new Canvas
+        {
+            Width = actualWidth,
+            Height = actualHeight,
+            ClipToBounds = true,
+            IsHitTestVisible = false,
+        };
+        AutomationProperties.SetAutomationId(overlay, "ManualPageBreakOverlay");
+
+        foreach (var line in lines)
+        {
+            overlay.Children.Add(new global::Avalonia.Controls.Shapes.Line
+            {
+                StartPoint = new Point(line.X1, line.Y1),
+                EndPoint = new Point(line.X2, line.Y2),
+                Stroke = ManualPageBreakLineBrush,
+                StrokeThickness = 2,
+                StrokeDashArray = [6, 4],
+            });
+        }
+
+        return overlay;
+    }
+
+    /// <summary>
+    /// Pure geometry for <see cref="BuildManualPageBreakOverlay"/>: a horizontal line above each manual
+    /// row break, and a vertical line left of each manual column break, spanning the full grid — the
+    /// same geometry the WPF shell's RenderManualPageBreaks computes directly from RowMetrics/ColMetrics
+    /// (no dependency on the print-range/pagination layout PageBreakPreviewLayoutPlanner uses for masks/
+    /// automatic breaks/watermarks). Internal + static so it is independently unit-testable.
+    /// </summary>
+    internal static IReadOnlyList<PageBreakLineInstruction> BuildManualPageBreakLineInstructions(
+        ViewportModel displayViewport,
+        IReadOnlyCollection<uint>? rowPageBreaks,
+        IReadOnlyCollection<uint>? columnPageBreaks,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        double gridWidth,
+        double gridHeight)
+    {
+        var lines = new List<PageBreakLineInstruction>();
+
+        if (rowPageBreaks is { Count: > 0 })
+        {
+            var rowBreakLookup = rowPageBreaks as IReadOnlySet<uint> ?? new HashSet<uint>(rowPageBreaks);
+            foreach (var metric in displayViewport.RowMetrics)
+            {
+                if (!rowBreakLookup.Contains(metric.Row))
+                    continue;
+
+                var y = metric.TopOffset + columnHeaderHeight;
+                lines.Add(new PageBreakLineInstruction(rowHeaderWidth, y, gridWidth, y));
+            }
+        }
+
+        if (columnPageBreaks is { Count: > 0 })
+        {
+            var columnBreakLookup = columnPageBreaks as IReadOnlySet<uint> ?? new HashSet<uint>(columnPageBreaks);
+            foreach (var metric in displayViewport.ColMetrics)
+            {
+                if (!columnBreakLookup.Contains(metric.Col))
+                    continue;
+
+                var x = metric.LeftOffset + rowHeaderWidth;
+                lines.Add(new PageBreakLineInstruction(x, columnHeaderHeight, x, gridHeight));
+            }
+        }
+
+        return lines;
     }
 
     /// <summary>
@@ -8650,7 +8763,7 @@ public sealed partial class MainWindow : Window
             items.Add(clearFillItem);
         }
 
-        items.AddRange(CellColorPalettePlanner.BuildDefaultSwatches().Select(swatch => CreateColorSwatchMenuItem(swatch, target)));
+        items.AddRange(CellColorPalettePlanner.BuildDefaultSwatches(_session.Workbook.Theme).Select(swatch => CreateColorSwatchMenuItem(swatch, target)));
         return new MenuFlyout { ItemsSource = items };
     }
 
@@ -8675,7 +8788,7 @@ public sealed partial class MainWindow : Window
             menu.Items.Add(clearFillItem);
         }
 
-        foreach (var swatch in CellColorPalettePlanner.BuildDefaultSwatches())
+        foreach (var swatch in CellColorPalettePlanner.BuildDefaultSwatches(_session.Workbook.Theme))
             menu.Items.Add(CreateNativeColorSwatchMenuItem(swatch, target));
 
         return menu;
@@ -8695,7 +8808,7 @@ public sealed partial class MainWindow : Window
         clearColorItem.Click += (_, _) => ApplyActiveSheetTabColor(null);
         menu.Items.Add(clearColorItem);
 
-        foreach (var swatch in CellColorPalettePlanner.BuildDefaultSwatches())
+        foreach (var swatch in CellColorPalettePlanner.BuildDefaultSwatches(_session.Workbook.Theme))
             menu.Items.Add(CreateNativeSheetTabColorSwatchMenuItem(swatch));
 
         return menu;
@@ -22966,7 +23079,7 @@ public sealed partial class MainWindow : Window
                     // (headless/no-Skia). The routing decision lives in AvaloniaPdfDocumentExporter so it
                     // is exercised by tests.
                     using var pdfBuffer = new MemoryStream();
-                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, effectiveExportPlan, pdfBuffer);
+                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, effectiveExportPlan, pdfBuffer, options: null, workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
                     await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
 
                     RefreshShell(UiText.Format("MainLoc_StatusFileName", outcome.Result.StatusText, Path.GetFileName(path)));
@@ -23281,7 +23394,7 @@ public sealed partial class MainWindow : Window
                     }
 
                     using var pdfBuffer = new MemoryStream();
-                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, effectiveExportPlan, pdfBuffer);
+                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, effectiveExportPlan, pdfBuffer, options: null, workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
                     await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
 
                     RefreshShell(UiText.Format("MainLoc_StatusFileName", outcome.Result.StatusText, Path.GetFileName(path)));

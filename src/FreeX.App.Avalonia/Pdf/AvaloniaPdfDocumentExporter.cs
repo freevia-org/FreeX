@@ -26,7 +26,8 @@ public static class AvaloniaPdfDocumentExporter
         Workbook workbook,
         PortablePdfExportPlan exportPlan,
         Stream stream,
-        PortablePdfDocumentOptions? options = null)
+        PortablePdfDocumentOptions? options = null,
+        string workbookDirectory = "")
     {
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(exportPlan);
@@ -43,7 +44,7 @@ public static class AvaloniaPdfDocumentExporter
         // options bypasses page-setup awareness and uses the fixed geometry supplied by the caller.
         try
         {
-            var result = SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream, options);
+            var result = SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream, options, workbookDirectory);
             return new AvaloniaPdfDocumentExportOutcome(result, AvaloniaPdfExportBackend.Skia);
         }
         catch (Exception ex) when (IsSkiaUnavailable(ex))

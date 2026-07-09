@@ -14,17 +14,20 @@ public sealed class PrintPreviewPaginationContext
     private readonly Sheet _sheet;
     private readonly PagePaginationResult _plan;
     private readonly ITextMeasurer _textMeasurer;
+    private readonly string _workbookDirectory;
 
     private PrintPreviewPaginationContext(
         Workbook workbook,
         Sheet sheet,
         PagePaginationResult plan,
-        ITextMeasurer textMeasurer)
+        ITextMeasurer textMeasurer,
+        string workbookDirectory)
     {
         _workbook = workbook;
         _sheet = sheet;
         _plan = plan;
         _textMeasurer = textMeasurer;
+        _workbookDirectory = workbookDirectory;
     }
 
     public int PageCount => _plan.PageCount;
@@ -37,7 +40,8 @@ public sealed class PrintPreviewPaginationContext
         Workbook workbook,
         Sheet sheet,
         ITextMeasurer textMeasurer,
-        out PrintPreviewPaginationContext context)
+        out PrintPreviewPaginationContext context,
+        string workbookDirectory = "")
     {
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(sheet);
@@ -77,10 +81,10 @@ public sealed class PrintPreviewPaginationContext
             return false;
         }
 
-        context = new PrintPreviewPaginationContext(workbook, sheet, plan, textMeasurer);
+        context = new PrintPreviewPaginationContext(workbook, sheet, plan, textMeasurer, workbookDirectory);
         return true;
     }
 
     public PageContentLayout? BuildPage(int pageIndex) =>
-        PageContentRenderModelBuilder.Build(_workbook, _sheet, _plan, pageIndex, _textMeasurer);
+        PageContentRenderModelBuilder.Build(_workbook, _sheet, _plan, pageIndex, _textMeasurer, workbookDirectory: _workbookDirectory);
 }

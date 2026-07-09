@@ -46,13 +46,14 @@ public static class WorkbookPdfContentBuilder
     /// </summary>
     public static PdfContentDocument BuildWithPageSetup(
         Workbook workbook,
-        PortablePdfExportPlan exportPlan)
+        PortablePdfExportPlan exportPlan,
+        string workbookDirectory = "")
     {
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(exportPlan);
 
         var pages = exportPlan.PageRequests
-            .Select(request => BuildPageWithPageSetup(workbook, exportPlan, request))
+            .Select(request => BuildPageWithPageSetup(workbook, exportPlan, request, workbookDirectory))
             .ToArray();
         return new PdfContentDocument(pages);
     }
@@ -60,10 +61,16 @@ public static class WorkbookPdfContentBuilder
     /// <summary>
     /// Builds one PDF page honoring the sheet's page setup.
     /// </summary>
+    /// <param name="workbookDirectory">
+    /// Directory that contains the workbook file, with a trailing path separator (e.g.
+    /// <c>C:\Docs\</c>). Substituted for <c>&amp;Z</c> / <c>&amp;[Path]</c>; pass an empty string
+    /// when the workbook is unsaved.
+    /// </param>
     public static PdfContentPage BuildPageWithPageSetup(
         Workbook workbook,
         PortablePdfExportPlan exportPlan,
-        PortablePdfExportPageRequest request)
+        PortablePdfExportPageRequest request,
+        string workbookDirectory = "")
     {
         var contentPlan = PortablePdfPageContentPlanner.CreatePlan(workbook, request);
         if (!contentPlan.IsReady)
@@ -229,12 +236,12 @@ public static class WorkbookPdfContentBuilder
         // Header text: rendered just below the header margin from the top of the page.
         var headerY = pageH - headerEdgePt - 8;   // baseline approx 8pt below header edge
         RenderHeaderFooterBand(ops, header, pageW, mL, mR, headerY, 8,
-            workbook.Name, sheet.Name, pageNumber, totalPages, HeaderTextColor);
+            workbook.Name, workbookDirectory, sheet.Name, pageNumber, totalPages, HeaderTextColor);
 
         // Footer text: rendered just above the footer edge from the bottom.
         var footerY = footerEdgePt + 2;            // baseline approx 2pt above footer edge
         RenderHeaderFooterBand(ops, footer, pageW, mL, mR, footerY, 8,
-            workbook.Name, sheet.Name, pageNumber, totalPages, FooterTextColor);
+            workbook.Name, workbookDirectory, sheet.Name, pageNumber, totalPages, FooterTextColor);
 
         return new PdfContentPage(pageW, pageH, ops);
     }
@@ -489,6 +496,7 @@ public static class WorkbookPdfContentBuilder
         double baselineY,
         double fontSize,
         string workbookName,
+        string workbookDirectory,
         string sheetName,
         int pageNumber,
         int totalPages,
@@ -498,13 +506,13 @@ public static class WorkbookPdfContentBuilder
         var sectionWidth = Math.Max(1, (pageW - mL - mR) / 3.0);
 
         // Left section.
-        var leftText = ExpandHF(band.Left, pageNumber, totalPages, workbookName, sheetName, now);
+        var leftText = ExpandHF(band.Left, pageNumber, totalPages, workbookName, workbookDirectory, sheetName, now);
         if (!string.IsNullOrEmpty(leftText))
             ops.Add(new PdfText(mL, baselineY, fontSize, PdfFontFace.Regular, color,
                 PortablePdfWinAnsiTextCapability.Truncate(leftText, 128)));
 
         // Center section.
-        var centerText = ExpandHF(band.Center, pageNumber, totalPages, workbookName, sheetName, now);
+        var centerText = ExpandHF(band.Center, pageNumber, totalPages, workbookName, workbookDirectory, sheetName, now);
         if (!string.IsNullOrEmpty(centerText))
         {
             var centerX = mL + sectionWidth;  // approximate — no text measurement available here
@@ -513,7 +521,7 @@ public static class WorkbookPdfContentBuilder
         }
 
         // Right section.
-        var rightText = ExpandHF(band.Right, pageNumber, totalPages, workbookName, sheetName, now);
+        var rightText = ExpandHF(band.Right, pageNumber, totalPages, workbookName, workbookDirectory, sheetName, now);
         if (!string.IsNullOrEmpty(rightText))
         {
             var rightX = pageW - mR - sectionWidth;
@@ -524,13 +532,17 @@ public static class WorkbookPdfContentBuilder
 
     /// <summary>
     /// Simple header/footer token expansion without formatting codes (bold/italic/etc. are stripped;
-    /// value placeholders &P/&N/&D/&T/&F/&A are substituted).
+    /// value placeholders &amp;P/&amp;N/&amp;D/&amp;T/&amp;F/&amp;Z/&amp;A are substituted).
+    /// <paramref name="workbookDirectory"/> is the folder that contains the workbook file (with a
+    /// trailing separator), substituted for &amp;Z / &amp;[Path]; pass an empty string when the
+    /// workbook is unsaved, matching the WPF <c>PagePrintTextPlanner</c> path.
     /// </summary>
-    private static string ExpandHF(
+    internal static string ExpandHF(
         string raw,
         int pageNumber,
         int totalPages,
         string workbookName,
+        string workbookDirectory,
         string sheetName,
         DateTime now)
     {
@@ -565,6 +577,7 @@ public static class WorkbookPdfContentBuilder
                     case "DATE":   sb.Append(now.ToString("d", CultureInfo.CurrentCulture)); break;
                     case "TIME":   sb.Append(now.ToString("t", CultureInfo.CurrentCulture)); break;
                     case "FILE":   sb.Append(workbookName); break;
+                    case "PATH":   sb.Append(workbookDirectory); break;
                     case "TAB":    sb.Append(sheetName); break;
                 }
                 continue;
@@ -577,7 +590,7 @@ public static class WorkbookPdfContentBuilder
             switch (code)
             {
                 case 'B': case 'I': case 'U': case 'E': case 'S': case 'G':
-                case '+': case '-':
+                case '+': case '-': case 'X': case 'Y':
                     i += 2;
                     continue;
                 case '"':
@@ -603,6 +616,9 @@ public static class WorkbookPdfContentBuilder
                     i += 2; continue;
                 case 'F':
                     sb.Append(workbookName);
+                    i += 2; continue;
+                case 'Z':
+                    sb.Append(workbookDirectory);
                     i += 2; continue;
                 case 'A':
                     sb.Append(sheetName);

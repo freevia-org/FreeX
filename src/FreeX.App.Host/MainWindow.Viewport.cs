@@ -382,6 +382,11 @@ public partial class MainWindow
                     .ToHashSet<(uint Row, uint Col)>();
         SheetGrid.HiddenRows = sheet?.HiddenRows;
         SheetGrid.HiddenColumns = sheet?.HiddenCols;
+        // Feed the page-break preview overlay the sheet's real "effectively hidden" predicates
+        // (AutoFilter-hidden rows + collapsed outline groups), not just the manual hidden sets
+        // above, so its pagination matches the real print output (R15-print-preview-interaction-2).
+        SheetGrid.SheetIsRowHiddenPredicate = sheet is null ? null : sheet.IsRowEffectivelyHidden;
+        SheetGrid.SheetIsColHiddenPredicate = sheet is null ? null : sheet.IsColEffectivelyHidden;
         SheetGrid.AutoFilterRange = sheet is not null &&
                                     AutoFilterDropdownMenuPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange)
             ? autoFilterRange

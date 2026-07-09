@@ -338,13 +338,11 @@ public partial class MainWindow
     /// even resolve to a formula cell; this mirrors that behavior.
     /// </summary>
     /// <remarks>
-    /// TODO(O24 remaining scope): call this from every row/column insert/delete call site in
-    /// MainWindow.CellsCommands.cs (InsertRowsCommand/DeleteRowsCommand/InsertColumnsCommand/
-    /// DeleteColumnsCommand executions), and add the matching call in the Avalonia shell
-    /// (src/FreeX.App.Avalonia/MainWindow.FormulaAuditing.cs + its own CellsCommands equivalent),
-    /// which reproduces the identical stale-arrow bug. Both files were out of scope for this fix
-    /// (owned by another reviewer in this pass), so the invalidation is landed here, ready to wire in,
-    /// but not yet invoked from those structural-edit paths.
+    /// Invoked from every row/column insert/delete call site in MainWindow.CellsCommands.cs
+    /// (InsertRowsCommand/DeleteRowsCommand/InsertColumnsCommand/DeleteColumnsCommand executions).
+    /// The Avalonia shell has the matching invalidation in
+    /// src/FreeX.App.Avalonia/MainWindow.RibbonMenuWires.cs (InsertSheetRows/InsertSheetColumns/
+    /// DeleteSheetRows/DeleteSheetColumns), which reproduces the identical stale-arrow bug there.
     /// </remarks>
     private void ClearFormulaTraceArrowsAfterStructuralEdit()
     {

@@ -50,7 +50,7 @@ public static partial class DataValidationService
 
         return dv.Type switch
         {
-            DvType.List => ValidateList(dv, value, sheet, workbook),
+            DvType.List => ValidateList(dv, value, sheet, address, workbook),
             DvType.WholeNumber => ValidateNumeric(dv, value, sheet, address, workbook, requireInteger: true),
             DvType.Decimal => ValidateNumeric(dv, value, sheet, address, workbook),
             DvType.TextLength => ValidateTextLength(dv, value, sheet, address, workbook),
@@ -242,12 +242,22 @@ public static partial class DataValidationService
             : new InputPrompt(title, message);
     }
 
-    public static IReadOnlyList<string> GetListItems(DataValidation dv, Sheet sheet, Workbook? workbook = null)
+    public static IReadOnlyList<string> GetListItems(DataValidation dv, Sheet sheet, Workbook? workbook = null) =>
+        GetListItems(dv, sheet, dv.AppliesTo.Start, workbook);
+
+    /// <summary>
+    /// Returns the resolvable list items for <paramref name="dv"/> as they would appear for
+    /// <paramref name="address"/>. A list source formula is authored as if the rule's anchor
+    /// cell (<c>dv.AppliesTo.Start</c>) were active, so relative references (e.g. an
+    /// <c>=INDIRECT($A2)</c> cascading-dropdown source) are shifted from that anchor to
+    /// <paramref name="address"/> before evaluation, matching <see cref="ValidateList"/>.
+    /// </summary>
+    public static IReadOnlyList<string> GetListItems(DataValidation dv, Sheet sheet, CellAddress address, Workbook? workbook = null)
     {
         if (dv.Type != DvType.List || !dv.ShowDropdown || string.IsNullOrWhiteSpace(dv.Formula1))
             return Array.Empty<string>();
 
-        return ResolveListValues(dv.Formula1, sheet, workbook);
+        return ResolveListValues(dv.Formula1, sheet, dv.AppliesTo.Start, address, workbook);
     }
 
     public static string FormatListSourceRange(GridRange range, string? sheetName = null)
@@ -341,10 +351,15 @@ public static partial class DataValidationService
         CellAddress? address,
         Workbook? workbook)
     {
-        if (value is not TextValue tv)
+        // Excel's Text Length rule validates the length of whatever was entered, regardless of
+        // its type — LEN() applied to a number/date/bool renders its display text first. Only
+        // an outright non-scalar/unsupported value (handled by the null fallthrough below) is
+        // rejected as "must be text".
+        var rendered = RenderValueForLengthCheck(value);
+        if (rendered is null)
             return dv.ErrorMessage ?? "Value must be text.";
 
-        double length = tv.Value.Length;
+        double length = rendered.Length;
 
         if (!DataValidationBoundsParser.TryParseNumberBound(dv.Formula1, sheet, address, workbook, out var v1))
             return null;
@@ -371,6 +386,20 @@ public static partial class DataValidationService
 
         return passes ? null : dv.ErrorMessage ?? $"Text length must satisfy the rule (length {(int)length}).";
     }
+
+    /// <summary>
+    /// Renders a scalar value the way it would appear if typed into the cell, for LEN()-style
+    /// text-length validation. Returns null only for values that have no meaningful entry text
+    /// (used to fall back to the "must be text" error).
+    /// </summary>
+    private static string? RenderValueForLengthCheck(ScalarValue value) => value switch
+    {
+        TextValue tv      => tv.Value,
+        NumberValue nv    => nv.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        DateTimeValue dtv => dtv.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        BoolValue b       => b.Value ? "TRUE" : "FALSE",
+        _                 => null
+    };
 
     private static string? ValidateDate(DataValidation dv, ScalarValue value) =>
         ValidateDate(dv, value, sheet: null, address: null, workbook: null);

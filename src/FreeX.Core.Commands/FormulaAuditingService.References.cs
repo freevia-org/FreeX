@@ -106,8 +106,28 @@ public static partial class FormulaAuditingService
             if (ch != '$' && !IsAsciiLetter(ch) && ch != '_')
                 continue;
 
-            if (IsFormulaReferenceBoundaryBefore(formulaText, index) &&
-                TryReadFormulaReference(formulaText, index, out var end, out var row, out var col))
+            if (!IsFormulaReferenceBoundaryBefore(formulaText, index))
+            {
+                if (ch != '$' && IsFunctionCallToken(formulaText, index, out var midTokenFunctionEnd))
+                {
+                    index = midTokenFunctionEnd - 1;
+                    continue;
+                }
+
+                return false;
+            }
+
+            // A token immediately followed by '(' (optionally through whitespace) is a function
+            // name (e.g. LOG10, ATAN2), not a cell reference, even when its letters+digits also
+            // happen to parse as a valid A1-style address. Check this BEFORE attempting to read it
+            // as a reference, since TryReadFormulaReference has no way to see past the token.
+            if (ch != '$' && IsFunctionCallToken(formulaText, index, out var functionEnd))
+            {
+                index = functionEnd - 1;
+                continue;
+            }
+
+            if (TryReadFormulaReference(formulaText, index, out var end, out var row, out var col))
             {
                 if (IsBlankPrecedent(workbook, new CellAddress(hostSheetId, row, col)))
                 {
@@ -121,23 +141,6 @@ public static partial class FormulaAuditingService
 
             if (ch == '$')
                 return false;
-
-            var identifierEnd = index + 1;
-            while (identifierEnd < formulaText.Length &&
-                   (IsAsciiLetterDigitOrUnderscore(formulaText[identifierEnd]) || formulaText[identifierEnd] == '.'))
-            {
-                identifierEnd++;
-            }
-
-            var next = identifierEnd;
-            while (next < formulaText.Length && char.IsWhiteSpace(formulaText[next]))
-                next++;
-
-            if (next < formulaText.Length && formulaText[next] == '(')
-            {
-                index = identifierEnd - 1;
-                continue;
-            }
 
             return false;
         }

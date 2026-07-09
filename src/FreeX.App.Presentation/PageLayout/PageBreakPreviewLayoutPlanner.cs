@@ -38,7 +38,9 @@ public sealed record PageBreakPreviewLayout(
 /// row/column metrics, the print range, manual page breaks, and the active page setup, it computes the
 /// page grid in pixel space, the dimmed masks outside the print range, and the automatic break lines.
 /// Pagination itself is delegated to <see cref="PagePaginationPlanner"/> so page slicing stays in one
-/// place.
+/// place. Callers should pass the sheet's IsRowEffectivelyHidden/IsColEffectivelyHidden predicates (see
+/// <see cref="PrintPreviewPaginationContext"/>) so the overlay's page count and break lines match the
+/// real print output, which also excludes hidden/filtered rows and columns.
 /// </summary>
 public static class PageBreakPreviewLayoutPlanner
 {
@@ -63,7 +65,9 @@ public static class PageBreakPreviewLayoutPlanner
         IReadOnlyDictionary<uint, double>? columnWidths = null,
         double defaultColumnWidth = 0.0,
         double headerMarginInches = 0.0,
-        double footerMarginInches = 0.0)
+        double footerMarginInches = 0.0,
+        Func<uint, bool>? isRowHidden = null,
+        Func<uint, bool>? isColumnHidden = null)
     {
         if (printArea is not { } range ||
             viewport.RowMetrics.Count == 0 ||
@@ -113,7 +117,9 @@ public static class PageBreakPreviewLayoutPlanner
             headerMarginInches,
             footerMarginInches,
             rowPageBreaks,
-            columnPageBreaks);
+            columnPageBreaks,
+            isRowHidden,
+            isColumnHidden);
 
         var pages = BuildVisiblePages(
             viewport,

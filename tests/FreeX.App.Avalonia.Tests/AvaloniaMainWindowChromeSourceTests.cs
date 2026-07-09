@@ -797,7 +797,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PrintPreview.cs"));
         var sharedSource = File.ReadAllText(RepoFile("src", "FreeX.App.Presentation", "PageLayout", "PrintPreviewPaginationContext.cs"));
 
-        source.Should().Contain("PrintPreviewPaginationContext.TryCreate(_session.Workbook, sheet, PrintPreviewTextMeasurer, out var context)");
+        source.Should().Contain("PrintPreviewPaginationContext.TryCreate(_session.Workbook, sheet, PrintPreviewTextMeasurer, out var context, ResolveWorkbookDirectoryForHeaderFooter())");
         source.Should().NotContain("internal sealed class PrintPreviewPaginationContext");
         source.Should().NotContain("var plan = PagePaginationPlanner.Paginate(");
         sharedSource.Should().Contain("PageBreakPreviewInstructionBuilder.TryResolvePrintRange(sheet, out var printRange)");

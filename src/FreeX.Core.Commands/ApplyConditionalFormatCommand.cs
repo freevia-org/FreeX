@@ -98,7 +98,7 @@ public sealed class ClearConditionalFormatsCommand : IWorkbookCommand
         for (var i = sheet.ConditionalFormats.Count - 1; i >= 0; i--)
         {
             var rule = sheet.ConditionalFormats[i];
-            if (rule.AppliesTo.Start.Sheet == _sheetId && _range.Overlaps(rule.AppliesTo))
+            if (rule.AppliesTo.Start.Sheet == _sheetId && rule.AllRanges.Any(r => _range.Overlaps(r)))
             {
                 _removed.Add((i, rule));
                 sheet.ConditionalFormats.RemoveAt(i);

@@ -87,6 +87,29 @@ public partial class GridView
         set => SetValue(HiddenColumnsProperty, value);
     }
 
+    // Sheet-level "effectively hidden" predicates (AutoFilter-hidden rows + collapsed outline
+    // groups), distinct from HiddenRows/HiddenColumns above (which only carry the manual
+    // Format > Hide Rows/Columns sets). Wired from MainWindow.Viewport.cs to
+    // Sheet.IsRowEffectivelyHidden/IsColEffectivelyHidden so the page-break preview overlay's
+    // pagination matches the real print output (R15-print-preview-interaction-2).
+    public static readonly DependencyProperty SheetIsRowHiddenPredicateProperty =
+        DependencyProperty.Register(nameof(SheetIsRowHiddenPredicate), typeof(Func<uint, bool>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public Func<uint, bool>? SheetIsRowHiddenPredicate
+    {
+        get => (Func<uint, bool>?)GetValue(SheetIsRowHiddenPredicateProperty);
+        set => SetValue(SheetIsRowHiddenPredicateProperty, value);
+    }
+
+    public static readonly DependencyProperty SheetIsColHiddenPredicateProperty =
+        DependencyProperty.Register(nameof(SheetIsColHiddenPredicate), typeof(Func<uint, bool>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public Func<uint, bool>? SheetIsColHiddenPredicate
+    {
+        get => (Func<uint, bool>?)GetValue(SheetIsColHiddenPredicateProperty);
+        set => SetValue(SheetIsColHiddenPredicateProperty, value);
+    }
+
     public static readonly DependencyProperty IsLiveResizingProperty =
         DependencyProperty.Register(nameof(IsLiveResizing), typeof(bool), typeof(GridView),
             new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));

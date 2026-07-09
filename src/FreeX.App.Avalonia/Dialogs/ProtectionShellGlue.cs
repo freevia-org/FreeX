@@ -47,7 +47,7 @@ internal static class ProtectionShellGlue
     public static ProtectWorkbookCommand BuildProtectWorkbookCommand(ProtectWorkbookOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        return new ProtectWorkbookCommand(options.ToCorePassword());
+        return new ProtectWorkbookCommand(options.ToCorePassword(), options.ToCoreStructureProtected());
     }
 
     /// <summary>

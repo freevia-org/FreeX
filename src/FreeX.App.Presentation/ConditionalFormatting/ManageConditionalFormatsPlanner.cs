@@ -284,12 +284,12 @@ public static class ManageConditionalFormatsPlanner
             return Reprioritize(editedRules);
 
         var result = new List<ConditionalFormat>();
-        var matchingRuleCount = sheetRules.Count(rule => RangesOverlap(rule.AppliesTo, selection.Value));
+        var matchingRuleCount = sheetRules.Count(rule => RuleOverlapsSelection(rule, selection.Value));
         var editedRuleIndex = 0;
 
         foreach (var rule in sheetRules)
         {
-            if (!RangesOverlap(rule.AppliesTo, selection.Value))
+            if (!RuleOverlapsSelection(rule, selection.Value))
             {
                 result.Add(rule);
                 continue;
@@ -377,6 +377,7 @@ public static class ManageConditionalFormatsPlanner
 
         var updated = CloneWithPriority(result[index], index + 1);
         updated.AppliesTo = range;
+        updated.AdditionalRanges = null;
         result[index] = updated;
         return result;
     }
@@ -399,6 +400,13 @@ public static class ManageConditionalFormatsPlanner
         return a.Start.Row <= b.End.Row && a.End.Row >= b.Start.Row
             && a.Start.Col <= b.End.Col && a.End.Col >= b.Start.Col;
     }
+
+    /// <summary>
+    /// Matches the Manage-Rules dialog's display predicate (which filters on <see cref="ConditionalFormat.AllRanges"/>),
+    /// so the edited-rule merge in <see cref="BuildResultRules"/> aligns 1:1 with the rules actually shown to the user.
+    /// </summary>
+    private static bool RuleOverlapsSelection(ConditionalFormat rule, GridRange selection) =>
+        rule.AllRanges.Any(range => RangesOverlap(range, selection));
 
     private static int FindRuleIndex(IReadOnlyList<ConditionalFormat> rules, Guid ruleId)
     {

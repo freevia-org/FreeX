@@ -14,16 +14,22 @@ public partial class ColorPickerDialog : Window
     private bool _updatingText;
     private bool _updatingSlider;
     private readonly CellColor? _currentColor;
+    private readonly WorkbookTheme? _theme;
     private CellColor? _customSpectrumBaseColor;
     private Button? _initialFocusButton;
     private Button? _selectedSwatchButton;
 
-    public ColorPickerDialog(CellColor? initialColor = null, bool allowNoColor = false, string? noColorButtonText = null)
+    public ColorPickerDialog(
+        CellColor? initialColor = null,
+        bool allowNoColor = false,
+        string? noColorButtonText = null,
+        WorkbookTheme? theme = null)
     {
         InitializeComponent();
 
         AllowNoColor = allowNoColor;
         _currentColor = initialColor;
+        _theme = theme;
         SelectedColor = initialColor;
         NoColorButton.Visibility = allowNoColor ? Visibility.Visible : Visibility.Collapsed;
         if (!string.IsNullOrWhiteSpace(noColorButtonText))
@@ -44,11 +50,11 @@ public partial class ColorPickerDialog : Window
 
     public bool AllowNoColor { get; }
 
-    public static IReadOnlyList<CellColorSwatch> BuildDefaultSwatches() =>
-        CellColorPalettePlanner.BuildDefaultSwatches();
+    public static IReadOnlyList<CellColorSwatch> BuildDefaultSwatches(WorkbookTheme? theme = null) =>
+        CellColorPalettePlanner.BuildDefaultSwatches(theme);
 
-    public static IReadOnlyList<CellColorThemeColumn> BuildThemePalette() =>
-        CellColorPalettePlanner.BuildThemePalette();
+    public static IReadOnlyList<CellColorThemeColumn> BuildThemePalette(WorkbookTheme? theme = null) =>
+        CellColorPalettePlanner.BuildThemePalette(theme);
 
     public static IReadOnlyList<CellColorSwatch> BuildStandardSwatches() =>
         CellColorPalettePlanner.BuildStandardSwatches();
@@ -147,7 +153,7 @@ public partial class ColorPickerDialog : Window
 
     private void BuildPaletteButtons()
     {
-        var themeColumns = BuildThemePalette();
+        var themeColumns = BuildThemePalette(_theme);
         for (var row = 0; row < themeColumns[0].Shades.Count; row++)
         {
             foreach (var column in themeColumns)

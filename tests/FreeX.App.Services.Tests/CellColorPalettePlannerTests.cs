@@ -51,7 +51,10 @@ public sealed class CellColorPalettePlannerTests
     {
         var swatches = CellColorPalettePlanner.BuildDefaultSwatches();
 
-        swatches.Should().HaveCount(69);
+        // The default theme row now derives from the workbook's actual (Aptos) theme rather than the
+        // frozen legacy Office 2013-2021 palette, so one fewer accent shade collides with the standard
+        // color row -> 70 unique swatches (was 69 under the legacy palette).
+        swatches.Should().HaveCount(70);
         swatches.Should().Contain(swatch => swatch.Hex == "#000000" && swatch.Color == CellColor.Black);
         swatches.Should().Contain(swatch => swatch.Hex == "#FFFFFF" && swatch.Color == CellColor.White);
         swatches.Should().OnlyContain(swatch => swatch.Hex.Length == 7 && swatch.Hex[0] == '#');
@@ -78,7 +81,9 @@ public sealed class CellColorPalettePlannerTests
             "Accent 6");
         columns[0].Shades[0].Hex.Should().Be("#000000");
         columns[1].Shades[0].Hex.Should().Be("#FFFFFF");
-        columns[4].Shades[0].Hex.Should().Be("#4472C4");
+        // Accent 1 now reflects the workbook's real default theme (Aptos, #156082), not the frozen
+        // legacy Office 2013-2021 accent (#4472C4).
+        columns[4].Shades[0].Hex.Should().Be("#156082");
         columns.SelectMany(column => column.Shades).Select(swatch => swatch.Hex).Should().OnlyHaveUniqueItems();
     }
 

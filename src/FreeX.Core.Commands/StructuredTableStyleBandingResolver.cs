@@ -53,7 +53,8 @@ public static class StructuredTableStyleBandingResolver
         (new CellColor(0, 97, 0), new CellColor(0, 125, 0), CellColor.White),
         (new CellColor(91, 44, 111), new CellColor(112, 48, 160), CellColor.White),
         (new CellColor(128, 55, 52), new CellColor(160, 64, 61), CellColor.White),
-        (new CellColor(68, 84, 106), new CellColor(84, 105, 132), CellColor.White)
+        (new CellColor(68, 84, 106), new CellColor(84, 105, 132), CellColor.White),
+        (new CellColor(45, 90, 39), new CellColor(60, 110, 51), CellColor.White)
     ];
 
     /// <summary>Resolves the banding for <paramref name="styleName"/> against the Office theme.</summary>
@@ -105,10 +106,12 @@ public static class StructuredTableStyleBandingResolver
         };
 
         var accent = accents[(index - 1) % accents.Length];
-        var evenFill = useDarkRows ? Darken(accent.Band, 18) : CellColor.White;
-        var oddFill = useDarkRows
-            ? accent.Band
-            : Lighten(accent.Band, ((index - 1) / accents.Length) * 8);
+        // Once a family cycles back through its accent tuples (e.g. Dark8 reuses Dark1's accent),
+        // progressively tint the fill so later styles in the cycle stay visually distinct instead of
+        // rendering byte-identical to their first-cycle counterpart.
+        var cycle = (index - 1) / accents.Length;
+        var evenFill = useDarkRows ? Darken(accent.Band, 18 + cycle * 8) : CellColor.White;
+        var oddFill = Lighten(accent.Band, cycle * 8);
 
         // Border color: only the Medium family uses interior thin borders (a midpoint tint ≈ 0.5 of the
         // accent, sitting between the solid header and the banded row fill).  Light and Dark families
@@ -219,7 +222,9 @@ public static class StructuredTableStyleBandingResolver
             OddRowFill: theme.ResolveColor(slot, 0.95),
             EvenRowFill: CellColor.White,
             HeaderFontColor: CellColor.Black,
-            Border: theme.ResolveColor(slot, 0.6));
+            // Light has no interior borders (see the matching fixed-palette comment in
+            // ResolveFromAccentPalette), regardless of which theme it is resolved against.
+            Border: null);
 
     /// <summary>
     /// True for the black-header "Light" family (TableStyleLight 8-14), which Excel renders with a solid

@@ -178,6 +178,71 @@ public sealed class DependencyGraph
         _rangeDependentsBySheet.Clear();
     }
 
+    /// <summary>
+    /// Remove every dependency edge belonging to the given sheets only, leaving every other
+    /// open workbook's edges untouched. RecalcEngine is a single WPF-host-wide singleton shared
+    /// by every open workbook (unlike Avalonia's per-session engine), so a full rebuild of one
+    /// workbook's formulas must not wipe another workbook's edges out of this shared graph.
+    /// Sheet ids are globally unique (never reused across workbooks), so passing one workbook's
+    /// own sheet ids fully clears that workbook's precedents/dependents/range-precedents while
+    /// provably leaving every cell (and range index) keyed to a different workbook's sheets alone.
+    /// </summary>
+    public void ClearForSheets(IEnumerable<SheetId> sheetIds)
+    {
+        var sheets = sheetIds as IReadOnlySet<SheetId> ?? new HashSet<SheetId>(sheetIds);
+        if (sheets.Count == 0)
+            return;
+
+        // Clearing each formula cell's own precedents (via the existing single-cell path) also
+        // removes it from the _dependents entry of every precedent it referenced, and prunes any
+        // now-empty range-dependent bucket — so this alone undoes everything SetDependenciesCore
+        // built for these cells.
+        List<CellAddress>? precedentKeysToClear = null;
+        foreach (var cell in _precedents.Keys)
+        {
+            if (sheets.Contains(cell.Sheet))
+                (precedentKeysToClear ??= []).Add(cell);
+        }
+
+        if (precedentKeysToClear is not null)
+        {
+            foreach (var cell in precedentKeysToClear)
+                ClearDependencies(cell);
+        }
+
+        // A plain (non-formula) cell in one of these sheets can still appear as a _dependents key
+        // (other cells depend on it) without ever having its own _precedents entry. Every cell that
+        // depended on it belongs to the same workbook (formulas never cross sheet ids between
+        // workbooks), and is itself being cleared above, so it is safe to drop these keys outright.
+        List<CellAddress>? dependentKeysToRemove = null;
+        foreach (var cell in _dependents.Keys)
+        {
+            if (sheets.Contains(cell.Sheet))
+                (dependentKeysToRemove ??= []).Add(cell);
+        }
+
+        if (dependentKeysToRemove is not null)
+        {
+            foreach (var cell in dependentKeysToRemove)
+                _dependents.Remove(cell);
+        }
+
+        // _rangeDependentsBySheet is already keyed by the sheet the range lives on, so this is a
+        // direct removal rather than a per-cell scan.
+        List<SheetId>? rangeSheetsToRemove = null;
+        foreach (var sheetId in _rangeDependentsBySheet.Keys)
+        {
+            if (sheets.Contains(sheetId))
+                (rangeSheetsToRemove ??= []).Add(sheetId);
+        }
+
+        if (rangeSheetsToRemove is not null)
+        {
+            foreach (var sheetId in rangeSheetsToRemove)
+                _rangeDependentsBySheet.Remove(sheetId);
+        }
+    }
+
     internal void EnsureFormulaCapacity(int formulaCount)
     {
         if (formulaCount <= 0)

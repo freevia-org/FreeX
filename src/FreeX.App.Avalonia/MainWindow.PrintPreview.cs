@@ -62,7 +62,7 @@ public sealed partial class MainWindow
         ClearSelectedDrawingObject();
 
         var sheet = _session.ActiveSheet;
-        if (!PrintPreviewPaginationContext.TryCreate(_session.Workbook, sheet, PrintPreviewTextMeasurer, out var context))
+        if (!PrintPreviewPaginationContext.TryCreate(_session.Workbook, sheet, PrintPreviewTextMeasurer, out var context, ResolveWorkbookDirectoryForHeaderFooter()))
         {
             ShowEditIssue(UiText.Get("ShellLoc_NothingToPreview"));
             return;

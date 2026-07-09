@@ -19,6 +19,9 @@ public sealed class FreeXReview10CommentsHostTests
         sheet.PrintComments = WorksheetPrintComments.AsDisplayed;
         var addr = new CellAddress(sheet.Id, 2, 2);
         sheet.Comments[addr] = "Check this total";
+        // "As displayed on sheet" prints a box only for notes that are actually shown (pinned open),
+        // matching Excel — so pin this note, otherwise it is correctly excluded from the overlay set.
+        sheet.ShownComments.Add(addr);
 
         var selectedRange = GridRange.Parse("A1:E6", sheet.Id);
         var exportPrintPlan = WorkbookExportPrintPlanner.CreatePlan(

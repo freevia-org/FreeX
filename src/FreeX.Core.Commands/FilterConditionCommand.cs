@@ -1,10 +1,63 @@
 using FreeX.Core.Model;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace FreeX.Core.Commands;
 
 public interface IFilterCriterion
 {
     bool Matches(ScalarValue value);
+}
+
+/// <summary>
+/// Translates Excel-style wildcard patterns (? = any single character, * = any run of
+/// characters, ~ escapes a following ?, *, or ~ as a literal) into anchored/unanchored
+/// regex matches, matching the semantics used by AutoFilter custom filters and
+/// Advanced Filter criteria.
+/// </summary>
+internal static class FilterWildcard
+{
+    public static bool IsMatch(string text, string pattern, bool anchorStart, bool anchorEnd)
+    {
+        var regexPattern = ToRegexPattern(pattern, anchorStart, anchorEnd);
+        return Regex.IsMatch(text, regexPattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
+
+    public static bool ContainsWildcardCharacter(string text) =>
+        text.IndexOfAny(['*', '?', '~']) >= 0;
+
+    private static string ToRegexPattern(string pattern, bool anchorStart, bool anchorEnd)
+    {
+        var builder = new StringBuilder(pattern.Length + 4);
+        if (anchorStart)
+            builder.Append('^');
+
+        for (var i = 0; i < pattern.Length; i++)
+        {
+            var c = pattern[i];
+            if (c == '~' && i + 1 < pattern.Length)
+            {
+                builder.Append(Regex.Escape(pattern[++i].ToString()));
+            }
+            else if (c == '*')
+            {
+                builder.Append(".*");
+            }
+            else if (c == '?')
+            {
+                builder.Append('.');
+            }
+            else
+            {
+                builder.Append(Regex.Escape(c.ToString()));
+            }
+        }
+
+        if (anchorEnd)
+            builder.Append('$');
+
+        return builder.ToString();
+    }
 }
 
 public sealed record CompositeFilterCriterion(
@@ -33,7 +86,7 @@ public sealed record TextContainsFilterCriterion(string Text) : IFilterCriterion
     public bool Matches(ScalarValue value)
     {
         var text = FilterValueFormatter.ToText(value);
-        return text.Contains(Text, StringComparison.OrdinalIgnoreCase);
+        return FilterWildcard.IsMatch(text, Text, anchorStart: false, anchorEnd: false);
     }
 }
 
@@ -42,7 +95,7 @@ public sealed record TextDoesNotContainFilterCriterion(string Text) : IFilterCri
     public bool Matches(ScalarValue value)
     {
         var text = FilterValueFormatter.ToText(value);
-        return !text.Contains(Text, StringComparison.OrdinalIgnoreCase);
+        return !FilterWildcard.IsMatch(text, Text, anchorStart: false, anchorEnd: false);
     }
 }
 
@@ -51,7 +104,7 @@ public sealed record TextBeginsWithFilterCriterion(string Text) : IFilterCriteri
     public bool Matches(ScalarValue value)
     {
         var text = FilterValueFormatter.ToText(value);
-        return text.StartsWith(Text, StringComparison.OrdinalIgnoreCase);
+        return FilterWildcard.IsMatch(text, Text, anchorStart: true, anchorEnd: false);
     }
 }
 
@@ -60,7 +113,7 @@ public sealed record TextEndsWithFilterCriterion(string Text) : IFilterCriterion
     public bool Matches(ScalarValue value)
     {
         var text = FilterValueFormatter.ToText(value);
-        return text.EndsWith(Text, StringComparison.OrdinalIgnoreCase);
+        return FilterWildcard.IsMatch(text, Text, anchorStart: false, anchorEnd: true);
     }
 }
 
@@ -69,7 +122,7 @@ public sealed record TextEqualsFilterCriterion(string Text) : IFilterCriterion
     public bool Matches(ScalarValue value)
     {
         var text = FilterValueFormatter.ToText(value);
-        return text.Equals(Text, StringComparison.OrdinalIgnoreCase);
+        return FilterWildcard.IsMatch(text, Text, anchorStart: true, anchorEnd: true);
     }
 }
 
@@ -78,7 +131,7 @@ public sealed record TextNotEqualsFilterCriterion(string Text) : IFilterCriterio
     public bool Matches(ScalarValue value)
     {
         var text = FilterValueFormatter.ToText(value);
-        return !text.Equals(Text, StringComparison.OrdinalIgnoreCase);
+        return !FilterWildcard.IsMatch(text, Text, anchorStart: true, anchorEnd: true);
     }
 }
 
@@ -110,8 +163,11 @@ public sealed record NumberEqualsFilterCriterion(double Expected) : IFilterCrite
 
 public sealed record NumberNotEqualsFilterCriterion(double Expected) : IFilterCriterion
 {
+    // Excel semantics: "does not equal" hides only values that ARE the matching number.
+    // Text, blanks, booleans, and errors are a different type than the expected number,
+    // so they are never "equal" to it and must stay visible (matching NumberEquals' inverse).
     public bool Matches(ScalarValue value) =>
-        value is NumberValue number && Math.Abs(number.Value - Expected) >= double.Epsilon;
+        !(value is NumberValue number && Math.Abs(number.Value - Expected) < double.Epsilon);
 }
 
 public sealed record NumberBetweenFilterCriterion(double Minimum, double Maximum) : IFilterCriterion
@@ -128,8 +184,11 @@ public sealed record DateEqualsFilterCriterion(DateOnly Expected) : IFilterCrite
 
 public sealed record DateNotEqualsFilterCriterion(DateOnly Expected) : IFilterCriterion
 {
+    // Excel semantics: "does not equal" hides only values that ARE the matching date.
+    // Non-date values (text/blank/bool/error) are a different type than the expected date,
+    // so they are never "equal" to it and must stay visible (matching DateEquals' inverse).
     public bool Matches(ScalarValue value) =>
-        value is DateTimeValue date && DateOnly.FromDateTime(date.ToDateTime()) != Expected;
+        !(value is DateTimeValue date && DateOnly.FromDateTime(date.ToDateTime()) == Expected);
 }
 
 public sealed record DateAfterFilterCriterion(DateOnly Threshold) : IFilterCriterion

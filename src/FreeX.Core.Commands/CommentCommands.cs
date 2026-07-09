@@ -47,6 +47,9 @@ public sealed class DeleteCommentCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly CellAddress _address;
     private string? _previousComment;
+    private bool _hadAuthor;
+    private string? _previousAuthor;
+    private bool _wasShown;
 
     public string Label => "Delete Comment";
 
@@ -65,7 +68,12 @@ public sealed class DeleteCommentCommand : IWorkbookCommand
         if (!sheet.Comments.TryGetValue(_address, out _previousComment))
             return new CommandOutcome(false, "No comment exists at the selected cell.");
 
+        _hadAuthor = sheet.CommentAuthors.TryGetValue(_address, out _previousAuthor);
+        _wasShown = sheet.ShownComments.Contains(_address);
+
         sheet.Comments.Remove(_address);
+        sheet.CommentAuthors.Remove(_address);
+        sheet.ShownComments.Remove(_address);
         return new CommandOutcome(true, AffectedCells: [_address]);
     }
 
@@ -76,6 +84,10 @@ public sealed class DeleteCommentCommand : IWorkbookCommand
 
         var sheet = ctx.GetSheet(_sheetId);
         sheet.Comments[_address] = _previousComment;
+        if (_hadAuthor && _previousAuthor is not null)
+            sheet.CommentAuthors[_address] = _previousAuthor;
+        if (_wasShown)
+            sheet.ShownComments.Add(_address);
     }
 }
 
@@ -289,6 +301,8 @@ public sealed class ClearCommentsCommand : IWorkbookCommand
     private readonly GridRange _range;
     private Dictionary<CellAddress, string>? _snapshot;
     private Dictionary<CellAddress, ThreadedComment>? _threadedSnapshot;
+    private Dictionary<CellAddress, string>? _authorSnapshot;
+    private HashSet<CellAddress>? _shownSnapshot;
 
     public string Label => "Clear Comments and Notes";
 
@@ -306,6 +320,8 @@ public sealed class ClearCommentsCommand : IWorkbookCommand
 
         _snapshot = [];
         _threadedSnapshot = [];
+        _authorSnapshot = [];
+        _shownSnapshot = [];
         foreach (var addr in _range.AllCells())
         {
             if (sheet.Comments.TryGetValue(addr, out var comment))
@@ -319,6 +335,15 @@ public sealed class ClearCommentsCommand : IWorkbookCommand
                 _threadedSnapshot[addr] = threadedComment;
                 sheet.ThreadedComments.Remove(addr);
             }
+
+            if (sheet.CommentAuthors.TryGetValue(addr, out var author))
+            {
+                _authorSnapshot[addr] = author;
+                sheet.CommentAuthors.Remove(addr);
+            }
+
+            if (sheet.ShownComments.Remove(addr))
+                _shownSnapshot.Add(addr);
         }
 
         return new CommandOutcome(true, AffectedCells: _snapshot.Keys.Concat(_threadedSnapshot.Keys).Distinct().ToList());
@@ -326,12 +351,16 @@ public sealed class ClearCommentsCommand : IWorkbookCommand
 
     public void Revert(ICommandContext ctx)
     {
-        if (_snapshot is null || _threadedSnapshot is null) return;
+        if (_snapshot is null || _threadedSnapshot is null || _authorSnapshot is null || _shownSnapshot is null) return;
 
         var sheet = ctx.GetSheet(_sheetId);
         foreach (var (addr, comment) in _snapshot)
             sheet.Comments[addr] = comment;
         foreach (var (addr, threadedComment) in _threadedSnapshot)
             sheet.ThreadedComments[addr] = threadedComment;
+        foreach (var (addr, author) in _authorSnapshot)
+            sheet.CommentAuthors[addr] = author;
+        foreach (var addr in _shownSnapshot)
+            sheet.ShownComments.Add(addr);
     }
 }

@@ -248,15 +248,23 @@ public sealed class ClearAllowEditRangesCommand : IWorkbookCommand
 public sealed class ProtectWorkbookCommand : IWorkbookCommand
 {
     private readonly string? _password;
+    private readonly bool _structureProtected;
     private bool _previousProtected;
     private string? _previousPassword;
     private NativeXmlPreserveBag? _previousProtectionMetadata;
 
     public string Label => "Protect Workbook";
 
-    public ProtectWorkbookCommand(string? password = null)
+    /// <param name="password">The optional password to protect with.</param>
+    /// <param name="structureProtected">
+    /// Whether the "Structure" checkbox was checked in the dialog. Defaults to <c>true</c> to preserve
+    /// prior behavior for callers that don't model the checkbox. Window protection is not modelled by
+    /// Core, so this is the only protection flag the command carries.
+    /// </param>
+    public ProtectWorkbookCommand(string? password = null, bool structureProtected = true)
     {
         _password = password;
+        _structureProtected = structureProtected;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -264,7 +272,7 @@ public sealed class ProtectWorkbookCommand : IWorkbookCommand
         _previousProtected = ctx.Workbook.IsStructureProtected;
         _previousPassword = ctx.Workbook.StructureProtectionPassword;
         _previousProtectionMetadata = ctx.Workbook.ProtectionMetadata;
-        ctx.Workbook.IsStructureProtected = true;
+        ctx.Workbook.IsStructureProtected = _structureProtected;
         ctx.Workbook.StructureProtectionPassword = ProtectionCommandPasswordHashing.HashTypedPassword(_password);
 
         // A freshly-typed password (or re-protecting with no password at all) supersedes whatever

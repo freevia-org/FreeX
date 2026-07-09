@@ -62,17 +62,23 @@ internal static class XlsxChartSanitizer
         }
 
         if (!ChartTypeSupport.SupportsXAxisBounds(chart.Type))
-            ClearXAxisValueBounds(chart);
+            ClearXAxisValueBounds(chart, keepDateAxisUnits: chart.XAxisIsDateAxis);
         if (!ChartTypeSupport.SupportsYAxisBounds(chart.Type))
             ClearYAxisValueBounds(chart);
     }
 
-    private static void ClearXAxisValueBounds(ChartModel chart)
+    private static void ClearXAxisValueBounds(ChartModel chart, bool keepDateAxisUnits = false)
     {
         chart.XAxisMinimum = null;
         chart.XAxisMaximum = null;
-        chart.XAxisMajorUnit = null;
-        chart.XAxisMinorUnit = null;
+        // On a date (category) X axis the numeric major/minor unit is the date-unit multiplier
+        // ("every 2 months"), not a value-axis bound — so it must survive even though the chart type
+        // has no value axis on X. Only strip them when the X axis is genuinely a value axis.
+        if (!keepDateAxisUnits)
+        {
+            chart.XAxisMajorUnit = null;
+            chart.XAxisMinorUnit = null;
+        }
         chart.XAxisLogScale = false;
         chart.XAxisNumberFormat = ChartDataLabelNumberFormat.General;
     }

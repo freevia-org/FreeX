@@ -26,7 +26,8 @@ public static partial class PrintRenderer
         bool alignWithMargins,
         int pageNumber,
         int totalPages,
-        bool draftQuality)
+        bool draftQuality,
+        string workbookDirectory = "")
     {
         var headerHeight = CalculateHeaderFooterLineHeight(header, headerPictures, draftQuality);
         var footerHeight = CalculateHeaderFooterLineHeight(footer, footerPictures, draftQuality);
@@ -34,8 +35,8 @@ public static partial class PrintRenderer
         var footerY = Math.Max(4, pageH - footerMargin - footerHeight);
         var leftInset = alignWithMargins ? marginLeft : 0.3 * 96.0;
         var rightInset = alignWithMargins ? marginRight : 0.3 * 96.0;
-        DrawHeaderFooterLine(dc, textOverlays, header, headerPictures, pageW, leftInset, rightInset, headerY, headerHeight, pageNumber, totalPages, workbookName, sheetName, draftQuality);
-        DrawHeaderFooterLine(dc, textOverlays, footer, footerPictures, pageW, leftInset, rightInset, footerY, footerHeight, pageNumber, totalPages, workbookName, sheetName, draftQuality);
+        DrawHeaderFooterLine(dc, textOverlays, header, headerPictures, pageW, leftInset, rightInset, headerY, headerHeight, pageNumber, totalPages, workbookName, sheetName, draftQuality, workbookDirectory);
+        DrawHeaderFooterLine(dc, textOverlays, footer, footerPictures, pageW, leftInset, rightInset, footerY, footerHeight, pageNumber, totalPages, workbookName, sheetName, draftQuality, workbookDirectory);
     }
 
     private static void DrawHeaderFooterLine(
@@ -52,13 +53,15 @@ public static partial class PrintRenderer
         int totalPages,
         string workbookName,
         string sheetName,
-        bool draftQuality)
+        bool draftQuality,
+        string workbookDirectory = "")
     {
-        // Tokenize each section into formatted runs.  workbookDirectory is not available in
-        // the legacy PrintRenderer path; pass empty string so &Z expands to "".
-        var leftRuns   = PagePrintTextPlanner.TokenizeSectionText(value.Left,   pageNumber, totalPages, workbookName, "", sheetName, DateTime.Now);
-        var centerRuns = PagePrintTextPlanner.TokenizeSectionText(value.Center, pageNumber, totalPages, workbookName, "", sheetName, DateTime.Now);
-        var rightRuns  = PagePrintTextPlanner.TokenizeSectionText(value.Right,  pageNumber, totalPages, workbookName, "", sheetName, DateTime.Now);
+        // Tokenize each section into formatted runs. workbookDirectory is the folder containing the
+        // workbook's saved file (trailing separator), or "" for an unsaved workbook -- substituted
+        // for &Z / &[Path], matching Sheet's WPF page-setup preview and the portable PDF path.
+        var leftRuns   = PagePrintTextPlanner.TokenizeSectionText(value.Left,   pageNumber, totalPages, workbookName, workbookDirectory, sheetName, DateTime.Now);
+        var centerRuns = PagePrintTextPlanner.TokenizeSectionText(value.Center, pageNumber, totalPages, workbookName, workbookDirectory, sheetName, DateTime.Now);
+        var rightRuns  = PagePrintTextPlanner.TokenizeSectionText(value.Right,  pageNumber, totalPages, workbookName, workbookDirectory, sheetName, DateTime.Now);
 
         var availableWidth = Math.Max(1, pageW - leftInset - rightInset);
         var sectionWidth = Math.Max(1, availableWidth / 3);

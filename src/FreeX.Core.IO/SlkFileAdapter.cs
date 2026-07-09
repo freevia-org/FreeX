@@ -46,7 +46,7 @@ public sealed class SlkFileAdapter : IFileAdapter
         uint curRow = 1, curCol = 1;
 
         string? line;
-        while ((line = reader.ReadLine()) is not null)
+        while ((line = ReadLogicalLine(reader)) is not null)
         {
             if (line.Length == 0)
                 continue;
@@ -329,6 +329,43 @@ public sealed class SlkFileAdapter : IFileAdapter
 
         fields.Add(sb.ToString());
         return fields;
+    }
+
+    /// <summary>
+    /// Reads one logical SYLK record, re-joining physical lines that were split by an embedded newline
+    /// inside a quoted <c>K"..."</c> constant. On write, a <see cref="TextValue"/> containing '\n'/'\r'
+    /// is quoted but the newline itself is never escaped, so <see cref="StreamWriter.WriteLine"/> ends up
+    /// emitting it as a genuine line break — the quote opens on one physical line and closes on a later
+    /// one. A record's quotes always balance in pairs, so an odd running count of <c>"</c> means the
+    /// value's closing quote (and the newline it swallowed) is still ahead; keep pulling physical lines,
+    /// rejoining with the '\n' that was in the original value, until the quote closes or the file ends.
+    /// </summary>
+    private static string? ReadLogicalLine(TextReader reader)
+    {
+        var line = reader.ReadLine();
+        if (line is null)
+            return null;
+
+        while (CountQuotes(line) % 2 != 0)
+        {
+            var next = reader.ReadLine();
+            if (next is null)
+                break;
+            line += "\n" + next;
+        }
+
+        return line;
+    }
+
+    private static int CountQuotes(string s)
+    {
+        var count = 0;
+        foreach (var c in s)
+        {
+            if (c == '"')
+                count++;
+        }
+        return count;
     }
 
     private static Encoding DetectEncoding(Stream stream) => new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);

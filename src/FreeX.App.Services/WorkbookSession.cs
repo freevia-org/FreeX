@@ -555,7 +555,8 @@ public sealed class WorkbookSession
 
     public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
     {
-        var matches = GoToSpecialService.Find(Workbook, ActiveSheet, SelectedRange, kind, ActiveCell, options);
+        var searchRange = ResolveGoToSpecialSearchRange();
+        var matches = GoToSpecialService.Find(Workbook, ActiveSheet, searchRange, kind, ActiveCell, options);
         if (matches.Count == 0)
             return WorkbookGoToSpecialResult.Failed("No cells found.");
 
@@ -563,6 +564,22 @@ public sealed class WorkbookSession
         var selectedRange = ranges[0];
         SelectRanges(selectedRange, ranges);
         return WorkbookGoToSpecialResult.Selected(selectedRange, ranges, matches.Count);
+    }
+
+    /// <summary>
+    /// Determines the range that Go To Special should search. Matching Excel (and the WPF host's
+    /// ResolveGoToSpecialSearchRange), a single active cell (the ordinary result of clicking one
+    /// cell) searches the whole used range of the sheet; an explicit multi-cell selection is
+    /// honored as-is. The true active cell (used by CurrentRegion/Precedents/Dependents kinds)
+    /// is unaffected by this expansion.
+    /// </summary>
+    private GridRange ResolveGoToSpecialSearchRange()
+    {
+        var selected = SelectedRange;
+        if (selected.Start != selected.End)
+            return selected;
+
+        return ActiveSheet.GetUsedRange() ?? selected;
     }
 
     public ReviewWorkflowPlan GetReviewWorkflowPlan(

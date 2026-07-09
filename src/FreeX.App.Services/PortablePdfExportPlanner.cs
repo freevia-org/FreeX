@@ -188,7 +188,8 @@ public static class PortablePdfExportPlanner
                 sheet.Comments,
                 sheet.ThreadedComments,
                 CombineSpan(page.RowPlan.TitleRows, page.RowPlan.BodyRows),
-                CombineSpan(page.ColumnPlan.TitleColumns, page.ColumnPlan.BodyColumns))
+                CombineSpan(page.ColumnPlan.TitleColumns, page.ColumnPlan.BodyColumns),
+                sheet.ShownComments)
             : [];
 
         pageRequests.Add(new PortablePdfExportPageRequest(

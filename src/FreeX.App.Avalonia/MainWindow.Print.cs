@@ -35,6 +35,16 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    /// <summary>
+    /// Directory that contains the workbook's saved file, with a trailing separator, for the
+    /// print/export header/footer <c>&amp;Z</c> / <c>&amp;[Path]</c> tokens
+    /// (R15-header-footer-print-titles-2); empty when the workbook has never been saved.
+    /// </summary>
+    private string ResolveWorkbookDirectoryForHeaderFooter() =>
+        Path.GetDirectoryName(_session.CurrentFilePath) is { Length: > 0 } directory
+            ? directory + Path.DirectorySeparatorChar
+            : "";
+
     // -------------------------------------------------------------------------------------------------------
     // Print dialog chrome helpers
     // -------------------------------------------------------------------------------------------------------
@@ -388,7 +398,7 @@ public sealed partial class MainWindow
         try
         {
             using var pdfBuffer = new MemoryStream();
-            Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
+            Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer, options: null, workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
             documentBytes = pdfBuffer.ToArray();
         }
         catch (Exception ex)

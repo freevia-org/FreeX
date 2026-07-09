@@ -394,7 +394,7 @@ public sealed class GoToDialogsTests
 
         source.Should().Contain("dialog.SelectedOptions");
         source.Should().Contain("SelectGoToSpecialMatches(specialKind, dialog.SelectedSpecialOptions, showEmptyMessage: true)");
-        source.Should().Contain("GoToSpecialService.Find(_workbook, sheet, range, kind, range.Start, options)");
+        source.Should().Contain("GoToSpecialService.Find(_workbook, sheet, searchRange, kind, activeCell, options)");
     }
 
     [Fact]

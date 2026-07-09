@@ -151,6 +151,17 @@ internal static partial class XlsxChartXmlWriter
         var showValueAxisMajorGridlines = ToEffectiveShowValueAxisMajorGridlines(chart);
         var valueAxisMajorTickStyle = ToEffectiveAxisMajorTickStyle(chart.Type, chart.YAxisMajorTickStyle);
         var valueAxisCrossBetween = ToEffectiveValueAxisCrossBetween(chart);
+        // For bar-direction charts the value axis is HORIZONTAL (rendered at the bottom / X), so its
+        // scaling (min/max/major/minor unit, log scale) is read from the X* fields
+        // (XlsxChartAxisReader.ApplyValueAxisProperties(useXAxis: valueAxisOnX), SupportsXAxisBounds(Bar)==true).
+        // Mirror that routing on write, otherwise a fixed bar-chart value range (e.g. 0..1) is silently dropped.
+        var valueAxisOnX = IsHorizontalBarChart(chart.Type);
+        var valueAxisMinimum = valueAxisOnX ? chart.XAxisMinimum : chart.YAxisMinimum;
+        var valueAxisMaximum = valueAxisOnX ? chart.XAxisMaximum : chart.YAxisMaximum;
+        var valueAxisMajorUnit = valueAxisOnX ? chart.XAxisMajorUnit : chart.YAxisMajorUnit;
+        var valueAxisMinorUnit = valueAxisOnX ? chart.XAxisMinorUnit : chart.YAxisMinorUnit;
+        var valueAxisLogScale = valueAxisOnX ? chart.XAxisLogScale : chart.YAxisLogScale;
+        var valueAxisLogBase = valueAxisOnX ? chart.XAxisLogBase : chart.YAxisLogBase;
         yield return ToValueAxisXml(
             chart.YAxisTitle,
             chart.YAxisTitleLayout,
@@ -158,12 +169,12 @@ internal static partial class XlsxChartXmlWriter
             CategoryAxisId,
             ToXlsxValueAxisPosition(chart),
             chart.HideYAxis,
-            chart.YAxisMinimum,
-            chart.YAxisMaximum,
-            chart.YAxisMajorUnit,
-            chart.YAxisMinorUnit,
-            chart.YAxisLogScale,
-            chart.YAxisLogBase,
+            valueAxisMinimum,
+            valueAxisMaximum,
+            valueAxisMajorUnit,
+            valueAxisMinorUnit,
+            valueAxisLogScale,
+            valueAxisLogBase,
             chart.YAxisReverseOrder,
             valueAxisNumberFormat.Format,
             valueAxisNumberFormat.FormatCode,

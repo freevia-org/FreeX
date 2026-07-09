@@ -291,7 +291,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("WorkbookExportPrintSurface.MacOs");
         source.Should().Contain("PortablePdfExportPlanner.CreatePlan(exportPrintPlan)");
         // The menu handler routes through a single PDF export seam; the Skia-vs-portable decision lives there.
-        source.Should().Contain("Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, effectiveExportPlan, pdfBuffer)");
+        // The real saved-file directory is threaded through so &Z/&[Path] header/footer tokens resolve
+        // (R15-header-footer-print-titles-2) instead of always expanding to "".
+        source.Should().Contain("Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, effectiveExportPlan, pdfBuffer, options: null, workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter())");
         var pdfRouterSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Pdf", "AvaloniaPdfDocumentExporter.cs"));
         // Unicode-capable export goes through Skia (auto font embedding); portable WinAnsi is the fallback.
         pdfRouterSource.Should().Contain("SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream");
@@ -2138,7 +2140,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("await ShowTextDialogAsync(\"Data Validation Preview\", preview.Text, 520, 360);");
 
         plannerSource.Should().Contain("DataValidationService.GetApplicable(sheet, activeCell)");
-        plannerSource.Should().Contain("DataValidationService.GetListItems(rule, sheet, workbook)");
+        plannerSource.Should().Contain("DataValidationService.GetListItems(rule, sheet, activeCell, workbook)");
         plannerSource.Should().Contain("DataValidationService.FormatListSourceRange");
         plannerSource.Should().Contain("DataValidationDisplayTextPlanner.FormatAlertStyle");
         plannerSource.Should().NotContain("private static string FormatAlertStyle");
@@ -2199,7 +2201,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("RefreshShell($\"Picked {selected} for {FormatCellReference(address)}\");");
 
         plannerSource.Should().Contain("DataValidationService.GetApplicable(sheet, activeCell)");
-        plannerSource.Should().Contain("DataValidationService.GetListItems(rule, sheet, workbook)");
+        plannerSource.Should().Contain("DataValidationService.GetListItems(rule, sheet, activeCell, workbook)");
         plannerSource.Should().Contain("rule.Type == DvType.List && rule.ShowDropdown");
 
         var overlayIndex = normalizedSource.IndexOf("private void AddDataValidationDropdownOverlay(", StringComparison.Ordinal);
@@ -3951,7 +3953,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_fillColorButton.IsEnabled = isIdle;");
         source.Should().Contain("_fontColorButton.IsEnabled = isIdle;");
         source.Should().Contain("private MenuFlyout CreateColorPaletteFlyout(ColorPaletteTarget target, bool includeClearFill)");
-        source.Should().Contain("items.AddRange(CellColorPalettePlanner.BuildDefaultSwatches().Select(swatch => CreateColorSwatchMenuItem(swatch, target)));");
+        source.Should().Contain("items.AddRange(CellColorPalettePlanner.BuildDefaultSwatches(_session.Workbook.Theme).Select(swatch => CreateColorSwatchMenuItem(swatch, target)));");
         source.Should().Contain("private MenuItem CreateColorSwatchMenuItem(CellColorSwatch swatch, ColorPaletteTarget target)");
         source.Should().Contain("Icon = CreateColorSwatchIcon(swatch.Color),");
         source.Should().Contain("menuItem.Click += (_, _) => ApplySelectedRangePaletteColor(swatch.Color, target);");
@@ -5144,7 +5146,8 @@ public sealed class AvaloniaShellSourceTests
         findReplaceServiceSource.Should().Contain("match.ReplyIndex is { } replyIndex");
         findReplaceServiceSource.Should().Contain("new UpdateThreadedCommentReplyCommand(");
         sessionSource.Should().Contain("public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)");
-        sessionSource.Should().Contain("GoToSpecialService.Find(Workbook, ActiveSheet, SelectedRange, kind, ActiveCell, options)");
+        sessionSource.Should().Contain("var searchRange = ResolveGoToSpecialSearchRange();");
+        sessionSource.Should().Contain("GoToSpecialService.Find(Workbook, ActiveSheet, searchRange, kind, ActiveCell, options)");
         sessionSource.Should().Contain("SelectionRangeService.CompressAddresses(matches)");
         sessionSource.Should().Contain("SelectRanges(selectedRange, ranges);");
         findReplaceServiceSource.Should().Contain("public enum FindResultTarget");

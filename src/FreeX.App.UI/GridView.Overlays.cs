@@ -358,7 +358,15 @@ public partial class GridView
                 SheetColumnWidths,
                 SheetDefaultColumnWidth,
                 SheetHeaderMargin,
-                SheetFooterMargin))
+                SheetFooterMargin,
+                // Prefer the sheet's real IsRowEffectivelyHidden/IsColEffectivelyHidden predicates
+                // (AutoFilter-hidden rows + collapsed outline groups, wired from
+                // MainWindow.Viewport.cs) when available, matching the actual print path's
+                // pagination (see PrintPreviewPaginationContext). Fall back to the manually-hidden
+                // rows/columns bound to this GridView so nothing regresses when the predicates
+                // haven't been wired (R15-print-preview-interaction-2).
+                SheetIsRowHiddenPredicate ?? (row => HiddenRows?.Contains(row) == true),
+                SheetIsColHiddenPredicate ?? (col => HiddenColumns?.Contains(col) == true)))
             : WpfPageBreakPreviewLayout.Empty;
 
         if (WorksheetViewMode == WorksheetViewMode.PageBreakPreview)

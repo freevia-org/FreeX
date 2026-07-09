@@ -26,7 +26,8 @@ public static partial class PrintRenderer
         GridRange? printRangeOverride = null,
         bool ignorePrintArea = false,
         double pageWidthInches = 8.27,
-        double pageHeightInches = 11.69)
+        double pageHeightInches = 11.69,
+        string workbookDirectory = "")
     {
         var doc = new FixedDocument();
 
@@ -140,7 +141,8 @@ public static partial class PrintRenderer
                 totalPages,
                 sheet.PrintDraftQuality,
                 sheet.PrintBlackAndWhite,
-                configuredScalePercent);
+                configuredScalePercent,
+                workbookDirectory);
 
             var container = new VisualHost
             {
@@ -182,7 +184,11 @@ public static partial class PrintRenderer
         return doc;
     }
 
-    public static FixedDocument RenderWorkbook(Workbook workbook, IViewportService viewportService, bool ignorePrintAreas = false)
+    public static FixedDocument RenderWorkbook(
+        Workbook workbook,
+        IViewportService viewportService,
+        bool ignorePrintAreas = false,
+        string workbookDirectory = "")
     {
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(viewportService);
@@ -190,7 +196,7 @@ public static partial class PrintRenderer
         var result = new FixedDocument();
         foreach (var sheet in workbook.Sheets.Where(sheet => !sheet.IsHidden && !sheet.IsVeryHidden))
         {
-            var sheetDocument = RenderWorksheet(workbook, sheet.Id, viewportService, ignorePrintArea: ignorePrintAreas);
+            var sheetDocument = RenderWorksheet(workbook, sheet.Id, viewportService, ignorePrintArea: ignorePrintAreas, workbookDirectory: workbookDirectory);
             if (result.Pages.Count == 0)
                 result.DocumentPaginator.PageSize = sheetDocument.DocumentPaginator.PageSize;
 
@@ -201,14 +207,18 @@ public static partial class PrintRenderer
         return result;
     }
 
-    public static DocumentPaginator CreateWorkbookPaginator(Workbook workbook, IViewportService viewportService, bool ignorePrintAreas = false)
+    public static DocumentPaginator CreateWorkbookPaginator(
+        Workbook workbook,
+        IViewportService viewportService,
+        bool ignorePrintAreas = false,
+        string workbookDirectory = "")
     {
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(viewportService);
 
         var paginators = workbook.Sheets
             .Where(sheet => !sheet.IsHidden && !sheet.IsVeryHidden)
-            .Select(sheet => RenderWorksheet(workbook, sheet.Id, viewportService, ignorePrintArea: ignorePrintAreas).DocumentPaginator)
+            .Select(sheet => RenderWorksheet(workbook, sheet.Id, viewportService, ignorePrintArea: ignorePrintAreas, workbookDirectory: workbookDirectory).DocumentPaginator)
             .Where(paginator => paginator.PageCount > 0)
             .ToList();
         return new WorkbookDocumentPaginator(paginators);

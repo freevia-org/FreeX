@@ -12,9 +12,19 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
+    /// <summary>
+    /// Directory that contains the workbook's saved file, with a trailing separator, for the
+    /// print/export header/footer <c>&amp;Z</c> / <c>&amp;[Path]</c> tokens
+    /// (R15-header-footer-print-titles-2); empty when the workbook has never been saved.
+    /// </summary>
+    private string ResolveWorkbookDirectoryForHeaderFooter() =>
+        Path.GetDirectoryName(_currentFilePath) is { Length: > 0 } directory
+            ? directory + Path.DirectorySeparatorChar
+            : "";
+
     private void PrintButton_Click(object sender, RoutedEventArgs e)
     {
-        var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService);
+        var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService, workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
         var sheet = _workbook.GetSheet(_currentSheetId);
         var settings = sheet is null
             ? new PrintSettingsPlan([UiText.Get("MainWindowPrintSettings_ActiveSheet")])
@@ -41,7 +51,7 @@ public partial class MainWindow
         switch (settings.PrintWhat)
         {
             case PrintWhat.EntireWorkbook:
-                document = PrintRenderer.RenderWorkbook(_workbook, _viewportService, settings.IgnorePrintArea);
+                document = PrintRenderer.RenderWorkbook(_workbook, _viewportService, settings.IgnorePrintArea, ResolveWorkbookDirectoryForHeaderFooter());
                 break;
 
             case PrintWhat.Selection:
@@ -52,7 +62,8 @@ public partial class MainWindow
                     _currentSheetId,
                     _viewportService,
                     printRangeOverride: selectionRange,
-                    ignorePrintArea: true);
+                    ignorePrintArea: true,
+                    workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
                 break;
             }
 
@@ -61,7 +72,8 @@ public partial class MainWindow
                     _workbook,
                     _currentSheetId,
                     _viewportService,
-                    ignorePrintArea: settings.IgnorePrintArea);
+                    ignorePrintArea: settings.IgnorePrintArea,
+                    workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
                 break;
         }
 
@@ -389,7 +401,7 @@ public partial class MainWindow
 
     private System.Windows.Documents.FixedDocument RenderExportDocument(ExportOptions options) =>
         options.Scope == ExportContentScope.EntireWorkbook
-            ? PrintRenderer.RenderWorkbook(_workbook, _viewportService, options.IgnorePrintAreas)
+            ? PrintRenderer.RenderWorkbook(_workbook, _viewportService, options.IgnorePrintAreas, ResolveWorkbookDirectoryForHeaderFooter())
             : RenderExportSheets(
                 WorkbookExportSheetSelectionPlanner.ResolveSheetIds(_workbook, options, _currentSheetId, _groupedSheetIds),
                 options);
@@ -408,7 +420,8 @@ public partial class MainWindow
                 options.Scope == ExportContentScope.Selection && sheetId == _currentSheetId
                     ? ResolveExportRange(options)
                     : null,
-                options.IgnorePrintAreas);
+                options.IgnorePrintAreas,
+                workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
         }
 
         var result = new FixedDocument();
@@ -421,7 +434,8 @@ public partial class MainWindow
                 options.Scope == ExportContentScope.Selection && sheetId == _currentSheetId
                     ? ResolveExportRange(options)
                     : null,
-                options.IgnorePrintAreas);
+                options.IgnorePrintAreas,
+                workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
             if (result.Pages.Count == 0)
                 result.DocumentPaginator.PageSize = document.DocumentPaginator.PageSize;
 
@@ -504,7 +518,8 @@ public partial class MainWindow
                 sheet.Id,
                 _viewportService,
                 range,
-                options.IgnorePrintAreas);
+                options.IgnorePrintAreas,
+                workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
             if (document.Pages.Count > 0)
             {
                 if (options.EffectiveBookmarkMode == PdfBookmarkMode.PageNumbers)
@@ -542,7 +557,7 @@ public partial class MainWindow
     private System.Windows.Documents.DocumentPaginator RenderExportPaginator(ExportOptions options)
     {
         var paginator = options.Scope == ExportContentScope.EntireWorkbook
-            ? PrintRenderer.CreateWorkbookPaginator(_workbook, _viewportService, options.IgnorePrintAreas)
+            ? PrintRenderer.CreateWorkbookPaginator(_workbook, _viewportService, options.IgnorePrintAreas, ResolveWorkbookDirectoryForHeaderFooter())
             : RenderExportDocument(options).DocumentPaginator;
 
         if (!ExportPlanner.TryValidatePageRange(options.PageRange, paginator.PageCount, out var pageRangeError, WpfExportPlannerTextResolver.Instance))

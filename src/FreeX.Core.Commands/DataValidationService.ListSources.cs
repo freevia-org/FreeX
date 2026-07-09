@@ -17,7 +17,7 @@ public static partial class DataValidationService
         return ValidateListAgainstValues(dv, value, trimmed);
     }
 
-    private static string? ValidateList(DataValidation dv, ScalarValue value, Sheet sheet, Workbook? workbook)
+    private static string? ValidateList(DataValidation dv, ScalarValue value, Sheet sheet, CellAddress address, Workbook? workbook)
     {
         if (string.IsNullOrWhiteSpace(dv.Formula1))
             return null;
@@ -25,7 +25,11 @@ public static partial class DataValidationService
         var source = dv.Formula1.Trim();
         if (source.StartsWith('='))
         {
-            if (TryValidateRangeOrNamedSource(source, sheet, workbook, value, out var rangeMatch))
+            // The source formula is authored as if the rule's anchor cell (AppliesTo.Start) were
+            // active; relative references (e.g. a cascading =INDIRECT($A2) source) must be
+            // shifted to the cell actually being validated, mirroring ValidateCustom.
+            var anchor = dv.AppliesTo.Start;
+            if (TryValidateRangeOrNamedSource(source, sheet, workbook, anchor, address, value, out var rangeMatch))
             {
                 if (rangeMatch)
                     return null;
@@ -34,7 +38,7 @@ public static partial class DataValidationService
                     return dv.ErrorMessage;
             }
 
-            var allowed = ResolveListValues(source, sheet, workbook);
+            var allowed = ResolveListValues(source, sheet, anchor, address, workbook);
             if (allowed.Count > 0)
                 return ValidateListAgainstValues(dv, value, allowed);
         }
@@ -42,15 +46,24 @@ public static partial class DataValidationService
         return ValidateList(dv, value);
     }
 
-    private static IReadOnlyList<string> ResolveListValues(string formulaText, Sheet sheet, Workbook? workbook)
+    private static IReadOnlyList<string> ResolveListValues(
+        string formulaText,
+        Sheet sheet,
+        CellAddress anchor,
+        CellAddress address,
+        Workbook? workbook)
     {
         var source = formulaText.Trim();
         if (source.StartsWith('='))
         {
-            if (TryReadRangeOrNamedSource(source, sheet, workbook, out var rangeValues))
+            if (TryReadRangeOrNamedSource(source, sheet, workbook, anchor, address, out var rangeValues))
                 return rangeValues;
 
-            var result = new FormulaEvaluator().Evaluate(source, sheet, workbook);
+            var ast = FormulaEvaluator.ParseFormula(source);
+            if (anchor != address)
+                ast = FormulaEvaluator.ShiftFormulaForCell(ast, anchor, address);
+
+            var result = new FormulaEvaluator().Evaluate(ast, sheet, workbook, currentCell: address);
             if (result is RangeValue range)
                 return range.Flatten().Select(ToValidationText).ToArray();
 
@@ -101,17 +114,29 @@ public static partial class DataValidationService
         string formulaText,
         Sheet sheet,
         Workbook? workbook,
+        CellAddress anchor,
+        CellAddress address,
         out IReadOnlyList<string> values)
     {
         values = Array.Empty<string>();
 
-        if (TryReadSimpleSameSheetRangeSource(formulaText, sheet, out values))
+        // The simple-range fast path strips $ markers and can't distinguish relative from
+        // absolute references, so it can only be used when no anchor->address shift is needed.
+        if (anchor == address && TryReadSimpleSameSheetRangeSource(formulaText, sheet, out values))
             return true;
 
         try
         {
             var tokens = new Lexer(formulaText).Tokenize();
             var ast = new Parser(tokens).Parse();
+            if (anchor != address)
+                ast = FormulaEvaluator.ShiftFormulaForCell(ast, anchor, address);
+
+            if (ast is ErrorNode)
+            {
+                values = Array.Empty<string>();
+                return true;
+            }
 
             if (ast is RangeRefNode range)
             {
@@ -187,10 +212,14 @@ public static partial class DataValidationService
         string formulaText,
         Sheet sheet,
         Workbook? workbook,
+        CellAddress anchor,
+        CellAddress address,
         ScalarValue value,
         out bool matches)
     {
-        if (TryValidateSimpleSameSheetRangeSource(formulaText, sheet, value, out matches))
+        // Same fast-path caveat as TryReadRangeOrNamedSource: it can't tell relative from
+        // absolute references, so only take it when no shift is needed.
+        if (anchor == address && TryValidateSimpleSameSheetRangeSource(formulaText, sheet, value, out matches))
             return true;
 
         matches = false;
@@ -199,6 +228,14 @@ public static partial class DataValidationService
         {
             var tokens = new Lexer(formulaText).Tokenize();
             var ast = new Parser(tokens).Parse();
+            if (anchor != address)
+                ast = FormulaEvaluator.ShiftFormulaForCell(ast, anchor, address);
+
+            if (ast is ErrorNode)
+            {
+                matches = false;
+                return true;
+            }
 
             if (ast is RangeRefNode range)
             {

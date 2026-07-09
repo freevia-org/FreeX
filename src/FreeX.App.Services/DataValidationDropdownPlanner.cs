@@ -48,7 +48,7 @@ public static class DataValidationDropdownPlanner
 
         try
         {
-            var items = DataValidationService.GetListItems(rule, sheet, workbook);
+            var items = DataValidationService.GetListItems(rule, sheet, activeCell, workbook);
             return items.Count > 0 && items.Count <= MaximumDropdownItems;
         }
         catch
@@ -78,7 +78,7 @@ public static class DataValidationDropdownPlanner
         IReadOnlyList<string> items;
         try
         {
-            items = DataValidationService.GetListItems(rule, sheet, workbook);
+            items = DataValidationService.GetListItems(rule, sheet, activeCell, workbook);
         }
         catch
         {

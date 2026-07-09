@@ -52,7 +52,7 @@ public static class DataValidationPreviewPlanner
         lines.Add($"Ignore blank: {FormatYesNo(rule.AllowBlank)}");
 
         if (rule.Type == DvType.List)
-            AddListPreview(lines, rule, sheet, workbook);
+            AddListPreview(lines, rule, sheet, activeCell, workbook);
 
         AddPromptPreview(lines, rule);
         AddErrorPreview(lines, rule);
@@ -60,14 +60,14 @@ public static class DataValidationPreviewPlanner
         return new DataValidationPreviewPlan(true, string.Join(Environment.NewLine, lines));
     }
 
-    private static void AddListPreview(List<string> lines, DataValidation rule, Sheet sheet, Workbook workbook)
+    private static void AddListPreview(List<string> lines, DataValidation rule, Sheet sheet, CellAddress activeCell, Workbook workbook)
     {
         if (!string.IsNullOrWhiteSpace(rule.Formula1))
             lines.Add($"Source: {DataValidationDisplayTextPlanner.FormatPreviewValue(rule.Formula1)}");
 
         lines.Add($"In-cell dropdown: {(rule.ShowDropdown ? "Shown" : "Hidden")}");
 
-        var items = DataValidationService.GetListItems(rule, sheet, workbook);
+        var items = DataValidationService.GetListItems(rule, sheet, activeCell, workbook);
         lines.Add(items.Count == 0
             ? "List items: none available"
             : $"List items: {FormatListItems(items)}");

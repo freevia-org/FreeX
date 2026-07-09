@@ -355,7 +355,17 @@ public sealed class RecalcEngine
             foreach (var anchor in _spillBlockedAnchors)
             {
                 var sheet = workbook.GetSheet(anchor.Sheet);
-                var cell = sheet?.GetCell(anchor);
+                if (sheet is null)
+                {
+                    // This anchor's sheet does not belong to `workbook` at all — it belongs to a
+                    // different open workbook sharing this engine (see RecalcEngine class remarks).
+                    // Neither retry nor evict it: evicting here would strand that other workbook's
+                    // dynamic array at a stale #SPILL! forever, since only that workbook's own
+                    // Recalculate call would ever revisit it.
+                    continue;
+                }
+
+                var cell = sheet.GetCell(anchor);
                 if (cell is null || !cell.HasFormula || cell.Value is not ErrorValue { Code: "#SPILL!" })
                 {
                     // No longer this engine's concern (cell cleared, overwritten, or already
@@ -843,8 +853,19 @@ public sealed class RecalcEngine
     /// <summary>Rebuild dependency and volatile-function tracking from every formula in a workbook.</summary>
     public void RebuildFormulaDependencies(Workbook workbook)
     {
-        _graph.ClearAll();
-        _volatileCells.Clear();
+        // This engine/graph is a single WPF-host-wide singleton shared by every open workbook (see
+        // RecalcEngine class remarks), so rebuilding one workbook's formulas must only clear THIS
+        // workbook's own state — a blanket ClearAll()/Clear() here would wipe every other open
+        // workbook's dependency edges, volatile-cell tracking, and spill-blocked anchors out from
+        // under it. Sheet ids are globally unique, so scoping to this workbook's own sheet ids is
+        // both necessary and sufficient.
+        var sheetIds = new HashSet<SheetId>(workbook.Sheets.Count);
+        foreach (var sheet in workbook.Sheets)
+            sheetIds.Add(sheet.Id);
+
+        _graph.ClearForSheets(sheetIds);
+        _volatileCells.RemoveWhere(cell => sheetIds.Contains(cell.Sheet));
+        _spillBlockedAnchors.RemoveWhere(cell => sheetIds.Contains(cell.Sheet));
         var formulaCellCount = 0;
 
         foreach (var sheet in workbook.Sheets)

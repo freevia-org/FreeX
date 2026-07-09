@@ -157,7 +157,9 @@ public sealed partial class MainWindow
             sheet.ColumnWidths,
             sheet.DefaultColumnWidth,
             sheet.HeaderMargin,
-            sheet.FooterMargin);
+            sheet.FooterMargin,
+            sheet.IsRowEffectivelyHidden,
+            sheet.IsColEffectivelyHidden);
 
         var instructions = PageBreakPreviewInstructionBuilder.Build(layout);
         if (instructions.IsEmpty)

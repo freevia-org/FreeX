@@ -1053,11 +1053,20 @@ public static partial class FormulaAuditingService
 
         for (var index = 0; index < formulaText.Length; index++)
         {
-            if (!IsFormulaReferenceBoundaryBefore(formulaText, index) ||
-                !TryReadFormulaReference(formulaText, index, out var end, out var row, out var col))
+            if (!IsFormulaReferenceBoundaryBefore(formulaText, index))
+                continue;
+
+            // A function name (e.g. LOG10, ATAN2) that happens to also parse as a valid A1-style
+            // address must not be normalized as a reference; check for the trailing '(' first.
+            if (IsAsciiLetterOrUnderscore(formulaText[index]) &&
+                IsFunctionCallToken(formulaText, index, out var functionEnd))
             {
+                index = functionEnd - 1;
                 continue;
             }
+
+            if (!TryReadFormulaReference(formulaText, index, out var end, out var row, out var col))
+                continue;
 
             var rowDelta = (int)row - (int)address.Row;
             var colDelta = (int)col - (int)address.Col;
@@ -1077,11 +1086,18 @@ public static partial class FormulaAuditingService
 
             for (var index = 0; index < formulaText.Length; index++)
             {
-                if (!IsFormulaReferenceBoundaryBefore(formulaText, index) ||
-                    !TryReadFormulaReference(formulaText, index, out var end, out var row, out var col))
+                if (!IsFormulaReferenceBoundaryBefore(formulaText, index))
+                    continue;
+
+                if (IsAsciiLetterOrUnderscore(formulaText[index]) &&
+                    IsFunctionCallToken(formulaText, index, out var functionEnd))
                 {
+                    index = functionEnd - 1;
                     continue;
                 }
+
+                if (!TryReadFormulaReference(formulaText, index, out var end, out var row, out var col))
+                    continue;
 
                 formulaText.AsSpan(appendStart, index - appendStart).CopyTo(buffer[writeIndex..]);
                 writeIndex += index - appendStart;
@@ -1195,6 +1211,32 @@ public static partial class FormulaAuditingService
 
     private static bool IsFormulaReferenceBoundaryAfter(string text, int index) =>
         index >= text.Length || !IsAsciiLetterDigitOrUnderscore(text[index]);
+
+    /// <summary>
+    /// True when the identifier starting at <paramref name="start"/> is immediately followed
+    /// (optionally through whitespace) by '(' — i.e. it is a function name (e.g. LOG10, ATAN2),
+    /// not a cell reference, even though its letters+digits may also parse as a valid A1 address.
+    /// Must be checked BEFORE <see cref="TryReadFormulaReference"/>, which has no way to see past
+    /// the token it is reading.
+    /// </summary>
+    private static bool IsFunctionCallToken(string formulaText, int start, out int identifierEnd)
+    {
+        identifierEnd = start + 1;
+        while (identifierEnd < formulaText.Length &&
+               (IsAsciiLetterDigitOrUnderscore(formulaText[identifierEnd]) || formulaText[identifierEnd] == '.'))
+        {
+            identifierEnd++;
+        }
+
+        var next = identifierEnd;
+        while (next < formulaText.Length && char.IsWhiteSpace(formulaText[next]))
+            next++;
+
+        return next < formulaText.Length && formulaText[next] == '(';
+    }
+
+    private static bool IsAsciiLetterOrUnderscore(char value) =>
+        IsAsciiLetter(value) || value == '_';
 
     private static bool TryNormalizeFormulaColumnLetter(char value, out char letter)
     {

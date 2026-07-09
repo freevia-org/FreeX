@@ -52,11 +52,22 @@ public sealed class DifFileAdapter : IFileAdapter
         while (i + 1 < lines.Count)
         {
             var typeLine = lines[i];
-            var contentLine = lines[i + 1];
-            i += 2;
 
             if (!TryParsePair(typeLine, out var typeId, out var number))
-                continue; // malformed pair — skip the chunk
+            {
+                i += 2; // malformed pair — skip the chunk
+                continue;
+            }
+
+            // The content line is normally a single physical line, but a quoted TextValue chunk may
+            // contain an embedded '\n'/'\r' — Escape() only doubles embedded double-quotes, so that raw
+            // line break survives into the written file and StreamReader.ReadLine splits it into two (or
+            // more) physical lines. Stay quote-aware: if the value opens with '"' but does not close on
+            // this line, keep folding subsequent physical lines in (re-inserting the '\n' between them)
+            // until the closing unescaped quote is found. This both recovers the embedded line break and
+            // keeps the index in sync so later records don't desync by one line.
+            var (contentLine, nextIndex) = ReadQuotedAwareContent(lines, i + 1);
+            i = nextIndex;
 
             if (typeId == BeginningOfTuple)
             {
@@ -289,6 +300,59 @@ public sealed class DifFileAdapter : IFileAdapter
     }
 
     private static string Escape(string value) => value.Replace("\"", "\"\"", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Reads the content line starting at <paramref name="start"/>, folding in subsequent physical
+    /// lines (rejoined with '\n') while the value is an unterminated quoted string — i.e. it opens with
+    /// '"' but the matching unescaped closing '"' has not yet been seen. Returns the (possibly
+    /// multi-line) content and the index of the next unread line, so the caller's cursor stays in sync
+    /// even when a single logical value spanned several physical lines.
+    /// </summary>
+    private static (string Content, int NextIndex) ReadQuotedAwareContent(List<string> lines, int start)
+    {
+        if (start >= lines.Count)
+            return (string.Empty, start);
+
+        var value = lines[start];
+        var index = start + 1;
+        while (!IsQuoteClosed(value) && index < lines.Count)
+        {
+            value = string.Concat(value, "\n", lines[index]);
+            index++;
+        }
+
+        return (value, index);
+    }
+
+    /// <summary>
+    /// True when <paramref name="text"/> does not open with an unescaped double-quote, or it does and
+    /// that quote is already matched by a later unescaped closing quote (embedded "" escapes are
+    /// skipped in pairs, matching <see cref="Escape"/>/<see cref="Unquote"/>).
+    /// </summary>
+    private static bool IsQuoteClosed(string text)
+    {
+        if (text.Length == 0 || text[0] != '"')
+            return true; // not a quoted value — nothing to close, single line stands as-is
+
+        var i = 1;
+        while (i < text.Length)
+        {
+            if (text[i] == '"')
+            {
+                if (i + 1 < text.Length && text[i + 1] == '"')
+                {
+                    i += 2; // escaped quote — doubled per Escape()
+                    continue;
+                }
+
+                return true; // unescaped closing quote found
+            }
+
+            i++;
+        }
+
+        return false;
+    }
 
     private static List<string> ReadAllLines(TextReader reader)
     {

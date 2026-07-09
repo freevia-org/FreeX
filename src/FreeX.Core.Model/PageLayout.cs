@@ -193,6 +193,43 @@ public static class WorksheetPageLayout
         IReadOnlyList<uint> pageRows,
         IReadOnlyList<uint> pageColumns)
     {
+        return GetDisplayedCommentOverlaysCore(comments, threadedComments, pageRows, pageColumns, shownComments: null);
+    }
+
+    /// <summary>
+    /// Same as the overload without <paramref name="shownComments"/>, except only notes/threaded
+    /// comments whose address is "pinned" (present in <paramref name="shownComments"/> — i.e.
+    /// <see cref="Sheet.ShownComments"/>) are emitted. Excel's Comments &amp; Notes "Indicators only"
+    /// display state means the "As displayed on sheet" print/PDF mode must draw a box only for the
+    /// notes the user actually pinned open, not every note/threaded comment on the sheet.
+    /// </summary>
+    public static IReadOnlyList<WorksheetDisplayedComment> GetDisplayedCommentOverlays(
+        IReadOnlyDictionary<CellAddress, string> comments,
+        IReadOnlyList<uint> pageRows,
+        IReadOnlyList<uint> pageColumns,
+        IReadOnlySet<CellAddress> shownComments)
+    {
+        return GetDisplayedCommentOverlaysCore(comments, EmptyThreadedComments, pageRows, pageColumns, shownComments);
+    }
+
+    /// <inheritdoc cref="GetDisplayedCommentOverlays(IReadOnlyDictionary{CellAddress,string},IReadOnlyList{uint},IReadOnlyList{uint},IReadOnlySet{CellAddress})"/>
+    public static IReadOnlyList<WorksheetDisplayedComment> GetDisplayedCommentOverlays(
+        IReadOnlyDictionary<CellAddress, string> comments,
+        IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments,
+        IReadOnlyList<uint> pageRows,
+        IReadOnlyList<uint> pageColumns,
+        IReadOnlySet<CellAddress> shownComments)
+    {
+        return GetDisplayedCommentOverlaysCore(comments, threadedComments, pageRows, pageColumns, shownComments);
+    }
+
+    private static IReadOnlyList<WorksheetDisplayedComment> GetDisplayedCommentOverlaysCore(
+        IReadOnlyDictionary<CellAddress, string> comments,
+        IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments,
+        IReadOnlyList<uint> pageRows,
+        IReadOnlyList<uint> pageColumns,
+        IReadOnlySet<CellAddress>? shownComments)
+    {
         var rowIndexes = pageRows
             .Select((row, index) => (row, index))
             .ToDictionary(item => item.row, item => item.index);
@@ -211,6 +248,7 @@ public static class WorksheetPageLayout
 
         return mergedComments
             .Where(pair => rowIndexes.ContainsKey(pair.Key.Row) && columnIndexes.ContainsKey(pair.Key.Col))
+            .Where(pair => shownComments is null || shownComments.Contains(pair.Key))
             .OrderBy(pair => rowIndexes[pair.Key.Row])
             .ThenBy(pair => columnIndexes[pair.Key.Col])
             .Select(pair => new WorksheetDisplayedComment(

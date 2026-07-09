@@ -131,7 +131,12 @@ internal static class AdvancedFilterPlanBuilder
             return new TextEqualsFilterCriterion(criteriaText[1..]);
         // Excel semantics: plain (unquoted) text in an Advanced Filter criteria cell means
         // "begins with", not exact match. Exact match requires the ="text" form (handled above).
-        return new TextBeginsWithFilterCriterion(criteriaText);
+        // But once the text contains a wildcard (? * ~), Excel matches the wildcard pattern
+        // against the whole cell value instead of treating it as a begins-with prefix, e.g.
+        // "Sm?th" matches "Smith"/"Smyth" but not "Smithsonian".
+        return FilterWildcard.ContainsWildcardCharacter(criteriaText)
+            ? new TextEqualsFilterCriterion(criteriaText)
+            : new TextBeginsWithFilterCriterion(criteriaText);
     }
 
     private sealed class UniqueRowSet

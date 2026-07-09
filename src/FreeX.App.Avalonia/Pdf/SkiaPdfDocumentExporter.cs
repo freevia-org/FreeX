@@ -23,7 +23,8 @@ public static class SkiaPdfDocumentExporter
         Workbook workbook,
         PortablePdfExportPlan exportPlan,
         Stream stream,
-        PortablePdfDocumentOptions? options = null)
+        PortablePdfDocumentOptions? options = null,
+        string workbookDirectory = "")
     {
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(exportPlan);
@@ -37,7 +38,7 @@ public static class SkiaPdfDocumentExporter
         // CreatePlanFromPageSetup (page dimensions/gridlines/header-footer honored per sheet).
         // Fall back to the legacy options-driven builder when an explicit options object is passed.
         var document = options is null
-            ? WorkbookPdfContentBuilder.BuildWithPageSetup(workbook, exportPlan)
+            ? WorkbookPdfContentBuilder.BuildWithPageSetup(workbook, exportPlan, workbookDirectory)
             : WorkbookPdfContentBuilder.Build(workbook, exportPlan, options);
 
         var pageCount = SkiaPdfWriter.Write(document, stream);

@@ -157,6 +157,8 @@ public sealed partial class MainWindow
         var range = _session.SelectedRange;
         var result = _session.ExecuteReviewCommand(
             new InsertRowsCommand(_session.ActiveSheet.Id, range.Start.Row, range.RowCount));
+        if (result.Success)
+            ClearFormulaTraceArrowsAfterStructuralEdit();
         RefreshShell(result.Success
             ? UiText.Get("RibbonWire_InsertedSheetRows")
             : result.ErrorMessage ?? UiText.Get("RibbonWire_InsertSheetRowsFailed"));
@@ -167,6 +169,8 @@ public sealed partial class MainWindow
         var range = _session.SelectedRange;
         var result = _session.ExecuteReviewCommand(
             new InsertColumnsCommand(_session.ActiveSheet.Id, range.Start.Col, range.ColCount));
+        if (result.Success)
+            ClearFormulaTraceArrowsAfterStructuralEdit();
         RefreshShell(result.Success
             ? UiText.Get("RibbonWire_InsertedSheetColumns")
             : result.ErrorMessage ?? UiText.Get("RibbonWire_InsertSheetColumnsFailed"));
@@ -177,6 +181,8 @@ public sealed partial class MainWindow
         var range = _session.SelectedRange;
         var result = _session.ExecuteReviewCommand(
             new DeleteRowsCommand(_session.ActiveSheet.Id, range.Start.Row, range.RowCount));
+        if (result.Success)
+            ClearFormulaTraceArrowsAfterStructuralEdit();
         RefreshShell(result.Success
             ? UiText.Get("RibbonWire_DeletedSheetRows")
             : result.ErrorMessage ?? UiText.Get("RibbonWire_DeleteSheetRowsFailed"));
@@ -187,9 +193,24 @@ public sealed partial class MainWindow
         var range = _session.SelectedRange;
         var result = _session.ExecuteReviewCommand(
             new DeleteColumnsCommand(_session.ActiveSheet.Id, range.Start.Col, range.ColCount));
+        if (result.Success)
+            ClearFormulaTraceArrowsAfterStructuralEdit();
         RefreshShell(result.Success
             ? UiText.Get("RibbonWire_DeletedSheetColumns")
             : result.ErrorMessage ?? UiText.Get("RibbonWire_DeleteSheetColumnsFailed"));
+    }
+
+    // Mirrors the WPF host's ClearFormulaTraceArrowsAfterStructuralEdit invalidation:
+    // row/column insert/delete rewrites formulas and shifts cells (RowColumnShiftHelpers) but never
+    // touches _formulaTraceArrows itself, so a stale arrow set would silently keep pointing at
+    // pre-edit grid coordinates that, after the shift, belong to different cells than the formula's
+    // actual (now-moved) precedents/dependents. Excel clears trace arrows outright on a structural
+    // edit rather than trying to re-derive them, since the frontier the arrows were expanded from may
+    // no longer even resolve to a formula cell; this mirrors that behavior. RefreshShell (called by
+    // every caller right after) repaints the overlay, so no separate redraw is needed here.
+    private void ClearFormulaTraceArrowsAfterStructuralEdit()
+    {
+        _formulaTraceArrows.Clear();
     }
 
     // ── Home ▸ Cells ▸ Format ▸ Lock Cell ────────────────────────────────────────

@@ -325,7 +325,17 @@ public partial class MainWindow
 
     private void SelectGoToSpecialMatches(GoToSpecialKind kind, GoToSpecialOptions? options, bool showEmptyMessage, Sheet sheet, GridRange range)
     {
-        var matches = GoToSpecialService.Find(_workbook, sheet, range, kind, range.Start, options);
+        // CurrentRegion/Precedents/Dependents trace relationships from the user's true active
+        // cell/selection, not the (possibly auto-expanded-to-used-range) content search range;
+        // otherwise a single-cell selection whose used-range corner is blank falsely reports
+        // "No cells found", and Precedents/Dependents would trace the whole used range instead
+        // of the cell the user actually selected.
+        var trueSelection = SheetGrid.SelectedRange ?? new GridRange(range.Start, range.Start);
+        var activeCell = trueSelection.Start;
+        var searchRange = kind is GoToSpecialKind.CurrentRegion or GoToSpecialKind.Precedents or GoToSpecialKind.Dependents
+            ? trueSelection
+            : range;
+        var matches = GoToSpecialService.Find(_workbook, sheet, searchRange, kind, activeCell, options);
         if (matches.Count == 0)
         {
             if (showEmptyMessage)

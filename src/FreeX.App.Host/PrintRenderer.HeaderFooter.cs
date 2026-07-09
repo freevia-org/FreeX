@@ -66,7 +66,8 @@ public static partial class PrintRenderer
         int totalPages,
         bool draftQuality,
         bool blackAndWhite,
-        double configuredScalePercent)
+        double configuredScalePercent,
+        string workbookDirectory = "")
     {
         var visual = new DrawingVisual();
         var textOverlays = new List<PdfTextOverlay>();
@@ -92,7 +93,8 @@ public static partial class PrintRenderer
             alignHeaderFooterWithMargins,
             pageNumber,
             totalPages,
-            draftQuality);
+            draftQuality,
+            workbookDirectory);
 
         var printedWidth = measurement.HeaderWidth + measurement.TotalColumnWidth(pageColumns.Count);
         var printedHeight = measurement.HeaderHeight + measurement.TotalRowHeight(pageRows.Count);

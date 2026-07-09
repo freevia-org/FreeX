@@ -116,7 +116,7 @@ public sealed class FormulaEvaluationSession
         if (string.IsNullOrEmpty(expression))
             return new FormulaEvaluationHighlight("", formula, "");
 
-        var index = formula.IndexOf(expression, StringComparison.OrdinalIgnoreCase);
+        var index = FindExpressionTokenIndex(formula, expression);
         if (index < 0)
             return new FormulaEvaluationHighlight("", formula, "");
 
@@ -125,6 +125,42 @@ public sealed class FormulaEvaluationSession
             formula.Substring(index, expression.Length),
             formula[(index + expression.Length)..]);
     }
+
+    /// <summary>
+    /// Finds <paramref name="expression"/> inside <paramref name="formula"/>, skipping matches that
+    /// are merely a substring of a longer reference/identifier token (e.g. "A1" inside "A11") so a
+    /// repeated identical sub-expression or a prefix collision highlights the correct span rather
+    /// than the first (possibly embedded) occurrence.
+    /// </summary>
+    private static int FindExpressionTokenIndex(string formula, string expression)
+    {
+        var searchStart = 0;
+        while (searchStart <= formula.Length - expression.Length)
+        {
+            var index = formula.IndexOf(expression, searchStart, StringComparison.OrdinalIgnoreCase);
+            if (index < 0)
+                return -1;
+
+            var boundaryBefore = index == 0 ||
+                !IsFormulaHighlightTokenChar(expression[0]) ||
+                !IsFormulaHighlightTokenChar(formula[index - 1]);
+
+            var endIndex = index + expression.Length;
+            var boundaryAfter = endIndex >= formula.Length ||
+                !IsFormulaHighlightTokenChar(expression[^1]) ||
+                !IsFormulaHighlightTokenChar(formula[endIndex]);
+
+            if (boundaryBefore && boundaryAfter)
+                return index;
+
+            searchStart = index + 1;
+        }
+
+        return -1;
+    }
+
+    private static bool IsFormulaHighlightTokenChar(char value) =>
+        char.IsLetterOrDigit(value) || value is '_' or '.' or '$';
 }
 
 internal sealed record FormulaEvaluationSessionFrame(FormulaEvaluationSummary Summary, int StepIndex);

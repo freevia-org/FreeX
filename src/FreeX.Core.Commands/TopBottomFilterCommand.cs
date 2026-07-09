@@ -154,8 +154,31 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
                 }
             }
 
-            for (var i = 0; i < heapCount; i++)
-                keptRows[(int)(heap[i].Row - firstDataRow)] = true;
+            if (heapCount < keepCount)
+            {
+                // Fewer numeric rows than requested count: everything numeric qualifies.
+                for (var row = firstDataRow; row <= lastDataRow; row++)
+                {
+                    if (sheet.GetValue(row, filterCol) is NumberValue)
+                        keptRows[(int)(row - firstDataRow)] = true;
+                }
+            }
+            else
+            {
+                // Excel Top-N/Bottom-N is threshold-based: keep every row at least as good as
+                // the Nth-best (boundary) value, not just the first N by row index, so ties at
+                // the boundary are all kept (e.g. Top 2 over {100,100,100,50} keeps all three 100s).
+                var boundary = heap[0].Value;
+                for (var row = firstDataRow; row <= lastDataRow; row++)
+                {
+                    if (sheet.GetValue(row, filterCol) is not NumberValue number)
+                        continue;
+
+                    var keep = top ? number.Value >= boundary : number.Value <= boundary;
+                    if (keep)
+                        keptRows[(int)(row - firstDataRow)] = true;
+                }
+            }
         }
         finally
         {
