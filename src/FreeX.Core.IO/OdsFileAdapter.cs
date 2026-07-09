@@ -165,12 +165,11 @@ public sealed partial class OdsFileAdapter : IFileAdapter
 
     private static XDocument LoadXml(Stream stream)
     {
-        var settings = new XmlReaderSettings
-        {
-            DtdProcessing = DtdProcessing.Prohibit,
-            XmlResolver = null,
-            IgnoreWhitespace = false,
-        };
+        // Use the shared hardened reader policy (DTD prohibited, no external resolver, and a
+        // MaxCharactersInDocument ceiling) so a crafted content.xml/styles.xml part can't exhaust
+        // memory the same way the other package-based adapters (XLSX/DOCX/ODT) are already guarded.
+        var settings = SecureXmlReaderSettings.Create();
+        settings.IgnoreWhitespace = false;
         using var reader = XmlReader.Create(stream, settings);
         return XDocument.Load(reader, LoadOptions.None);
     }

@@ -5146,7 +5146,10 @@ public sealed class AvaloniaShellSourceTests
         findReplaceServiceSource.Should().Contain("match.ReplyIndex is { } replyIndex");
         findReplaceServiceSource.Should().Contain("new UpdateThreadedCommentReplyCommand(");
         sessionSource.Should().Contain("public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)");
-        sessionSource.Should().Contain("var searchRange = ResolveGoToSpecialSearchRange();");
+        // CurrentRegion/Precedents/Dependents trace from the true selection; content kinds use the
+        // (auto-expanded) search range.
+        sessionSource.Should().Contain("kind is GoToSpecialKind.CurrentRegion or GoToSpecialKind.Precedents or GoToSpecialKind.Dependents");
+        sessionSource.Should().Contain("ResolveGoToSpecialSearchRange();");
         sessionSource.Should().Contain("GoToSpecialService.Find(Workbook, ActiveSheet, searchRange, kind, ActiveCell, options)");
         sessionSource.Should().Contain("SelectionRangeService.CompressAddresses(matches)");
         sessionSource.Should().Contain("SelectRanges(selectedRange, ranges);");

@@ -125,7 +125,7 @@ public sealed class ClipboardPastePlannerTests
     }
 
     [Fact]
-    public void ShouldFillSelectedDestinationRange_AllowsCopiedCellsButKeepsCutAndOperationsAtSourceFootprint()
+    public void ShouldFillSelectedDestinationRange_AllowsCopiedCellsAndOperationsButKeepsCutAtSourceFootprint()
     {
         ClipboardPastePlanner.ShouldFillSelectedDestinationRange(isCut: false, default)
             .Should()
@@ -133,11 +133,14 @@ public sealed class ClipboardPastePlannerTests
         ClipboardPastePlanner.ShouldFillSelectedDestinationRange(isCut: true, default)
             .Should()
             .BeFalse();
+        // An arithmetic Operation must still tile/fill the selected destination range, exactly like
+        // a plain paste — Excel applies Add/Subtract/Multiply/Divide cell-by-cell across the whole
+        // selection, not just the anchor cell (R16-paste-special-matrix-1).
         ClipboardPastePlanner.ShouldFillSelectedDestinationRange(
                 isCut: false,
                 new PasteSpecialOptions(Operation: PasteSpecialOperation.Add))
             .Should()
-            .BeFalse();
+            .BeTrue();
         ClipboardPastePlanner.ShouldFillSelectedDestinationRange(
                 isCut: false,
                 new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.AllMergingConditionalFormats))

@@ -230,6 +230,11 @@ internal static partial class RowColumnShiftHelpers
         public List<ChartSeriesVerbatimFormulas>? VerbatimSeriesFormulas { get; init; }
         // Per-series data-label formula snapshot: (SeriesIndex, Formula?)
         public List<(int SeriesIndex, string? Formula)>? DataLabelFormulas { get; init; }
+        // Custom error-bar plus/minus range-source formulas (R16-chart-datasource-editing-1).
+        // ErrorBarsCaptured distinguishes "chart had error-bar formulas" from "not captured".
+        public bool ErrorBarsCaptured { get; init; }
+        public string? ErrorBarPlusRangeFormula { get; init; }
+        public string? ErrorBarMinusRangeFormula { get; init; }
     }
 
     /// <summary>
@@ -268,11 +273,16 @@ internal static partial class RowColumnShiftHelpers
                     dlFormulas.Add((d.SeriesIndex, d.Formula));
             }
 
-            result.Add(verbatim is not null || dlFormulas is not null
+            var hasErrorBars = chart.ErrorBarPlusRangeFormula is not null || chart.ErrorBarMinusRangeFormula is not null;
+
+            result.Add(verbatim is not null || dlFormulas is not null || hasErrorBars
                 ? new ChartVerbatimSnapshot
                 {
-                    VerbatimSeriesFormulas = verbatim,
-                    DataLabelFormulas      = dlFormulas
+                    VerbatimSeriesFormulas    = verbatim,
+                    DataLabelFormulas         = dlFormulas,
+                    ErrorBarsCaptured         = hasErrorBars,
+                    ErrorBarPlusRangeFormula  = chart.ErrorBarPlusRangeFormula,
+                    ErrorBarMinusRangeFormula = chart.ErrorBarMinusRangeFormula
                 }
                 : null);
         }
@@ -342,6 +352,15 @@ internal static partial class RowColumnShiftHelpers
                         dl[i] = entry with { Formula = rewritten };
                 }
             }
+
+            // R16-chart-datasource-editing-1: custom error-bar +/- range formulas track
+            // structural edits just like the series value/category formulas above.
+            var newPlus  = RewriteVerbatimFormula(chart.ErrorBarPlusRangeFormula,  op, hostSheetName);
+            var newMinus = RewriteVerbatimFormula(chart.ErrorBarMinusRangeFormula, op, hostSheetName);
+            if (!ReferenceEquals(newPlus, chart.ErrorBarPlusRangeFormula))
+                chart.ErrorBarPlusRangeFormula = newPlus;
+            if (!ReferenceEquals(newMinus, chart.ErrorBarMinusRangeFormula))
+                chart.ErrorBarMinusRangeFormula = newMinus;
         }
     }
 
@@ -398,6 +417,13 @@ internal static partial class RowColumnShiftHelpers
                         chart.SeriesRangeDataLabels[listIdx] = entry with { Formula = formula };
                     }
                 }
+            }
+
+            // R16-chart-datasource-editing-1: undo restores the pre-edit error-bar range formulas.
+            if (snap.ErrorBarsCaptured)
+            {
+                chart.ErrorBarPlusRangeFormula = snap.ErrorBarPlusRangeFormula;
+                chart.ErrorBarMinusRangeFormula = snap.ErrorBarMinusRangeFormula;
             }
         }
     }

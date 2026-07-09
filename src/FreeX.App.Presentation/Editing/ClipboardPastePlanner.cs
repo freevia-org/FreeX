@@ -86,7 +86,10 @@ public static class ClipboardPastePlanner
 
     public static bool ShouldFillSelectedDestinationRange(bool isCut, PasteSpecialOptions options) =>
         !isCut &&
-        options.Operation == PasteSpecialOperation.None &&
+        // An arithmetic Operation (Add/Subtract/Multiply/Divide) must still tile across a larger
+        // selected destination just like a plain paste — Excel applies the operation cell-by-cell
+        // to every destination cell, tiling the (possibly 1-cell) clipboard source across the whole
+        // selection, not just the anchor cell (R16-paste-special-matrix-1).
         options.ContentKind != PasteSpecialContentKind.AllMergingConditionalFormats;
 
     public static bool ShouldClearCutSourceAfterPaste(

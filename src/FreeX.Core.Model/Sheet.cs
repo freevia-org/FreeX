@@ -857,6 +857,9 @@ public sealed partial class Sheet
                 long targetCol = (long)anchor.Col + c;
                 if (targetRow > CellAddress.MaxRow || targetCol > CellAddress.MaxCol) return true;
                 var key = ((uint)targetRow, (uint)targetCol);
+                // Excel refuses to spill into a merged cell ("Spill range has merged cells"),
+                // even when that region is otherwise empty (no _cells/_spillValues entry).
+                if (IsMerged(new CellAddress(anchor.Sheet, key.Item1, key.Item2))) return true;
                 if (_cells.ContainsKey(key))
                 {
                     // A provisional cached spill cell loaded from the XLSX for THIS anchor does not

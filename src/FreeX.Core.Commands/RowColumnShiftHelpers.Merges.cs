@@ -7,10 +7,17 @@ internal static partial class RowColumnShiftHelpers
     public static IReadOnlyList<GridRange> InsertColumnsIntoMergedRegions(
         IEnumerable<GridRange> mergedRegions,
         uint beforeCol,
-        uint count) =>
-        mergedRegions
-            .Select(region => InsertColumnsIntoMergedRegion(region, beforeCol, count))
-            .ToList();
+        uint count)
+    {
+        var adjustedMerges = new List<GridRange>();
+        foreach (var region in mergedRegions)
+        {
+            if (TryInsertColumnsIntoMergedRegion(region, beforeCol, count, out var adjusted))
+                adjustedMerges.Add(adjusted);
+        }
+
+        return adjustedMerges;
+    }
 
     public static IReadOnlyList<GridRange> DeleteColumnsFromMergedRegions(
         IEnumerable<GridRange> mergedRegions,
@@ -28,23 +35,40 @@ internal static partial class RowColumnShiftHelpers
         return adjustedMerges;
     }
 
-    private static GridRange InsertColumnsIntoMergedRegion(GridRange region, uint beforeCol, uint count)
+    private static bool TryInsertColumnsIntoMergedRegion(GridRange region, uint beforeCol, uint count, out GridRange adjusted)
     {
+        GridRange shifted;
         if (region.Start.Col >= beforeCol)
         {
-            return new GridRange(
+            shifted = new GridRange(
                 new CellAddress(region.Start.Sheet, region.Start.Row, region.Start.Col + count),
                 new CellAddress(region.End.Sheet, region.End.Row, region.End.Col + count));
         }
-
-        if (region.End.Col >= beforeCol)
+        else if (region.End.Col >= beforeCol)
         {
-            return new GridRange(
+            shifted = new GridRange(
                 region.Start,
                 new CellAddress(region.End.Sheet, region.End.Row, region.End.Col + count));
         }
+        else
+        {
+            adjusted = region;
+            return true;
+        }
 
-        return region;
+        // R16-large-workbook-perf-2: a merged region whose entire shifted position falls past the
+        // last column runs off the sheet and is dropped, mirroring Excel; one whose right edge
+        // merely overshoots is clamped back to the last column instead of left out-of-bounds.
+        if (shifted.Start.Col > CellAddress.MaxCol)
+        {
+            adjusted = default;
+            return false;
+        }
+
+        adjusted = shifted.End.Col > CellAddress.MaxCol
+            ? new GridRange(shifted.Start, new CellAddress(shifted.End.Sheet, shifted.End.Row, CellAddress.MaxCol))
+            : shifted;
+        return true;
     }
 
     private static bool TryDeleteColumnsFromMergedRegion(

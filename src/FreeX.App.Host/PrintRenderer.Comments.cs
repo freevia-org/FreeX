@@ -20,13 +20,20 @@ public static partial class PrintRenderer
         PrintGridMeasurement measurement,
         double pageW,
         double pageH,
-        bool blackAndWhite)
+        bool blackAndWhite,
+        IReadOnlySet<CellAddress> shownComments)
     {
+        // Excel's Comments & Notes "Indicators only" display state means "As displayed on sheet"
+        // print/direct-print must draw a box only for the notes the user actually pinned open
+        // (Sheet.ShownComments), not every note/threaded comment on the sheet -- match the
+        // portable/Skia PDF path (PortablePdfExportPlanner), which already passes shownComments
+        // into this same overload.
         var overlays = WorksheetPageLayout.GetDisplayedCommentOverlays(
             comments,
             threadedComments,
             pageRows,
-            pageColumns);
+            pageColumns,
+            shownComments);
         if (overlays.Count == 0)
             return;
 

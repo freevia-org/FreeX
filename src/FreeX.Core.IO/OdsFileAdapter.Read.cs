@@ -42,7 +42,9 @@ public sealed partial class OdsFileAdapter
         if (workbook.Sheets.Count == 0)
             workbook.AddSheet("Sheet1");
 
-        ReadNamedExpressions(workbook, spreadsheet);
+        var workbookNamedExpressions = spreadsheet.Element(TableNs + "named-expressions");
+        if (workbookNamedExpressions is not null)
+            ReadNamedExpressions(workbook, workbookNamedExpressions, scopeSheetId: null);
         return workbook;
     }
 
@@ -75,6 +77,12 @@ public sealed partial class OdsFileAdapter
 
         foreach (var merge in pendingMerges)
             sheet.AddMergedRegion(merge);
+
+        // table:named-expressions may also appear nested inside table:table, holding sheet-scoped
+        // named ranges/formulas (per the ODF 1.2 schema, it's the last child of the table element).
+        var sheetNamedExpressions = tableElement.Element(TableNs + "named-expressions");
+        if (sheetNamedExpressions is not null)
+            ReadNamedExpressions(workbook, sheetNamedExpressions, scopeSheetId: sheet.Id);
     }
 
     private void ReadColumns(Sheet sheet, XElement tableElement, OdsStyleTable styleTable)
@@ -113,6 +121,8 @@ public sealed partial class OdsFileAdapter
             if (!isCovered && !isCell)
                 continue;
 
+            if (col >= CellAddress.MaxCol) return;
+
             var repeat = ReadRepeat(cellElement, TableNs + "number-columns-repeated");
             repeat = (uint)Math.Min(repeat, CellAddress.MaxCol);
 
@@ -120,8 +130,39 @@ public sealed partial class OdsFileAdapter
             // repeated). Detect spans and treat the cell as non-repeating in that case.
             var rowsSpanned = ReadRepeat(cellElement, TableNs + "number-rows-spanned");
             var colsSpanned = ReadRepeat(cellElement, TableNs + "number-columns-spanned");
-            if (rowsSpanned > 1 || colsSpanned > 1)
+            var isMerge = rowsSpanned > 1 || colsSpanned > 1;
+            if (isMerge)
                 repeat = 1;
+
+            // Resolve the cell's content/style once per XML element rather than once per repeat
+            // instance — none of these depend on the column index.
+            string? styleName = null;
+            StyleId styleId = StyleId.Default;
+            var value = (ScalarValue)BlankValue.Instance;
+            string? formula = null;
+            if (!isCovered)
+            {
+                styleName = (string?)cellElement.Attribute(TableNs + "style-name");
+                if (styleName is not null && styleTable.GetCellStyle(workbook, styleName) is { } sid)
+                    styleId = sid;
+                value = ReadCellValue(cellElement, styleTable, styleName);
+                formula = ReadFormula(cellElement, row, col);
+            }
+
+            var hasInfo = formula is not null || value is not BlankValue || styleId != StyleId.Default;
+            if (!hasInfo && !isMerge)
+            {
+                // A covered-merge interior, or a fully blank/style-less cell, carries no information
+                // for any of its repeat instances — advance the column cursor for the whole run in
+                // O(1) rather than materializing (and re-evaluating) every repeated instance. Without
+                // this, a tiny file declaring a huge number-columns-repeated on a blank cell —
+                // combined with a huge number-rows-repeated on the enclosing row — would force the
+                // reader to iterate the full row*column product (a decompression-bomb style DoS).
+                var newCol = (ulong)col + repeat;
+                col = newCol > CellAddress.MaxCol ? CellAddress.MaxCol + 1 : (uint)newCol;
+                if (col > CellAddress.MaxCol) return;
+                continue;
+            }
 
             for (uint i = 0; i < repeat; i++)
             {
@@ -129,14 +170,6 @@ public sealed partial class OdsFileAdapter
                 if (col > CellAddress.MaxCol) return;
                 if (isCovered)
                     continue;
-
-                var styleName = (string?)cellElement.Attribute(TableNs + "style-name");
-                StyleId styleId = StyleId.Default;
-                if (styleName is not null && styleTable.GetCellStyle(workbook, styleName) is { } sid)
-                    styleId = sid;
-
-                var value = ReadCellValue(cellElement, styleTable, styleName);
-                var formula = ReadFormula(cellElement, row, col);
 
                 if (formula is not null)
                 {
@@ -161,10 +194,14 @@ public sealed partial class OdsFileAdapter
                     sheet.SetStyleOnly(row, col, styleId);
                 }
 
-                if ((rowsSpanned > 1 || colsSpanned > 1) && isFirstRepeat)
+                if (isMerge && isFirstRepeat)
                 {
-                    var endRow = Math.Min(CellAddress.MaxRow, row + Math.Max(rowsSpanned, 1) - 1);
-                    var endCol = Math.Min(CellAddress.MaxCol, col + Math.Max(colsSpanned, 1) - 1);
+                    // Widen to a 64-bit accumulator before clamping: rowsSpanned/colsSpanned come
+                    // straight from the (attacker-controlled) XML with no upper bound, so
+                    // `row + rowsSpanned - 1` in uint arithmetic can wrap around and silently produce
+                    // a corrupt (and possibly tiny/negative-looking) merge extent.
+                    var endRow = (uint)Math.Min(CellAddress.MaxRow, (ulong)row + Math.Max((ulong)rowsSpanned, 1) - 1);
+                    var endCol = (uint)Math.Min(CellAddress.MaxCol, (ulong)col + Math.Max((ulong)colsSpanned, 1) - 1);
                     pendingMerges.Add(new GridRange(
                         new CellAddress(sheet.Id, row, col),
                         new CellAddress(sheet.Id, endRow, endCol)));
@@ -243,12 +280,14 @@ public sealed partial class OdsFileAdapter
         return OdsFormulaConverter.ToA1(body);
     }
 
-    private void ReadNamedExpressions(Workbook workbook, XElement spreadsheet)
+    /// <summary>
+    /// Reads a table:named-expressions container: table:named-range (a named range) and
+    /// table:named-expression (a named formula). <paramref name="scopeSheetId"/> is null for the
+    /// workbook-level container (office:spreadsheet/table:named-expressions) and the owning sheet's
+    /// id when reading the sheet-scoped container nested inside a table:table.
+    /// </summary>
+    private void ReadNamedExpressions(Workbook workbook, XElement container, SheetId? scopeSheetId)
     {
-        var container = spreadsheet.Element(TableNs + "named-expressions");
-        if (container is null)
-            return;
-
         foreach (var namedRange in container.Elements(TableNs + "named-range"))
         {
             var name = (string?)namedRange.Attribute(TableNs + "name");
@@ -261,12 +300,53 @@ public sealed partial class OdsFileAdapter
             try
             {
                 var range = ParseOdfCellRangeAddress(workbook, cellRange);
-                if (range is { } r)
+                if (range is not { } r)
+                    continue;
+                if (scopeSheetId is { } sid)
+                    workbook.DefineNamedRange(name, r, metadata: null, sid);
+                else
                     workbook.DefineNamedRange(name, r);
             }
             catch (FormatException) { /* skip unparseable refs */ }
             catch (ArgumentException) { /* skip invalid names/ranges */ }
         }
+
+        foreach (var namedExpression in container.Elements(TableNs + "named-expression"))
+        {
+            var name = (string?)namedExpression.Attribute(TableNs + "name");
+            if (string.IsNullOrEmpty(name) || workbook.ValidateNamedRangeName(name) is not null)
+                continue;
+
+            var formulaText = ReadNamedExpressionFormula(namedExpression);
+            if (string.IsNullOrEmpty(formulaText))
+                continue;
+
+            if (scopeSheetId is { } sid)
+                workbook.DefineNamedFormula(name, formulaText, sid);
+            else
+                workbook.NamedFormulas.TryAdd(name, formulaText);
+        }
+    }
+
+    private static string? ReadNamedExpressionFormula(XElement namedExpression)
+    {
+        // Prefer the verbatim FreeX A1 hint when present — mirrors the per-cell formula hint and
+        // guarantees exact round-trip.
+        var a1Hint = (string?)namedExpression.Attribute(TableNs + "freex-a1-formula");
+        if (a1Hint is { Length: > 0 })
+            return a1Hint;
+
+        var expression = (string?)namedExpression.Attribute(TableNs + "expression");
+        if (string.IsNullOrEmpty(expression))
+            return null;
+
+        var body = expression;
+        if (body.StartsWith("of:", StringComparison.OrdinalIgnoreCase))
+            body = body[3..];
+        if (body.StartsWith('='))
+            body = body[1..];
+
+        return OdsFormulaConverter.ToA1(body);
     }
 
     private static GridRange? ParseOdfCellRangeAddress(Workbook workbook, string address)

@@ -310,34 +310,7 @@ public sealed class RecalcEngine
         // (bounded by MaxSpillDependentPasses as a sane guard against runaway chains).
         if (resolveSpillDependents && spillTargetsMayHaveChanged)
         {
-            // Track, per dependent cell, how many distinct spill-target precedents it read the
-            // last time it was scheduled. A cell must only be skipped as "already handled" if its
-            // spill-target input count has not grown since — otherwise a cell that depends on two
-            // spill targets from different "generations" (one resolved this pass, another that only
-            // materializes in a later pass) would be permanently skipped after its first, incomplete
-            // evaluation, keeping a stale value forever. See finding H3.
-            var seenSpillDependentInputCounts = new Dictionary<CellAddress, int>();
-            for (var pass = 0; pass < MaxSpillDependentPasses; pass++)
-            {
-                var spillDependents = CollectSpillTargetDependentFormulaCells(workbook, out var inputCounts);
-                spillDependents.RemoveAll(addr =>
-                {
-                    var currentCount = inputCounts[addr];
-                    if (seenSpillDependentInputCounts.TryGetValue(addr, out var previousCount) &&
-                        currentCount <= previousCount)
-                    {
-                        return true;
-                    }
-
-                    seenSpillDependentInputCounts[addr] = currentCount;
-                    return false;
-                });
-                if (spillDependents.Count == 0)
-                    break;
-
-                var spillReport = Recalculate(workbook, spillDependents, resolveSpillDependents: false);
-                report = MergeRecalcReports(report, spillReport);
-            }
+            ResolveSpillTargetDependentsFixpoint(workbook, ref report);
         }
 
         // Retry anchors that were showing #SPILL! as of some earlier pass. Excel re-spills the
@@ -388,6 +361,21 @@ public sealed class RecalcEngine
             {
                 var retryReport = Recalculate(workbook, retryAnchors, resolveSpillDependents: false);
                 report = MergeRecalcReports(report, retryReport);
+
+                // If a retried anchor actually re-spilled (its #SPILL! cleared because the blocker
+                // was cleared/moved), formulas that read its newly-populated spill-target cells were
+                // never ordered relative to it — those targets have no dependency-graph node — so
+                // the retry pass above did not refresh them. Run the same spill-target dependent
+                // fixpoint used for the main pass so those readers reflect the fresh values in this
+                // same recalc, instead of staying stale until the next full recalc/F9.
+                var anyReSpilled = retryAnchors.Exists(anchor =>
+                {
+                    var anchorSheet = workbook.GetSheet(anchor.Sheet);
+                    return anchorSheet?.GetCell(anchor)?.Value is not ErrorValue { Code: "#SPILL!" };
+                });
+
+                if (anyReSpilled)
+                    ResolveSpillTargetDependentsFixpoint(workbook, ref report);
             }
         }
 
@@ -917,6 +905,45 @@ public sealed class RecalcEngine
         // Recalculate runs the spill-target dependent follow-up pass itself (see the
         // spillTargetsMayHaveChanged path), so no separate second pass is needed here.
         return Recalculate(workbook, formulaCells);
+    }
+
+    /// <summary>
+    /// Re-evaluate formula cells that read spill-target cells (which have no dependency-graph
+    /// node of their own) until a fixpoint, so they reflect the current contents of every spill
+    /// range in the workbook. Shared by the main "a spill range changed this pass" path and by
+    /// the #SPILL! anchor retry path below (a re-spilled anchor's newly-populated targets need
+    /// the same follow-up, or their readers would stay stale until the next full recalc/F9).
+    /// </summary>
+    private void ResolveSpillTargetDependentsFixpoint(Workbook workbook, ref RecalcReport report)
+    {
+        // Track, per dependent cell, how many distinct spill-target precedents it read the
+        // last time it was scheduled. A cell must only be skipped as "already handled" if its
+        // spill-target input count has not grown since — otherwise a cell that depends on two
+        // spill targets from different "generations" (one resolved this pass, another that only
+        // materializes in a later pass) would be permanently skipped after its first, incomplete
+        // evaluation, keeping a stale value forever. See finding H3.
+        var seenSpillDependentInputCounts = new Dictionary<CellAddress, int>();
+        for (var pass = 0; pass < MaxSpillDependentPasses; pass++)
+        {
+            var spillDependents = CollectSpillTargetDependentFormulaCells(workbook, out var inputCounts);
+            spillDependents.RemoveAll(addr =>
+            {
+                var currentCount = inputCounts[addr];
+                if (seenSpillDependentInputCounts.TryGetValue(addr, out var previousCount) &&
+                    currentCount <= previousCount)
+                {
+                    return true;
+                }
+
+                seenSpillDependentInputCounts[addr] = currentCount;
+                return false;
+            });
+            if (spillDependents.Count == 0)
+                break;
+
+            var spillReport = Recalculate(workbook, spillDependents, resolveSpillDependents: false);
+            report = MergeRecalcReports(report, spillReport);
+        }
     }
 
     /// <summary>

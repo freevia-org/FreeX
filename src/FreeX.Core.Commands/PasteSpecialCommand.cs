@@ -131,20 +131,28 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
                 oldHyperlinkMetadata));
             sheet.SetCell(address, cell);
 
-            if (_sourceRichTextRuns is not null && _sourceRichTextRuns.TryGetValue(sourceAddress, out var newRuns))
-                sheet.RichTextRuns[address] = newRuns;
-            else
-                sheet.RichTextRuns.Remove(address);
+            // An arithmetic Operation paste only changes the destination cell's numeric value (see
+            // TryBuildCell) — it must leave whatever hyperlink/rich-text runs already sat at the
+            // destination untouched, not clear them (R16-paste-special-matrix-3). A non-Operation
+            // paste continues to replace them with the source's (or clear them, when the source has
+            // none), same as before.
+            if (_options.Operation == PasteSpecialOperation.None)
+            {
+                if (_sourceRichTextRuns is not null && _sourceRichTextRuns.TryGetValue(sourceAddress, out var newRuns))
+                    sheet.RichTextRuns[address] = newRuns;
+                else
+                    sheet.RichTextRuns.Remove(address);
 
-            if (_sourceHyperlinks is not null && _sourceHyperlinks.TryGetValue(sourceAddress, out var newHyperlink))
-                sheet.Hyperlinks[address] = newHyperlink;
-            else
-                sheet.Hyperlinks.Remove(address);
+                if (_sourceHyperlinks is not null && _sourceHyperlinks.TryGetValue(sourceAddress, out var newHyperlink))
+                    sheet.Hyperlinks[address] = newHyperlink;
+                else
+                    sheet.Hyperlinks.Remove(address);
 
-            if (_sourceHyperlinkMetadata is not null && _sourceHyperlinkMetadata.TryGetValue(sourceAddress, out var newHyperlinkMetadata))
-                sheet.HyperlinkMetadata[address] = newHyperlinkMetadata;
-            else
-                sheet.HyperlinkMetadata.Remove(address);
+                if (_sourceHyperlinkMetadata is not null && _sourceHyperlinkMetadata.TryGetValue(sourceAddress, out var newHyperlinkMetadata))
+                    sheet.HyperlinkMetadata[address] = newHyperlinkMetadata;
+                else
+                    sheet.HyperlinkMetadata.Remove(address);
+            }
         }
 
         return new CommandOutcome(true, AffectedCells: cells.Select(c => c.Address).ToList());
@@ -300,13 +308,16 @@ internal static class PasteArithmetic
             PasteSpecialOperation.Add => left + right,
             PasteSpecialOperation.Subtract => left - right,
             PasteSpecialOperation.Multiply => left * right,
-            PasteSpecialOperation.Divide when Math.Abs(right) < 0.000000000001 => double.NaN,
+            // Only an actual zero divisor is #DIV/0! — a tiny but non-zero divisor (e.g. 1e-15) is a
+            // legitimate division that yields a (possibly huge) real quotient, matching Excel
+            // (R16-paste-special-matrix-2).
+            PasteSpecialOperation.Divide when right == 0 => double.NaN,
             PasteSpecialOperation.Divide => left / right,
             _ => double.NaN
         };
 
         if (double.IsNaN(result))
-            return operation == PasteSpecialOperation.Divide && Math.Abs(right) < 0.000000000001
+            return operation == PasteSpecialOperation.Divide && right == 0
                 ? ErrorValue.DivByZero
                 : source;
 

@@ -117,14 +117,10 @@ internal static partial class XlsxChartXmlWriter
         var categoryIsNumeric = chart.FirstColIsCategories &&
             IsCategoryRangeNumeric(sheet, layout);
 
-        var seriesIndex = 0;
-        for (var strip = layout.FirstValueStrip; strip <= layout.LastStrip; strip++)
+        foreach (var (strip, seriesIndex) in GetChartSeriesStripSequence(chart, layout))
         {
             if (includeSeries is not null && !includeSeries(seriesIndex))
-            {
-                seriesIndex++;
                 continue;
-            }
 
             var verbatim = GetVerbatimFormulas(chart, seriesIndex);
             var valueRange = verbatim?.ValFormula
@@ -166,8 +162,60 @@ internal static partial class XlsxChartXmlWriter
                     ? ToSeriesSmoothXml(chart, seriesIndex, chartNs)
                     : null,
                 ToRangeDataLabelsExtXml(chart, seriesIndex, chartNs));
+        }
+    }
+
+    /// <summary>
+    /// R16-chart-datasource-editing-3: yields the (column, chart-XML series index) pairs to emit as
+    /// <c>&lt;c:ser&gt;</c> elements. When <see cref="ChartModel.SeriesColumnMappings"/> is
+    /// authoritative (populated and every mapped column lies within the strip span — mirrors
+    /// ChartRenderer.SeriesFormatting.HasAuthoritativeSeriesColumns) it is the source of truth: a
+    /// worksheet column inside <see cref="ChartModel.DataRange"/> that was deselected from the chart
+    /// (and so has no entry) is skipped instead of being re-emitted as a phantom series, and kept
+    /// columns use their original chart-XML idx (the key <see cref="ChartModel.SeriesFormats"/> and
+    /// friends are indexed by) instead of a freshly recomputed position. Otherwise falls back to the
+    /// legacy positional scan of every column in the strip span.
+    /// </summary>
+    private static IEnumerable<(uint Strip, int SeriesIndex)> GetChartSeriesStripSequence(
+        ChartModel chart,
+        ChartSeriesStripLayout layout)
+    {
+        if (HasAuthoritativeSeriesColumnMappings(chart, layout))
+        {
+            foreach (var mapping in chart.SeriesColumnMappings.OrderBy(m => m.SeriesXmlIndex))
+                yield return (mapping.ValueColumn, mapping.SeriesXmlIndex);
+            yield break;
+        }
+
+        var seriesIndex = 0;
+        for (var strip = layout.FirstValueStrip; strip <= layout.LastStrip; strip++)
+        {
+            yield return (strip, seriesIndex);
             seriesIndex++;
         }
+    }
+
+    /// <summary>
+    /// True when <see cref="ChartModel.SeriesColumnMappings"/> can be trusted as the exact set of
+    /// series to emit. Column-based mappings cannot describe row-major series (mirrors the renderer's
+    /// same guard), and a mapping referencing a column outside the strip span is stale/ambiguous.
+    /// </summary>
+    private static bool HasAuthoritativeSeriesColumnMappings(ChartModel chart, ChartSeriesStripLayout layout)
+    {
+        if (chart.SeriesInRows)
+            return false;
+
+        var mappings = chart.SeriesColumnMappings;
+        if (mappings.Count == 0)
+            return false;
+
+        foreach (var mapping in mappings)
+        {
+            if (mapping.ValueColumn < layout.FirstValueStrip || mapping.ValueColumn > layout.LastStrip)
+                return false;
+        }
+
+        return true;
     }
 
     /// <summary>

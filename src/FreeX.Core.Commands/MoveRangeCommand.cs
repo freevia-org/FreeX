@@ -28,6 +28,16 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
     private Dictionary<(Guid Id, int Slot), string?>? _cfThresholdSnapshot;
     private Dictionary<(Guid Id, int Slot), string?>? _dvFormulaSnapshot;
     private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
+    // R16-structural-edit-shift-sweep-1/2/3 + R16-chart-datasource-editing-2: a plain (non-verbatim)
+    // chart.DataRange, workbook/sheet-scoped defined names, and a moved cell's sparkline are all
+    // address-bearing state that a Cut+Paste move must relocate along with the cells themselves —
+    // otherwise they keep pointing at the now-vacated source range/cell. Verbatim series formulas
+    // are already handled above by _chartVerbatimSnapshot/RewriteChartVerbatimFormulas; these three
+    // cover the remaining plain-range/address cases that formula rewriting does not touch.
+    private List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? _chartDataRangeSnapshot;
+    private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
+    private Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? _scopedNamedRangeSnapshot;
+    private Dictionary<CellAddress, SparklineModel>? _sparklineSnapshot;
 
     public string Label => "Move Cells";
 
@@ -103,10 +113,15 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         _hyperlinkSnapshot = CaptureDictionary(sheet.Hyperlinks, affected);
         _hyperlinkMetadataSnapshot = CaptureDictionary(sheet.HyperlinkMetadata, affected);
         _richTextRunsSnapshot = CaptureDictionary(sheet.RichTextRuns, affected);
+        _sparklineSnapshot = CaptureSparklinesByLocation(sheet, affected);
         _payloadAffectedCells = affected;
 
         (_dataValidationSnapshot, _conditionalFormatSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
         TranslateFullyContainedRules(sheet, _sourceRange, _destination);
+
+        _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
+        _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
+        TranslateFullyContainedNamedRanges(ctx.Workbook, _sourceRange, _destination);
 
         var moveOp = CreateMoveRangeOp(sheet, _sourceRange, _destination);
         _formulaSnapshot = [];
@@ -117,6 +132,8 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         RowColumnShiftHelpers.RewriteRuleFormulas(sheet, moveOp, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
         _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
         RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, moveOp);
+        _chartDataRangeSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(ctx.Workbook);
+        TranslateFullyContainedChartDataRanges(ctx.Workbook, _sourceRange, moveOp.RowDelta, moveOp.ColDelta);
 
         var payloads = CaptureSourcePayloads(sheet, _sourceRange, _destination);
 
@@ -141,6 +158,9 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         if (_cfFormulaSnapshot is not null || _cfThresholdSnapshot is not null || _dvFormulaSnapshot is not null)
             RowColumnShiftHelpers.RestoreRuleFormulas(sheet, _cfFormulaSnapshot ?? [], _cfThresholdSnapshot ?? [], _dvFormulaSnapshot ?? []);
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
+        RowColumnShiftHelpers.RestoreChartDataRanges(ctx.Workbook, _chartDataRangeSnapshot);
+        RowColumnShiftHelpers.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
+        RowColumnShiftHelpers.RestoreScopedNamedRanges(ctx.Workbook, _scopedNamedRangeSnapshot);
 
         foreach (var snapshot in _snapshot)
             RestoreCellSnapshot(sheet, snapshot);
@@ -152,6 +172,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot, _payloadAffectedCells);
         RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot, _payloadAffectedCells);
         RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot, _payloadAffectedCells);
+        RestoreSparklines(sheet, _sparklineSnapshot, _payloadAffectedCells);
         // Restore DV/CF rule ranges that were translated during the move.
         RowColumnShiftHelpers.RestoreRuleRangesInPlace(sheet, _dataValidationSnapshot, _conditionalFormatSnapshot);
     }
@@ -181,6 +202,17 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         var rowDelta = (long)destination.Row - sourceRange.Start.Row;
         var colDelta = (long)destination.Col - sourceRange.Start.Col;
 
+        // J17-style companion: sparklines are keyed by SparklineModel.Location rather than a
+        // Dictionary<CellAddress,_>, so build a lookup up front (mirrors the per-address maps
+        // below) to find the sparkline hosted at each moved source cell, if any.
+        Dictionary<CellAddress, SparklineModel>? sparklinesByLocation = null;
+        if (sheet.Sparklines.Count > 0)
+        {
+            sparklinesByLocation = new Dictionary<CellAddress, SparklineModel>();
+            foreach (var sparkline in sheet.Sparklines)
+                sparklinesByLocation[sparkline.Location] = sparkline;
+        }
+
         foreach (var source in sourceRange.AllCells())
         {
             var target = new CellAddress(
@@ -203,7 +235,10 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
                     : null,
                 sheet.Hyperlinks.TryGetValue(source, out var hyperlink) ? hyperlink : null,
                 sheet.HyperlinkMetadata.TryGetValue(source, out var metadata) ? metadata : null,
-                sheet.RichTextRuns.TryGetValue(source, out var richRuns) ? richRuns : null));
+                sheet.RichTextRuns.TryGetValue(source, out var richRuns) ? richRuns : null,
+                sparklinesByLocation is not null && sparklinesByLocation.TryGetValue(source, out var sourceSparkline)
+                    ? CloneSparklineAt(sourceSparkline, target)
+                    : null));
         }
 
         return payloads;
@@ -297,6 +332,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         sheet.Hyperlinks.Remove(address);
         sheet.HyperlinkMetadata.Remove(address);
         sheet.RichTextRuns.Remove(address);
+        RemoveSparklineAt(sheet, address);
     }
 
     private static void WritePayload(Sheet sheet, MovePayload payload)
@@ -325,6 +361,8 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
             sheet.HyperlinkMetadata[payload.Target] = payload.HyperlinkMetadata;
         if (payload.RichTextRuns is not null)
             sheet.RichTextRuns[payload.Target] = payload.RichTextRuns;
+        if (payload.Sparkline is not null)
+            sheet.Sparklines.Add(payload.Sparkline);
     }
 
     private static void RestoreCellSnapshot(Sheet sheet, CellSnapshot snapshot)
@@ -490,5 +528,153 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         ThreadedComment? ThreadedComment,
         string? Hyperlink,
         HyperlinkMetadata? HyperlinkMetadata,
-        IReadOnlyList<CellTextRun>? RichTextRuns);
+        IReadOnlyList<CellTextRun>? RichTextRuns,
+        SparklineModel? Sparkline);
+
+    /// <summary>
+    /// Relocates workbook-scoped (<see cref="Workbook.NamedRanges"/>) and sheet-scoped
+    /// (<see cref="Workbook.ScopedNamedRanges"/>) defined names whose range falls entirely inside
+    /// the moved <paramref name="sourceRange"/>, so the name continues to refer to the moved data at
+    /// its new location instead of the now-vacated source (R16-structural-edit-shift-sweep-1).
+    /// Mirrors <see cref="TranslateFullyContainedRules"/>'s "fully contained only" convention for
+    /// DV/CF ranges; a name that only partially overlaps the moved range is left unchanged.
+    /// </summary>
+    private static void TranslateFullyContainedNamedRanges(Workbook workbook, GridRange sourceRange, CellAddress destination)
+    {
+        var rowDelta = (long)destination.Row - sourceRange.Start.Row;
+        var colDelta = (long)destination.Col - sourceRange.Start.Col;
+        if (rowDelta == 0 && colDelta == 0)
+            return;
+
+        foreach (var (name, range) in workbook.NamedRanges.ToList())
+        {
+            if (sourceRange.Contains(range))
+                workbook.NamedRanges[name] = TranslateRange(range, rowDelta, colDelta);
+        }
+
+        foreach (var ((name, scopeSheet), range) in workbook.ScopedNamedRanges.ToList())
+        {
+            if (sourceRange.Contains(range))
+            {
+                workbook.TryGetScopedNamedRangeMetadata(name, scopeSheet, out var metadata);
+                workbook.DefineNamedRange(name, TranslateRange(range, rowDelta, colDelta), metadata, scopeSheet);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Relocates a chart's plain (non-verbatim) <see cref="ChartModel.DataRange"/> when it falls
+    /// entirely inside the moved range, across every sheet in the workbook (a chart can be hosted on
+    /// a different sheet than the data it plots — see <c>RowColumnShiftHelpers.PrintAndCharts.cs</c>).
+    /// Verbatim series formulas are already rewritten above via
+    /// <see cref="RowColumnShiftHelpers.RewriteChartVerbatimFormulas(Workbook, RewriteOperation)"/>;
+    /// this covers the plain-DataRange chart case that formula rewriting does not touch
+    /// (R16-structural-edit-shift-sweep-1, R16-chart-datasource-editing-2).
+    /// </summary>
+    private static void TranslateFullyContainedChartDataRanges(Workbook workbook, GridRange sourceRange, int rowDelta, int colDelta)
+    {
+        if (rowDelta == 0 && colDelta == 0)
+            return;
+
+        foreach (var hostSheet in workbook.Sheets)
+        {
+            foreach (var chart in hostSheet.Charts)
+            {
+                if (sourceRange.Contains(chart.DataRange))
+                    chart.DataRange = TranslateRange(chart.DataRange, rowDelta, colDelta);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Captures the sparkline (if any) hosted at each of <paramref name="addresses"/>, keyed by its
+    /// <see cref="SparklineModel.Location"/>. Sparklines live in <see cref="Sheet.Sparklines"/> — a
+    /// flat list rather than a per-address dictionary like Comments/Hyperlinks — so this (and
+    /// <see cref="RemoveSparklineAt"/>/<see cref="RestoreSparklines"/>/<see cref="CloneSparklineAt"/>)
+    /// gives the move the same capture/clear/write/restore shape used for the dictionary-backed
+    /// per-cell state above (R16-structural-edit-shift-sweep-3).
+    /// </summary>
+    private static Dictionary<CellAddress, SparklineModel> CaptureSparklinesByLocation(
+        Sheet sheet, IReadOnlyList<CellAddress> addresses)
+    {
+        var snapshot = new Dictionary<CellAddress, SparklineModel>();
+        if (sheet.Sparklines.Count == 0)
+            return snapshot;
+
+        var addressSet = new HashSet<CellAddress>(addresses);
+        foreach (var sparkline in sheet.Sparklines)
+        {
+            if (addressSet.Contains(sparkline.Location))
+                snapshot[sparkline.Location] = sparkline;
+        }
+
+        return snapshot;
+    }
+
+    private static void RemoveSparklineAt(Sheet sheet, CellAddress address)
+    {
+        for (var i = sheet.Sparklines.Count - 1; i >= 0; i--)
+        {
+            if (sheet.Sparklines[i].Location == address)
+                sheet.Sparklines.RemoveAt(i);
+        }
+    }
+
+    /// <summary>
+    /// Restores <see cref="Sheet.Sparklines"/> from a snapshot captured by
+    /// <see cref="CaptureSparklinesByLocation"/>: removes whatever now sits at each affected address
+    /// (the moved/cloned sparklines written during Apply) and re-adds the original snapshotted
+    /// instances, mirroring <see cref="RestoreDictionary{TValue}"/>.
+    /// </summary>
+    private static void RestoreSparklines(
+        Sheet sheet,
+        Dictionary<CellAddress, SparklineModel>? snapshot,
+        IReadOnlyList<CellAddress> affected)
+    {
+        foreach (var address in affected)
+            RemoveSparklineAt(sheet, address);
+
+        if (snapshot is null)
+            return;
+
+        foreach (var (_, sparkline) in snapshot)
+            sheet.Sparklines.Add(sparkline);
+    }
+
+    // Manual field-by-field clone: SparklineModel is a mutable class (not a record), so there is no
+    // built-in `with` copy. A clone (rather than reusing the source instance with a mutated
+    // Location) is required here because the source instance is also held by _sparklineSnapshot for
+    // undo — mutating it in place would corrupt that snapshot's recorded source-cell state.
+    private static SparklineModel CloneSparklineAt(SparklineModel source, CellAddress location) => new()
+    {
+        Id = source.Id,
+        DataRange = source.DataRange,
+        Location = location,
+        Kind = source.Kind,
+        GroupId = source.GroupId,
+        ShowMarkers = source.ShowMarkers,
+        ShowHighPoint = source.ShowHighPoint,
+        ShowLowPoint = source.ShowLowPoint,
+        ShowFirstPoint = source.ShowFirstPoint,
+        ShowLastPoint = source.ShowLastPoint,
+        ShowNegativePoints = source.ShowNegativePoints,
+        ShowAxis = source.ShowAxis,
+        DisplayHidden = source.DisplayHidden,
+        RightToLeft = source.RightToLeft,
+        SeriesColor = source.SeriesColor,
+        NegativeColor = source.NegativeColor,
+        AxisColor = source.AxisColor,
+        MarkersColor = source.MarkersColor,
+        HighPointColor = source.HighPointColor,
+        LowPointColor = source.LowPointColor,
+        FirstPointColor = source.FirstPointColor,
+        LastPointColor = source.LastPointColor,
+        LineWeight = source.LineWeight,
+        MinAxisType = source.MinAxisType,
+        MaxAxisType = source.MaxAxisType,
+        ManualMin = source.ManualMin,
+        ManualMax = source.ManualMax,
+        DisplayEmptyCellsAs = source.DisplayEmptyCellsAs,
+        DateAxisRange = source.DateAxisRange,
+    };
 }

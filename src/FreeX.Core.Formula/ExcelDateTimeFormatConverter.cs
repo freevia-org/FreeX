@@ -84,6 +84,12 @@ internal static class ExcelDateTimeFormatConverter
                 TryConsume(excelFmt, i, "am/pm", "tt", sb, out ni) ||
                 TryConsume(excelFmt, i, "A/P", "t", sb, out ni) ||
                 TryConsume(excelFmt, i, "a/p", "t", sb, out ni) ||
+                // aaaa/aaa are locale day-of-week tokens (e.g. some non-English Excel
+                // builds) equivalent to dddd/ddd. Checked after the AM/PM and A/P tokens
+                // above so those (which require a literal slash) always win first; a bare
+                // run of 'a' characters with no slash can only be the weekday token.
+                TryConsume(excelFmt, i, "aaaa", "dddd", sb, out ni) ||
+                TryConsume(excelFmt, i, "aaa", "ddd", sb, out ni) ||
                 TryConsume(excelFmt, i, "yyyy", "yyyy", sb, out ni) ||
                 TryConsume(excelFmt, i, "yy", "yy", sb, out ni) ||
                 TryConsume(excelFmt, i, "mmmm", "MMMM", sb, out ni) ||

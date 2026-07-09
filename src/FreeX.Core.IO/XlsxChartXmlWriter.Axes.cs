@@ -162,6 +162,13 @@ internal static partial class XlsxChartXmlWriter
         var valueAxisMinorUnit = valueAxisOnX ? chart.XAxisMinorUnit : chart.YAxisMinorUnit;
         var valueAxisLogScale = valueAxisOnX ? chart.XAxisLogScale : chart.YAxisLogScale;
         var valueAxisLogBase = valueAxisOnX ? chart.XAxisLogBase : chart.YAxisLogBase;
+        // R16-meta-1: mirror the reader's routing (XlsxChartAxisReader.ApplyValueAxisProperties /
+        // ApplyCategoryAxisProperties) — for bar-family charts the value axis is physically on X and
+        // the category axis is physically on Y, so their reverse-order flags were captured swapped on
+        // read (XAxisReverseOrder for the value axis, YAxisReverseOrder for the category axis). Emitting
+        // the value axis's <c:orientation> from YAxisReverseOrder unconditionally silently moved a
+        // category-axis reversal onto the value axis on every save of a horizontal Bar chart.
+        var valueAxisReverseOrder = valueAxisOnX ? chart.XAxisReverseOrder : chart.YAxisReverseOrder;
         yield return ToValueAxisXml(
             chart.YAxisTitle,
             chart.YAxisTitleLayout,
@@ -175,7 +182,7 @@ internal static partial class XlsxChartXmlWriter
             valueAxisMinorUnit,
             valueAxisLogScale,
             valueAxisLogBase,
-            chart.YAxisReverseOrder,
+            valueAxisReverseOrder,
             valueAxisNumberFormat.Format,
             valueAxisNumberFormat.FormatCode,
             valueAxisNumberFormat.SourceLinked,
@@ -261,10 +268,14 @@ internal static partial class XlsxChartXmlWriter
     private static XElement ToCategoryAxisXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
     {
         var isDateAxis = chart.XAxisIsDateAxis;
+        // R16-meta-1: mirror XlsxChartAxisReader.ApplyCategoryAxisProperties(categoryAxisOnY:
+        // valueAxisOnX) — for bar-family charts the category axis is physically on Y, so its
+        // reverse-order flag was captured into YAxisReverseOrder on read, not XAxisReverseOrder.
+        var categoryAxisReverseOrder = IsHorizontalBarChart(chart.Type) ? chart.YAxisReverseOrder : chart.XAxisReverseOrder;
         return new XElement(chartNs + (isDateAxis ? "dateAx" : "catAx"),
             new XElement(chartNs + "axId", new XAttribute("val", CategoryAxisId)),
             new XElement(chartNs + "scaling",
-                new XElement(chartNs + "orientation", new XAttribute("val", ToXlsxAxisOrientation(chart.XAxisReverseOrder)))),
+                new XElement(chartNs + "orientation", new XAttribute("val", ToXlsxAxisOrientation(categoryAxisReverseOrder)))),
             new XElement(chartNs + "delete", new XAttribute("val", chart.HideXAxis ? "1" : "0")),
             new XElement(chartNs + "axPos", new XAttribute("val", ToXlsxCategoryAxisPosition(chart))),
             ToAxisGridlinesXml("majorGridlines", chart.ShowXAxisMajorGridlines, chart.XAxisMajorGridlineColor, chart.XAxisGridlineThickness, chartNs, drawingNs),

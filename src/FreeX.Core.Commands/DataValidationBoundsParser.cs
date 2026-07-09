@@ -5,7 +5,19 @@ namespace FreeX.Core.Commands;
 
 internal static class DataValidationBoundsParser
 {
+    /// <summary>
+    /// Parses a user-entered numeric DV bound (e.g. from the Data Validation dialog). Tries the
+    /// current UI culture first so a comma-decimal locale (e.g. de-DE "1,5") is read as the user
+    /// intended, then falls back to invariant parsing for bounds that were stored/typed in
+    /// invariant form. The returned value is a culture-neutral double either way, so persistence
+    /// (file/model layer) is unaffected.
+    /// </summary>
     public static bool TryParseNumberBound(string? text, out double value) =>
+        double.TryParse(
+            text,
+            System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.CurrentCulture,
+            out value) ||
         double.TryParse(
             text,
             System.Globalization.NumberStyles.Any,

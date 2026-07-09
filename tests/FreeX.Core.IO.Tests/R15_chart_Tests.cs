@@ -79,25 +79,26 @@ public sealed class R15_chart_Tests
     }
 
     [Fact]
-    public void XlsxAdapter_RoundTrip_BarChartCategoryReverseOrder_RoutesToCorrectAxisAndIsNotClobbered()
+    public void XlsxAdapter_RoundTrip_BarChartCategoryReverseOrder_IsIdempotent()
     {
+        // For a horizontal Bar chart the category axis is the Left axis (YAxisReverseOrder) and the
+        // value axis is the Bottom axis (XAxisReverseOrder). Round-15 routed only the READER this way;
+        // round-16 mirrored it on the WRITER so file->model->file is idempotent: a reversed category
+        // axis (value normal) stays on the category axis across repeated save/load and never flips
+        // onto the value axis.
         var chart = new ChartModel
         {
             Type = ChartType.Bar,
-            XAxisReverseOrder = true, // writer always serializes catAx orientation from XAxisReverseOrder
-            YAxisReverseOrder = false, // the value axis (bottom, for a Bar chart) is NOT reversed
+            YAxisReverseOrder = true, // category axis (left, for Bar) reversed
+            XAxisReverseOrder = false, // value axis (bottom, for Bar) NOT reversed
         };
 
-        var loaded = RoundTrip(chart);
+        var loadedOnce = RoundTrip(chart);
+        loadedOnce.YAxisReverseOrder.Should().BeTrue();
+        loadedOnce.XAxisReverseOrder.Should().BeFalse();
 
-        // The renderer applies YAxisReverseOrder to the Left/category axis and XAxisReverseOrder to
-        // the Bottom/value axis. For a Bar chart the category axis IS the Left axis, so a reversed
-        // catAx must come back as YAxisReverseOrder=true.
-        loaded.YAxisReverseOrder.Should().BeTrue(
-            "the category axis is rendered on the left for a Bar chart, and the renderer reads that axis's reverse flag from YAxisReverseOrder");
-        // And it must not have been clobbered back to false, nor bled into XAxisReverseOrder, by the
-        // subsequent value-axis read pass (which legitimately owns XAxisReverseOrder for Bar charts).
-        loaded.XAxisReverseOrder.Should().BeFalse(
-            "the value axis (bottom) was not reversed, and must not inherit the category axis's reverse flag");
+        var loadedTwice = RoundTrip(loadedOnce);
+        loadedTwice.YAxisReverseOrder.Should().BeTrue();
+        loadedTwice.XAxisReverseOrder.Should().BeFalse();
     }
 }

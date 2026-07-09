@@ -2055,16 +2055,22 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             if (string.IsNullOrWhiteSpace(refersTo))
                 continue;
 
+            var scopeSheetId = GetDefinedNameScopeSheetId(sourceWorkbook, workbook, definedName);
+
             if (TryParseNamedRangeRefersTo(workbook, refersTo, out var range))
             {
-                workbook.DefineNamedRange(
-                    definedName.NameName,
-                    range,
-                    new NamedRangeMetadata(GetDefinedNameScope(sourceWorkbook, definedName), definedName.Comment ?? ""));
+                var metadata = new NamedRangeMetadata(GetDefinedNameScope(sourceWorkbook, definedName), definedName.Comment ?? "");
+                if (scopeSheetId is { } rangeSheetId)
+                    workbook.DefineNamedRange(definedName.NameName, range, metadata, rangeSheetId);
+                else
+                    workbook.DefineNamedRange(definedName.NameName, range, metadata);
                 continue;
             }
 
-            workbook.NamedFormulas[definedName.NameName] = refersTo.Trim();
+            if (scopeSheetId is { } formulaSheetId)
+                workbook.DefineNamedFormula(definedName.NameName, refersTo.Trim(), formulaSheetId);
+            else
+                workbook.NamedFormulas[definedName.NameName] = refersTo.Trim();
         }
     }
 
@@ -2303,6 +2309,21 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         return sheetIndex >= 0 && sheetIndex < sourceWorkbook.NumberOfSheets
             ? sourceWorkbook.GetSheetName(sheetIndex)
             : NamedRangeMetadata.WorkbookScope.Scope;
+    }
+
+    /// <summary>
+    /// Resolves the BIFF NAME record's itab (sheet index) to the corresponding loaded sheet's
+    /// <see cref="SheetId"/> so sheet-scoped defined names are registered in
+    /// <see cref="Workbook.ScopedNamedRanges"/> instead of collapsing into workbook-global scope.
+    /// Returns null for workbook-global names (itab == 0 / unset).
+    /// </summary>
+    private static SheetId? GetDefinedNameScopeSheetId(NPOIWorkbook sourceWorkbook, Workbook workbook, IName definedName)
+    {
+        var sheetIndex = definedName.SheetIndex;
+        if (sheetIndex < 0 || sheetIndex >= sourceWorkbook.NumberOfSheets || sheetIndex >= workbook.Sheets.Count)
+            return null;
+
+        return workbook.Sheets[sheetIndex].Id;
     }
 
     private static bool TryParseNamedRangeRefersTo(Workbook workbook, string? refersTo, out GridRange range)

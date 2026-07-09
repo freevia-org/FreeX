@@ -21,6 +21,7 @@ public sealed partial class PrintRendererPageSetupTests
             sheet.SetCell(a1, new TextValue("Printed"));
             sheet.Comments[a1] = "Visible note";
             sheet.PrintComments = WorksheetPrintComments.AsDisplayed;
+            sheet.ShownComments.Add(a1); // "As displayed" prints only pinned/shown notes (R16-meta-3).
 
             sheet.PrintDraftQuality = false;
             var normalDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
@@ -46,6 +47,7 @@ public sealed partial class PrintRendererPageSetupTests
             sheet.SetCell(a1, new TextValue("Printed"));
             sheet.Comments[a1] = "Displayed note PDF text";
             sheet.PrintComments = WorksheetPrintComments.AsDisplayed;
+            sheet.ShownComments.Add(a1); // "As displayed" prints only pinned/shown notes (R16-meta-3).
 
             var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
             var page = document.Pages[0].GetPageRoot(forceReload: false)!;
@@ -71,6 +73,7 @@ public sealed partial class PrintRendererPageSetupTests
             sheet.SetCell(a1, new TextValue("Printed"));
             sheet.Comments[a1] = "Draft hidden note text";
             sheet.PrintComments = WorksheetPrintComments.AsDisplayed;
+            sheet.ShownComments.Add(a1); // "As displayed" prints only pinned/shown notes (R16-meta-3).
             sheet.PrintDraftQuality = true;
 
             var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
@@ -92,6 +95,7 @@ public sealed partial class PrintRendererPageSetupTests
             sheet.SetCell(a1, new TextValue("Printed"));
             sheet.Comments[a1] = "Visible note";
             sheet.PrintComments = WorksheetPrintComments.AsDisplayed;
+            sheet.ShownComments.Add(a1); // "As displayed" prints only pinned/shown notes (R16-meta-3).
 
             sheet.PrintBlackAndWhite = false;
             var colorDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());

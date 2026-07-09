@@ -41,8 +41,30 @@ public static class CellEntryParser
         return new TextValue(text);
     }
 
-    private static bool TryParseFiniteNumber(string text, out double number) =>
-        (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out number) ||
-         double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out number)) &&
-        double.IsFinite(number);
+    // Float + AllowThousands so a comma-decimal locale's grouped integer (e.g. de-DE "1.234"
+    // meaning 1234, '.' as thousands separator) is honored, not silently misread as a decimal.
+    private const NumberStyles NumberEntryStyles = NumberStyles.Float | NumberStyles.AllowThousands;
+
+    private static bool TryParseFiniteNumber(string text, out double number)
+    {
+        if (double.TryParse(text, NumberEntryStyles, CultureInfo.CurrentCulture, out number) &&
+            double.IsFinite(number))
+        {
+            return true;
+        }
+
+        // Only reinterpret using invariant separators when the current-culture attempt failed
+        // and the text doesn't contain the current culture's own (non-'.') decimal separator -
+        // otherwise a locale-typed value that merely failed to parse could be misread as an
+        // invariant-formatted one.
+        var currentDecimalSeparator = CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator;
+        if (currentDecimalSeparator != "." && text.Contains(currentDecimalSeparator, StringComparison.Ordinal))
+        {
+            number = 0;
+            return false;
+        }
+
+        return double.TryParse(text, NumberEntryStyles, CultureInfo.InvariantCulture, out number) &&
+               double.IsFinite(number);
+    }
 }

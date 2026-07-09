@@ -555,7 +555,15 @@ public sealed class WorkbookSession
 
     public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
     {
-        var searchRange = ResolveGoToSpecialSearchRange();
+        // CurrentRegion/Precedents/Dependents trace relationships from the user's true active
+        // cell/selection, not the (possibly auto-expanded-to-used-range) content search range;
+        // otherwise Precedents/Dependents would trace the whole used range instead of just the
+        // cell (or cells) the user actually selected. Mirrors the WPF host's
+        // SelectGoToSpecialMatches guard.
+        var trueSelection = SelectedRange;
+        var searchRange = kind is GoToSpecialKind.CurrentRegion or GoToSpecialKind.Precedents or GoToSpecialKind.Dependents
+            ? trueSelection
+            : ResolveGoToSpecialSearchRange();
         var matches = GoToSpecialService.Find(Workbook, ActiveSheet, searchRange, kind, ActiveCell, options);
         if (matches.Count == 0)
             return WorkbookGoToSpecialResult.Failed("No cells found.");
@@ -567,11 +575,12 @@ public sealed class WorkbookSession
     }
 
     /// <summary>
-    /// Determines the range that Go To Special should search. Matching Excel (and the WPF host's
-    /// ResolveGoToSpecialSearchRange), a single active cell (the ordinary result of clicking one
-    /// cell) searches the whole used range of the sheet; an explicit multi-cell selection is
-    /// honored as-is. The true active cell (used by CurrentRegion/Precedents/Dependents kinds)
-    /// is unaffected by this expansion.
+    /// Determines the range that Go To Special's content-search kinds (Constants/Blanks/Formulas/
+    /// etc.) should search. Matching Excel (and the WPF host's ResolveGoToSpecialSearchRange), a
+    /// single active cell (the ordinary result of clicking one cell) searches the whole used range
+    /// of the sheet; an explicit multi-cell selection is honored as-is. CurrentRegion/Precedents/
+    /// Dependents kinds bypass this expansion entirely and use the true selection instead (see
+    /// GoToSpecial above).
     /// </summary>
     private GridRange ResolveGoToSpecialSearchRange()
     {

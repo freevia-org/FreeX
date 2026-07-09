@@ -75,11 +75,24 @@ public partial class MainWindow : IAutosaveWorkbookSource
 
     /// <summary>
     /// Deletes the autosave snapshot after a successful clean save (called from MarkWorkbookSaved
-    /// path in the save workflow — hook is in the existing MarkWorkbookSaved method).
+    /// path in the save workflow — hook is in the existing MarkWorkbookSaved method). Also fans out
+    /// to every OTHER live window viewing the same document (Excel "New Window" siblings): each such
+    /// window owns its own independent per-window autosave snapshot (see AttachAutosaveService),
+    /// last written before this save, so leaving it in place would let a later crash offer stale
+    /// pre-save content that could clobber the file this save just wrote.
     /// </summary>
     internal void NotifyAutosaveSaved()
     {
         _autosaveService?.DeleteSnapshot();
+
+        if (_windowRegistry is null)
+            return;
+
+        foreach (var window in _windowRegistry.Windows)
+        {
+            if (window is MainWindow sibling && !ReferenceEquals(sibling, this) && sibling.DocumentId == DocumentId)
+                sibling._autosaveService?.DeleteSnapshot();
+        }
     }
 
     /// <summary>

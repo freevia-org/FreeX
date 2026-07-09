@@ -236,7 +236,8 @@ public static partial class PrintRenderer
                 measurement,
                 pageW,
                 pageH,
-                blackAndWhite);
+                blackAndWhite,
+                sheet.ShownComments);
         }
 
         if (scaleRatio != 1.0)

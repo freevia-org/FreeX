@@ -76,11 +76,39 @@ public sealed partial class OdsFileAdapter
             if (table.Element(TableNs + "table-column") is null)
                 table.Add(new XElement(TableNs + "table-column"));
             table.Add(new XElement(TableNs + "table-row", new XElement(TableNs + "table-cell")));
+            AppendSheetNamedExpressions(workbook, sheet, table);
             return table;
         }
 
         WriteRows(workbook, sheet, table, maxRow, maxCol, styleRegistry);
+        AppendSheetNamedExpressions(workbook, sheet, table);
         return table;
+    }
+
+    /// <summary>
+    /// Sheet-scoped named ranges/formulas are nested as a table:named-expressions child of their
+    /// owning table:table (per the ODF 1.2 schema, the last child of table-table-content), mirroring
+    /// how <see cref="WriteNamedExpressions"/> handles workbook-scoped names on the spreadsheet root.
+    /// </summary>
+    private void AppendSheetNamedExpressions(Workbook workbook, Sheet sheet, XElement table)
+    {
+        var container = new XElement(TableNs + "named-expressions");
+
+        foreach (var (key, range) in workbook.ScopedNamedRanges)
+        {
+            if (!key.Sheet.Equals(sheet.Id)) continue;
+            if (BuildNamedRangeElement(workbook, key.Name, range) is { } element)
+                container.Add(element);
+        }
+
+        foreach (var (key, formulaText) in workbook.ScopedNamedFormulas)
+        {
+            if (!key.Sheet.Equals(sheet.Id)) continue;
+            container.Add(BuildNamedExpressionElement(key.Name, formulaText, sheet));
+        }
+
+        if (container.HasElements)
+            table.Add(container);
     }
 
     private void WriteColumns(Sheet sheet, XElement table, uint maxCol, OdsStyleRegistry styleRegistry)
@@ -330,28 +358,65 @@ public sealed partial class OdsFileAdapter
     private static XElement TextParagraph(string text) =>
         new(TextNs + "p", text);
 
+    /// <summary>
+    /// Workbook-scoped named ranges and named formulas become table:named-expressions on the
+    /// office:spreadsheet element. Sheet-scoped names are written separately, nested inside their
+    /// owning table:table (see <see cref="AppendSheetNamedExpressions"/>).
+    /// </summary>
     private XElement? WriteNamedExpressions(Workbook workbook)
     {
-        if (workbook.NamedRanges.Count == 0)
-            return null;
-
         var container = new XElement(TableNs + "named-expressions");
+
         foreach (var (name, range) in workbook.NamedRanges)
         {
-            var sheet = workbook.GetSheet(range.Start.Sheet);
-            if (sheet is null) continue;
-            var sheetName = sheet.Name;
-            var cellRange = "$" + QuoteOds(sheetName) + "." +
-                "$" + CellAddress.NumberToColumnName(range.Start.Col) + "$" + range.Start.Row +
-                ":.$" + CellAddress.NumberToColumnName(range.End.Col) + "$" + range.End.Row;
-            var baseCell = "$" + QuoteOds(sheetName) + ".$" +
-                CellAddress.NumberToColumnName(range.Start.Col) + "$" + range.Start.Row;
-            container.Add(new XElement(TableNs + "named-range",
-                new XAttribute(TableNs + "name", name),
-                new XAttribute(TableNs + "base-cell-address", baseCell),
-                new XAttribute(TableNs + "cell-range-address", cellRange)));
+            if (BuildNamedRangeElement(workbook, name, range) is { } element)
+                container.Add(element);
         }
+
+        var defaultSheet = workbook.Sheets.Count > 0 ? workbook.Sheets[0] : null;
+        foreach (var (name, formulaText) in workbook.NamedFormulas)
+        {
+            if (defaultSheet is null) continue;
+            container.Add(BuildNamedExpressionElement(name, formulaText, defaultSheet));
+        }
+
         return container.HasElements ? container : null;
+    }
+
+    private XElement? BuildNamedRangeElement(Workbook workbook, string name, GridRange range)
+    {
+        var sheet = workbook.GetSheet(range.Start.Sheet);
+        if (sheet is null) return null;
+        var sheetName = sheet.Name;
+        var cellRange = "$" + QuoteOds(sheetName) + "." +
+            "$" + CellAddress.NumberToColumnName(range.Start.Col) + "$" + range.Start.Row +
+            ":.$" + CellAddress.NumberToColumnName(range.End.Col) + "$" + range.End.Row;
+        var baseCell = "$" + QuoteOds(sheetName) + ".$" +
+            CellAddress.NumberToColumnName(range.Start.Col) + "$" + range.Start.Row;
+        return new XElement(TableNs + "named-range",
+            new XAttribute(TableNs + "name", name),
+            new XAttribute(TableNs + "base-cell-address", baseCell),
+            new XAttribute(TableNs + "cell-range-address", cellRange));
+    }
+
+    /// <summary>
+    /// Builds a table:named-expression (a named formula). OpenFormula requires a base-cell-address
+    /// even for a formula that carries no cell reference of its own; like Excel/ClosedXML's own
+    /// defined-name base, we anchor it at the owning sheet's A1.
+    /// </summary>
+    private XElement BuildNamedExpressionElement(string name, string formulaText, Sheet baseSheet)
+    {
+        var body = formulaText.StartsWith('=') ? formulaText[1..] : formulaText;
+        var odf = "of:=" + OdsFormulaConverter.ToOdf(body);
+        var baseCell = "$" + QuoteOds(baseSheet.Name) + ".$A$1";
+        var element = new XElement(TableNs + "named-expression",
+            new XAttribute(TableNs + "name", name),
+            new XAttribute(TableNs + "base-cell-address", baseCell),
+            new XAttribute(TableNs + "expression", odf));
+        // Carry the exact FreeX A1 body verbatim, mirroring the per-cell freex-a1-formula hint, so the
+        // named formula round-trips losslessly regardless of OpenFormula conversion edge cases.
+        element.SetAttributeValue(TableNs + "freex-a1-formula", body);
+        return element;
     }
 
     private static string QuoteOds(string sheet)

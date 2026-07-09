@@ -9399,6 +9399,10 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        // Cross-sheet/3-D formulas (e.g. SUM(Sheet1:Sheet3!A1)) can pick up the duplicated sheet,
+        // so force a recalc here — sheet structure commands don't report affected cells to the
+        // shared edit pipeline's automatic recalc (WPF host parity: SheetCtxDuplicate_Click).
+        _session.RecalculateWorkbook();
         RefreshShell($"Duplicated {sourceName}");
     }
 
@@ -9419,6 +9423,9 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        // Reordering sheets can change which sheets a 3-D reference spans, so force a recalc
+        // (sheet structure commands don't report affected cells to the automatic recalc path).
+        _session.RecalculateWorkbook();
         RefreshShell($"Moved {sheetName} left");
     }
 
@@ -9439,6 +9446,9 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        // Reordering sheets can change which sheets a 3-D reference spans, so force a recalc
+        // (sheet structure commands don't report affected cells to the automatic recalc path).
+        _session.RecalculateWorkbook();
         RefreshShell($"Moved {sheetName} right");
     }
 
@@ -9900,6 +9910,10 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        // Cross-sheet/3-D formulas referencing the deleted sheet (or spanning past it) can go
+        // stale, so force a recalc here — sheet structure commands don't report affected cells to
+        // the shared edit pipeline's automatic recalc (WPF host parity: SheetCtxDelete_Click).
+        _session.RecalculateWorkbook();
         RefreshShell($"Deleted {sheetName}");
     }
 
@@ -20158,6 +20172,24 @@ public sealed partial class MainWindow : Window
             return;
 
         var range = _session.SelectedRange;
+
+        // Excel/WPF toggle: Merge & Center on a selection that is already merged un-merges it
+        // instead of erroring with "Range overlaps an existing merged region." (MergeCellsCommand
+        // rejects re-merging an overlapping region, so without this check the button would just
+        // fail on an already-merged selection).
+        if (_session.IsSelectedRangeMerged)
+        {
+            var unmergeResult = _session.UnmergeSelectedRange();
+            if (!unmergeResult.Success)
+            {
+                ShowEditIssue(unmergeResult.ErrorMessage ?? "Merge & Center failed.");
+                return;
+            }
+
+            RefreshShell($"Unmerged cells in {FormatRangeReference(range)}");
+            return;
+        }
+
         var contentResolution = MergeCellContentResolution.KeepFirstCell;
         var contentPlan = CellMergePlanner.AnalyzeContent(_session.ActiveSheet, range);
         if (contentPlan.WouldLoseContent)

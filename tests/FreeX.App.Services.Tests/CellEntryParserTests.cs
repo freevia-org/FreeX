@@ -31,7 +31,7 @@ public sealed class CellEntryParserTests
     [Theory]
     [InlineData("NaN")]
     [InlineData("Infinity")]
-    [InlineData("1,25")]
+    [InlineData("1.2.3")]
     [InlineData("plain text")]
     public void CreateCell_TreatsNonFiniteAndNonInvariantNumbersAsText(string text)
     {

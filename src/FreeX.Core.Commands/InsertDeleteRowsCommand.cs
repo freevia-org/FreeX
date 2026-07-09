@@ -115,18 +115,33 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.ShiftAddressBearingRowsUp(ctx.Workbook, sheet, _addressStateSnapshot, _beforeRow, _count);
 
         _mergeSnapshot = sheet.MergedRegions.ToList();
-        var shiftedMerges = sheet.MergedRegions.Select(m =>
+        var shiftedMerges = new List<GridRange>(_mergeSnapshot.Count);
+        foreach (var m in sheet.MergedRegions)
         {
+            GridRange shifted;
             if (m.Start.Row >= _beforeRow)
-                return new GridRange(
+                shifted = new GridRange(
                     new CellAddress(m.Start.Sheet, m.Start.Row + _count, m.Start.Col),
                     new CellAddress(m.End.Sheet,   m.End.Row   + _count, m.End.Col));
-            if (m.End.Row >= _beforeRow)
-                return new GridRange(
+            else if (m.End.Row >= _beforeRow)
+                shifted = new GridRange(
                     m.Start,
                     new CellAddress(m.End.Sheet, m.End.Row + _count, m.End.Col));
-            return m;
-        }).ToList();
+            else
+                shifted = m;
+
+            // R16-large-workbook-perf-1: a merged region whose entire shifted position falls past
+            // the last row runs off the sheet and is dropped, mirroring Excel; one whose bottom
+            // edge merely overshoots is clamped back to the last row instead of left out-of-bounds.
+            if (shifted.Start.Row > Model.CellAddress.MaxRow)
+                continue;
+            if (shifted.End.Row > Model.CellAddress.MaxRow)
+                shifted = new GridRange(
+                    shifted.Start,
+                    new CellAddress(shifted.End.Sheet, Model.CellAddress.MaxRow, shifted.End.Col));
+
+            shiftedMerges.Add(shifted);
+        }
         sheet.ReplaceMergedRegions(shiftedMerges);
 
         _formulaSnapshot.Clear();

@@ -22,9 +22,22 @@ public sealed class AddSheetCommand : IWorkbookCommand
         if (validationError is not null)
             return new CommandOutcome(false, validationError);
 
-        var sheet = ctx.Workbook.AddSheet(_name);
+        Sheet sheet;
+        if (_addedSheetId is { } existingId)
+        {
+            // R16: redo. Workbook.AddSheet always mints a brand-new SheetId, which would give
+            // the re-created sheet a DIFFERENT id than the first Apply produced — breaking any
+            // later redo-stack command that captured the original id. Re-create with the SAME
+            // id captured below instead, via the "reinsert an existing sheet instance" overload.
+            sheet = new Sheet(existingId, _name);
+            ctx.Workbook.InsertSheet(ctx.Workbook.Sheets.Count, sheet);
+        }
+        else
+        {
+            sheet = ctx.Workbook.AddSheet(_name);
+            _addedSheetId = sheet.Id;
+        }
         sheet.ResetViewStateToA1();
-        _addedSheetId = sheet.Id;
         return new CommandOutcome(true);
     }
 

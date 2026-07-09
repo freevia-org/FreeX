@@ -208,6 +208,10 @@ public partial class MainWindow
             return;
 
         _currentSheetId = draggedId;
+        // Moving a sheet can change which sheets fall inside a 3-D span reference
+        // (e.g. =SUM(Sheet1:Sheet3!A1)), so recalculate just like the other structural
+        // sheet operations (rename/delete/duplicate) do.
+        RecalculateWorkbook();
         RefreshSheetTabs();
     }
 
@@ -1754,6 +1758,10 @@ public partial class MainWindow
                 return;
 
             _currentSheetId = tab.Id;
+            // Moving sheets can change which sheets fall inside a 3-D span reference
+            // (e.g. =SUM(Sheet1:Sheet3!A1)), so recalculate just like the other structural
+            // sheet operations (rename/delete/duplicate) do.
+            RecalculateWorkbook();
         }
 
         _groupedSheetIds.Clear();
@@ -1932,6 +1940,10 @@ public partial class MainWindow
         _groupedSheetIds.Clear();
         _groupedSheetIds.Add(_currentSheetId);
         _sheetGroupAnchor = _currentSheetId;
+        // Moving a sheet can change which sheets fall inside a 3-D span reference
+        // (e.g. =SUM(Sheet1:Sheet3!A1)), so recalculate just like the other structural
+        // sheet operations (rename/delete/duplicate) do.
+        RecalculateWorkbook();
         RefreshSheetTabs();
     }
 
