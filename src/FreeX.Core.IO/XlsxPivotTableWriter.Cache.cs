@@ -132,9 +132,21 @@ internal static partial class XlsxPivotTableWriter
     {
         var items = field.SharedItems ?? [];
         var kinds = field.SharedItemKinds;
+        // The emitted "count" attribute must equal the number of child items actually written below.
+        // field.SharedItemCount can be stale relative to field.SharedItems: the reader (XlsxPivotCacheReader)
+        // filters out <m/> (missing-value) items when populating SharedItems but leaves the raw preserved
+        // sharedItems/@count untouched, so re-emitting that raw count here would produce a
+        // schema-inconsistent <sharedItems count="N"> with fewer than N children -- Excel then flags the
+        // pivot cache part as unreadable. Recomputing from the actual item list keeps count and children
+        // in lockstep. Only emit the attribute at all under the SAME condition as before this fix (a
+        // preserved, non-null SharedItemCount) so fields that never carried one -- including FreeX-created
+        // fields whose type/range metadata was widened without ever gaining an explicit item list --
+        // keep round-tripping SharedItemCount as null rather than picking up a synthetic count derived
+        // solely from item-list length.
+        var count = items.Count;
         return new XElement(
             workbookNs + "sharedItems",
-            field.SharedItemCount is { } count ? new XAttribute("count", count.ToString(CultureInfo.InvariantCulture)) : null,
+            field.SharedItemCount is not null ? new XAttribute("count", count.ToString(CultureInfo.InvariantCulture)) : null,
             field.ContainsBlank ? new XAttribute("containsBlank", "1") : null,
             field.ContainsString ? new XAttribute("containsString", "1") : null,
             field.ContainsNumber ? new XAttribute("containsNumber", "1") : null,
@@ -208,6 +220,86 @@ internal static partial class XlsxPivotTableWriter
                 new XAttribute("count", records.Count.ToString(CultureInfo.InvariantCulture)),
                 records)),
             records.Count);
+    }
+
+    // Cache-field metadata (ContainsNumber/ContainsDate/ContainsString/MinValue/MaxValue) is loaded once
+    // from the source xlsx at file-open time (XlsxPivotCacheReader.Load) and is otherwise never updated.
+    // ToPivotCacheRecordsXml below always re-reads the LIVE worksheet and writes fresh <r> records that
+    // reflect any edits the user made, so without this resync a saved file's cacheField/sharedItems could
+    // permanently disagree with its own pivotCacheRecords (e.g. a numeric-only field that gained a text
+    // value keeps declaring containsNumber-only with stale min/max). Widen (never narrow) the observed
+    // type flags/min-max from the current source data immediately before the definition is serialized.
+    private static void ResyncPivotCacheFieldTypeMetadata(PivotCacheModel cache, Workbook workbook)
+    {
+        if (!TryGetPivotCacheSourceRange(cache, workbook, out var sourceSheet, out var sourceRange) ||
+            sourceRange.RowCount <= 1)
+        {
+            return;
+        }
+
+        var fieldCount = Math.Min(cache.Fields.Count, (int)sourceRange.ColCount);
+        for (var index = 0; index < fieldCount; index++)
+        {
+            var field = cache.Fields[index];
+            var col = sourceRange.Start.Col + (uint)index;
+            var containsString = field.ContainsString;
+            var containsNumber = field.ContainsNumber;
+            var containsDate = field.ContainsDate;
+            var minValue = field.MinValue;
+            var maxValue = field.MaxValue;
+
+            // Only ever WIDEN from actually-observed, typed values (Number/Date/String/Bool/Error).
+            // Blank cells are deliberately NOT treated as evidence of anything here: many pivot caches
+            // loaded from a real file describe source ranges wider/taller than what the in-memory sheet
+            // happens to hold live (e.g. before a refresh, or in tests that patch a rich pivot cache
+            // definition onto a near-empty placeholder sheet), and a blank read there must never be
+            // allowed to override or contradict metadata the cache definition already carries.
+            for (var row = sourceRange.Start.Row + 1; row <= sourceRange.End.Row; row++)
+            {
+                switch (sourceSheet.GetValue(row, col))
+                {
+                    case NumberValue number:
+                        containsNumber = true;
+                        if (minValue is null || number.Value < minValue.Value)
+                            minValue = number.Value;
+                        if (maxValue is null || number.Value > maxValue.Value)
+                            maxValue = number.Value;
+                        break;
+                    case DateTimeValue:
+                        containsDate = true;
+                        break;
+                    case TextValue text when !string.IsNullOrEmpty(text.Value):
+                        containsString = true;
+                        break;
+                    case BoolValue:
+                    case ErrorValue:
+                        containsString = true;
+                        break;
+                }
+            }
+
+            var typeCount = (containsString ? 1 : 0) + (containsNumber ? 1 : 0) + (containsDate ? 1 : 0);
+            var containsMixedTypes = field.ContainsMixedTypes || typeCount > 1;
+            if (containsString == field.ContainsString &&
+                containsNumber == field.ContainsNumber &&
+                containsDate == field.ContainsDate &&
+                containsMixedTypes == field.ContainsMixedTypes &&
+                minValue == field.MinValue &&
+                maxValue == field.MaxValue)
+            {
+                continue;
+            }
+
+            cache.Fields[index] = field with
+            {
+                ContainsString = containsString,
+                ContainsNumber = containsNumber,
+                ContainsDate = containsDate,
+                ContainsMixedTypes = containsMixedTypes,
+                MinValue = minValue,
+                MaxValue = maxValue,
+            };
+        }
     }
 
     private static bool TryGetPivotCacheSourceRange(

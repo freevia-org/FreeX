@@ -63,7 +63,8 @@ internal static class XlsxNamedRangeMapper
                 var refersToBody = definedName.Value.Trim();
                 if (refersToBody.StartsWith('='))
                     refersToBody = refersToBody[1..].Trim();
-                if (string.IsNullOrWhiteSpace(refersToBody) || !IsFormulaExpression(refersToBody))
+                if (string.IsNullOrWhiteSpace(refersToBody) ||
+                    !(IsFormulaExpression(refersToBody) || IsSheetSpanRefersTo(refersToBody)))
                     continue;
 
                 var localSheetIdText = definedName.Attribute("localSheetId")?.Value;
@@ -113,9 +114,14 @@ internal static class XlsxNamedRangeMapper
                 // Strip the leading '=' if present.
                 var refersToBody = refersTo.StartsWith('=') ? refersTo[1..].Trim() : refersTo;
 
-                if (IsFormulaExpression(refersToBody))
+                if (IsFormulaExpression(refersToBody) || IsSheetSpanRefersTo(refersToBody))
                 {
-                    // Named formula: store the bare expression for on-demand evaluation.
+                    // Named formula, OR a 3-D sheet-span reference (e.g. Sheet1:Sheet3!$A$1): store
+                    // the bare expression/opaque refers-to text for on-demand evaluation/round-trip.
+                    // A sheet span can't be represented by the single-rectangle GridRange model below
+                    // (and ClosedXML's own namedRange.Ranges enumerates to zero items for it), so it
+                    // must be routed through this opaque-preserving branch instead of falling into the
+                    // "plain range" branch, where it would otherwise be silently dropped.
                     if (workbook.ValidateNamedRangeName(namedRange.Name) is null)
                     {
                         if (scopeSheetId is { } fid)
@@ -229,6 +235,40 @@ internal static class XlsxNamedRangeMapper
             // Plain range refs only have: alphanumeric, $, !, :, comma (multi-area), space.
             if (ch is '(' or ')' or '+' or '-' or '*' or '/' or '^' or '&' or '%')
                 return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Returns true when the refers-to expression is a 3-D "sheet span" reference, e.g.
+    /// <c>Sheet1:Sheet3!$A$1</c> or the quoted form <c>'Sheet1:Sheet3'!$A$1</c> (both valid inside
+    /// e.g. <c>=SUM(MySpan)</c> in Excel). <see cref="IsFormulaExpression"/> classifies these as
+    /// plain range references (no operator/paren characters), but ClosedXML's <c>IXLDefinedName.Ranges</c>
+    /// enumerates to zero items for them (no exception), so the plain-range branch in
+    /// <see cref="LoadDefinedNames"/> would silently drop the name. Detection: scan up to the first
+    /// '!' that is outside a quoted sheet-name section (the "sheet name" portion of the reference)
+    /// and check whether that portion contains a ':' — a plain single-sheet range's colon always
+    /// appears AFTER the '!' (inside the cell range, e.g. Sheet1!$A$1:$B$2), never before it.
+    /// </summary>
+    private static bool IsSheetSpanRefersTo(string refersToBody)
+    {
+        bool inQuote = false;
+        for (int i = 0; i < refersToBody.Length; i++)
+        {
+            var ch = refersToBody[i];
+            if (ch == '\'')
+            {
+                if (inQuote && i + 1 < refersToBody.Length && refersToBody[i + 1] == '\'')
+                {
+                    i++; // skip escaped apostrophe
+                    continue;
+                }
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (!inQuote && ch == '!')
+                return refersToBody[..i].Contains(':');
         }
         return false;
     }

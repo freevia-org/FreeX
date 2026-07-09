@@ -554,14 +554,18 @@ public sealed partial class XlsxFileAdapter
             MergeChartExSeries(sourceChart, generatedXml, chartExNs);
         }
 
-        sourceXml.Root?.Element(chartExNs + "chartData")?.Remove();
-        if (generatedChartData is not null)
-            sourceXml.Root?.AddFirst(new XElement(generatedChartData));
+        var sourceRoot = sourceXml.Root;
+        if (generatedChartData is not null && sourceRoot is not null)
+            MergeChartExData(sourceRoot, generatedChartData, chartExNs);
 
         generatedArchive.GetEntry(sourceEntry.FullName)?.Delete();
         XlsxPackageXmlEditor.ReplaceXml(generatedArchive, sourceEntry.FullName, sourceXml);
     }
 
+    // R19-chartex-deep-1: the source cx:series carries content FreeX never models at all (dataPt,
+    // dataLabels, spPr, marker, valueColors, axisId, extLst, ...). Wholesale Remove()+Add(generated)
+    // silently destroyed all of it on every save of an untouched chart. Merge positionally instead:
+    // keep the ORIGINAL series element and only refresh the parts FreeX actually generates.
     private static void MergeChartExSeries(XElement sourceChart, XDocument generatedXml, XNamespace chartExNs)
     {
         var sourceRegion = sourceChart
@@ -577,8 +581,192 @@ public sealed partial class XlsxFileAdapter
         if (sourceRegion is null || generatedSeries is null)
             return;
 
-        sourceRegion.Elements(chartExNs + "series").Remove();
-        sourceRegion.Add(generatedSeries);
+        var sourceSeries = sourceRegion.Elements(chartExNs + "series").ToList();
+        var mergedCount = Math.Min(sourceSeries.Count, generatedSeries.Count);
+        for (var i = 0; i < mergedCount; i++)
+            MergeChartExSeriesElement(sourceSeries[i], generatedSeries[i], chartExNs);
+
+        // Counts can legitimately differ (e.g. Pareto's synthetic "paretoLine" series, or a data
+        // range edit that added/removed a series) -- trim any leftover source series and append any
+        // leftover generated ones so the plot area still matches what FreeX just modeled, without
+        // touching the content merged above for the series that do line up.
+        for (var i = sourceSeries.Count - 1; i >= mergedCount; i--)
+            sourceSeries[i].Remove();
+        if (generatedSeries.Count > mergedCount)
+            sourceRegion.Add(generatedSeries.Skip(mergedCount));
+    }
+
+    // Only layoutId/uniqueId (attributes) and tx/dataId/layoutPr (elements) are ever produced by
+    // BuildChartExSeries (XlsxChartXmlWriter.ChartEx.cs) -- refresh exactly those parts in place and
+    // leave every other attribute/child on the source series element untouched.
+    private static void MergeChartExSeriesElement(XElement sourceSeries, XElement generatedSeries, XNamespace chartExNs)
+    {
+        var layoutId = generatedSeries.Attribute("layoutId")?.Value;
+        if (layoutId is not null)
+            sourceSeries.SetAttributeValue("layoutId", layoutId);
+        // ToChartExSeriesUniqueIdAttribute only emits uniqueId for BoxAndWhisker -- mirror its
+        // presence/absence rather than always keeping whatever the source happened to have.
+        sourceSeries.SetAttributeValue("uniqueId", generatedSeries.Attribute("uniqueId")?.Value);
+
+        ReplaceChartExSeriesChild(sourceSeries, generatedSeries, chartExNs + "tx", insertBeforeCandidates: null);
+        ReplaceChartExSeriesChild(
+            sourceSeries,
+            generatedSeries,
+            chartExNs + "dataId",
+            insertBeforeCandidates: [chartExNs + "layoutPr", chartExNs + "axisId", chartExNs + "extLst"]);
+        ReplaceChartExSeriesChild(
+            sourceSeries,
+            generatedSeries,
+            chartExNs + "layoutPr",
+            insertBeforeCandidates: [chartExNs + "axisId", chartExNs + "extLst"]);
+    }
+
+    // CT_Series child order is tx?, spPr?, valueColors?, valueColorPositions?, dataPt*, dataLabels?,
+    // dataId, layoutPr?, axisId*, extLst? -- replacing a modeled element in place (or inserting it
+    // right before the first following sibling that still exists) keeps that order intact so Excel
+    // doesn't treat the part as invalid on open. A null insertBeforeCandidates means "always first"
+    // (used for tx, which precedes everything else FreeX can generate).
+    private static void ReplaceChartExSeriesChild(
+        XElement sourceSeries,
+        XElement generatedSeries,
+        XName childName,
+        XName[]? insertBeforeCandidates)
+    {
+        var existing = sourceSeries.Element(childName);
+        var generatedChild = generatedSeries.Element(childName);
+        if (generatedChild is null)
+        {
+            existing?.Remove();
+            return;
+        }
+
+        var replacement = new XElement(generatedChild);
+        if (existing is not null)
+        {
+            existing.ReplaceWith(replacement);
+            return;
+        }
+
+        if (insertBeforeCandidates is null)
+        {
+            sourceSeries.AddFirst(replacement);
+            return;
+        }
+
+        foreach (var candidate in insertBeforeCandidates)
+        {
+            var anchor = sourceSeries.Element(candidate);
+            if (anchor is not null)
+            {
+                anchor.AddBeforeSelf(replacement);
+                return;
+            }
+        }
+
+        sourceSeries.Add(replacement);
+    }
+
+    // R19-chartex-deep-2: the source cx:chartData can carry cached point values (cx:pt) or extra
+    // hierarchy levels (cx:lvl) inside a numDim/strDim beyond the bare cx:f formula reference FreeX
+    // models. Wholesale Remove()+substitute silently destroyed all of it on every save of an
+    // untouched chart. Merge positionally (by <cx:data> order) instead, refreshing only the formula
+    // reference / header number format each dimension carries.
+    private static void MergeChartExData(XElement sourceRoot, XElement generatedChartData, XNamespace chartExNs)
+    {
+        var sourceChartData = sourceRoot.Element(chartExNs + "chartData");
+        if (sourceChartData is null)
+        {
+            sourceRoot.AddFirst(new XElement(generatedChartData));
+            return;
+        }
+
+        var sourceDataList = sourceChartData.Elements(chartExNs + "data").ToList();
+        var generatedDataList = generatedChartData.Elements(chartExNs + "data")
+            .Select(element => new XElement(element))
+            .ToList();
+        var mergedCount = Math.Min(sourceDataList.Count, generatedDataList.Count);
+        for (var i = 0; i < mergedCount; i++)
+            MergeChartExDataElement(sourceDataList[i], generatedDataList[i], chartExNs);
+
+        for (var i = sourceDataList.Count - 1; i >= mergedCount; i--)
+            sourceDataList[i].Remove();
+        if (generatedDataList.Count > mergedCount)
+            sourceChartData.Add(generatedDataList.Skip(mergedCount));
+    }
+
+    private static void MergeChartExDataElement(XElement sourceData, XElement generatedData, XNamespace chartExNs)
+    {
+        // cx:data/@id is purely positional (ToChartExDataId) -- always take the generated value.
+        var id = generatedData.Attribute("id")?.Value;
+        if (id is not null)
+            sourceData.SetAttributeValue("id", id);
+
+        MergeChartExDimension(sourceData, generatedData, chartExNs + "strDim", chartExNs);
+        MergeChartExDimension(sourceData, generatedData, chartExNs + "numDim", chartExNs);
+    }
+
+    // CT_NumericDimension / CT_StringDimension sequence is f?, nf?, lvl*, pt* -- only f/nf are ever
+    // generated by BuildChartExData, so lvl (hierarchy levels) and pt (cached point values) the
+    // source carried must survive completely untouched.
+    private static void MergeChartExDimension(
+        XElement sourceData,
+        XElement generatedData,
+        XName dimensionName,
+        XNamespace chartExNs)
+    {
+        var generatedDim = generatedData.Element(dimensionName);
+        if (generatedDim is null)
+            return;
+
+        var sourceDim = sourceData.Element(dimensionName);
+        if (sourceDim is null)
+        {
+            sourceData.Add(new XElement(generatedDim));
+            return;
+        }
+
+        var type = generatedDim.Attribute("type")?.Value;
+        if (type is not null)
+            sourceDim.SetAttributeValue("type", type);
+
+        var generatedF = generatedDim.Element(chartExNs + "f");
+        var existingF = sourceDim.Element(chartExNs + "f");
+        if (generatedF is not null)
+        {
+            var replacementF = new XElement(generatedF);
+            if (existingF is not null)
+                existingF.ReplaceWith(replacementF);
+            else
+                sourceDim.AddFirst(replacementF);
+        }
+        else
+        {
+            existingF?.Remove();
+        }
+
+        var generatedNf = generatedDim.Element(chartExNs + "nf");
+        var existingNf = sourceDim.Element(chartExNs + "nf");
+        if (generatedNf is not null)
+        {
+            var replacementNf = new XElement(generatedNf);
+            if (existingNf is not null)
+            {
+                existingNf.ReplaceWith(replacementNf);
+            }
+            else
+            {
+                // nf immediately follows f per CT_NumericDimension/CT_StringDimension.
+                var anchorF = sourceDim.Element(chartExNs + "f");
+                if (anchorF is not null)
+                    anchorF.AddAfterSelf(replacementNf);
+                else
+                    sourceDim.AddFirst(replacementNf);
+            }
+        }
+        else
+        {
+            existingNf?.Remove();
+        }
     }
 
     private static bool RangesMatchIgnoringSheet(GridRange left, GridRange right) =>

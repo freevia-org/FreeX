@@ -1427,7 +1427,8 @@ public sealed partial class XlsxFileAdapter
         }
 
         private static bool PatchBlockReasonInvalidatesCalcChain(string reason) =>
-            reason is "change_formula_text" or "change_formula_to_literal" or "change_formula_array_mode";
+            reason is "change_formula_text" or "change_formula_to_literal" or "change_formula_array_mode"
+                or "change_sheet_count" or "change_dimension_metadata" or "change_cell_count_mismatch";
 
         private static bool ChangesInvalidateCalcChain(IEnumerable<XlsxCellValuePatch> changes) =>
             changes.Any(change =>
@@ -8232,9 +8233,26 @@ public sealed partial class XlsxFileAdapter
             ScalarValue value,
             IReadOnlyList<CellTextRun>? richRuns = null)
         {
+            // A rich value (linked data type, IMAGE()-produced value, etc.) is stored for backward
+            // compatibility as a t="e" (#VALUE!) placeholder cell whose vm/cm attribute indexes into
+            // xl/metadata.xml's valueMetadata/cellMetadata to resolve the real rich-value content. If the
+            // user overwrites that cell's literal value, the vm/cm index would otherwise keep pointing at
+            // now-unrelated rich-value metadata, so clear it here. Other metadataTypes (e.g. XLDAPR dynamic
+            // array spill markers) are not represented with a t="e" placeholder and are intentionally left
+            // untouched by this narrower check.
+            var wasRichValuePlaceholder =
+                string.Equals(cell.Attribute("t")?.Value, "e", StringComparison.Ordinal) &&
+                (cell.Attribute("vm") is not null || cell.Attribute("cm") is not null);
+
             cell.Element(worksheetNs + "f")?.Remove();
             cell.Element(worksheetNs + "v")?.Remove();
             cell.Element(worksheetNs + "is")?.Remove();
+
+            if (wasRichValuePlaceholder)
+            {
+                cell.Attribute("vm")?.Remove();
+                cell.Attribute("cm")?.Remove();
+            }
 
             switch (value)
             {

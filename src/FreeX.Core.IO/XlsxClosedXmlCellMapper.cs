@@ -193,6 +193,7 @@ internal static class XlsxClosedXmlCellMapper
             Superscript = xlStyle.Font.VerticalAlignment == XLFontVerticalTextAlignmentValues.Superscript,
             Subscript   = xlStyle.Font.VerticalAlignment == XLFontVerticalTextAlignmentValues.Subscript,
             FontColor = MapColor(xlStyle.Font.FontColor, theme, indexedColors),
+            FontThemeColor = MapThemeColorReference(xlStyle.Font.FontColor),
             DoubleUnderline = xlStyle.Font.Underline is XLFontUnderlineValues.Double or XLFontUnderlineValues.DoubleAccounting,
             FontScheme = xlStyle.Font.FontScheme switch
             {
@@ -203,10 +204,16 @@ internal static class XlsxClosedXmlCellMapper
             FillColor = xlStyle.Fill.PatternType != XLFillPatternValues.None
                 ? (CellColor?)MapColor(xlStyle.Fill.BackgroundColor, theme, indexedColors)
                 : null,
+            FillThemeColor = xlStyle.Fill.PatternType != XLFillPatternValues.None
+                ? MapThemeColorReference(xlStyle.Fill.BackgroundColor)
+                : null,
             FillPatternStyle = MapFillPatternStyle(xlStyle.Fill.PatternType),
             FillPatternColor = xlStyle.Fill.PatternType is XLFillPatternValues.None or XLFillPatternValues.Solid
                 ? null
                 : MapColor(xlStyle.Fill.PatternColor, theme, indexedColors),
+            FillPatternThemeColor = xlStyle.Fill.PatternType is XLFillPatternValues.None or XLFillPatternValues.Solid
+                ? null
+                : MapThemeColorReference(xlStyle.Fill.PatternColor),
             BorderTop = MapBorder(xlStyle.Border.TopBorder, xlStyle.Border.TopBorderColor, theme, indexedColors),
             BorderRight = MapBorder(xlStyle.Border.RightBorder, xlStyle.Border.RightBorderColor, theme, indexedColors),
             BorderBottom = MapBorder(xlStyle.Border.BottomBorder, xlStyle.Border.BottomBorderColor, theme, indexedColors),
@@ -299,7 +306,9 @@ internal static class XlsxClosedXmlCellMapper
         if (style.FontSize != def.FontSize && IsSupportedFontSize(style.FontSize))
             xlStyle.Font.FontSize = style.FontSize;
         if (style.FontName != def.FontName) xlStyle.Font.FontName = style.FontName;
-        if (style.FontColor != def.FontColor)
+        if (style.FontThemeColor is { } fontThemeColor)
+            xlStyle.Font.FontColor = ToXLColor(fontThemeColor);
+        else if (style.FontColor != def.FontColor)
             xlStyle.Font.FontColor = XLColor.FromArgb(255, style.FontColor.R, style.FontColor.G, style.FontColor.B);
         if (style.FontScheme != def.FontScheme)
             xlStyle.Font.FontScheme = style.FontScheme switch
@@ -312,10 +321,19 @@ internal static class XlsxClosedXmlCellMapper
         if (style.FillPatternStyle != CellFillPatternStyle.None)
         {
             xlStyle.Fill.PatternType = MapFillPatternStyleInverse(style.FillPatternStyle);
-            if (style.FillColor.HasValue)
+            if (style.FillThemeColor is { } fillThemeColor)
+                xlStyle.Fill.BackgroundColor = ToXLColor(fillThemeColor);
+            else if (style.FillColor.HasValue)
                 xlStyle.Fill.BackgroundColor = XLColor.FromArgb(255, style.FillColor.Value.R, style.FillColor.Value.G, style.FillColor.Value.B);
-            if (style.FillPatternColor.HasValue)
+            if (style.FillPatternThemeColor is { } fillPatternThemeColor)
+                xlStyle.Fill.PatternColor = ToXLColor(fillPatternThemeColor);
+            else if (style.FillPatternColor.HasValue)
                 xlStyle.Fill.PatternColor = XLColor.FromArgb(255, style.FillPatternColor.Value.R, style.FillPatternColor.Value.G, style.FillPatternColor.Value.B);
+        }
+        else if (style.FillThemeColor is { } solidFillThemeColor)
+        {
+            xlStyle.Fill.PatternType = XLFillPatternValues.Solid;
+            xlStyle.Fill.BackgroundColor = ToXLColor(solidFillThemeColor);
         }
         else if (style.FillColor.HasValue)
         {
@@ -498,6 +516,40 @@ internal static class XlsxClosedXmlCellMapper
         color = new CellColor(r, g, b);
         return true;
     }
+
+    // Preserves a cell/font/fill color's theme link (slot + tint) alongside the baked RGB fallback in
+    // MapColor, so ApplyStyle can re-emit <color theme="…" tint="…"/> instead of a literal rgb on save
+    // (see R19-theme-extlst-1: without this a theme-linked cell color loses its theme link on round-trip
+    // and never re-colors when the workbook theme changes).
+    private static WorkbookThemeColorReference? MapThemeColorReference(XLColor xlColor) =>
+        xlColor.ColorType == XLColorType.Theme
+            ? new WorkbookThemeColorReference(ToWorkbookThemeColorSlot(xlColor.ThemeColor), xlColor.ThemeTint)
+            : null;
+
+    // Inverse of ToXLColor: converts a resolved theme-color reference back into a ClosedXML XLColor
+    // that serializes as <color theme="…" tint="…"/>, mirroring the tint-omission convention already
+    // used by MapRunColorToXLColor (XlsxFileAdapter.Save.cs) for rich-text run colors.
+    private static XLColor ToXLColor(WorkbookThemeColorReference themeColor) =>
+        Math.Abs(themeColor.Tint) > 0.000001
+            ? XLColor.FromTheme(ToXLThemeColor(themeColor.Slot), themeColor.Tint)
+            : XLColor.FromTheme(ToXLThemeColor(themeColor.Slot));
+
+    private static XLThemeColor ToXLThemeColor(WorkbookThemeColorSlot slot) => slot switch
+    {
+        WorkbookThemeColorSlot.Dark1 => XLThemeColor.Text1,
+        WorkbookThemeColorSlot.Light1 => XLThemeColor.Background1,
+        WorkbookThemeColorSlot.Dark2 => XLThemeColor.Text2,
+        WorkbookThemeColorSlot.Light2 => XLThemeColor.Background2,
+        WorkbookThemeColorSlot.Accent1 => XLThemeColor.Accent1,
+        WorkbookThemeColorSlot.Accent2 => XLThemeColor.Accent2,
+        WorkbookThemeColorSlot.Accent3 => XLThemeColor.Accent3,
+        WorkbookThemeColorSlot.Accent4 => XLThemeColor.Accent4,
+        WorkbookThemeColorSlot.Accent5 => XLThemeColor.Accent5,
+        WorkbookThemeColorSlot.Accent6 => XLThemeColor.Accent6,
+        WorkbookThemeColorSlot.Hyperlink => XLThemeColor.Hyperlink,
+        WorkbookThemeColorSlot.FollowedHyperlink => XLThemeColor.FollowedHyperlink,
+        _ => XLThemeColor.Text1,
+    };
 
     private static WorkbookThemeColorSlot ToWorkbookThemeColorSlot(XLThemeColor themeColor) => themeColor switch
     {

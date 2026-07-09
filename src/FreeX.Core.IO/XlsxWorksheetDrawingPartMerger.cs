@@ -426,9 +426,64 @@ internal static class XlsxWorksheetDrawingPartMerger
     {
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
         var objectName = ReadFirstNonVisualPropertyName(anchor, spreadsheetDrawingNs);
-        return string.IsNullOrWhiteSpace(objectName)
-            ? anchor.ToString(SaveOptions.DisableFormatting)
-            : $"{anchor.Name.LocalName}:{objectName}";
+        if (string.IsNullOrWhiteSpace(objectName))
+            return anchor.ToString(SaveOptions.DisableFormatting);
+
+        // Excel's own default object naming ("TextBox 1", "Picture 1", ...) is reused independently
+        // per sheet, so a source-loaded object and a brand-new object authored in FreeX can end up
+        // with the exact same cNvPr name while being genuinely distinct objects. Name alone is not a
+        // reliable identity for dedup: fold the anchor's own position (from/to cell + offsets for
+        // one/two-cell anchors, or absolute pos + extent for absolute anchors) into the key so two
+        // anchors that merely share a default name but sit at different positions are both kept. A
+        // source anchor the writer re-emits verbatim keeps both the same name and the same position,
+        // so it still collapses to a single identity and continues to de-dupe correctly.
+        var position = GetDrawingAnchorPositionSignature(anchor, spreadsheetDrawingNs);
+        return $"{anchor.Name.LocalName}:{objectName}:{position}";
+    }
+
+    private static string GetDrawingAnchorPositionSignature(XElement anchor, XNamespace spreadsheetDrawingNs)
+    {
+        // Pull out the actual position values rather than serializing the elements with ToString():
+        // a source anchor copied into a detached XElement (see MergeDrawingPart's anchorCopy) loses the
+        // "xdr" prefix binding it inherited from its original document's root and re-serializes using the
+        // default-namespace form (e.g. "<from xmlns=\"...\">" instead of "<xdr:from xmlns:xdr=\"...\">"),
+        // even though the position is byte-for-byte the same. Comparing raw child/attribute values instead
+        // of XML text keeps the signature immune to that prefix churn so a source anchor re-emitted
+        // verbatim by the writer still collapses to the same identity as its target-side counterpart.
+        return string.Join(
+            "|",
+            FormatCellReference("from", anchor.Element(spreadsheetDrawingNs + "from"), spreadsheetDrawingNs),
+            FormatCellReference("to", anchor.Element(spreadsheetDrawingNs + "to"), spreadsheetDrawingNs),
+            FormatPositionAttributes("pos", anchor.Element(spreadsheetDrawingNs + "pos")),
+            FormatPositionAttributes("ext", anchor.Element(spreadsheetDrawingNs + "ext")));
+    }
+
+    private static string FormatCellReference(string label, XElement? element, XNamespace spreadsheetDrawingNs)
+    {
+        if (element is null)
+            return $"{label}:";
+
+        return string.Join(
+            "/",
+            label,
+            element.Element(spreadsheetDrawingNs + "col")?.Value,
+            element.Element(spreadsheetDrawingNs + "colOff")?.Value,
+            element.Element(spreadsheetDrawingNs + "row")?.Value,
+            element.Element(spreadsheetDrawingNs + "rowOff")?.Value);
+    }
+
+    private static string FormatPositionAttributes(string label, XElement? element)
+    {
+        if (element is null)
+            return $"{label}:";
+
+        return string.Join(
+            "/",
+            label,
+            element.Attribute("x")?.Value,
+            element.Attribute("y")?.Value,
+            element.Attribute("cx")?.Value,
+            element.Attribute("cy")?.Value);
     }
 
     private static string? ReadFirstNonVisualPropertyName(XElement anchor, XNamespace spreadsheetDrawingNs)

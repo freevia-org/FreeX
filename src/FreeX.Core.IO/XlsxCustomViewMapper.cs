@@ -24,12 +24,17 @@ internal static class XlsxCustomViewMapper
 
             var pane = customSheetView.Element(worksheetNs + "pane");
             var paneState = pane?.Attribute("state")?.Value;
-            var rowSplit = XlsxWorksheetXmlValueParser.ParsePaneSplit(pane?.Attribute("ySplit")?.Value);
-            var columnSplit = XlsxWorksheetXmlValueParser.ParsePaneSplit(pane?.Attribute("xSplit")?.Value);
-            var frozenRows = paneState is "frozen" or "frozenSplit" ? rowSplit ?? 0 : 0;
-            var frozenCols = paneState is "frozen" or "frozenSplit" ? columnSplit ?? 0 : 0;
-            var splitRow = frozenRows == 0 && frozenCols == 0 ? rowSplit : null;
-            var splitColumn = frozenRows == 0 && frozenCols == 0 ? columnSplit : null;
+            // CT_Pane's xSplit/ySplit are the row/column index under state="frozen"/"frozenSplit";
+            // WorksheetCustomViewState.SplitRow/SplitColumn (the non-frozen "split" case) mirror
+            // Sheet.SplitRow/SplitColumn, which are themselves row/column indexes (see Sheet.cs) --
+            // this mapper reads/writes both cases as the literal index, matching FileAdapterSmoke's
+            // and NativeJsonAdapter's established modeling of split panes.
+            var rawYSplit = XlsxWorksheetXmlValueParser.ParsePaneSplit(pane?.Attribute("ySplit")?.Value);
+            var rawXSplit = XlsxWorksheetXmlValueParser.ParsePaneSplit(pane?.Attribute("xSplit")?.Value);
+            var frozenRows = paneState is "frozen" or "frozenSplit" ? rawYSplit ?? 0 : 0;
+            var frozenCols = paneState is "frozen" or "frozenSplit" ? rawXSplit ?? 0 : 0;
+            var splitRow = frozenRows == 0 && frozenCols == 0 ? rawYSplit : null;
+            var splitColumn = frozenRows == 0 && frozenCols == 0 ? rawXSplit : null;
             var topLeftCell = customSheetView.Attribute("topLeftCell")?.Value;
             var activeCell = customSheetView
                 .Elements(worksheetNs + "selection")
@@ -60,15 +65,16 @@ internal static class XlsxCustomViewMapper
                     ActiveCol: ParseCellColumn(activeCell),
                     ViewTopRow: ParseCellRow(topLeftCell),
                     ViewLeftCol: ParseCellColumn(topLeftCell),
-                    // N13: hidden-rows/cols/filter state and the fit-to-page flag have no dedicated
-                    // slot in CT_CustomSheetView (ECMA-376 §18.3.1.90) — Excel itself does not
-                    // snapshot per-view hidden-row/column lists there (only the live sheetData
-                    // row/col hidden attributes), and FitToPage is a worksheet-level sheetPr/
-                    // pageSetUpPr/@fitToPage flag, not a customSheetView attribute. AutoFilter and
-                    // the rest of the print settings DO have schema support (nested autoFilter/
-                    // pageMargins/pageSetup/printOptions elements) so those round-trip; the others
-                    // are left null here (not captured) rather than guessing at a non-standard
-                    // extension.
+                    // N13: hidden-rows/cols state has no dedicated slot in CT_CustomSheetView
+                    // (ECMA-376 §18.3.1.90) — Excel itself does not snapshot per-view hidden-row/
+                    // column lists there (only the live sheetData row/col hidden attributes) — so
+                    // that is left uncaptured here rather than guessing at a non-standard
+                    // extension. FitToPage IS a real customSheetView attribute (CT_CustomSheetView.
+                    // FitToPage, distinct from the worksheet-level sheetPr/pageSetUpPr/@fitToPage
+                    // flag) and AutoFilter/print settings also have schema support (nested
+                    // autoFilter/pageMargins/pageSetup/printOptions elements), so all of those
+                    // round-trip below.
+                    FitToPage: XlsxXmlAttributeReader.ReadNullableBoolAttribute(customSheetView, "fitToPage"),
                     AutoFilter: autoFilter,
                     PageOrientation: ParseOrientation(pageSetup?.Attribute("orientation")?.Value),
                     PaperSize: paperSizeCode is { } code && PaperSizeCodes.TryGetEnum(code, out var paperSize) ? paperSize : null,
@@ -249,6 +255,7 @@ internal static class XlsxCustomViewMapper
         var hasFrozenPanes = frozenRows > 0 || frozenCols > 0;
         var splitRow = hasFrozenPanes ? null : state.SplitRow;
         var splitColumn = hasFrozenPanes ? null : state.SplitColumn;
+        var autoFilterXml = ToAutoFilterXml(workbookNs, state.AutoFilter);
 
         var customSheetView = new XElement(
             workbookNs + "customSheetView",
@@ -264,14 +271,22 @@ internal static class XlsxCustomViewMapper
             state.ShowRulers ? null : new XAttribute("showRuler", "0"),
             state.ZoomPercent == 100 ? null : new XAttribute("scale", XlsxWorksheetValueSanitizer.ValidZoomPercentOrDefault(state.ZoomPercent)),
             state.ShowFormulas ? new XAttribute("showFormulas", "1") : null,
+            state.FitToPage is true ? new XAttribute("fitToPage", "1") : null,
+            // ShowAutoFilter ("Show AutoFilter Drop Down Controls") is distinct from the <autoFilter>
+            // child element's own ref/criteria: without it, Excel restores the view without the
+            // filter dropdown arrows even though the underlying autoFilter element round-trips.
+            autoFilterXml is not null ? new XAttribute("showAutoFilter", "1") : null,
             new XAttribute("state", "visible"));
 
         if (hasFrozenPanes || splitRow.HasValue || splitColumn.HasValue)
         {
+            // Mirrors ReadWorksheetViews above: both state="frozen" and state="split" are written
+            // as the literal row/column index here (SplitRow/SplitColumn already model the index,
+            // matching Sheet.SplitRow/SplitColumn), not a pane-bar pixel offset.
             customSheetView.Add(new XElement(
                 workbookNs + "pane",
-                splitColumn is { } splitColumnValue ? new XAttribute("xSplit", splitColumnValue) : null,
-                splitRow is { } splitRowValue ? new XAttribute("ySplit", splitRowValue) : null,
+                !hasFrozenPanes && splitColumn is { } splitColumnValue ? new XAttribute("xSplit", splitColumnValue) : null,
+                !hasFrozenPanes && splitRow is { } splitRowValue ? new XAttribute("ySplit", splitRowValue) : null,
                 frozenCols > 0 ? new XAttribute("xSplit", frozenCols) : null,
                 frozenRows > 0 ? new XAttribute("ySplit", frozenRows) : null,
                 new XAttribute("state", hasFrozenPanes ? "frozen" : "split")));
@@ -287,9 +302,8 @@ internal static class XlsxCustomViewMapper
 
         // N13: print settings and AutoFilter have dedicated slots in CT_CustomSheetView
         // (ECMA-376 §18.3.1.90, sequence: pane?, selection*, pageMargins?, printOptions?,
-        // pageSetup?, headerFooter?, autoFilter?, extLst?) — hidden-rows/cols/FilterHiddenRows and
-        // FitToPage do not (Excel keeps those on the live sheetData row/col elements and the
-        // worksheet-level sheetPr/pageSetUpPr/@fitToPage flag respectively), so those fields are
+        // pageSetup?, headerFooter?, autoFilter?, extLst?) — hidden-rows/cols/FilterHiddenRows
+        // do not (Excel keeps those on the live sheetData row/col elements), so that field is
         // intentionally not written here; see the matching read-side comment above.
         if (ToPageMarginsXml(workbookNs, state) is { } pageMarginsXml)
             customSheetView.Add(pageMarginsXml);
@@ -297,7 +311,7 @@ internal static class XlsxCustomViewMapper
             customSheetView.Add(printOptionsXml);
         if (ToPageSetupXml(workbookNs, state) is { } pageSetupXml)
             customSheetView.Add(pageSetupXml);
-        if (ToAutoFilterXml(workbookNs, state.AutoFilter) is { } autoFilterXml)
+        if (autoFilterXml is not null)
             customSheetView.Add(autoFilterXml);
 
         return customSheetView;

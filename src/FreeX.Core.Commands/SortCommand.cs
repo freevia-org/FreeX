@@ -39,6 +39,11 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
     private HashSet<uint>? _filterHiddenRowsSnapshot;
     private HashSet<uint>? _valueFilterHiddenRowsSnapshot;
     private IReadOnlyList<CellAddress> _affectedCells = [];
+    // Undo snapshot for sheet.SortState (R19: Apply must record the sort it just performed so
+    // the persisted <sortState> matches the data on disk, and Revert must restore whatever was
+    // there before — which may be null, or a stale sortState left over from a prior Excel sort).
+    private WorksheetSortStateModel? _priorSortState;
+    private bool _sortStateCaptured;
 
     private sealed record SortPayloadCapture(
         SortCellPayload[][] Rows,
@@ -123,6 +128,12 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
 
         int rowCount = (int)(endRow - startRow + 1);
         int colCount = (int)(endCol - startCol + 1);
+
+        // Redo replays Apply after Revert, so the snapshot must capture whatever SortState is
+        // on the sheet right now (which is either the pristine pre-sort value, or — after a
+        // Revert — back to that same pristine value) each time Apply runs.
+        _priorSortState = sheet.SortState;
+        _sortStateCaptured = true;
 
         if (_options.LeftToRight)
             return ApplyLeftToRight(ctx.Workbook, sheet, startRow, endRow, startCol, endCol, keyColIndexes, rowCount, colCount);
@@ -215,6 +226,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         }
 
         _affectedCells = affected;
+        sheet.SortState = BuildSortState(_range, keyColIndexes, leftToRight: false);
         return new CommandOutcome(true, AffectedCells: affected);
     }
 
@@ -290,7 +302,56 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         }
 
         _affectedCells = affected;
+        sheet.SortState = BuildSortState(_range, keyRowIndexes, leftToRight: true);
         return new CommandOutcome(true, AffectedCells: affected);
+    }
+
+    /// <summary>
+    /// Builds the sheet-level sortState metadata (ref + per-key sortCondition) describing the
+    /// sort that was just applied, matching what Excel itself writes after a Data > Sort.
+    /// R19: previously SortCommand never touched sheet.SortState at all, so the saved file's
+    /// persisted sort metadata was either missing entirely or — worse — left stale from whatever
+    /// sort (if any) had been recorded before this command ran.
+    /// </summary>
+    private WorksheetSortStateModel BuildSortState(
+        GridRange range,
+        IReadOnlyList<(int Index, bool Ascending, SortOn SortOn, CellColor? TargetColor, CustomSortOrder? CustomOrder)> keys,
+        bool leftToRight)
+    {
+        var model = new WorksheetSortStateModel
+        {
+            Reference = range.ToString(),
+            ColumnSort = leftToRight ? true : null,
+            CaseSensitive = _options.CaseSensitive ? true : null
+        };
+
+        foreach (var (index, ascending, sortOn, _, _) in keys)
+        {
+            // Top-to-bottom: each key is a column, and its condition ref spans the full sorted
+            // row range within that single column. Left-to-right: each key is a row, and its
+            // condition ref spans the full sorted column range within that single row.
+            var conditionRange = leftToRight
+                ? new GridRange(
+                    new CellAddress(_sheetId, range.Start.Row + (uint)index, range.Start.Col),
+                    new CellAddress(_sheetId, range.Start.Row + (uint)index, range.End.Col))
+                : new GridRange(
+                    new CellAddress(_sheetId, range.Start.Row, range.Start.Col + (uint)index),
+                    new CellAddress(_sheetId, range.End.Row, range.Start.Col + (uint)index));
+
+            model.Conditions.Add(new WorksheetSortConditionModel
+            {
+                Reference = conditionRange.ToString(),
+                Descending = ascending ? null : true,
+                SortBy = sortOn switch
+                {
+                    SortOn.CellColor => "cellColor",
+                    SortOn.FontColor => "fontColor",
+                    _ => null
+                }
+            });
+        }
+
+        return model;
     }
 
     public void Revert(ICommandContext ctx)
@@ -304,6 +365,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         RestoreHiddenRows(sheet);
         RestoreFilterHiddenRows(sheet);
         RestoreValueFilterHiddenRows(sheet);
+        if (_sortStateCaptured)
+            sheet.SortState = _priorSortState;
     }
 
     private static SortPayloadCapture CapturePayloads(

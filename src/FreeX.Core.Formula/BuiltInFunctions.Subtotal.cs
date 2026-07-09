@@ -24,14 +24,27 @@ public static partial class BuiltInFunctions
             if (args[i] is ErrorValue ei) return ei;
             if (args[i] is RangeValue rv)
             {
+                // A computed/virtual array (e.g. the result of FILTER, SORT, SEQUENCE, MAP, ...)
+                // has no real position on the sheet, so RangeValue defaults its StartRow/StartCol
+                // to 1 and leaves SheetName null (see RangeValue in FreeX.Core.Model/ScalarValue.cs
+                // and its construction sites in BuiltInFunctions.DynamicArrays.*.cs). Only a genuine
+                // worksheet REFERENCE — recognizable by a real SheetName, or a start row/col other
+                // than that (1,1) default — carries coordinates meaningful enough to look up
+                // hidden-row state or nested SUBTOTAL/AGGREGATE formulas. Applying those
+                // coordinate-based exclusions to a virtual array's bogus (1,1)-anchored coordinates
+                // silently (and wrongly) drops elements whenever sheet row 1 / column A happens to
+                // be hidden or hold a nested SUBTOTAL, regardless of where the array's values
+                // actually came from. See R19-formula-functions-edge-1.
+                bool isReference = rv.SheetName is not null || rv.StartRow != 1 || rv.StartCol != 1;
+
                 for (int r = 0; r < rv.RowCount; r++)
                 {
                     uint absRow = rv.StartRow + (uint)r;
-                    if (ShouldSkipSubtotalRow(ctx, rv, absRow, skipHidden)) continue;
+                    if (isReference && ShouldSkipSubtotalRow(ctx, rv, absRow, skipHidden)) continue;
                     for (int c = 0; c < rv.ColCount; c++)
                     {
                         uint absCol = rv.StartCol + (uint)c;
-                        if (IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
+                        if (isReference && IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
                         var cell = rv.Cells[r, c];
                         if (cell is ErrorValue err)
                         {

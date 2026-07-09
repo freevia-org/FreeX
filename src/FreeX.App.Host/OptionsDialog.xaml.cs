@@ -23,17 +23,32 @@ public enum OptionsDialogInitialSection
 /// <see cref="FreeXOptions.AutoCalculate"/> default. Excel's Options dialog reflects the active
 /// workbook's calculation state, not a saved app preference.
 /// </summary>
+/// <param name="AutoCalculate">
+/// True when the workbook is NOT in Manual mode. The dialog only has two calc-mode radio
+/// buttons (Automatic/Manual), so <see cref="WorkbookCalculationMode.AutomaticExceptDataTables"/>
+/// must map here to "Automatic" (checked, not Manual) — never collapse it into Manual.
+/// </param>
+/// <param name="CalculationMode">
+/// The workbook's real tri-state calculation mode when known (set by <see cref="FromWorkbook"/>).
+/// Null for settings built from a dialog edit or the persisted app-wide default, which can only
+/// ever express Automatic/Manual. Callers applying an edited settings snapshot back to the
+/// workbook must compare against <see cref="AutoCalculate"/> (not this mode) so that leaving the
+/// calc-mode radios untouched never overwrites an <see cref="WorkbookCalculationMode.AutomaticExceptDataTables"/>
+/// workbook with plain Automatic or Manual as a side effect of an unrelated settings change.
+/// </param>
 public sealed record OptionsDialogCalculationSettings(
     bool AutoCalculate,
     bool IterativeCalculation,
     int? MaxCalculationIterations,
-    double? MaxCalculationChange)
+    double? MaxCalculationChange,
+    WorkbookCalculationMode? CalculationMode = null)
 {
     public static OptionsDialogCalculationSettings FromWorkbook(Workbook workbook) => new(
-        workbook.CalculationMode == WorkbookCalculationMode.Automatic,
+        workbook.CalculationMode != WorkbookCalculationMode.Manual,
         workbook.IterativeCalculation,
         workbook.MaxCalculationIterations,
-        workbook.MaxCalculationChange);
+        workbook.MaxCalculationChange,
+        workbook.CalculationMode);
 }
 
 public partial class OptionsDialog : Window

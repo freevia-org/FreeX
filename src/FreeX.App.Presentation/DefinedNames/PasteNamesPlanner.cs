@@ -25,7 +25,14 @@ public static class PasteNamesPlanner
     /// <summary>
     /// Projects the workbook's defined names into Paste Names rows (sorted case-insensitively by name). The
     /// caller supplies <paramref name="formatRange"/> so the host controls how a range renders as refers-to
-    /// text (e.g. sheet-qualified A1).
+    /// text (e.g. sheet-qualified A1). Excel's Paste Names / Paste List lists every defined name in the
+    /// workbook -- workbook-scoped and sheet-scoped, range-valued and formula/constant-valued -- so all four
+    /// storage sources are projected here: <see cref="Workbook.NamedRanges"/> (workbook-scoped ranges),
+    /// <see cref="Workbook.ScopedNamedRanges"/> (sheet-scoped ranges, "localSheetId"),
+    /// <see cref="Workbook.NamedFormulas"/> (workbook-scoped formulas/constants), and
+    /// <see cref="Workbook.ScopedNamedFormulas"/> (sheet-scoped formulas/constants). Sheet-scoped names are
+    /// qualified as "SheetName!Name" so they aren't mistaken for a same-named workbook-scoped name and so the
+    /// pasted list is unambiguous even though the dialog has no single "current sheet" context.
     /// </summary>
     public static IReadOnlyList<PasteNamesItem> BuildItems(
         Workbook workbook,
@@ -34,10 +41,30 @@ public static class PasteNamesPlanner
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(formatRange);
 
-        return workbook.NamedRanges
-            .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
-            .Select(pair => new PasteNamesItem(pair.Key, formatRange(pair.Value)))
+        var items = new List<PasteNamesItem>();
+
+        foreach (var (name, range) in workbook.NamedRanges)
+            items.Add(new PasteNamesItem(name, formatRange(range)));
+
+        foreach (var ((name, sheetId), range) in workbook.ScopedNamedRanges)
+            items.Add(new PasteNamesItem(QualifyScopedName(workbook, sheetId, name), formatRange(range)));
+
+        foreach (var (name, formulaText) in workbook.NamedFormulas)
+            items.Add(new PasteNamesItem(name, "=" + formulaText));
+
+        foreach (var ((name, sheetId), formulaText) in workbook.ScopedNamedFormulas)
+            items.Add(new PasteNamesItem(QualifyScopedName(workbook, sheetId, name), "=" + formulaText));
+
+        return items
+            .OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    /// <summary>Qualifies a sheet-scoped name as "SheetName!Name" for display in the workbook-wide list.</summary>
+    private static string QualifyScopedName(Workbook workbook, SheetId sheetId, string name)
+    {
+        var sheetName = workbook.GetSheet(sheetId)?.Name ?? "Sheet1";
+        return $"{sheetName}!{name}";
     }
 
     /// <summary>

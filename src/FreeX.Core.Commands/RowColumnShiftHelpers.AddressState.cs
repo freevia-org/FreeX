@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Xml.Linq;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -900,6 +901,7 @@ internal static partial class RowColumnShiftHelpers
             ColumnSort = sortState.ColumnSort,
             CaseSensitive = sortState.CaseSensitive,
             SortMethod = sortState.SortMethod,
+            NativeXml = ShiftSortStateNativeXml(sortState.NativeXml, shift),
             NativeAttributes = new Dictionary<string, string>(sortState.NativeAttributes, StringComparer.Ordinal)
         };
 
@@ -914,6 +916,55 @@ internal static partial class RowColumnShiftHelpers
         }
 
         return changed ? clone : sortState;
+    }
+
+    // Rewrites the `ref` attribute on a raw <sortState>/<sortCondition> XML payload (captured verbatim
+    // on load, e.g. via XlsxWorksheetSortStateMapper.Read or the structured-table sortState reader) so a
+    // structural row/column insert or delete keeps the sort range in sync WITHOUT discarding any
+    // full-fidelity content the payload carries (in particular <extLst> Excel-2010+ extension blocks,
+    // which have no other representation in the model and would otherwise be permanently lost the first
+    // time a shift forces the from-scratch element builder to run instead of round-tripping this string).
+    private static string? ShiftSortStateNativeXml(string? nativeXml, AddressShift shift)
+    {
+        if (string.IsNullOrWhiteSpace(nativeXml))
+            return nativeXml;
+
+        XElement element;
+        try
+        {
+            element = XElement.Parse(nativeXml);
+        }
+        catch
+        {
+            // Malformed native payload from an older save; leave it untouched rather than lose it.
+            return nativeXml;
+        }
+
+        var refAttribute = element.Attribute("ref");
+        if (refAttribute is not null)
+        {
+            var shiftedRef = ShiftReference(refAttribute.Value, shift);
+            if (shiftedRef is null)
+                refAttribute.Remove();
+            else
+                refAttribute.Value = shiftedRef;
+        }
+
+        var sortConditionName = XName.Get("sortCondition", element.Name.NamespaceName);
+        foreach (var condition in element.Elements(sortConditionName).ToList())
+        {
+            var conditionRefAttribute = condition.Attribute("ref");
+            if (conditionRefAttribute is null)
+                continue;
+
+            var shiftedConditionRef = ShiftReference(conditionRefAttribute.Value, shift);
+            if (shiftedConditionRef is null)
+                condition.Remove();
+            else
+                conditionRefAttribute.Value = shiftedConditionRef;
+        }
+
+        return element.ToString(SaveOptions.DisableFormatting);
     }
 
     private static WorksheetSingleXmlCellsModel? ShiftSingleXmlCells(
@@ -1579,7 +1630,7 @@ internal static partial class RowColumnShiftHelpers
             ShowRowStripes = table.ShowRowStripes,
             ShowColumnStripes = table.ShowColumnStripes,
             PackagePart = table.PackagePart,
-            NativeSortStateXml = table.NativeSortStateXml,
+            NativeSortStateXml = ShiftSortStateNativeXml(table.NativeSortStateXml, shift),
             NativeAttributes = CloneReadOnlyDictionary(table.NativeAttributes),
             NativeChildXmls = table.NativeChildXmls?.ToArray(),
             NativeAutoFilterAttributes = CloneReadOnlyDictionary(table.NativeAutoFilterAttributes),

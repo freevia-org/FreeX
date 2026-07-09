@@ -976,12 +976,25 @@ public partial class MainWindow
         if (calcSettings is null)
             return;
 
-        var wantMode = calcSettings.AutoCalculate ? WorkbookCalculationMode.Automatic : WorkbookCalculationMode.Manual;
-        if (_workbook.CalculationMode != wantMode &&
-            TryExecuteCommand(new SetCalculationModeCommand(wantMode), "Calculation Options") &&
-            wantMode == WorkbookCalculationMode.Automatic)
+        // The dialog's calc-mode radios only ever express Automatic/Manual (there is no third
+        // "Automatic except for data tables" option), so comparing calcSettings.AutoCalculate
+        // against the exact _workbook.CalculationMode would spuriously fire a mode change for a
+        // workbook that's WorkbookCalculationMode.AutomaticExceptDataTables whenever the user
+        // never touched the calc-mode radios at all (e.g. edited only the iterative-calculation
+        // fields) -- silently downgrading "except data tables" to plain Automatic or Manual.
+        // Compare against the boolean "currently Manual" state instead (mirrors the Avalonia
+        // host's MainWindow.Options.cs CalculationModeIsManual guard) so the workbook's calc mode
+        // is only ever touched when the user's Automatic/Manual choice actually changed.
+        var workbookIsManual = _workbook.CalculationMode == WorkbookCalculationMode.Manual;
+        var wantManual = !calcSettings.AutoCalculate;
+        if (workbookIsManual != wantManual)
         {
-            RecalculateWorkbook();
+            var wantMode = wantManual ? WorkbookCalculationMode.Manual : WorkbookCalculationMode.Automatic;
+            if (TryExecuteCommand(new SetCalculationModeCommand(wantMode), "Calculation Options") &&
+                wantMode == WorkbookCalculationMode.Automatic)
+            {
+                RecalculateWorkbook();
+            }
         }
 
         if (_workbook.IterativeCalculation != calcSettings.IterativeCalculation ||
