@@ -195,7 +195,8 @@ public static partial class BuiltInFunctions
     private static ScalarValue HypergeomDistScalar(ScalarValue sampleSuccessesValue, int n, int M, int N, bool cum)
     {
         int s = (int)Math.Truncate(ToNumber(sampleSuccessesValue));
-        if (s < 0 || n < 0 || M < 0 || N <= 0 || s > n || s > M || n > N || M > N) return ErrorValue.Num;
+        int sMin = Math.Max(0, n + M - N);
+        if (s < 0 || n < 0 || M < 0 || N <= 0 || s > n || s > M || n > N || M > N || s < sMin) return ErrorValue.Num;
 
         if (!cum)
         {

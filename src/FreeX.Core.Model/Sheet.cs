@@ -860,6 +860,17 @@ public sealed partial class Sheet
                 // Excel refuses to spill into a merged cell ("Spill range has merged cells"),
                 // even when that region is otherwise empty (no _cells/_spillValues entry).
                 if (IsMerged(new CellAddress(anchor.Sheet, key.Item1, key.Item2))) return true;
+                // R20-array-dynamic-spill-2: Excel also refuses to spill into (or through) an Excel
+                // Table's footprint ("Spill range has table"), even for a blank table body cell that
+                // has no _cells/_spillValues entry of its own.
+                if (StructuredTables.Count > 0)
+                {
+                    var candidate = new CellAddress(anchor.Sheet, key.Item1, key.Item2);
+                    foreach (var table in StructuredTables)
+                    {
+                        if (table.Range.Contains(candidate)) return true;
+                    }
+                }
                 if (_cells.ContainsKey(key))
                 {
                     // A provisional cached spill cell loaded from the XLSX for THIS anchor does not
@@ -947,6 +958,40 @@ public sealed partial class Sheet
         rows = 0;
         cols = 0;
         return false;
+    }
+
+    /// <summary>
+    /// Captures the live spill payload rooted at <paramref name="anchor"/>, if it is currently a
+    /// spill anchor, as a <see cref="RangeValue"/> that can be replayed via <see cref="SetSpillRange"/>
+    /// once the anchor's formula cell has been relocated by a structural edit (a row/column
+    /// insert/delete shift, or a range Move). MUST be called BEFORE the anchor cell is
+    /// cleared/moved: <see cref="ClearCell(CellAddress)"/> and <see cref="SetCell(CellAddress, Cell)"/>
+    /// both tear down the spill via <see cref="ClearSpillRange"/> as a side effect and, unless the
+    /// caller re-establishes it at the new address afterward, the array's spilled members are
+    /// permanently lost (R20-array-dynamic-spill-1). Returns null when <paramref name="anchor"/> is
+    /// not currently a live spill anchor.
+    /// </summary>
+    public RangeValue? CaptureSpillForRelocate(CellAddress anchor)
+    {
+        if (!_spillAnchors.TryGetValue((anchor.Row, anchor.Col), out var extent))
+            return null;
+
+        var cells = new ScalarValue[extent.Rows, extent.Cols];
+        for (uint r = 0; r < extent.Rows; r++)
+            for (uint c = 0; c < extent.Cols; c++)
+            {
+                if (r == 0 && c == 0)
+                {
+                    // The anchor's own value is carried by the moved formula cell itself;
+                    // SetSpillRange ignores slot [0,0] of the supplied RangeValue.
+                    cells[r, c] = BlankValue.Instance;
+                    continue;
+                }
+                cells[r, c] = _spillValues.TryGetValue((anchor.Row + r, anchor.Col + c), out var v)
+                    ? v
+                    : BlankValue.Instance;
+            }
+        return new RangeValue(cells);
     }
 
     /// <summary>Remove all spill values written by the given anchor cell's formula.</summary>

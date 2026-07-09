@@ -6,13 +6,27 @@ public static partial class BuiltInFunctions
 {
     // -- Standard bond price/yield helpers --------------------------------
 
+    /// <summary>
+    /// Days in the coupon period bounded by <paramref name="pcd"/>/<paramref name="ncd"/>, using the
+    /// same basis-aware convention as COUPDAYS (see BuiltInFunctions.Financial.Coupons.cs): the actual
+    /// calendar day count for basis 1 (Actual/Actual), a fixed 365/frequency for basis 3 (Actual/365),
+    /// and a fixed 360/frequency for bases 0, 2 and 4 (30/360 and Actual/360 both use a 360-day year
+    /// for the period length even though basis 2 counts *elapsed* days actually).
+    /// </summary>
+    private static double CouponPeriodDayCount(DateTime pcd, DateTime ncd, int frequency, int basis)
+    {
+        if (basis == 1) return (ncd - pcd).TotalDays;
+        if (basis == 3) return 365.0 / frequency;
+        return 360.0 / frequency;
+    }
+
     private static double CalcBondPrice(DateTime settlement, DateTime maturity, double couponRate,
         double yld, double redemption, int frequency, int basis)
     {
         DateTime pcd = CouponDateBefore(settlement, maturity, frequency);
         DateTime ncd = CouponDateAfter(settlement, maturity, frequency);
-        double daysInPeriod = (ncd - pcd).TotalDays;
-        double daysToNext = (ncd - settlement).TotalDays;
+        double daysInPeriod = CouponPeriodDayCount(pcd, ncd, frequency, basis);
+        double daysToNext = CouponDayCount(settlement, ncd, basis);
         double a = daysInPeriod > 0 ? daysToNext / daysInPeriod : 1.0;
 
         // Count coupons from next coupon date to maturity
@@ -279,8 +293,8 @@ public static partial class BuiltInFunctions
         // Build coupon schedule
         DateTime pcd = CouponDateBefore(sd, md, frequency);
         DateTime ncd = CouponDateAfter(sd, md, frequency);
-        double daysInPeriod = (ncd - pcd).TotalDays;
-        double daysToNext = (ncd - sd).TotalDays;
+        double daysInPeriod = CouponPeriodDayCount(pcd, ncd, frequency, basis);
+        double daysToNext = CouponDayCount(sd, ncd, basis);
         double a = daysInPeriod > 0 ? daysToNext / daysInPeriod : 1.0;
 
         int months = 12 / frequency;

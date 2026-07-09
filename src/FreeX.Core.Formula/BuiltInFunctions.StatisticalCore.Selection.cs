@@ -90,7 +90,9 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is not RangeValue range) return ErrorValue.Value;
+        var range = args[1] is RangeValue rangeArg
+            ? rangeArg
+            : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         var orderArg = args.Count > 2 ? args[2] : BlankValue.Instance;
         return MapBinaryMathArgs(args[0], orderArg, (numberValue, orderValue) => RankAvgScalar(range, numberValue, orderValue));

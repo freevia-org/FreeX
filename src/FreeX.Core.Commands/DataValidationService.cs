@@ -290,6 +290,21 @@ public static partial class DataValidationService
     private static string FormatAbsoluteCell(CellAddress address) =>
         $"${CellAddress.NumberToColumnName(address.Col)}${address.Row}";
 
+    // Excel treats a formula result as a "whole number" for WholeNumber data validation
+    // even when ordinary floating-point noise means it isn't bit-exact (e.g. 5 + 0.1 - 0.1
+    // can evaluate to 5.000000000000001). Use a small absolute/relative tolerance instead
+    // of double.Epsilon, which only tolerates a difference of a few ULPs near zero and
+    // rejects any noise that accumulates from real arithmetic.
+    private const double WholeNumberTolerance = 1e-9;
+
+    private static bool IsEffectivelyWholeNumber(double value)
+    {
+        double rounded = Math.Round(value);
+        double diff = Math.Abs(value - rounded);
+        double scale = Math.Max(1.0, Math.Abs(value));
+        return diff <= WholeNumberTolerance * scale;
+    }
+
     private static string? ValidateNumeric(
         DataValidation dv,
         ScalarValue value,
@@ -312,7 +327,7 @@ public static partial class DataValidationService
         else
             return dv.ErrorMessage ?? "Value must be a number.";
 
-        if (requireInteger && Math.Abs(numericValue - Math.Round(numericValue)) > double.Epsilon)
+        if (requireInteger && !IsEffectivelyWholeNumber(numericValue))
             return dv.ErrorMessage ?? "Value must be a whole number.";
 
         if (!DataValidationBoundsParser.TryParseNumberBound(dv.Formula1, sheet, address, workbook, out var v1))

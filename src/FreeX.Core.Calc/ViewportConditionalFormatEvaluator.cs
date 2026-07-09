@@ -378,11 +378,24 @@ internal static partial class ViewportConditionalFormatEvaluator
             CfRuleType.NoBlanks => !IsBlankValue(value),
             CfRuleType.Errors => value is ErrorValue,
             CfRuleType.NoErrors => value is not ErrorValue,
-            CfRuleType.IconSet => false,
-            CfRuleType.DataBar => false,
+            CfRuleType.IconSet => MatchesIconSetOrDataBarCondition(value),
+            CfRuleType.DataBar => MatchesIconSetOrDataBarCondition(value),
             _ => false
         };
     }
+
+    /// <summary>
+    /// An icon set always sorts a finite numeric value into *some* icon bucket, and a data bar
+    /// always renders (or would render, for Stop-If-True suppression purposes) for every finite
+    /// numeric cell in its range -- exactly as Excel treats both rule kinds. Non-numeric cells
+    /// (blank/text/error) never receive an icon or bar and so do not match. This mirrors the gate
+    /// both <c>EvaluateConditionalIcon</c> (ViewportService.ConditionalFormatIcons.cs) and
+    /// <see cref="EvaluateDataBar"/> apply before resolving a bucket/bar, so a matched higher-
+    /// priority Stop-If-True IconSet/DataBar rule here is only reported as "condition met" when it
+    /// would actually have produced an icon or bar for this cell.
+    /// </summary>
+    private static bool MatchesIconSetOrDataBarCondition(ScalarValue value) =>
+        TryGetDouble(value, out var numeric) && double.IsFinite(numeric);
 
     /// <summary>
     /// Returns true when a rule strictly above <paramref name="belowPriorityRule"/> in priority order,

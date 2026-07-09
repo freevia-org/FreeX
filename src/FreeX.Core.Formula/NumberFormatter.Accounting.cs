@@ -4,16 +4,76 @@ public static partial class NumberFormatter
 {
     private static string ApplyAccountingTargetWidth(string text, string format, int? targetWidthCharacters)
     {
-        if (targetWidthCharacters is not > 0 ||
-            text.Length >= targetWidthCharacters.Value ||
-            !HasAccountingLayoutDirective(format))
+        if (!HasAccountingLayoutDirective(format))
         {
             return text;
         }
 
+        if (targetWidthCharacters is > 0)
+        {
+            return text.Length >= targetWidthCharacters.Value
+                ? text
+                : ApplyFillDirective(text, format, targetWidthCharacters.Value - text.Length);
+        }
+
+        // No column-width context (e.g. TEXT()/formula evaluation with no target cell).
+        // Date/time formats intentionally strip these layout directives entirely with no
+        // column to align to (see CustomNumberSubset_Cleans*SpacingFillAndEscapes tests).
+        // For numeric formats, the accounting "<symbol>* " fill idiom is already rendered
+        // as a single literal space upstream by PreserveAccountingFillSpace, and the
+        // "[$symbol-locale]* " idiom likewise by PreserveLocaleCurrencyTokens, so nothing
+        // further is needed for either case here. Any other underscore/asterisk fill
+        // directive (a bare "_)" or "*-" with no accounting symbol) must still render at
+        // least one character instead of being silently dropped.
+        if (IsDateTimeFormat(format))
+        {
+            return text;
+        }
+
+        return HasAccountingFillDirective(format) || HasLocaleCurrencyFillDirective(format)
+            ? text
+            : ApplyFillDirective(text, format, fillWidth: 1);
+    }
+
+    // Detects the "[$symbol-locale]* " idiom (a bracketed locale-currency token
+    // immediately followed by an asterisk fill and a space) -- PreserveLocaleCurrencyTokens
+    // resolves this into a quoted symbol plus a literal space before PreserveAccountingFillSpace
+    // ever runs, so by the time this method would otherwise re-detect a raw "*" here it is
+    // already gone; check the original bracket-adjacent pattern directly instead.
+    private static bool HasLocaleCurrencyFillDirective(string format)
+    {
+        bool inQuote = false;
+        for (int i = 0; i < format.Length; i++)
+        {
+            char c = format[i];
+            if (c == '"')
+            {
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (inQuote)
+                continue;
+
+            if (c == '[' && i + 2 < format.Length && format[i + 1] == '$')
+            {
+                int close = format.IndexOf(']', i + 2);
+                if (close > i && close + 2 < format.Length &&
+                    format[close + 1] == '*' && format[close + 2] == ' ')
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static string ApplyFillDirective(string text, string format, int fillWidth)
+    {
         if (TryGetFillDirective(format, out var fillChar, out var fillPlacement, out var fillDirectiveIndex))
         {
-            var fill = new string(fillChar, targetWidthCharacters.Value - text.Length);
+            var fill = new string(fillChar, fillWidth);
             if (fillPlacement == FillDirectivePlacement.AfterNumber)
             {
                 int insertionIndex = FindFillAfterNumberInsertionIndex(text, format, fillDirectiveIndex);
@@ -22,7 +82,7 @@ public static partial class NumberFormatter
 
             int directiveFillIndex = FindAccountingFillInsertionIndex(text);
             return directiveFillIndex < 0
-                ? text.PadLeft(targetWidthCharacters.Value, fillChar)
+                ? text.PadLeft(text.Length + fillWidth, fillChar)
                 : text.Insert(directiveFillIndex, fill);
         }
 
@@ -35,7 +95,7 @@ public static partial class NumberFormatter
                 : text;
         }
 
-        return text.Insert(fillIndex, new string(' ', targetWidthCharacters.Value - text.Length));
+        return text.Insert(fillIndex, new string(' ', fillWidth));
     }
 
     private static int CountTrailingSkipDirectives(string format)

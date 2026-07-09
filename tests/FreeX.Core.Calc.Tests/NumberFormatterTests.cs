@@ -138,7 +138,7 @@ public class NumberFormatterTests
     [InlineData("0.##E-00", 0.012, "1.2E-02")]
     [InlineData("#0.0E+0", 12200000, "12.2E+6")]
     [InlineData("[$\u20AC-407]#0.0E+0", 12200000, "\u20AC12,2E+6")]
-    [InlineData("0*-", 12, "12")]
+    [InlineData("0*-", 12, "12-")]
     public void CustomNumberSubset_FormatsVariableDecimalsFractionsAndScientific(string format, double value, string expected)
     {
         var result = NumberFormatter.Format(new NumberValue(value), format);

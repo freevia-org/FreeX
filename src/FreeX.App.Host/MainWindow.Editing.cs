@@ -974,67 +974,67 @@ public partial class MainWindow
     {
         newCell = CellEntryParser.CreateCell(text, addr, _options.UseR1C1ReferenceStyle);
 
-        if (newCell.Value is { } value)
+        var validationSheet = _workbook.GetSheet(_currentSheetId);
+        if (validationSheet != null)
         {
-            var sheet = _workbook.GetSheet(_currentSheetId);
-            if (sheet != null)
+            var value = ComputeValueForValidation(newCell, validationSheet, _workbook, addr);
+
+            var applicableRules = DataValidationService.GetApplicable(validationSheet, addr);
+
+            DataValidation? violatingRule = null;
+            string? violationMsg = null;
+            foreach (var dv in applicableRules)
             {
-                var applicableRules = DataValidationService.GetApplicable(sheet, addr);
-                DataValidation? violatingRule = null;
-                string? violationMsg = null;
-                foreach (var dv in applicableRules)
+                var msg = DataValidationService.Validate(dv, value, validationSheet, addr, _workbook);
+                if (msg != null) { violatingRule = dv; violationMsg = msg; break; }
+            }
+
+            if (violationMsg != null && violatingRule != null)
+            {
+                var dvRule = violatingRule;
+                var action = DataValidationService.GetInvalidEntryAction(dvRule);
+                if (action == DataValidationInvalidEntryAction.Block)
                 {
-                    var msg = DataValidationService.Validate(dv, value, sheet, addr, _workbook);
-                    if (msg != null) { violatingRule = dv; violationMsg = msg; break; }
+                    var icon = dvRule.AlertStyle switch
+                    {
+                        DvAlertStyle.Information => MessageBoxImage.Information,
+                        DvAlertStyle.Warning => MessageBoxImage.Warning,
+                        _ => MessageBoxImage.Error
+                    };
+                    ShowOwnedMessage(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
+                        MessageBoxButton.OK, icon);
+                    RefreshValidationDropdown();
+                    return false;
                 }
 
-                if (violationMsg != null && violatingRule != null)
+                if (action == DataValidationInvalidEntryAction.AskToContinue)
                 {
-                    var dvRule = violatingRule;
-                    var action = DataValidationService.GetInvalidEntryAction(dvRule);
-                    if (action == DataValidationInvalidEntryAction.Block)
+                    var icon = dvRule.AlertStyle switch
                     {
-                        var icon = dvRule.AlertStyle switch
-                        {
-                            DvAlertStyle.Information => MessageBoxImage.Information,
-                            DvAlertStyle.Warning => MessageBoxImage.Warning,
-                            _ => MessageBoxImage.Error
-                        };
-                        ShowOwnedMessage(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
-                            MessageBoxButton.OK, icon);
+                        DvAlertStyle.Information => MessageBoxImage.Information,
+                        DvAlertStyle.Warning => MessageBoxImage.Warning,
+                        _ => MessageBoxImage.Error
+                    };
+                    // Excel's three AskToContinue alert styles offer different button sets:
+                    // Information is OK/Cancel (OK = accept, Cancel = stay in the cell to
+                    // re-edit); Warning is Yes/No/Cancel (Yes = accept, No = stay in the cell
+                    // to re-edit, Cancel = discard the entry and restore the prior value).
+                    var buttons = dvRule.AlertStyle == DvAlertStyle.Information
+                        ? MessageBoxButton.OKCancel
+                        : MessageBoxButton.YesNoCancel;
+                    var result = ShowOwnedMessage(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
+                        buttons, icon);
+                    if (ShouldRestoreOnCancel(dvRule.AlertStyle, result))
+                    {
                         RefreshValidationDropdown();
+                        RestoreFormulaBarToCommittedValue(addr);
                         return false;
                     }
 
-                    if (action == DataValidationInvalidEntryAction.AskToContinue)
+                    if (result is MessageBoxResult.No or MessageBoxResult.Cancel)
                     {
-                        var icon = dvRule.AlertStyle switch
-                        {
-                            DvAlertStyle.Information => MessageBoxImage.Information,
-                            DvAlertStyle.Warning => MessageBoxImage.Warning,
-                            _ => MessageBoxImage.Error
-                        };
-                        // Excel's three AskToContinue alert styles offer different button sets:
-                        // Information is OK/Cancel (OK = accept, Cancel = stay in the cell to
-                        // re-edit); Warning is Yes/No/Cancel (Yes = accept, No = stay in the cell
-                        // to re-edit, Cancel = discard the entry and restore the prior value).
-                        var buttons = dvRule.AlertStyle == DvAlertStyle.Information
-                            ? MessageBoxButton.OKCancel
-                            : MessageBoxButton.YesNoCancel;
-                        var result = ShowOwnedMessage(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
-                            buttons, icon);
-                        if (ShouldRestoreOnCancel(dvRule.AlertStyle, result))
-                        {
-                            RefreshValidationDropdown();
-                            RestoreFormulaBarToCommittedValue(addr);
-                            return false;
-                        }
-
-                        if (result is MessageBoxResult.No or MessageBoxResult.Cancel)
-                        {
-                            RefreshValidationDropdown();
-                            return false;
-                        }
+                        RefreshValidationDropdown();
+                        return false;
                     }
                 }
             }
@@ -1042,6 +1042,22 @@ public partial class MainWindow
 
         return true;
     }
+
+    /// <summary>
+    /// Computes the value a newly-entered cell should be validated against for data-validation
+    /// purposes. A freshly-parsed formula cell (<see cref="Cell.FromFormula"/>) has its
+    /// <see cref="Cell.Value"/> left at the default <c>BlankValue.Instance</c> — the calc engine
+    /// only populates it later, asynchronously, once the edit is committed. Validating against
+    /// that placeholder blank instead of the formula's COMPUTED result silently bypasses (when
+    /// AllowBlank is true) or wrongly blocks (when AllowBlank is false) every data-validation rule
+    /// whenever the user types a formula rather than a literal. This evaluates the formula text
+    /// up front, purely for the validation decision; the cell's real <see cref="Cell.Value"/> is
+    /// still (re)computed by the calc engine on recalculation after the edit commits.
+    /// </summary>
+    internal static ScalarValue ComputeValueForValidation(Cell newCell, Sheet sheet, Workbook workbook, CellAddress addr) =>
+        newCell.HasFormula
+            ? new FormulaEvaluator().Evaluate(newCell.FormulaText!, sheet, workbook, currentCell: addr)
+            : newCell.Value;
 
     /// <summary>
     /// Decides whether a Cancel response to an AskToContinue data-validation alert should discard

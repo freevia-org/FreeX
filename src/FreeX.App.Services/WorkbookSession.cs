@@ -4976,9 +4976,19 @@ public sealed class WorkbookSession
         if (!clipboard.IsCut || keepSourceColumnWidths)
             return false;
 
-        // Only the plain "Paste" gesture (no Paste Special mode/options) is a straight move in
-        // Excel; Paste Special after a cut falls back to the legacy copy+clear behaviour below.
-        if (mode != PasteCellsMode.All || options != default)
+        // Excel's Cut is always a MOVE: the moved formulas keep their own references unchanged
+        // and any OTHER formula that pointed at the cut cells is rewritten to follow the move.
+        // The plain "Paste" gesture (no Paste Special mode/options) gets that fixup via a straight
+        // MoveRangeCommand. "Paste Special > Values" (mode == Values, no Transpose/Operation/
+        // SkipBlanks) is the one other Paste Special variant simple enough to express the same
+        // way: perform the real move (so references are fixed up both ways) and then collapse the
+        // moved cell(s) down to their computed values (R20-paste-special-operations-1). Any other
+        // Paste Special mode/option (Formulas, All/AllExceptBorders-style content kinds,
+        // Transpose, Operations, Skip Blanks, Formats-only) still falls back to the legacy
+        // copy+clear behaviour below, which does not fix up references either direction.
+        var isPlainPaste = mode == PasteCellsMode.All && options == default;
+        var isPasteSpecialValuesOnly = mode == PasteCellsMode.Values && options == default;
+        if (!isPlainPaste && !isPasteSpecialValuesOnly)
             return false;
 
         // MoveRangeCommand only supports a same-sheet move; grouped multi-sheet editing or a
@@ -4990,8 +5000,79 @@ public sealed class WorkbookSession
         if (!destination.Sheet.Equals(clipboard.SourceRange.Start.Sheet))
             return false;
 
-        command = new MoveRangeCommand(clipboard.SourceRange.Start.Sheet, clipboard.SourceRange, destination);
+        command = isPlainPaste
+            ? new MoveRangeCommand(clipboard.SourceRange.Start.Sheet, clipboard.SourceRange, destination)
+            : new CutPasteValuesCommand(clipboard.SourceRange.Start.Sheet, clipboard.SourceRange, destination);
         return true;
+    }
+
+    /// <summary>
+    /// R20-paste-special-operations-1: routes a Cut + "Paste Special &gt; Values" through the same
+    /// move-based reference fixup as a plain Cut + Paste (see <see cref="TryCreateCutMoveCommand"/>),
+    /// so that (a) the moved formula's own references are left untouched by the move (rather than
+    /// mis-rewritten as a relative-copy offset) and (b) any OTHER formula that referenced the cut
+    /// cells is rewritten to follow the move — both of which the legacy copy-paste-and-clear path
+    /// gets wrong for every non-default Paste Special invocation. It delegates the actual cell
+    /// relocation (and the accompanying formula/comment/hyperlink/sparkline/named-range fixups) to
+    /// the real <see cref="MoveRangeCommand"/>, then collapses each moved cell down to its computed
+    /// value in place, matching <see cref="PasteCellsMode.Values"/> semantics: the destination keeps
+    /// its own pre-paste style/format, and the formula is dropped.
+    /// </summary>
+    private sealed class CutPasteValuesCommand : IWorkbookCommand, IAffectedCellsCommand
+    {
+        private readonly SheetId _sheetId;
+        private readonly GridRange _sourceRange;
+        private readonly CellAddress _destination;
+        private readonly MoveRangeCommand _moveCommand;
+
+        public string Label => "Paste Special";
+
+        public IReadOnlyList<CellAddress> AffectedCells => _moveCommand.AffectedCells;
+
+        public CutPasteValuesCommand(SheetId sheetId, GridRange sourceRange, CellAddress destination)
+        {
+            _sheetId = sheetId;
+            _sourceRange = sourceRange;
+            _destination = destination;
+            _moveCommand = new MoveRangeCommand(sheetId, sourceRange, destination);
+        }
+
+        public CommandOutcome Apply(ICommandContext ctx)
+        {
+            var sheet = ctx.GetSheet(_sheetId);
+            var rowDelta = (long)_destination.Row - _sourceRange.Start.Row;
+            var colDelta = (long)_destination.Col - _sourceRange.Start.Col;
+
+            // Capture each destination cell's PRE-paste style before the move overwrites it:
+            // "Paste Special > Values" keeps the destination's own existing formatting, unlike a
+            // plain move/paste which brings the source's style along.
+            var originalDestinationStyles = new Dictionary<CellAddress, StyleId>();
+            foreach (var source in _sourceRange.AllCells())
+            {
+                var target = new CellAddress(
+                    _destination.Sheet,
+                    checked((uint)(source.Row + rowDelta)),
+                    checked((uint)(source.Col + colDelta)));
+                originalDestinationStyles[target] =
+                    sheet.GetCell(target)?.StyleId ?? sheet.GetStyleOnly(target.Row, target.Col) ?? StyleId.Default;
+            }
+
+            var outcome = _moveCommand.Apply(ctx);
+            if (!outcome.Success)
+                return outcome;
+
+            foreach (var (target, styleId) in originalDestinationStyles)
+            {
+                var movedCell = sheet.GetCell(target);
+                var valueCell = Cell.FromValue(movedCell?.Value ?? BlankValue.Instance);
+                valueCell.StyleId = styleId;
+                sheet.SetCell(target, valueCell);
+            }
+
+            return outcome;
+        }
+
+        public void Revert(ICommandContext ctx) => _moveCommand.Revert(ctx);
     }
 
     private static bool ShouldClearCutSourceAfterPaste(

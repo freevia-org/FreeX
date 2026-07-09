@@ -75,7 +75,9 @@ public static partial class BuiltInFunctions
         }
         else if (TryCellNumber(args[1], out double bva)) binsList.Add(bva);
 
-        binsList.Sort();
+        // Excel processes bins_array positionally, in the order the user supplied it — it does
+        // NOT sort bins_array before binning. Supplying an unsorted bins_array yields different
+        // (and, per Microsoft's own guidance, order-dependent) results, matched here intentionally.
         int binsCount = binsList.Count;
         int[] counts = new int[binsCount + 1];
         foreach (double d in dataList)

@@ -193,11 +193,26 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
         RowColumnShiftHelpers.RestoreRuleFormulas(sheet, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
 
+        // R20-array-dynamic-spill-1: mirror MoveCellsForDelete's spill-relocation fix for undo —
+        // capture any live spill rooted at the shifted-down address before clearing it back.
+        var shiftedSpillPayloads = new RangeValue?[_shiftedSnapshot.Count];
+        for (var i = 0; i < _shiftedSnapshot.Count; i++)
+        {
+            var s = _shiftedSnapshot[i];
+            shiftedSpillPayloads[i] = sheet.CaptureSpillForRelocate(new CellAddress(sheet.Id, s.Row - _count, s.Col));
+        }
+
         foreach (var snapshot in _shiftedSnapshot)
             sheet.ClearCell(snapshot.Row - _count, snapshot.Col);
 
-        foreach (var snapshot in _shiftedSnapshot)
-            sheet.SetCell(snapshot.ToAddress(sheet.Id), snapshot.ToCell());
+        for (var i = 0; i < _shiftedSnapshot.Count; i++)
+        {
+            var snapshot = _shiftedSnapshot[i];
+            var addr = snapshot.ToAddress(sheet.Id);
+            sheet.SetCell(addr, snapshot.ToCell());
+            if (shiftedSpillPayloads[i] is { } payload)
+                sheet.SetSpillRange(addr, payload);
+        }
 
         foreach (var snapshot in _deletedSnapshot)
             sheet.SetCell(snapshot.ToAddress(sheet.Id), snapshot.ToCell());
@@ -306,10 +321,19 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
             return;
 
         var originals = ArrayPool<Cell>.Shared.Rent(shiftedCells.Count);
+        // R20-array-dynamic-spill-1: capture any live spill rooted at each shifted cell BEFORE it is
+        // cleared/moved, so a relocated dynamic-array anchor (e.g. =SEQUENCE with no cell references,
+        // whose formula text never changes on a row shift) keeps spilling at its new address instead
+        // of silently collapsing to a stale scalar.
+        var spillPayloads = new RangeValue?[shiftedCells.Count];
         try
         {
             for (var i = 0; i < shiftedCells.Count; i++)
+            {
                 originals[i] = sheet.GetCell(shiftedCells[i].Row, shiftedCells[i].Col)!;
+                spillPayloads[i] = sheet.CaptureSpillForRelocate(
+                    new CellAddress(sheet.Id, shiftedCells[i].Row, shiftedCells[i].Col));
+            }
 
             for (var i = 0; i < shiftedCells.Count; i++)
                 sheet.ClearCell(shiftedCells[i].Row, shiftedCells[i].Col);
@@ -317,7 +341,10 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
             for (var i = 0; i < shiftedCells.Count; i++)
             {
                 var snapshot = shiftedCells[i];
-                sheet.SetCell(new CellAddress(sheet.Id, snapshot.Row - count, snapshot.Col), originals[i]);
+                var newAddr = new CellAddress(sheet.Id, snapshot.Row - count, snapshot.Col);
+                sheet.SetCell(newAddr, originals[i]);
+                if (spillPayloads[i] is { } payload)
+                    sheet.SetSpillRange(newAddr, payload);
             }
         }
         finally

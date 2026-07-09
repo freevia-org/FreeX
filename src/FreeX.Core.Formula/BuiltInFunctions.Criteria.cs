@@ -177,6 +177,22 @@ public static partial class BuiltInFunctions
             // mirroring MatchesNumericComparison's cross-type exclusion for numeric criteria).
             if (cellValue is not TextValue tv)
             {
+                // Excel special-cases a blank cell against an empty-string threshold: a blank
+                // cell coerces to "" for text equality (mirroring the engine's own equality
+                // operator, FormulaEvaluator.Operators.cs, and the plain "" / "<>" criteria
+                // paths which route through CriteriaComparableText/TextEquals). So bare "="
+                // must match blanks and bare "<>" must NOT match blanks, even though every
+                // other non-text cell (number/bool/date) still only satisfies NotEqual.
+                if (cellValue is BlankValue && _text.Length == 0)
+                {
+                    return _op switch
+                    {
+                        CriteriaComparisonOp.Equal => true,
+                        CriteriaComparisonOp.NotEqual => false,
+                        _ => false
+                    };
+                }
+
                 return _op switch
                 {
                     CriteriaComparisonOp.NotEqual => true,

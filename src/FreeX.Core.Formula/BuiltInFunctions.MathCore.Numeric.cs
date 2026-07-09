@@ -195,7 +195,7 @@ public static partial class BuiltInFunctions
         double n = ToNumber(value);
         if (!double.IsFinite(n) || !double.IsFinite(d)) return ErrorValue.Num;
         if (d == 0) return ErrorValue.DivByZero;
-        return NumberResult(Math.Truncate(n / d));
+        return NumberResult(TruncateExcelQuotient(n, d));
     }
 
 }

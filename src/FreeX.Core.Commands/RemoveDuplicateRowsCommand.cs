@@ -27,6 +27,12 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
     private Dictionary<CellAddress, IReadOnlyList<CellTextRun>>? _richTextRunsSnapshot;
     private HashSet<uint>? _filterHiddenRowsSnapshot;
     private HashSet<uint>? _valueFilterHiddenRowsSnapshot;
+    // Snapshot of sheet.MergedRegions before Apply, used by Revert. A merge entirely contained
+    // within the operated range must travel with its surviving row(s) as they compact upward
+    // (or be dropped if every row it covered was removed as a duplicate), otherwise the merge
+    // is left anchored over vacated rows while the data it belonged to moves elsewhere — see
+    // R20-merged-cells-deep-2.
+    private List<GridRange>? _mergeSnapshot;
 
     public int RemovedRowCount { get; private set; }
 
@@ -78,6 +84,7 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
             _richTextRunsSnapshot = [];
             _filterHiddenRowsSnapshot = [];
             _valueFilterHiddenRowsSnapshot = [];
+            _mergeSnapshot = [];
             return new CommandOutcome(true);
         }
 
@@ -168,6 +175,54 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
 
         // Vacated trailing rows are already cleared (step 3).
 
+        // ── 5. Adjust merged regions so merges travel with their compacted rows ────────────
+        // A merge entirely inside the operated range must be remapped onto the new (compacted)
+        // row positions of whichever of its rows survived, or dropped entirely if every row it
+        // covered was removed as a duplicate. Merges outside the range, or only partially
+        // overlapping it, are left untouched (their data was never moved by this command).
+        _mergeSnapshot = sheet.MergedRegions.ToList();
+        var survivorTargetRow = new Dictionary<uint, uint>();
+        for (var i = 0; i < survivingRows.Count; i++)
+            survivorTargetRow[survivingRows[i]] = _range.Start.Row + (uint)i;
+
+        var adjustedMerges = new List<GridRange>(_mergeSnapshot.Count);
+        foreach (var merge in _mergeSnapshot)
+        {
+            if (!_range.Contains(merge))
+            {
+                adjustedMerges.Add(merge);
+                continue;
+            }
+
+            // Collect the new target rows for whichever of the merge's original rows survived,
+            // preserving order (survivingRows/target rows are contiguous ascending, and the
+            // merge's row span is itself contiguous, so any survivors within it map to a
+            // contiguous run of target rows).
+            uint? newStartRow = null;
+            uint newEndRow = 0;
+            for (var row = merge.Start.Row; row <= merge.End.Row; row++)
+            {
+                if (!survivorTargetRow.TryGetValue(row, out var target))
+                    continue;
+
+                newStartRow ??= target;
+                newEndRow = target;
+            }
+
+            if (newStartRow is null)
+                continue; // Every row this merge covered was removed as a duplicate — drop it.
+
+            // A merge must span at least two cells; don't keep a degenerate 1x1 "merge".
+            if (newStartRow.Value == newEndRow && merge.Start.Col == merge.End.Col)
+                continue;
+
+            adjustedMerges.Add(new GridRange(
+                new CellAddress(merge.Start.Sheet, newStartRow.Value, merge.Start.Col),
+                new CellAddress(merge.End.Sheet, newEndRow, merge.End.Col)));
+        }
+
+        sheet.ReplaceMergedRegions(adjustedMerges);
+
         var affectedCells = allInRangeAddresses;
         return new CommandOutcome(true, AffectedCells: affectedCells);
     }
@@ -212,6 +267,10 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
             foreach (var row in _valueFilterHiddenRowsSnapshot)
                 sheet.ValueFilterHiddenRows.Add(row);
         }
+
+        // Restore merged regions to their pre-Apply state (undoing the row remap/drop above).
+        if (_mergeSnapshot is not null)
+            sheet.ReplaceMergedRegions(_mergeSnapshot);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

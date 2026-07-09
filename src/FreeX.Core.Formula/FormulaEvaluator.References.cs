@@ -105,6 +105,7 @@ public sealed partial class FormulaEvaluator
         try
         {
             var ast = GetOrParseFormula(formulaText);
+            ast = ApplyRelativeNameAnchor(ast, context);
             result = EvaluateNamedFormulaAst(ast, context);
             return true;
         }
@@ -122,6 +123,114 @@ public sealed partial class FormulaEvaluator
         {
             visiting.Remove(name);
         }
+    }
+
+    /// <summary>
+    /// INDIRECT("Foo") support for a name whose RefersTo is a formula/dynamic expression rather
+    /// than a plain named range (e.g. a dynamic named range built with OFFSET/COUNTA). Evaluates
+    /// the named formula and, when it resolves to a reference (a <see cref="RangeValue"/>),
+    /// exposes its bounds/sheet so BuiltInFunctions.Lookup.Indirect.cs's
+    /// TryResolveIndirectRangeReference can materialize it exactly like a plain named range —
+    /// previously that method's only named-name lookup was <c>ctx.TryResolveNamedRange</c>, which
+    /// never consults formula-backed names at all, so INDIRECT("Foo") returned #REF! for any
+    /// dynamic named range. Returns false (with <paramref name="error"/> left null) when
+    /// <paramref name="name"/> isn't a formula-backed name at all, or when it is but evaluates to
+    /// a plain scalar rather than a reference (matching Excel: INDIRECT needs an actual
+    /// reference). Returns false with <paramref name="error"/> set when the named formula itself
+    /// evaluates to an error (e.g. #REF! from a circular name chain), so the caller can propagate
+    /// that error instead of falling through to a plain-text reference parse.
+    /// </summary>
+    internal static bool TryResolveIndirectNamedFormula(
+        string name,
+        IEvalContext context,
+        out RangeValue range,
+        out ScalarValue? error)
+    {
+        range = null!;
+        error = null;
+
+        if (!TryEvaluateNamedFormula(name, context, out var result))
+            return false;
+
+        if (result is RangeValue rangeValue)
+        {
+            range = rangeValue;
+            return true;
+        }
+
+        if (result is ErrorValue namedFormulaError)
+            error = namedFormulaError;
+
+        return false;
+    }
+
+    /// <summary>
+    /// Re-anchors the relative (non-$) references of a named formula's parsed AST to the cell
+    /// that is actually using the name, matching Excel's per-cell relative-name evaluation: a
+    /// name's RefersTo text is authored/stored with no persisted anchor cell (FreeX keeps only
+    /// the raw formula text — see NamedFormulaTests / Workbook.NamedFormulas), so its implicit
+    /// anchor is taken to be A1 of the using cell's sheet (Excel's own convention for a defined
+    /// name's relative references), and the AST is shifted by the delta between that anchor and
+    /// the current using cell. Absolute ($) references are left untouched by the underlying
+    /// <see cref="ShiftFormulaForCell"/>. When there is no current-cell context (e.g. a
+    /// convenience <c>Evaluate(formulaText, sheet, workbook)</c> call with no explicit
+    /// <c>currentCell</c>), the AST is returned unshifted so that literal, cell-context-free
+    /// evaluation keeps working exactly as before.
+    /// </summary>
+    /// <remarks>
+    /// Narrow safety guard: FreeX's dependency graph for named formulas is built by
+    /// RebuildFormulaDependencies from the LITERAL (unshifted, A1-anchored) RefersTo text, not
+    /// from any per-using-cell shifted form — the graph has no notion of "this using cell now
+    /// depends on itself because of the shift". If shifting here would manufacture a reference
+    /// to the very cell currently being evaluated (a dependency edge the graph was never told
+    /// about), applying the shift would silently read a stale self-value instead of raising a
+    /// proper circular-reference error, which is worse than the bug being fixed. Making named-
+    /// formula dependency tracking itself shift-aware is a broader change outside this method's
+    /// file scope, so — until that lands — this falls back to the literal (unshifted) form only
+    /// for that specific self-reference case, leaving every other relative-shift scenario fixed.
+    /// </remarks>
+    private static FormulaNode ApplyRelativeNameAnchor(FormulaNode ast, IEvalContext context)
+    {
+        if (context.CurrentCellAddress is not { } current)
+            return ast;
+
+        var anchor = new FreeX.Core.Model.CellAddress(current.Sheet, 1, 1);
+        var shifted = ShiftFormulaForCell(ast, anchor, current);
+        if (ReferenceEquals(shifted, ast))
+            return ast;
+
+        return ReferencesCell(shifted, current) ? ast : shifted;
+    }
+
+    // Best-effort structural check for whether `node` contains an unqualified (implicit-sheet)
+    // cell/range reference that covers `current` — see ApplyRelativeNameAnchor's self-reference
+    // guard. Only the node kinds that ShiftAst actually rewrites are inspected; this is
+    // intentionally narrow (not a full reference-tracking pass) to match the guard's limited
+    // purpose.
+    private static bool ReferencesCell(FormulaNode node, FreeX.Core.Model.CellAddress current) => node switch
+    {
+        CellRefNode cr when cr.SheetName is null => cr.Row == current.Row && cr.ColumnNumber == current.Col,
+        RangeRefNode rr when rr.SheetName is null =>
+            current.Row >= Math.Min(rr.Start.Row, rr.End.Row) && current.Row <= Math.Max(rr.Start.Row, rr.End.Row) &&
+            current.Col >= Math.Min(rr.Start.ColumnNumber, rr.End.ColumnNumber) && current.Col <= Math.Max(rr.Start.ColumnNumber, rr.End.ColumnNumber),
+        FullColumnRangeRefNode fcr when fcr.SheetName is null =>
+            current.Col >= Math.Min(fcr.StartColumnNumber, fcr.EndColumnNumber) && current.Col <= Math.Max(fcr.StartColumnNumber, fcr.EndColumnNumber),
+        FullRowRangeRefNode frr when frr.SheetName is null =>
+            current.Row >= Math.Min(frr.StartRow, frr.EndRow) && current.Row <= Math.Max(frr.StartRow, frr.EndRow),
+        BinaryOpNode bin => ReferencesCell(bin.Left, current) || ReferencesCell(bin.Right, current),
+        UnaryOpNode un => ReferencesCell(un.Operand, current),
+        FunctionCallNode fn => ReferencesCellInAny(fn.Arguments, current),
+        _ => false
+    };
+
+    private static bool ReferencesCellInAny(IReadOnlyList<FormulaNode> nodes, FreeX.Core.Model.CellAddress current)
+    {
+        for (var i = 0; i < nodes.Count; i++)
+        {
+            if (ReferencesCell(nodes[i], current))
+                return true;
+        }
+        return false;
     }
 
     /// <summary>

@@ -551,7 +551,7 @@ public sealed partial class XlsxFileAdapter
                     sourceChart.Add(new XElement(generatedLegend));
             }
 
-            MergeChartExSeries(sourceChart, generatedXml, chartExNs);
+            MergeChartExSeries(sourceXml, sourceChart, generatedXml, chartExNs);
         }
 
         var sourceRoot = sourceXml.Root;
@@ -564,9 +564,20 @@ public sealed partial class XlsxFileAdapter
 
     // R19-chartex-deep-1: the source cx:series carries content FreeX never models at all (dataPt,
     // dataLabels, spPr, marker, valueColors, axisId, extLst, ...). Wholesale Remove()+Add(generated)
-    // silently destroyed all of it on every save of an untouched chart. Merge positionally instead:
+    // silently destroyed all of it on every save of an untouched chart. Merge in place instead:
     // keep the ORIGINAL series element and only refresh the parts FreeX actually generates.
-    private static void MergeChartExSeries(XElement sourceChart, XDocument generatedXml, XNamespace chartExNs)
+    //
+    // R20-meta-3: pairing source<->generated series purely by list POSITION silently misassigns
+    // preserved formatting whenever a NON-trailing series is added or removed (every series after
+    // the edit point shifts by one slot). Pair by IDENTITY first -- the data range each series'
+    // cx:dataId resolves to via cx:chartData's cx:numDim/cx:f formula -- and only fall back to
+    // positional pairing for series where identity can't be resolved on both sides (e.g. Pareto's
+    // synthetic ownerIdx-based "paretoLine" series, which has no cx:dataId of its own).
+    private static void MergeChartExSeries(
+        XDocument sourceXml,
+        XElement sourceChart,
+        XDocument generatedXml,
+        XNamespace chartExNs)
     {
         var sourceRegion = sourceChart
             .Element(chartExNs + "plotArea")
@@ -582,18 +593,104 @@ public sealed partial class XlsxFileAdapter
             return;
 
         var sourceSeries = sourceRegion.Elements(chartExNs + "series").ToList();
-        var mergedCount = Math.Min(sourceSeries.Count, generatedSeries.Count);
-        for (var i = 0; i < mergedCount; i++)
-            MergeChartExSeriesElement(sourceSeries[i], generatedSeries[i], chartExNs);
+        var sourceFormulasById = BuildChartExDataFormulaMap(sourceXml, chartExNs);
+        var generatedFormulasById = BuildChartExDataFormulaMap(generatedXml, chartExNs);
 
-        // Counts can legitimately differ (e.g. Pareto's synthetic "paretoLine" series, or a data
-        // range edit that added/removed a series) -- trim any leftover source series and append any
-        // leftover generated ones so the plot area still matches what FreeX just modeled, without
-        // touching the content merged above for the series that do line up.
-        for (var i = sourceSeries.Count - 1; i >= mergedCount; i--)
-            sourceSeries[i].Remove();
-        if (generatedSeries.Count > mergedCount)
-            sourceRegion.Add(generatedSeries.Skip(mergedCount));
+        var generatedQueuesByIdentity = new Dictionary<string, Queue<XElement>>(StringComparer.Ordinal);
+        foreach (var generated in generatedSeries)
+        {
+            var identity = GetChartExSeriesIdentity(generated, generatedFormulasById, chartExNs);
+            if (identity is null)
+                continue;
+            if (!generatedQueuesByIdentity.TryGetValue(identity, out var queue))
+                generatedQueuesByIdentity[identity] = queue = new Queue<XElement>();
+            queue.Enqueue(generated);
+        }
+
+        var pairs = new List<(XElement Source, XElement Generated)>();
+        var claimedGenerated = new HashSet<XElement>();
+        var unmatchedSource = new List<XElement>();
+        foreach (var source in sourceSeries)
+        {
+            var identity = GetChartExSeriesIdentity(source, sourceFormulasById, chartExNs);
+            if (identity is not null &&
+                generatedQueuesByIdentity.TryGetValue(identity, out var queue) &&
+                queue.Count > 0)
+            {
+                var generated = queue.Dequeue();
+                pairs.Add((source, generated));
+                claimedGenerated.Add(generated);
+            }
+            else
+            {
+                unmatchedSource.Add(source);
+            }
+        }
+
+        // Anything left over (no resolvable identity on one or both sides -- e.g. an untouched
+        // chart of a type FreeX doesn't stamp a resolvable dataId formula for) still needs pairing
+        // so behavior for those charts matches the pre-R20 positional merge exactly. Pair the
+        // leftovers positionally, in original relative order.
+        var unmatchedGenerated = generatedSeries.Where(series => !claimedGenerated.Contains(series)).ToList();
+        var fallbackCount = Math.Min(unmatchedSource.Count, unmatchedGenerated.Count);
+        for (var i = 0; i < fallbackCount; i++)
+        {
+            pairs.Add((unmatchedSource[i], unmatchedGenerated[i]));
+            claimedGenerated.Add(unmatchedGenerated[i]);
+        }
+
+        foreach (var (source, generated) in pairs)
+            MergeChartExSeriesElement(source, generated, chartExNs);
+
+        // A source series left unpaired describes a series that no longer exists in the generated
+        // chart -- drop it. A generated series left unclaimed is brand new -- append it.
+        var pairedSource = new HashSet<XElement>(pairs.Select(pair => pair.Source));
+        foreach (var source in sourceSeries)
+            if (!pairedSource.Contains(source))
+                source.Remove();
+
+        foreach (var generated in generatedSeries)
+            if (!claimedGenerated.Contains(generated))
+                sourceRegion.Add(generated);
+    }
+
+    // Identity key for a cx:series: the value-range formula (cx:numDim/cx:f) that its cx:dataId
+    // resolves to via cx:chartData. Stable across a non-trailing series add/remove as long as the
+    // survivors' own underlying value ranges don't move -- exactly the "remove series 1 via the
+    // data-range/series editor" scenario R20-meta-3 flagged (series 2/3 keep referencing their
+    // original columns; only the dataId indices get renumbered).
+    private static string? GetChartExSeriesIdentity(
+        XElement series,
+        IReadOnlyDictionary<string, string> dataFormulasById,
+        XNamespace chartExNs)
+    {
+        var dataIdValue = series.Element(chartExNs + "dataId")?.Attribute("val")?.Value;
+        if (dataIdValue is not null && dataFormulasById.TryGetValue(dataIdValue, out var formula))
+            return formula;
+
+        // Series with no resolvable dataId (e.g. Pareto's synthetic ownerIdx-based "paretoLine"
+        // series) carry no data of their own to key off -- fall back to an explicit series-name
+        // formula when present, otherwise report "no identity" so the caller pairs positionally.
+        return series.Element(chartExNs + "tx")?.Element(chartExNs + "txData")?.Element(chartExNs + "f")?.Value;
+    }
+
+    // Maps every cx:chartData/cx:data/@id to the value-range formula its cx:numDim/cx:f carries.
+    private static Dictionary<string, string> BuildChartExDataFormulaMap(XDocument doc, XNamespace chartExNs)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        var dataElements = doc.Root?.Element(chartExNs + "chartData")?.Elements(chartExNs + "data");
+        if (dataElements is null)
+            return map;
+
+        foreach (var data in dataElements)
+        {
+            var id = data.Attribute("id")?.Value;
+            var formula = data.Element(chartExNs + "numDim")?.Element(chartExNs + "f")?.Value;
+            if (id is not null && formula is not null)
+                map[id] = formula;
+        }
+
+        return map;
     }
 
     // Only layoutId/uniqueId (attributes) and tx/dataId/layoutPr (elements) are ever produced by

@@ -105,6 +105,27 @@ public static partial class BuiltInFunctions
                 out error);
         }
 
+        // The plain-range lookup above only finds range-kind names. A name whose RefersTo is a
+        // formula/dynamic expression (e.g. "=OFFSET($A$1,0,0,COUNTA($A:$A),1)" for a growing
+        // named range) is invisible to it, so also try resolving refText as a named formula that
+        // evaluates to a reference — see FormulaEvaluator.TryResolveIndirectNamedFormula.
+        if (sheetName is null && FormulaEvaluator.TryResolveIndirectNamedFormula(refText, ctx, out var namedFormulaRange, out error))
+        {
+            var formulaStartRow = namedFormulaRange.StartRow;
+            var formulaStartCol = namedFormulaRange.StartCol;
+            var formulaEndRow = formulaStartRow + (uint)namedFormulaRange.RowCount - 1;
+            var formulaEndCol = formulaStartCol + (uint)namedFormulaRange.ColCount - 1;
+            return CompleteIndirectRange(
+                ctx,
+                namedFormulaRange.SheetName,
+                formulaStartRow,
+                formulaStartCol,
+                formulaEndRow,
+                formulaEndCol,
+                out range,
+                out error);
+        }
+
         return false;
     }
 

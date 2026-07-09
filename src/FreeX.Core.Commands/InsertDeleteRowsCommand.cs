@@ -170,11 +170,26 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
         RowColumnShiftHelpers.RestoreRuleFormulas(sheet, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
 
+        // R20-array-dynamic-spill-1: mirror MoveCellsForInsert's spill-relocation fix for undo —
+        // capture any live spill rooted at the shifted-up address before clearing it back.
+        var movedSpillPayloads = new RangeValue?[_movedSnapshot.Count];
+        for (var i = 0; i < _movedSnapshot.Count; i++)
+        {
+            var s = _movedSnapshot[i];
+            movedSpillPayloads[i] = sheet.CaptureSpillForRelocate(new CellAddress(sheet.Id, s.Row + _count, s.Col));
+        }
+
         foreach (var snapshot in _movedSnapshot)
             sheet.ClearCell(snapshot.Row + _count, snapshot.Col);
 
-        foreach (var snapshot in _movedSnapshot)
-            sheet.SetCell(snapshot.ToAddress(sheet.Id), snapshot.ToCell());
+        for (var i = 0; i < _movedSnapshot.Count; i++)
+        {
+            var snapshot = _movedSnapshot[i];
+            var addr = snapshot.ToAddress(sheet.Id);
+            sheet.SetCell(addr, snapshot.ToCell());
+            if (movedSpillPayloads[i] is { } payload)
+                sheet.SetSpillRange(addr, payload);
+        }
 
         RowColumnShiftHelpers.ShiftSetDownFrom(sheet.HiddenRows, _beforeRow + _count, _count);
         RowColumnShiftHelpers.ShiftSetDownFrom(sheet.FilterHiddenRows, _beforeRow + _count, _count);
@@ -269,10 +284,19 @@ public sealed class InsertRowsCommand : IWorkbookCommand
             return;
 
         var originals = ArrayPool<Cell>.Shared.Rent(movedCells.Count);
+        // R20-array-dynamic-spill-1: capture any live spill rooted at each moved cell BEFORE it is
+        // cleared/moved, so a relocated dynamic-array anchor (e.g. =SEQUENCE with no cell references,
+        // whose formula text never changes on a row shift) keeps spilling at its new address instead
+        // of silently collapsing to a stale scalar.
+        var spillPayloads = new RangeValue?[movedCells.Count];
         try
         {
             for (var i = 0; i < movedCells.Count; i++)
+            {
                 originals[i] = sheet.GetCell(movedCells[i].Row, movedCells[i].Col)!;
+                spillPayloads[i] = sheet.CaptureSpillForRelocate(
+                    new CellAddress(sheet.Id, movedCells[i].Row, movedCells[i].Col));
+            }
 
             for (var i = 0; i < movedCells.Count; i++)
                 sheet.ClearCell(movedCells[i].Row, movedCells[i].Col);
@@ -280,7 +304,10 @@ public sealed class InsertRowsCommand : IWorkbookCommand
             for (var i = 0; i < movedCells.Count; i++)
             {
                 var snapshot = movedCells[i];
-                sheet.SetCell(new CellAddress(sheet.Id, snapshot.Row + count, snapshot.Col), originals[i]);
+                var newAddr = new CellAddress(sheet.Id, snapshot.Row + count, snapshot.Col);
+                sheet.SetCell(newAddr, originals[i]);
+                if (spillPayloads[i] is { } payload)
+                    sheet.SetSpillRange(newAddr, payload);
             }
         }
         finally

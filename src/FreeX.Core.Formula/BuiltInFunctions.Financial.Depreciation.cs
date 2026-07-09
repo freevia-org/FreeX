@@ -98,15 +98,27 @@ public static partial class BuiltInFunctions
             return ErrorValue.Num;
         if (cost < 0 || salvage < 0 || life <= 0 || period <= 0 || factor <= 0) return ErrorValue.Num;
         double bookValue = cost;
-        int ip = (int)Math.Truncate(period);
-        for (int p = 1; p <= ip; p++)
+        // Excel supports fractional periods: full periods before the target period fully
+        // deplete book value in the usual double-declining-balance way, and any remaining
+        // fractional part of the target period contributes a pro-rated slice of the
+        // depreciation that the *next* full period would have produced (this also covers the
+        // 0 < period < 1 case, where there are no full periods and the whole result is a
+        // fraction of period-one's depreciation).
+        int fullPeriods = (int)Math.Floor(period);
+        double fraction = period - fullPeriods;
+        double dep = 0;
+        for (int p = 1; p <= fullPeriods; p++)
         {
-            double dep = Math.Min(bookValue - salvage, bookValue * factor / life);
+            dep = Math.Min(bookValue - salvage, bookValue * factor / life);
             dep = Math.Max(dep, 0);
-            if (p < ip) { bookValue -= dep; }
-            else return NumberResult(dep);
+            bookValue -= dep;
         }
-        return NumberResult(0);
+        if (fraction > 0)
+        {
+            dep = Math.Min(bookValue - salvage, bookValue * factor / life);
+            dep = Math.Max(dep, 0) * fraction;
+        }
+        return NumberResult(dep);
     }
 
     private static ScalarValue Vdb(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

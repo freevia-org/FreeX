@@ -220,10 +220,43 @@ public static class PagePaginationPlanner
             var uniformScale = ComputeScaleFraction(baseRowsPerPage, rowsPerPage);
             columnsPerPage = ApplyUniformScaleToFreeAxis(columnsPerPage, uniformScale);
         }
+        else if (wideConstrained && tallConstrained)
+        {
+            // R20-print-area-page-setup-3: when BOTH FitToPagesWide and FitToPagesTall are
+            // explicitly set, Excel derives ONE uniform scale -- the smaller (more aggressive
+            // shrink) of the two per-axis scales that would be needed to hit each axis's own
+            // requested page count independently -- and applies that SAME scale to both axes.
+            // Resolving each axis to its own exact page count independently (the old behavior)
+            // produces a non-uniform scale Excel's rendering model can never actually apply,
+            // over-paginating the axis that needed less shrink.
+            var columnsPerPageIfWideOnly = ApplyScaleToFitCapacity(
+                baseColumnsPerPage,
+                printRange.Start.Col,
+                printRange.End.Col,
+                printTitleColumns,
+                CellAddress.MaxCol,
+                scalePercent: null,
+                scaleToFit.FitToPagesWide);
+            var rowsPerPageIfTallOnly = ApplyScaleToFitCapacity(
+                baseRowsPerPage,
+                printRange.Start.Row,
+                printRange.End.Row,
+                printTitleRows,
+                CellAddress.MaxRow,
+                scalePercent: null,
+                scaleToFit.FitToPagesTall);
+
+            var widthScale = ComputeScaleFraction(baseColumnsPerPage, columnsPerPageIfWideOnly);
+            var heightScale = ComputeScaleFraction(baseRowsPerPage, rowsPerPageIfTallOnly);
+            var uniformScale = Math.Min(widthScale, heightScale);
+
+            columnsPerPage = ApplyUniformScaleToFreeAxis(baseColumnsPerPage, uniformScale);
+            rowsPerPage = ApplyUniformScaleToFreeAxis(baseRowsPerPage, uniformScale);
+        }
         else
         {
-            // Neither axis constrained, both constrained (each targets its own explicit page count),
-            // or an explicit scale percent is set: resolve each axis independently, as before.
+            // Neither axis constrained, or an explicit scale percent is set: resolve each axis
+            // independently, as before.
             rowsPerPage = ApplyScaleToFitCapacity(
                 rowsPerPage,
                 printRange.Start.Row,

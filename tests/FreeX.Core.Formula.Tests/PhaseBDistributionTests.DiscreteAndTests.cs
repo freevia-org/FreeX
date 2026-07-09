@@ -34,14 +34,18 @@ public partial class PhaseBDistributionTests
             (1, 1, 4.0), (2, 1, 6.0),
             (1, 2, 8.0), (2, 2, 10.0),
             (1, 3, 0.25), (2, 3, 0.5),
-            (1, 4, 5.0), (2, 4, 6.0),
+            // D1/D2 lowered from 5/6 to 4/5 so the HYPERGEOM.DIST row below stays within its
+            // documented domain (sample_s >= max(0, sample_size - population_size + population_s));
+            // the original 5/6 values made both rows mathematically impossible sample_s draws
+            // (R20-statistical-functions-2: HYPERGEOM.DIST now correctly returns #NUM! for those).
+            (1, 4, 4.0), (2, 4, 5.0),
             (1, 5, 0.0), (2, 5, 1.0),
             (1, 6, 0.0), (2, 6, 1.0));
 
         AssertColumnApproximately(Eval("BINOM.DIST(A1:A2,B1:B2,C1:C2,E1:E2)", sheet), Calc("BINOM.DIST(4,8,0.25,FALSE)"), Calc("BINOM.DIST(6,10,0.5,TRUE)"));
         AssertColumnApproximately(Eval("BINOM.INV(B1:B2,C1:C2,A1:A2/10)", sheet), Calc("BINOM.INV(8,0.25,0.4)"), Calc("BINOM.INV(10,0.5,0.6)"));
-        AssertColumnApproximately(Eval("NEGBINOM.DIST(A1:A2,D1:D2,C1:C2,E1:E2)", sheet), Calc("NEGBINOM.DIST(4,5,0.25,FALSE)"), Calc("NEGBINOM.DIST(6,6,0.5,TRUE)"));
-        AssertColumnApproximately(Eval("HYPERGEOM.DIST(E1:E2,A1:A2,D1:D2,B1:B2,F1:F2)", sheet), Calc("HYPERGEOM.DIST(0,4,5,8,FALSE)"), Calc("HYPERGEOM.DIST(1,6,6,10,TRUE)"));
+        AssertColumnApproximately(Eval("NEGBINOM.DIST(A1:A2,D1:D2,C1:C2,E1:E2)", sheet), Calc("NEGBINOM.DIST(4,4,0.25,FALSE)"), Calc("NEGBINOM.DIST(6,5,0.5,TRUE)"));
+        AssertColumnApproximately(Eval("HYPERGEOM.DIST(E1:E2,A1:A2,D1:D2,B1:B2,F1:F2)", sheet), Calc("HYPERGEOM.DIST(0,4,4,8,FALSE)"), Calc("HYPERGEOM.DIST(1,6,5,10,TRUE)"));
 
         Eval("BINOM.DIST(A1:A2,B1:C1,0.5,FALSE)", sheet).Should().Be(ErrorValue.Value);
         Eval("NEGBINOM.DIST(A1:A2,B1:C1,0.5,FALSE)", sheet).Should().Be(ErrorValue.Value);

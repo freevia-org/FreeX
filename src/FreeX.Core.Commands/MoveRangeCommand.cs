@@ -105,6 +105,14 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
             }
         }
 
+        // R20-array-dynamic-spill-3: every other cell-mutating command (Copy, Paste, Autofill,
+        // ClearContents, Fill, ...) rejects an edit that would touch only PART of a dynamic-array/CSE
+        // spill ("You cannot change part of an array"); Move omitted this guard, silently discarding
+        // a move of just a non-anchor spill member (or losing the array via the anchor-only move bug
+        // fixed below) instead of rejecting it like Excel does.
+        if (CommandGuards.RejectIfSplitsArray(sheet, affected) is { } splitsArrayRejection)
+            return splitsArrayRejection;
+
         _snapshot = CaptureCellSnapshots(sheet, affected);
         _commentSnapshot = CaptureDictionary(sheet.Comments, affected);
         _commentAuthorsSnapshot = CaptureDictionary(sheet.CommentAuthors, affected);
@@ -136,12 +144,20 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         TranslateFullyContainedChartDataRanges(ctx.Workbook, _sourceRange, moveOp.RowDelta, moveOp.ColDelta);
 
         var payloads = CaptureSourcePayloads(sheet, _sourceRange, _destination);
+        // R20-array-dynamic-spill-1: capture any live spill rooted at a source cell BEFORE
+        // ClearAddress tears it down, so a moved dynamic-array anchor (e.g. =SEQUENCE with no cell
+        // references, whose formula text is unchanged by a plain Move) keeps spilling at its new
+        // location instead of silently collapsing to a stale scalar with a blank spill area.
+        var spillPayloads = CaptureSourceSpillPayloads(sheet, _sourceRange, _destination);
 
         foreach (var address in affected)
             ClearAddress(sheet, address);
 
         foreach (var payload in payloads)
             WritePayload(sheet, payload);
+
+        foreach (var (target, spillPayload) in spillPayloads)
+            sheet.SetSpillRange(target, spillPayload);
 
         _affectedCells = MergeAffectedCells(affected, _formulaSnapshot.Keys);
         return new CommandOutcome(true, AffectedCells: _affectedCells);
@@ -242,6 +258,35 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         }
 
         return payloads;
+    }
+
+    /// <summary>
+    /// Captures the live spill payload rooted at each spill-anchor cell within <paramref name="sourceRange"/>
+    /// (if any), paired with the address it will occupy at the destination, so <see cref="Apply"/> can
+    /// re-establish the spill via <see cref="Sheet.SetSpillRange"/> once the anchor's formula cell has
+    /// been moved (R20-array-dynamic-spill-1). Must be called before the source cells are cleared.
+    /// </summary>
+    private static List<(CellAddress Target, RangeValue Payload)> CaptureSourceSpillPayloads(
+        Sheet sheet, GridRange sourceRange, CellAddress destination)
+    {
+        var rowDelta = (long)destination.Row - sourceRange.Start.Row;
+        var colDelta = (long)destination.Col - sourceRange.Start.Col;
+
+        List<(CellAddress, RangeValue)>? result = null;
+        foreach (var source in sourceRange.AllCells())
+        {
+            var payload = sheet.CaptureSpillForRelocate(source);
+            if (payload is null)
+                continue;
+
+            var target = new CellAddress(
+                destination.Sheet,
+                checked((uint)(source.Row + rowDelta)),
+                checked((uint)(source.Col + colDelta)));
+            (result ??= []).Add((target, payload));
+        }
+
+        return result ?? [];
     }
 
     private static MoveRangeOp CreateMoveRangeOp(Sheet sheet, GridRange sourceRange, CellAddress destination)

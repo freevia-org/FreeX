@@ -49,7 +49,7 @@ public static partial class NumberFormatter
         double fractional = absValue - whole;
 
         var (numerator, denominator) = fixedDenominator is { } denominatorValue
-            ? ((int)Math.Round(fractional * denominatorValue), denominatorValue)
+            ? ((int)Math.Round(fractional * denominatorValue, MidpointRounding.AwayFromZero), denominatorValue)
             : ApproximateFraction(fractional, maxDenominator);
         // When numerator equals denominator (e.g. 8/8 = 1), promote to the whole-number
         // section only if the format HAS a whole-number section.  For pure-fraction formats
@@ -140,7 +140,7 @@ public static partial class NumberFormatter
 
         for (int denominator = 1; denominator <= maxDenominator; denominator++)
         {
-            int numerator = (int)Math.Round(value * denominator);
+            int numerator = (int)Math.Round(value * denominator, MidpointRounding.AwayFromZero);
             double error = Math.Abs(value - numerator / (double)denominator);
             if (error < bestError)
             {

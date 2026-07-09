@@ -39,13 +39,32 @@ public static partial class BuiltInFunctions
         return double.IsFinite(serial) && serial >= 0 && serial < 1;
     }
 
-    private static double ActualYearLength(DateTime d1, DateTime d2)
+    // True Actual/Actual (Excel basis 1) day-count fraction: the span between d1 and d2
+    // is split at each calendar-year boundary, and each segment's actual day count is
+    // weighted by that calendar year's actual length (365 or 366). This must NOT be
+    // implemented as "totalDays / averageYearLength" — for a cross-year span, dividing
+    // by an average year length derived from the same total days algebraically collapses
+    // to the bare integer year difference (days / (days/years) == years), losing all
+    // sub-year precision. See R20-financial-functions-1.
+    private static double ActualActualDayCountFraction(DateTime d1, DateTime d2)
     {
-        if (d1.Year == d2.Year)
-            return DateTime.IsLeapYear(d1.Year) ? 366.0 : 365.0;
-        double years = d2.Year - d1.Year;
-        double days = (d2 - d1).TotalDays;
-        return days / years;
+        if (d1 == d2) return 0.0;
+        bool negative = d1 > d2;
+        DateTime start = negative ? d2 : d1;
+        DateTime end = negative ? d1 : d2;
+
+        double total = 0.0;
+        DateTime cursor = start;
+        while (cursor < end)
+        {
+            DateTime yearEnd = new DateTime(cursor.Year + 1, 1, 1);
+            DateTime segmentEnd = yearEnd < end ? yearEnd : end;
+            double yearLength = DateTime.IsLeapYear(cursor.Year) ? 366.0 : 365.0;
+            total += (segmentEnd - cursor).TotalDays / yearLength;
+            cursor = segmentEnd;
+        }
+
+        return negative ? -total : total;
     }
 
     private static double DayCountFraction(DateTime d1, DateTime d2, int basis)
@@ -54,7 +73,7 @@ public static partial class BuiltInFunctions
         {
             case 0: // US 30/360 (NASD)
                 return Days30360Us(d1, d2) / 360.0;
-            case 1: return (d2 - d1).TotalDays / ActualYearLength(d1, d2);
+            case 1: return ActualActualDayCountFraction(d1, d2);
             case 2: return (d2 - d1).TotalDays / 360.0;
             case 3: return (d2 - d1).TotalDays / 365.0;
             case 4: // European 30/360

@@ -234,6 +234,15 @@ public static class PasteCommandFactory
                 if (options.Operation != PasteSpecialOperation.None)
                 {
                     pastedCell = Cell.FromValue(sourceCell.Value);
+                    // Preserve whether the source cell had a formula. PasteSpecialCellsCommand's own
+                    // Skip-Blanks check (BuildDestinationCells) re-applies IsBlank to THIS collapsed
+                    // cell; if we dropped FormulaText here, a formula that currently evaluates to
+                    // blank/0 (FormulaText non-null, Value=BlankValue) would look truly-empty
+                    // downstream and get skipped a second time, silently leaving the destination
+                    // unchanged instead of applying the operation with the computed value treated as
+                    // 0 (R20-paste-special-operations-2). Excel's Skip Blanks only skips a source cell
+                    // with no content at all, not a formula whose result happens to be blank.
+                    pastedCell.FormulaText = sourceCell.FormulaText;
                     if (options.ContentKind == PasteSpecialContentKind.ValuesAndNumberFormats)
                         pastedCell.StyleId = sourceCell.StyleId;
                 }

@@ -138,18 +138,58 @@ public static class SheetPdfPageSetupResolver
         {
             // fit-to-pages: enough rows/cols per page so that the total page count matches the
             // requested wide × tall.
-            if (scaleToFit.FitToPagesTall is { } tall and >= 1)
-            {
-                var bodyRows = CountBodyItems(printRange.Start.Row, printRange.End.Row, sheet.PrintTitleRows);
-                if (bodyRows > 0)
-                    baseRowsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyRows / (double)tall));
-            }
+            //
+            // R20-print-area-page-setup-2: mirrors PagePaginationPlanner's R18 uniform-scale fix.
+            // Excel derives ONE uniform scale from whichever axis carries an explicit fit-to-pages
+            // request and applies that SAME scale to the other (free) axis. When only the column
+            // axis is constrained (e.g. "Fit to 1 page wide by [auto] tall"), the row axis must
+            // shrink by the same ratio too, instead of staying at its unscaled natural capacity --
+            // which used to over-paginate the free axis (e.g. 1x3 pages instead of Excel's
+            // uniformly-shrunk 1x1).
+            var naturalRowsPerPage = baseRowsPerPage;
+            var naturalColsPerPage = baseColsPerPage;
+            var wideConstrained = scaleToFit.FitToPagesWide is >= 1;
+            var tallConstrained = scaleToFit.FitToPagesTall is >= 1;
 
-            if (scaleToFit.FitToPagesWide is { } wide and >= 1)
+            if (wideConstrained && !tallConstrained)
             {
                 var bodyCols = CountBodyItems(printRange.Start.Col, printRange.End.Col, sheet.PrintTitleColumns);
                 if (bodyCols > 0)
+                {
+                    var wide = scaleToFit.FitToPagesWide!.Value;
                     baseColsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyCols / (double)wide));
+                    var uniformScale = ComputeScaleFraction(naturalColsPerPage, baseColsPerPage);
+                    baseRowsPerPage = ApplyUniformScaleToFreeAxis(naturalRowsPerPage, uniformScale);
+                }
+            }
+            else if (tallConstrained && !wideConstrained)
+            {
+                var bodyRows = CountBodyItems(printRange.Start.Row, printRange.End.Row, sheet.PrintTitleRows);
+                if (bodyRows > 0)
+                {
+                    var tall = scaleToFit.FitToPagesTall!.Value;
+                    baseRowsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyRows / (double)tall));
+                    var uniformScale = ComputeScaleFraction(naturalRowsPerPage, baseRowsPerPage);
+                    baseColsPerPage = ApplyUniformScaleToFreeAxis(naturalColsPerPage, uniformScale);
+                }
+            }
+            else
+            {
+                // Neither axis constrained or both constrained (each targets its own explicit page
+                // count): resolve each axis independently, as before.
+                if (tallConstrained)
+                {
+                    var bodyRows = CountBodyItems(printRange.Start.Row, printRange.End.Row, sheet.PrintTitleRows);
+                    if (bodyRows > 0)
+                        baseRowsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyRows / (double)scaleToFit.FitToPagesTall!.Value));
+                }
+
+                if (wideConstrained)
+                {
+                    var bodyCols = CountBodyItems(printRange.Start.Col, printRange.End.Col, sheet.PrintTitleColumns);
+                    if (bodyCols > 0)
+                        baseColsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyCols / (double)scaleToFit.FitToPagesWide!.Value));
+                }
             }
         }
 
@@ -237,6 +277,28 @@ public static class SheetPdfPageSetupResolver
         }
 
         return total / count;
+    }
+
+    /// <summary>
+    /// The "s" shrink fraction implied by going from <paramref name="naturalItemsPerPage"/> (the
+    /// natural, unscaled per-page item count) to <paramref name="constrainedItemsPerPage"/>:
+    /// <c>s = natural / constrained</c> -- mirrors <c>PagePaginationPlanner.ComputeScaleFraction</c>.
+    /// </summary>
+    private static double ComputeScaleFraction(uint naturalItemsPerPage, uint constrainedItemsPerPage) =>
+        constrainedItemsPerPage == 0 ? 1.0 : naturalItemsPerPage / (double)constrainedItemsPerPage;
+
+    /// <summary>
+    /// Applies the uniform shrink fraction derived from the constrained axis to the free axis's
+    /// natural capacity, clamped to the same [10, 400] scale-percent range Excel supports for an
+    /// explicit scale -- mirrors <c>PagePaginationPlanner.ApplyUniformScaleToFreeAxis</c>.
+    /// </summary>
+    private static uint ApplyUniformScaleToFreeAxis(uint naturalItemsPerPage, double scaleFraction)
+    {
+        if (scaleFraction <= 0 || !double.IsFinite(scaleFraction))
+            return naturalItemsPerPage;
+
+        var percent = Math.Clamp(scaleFraction * 100.0, 10.0, 400.0);
+        return Math.Max(1u, (uint)Math.Floor(naturalItemsPerPage * (100d / percent)));
     }
 
     private static uint CountBodyItems(uint start, uint end, WorksheetRepeatRange? repeat)

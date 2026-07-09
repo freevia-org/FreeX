@@ -63,6 +63,16 @@ public sealed class PasteCellsCommand : IWorkbookCommand
                 oldHyperlink,
                 hadHyperlinkMetadata,
                 oldHyperlinkMetadata));
+
+            // A destination cell that is a non-anchor (hidden/covered) member of an existing merged
+            // region must stay empty, matching Excel: only the merge's top-left anchor cell ever
+            // carries a value. Writing into a covered cell would silently plant a live value that the
+            // grid never displays (the merge only renders the anchor), yet formulas like =SUM or
+            // unmerging later would suddenly surface it. So skip the mutation entirely for those cells.
+            var mergeRegion = sheet.GetMergeRegion(addr);
+            if (mergeRegion is { } region && !region.Start.Equals(addr))
+                continue;
+
             sheet.SetCell(addr, cell.Clone());
 
             if (_richTextRuns is not null && _richTextRuns.TryGetValue(addr, out var newRuns))

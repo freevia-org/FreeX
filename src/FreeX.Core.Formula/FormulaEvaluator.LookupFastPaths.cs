@@ -172,13 +172,24 @@ public sealed partial class FormulaEvaluator
         if (!TryCreateDirectXlookupReturnVector(returnRange, context, out var returnVector, out result, out var shouldFallback))
             return !shouldFallback;
 
-        var lookupReader = CreateDirectLookupReader(lookupVector, context);
-        var returnReader = CreateDirectLookupReader(returnVector, context);
-        if (returnReader.Count != lookupReader.Count)
+        // Excel's XLOOKUP requires the return array's shape to match the lookup array's
+        // shape on the matching axis (row-count for a vertical lookup array, column-count
+        // for a horizontal one) -- not merely the same total element count. A same-count
+        // but orientation-mismatched pair (e.g. a 5-row/1-col lookup array paired with a
+        // 1-row/5-col return array) must fall through to #VALUE!, matching the slow path
+        // in BuiltInFunctions.Lookup.Modern.cs.
+        var lookupIsVertical = lookupVector.ColCount == 1;
+        var lookupIsHorizontal = lookupVector.RowCount == 1;
+        if ((!lookupIsVertical && !lookupIsHorizontal) ||
+            (lookupIsVertical && returnVector.RowCount != lookupVector.RowCount) ||
+            (lookupIsHorizontal && returnVector.ColCount != lookupVector.ColCount))
         {
             result = ErrorValue.Value;
             return true;
         }
+
+        var lookupReader = CreateDirectLookupReader(lookupVector, context);
+        var returnReader = CreateDirectLookupReader(returnVector, context);
 
         ScalarValue ifNotFound = ErrorValue.NA;
         if (node.Arguments.Count > 3)

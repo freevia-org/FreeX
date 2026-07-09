@@ -55,7 +55,7 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(n) || !double.IsFinite(sig)) return ErrorValue.Num;
         if (sig == 0) return new NumberValue(0);
         if (n > 0 && sig < 0) return ErrorValue.Num;
-        return NumberResult(Math.Ceiling(n / sig) * sig);
+        return NumberResult(CeilingToMultiple(n, sig));
     }
 
     private static ScalarValue IsoCeiling(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -73,7 +73,7 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(n) || !double.IsFinite(significance)) return ErrorValue.Num;
         if (n == 0 || significance == 0) return new NumberValue(0);
         var multiple = Math.Abs(significance);
-        return NumberResult(Math.Ceiling(n / multiple) * multiple);
+        return NumberResult(CeilingToMultiple(n, multiple));
     }
 
     private static ScalarValue CeilingPrecise(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
@@ -98,8 +98,8 @@ public static partial class BuiltInFunctions
         if (n == 0 || significance == 0) return new NumberValue(0);
         var multiple = Math.Abs(significance);
         var rounded = n < 0 && mode != 0
-            ? Math.Floor(n / multiple) * multiple
-            : Math.Ceiling(n / multiple) * multiple;
+            ? FloorToMultiple(n, multiple)
+            : CeilingToMultiple(n, multiple);
         return NumberResult(rounded);
     }
 
@@ -116,7 +116,7 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(n) || !double.IsFinite(sig)) return ErrorValue.Num;
         if (sig == 0) return new NumberValue(0);
         if (n * sig < 0) return ErrorValue.Num;
-        return NumberResult(Math.Floor(n / sig) * sig);
+        return NumberResult(FloorToMultiple(n, sig));
     }
 
     private static ScalarValue FloorPrecise(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -134,7 +134,7 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(n) || !double.IsFinite(significance)) return ErrorValue.Num;
         if (n == 0 || significance == 0) return new NumberValue(0);
         var multiple = Math.Abs(significance);
-        return NumberResult(Math.Floor(n / multiple) * multiple);
+        return NumberResult(FloorToMultiple(n, multiple));
     }
 
     private static ScalarValue FloorMath(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -156,8 +156,8 @@ public static partial class BuiltInFunctions
         if (n == 0 || significance == 0) return new NumberValue(0);
         var multiple = Math.Abs(significance);
         var rounded = n < 0 && mode != 0
-            ? Math.Truncate(n / multiple) * multiple
-            : Math.Floor(n / multiple) * multiple;
+            ? TruncateToMultiple(n, multiple)
+            : FloorToMultiple(n, multiple);
         return NumberResult(rounded);
     }
 
@@ -368,5 +368,80 @@ public static partial class BuiltInFunctions
             System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture,
             out result);
+    }
+
+    // FLOOR/CEILING and their *.MATH/ISO/PRECISE variants all bucket a value by a
+    // significance/multiple. Doing that with raw double division (Math.Ceiling(n/sig)*sig)
+    // means an exact multiple like 4.2/0.3 == 14.000000000000002 (IEEE-754 double rounding
+    // error) lands a full bucket wrong (4.5 instead of Excel's 4.2). These helpers use the
+    // same 15-significant-digit decimal correction as MroundWithExcelDigits above: convert
+    // both operands to decimal (via TryToExcelDecimal), do the division/rounding/multiply
+    // entirely in decimal, and only cast back to double at the very end so no intermediate
+    // double-precision artifact can leak into the result.
+    private static double CeilingToMultiple(double n, double multiple)
+    {
+        if (TryToExcelDecimal(n, out var dn) && TryToExcelDecimal(multiple, out var dm) && dm != 0m)
+        {
+            try
+            {
+                return (double)(Math.Ceiling(dn / dm) * dm);
+            }
+            catch (OverflowException)
+            {
+                // Magnitude outside decimal's range (~7.9e28) — fall back to double math.
+            }
+        }
+
+        return Math.Ceiling(n / multiple) * multiple;
+    }
+
+    private static double FloorToMultiple(double n, double multiple)
+    {
+        if (TryToExcelDecimal(n, out var dn) && TryToExcelDecimal(multiple, out var dm) && dm != 0m)
+        {
+            try
+            {
+                return (double)(Math.Floor(dn / dm) * dm);
+            }
+            catch (OverflowException)
+            {
+            }
+        }
+
+        return Math.Floor(n / multiple) * multiple;
+    }
+
+    private static double TruncateToMultiple(double n, double multiple)
+    {
+        if (TryToExcelDecimal(n, out var dn) && TryToExcelDecimal(multiple, out var dm) && dm != 0m)
+        {
+            try
+            {
+                return (double)(Math.Truncate(dn / dm) * dm);
+            }
+            catch (OverflowException)
+            {
+            }
+        }
+
+        return Math.Truncate(n / multiple) * multiple;
+    }
+
+    // Same decimal-precision correction as above, but for QUOTIENT which returns the
+    // truncated quotient itself rather than a value re-multiplied by the divisor.
+    private static double TruncateExcelQuotient(double n, double d)
+    {
+        if (TryToExcelDecimal(n, out var dn) && TryToExcelDecimal(d, out var dd) && dd != 0m)
+        {
+            try
+            {
+                return (double)Math.Truncate(dn / dd);
+            }
+            catch (OverflowException)
+            {
+            }
+        }
+
+        return Math.Truncate(n / d);
     }
 }

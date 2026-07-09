@@ -153,7 +153,9 @@ public static partial class DataValidationService
                 return true;
             }
 
-            if (ast is NamedRangeNode named && workbook is not null && workbook.TryGetNamedRange(named.Name, sheet.Id, out var namedRange))
+            if (ast is NamedRangeNode named && workbook is not null &&
+                !HasSheetScopedNamedFormula(workbook, named.Name, sheet.Id) &&
+                workbook.TryGetNamedRange(named.Name, sheet.Id, out var namedRange))
             {
                 var sourceSheet = workbook.GetSheet(namedRange.Start.Sheet) ?? sheet;
                 values = ReadRangeValues(
@@ -172,6 +174,20 @@ public static partial class DataValidationService
             return false;
         }
     }
+
+    /// <summary>
+    /// Excel scope precedence: a name scoped to the current sheet always wins over a
+    /// same-named workbook-global name, regardless of whether either name is a plain range
+    /// or a formula expression (mirrors FormulaEvaluator.References.cs.IsSheetScopedName).
+    /// Workbook.TryGetNamedRange(name, sheetId) only consults ScopedNamedRanges (range-kind)
+    /// before falling back to the workbook-global NamedRanges dictionary — it never looks at
+    /// ScopedNamedFormulas, so a sheet-scoped named FORMULA is invisible to it and the
+    /// shadowed workbook-global range would be returned as if it were the correct match. Guard
+    /// the DV fast path here so that case falls through to the full FormulaEvaluator, which
+    /// implements the correct precedence via EvaluateNamedRange/IsSheetScopedName.
+    /// </summary>
+    private static bool HasSheetScopedNamedFormula(Workbook workbook, string name, SheetId sheetId) =>
+        workbook.ScopedNamedFormulas.ContainsKey((name, sheetId));
 
     private static bool TryReadSimpleSameSheetRangeSource(
         string formulaText,
@@ -258,7 +274,9 @@ public static partial class DataValidationService
                 return true;
             }
 
-            if (ast is NamedRangeNode named && workbook is not null && workbook.TryGetNamedRange(named.Name, sheet.Id, out var namedRange))
+            if (ast is NamedRangeNode named && workbook is not null &&
+                !HasSheetScopedNamedFormula(workbook, named.Name, sheet.Id) &&
+                workbook.TryGetNamedRange(named.Name, sheet.Id, out var namedRange))
             {
                 var sourceSheet = workbook.GetSheet(namedRange.Start.Sheet) ?? sheet;
                 matches = RangeContainsValue(

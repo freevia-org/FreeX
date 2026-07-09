@@ -11,12 +11,21 @@ public static partial class NumberFormatter
         WorkbookTheme? theme)
     {
         var parsedSections = ParseSections(sections, indexedColors, theme, out _);
-        if (sections.Length <= 3)
+        if (sections.Length == 1)
         {
             var firstSection = parsedSections[0];
             return firstSection.Format.Contains('@', StringComparison.Ordinal)
                 ? new FormatResult(ApplyTextSection(firstSection.Format, text), firstSection.ColorHex)
                 : new FormatResult(text);
+        }
+
+        if (sections.Length <= 3)
+        {
+            // A 2- or 3-section format (positive[;negative[;zero]]) has no dedicated 4th
+            // (text) section. Per Excel's rule, text values are unaffected by such a format
+            // -- even if the first (positive) section happens to contain '@' -- so the raw
+            // text always passes through unmodified.
+            return new FormatResult(text);
         }
 
         var parsed = parsedSections[3];

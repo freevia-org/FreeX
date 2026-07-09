@@ -150,7 +150,18 @@ internal static class DataValidationBoundsParser
 
         try
         {
-            var evaluated = new FormulaEvaluator().Evaluate(formulaText, sheet, workbook, currentCell: address);
+            // Parse once so we can shift relative references from the rule's anchor cell
+            // (AppliesTo.Start) to the cell actually being validated, mirroring the way
+            // ValidateCustom / ResolveListValues already handle List/Custom rules: a bound
+            // formula like "=A1" is authored as if the rule's anchor cell were active, so for
+            // a multi-cell rule (e.g. B1:B3 anchored at B1) it must shift row/column-wise for
+            // B2, B3, etc. rather than always evaluating against the anchor's neighbor.
+            var ast = FormulaEvaluator.ParseFormula(formulaText);
+            var anchor = FindRuleAnchor(sheet, address, text) ?? address;
+            if (anchor != address)
+                ast = FormulaEvaluator.ShiftFormulaForCell(ast, anchor, address);
+
+            var evaluated = new FormulaEvaluator().Evaluate(ast, sheet, workbook, currentCell: address);
             if (evaluated is ErrorValue)
             {
                 result = evaluated;
@@ -165,6 +176,45 @@ internal static class DataValidationBoundsParser
             result = ErrorValue.Value;
             return false;
         }
+    }
+
+    /// <summary>
+    /// Recovers the anchor cell (<c>AppliesTo.Start</c>) of the data-validation rule that owns
+    /// this bound formula. The bound parser only receives the raw Formula1/Formula2 text (see
+    /// the callers in DataValidationService), not the owning <see cref="DataValidation"/>, so
+    /// the anchor is found by matching which rule covers <paramref name="address"/> and carries
+    /// this exact bound text, rather than requiring every caller to thread the anchor through.
+    /// Returns null (no shift) when no matching rule is found, preserving prior behavior.
+    /// </summary>
+    private static CellAddress? FindRuleAnchor(Sheet sheet, CellAddress address, string text)
+    {
+        var validations = sheet.DataValidations;
+        for (var i = 0; i < validations.Count; i++)
+        {
+            var dv = validations[i];
+            if (dv.Type is not (DvType.WholeNumber or DvType.Decimal or DvType.Date or DvType.Time or DvType.TextLength))
+                continue;
+
+            if (!string.Equals(dv.Formula1, text, StringComparison.Ordinal) &&
+                !string.Equals(dv.Formula2, text, StringComparison.Ordinal))
+                continue;
+
+            if (dv.AppliesTo.Contains(address) || AdditionalRangeContains(dv.AdditionalRanges, address))
+                return dv.AppliesTo.Start;
+        }
+
+        return null;
+    }
+
+    private static bool AdditionalRangeContains(IReadOnlyList<GridRange> ranges, CellAddress addr)
+    {
+        for (var i = 0; i < ranges.Count; i++)
+        {
+            if (ranges[i].Contains(addr))
+                return true;
+        }
+
+        return false;
     }
 
     private static bool Assign(double resolved, out double value)
