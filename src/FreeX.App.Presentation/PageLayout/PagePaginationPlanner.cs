@@ -117,6 +117,51 @@ public static class PagePaginationPlanner
         double headerMarginInches,
         double footerMarginInches)
     {
+        return CalculatePageCapacityDetail(
+            printRange,
+            scaleToFit,
+            printTitleRows,
+            printTitleColumns,
+            paperSize,
+            orientation,
+            margins,
+            rowHeights,
+            defaultRowHeight,
+            columnWidths,
+            defaultColumnWidth,
+            headerMarginInches,
+            footerMarginInches).Capacity;
+    }
+
+    /// <summary>
+    /// Internal detail behind <see cref="CalculatePageCapacity"/>: also exposes the printable body
+    /// size and the pre-scale-to-fit ("base") per-page item counts, so <see cref="BuildPlan"/> can
+    /// derive the real uniform shrink factor implied by the resolved capacity and accumulate real
+    /// row/column sizes against it (R18-print-pagination-exact-3) instead of re-deriving the scale
+    /// from scratch.
+    /// </summary>
+    private readonly record struct PageCapacityDetail(
+        PageCapacity Capacity,
+        double PrintableWidth,
+        double PrintableHeight,
+        uint BaseRowsPerPage,
+        uint BaseColumnsPerPage);
+
+    private static PageCapacityDetail CalculatePageCapacityDetail(
+        GridRange printRange,
+        WorksheetScaleToFit scaleToFit,
+        WorksheetRepeatRange? printTitleRows,
+        WorksheetRepeatRange? printTitleColumns,
+        WorksheetPaperSize paperSize,
+        WorksheetPageOrientation orientation,
+        WorksheetPageMargins margins,
+        IReadOnlyDictionary<uint, double> rowHeights,
+        double defaultRowHeight,
+        IReadOnlyDictionary<uint, double> columnWidths,
+        double defaultColumnWidth,
+        double headerMarginInches,
+        double footerMarginInches)
+    {
         var pageSize = WorksheetPageLayout.GetPageSizeInches(paperSize, orientation);
 
         // PR5: subtract header + footer margin reservations from the body height.
@@ -134,27 +179,98 @@ public static class PagePaginationPlanner
             printRange.Start.Col, printRange.End.Col,
             columnWidths, defaultColumnWidth);
 
-        var rowsPerPage = Math.Max(1u, (uint)Math.Floor(printableHeight / effectiveRowHeight));
-        var columnsPerPage = Math.Max(1u, (uint)Math.Floor(printableWidth / effectiveColWidth));
+        var baseRowsPerPage = Math.Max(1u, (uint)Math.Floor(printableHeight / effectiveRowHeight));
+        var baseColumnsPerPage = Math.Max(1u, (uint)Math.Floor(printableWidth / effectiveColWidth));
 
-        rowsPerPage = ApplyScaleToFitCapacity(
-            rowsPerPage,
-            printRange.Start.Row,
-            printRange.End.Row,
-            printTitleRows,
-            CellAddress.MaxRow,
-            scaleToFit.ScalePercent,
-            scaleToFit.FitToPagesTall);
-        columnsPerPage = ApplyScaleToFitCapacity(
-            columnsPerPage,
-            printRange.Start.Col,
-            printRange.End.Col,
-            printTitleColumns,
-            CellAddress.MaxCol,
-            scaleToFit.ScalePercent,
-            scaleToFit.FitToPagesWide);
+        var rowsPerPage = baseRowsPerPage;
+        var columnsPerPage = baseColumnsPerPage;
 
-        return new PageCapacity(rowsPerPage, columnsPerPage);
+        // R18-print-pagination-exact-1: Excel derives ONE uniform scale from whichever axis carries
+        // an explicit fit-to-pages request and applies that SAME scale to the other (free) axis. When
+        // only the column axis is constrained (e.g. "Fit to 1 page wide by [auto] tall"), the row
+        // axis must shrink by the same ratio too, instead of staying at 100% capacity -- which used to
+        // over-paginate the free axis (e.g. 1x2 pages instead of Excel's uniformly-shrunk 1x1).
+        var explicitPercentSet = scaleToFit.ScalePercent is not null;
+        var wideConstrained = !explicitPercentSet && scaleToFit.FitToPagesWide is >= 1;
+        var tallConstrained = !explicitPercentSet && scaleToFit.FitToPagesTall is >= 1;
+
+        if (wideConstrained && !tallConstrained)
+        {
+            columnsPerPage = ApplyScaleToFitCapacity(
+                columnsPerPage,
+                printRange.Start.Col,
+                printRange.End.Col,
+                printTitleColumns,
+                CellAddress.MaxCol,
+                scalePercent: null,
+                scaleToFit.FitToPagesWide);
+            var uniformScale = ComputeScaleFraction(baseColumnsPerPage, columnsPerPage);
+            rowsPerPage = ApplyUniformScaleToFreeAxis(rowsPerPage, uniformScale);
+        }
+        else if (tallConstrained && !wideConstrained)
+        {
+            rowsPerPage = ApplyScaleToFitCapacity(
+                rowsPerPage,
+                printRange.Start.Row,
+                printRange.End.Row,
+                printTitleRows,
+                CellAddress.MaxRow,
+                scalePercent: null,
+                scaleToFit.FitToPagesTall);
+            var uniformScale = ComputeScaleFraction(baseRowsPerPage, rowsPerPage);
+            columnsPerPage = ApplyUniformScaleToFreeAxis(columnsPerPage, uniformScale);
+        }
+        else
+        {
+            // Neither axis constrained, both constrained (each targets its own explicit page count),
+            // or an explicit scale percent is set: resolve each axis independently, as before.
+            rowsPerPage = ApplyScaleToFitCapacity(
+                rowsPerPage,
+                printRange.Start.Row,
+                printRange.End.Row,
+                printTitleRows,
+                CellAddress.MaxRow,
+                scaleToFit.ScalePercent,
+                scaleToFit.FitToPagesTall);
+            columnsPerPage = ApplyScaleToFitCapacity(
+                columnsPerPage,
+                printRange.Start.Col,
+                printRange.End.Col,
+                printTitleColumns,
+                CellAddress.MaxCol,
+                scaleToFit.ScalePercent,
+                scaleToFit.FitToPagesWide);
+        }
+
+        return new PageCapacityDetail(
+            new PageCapacity(rowsPerPage, columnsPerPage),
+            printableWidth,
+            printableHeight,
+            baseRowsPerPage,
+            baseColumnsPerPage);
+    }
+
+    /// <summary>
+    /// The "s" shrink fraction implied by going from <paramref name="baseItemsPerPage"/> (the natural,
+    /// unscaled per-page item count) to <paramref name="resolvedItemsPerPage"/>: <c>s = base / resolved</c>,
+    /// i.e. <c>resolved = base / s</c> -- the same relationship <see cref="ApplyScaleToFitCapacity"/>'s
+    /// explicit-percent branch uses (<c>s = percent / 100</c>).
+    /// </summary>
+    private static double ComputeScaleFraction(uint baseItemsPerPage, uint resolvedItemsPerPage) =>
+        resolvedItemsPerPage == 0 ? 1.0 : baseItemsPerPage / (double)resolvedItemsPerPage;
+
+    /// <summary>
+    /// Applies the uniform shrink fraction derived from the constrained axis to the free axis's
+    /// baseline capacity, clamped to the same [<see cref="MinScalePercent"/>, <see cref="MaxScalePercent"/>]
+    /// range as an explicit scale percent.
+    /// </summary>
+    private static uint ApplyUniformScaleToFreeAxis(uint baseItemsPerPage, double scaleFraction)
+    {
+        if (scaleFraction <= 0 || !double.IsFinite(scaleFraction))
+            return baseItemsPerPage;
+
+        var percent = Math.Clamp(scaleFraction * 100.0, MinScalePercent, MaxScalePercent);
+        return Math.Max(1u, (uint)Math.Floor(baseItemsPerPage * (100d / percent)));
     }
 
     /// <summary>
@@ -214,7 +330,7 @@ public static class PagePaginationPlanner
         Func<uint, bool>? isRowHidden = null,
         Func<uint, bool>? isColumnHidden = null)
     {
-        var capacity = CalculatePageCapacity(
+        var detail = CalculatePageCapacityDetail(
             printRange,
             scaleToFit,
             printTitleRows,
@@ -228,18 +344,45 @@ public static class PagePaginationPlanner
             defaultColumnWidth,
             headerMarginInches,
             footerMarginInches);
+        var capacity = detail.Capacity;
+
+        // R18-print-pagination-exact-3: slice pages by the real ACCUMULATED row height / column
+        // width -- breaking a page once its running total would exceed the printable body size --
+        // instead of the fixed count implied by the AVERAGE row height / column width used for
+        // `capacity` above. A fixed average*count slice over/under-shoots the real printable area
+        // whenever the range has non-uniform row heights or column widths. The accumulated break
+        // points are fed into PrintLayoutPlanner as extra manual breaks (merged with any real manual
+        // breaks), using a capacity large enough that PrintLayoutPlanner's own count-based slicing
+        // never forces an additional break of its own -- the accumulated/manual breaks alone decide
+        // where pages split.
+        double RowSize(uint row) => ResolveRowHeightPixels(row, rowHeights, defaultRowHeight);
+        double ColumnSize(uint col) => ResolveColumnWidthPixels(col, columnWidths, defaultColumnWidth);
+
+        var rowScale = ComputeScaleFraction(detail.BaseRowsPerPage, capacity.RowsPerPage);
+        var columnScale = ComputeScaleFraction(detail.BaseColumnsPerPage, capacity.ColumnsPerPage);
+
+        var rowTitleSize = ComputeRepeatRangeSize(printTitleRows, CellAddress.MaxRow, isRowHidden, RowSize);
+        var columnTitleSize = ComputeRepeatRangeSize(printTitleColumns, CellAddress.MaxCol, isColumnHidden, ColumnSize);
+
+        var rowBodyBudget = detail.PrintableHeight / rowScale - rowTitleSize;
+        var columnBodyBudget = detail.PrintableWidth / columnScale - columnTitleSize;
+
+        var accumulatedRowBreaks = ComputeAccumulationBreakPoints(
+            printRange.Start.Row, printRange.End.Row, printTitleRows, isRowHidden, RowSize, rowBodyBudget);
+        var accumulatedColumnBreaks = ComputeAccumulationBreakPoints(
+            printRange.Start.Col, printRange.End.Col, printTitleColumns, isColumnHidden, ColumnSize, columnBodyBudget);
 
         var rowPlans = PrintLayoutPlanner.BuildRowPlans(
             printRange,
             printTitleRows,
-            capacity.RowsPerPage,
-            rowPageBreaks,
+            UnboundedAxisCapacity(printRange.Start.Row, printRange.End.Row),
+            MergeBreaks(rowPageBreaks, accumulatedRowBreaks),
             isRowHidden);
         var columnPlans = PrintLayoutPlanner.BuildColumnPlans(
             printRange,
             printTitleColumns,
-            capacity.ColumnsPerPage,
-            columnPageBreaks,
+            UnboundedAxisCapacity(printRange.Start.Col, printRange.End.Col),
+            MergeBreaks(columnPageBreaks, accumulatedColumnBreaks),
             isColumnHidden);
 
         var effectiveScale = CalculateEffectiveScalePercent(scaleToFit, rowPlans.Count, columnPlans.Count);
@@ -521,4 +664,111 @@ public static class PagePaginationPlanner
 
         return total / count;
     }
+
+    /// <summary>Resolves a single row's real height in pixels, the same way <see cref="AverageRowHeightPixels"/> does per row.</summary>
+    private static double ResolveRowHeightPixels(uint row, IReadOnlyDictionary<uint, double> rowHeights, double defaultRowHeight)
+    {
+        var fallback = defaultRowHeight > 0 ? defaultRowHeight : NominalRowHeight;
+        return rowHeights.TryGetValue(row, out var h) && h > 0 ? h : fallback;
+    }
+
+    /// <summary>Resolves a single column's real width in pixels, the same way <see cref="AverageColumnWidthPixels"/> does per column.</summary>
+    private static double ResolveColumnWidthPixels(uint col, IReadOnlyDictionary<uint, double> columnWidths, double defaultColumnWidth)
+    {
+        var fallbackChars = defaultColumnWidth > 0 ? defaultColumnWidth : ColumnWidthPixelMapper.PixelsToColumnWidth(MinimumPrintColumnWidth);
+        var chars = columnWidths.TryGetValue(col, out var w) && w > 0 ? w : fallbackChars;
+        return Math.Max(MinimumPrintColumnWidth, ColumnWidthPixelMapper.ColumnWidthToPixels(chars));
+    }
+
+    private static bool IsWithinRepeatRange(WorksheetRepeatRange? repeatRange, uint value) =>
+        repeatRange is { } range && value >= range.Start && value <= range.End;
+
+    /// <summary>
+    /// Sums the real (visible, non-hidden) size of the rows/columns in <paramref name="repeat"/>
+    /// (clipped to <paramref name="maxItem"/>), the title rows/columns that are reprinted on every
+    /// page and so must be reserved out of each page's body budget.
+    /// </summary>
+    private static double ComputeRepeatRangeSize(
+        WorksheetRepeatRange? repeat,
+        uint maxItem,
+        Func<uint, bool>? isHidden,
+        Func<uint, double> sizeOf)
+    {
+        if (repeat is not { } range || range.Start == 0 || range.Start > maxItem || range.End < range.Start)
+            return 0.0;
+
+        var total = 0.0;
+        var end = Math.Min(range.End, maxItem);
+        for (var value = range.Start; value <= end; value++)
+        {
+            if (value >= 1 && isHidden?.Invoke(value) != true)
+                total += Math.Max(0.0, sizeOf(value));
+        }
+
+        return total;
+    }
+
+    /// <summary>
+    /// Computes extra "manual" break points so that pages break on the real ACCUMULATED size of
+    /// visible, non-title rows/columns (R18-print-pagination-exact-3), instead of the fixed count
+    /// derived from an average size. Walks [<paramref name="startValue"/>, <paramref name="endValue"/>]
+    /// in order, skipping title and hidden values, and records a break before the first value whose
+    /// addition would push the running total past <paramref name="availableBodySize"/> -- guaranteeing
+    /// at least one value per page even when a single oversized value alone exceeds the budget.
+    /// </summary>
+    private static List<uint> ComputeAccumulationBreakPoints(
+        uint startValue,
+        uint endValue,
+        WorksheetRepeatRange? repeat,
+        Func<uint, bool>? isHidden,
+        Func<uint, double> sizeOf,
+        double availableBodySize)
+    {
+        var breaks = new List<uint>();
+        if (endValue < startValue)
+            return breaks;
+
+        var budget = double.IsFinite(availableBodySize) ? Math.Max(1.0, availableBodySize) : double.MaxValue;
+        var accumulated = 0.0;
+        var pageHasValue = false;
+        for (var value = startValue; value <= endValue; value++)
+        {
+            if (IsWithinRepeatRange(repeat, value) || isHidden?.Invoke(value) == true)
+                continue;
+
+            var size = Math.Max(0.0, sizeOf(value));
+            if (pageHasValue && accumulated + size > budget)
+            {
+                breaks.Add(value);
+                accumulated = 0.0;
+                pageHasValue = false;
+            }
+
+            accumulated += size;
+            pageHasValue = true;
+        }
+
+        return breaks;
+    }
+
+    /// <summary>Unions any real manual breaks with the accumulated-size break points.</summary>
+    private static List<uint> MergeBreaks(IReadOnlyCollection<uint>? userBreaks, List<uint> computedBreaks)
+    {
+        if (computedBreaks.Count == 0)
+            return userBreaks is null ? [] : new List<uint>(userBreaks);
+
+        var merged = new HashSet<uint>(computedBreaks);
+        if (userBreaks is not null)
+            merged.UnionWith(userBreaks);
+
+        return [.. merged];
+    }
+
+    /// <summary>
+    /// An axis capacity large enough that <see cref="PrintLayoutPlanner"/>'s own count-based slicing
+    /// never forces a break within a page; used together with <see cref="MergeBreaks"/> so accumulated
+    /// (and any real manual) break points are the only thing that decides where pages split.
+    /// </summary>
+    private static uint UnboundedAxisCapacity(uint start, uint end) =>
+        end >= start ? (uint)Math.Min(uint.MaxValue - 1L, (long)(end - start) + 2L) : 1u;
 }

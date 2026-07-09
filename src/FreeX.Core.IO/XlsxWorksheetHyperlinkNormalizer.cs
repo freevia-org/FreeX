@@ -220,6 +220,13 @@ internal static class XlsxWorksheetHyperlinkNormalizer
         return changed;
     }
 
+    // ClosedXML materializes a ranged hyperlink's "ref" attribute into one hyperlink entry per
+    // cell in the range. A bounded range that is merely large (well beyond anything a user would
+    // plausibly attach a single hyperlink to, e.g. A1:Z100000 = 2.6M cells) blows up the same way
+    // whole-column/row refs do, even though it isn't recognized as whole-column/row. Any bounded
+    // range above this cap gets stripped alongside the whole-column/row case below.
+    private const long MaxBoundedHyperlinkRangeCellCount = 100_000;
+
     private static bool IsRangeHyperlinkRef(string? value)
     {
         var trimmed = value?.Trim();
@@ -227,7 +234,23 @@ internal static class XlsxWorksheetHyperlinkNormalizer
             return false;
 
         var parts = trimmed.Split(':');
-        return parts.Length == 2 && IsWholeColumnOrRowRef(parts[0], parts[1]);
+        if (parts.Length != 2)
+            return false;
+
+        if (IsWholeColumnOrRowRef(parts[0], parts[1]))
+            return true;
+
+        return IsOversizedBoundedRangeRef(parts[0], parts[1]);
+    }
+
+    private static bool IsOversizedBoundedRangeRef(string left, string right)
+    {
+        var sheet = SheetId.New();
+        if (!CellAddress.TryParse(left, sheet, out var start) || !CellAddress.TryParse(right, sheet, out var end))
+            return false;
+
+        var range = new GridRange(start, end);
+        return range.CellCount > MaxBoundedHyperlinkRangeCellCount;
     }
 
     private static bool IsWholeColumnOrRowRef(string left, string right)

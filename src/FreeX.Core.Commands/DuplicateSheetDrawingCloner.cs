@@ -341,6 +341,7 @@ internal static class DuplicateSheetDrawingCloner
             FirstSliceAngle = chart.FirstSliceAngle,
             ExplodedSliceIndex = chart.ExplodedSliceIndex,
             ExplodedSliceDistance = chart.ExplodedSliceDistance,
+            ExplodedSlices = chart.ExplodedSlices.ToList(),
             XAxisMinimum = chart.XAxisMinimum,
             XAxisMaximum = chart.XAxisMaximum,
             XAxisMajorUnit = chart.XAxisMajorUnit,

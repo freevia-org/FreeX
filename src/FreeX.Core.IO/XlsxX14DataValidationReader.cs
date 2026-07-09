@@ -18,7 +18,12 @@ internal sealed record X14DataValidationMetadata(
     string? ErrorTitle,
     string? Error,
     string? PromptTitle,
-    string? Prompt);
+    string? Prompt,
+    /// <summary>
+    /// Unmodeled x14:dataValidation attributes (e.g. imeMode) that FreeX does not model directly.
+    /// Captured so they can be re-emitted verbatim on save instead of being silently dropped.
+    /// </summary>
+    IReadOnlyDictionary<string, string> NativeAttributes);
 
 /// <summary>
 /// Reads x14-extension data validation rules from a worksheet extLst.
@@ -49,6 +54,22 @@ internal static class XlsxX14DataValidationReader
     /// The extension URI that wraps x14 data validations in the worksheet extLst.
     /// </summary>
     public const string X14DvUri = "{CCE6A557-97BC-4b89-ADB6-D9C93CAAB3DF}";
+
+    /// <summary>Attribute names on &lt;x14:dataValidation&gt; that FreeX maps onto modeled fields.</summary>
+    private static readonly string[] ModeledX14Attributes =
+    [
+        "type",
+        "operator",
+        "allowBlank",
+        "showDropDown",
+        "errorStyle",
+        "showInputMessage",
+        "showErrorMessage",
+        "errorTitle",
+        "error",
+        "promptTitle",
+        "prompt",
+    ];
 
     /// <summary>
     /// Phase 1: extracts raw x14 data-validation metadata from the worksheet XML document.
@@ -125,6 +146,8 @@ internal static class XlsxX14DataValidationReader
                 if (!string.IsNullOrEmpty(metadata.Formula2))
                     existing.Formula2 = metadata.Formula2;
                 existing.IsX14 = true;
+                if (metadata.NativeAttributes.Count > 0)
+                    existing.NativeAttributes = MergeNativeAttributes(existing.NativeAttributes, metadata.NativeAttributes);
             }
             else
             {
@@ -154,6 +177,7 @@ internal static class XlsxX14DataValidationReader
                     PromptTitle = string.IsNullOrEmpty(metadata.PromptTitle) ? null : metadata.PromptTitle,
                     PromptMessage = string.IsNullOrEmpty(metadata.Prompt) ? null : metadata.Prompt,
                     IsX14 = true,
+                    NativeAttributes = metadata.NativeAttributes.Count > 0 ? metadata.NativeAttributes : null,
                 };
 
                 // Additional discontiguous ranges
@@ -167,6 +191,27 @@ internal static class XlsxX14DataValidationReader
                 sheet.DataValidations.Add(dv);
             }
         }
+    }
+
+    /// <summary>
+    /// Merges x14-only native attributes into an existing legacy rule's <see cref="DataValidation.NativeAttributes"/>.
+    /// Legacy-element attributes (already present) win on key conflicts.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string>? MergeNativeAttributes(
+        IReadOnlyDictionary<string, string>? existing,
+        IReadOnlyDictionary<string, string> additional)
+    {
+        if (additional.Count == 0)
+            return existing;
+
+        if (existing is null || existing.Count == 0)
+            return additional;
+
+        var merged = new Dictionary<string, string>(existing, StringComparer.Ordinal);
+        foreach (var (key, value) in additional)
+            merged.TryAdd(key, value);
+
+        return merged;
     }
 
     private static X14DataValidationMetadata? TryReadX14DataValidation(XElement x14Dv)
@@ -187,6 +232,10 @@ internal static class XlsxX14DataValidationReader
         var f2El = formula2El?.Element(XmNs + "f");
         var formula2 = f2El?.Value?.Trim();
 
+        // Capture unmodeled x14-only attributes (e.g. imeMode) so they can be re-emitted on save.
+        var nativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal);
+        XlsxWorksheetNativeMetadataHelpers.ReadNativeAttributes(x14Dv, nativeAttributes, ModeledX14Attributes);
+
         return new X14DataValidationMetadata(
             Sqref: sqref!,
             Formula1: formula1,
@@ -201,7 +250,8 @@ internal static class XlsxX14DataValidationReader
             ErrorTitle: x14Dv.Attribute("errorTitle")?.Value,
             Error: x14Dv.Attribute("error")?.Value,
             PromptTitle: x14Dv.Attribute("promptTitle")?.Value,
-            Prompt: x14Dv.Attribute("prompt")?.Value);
+            Prompt: x14Dv.Attribute("prompt")?.Value,
+            NativeAttributes: nativeAttributes);
     }
 
     /// <summary>

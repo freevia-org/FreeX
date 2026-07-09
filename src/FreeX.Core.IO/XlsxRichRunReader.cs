@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 // NOTE: XlsxColorReader resolves theme/indexed to RGB; for rich runs we preserve
@@ -41,7 +42,10 @@ internal static class XlsxRichRunReader
         {
             var rPr = runElement.Element(workbookNs + "rPr");
             var t   = runElement.Element(workbookNs + "t");
-            var text = t?.Value ?? string.Empty;
+            // R18: decode OOXML _xHHHH_ escapes (e.g. _x000D_ -> CR) here — this reads the raw
+            // <t> text directly via XLinq, bypassing ClosedXML's own shared-/inline-string reader,
+            // which is what normally performs this decode for the plain-text value path.
+            var text = DecodeRunText(t?.Value ?? string.Empty);
 
             bool?  bold          = null;
             bool?  italic        = null;
@@ -207,4 +211,70 @@ internal static class XlsxRichRunReader
         return !string.Equals(val, "0", StringComparison.Ordinal) &&
                !string.Equals(val, "false", StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// Decodes OOXML <c>_xHHHH_</c> escape sequences in a rich run's raw <c>&lt;t&gt;</c> text
+    /// (see <c>Free.Shared.Opc.XlsxXmlTextEscaper</c> for the matching encode side). Excel/ClosedXML
+    /// escape U+000D (CR) and other XML-invalid characters this way on save, and also pre-escape any
+    /// literal <c>_xHHHH_</c>-looking text so it survives a round-trip undecoded. The normal cell-value
+    /// read path gets this decode for free from ClosedXML's own shared-/inline-string reader, but rich
+    /// runs are parsed directly from the raw XML here, so without this the escape text would be stored
+    /// verbatim (e.g. "Line1_x000D_Line2" instead of "Line1\rLine2") and re-escaped on every subsequent
+    /// save, compounding.
+    /// </summary>
+    private static string DecodeRunText(string text)
+    {
+        if (string.IsNullOrEmpty(text) || text.IndexOf("_x", StringComparison.OrdinalIgnoreCase) < 0)
+            return text;
+
+        var builder = new StringBuilder(text.Length);
+        var i = 0;
+        while (i < text.Length)
+        {
+            if (TryReadTextEscape(text, i, out var code, out var consumed))
+            {
+                builder.Append((char)code);
+                i += consumed;
+                continue;
+            }
+
+            builder.Append(text[i]);
+            i++;
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>Parses a <c>_xHHHH_</c> escape at <paramref name="start"/>; HHHH is exactly 4 hex digits.</summary>
+    private static bool TryReadTextEscape(string text, int start, out int code, out int consumed)
+    {
+        code = 0;
+        consumed = 0;
+        const int length = 7; // "_xHHHH_"
+        if (start < 0 || start + length > text.Length)
+            return false;
+        if (text[start] != '_' || (text[start + 1] != 'x' && text[start + 1] != 'X') || text[start + 6] != '_')
+            return false;
+
+        var value = 0;
+        for (var j = start + 2; j < start + 6; j++)
+        {
+            var digit = HexDigit(text[j]);
+            if (digit < 0)
+                return false;
+            value = (value << 4) | digit;
+        }
+
+        code = value;
+        consumed = length;
+        return true;
+    }
+
+    private static int HexDigit(char c) => c switch
+    {
+        >= '0' and <= '9' => c - '0',
+        >= 'a' and <= 'f' => c - 'a' + 10,
+        >= 'A' and <= 'F' => c - 'A' + 10,
+        _ => -1,
+    };
 }

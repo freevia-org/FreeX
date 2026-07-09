@@ -86,6 +86,7 @@ public sealed partial class NativeJsonAdapter
         FirstSliceAngle = chart.FirstSliceAngle,
         ExplodedSliceIndex = chart.ExplodedSliceIndex,
         ExplodedSliceDistance = chart.ExplodedSliceDistance,
+        ExplodedSlices = NonNullChartList(chart.ExplodedSlices),
         XAxisMinimum = chart.XAxisMinimum,
         XAxisMaximum = chart.XAxisMaximum,
         XAxisMajorUnit = chart.XAxisMajorUnit,

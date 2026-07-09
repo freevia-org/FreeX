@@ -351,7 +351,12 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
                 filters?
                     .Elements(worksheetNs + "filter")
                     .Select(filter => filter.Attribute("val")?.Value)
-                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    // Keep any present (non-null) val, including whitespace-only strings: Excel emits
+                    // a legal ST_Xstring like <filter val=" "/> for a space-valued cell, and dropping it
+                    // here silently changes the filter on round-trip. Only a genuinely absent val
+                    // attribute (null) is meaningless and should be discarded; blanks are separately
+                    // handled via the filters/@blank attribute.
+                    .Where(value => value is not null)
                     .Select(value => value!)
                     .ToArray() ?? [],
                 XlsxXmlAttributeReader.ReadBoolAttribute(filters, "blank"),

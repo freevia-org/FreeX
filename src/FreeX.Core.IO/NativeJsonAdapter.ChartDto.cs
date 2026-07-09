@@ -93,6 +93,7 @@ public sealed partial class NativeJsonAdapter
         public double FirstSliceAngle { get; set; }
         public int ExplodedSliceIndex { get; set; } = -1;
         public double ExplodedSliceDistance { get; set; } = 0.1;
+        public List<ChartPointExplosion>? ExplodedSlices { get; set; }
         public double? XAxisMinimum { get; set; }
         public double? XAxisMaximum { get; set; }
         public double? XAxisMajorUnit { get; set; }

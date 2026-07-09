@@ -33,6 +33,7 @@ public sealed partial class XlsxFileAdapter
         var result = new List<ConditionalFormat>();
         var classicPriorities = new List<int>();
         var dataBarGuids = new Dictionary<string, ConditionalFormat>(StringComparer.OrdinalIgnoreCase);
+        var iconSetGuids = new Dictionary<string, ConditionalFormat>(StringComparer.OrdinalIgnoreCase);
         var tempSheet = SheetId.New();
         foreach (var conditionalFormatting in worksheetXml.Root?.Elements(worksheetNs + "conditionalFormatting") ?? [])
         {
@@ -102,6 +103,9 @@ public sealed partial class XlsxFileAdapter
                     ApplyNativeConditionalFormatPayloadMetadata(format, iconSet, worksheetNs);
                     ApplyNativeConditionalFormatRuleMetadata(format, rule, worksheetNs);
                     ApplyNativeConditionalFormattingContainerMetadata(format, conditionalFormatting, worksheetNs);
+                    var iconSetX14Id = ExtractX14IdFromCfRule(rule);
+                    if (iconSetX14Id is not null)
+                        iconSetGuids[iconSetX14Id] = format;
                     result.Add(format);
                 }
                 else if (TryMapLongTailConditionalFormatRule(type, out var mappedType))
@@ -146,7 +150,7 @@ public sealed partial class XlsxFileAdapter
         }
 
         ApplyX14DataBarProperties(dataBarGuids, worksheetXml);
-        ReadX14IconSetConditionalFormats(result, worksheetXml, tempSheet);
+        ReadX14IconSetConditionalFormats(result, iconSetGuids, worksheetXml, tempSheet);
         classicRulePriorities = classicPriorities;
         return result;
     }
@@ -250,9 +254,14 @@ public sealed partial class XlsxFileAdapter
     /// "extended" icon sets (3Stars, 3Triangles, 5Boxes (x14) etc.) exclusively in the x14 namespace
     /// block at the bottom of the worksheet, not in the regular &lt;conditionalFormatting&gt; elements.
     /// The cfvo threshold values in the x14 schema are stored as &lt;xm:f&gt; child text, not @val attributes.
+    /// Every extended icon set also has a classic iconSet cfRule (with a matching extLst x14 id) written
+    /// as a legacy-reader fallback, which <see cref="ReadAdvancedConditionalFormats"/> already reads into
+    /// <paramref name="iconSetGuids"/>. When the x14 id matches, merge the extended properties into that
+    /// SAME format (mirroring the data-bar x14 merge) instead of adding a second, duplicate rule.
     /// </summary>
     private static void ReadX14IconSetConditionalFormats(
         List<ConditionalFormat> result,
+        Dictionary<string, ConditionalFormat> iconSetGuids,
         XDocument worksheetXml,
         SheetId tempSheet)
     {
@@ -302,17 +311,35 @@ public sealed partial class XlsxFileAdapter
                             if (x14IconSet is null)
                                 continue;
 
-                            var priority = XlsxXmlAttributeReader.ReadIntAttribute(x14CfRule, "priority") ?? 1;
-                            var format = new ConditionalFormat
+                            // If this x14 rule's id matches a classic iconSet cfRule already read into
+                            // iconSetGuids (via its extLst x14 id), merge the extended properties into
+                            // that SAME format instead of adding a duplicate second rule.
+                            var id = x14CfRule.Attribute("id")?.Value;
+                            ConditionalFormat format;
+                            bool isMerge;
+                            if (id is not null && iconSetGuids.TryGetValue(id, out var existing))
                             {
-                                AppliesTo = appliesTo,
-                                AdditionalRanges = additionalRanges,
-                                Priority = priority,
-                                RuleType = CfRuleType.IconSet,
-                                IconSetStyle = NormalizeOptionalText(x14IconSet.Attribute("iconSet")?.Value),
-                                IconSetShowValue = !IsFalse(x14IconSet.Attribute("showValue")?.Value),
-                                IconSetReverse = IsTruthy(x14IconSet.Attribute("reverse")?.Value),
-                            };
+                                isMerge = true;
+                                format = existing;
+                                format.IconSetThresholds.Clear();
+                                format.IconOverrides.Clear();
+                            }
+                            else
+                            {
+                                isMerge = false;
+                                var priority = XlsxXmlAttributeReader.ReadIntAttribute(x14CfRule, "priority") ?? 1;
+                                format = new ConditionalFormat
+                                {
+                                    AppliesTo = appliesTo,
+                                    AdditionalRanges = additionalRanges,
+                                    Priority = priority,
+                                    RuleType = CfRuleType.IconSet,
+                                };
+                            }
+
+                            format.IconSetStyle = NormalizeOptionalText(x14IconSet.Attribute("iconSet")?.Value);
+                            format.IconSetShowValue = !IsFalse(x14IconSet.Attribute("showValue")?.Value);
+                            format.IconSetReverse = IsTruthy(x14IconSet.Attribute("reverse")?.Value);
 
                             // x14 cfvo values are stored as <xm:f> child text (formula value), not @val.
                             foreach (var x14Cfvo in x14IconSet.Elements(x14Ns + "cfvo"))
@@ -327,7 +354,8 @@ public sealed partial class XlsxFileAdapter
                             // cfIcon overrides (same structure as standard, under x14Ns)
                             format.IconOverrides.AddRange(ReadCfIconOverrides(x14IconSet, x14Ns));
 
-                            result.Add(format);
+                            if (!isMerge)
+                                result.Add(format);
                         }
                     }
                 }

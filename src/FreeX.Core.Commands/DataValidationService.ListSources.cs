@@ -153,7 +153,7 @@ public static partial class DataValidationService
                 return true;
             }
 
-            if (ast is NamedRangeNode named && workbook is not null && workbook.TryGetNamedRange(named.Name, out var namedRange))
+            if (ast is NamedRangeNode named && workbook is not null && workbook.TryGetNamedRange(named.Name, sheet.Id, out var namedRange))
             {
                 var sourceSheet = workbook.GetSheet(namedRange.Start.Sheet) ?? sheet;
                 values = ReadRangeValues(
@@ -258,7 +258,7 @@ public static partial class DataValidationService
                 return true;
             }
 
-            if (ast is NamedRangeNode named && workbook is not null && workbook.TryGetNamedRange(named.Name, out var namedRange))
+            if (ast is NamedRangeNode named && workbook is not null && workbook.TryGetNamedRange(named.Name, sheet.Id, out var namedRange))
             {
                 var sourceSheet = workbook.GetSheet(namedRange.Start.Sheet) ?? sheet;
                 matches = RangeContainsValue(

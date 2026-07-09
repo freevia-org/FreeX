@@ -437,18 +437,25 @@ public static class WorkbookPdfContentBuilder
         // residual overflow (e.g. a merged/oversized row that still doesn't fit) the same way the
         // legacy path always has, but relative to the now-already-scaled sizes so a page whose
         // scaled content exactly matches the available budget is never shrunk a second time.
-        if (totalColWidthPt > 0 && totalColWidthPt > availableWidth)
-        {
-            var scale = availableWidth / totalColWidthPt;
-            for (var i = 0; i < colWidthsPt.Length; i++)
-                colWidthsPt[i] *= scale;
-        }
+        // R18-print-pagination-exact-2: use a SINGLE uniform scale -- the smaller of the width and
+        // height overflow ratios -- applied to BOTH axes, mirroring PrintRenderer.HeaderFooter.cs's
+        // uniform scaleRatio (and Excel's own fit-to-page behavior). Shrinking width/height
+        // independently distorts the aspect ratio (e.g. columns squished to fit while rows keep
+        // their full scaled height), which never happens on the WPF print path this PDF path mirrors.
+        var widthFitScale = totalColWidthPt > 0 && totalColWidthPt > availableWidth
+            ? availableWidth / totalColWidthPt
+            : 1.0;
+        var heightFitScale = totalRowHeightPt > 0 && totalRowHeightPt > availableHeight
+            ? availableHeight / totalRowHeightPt
+            : 1.0;
+        var uniformFitScale = Math.Min(widthFitScale, heightFitScale);
 
-        if (totalRowHeightPt > 0 && totalRowHeightPt > availableHeight)
+        if (uniformFitScale < 1.0)
         {
-            var scale = availableHeight / totalRowHeightPt;
+            for (var i = 0; i < colWidthsPt.Length; i++)
+                colWidthsPt[i] *= uniformFitScale;
             for (var i = 0; i < rowHeightsPt.Length; i++)
-                rowHeightsPt[i] *= scale;
+                rowHeightsPt[i] *= uniformFitScale;
         }
 
         return (colWidthsPt, rowHeightsPt);

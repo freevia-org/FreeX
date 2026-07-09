@@ -299,6 +299,9 @@ public sealed partial class SetChartLayoutCommand
         chart.FirstSliceAngle = snapshot.FirstSliceAngle ?? 0;
         chart.ExplodedSliceIndex = snapshot.ExplodedSliceIndex ?? -1;
         chart.ExplodedSliceDistance = snapshot.ExplodedSliceDistance ?? 0.1;
+        // R18-meta-1: restore the per-point exploded-slice collection too, so undo of an
+        // explode/un-explode edit does not leave the (writer-authoritative) collection stale.
+        chart.ExplodedSlices = snapshot.ExplodedSlices?.ToList() ?? [];
         chart.XAxisMinimum = snapshot.XAxisMinimum;
         chart.XAxisMaximum = snapshot.XAxisMaximum;
         chart.XAxisMajorUnit = snapshot.XAxisMajorUnit;

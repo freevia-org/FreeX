@@ -6786,7 +6786,7 @@ public sealed partial class XlsxFileAdapter
                 if (!hyperlinksByReference.TryGetValue(change.Reference, out var hyperlink))
                     return false;
 
-                hyperlink.SetAttributeValue("location", change.NewLocation);
+                hyperlink.SetAttributeValue("location", QuoteInternalHyperlinkAddress(change.NewLocation));
                 if (string.IsNullOrWhiteSpace(change.NewTooltip))
                     hyperlink.SetAttributeValue("tooltip", null);
                 else

@@ -42,7 +42,9 @@ public static class OpcDocumentProperties
         CorePropertiesNamespace + "category",
         CorePropertiesNamespace + "contentStatus",
         DublinCoreNamespace + "language",
-        CorePropertiesNamespace + "version"
+        CorePropertiesNamespace + "version",
+        CorePropertiesNamespace + "lastPrinted",
+        CorePropertiesNamespace + "revision"
     ];
 
     public static readonly IReadOnlyList<XName> StableExtendedPropertyElementNames =
@@ -51,7 +53,9 @@ public static class OpcDocumentProperties
         ExtendedPropertiesNamespace + "Company",
         ExtendedPropertiesNamespace + "Manager",
         ExtendedPropertiesNamespace + "PresentationFormat",
-        ExtendedPropertiesNamespace + "Template"
+        ExtendedPropertiesNamespace + "Template",
+        ExtendedPropertiesNamespace + "HyperlinkBase",
+        ExtendedPropertiesNamespace + "HLinks"
     ];
 
     public static CoreDocumentProperties ReadCoreProperties(

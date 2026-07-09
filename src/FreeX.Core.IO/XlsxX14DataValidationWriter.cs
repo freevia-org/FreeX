@@ -73,9 +73,6 @@ internal static class XlsxX14DataValidationWriter
         using var archive2 = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
         foreach (var sheet in workbook.Sheets)
         {
-            if (!HasX14DataValidations(sheet))
-                continue;
-
             if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
                 continue;
 
@@ -83,15 +80,35 @@ internal static class XlsxX14DataValidationWriter
             if (worksheetEntry is null)
                 continue;
 
+            // Even when the sheet's model has zero x14 rules right now (e.g. the only rule was
+            // just deleted), the preserved worksheet XML may still carry a stale x14 DV ext block
+            // from the source file. Skipping the sheet in that case would let the deleted rule
+            // resurrect on reopen, so we must still inspect (and, if needed, rewrite) the sheet.
             var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
             var root = worksheetXml.Root;
             if (root is null)
+                continue;
+
+            if (!HasX14DataValidations(sheet) && !HasX14DataValidationExt(root))
                 continue;
 
             WriteX14DataValidations(root, sheet);
 
             XlsxPackageXmlEditor.ReplaceXml(archive2, worksheetPath, worksheetXml);
         }
+    }
+
+    /// <summary>
+    /// True when the worksheet root's (last) extLst already carries an x14 data-validation ext
+    /// block, regardless of whether the current sheet model still has any x14 rules. Mirrors the
+    /// "last extLst" convention used by <see cref="FindOrCreateExtLst"/> and the stale-ext removal
+    /// below, so a sheet whose x14 ext lives in that extLst is never skipped.
+    /// </summary>
+    private static bool HasX14DataValidationExt(XElement worksheetRoot)
+    {
+        var extLst = worksheetRoot.Elements().LastOrDefault(e => e.Name.LocalName == "extLst");
+        return extLst is not null && extLst.Elements()
+            .Any(e => e.Name.LocalName == "ext" && e.Attribute("uri")?.Value == XlsxX14DataValidationReader.X14DvUri);
     }
 
     private static void WriteX14DataValidations(XElement worksheetRoot, Sheet sheet)
@@ -104,7 +121,25 @@ internal static class XlsxX14DataValidationWriter
         }
 
         if (x14Rules.Count == 0)
+        {
+            // All x14 rules on this sheet were deleted. If the preserved worksheet XML still has
+            // a stale x14 DV ext block from the source file, strip it so the deleted rule(s) do
+            // not resurrect on reopen. Leave any other ext children (and a non-empty extLst)
+            // untouched; only remove the extLst itself if it becomes empty.
+            var extLst = worksheetRoot.Elements()
+                .LastOrDefault(e => e.Name.LocalName == "extLst");
+            if (extLst is null)
+                return;
+
+            var staleExt = extLst.Elements()
+                .FirstOrDefault(e => e.Name.LocalName == "ext" && e.Attribute("uri")?.Value == XlsxX14DataValidationReader.X14DvUri);
+            staleExt?.Remove();
+
+            if (!extLst.HasElements)
+                extLst.Remove();
+
             return;
+        }
 
         // Build the x14 dataValidations element.
         var x14DvElements = new List<XElement>(x14Rules.Count);
@@ -163,6 +198,11 @@ internal static class XlsxX14DataValidationWriter
             x14Dv.SetAttributeValue("promptTitle", dv.PromptTitle);
         if (!string.IsNullOrEmpty(dv.PromptMessage))
             x14Dv.SetAttributeValue("prompt", dv.PromptMessage);
+
+        // Re-emit any unmodeled x14-only attributes captured on load (e.g. imeMode) so they
+        // round-trip. Never overwrite an attribute already set from the modeled fields above.
+        if (dv.NativeAttributes is { Count: > 0 } nativeAttributes)
+            XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(x14Dv, nativeAttributes);
 
         // <x14:formula1><xm:f>…</xm:f></x14:formula1>
         var formula1 = dv.Formula1;

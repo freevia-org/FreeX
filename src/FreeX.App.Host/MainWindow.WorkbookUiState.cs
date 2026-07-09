@@ -57,7 +57,7 @@ public partial class MainWindow
 
     private void RecalculateIfAutomatic(IReadOnlyList<CellAddress> changedCells)
     {
-        if (_workbook.CalculationMode == WorkbookCalculationMode.Automatic)
+        if (_workbook.CalculationMode is WorkbookCalculationMode.Automatic or WorkbookCalculationMode.AutomaticExceptDataTables)
         {
             _recalcEngine.Recalculate(_workbook, changedCells);
             InvalidateNavigationCaches();

@@ -91,7 +91,7 @@ public sealed class WorkbookCellEditService
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(affectedCells);
 
-        return workbook.CalculationMode == WorkbookCalculationMode.Automatic
+        return workbook.CalculationMode is WorkbookCalculationMode.Automatic or WorkbookCalculationMode.AutomaticExceptDataTables
             ? _recalcEngine.Recalculate(workbook, affectedCells)
             : null;
     }

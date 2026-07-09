@@ -344,10 +344,11 @@ internal static class XlsxWorkbookMetadataReader
 
             var mode = string.Equals(calcPr.Attribute("calcMode")?.Value, "manual", StringComparison.OrdinalIgnoreCase)
                 ? WorkbookCalculationMode.Manual
-                : string.Equals(calcPr.Attribute("calcMode")?.Value, "auto", StringComparison.OrdinalIgnoreCase) ||
-                  string.Equals(calcPr.Attribute("calcMode")?.Value, "autoNoTable", StringComparison.OrdinalIgnoreCase)
-                    ? WorkbookCalculationMode.Automatic
-                    : (WorkbookCalculationMode?)null;
+                : string.Equals(calcPr.Attribute("calcMode")?.Value, "autoNoTable", StringComparison.OrdinalIgnoreCase)
+                    ? WorkbookCalculationMode.AutomaticExceptDataTables
+                    : string.Equals(calcPr.Attribute("calcMode")?.Value, "auto", StringComparison.OrdinalIgnoreCase)
+                        ? WorkbookCalculationMode.Automatic
+                        : (WorkbookCalculationMode?)null;
 
             return new WorkbookCalculationProperties(
                 mode,
@@ -565,10 +566,11 @@ internal static class XlsxWorkbookMetadataReader
 
         var mode = string.Equals(calcPr.Attribute("calcMode")?.Value, "manual", StringComparison.OrdinalIgnoreCase)
             ? WorkbookCalculationMode.Manual
-            : string.Equals(calcPr.Attribute("calcMode")?.Value, "auto", StringComparison.OrdinalIgnoreCase) ||
-              string.Equals(calcPr.Attribute("calcMode")?.Value, "autoNoTable", StringComparison.OrdinalIgnoreCase)
-                ? WorkbookCalculationMode.Automatic
-                : (WorkbookCalculationMode?)null;
+            : string.Equals(calcPr.Attribute("calcMode")?.Value, "autoNoTable", StringComparison.OrdinalIgnoreCase)
+                ? WorkbookCalculationMode.AutomaticExceptDataTables
+                : string.Equals(calcPr.Attribute("calcMode")?.Value, "auto", StringComparison.OrdinalIgnoreCase)
+                    ? WorkbookCalculationMode.Automatic
+                    : (WorkbookCalculationMode?)null;
 
         return new WorkbookCalculationProperties(
             mode,

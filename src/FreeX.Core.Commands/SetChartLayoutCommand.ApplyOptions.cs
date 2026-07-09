@@ -86,6 +86,16 @@ public sealed partial class SetChartLayoutCommand
         }
         if (options.ExplodedSliceDistance is not null)
             chart.ExplodedSliceDistance = ClampFinite(options.ExplodedSliceDistance.Value, 0, 0.5);
+        if (options.ExplodedSliceIndex is not null || options.ExplodedSliceDistance is not null)
+        {
+            // The UI only ever edits the single-slice scalar explosion representation. Rebuild
+            // ExplodedSlices to match so the writer (which treats ExplodedSlices as authoritative
+            // whenever it's non-empty) emits this edit instead of re-emitting a stale per-point
+            // collection loaded from a previously-saved multi-slice-exploded pie.
+            chart.ExplodedSlices = chart.ExplodedSliceIndex >= 0 && chart.ExplodedSliceDistance > 0
+                ? [new ChartPointExplosion(0, chart.ExplodedSliceIndex, chart.ExplodedSliceDistance)]
+                : [];
+        }
         if (options.ClearXAxisBounds)
             ClearXAxisBounds(chart);
         if (options.ClearYAxisBounds)

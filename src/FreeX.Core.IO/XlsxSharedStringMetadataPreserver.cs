@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Text;
 using System.Xml;
@@ -61,13 +62,34 @@ internal static class XlsxSharedStringMetadataPreserver
                     ? sourceDuplicateTexts
                     : sourceDuplicateTexts.Concat(targetDuplicateTexts);
 
+            // R18: raw sharedStrings.xml document order is only a reliable proxy for "first-use
+            // cell order" when the SOURCE file was written by a generator that appends entries in
+            // first-use order (Excel, and ClosedXML's own regenerated target). A source built by a
+            // different generator (e.g. one that sorts/dedups the SST independently of cell usage)
+            // can have same-text rich duplicates in a different relative order than the cells that
+            // actually use them, so pairing sourceMatches[i] <-> targetMatches[i] by raw document
+            // order can swap formatting between two cells that happen to share the same text.
+            // Reorder the source matches by their true first-use cell order (computed by scanning
+            // the source worksheets) before pairing so each cell keeps its own formatting.
+            var sourceSiIndexByElement = new Dictionary<XElement, int>();
+            var siIndex = 0;
+            foreach (var si in sourceRoot.Elements(workbookNs + "si"))
+                sourceSiIndexByElement[si] = siIndex++;
+
+            var sourceFirstUseBySharedIndex = BuildFirstUseOrderBySharedStringIndex(sourceArchive);
+
             var handledTexts = new HashSet<string>(StringComparer.Ordinal);
             foreach (var text in textsToMatch)
             {
                 if (!handledTexts.Add(text))
                     continue;
 
-                var sourceMatches = sourceRichStrings.Where(item => ReadSharedStringPlainText(item, workbookNs) == text).ToList();
+                var sourceMatches = sourceRichStrings
+                    .Where(item => ReadSharedStringPlainText(item, workbookNs) == text)
+                    .OrderBy(item => sourceFirstUseBySharedIndex.TryGetValue(sourceSiIndexByElement[item], out var pos)
+                        ? pos
+                        : int.MaxValue)
+                    .ToList();
                 if (sourceMatches.Count == 0)
                     continue;
 
@@ -160,6 +182,64 @@ internal static class XlsxSharedStringMetadataPreserver
     {
         foreach (var richTextFont in sharedString.Descendants(workbookNs + "rFont"))
             XlsxFontNameSanitizer.SanitizeValAttribute(richTextFont);
+    }
+
+    /// <summary>
+    /// Scans every worksheet in <paramref name="archive"/> for <c>&lt;c t="s"&gt;&lt;v&gt;N&lt;/v&gt;&lt;/c&gt;</c>
+    /// shared-string references and records, for each shared-string index, the ordinal position at
+    /// which it is first referenced across the workbook (worksheet-entry-name order, then document
+    /// order within each worksheet). Used to pair same-text rich shared-string duplicates by the
+    /// cell that actually uses them instead of trusting the raw <c>sharedStrings.xml</c> array order,
+    /// which a non-Excel generator need not have written in first-use order (R18).
+    /// </summary>
+    private static Dictionary<int, int> BuildFirstUseOrderBySharedStringIndex(ZipArchive archive)
+    {
+        var firstUse = new Dictionary<int, int>();
+        var position = 0;
+
+        var settings = new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            IgnoreComments = true,
+            IgnoreProcessingInstructions = true
+        };
+
+        var worksheetEntries = archive.Entries
+            .Where(entry => entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                            entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(entry => entry.FullName, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var worksheetEntry in worksheetEntries)
+        {
+            using var stream = worksheetEntry.Open();
+            using var reader = XmlReader.Create(stream, settings);
+            var inSharedStringCell = false;
+            while (reader.Read())
+            {
+                if (reader.NodeType != XmlNodeType.Element ||
+                    reader.NamespaceURI != "http://schemas.openxmlformats.org/spreadsheetml/2006/main")
+                    continue;
+
+                if (reader.LocalName == "c")
+                {
+                    inSharedStringCell = reader.GetAttribute("t") == "s";
+                }
+                else if (inSharedStringCell && reader.LocalName == "v")
+                {
+                    var text = reader.ReadElementContentAsString();
+                    if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var sharedIndex) &&
+                        !firstUse.ContainsKey(sharedIndex))
+                    {
+                        firstUse[sharedIndex] = position++;
+                    }
+
+                    inSharedStringCell = false;
+                }
+            }
+        }
+
+        return firstUse;
     }
 
     private static string ReadSharedStringPlainText(XElement sharedString, XNamespace workbookNs)

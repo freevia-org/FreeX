@@ -111,7 +111,7 @@ public static class FormControlListResolver
                     return TryResolveCellRefNode(cell, sheet, workbook, out resolved);
 
                 case NamedRangeNode named when workbook is not null &&
-                                               workbook.TryGetNamedRange(named.Name, out var namedRange):
+                                               workbook.TryGetNamedRange(named.Name, sheet.Id, out var namedRange):
                     return TryResolveNamedRange(namedRange, sheet, workbook, out resolved);
 
                 default:

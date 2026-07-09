@@ -36,6 +36,35 @@ public sealed partial class XlsxFileAdapter
         return address;
     }
 
+    /// <summary>
+    /// Inverse of <see cref="NormalizeInternalHyperlinkAddress"/>: re-quotes the sheet-name
+    /// portion of an internal hyperlink address (as stored on the model, always unquoted with
+    /// embedded apostrophes un-escaped) so it round-trips back to a valid Excel reference when
+    /// written verbatim into the "location" attribute on the fast PATCH-save path. The full-save
+    /// path goes through ClosedXML, which re-quotes on its own; this helper exists so the PATCH
+    /// path (XlsxCellPatchBaseline.ApplyHyperlinkChanges) matches that behavior instead of
+    /// writing an invalid unquoted sheet reference (e.g. "My Sheet!A10" instead of
+    /// 'My Sheet'!A10).
+    /// </summary>
+    internal static string? QuoteInternalHyperlinkAddress(string? address)
+    {
+        if (string.IsNullOrWhiteSpace(address))
+            return address;
+
+        var bangIndex = address.IndexOf('!');
+        if (bangIndex <= 0)
+            return address;
+
+        // Already quoted (mirrors the guard in NormalizeInternalHyperlinkAddress) -- leave as-is
+        // so we never double-quote an address that was never normalized in the first place.
+        if (bangIndex > 2 && address[0] == '\'' && address[bangIndex - 1] == '\'')
+            return address;
+
+        var sheetName = address[..bangIndex];
+        var rest = address[bangIndex..];
+        return SheetNameFormatter.QuoteIfNeeded(sheetName) + rest;
+    }
+
     private static XLHyperlink CreateXlsxHyperlink(string target, HyperlinkMetadata? metadata)
     {
         metadata ??= new HyperlinkMetadata();

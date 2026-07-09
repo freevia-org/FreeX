@@ -357,7 +357,23 @@ public static class FormControlInteractionService
 
         var colon = cellPart.IndexOf(':');
         if (colon < 0)
-            return 1; // single cell → 1 item
+        {
+            if (CellAddress.TryParse(cellPart, sheet.Id, out _))
+                return 1; // single cell → 1 item
+
+            // Not a plain A1 cell — cellPart may be a defined name (Excel allows a bare defined
+            // name as ListFillRange). Resolve it scope-aware (sheet-scoped shadows global), the
+            // same way FormControlListResolver.TryResolveRange handles NamedRangeNode, so a
+            // named-range list control's item count reflects the actual row count instead of
+            // always clamping to a single item.
+            if (bangIdx < 0 && workbook.TryGetNamedRange(cellPart, sheetId, out var namedListRange))
+            {
+                return (int)(Math.Max(namedListRange.End.Row, namedListRange.Start.Row) -
+                             Math.Min(namedListRange.End.Row, namedListRange.Start.Row) + 1);
+            }
+
+            return 1; // unresolved bare token — fall back to prior single-item behavior
+        }
 
         if (!CellAddress.TryParse(cellPart[..colon], sheet.Id, out var start) ||
             !CellAddress.TryParse(cellPart[(colon + 1)..], sheet.Id, out var end))

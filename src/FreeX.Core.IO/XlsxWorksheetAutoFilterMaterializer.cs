@@ -20,8 +20,8 @@ internal static class XlsxWorksheetAutoFilterMaterializer
             return;
         }
 
-        var filters = BuildFilters(sheet, autoFilter, range).ToList();
-        if (filters.Count != autoFilter.FilterColumns.Count)
+        var filters = BuildFilters(sheet, autoFilter, range, out var unfilteredColumnCount);
+        if (filters.Count + unfilteredColumnCount != autoFilter.FilterColumns.Count)
             return;
 
         // G2/G32: sheet.ActiveValueFilterColumns/ValueFilterHiddenRows form an ownership pair that
@@ -85,8 +85,14 @@ internal static class XlsxWorksheetAutoFilterMaterializer
         return false;
     }
 
-    private static IEnumerable<WorksheetAutoFilterState> BuildFilters(Sheet sheet, WorksheetAutoFilterModel autoFilter, GridRange range)
+    private static List<WorksheetAutoFilterState> BuildFilters(
+        Sheet sheet,
+        WorksheetAutoFilterModel autoFilter,
+        GridRange range,
+        out int unfilteredColumnCount)
     {
+        var filters = new List<WorksheetAutoFilterState>();
+        unfilteredColumnCount = 0;
         foreach (var filterColumn in autoFilter.FilterColumns)
         {
             if (filterColumn.ColumnId < 0)
@@ -106,11 +112,11 @@ internal static class XlsxWorksheetAutoFilterMaterializer
             var column = range.Start.Col + (uint)filterColumn.ColumnId;
             if (filterColumn.Top10 is { } top10)
             {
-                yield return new WorksheetAutoFilterState(
+                filters.Add(new WorksheetAutoFilterState(
                     column,
                     null,
                     false,
-                    BuildTop10KeptRows(sheet, range, column, top10));
+                    BuildTop10KeptRows(sheet, range, column, top10)));
                 continue;
             }
 
@@ -119,20 +125,34 @@ internal static class XlsxWorksheetAutoFilterMaterializer
                 if (!IsAverageDynamicFilter(dynamicFilter, out var above))
                     continue;
 
-                yield return new WorksheetAutoFilterState(
+                filters.Add(new WorksheetAutoFilterState(
                     column,
                     null,
                     false,
-                    BuildAverageKeptRows(sheet, range, column, above));
+                    BuildAverageKeptRows(sheet, range, column, above)));
                 continue;
             }
 
-            yield return new WorksheetAutoFilterState(
+            // A value-list filter column with zero allowed values and no "include blank" flag has no
+            // actual filter criterion -- it is a button-only <filterColumn colId="n" showButton="0"/>
+            // (the showButton attribute lands in NativeAttributes, which is why it still passes the
+            // ReadFilterColumns inclusion guard above). Treat it as unfiltered rather than materializing
+            // an empty allowed-set, which would otherwise make every row fail RowMatchesAllFilters and
+            // hide the entire data range.
+            if (filterColumn.Values.Count == 0 && !filterColumn.IncludeBlank)
+            {
+                unfilteredColumnCount++;
+                continue;
+            }
+
+            filters.Add(new WorksheetAutoFilterState(
                 column,
                 new HashSet<string>(filterColumn.Values, StringComparer.OrdinalIgnoreCase),
                 filterColumn.IncludeBlank,
-                null);
+                null));
         }
+
+        return filters;
     }
 
     private static bool IsAverageDynamicFilter(WorksheetAutoFilterDynamicFilterModel dynamicFilter, out bool above)

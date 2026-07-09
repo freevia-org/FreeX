@@ -193,6 +193,7 @@ internal static class XlsxConditionalFormatClosedXmlMapper
 
         if (style.Bold != def.Bold) xlStyle.Font.Bold = style.Bold;
         if (style.Italic != def.Italic) xlStyle.Font.Italic = style.Italic;
+        if (style.Strikethrough != def.Strikethrough) xlStyle.Font.Strikethrough = style.Strikethrough;
         if (style.Underline != def.Underline)
             xlStyle.Font.Underline = style.Underline ? XLFontUnderlineValues.Single : XLFontUnderlineValues.None;
         if (style.FontColor != def.FontColor)
