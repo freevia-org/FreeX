@@ -14720,66 +14720,24 @@ public static partial class AccessibilityCheckerService
                 "NPER", new NumberValue(rate), new NumberValue(pmt), new NumberValue(pv), new NumberValue(fv),
                 new NumberValue(type));
 
-        private static ScalarValue FormulaRateScalar(double nper, double pmt, double pv, double fv, double type, double guess)
-        {
-            if (!double.IsFinite(nper) || !double.IsFinite(pmt) || !double.IsFinite(pv) || !double.IsFinite(fv) || !double.IsFinite(type) || !double.IsFinite(guess))
-                return ErrorValue.Num;
+        // Delegated to the single source-of-truth FreeX.Core.Formula implementation (Core adds the Excel
+        // #NUM! non-convergence check the shadow lacked).
+        private static ScalarValue FormulaRateScalar(double nper, double pmt, double pv, double fv, double type, double guess) =>
+            InvokeCoreFormulaScalarFunction(
+                "RATE", new NumberValue(nper), new NumberValue(pmt), new NumberValue(pv), new NumberValue(fv),
+                new NumberValue(type), new NumberValue(guess));
 
-            if (!IsValidFormulaFinancialPaymentType(type))
-                return ErrorValue.Num;
+        // Delegated to Core.Formula (its type=1 annuity-due interest formula matches Excel's recursive
+        // identity, e.g. IPMT period-1 type-1 = 0; the shadow's did not).
+        private static ScalarValue FormulaIpmtScalar(double rate, double per, double nper, double pv, double fv, double type) =>
+            InvokeCoreFormulaScalarFunction(
+                "IPMT", new NumberValue(rate), new NumberValue(per), new NumberValue(nper), new NumberValue(pv),
+                new NumberValue(fv), new NumberValue(type));
 
-            if (nper == 0d)
-                return ErrorValue.DivByZero;
-
-            var rate = guess;
-            for (var i = 0; i < 100; i++)
-            {
-                var rn = Math.Pow(1d + rate, nper);
-                var rn1 = nper * Math.Pow(1d + rate, nper - 1d);
-                double f;
-                double df;
-                if (Math.Abs(rate) < 1e-10d)
-                {
-                    f = pv + pmt * nper + fv;
-                    df = pv * nper + pmt * nper * (nper - 1d) / 2d;
-                }
-                else
-                {
-                    f = pv * rn + pmt * (1d + rate * type) * (rn - 1d) / rate + fv;
-                    df = pv * rn1
-                        + pmt * type * (rn - 1d) / rate
-                        + pmt * (1d + rate * type) * (rn1 * rate - (rn - 1d)) / (rate * rate);
-                }
-
-                if (Math.Abs(df) < 1e-15d)
-                    break;
-
-                var delta = f / df;
-                rate -= delta;
-                if (Math.Abs(delta) < 1e-10d)
-                    break;
-            }
-
-            return FormulaFinancialNumberResult(rate);
-        }
-
-        private static ScalarValue FormulaIpmtScalar(double rate, double per, double nper, double pv, double fv, double type)
-        {
-            if (!TryGetFormulaFinancialPaymentPeriod(rate, per, nper, pv, fv, type, out var period, out var paymentType))
-                return ErrorValue.Num;
-
-            return FormulaFinancialNumberResult(FormulaFinancialCalcIpmt(rate, period, nper, pv, fv, paymentType));
-        }
-
-        private static ScalarValue FormulaPpmtScalar(double rate, double per, double nper, double pv, double fv, double type)
-        {
-            if (!TryGetFormulaFinancialPaymentPeriod(rate, per, nper, pv, fv, type, out var period, out var paymentType))
-                return ErrorValue.Num;
-
-            var pmt = FormulaFinancialCalcPmt(rate, nper, pv, fv, paymentType);
-            var ipmt = FormulaFinancialCalcIpmt(rate, period, nper, pv, fv, paymentType);
-            return FormulaFinancialNumberResult(pmt - ipmt);
-        }
+        private static ScalarValue FormulaPpmtScalar(double rate, double per, double nper, double pv, double fv, double type) =>
+            InvokeCoreFormulaScalarFunction(
+                "PPMT", new NumberValue(rate), new NumberValue(per), new NumberValue(nper), new NumberValue(pv),
+                new NumberValue(fv), new NumberValue(type));
 
         // Delegated to the single source-of-truth FreeX.Core.Formula implementation (see
         // AccessibilityCheckerService.CoreFormulaFinancialDelegation.cs).
@@ -14787,60 +14745,16 @@ public static partial class AccessibilityCheckerService
             InvokeCoreFormulaScalarFunction(
                 "ISPMT", new NumberValue(rate), new NumberValue(per), new NumberValue(nper), new NumberValue(pv));
 
-        private static ScalarValue FormulaCumipmtScalar(double rate, double nper, double pv, double start, double end, double type)
-        {
-            if (!TryGetFormulaFinancialCumulativePaymentArguments(
-                    rate,
-                    nper,
-                    pv,
-                    start,
-                    end,
-                    type,
-                    out var startPeriod,
-                    out var endPeriod,
-                    out var paymentType))
-            {
-                return ErrorValue.Num;
-            }
+        // Delegated to Core.Formula (shares the same corrected type=1 interest formula as IPMT/PPMT).
+        private static ScalarValue FormulaCumipmtScalar(double rate, double nper, double pv, double start, double end, double type) =>
+            InvokeCoreFormulaScalarFunction(
+                "CUMIPMT", new NumberValue(rate), new NumberValue(nper), new NumberValue(pv), new NumberValue(start),
+                new NumberValue(end), new NumberValue(type));
 
-            var sum = 0d;
-            var periodCount = endPeriod - startPeriod + 1;
-            for (var offset = 0; offset < periodCount; offset++)
-            {
-                var period = startPeriod + offset;
-                sum += FormulaFinancialCalcIpmt(rate, period, nper, pv, 0d, paymentType);
-            }
-
-            return FormulaFinancialNumberResult(sum);
-        }
-
-        private static ScalarValue FormulaCumprincScalar(double rate, double nper, double pv, double start, double end, double type)
-        {
-            if (!TryGetFormulaFinancialCumulativePaymentArguments(
-                    rate,
-                    nper,
-                    pv,
-                    start,
-                    end,
-                    type,
-                    out var startPeriod,
-                    out var endPeriod,
-                    out var paymentType))
-            {
-                return ErrorValue.Num;
-            }
-
-            var payment = FormulaFinancialCalcPmt(rate, nper, pv, 0d, paymentType);
-            var sum = 0d;
-            var periodCount = endPeriod - startPeriod + 1;
-            for (var offset = 0; offset < periodCount; offset++)
-            {
-                var period = startPeriod + offset;
-                sum += payment - FormulaFinancialCalcIpmt(rate, period, nper, pv, 0d, paymentType);
-            }
-
-            return FormulaFinancialNumberResult(sum);
-        }
+        private static ScalarValue FormulaCumprincScalar(double rate, double nper, double pv, double start, double end, double type) =>
+            InvokeCoreFormulaScalarFunction(
+                "CUMPRINC", new NumberValue(rate), new NumberValue(nper), new NumberValue(pv), new NumberValue(start),
+                new NumberValue(end), new NumberValue(type));
 
         private static bool TryGetFormulaFinancialCumulativePaymentArguments(
             double rate,
