@@ -14698,80 +14698,27 @@ public static partial class AccessibilityCheckerService
         private static bool IsValidFormulaFinancialPaymentType(double type) =>
             double.IsFinite(type) && (type == 0d || type == 1d);
 
-        private static ScalarValue FormulaPmtScalar(double rate, double nper, double pv, double fv, double type)
-        {
-            if (!double.IsFinite(rate) || !double.IsFinite(nper) || !double.IsFinite(pv) || !double.IsFinite(fv) || !double.IsFinite(type))
-                return ErrorValue.Num;
+        // Delegated to the single source-of-truth FreeX.Core.Formula implementation (see
+        // AccessibilityCheckerService.CoreFormulaFinancialDelegation.cs).
+        private static ScalarValue FormulaPmtScalar(double rate, double nper, double pv, double fv, double type) =>
+            InvokeCoreFormulaScalarFunction(
+                "PMT", new NumberValue(rate), new NumberValue(nper), new NumberValue(pv), new NumberValue(fv),
+                new NumberValue(type));
 
-            if (!IsValidFormulaFinancialPaymentType(type))
-                return ErrorValue.Num;
+        private static ScalarValue FormulaPvScalar(double rate, double nper, double pmt, double fv, double type) =>
+            InvokeCoreFormulaScalarFunction(
+                "PV", new NumberValue(rate), new NumberValue(nper), new NumberValue(pmt), new NumberValue(fv),
+                new NumberValue(type));
 
-            if (nper == 0d)
-                return ErrorValue.DivByZero;
+        private static ScalarValue FormulaFvScalar(double rate, double nper, double pmt, double pv, double type) =>
+            InvokeCoreFormulaScalarFunction(
+                "FV", new NumberValue(rate), new NumberValue(nper), new NumberValue(pmt), new NumberValue(pv),
+                new NumberValue(type));
 
-            if (Math.Abs(rate) < 1e-10d)
-                return FormulaFinancialNumberResult(-(pv + fv) / nper);
-
-            var rn = Math.Pow(1d + rate, nper);
-            return FormulaFinancialNumberResult(-(pv * rn + fv) * rate / ((1d + rate * type) * (rn - 1d)));
-        }
-
-        private static ScalarValue FormulaPvScalar(double rate, double nper, double pmt, double fv, double type)
-        {
-            if (!double.IsFinite(rate) || !double.IsFinite(nper) || !double.IsFinite(pmt) || !double.IsFinite(fv) || !double.IsFinite(type))
-                return ErrorValue.Num;
-
-            if (!IsValidFormulaFinancialPaymentType(type))
-                return ErrorValue.Num;
-
-            if (nper == 0d)
-                return ErrorValue.DivByZero;
-
-            if (Math.Abs(rate) < 1e-10d)
-                return FormulaFinancialNumberResult(-pmt * nper - fv);
-
-            var rn = Math.Pow(1d + rate, nper);
-            return FormulaFinancialNumberResult((-pmt * (1d + rate * type) * (rn - 1d) / rate - fv) / rn);
-        }
-
-        private static ScalarValue FormulaFvScalar(double rate, double nper, double pmt, double pv, double type)
-        {
-            if (!double.IsFinite(rate) || !double.IsFinite(nper) || !double.IsFinite(pmt) || !double.IsFinite(pv) || !double.IsFinite(type))
-                return ErrorValue.Num;
-
-            if (!IsValidFormulaFinancialPaymentType(type))
-                return ErrorValue.Num;
-
-            if (Math.Abs(rate) < 1e-10d)
-                return FormulaFinancialNumberResult(-pv - pmt * nper);
-
-            var rn = Math.Pow(1d + rate, nper);
-            return FormulaFinancialNumberResult(-pv * rn - pmt * (1d + rate * type) * (rn - 1d) / rate);
-        }
-
-        private static ScalarValue FormulaNperScalar(double rate, double pmt, double pv, double fv, double type)
-        {
-            if (!double.IsFinite(rate) || !double.IsFinite(pmt) || !double.IsFinite(pv) || !double.IsFinite(fv) || !double.IsFinite(type))
-                return ErrorValue.Num;
-
-            if (!IsValidFormulaFinancialPaymentType(type))
-                return ErrorValue.Num;
-
-            if (Math.Abs(rate) < 1e-10d)
-            {
-                if (Math.Abs(pmt) < 1e-10d)
-                    return ErrorValue.DivByZero;
-
-                return FormulaFinancialNumberResult(-(pv + fv) / pmt);
-            }
-
-            var pmtAdjusted = pmt * (1d + rate * type);
-            var ratio = (pmtAdjusted - fv * rate) / (pmtAdjusted + pv * rate);
-            if (ratio <= 0d)
-                return ErrorValue.Num;
-
-            return FormulaFinancialNumberResult(Math.Log(ratio) / Math.Log(1d + rate));
-        }
+        private static ScalarValue FormulaNperScalar(double rate, double pmt, double pv, double fv, double type) =>
+            InvokeCoreFormulaScalarFunction(
+                "NPER", new NumberValue(rate), new NumberValue(pmt), new NumberValue(pv), new NumberValue(fv),
+                new NumberValue(type));
 
         private static ScalarValue FormulaRateScalar(double nper, double pmt, double pv, double fv, double type, double guess)
         {
@@ -14834,17 +14781,11 @@ public static partial class AccessibilityCheckerService
             return FormulaFinancialNumberResult(pmt - ipmt);
         }
 
-        private static ScalarValue FormulaIspmtScalar(double rate, double per, double nper, double pv)
-        {
-            per = Math.Truncate(per);
-            if (!double.IsFinite(rate) || !double.IsFinite(per) || !double.IsFinite(nper) || !double.IsFinite(pv))
-                return ErrorValue.Num;
-
-            if (nper <= 0d || per < 0d || per > nper)
-                return ErrorValue.Num;
-
-            return FormulaFinancialNumberResult(-pv * rate * (nper - per) / nper);
-        }
+        // Delegated to the single source-of-truth FreeX.Core.Formula implementation (see
+        // AccessibilityCheckerService.CoreFormulaFinancialDelegation.cs).
+        private static ScalarValue FormulaIspmtScalar(double rate, double per, double nper, double pv) =>
+            InvokeCoreFormulaScalarFunction(
+                "ISPMT", new NumberValue(rate), new NumberValue(per), new NumberValue(nper), new NumberValue(pv));
 
         private static ScalarValue FormulaCumipmtScalar(double rate, double nper, double pv, double start, double end, double type)
         {
@@ -15173,47 +15114,27 @@ public static partial class AccessibilityCheckerService
             }
         }
 
-        private static ScalarValue FormulaNormDistScalar(double x, double mean, double stdev, bool cumulative)
-        {
-            if (stdev <= 0d)
-                return ErrorValue.Num;
+        // Delegated to the single source-of-truth FreeX.Core.Formula implementation (see
+        // AccessibilityCheckerService.CoreFormulaFinancialDelegation.cs).
+        private static ScalarValue FormulaNormDistScalar(double x, double mean, double stdev, bool cumulative) =>
+            InvokeCoreFormulaScalarFunction(
+                "NORM.DIST", new NumberValue(x), new NumberValue(mean), new NumberValue(stdev),
+                new BoolValue(cumulative));
 
-            var z = (x - mean) / stdev;
-            return FormulaNormalNumberResult(cumulative ? FormulaNormSCdf(z) : FormulaNormSPdf(z) / stdev);
-        }
+        private static ScalarValue FormulaNormInvScalar(double probability, double mean, double stdev) =>
+            InvokeCoreFormulaScalarFunction(
+                "NORM.INV", new NumberValue(probability), new NumberValue(mean), new NumberValue(stdev));
 
-        private static ScalarValue FormulaNormInvScalar(double probability, double mean, double stdev)
-        {
-            if (stdev <= 0d || probability <= 0d || probability >= 1d)
-                return ErrorValue.Num;
+        private static ScalarValue FormulaNormSInvScalar(double probability) =>
+            InvokeCoreFormulaScalarFunction("NORM.S.INV", new NumberValue(probability));
 
-            return FormulaNormalNumberResult(FormulaNormSInv(probability) * stdev + mean);
-        }
+        private static ScalarValue FormulaStandardizeScalar(double x, double mean, double stdev) =>
+            InvokeCoreFormulaScalarFunction(
+                "STANDARDIZE", new NumberValue(x), new NumberValue(mean), new NumberValue(stdev));
 
-        private static ScalarValue FormulaNormSInvScalar(double probability)
-        {
-            if (probability <= 0d || probability >= 1d)
-                return ErrorValue.Num;
-
-            return FormulaNormalNumberResult(FormulaNormSInv(probability));
-        }
-
-        private static ScalarValue FormulaStandardizeScalar(double x, double mean, double stdev)
-        {
-            if (stdev <= 0d)
-                return ErrorValue.Num;
-
-            return FormulaNormalNumberResult((x - mean) / stdev);
-        }
-
-        private static ScalarValue FormulaConfidenceNormScalar(double alpha, double stdev, double sizeValue)
-        {
-            var size = Math.Truncate(sizeValue);
-            if (alpha <= 0d || alpha >= 1d || stdev <= 0d || size < 1d)
-                return ErrorValue.Num;
-
-            return FormulaNormalNumberResult(FormulaNormSInv(1.0d - alpha / 2.0d) * stdev / Math.Sqrt(size));
-        }
+        private static ScalarValue FormulaConfidenceNormScalar(double alpha, double stdev, double sizeValue) =>
+            InvokeCoreFormulaScalarFunction(
+                "CONFIDENCE.NORM", new NumberValue(alpha), new NumberValue(stdev), new NumberValue(sizeValue));
 
         private static ScalarValue FormulaNormalNumberResult(double result) =>
             double.IsFinite(result) ? new NumberValue(result) : ErrorValue.Num;
@@ -15711,82 +15632,38 @@ public static partial class AccessibilityCheckerService
             }
         }
 
-        private static ScalarValue FormulaFisherScalar(double x)
-        {
-            if (x <= -1d || x >= 1d)
-                return ErrorValue.Num;
-
-            return FormulaDistributionNumberResult(0.5d * Math.Log((1d + x) / (1d - x)));
-        }
+        // Delegated to the single source-of-truth FreeX.Core.Formula implementation (see
+        // AccessibilityCheckerService.CoreFormulaFinancialDelegation.cs).
+        private static ScalarValue FormulaFisherScalar(double x) =>
+            InvokeCoreFormulaScalarFunction("FISHER", new NumberValue(x));
 
         private static ScalarValue FormulaFisherInvScalar(double y) =>
-            FormulaDistributionNumberResult(Math.Tanh(y));
+            InvokeCoreFormulaScalarFunction("FISHERINV", new NumberValue(y));
 
         private static ScalarValue FormulaBinomDistScalar(
             double successesValue,
             double trialsValue,
             double probability,
-            bool cumulative)
-        {
-            if (!TryGetFormulaDiscreteInteger(successesValue, out var successes) ||
-                !TryGetFormulaDiscreteInteger(trialsValue, out var trials))
-            {
-                return ErrorValue.Num;
-            }
-
-            if (successes < 0 || trials < 0 || successes > trials || probability < 0d || probability > 1d)
-                return ErrorValue.Num;
-
-            return FormulaDiscreteProbabilityResult(cumulative
-                ? FormulaBinomCdf(successes, trials, probability)
-                : FormulaBinomPmf(successes, trials, probability));
-        }
+            bool cumulative) =>
+            InvokeCoreFormulaScalarFunction(
+                "BINOM.DIST", new NumberValue(successesValue), new NumberValue(trialsValue),
+                new NumberValue(probability), new BoolValue(cumulative));
 
         private static ScalarValue FormulaBinomDistRangeScalar(
             double trialsValue,
             double probability,
             double lowerValue,
-            double upperValue)
-        {
-            if (!TryGetFormulaDiscreteInteger(trialsValue, out var trials) ||
-                !TryGetFormulaDiscreteInteger(lowerValue, out var lower) ||
-                !TryGetFormulaDiscreteInteger(upperValue, out var upper))
-            {
-                return ErrorValue.Num;
-            }
-
-            if (trials < 0 || probability < 0d || probability > 1d || lower < 0 || upper < lower || upper > trials)
-                return ErrorValue.Num;
-
-            var result = FormulaBinomCdf(upper, trials, probability) -
-                FormulaBinomCdf(lower - 1, trials, probability);
-            return FormulaDiscreteProbabilityResult(result);
-        }
+            double upperValue) =>
+            InvokeCoreFormulaScalarFunction(
+                "BINOM.DIST.RANGE", new NumberValue(trialsValue), new NumberValue(probability),
+                new NumberValue(lowerValue), new NumberValue(upperValue));
 
         private static ScalarValue FormulaBinomInvScalar(
             double trialsValue,
             double probability,
-            double alpha)
-        {
-            if (!TryGetFormulaDiscreteInteger(trialsValue, out var trials))
-                return ErrorValue.Num;
-
-            if (trials < 0 || probability < 0d || probability > 1d || alpha < 0d || alpha > 1d)
-                return ErrorValue.Num;
-
-            var low = 0;
-            var high = trials;
-            while (low < high)
-            {
-                var mid = low + (high - low) / 2;
-                if (FormulaBinomCdf(mid, trials, probability) >= alpha)
-                    high = mid;
-                else
-                    low = mid + 1;
-            }
-
-            return new NumberValue(low);
-        }
+            double alpha) =>
+            InvokeCoreFormulaScalarFunction(
+                "BINOM.INV", new NumberValue(trialsValue), new NumberValue(probability), new NumberValue(alpha));
 
         private static ScalarValue FormulaHypergeomDistScalar(
             double sampleSuccessesValue,
@@ -15837,40 +15714,17 @@ public static partial class AccessibilityCheckerService
             double failuresValue,
             double successesValue,
             double probability,
-            bool cumulative)
-        {
-            if (!TryGetFormulaDiscreteInteger(failuresValue, out var failures) ||
-                !TryGetFormulaDiscreteInteger(successesValue, out var successes))
-            {
-                return ErrorValue.Num;
-            }
-
-            if (failures < 0 || successes < 1 || probability <= 0d || probability > 1d ||
-                failures > int.MaxValue - successes)
-            {
-                return ErrorValue.Num;
-            }
-
-            return FormulaDiscreteProbabilityResult(cumulative
-                ? FormulaBetaInc(successes, failures + 1d, probability)
-                : FormulaNegBinomPmf(failures, successes, probability));
-        }
+            bool cumulative) =>
+            InvokeCoreFormulaScalarFunction(
+                "NEGBINOM.DIST", new NumberValue(failuresValue), new NumberValue(successesValue),
+                new NumberValue(probability), new BoolValue(cumulative));
 
         private static ScalarValue FormulaPoissonDistScalar(
             double xValue,
             double mean,
-            bool cumulative)
-        {
-            if (!TryGetFormulaDiscreteInteger(xValue, out var x))
-                return ErrorValue.Num;
-
-            if (x < 0 || mean < 0d)
-                return ErrorValue.Num;
-
-            return FormulaDiscreteProbabilityResult(cumulative
-                ? 1.0d - FormulaGammaInc(x + 1d, mean)
-                : FormulaPoissonPmf(x, mean));
-        }
+            bool cumulative) =>
+            InvokeCoreFormulaScalarFunction(
+                "POISSON.DIST", new NumberValue(xValue), new NumberValue(mean), new BoolValue(cumulative));
 
         private static ScalarValue FormulaSeriesSumScalar(
             double x,
@@ -16631,108 +16485,50 @@ public static partial class AccessibilityCheckerService
             }
         }
 
-        private static ScalarValue FormulaExponDistScalar(double x, double lambda, bool cumulative)
-        {
-            if (x < 0d || lambda <= 0d)
-                return ErrorValue.Num;
+        // Delegated to the single source-of-truth FreeX.Core.Formula implementation (see
+        // AccessibilityCheckerService.CoreFormulaFinancialDelegation.cs).
+        private static ScalarValue FormulaExponDistScalar(double x, double lambda, bool cumulative) =>
+            InvokeCoreFormulaScalarFunction(
+                "EXPON.DIST", new NumberValue(x), new NumberValue(lambda), new BoolValue(cumulative));
 
-            return FormulaDistributionNumberResult(cumulative
-                ? 1.0d - Math.Exp(-lambda * x)
-                : lambda * Math.Exp(-lambda * x));
-        }
+        private static ScalarValue FormulaWeibullDistScalar(double x, double alpha, double beta, bool cumulative) =>
+            InvokeCoreFormulaScalarFunction(
+                "WEIBULL.DIST", new NumberValue(x), new NumberValue(alpha), new NumberValue(beta),
+                new BoolValue(cumulative));
 
-        private static ScalarValue FormulaWeibullDistScalar(double x, double alpha, double beta, bool cumulative)
-        {
-            if (x < 0d || alpha <= 0d || beta <= 0d)
-                return ErrorValue.Num;
+        private static ScalarValue FormulaGammaDistScalar(double x, double alpha, double beta, bool cumulative) =>
+            InvokeCoreFormulaScalarFunction(
+                "GAMMA.DIST", new NumberValue(x), new NumberValue(alpha), new NumberValue(beta),
+                new BoolValue(cumulative));
 
-            var scaled = x / beta;
-            var powered = Math.Pow(scaled, alpha);
-            return FormulaDistributionNumberResult(cumulative
-                ? 1.0d - Math.Exp(-powered)
-                : (alpha / beta) * Math.Pow(scaled, alpha - 1d) * Math.Exp(-powered));
-        }
+        private static ScalarValue FormulaGammaInvScalar(double probability, double alpha, double beta) =>
+            InvokeCoreFormulaScalarFunction(
+                "GAMMA.INV", new NumberValue(probability), new NumberValue(alpha), new NumberValue(beta));
 
-        private static ScalarValue FormulaGammaDistScalar(double x, double alpha, double beta, bool cumulative)
-        {
-            if (x < 0d || alpha <= 0d || beta <= 0d)
-                return ErrorValue.Num;
+        private static ScalarValue FormulaGammaLnScalar(double x) =>
+            InvokeCoreFormulaScalarFunction("GAMMALN", new NumberValue(x));
 
-            if (cumulative)
-                return FormulaDistributionNumberResult(FormulaGammaInc(alpha, x / beta));
+        private static ScalarValue FormulaGammaScalar(double x) =>
+            InvokeCoreFormulaScalarFunction("GAMMA", new NumberValue(x));
 
-            var pdf = Math.Exp((alpha - 1d) * Math.Log(x) - x / beta - alpha * Math.Log(beta) - FormulaLogGamma(alpha));
-            return FormulaDistributionNumberResult(pdf);
-        }
+        private static ScalarValue FormulaBetaDistScalar(double x, double alpha, double beta, bool cumulative, double lower, double upper) =>
+            InvokeCoreFormulaScalarFunction(
+                "BETA.DIST", new NumberValue(x), new NumberValue(alpha), new NumberValue(beta),
+                new BoolValue(cumulative), new NumberValue(lower), new NumberValue(upper));
 
-        private static ScalarValue FormulaGammaInvScalar(double probability, double alpha, double beta)
-        {
-            if (probability < 0d || probability >= 1d || alpha <= 0d || beta <= 0d)
-                return ErrorValue.Num;
+        private static ScalarValue FormulaBetaInvScalar(double probability, double alpha, double beta, double lower, double upper) =>
+            InvokeCoreFormulaScalarFunction(
+                "BETA.INV", new NumberValue(probability), new NumberValue(alpha), new NumberValue(beta),
+                new NumberValue(lower), new NumberValue(upper));
 
-            return FormulaDistributionNumberResult(FormulaGammaInv(probability, alpha) * beta);
-        }
+        private static ScalarValue FormulaLogNormDistScalar(double x, double mean, double stdev, bool cumulative) =>
+            InvokeCoreFormulaScalarFunction(
+                "LOGNORM.DIST", new NumberValue(x), new NumberValue(mean), new NumberValue(stdev),
+                new BoolValue(cumulative));
 
-        private static ScalarValue FormulaGammaLnScalar(double x)
-        {
-            if (x <= 0d)
-                return ErrorValue.Num;
-
-            return FormulaDistributionNumberResult(FormulaLogGamma(x));
-        }
-
-        private static ScalarValue FormulaGammaScalar(double x)
-        {
-            if (x == 0d || x < 0d && x == Math.Floor(x))
-                return ErrorValue.Num;
-
-            var gamma = FormulaGammaValue(x);
-            return double.IsFinite(gamma) ? FormulaDistributionNumberResult(gamma) : ErrorValue.Num;
-        }
-
-        private static ScalarValue FormulaBetaDistScalar(double x, double alpha, double beta, bool cumulative, double lower, double upper)
-        {
-            if (alpha <= 0d || beta <= 0d || lower >= upper)
-                return ErrorValue.Num;
-
-            if (x < lower || x > upper)
-                return ErrorValue.Num;
-
-            var t = (x - lower) / (upper - lower);
-            if (cumulative)
-                return FormulaDistributionNumberResult(FormulaBetaInc(alpha, beta, t));
-
-            var logBeta = FormulaLogGamma(alpha) + FormulaLogGamma(beta) - FormulaLogGamma(alpha + beta);
-            var pdf = Math.Exp((alpha - 1d) * Math.Log(t) + (beta - 1d) * Math.Log(1d - t) - logBeta) / (upper - lower);
-            return FormulaDistributionNumberResult(pdf);
-        }
-
-        private static ScalarValue FormulaBetaInvScalar(double probability, double alpha, double beta, double lower, double upper)
-        {
-            if (probability < 0d || probability > 1d || alpha <= 0d || beta <= 0d || lower >= upper)
-                return ErrorValue.Num;
-
-            return FormulaDistributionNumberResult(FormulaBetaInv(probability, alpha, beta) * (upper - lower) + lower);
-        }
-
-        private static ScalarValue FormulaLogNormDistScalar(double x, double mean, double stdev, bool cumulative)
-        {
-            if (x <= 0d || stdev <= 0d)
-                return ErrorValue.Num;
-
-            var z = (Math.Log(x) - mean) / stdev;
-            return FormulaDistributionNumberResult(cumulative
-                ? FormulaNormSCdf(z)
-                : FormulaNormSPdf(z) / (x * stdev));
-        }
-
-        private static ScalarValue FormulaLogNormInvScalar(double probability, double mean, double stdev)
-        {
-            if (probability <= 0d || probability >= 1d || stdev <= 0d)
-                return ErrorValue.Num;
-
-            return FormulaDistributionNumberResult(Math.Exp(FormulaNormSInv(probability) * stdev + mean));
-        }
+        private static ScalarValue FormulaLogNormInvScalar(double probability, double mean, double stdev) =>
+            InvokeCoreFormulaScalarFunction(
+                "LOGNORM.INV", new NumberValue(probability), new NumberValue(mean), new NumberValue(stdev));
 
         private bool TryEvaluateFormulaTFChiSquareDistributionFunction(
             ConditionalFormulaScalarFunction function,
@@ -16935,142 +16731,57 @@ public static partial class AccessibilityCheckerService
             }
         }
 
-        private static ScalarValue FormulaTDistScalar(double x, double dfValue, bool cumulative)
-        {
-            var df = Math.Truncate(dfValue);
-            if (df < 1d)
-                return ErrorValue.Num;
+        // Delegated to the single source-of-truth FreeX.Core.Formula implementation (see
+        // AccessibilityCheckerService.CoreFormulaFinancialDelegation.cs).
+        private static ScalarValue FormulaTDistScalar(double x, double dfValue, bool cumulative) =>
+            InvokeCoreFormulaScalarFunction(
+                "T.DIST", new NumberValue(x), new NumberValue(dfValue), new BoolValue(cumulative));
 
-            return FormulaDistributionNumberResult(cumulative
-                ? FormulaTCdf(x, df)
-                : FormulaTPdf(x, df));
-        }
+        private static ScalarValue FormulaTDistRtScalar(double x, double dfValue) =>
+            InvokeCoreFormulaScalarFunction("T.DIST.RT", new NumberValue(x), new NumberValue(dfValue));
 
-        private static ScalarValue FormulaTDistRtScalar(double x, double dfValue)
-        {
-            var df = Math.Truncate(dfValue);
-            if (df < 1d || x < 0d)
-                return ErrorValue.Num;
+        private static ScalarValue FormulaTDist2TScalar(double x, double dfValue) =>
+            InvokeCoreFormulaScalarFunction("T.DIST.2T", new NumberValue(x), new NumberValue(dfValue));
 
-            return FormulaDistributionNumberResult(1.0d - FormulaTCdf(x, df));
-        }
+        private static ScalarValue FormulaTInvScalar(double probability, double dfValue) =>
+            InvokeCoreFormulaScalarFunction("T.INV", new NumberValue(probability), new NumberValue(dfValue));
 
-        private static ScalarValue FormulaTDist2TScalar(double x, double dfValue)
-        {
-            var df = Math.Truncate(dfValue);
-            if (df < 1d || x < 0d)
-                return ErrorValue.Num;
+        private static ScalarValue FormulaTInv2TScalar(double probability, double dfValue) =>
+            InvokeCoreFormulaScalarFunction("T.INV.2T", new NumberValue(probability), new NumberValue(dfValue));
 
-            return FormulaDistributionNumberResult(2.0d * (1.0d - FormulaTCdf(x, df)));
-        }
+        private static ScalarValue FormulaConfidenceTScalar(double alpha, double stdev, double sizeValue) =>
+            InvokeCoreFormulaScalarFunction(
+                "CONFIDENCE.T", new NumberValue(alpha), new NumberValue(stdev), new NumberValue(sizeValue));
 
-        private static ScalarValue FormulaTInvScalar(double probability, double dfValue)
-        {
-            var df = Math.Truncate(dfValue);
-            if (df < 1d || probability <= 0d || probability >= 1d)
-                return ErrorValue.Num;
+        private static ScalarValue FormulaFDistScalar(double x, double d1Value, double d2Value, bool cumulative) =>
+            InvokeCoreFormulaScalarFunction(
+                "F.DIST", new NumberValue(x), new NumberValue(d1Value), new NumberValue(d2Value),
+                new BoolValue(cumulative));
 
-            return FormulaDistributionNumberResult(FormulaTInv(probability, df));
-        }
+        private static ScalarValue FormulaFDistRtScalar(double x, double d1Value, double d2Value) =>
+            InvokeCoreFormulaScalarFunction(
+                "F.DIST.RT", new NumberValue(x), new NumberValue(d1Value), new NumberValue(d2Value));
 
-        private static ScalarValue FormulaTInv2TScalar(double probability, double dfValue)
-        {
-            var df = Math.Truncate(dfValue);
-            if (df < 1d || probability <= 0d || probability > 1d)
-                return ErrorValue.Num;
+        private static ScalarValue FormulaFInvScalar(double probability, double d1Value, double d2Value) =>
+            InvokeCoreFormulaScalarFunction(
+                "F.INV", new NumberValue(probability), new NumberValue(d1Value), new NumberValue(d2Value));
 
-            return FormulaDistributionNumberResult(FormulaTInv(1.0d - probability / 2.0d, df));
-        }
+        private static ScalarValue FormulaFInvRtScalar(double probability, double d1Value, double d2Value) =>
+            InvokeCoreFormulaScalarFunction(
+                "F.INV.RT", new NumberValue(probability), new NumberValue(d1Value), new NumberValue(d2Value));
 
-        private static ScalarValue FormulaConfidenceTScalar(double alpha, double stdev, double sizeValue)
-        {
-            var size = Math.Truncate(sizeValue);
-            var df = size - 1d;
-            if (alpha <= 0d || alpha >= 1d || stdev <= 0d || df < 1d)
-                return ErrorValue.Num;
+        private static ScalarValue FormulaChiSqDistScalar(double x, double dfValue, bool cumulative) =>
+            InvokeCoreFormulaScalarFunction(
+                "CHISQ.DIST", new NumberValue(x), new NumberValue(dfValue), new BoolValue(cumulative));
 
-            return FormulaDistributionNumberResult(FormulaTInv(1.0d - alpha / 2.0d, df) * stdev / Math.Sqrt(size));
-        }
+        private static ScalarValue FormulaChiSqDistRtScalar(double x, double dfValue) =>
+            InvokeCoreFormulaScalarFunction("CHISQ.DIST.RT", new NumberValue(x), new NumberValue(dfValue));
 
-        private static ScalarValue FormulaFDistScalar(double x, double d1Value, double d2Value, bool cumulative)
-        {
-            var d1 = Math.Truncate(d1Value);
-            var d2 = Math.Truncate(d2Value);
-            if (d1 < 1d || d2 < 1d || x < 0d)
-                return ErrorValue.Num;
+        private static ScalarValue FormulaChiSqInvScalar(double probability, double dfValue) =>
+            InvokeCoreFormulaScalarFunction("CHISQ.INV", new NumberValue(probability), new NumberValue(dfValue));
 
-            return FormulaDistributionNumberResult(cumulative
-                ? FormulaFCdf(x, d1, d2)
-                : FormulaFPdf(x, d1, d2));
-        }
-
-        private static ScalarValue FormulaFDistRtScalar(double x, double d1Value, double d2Value)
-        {
-            var d1 = Math.Truncate(d1Value);
-            var d2 = Math.Truncate(d2Value);
-            if (d1 < 1d || d2 < 1d || x < 0d)
-                return ErrorValue.Num;
-
-            return FormulaDistributionNumberResult(1.0d - FormulaFCdf(x, d1, d2));
-        }
-
-        private static ScalarValue FormulaFInvScalar(double probability, double d1Value, double d2Value)
-        {
-            var d1 = Math.Truncate(d1Value);
-            var d2 = Math.Truncate(d2Value);
-            if (d1 < 1d || d2 < 1d || probability <= 0d || probability >= 1d)
-                return ErrorValue.Num;
-
-            return FormulaDistributionNumberResult(FormulaFInv(probability, d1, d2));
-        }
-
-        private static ScalarValue FormulaFInvRtScalar(double probability, double d1Value, double d2Value)
-        {
-            var d1 = Math.Truncate(d1Value);
-            var d2 = Math.Truncate(d2Value);
-            if (d1 < 1d || d2 < 1d || probability <= 0d || probability >= 1d)
-                return ErrorValue.Num;
-
-            return FormulaDistributionNumberResult(FormulaFInv(1.0d - probability, d1, d2));
-        }
-
-        private static ScalarValue FormulaChiSqDistScalar(double x, double dfValue, bool cumulative)
-        {
-            var df = Math.Truncate(dfValue);
-            if (df < 1d || x < 0d)
-                return ErrorValue.Num;
-
-            return FormulaDistributionNumberResult(cumulative
-                ? FormulaChiSqCdf(x, df)
-                : FormulaChiSqPdf(x, df));
-        }
-
-        private static ScalarValue FormulaChiSqDistRtScalar(double x, double dfValue)
-        {
-            var df = Math.Truncate(dfValue);
-            if (df < 1d || x < 0d)
-                return ErrorValue.Num;
-
-            return FormulaDistributionNumberResult(1.0d - FormulaChiSqCdf(x, df));
-        }
-
-        private static ScalarValue FormulaChiSqInvScalar(double probability, double dfValue)
-        {
-            var df = Math.Truncate(dfValue);
-            if (df < 1d || probability < 0d || probability >= 1d)
-                return ErrorValue.Num;
-
-            return FormulaDistributionNumberResult(FormulaChiSqInv(probability, df));
-        }
-
-        private static ScalarValue FormulaChiSqInvRtScalar(double probability, double dfValue)
-        {
-            var df = Math.Truncate(dfValue);
-            if (df < 1d || probability <= 0d || probability > 1d)
-                return ErrorValue.Num;
-
-            return FormulaDistributionNumberResult(FormulaChiSqInv(1.0d - probability, df));
-        }
+        private static ScalarValue FormulaChiSqInvRtScalar(double probability, double dfValue) =>
+            InvokeCoreFormulaScalarFunction("CHISQ.INV.RT", new NumberValue(probability), new NumberValue(dfValue));
 
         private static double FormulaTCdf(double t, double df)
         {
