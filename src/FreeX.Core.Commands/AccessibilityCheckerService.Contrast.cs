@@ -18027,11 +18027,13 @@ public static partial class AccessibilityCheckerService
                 : ErrorValue.Num;
         }
 
+        // Delegated to the single source-of-truth FreeX.Core.Formula implementation (see
+        // AccessibilityCheckerService.CoreFormulaFinancialDelegation.cs).
         private static ScalarValue FormulaFinancialDollardeScalar(double dollar, double rawFraction) =>
-            FormulaFinancialDollarFractionScalar(dollar, rawFraction, convertFractionToDecimal: true);
+            InvokeCoreFormulaScalarFunction("DOLLARDE", new NumberValue(dollar), new NumberValue(rawFraction));
 
         private static ScalarValue FormulaFinancialDollarfrScalar(double dollar, double rawFraction) =>
-            FormulaFinancialDollarFractionScalar(dollar, rawFraction, convertFractionToDecimal: false);
+            InvokeCoreFormulaScalarFunction("DOLLARFR", new NumberValue(dollar), new NumberValue(rawFraction));
 
         private static ScalarValue FormulaFinancialDollarFractionScalar(
             double dollar,
@@ -18103,147 +18105,40 @@ public static partial class AccessibilityCheckerService
             return FormulaFinancialNumberResult(par * rate * dayCountFraction);
         }
 
+        // Delegated to the single source-of-truth FreeX.Core.Formula implementation (see
+        // AccessibilityCheckerService.CoreFormulaFinancialDelegation.cs).
         private static ScalarValue FormulaFinancialAccrintmScalar(
             double issue,
             double settlement,
             double rate,
             double par,
-            int basis)
-        {
-            if (!double.IsFinite(issue) ||
-                !double.IsFinite(settlement) ||
-                !double.IsFinite(rate) ||
-                !double.IsFinite(par))
-            {
-                return ErrorValue.Num;
-            }
+            int basis) =>
+            InvokeCoreFormulaScalarFunction(
+                "ACCRINTM", new NumberValue(issue), new NumberValue(settlement), new NumberValue(rate),
+                new NumberValue(par), new NumberValue(basis));
 
-            if (rate <= 0d || par <= 0d)
-                return ErrorValue.Num;
+        // Delegated to the single source-of-truth FreeX.Core.Formula implementation (see
+        // AccessibilityCheckerService.CoreFormulaFinancialDelegation.cs).
+        private static ScalarValue FormulaFinancialSlnScalar(double cost, double salvage, double life) =>
+            InvokeCoreFormulaScalarFunction(
+                "SLN", new NumberValue(cost), new NumberValue(salvage), new NumberValue(life));
 
-            if (!TryGetFormulaFinancialDate(issue, out var issueDate) ||
-                !TryGetFormulaFinancialDate(settlement, out var settlementDate) ||
-                issueDate >= settlementDate)
-            {
-                return ErrorValue.Num;
-            }
+        private static ScalarValue FormulaFinancialSydScalar(double cost, double salvage, double life, double period) =>
+            InvokeCoreFormulaScalarFunction(
+                "SYD", new NumberValue(cost), new NumberValue(salvage), new NumberValue(life), new NumberValue(period));
 
-            var dayCountFraction = FormulaFinancialDayCountFraction(issueDate, settlementDate, basis);
-            if (!double.IsFinite(dayCountFraction) || dayCountFraction < 0d)
-                return ErrorValue.Num;
+        private static ScalarValue FormulaFinancialDbScalar(double cost, double salvage, double life, double period, double month) =>
+            InvokeCoreFormulaScalarFunction(
+                "DB", new NumberValue(cost), new NumberValue(salvage), new NumberValue(life), new NumberValue(period),
+                new NumberValue(month));
 
-            return FormulaFinancialNumberResult(par * rate * dayCountFraction);
-        }
+        private static ScalarValue FormulaFinancialDdbScalar(double cost, double salvage, double life, double period, double factor) =>
+            InvokeCoreFormulaScalarFunction(
+                "DDB", new NumberValue(cost), new NumberValue(salvage), new NumberValue(life), new NumberValue(period),
+                new NumberValue(factor));
 
-        private static ScalarValue FormulaFinancialSlnScalar(double cost, double salvage, double life)
-        {
-            if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(life))
-                return ErrorValue.Num;
-
-            return life == 0d
-                ? ErrorValue.DivByZero
-                : FormulaFinancialNumberResult((cost - salvage) / life);
-        }
-
-        private static ScalarValue FormulaFinancialSydScalar(double cost, double salvage, double life, double period)
-        {
-            if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(life) || !double.IsFinite(period))
-                return ErrorValue.Num;
-
-            if (life <= 0d || period <= 0d || period > life)
-                return ErrorValue.Num;
-
-            return FormulaFinancialNumberResult((cost - salvage) * (life - period + 1d) / (life * (life + 1d) / 2d));
-        }
-
-        private static ScalarValue FormulaFinancialDbScalar(double cost, double salvage, double life, double period, double month)
-        {
-            if (!TryGetFormulaFinancialInteger(life, out var integerLife) ||
-                !TryGetFormulaFinancialInteger(period, out var integerPeriod) ||
-                !TryGetFormulaFinancialInteger(month, out var integerMonth))
-            {
-                return ErrorValue.Num;
-            }
-
-            if (cost <= 0d ||
-                salvage < 0d ||
-                integerLife <= 0 ||
-                integerPeriod <= 0 ||
-                integerPeriod > integerLife + 1 ||
-                integerMonth is < 1 or > 12 ||
-                integerPeriod > MaxFormulaFinancialDepreciationIterations)
-            {
-                return ErrorValue.Num;
-            }
-
-            if (salvage >= cost)
-                return new NumberValue(0d);
-
-            var rate = Math.Round(1d - Math.Pow(salvage / cost, 1d / integerLife), 3);
-            var accumulated = 0d;
-            var depreciation = 0d;
-            for (var currentPeriod = 1; currentPeriod <= integerPeriod; currentPeriod++)
-            {
-                if (currentPeriod == 1)
-                    depreciation = cost * rate * integerMonth / 12d;
-                else if (currentPeriod <= integerLife)
-                    depreciation = (cost - accumulated) * rate;
-                else
-                    depreciation = (cost - accumulated) * rate * (12d - integerMonth + 1d) / 12d;
-
-                if (currentPeriod < integerPeriod)
-                    accumulated += depreciation;
-            }
-
-            return FormulaFinancialNumberResult(depreciation);
-        }
-
-        private static ScalarValue FormulaFinancialDdbScalar(double cost, double salvage, double life, double period, double factor)
-        {
-            if (!double.IsFinite(cost) ||
-                !double.IsFinite(salvage) ||
-                !double.IsFinite(life) ||
-                !double.IsFinite(period) ||
-                !double.IsFinite(factor))
-            {
-                return ErrorValue.Num;
-            }
-
-            if (cost < 0d ||
-                salvage < 0d ||
-                life <= 0d ||
-                period <= 0d ||
-                factor <= 0d ||
-                Math.Floor(period) > MaxFormulaFinancialDepreciationIterations)
-            {
-                return ErrorValue.Num;
-            }
-
-            // Excel supports fractional periods (mirrors FreeX.Core.Formula DdbScalar): full periods
-            // deplete book value in the usual double-declining-balance way, then any fractional part
-            // of the target period contributes a pro-rated slice of the next full period's
-            // depreciation (also covers 0 < period < 1). The previous integer-only form returned 0
-            // for 0 < period < 1.
-            var fullPeriods = (int)Math.Floor(period);
-            var fraction = period - fullPeriods;
-            var bookValue = cost;
-            var depreciation = 0d;
-            for (var currentPeriod = 1; currentPeriod <= fullPeriods; currentPeriod++)
-            {
-                depreciation = Math.Min(bookValue - salvage, bookValue * factor / life);
-                depreciation = Math.Max(depreciation, 0d);
-                bookValue -= depreciation;
-            }
-
-            if (fraction > 0d)
-            {
-                depreciation = Math.Min(bookValue - salvage, bookValue * factor / life);
-                depreciation = Math.Max(depreciation, 0d) * fraction;
-            }
-
-            return FormulaFinancialNumberResult(depreciation);
-        }
-
+        // Delegated to the single source-of-truth FreeX.Core.Formula implementation (see
+        // AccessibilityCheckerService.CoreFormulaFinancialDelegation.cs).
         private static ScalarValue FormulaFinancialVdbScalar(
             double cost,
             double salvage,
@@ -18251,60 +18146,14 @@ public static partial class AccessibilityCheckerService
             double startPeriod,
             double endPeriod,
             double factor,
-            bool noSwitch)
-        {
-            if (!double.IsFinite(cost) ||
-                !double.IsFinite(salvage) ||
-                !double.IsFinite(life) ||
-                !double.IsFinite(startPeriod) ||
-                !double.IsFinite(endPeriod) ||
-                !double.IsFinite(factor))
-            {
-                return ErrorValue.Num;
-            }
+            bool noSwitch) =>
+            InvokeCoreFormulaScalarFunction(
+                "VDB", new NumberValue(cost), new NumberValue(salvage), new NumberValue(life),
+                new NumberValue(startPeriod), new NumberValue(endPeriod), new NumberValue(factor),
+                new BoolValue(noSwitch));
 
-            if (cost < 0d ||
-                salvage < 0d ||
-                life <= 0d ||
-                startPeriod < 0d ||
-                endPeriod < startPeriod ||
-                endPeriod > life ||
-                factor <= 0d)
-            {
-                return ErrorValue.Num;
-            }
-
-            var totalDepreciation = 0d;
-            var bookValue = cost;
-            var currentPeriod = startPeriod;
-            var iterations = 0;
-            while (currentPeriod < endPeriod)
-            {
-                if (++iterations > MaxFormulaFinancialDepreciationIterations)
-                    return ErrorValue.Num;
-
-                var periodEnd = Math.Min(Math.Ceiling(currentPeriod + 1e-10d), endPeriod);
-                if (periodEnd <= currentPeriod)
-                    return ErrorValue.Num;
-
-                var fraction = periodEnd - currentPeriod;
-                var period = Math.Floor(currentPeriod + 1e-10d);
-                var ddbDepreciation = bookValue * factor / life;
-                var straightLineDepreciation = (bookValue - salvage) / (life - period);
-                var depreciation = !noSwitch && straightLineDepreciation > ddbDepreciation
-                    ? straightLineDepreciation
-                    : ddbDepreciation;
-                depreciation = Math.Max(0d, Math.Min(depreciation, bookValue - salvage));
-
-                var partialDepreciation = depreciation * fraction;
-                totalDepreciation += partialDepreciation;
-                bookValue -= partialDepreciation;
-                currentPeriod = periodEnd;
-            }
-
-            return FormulaFinancialNumberResult(totalDepreciation);
-        }
-
+        // Delegated to the single source-of-truth FreeX.Core.Formula implementation (see
+        // AccessibilityCheckerService.CoreFormulaFinancialDelegation.cs).
         private static ScalarValue FormulaFinancialAmordegrcScalar(
             double cost,
             double datePurchased,
@@ -18312,51 +18161,10 @@ public static partial class AccessibilityCheckerService
             double salvage,
             double period,
             double rate,
-            int basis)
-        {
-            if (!TryGetFormulaFinancialAmortizationArguments(
-                    cost,
-                    datePurchased,
-                    firstPeriod,
-                    salvage,
-                    period,
-                    rate,
-                    basis,
-                    out var datePurchasedDate,
-                    out var firstPeriodDate,
-                    out var integerPeriod))
-            {
-                return ErrorValue.Num;
-            }
-
-            var life = 1d / rate;
-            double coefficient;
-            if (life < 3d)
-                coefficient = 1d;
-            else if (life < 5d)
-                coefficient = 1.5d;
-            else if (life <= 6d)
-                coefficient = 2d;
-            else
-                coefficient = 2.5d;
-
-            var depreciationRate = rate * coefficient;
-            var firstFraction = FormulaFinancialDayCountFraction(datePurchasedDate, firstPeriodDate, basis);
-            var bookValue = cost;
-            for (var currentPeriod = 0; currentPeriod <= integerPeriod; currentPeriod++)
-            {
-                var depreciation = currentPeriod == 0
-                    ? bookValue * depreciationRate * firstFraction
-                    : bookValue * depreciationRate;
-                depreciation = Math.Max(0d, Math.Min(depreciation, bookValue - salvage));
-                if (currentPeriod < integerPeriod)
-                    bookValue -= depreciation;
-                else
-                    return FormulaFinancialNumberResult(depreciation);
-            }
-
-            return new NumberValue(0d);
-        }
+            int basis) =>
+            InvokeCoreFormulaScalarFunction(
+                "AMORDEGRC", new NumberValue(cost), new NumberValue(datePurchased), new NumberValue(firstPeriod),
+                new NumberValue(salvage), new NumberValue(period), new NumberValue(rate), new NumberValue(basis));
 
         private static ScalarValue FormulaFinancialAmorlincScalar(
             double cost,
@@ -18365,40 +18173,10 @@ public static partial class AccessibilityCheckerService
             double salvage,
             double period,
             double rate,
-            int basis)
-        {
-            if (!TryGetFormulaFinancialAmortizationArguments(
-                    cost,
-                    datePurchased,
-                    firstPeriod,
-                    salvage,
-                    period,
-                    rate,
-                    basis,
-                    out var datePurchasedDate,
-                    out var firstPeriodDate,
-                    out var integerPeriod))
-            {
-                return ErrorValue.Num;
-            }
-
-            var firstFraction = FormulaFinancialDayCountFraction(datePurchasedDate, firstPeriodDate, basis);
-            var annualDepreciation = cost * rate;
-            var bookValue = cost;
-            for (var currentPeriod = 0; currentPeriod <= integerPeriod; currentPeriod++)
-            {
-                var depreciation = currentPeriod == 0
-                    ? annualDepreciation * firstFraction
-                    : annualDepreciation;
-                depreciation = Math.Max(0d, Math.Min(depreciation, bookValue - salvage));
-                if (currentPeriod < integerPeriod)
-                    bookValue -= depreciation;
-                else
-                    return FormulaFinancialNumberResult(depreciation);
-            }
-
-            return new NumberValue(0d);
-        }
+            int basis) =>
+            InvokeCoreFormulaScalarFunction(
+                "AMORLINC", new NumberValue(cost), new NumberValue(datePurchased), new NumberValue(firstPeriod),
+                new NumberValue(salvage), new NumberValue(period), new NumberValue(rate), new NumberValue(basis));
 
         private static bool TryGetFormulaFinancialAmortizationArguments(
             double cost,
@@ -18435,118 +18213,32 @@ public static partial class AccessibilityCheckerService
                 TryGetFormulaFinancialDate(firstPeriod, out firstPeriodDate);
         }
 
-        private static ScalarValue FormulaFinancialEffectScalar(double nominalRate, double npery)
-        {
-            npery = Math.Truncate(npery);
-            if (!double.IsFinite(nominalRate) || !double.IsFinite(npery) || nominalRate <= 0d || npery < 1d)
-                return ErrorValue.Num;
+        // Delegated to the single source-of-truth FreeX.Core.Formula implementation (see
+        // AccessibilityCheckerService.CoreFormulaFinancialDelegation.cs).
+        private static ScalarValue FormulaFinancialEffectScalar(double nominalRate, double npery) =>
+            InvokeCoreFormulaScalarFunction("EFFECT", new NumberValue(nominalRate), new NumberValue(npery));
 
-            return FormulaFinancialNumberResult(Math.Pow(1d + nominalRate / npery, npery) - 1d);
-        }
+        private static ScalarValue FormulaFinancialNominalScalar(double effectiveRate, double npery) =>
+            InvokeCoreFormulaScalarFunction("NOMINAL", new NumberValue(effectiveRate), new NumberValue(npery));
 
-        private static ScalarValue FormulaFinancialNominalScalar(double effectiveRate, double npery)
-        {
-            npery = Math.Truncate(npery);
-            if (!double.IsFinite(effectiveRate) || !double.IsFinite(npery) || effectiveRate <= 0d || npery < 1d)
-                return ErrorValue.Num;
+        private static ScalarValue FormulaFinancialRriScalar(double nper, double pv, double fv) =>
+            InvokeCoreFormulaScalarFunction("RRI", new NumberValue(nper), new NumberValue(pv), new NumberValue(fv));
 
-            return FormulaFinancialNumberResult((Math.Pow(1d + effectiveRate, 1d / npery) - 1d) * npery);
-        }
+        private static ScalarValue FormulaFinancialPdurationScalar(double rate, double pv, double fv) =>
+            InvokeCoreFormulaScalarFunction("PDURATION", new NumberValue(rate), new NumberValue(pv), new NumberValue(fv));
 
-        private static ScalarValue FormulaFinancialRriScalar(double nper, double pv, double fv)
-        {
-            if (!double.IsFinite(nper) || !double.IsFinite(pv) || !double.IsFinite(fv))
-                return ErrorValue.Num;
-
-            if (nper <= 0d || pv == 0d || pv > 0d && fv < 0d || pv < 0d && fv > 0d)
-                return ErrorValue.Num;
-
-            return FormulaFinancialNumberResult(Math.Pow(fv / pv, 1d / nper) - 1d);
-        }
-
-        private static ScalarValue FormulaFinancialPdurationScalar(double rate, double pv, double fv)
-        {
-            if (!double.IsFinite(rate) || !double.IsFinite(pv) || !double.IsFinite(fv))
-                return ErrorValue.Num;
-
-            if (rate <= 0d || pv <= 0d || fv <= 0d)
-                return ErrorValue.Num;
-
-            return FormulaFinancialNumberResult((Math.Log(fv) - Math.Log(pv)) / Math.Log(1d + rate));
-        }
-
+        // Delegated to the single source-of-truth FreeX.Core.Formula implementation (see
+        // AccessibilityCheckerService.CoreFormulaFinancialDelegation.cs).
         private static ScalarValue FormulaFinancialDurationScalar(
             double settlement,
             double maturity,
             double coupon,
             double yield,
             int frequency,
-            int basis)
-        {
-            if (!double.IsFinite(settlement) ||
-                !double.IsFinite(maturity) ||
-                !double.IsFinite(coupon) ||
-                !double.IsFinite(yield))
-            {
-                return ErrorValue.Num;
-            }
-
-            if (coupon < 0d ||
-                yield < 0d ||
-                !TryValidateFormulaFinancialBondSchedule(settlement, maturity, frequency, basis, out var settlementDate, out var maturityDate))
-            {
-                return ErrorValue.Num;
-            }
-
-            if (!TryGetFormulaFinancialCouponSchedule(
-                    settlementDate,
-                    maturityDate,
-                    frequency,
-                    out var previousCouponDate,
-                    out var nextCouponDate,
-                    out var couponCount))
-            {
-                return ErrorValue.Num;
-            }
-
-            var daysInPeriod = (nextCouponDate - previousCouponDate).TotalDays;
-            if (daysInPeriod <= 0d)
-                return ErrorValue.Num;
-
-            var fractionalPeriodsToNextCoupon = (nextCouponDate - settlementDate).TotalDays / daysInPeriod;
-            var couponPayment = coupon / frequency * 100d;
-            var yieldPerPeriod = yield / frequency;
-            var price = 0d;
-            var weightedTime = 0d;
-            var currentCouponDate = nextCouponDate;
-            var months = 12 / frequency;
-
-            for (var index = 0; index < couponCount; index++)
-            {
-                var periodsFromSettlement = index + fractionalPeriodsToNextCoupon;
-                var cashFlow = couponPayment;
-                if (currentCouponDate == maturityDate)
-                    cashFlow += 100d;
-
-                var presentValue = cashFlow / Math.Pow(1d + yieldPerPeriod, periodsFromSettlement);
-                price += presentValue;
-                weightedTime += periodsFromSettlement / frequency * presentValue;
-
-                try
-                {
-                    currentCouponDate = currentCouponDate.AddMonths(months);
-                }
-                catch (ArgumentOutOfRangeException)
-                {
-                    return ErrorValue.Num;
-                }
-            }
-
-            if (Math.Abs(price) < 1E-14d)
-                return ErrorValue.Num;
-
-            return FormulaFinancialNumberResult(weightedTime / price);
-        }
+            int basis) =>
+            InvokeCoreFormulaScalarFunction(
+                "DURATION", new NumberValue(settlement), new NumberValue(maturity), new NumberValue(coupon),
+                new NumberValue(yield), new NumberValue(frequency), new NumberValue(basis));
 
         private static ScalarValue FormulaFinancialMdurationScalar(
             double settlement,
@@ -18554,15 +18246,13 @@ public static partial class AccessibilityCheckerService
             double coupon,
             double yield,
             int frequency,
-            int basis)
-        {
-            var duration = FormulaFinancialDurationScalar(settlement, maturity, coupon, yield, frequency, basis);
-            if (duration is not NumberValue durationNumber)
-                return duration;
+            int basis) =>
+            InvokeCoreFormulaScalarFunction(
+                "MDURATION", new NumberValue(settlement), new NumberValue(maturity), new NumberValue(coupon),
+                new NumberValue(yield), new NumberValue(frequency), new NumberValue(basis));
 
-            return FormulaFinancialNumberResult(durationNumber.Value / (1d + yield / frequency));
-        }
-
+        // Delegated to the single source-of-truth FreeX.Core.Formula implementation (see
+        // AccessibilityCheckerService.CoreFormulaFinancialDelegation.cs).
         private static ScalarValue FormulaFinancialPriceScalar(
             double settlement,
             double maturity,
@@ -18570,36 +18260,10 @@ public static partial class AccessibilityCheckerService
             double yield,
             double redemption,
             int frequency,
-            int basis)
-        {
-            if (!double.IsFinite(settlement) ||
-                !double.IsFinite(maturity) ||
-                !double.IsFinite(rate) ||
-                !double.IsFinite(yield) ||
-                !double.IsFinite(redemption))
-            {
-                return ErrorValue.Num;
-            }
-
-            if (rate < 0d ||
-                yield < 0d ||
-                redemption <= 0d ||
-                !TryValidateFormulaFinancialBondSchedule(settlement, maturity, frequency, basis, out var settlementDate, out var maturityDate))
-            {
-                return ErrorValue.Num;
-            }
-
-            return TryCalculateFormulaFinancialBondPrice(
-                    settlementDate,
-                    maturityDate,
-                    rate,
-                    yield,
-                    redemption,
-                    frequency,
-                    out var price)
-                ? FormulaFinancialNumberResult(price)
-                : ErrorValue.Num;
-        }
+            int basis) =>
+            InvokeCoreFormulaScalarFunction(
+                "PRICE", new NumberValue(settlement), new NumberValue(maturity), new NumberValue(rate),
+                new NumberValue(yield), new NumberValue(redemption), new NumberValue(frequency), new NumberValue(basis));
 
         private static ScalarValue FormulaFinancialYieldScalar(
             double settlement,
@@ -18608,98 +18272,22 @@ public static partial class AccessibilityCheckerService
             double price,
             double redemption,
             int frequency,
-            int basis)
-        {
-            if (!double.IsFinite(settlement) ||
-                !double.IsFinite(maturity) ||
-                !double.IsFinite(rate) ||
-                !double.IsFinite(price) ||
-                !double.IsFinite(redemption))
-            {
-                return ErrorValue.Num;
-            }
+            int basis) =>
+            InvokeCoreFormulaScalarFunction(
+                "YIELD", new NumberValue(settlement), new NumberValue(maturity), new NumberValue(rate),
+                new NumberValue(price), new NumberValue(redemption), new NumberValue(frequency), new NumberValue(basis));
 
-            if (rate < 0d ||
-                price <= 0d ||
-                redemption <= 0d ||
-                !TryValidateFormulaFinancialBondSchedule(settlement, maturity, frequency, basis, out var settlementDate, out var maturityDate))
-            {
-                return ErrorValue.Num;
-            }
-
-            var yield = 0.1d;
-            for (var iteration = 0; iteration < MaxFormulaFinancialBondYieldIterations; iteration++)
-            {
-                if (!TryCalculateFormulaFinancialBondPrice(
-                        settlementDate,
-                        maturityDate,
-                        rate,
-                        yield,
-                        redemption,
-                        frequency,
-                        out var calculatedPrice) ||
-                    !TryCalculateFormulaFinancialBondPrice(
-                        settlementDate,
-                        maturityDate,
-                        rate,
-                        yield + 1E-6d,
-                        redemption,
-                        frequency,
-                        out var shiftedPrice))
-                {
-                    return ErrorValue.Num;
-                }
-
-                var derivative = (shiftedPrice - calculatedPrice) / 1E-6d;
-                if (!double.IsFinite(derivative))
-                    return ErrorValue.Num;
-
-                if (Math.Abs(derivative) < 1E-14d)
-                    break;
-
-                var delta = (calculatedPrice - price) / derivative;
-                if (!double.IsFinite(delta))
-                    return ErrorValue.Num;
-
-                yield -= delta;
-                if (yield < -0.999d)
-                    yield = -0.999d;
-
-                if (Math.Abs(delta) < 1E-10d)
-                    break;
-            }
-
-            return FormulaFinancialNumberResult(yield);
-        }
-
+        // Delegated to the single source-of-truth FreeX.Core.Formula implementation (see
+        // AccessibilityCheckerService.CoreFormulaFinancialDelegation.cs).
         private static ScalarValue FormulaFinancialYielddiscScalar(
             double settlement,
             double maturity,
             double price,
             double redemption,
-            int basis)
-        {
-            if (!double.IsFinite(settlement) ||
-                !double.IsFinite(maturity) ||
-                !double.IsFinite(price) ||
-                !double.IsFinite(redemption))
-            {
-                return ErrorValue.Num;
-            }
-
-            if (price <= 0d ||
-                redemption <= 0d ||
-                !TryGetFormulaFinancialBondDates(settlement, maturity, out var settlementDate, out var maturityDate))
-            {
-                return ErrorValue.Num;
-            }
-
-            var dayCountFraction = FormulaFinancialDayCountFraction(settlementDate, maturityDate, basis);
-            if (!double.IsFinite(dayCountFraction) || dayCountFraction <= 0d)
-                return ErrorValue.Num;
-
-            return FormulaFinancialNumberResult((redemption / price - 1d) / dayCountFraction);
-        }
+            int basis) =>
+            InvokeCoreFormulaScalarFunction(
+                "YIELDDISC", new NumberValue(settlement), new NumberValue(maturity), new NumberValue(price),
+                new NumberValue(redemption), new NumberValue(basis));
 
         private static ScalarValue FormulaFinancialYieldmatScalar(
             double settlement,
@@ -18707,38 +18295,13 @@ public static partial class AccessibilityCheckerService
             double issue,
             double rate,
             double price,
-            int basis)
-        {
-            if (!double.IsFinite(settlement) ||
-                !double.IsFinite(maturity) ||
-                !double.IsFinite(issue) ||
-                !double.IsFinite(rate) ||
-                !double.IsFinite(price))
-            {
-                return ErrorValue.Num;
-            }
+            int basis) =>
+            InvokeCoreFormulaScalarFunction(
+                "YIELDMAT", new NumberValue(settlement), new NumberValue(maturity), new NumberValue(issue),
+                new NumberValue(rate), new NumberValue(price), new NumberValue(basis));
 
-            if (rate < 0d ||
-                price <= 0d ||
-                !TryGetFormulaFinancialBondDates(settlement, maturity, out var settlementDate, out var maturityDate) ||
-                !TryGetFormulaFinancialCouponDate(issue, out var issueDate))
-            {
-                return ErrorValue.Num;
-            }
-
-            var daysIssueToMaturity = FormulaFinancialDayCountFraction(issueDate, maturityDate, basis);
-            var daysSettlementToMaturity = FormulaFinancialDayCountFraction(settlementDate, maturityDate, basis);
-            if (!double.IsFinite(daysIssueToMaturity) ||
-                !double.IsFinite(daysSettlementToMaturity) ||
-                daysSettlementToMaturity <= 0d)
-            {
-                return ErrorValue.Num;
-            }
-
-            var numerator = (1d + rate * daysIssueToMaturity) / (price / 100d) - 1d;
-            return FormulaFinancialNumberResult(numerator / daysSettlementToMaturity);
-        }
-
+        // Delegated to the single source-of-truth FreeX.Core.Formula implementation (see
+        // AccessibilityCheckerService.CoreFormulaFinancialDelegation.cs).
         private static ScalarValue FormulaFinancialOddfpriceScalar(
             double settlement,
             double maturity,
@@ -18748,51 +18311,11 @@ public static partial class AccessibilityCheckerService
             double yield,
             double redemption,
             int frequency,
-            int basis)
-        {
-            if (!double.IsFinite(settlement) ||
-                !double.IsFinite(maturity) ||
-                !double.IsFinite(issue) ||
-                !double.IsFinite(firstCoupon) ||
-                !double.IsFinite(rate) ||
-                !double.IsFinite(yield) ||
-                !double.IsFinite(redemption))
-            {
-                return ErrorValue.Num;
-            }
-
-            if (rate < 0d ||
-                yield < 0d ||
-                redemption <= 0d ||
-                !TryGetFormulaFinancialOddFirstCouponDates(
-                    settlement,
-                    maturity,
-                    issue,
-                    firstCoupon,
-                    frequency,
-                    basis,
-                    out var settlementDate,
-                    out var maturityDate,
-                    out var issueDate,
-                    out var firstCouponDate))
-            {
-                return ErrorValue.Num;
-            }
-
-            return TryCalculateFormulaFinancialOddFirstPrice(
-                    issueDate,
-                    settlementDate,
-                    maturityDate,
-                    firstCouponDate,
-                    rate,
-                    yield,
-                    redemption,
-                    frequency,
-                    basis,
-                    out var price)
-                ? FormulaFinancialNumberResult(price)
-                : ErrorValue.Num;
-        }
+            int basis) =>
+            InvokeCoreFormulaScalarFunction(
+                "ODDFPRICE", new NumberValue(settlement), new NumberValue(maturity), new NumberValue(issue),
+                new NumberValue(firstCoupon), new NumberValue(rate), new NumberValue(yield),
+                new NumberValue(redemption), new NumberValue(frequency), new NumberValue(basis));
 
         private static ScalarValue FormulaFinancialOddfyieldScalar(
             double settlement,
@@ -18803,87 +18326,11 @@ public static partial class AccessibilityCheckerService
             double price,
             double redemption,
             int frequency,
-            int basis)
-        {
-            if (!double.IsFinite(settlement) ||
-                !double.IsFinite(maturity) ||
-                !double.IsFinite(issue) ||
-                !double.IsFinite(firstCoupon) ||
-                !double.IsFinite(rate) ||
-                !double.IsFinite(price) ||
-                !double.IsFinite(redemption))
-            {
-                return ErrorValue.Num;
-            }
-
-            if (rate < 0d ||
-                price <= 0d ||
-                redemption <= 0d ||
-                !TryGetFormulaFinancialOddFirstCouponDates(
-                    settlement,
-                    maturity,
-                    issue,
-                    firstCoupon,
-                    frequency,
-                    basis,
-                    out var settlementDate,
-                    out var maturityDate,
-                    out var issueDate,
-                    out var firstCouponDate))
-            {
-                return ErrorValue.Num;
-            }
-
-            var yield = 0.1d;
-            for (var iteration = 0; iteration < MaxFormulaFinancialBondYieldIterations; iteration++)
-            {
-                if (!TryCalculateFormulaFinancialOddFirstPrice(
-                        issueDate,
-                        settlementDate,
-                        maturityDate,
-                        firstCouponDate,
-                        rate,
-                        yield,
-                        redemption,
-                        frequency,
-                        basis,
-                        out var calculatedPrice) ||
-                    !TryCalculateFormulaFinancialOddFirstPrice(
-                        issueDate,
-                        settlementDate,
-                        maturityDate,
-                        firstCouponDate,
-                        rate,
-                        yield + 1E-6d,
-                        redemption,
-                        frequency,
-                        basis,
-                        out var shiftedPrice))
-                {
-                    return ErrorValue.Num;
-                }
-
-                var derivative = (shiftedPrice - calculatedPrice) / 1E-6d;
-                if (!double.IsFinite(derivative))
-                    return ErrorValue.Num;
-
-                if (Math.Abs(derivative) < 1E-14d)
-                    break;
-
-                var delta = (calculatedPrice - price) / derivative;
-                if (!double.IsFinite(delta))
-                    return ErrorValue.Num;
-
-                yield -= delta;
-                if (yield < -0.999d)
-                    yield = -0.999d;
-
-                if (Math.Abs(delta) < 1E-10d)
-                    break;
-            }
-
-            return FormulaFinancialNumberResult(yield);
-        }
+            int basis) =>
+            InvokeCoreFormulaScalarFunction(
+                "ODDFYIELD", new NumberValue(settlement), new NumberValue(maturity), new NumberValue(issue),
+                new NumberValue(firstCoupon), new NumberValue(rate), new NumberValue(price),
+                new NumberValue(redemption), new NumberValue(frequency), new NumberValue(basis));
 
         private static ScalarValue FormulaFinancialOddlpriceScalar(
             double settlement,
@@ -18893,47 +18340,11 @@ public static partial class AccessibilityCheckerService
             double yield,
             double redemption,
             int frequency,
-            int basis)
-        {
-            if (!double.IsFinite(settlement) ||
-                !double.IsFinite(maturity) ||
-                !double.IsFinite(lastInterest) ||
-                !double.IsFinite(rate) ||
-                !double.IsFinite(yield) ||
-                !double.IsFinite(redemption))
-            {
-                return ErrorValue.Num;
-            }
-
-            if (rate < 0d ||
-                yield < 0d ||
-                redemption <= 0d ||
-                !TryGetFormulaFinancialOddLastCouponDates(
-                    settlement,
-                    maturity,
-                    lastInterest,
-                    frequency,
-                    basis,
-                    out var settlementDate,
-                    out var maturityDate,
-                    out var lastInterestDate))
-            {
-                return ErrorValue.Num;
-            }
-
-            return TryCalculateFormulaFinancialOddLastPrice(
-                    lastInterestDate,
-                    settlementDate,
-                    maturityDate,
-                    rate,
-                    yield,
-                    redemption,
-                    frequency,
-                    basis,
-                    out var price)
-                ? FormulaFinancialNumberResult(price)
-                : ErrorValue.Num;
-        }
+            int basis) =>
+            InvokeCoreFormulaScalarFunction(
+                "ODDLPRICE", new NumberValue(settlement), new NumberValue(maturity), new NumberValue(lastInterest),
+                new NumberValue(rate), new NumberValue(yield), new NumberValue(redemption),
+                new NumberValue(frequency), new NumberValue(basis));
 
         private static ScalarValue FormulaFinancialOddlyieldScalar(
             double settlement,
@@ -18943,58 +18354,11 @@ public static partial class AccessibilityCheckerService
             double price,
             double redemption,
             int frequency,
-            int basis)
-        {
-            if (!double.IsFinite(settlement) ||
-                !double.IsFinite(maturity) ||
-                !double.IsFinite(lastInterest) ||
-                !double.IsFinite(rate) ||
-                !double.IsFinite(price) ||
-                !double.IsFinite(redemption))
-            {
-                return ErrorValue.Num;
-            }
-
-            if (rate < 0d ||
-                price <= 0d ||
-                redemption <= 0d ||
-                !TryGetFormulaFinancialOddLastCouponDates(
-                    settlement,
-                    maturity,
-                    lastInterest,
-                    frequency,
-                    basis,
-                    out var settlementDate,
-                    out var maturityDate,
-                    out var lastInterestDate))
-            {
-                return ErrorValue.Num;
-            }
-
-            if (!TryGetFormulaFinancialOddLastCouponPeriods(
-                    lastInterestDate,
-                    settlementDate,
-                    maturityDate,
-                    frequency,
-                    basis,
-                    out var accruedPeriods,
-                    out var remainingPeriods,
-                    out var oddCouponPeriods))
-            {
-                return ErrorValue.Num;
-            }
-
-            var couponAmount = rate / frequency * redemption;
-            var numerator = redemption + couponAmount * oddCouponPeriods;
-            var denominator = price + couponAmount * accruedPeriods;
-            if (Math.Abs(remainingPeriods) < 1E-14d ||
-                Math.Abs(denominator) < 1E-14d)
-            {
-                return ErrorValue.DivByZero;
-            }
-
-            return FormulaFinancialNumberResult((numerator / denominator - 1d) / remainingPeriods * frequency);
-        }
+            int basis) =>
+            InvokeCoreFormulaScalarFunction(
+                "ODDLYIELD", new NumberValue(settlement), new NumberValue(maturity), new NumberValue(lastInterest),
+                new NumberValue(rate), new NumberValue(price), new NumberValue(redemption),
+                new NumberValue(frequency), new NumberValue(basis));
 
         private static bool TryGetFormulaFinancialOddFirstCouponDates(
             double settlement,
@@ -19368,131 +18732,47 @@ public static partial class AccessibilityCheckerService
             return false;
         }
 
+        // Delegated to the single source-of-truth FreeX.Core.Formula implementation (see
+        // AccessibilityCheckerService.CoreFormulaFinancialDelegation.cs).
         private static ScalarValue FormulaFinancialDiscScalar(
             double settlement,
             double maturity,
             double price,
             double redemption,
-            int basis)
-        {
-            if (!double.IsFinite(settlement) ||
-                !double.IsFinite(maturity) ||
-                !double.IsFinite(price) ||
-                !double.IsFinite(redemption))
-            {
-                return ErrorValue.Num;
-            }
-
-            if (price <= 0d || redemption <= 0d)
-                return ErrorValue.Num;
-
-            if (!TryGetFormulaFinancialDate(settlement, out var settlementDate) ||
-                !TryGetFormulaFinancialDate(maturity, out var maturityDate) ||
-                settlementDate >= maturityDate)
-            {
-                return ErrorValue.Num;
-            }
-
-            var dayCountFraction = FormulaFinancialDayCountFraction(settlementDate, maturityDate, basis);
-            if (dayCountFraction <= 0d)
-                return ErrorValue.Num;
-
-            return FormulaFinancialNumberResult((redemption - price) / redemption / dayCountFraction);
-        }
+            int basis) =>
+            InvokeCoreFormulaScalarFunction(
+                "DISC", new NumberValue(settlement), new NumberValue(maturity), new NumberValue(price),
+                new NumberValue(redemption), new NumberValue(basis));
 
         private static ScalarValue FormulaFinancialIntrateScalar(
             double settlement,
             double maturity,
             double investment,
             double redemption,
-            int basis)
-        {
-            if (!double.IsFinite(settlement) ||
-                !double.IsFinite(maturity) ||
-                !double.IsFinite(investment) ||
-                !double.IsFinite(redemption))
-            {
-                return ErrorValue.Num;
-            }
-
-            if (investment <= 0d || redemption <= 0d)
-                return ErrorValue.Num;
-
-            if (!TryGetFormulaFinancialDate(settlement, out var settlementDate) ||
-                !TryGetFormulaFinancialDate(maturity, out var maturityDate) ||
-                settlementDate >= maturityDate)
-            {
-                return ErrorValue.Num;
-            }
-
-            var dayCountFraction = FormulaFinancialDayCountFraction(settlementDate, maturityDate, basis);
-            if (dayCountFraction <= 0d)
-                return ErrorValue.Num;
-
-            return FormulaFinancialNumberResult((redemption - investment) / investment / dayCountFraction);
-        }
+            int basis) =>
+            InvokeCoreFormulaScalarFunction(
+                "INTRATE", new NumberValue(settlement), new NumberValue(maturity), new NumberValue(investment),
+                new NumberValue(redemption), new NumberValue(basis));
 
         private static ScalarValue FormulaFinancialReceivedScalar(
             double settlement,
             double maturity,
             double investment,
             double discount,
-            int basis)
-        {
-            if (!double.IsFinite(settlement) ||
-                !double.IsFinite(maturity) ||
-                !double.IsFinite(investment) ||
-                !double.IsFinite(discount))
-            {
-                return ErrorValue.Num;
-            }
-
-            if (investment <= 0d || discount <= 0d)
-                return ErrorValue.Num;
-
-            if (!TryGetFormulaFinancialDate(settlement, out var settlementDate) ||
-                !TryGetFormulaFinancialDate(maturity, out var maturityDate) ||
-                settlementDate >= maturityDate)
-            {
-                return ErrorValue.Num;
-            }
-
-            var dayCountFraction = FormulaFinancialDayCountFraction(settlementDate, maturityDate, basis);
-            var denominator = 1d - discount * dayCountFraction;
-            if (Math.Abs(denominator) < 1E-14d)
-                return ErrorValue.DivByZero;
-
-            return FormulaFinancialNumberResult(investment / denominator);
-        }
+            int basis) =>
+            InvokeCoreFormulaScalarFunction(
+                "RECEIVED", new NumberValue(settlement), new NumberValue(maturity), new NumberValue(investment),
+                new NumberValue(discount), new NumberValue(basis));
 
         private static ScalarValue FormulaFinancialPricediscScalar(
             double settlement,
             double maturity,
             double discount,
             double redemption,
-            int basis)
-        {
-            if (!double.IsFinite(settlement) ||
-                !double.IsFinite(maturity) ||
-                !double.IsFinite(discount) ||
-                !double.IsFinite(redemption))
-            {
-                return ErrorValue.Num;
-            }
-
-            if (discount <= 0d || redemption <= 0d)
-                return ErrorValue.Num;
-
-            if (!TryGetFormulaFinancialDate(settlement, out var settlementDate) ||
-                !TryGetFormulaFinancialDate(maturity, out var maturityDate) ||
-                settlementDate >= maturityDate)
-            {
-                return ErrorValue.Num;
-            }
-
-            var dayCountFraction = FormulaFinancialDayCountFraction(settlementDate, maturityDate, basis);
-            return FormulaFinancialNumberResult(redemption * (1d - discount * dayCountFraction));
-        }
+            int basis) =>
+            InvokeCoreFormulaScalarFunction(
+                "PRICEDISC", new NumberValue(settlement), new NumberValue(maturity), new NumberValue(discount),
+                new NumberValue(redemption), new NumberValue(basis));
 
         private static ScalarValue FormulaFinancialPricematScalar(
             double settlement,
@@ -19500,95 +18780,22 @@ public static partial class AccessibilityCheckerService
             double issue,
             double rate,
             double yieldRate,
-            int basis)
-        {
-            if (!double.IsFinite(settlement) ||
-                !double.IsFinite(maturity) ||
-                !double.IsFinite(issue) ||
-                !double.IsFinite(rate) ||
-                !double.IsFinite(yieldRate))
-            {
-                return ErrorValue.Num;
-            }
+            int basis) =>
+            InvokeCoreFormulaScalarFunction(
+                "PRICEMAT", new NumberValue(settlement), new NumberValue(maturity), new NumberValue(issue),
+                new NumberValue(rate), new NumberValue(yieldRate), new NumberValue(basis));
 
-            if (rate < 0d || yieldRate < 0d)
-                return ErrorValue.Num;
+        private static ScalarValue FormulaFinancialTbilleqScalar(double settlement, double maturity, double discount) =>
+            InvokeCoreFormulaScalarFunction(
+                "TBILLEQ", new NumberValue(settlement), new NumberValue(maturity), new NumberValue(discount));
 
-            if (!TryGetFormulaFinancialDate(settlement, out var settlementDate) ||
-                !TryGetFormulaFinancialDate(maturity, out var maturityDate) ||
-                !TryGetFormulaFinancialDate(issue, out var issueDate) ||
-                settlementDate >= maturityDate)
-            {
-                return ErrorValue.Num;
-            }
+        private static ScalarValue FormulaFinancialTbillpriceScalar(double settlement, double maturity, double discount) =>
+            InvokeCoreFormulaScalarFunction(
+                "TBILLPRICE", new NumberValue(settlement), new NumberValue(maturity), new NumberValue(discount));
 
-            var issueToMaturity = FormulaFinancialDayCountFraction(issueDate, maturityDate, basis);
-            var settlementToMaturity = FormulaFinancialDayCountFraction(settlementDate, maturityDate, basis);
-            return FormulaFinancialNumberResult(100d * (1d + rate * issueToMaturity) / (1d + yieldRate * settlementToMaturity));
-        }
-
-        private static ScalarValue FormulaFinancialTbilleqScalar(double settlement, double maturity, double discount)
-        {
-            if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(discount))
-                return ErrorValue.Num;
-
-            if (discount <= 0d || discount >= 1d)
-                return ErrorValue.Num;
-
-            if (!TryGetFormulaFinancialDate(settlement, out var settlementDate) ||
-                !TryGetFormulaFinancialDate(maturity, out var maturityDate))
-            {
-                return ErrorValue.Num;
-            }
-
-            var daysSettlementToMaturity = (maturityDate - settlementDate).TotalDays;
-            if (daysSettlementToMaturity <= 0d || daysSettlementToMaturity > 182d)
-                return ErrorValue.Num;
-
-            return FormulaFinancialNumberResult((365d * discount) / (360d - discount * daysSettlementToMaturity));
-        }
-
-        private static ScalarValue FormulaFinancialTbillpriceScalar(double settlement, double maturity, double discount)
-        {
-            if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(discount))
-                return ErrorValue.Num;
-
-            if (discount <= 0d)
-                return ErrorValue.Num;
-
-            if (!TryGetFormulaFinancialDate(settlement, out var settlementDate) ||
-                !TryGetFormulaFinancialDate(maturity, out var maturityDate))
-            {
-                return ErrorValue.Num;
-            }
-
-            var daysSettlementToMaturity = (maturityDate - settlementDate).TotalDays;
-            if (daysSettlementToMaturity <= 0d)
-                return ErrorValue.Num;
-
-            return FormulaFinancialNumberResult(100d * (1d - discount * daysSettlementToMaturity / 360d));
-        }
-
-        private static ScalarValue FormulaFinancialTbillyieldScalar(double settlement, double maturity, double price)
-        {
-            if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(price))
-                return ErrorValue.Num;
-
-            if (price <= 0d)
-                return ErrorValue.Num;
-
-            if (!TryGetFormulaFinancialDate(settlement, out var settlementDate) ||
-                !TryGetFormulaFinancialDate(maturity, out var maturityDate))
-            {
-                return ErrorValue.Num;
-            }
-
-            var daysSettlementToMaturity = (maturityDate - settlementDate).TotalDays;
-            if (daysSettlementToMaturity <= 0d)
-                return ErrorValue.Num;
-
-            return FormulaFinancialNumberResult((100d - price) / price * 360d / daysSettlementToMaturity);
-        }
+        private static ScalarValue FormulaFinancialTbillyieldScalar(double settlement, double maturity, double price) =>
+            InvokeCoreFormulaScalarFunction(
+                "TBILLYIELD", new NumberValue(settlement), new NumberValue(maturity), new NumberValue(price));
 
         private static double FormulaFinancialDayCountFraction(DateTime start, DateTime end, int basis)
         {
