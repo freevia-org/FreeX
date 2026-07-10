@@ -288,6 +288,12 @@ public sealed class ChartModel
     /// </summary>
     public List<int>? WaterfallTotalPointIndices { get; set; }
 
+    /// <summary>
+    /// BoxAndWhisker cx:statistics/@quartileMethod ("inclusive" or "exclusive"). Null means unset,
+    /// in which case the writer defaults to Excel's "exclusive" behavior.
+    /// </summary>
+    public string? QuartileMethod { get; set; }
+
     public bool ShowUpDownBars { get; set; }
     public int? UpDownBarGapWidth { get; set; }
     public CellColor? UpBarFillColor { get; set; }

@@ -136,7 +136,9 @@ internal static partial class XlsxChartXmlWriter
     /// <summary>
     /// Optional per-series layout properties for chartEx families. Histogram emits Excel's default
     /// empty binning element so desktop Excel treats the data as bins, and Pareto emits Excel's
-    /// aggregation marker so the primary column series is sorted/grouped by value. Custom
+    /// aggregation marker so the primary column series is sorted/grouped by value. BoxAndWhisker
+    /// emits <c>cx:statistics/@quartileMethod</c> from <see cref="ChartModel.QuartileMethod"/>,
+    /// defaulting to "exclusive" when unset. Custom
     /// <c>cx:binCount</c> and <c>cx:binSize</c> values remain intentionally suppressed because Excel
     /// rejects otherwise valid chartEx packages that contain them.
     /// </summary>
@@ -153,8 +155,9 @@ internal static partial class XlsxChartXmlWriter
 
         if (chart.Type == ChartType.BoxAndWhisker)
         {
+            var quartileMethod = chart.QuartileMethod ?? "exclusive";
             return new XElement(chartExNs + "layoutPr",
-                new XElement(chartExNs + "statistics", new XAttribute("quartileMethod", "exclusive")));
+                new XElement(chartExNs + "statistics", new XAttribute("quartileMethod", quartileMethod)));
         }
 
         if (chart.Type == ChartType.Waterfall)

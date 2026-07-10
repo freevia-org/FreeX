@@ -2,6 +2,8 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
 
+using FreeX.Core.Model;
+
 namespace FreeX.Core.IO;
 
 internal static partial class XlsxWorksheetMetadataPreserver
@@ -18,24 +20,47 @@ internal static partial class XlsxWorksheetMetadataPreserver
             return false;
 
         var targetHyperlinks = targetRoot.Element(workbookNs + "hyperlinks");
-        if (targetHyperlinks is null)
-            return false;
+        var changed = false;
+        if (targetHyperlinks is not null)
+            changed = MergeMissingAttributes(sourceHyperlinks, targetHyperlinks);
 
-        var changed = MergeMissingAttributes(sourceHyperlinks, targetHyperlinks);
-
-        var targetByReference = targetHyperlinks
-            .Elements(workbookNs + "hyperlink")
-            .Where(element => !string.IsNullOrWhiteSpace(element.Attribute("ref")?.Value))
-            .ToDictionary(
-                element => element.Attribute("ref")!.Value,
-                StringComparer.OrdinalIgnoreCase);
+        var targetByReference = targetHyperlinks is null
+            ? new Dictionary<string, XElement>(StringComparer.OrdinalIgnoreCase)
+            : targetHyperlinks
+                .Elements(workbookNs + "hyperlink")
+                .Where(element => !string.IsNullOrWhiteSpace(element.Attribute("ref")?.Value))
+                .ToDictionary(
+                    element => element.Attribute("ref")!.Value,
+                    StringComparer.OrdinalIgnoreCase);
 
         foreach (var sourceHyperlink in sourceHyperlinks.Elements(workbookNs + "hyperlink"))
         {
             var reference = sourceHyperlink.Attribute("ref")?.Value;
-            if (string.IsNullOrWhiteSpace(reference) ||
-                !targetByReference.TryGetValue(reference, out var targetHyperlink))
+            if (string.IsNullOrWhiteSpace(reference))
+                continue;
+
+            if (!targetByReference.TryGetValue(reference, out var targetHyperlink))
             {
+                // Whole-column/row and oversized bounded-range hyperlinks are stripped from the
+                // ClosedXML-input copy before load (XlsxWorksheetHyperlinkNormalizer.StripRangeHyperlinkRefs)
+                // so ClosedXML's regenerated worksheet never has a matching <hyperlink> element for this
+                // ref on a full (non-patch) save -- there's nothing to merge attributes onto. Everything
+                // else with no target match is a genuine edit (the cells were cleared or the hyperlink was
+                // removed) and must NOT be resurrected, so only re-emit refs that match the same load-time
+                // strip criteria the loader used to drop them in the first place. The relationship itself
+                // (for an external target) is already carried over into the target worksheet's own .rels by
+                // XlsxPackageMetadataMerger.MergeRelationshipParts, which always preserves external
+                // relationships regardless of whether the regenerated worksheet body references them, so no
+                // package-graph rebinding is needed here -- and none of this requires reading anything
+                // beyond the per-part source worksheet XML already parsed into sourceHyperlinks.
+                if (!IsStrippedRangeHyperlinkRef(reference))
+                    continue;
+
+                targetHyperlinks ??= CreateAndInsertWorksheetHyperlinksElement(targetRoot, workbookNs);
+                var reemitted = new XElement(sourceHyperlink);
+                targetHyperlinks.Add(reemitted);
+                targetByReference[reference] = reemitted;
+                changed = true;
                 continue;
             }
 
@@ -55,6 +80,96 @@ internal static partial class XlsxWorksheetMetadataPreserver
         }
 
         return changed;
+    }
+
+    // Mirrors XlsxWorksheetHyperlinkNormalizer's load-time strip criteria (whole-column/row refs, and
+    // bounded ranges above the cell-count cap that ClosedXML would otherwise materialize per-cell). Kept
+    // as an independent, narrowly-scoped copy here rather than exposing the normalizer's private helpers,
+    // so this file's ownership boundary stays self-contained.
+    private const long MaxBoundedHyperlinkRangeCellCount = 100_000;
+
+    private static bool IsStrippedRangeHyperlinkRef(string reference)
+    {
+        var trimmed = reference.Trim();
+        if (trimmed.Length == 0 || trimmed.Contains(' ', StringComparison.Ordinal))
+            return false;
+
+        var parts = trimmed.Split(':');
+        if (parts.Length != 2)
+            return false;
+
+        if (IsWholeColumnOrRowHyperlinkRef(parts[0], parts[1]))
+            return true;
+
+        var sheet = SheetId.New();
+        if (!CellAddress.TryParse(parts[0], sheet, out var start) ||
+            !CellAddress.TryParse(parts[1], sheet, out var end))
+        {
+            return false;
+        }
+
+        return new GridRange(start, end).CellCount > MaxBoundedHyperlinkRangeCellCount;
+    }
+
+    private static bool IsWholeColumnOrRowHyperlinkRef(string left, string right)
+    {
+        if (left.Length == 0 || right.Length == 0)
+            return false;
+
+        if (left.All(char.IsAsciiLetter) && right.All(char.IsAsciiLetter))
+            return true;
+
+        return left.All(char.IsAsciiDigit) && right.All(char.IsAsciiDigit);
+    }
+
+    // Elements that must follow <hyperlinks> per the CT_Worksheet schema sequence. Used only to find a
+    // correct insertion point when re-emitting a fully-stripped range hyperlink onto a worksheet whose
+    // regenerated body has no <hyperlinks> element at all left to merge onto.
+    private static readonly string[] WorksheetElementsAfterHyperlinks =
+    [
+        "printOptions",
+        "pageMargins",
+        "pageSetup",
+        "headerFooter",
+        "rowBreaks",
+        "colBreaks",
+        "customProperties",
+        "cellWatches",
+        "ignoredErrors",
+        "singleXmlCells",
+        "smartTags",
+        "drawing",
+        "legacyDrawing",
+        "legacyDrawingHF",
+        "picture",
+        "oleObjects",
+        "controls",
+        "webPublishItems",
+        "tableParts",
+        "extLst"
+    ];
+
+    private static XElement CreateAndInsertWorksheetHyperlinksElement(XElement targetRoot, XNamespace workbookNs)
+    {
+        var hyperlinks = new XElement(workbookNs + "hyperlinks");
+
+        XElement? insertionPoint = null;
+        foreach (var element in targetRoot.Elements())
+        {
+            if (element.Name.Namespace == workbookNs &&
+                WorksheetElementsAfterHyperlinks.Contains(element.Name.LocalName, StringComparer.Ordinal))
+            {
+                insertionPoint = element;
+                break;
+            }
+        }
+
+        if (insertionPoint is null)
+            targetRoot.Add(hyperlinks);
+        else
+            insertionPoint.AddBeforeSelf(hyperlinks);
+
+        return hyperlinks;
     }
 
     private static bool MergeWorksheetColumnAttributes(XElement? sourceColumns, XElement targetRoot, XNamespace workbookNs)
@@ -359,6 +474,18 @@ internal static partial class XlsxWorksheetMetadataPreserver
                         continue;
                     }
 
+                    // Rich-value cell metadata (vm/cm index into <valueMetadata>/<cellMetadata> in the
+                    // rich-value metadata part) is only valid for the exact t/formula/<v> it was captured
+                    // against. A full-rewrite save regenerates the target cell from the current model, so
+                    // if the cell's type, formula, or value changed since the source snapshot was taken,
+                    // reattaching the stale vm/cm would point the edited cell at metadata describing its
+                    // old value. Drop vm/cm on any mismatch; every other native attribute is unaffected.
+                    if (IsRichValueMetadataAttribute(attribute) &&
+                        !CellValueMatchesCapturedNativeMetadata(sourceCell, targetCell, workbookNs))
+                    {
+                        continue;
+                    }
+
                     targetCell.SetAttributeValue(attribute.Name, attribute.Value);
                     changed = true;
                 }
@@ -423,6 +550,38 @@ internal static partial class XlsxWorksheetMetadataPreserver
         }
 
         return changed;
+    }
+
+    private static bool IsRichValueMetadataAttribute(XAttribute attribute) =>
+        attribute.Name.NamespaceName.Length == 0 &&
+        (attribute.Name.LocalName == "vm" || attribute.Name.LocalName == "cm");
+
+    // True when sourceCell's t/formula/<v> -- the cell state the source's vm/cm metadata was captured
+    // against -- still match targetCell's. Guards against reattaching stale rich-value metadata (vm/cm)
+    // to a cell whose value, type, or formula changed since the source snapshot was taken.
+    private static bool CellValueMatchesCapturedNativeMetadata(XElement sourceCell, XElement targetCell, XNamespace workbookNs)
+    {
+        if (!string.Equals(sourceCell.Attribute("t")?.Value, targetCell.Attribute("t")?.Value, StringComparison.Ordinal))
+            return false;
+
+        var sourceFormula = sourceCell.Element(workbookNs + "f");
+        var targetFormula = targetCell.Element(workbookNs + "f");
+        if ((sourceFormula is null) != (targetFormula is null))
+            return false;
+
+        if (sourceFormula is not null && targetFormula is not null &&
+            !string.Equals(
+                NormalizeFormulaXmlText(sourceFormula.Value),
+                NormalizeFormulaXmlText(targetFormula.Value),
+                StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return string.Equals(
+            sourceCell.Element(workbookNs + "v")?.Value,
+            targetCell.Element(workbookNs + "v")?.Value,
+            StringComparison.Ordinal);
     }
 
     private static SourceCellNativeMetadata GetSourceCellNativeMetadata(XElement sourceCell, XNamespace workbookNs)

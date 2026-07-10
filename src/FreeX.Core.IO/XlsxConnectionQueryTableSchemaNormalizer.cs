@@ -145,7 +145,16 @@ internal static class XlsxConnectionQueryTableSchemaNormalizer
             if (root is null)
                 continue;
 
-            // Query table parts are preserved through worksheet relationships, not a worksheet child element.
+            // IMPORTANT: <queryTableParts> is NOT a member of CT_Worksheet's content model in the real
+            // ECMA-376/ISO-29500 schema (verified against the actual Microsoft.OpenXml schema used by
+            // this project's own OpenXmlValidator-based tests: any worksheet-level <queryTableParts>
+            // element -- regardless of whether its child <queryTablePart r:id="..."/> resolves to a
+            // valid worksheet relationship -- is flagged as an invalid child element of <worksheet>).
+            // A range<->queryTable binding is carried entirely by the relationship graph instead: the
+            // worksheet's own .rels ".../relationships/queryTable" entry, xl/queryTables/*.xml, and
+            // xl/connections.xml. None of that is touched here, so removing this inert/invalid marker
+            // element can never sever a real binding -- there is no "dangling vs. valid" distinction to
+            // make for this element; every occurrence must be stripped to keep the package schema-valid.
             var changed = false;
             foreach (var queryTableParts in root.Elements(WorksheetNs + "queryTableParts").ToList())
             {

@@ -43,4 +43,33 @@ internal static class ExcelDateSystem
 
     public static double DateToSerial(DateTime date, bool uses1904DateSystem) =>
         uses1904DateSystem ? (date - Date1904Epoch).TotalDays : DateToSerial(date);
+
+    /// <summary>
+    /// True when <paramref name="serial"/> is Excel's phantom 1900 leap day (serial 60,
+    /// i.e. "1900-02-29"). That day does not exist in the real Gregorian calendar, so
+    /// .NET's <see cref="DateTime"/> cannot represent it: <see cref="SerialToDate(double)"/>
+    /// maps both serial 59 ("1900-02-28") and serial 60 onto the same DateTime value
+    /// (1900-02-28), which is otherwise indistinguishable from a genuine collision.
+    /// Callers that need to detect this specific, Excel-only edge case (rather than
+    /// silently treating it as 1900-02-28) can check this first.
+    /// </summary>
+    public static bool IsPhantomLeapDaySerial(double serial) => serial == 60;
+
+    /// <summary>
+    /// Returns the day-count difference between two Excel serials, computed directly in
+    /// serial space (<paramref name="endSerial"/> - <paramref name="startSerial"/>) rather
+    /// than by converting both serials to <see cref="DateTime"/> via
+    /// <see cref="SerialToDate(double)"/> and subtracting those.
+    /// </summary>
+    /// <remarks>
+    /// Excel's serial numbering already accounts for the phantom 1900-02-29 leap day for
+    /// every serial &gt;= 61, so plain serial subtraction reproduces Excel's own day-count
+    /// semantics across the 59/60/61 boundary. Converting through <see cref="DateTime"/>
+    /// first does not: because serials 59 and 60 both map to 1900-02-28, a difference such
+    /// as serial 61 minus serial 59 (which Excel treats as a 2-day span) would come out as
+    /// only 1 day if computed via DateTime subtraction. Prefer this helper -- or equivalent
+    /// direct serial arithmetic -- over DateTime subtraction for any day-count calculation
+    /// that might span the 1900 phantom leap day.
+    /// </remarks>
+    public static double SerialDayDifference(double startSerial, double endSerial) => endSerial - startSerial;
 }

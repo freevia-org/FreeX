@@ -238,8 +238,9 @@ public static partial class XlsxChartPartReader
                 element.Value.StartsWith("_xlchart.", StringComparison.OrdinalIgnoreCase)) == true;
 
     /// <summary>
-    /// Reads chartEx per-series <c>layoutPr</c> settings (histogram <c>binning</c>, waterfall
-    /// <c>subtotals</c>) into the model so they round-trip through XLSX.
+    /// Reads chartEx per-series <c>layoutPr</c> settings (histogram <c>binning</c>, box-and-whisker
+    /// <c>statistics/@quartileMethod</c>, waterfall <c>subtotals</c>) into the model so they round-trip
+    /// through XLSX.
     /// </summary>
     private static void ReadChartExSeriesLayout(XElement series, ChartModel chart)
     {
@@ -250,6 +251,11 @@ public static partial class XlsxChartPartReader
         var binning = FirstChildElementByLocalName(layoutPr, "binning");
         if (binning is not null && ParseChartExBinning(binning) is { } binningModel)
             chart.HistogramBinning = binningModel;
+
+        var statistics = FirstChildElementByLocalName(layoutPr, "statistics");
+        var quartileMethod = statistics?.Attribute("quartileMethod")?.Value;
+        if (!string.IsNullOrWhiteSpace(quartileMethod))
+            chart.QuartileMethod = quartileMethod;
 
         var subtotals = FirstChildElementByLocalName(layoutPr, "subtotals");
         if (subtotals is not null)

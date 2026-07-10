@@ -546,17 +546,61 @@ public sealed partial class FormulaEvaluator
 
         return node.Operator switch
         {
-            UnaryOperator.ImplicitIntersection => ImplicitIntersectionOp(operand, context),
+            UnaryOperator.ImplicitIntersection => ImplicitIntersectionOp(node.Operand, operand, context),
             UnaryOperator.Negate => NegateOp(operand),
             UnaryOperator.Percent => PercentOp(operand),
             _ => throw new FormulaEvalException("#VALUE!", $"Unknown unary operator: {node.Operator}")
         };
     }
 
+    /// <summary>
+    /// Back-compat overload used by SINGLE() (FormulaEvaluator.Functions.cs's EvaluateSingle), which
+    /// only has the already-evaluated scalar in hand, not the operand AST node. Always resolves via
+    /// positional intersection — the pre-existing behavior for that call site — since SINGLE() cannot
+    /// be reached through this file's discriminated <see cref="UnaryOperator.ImplicitIntersection"/>
+    /// path below.
+    /// </summary>
     private static ScalarValue ImplicitIntersectionOp(ScalarValue value, IEvalContext context)
     {
         if (value is not RangeValue range)
             return value;
+
+        if (context.CurrentCellAddress is not { } currentCell)
+            return ErrorValue.Value;
+
+        return ResolveImplicitIntersection(range, currentCell);
+    }
+
+    /// <summary>
+    /// The @ (implicit intersection) operator. Excel's rule: applied to a genuine REFERENCE
+    /// expression (a bare range, full row/column, named range, or structured/table reference), @
+    /// positionally intersects that reference against the formula cell's own row/col. Applied to
+    /// anything else — a computed/dynamic-array result such as a function call (=@SEQUENCE(3)), an
+    /// arithmetic expression, or an array constant — Excel instead returns the array's TOP-LEFT
+    /// element; there is no "formula cell row/col" to intersect against because the array isn't
+    /// anchored to worksheet cells.
+    ///
+    /// <paramref name="operandNode"/> is the *unevaluated* AST node so this can distinguish the two
+    /// cases syntactically. The reference-node whitelist below intentionally mirrors the one already
+    /// used by <see cref="EvaluateSpilling"/> (FormulaEvaluator.cs) to decide which top-level nodes
+    /// are "reference-like" versus already-materialized-array — reusing a proven categorization
+    /// rather than introducing a new (and previously bug-prone — see prior "RangeValue.SheetName is
+    /// null" attempts, which also matched same-sheet bare references) runtime signal.
+    /// </summary>
+    private static ScalarValue ImplicitIntersectionOp(FormulaNode operandNode, ScalarValue value, IEvalContext context)
+    {
+        if (value is not RangeValue range)
+            return value;
+
+        bool isReferenceLikeOperand = operandNode is RangeRefNode or FullColumnRangeRefNode or FullRowRangeRefNode
+            or NamedRangeNode or StructuredReferenceNode or StructuredCurrentRowReferenceNode;
+
+        if (!isReferenceLikeOperand)
+        {
+            // Computed/dynamic-array result: Excel returns the top-left element, regardless of the
+            // formula cell's own position.
+            return range.RowCount > 0 && range.ColCount > 0 ? range.Cells[0, 0] : ErrorValue.Value;
+        }
 
         if (context.CurrentCellAddress is not { } currentCell)
             return ErrorValue.Value;
