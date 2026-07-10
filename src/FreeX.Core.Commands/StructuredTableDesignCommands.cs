@@ -371,6 +371,7 @@ public sealed class ConvertStructuredTableToRangeCommand : IWorkbookCommand
     private HashSet<uint>? _previousFilterHiddenRows;
     private HashSet<uint>? _previousValueFilterHiddenRows;
     private Dictionary<uint, IReadOnlyList<string>>? _previousActiveValueFilterColumns;
+    private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
 
     public string Label => "Convert to Range";
 
@@ -387,6 +388,7 @@ public sealed class ConvertStructuredTableToRangeCommand : IWorkbookCommand
         _previousFilterHiddenRows = null;
         _previousValueFilterHiddenRows = null;
         _previousActiveValueFilterColumns = null;
+        _formulaSnapshot.Clear();
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
@@ -396,6 +398,14 @@ public sealed class ConvertStructuredTableToRangeCommand : IWorkbookCommand
 
         _removedIndex = tableIndex;
         _removedTable = sheet.StructuredTables[tableIndex];
+
+        // Excel's real Convert-to-Range lowers every structured reference into this table
+        // (elsewhere in the workbook, and inside the table's own formulas) to the equivalent
+        // absolute A1 reference before the table disappears — otherwise every such formula would
+        // evaluate to #NAME?/#REF! the instant the table model is gone. Must run while the table
+        // is still in sheet.StructuredTables, since resolution needs its live column layout.
+        ConvertToRangeStructuredReferenceLowering.LowerAllFormulas(ctx.Workbook, sheet, _removedTable, _formulaSnapshot);
+
         sheet.StructuredTables.RemoveAt(tableIndex);
 
         // Excel's real Convert-to-Range clears the table's filter state so every row reappears —
@@ -414,7 +424,9 @@ public sealed class ConvertStructuredTableToRangeCommand : IWorkbookCommand
         for (var col = _removedTable.Range.Start.Col; col <= _removedTable.Range.End.Col; col++)
             sheet.ActiveValueFilterColumns.Remove(col);
 
-        return new CommandOutcome(true, AffectedCells: [_removedTable.Range.Start]);
+        var affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
+            [_removedTable.Range.Start], _formulaSnapshot);
+        return new CommandOutcome(true, AffectedCells: affectedCells);
     }
 
     public void Revert(ICommandContext ctx)
@@ -423,6 +435,8 @@ public sealed class ConvertStructuredTableToRangeCommand : IWorkbookCommand
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
+        RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
+
         var insertIndex = _removedIndex >= 0 && _removedIndex <= sheet.StructuredTables.Count
             ? _removedIndex
             : sheet.StructuredTables.Count;

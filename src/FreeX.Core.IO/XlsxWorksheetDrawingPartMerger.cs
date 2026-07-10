@@ -48,6 +48,9 @@ internal static class XlsxWorksheetDrawingPartMerger
 
             var sourceDrawingPath = GetWorksheetDrawingPath(sourceArchive, sourceWorksheetPath, workbookNs, relNs, packageRelNs);
             var targetDrawingPath = GetWorksheetDrawingPath(targetArchive, targetWorksheetPath, workbookNs, relNs, packageRelNs);
+            if (!string.IsNullOrWhiteSpace(targetDrawingPath))
+                MergeChartShadowIntoTarget(targetArchive, targetDrawingPath, relNs, packageRelNs);
+
             if (string.IsNullOrWhiteSpace(sourceDrawingPath) || string.IsNullOrWhiteSpace(targetDrawingPath))
                 continue;
 
@@ -86,7 +89,17 @@ internal static class XlsxWorksheetDrawingPartMerger
             if (!string.IsNullOrWhiteSpace(sourceDrawingPath))
                 sourceDrawingPaths[sheetName] = sourceDrawingPath;
             if (!string.IsNullOrWhiteSpace(targetDrawingPath))
+            {
                 targetDrawingPaths[sheetName] = targetDrawingPath;
+
+                // drawing-zorder-share-part: reclaim any chart anchors XlsxWorksheetChartWriter stashed
+                // for this sheet's drawing part before XlsxWorksheetDrawingObjectWriter (which runs
+                // between the chart writer and here) had a chance to delete-and-rewrite it. Must run
+                // regardless of whether the source side resolves below, since a sheet can gain its
+                // first-ever drawing part in this very save.
+                MergeChartShadowIntoTarget(targetArchive, targetDrawingPath, context.RelNs, context.PackageRelNs);
+            }
+
             if (string.IsNullOrWhiteSpace(sourceDrawingPath) || string.IsNullOrWhiteSpace(targetDrawingPath))
                 continue;
 
@@ -171,6 +184,32 @@ internal static class XlsxWorksheetDrawingPartMerger
         }
 
         return null;
+    }
+
+    // drawing-zorder-share-part: XlsxWorksheetChartWriter stashes a throwaway copy of the chart anchors
+    // it wrote at XlsxWorksheetChartDrawingShadow.GetShadowPath(targetDrawingPath) whenever it reused a
+    // drawing part XlsxWorksheetDrawingObjectWriter was about to delete-and-rewrite afterwards (see the
+    // comment on that helper). By the time this runs, both writers have already executed, so the shadow
+    // -- if present -- is the only surviving record of those chart anchors. Reuse the existing
+    // source-vs-target merge machinery to fold the shadow's anchors (and their chart relationships)
+    // into the live target drawing part, then delete the shadow so it never leaks into the saved
+    // package. A no-op when no shadow was written for this drawing part.
+    private static void MergeChartShadowIntoTarget(
+        ZipArchive targetArchive,
+        string targetDrawingPath,
+        XNamespace relNs,
+        XNamespace packageRelNs)
+    {
+        var shadowPath = XlsxWorksheetChartDrawingShadow.GetShadowPath(targetDrawingPath);
+        if (targetArchive.GetEntry(shadowPath) is null)
+            return;
+
+        // Same archive on both sides: the shadow and the live drawing part it feeds are both in
+        // targetArchive. MergeDrawingPart only ever reads from its "source" side, so this is safe.
+        MergeDrawingPart(targetArchive, targetArchive, shadowPath, targetDrawingPath, relNs, packageRelNs);
+
+        targetArchive.GetEntry(shadowPath)?.Delete();
+        targetArchive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(shadowPath))?.Delete();
     }
 
     private static void MergeDrawingPart(

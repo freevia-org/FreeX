@@ -4979,17 +4979,36 @@ public sealed class WorkbookSession
         // Excel's Cut is always a MOVE: the moved formulas keep their own references unchanged
         // and any OTHER formula that pointed at the cut cells is rewritten to follow the move.
         // The plain "Paste" gesture (no Paste Special mode/options) gets that fixup via a straight
-        // MoveRangeCommand. "Paste Special > Values" (mode == Values, no Transpose/Operation/
-        // SkipBlanks) is the one other Paste Special variant simple enough to express the same
-        // way: perform the real move (so references are fixed up both ways) and then collapse the
-        // moved cell(s) down to their computed values (R20-paste-special-operations-1). Any other
-        // Paste Special mode/option (Formulas, All/AllExceptBorders-style content kinds,
-        // Transpose, Operations, Skip Blanks, Formats-only) still falls back to the legacy
-        // copy+clear behaviour below, which does not fix up references either direction.
+        // MoveRangeCommand. A handful of other Paste Special variants are simple enough to express
+        // the same way: perform the real move (so references are fixed up both ways) and then
+        // finish each moved cell per the paste mode's own content rule
+        // (R20-paste-special-operations-1, Backlog-paste-special-cut-routing-part-a):
+        //   - Values (mode == Values, no Transpose/Operation/SkipBlanks): collapse to the computed
+        //     value, keeping the destination's own pre-paste style.
+        //   - Formulas (mode == Formulas, no Transpose/Operation/SkipBlanks): keep the moved
+        //     formula/value untouched, but restore the destination's own pre-paste style.
+        //   - Formulas and Number Formats (mode == All, ContentKind ==
+        //     FormulasAndNumberFormats, no Transpose/Operation/SkipBlanks): same as Formulas, but
+        //     the destination's style keeps the MOVED (source) cell's number format merged in.
+        // Any other Paste Special mode/option (All/AllExceptBorders-style content kinds, Transpose,
+        // Operations, Skip Blanks, Formats-only) still falls back to the legacy copy+clear
+        // behaviour below, which does not fix up references either direction.
         var isPlainPaste = mode == PasteCellsMode.All && options == default;
         var isPasteSpecialValuesOnly = mode == PasteCellsMode.Values && options == default;
-        if (!isPlainPaste && !isPasteSpecialValuesOnly)
+        var isPasteSpecialFormulasOnly = mode == PasteCellsMode.Formulas && options == default;
+        var isPasteSpecialFormulasAndNumberFormats =
+            mode == PasteCellsMode.All &&
+            options.ContentKind == PasteSpecialContentKind.FormulasAndNumberFormats &&
+            !options.Transpose &&
+            options.Operation == PasteSpecialOperation.None &&
+            !options.SkipBlanks;
+        if (!isPlainPaste &&
+            !isPasteSpecialValuesOnly &&
+            !isPasteSpecialFormulasOnly &&
+            !isPasteSpecialFormulasAndNumberFormats)
+        {
             return false;
+        }
 
         // MoveRangeCommand only supports a same-sheet move; grouped multi-sheet editing or a
         // cross-sheet paste destination cannot be expressed as a single move, so fall back.
@@ -5000,40 +5019,71 @@ public sealed class WorkbookSession
         if (!destination.Sheet.Equals(clipboard.SourceRange.Start.Sheet))
             return false;
 
-        command = isPlainPaste
-            ? new MoveRangeCommand(clipboard.SourceRange.Start.Sheet, clipboard.SourceRange, destination)
-            : new CutPasteValuesCommand(clipboard.SourceRange.Start.Sheet, clipboard.SourceRange, destination);
+        if (isPlainPaste)
+        {
+            command = new MoveRangeCommand(clipboard.SourceRange.Start.Sheet, clipboard.SourceRange, destination);
+            return true;
+        }
+
+        var finalizeKind = isPasteSpecialValuesOnly
+            ? CutPasteFinalizeKind.Values
+            : isPasteSpecialFormulasAndNumberFormats
+                ? CutPasteFinalizeKind.FormulasAndNumberFormat
+                : CutPasteFinalizeKind.Formulas;
+        command = new CutPasteMoveCommand(
+            clipboard.SourceRange.Start.Sheet, clipboard.SourceRange, destination, finalizeKind);
         return true;
     }
 
     /// <summary>
-    /// R20-paste-special-operations-1: routes a Cut + "Paste Special &gt; Values" through the same
+    /// How <see cref="CutPasteMoveCommand"/> finishes each cell after the underlying
+    /// <see cref="MoveRangeCommand"/> has relocated it and fixed up formula references both ways.
+    /// </summary>
+    private enum CutPasteFinalizeKind
+    {
+        /// <summary>Paste Special &gt; Values: collapse to the computed value, keep the destination's own style.</summary>
+        Values,
+
+        /// <summary>Paste Special &gt; Formulas: keep the moved formula/value, restore the destination's own style.</summary>
+        Formulas,
+
+        /// <summary>Paste Special &gt; Formulas and Number Formats: like Formulas, but merge the moved cell's number format into the destination's style.</summary>
+        FormulasAndNumberFormat
+    }
+
+    /// <summary>
+    /// R20-paste-special-operations-1 / Backlog-paste-special-cut-routing-part-a: routes a Cut +
+    /// non-default Paste Special (Values / Formulas / Formulas-and-Number-Formats) through the same
     /// move-based reference fixup as a plain Cut + Paste (see <see cref="TryCreateCutMoveCommand"/>),
     /// so that (a) the moved formula's own references are left untouched by the move (rather than
     /// mis-rewritten as a relative-copy offset) and (b) any OTHER formula that referenced the cut
     /// cells is rewritten to follow the move — both of which the legacy copy-paste-and-clear path
     /// gets wrong for every non-default Paste Special invocation. It delegates the actual cell
     /// relocation (and the accompanying formula/comment/hyperlink/sparkline/named-range fixups) to
-    /// the real <see cref="MoveRangeCommand"/>, then collapses each moved cell down to its computed
-    /// value in place, matching <see cref="PasteCellsMode.Values"/> semantics: the destination keeps
-    /// its own pre-paste style/format, and the formula is dropped.
+    /// the real <see cref="MoveRangeCommand"/>, then finalizes each moved cell per
+    /// <see cref="CutPasteFinalizeKind"/>: the destination always keeps its own pre-paste style
+    /// (merged with the moved cell's number format for FormulasAndNumberFormat), and Values drops
+    /// the formula while Formulas/FormulasAndNumberFormat keep it as the move produced it.
     /// </summary>
-    private sealed class CutPasteValuesCommand : IWorkbookCommand, IAffectedCellsCommand
+    private sealed class CutPasteMoveCommand : IWorkbookCommand, IAffectedCellsCommand
     {
         private readonly SheetId _sheetId;
         private readonly GridRange _sourceRange;
         private readonly CellAddress _destination;
+        private readonly CutPasteFinalizeKind _finalizeKind;
         private readonly MoveRangeCommand _moveCommand;
 
         public string Label => "Paste Special";
 
         public IReadOnlyList<CellAddress> AffectedCells => _moveCommand.AffectedCells;
 
-        public CutPasteValuesCommand(SheetId sheetId, GridRange sourceRange, CellAddress destination)
+        public CutPasteMoveCommand(
+            SheetId sheetId, GridRange sourceRange, CellAddress destination, CutPasteFinalizeKind finalizeKind)
         {
             _sheetId = sheetId;
             _sourceRange = sourceRange;
             _destination = destination;
+            _finalizeKind = finalizeKind;
             _moveCommand = new MoveRangeCommand(sheetId, sourceRange, destination);
         }
 
@@ -5043,9 +5093,9 @@ public sealed class WorkbookSession
             var rowDelta = (long)_destination.Row - _sourceRange.Start.Row;
             var colDelta = (long)_destination.Col - _sourceRange.Start.Col;
 
-            // Capture each destination cell's PRE-paste style before the move overwrites it:
-            // "Paste Special > Values" keeps the destination's own existing formatting, unlike a
-            // plain move/paste which brings the source's style along.
+            // Capture each destination cell's PRE-paste style before the move overwrites it: every
+            // routed Paste Special variant here keeps the destination's own existing formatting,
+            // unlike a plain move/paste which brings the source's style along.
             var originalDestinationStyles = new Dictionary<CellAddress, StyleId>();
             foreach (var source in _sourceRange.AllCells())
             {
@@ -5064,12 +5114,38 @@ public sealed class WorkbookSession
             foreach (var (target, styleId) in originalDestinationStyles)
             {
                 var movedCell = sheet.GetCell(target);
-                var valueCell = Cell.FromValue(movedCell?.Value ?? BlankValue.Instance);
-                valueCell.StyleId = styleId;
-                sheet.SetCell(target, valueCell);
+                Cell finalCell;
+                StyleId finalStyleId;
+                switch (_finalizeKind)
+                {
+                    case CutPasteFinalizeKind.Formulas:
+                        finalCell = movedCell?.Clone() ?? Cell.FromValue(BlankValue.Instance);
+                        finalStyleId = styleId;
+                        break;
+
+                    case CutPasteFinalizeKind.FormulasAndNumberFormat:
+                        finalCell = movedCell?.Clone() ?? Cell.FromValue(BlankValue.Instance);
+                        finalStyleId = MergeNumberFormat(ctx.Workbook, styleId, movedCell?.StyleId ?? styleId);
+                        break;
+
+                    default: // Values
+                        finalCell = Cell.FromValue(movedCell?.Value ?? BlankValue.Instance);
+                        finalStyleId = styleId;
+                        break;
+                }
+
+                finalCell.StyleId = finalStyleId;
+                sheet.SetCell(target, finalCell);
             }
 
             return outcome;
+        }
+
+        private static StyleId MergeNumberFormat(Workbook workbook, StyleId destinationStyleId, StyleId sourceStyleId)
+        {
+            var style = workbook.GetStyle(destinationStyleId).Clone();
+            style.NumberFormat = workbook.GetStyle(sourceStyleId).NumberFormat;
+            return workbook.RegisterStyle(style);
         }
 
         public void Revert(ICommandContext ctx) => _moveCommand.Revert(ctx);

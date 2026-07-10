@@ -93,11 +93,26 @@ internal static class XlsxWorksheetChartWriter
             // Reuse the sheet's own source drawing part when it has one (so its rebuilt charts and any
             // preserved drawing content stay on the same sheet); otherwise allocate a drawing name that
             // collides with neither another sheet's source drawing nor an already-claimed part.
-            var drawingPath = sourceDrawingPaths.TryGetValue(name, out var ownDrawingPath) &&
-                              usedDrawingPaths.Add(ownDrawingPath)
-                ? ownDrawingPath
+            //
+            // drawing-zorder-share-part: whenever we reuse the sheet's own source drawing path,
+            // XlsxWorksheetDrawingObjectWriter (which runs right after us in SavePostProcessing) will
+            // independently resolve that exact same path for this sheet's pictures/shapes/text boxes
+            // (if any) and unconditionally delete-and-rewrite it, discarding the chart anchors we are
+            // about to write. We cannot prevent that from here, but we CAN stash a throwaway copy of
+            // our anchors at a private shadow path (see XlsxWorksheetChartDrawingShadow) that survives
+            // that deletion; XlsxWorksheetDrawingPartMerger picks it back up later (after both writers
+            // and the source-package preservation pass have run) and merges the chart anchors back into
+            // the final drawing part. This only applies to the "reused own source drawing path" branch:
+            // reaching it guarantees the workbook's source package snapshot has a drawings/ folder,
+            // which is exactly the precondition for XlsxWorksheetDrawingPartMerger to run at all later
+            // in this same save -- see the comment on XlsxWorksheetChartDrawingShadow for the residual
+            // gap (fresh/no-prior-drawing sheets) this does not cover.
+            var hasOwnSourceDrawingPath = sourceDrawingPaths.TryGetValue(name, out var ownDrawingPath) && ownDrawingPath is not null;
+            var reusesOwnSourceDrawingPath = hasOwnSourceDrawingPath && usedDrawingPaths.Add(ownDrawingPath!);
+            var drawingPath = reusesOwnSourceDrawingPath
+                ? ownDrawingPath!
                 : AllocateFreshDrawingPath(archive, reservedDrawingPaths, usedDrawingPaths);
-            WriteWorksheetCharts(archive, worksheetPath, sheet, supportedCharts, drawingPath, ref chartIndex, createChartXml, getChartContentType, getChartRelationshipType);
+            WriteWorksheetCharts(archive, worksheetPath, sheet, supportedCharts, drawingPath, reusesOwnSourceDrawingPath, ref chartIndex, createChartXml, getChartContentType, getChartRelationshipType);
         }
     }
 
@@ -129,6 +144,7 @@ internal static class XlsxWorksheetChartWriter
         Sheet sheet,
         IReadOnlyList<ChartModel> charts,
         string drawingPath,
+        bool reusesOwnSourceDrawingPath,
         ref int chartIndex,
         Func<ChartModel, Sheet, XDocument> createChartXml,
         Func<ChartModel, string> getChartContentType,
@@ -192,6 +208,29 @@ internal static class XlsxWorksheetChartWriter
                 new XAttribute(XNamespace.Xmlns + "r", relNs),
                 anchors)));
         XlsxPackageXmlEditor.ReplaceXml(archive, drawingRelsPath, drawingRelsXml);
+
+        // drawing-zorder-share-part: see the call-site comment in Save(). When we are about to write
+        // into a drawing part the sheet's source package already owns, XlsxWorksheetDrawingObjectWriter
+        // is about to reuse and unconditionally overwrite this exact same part, discarding the chart
+        // anchors above. Stash a throwaway copy at a private shadow path so
+        // XlsxWorksheetDrawingPartMerger can merge them back into the final drawing part later in this
+        // same save, after both writers have run. Cloning every element (rather than reusing the
+        // `anchors`/`drawingRelsXml` instances) keeps this independent of XElement's already-has-a-parent
+        // auto-clone behavior on Add, so it stays correct even if the write order above ever changes.
+        if (reusesOwnSourceDrawingPath && anchors.Count > 0)
+        {
+            var shadowPath = XlsxWorksheetChartDrawingShadow.GetShadowPath(drawingPath);
+            var shadowRelsPath = XlsxPackagePath.GetRelationshipPartPath(shadowPath);
+            XlsxPackageXmlEditor.ReplaceXml(archive, shadowPath, new XDocument(
+                new XElement(spreadsheetDrawingNs + "wsDr",
+                    new XAttribute(XNamespace.Xmlns + "xdr", spreadsheetDrawingNs),
+                    new XAttribute(XNamespace.Xmlns + "a", drawingNs),
+                    new XAttribute(XNamespace.Xmlns + "c", chartNs),
+                    new XAttribute(XNamespace.Xmlns + "cx", chartExNs),
+                    new XAttribute(XNamespace.Xmlns + "r", relNs),
+                    anchors.Select(anchor => new XElement(anchor)))));
+            XlsxPackageXmlEditor.ReplaceXml(archive, shadowRelsPath, new XDocument(new XElement(drawingRelsXml.Root!)));
+        }
 
         XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{drawingPath}", "application/vnd.openxmlformats-officedocument.drawing+xml");
         foreach (var (index, contentType) in chartContentTypes)
