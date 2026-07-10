@@ -15579,50 +15579,18 @@ public static partial class AccessibilityCheckerService
             InvokeCoreFormulaScalarFunction(
                 "BINOM.INV", new NumberValue(trialsValue), new NumberValue(probability), new NumberValue(alpha));
 
+        // Delegated to Core.Formula (registered as HYPERGEOM.DIST; Core also carries the round-20
+        // lower-bound domain fix the shadow lacked).
         private static ScalarValue FormulaHypergeomDistScalar(
             double sampleSuccessesValue,
             double sampleSizeValue,
             double populationSuccessesValue,
             double populationSizeValue,
-            bool cumulative)
-        {
-            if (!TryGetFormulaDiscreteInteger(sampleSuccessesValue, out var sampleSuccesses) ||
-                !TryGetFormulaDiscreteInteger(sampleSizeValue, out var sampleSize) ||
-                !TryGetFormulaDiscreteInteger(populationSuccessesValue, out var populationSuccesses) ||
-                !TryGetFormulaDiscreteInteger(populationSizeValue, out var populationSize))
-            {
-                return ErrorValue.Num;
-            }
-
-            if (sampleSuccesses < 0 ||
-                sampleSize < 0 ||
-                populationSuccesses < 0 ||
-                populationSize <= 0 ||
-                sampleSuccesses > sampleSize ||
-                sampleSuccesses > populationSuccesses ||
-                sampleSize > populationSize ||
-                populationSuccesses > populationSize)
-            {
-                return ErrorValue.Num;
-            }
-
-            if (!cumulative)
-            {
-                return FormulaDiscreteProbabilityResult(FormulaHypergeomPmf(
-                    sampleSuccesses,
-                    sampleSize,
-                    populationSuccesses,
-                    populationSize));
-            }
-
-            var lower = Math.Max(0, sampleSize - (populationSize - populationSuccesses));
-            var upper = Math.Min(Math.Min(sampleSize, populationSuccesses), sampleSuccesses);
-            var result = 0d;
-            for (var k = lower; k <= upper; k++)
-                result += FormulaHypergeomPmf(k, sampleSize, populationSuccesses, populationSize);
-
-            return FormulaDiscreteProbabilityResult(result);
-        }
+            bool cumulative) =>
+            InvokeCoreFormulaScalarFunction(
+                "HYPERGEOM.DIST", new NumberValue(sampleSuccessesValue), new NumberValue(sampleSizeValue),
+                new NumberValue(populationSuccessesValue), new NumberValue(populationSizeValue),
+                new BoolValue(cumulative));
 
         private static ScalarValue FormulaNegBinomDistScalar(
             double failuresValue,
