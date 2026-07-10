@@ -5258,7 +5258,10 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaFinancialDepreciationFunctionContrastLocations("SLN($A1,$C1,$D1)>170", "B1", "B2", "B8");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("SYD($A1,$C1,$D1,$E1)>200", "B1", "B2", "B8");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("DB($A1,$C1,$D1,$E1,$I1)>300", "B1", "B2");
-        AssertFormulaFinancialDepreciationFunctionContrastLocations("DDB($A1,$C1,$D1,$E1)>300", "B1", "B8");
+        // DDB corrected to Excel's fractional-period behavior (see AccessibilityCheckerService.Contrast.cs
+        // FormulaFinancialDdbScalar): B8's row no longer crosses the >300 threshold, so it is no longer a
+        // low-contrast cell. Previously pinned the buggy integer-only DDB output.
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("DDB($A1,$C1,$D1,$E1)>300", "B1");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("VDB($A1,$C1,$D1,$F1,$G1)>300", "B1", "B2", "B8");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("AMORDEGRC($A1,DATE(2020,1,1),DATE(2020,12,31),$C1,$E1,$K1,0)>140", "B1", "B2", "B8");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("AMORLINC($A1,DATE(2020,1,1),DATE(2020,12,31),$C1,$E1,$K1)>=100", "B1", "B2", "B8");
@@ -5276,7 +5279,9 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialOptionalArgumentsWrappersAndAggregates()
     {
-        AssertFormulaFinancialDepreciationFunctionContrastLocations("DDB($A1,$C1,$D1,$E1,$H1)>=300", "B1", "B8");
+        // DDB corrected to Excel's fractional-period behavior: B8's row no longer crosses the >=300
+        // threshold (was pinning the buggy integer-only DDB output).
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("DDB($A1,$C1,$D1,$E1,$H1)>=300", "B1");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("DB($A1,$C1,$D1,$E1,$I1)>180", "B1", "B2", "B8");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("AND($O1,VDB($A1,$C1,$D1,$F1,$G1,$H1,$J1)>250)", "B1", "B2", "B8");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("SUM(SLN($A1,$C1,$D1),SYD($A1,$C1,$D1,$E1))>400", "B1", "B2", "B8");

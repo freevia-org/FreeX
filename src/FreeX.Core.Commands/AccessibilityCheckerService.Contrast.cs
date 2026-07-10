@@ -18203,8 +18203,8 @@ public static partial class AccessibilityCheckerService
             if (!double.IsFinite(cost) ||
                 !double.IsFinite(salvage) ||
                 !double.IsFinite(life) ||
-                !double.IsFinite(factor) ||
-                !TryGetFormulaFinancialInteger(period, out var integerPeriod))
+                !double.IsFinite(period) ||
+                !double.IsFinite(factor))
             {
                 return ErrorValue.Num;
             }
@@ -18214,23 +18214,34 @@ public static partial class AccessibilityCheckerService
                 life <= 0d ||
                 period <= 0d ||
                 factor <= 0d ||
-                integerPeriod > MaxFormulaFinancialDepreciationIterations)
+                Math.Floor(period) > MaxFormulaFinancialDepreciationIterations)
             {
                 return ErrorValue.Num;
             }
 
+            // Excel supports fractional periods (mirrors FreeX.Core.Formula DdbScalar): full periods
+            // deplete book value in the usual double-declining-balance way, then any fractional part
+            // of the target period contributes a pro-rated slice of the next full period's
+            // depreciation (also covers 0 < period < 1). The previous integer-only form returned 0
+            // for 0 < period < 1.
+            var fullPeriods = (int)Math.Floor(period);
+            var fraction = period - fullPeriods;
             var bookValue = cost;
-            for (var currentPeriod = 1; currentPeriod <= integerPeriod; currentPeriod++)
+            var depreciation = 0d;
+            for (var currentPeriod = 1; currentPeriod <= fullPeriods; currentPeriod++)
             {
-                var depreciation = Math.Min(bookValue - salvage, bookValue * factor / life);
+                depreciation = Math.Min(bookValue - salvage, bookValue * factor / life);
                 depreciation = Math.Max(depreciation, 0d);
-                if (currentPeriod < integerPeriod)
-                    bookValue -= depreciation;
-                else
-                    return FormulaFinancialNumberResult(depreciation);
+                bookValue -= depreciation;
             }
 
-            return new NumberValue(0d);
+            if (fraction > 0d)
+            {
+                depreciation = Math.Min(bookValue - salvage, bookValue * factor / life);
+                depreciation = Math.Max(depreciation, 0d) * fraction;
+            }
+
+            return FormulaFinancialNumberResult(depreciation);
         }
 
         private static ScalarValue FormulaFinancialVdbScalar(
@@ -19593,7 +19604,7 @@ public static partial class AccessibilityCheckerService
 
                     return ((end.Year - start.Year) * 360d + (end.Month - start.Month) * 30d + (endDay - startDay)) / 360d;
                 case 1:
-                    return (end - start).TotalDays / FormulaFinancialActualYearLength(start, end);
+                    return FormulaFinancialActualActualDayCountFraction(start, end);
                 case 2:
                     return (end - start).TotalDays / 360d;
                 case 3:
@@ -19605,14 +19616,31 @@ public static partial class AccessibilityCheckerService
             }
         }
 
-        private static double FormulaFinancialActualYearLength(DateTime start, DateTime end)
+        // Actual/Actual (basis 1): weight each calendar-year segment's actual days by that year's
+        // true length (365/366). Mirrors FreeX.Core.Formula's ActualActualDayCountFraction. The
+        // previous days/(integer-years) form algebraically collapsed to the bare calendar-year
+        // difference for any cross-year span.
+        private static double FormulaFinancialActualActualDayCountFraction(DateTime start, DateTime end)
         {
-            if (start.Year == end.Year)
-                return DateTime.IsLeapYear(start.Year) ? 366d : 365d;
+            if (start == end)
+                return 0d;
 
-            var years = end.Year - start.Year;
-            var days = (end - start).TotalDays;
-            return days / years;
+            var negative = start > end;
+            var from = negative ? end : start;
+            var to = negative ? start : end;
+
+            var total = 0d;
+            var cursor = from;
+            while (cursor < to)
+            {
+                var yearEnd = new DateTime(cursor.Year + 1, 1, 1);
+                var segmentEnd = yearEnd < to ? yearEnd : to;
+                var yearLength = DateTime.IsLeapYear(cursor.Year) ? 366d : 365d;
+                total += (segmentEnd - cursor).TotalDays / yearLength;
+                cursor = segmentEnd;
+            }
+
+            return negative ? -total : total;
         }
 
         private static bool TryGetFormulaFinancialDate(double serial, out DateTime date) =>
