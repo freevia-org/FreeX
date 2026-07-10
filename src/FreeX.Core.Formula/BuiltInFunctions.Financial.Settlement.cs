@@ -86,27 +86,32 @@ public static partial class BuiltInFunctions
     {
         if (FirstError(args) is { } e) return e;
         var basisArg = args.Count > 6 ? args[6] : BlankValue.Instance;
-        return MapScalarArgs([args[0], args[1], args[2], args[3], args[4], args[5], basisArg], values => AccrintScalar(values[0], values[1], values[2], values[3], values[4], values[5], values[6]));
+        var calcMethodArg = args.Count > 7 ? args[7] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], args[4], args[5], basisArg, calcMethodArg], values => AccrintScalar(values[0], values[1], values[2], values[3], values[4], values[5], values[6], values[7]));
     }
 
-    private static ScalarValue AccrintScalar(ScalarValue issueValue, ScalarValue firstInterestValue, ScalarValue settlementValue, ScalarValue rateValue, ScalarValue parValue, ScalarValue frequencyValue, ScalarValue basisValue)
+    private static ScalarValue AccrintScalar(ScalarValue issueValue, ScalarValue firstInterestValue, ScalarValue settlementValue, ScalarValue rateValue, ScalarValue parValue, ScalarValue frequencyValue, ScalarValue basisValue, ScalarValue calcMethodValue)
     {
         double issue = ToNumber(issueValue);
         double firstInterest = ToNumber(firstInterestValue);
         double settlement = ToNumber(settlementValue);
         double par = ToNumber(parValue);
         double frequency = ToNumber(frequencyValue);
-        _ = firstInterest;
         double rate = ToNumber(rateValue);
-        if (!double.IsFinite(issue) || !double.IsFinite(settlement) || !double.IsFinite(rate) ||
-            !double.IsFinite(par) || !double.IsFinite(frequency))
+        if (!double.IsFinite(issue) || !double.IsFinite(firstInterest) || !double.IsFinite(settlement) ||
+            !double.IsFinite(rate) || !double.IsFinite(par) || !double.IsFinite(frequency))
             return ErrorValue.Num;
         if (!TryGetFinancialBasis(basisValue, out int basis)) return ErrorValue.Num;
         if (rate <= 0 || par <= 0 || frequency <= 0) return ErrorValue.Num;
         if (!TryGetFinancialDate(issue, out DateTime sd) ||
+            !TryGetFinancialDate(firstInterest, out DateTime fi) ||
             !TryGetFinancialDate(settlement, out DateTime sett)) return ErrorValue.Num;
-        if (sd >= sett) return ErrorValue.Num;
-        double dcf = DayCountFraction(sd, sett, basis);
+        if (sd >= sett || fi < sd) return ErrorValue.Num;
+        // calc_method (default TRUE) accrues from the issue date; FALSE accrues from first_interest when it
+        // precedes settlement (Excel ACCRINT semantics). Previously calc_method/first_interest were ignored.
+        bool calcMethod = calcMethodValue is BlankValue || ToBool(calcMethodValue);
+        DateTime accrualStart = !calcMethod && sett > fi ? fi : sd;
+        double dcf = DayCountFraction(accrualStart, sett, basis);
         return NumberResult(par * rate * dcf);
     }
 

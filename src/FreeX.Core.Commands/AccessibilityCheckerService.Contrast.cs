@@ -17688,6 +17688,8 @@ public static partial class AccessibilityCheckerService
             return FormulaFinancialNumberResult(result);
         }
 
+        // Delegated to Core.Formula, which now honors the calc_method / first_interest arguments (fixed in
+        // BuiltInFunctions.Financial.Settlement.cs -- it previously ignored them).
         private static ScalarValue FormulaFinancialAccrintScalar(
             double issue,
             double firstInterest,
@@ -17696,39 +17698,11 @@ public static partial class AccessibilityCheckerService
             double par,
             double rawFrequency,
             int basis,
-            bool calcMethod)
-        {
-            if (!double.IsFinite(issue) ||
-                !double.IsFinite(firstInterest) ||
-                !double.IsFinite(settlement) ||
-                !double.IsFinite(rate) ||
-                !double.IsFinite(par) ||
-                !double.IsFinite(rawFrequency))
-            {
-                return ErrorValue.Num;
-            }
-
-            if (rate <= 0d || par <= 0d || !TryGetFormulaFinancialCouponFrequency(rawFrequency, out _))
-                return ErrorValue.Num;
-
-            if (!TryGetFormulaFinancialDate(issue, out var issueDate) ||
-                !TryGetFormulaFinancialDate(firstInterest, out var firstInterestDate) ||
-                !TryGetFormulaFinancialDate(settlement, out var settlementDate) ||
-                issueDate >= settlementDate ||
-                firstInterestDate < issueDate)
-            {
-                return ErrorValue.Num;
-            }
-
-            var accrualStart = !calcMethod && settlementDate > firstInterestDate
-                ? firstInterestDate
-                : issueDate;
-            var dayCountFraction = FormulaFinancialDayCountFraction(accrualStart, settlementDate, basis);
-            if (!double.IsFinite(dayCountFraction) || dayCountFraction < 0d)
-                return ErrorValue.Num;
-
-            return FormulaFinancialNumberResult(par * rate * dayCountFraction);
-        }
+            bool calcMethod) =>
+            InvokeCoreFormulaScalarFunction(
+                "ACCRINT", new NumberValue(issue), new NumberValue(firstInterest), new NumberValue(settlement),
+                new NumberValue(rate), new NumberValue(par), new NumberValue(rawFrequency), new NumberValue(basis),
+                new BoolValue(calcMethod));
 
         // Delegated to the single source-of-truth FreeX.Core.Formula implementation (see
         // AccessibilityCheckerService.CoreFormulaFinancialDelegation.cs).
