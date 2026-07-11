@@ -53,6 +53,47 @@ public sealed partial class ViewportService
         return false;
     }
 
+    /// <summary>
+    /// True when (<paramref name="row"/>, <paramref name="col"/>) is exactly the anchor cell of a
+    /// merged region whose hidden anchor row/column still has a visible remainder (see
+    /// <see cref="IsHiddenMergeAnchorRowWithVisibleRemainder"/> and
+    /// <see cref="IsHiddenMergeAnchorColWithVisibleRemainder"/>). The merge's value/style live only
+    /// on this one anchor cell, so cell-enumeration must expose ONLY this cell for a hidden anchor
+    /// row/column -- never any other, unrelated cell that merely happens to share the hidden row or
+    /// column (e.g. an unrelated cell in column A of a hidden row that has nothing to do with a
+    /// merge anchored in column B).
+    /// </summary>
+    private static bool IsExposedHiddenMergeAnchorCell(Sheet sheet, uint row, uint col, bool rowHidden, bool colHidden)
+    {
+        if (!rowHidden && !colHidden)
+            return false;
+
+        var regions = sheet.MergedRegions;
+        for (var i = 0; i < regions.Count; i++)
+        {
+            var region = regions[i];
+            if (region.Start.Row != row || region.Start.Col != col) continue;
+
+            if (rowHidden && region.End.Row > region.Start.Row)
+            {
+                for (var r = region.Start.Row; r <= region.End.Row; r++)
+                {
+                    if (!IsRowHidden(sheet, r)) return true;
+                }
+            }
+
+            if (colHidden && region.End.Col > region.Start.Col)
+            {
+                for (var c = region.Start.Col; c <= region.End.Col; c++)
+                {
+                    if (!sheet.IsColEffectivelyHidden(c)) return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     private static IReadOnlyList<RowMetric> BuildFrozenAwareRowMetrics(Sheet sheet, uint startRow, double availableHeight)
     {
         var frozenRows = Math.Min(sheet.FrozenRows, CellAddress.MaxRow);

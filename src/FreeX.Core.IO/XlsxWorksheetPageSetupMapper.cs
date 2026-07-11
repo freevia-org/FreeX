@@ -142,9 +142,51 @@ internal static class XlsxWorksheetPageSetupMapper
         IReadOnlyList<HeaderFooterTokenMapping> mappings,
         StringComparison comparison)
     {
-        foreach (var mapping in mappings)
-            text = text.Replace(mapping.Source, mapping.Target, comparison);
-        return text;
+        if (string.IsNullOrEmpty(text))
+            return text;
+
+        var result = new System.Text.StringBuilder(text.Length);
+        var i = 0;
+        while (i < text.Length)
+        {
+            if (text[i] != '&')
+            {
+                result.Append(text[i]);
+                i++;
+                continue;
+            }
+
+            // "&&" is Excel's escape sequence for a literal ampersand in header/footer
+            // text; the character following it must not be treated as a code letter
+            // (e.g. "R&&D Report" must stay literal, not have "&D" read as the Date code).
+            if (i + 1 < text.Length && text[i + 1] == '&')
+            {
+                result.Append("&&");
+                i += 2;
+                continue;
+            }
+
+            var matched = false;
+            foreach (var mapping in mappings)
+            {
+                if (i + mapping.Source.Length <= text.Length &&
+                    string.Compare(text, i, mapping.Source, 0, mapping.Source.Length, comparison) == 0)
+                {
+                    result.Append(mapping.Target);
+                    i += mapping.Source.Length;
+                    matched = true;
+                    break;
+                }
+            }
+
+            if (!matched)
+            {
+                result.Append(text[i]);
+                i++;
+            }
+        }
+
+        return result.ToString();
     }
 
     private readonly record struct HeaderFooterTokenMapping(string Source, string Target);

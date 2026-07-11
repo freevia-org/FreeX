@@ -10,7 +10,7 @@ internal static class WorkbookThemeTint
             return color;
 
         var transformed = tint < 0
-            ? DrawingMlColorTransform.ApplyShade(ToSharedColor(color), 1.0 + tint)
+            ? DrawingMlColorTransform.ApplyLuminance(ToSharedColor(color), 1.0 + tint, 0.0)
             : DrawingMlColorTransform.ApplyTint(ToSharedColor(color), 1.0 - tint);
 
         return new CellColor(transformed.R, transformed.G, transformed.B);

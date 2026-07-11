@@ -2096,17 +2096,25 @@ public sealed class WorkbookSession
         if (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal))
         {
             // A FreeX-internal clipboard exists, but the live OS clipboard text no longer matches
-            // it (another app/window changed the platform clipboard since the FreeX copy). Unlike
-            // the "no internal clipboard at all" case above, this is a genuine invalidation signal —
-            // the Paste Special options the user selected were configured against the internal
-            // clip's shape, so silently redirecting to an external-text paste could misapply them.
-            // Reject and require a fresh copy, matching the pre-P46 safety guard.
+            // it (another app/window changed the platform clipboard since the FreeX copy). Matching
+            // the WPF host's ExecutePaste (which treats ClipboardPastePlanner.PlanPaste's
+            // UseExternalClipboardText result as "clipboard changed externally" and falls through to
+            // CreateExternalTextPasteCommand with the selected options), clear the stale internal
+            // clipboard and fall back to an external-text Paste Special instead of hard-rejecting, so
+            // the live external text still gets the chosen Transpose/Skip Blanks/Operation options
+            // applied (review P46 corollary — the null-internal-clipboard branch above already does
+            // this; this branch used to unconditionally reject instead).
             _internalClipboard = null;
-            return new WorkbookCellEditResult(
-                false,
-                "Paste Special requires copied FreeX cells.",
-                [],
-                RecalcReport: null);
+            if (string.IsNullOrEmpty(text))
+            {
+                return new WorkbookCellEditResult(
+                    false,
+                    "Paste Special requires copied FreeX cells.",
+                    [],
+                    RecalcReport: null);
+            }
+
+            return PasteExternalTextAtActiveCell(text, preserveText: false, options);
         }
 
         if (SelectedRanges.Count > 1)

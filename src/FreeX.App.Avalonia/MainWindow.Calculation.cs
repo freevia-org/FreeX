@@ -64,6 +64,15 @@ public sealed partial class MainWindow
     private void SetCalculationModeManual() =>
         SetCalculationMode(WorkbookCalculationMode.Manual);
 
+    /// <summary>
+    /// Handler for the "Automatic Except Data Tables" menu choice. Sets the workbook to
+    /// <see cref="WorkbookCalculationMode.AutomaticExceptDataTables"/> (mirrors the Windows
+    /// host's <c>CalcAutoExceptDataTablesMenuItem_Click</c>, which is distinct from the plain
+    /// Automatic handler).
+    /// </summary>
+    private void SetCalculationModeAutomaticExceptDataTables() =>
+        SetCalculationMode(WorkbookCalculationMode.AutomaticExceptDataTables);
+
     private void SetCalculationMode(WorkbookCalculationMode mode)
     {
         if (_session.Workbook.CalculationMode == mode)
@@ -79,9 +88,10 @@ public sealed partial class MainWindow
             return;
         }
 
-        // Switching to Automatic recalculates any values left stale while in Manual mode
-        // (mirrors the Windows host, which recalcs on the Automatic transition).
-        if (mode == WorkbookCalculationMode.Automatic)
+        // Switching to either Automatic variant recalculates any values left stale while in
+        // Manual mode (mirrors the Windows host, which recalcs on both the Automatic and
+        // Automatic-Except-Data-Tables transitions).
+        if (mode is WorkbookCalculationMode.Automatic or WorkbookCalculationMode.AutomaticExceptDataTables)
             _session.RecalculateWorkbook();
 
         RefreshShell(UiText.Format("ShellLoc_CalculationSet", DescribeCalculationMode(mode)));

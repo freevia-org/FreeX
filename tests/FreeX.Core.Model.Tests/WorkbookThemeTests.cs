@@ -368,7 +368,7 @@ public sealed class WorkbookThemeTests
     [Theory]
     [InlineData(100, 150, 200, 0.0, 100, 150, 200)]
     [InlineData(100, 150, 200, 0.5, 178, 202, 228)]
-    [InlineData(100, 150, 200, -0.25, 75, 112, 150)]
+    [InlineData(100, 150, 200, -0.25, 59, 112, 166)]
     [InlineData(100, 150, 200, 2.0, 255, 255, 255)]
     [InlineData(100, 150, 200, -2.0, 0, 0, 0)]
     public void WorkbookTheme_ResolveColor_AppliesExcelTint(
@@ -396,7 +396,7 @@ public sealed class WorkbookThemeTests
             new CellColor(100, 150, 200));
 
         var positiveTint = DrawingMlColorTransform.ApplyTint(new DrawingMlRgbColor(100, 150, 200), 0.5);
-        var negativeTint = DrawingMlColorTransform.ApplyShade(new DrawingMlRgbColor(100, 150, 200), 0.75);
+        var negativeTint = DrawingMlColorTransform.ApplyLuminance(new DrawingMlRgbColor(100, 150, 200), 0.75, 0.0);
 
         theme.ResolveColor(WorkbookThemeColorSlot.Accent1, 0.5)
             .Should().Be(new CellColor(positiveTint.R, positiveTint.G, positiveTint.B));

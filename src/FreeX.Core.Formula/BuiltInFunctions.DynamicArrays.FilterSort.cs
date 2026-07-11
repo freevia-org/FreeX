@@ -133,6 +133,15 @@ public static partial class BuiltInFunctions
             keys[k] = (idx, order);
         }
 
+        // Excel's SORT is all-or-nothing: an error anywhere in a sort key column/row makes the
+        // whole result that error, mirroring FILTER's `if (v is ErrorValue e) return e;` guard
+        // on its deciding array above.
+        foreach (var (idx, _) in keys)
+        {
+            var keyError = FindErrorInSortKey(arr, idx, byCol);
+            if (keyError is not null) return keyError;
+        }
+
         if (!byCol)
         {
             var rowIndices = CreateSequentialIndices(arr.RowCount);
@@ -213,6 +222,25 @@ public static partial class BuiltInFunctions
         return sortOrder * CompareScalar(va, vb);
     }
 
+    // Scans every value along the sort key at `idx` (a column when sorting rows, a row when sorting
+    // columns) for an ErrorValue. Returns the first one found so SORT/SORTBY can propagate it as the
+    // whole function result instead of letting CompareScalar's cross-type fallback silently place it.
+    private static ErrorValue? FindErrorInSortKey(RangeValue arr, int idx, bool byCol)
+    {
+        if (byCol)
+        {
+            for (int c = 0; c < arr.ColCount; c++)
+                if (arr.Cells[idx, c] is ErrorValue e) return e;
+        }
+        else
+        {
+            for (int r = 0; r < arr.RowCount; r++)
+                if (arr.Cells[r, idx] is ErrorValue e) return e;
+        }
+
+        return null;
+    }
+
     private static ScalarValue SortBy(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue arrayError) return arrayError;
@@ -253,6 +281,13 @@ public static partial class BuiltInFunctions
         }
 
         if (keys.Count == 0) return ErrorValue.Value;
+
+        // Same all-or-nothing propagation as SORT: an error anywhere in a by_array key means the
+        // whole SORTBY result is that error.
+        foreach (var key in keys)
+            foreach (var cell in key.Range.Cells)
+                if (cell is ErrorValue e) return e;
+
         return sortRows.GetValueOrDefault(true)
             ? SortByRows(arr, keys)
             : SortByColumns(arr, keys);

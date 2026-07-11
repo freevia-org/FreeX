@@ -93,6 +93,19 @@ public static partial class BuiltInFunctions
         if (!useA1 && TryParseR1C1FullColumnRef(refText, ctx.CurrentCellAddress, out startCol))
             return CompleteIndirectRange(ctx, sheetName, 1, startCol, CellAddress.MaxRow, startCol, out range, out error, isFullColumnRange: true);
 
+        // Excel's name-scope rule (§18.2.6): a name scoped to the current sheet always shadows a
+        // same-named workbook-global name, regardless of whether either name is a plain range or a
+        // formula expression — so a sheet-scoped named FORMULA must shadow a workbook-global named
+        // RANGE. Mirror EvaluateNamedRange/IsSheetScopedName in FormulaEvaluator.References.cs:
+        // resolve a sheet-scoped named formula first, before ever falling through to the naive
+        // ctx.TryResolveNamedRange lookup below, which only ever sees ScopedNamedRanges (never
+        // ScopedNamedFormulas) and would otherwise resolve the shadowed workbook-global range.
+        if (sheetName is null && IsSheetScopedNamedFormula(refText, ctx))
+        {
+            return FormulaEvaluator.TryResolveIndirectNamedFormula(refText, ctx, out var scopedFormulaRange, out error)
+                && CompleteIndirectRangeFromNamedFormula(ctx, scopedFormulaRange, out range, out error);
+        }
+
         if (sheetName is null && ctx.TryResolveNamedRange(refText) is { } namedRange)
         {
             var namedSheetName = ctx.TryGetSheetName(namedRange.Start.Sheet);
@@ -118,23 +131,43 @@ public static partial class BuiltInFunctions
         // named range) is invisible to it, so also try resolving refText as a named formula that
         // evaluates to a reference — see FormulaEvaluator.TryResolveIndirectNamedFormula.
         if (sheetName is null && FormulaEvaluator.TryResolveIndirectNamedFormula(refText, ctx, out var namedFormulaRange, out error))
-        {
-            var formulaStartRow = namedFormulaRange.StartRow;
-            var formulaStartCol = namedFormulaRange.StartCol;
-            var formulaEndRow = formulaStartRow + (uint)namedFormulaRange.RowCount - 1;
-            var formulaEndCol = formulaStartCol + (uint)namedFormulaRange.ColCount - 1;
-            return CompleteIndirectRange(
-                ctx,
-                namedFormulaRange.SheetName,
-                formulaStartRow,
-                formulaStartCol,
-                formulaEndRow,
-                formulaEndCol,
-                out range,
-                out error);
-        }
+            return CompleteIndirectRangeFromNamedFormula(ctx, namedFormulaRange, out range, out error);
 
         return false;
+    }
+
+    /// <summary>
+    /// Returns true when <paramref name="name"/> has an explicit sheet-scoped named-FORMULA
+    /// definition on the context's current sheet, which must take precedence over any
+    /// workbook-global name (range or formula) of the same name — mirrors
+    /// FormulaEvaluator.IsSheetScopedName's formula branch.
+    /// </summary>
+    private static bool IsSheetScopedNamedFormula(string name, IEvalContext ctx)
+    {
+        var workbook = ctx.CurrentWorkbook;
+        var sheet = ctx.CurrentSheet;
+        return workbook is not null && sheet is not null && workbook.ScopedNamedFormulas.ContainsKey((name, sheet.Id));
+    }
+
+    private static bool CompleteIndirectRangeFromNamedFormula(
+        IEvalContext ctx,
+        RangeValue namedFormulaRange,
+        out IndirectRangeReference range,
+        out ScalarValue? error)
+    {
+        var formulaStartRow = namedFormulaRange.StartRow;
+        var formulaStartCol = namedFormulaRange.StartCol;
+        var formulaEndRow = formulaStartRow + (uint)namedFormulaRange.RowCount - 1;
+        var formulaEndCol = formulaStartCol + (uint)namedFormulaRange.ColCount - 1;
+        return CompleteIndirectRange(
+            ctx,
+            namedFormulaRange.SheetName,
+            formulaStartRow,
+            formulaStartCol,
+            formulaEndRow,
+            formulaEndCol,
+            out range,
+            out error);
     }
 
     private static bool CompleteIndirectRange(
@@ -462,4 +495,3 @@ public static partial class BuiltInFunctions
         return true;
     }
 }
-

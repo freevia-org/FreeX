@@ -76,9 +76,9 @@ public static class GoToSpecialService
 
         var result = new List<CellAddress>();
         if (kind == GoToSpecialKind.RowDifferences)
-            return FindRowDifferences(sheet, range);
+            return FindRowDifferences(sheet, range, activeCell);
         if (kind == GoToSpecialKind.ColumnDifferences)
-            return FindColumnDifferences(sheet, range);
+            return FindColumnDifferences(sheet, range, activeCell);
         if (kind == GoToSpecialKind.DataValidation)
             return FindDataValidations(sheet.DataValidations, range);
         if (kind == GoToSpecialKind.ConditionalFormats)
@@ -410,17 +410,25 @@ public static class GoToSpecialService
             result.Add(address);
     }
 
-    private static IReadOnlyList<CellAddress> FindRowDifferences(Sheet sheet, GridRange range)
+    private static IReadOnlyList<CellAddress> FindRowDifferences(Sheet sheet, GridRange range, CellAddress? activeCell)
     {
+        // Excel always compares each row against the cell in the ACTIVE cell's column,
+        // not the selection's top-left column. Fall back to the top-left column when
+        // there is no active cell or it falls outside the searched range.
+        var baseCol = activeCell is { } cell && range.Contains(cell) ? cell.Col : range.Start.Col;
+
         var result = new List<CellAddress>();
         for (var row = range.Start.Row; row <= range.End.Row; row++)
         {
-            var firstValue = sheet.GetCell(row, range.Start.Col)?.Value ?? BlankValue.Instance;
-            for (var col = range.Start.Col + 1; col <= range.End.Col; col++)
+            var baseValue = sheet.GetCell(row, baseCol)?.Value ?? BlankValue.Instance;
+            for (var col = range.Start.Col; col <= range.End.Col; col++)
             {
+                if (col == baseCol)
+                    continue;
+
                 var address = new CellAddress(range.Start.Sheet, row, col);
                 var value = sheet.GetCell(address)?.Value ?? BlankValue.Instance;
-                if (!ScalarEquals(firstValue, value))
+                if (!ScalarEquals(baseValue, value))
                     result.Add(address);
             }
         }
@@ -428,17 +436,25 @@ public static class GoToSpecialService
         return result;
     }
 
-    private static IReadOnlyList<CellAddress> FindColumnDifferences(Sheet sheet, GridRange range)
+    private static IReadOnlyList<CellAddress> FindColumnDifferences(Sheet sheet, GridRange range, CellAddress? activeCell)
     {
+        // Excel always compares each column against the cell in the ACTIVE cell's row,
+        // not the selection's top-left row. Fall back to the top-left row when there is
+        // no active cell or it falls outside the searched range.
+        var baseRow = activeCell is { } cell && range.Contains(cell) ? cell.Row : range.Start.Row;
+
         var result = new List<CellAddress>();
         for (var col = range.Start.Col; col <= range.End.Col; col++)
         {
-            var firstValue = sheet.GetCell(range.Start.Row, col)?.Value ?? BlankValue.Instance;
-            for (var row = range.Start.Row + 1; row <= range.End.Row; row++)
+            var baseValue = sheet.GetCell(baseRow, col)?.Value ?? BlankValue.Instance;
+            for (var row = range.Start.Row; row <= range.End.Row; row++)
             {
+                if (row == baseRow)
+                    continue;
+
                 var address = new CellAddress(range.Start.Sheet, row, col);
                 var value = sheet.GetCell(address)?.Value ?? BlankValue.Instance;
-                if (!ScalarEquals(firstValue, value))
+                if (!ScalarEquals(baseValue, value))
                     result.Add(address);
             }
         }

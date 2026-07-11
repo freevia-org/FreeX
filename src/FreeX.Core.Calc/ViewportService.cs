@@ -343,6 +343,19 @@ public sealed partial class ViewportService : IViewportService
             if (!IsVisibleMetricRow(rowMetrics, row))
                 continue;
 
+            // A row/column present in the metrics list even though it is hidden is only there
+            // because it anchors a merge with a visible remainder (see
+            // IsHiddenMergeAnchorRowWithVisibleRemainder/...ColWithVisibleRemainder). The merge's
+            // value/style live solely on its anchor cell, so any OTHER cell in that hidden row/col
+            // must not leak into the viewport.
+            var rowHidden = IsRowHidden(sheet, row);
+            var colHidden = sheet.IsColEffectivelyHidden(col);
+            if ((rowHidden || colHidden) &&
+                !IsExposedHiddenMergeAnchorCell(sheet, row, col, rowHidden, colHidden))
+            {
+                continue;
+            }
+
             AddCellDisplayCell(
                 cells,
                 workbook,
@@ -725,6 +738,19 @@ public sealed partial class ViewportService : IViewportService
     {
         if (dedupeCells && !AddSeenCell(ref seen, row, col))
             return;
+
+        // A row/column reaching this point despite being hidden is only in the metrics list
+        // because it anchors a merge with a visible remainder (see
+        // IsHiddenMergeAnchorRowWithVisibleRemainder/...ColWithVisibleRemainder). The merge's
+        // value/style live solely on its anchor cell, so any OTHER cell in that hidden row/col
+        // must not leak into the viewport.
+        var rowHidden = IsRowHidden(sheet, row);
+        var colHidden = sheet.IsColEffectivelyHidden(col);
+        if ((rowHidden || colHidden) &&
+            !IsExposedHiddenMergeAnchorCell(sheet, row, col, rowHidden, colHidden))
+        {
+            return;
+        }
 
         var cell = sheet.GetCell(row, col);
         if (cell is null)

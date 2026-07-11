@@ -69,6 +69,13 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             uint width = _range.ColCount;
             var shiftRegion = CellShiftRegion.Rightward(_range);
 
+            // R23-array-formula-legacy-cse-1: reject if this band-scoped shift would carry some
+            // members of a legacy CSE array / dynamic-array spill along while leaving others behind
+            // (Excel's "You cannot change part of an array"). An array whose full extent lies inside
+            // the shifted band still moves as one atomic unit — see ArrayMembersWithinShiftRegion.
+            if (CommandGuards.RejectIfSplitsArray(sheet, ArrayMembersWithinShiftRegion(sheet, shiftRegion)) is { } splitsArrayRejection)
+                return splitsArrayRejection;
+
             if (MergeWouldBeTorn(sheet, shiftRegion, shiftDirection: ShiftAxis.Column))
                 return new CommandOutcome(false,
                     "This operation will cause some merged cells to unmerge. To do this, first unmerge the affected cells.");
@@ -162,6 +169,10 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         {
             uint height = _range.RowCount;
             var shiftRegion = CellShiftRegion.Downward(_range);
+
+            // R23-array-formula-legacy-cse-1: see the Shift-Right branch above.
+            if (CommandGuards.RejectIfSplitsArray(sheet, ArrayMembersWithinShiftRegion(sheet, shiftRegion)) is { } splitsArrayRejection)
+                return splitsArrayRejection;
 
             if (MergeWouldBeTorn(sheet, shiftRegion, shiftDirection: ShiftAxis.Row))
                 return new CommandOutcome(false,
@@ -347,6 +358,42 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         {
             ReturnOriginalCells(originalCells);
         }
+    }
+
+    /// <summary>
+    /// R23-array-formula-legacy-cse-1: for every legacy CSE array or dynamic-array spill that has at
+    /// least one member inside <paramref name="region"/>, collects only the members that fall inside
+    /// the region. Feeding this into <see cref="CommandGuards.RejectIfSplitsArray"/> allows an array
+    /// whose full extent lies entirely inside the shifted band (it moves — or is deleted — as one
+    /// atomic unit, e.g. inserting cells above a spilling anchor within its own column) while
+    /// rejecting an array straddling the band boundary (some members would shift/delete, others
+    /// would stay put), matching Excel's "You cannot change part of an array" rule.
+    /// </summary>
+    internal static List<CellAddress> ArrayMembersWithinShiftRegion(Sheet sheet, CellShiftRegion region)
+    {
+        var result = new List<CellAddress>();
+        if (!sheet.HasArrayOrSpillMembers)
+            return result;
+
+        var seenAnchors = new HashSet<CellAddress>();
+        foreach (var (row, col) in sheet.GetOccupiedCellMap().Keys)
+        {
+            var address = new CellAddress(sheet.Id, row, col);
+            if (!sheet.TryGetArrayExtent(address, out var anchor, out var rows, out var cols))
+                continue;
+            if (!seenAnchors.Add(anchor))
+                continue;
+
+            for (var r = 0u; r < rows; r++)
+                for (var c = 0u; c < cols; c++)
+                {
+                    var member = new CellAddress(anchor.Sheet, anchor.Row + r, anchor.Col + c);
+                    if (region.Contains(member))
+                        result.Add(member);
+                }
+        }
+
+        return result;
     }
 
     internal static CellShiftSnapshot CaptureCells(Sheet sheet, CellShiftRegion region)
@@ -931,6 +978,14 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
         {
             var shiftRegion = CellShiftRegion.Rightward(_range);
 
+            // R23-array-formula-legacy-cse-1: reject if this band-scoped shift would carry some
+            // members of a legacy CSE array / dynamic-array spill along while leaving others behind
+            // (Excel's "You cannot change part of an array"). An array whose full extent lies inside
+            // the shifted/deleted band still moves (or is deleted) as one atomic unit — see
+            // InsertCellsCommand.ArrayMembersWithinShiftRegion.
+            if (CommandGuards.RejectIfSplitsArray(sheet, InsertCellsCommand.ArrayMembersWithinShiftRegion(sheet, shiftRegion)) is { } splitsArrayRejection)
+                return splitsArrayRejection;
+
             if (DeleteMergeWouldBeTorn(sheet, shiftRegion, _range, ShiftAxis.Column))
                 return new CommandOutcome(false,
                     "This operation will cause some merged cells to unmerge. To do this, first unmerge the affected cells.");
@@ -1018,6 +1073,10 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
         else
         {
             var shiftRegion = CellShiftRegion.Downward(_range);
+
+            // R23-array-formula-legacy-cse-1: see the Shift-Left branch above.
+            if (CommandGuards.RejectIfSplitsArray(sheet, InsertCellsCommand.ArrayMembersWithinShiftRegion(sheet, shiftRegion)) is { } splitsArrayRejection)
+                return splitsArrayRejection;
 
             if (DeleteMergeWouldBeTorn(sheet, shiftRegion, _range, ShiftAxis.Row))
                 return new CommandOutcome(false,

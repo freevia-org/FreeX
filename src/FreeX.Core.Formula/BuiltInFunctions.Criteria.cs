@@ -85,6 +85,17 @@ public static partial class BuiltInFunctions
             if (criteria is BoolValue cb)
                 return new CriteriaMatcher(CriteriaMatcherKind.BoolEquals, boolean: cb.Value);
 
+            // An error-valued criteria cell (e.g. a database-criteria-range cell whose formula
+            // evaluates to #REF!/#N/A/etc.) must propagate that error rather than silently being
+            // treated as "never matches" — mirrors how SUMIF/SUMIFS/MAXIFS etc. explicitly check
+            // `criteria is ErrorValue` and return it before ever reaching CompileCriteria. Those
+            // call sites already guard against ErrorValue before calling here, so this only fires
+            // for paths (like the DB functions' criteria-table cells) that don't pre-filter errors;
+            // the thrown exception is converted back to the matching ErrorValue by the generic
+            // built-in-function dispatch (see FormulaEvaluator.Functions.cs catch (FormulaEvalException)).
+            if (criteria is ErrorValue ce)
+                throw new FormulaEvalException(ce.Code, $"Criteria evaluated to error {ce.Code}");
+
             if (criteria is not TextValue ct)
                 return new CriteriaMatcher(CriteriaMatcherKind.AlwaysFalse);
 

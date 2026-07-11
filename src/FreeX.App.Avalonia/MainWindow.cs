@@ -1333,7 +1333,7 @@ public sealed partial class MainWindow : Window
                     ["Calculate Sheet"] = CalculateSheet,
                     ["Automatic"] = SetCalculationModeAutomatic,
                     ["Manual"] = SetCalculationModeManual,
-                    ["Automatic Except Data Tables"] = SetCalculationModeAutomatic,
+                    ["Automatic Except Data Tables"] = SetCalculationModeAutomaticExceptDataTables,
 
                     // Data ▸ Connections ▸ Refresh All (parity: recalculates the workbook).
                     ["data.refresh"] = CalculateNow,

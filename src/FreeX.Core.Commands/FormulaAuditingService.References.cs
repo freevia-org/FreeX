@@ -39,7 +39,12 @@ public static partial class FormulaAuditingService
                 break;
 
             case NamedRangeNode namedRange:
-                if (workbook.TryGetNamedRange(namedRange.Name, out var range))
+                // Sheet-scope-first: a sheet-scoped named FORMULA of the same name shadows a
+                // workbook-global named RANGE (mirrors RecalcEngine.CollectReferences's
+                // NamedRangeNode handling), so a bare scope-unaware range lookup must not run
+                // when the host sheet has its own scoped formula of this name.
+                if (!workbook.ScopedNamedFormulas.ContainsKey((namedRange.Name, hostSheetId)) &&
+                    workbook.TryGetNamedRange(namedRange.Name, hostSheetId, out var range))
                     foreach (var address in range.AllCells())
                         result.Add(address);
                 break;

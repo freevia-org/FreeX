@@ -456,7 +456,7 @@ internal static partial class DelimitedTextWorkbookReader
             return DateTimeValue.FromDateTime(cultureDateTime);
         if (TryParseFiniteNumber(trimmed, NumberStyles.Any, out var number))
         {
-            return new NumberValue(number);
+            return new NumberValue(RoundToSignificantDigits(number, 15));
         }
         if (TryParseDateTime(trimmed, out var dateTime))
             return DateTimeValue.FromDateTime(dateTime);
@@ -464,6 +464,27 @@ internal static partial class DelimitedTextWorkbookReader
             return new DateTimeValue(time.TotalDays);
 
         return new TextValue(field.Value);
+    }
+
+    /// <summary>
+    /// Round <paramref name="value"/> to at most <paramref name="digits"/> significant decimal digits,
+    /// matching Excel's storage precision cap (any typed/pasted/imported literal number is capped at
+    /// 15 significant digits, unconditionally — not just under the separate opt-in "Precision as
+    /// displayed" workbook option). Mirrors RecalcEngine's own RoundToSignificantDigits helper
+    /// (FreeX.Core.Calc cannot be referenced from here, so the identical logic is duplicated).
+    /// </summary>
+    private static double RoundToSignificantDigits(double value, int digits)
+    {
+        if (value == 0)
+            return 0;
+
+        var scale = digits - (int)Math.Floor(Math.Log10(Math.Abs(value))) - 1;
+        // Math.Round(double, int) only accepts digits in [0, 15] and throws ArgumentOutOfRangeException
+        // for negative values (which occur whenever |value| >= 10^digits); clamp to [0, 15] rather than
+        // [-15, 15] since a value that already has more integer digits than the cap has nothing left to
+        // round off.
+        scale = Math.Clamp(scale, 0, 15);
+        return Math.Round(value, scale, MidpointRounding.AwayFromZero);
     }
 
     private static bool TryReadErrorLike(ReadOnlySpan<char> field, out ErrorValue error)

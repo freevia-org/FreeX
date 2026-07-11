@@ -111,6 +111,7 @@ public static class FormControlListResolver
                     return TryResolveCellRefNode(cell, sheet, workbook, out resolved);
 
                 case NamedRangeNode named when workbook is not null &&
+                                               !HasSheetScopedNamedFormula(workbook, named.Name, sheet.Id) &&
                                                workbook.TryGetNamedRange(named.Name, sheet.Id, out var namedRange):
                     return TryResolveNamedRange(namedRange, sheet, workbook, out resolved);
 
@@ -188,6 +189,20 @@ public static class FormControlListResolver
             namedRange.End.Col);
         return true;
     }
+
+    /// <summary>
+    /// Excel scope precedence: a name scoped to the current sheet always wins over a
+    /// same-named workbook-global name, regardless of whether either name is a plain range
+    /// or a formula expression. Workbook.TryGetNamedRange(name, sheetId) only consults
+    /// ScopedNamedRanges (range-kind) before falling back to the workbook-global NamedRanges
+    /// dictionary — it never looks at ScopedNamedFormulas, so a sheet-scoped named FORMULA is
+    /// invisible to it and the shadowed workbook-global range would be returned as if it were
+    /// the correct match. Guard the named-range case here so that scenario is left unresolved
+    /// (falls back to null/blank) instead of silently showing the wrong workbook-global range.
+    /// Mirrors DataValidationService.ListSources.cs's HasSheetScopedNamedFormula helper.
+    /// </summary>
+    private static bool HasSheetScopedNamedFormula(Workbook workbook, string name, SheetId sheetId) =>
+        workbook.ScopedNamedFormulas.ContainsKey((name, sheetId));
 
     private static bool TryResolveSourceSheet(string? sheetName, Sheet sheet, Workbook? workbook, out Sheet sourceSheet)
     {

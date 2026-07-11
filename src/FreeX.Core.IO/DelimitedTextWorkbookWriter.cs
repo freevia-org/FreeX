@@ -219,16 +219,11 @@ internal static class DelimitedTextWorkbookWriter
 
     private static void WriteCellField(TextWriter writer, char delimiter, Cell cell)
     {
-        if (cell.FormulaText is { } formulaText)
-        {
-            WriteField(
-                writer,
-                delimiter,
-                formulaText.StartsWith("=", StringComparison.Ordinal) ? formulaText : $"={formulaText}",
-                isTextValue: false);
-            return;
-        }
-
+        // CSV has no formula syntax: real Excel's "CSV (Comma delimited)" / "CSV UTF-8" Save-As
+        // always writes a formula cell's calculated result (Cell.Value), never the formula source
+        // text — reopening such a file (in Excel or FreeX) must see the same value the workbook
+        // showed, not a brand-new live formula re-evaluated against whatever now sits in its
+        // references.
         switch (cell.Value)
         {
             case NumberValue number:

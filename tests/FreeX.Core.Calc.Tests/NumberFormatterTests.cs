@@ -283,15 +283,15 @@ public class NumberFormatterTests
     [InlineData("[Red][<0]0.00;[Blue]0.00", -2.5, "-2.50", "#FF0000")]
     [InlineData("[Red][<0]0.00;[Blue]0.00", 2.5, "2.50", "#0000FF")] // [Blue] = legacy palette pure blue
     [InlineData("[Color3][<0]0.00;[Color5]0.00", -2.5, "-2.50", "#FF0000")]
-    [InlineData("[Color3][<0]0.00;[Color5]0.00", 2.5, "2.50", "#0070C0")]
+    [InlineData("[Color3][<0]0.00;[Color5]0.00", 2.5, "2.50", "#0000FF")]
     [InlineData("[Color6]0.00", 2.5, "2.50", "#FFFF00")]
     [InlineData("[Color9]0.00", 2.5, "2.50", "#800000")]
     [InlineData("[Color16]0.00", 2.5, "2.50", "#808080")]
     [InlineData("[Color46]0.00", 2.5, "2.50", "#FF6600")]
     [InlineData("[Color56]0.00", 2.5, "2.50", "#333333")]
     [InlineData("[ Red ]0.00", 2.5, "2.50", "#FF0000")]
-    [InlineData("[ Color5 ]0.00", 2.5, "2.50", "#0070C0")]
-    [InlineData("[Color 5]0.00", 2.5, "2.50", "#0070C0")]
+    [InlineData("[ Color5 ]0.00", 2.5, "2.50", "#0000FF")]
+    [InlineData("[Color 5]0.00", 2.5, "2.50", "#0000FF")]
     [InlineData("[ Color 56 ]0.00", 2.5, "2.50", "#333333")]
     public void CustomNumberSubset_ReturnsColorFromConditionalSections(
         string format,
@@ -327,7 +327,7 @@ public class NumberFormatterTests
         palette.SetColor(5, CellColor.FromArgb(4, 5, 6));
         var updated = NumberFormatter.FormatWithColor(new NumberValue(12.5), format, palette);
 
-        Assert.Equal("#0070C0", initial.ColorHex);
+        Assert.Equal("#0000FF", initial.ColorHex);
         Assert.Equal("#040506", updated.ColorHex);
     }
 
@@ -369,7 +369,7 @@ public class NumberFormatterTests
     [InlineData("[ThemeAccent1Tint40]0.0", "#71859A")]
     [InlineData("[Theme Accent1 Tint 40]0.0", "#71859A")]
     [InlineData("[ThemeAccent1Tint40%]0.0", "#71859A")]
-    [InlineData("[ThemeAccent1Tint-25]0.0", "#0E2740")]
+    [InlineData("[ThemeAccent1Tint-25]0.0", "#0D2741")]
     public void CustomNumberSubset_ResolvesTintedThemeColorDirectivesWithWorkbookTheme(
         string numberFormat,
         string expectedColor)

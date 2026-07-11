@@ -56,10 +56,12 @@ internal static class FindReplaceSearchPlanner
         foreach (var (addr, cell) in sheet.EnumerateCells())
         {
             // Excel's "Look in: Values" Find does not return matches in hidden or filtered-out
-            // rows ("Values cannot find hidden data"), so Replace All must not rewrite cells a
-            // user could never have navigated to via Find Next either. Formulas/Notes/Comments
-            // modes are unaffected -- only the Values-mode cell-text branch below is scoped here.
-            if (lookIn == FindLookIn.Values && sheet.IsRowEffectivelyHidden(addr.Row))
+            // rows/columns ("Values cannot find hidden data"), so Replace All must not rewrite
+            // cells a user could never have navigated to via Find Next either. Formulas/Notes/
+            // Comments modes are unaffected -- only the Values-mode cell-text branch below is
+            // scoped here.
+            if (lookIn == FindLookIn.Values &&
+                (sheet.IsRowEffectivelyHidden(addr.Row) || sheet.IsColEffectivelyHidden(addr.Col)))
                 continue;
 
             // Performance: skip number cells when the search pattern can never match any

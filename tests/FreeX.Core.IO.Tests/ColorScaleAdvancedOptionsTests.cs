@@ -145,7 +145,7 @@ public sealed class ColorScaleAdvancedOptionsTests
 
         var rule = workbook.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
         rule.RuleType.Should().Be(CfRuleType.ColorScale);
-        rule.MinColor.Should().Be(new RgbColor(60, 120, 180));
+        rule.MinColor.Should().Be(new RgbColor(19, 120, 221));
         rule.MidColor.Should().Be(new RgbColor(10, 20, 30));
         rule.MaxColor.Should().Be(new RgbColor(91, 131, 171));
     }
@@ -167,7 +167,7 @@ public sealed class ColorScaleAdvancedOptionsTests
             .Elements(MainNs + "color")
             .ToArray();
         colors.Should().HaveCount(3);
-        colors[0].Attribute("rgb")?.Value.Should().Be(ToArgb(new RgbColor(60, 120, 180)));
+        colors[0].Attribute("rgb")?.Value.Should().Be(ToArgb(new RgbColor(19, 120, 221)));
         colors[1].Attribute("rgb")?.Value.Should().Be(ToArgb(new RgbColor(10, 20, 30)));
         colors[2].Attribute("rgb")?.Value.Should().Be(ToArgb(new RgbColor(91, 131, 171)));
     }

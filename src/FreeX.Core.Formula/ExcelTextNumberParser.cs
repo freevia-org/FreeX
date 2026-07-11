@@ -18,11 +18,13 @@ internal static class ExcelTextNumberParser
 
     // Matches a number whose comma grouping is correct: each group to the left of the decimal (or end)
     // is exactly 3 digits, except the first group which may be 1–3 digits.  Optional leading sign,
-    // optional leading/trailing currency symbol, optional decimal fraction.
-    // Examples that pass: 1,234  $1,234.50  -1,234,567  1,234,567.5
-    // Examples that fail: 1,2  12,34  1,2345  1,234,5
+    // optional leading/trailing currency symbol, optional decimal fraction, and an optional matched
+    // pair of parentheses (Excel's accounting-format negative wrapper) around the whole thing — a
+    // leading "(" requires a trailing ")" and vice versa, via the "paren" conditional group.
+    // Examples that pass: 1,234  $1,234.50  -1,234,567  1,234,567.5  (1,234.50)  ($1,234.50)
+    // Examples that fail: 1,2  12,34  1,2345  1,234,5  (1,234.50  1,234.50)
     private static readonly Regex ValidGroupingRegex = new(
-        @"^[+-]?\$?\d{1,3}(,\d{3})*(\.\d*)?\$?[+-]?$",
+        @"^(?<paren>\()?[+-]?\$?\d{1,3}(?:,\d{3})*(?:\.\d*)?\$?[+-]?(?(paren)\)|)$",
         RegexOptions.None);
 
     // NumberStyles without AllowThousands — used for the first parse attempt so that

@@ -114,21 +114,25 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
             return new CommandOutcome(true); // nothing to sort
 
         // Excel rejects sorts that contain merged cells, UNLESS every merge overlapping the range
-        // is fully contained within it and all such merges are identically sized. In that uniform
-        // case (e.g. every row of the range merged the same way — a common "each record spans N
-        // cosmetic columns" layout), Excel treats each merge as one sortable row unit and moves it
-        // as a whole; the sort below already swaps entire rows intact and never touches
+        // is fully contained within it, spans exactly one row (a horizontal, cosmetic multi-column
+        // merge), and all such merges are identically sized. In that uniform case (e.g. every row
+        // of the range merged the same way across the same columns — a common "each record spans
+        // N cosmetic columns" layout), Excel treats each merge as one sortable row unit and moves
+        // it as a whole; the sort below already swaps entire GRID ROWS intact and never touches
         // MergedRegions, so the merge geometry stays put while the row content moves through it.
+        // A vertical (multi-row) merge cannot be relaxed this way: the sort below swaps single grid
+        // rows independently, so allowing a RowCount>1 merge through would scramble the row-to-row
+        // association within that merged block (e.g. a 2-row merged record's two data rows could
+        // land next to a different record's rows) — any such merge must still be rejected below.
         // Merges that only partially overlap the range, or that differ in size/shape from one
         // another, still make the range unsortable — this mirrors Excel's own "This operation
         // requires the merged cells to be identically sized" refusal.
         var overlappingMerges = sheet.MergedRegions.Where(m => _range.Overlaps(m)).ToList();
         if (overlappingMerges.Count > 0)
         {
-            var firstRowSpan = overlappingMerges[0].RowCount;
             var firstColSpan = overlappingMerges[0].ColCount;
             bool uniform = overlappingMerges.All(m =>
-                _range.Contains(m) && m.RowCount == firstRowSpan && m.ColCount == firstColSpan);
+                _range.Contains(m) && m.RowCount == 1 && m.ColCount == firstColSpan);
 
             if (!uniform)
                 return new CommandOutcome(false, "Cannot sort a range that contains merged cells.");

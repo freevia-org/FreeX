@@ -32,18 +32,22 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue And(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        // Excel evaluates every argument before combining them, so an error anywhere in the
+        // argument list (including inside a referenced range) always wins, even when an earlier
+        // argument already determines the boolean result (e.g. AND(FALSE, 1/0) is #DIV/0!, not
+        // FALSE). Scan for that first, before any short-circuiting on a determining value.
+        if (FirstLogicalArgError(args) is { } firstError) return firstError;
+
         bool hadUsableValue = false;
         foreach (var arg in args)
         {
-            if (arg is ErrorValue err) return err;
             if (arg is ReferencedScalarValue referenced)
             {
-                if (TryReferencedBool(referenced, out bool value, out var refError))
+                if (TryReferencedBool(referenced, out bool value, out _))
                 {
                     hadUsableValue = true;
                     if (!value) return new BoolValue(false);
                 }
-                else if (refError is not null) return refError;
                 continue;
             }
             if (!TryDirectLogicalBool(arg, out var direct)) return ErrorValue.Value;
@@ -55,18 +59,21 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue Or(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        // See And() above: an error anywhere in the argument list must propagate even when an
+        // earlier argument already determines the boolean result (e.g. OR(TRUE, 1/0) is #DIV/0!,
+        // not TRUE).
+        if (FirstLogicalArgError(args) is { } firstError) return firstError;
+
         bool hadUsableValue = false;
         foreach (var arg in args)
         {
-            if (arg is ErrorValue err) return err;
             if (arg is ReferencedScalarValue referenced)
             {
-                if (TryReferencedBool(referenced, out bool value, out var refError))
+                if (TryReferencedBool(referenced, out bool value, out _))
                 {
                     hadUsableValue = true;
                     if (value) return new BoolValue(true);
                 }
-                else if (refError is not null) return refError;
                 continue;
             }
             if (!TryDirectLogicalBool(arg, out var direct)) return ErrorValue.Value;
@@ -74,6 +81,18 @@ public static partial class BuiltInFunctions
             if (direct) return new BoolValue(true);
         }
         return hadUsableValue ? new BoolValue(false) : ErrorValue.Value;
+    }
+
+    // Scans every flattened argument (including range members wrapped in ReferencedScalarValue)
+    // for an error and returns the first one found, in argument order.
+    private static ErrorValue? FirstLogicalArgError(IReadOnlyList<ScalarValue> args)
+    {
+        foreach (var arg in args)
+        {
+            if (arg is ErrorValue e) return e;
+            if (arg is ReferencedScalarValue { Value: ErrorValue re }) return re;
+        }
+        return null;
     }
 
     private static ScalarValue Not(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

@@ -438,6 +438,14 @@ internal static partial class ViewportConditionalFormatEvaluator
         if (string.IsNullOrEmpty(cf.TextRuleText))
             return false;
 
+        // Excel's Contains/BeginsWith/EndsWith rules are effectively ISERROR-gated (e.g.
+        // Contains is NOT(ISERROR(SEARCH(...)))): an error value propagates through SEARCH so
+        // ISERROR is TRUE and the rule never fires. NotContains is the complement, so an error
+        // cell always satisfies it. Guard before GetString turns the error's code text (e.g.
+        // "#DIV/0!") into a spurious substring match target.
+        if (value is ErrorValue)
+            return kind == TextRuleMatchKind.NotContains;
+
         var text = GetString(value);
         return kind switch
         {
@@ -451,10 +459,22 @@ internal static partial class ViewportConditionalFormatEvaluator
 
     private static bool MatchesDateOccurring(ConditionalFormat cf, ScalarValue value, DateTime today)
     {
-        if (value is not DateTimeValue dateValue)
+        // Like every other rule matcher in this file, accept both NumberValue and DateTimeValue
+        // (via TryGetDouble): date arithmetic (e.g. =A1+1) always decays to a plain NumberValue
+        // holding the OADate serial, and Excel highlights it the same as a literal date cell.
+        if (!TryGetDouble(value, out double serial))
             return false;
 
-        var date = dateValue.ToDateTime().Date;
+        DateTime date;
+        try
+        {
+            date = DateTime.FromOADate(serial).Date;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+
         today = today.Date;
 
         return (cf.DateOccurringPeriod ?? "today") switch

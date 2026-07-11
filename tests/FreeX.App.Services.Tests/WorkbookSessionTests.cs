@@ -2488,12 +2488,21 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
-    public void PasteSpecialClipboardAtActiveCell_RejectsChangedPlatformClipboardText()
+    public void PasteSpecialClipboardAtActiveCell_FallsBackToExternalTextWhenClipboardTextChanges()
     {
+        // Regression coverage for review R23-clipboard-formats-deep-2: this test used to pin the
+        // WRONG behavior (hard-rejecting Paste Special whenever a stale internal clipboard existed
+        // alongside externally-changed OS clipboard text). Matching the WPF host's ExecutePaste
+        // (which treats this exact situation as "clipboard changed externally" and falls through to
+        // an external-text paste honoring the selected options) and the sibling
+        // PasteClipboardTextAtActiveCell_FallsBackToExternalTextWhenClipboardTextChanges test above,
+        // Paste Special must now honor the live external text — including its selected options —
+        // instead of rejecting.
         var workbook = CreateWorkbook();
         var sheet = workbook.Sheets.Single();
         var a1 = new CellAddress(sheet.Id, 1, 1);
         var c1 = new CellAddress(sheet.Id, 1, 3);
+        var c2 = new CellAddress(sheet.Id, 2, 3);
         sheet.SetCell(a1, new TextValue("source"));
         var session = CreateSession(new StartupWorkbookLoadResult(
             workbook,
@@ -2504,11 +2513,14 @@ public sealed class WorkbookSessionTests
         session.CopySelectedRangeText();
         session.SelectCell(c1);
 
-        var result = session.PasteSpecialClipboardAtActiveCell("external", PasteCellsMode.Values, default);
+        var result = session.PasteSpecialClipboardAtActiveCell(
+            "1\t2",
+            PasteCellsMode.All,
+            new PasteSpecialOptions(Transpose: true));
 
-        result.Success.Should().BeFalse();
-        result.ErrorMessage.Should().Be("Paste Special requires copied FreeX cells.");
-        sheet.GetCell(c1).Should().BeNull();
+        result.Success.Should().BeTrue();
+        sheet.GetValue(c1).Should().Be(new NumberValue(1));
+        sheet.GetValue(c2).Should().Be(new NumberValue(2));
     }
 
     [Fact]

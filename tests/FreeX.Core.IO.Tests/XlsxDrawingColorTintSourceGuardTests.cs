@@ -94,7 +94,7 @@ public sealed class XlsxDrawingColorTintSourceGuardTests
         TestWorkspaceFiles.ReadCoreModelRepoSource("WorkbookThemeTint.cs")
             .Should()
             .Contain("DrawingMlColorTransform.ApplyTint")
-            .And.Contain("DrawingMlColorTransform.ApplyShade");
+            .And.Contain("DrawingMlColorTransform.ApplyLuminance");
     }
 
     private static string ExtractMethod(string source, string signature)

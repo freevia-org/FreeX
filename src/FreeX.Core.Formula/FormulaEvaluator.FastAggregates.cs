@@ -620,15 +620,23 @@ public sealed partial class FormulaEvaluator
     private static bool TryAcceptFastAggregateRange(FastAggregateRange range, FastAggregateKind kind, out ErrorValue? error)
     {
         error = null;
+
+        // COUNTBLANK is intentionally left un-clamped by the used-range clamp above (it must
+        // count blanks across the whole nominal range), and its implementation streams
+        // cell-by-cell rather than materializing, so no cell-count safety cap applies to it.
+        if (kind == FastAggregateKind.CountBlank)
+            return true;
+
         var cellCount = FormulaSafetyLimits.GetRangeCellCount(
             range.StartRow,
             range.StartCol,
             range.EndRow,
             range.EndCol);
-        var maxCells = kind is FastAggregateKind.StdevS or FastAggregateKind.StdevP or FastAggregateKind.VarS or FastAggregateKind.VarP
-            ? FormulaSafetyLimits.MaxMaterializedRangeCells
-            : FormulaSafetyLimits.MaxStreamingRangeCells;
-        if (cellCount <= maxCells)
+
+        // Stdev/Var kinds are also pure streaming Welford accumulators (no materialization;
+        // see EvaluateFastRangeOnlyVariance), so they use the same streaming cap as
+        // SUM/AVERAGE/etc. rather than the lower materialized-range cap.
+        if (cellCount <= FormulaSafetyLimits.MaxStreamingRangeCells)
             return true;
 
         error = ErrorValue.Ref;
