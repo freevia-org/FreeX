@@ -51,7 +51,7 @@ public static partial class BuiltInFunctions
         DirectTextLiteralValue t => t.Value,
         TextValue t => t.Value,
         NumberValue n => NumberToExcelText(n.Value),
-        DateTimeValue d => d.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        DateTimeValue d => NumberToExcelText(d.Value),
         BoolValue b => b.Value ? "TRUE" : "FALSE",
         BlankValue => "",
         ErrorValue e => e.Code,

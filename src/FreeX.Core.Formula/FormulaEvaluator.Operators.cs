@@ -728,7 +728,7 @@ public sealed partial class FormulaEvaluator
     {
         TextValue t => t.Value,
         NumberValue n => BuiltInFunctions.NumberToExcelText(n.Value),
-        DateTimeValue dt => dt.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        DateTimeValue dt => BuiltInFunctions.NumberToExcelText(dt.Value),
         BoolValue b => b.Value ? "TRUE" : "FALSE",
         BlankValue => "",
         ErrorValue e => e.Code,

@@ -24,11 +24,8 @@ public static partial class BuiltInFunctions
             for (int c = 0; c < database.ColCount; c++)
             {
                 var header = database.Cells[0, c];
-                if (header is TextValue or DirectTextLiteralValue)
-                {
-                    if (string.Equals(ToText(header), name, StringComparison.OrdinalIgnoreCase))
-                        return c;
-                }
+                if (string.Equals(ToText(header), name, StringComparison.OrdinalIgnoreCase))
+                    return c;
             }
         }
         return null;
@@ -70,15 +67,23 @@ public static partial class BuiltInFunctions
     }
 
     /// <summary>Extract values from the field column for all matching rows.</summary>
-    private static (List<ScalarValue> Matches, ErrorValue? Error) DatabaseExtract(
+    /// <remarks>
+    /// <paramref name="matchCount"/> is the total number of database rows satisfying the
+    /// criteria, independent of whether the matched row's field cell is itself an error —
+    /// DGET needs this to apply Excel's "more than one record matches" #NUM! rule even when
+    /// a matching row's field value errors before every match has been scanned.
+    /// </remarks>
+    private static (List<ScalarValue> Matches, ErrorValue? Error, int MatchCount) DatabaseExtract(
         RangeValue database, ScalarValue fieldArg, RangeValue criteria)
     {
-        if (database.RowCount < 2) return (new List<ScalarValue>(), null);
+        if (database.RowCount < 2) return (new List<ScalarValue>(), null, 0);
 
         int? fieldCol = ResolveDatabaseField(database, fieldArg);
-        if (fieldCol is null) return (new List<ScalarValue>(), ErrorValue.Value);
+        if (fieldCol is null) return (new List<ScalarValue>(), ErrorValue.Value, 0);
 
         var matches = new List<ScalarValue>();
+        ErrorValue? firstError = null;
+        int matchCount = 0;
         for (int r = 1; r < database.RowCount; r++)
         {
             bool rowMatches = false;
@@ -93,18 +98,23 @@ public static partial class BuiltInFunctions
             }
             if (rowMatches)
             {
+                matchCount++;
                 var cell = database.Cells[r, fieldCol.Value];
-                if (cell is ErrorValue ev) return (matches, ev);
+                if (cell is ErrorValue ev)
+                {
+                    firstError ??= ev;
+                    continue;
+                }
                 matches.Add(cell);
             }
         }
-        return (matches, null);
+        return (matches, firstError, matchCount);
     }
 
     private static (List<double> Nums, ErrorValue? Error) DatabaseExtractNumeric(
         RangeValue database, ScalarValue fieldArg, RangeValue criteria)
     {
-        var (matches, err) = DatabaseExtract(database, fieldArg, criteria);
+        var (matches, err, _) = DatabaseExtract(database, fieldArg, criteria);
         if (err is not null) return (new List<double>(), err);
         var nums = new List<double>();
         foreach (var v in matches)
@@ -181,7 +191,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue DCountA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
-        var (matches, e) = DatabaseExtract(db, f, cr);
+        var (matches, e, _) = DatabaseExtract(db, f, cr);
         if (e is not null) return e;
         int count = 0;
         foreach (var v in matches)
@@ -192,7 +202,10 @@ public static partial class BuiltInFunctions
     private static ScalarValue DGet(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
-        var (matches, e) = DatabaseExtract(db, f, cr);
+        var (matches, e, matchCount) = DatabaseExtract(db, f, cr);
+        // Excel's documented "more than one record satisfies the criteria" #NUM! rule takes
+        // priority over a matched row's field error — check the total match count first.
+        if (matchCount > 1) return ErrorValue.Num;
         if (e is not null) return e;
         if (matches.Count == 0) return ErrorValue.Value;
         if (matches.Count > 1) return ErrorValue.Num;
@@ -202,14 +215,14 @@ public static partial class BuiltInFunctions
     private static ScalarValue DMax(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
         => EvaluateDatabaseNumericAggregate(args, nums =>
         {
-            if (nums.Count == 0) return ErrorValue.Num;
+            if (nums.Count == 0) return NumberResult(0);
             return NumberResult(nums.Max());
         });
 
     private static ScalarValue DMin(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
         => EvaluateDatabaseNumericAggregate(args, nums =>
         {
-            if (nums.Count == 0) return ErrorValue.Num;
+            if (nums.Count == 0) return NumberResult(0);
             return NumberResult(nums.Min());
         });
 

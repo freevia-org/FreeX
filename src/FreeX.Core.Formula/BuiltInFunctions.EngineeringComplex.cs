@@ -107,11 +107,22 @@ public static partial class BuiltInFunctions
         var suffix = args.Count > 2 && args[2] is not BlankValue ? ToText(args[2]).ToLowerInvariant() : "i";
         if (suffix is not ("i" or "j")) return ErrorValue.Value;
 
-        var real = ToNumber(args[0]);
-        var imaginary = ToNumber(args[1]);
+        return MapBinaryMathArgs(args[0], args[1], (realValue, imaginaryValue) => ComplexScalar(realValue, imaginaryValue, suffix));
+    }
+
+    private static ScalarValue ComplexScalar(ScalarValue realValue, ScalarValue imaginaryValue, string suffix)
+    {
+        if (realValue is ErrorValue e0) return e0;
+        if (imaginaryValue is ErrorValue e1) return e1;
+
+        var real = ToNumber(realValue);
+        var imaginary = ToNumber(imaginaryValue);
         if (!double.IsFinite(real) || !double.IsFinite(imaginary)) return ErrorValue.Num;
 
-        return ComplexTextResult(real, imaginary, suffix);
+        // COMPLEX just formats its literal inputs (no trigonometric computation), so unlike the
+        // Im*/trig-derived complex results below, tiny user-entered components must not be
+        // snapped to zero.
+        return ComplexTextResult(real, imaginary, suffix, snapNearZero: false);
     }
 
     private static ScalarValue ImReal(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -186,23 +197,38 @@ public static partial class BuiltInFunctions
         double real = 0;
         double imaginary = 0;
         var suffix = "i";
+        string? explicitSuffix = null;
         foreach (var value in FlattenComplexArguments(args))
         {
             var parsed = ParseComplexArgument(value);
             if (parsed.Error is not null) return parsed.Error;
+            if (parsed.Imaginary != 0)
+            {
+                // Excel rejects mixing "i" and "j" notation across arguments.
+                if (explicitSuffix is not null && explicitSuffix != parsed.Suffix) return ErrorValue.Num;
+                explicitSuffix = parsed.Suffix;
+            }
+
             real += parsed.Real;
             imaginary += parsed.Imaginary;
             suffix = parsed.Suffix;
         }
 
-        return ComplexTextResult(real, imaginary, suffix);
+        return ComplexTextResult(real, imaginary, explicitSuffix ?? suffix);
     }
 
     private static ScalarValue ImSub(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        var left = ParseComplexArgument(args[0]);
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        return MapBinaryMathArgs(args[0], args[1], ImSubScalar);
+    }
+
+    private static ScalarValue ImSubScalar(ScalarValue leftValue, ScalarValue rightValue)
+    {
+        var left = ParseComplexArgument(leftValue);
         if (left.Error is not null) return left.Error;
-        var right = ParseComplexArgument(args[1]);
+        var right = ParseComplexArgument(rightValue);
         if (right.Error is not null) return right.Error;
 
         return ComplexTextResult(left.Real - right.Real, left.Imaginary - right.Imaginary, left.Suffix);
@@ -213,10 +239,18 @@ public static partial class BuiltInFunctions
         double real = 1;
         double imaginary = 0;
         var suffix = "i";
+        string? explicitSuffix = null;
         foreach (var value in FlattenComplexArguments(args))
         {
             var parsed = ParseComplexArgument(value);
             if (parsed.Error is not null) return parsed.Error;
+            if (parsed.Imaginary != 0)
+            {
+                // Excel rejects mixing "i" and "j" notation across arguments.
+                if (explicitSuffix is not null && explicitSuffix != parsed.Suffix) return ErrorValue.Num;
+                explicitSuffix = parsed.Suffix;
+            }
+
             var nextReal = real * parsed.Real - imaginary * parsed.Imaginary;
             var nextImaginary = real * parsed.Imaginary + imaginary * parsed.Real;
             real = nextReal;
@@ -224,7 +258,7 @@ public static partial class BuiltInFunctions
             suffix = parsed.Suffix;
         }
 
-        return ComplexTextResult(real, imaginary, suffix);
+        return ComplexTextResult(real, imaginary, explicitSuffix ?? suffix);
     }
 
     private static ScalarValue ImPower(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -258,9 +292,16 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue ImDiv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        var left = ParseComplexArgument(args[0]);
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        return MapBinaryMathArgs(args[0], args[1], ImDivScalar);
+    }
+
+    private static ScalarValue ImDivScalar(ScalarValue leftValue, ScalarValue rightValue)
+    {
+        var left = ParseComplexArgument(leftValue);
         if (left.Error is not null) return left.Error;
-        var right = ParseComplexArgument(args[1]);
+        var right = ParseComplexArgument(rightValue);
         if (right.Error is not null) return right.Error;
 
         var denominator = right.Real * right.Real + right.Imaginary * right.Imaginary;
@@ -527,9 +568,9 @@ public static partial class BuiltInFunctions
         return ComplexTextResult(real / denominator, -imaginary / denominator, suffix);
     }
 
-    private static ScalarValue ComplexTextResult(double real, double imaginary, string suffix) =>
+    private static ScalarValue ComplexTextResult(double real, double imaginary, string suffix, bool snapNearZero = true) =>
         double.IsFinite(real) && double.IsFinite(imaginary)
-            ? TextResult(FormatComplex(real, imaginary, suffix))
+            ? TextResult(FormatComplex(real, imaginary, suffix, snapNearZero))
             : ErrorValue.Num;
 
     private static IEnumerable<ScalarValue> FlattenComplexArguments(IReadOnlyList<ScalarValue> args)
@@ -620,10 +661,14 @@ public static partial class BuiltInFunctions
             && double.IsFinite(value);
     }
 
-    private static string FormatComplex(double real, double imaginary, string suffix)
+    private static string FormatComplex(double real, double imaginary, string suffix, bool snapNearZero = true)
     {
-        if (Math.Abs(real) < 1e-14) real = 0;
-        if (Math.Abs(imaginary) < 1e-14) imaginary = 0;
+        if (snapNearZero)
+        {
+            if (Math.Abs(real) < 1e-14) real = 0;
+            if (Math.Abs(imaginary) < 1e-14) imaginary = 0;
+        }
+
         if (real == 0 && imaginary == 0) return "0";
         if (imaginary == 0) return FormatComplexNumber(real);
 

@@ -1,3 +1,4 @@
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -32,7 +33,7 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
 
         var pastedRules = sourceSheet.ConditionalFormats
             .Where(rule => rule.AppliesTo.Overlaps(_sourceRange))
-            .Select(CloneRuleForDestination)
+            .Select(rule => CloneRuleForDestination(rule, targetSheet.Name))
             .ToList();
 
         _previousRules = [.. targetSheet.ConditionalFormats];
@@ -52,7 +53,7 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
         _previousRules = null;
     }
 
-    private ConditionalFormat CloneRuleForDestination(ConditionalFormat source)
+    private ConditionalFormat CloneRuleForDestination(ConditionalFormat source, string hostSheetName)
     {
         // Clip the rule to the copied source range before mapping. Rules are selected by Overlaps (not
         // Contains), so a rule that starts above/left of the source range would otherwise make
@@ -63,6 +64,15 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
             : source.AppliesTo;
         var start = MapDestination(clipped.Start);
         var end = MapDestination(clipped.End);
+
+        // A "Formula is" rule is evaluated per-cell by shifting FormulaText relative to the rule's own
+        // AppliesTo.Start anchor (ViewportConditionalFormatEvaluator.GetShiftedConditionalFormatFormula),
+        // so once the anchor moves to the pasted destination the formula text itself must be rewritten
+        // by the same offset — otherwise the shifted-at-evaluation-time formula still points at the
+        // original (now unrelated) source cells. Mirrors PasteDataValidationCommand/DataValidationCopySupport,
+        // which rewrites Formula1/Formula2 the same way for the identical destination-anchor scenario.
+        var rowDelta = (int)start.Row - (int)clipped.Start.Row;
+        var colDelta = (int)start.Col - (int)clipped.Start.Col;
         var clone = new ConditionalFormat
         {
             AppliesTo = new GridRange(start, end),
@@ -107,7 +117,7 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
             AboveAverage = source.AboveAverage,
             EqualAverage = source.EqualAverage,
             StdDevCount = source.StdDevCount,
-            FormulaText = source.FormulaText,
+            FormulaText = RewriteFormulaText(source.FormulaText, hostSheetName, rowDelta, colDelta),
             IconSetStyle = source.IconSetStyle,
             IconSetShowValue = source.IconSetShowValue,
             IconSetReverse = source.IconSetReverse,
@@ -126,6 +136,18 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
         clone.IconSetThresholds.AddRange(source.IconSetThresholds);
         clone.IconOverrides.AddRange(source.IconOverrides);
         return clone;
+    }
+
+    // Mirrors DataValidationCopySupport.RewriteValidationFormula, minus the leading-'=' handling:
+    // unlike DataValidation.Formula1/Formula2, ConditionalFormat.FormulaText is documented as stored
+    // "without leading =", so the raw text is handed straight to FormulaRewriter.
+    private static string? RewriteFormulaText(string? formulaText, string hostSheetName, int rowDelta, int colDelta)
+    {
+        if (string.IsNullOrWhiteSpace(formulaText) || (rowDelta == 0 && colDelta == 0))
+            return formulaText;
+
+        var rewritten = FormulaRewriter.Rewrite(formulaText, new PasteOffsetOp(rowDelta, colDelta), hostSheetName);
+        return rewritten ?? formulaText;
     }
 
     private CellAddress MapDestination(CellAddress source)

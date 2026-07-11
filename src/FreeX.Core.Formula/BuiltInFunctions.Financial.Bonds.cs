@@ -190,7 +190,8 @@ public static partial class BuiltInFunctions
         if (sd >= md) return ErrorValue.Num;
         double dim = DayCountFraction(id, md, basis);
         double dsm = DayCountFraction(sd, md, basis);
-        double result = 100.0 * (1 + rate * dim) / (1 + yld * dsm);
+        double a = DayCountFraction(id, sd, basis);
+        double result = 100.0 * (1 + rate * dim) / (1 + yld * dsm) - a * rate * 100.0;
         return NumberResult(result);
     }
 
@@ -257,7 +258,8 @@ public static partial class BuiltInFunctions
         double dim = DayCountFraction(id, md, basis);
         double dsm = DayCountFraction(sd, md, basis);
         if (dsm <= 0) return ErrorValue.Num;
-        double num = (1 + rate * dim) / (pr / 100.0) - 1;
+        double a = DayCountFraction(id, sd, basis);
+        double num = (1 + rate * dim) / (pr / 100.0 + a * rate) - 1;
         return NumberResult(num / dsm);
     }
 

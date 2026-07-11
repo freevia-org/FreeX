@@ -30,7 +30,11 @@ public sealed partial class FormulaEvaluator
             bindings[localName] = value;
         }
 
-        return EvaluateNode(node.Arguments[^1], scoped);
+        // The final calc_expr is the LET's overall result and must be evaluated array-aware
+        // (mirroring the bindings above and EvaluateSpilling's top-level treatment), so a bare
+        // range/full-column/full-row/named-range body yields a RangeValue that can spill instead
+        // of silently collapsing to its top-left cell via implicit intersection.
+        return EvaluateArrayOperand(node.Arguments[^1], scoped);
     }
 
     private static ScalarValue EvaluateLambda(FunctionCallNode node, IEvalContext context)

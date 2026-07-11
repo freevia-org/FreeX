@@ -201,9 +201,22 @@ public static partial class BuiltInFunctions
     private static int DbcsByteWidthAt(string text, int index)
     {
         if (IsSurrogatePairAt(text, index)) return 2;
-        var ch = text[index];
-        return ch <= '\u00ff' || (ch >= '\uff61' && ch <= '\uff9f') ? 1 : 2;
+        return IsDbcsWide(text[index]) ? 2 : 1;
     }
+
+    // Real Excel *B functions (LENB/LEFTB/RIGHTB/MIDB/REPLACEB/FINDB/SEARCHB) only double-count characters
+    // that are genuinely double-byte under an active DBCS codepage (Shift-JIS/GBK/Big5/EUC-KR): CJK ideographs,
+    // kana, hangul, and fullwidth forms. Single-byte scripts above U+00FF -- Cyrillic, Greek, Hebrew, Arabic,
+    // Thai, Devanagari, Latin Extended, etc. -- are 1 byte per character, same as LEN, in every DBCS codepage.
+    private static bool IsDbcsWide(char ch) =>
+        (ch >= '\u1100' && ch <= '\u11ff') ||   // Hangul Jamo
+        (ch >= '\u2e80' && ch <= '\ua4cf') ||   // CJK radicals/symbols, Hiragana, Katakana, Bopomofo, Hangul
+                                                 // compatibility jamo, CJK strokes/compat/ext-A, Yi
+        (ch >= '\uac00' && ch <= '\ud7a3') ||   // Hangul syllables
+        (ch >= '\uf900' && ch <= '\ufaff') ||   // CJK compatibility ideographs
+        (ch >= '\ufe30' && ch <= '\ufe4f') ||   // CJK compatibility forms
+        (ch >= '\uff00' && ch <= '\uff60') ||   // Fullwidth forms (halfwidth kana \uff61-\uff9f stays 1 byte)
+        (ch >= '\uffe0' && ch <= '\uffe6');     // Fullwidth signs
 
     private static int DbcsByteOffsetToUtf16Index(string text, int byteOffset)
     {

@@ -40,43 +40,79 @@ public static partial class BuiltInFunctions
         return new RangeValue(result);
     }
 
-    // REDUCE(initial, array, lambda(accumulator, value)) → scalar
+    // REDUCE([initial_value], array, lambda(accumulator, value)) → scalar
+    // initial_value is optional (Excel: "If no value is supplied for the initial_value, the
+    // first value in the array will be used as the starting value" and reduction then proceeds
+    // from the array's second element).
     private static ScalarValue ReduceFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        if (args.Count != 3) return ErrorValue.Value;
-        if (args[1] is ErrorValue e) return e;
-        var rv = args[1] is RangeValue range ? range : SingleCellArray(args[1]);
-        if (args[2] is not LambdaValue lambda) return ErrorValue.Value;
+        if (args.Count is < 2 or > 3) return ErrorValue.Value;
+        bool hasInitialValue = args.Count == 3;
+        var arrayArg = args[hasInitialValue ? 1 : 0];
+        var lambdaArg = args[hasInitialValue ? 2 : 1];
+        if (arrayArg is ErrorValue e) return e;
+        var rv = arrayArg is RangeValue range ? range : SingleCellArray(arrayArg);
+        if (lambdaArg is not LambdaValue lambda) return ErrorValue.Value;
         if (lambda.Parameters.Count != 2) return ErrorValue.Value;
 
-        ScalarValue acc = args[0];
         var flat = rv.Flatten();
-        foreach (var val in flat)
+        int startIndex;
+        ScalarValue acc;
+        if (hasInitialValue)
         {
-            acc = ctx.InvokeLambda(lambda, [acc, val]);
+            acc = args[0];
+            startIndex = 0;
+        }
+        else
+        {
+            if (flat.Count == 0) return ErrorValue.Value;
+            acc = flat[0];
+            startIndex = 1;
+        }
+
+        for (int i = startIndex; i < flat.Count; i++)
+        {
+            acc = ctx.InvokeLambda(lambda, [acc, flat[i]]);
             if (acc is ErrorValue accError) return accError;
         }
         return acc;
     }
 
-    // SCAN(initial, array, lambda(accumulator, value)) → same-shape array of intermediates
+    // SCAN([initial_value], array, lambda(accumulator, value)) → same-shape array of intermediates
+    // initial_value is optional, matching REDUCE: when omitted, the array's first element seeds
+    // the accumulator (and becomes the first output element) and scanning proceeds from the
+    // second element.
     private static ScalarValue ScanFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        if (args.Count != 3) return ErrorValue.Value;
-        if (args[1] is ErrorValue e) return e;
-        var rv = args[1] is RangeValue range ? range : SingleCellArray(args[1]);
-        if (args[2] is not LambdaValue lambda) return ErrorValue.Value;
+        if (args.Count is < 2 or > 3) return ErrorValue.Value;
+        bool hasInitialValue = args.Count == 3;
+        var arrayArg = args[hasInitialValue ? 1 : 0];
+        var lambdaArg = args[hasInitialValue ? 2 : 1];
+        if (arrayArg is ErrorValue e) return e;
+        var rv = arrayArg is RangeValue range ? range : SingleCellArray(arrayArg);
+        if (lambdaArg is not LambdaValue lambda) return ErrorValue.Value;
         if (lambda.Parameters.Count != 2) return ErrorValue.Value;
 
         int rows = rv.RowCount, cols = rv.ColCount;
+        if (!hasInitialValue && rows * cols == 0) return ErrorValue.Value;
+        var flat = rv.Flatten();
         var result = new ScalarValue[rows, cols];
-        ScalarValue acc = args[0];
+        ScalarValue acc = hasInitialValue ? args[0] : flat[0];
+        int flatIndex = 0;
         for (int r = 0; r < rows; r++)
             for (int c = 0; c < cols; c++)
             {
-                acc = ctx.InvokeLambda(lambda, [acc, rv.At(r + 1, c + 1)]);
-                if (acc is RangeValue) return ErrorValue.Calc;
-                result[r, c] = acc;
+                if (!hasInitialValue && flatIndex == 0)
+                {
+                    result[r, c] = acc;
+                }
+                else
+                {
+                    acc = ctx.InvokeLambda(lambda, [acc, flat[flatIndex]]);
+                    if (acc is RangeValue) return ErrorValue.Calc;
+                    result[r, c] = acc;
+                }
+                flatIndex++;
             }
         return new RangeValue(result);
     }

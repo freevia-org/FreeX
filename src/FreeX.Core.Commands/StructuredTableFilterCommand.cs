@@ -34,7 +34,7 @@ public sealed class ApplyStructuredTableFiltersCommand : IWorkbookCommand
 
         _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
 
-        RemoveExistingFilterRows(sheet.FilterHiddenRows, table.Range, table.TotalsRowShown);
+        RemoveExistingFilterRows(sheet, table.Range, table.TotalsRowShown);
 
         if (filters.Count == 0)
             return new CommandOutcome(true);
@@ -84,18 +84,33 @@ public sealed class ApplyStructuredTableFiltersCommand : IWorkbookCommand
     private static uint LastDataRow(GridRange range, bool totalsRowShown) =>
         totalsRowShown && range.End.Row > range.Start.Row ? range.End.Row - 1 : range.End.Row;
 
-    private static void RemoveExistingFilterRows(HashSet<uint> filterHiddenRows, GridRange range, bool totalsRowShown)
+    /// <summary>
+    /// Un-hides the table's data rows so they can be recomputed against the current value-list
+    /// filters — but only rows this table's value filters are actually responsible for. A row also
+    /// hidden by a Top-10/Above-Average/condition/color filter on some column (tracked in
+    /// <see cref="Sheet.ColumnFilterOwnedRows"/>) must stay hidden; those mechanisms don't
+    /// participate in <see cref="BuildFilters"/> at all, so blindly clearing every row in range would
+    /// silently discard their filtering the moment this table's own filters are re-applied. Mirrors
+    /// <see cref="FilterCommand.RecomputeHiddenRows"/>'s ownership guard for the same reason
+    /// (finding R21-autofilter-sort-state-2).
+    /// </summary>
+    private static void RemoveExistingFilterRows(Sheet sheet, GridRange range, bool totalsRowShown)
     {
+        var filterHiddenRows = sheet.FilterHiddenRows;
         var firstDataRow = range.Start.Row + 1;
         var lastDataRow = LastDataRow(range, totalsRowShown);
         if (filterHiddenRows.Count < range.RowCount)
         {
-            filterHiddenRows.RemoveWhere(row => row >= firstDataRow && row <= lastDataRow);
+            filterHiddenRows.RemoveWhere(row => row >= firstDataRow && row <= lastDataRow &&
+                !FilterHiddenRowUpdater.IsHiddenByAnyColumnOwnedFilter(sheet, row));
             return;
         }
 
         for (var row = firstDataRow; row <= lastDataRow; row++)
-            filterHiddenRows.Remove(row);
+        {
+            if (!FilterHiddenRowUpdater.IsHiddenByAnyColumnOwnedFilter(sheet, row))
+                filterHiddenRows.Remove(row);
+        }
     }
 
     private static bool RowMatchesAllFilters(Sheet sheet, uint row, IReadOnlyList<TableFilterState> filters)

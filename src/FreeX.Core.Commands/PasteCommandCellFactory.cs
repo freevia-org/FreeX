@@ -151,6 +151,8 @@ internal static class PasteCommandCellFactory
         style.BorderRight = destinationStyle.BorderRight;
         style.BorderBottom = destinationStyle.BorderBottom;
         style.BorderLeft = destinationStyle.BorderLeft;
+        style.BorderDiagonalDown = destinationStyle.BorderDiagonalDown;
+        style.BorderDiagonalUp = destinationStyle.BorderDiagonalUp;
         return workbook.RegisterStyle(style);
     }
 }

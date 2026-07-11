@@ -60,7 +60,12 @@ public static partial class BuiltInFunctions
         switch (infoType)
         {
             case "address":
-                return new TextValue($"${CellAddress.NumberToColumnName(col)}${row}");
+            {
+                var address = $"${CellAddress.NumberToColumnName(col)}${row}";
+                if (sheet is not null && sheet != ctx.CurrentSheet)
+                    address = $"{SheetNameFormatter.QuoteIfNeeded(sheet.Name)}!{address}";
+                return new TextValue(address);
+            }
             case "col":
                 return new NumberValue(col);
             case "row":

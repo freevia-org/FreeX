@@ -258,10 +258,14 @@ public sealed partial class FormulaEvaluator
             return ErrorValue.Value;
 
         // A bare range reference outside a function context returns the first value
-        // (This matches Excel's implicit intersection behavior for simple cases)
+        // (This matches Excel's implicit intersection behavior for simple cases).
+        // Excel normalizes a reversed range (e.g. B5:A1) to its top-left corner (A1:B5)
+        // before reading it, so pick the min row/col rather than trusting range.Start literally.
+        uint topRow = Math.Min(range.Start.Row, range.End.Row);
+        uint leftColumn = Math.Min(range.Start.ColumnNumber, range.End.ColumnNumber);
         return range.SheetName is not null
-            ? context.GetCellValue(range.SheetName, range.Start.Row, range.Start.ColumnNumber)
-            : context.GetCellValue(range.Start.Row, range.Start.ColumnNumber);
+            ? context.GetCellValue(range.SheetName, topRow, leftColumn)
+            : context.GetCellValue(topRow, leftColumn);
     }
 
 
@@ -609,11 +613,17 @@ public sealed partial class FormulaEvaluator
         if (!TryAsRangeRef(node.Arguments.Count > 0 ? node.Arguments[0] : new OmittedArgumentNode(), out var range))
             return false;
 
-        if (node.Arguments.Count is < 2 or > 3)
+        if (node.Arguments.Count is < 2 or > 4)
         {
             result = ErrorValue.Value;
             return true;
         }
+
+        // The 4-argument reference form INDEX(ref, row, col, area_num) is area_num-aware and is
+        // handled by the generic registry Index() implementation; defer to it rather than the
+        // single-area fast path (which has no area_num slot).
+        if (node.Arguments.Count == 4)
+            return false;
 
         if (TryAsRangeRef(node.Arguments[1], out _) ||
             (node.Arguments.Count > 2 && TryAsRangeRef(node.Arguments[2], out _)))
@@ -855,8 +865,16 @@ public sealed partial class FormulaEvaluator
         return unsupportedReferenceError;
     }
 
-    private static ErrorValue? TryGetTopLeftCell(RangeRefNode range, IEvalContext context, out Cell? cell) =>
-        TryGetCell(range.SheetName, range.Start.Row, range.Start.ColumnNumber, context, out cell);
+    private static ErrorValue? TryGetTopLeftCell(RangeRefNode range, IEvalContext context, out Cell? cell)
+    {
+        // Excel normalizes a reversed range (e.g. B5:A1) to its top-left corner (A1:B5) before
+        // reading it, exactly like BuildRangeValue and every OFFSET/INDEX/lookup fast-path in
+        // this file. range.Start/End are stored exactly as parsed, so pick the min row/col here
+        // rather than trusting range.Start literally.
+        uint row = Math.Min(range.Start.Row, range.End.Row);
+        uint column = Math.Min(range.Start.ColumnNumber, range.End.ColumnNumber);
+        return TryGetCell(range.SheetName, row, column, context, out cell);
+    }
 
     private static ErrorValue? TryGetCell(
         string? sheetName,

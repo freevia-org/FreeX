@@ -10,6 +10,15 @@ public static class PasteLinkService
         string sourceSheetName,
         bool transpose)
     {
+        // R21: match every other paste path (e.g. PasteCommandFactory.CreateInternalPasteCommand,
+        // which calls WorksheetBounds.TryGetRectangleEnd) by rejecting destinations that would
+        // place any linked cell outside the worksheet grid, instead of silently writing an
+        // off-grid formula cell that Sheet.SetCell/XLSX save have no bounds checking for.
+        var targetRowCount = transpose ? sourceRange.ColCount : sourceRange.RowCount;
+        var targetColCount = transpose ? sourceRange.RowCount : sourceRange.ColCount;
+        if (!WorksheetBounds.TryGetRectangleEnd(destination, targetRowCount, targetColCount, out _))
+            return [];
+
         var linkedCells = new List<(CellAddress Address, Cell Cell)>();
         for (uint row = sourceRange.Start.Row; row <= sourceRange.End.Row; row++)
         {

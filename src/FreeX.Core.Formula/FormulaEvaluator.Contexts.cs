@@ -272,7 +272,12 @@ public sealed partial class FormulaEvaluator
                 bindings[lambda.Parameters[i]] = args[i];
             // Lexical scoping: evaluate the body against the environment captured when the
             // LAMBDA was defined (lambda.Closure), not the call-site context (this).
-            return _evaluator.EvaluateNode(lambda.Body, new ScopedEvalContext(lambda.Closure ?? this, bindings, _evaluator));
+            // Array-aware: a bare range body (e.g. LAMBDA(x, B1:B3)) must materialize into a
+            // RangeValue instead of silently collapsing to its top-left cell via implicit
+            // intersection, so callers like MAP/BYROW/BYCOL/SCAN/MAKEARRAY can detect and reject
+            // a nested-array result (their `is RangeValue` #CALC! guard) instead of getting a
+            // wrong scalar.
+            return _evaluator.EvaluateArrayOperand(lambda.Body, new ScopedEvalContext(lambda.Closure ?? this, bindings, _evaluator));
         }
 
         private FreeX.Core.Model.Sheet? ResolveSheet(string sheetName)
@@ -335,7 +340,8 @@ public sealed partial class FormulaEvaluator
             for (int i = 0; i < lambda.Parameters.Count; i++) nb[lambda.Parameters[i]] = args[i];
             // Lexical scoping: evaluate the body against the environment captured when the
             // LAMBDA was defined (lambda.Closure), not the call-site context (this).
-            return _evaluator.EvaluateNode(lambda.Body, new ScopedEvalContext(lambda.Closure ?? this, nb, _evaluator));
+            // Array-aware: see the matching comment in SheetEvalContext.InvokeLambda above.
+            return _evaluator.EvaluateArrayOperand(lambda.Body, new ScopedEvalContext(lambda.Closure ?? this, nb, _evaluator));
         }
     }
 }

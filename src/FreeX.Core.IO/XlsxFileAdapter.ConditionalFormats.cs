@@ -67,6 +67,7 @@ public sealed partial class XlsxFileAdapter
                     var format = ReadColorScaleConditionalFormat(colorScale, appliesTo, priority, worksheetNs, workbookTheme, indexedColors);
                     format.AdditionalRanges = additionalRanges;
                     format.FormatIfTrue = formatIfTrue;
+                    format.StopIfTrue = IsTruthy(rule.Attribute("stopIfTrue")?.Value);
                     ApplyNativeConditionalFormatRuleMetadata(format, rule, worksheetNs);
                     ApplyNativeConditionalFormattingContainerMetadata(format, conditionalFormatting, worksheetNs);
                     result.Add(format);
@@ -77,6 +78,7 @@ public sealed partial class XlsxFileAdapter
                     var format = ReadDataBarConditionalFormat(dataBar, appliesTo, priority, worksheetNs, workbookTheme, indexedColors);
                     format.AdditionalRanges = additionalRanges;
                     format.FormatIfTrue = formatIfTrue;
+                    format.StopIfTrue = IsTruthy(rule.Attribute("stopIfTrue")?.Value);
                     ApplyNativeConditionalFormatRuleMetadata(format, rule, worksheetNs);
                     ApplyNativeConditionalFormattingContainerMetadata(format, conditionalFormatting, worksheetNs);
                     var x14Id = ExtractX14IdFromCfRule(rule);
@@ -96,6 +98,7 @@ public sealed partial class XlsxFileAdapter
                         IconSetStyle = NormalizeOptionalText(iconSet.Attribute("iconSet")?.Value),
                         IconSetShowValue = !IsFalse(iconSet.Attribute("showValue")?.Value),
                         IconSetReverse = IsTruthy(iconSet.Attribute("reverse")?.Value),
+                        StopIfTrue = IsTruthy(rule.Attribute("stopIfTrue")?.Value),
                         FormatIfTrue = formatIfTrue
                     };
                     format.IconSetThresholds.AddRange(ReadCfvoThresholds(iconSet, worksheetNs));

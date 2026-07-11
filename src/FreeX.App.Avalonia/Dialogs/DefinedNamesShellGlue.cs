@@ -110,15 +110,18 @@ internal static class DefinedNamesShellGlue
     /// <summary>
     /// Maps a validated Define-Name <paramref name="draft"/> plus the range its refers-to resolved to onto a
     /// <see cref="DefineNamedRangeCommand"/>. The scope label and comment are carried into the named-range
-    /// metadata so a worksheet-scoped name round-trips. Callers validate the draft (name + refers-to) and
-    /// resolve the refers-to to a <see cref="GridRange"/> before calling this.
+    /// metadata so a worksheet-scoped name round-trips, and <see cref="DefinedNameScope.Sheet"/> is passed
+    /// through as the command's scope-sheet id so a sheet-scoped choice actually defines a sheet-scoped name
+    /// (Excel "localSheetId") rather than a workbook-global one, matching the WPF host's NamedRangeDialog.
+    /// Callers validate the draft (name + refers-to) and resolve the refers-to to a <see cref="GridRange"/>
+    /// before calling this.
     /// </summary>
     public static DefineNamedRangeCommand BuildDefineCommand(DefinedNameDraft draft, GridRange range)
     {
         ArgumentNullException.ThrowIfNull(draft);
 
         var metadata = new NamedRangeMetadata(draft.Scope.Label, draft.Comment ?? "");
-        return new DefineNamedRangeCommand(draft.Name, range, metadata);
+        return new DefineNamedRangeCommand(draft.Name, range, metadata, draft.Scope.Sheet);
     }
 
     /// <summary>
@@ -126,8 +129,11 @@ internal static class DefinedNamesShellGlue
     /// range/cell/existing-name reference, but did parse as a formula expression, onto a
     /// <see cref="DefineNamedFormulaCommand"/> — a named formula/constant (e.g. <c>=1.05</c> or
     /// <c>=SUM(Sheet1!A:A)</c>). The leading '=' is stripped since <see cref="Workbook.NamedFormulas"/> stores
-    /// the raw formula text. Callers try <see cref="BuildDefineCommand"/> first and fall back to this only when
-    /// the refers-to text is not a resolvable range.
+    /// the raw formula text. <see cref="DefinedNameScope.Sheet"/> is passed through as the command's
+    /// scope-sheet id so a sheet-scoped choice defines a sheet-scoped named formula rather than a
+    /// workbook-global one, matching <see cref="BuildDefineCommand"/>. Callers try
+    /// <see cref="BuildDefineCommand"/> first and fall back to this only when the refers-to text is not a
+    /// resolvable range.
     /// </summary>
     public static DefineNamedFormulaCommand BuildDefineFormulaCommand(DefinedNameDraft draft)
     {
@@ -136,7 +142,7 @@ internal static class DefinedNamesShellGlue
         var text = draft.RefersTo.Trim();
         if (text.StartsWith('='))
             text = text[1..].Trim();
-        return new DefineNamedFormulaCommand(draft.Name, text);
+        return new DefineNamedFormulaCommand(draft.Name, text, draft.Scope.Sheet);
     }
 
     /// <summary>Maps a name deletion onto a <see cref="RemoveNamedRangeCommand"/>.</summary>

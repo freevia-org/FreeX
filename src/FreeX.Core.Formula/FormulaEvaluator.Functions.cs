@@ -134,6 +134,20 @@ public sealed partial class FormulaEvaluator
             {
                 if (isStructured || !isAggregate)
                 {
+                    // SHEETS(Sheet1:Sheet3!A1) is valid Excel and must return the number of sheets
+                    // spanned (3), not #VALUE!. SheetsFunc/SheetSpanCount (see
+                    // BuiltInFunctions.Lookup.Reference.cs) already handle a RangeValue whose
+                    // SheetName encodes a "Start:End" span; encode one here so it reaches them
+                    // instead of falling into the generic error path below. Only SHEETS is
+                    // special-cased — every other non-aggregate/structured function still errors.
+                    if (functionName == "SHEETS")
+                    {
+                        expandedArgs.Add(new RangeValue(new ScalarValue[1, 1] { { BlankValue.Instance } },
+                            spanRange.Start.Row, spanRange.Start.ColumnNumber)
+                        { SheetName = $"{spanRange.SheetName}:{spanRange.EndSheetName}" });
+                        continue;
+                    }
+
                     expandedArgs.Add(ErrorValue.Value);
                     continue;
                 }
@@ -279,6 +293,17 @@ public sealed partial class FormulaEvaluator
                             AddRangeValues(expandedArgs, values, preservesReferenceProvenance);
                         }
                     }
+                    else if (isAggregate && !isStructured &&
+                             TryExpandNamedFormulaSheetSpanAggregateRange(
+                                 named.Name, context, expandedArgs, preservesReferenceProvenance, out var spanError))
+                    {
+                        // A defined name whose RefersTo is a bare 3-D sheet-span (e.g.
+                        // Sheet1:Sheet3!A1): expand across the spanned sheets just like a literal
+                        // span argument, rather than falling through to TryEvaluateNamedFormula
+                        // (which has no aggregate-argument context and would surface #VALUE!).
+                        if (spanError is not null)
+                            return spanError;
+                    }
                     else if (TryEvaluateNamedFormula(named.Name, context, out var namedFormulaArg))
                     {
                         // Named formula: the evaluated result may be a scalar or RangeValue (array).
@@ -361,14 +386,63 @@ public sealed partial class FormulaEvaluator
         for (var sheetIndex = firstIndex; sheetIndex <= lastIndex; sheetIndex++)
         {
             var sheetName = workbook.Sheets[sheetIndex].Name;
+
+            // A full-column/full-row span (e.g. Sheet1:Sheet3!A:A) nominally spans the whole grid
+            // on every sheet it covers and would exceed the materialization cap per sheet, just
+            // like the non-span full-column path above (Functions.cs ~line 160). Clamp per sheet
+            // since each spanned sheet's used range can differ.
+            var perSheet = ClampOpenEndedRangeToUsed(spanRange with { SheetName = sheetName, EndSheetName = null }, context);
             var values = context.GetRangeValues(
                 sheetName,
-                spanRange.Start.Row, spanRange.Start.ColumnNumber,
-                spanRange.End.Row, spanRange.End.ColumnNumber);
+                perSheet.Start.Row, perSheet.Start.ColumnNumber,
+                perSheet.End.Row, perSheet.End.ColumnNumber);
             AddRangeValues(expandedArgs, values, preservesReferenceProvenance);
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// A defined name whose RefersTo is a bare 3-D sheet-span (e.g. Name -> Sheet1:Sheet3!A1) is
+    /// valid Excel syntax only as a direct argument to an aggregate function, exactly like a
+    /// literal span written inline (see <see cref="TryExpandSheetSpanAggregateRange"/> above).
+    /// The generic named-formula path (TryEvaluateNamedFormula -> EvaluateNamedFormulaAst ->
+    /// EvaluateArrayOperand -> BuildRangeValueOrError) has no notion of "called from an aggregate
+    /// argument position" and always surfaces #VALUE! for a span, so this parses the name's
+    /// RefersTo text directly and, when it is nothing but a bare span reference, reuses the same
+    /// span-expansion machinery instead of falling through to that generic path.
+    /// Returns false (do nothing) when the name isn't a formula, doesn't parse, or its RefersTo
+    /// isn't a bare 3-D span — callers should fall back to the normal named-formula evaluation.
+    /// </summary>
+    private static bool TryExpandNamedFormulaSheetSpanAggregateRange(
+        string name,
+        IEvalContext context,
+        List<ScalarValue> expandedArgs,
+        bool preservesReferenceProvenance,
+        out ScalarValue? error)
+    {
+        error = null;
+
+        var formulaText = context.TryGetNamedFormulaText(name);
+        if (formulaText is null)
+            return false;
+
+        FormulaNode ast;
+        try
+        {
+            ast = GetOrParseFormula(formulaText);
+            ast = ApplyRelativeNameAnchor(ast, context);
+        }
+        catch (FormulaParseException)
+        {
+            return false;
+        }
+
+        if (ast is not RangeRefNode { EndSheetName: not null } spanRange)
+            return false;
+
+        error = TryExpandSheetSpanAggregateRange(spanRange, context, expandedArgs, preservesReferenceProvenance);
+        return true;
     }
 
     private static int FindSheetIndex(FreeX.Core.Model.Workbook workbook, string sheetName)

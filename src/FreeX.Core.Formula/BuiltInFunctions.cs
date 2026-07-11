@@ -57,7 +57,7 @@ public static partial class BuiltInFunctions
         // ── Phase 4.2: Lookup ────────────────────────────────────────────────
         ["VLOOKUP"]     = (Vlookup, 3, 4),
         ["HLOOKUP"]     = (Hlookup, 3, 4),
-        ["INDEX"]       = (Index, 2, 3),
+        ["INDEX"]       = (Index, 2, 4),
         ["MATCH"]       = (Match, 2, 3),
         ["XMATCH"]      = (Xmatch, 2, 4),
 
@@ -603,8 +603,8 @@ public static partial class BuiltInFunctions
         // lookup so they don't return #NAME?.  The higher-order helpers below ARE
         // registered because they receive their lambda arg as a pre-evaluated LambdaValue.
         ["MAP"]       = (MapFunc,       2, 255),
-        ["REDUCE"]    = (ReduceFunc,    3, 3),
-        ["SCAN"]      = (ScanFunc,      3, 3),
+        ["REDUCE"]    = (ReduceFunc,    2, 3),
+        ["SCAN"]      = (ScanFunc,      2, 3),
         ["BYROW"]     = (ByRowFunc,     2, 2),
         ["BYCOL"]     = (ByColFunc,     2, 2),
         ["MAKEARRAY"] = (MakeArrayFunc, 3, 3),

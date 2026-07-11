@@ -713,6 +713,17 @@ public sealed class Parser
     /// </summary>
     private FormulaNode ParseSheetSpanBody(string startSheetName, string endSheetName)
     {
+        // A span's reference part can be a whole-column (A:A) or whole-row (1:1) shape too, just
+        // like the single-sheet path (ParseSheetQualifiedReference tries these first) — represent
+        // it directly as a RangeRefNode spanning row 1..MaxRow (or col A..MaxCol) with EndSheetName
+        // set, since FullColumnRangeRefNode/FullRowRangeRefNode have no span (EndSheetName) slot of
+        // their own and RangeRefNode already carries one.
+        if (TryParseFullColumnSpanBody(startSheetName, endSheetName, out var fullColumnSpan))
+            return fullColumnSpan;
+
+        if (TryParseFullRowSpanBody(startSheetName, endSheetName, out var fullRowSpan))
+            return fullRowSpan;
+
         if (Current.Type != TokenType.CellRef)
             throw new FormulaParseException(
                 $"Expected cell reference after '{startSheetName}:{endSheetName}!' at position {Current.Position}");
@@ -749,6 +760,80 @@ public sealed class Parser
         // Start == End with IsSingleCellSpan set so FormulaSerializer reprints just "A1", not a
         // synthesized "A1:A1" that was never in the source text.
         return new RangeRefNode(startCellRef, startCellRef, startSheetName, endSheetName, IsSingleCellSpan: true);
+    }
+
+    /// <summary>
+    /// Parses a whole-column reference part of a 3-D span (e.g. the "A:A" in Sheet1:Sheet3!A:A),
+    /// mirroring <see cref="TryParseFullColumnRange"/> but producing a RangeRefNode with
+    /// EndSheetName set (spanning row 1..MaxRow on the given column(s)) since
+    /// FullColumnRangeRefNode has no span slot. Leaves position unchanged on failure.
+    /// </summary>
+    private bool TryParseFullColumnSpanBody(string startSheetName, string endSheetName, out FormulaNode range)
+    {
+        range = null!;
+        if (!TryParseColumnToken(Current, out var startColumn, out var isStartAbsolute))
+            return false;
+
+        if (Peek().Type != TokenType.Colon)
+            return false;
+
+        var saved = _pos;
+        Advance();
+        Advance();
+
+        // Same restriction as the cell-range span body: the second endpoint is never itself
+        // sheet-qualified again.
+        if (Current.Type == TokenType.SheetQualifier)
+            throw new FormulaParseException(
+                $"Unexpected sheet qualifier '{Current.Value}!' at position {Current.Position}");
+
+        if (!TryParseColumnToken(Current, out var endColumn, out var isEndAbsolute))
+        {
+            _pos = saved;
+            return false;
+        }
+
+        Advance();
+        var start = new CellRefNode(startColumn, 1, isStartAbsolute, false, startSheetName);
+        var end = new CellRefNode(endColumn, Model.CellAddress.MaxRow, isEndAbsolute, false);
+        range = new RangeRefNode(start, end, startSheetName, endSheetName);
+        return true;
+    }
+
+    /// <summary>
+    /// Parses a whole-row reference part of a 3-D span (e.g. the "1:1" in Sheet1:Sheet3!1:1),
+    /// mirroring <see cref="TryParseFullRowRange"/> but producing a RangeRefNode with
+    /// EndSheetName set (spanning col A..MaxCol on the given row(s)) since FullRowRangeRefNode
+    /// has no span slot. Leaves position unchanged on failure.
+    /// </summary>
+    private bool TryParseFullRowSpanBody(string startSheetName, string endSheetName, out FormulaNode range)
+    {
+        range = null!;
+        if (!TryParseRowToken(Current, out var startRow, out var isStartAbsolute))
+            return false;
+
+        if (Peek().Type != TokenType.Colon)
+            return false;
+
+        var saved = _pos;
+        Advance();
+        Advance();
+
+        if (Current.Type == TokenType.SheetQualifier)
+            throw new FormulaParseException(
+                $"Unexpected sheet qualifier '{Current.Value}!' at position {Current.Position}");
+
+        if (!TryParseRowToken(Current, out var endRow, out var isEndAbsolute))
+        {
+            _pos = saved;
+            return false;
+        }
+
+        Advance();
+        var start = new CellRefNode("A", startRow, false, isStartAbsolute, startSheetName);
+        var end = new CellRefNode(Model.CellAddress.NumberToColumnName(Model.CellAddress.MaxCol), endRow, false, isEndAbsolute);
+        range = new RangeRefNode(start, end, startSheetName, endSheetName);
+        return true;
     }
 
     private bool TryParseFullColumnRange(string? sheetName, out FormulaNode range)

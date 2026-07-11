@@ -96,7 +96,32 @@ public static partial class BuiltInFunctions
         }
 
         if (args[0] is ErrorValue e) return e;
-        return args[0] is RangeValue ? new NumberValue(1) : ErrorValue.Value;
+        return args[0] is RangeValue range ? SheetSpanCount(range, ctx) : ErrorValue.Value;
+    }
+
+    /// <summary>
+    /// Counts the sheets a reference spans. Per Excel's documented SHEETS behavior ("If reference
+    /// refers to multiple sheets, SHEETS returns the number of sheets referred to"), a 3-D sheet-span
+    /// reference (e.g. Sheet1:Sheet3!A1) must count every sheet from its start to its end sheet
+    /// inclusive, not just report 1. RangeValue only carries a single SheetName, so a span is encoded
+    /// as "Start:End" in that field; Excel forbids ':' in an actual sheet name, so seeing one there
+    /// unambiguously means a span rather than a plain single-sheet reference.
+    /// </summary>
+    private static ScalarValue SheetSpanCount(RangeValue range, IEvalContext ctx)
+    {
+        var sheetName = range.SheetName;
+        if (sheetName is null) return new NumberValue(1);
+
+        var colonIndex = sheetName.IndexOf(':');
+        if (colonIndex < 0) return new NumberValue(1);
+
+        var startName = sheetName[..colonIndex];
+        var endName = sheetName[(colonIndex + 1)..];
+        if (!TryGetSheetIndex(ctx, startName, out var startIndex) ||
+            !TryGetSheetIndex(ctx, endName, out var endIndex))
+            return ErrorValue.Ref;
+
+        return new NumberValue(Math.Abs(endIndex - startIndex) + 1);
     }
 
     private static bool TryGetCurrentSheetIndex(IEvalContext ctx, out int index)

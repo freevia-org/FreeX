@@ -43,6 +43,9 @@ public sealed partial class ViewportService
             if (rule.IconOverrides.Count == iconCount)
             {
                 var ovr = rule.IconOverrides[bucketIndex.Value];
+                if (string.Equals(ovr.IconSet, "NoIcons", StringComparison.OrdinalIgnoreCase))
+                    return null;
+
                 return new ConditionalFormatIcon(ovr.IconSet, ovr.IconId, iconCount, rule.IconSetShowValue);
             }
 

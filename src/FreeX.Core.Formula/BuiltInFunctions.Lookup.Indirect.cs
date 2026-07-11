@@ -84,6 +84,14 @@ public static partial class BuiltInFunctions
             return CompleteIndirectRange(ctx, sheetName, 1, startCol, CellAddress.MaxRow, endCol, out range, out error, isFullColumnRange: true);
         if (!useA1 && TryParseR1C1RangeRef(refText, ctx.CurrentCellAddress, out startRow, out startCol, out endRow, out endCol))
             return CompleteIndirectRange(ctx, sheetName, startRow, startCol, endRow, endCol, out range, out error);
+        if (!useA1 && TryParseR1C1FullRowRangeRef(refText, ctx.CurrentCellAddress, out startRow, out endRow))
+            return CompleteIndirectRange(ctx, sheetName, startRow, 1, endRow, CellAddress.MaxCol, out range, out error, isFullRowRange: true);
+        if (!useA1 && TryParseR1C1FullColumnRangeRef(refText, ctx.CurrentCellAddress, out startCol, out endCol))
+            return CompleteIndirectRange(ctx, sheetName, 1, startCol, CellAddress.MaxRow, endCol, out range, out error, isFullColumnRange: true);
+        if (!useA1 && TryParseR1C1FullRowRef(refText, ctx.CurrentCellAddress, out startRow))
+            return CompleteIndirectRange(ctx, sheetName, startRow, 1, startRow, CellAddress.MaxCol, out range, out error, isFullRowRange: true);
+        if (!useA1 && TryParseR1C1FullColumnRef(refText, ctx.CurrentCellAddress, out startCol))
+            return CompleteIndirectRange(ctx, sheetName, 1, startCol, CellAddress.MaxRow, startCol, out range, out error, isFullColumnRange: true);
 
         if (sheetName is null && ctx.TryResolveNamedRange(refText) is { } namedRange)
         {
@@ -363,6 +371,44 @@ public static partial class BuiltInFunctions
 
         return TryParseR1C1Ref(refText[..colon], currentCell, out startRow, out startCol)
             && TryParseR1C1Ref(refText[(colon + 1)..], currentCell, out endRow, out endCol);
+    }
+
+    // R1C1's documented whole-row ("R5"/"R[-1]") and whole-column ("C3"/"C[2]") forms — the
+    // R1C1-style counterparts to TryParseA1FullRowRangeRef/TryParseA1FullColumnRangeRef above.
+    private static bool TryParseR1C1FullRowRangeRef(string refText, CellAddress? currentCell, out uint startRow, out uint endRow)
+    {
+        startRow = endRow = 0;
+        int colon = refText.IndexOf(':');
+        if (colon < 0 || colon != refText.LastIndexOf(':')) return false;
+
+        return TryParseR1C1FullRowRef(refText[..colon], currentCell, out startRow)
+            && TryParseR1C1FullRowRef(refText[(colon + 1)..], currentCell, out endRow);
+    }
+
+    private static bool TryParseR1C1FullColumnRangeRef(string refText, CellAddress? currentCell, out uint startCol, out uint endCol)
+    {
+        startCol = endCol = 0;
+        int colon = refText.IndexOf(':');
+        if (colon < 0 || colon != refText.LastIndexOf(':')) return false;
+
+        return TryParseR1C1FullColumnRef(refText[..colon], currentCell, out startCol)
+            && TryParseR1C1FullColumnRef(refText[(colon + 1)..], currentCell, out endCol);
+    }
+
+    private static bool TryParseR1C1FullRowRef(string refText, CellAddress? currentCell, out uint row)
+    {
+        row = 0;
+        var match = Regex.Match(refText, @"^R(?:(\d+)|\[(-?\d+)\])$", RegexOptions.IgnoreCase);
+        if (!match.Success) return false;
+        return ResolveR1C1Part(match.Groups[1].Value, match.Groups[2].Value, currentCell?.Row, CellAddress.MaxRow, out row);
+    }
+
+    private static bool TryParseR1C1FullColumnRef(string refText, CellAddress? currentCell, out uint col)
+    {
+        col = 0;
+        var match = Regex.Match(refText, @"^C(?:(\d+)|\[(-?\d+)\])$", RegexOptions.IgnoreCase);
+        if (!match.Success) return false;
+        return ResolveR1C1Part(match.Groups[1].Value, match.Groups[2].Value, currentCell?.Col, CellAddress.MaxCol, out col);
     }
 
     private static bool TryParseA1Ref(string cellRef, out uint row, out uint col)

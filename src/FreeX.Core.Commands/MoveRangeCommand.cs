@@ -38,6 +38,11 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
     private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
     private Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? _scopedNamedRangeSnapshot;
     private Dictionary<CellAddress, SparklineModel>? _sparklineSnapshot;
+    // R21-undo-redo-deep-2: pairs each relocated spill's original source anchor with its captured
+    // payload (Apply already carries the destination Target alongside it) so Revert can re-establish
+    // the spill back at the source once RestoreCellSnapshot has put the anchor's formula cell back —
+    // mirroring the sibling fix already applied on Apply (R20-array-dynamic-spill-1).
+    private List<(CellAddress Source, CellAddress Target, RangeValue Payload)>? _spillRelocations;
 
     public string Label => "Move Cells";
 
@@ -148,7 +153,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         // ClearAddress tears it down, so a moved dynamic-array anchor (e.g. =SEQUENCE with no cell
         // references, whose formula text is unchanged by a plain Move) keeps spilling at its new
         // location instead of silently collapsing to a stale scalar with a blank spill area.
-        var spillPayloads = CaptureSourceSpillPayloads(sheet, _sourceRange, _destination);
+        _spillRelocations = CaptureSourceSpillPayloads(sheet, _sourceRange, _destination);
 
         foreach (var address in affected)
             ClearAddress(sheet, address);
@@ -156,7 +161,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         foreach (var payload in payloads)
             WritePayload(sheet, payload);
 
-        foreach (var (target, spillPayload) in spillPayloads)
+        foreach (var (_, target, spillPayload) in _spillRelocations)
             sheet.SetSpillRange(target, spillPayload);
 
         _affectedCells = MergeAffectedCells(affected, _formulaSnapshot.Keys);
@@ -180,6 +185,16 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
 
         foreach (var snapshot in _snapshot)
             RestoreCellSnapshot(sheet, snapshot);
+
+        // R21-undo-redo-deep-2: RestoreCellSnapshot above puts each relocated spill anchor's formula
+        // back at its original source address, but (unlike Apply) never re-establishes the spill
+        // itself there — replay the payload captured before Apply moved it so the array's spilled
+        // members reappear at the source instead of staying blank after undo.
+        if (_spillRelocations is not null)
+        {
+            foreach (var (source, _, payload) in _spillRelocations)
+                sheet.SetSpillRange(source, payload);
+        }
 
         RestoreDictionary(sheet.Comments, _commentSnapshot, _payloadAffectedCells);
         RestoreDictionary(sheet.CommentAuthors, _commentAuthorsSnapshot, _payloadAffectedCells);
@@ -262,17 +277,19 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
 
     /// <summary>
     /// Captures the live spill payload rooted at each spill-anchor cell within <paramref name="sourceRange"/>
-    /// (if any), paired with the address it will occupy at the destination, so <see cref="Apply"/> can
-    /// re-establish the spill via <see cref="Sheet.SetSpillRange"/> once the anchor's formula cell has
-    /// been moved (R20-array-dynamic-spill-1). Must be called before the source cells are cleared.
+    /// (if any), paired with both its original source address and the address it will occupy at the
+    /// destination, so <see cref="Apply"/> can re-establish the spill via <see cref="Sheet.SetSpillRange"/>
+    /// once the anchor's formula cell has been moved (R20-array-dynamic-spill-1), and <see cref="Revert"/>
+    /// can replay the same payload back at the source once the anchor's formula cell has been restored
+    /// there (R21-undo-redo-deep-2). Must be called before the source cells are cleared.
     /// </summary>
-    private static List<(CellAddress Target, RangeValue Payload)> CaptureSourceSpillPayloads(
+    private static List<(CellAddress Source, CellAddress Target, RangeValue Payload)> CaptureSourceSpillPayloads(
         Sheet sheet, GridRange sourceRange, CellAddress destination)
     {
         var rowDelta = (long)destination.Row - sourceRange.Start.Row;
         var colDelta = (long)destination.Col - sourceRange.Start.Col;
 
-        List<(CellAddress, RangeValue)>? result = null;
+        List<(CellAddress, CellAddress, RangeValue)>? result = null;
         foreach (var source in sourceRange.AllCells())
         {
             var payload = sheet.CaptureSpillForRelocate(source);
@@ -283,7 +300,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
                 destination.Sheet,
                 checked((uint)(source.Row + rowDelta)),
                 checked((uint)(source.Col + colDelta)));
-            (result ??= []).Add((target, payload));
+            (result ??= []).Add((source, target, payload));
         }
 
         return result ?? [];

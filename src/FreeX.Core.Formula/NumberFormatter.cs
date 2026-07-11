@@ -139,12 +139,39 @@ public static partial class NumberFormatter
             return false;
         }
 
+        // Excel treats a negative value as fundamentally invalid for a calendar date/time
+        // format (widening the column never reveals a real date underneath) -- reaching here
+        // means ShouldAttemptSimpleDateTimeFormat already confirmed formatString has date/time
+        // tokens and no numeric placeholder, so a negative oaDate must show the invalid-value
+        // indicator instead of silently formatting a bogus (or sign-dropped) calendar date.
+        if (oaDate < 0)
+        {
+            result = new FormatResult(BuildInvalidDateTimeIndicator(formatString, targetWidthCharacters));
+            return true;
+        }
+
         var text = TryFormatCachedSimpleDateTime(oaDate, formatString, uses1904DateSystem, out var cachedText)
             ? cachedText
             : FormatDateTime(oaDate, formatString, uses1904DateSystem);
         text = ApplyAccountingTargetWidth(text, formatString, targetWidthCharacters);
         result = new FormatResult(text);
         return true;
+    }
+
+    /// <summary>
+    /// Builds Excel's "value doesn't fit"/invalid-value indicator (a run of '#' characters) for
+    /// a value that is fundamentally invalid for the given format -- currently used for negative
+    /// values formatted with a calendar date/time format. This is not a column-width artifact:
+    /// Excel shows this regardless of how wide the column is, because the value itself (e.g. a
+    /// negative serial date) cannot be represented by the format, not because the result is too
+    /// long to display. <paramref name="targetWidthCharacters"/> is honored when the caller has
+    /// real column-width context; otherwise the format's own length is used as a reasonable
+    /// stand-in so the result is still visibly "all hashes" rather than a single character.
+    /// </summary>
+    private static string BuildInvalidDateTimeIndicator(string format, int? targetWidthCharacters)
+    {
+        var width = targetWidthCharacters is > 0 ? targetWidthCharacters.Value : format.Length;
+        return new string('#', Math.Max(width, 1));
     }
 
     private static FormatResult FormatNumber(
@@ -157,6 +184,14 @@ public static partial class NumberFormatter
     {
         if (sections.Length == 1 && (sections[0].Length == 0 || sections[0][0] != '['))
         {
+            // Excel treats a negative value as fundamentally invalid for a date/time-only format
+            // (see BuildInvalidDateTimeIndicator) -- check this before splitting sign/magnitude
+            // below, since formatting the (always-positive) magnitude as a date would otherwise
+            // fabricate a plausible-looking but bogus calendar date/time with no hint that the
+            // underlying value is negative.
+            if (value < 0 && sections[0].Length > 0 && IsDateTimeFormat(sections[0]))
+                return new FormatResult(BuildInvalidDateTimeIndicator(sections[0], targetWidthCharacters));
+
             // A single-section format applies to negatives by formatting the MAGNITUDE and prepending a
             // leading minus to the whole result (so "-" sits before any prefix: -¥12.30, not ¥-12.30).
             // For prefix-free formats this is identical to the inline minus, so plain formats are unaffected.
@@ -228,7 +263,11 @@ public static partial class NumberFormatter
     private static bool TryFormatPlainNumericSection(double value, string format, out string text)
     {
         text = "";
-        if (!IsPlainNumericSection(format))
+        // A pattern with irregular (e.g. Indian lakh/crore) comma grouping must go through
+        // ApplyNumericFormat, which knows how to apply the pattern-derived NumberGroupSizes --
+        // this fast path always formats against the invariant culture's default (uniform
+        // 3-digit) grouping, which would silently discard the irregular layout.
+        if (!IsPlainNumericSection(format) || TryDeriveIrregularGroupSizes(format, out _))
             return false;
 
         try
@@ -266,6 +305,81 @@ public static partial class NumberFormatter
         }
 
         return hasPlaceholder && lastToken != ',';
+    }
+
+    /// <summary>
+    /// Derives Excel's irregular (e.g. Indian lakh/crore 3-2-2) thousands-grouping sizes purely
+    /// from the literal comma positions in a custom numeric pattern's integer part -- matching
+    /// Excel's own behaviour, where a format code like "#,##,##0" groups 3-2-2 from the decimal
+    /// point outward with no [$-locale] token involved at all. .NET's custom-format engine does
+    /// not derive grouping from the literal segment widths on its own; it only groups digits by
+    /// <see cref="NumberFormatInfo.NumberGroupSizes"/>, so without this the comma positions
+    /// actually written in the format code would be silently discarded in favor of uniform
+    /// Western 3-digit grouping. Returns false (and an empty array) when the pattern has no
+    /// grouping commas, or when the commas only ever imply the standard uniform 3-digit
+    /// grouping (nothing irregular to report).
+    /// </summary>
+    private static bool TryDeriveIrregularGroupSizes(string format, out int[] groupSizes)
+    {
+        groupSizes = [];
+
+        // Only the integer part (before any unquoted decimal point) carries grouping commas —
+        // Excel/.NET never group the fractional part.
+        var integerPart = format;
+        var inQuote = false;
+        for (var i = 0; i < format.Length; i++)
+        {
+            var c = format[i];
+            if (c == '"') { inQuote = !inQuote; continue; }
+            if (!inQuote && c == '\\' && i + 1 < format.Length) { i++; continue; }
+            if (!inQuote && c == '.') { integerPart = format[..i]; break; }
+        }
+
+        if (integerPart.IndexOf(',') < 0)
+            return false;
+
+        var segments = new List<int>();
+        var currentLength = 0;
+        inQuote = false;
+        for (var i = 0; i < integerPart.Length; i++)
+        {
+            var c = integerPart[i];
+            if (c == '"') { inQuote = !inQuote; continue; }
+            if (!inQuote && c == '\\' && i + 1 < integerPart.Length) { i++; continue; }
+
+            if (!inQuote && IsNumericPlaceholder(c))
+                currentLength++;
+            else if (!inQuote && c == ',')
+            {
+                segments.Add(currentLength);
+                currentLength = 0;
+            }
+        }
+        segments.Add(currentLength);
+
+        // Fewer than two comma-separated groups means there's nothing irregular to derive —
+        // leave the caller's existing (default) grouping behaviour alone.
+        if (segments.Count < 2)
+            return false;
+
+        // .NET's NumberGroupSizes convention reads right-to-left with the last array element
+        // repeating for every further-out group. The leftmost (outermost) literal segment is
+        // "however many placeholders are left", not a hard cap, so it is dropped in favor of
+        // letting the next segment in become the repeating tail — e.g. "#,##,##0" is [1,2,3]
+        // left-to-right; reversed to [3,2,1]; dropping the leftmost "1" leaves [3,2].
+        segments.Reverse();
+        segments.RemoveAt(segments.Count - 1);
+
+        if (segments.Count == 0 || segments.Exists(len => len <= 0))
+            return false;
+
+        // A pattern that only ever implies the standard Western 3-digit grouping (e.g. "#,##0",
+        // "#,###,##0") isn't irregular — skip so callers keep their existing fast paths/defaults.
+        if (segments.TrueForAll(len => len == 3))
+            return false;
+
+        groupSizes = segments.ToArray();
+        return true;
     }
 
     private static string ApplyNumericFormat(
@@ -338,6 +452,16 @@ public static partial class NumberFormatter
         // Date / time format
         if (IsDateTimeFormat(format))
         {
+            // Excel treats a negative value as invalid for a calendar date/time format (see
+            // BuildInvalidDateTimeIndicator). This only fires here for a single, unconditioned
+            // section that still carries its original sign -- e.g. a bracket-prefixed date
+            // format like "[$-409]m/d/yyyy" reaches this call with the raw value -- since the
+            // fast single-section path in FormatNumber and the multi-section explicit-negative-
+            // section path both already hand this function a non-negative value, making this a
+            // no-op for those callers.
+            if (value < 0)
+                return BuildInvalidDateTimeIndicator(format, null);
+
             try
             {
                 var dt = ExcelDateSystem.SerialToDate(value, uses1904DateSystem);
@@ -375,6 +499,19 @@ public static partial class NumberFormatter
         // Pass the cleaned format to .NET — it understands #,##0.00, 0.00, 0, # etc.
         if (HasActiveQuestionPlaceholder(format))
             return NativeDigits(prefix + FormatQuestionPlaceholderNumber(value, format, numberFormat) + suffix);
+
+        // Excel derives irregular (e.g. Indian lakh/crore) thousands grouping purely from the
+        // literal comma positions written in the pattern itself, even with no [$-locale] token.
+        // .NET's custom-format engine ignores those literal positions and groups only by
+        // NumberFormatInfo.NumberGroupSizes, so honor a pattern-implied irregular grouping here
+        // unless numberFormat already reflects it (e.g. via an explicit [$-439] locale token).
+        if (TryDeriveIrregularGroupSizes(format, out var irregularGroupSizes) &&
+            !irregularGroupSizes.SequenceEqual(numberFormat.NumberGroupSizes))
+        {
+            var groupedNumberFormat = (NumberFormatInfo)numberFormat.Clone();
+            groupedNumberFormat.NumberGroupSizes = irregularGroupSizes;
+            numberFormat = groupedNumberFormat;
+        }
 
         string numStr;
         try   { numStr = value.ToString(format, numberFormat); }

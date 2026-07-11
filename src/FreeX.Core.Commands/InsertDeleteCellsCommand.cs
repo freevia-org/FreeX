@@ -40,6 +40,9 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     private readonly Dictionary<(Guid Id, int Slot), string?> _cfThresholdSnapshot = [];
     private readonly Dictionary<(Guid Id, int Slot), string?> _dvFormulaSnapshot = [];
     private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
+    private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
+    private Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? _scopedNamedRangeSnapshot;
+    private List<CellAddress>? _movedDestinationCells;
 
     public string Label => "Insert Cells";
 
@@ -81,7 +84,8 @@ public sealed class InsertCellsCommand : IWorkbookCommand
                 return new CommandOutcome(false,
                     "This operation is not allowed. The operation is attempting to shift cells in a table or AutoFilter range on your worksheet.");
 
-            var capture = CaptureCellsForMove(sheet, shiftRegion);
+            var capture = CaptureCellsForMove(sheet, shiftRegion,
+                orig => new CellAddress(orig.Sheet, orig.Row, orig.Col + width));
             if (capture.MaxCol > 0 && capture.MaxCol + width > CellAddress.MaxCol)
                 return new CommandOutcome(false, $"Cannot insert cells: data would be pushed past the last column ({CellAddress.MaxCol}).");
 
@@ -114,7 +118,22 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             (_dvRuleSnapshot, _cfRuleSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
             RowColumnShiftHelpers.AdjustRulesInsertShiftRight(sheet, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
 
+            // R21-defined-name-management-1: plain (GridRange-backed) named ranges fully inside the
+            // band's row span are shifted right in lockstep with the cells, the same way whole-row/
+            // whole-column insert already does via RowColumnShiftHelpers.ShiftNamedRangeRowsUp/Down/
+            // ColumnsUp/Down — this band-scoped path never touched NamedRanges/ScopedNamedRanges at all.
+            _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
+            _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
+            ShiftNamedRangesInBandRight(ctx.Workbook, _sheetId, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
+
             InsertShiftRight(sheet, capture.Cells);
+            // R21-undo-redo-deep-1: record the shifted-to address of every moved cell so a moved
+            // dynamic-array anchor whose formula text is unchanged by the shift (e.g. SEQUENCE with
+            // no cell references) still gets queued for recalculation — RewriteAllFormulas below only
+            // records cells whose formula TEXT actually changed.
+            _movedDestinationCells = capture.Cells.Count == 0
+                ? null
+                : capture.Cells.Select(c => new CellAddress(c.Address.Sheet, c.Address.Row, c.Address.Col + width)).ToList();
 
             var insertRightOp = new InsertCellsShiftRightOp(
                 sheet.Name,
@@ -154,7 +173,8 @@ public sealed class InsertCellsCommand : IWorkbookCommand
                 return new CommandOutcome(false,
                     "This operation is not allowed. The operation is attempting to shift cells in a table or AutoFilter range on your worksheet.");
 
-            var capture = CaptureCellsForMove(sheet, shiftRegion);
+            var capture = CaptureCellsForMove(sheet, shiftRegion,
+                orig => new CellAddress(orig.Sheet, orig.Row + height, orig.Col));
             if (capture.MaxRow > 0 && capture.MaxRow + height > CellAddress.MaxRow)
                 return new CommandOutcome(false, $"Cannot insert cells: data would be pushed past the last row ({CellAddress.MaxRow}).");
 
@@ -187,7 +207,16 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             (_dvRuleSnapshot, _cfRuleSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
             RowColumnShiftHelpers.AdjustRulesInsertShiftDown(sheet, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
 
+            // R21-defined-name-management-1: see the Shift-Right branch above.
+            _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
+            _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
+            ShiftNamedRangesInBandDown(ctx.Workbook, _sheetId, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
+
             InsertShiftDown(sheet, capture.Cells);
+            // R21-undo-redo-deep-1: see the Shift-Right branch above.
+            _movedDestinationCells = capture.Cells.Count == 0
+                ? null
+                : capture.Cells.Select(c => new CellAddress(c.Address.Sheet, c.Address.Row + height, c.Address.Col)).ToList();
 
             var insertDownOp = new InsertCellsShiftDownOp(
                 sheet.Name,
@@ -216,7 +245,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         return new CommandOutcome(
             true,
             AffectedCells: RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
-                _range.AllCells(),
+                _range.AllCells().Concat(_movedDestinationCells ?? Enumerable.Empty<CellAddress>()),
                 _formulaSnapshot));
     }
 
@@ -247,6 +276,8 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             sheet.ReplaceMergedRegions(_mergeSnapshot);
 
         RowColumnShiftHelpers.RestoreRuleRangesInPlace(sheet, _dvRuleSnapshot, _cfRuleSnapshot);
+        RowColumnShiftHelpers.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
+        RowColumnShiftHelpers.RestoreScopedNamedRanges(ctx.Workbook, _scopedNamedRangeSnapshot);
 
         RowColumnShiftHelpers.RestoreDictionary(sheet.Comments, _commentSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.CommentAuthors, _commentAuthorsSnapshot);
@@ -262,6 +293,14 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     {
         var width = _range.ColCount;
         var originalCells = RentOriginalCells(sheet, captured);
+        // R21-undo-redo-deep-1: capture any live spill rooted at each moved cell BEFORE it is
+        // cleared/moved, so a relocated dynamic-array anchor (e.g. SEQUENCE with no cell references,
+        // whose formula text never changes on a shift) keeps spilling at its new address instead of
+        // silently collapsing to a stale scalar (mirrors InsertDeleteRowsCommand.MoveCellsForInsert,
+        // R20-array-dynamic-spill-1).
+        var spillPayloads = new RangeValue?[captured.Count];
+        for (var i = 0; i < captured.Count; i++)
+            spillPayloads[i] = sheet.CaptureSpillForRelocate(captured[i].Address);
         try
         {
             foreach (var (address, _) in captured)
@@ -270,7 +309,10 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             for (var i = 0; i < captured.Count; i++)
             {
                 var address = captured[i].Address;
-                sheet.SetCell(new CellAddress(address.Sheet, address.Row, address.Col + width), originalCells[i]);
+                var newAddress = new CellAddress(address.Sheet, address.Row, address.Col + width);
+                sheet.SetCell(newAddress, originalCells[i]);
+                if (spillPayloads[i] is { } payload)
+                    sheet.SetSpillRange(newAddress, payload);
             }
         }
         finally
@@ -283,6 +325,10 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     {
         var height = _range.RowCount;
         var originalCells = RentOriginalCells(sheet, captured);
+        // R21-undo-redo-deep-1: see InsertShiftRight above.
+        var spillPayloads = new RangeValue?[captured.Count];
+        for (var i = 0; i < captured.Count; i++)
+            spillPayloads[i] = sheet.CaptureSpillForRelocate(captured[i].Address);
         try
         {
             foreach (var (address, _) in captured)
@@ -291,7 +337,10 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             for (var i = 0; i < captured.Count; i++)
             {
                 var address = captured[i].Address;
-                sheet.SetCell(new CellAddress(address.Sheet, address.Row + height, address.Col), originalCells[i]);
+                var newAddress = new CellAddress(address.Sheet, address.Row + height, address.Col);
+                sheet.SetCell(newAddress, originalCells[i]);
+                if (spillPayloads[i] is { } payload)
+                    sheet.SetSpillRange(newAddress, payload);
             }
         }
         finally
@@ -303,10 +352,12 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     internal static CellShiftSnapshot CaptureCells(Sheet sheet, CellShiftRegion region)
         => CaptureCellsForMove(sheet, region).Snapshot;
 
-    internal static CellShiftCapture CaptureCellsForDelete(Sheet sheet, CellShiftRegion region)
-        => CaptureCellsForMove(sheet, region);
+    internal static CellShiftCapture CaptureCellsForDelete(
+        Sheet sheet, CellShiftRegion region, Func<CellAddress, CellAddress?>? currentAddressOf = null)
+        => CaptureCellsForMove(sheet, region, currentAddressOf);
 
-    private static CellShiftCapture CaptureCellsForMove(Sheet sheet, CellShiftRegion region)
+    private static CellShiftCapture CaptureCellsForMove(
+        Sheet sheet, CellShiftRegion region, Func<CellAddress, CellAddress?>? currentAddressOf = null)
     {
         var occupiedCells = sheet.GetOccupiedCellMap();
         var snapshotCells = new List<(CellAddress Address, Cell Cell)>(
@@ -329,7 +380,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         }
 
         return new CellShiftCapture(
-            new CellShiftSnapshot(region, snapshotCells),
+            new CellShiftSnapshot(region, snapshotCells, currentAddressOf),
             snapshotCells,
             maxRow,
             maxCol);
@@ -657,6 +708,175 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     private static bool RangeIntersectsBand(GridRange range, CellShiftRegion band) =>
         range.Start.Row <= band.EndRow && range.End.Row >= band.StartRow &&
         range.Start.Col <= band.EndCol && range.End.Col >= band.StartCol;
+
+    // ── Named-range band-scoped shift/delete helpers (R21-defined-name-management-1/-3) ──────
+    // Mirrors RowColumnShiftHelpers.Adjust*ShiftRight/Down/Left/Up for CF/DV rules (see
+    // RowColumnShiftHelpers.Rules.cs), but for workbook.NamedRanges/ScopedNamedRanges — the plain
+    // GridRange-backed defined names that whole-row/whole-column insert/delete already shift via
+    // RowColumnShiftHelpers.ShiftNamedRangeRowsUp/Down/ColumnsUp/Down. This band-scoped Insert/Delete
+    // Cells path never touched NamedRanges/ScopedNamedRanges at all before this fix, so a name
+    // pointing into the shifted band went silently stale.
+
+    /// <summary>
+    /// Insert Shift Right: named ranges fully inside [bandStartRow..bandEndRow] whose start column
+    /// is at or right of the insert point are shifted right by <paramref name="count"/>. Ranges
+    /// outside the band, or straddling the insert point, are left unchanged (matching the CF/DV
+    /// rule-range adjustment's documented partial-overlap limitation).
+    /// </summary>
+    internal static void ShiftNamedRangesInBandRight(
+        Workbook workbook, SheetId sheetId,
+        uint bandStartRow, uint bandEndRow,
+        uint insertBeforeCol, uint count)
+    {
+        foreach (var (name, range) in workbook.NamedRanges.ToList())
+        {
+            if (range.Start.Sheet != sheetId) continue;
+            if (range.Start.Row < bandStartRow || range.End.Row > bandEndRow) continue;
+            if (range.Start.Col < insertBeforeCol) continue;
+            workbook.NamedRanges[name] = new GridRange(
+                new CellAddress(range.Start.Sheet, range.Start.Row, Math.Min(range.Start.Col + count, CellAddress.MaxCol)),
+                new CellAddress(range.End.Sheet, range.End.Row, Math.Min(range.End.Col + count, CellAddress.MaxCol)));
+        }
+
+        foreach (var ((name, scopeSheet), range) in workbook.ScopedNamedRanges.ToList())
+        {
+            if (range.Start.Sheet != sheetId) continue;
+            if (range.Start.Row < bandStartRow || range.End.Row > bandEndRow) continue;
+            if (range.Start.Col < insertBeforeCol) continue;
+            workbook.TryGetScopedNamedRangeMetadata(name, scopeSheet, out var metadata);
+            workbook.DefineNamedRange(name, new GridRange(
+                new CellAddress(range.Start.Sheet, range.Start.Row, Math.Min(range.Start.Col + count, CellAddress.MaxCol)),
+                new CellAddress(range.End.Sheet, range.End.Row, Math.Min(range.End.Col + count, CellAddress.MaxCol))), metadata, scopeSheet);
+        }
+    }
+
+    /// <summary>
+    /// Insert Shift Down: named ranges fully inside [bandStartCol..bandEndCol] whose start row is
+    /// at or below the insert point are shifted down by <paramref name="count"/>.
+    /// </summary>
+    internal static void ShiftNamedRangesInBandDown(
+        Workbook workbook, SheetId sheetId,
+        uint bandStartCol, uint bandEndCol,
+        uint insertBeforeRow, uint count)
+    {
+        foreach (var (name, range) in workbook.NamedRanges.ToList())
+        {
+            if (range.Start.Sheet != sheetId) continue;
+            if (range.Start.Col < bandStartCol || range.End.Col > bandEndCol) continue;
+            if (range.Start.Row < insertBeforeRow) continue;
+            workbook.NamedRanges[name] = new GridRange(
+                new CellAddress(range.Start.Sheet, Math.Min(range.Start.Row + count, CellAddress.MaxRow), range.Start.Col),
+                new CellAddress(range.End.Sheet, Math.Min(range.End.Row + count, CellAddress.MaxRow), range.End.Col));
+        }
+
+        foreach (var ((name, scopeSheet), range) in workbook.ScopedNamedRanges.ToList())
+        {
+            if (range.Start.Sheet != sheetId) continue;
+            if (range.Start.Col < bandStartCol || range.End.Col > bandEndCol) continue;
+            if (range.Start.Row < insertBeforeRow) continue;
+            workbook.TryGetScopedNamedRangeMetadata(name, scopeSheet, out var metadata);
+            workbook.DefineNamedRange(name, new GridRange(
+                new CellAddress(range.Start.Sheet, Math.Min(range.Start.Row + count, CellAddress.MaxRow), range.Start.Col),
+                new CellAddress(range.End.Sheet, Math.Min(range.End.Row + count, CellAddress.MaxRow), range.End.Col)), metadata, scopeSheet);
+        }
+    }
+
+    /// <summary>
+    /// Delete Shift Left: named ranges fully inside [bandStartRow..bandEndRow] are removed when
+    /// entirely within the deleted columns — R21-defined-name-management-3: Excel would turn such a
+    /// name into #REF!, but GridRange cannot represent that sentinel here (see Workbook.cs's
+    /// RemoveNamedRangesForSheet, which drops a dangling global/scoped range for the same reason),
+    /// so it is dropped instead of being left pointing at whatever now occupies the old address —
+    /// or shifted left by <paramref name="count"/> when entirely right of the deleted columns.
+    /// Ranges straddling a boundary are left unchanged (matching the CF/DV rules' documented
+    /// partial-overlap limitation).
+    /// </summary>
+    internal static void DeleteNamedRangesInBandLeft(
+        Workbook workbook, SheetId sheetId,
+        uint bandStartRow, uint bandEndRow,
+        uint deletedStartCol, uint deletedEndCol, uint count)
+    {
+        foreach (var (name, range) in workbook.NamedRanges.ToList())
+        {
+            if (range.Start.Sheet != sheetId) continue;
+            if (range.Start.Row < bandStartRow || range.End.Row > bandEndRow) continue;
+            if (range.End.Col < deletedStartCol) continue;
+            if (range.Start.Col >= deletedStartCol && range.End.Col <= deletedEndCol)
+            {
+                workbook.RemoveNamedRange(name);
+                continue;
+            }
+            if (range.Start.Col > deletedEndCol)
+            {
+                workbook.NamedRanges[name] = new GridRange(
+                    new CellAddress(range.Start.Sheet, range.Start.Row, range.Start.Col - count),
+                    new CellAddress(range.End.Sheet, range.End.Row, range.End.Col - count));
+            }
+        }
+
+        foreach (var ((name, scopeSheet), range) in workbook.ScopedNamedRanges.ToList())
+        {
+            if (range.Start.Sheet != sheetId) continue;
+            if (range.Start.Row < bandStartRow || range.End.Row > bandEndRow) continue;
+            if (range.End.Col < deletedStartCol) continue;
+            if (range.Start.Col >= deletedStartCol && range.End.Col <= deletedEndCol)
+            {
+                workbook.RemoveScopedNamedRange(name, scopeSheet);
+                continue;
+            }
+            if (range.Start.Col > deletedEndCol)
+            {
+                workbook.TryGetScopedNamedRangeMetadata(name, scopeSheet, out var metadata);
+                workbook.DefineNamedRange(name, new GridRange(
+                    new CellAddress(range.Start.Sheet, range.Start.Row, range.Start.Col - count),
+                    new CellAddress(range.End.Sheet, range.End.Row, range.End.Col - count)), metadata, scopeSheet);
+            }
+        }
+    }
+
+    /// <summary>Delete Shift Up: analogous to <see cref="DeleteNamedRangesInBandLeft"/> for rows.</summary>
+    internal static void DeleteNamedRangesInBandUp(
+        Workbook workbook, SheetId sheetId,
+        uint bandStartCol, uint bandEndCol,
+        uint deletedStartRow, uint deletedEndRow, uint count)
+    {
+        foreach (var (name, range) in workbook.NamedRanges.ToList())
+        {
+            if (range.Start.Sheet != sheetId) continue;
+            if (range.Start.Col < bandStartCol || range.End.Col > bandEndCol) continue;
+            if (range.End.Row < deletedStartRow) continue;
+            if (range.Start.Row >= deletedStartRow && range.End.Row <= deletedEndRow)
+            {
+                workbook.RemoveNamedRange(name);
+                continue;
+            }
+            if (range.Start.Row > deletedEndRow)
+            {
+                workbook.NamedRanges[name] = new GridRange(
+                    new CellAddress(range.Start.Sheet, range.Start.Row - count, range.Start.Col),
+                    new CellAddress(range.End.Sheet, range.End.Row - count, range.End.Col));
+            }
+        }
+
+        foreach (var ((name, scopeSheet), range) in workbook.ScopedNamedRanges.ToList())
+        {
+            if (range.Start.Sheet != sheetId) continue;
+            if (range.Start.Col < bandStartCol || range.End.Col > bandEndCol) continue;
+            if (range.End.Row < deletedStartRow) continue;
+            if (range.Start.Row >= deletedStartRow && range.End.Row <= deletedEndRow)
+            {
+                workbook.RemoveScopedNamedRange(name, scopeSheet);
+                continue;
+            }
+            if (range.Start.Row > deletedEndRow)
+            {
+                workbook.TryGetScopedNamedRangeMetadata(name, scopeSheet, out var metadata);
+                workbook.DefineNamedRange(name, new GridRange(
+                    new CellAddress(range.Start.Sheet, range.Start.Row - count, range.Start.Col),
+                    new CellAddress(range.End.Sheet, range.End.Row - count, range.End.Col)), metadata, scopeSheet);
+            }
+        }
+    }
 }
 
 public sealed class DeleteCellsCommand : IWorkbookCommand
@@ -683,6 +903,9 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
     private readonly Dictionary<(Guid Id, int Slot), string?> _cfThresholdSnapshot = [];
     private readonly Dictionary<(Guid Id, int Slot), string?> _dvFormulaSnapshot = [];
     private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
+    private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
+    private Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? _scopedNamedRangeSnapshot;
+    private List<CellAddress>? _movedDestinationCells;
 
     public string Label => "Delete Cells";
 
@@ -718,7 +941,10 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
                 return new CommandOutcome(false,
                     "This operation is not allowed. The operation is attempting to shift cells in a table or AutoFilter range on your worksheet.");
 
-            var capture = InsertCellsCommand.CaptureCellsForDelete(sheet, shiftRegion);
+            var capture = InsertCellsCommand.CaptureCellsForDelete(sheet, shiftRegion,
+                orig => orig.Col > _range.End.Col
+                    ? new CellAddress(orig.Sheet, orig.Row, orig.Col - _range.ColCount)
+                    : (CellAddress?)null);
             _snapshot = capture.Snapshot;
 
             uint width = _range.ColCount;
@@ -750,7 +976,21 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             (_dvRuleSnapshot, _cfRuleSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
             RowColumnShiftHelpers.AdjustRulesDeleteShiftLeft(sheet, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
 
+            // R21-defined-name-management-1/-3: named ranges fully inside the band's row span are
+            // shifted left (surviving portion) or removed (fully inside the deleted columns — see
+            // InsertCellsCommand.DeleteNamedRangesInBandLeft for the #REF!-vs-drop rationale).
+            _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
+            _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
+            InsertCellsCommand.DeleteNamedRangesInBandLeft(ctx.Workbook, _sheetId, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
+
             DeleteShiftLeft(sheet, capture.Cells);
+            // R21-undo-redo-deep-1: record the shifted-to address of every surviving moved cell so a
+            // moved dynamic-array anchor whose formula text is unchanged by the shift still gets
+            // queued for recalculation — see InsertCellsCommand's Shift-Right branch.
+            _movedDestinationCells = capture.Cells
+                .Where(c => c.Address.Col > _range.End.Col)
+                .Select(c => new CellAddress(c.Address.Sheet, c.Address.Row, c.Address.Col - width))
+                .ToList();
 
             var deleteLeftOp = new DeleteCellsShiftLeftOp(
                 sheet.Name,
@@ -789,7 +1029,10 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
                 return new CommandOutcome(false,
                     "This operation is not allowed. The operation is attempting to shift cells in a table or AutoFilter range on your worksheet.");
 
-            var capture = InsertCellsCommand.CaptureCellsForDelete(sheet, shiftRegion);
+            var capture = InsertCellsCommand.CaptureCellsForDelete(sheet, shiftRegion,
+                orig => orig.Row > _range.End.Row
+                    ? new CellAddress(orig.Sheet, orig.Row - _range.RowCount, orig.Col)
+                    : (CellAddress?)null);
             _snapshot = capture.Snapshot;
 
             uint height = _range.RowCount;
@@ -821,7 +1064,17 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             (_dvRuleSnapshot, _cfRuleSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
             RowColumnShiftHelpers.AdjustRulesDeleteShiftUp(sheet, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
 
+            // R21-defined-name-management-1/-3: see the Delete-Shift-Left branch above.
+            _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
+            _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
+            InsertCellsCommand.DeleteNamedRangesInBandUp(ctx.Workbook, _sheetId, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
+
             DeleteShiftUp(sheet, capture.Cells);
+            // R21-undo-redo-deep-1: see the Delete-Shift-Left branch above.
+            _movedDestinationCells = capture.Cells
+                .Where(c => c.Address.Row > _range.End.Row)
+                .Select(c => new CellAddress(c.Address.Sheet, c.Address.Row - height, c.Address.Col))
+                .ToList();
 
             var deleteUpOp = new DeleteCellsShiftUpOp(
                 sheet.Name,
@@ -850,7 +1103,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
         return new CommandOutcome(
             true,
             AffectedCells: RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
-                _range.AllCells(),
+                _range.AllCells().Concat(_movedDestinationCells ?? Enumerable.Empty<CellAddress>()),
                 _formulaSnapshot));
     }
 
@@ -872,6 +1125,8 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
 
         // Full rebuild because delete operations may have removed rules from the collection.
         RowColumnShiftHelpers.RestoreRuleRanges(sheet, _dvRuleSnapshot, _cfRuleSnapshot);
+        RowColumnShiftHelpers.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
+        RowColumnShiftHelpers.RestoreScopedNamedRanges(ctx.Workbook, _scopedNamedRangeSnapshot);
 
         RowColumnShiftHelpers.RestoreDictionary(sheet.Comments, _commentSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.CommentAuthors, _commentAuthorsSnapshot);
@@ -887,6 +1142,14 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
     {
         var width = _range.ColCount;
         var originalCells = InsertCellsCommand.RentOriginalCells(sheet, captured);
+        // R21-undo-redo-deep-1: capture any live spill rooted at each surviving (post-delete) cell
+        // BEFORE it is cleared/moved — see InsertCellsCommand.InsertShiftRight above.
+        var spillPayloads = new RangeValue?[captured.Count];
+        for (var i = 0; i < captured.Count; i++)
+        {
+            if (captured[i].Address.Col > _range.End.Col)
+                spillPayloads[i] = sheet.CaptureSpillForRelocate(captured[i].Address);
+        }
         try
         {
             InsertCellsCommand.ClearRange(sheet, _range);
@@ -900,7 +1163,12 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             {
                 var address = captured[i].Address;
                 if (address.Col > _range.End.Col)
-                    sheet.SetCell(new CellAddress(address.Sheet, address.Row, address.Col - width), originalCells[i]);
+                {
+                    var newAddress = new CellAddress(address.Sheet, address.Row, address.Col - width);
+                    sheet.SetCell(newAddress, originalCells[i]);
+                    if (spillPayloads[i] is { } payload)
+                        sheet.SetSpillRange(newAddress, payload);
+                }
             }
         }
         finally
@@ -913,6 +1181,14 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
     {
         var height = _range.RowCount;
         var originalCells = InsertCellsCommand.RentOriginalCells(sheet, captured);
+        // R21-undo-redo-deep-1: capture any live spill rooted at each surviving (post-delete) cell
+        // BEFORE it is cleared/moved — see InsertCellsCommand.InsertShiftRight above.
+        var spillPayloads = new RangeValue?[captured.Count];
+        for (var i = 0; i < captured.Count; i++)
+        {
+            if (captured[i].Address.Row > _range.End.Row)
+                spillPayloads[i] = sheet.CaptureSpillForRelocate(captured[i].Address);
+        }
         try
         {
             InsertCellsCommand.ClearRange(sheet, _range);
@@ -926,7 +1202,12 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             {
                 var address = captured[i].Address;
                 if (address.Row > _range.End.Row)
-                    sheet.SetCell(new CellAddress(address.Sheet, address.Row - height, address.Col), originalCells[i]);
+                {
+                    var newAddress = new CellAddress(address.Sheet, address.Row - height, address.Col);
+                    sheet.SetCell(newAddress, originalCells[i]);
+                    if (spillPayloads[i] is { } payload)
+                        sheet.SetSpillRange(newAddress, payload);
+                }
             }
         }
         finally
@@ -1243,12 +1524,27 @@ internal sealed class CellShiftCapture(
 
 internal sealed class CellShiftSnapshot(
     CellShiftRegion region,
-    IReadOnlyList<(CellAddress Address, Cell Cell)> cells)
+    IReadOnlyList<(CellAddress Address, Cell Cell)> cells,
+    Func<CellAddress, CellAddress?>? currentAddressOf = null)
 {
     public void Restore(Sheet sheet)
     {
         var current = ArrayPool<CellAddress>.Shared.Rent(Math.Max(cells.Count, 16));
         var count = 0;
+        // R21-undo-redo-deep-1: capture any live spill rooted at each original cell's CURRENT
+        // (post-Apply) address before anything is cleared, so undo re-establishes the spill
+        // footprint at the restored (pre-Apply) address instead of silently losing it — mirrors the
+        // Apply-side fix in InsertShiftRight/Down and DeleteShiftLeft/Up above.
+        RangeValue?[]? spillPayloads = null;
+        if (currentAddressOf is not null && cells.Count > 0)
+        {
+            spillPayloads = new RangeValue?[cells.Count];
+            for (var i = 0; i < cells.Count; i++)
+            {
+                if (currentAddressOf(cells[i].Address) is { } liveAddress)
+                    spillPayloads[i] = sheet.CaptureSpillForRelocate(liveAddress);
+            }
+        }
         try
         {
             foreach (var ((row, col), _) in sheet.GetOccupiedCellMap())
@@ -1270,8 +1566,13 @@ internal sealed class CellShiftSnapshot(
             for (var i = 0; i < count; i++)
                 sheet.ClearCell(current[i]);
 
-            foreach (var (address, cell) in cells)
+            for (var i = 0; i < cells.Count; i++)
+            {
+                var (address, cell) = cells[i];
                 sheet.SetCell(address, cell);
+                if (spillPayloads is not null && spillPayloads[i] is { } payload)
+                    sheet.SetSpillRange(address, payload);
+            }
         }
         finally
         {

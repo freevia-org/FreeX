@@ -49,10 +49,13 @@ public sealed class CustomSortOrder
         value is not null && _rankByToken.TryGetValue(value, out var rank) ? rank : -1;
 
     /// <summary>
-    /// Compares two text values by their custom-list position. List members sort by position;
-    /// a list member precedes a non-member; two non-members fall back to ordinal-ignore-case.
+    /// Compares two text values by their custom-list position. List members sort by position
+    /// (list membership itself is always matched case-insensitively, mirroring Excel's custom
+    /// lists); a list member precedes a non-member; two non-members fall back to an ordinal
+    /// comparison honoring <paramref name="caseSensitive"/> — the same flag the caller applies
+    /// to its own non-custom-list text tie-break (Sort Options &gt; Case sensitive).
     /// </summary>
-    public int Compare(string? a, string? b)
+    public int Compare(string? a, string? b, bool caseSensitive = false)
     {
         var ai = IndexOf(a);
         var bi = IndexOf(b);
@@ -64,6 +67,6 @@ public sealed class CustomSortOrder
         if (bi >= 0)
             return 1;
 
-        return string.Compare(a ?? "", b ?? "", StringComparison.OrdinalIgnoreCase);
+        return string.Compare(a ?? "", b ?? "", caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase);
     }
 }

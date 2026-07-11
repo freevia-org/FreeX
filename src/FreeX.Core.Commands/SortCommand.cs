@@ -38,6 +38,10 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
     private HashSet<uint>? _hiddenRowsSnapshot;
     private HashSet<uint>? _filterHiddenRowsSnapshot;
     private HashSet<uint>? _valueFilterHiddenRowsSnapshot;
+    // R21-autofilter-sort-state-1: per-column ownership of the rows a Top-N/Average/condition/
+    // color filter is hiding (sheet.ColumnFilterOwnedRows) must be permuted in lockstep with
+    // FilterHiddenRows/ValueFilterHiddenRows, or it keeps naming the pre-sort row positions.
+    private Dictionary<uint, HashSet<uint>>? _columnFilterOwnedRowsSnapshot;
     private IReadOnlyList<CellAddress> _affectedCells = [];
     // Undo snapshot for sheet.SortState (R19: Apply must record the sort it just performed so
     // the persisted <sortState> matches the data on disk, and Revert must restore whatever was
@@ -144,6 +148,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         _hiddenRowsSnapshot = CaptureHiddenRows(sheet, startRow, rowCount);
         _filterHiddenRowsSnapshot = CaptureFilterHiddenRows(sheet, startRow, rowCount);
         _valueFilterHiddenRowsSnapshot = CaptureValueFilterHiddenRows(sheet, startRow, rowCount);
+        _columnFilterOwnedRowsSnapshot = CaptureColumnFilterOwnedRows(sheet, startRow, rowCount);
         var payloadCapture = CapturePayloads(sheet, _sheetId, startRow, startCol, rowCount, colCount);
         _snapshot = payloadCapture.CellSnapshot;
         _commentSnapshot = payloadCapture.CommentSnapshot;
@@ -151,7 +156,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         _shownCommentsSnapshot = payloadCapture.ShownCommentsSnapshot;
         _threadedCommentSnapshot = payloadCapture.ThreadedCommentSnapshot;
 
-        var rows = new List<(SortCellPayload[] Payloads, bool HasRowHeight, double RowHeight, bool IsHidden, bool IsFilterHidden, bool IsValueFilterHidden, int OriginalIndex)>(rowCount);
+        var rows = new List<(SortCellPayload[] Payloads, bool HasRowHeight, double RowHeight, bool IsHidden, bool IsFilterHidden, bool IsValueFilterHidden, List<uint>? OwnedFilterColumns, int OriginalIndex)>(rowCount);
 
         for (int ri = 0; ri < rowCount; ri++)
         {
@@ -160,8 +165,16 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
             var isHidden = sheet.HiddenRows.Contains(row);
             var isFilterHidden = sheet.FilterHiddenRows.Contains(row);
             var isValueFilterHidden = sheet.ValueFilterHiddenRows.Contains(row);
+            // R21-autofilter-sort-state-1: carry each row's column-owned-filter membership
+            // along with it so it lands on the row's new post-sort position below.
+            List<uint>? ownedFilterColumns = null;
+            foreach (var (col, ownedRows) in _columnFilterOwnedRowsSnapshot)
+            {
+                if (ownedRows.Contains(row))
+                    (ownedFilterColumns ??= []).Add(col);
+            }
 
-            rows.Add((payloadCapture.Rows[ri], hasRowHeight, rowHeight, isHidden, isFilterHidden, isValueFilterHidden, ri));
+            rows.Add((payloadCapture.Rows[ri], hasRowHeight, rowHeight, isHidden, isFilterHidden, isValueFilterHidden, ownedFilterColumns, ri));
         }
 
         rows.Sort((a, b) =>
@@ -211,6 +224,19 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
             if (rows[ri].IsValueFilterHidden)
                 sheet.ValueFilterHiddenRows.Add(row);
 
+            // R21-autofilter-sort-state-1: sheet.ColumnFilterOwnedRows must be permuted in
+            // lockstep too — it records, per column, exactly which rows a Top-N/Average/condition/
+            // color filter is hiding, and FilterHiddenRowUpdater.ClearColumnOwnedRange /
+            // IsHiddenByAnyColumnOwnedFilter rely on it to know which rows that mechanism owns.
+            // Left unpermuted, it would keep naming the pre-sort row positions after the rows move.
+            foreach (var col in _columnFilterOwnedRowsSnapshot.Keys)
+                sheet.ColumnFilterOwnedRows[col].Remove(row);
+            if (rows[ri].OwnedFilterColumns is { } ownedFilterColumns)
+            {
+                foreach (var col in ownedFilterColumns)
+                    sheet.ColumnFilterOwnedRows[col].Add(row);
+            }
+
             // N37: rows are permuted from OriginalIndex to ri — Excel rewrites each moved
             // formula's relative references the same way a cut/paste to the new row would,
             // so the row delta a cell actually moved must be applied to its formula text.
@@ -245,6 +271,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         _hiddenRowsSnapshot = null;
         _filterHiddenRowsSnapshot = null;
         _valueFilterHiddenRowsSnapshot = null;
+        _columnFilterOwnedRowsSnapshot = null;
         var payloadCapture = CapturePayloads(sheet, _sheetId, startRow, startCol, rowCount, colCount);
         _snapshot = payloadCapture.CellSnapshot;
         _commentSnapshot = payloadCapture.CommentSnapshot;
@@ -365,6 +392,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         RestoreHiddenRows(sheet);
         RestoreFilterHiddenRows(sheet);
         RestoreValueFilterHiddenRows(sheet);
+        RestoreColumnFilterOwnedRows(sheet);
         if (_sortStateCaptured)
             sheet.SortState = _priorSortState;
     }
@@ -461,6 +489,30 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
             var row = startRow + (uint)ri;
             if (sheet.ValueFilterHiddenRows.Contains(row))
                 snapshot.Add(row);
+        }
+
+        return snapshot;
+    }
+
+    // R21-autofilter-sort-state-1: captures, per column, which rows within the sort range are
+    // currently owned by a Top-N/Average/condition/color filter (sheet.ColumnFilterOwnedRows),
+    // mirroring CaptureFilterHiddenRows/CaptureValueFilterHiddenRows above so the ownership can
+    // be permuted (and restored on Revert) in lockstep with the rows themselves.
+    private static Dictionary<uint, HashSet<uint>> CaptureColumnFilterOwnedRows(Sheet sheet, uint startRow, int rowCount)
+    {
+        var snapshot = new Dictionary<uint, HashSet<uint>>();
+        foreach (var (col, ownedRows) in sheet.ColumnFilterOwnedRows)
+        {
+            for (int ri = 0; ri < rowCount; ri++)
+            {
+                var row = startRow + (uint)ri;
+                if (ownedRows.Contains(row))
+                {
+                    if (!snapshot.TryGetValue(col, out var set))
+                        snapshot[col] = set = [];
+                    set.Add(row);
+                }
+            }
         }
 
         return snapshot;
@@ -675,6 +727,32 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
             sheet.ValueFilterHiddenRows.Add(row);
     }
 
+    // R21-autofilter-sort-state-1: undo the ColumnFilterOwnedRows permutation in lockstep with
+    // the sibling FilterHiddenRows/ValueFilterHiddenRows restores above.
+    private void RestoreColumnFilterOwnedRows(Sheet sheet)
+    {
+        if (_columnFilterOwnedRowsSnapshot is null)
+            return;
+
+        foreach (var col in _columnFilterOwnedRowsSnapshot.Keys)
+        {
+            if (sheet.ColumnFilterOwnedRows.TryGetValue(col, out var ownedRows))
+            {
+                for (var row = _range.Start.Row; row <= _range.End.Row; row++)
+                    ownedRows.Remove(row);
+            }
+        }
+
+        foreach (var (col, ownedRows) in _columnFilterOwnedRowsSnapshot)
+        {
+            if (!sheet.ColumnFilterOwnedRows.TryGetValue(col, out var targetSet))
+                sheet.ColumnFilterOwnedRows[col] = targetSet = [];
+
+            foreach (var row in ownedRows)
+                targetSet.Add(row);
+        }
+    }
+
     private static int CompareKey(Workbook workbook, Cell? a, Cell? b, SortOn sortOn, CellColor? targetColor, CustomSortOrder? customOrder, bool caseSensitive)
     {
         if (targetColor is not null && sortOn is SortOn.CellColor or SortOn.FontColor)
@@ -745,7 +823,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         if (bNum) return  1;
         // Custom list ("First key sort order") ranks text by its position in the list.
         if (customOrder is not null && a is TextValue textA && b is TextValue textB)
-            return customOrder.Compare(textA.Value, textB.Value);
+            return customOrder.Compare(textA.Value, textB.Value, caseSensitive);
         return (a, b) switch
         {
             (TextValue ta,   TextValue tb  ) => string.Compare(ta.Value, tb.Value, caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase),

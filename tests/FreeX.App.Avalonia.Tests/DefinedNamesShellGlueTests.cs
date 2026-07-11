@@ -88,10 +88,14 @@ public sealed class DefinedNamesShellGlueTests
         var command = DefinedNamesShellGlue.BuildDefineCommand(draft, range);
         var outcome = Run(workbook, command);
 
+        // A sheet-scoped draft must define a sheet-scoped name (Excel "localSheetId"), not a
+        // workbook-global one: it lives in ScopedNamedRanges, not the global NamedRanges dictionary.
         outcome.Success.Should().BeTrue();
-        workbook.TryGetNamedRange("Revenue", out var stored).Should().BeTrue();
+        workbook.NamedRanges.Should().NotContainKey("Revenue");
+        workbook.ScopedNamedRanges.Should().ContainKey(("Revenue", sheet.Id));
+        workbook.TryGetNamedRange("Revenue", sheet.Id, out var stored).Should().BeTrue();
         stored.Should().Be(range);
-        workbook.TryGetNamedRangeMetadata("Revenue", out var metadata).Should().BeTrue();
+        workbook.TryGetScopedNamedRangeMetadata("Revenue", sheet.Id, out var metadata).Should().BeTrue();
         metadata.Scope.Should().Be("Sheet1");
         metadata.Comment.Should().Be("yearly");
     }

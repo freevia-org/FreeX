@@ -127,14 +127,28 @@ public static partial class BuiltInFunctions
             ? tableRange
             : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
         var columnArg = args.Count > 2 ? args[2] : BlankValue.Instance;
-        return MapScalarArgs([args[1], columnArg],
-            values => IndexScalar(table, values[0], values[1], args.Count == 2));
+        var areaArg = args.Count > 3 ? args[3] : BlankValue.Instance;
+        return MapScalarArgs([args[1], columnArg, areaArg],
+            values => IndexScalar(table, values[0], values[1], values[2], args.Count == 2));
     }
 
-    private static ScalarValue IndexScalar(RangeValue table, ScalarValue rowValue, ScalarValue columnValue, bool singleIndexArgument)
+    private static ScalarValue IndexScalar(RangeValue table, ScalarValue rowValue, ScalarValue columnValue, ScalarValue areaValue, bool singleIndexArgument)
     {
         if (rowValue is ErrorValue e1) return e1;
         if (columnValue is ErrorValue e2) return e2;
+        if (areaValue is ErrorValue e4) return e4;
+
+        // area_num (4th, optional arg) selects among multiple unioned ranges in `reference`.
+        // FreeX's RangeValue only ever represents a single area, so area 1 (or omitted) is the
+        // only valid selector here; any other area_num is out of range per Excel's documented
+        // #REF! behaviour for INDEX's reference form.
+        if (areaValue is not BlankValue)
+        {
+            double rawAreaNum = ToNumber(areaValue);
+            if (!double.IsFinite(rawAreaNum)) return ErrorValue.Value;
+            if ((int)rawAreaNum != 1) return ErrorValue.Ref;
+        }
+
         double rawRowNum = ToNumber(rowValue);
         if (!double.IsFinite(rawRowNum) || rawRowNum > int.MaxValue) return ErrorValue.Value;
         int rowNum = (int)rawRowNum;
