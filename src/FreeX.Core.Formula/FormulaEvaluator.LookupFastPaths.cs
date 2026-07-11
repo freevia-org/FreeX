@@ -204,8 +204,12 @@ public sealed partial class FormulaEvaluator
             if (ifNotFoundValue is RangeValue)
                 return false;
 
-            if (ifNotFoundValue is not BlankValue)
-                ifNotFound = ifNotFoundValue;
+            // Mirror the slow path (Xlookup in BuiltInFunctions.Lookup.Modern.cs): an
+            // explicitly-supplied if_not_found argument is returned verbatim -- including
+            // when it evaluates to blank -- and must not be coerced to #N/A. Only an
+            // omitted argument (args.Count <= 3, handled by the ifNotFound initializer
+            // above) defaults to #N/A.
+            ifNotFound = ifNotFoundValue;
         }
 
         var matchModeValue = node.Arguments.Count > 4

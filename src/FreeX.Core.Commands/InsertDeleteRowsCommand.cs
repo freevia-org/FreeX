@@ -31,6 +31,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     private List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? _chartSnapshot;
     private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
     private AddressBearingStateSnapshot? _addressStateSnapshot;
+    private List<(CellAddress Address, Cell? OldCell)>? _tableCalculatedColumnFillSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
     private readonly Dictionary<(string Name, SheetId Sheet), string> _scopedNamedFormulaSnapshot = [];
@@ -154,11 +155,79 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         _dvFormulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteRuleFormulas(sheet, new InsertRowsOp(sheet.Name, _beforeRow, _count), _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
 
+        // R26-table-structured-ref-deep-2: the address-bearing shift above already grows a
+        // structured table's Range (via ShiftStructuredTables) when the insert point falls inside
+        // it, but that is a pure range/columns reconciliation with no calculated-column fill.
+        // Mirror ResizeStructuredTableCommand.FillGrownCalculatedColumns here so a row inserted
+        // inside a table's body gets its calculated column(s) auto-filled the way Excel does,
+        // instead of being left blank. This MUST run after RewriteAllFormulas above: that pass
+        // bumps every existing formula's cell-reference rows >= _beforeRow by _count regardless of
+        // which cell holds them, so a same-row reference we write here (already targeting its final
+        // post-insert row) would be incorrectly re-shifted again if written any earlier.
+        _tableCalculatedColumnFillSnapshot = FillGrownCalculatedColumnsForInsertedRows(sheet);
+
         return new CommandOutcome(
             true,
             AffectedCells: RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
-                RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, movedSnapshot, _count, _formulaSnapshot),
+                RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, movedSnapshot, _count, _formulaSnapshot)
+                    .Concat(_tableCalculatedColumnFillSnapshot.Select(f => f.Address)),
                 _formulaSnapshot));
+    }
+
+    // R26-table-structured-ref-deep-2: fills each structured table's calculated-column formula into
+    // the row(s) this insert newly brought into the table's data body -- matching Excel's real
+    // behavior of always extending a calculated column into a row inserted inside the table (whether
+    // the row lands at the bottom or in the middle via Insert Row). Only rows exactly in
+    // [_beforeRow, _beforeRow + _count - 1] are new/blank here -- everything at or above them was
+    // already relocated intact (with formulas already rewritten) by MoveCellsForInsert /
+    // RewriteAllFormulas above, so only that inserted window (clipped to the table's post-shift data
+    // body, which excludes the header and any shown totals row) is touched. Mirrors
+    // ResizeStructuredTableCommand.FillGrownCalculatedColumns's formula-anchoring convention: each
+    // row's formula is row-shifted from the table's first data-body row, never written verbatim.
+    private List<(CellAddress Address, Cell? OldCell)> FillGrownCalculatedColumnsForInsertedRows(Sheet sheet)
+    {
+        var filled = new List<(CellAddress Address, Cell? OldCell)>();
+        if (_addressStateSnapshot is null)
+            return filled;
+
+        var lastInsertedRow = _beforeRow + _count - 1;
+
+        foreach (var resizedTable in sheet.StructuredTables)
+        {
+            var previousTable = _addressStateSnapshot.StructuredTables.FirstOrDefault(t => t.Id == resizedTable.Id);
+            // A table only gains newly-inserted rows in its body when the insert point fell
+            // strictly inside it (Start.Row unchanged, End.Row pushed down by the insert) -- one
+            // that shifted down as a whole (its Start.Row moved too, because the insert landed at
+            // or above its header) or that sits entirely above/below the insert point is untouched.
+            if (previousTable is null ||
+                previousTable.Range.Start.Row != resizedTable.Range.Start.Row ||
+                resizedTable.Range.End.Row <= previousTable.Range.End.Row)
+                continue;
+
+            var (firstDataRow, lastDataRow) = StructuredTableEditEffects.GetDataBodyRowBounds(resizedTable);
+            var fillStartRow = Math.Max(_beforeRow, firstDataRow);
+            var fillEndRow = Math.Min(lastInsertedRow, lastDataRow);
+            if (fillEndRow < fillStartRow)
+                continue;
+
+            for (var columnIndex = 0; columnIndex < resizedTable.Columns.Count; columnIndex++)
+            {
+                var formula = resizedTable.Columns[columnIndex].CalculatedColumnFormula;
+                if (string.IsNullOrWhiteSpace(formula))
+                    continue;
+
+                var col = resizedTable.Range.Start.Col + (uint)columnIndex;
+                for (var row = fillStartRow; row <= fillEndRow; row++)
+                {
+                    var address = new CellAddress(sheet.Id, row, col);
+                    filled.Add((address, sheet.GetCell(address)?.Clone()));
+                    var shiftedFormula = StructuredTableEditEffects.ShiftFormulaRows(formula, firstDataRow, row, sheet.Name);
+                    sheet.SetCell(address, Cell.FromFormula(shiftedFormula));
+                }
+            }
+        }
+
+        return filled;
     }
 
     // R24-volatile-recalc-deep-3: a relocated formula cell whose text needs no rewrite (e.g. a
@@ -188,6 +257,23 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     {
         if (_movedSnapshot is null) return;
         var sheet = ctx.GetSheet(_sheetId);
+
+        // R26-table-structured-ref-deep-2: undo the calculated-column auto-fill FIRST -- it was the
+        // very last effect Apply performed (after the physical row move below), so it must be the
+        // first one undone. Every address here falls strictly inside [_beforeRow, _beforeRow +
+        // _count - 1], which the moved-cell restore below is about to repopulate with the original
+        // pre-insert content (moved cells always restore back to their pre-shift address, i.e. this
+        // same window) -- undoing the fill afterward would instead clobber that just-restored data.
+        if (_tableCalculatedColumnFillSnapshot is not null)
+        {
+            foreach (var (address, oldCell) in _tableCalculatedColumnFillSnapshot)
+            {
+                if (oldCell is null)
+                    sheet.ClearCell(address);
+                else
+                    sheet.SetCell(address, oldCell);
+            }
+        }
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);

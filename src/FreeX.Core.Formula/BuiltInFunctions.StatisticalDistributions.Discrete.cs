@@ -15,7 +15,13 @@ public static partial class BuiltInFunctions
 
     /// <summary>Binomial PMF P(X=k | n, p).</summary>
     private static double BinomPmf(int k, int n, double p)
-        => Math.Exp(LogBinom(n, k) + k * Math.Log(p) + (n - k) * Math.Log(1 - p));
+    {
+        // Guard the p=0/p=1 boundaries: 0*log(0) is NaN, but the PMF is well-defined
+        // (degenerate) there — Excel returns 1 at the only attainable k, 0 elsewhere.
+        if (p == 0) return k == 0 ? 1.0 : 0.0;
+        if (p == 1) return k == n ? 1.0 : 0.0;
+        return Math.Exp(LogBinom(n, k) + k * Math.Log(p) + (n - k) * Math.Log(1 - p));
+    }
 
     /// <summary>Binomial CDF P(X &lt;= k | n, p) via regularised incomplete beta.</summary>
     private static double BinomCdf(int k, int n, double p)

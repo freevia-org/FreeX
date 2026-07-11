@@ -111,7 +111,7 @@ internal static class XlsxSlicerTimelineStateRewriter
                 continue;
 
             var changed = RewriteSlicerCacheSelection(root, model);
-            changed |= RewriteNativeCacheItemSelection(root, model, workbook);
+            changed |= RewriteNativeCacheItemSelection(archive, root, model, workbook);
             if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(archive, cachePath, cacheXml);
         }
@@ -206,7 +206,7 @@ internal static class XlsxSlicerTimelineStateRewriter
     /// of silently reverting to the stale native selection. A non-empty <see cref="SlicerModel.SelectedItems"/>
     /// always rewrites the native flags to match it, regardless of <see cref="SlicerModel.SelectionCaptured"/>.
     /// </summary>
-    private static bool RewriteNativeCacheItemSelection(XElement cacheRoot, SlicerModel model, Workbook workbook)
+    private static bool RewriteNativeCacheItemSelection(ZipArchive archive, XElement cacheRoot, SlicerModel model, Workbook workbook)
     {
         if (model.SelectedItems.Count == 0 && !model.SelectionCaptured)
             return false;
@@ -217,9 +217,14 @@ internal static class XlsxSlicerTimelineStateRewriter
         if (itemsElement is null)
             return false;
 
-        var field = ResolveSharedItemsField(workbook, model);
-        var sharedItems = field?.SharedItems;
-        var kinds = field?.SharedItemKinds;
+        // R26-io-pivot-deep-2: resolve captions from the RAW <sharedItems> XML (indexed exactly as Excel
+        // wrote it, including <m/> missing-value slots) -- NOT from PivotCacheFieldModel.SharedItems, which
+        // XlsxPivotCacheReader has already filtered <m/> out of, shifting every later index out of alignment
+        // with the native <i x="N"> this loop is patching.
+        var rawCaptions = ResolveRawSharedItemCaptions(archive, workbook, model);
+        if (rawCaptions is null)
+            return false;
+
         var selected = new HashSet<string>(model.SelectedItems, StringComparer.OrdinalIgnoreCase);
 
         var changed = false;
@@ -229,11 +234,10 @@ internal static class XlsxSlicerTimelineStateRewriter
                 continue;
             if (!int.TryParse(itemElement.Attribute("x")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index))
                 continue;
-            if (sharedItems is null || index < 0 || index >= sharedItems.Count)
+            if (index < 0 || index >= rawCaptions.Count)
                 continue;
 
-            var kind = kinds is not null && index < kinds.Count ? kinds[index] : (char?)null;
-            var caption = NormalizeSharedItemCaption(sharedItems[index], kind, field);
+            var caption = rawCaptions[index];
             if (string.IsNullOrEmpty(caption))
                 continue;
 
@@ -263,11 +267,17 @@ internal static class XlsxSlicerTimelineStateRewriter
     }
 
     /// <summary>
-    /// Finds the pivot cache field backing this slicer's <see cref="SlicerModel.SourceFieldName"/>, the
-    /// same association FreeX.Core.Commands.SlicerItemResolver uses (name match against
-    /// every field with non-empty shared items across the workbook's pivot caches).
+    /// Resolves, for the pivot cache field backing this slicer's <see cref="SlicerModel.SourceFieldName"/>
+    /// (the same name-match association FreeX.Core.Commands.SlicerItemResolver uses), the per-index caption
+    /// list read directly from the pivot cache definition part's RAW <c>&lt;sharedItems&gt;</c> XML -- one
+    /// entry per child element, in document order, so index N lines up with a native
+    /// <c>&lt;i x="N"/&gt;</c>'s own index space exactly as Excel wrote it. A <c>&lt;m/&gt;</c>
+    /// (missing-value) slot (or any item with no <c>v</c> attribute) resolves to <see langword="null"/> so it
+    /// can never satisfy a selection match, but it still OCCUPIES its slot -- unlike
+    /// <see cref="PivotCacheFieldModel.SharedItems"/>, which <c>XlsxPivotCacheReader</c> has already filtered
+    /// such items out of, shifting every later index (R26-io-pivot-deep-2).
     /// </summary>
-    private static PivotCacheFieldModel? ResolveSharedItemsField(Workbook workbook, SlicerModel slicer)
+    private static IReadOnlyList<string?>? ResolveRawSharedItemCaptions(ZipArchive archive, Workbook workbook, SlicerModel slicer)
     {
         var fieldName = slicer.SourceFieldName;
         if (string.IsNullOrWhiteSpace(fieldName))
@@ -275,17 +285,50 @@ internal static class XlsxSlicerTimelineStateRewriter
 
         foreach (var cache in workbook.PivotCaches)
         {
-            foreach (var candidateField in cache.Fields)
-            {
-                if (string.Equals(candidateField.Name, fieldName, StringComparison.OrdinalIgnoreCase) &&
-                    candidateField.SharedItems is { Count: > 0 })
-                {
-                    return candidateField;
-                }
-            }
+            var field = cache.Fields.FirstOrDefault(candidate =>
+                string.Equals(candidate.Name, fieldName, StringComparison.OrdinalIgnoreCase) &&
+                candidate.SharedItems is { Count: > 0 });
+            if (field is null || string.IsNullOrEmpty(cache.PackagePart))
+                continue;
+
+            var cacheEntry = archive.GetEntry(XlsxPackagePath.NormalizePackagePath(cache.PackagePart));
+            if (cacheEntry is null)
+                continue;
+
+            var cacheDefinitionXml = XlsxPackageXmlEditor.LoadXml(cacheEntry);
+            var cacheFieldElement = cacheDefinitionXml.Root?
+                .Elements()
+                .FirstOrDefault(element => string.Equals(element.Name.LocalName, "cacheFields", StringComparison.OrdinalIgnoreCase))?
+                .Elements()
+                .FirstOrDefault(element =>
+                    string.Equals(element.Name.LocalName, "cacheField", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(element.Attribute("name")?.Value, fieldName, StringComparison.OrdinalIgnoreCase));
+
+            var sharedItemsElement = cacheFieldElement?
+                .Elements()
+                .FirstOrDefault(element => string.Equals(element.Name.LocalName, "sharedItems", StringComparison.OrdinalIgnoreCase));
+            if (sharedItemsElement is null)
+                continue;
+
+            return sharedItemsElement
+                .Elements()
+                .Select(item => ResolveRawSharedItemCaption(item, field))
+                .ToList();
         }
 
         return null;
+    }
+
+    /// <summary>Resolves a single raw <c>&lt;sharedItems&gt;</c> child's caption, or null when it has no
+    /// <c>v</c> (e.g. <c>&lt;m/&gt;</c>) so it can never match a selection.</summary>
+    private static string? ResolveRawSharedItemCaption(XElement item, PivotCacheFieldModel field)
+    {
+        var raw = item.Attribute("v")?.Value;
+        if (string.IsNullOrEmpty(raw))
+            return null;
+
+        var kind = item.Name.LocalName.Length > 0 ? item.Name.LocalName[0] : (char?)null;
+        return NormalizeSharedItemCaption(raw, kind, field);
     }
 
     /// <summary>

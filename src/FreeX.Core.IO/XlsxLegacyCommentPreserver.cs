@@ -56,7 +56,7 @@ internal static class XlsxLegacyCommentPreserver
                 continue;
 
             var sheet = workbook.GetSheet(sheetName);
-            if (sheet is null || sheet.Comments.Count == 0)
+            if (sheet is null)
                 continue;
 
             var sourceWorksheetEntry = sourceArchive.GetEntry(sourceWorksheetPath);
@@ -74,6 +74,38 @@ internal static class XlsxLegacyCommentPreserver
                 continue;
 
             var sourceCommentsXml = XlsxPackageXmlEditor.LoadXml(sourceCommentsEntry);
+
+            if (sheet.Comments.Count == 0)
+            {
+                // GAP 6 fix: every REAL legacy note on this sheet was deleted (the source comments
+                // part has at least one non-shim entry, but Sheet.Comments -- populated from it at
+                // load time by XlsxWorksheetCommentReader -- is now empty). ClosedXML writes
+                // nothing at the old comments/VML paths for a note-free sheet, but
+                // XlsxPackageMetadataMerger's CopyUnknownPackageParts/MergeRelationshipParts
+                // already ran (unconditionally, before this preserver) and copied the stale source
+                // comments.xml -- with the deleted comment text -- back into the target package
+                // with a live relationship, so the deletion never actually took effect on disk.
+                // Skip sheets whose comments part contains ONLY Excel's legacy threaded-comment
+                // compatibility shims (or blank-text entries) -- those are never loaded into
+                // Sheet.Comments even when nothing was deleted (see
+                // XlsxWorksheetCommentReader.IsLegacyThreadedCommentShim), so an empty model here
+                // is normal and the shim must be left in place for older/non-Excel readers.
+                if (!SourceCommentsHaveOnlyUnmodeledEntries(sourceCommentsXml, workbookNs))
+                {
+                    PurgeDeletedLegacyComments(
+                        sourceArchive,
+                        targetArchive,
+                        sourceWorksheetPath,
+                        targetWorksheetPath,
+                        sourceCommentsPath,
+                        sourceWorksheetXml,
+                        workbookNs,
+                        relNs,
+                        packageRelNs);
+                }
+
+                continue;
+            }
 
             // GAP 5: build a reconciled comments XML rather than the all-or-nothing guard.
             // When the note set is unchanged, the reconciled XML equals the source XML (same
@@ -342,6 +374,172 @@ internal static class XlsxLegacyCommentPreserver
             return false;
 
         return sheet.Comments.TryGetValue(address, out text!);
+    }
+
+    /// <summary>
+    /// True when EVERY entry in the source comments part is one that
+    /// <c>XlsxWorksheetCommentReader</c> would never surface into <see cref="Sheet.Comments"/> in
+    /// the first place: Excel's legacy threaded-comment compatibility shim (mirrors
+    /// <c>XlsxWorksheetCommentReader.IsLegacyThreadedCommentShim</c>) or a blank-text entry (which
+    /// that same reader also skips). An unmodified sheet whose comments part looks like this
+    /// legitimately round-trips with <c>Sheet.Comments.Count == 0</c> and nothing deleted, so GAP 6's
+    /// purge in <see cref="Preserve"/> must not fire for it. Returns <c>false</c> (i.e. "go ahead
+    /// and purge") when the part has no entries at all, since there is nothing there to protect.
+    /// </summary>
+    private static bool SourceCommentsHaveOnlyUnmodeledEntries(XDocument sourceCommentsXml, XNamespace workbookNs)
+    {
+        var commentElements = sourceCommentsXml.Root?
+            .Element(workbookNs + "commentList")?
+            .Elements(workbookNs + "comment")
+            .ToList() ?? [];
+        if (commentElements.Count == 0)
+            return false;
+
+        var authors = sourceCommentsXml.Root?
+            .Element(workbookNs + "authors")?
+            .Elements(workbookNs + "author")
+            .Select(a => a.Value)
+            .ToList() ?? [];
+
+        foreach (var comment in commentElements)
+        {
+            var text = ReadCommentPlainText(comment, workbookNs);
+            var author = "";
+            if (int.TryParse(comment.Attribute("authorId")?.Value, out var authorIdx) &&
+                authorIdx >= 0 && authorIdx < authors.Count)
+            {
+                author = authors[authorIdx];
+            }
+
+            if (!IsUnmodeledLegacyCommentEntry(author, text))
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Mirrors <c>XlsxWorksheetCommentReader</c>'s "never load this into the model" rules: a
+    /// blank-text entry, or Excel's legacy threaded-comment compatibility shim (author literally
+    /// "tc={GUID}", or text starting with the fixed "[Threaded comment]" banner).
+    /// </summary>
+    private static bool IsUnmodeledLegacyCommentEntry(string author, string text) =>
+        text.Length == 0 ||
+        author.StartsWith("tc=", StringComparison.OrdinalIgnoreCase) ||
+        text.StartsWith("[Threaded comment]", StringComparison.Ordinal);
+
+    /// <summary>
+    /// GAP 6 fix: when every legacy note on a sheet was deleted, ClosedXML writes nothing at the
+    /// comments/VML paths for it -- but <c>XlsxPackageMetadataMerger.CopyUnknownPackageParts</c> and
+    /// <c>MergeRelationshipParts</c> run unconditionally BEFORE this preserver and already
+    /// resurrected the stale source comments part (plus, when nothing else still needs it, its VML
+    /// note shapes) into the target package with a live relationship. This removes that resurrected
+    /// part and relationship so the deletion actually sticks. The VML part is only removed when the
+    /// target worksheet has no <c>&lt;legacyDrawing&gt;</c> marker at all -- a legacy form control on
+    /// the same sheet shares that same marker/part, in which case it is left untouched (any
+    /// header/footer VML, which uses a distinct &lt;legacyDrawingHF&gt; marker/relationship, is
+    /// always excluded via <see cref="GetHeaderFooterLegacyDrawingRelationshipIds"/>).
+    /// </summary>
+    private static void PurgeDeletedLegacyComments(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        string sourceWorksheetPath,
+        string targetWorksheetPath,
+        string sourceCommentsPath,
+        XDocument sourceWorksheetXml,
+        XNamespace workbookNs,
+        XNamespace relNs,
+        XNamespace packageRelNs)
+    {
+        var hasChange = targetArchive.GetEntry(sourceCommentsPath) is not null;
+        if (hasChange)
+            DeletePackagePartCaseInsensitive(targetArchive, sourceCommentsPath);
+
+        var targetWorksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
+        var targetWorksheetRelsEntry = targetArchive.GetEntry(targetWorksheetRelsPath);
+        if (targetWorksheetRelsEntry is null)
+            return;
+
+        var targetWorksheetRelsXml = XlsxPackageXmlEditor.LoadXml(targetWorksheetRelsEntry);
+        var relsRoot = targetWorksheetRelsXml.Root;
+        if (relsRoot is null)
+            return;
+
+        foreach (var relationship in relsRoot.Elements(packageRelNs + "Relationship").ToList())
+        {
+            if (!string.Equals(relationship.Attribute("Type")?.Value, CommentsRelationshipType, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var target = relationship.Attribute("Target")?.Value;
+            if (string.IsNullOrWhiteSpace(target) ||
+                !string.Equals(
+                    XlsxPackagePath.ResolveRelationshipTarget(targetWorksheetPath, target),
+                    sourceCommentsPath,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            relationship.Remove();
+            hasChange = true;
+        }
+
+        // Only remove the VML note-shape part when nothing else on the sheet still needs it.
+        var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
+        var targetHasLegacyDrawingMarker = targetWorksheetEntry is not null &&
+            XlsxPackageXmlEditor.LoadXml(targetWorksheetEntry).Root?.Element(workbookNs + "legacyDrawing") is not null;
+
+        if (!targetHasLegacyDrawingMarker)
+        {
+            var sourceVmlRelId = sourceWorksheetXml.Root?
+                .Element(workbookNs + "legacyDrawing")?
+                .Attribute(relNs + "id")?
+                .Value;
+            if (!string.IsNullOrWhiteSpace(sourceVmlRelId) &&
+                TryGetInternalRelationshipTarget(
+                    sourceArchive,
+                    XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath),
+                    sourceWorksheetPath,
+                    sourceVmlRelId,
+                    VmlDrawingRelationshipType,
+                    packageRelNs,
+                    out var sourceVmlPath))
+            {
+                var headerFooterRelationshipIds = GetHeaderFooterLegacyDrawingRelationshipIds(
+                    targetArchive, targetWorksheetPath, packageRelNs, relNs);
+
+                foreach (var relationship in relsRoot.Elements(packageRelNs + "Relationship").ToList())
+                {
+                    if (!string.Equals(relationship.Attribute("Type")?.Value, VmlDrawingRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+                        headerFooterRelationshipIds.Contains(relationship.Attribute("Id")?.Value ?? ""))
+                    {
+                        continue;
+                    }
+
+                    var target = relationship.Attribute("Target")?.Value;
+                    if (string.IsNullOrWhiteSpace(target) ||
+                        !string.Equals(
+                            XlsxPackagePath.ResolveRelationshipTarget(targetWorksheetPath, target),
+                            sourceVmlPath,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    relationship.Remove();
+                    hasChange = true;
+                }
+
+                if (targetArchive.GetEntry(sourceVmlPath) is not null)
+                {
+                    DeletePackagePartCaseInsensitive(targetArchive, sourceVmlPath);
+                    hasChange = true;
+                }
+            }
+        }
+
+        if (hasChange)
+            XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetRelsPath, targetWorksheetRelsXml);
     }
 
     private static string? PreserveCommentVmlDrawing(

@@ -87,7 +87,11 @@ public static partial class BuiltInFunctions
             return TextResult("");
 
         var textLength = text.Length;
-        if (Math.Abs(options.InstanceNum) > textLength) return ErrorValue.Value;
+        // Use long arithmetic here: Math.Abs(int) throws OverflowException for int.MinValue
+        // (its positive counterpart isn't representable as an int), which would otherwise be
+        // swallowed by the generic OverflowException handler and surface as #NUM! instead of
+        // the #VALUE! every other instance_num domain violation in this function returns.
+        if (Math.Abs((long)options.InstanceNum) > textLength) return ErrorValue.Value;
 
         if (options.Delimiters.Any(delimiter => delimiter.Length == 0))
         {

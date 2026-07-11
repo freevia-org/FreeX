@@ -237,6 +237,7 @@ public static class PasteCommandFactory
             }
 
             var specialCells = new List<(CellAddress Source, Cell Cell)>(sourceCells.Count);
+            List<(CellAddress Address, StyleId StyleId)>? operationFormatEdits = null;
             foreach (var (source, sourceCell) in sourceCells)
             {
                 if (options.SkipBlanks && IsBlank(sourceCell))
@@ -257,6 +258,33 @@ public static class PasteCommandFactory
                     pastedCell.FormulaText = sourceCell.FormulaText;
                     if (options.ContentKind == PasteSpecialContentKind.ValuesAndNumberFormats)
                         pastedCell.StyleId = sourceCell.StyleId;
+
+                    // "All except borders"/"Values and source formatting"/"All using Source theme"/
+                    // "Formulas and number formats" all inherit source formatting during a plain paste
+                    // (PasteCommandCellFactory.BuildPastedCell); PasteSpecialCellsCommand's arithmetic
+                    // Operation handling only special-cases ValuesAndNumberFormats, so those other
+                    // kinds silently kept no formatting at all once an Operation was picked. Queue a
+                    // follow-up format edit here -- mirroring BuildPastedCell's per-kind formatting --
+                    // for the destination cells the operation actually touches (R26-paste-special-
+                    // operation-deep-3).
+                    var operationDestination = options.Transpose
+                        ? PasteCommandCellFactory.TransposeDestination(sourceRange, source, targetSheetId, destination)
+                        : PasteCommandCellFactory.Shift(
+                            source,
+                            targetSheetId,
+                            (int)destination.Row - (int)sourceRange.Start.Row,
+                            (int)destination.Col - (int)sourceRange.Start.Col);
+                    if (TryComputeOperationFormatEdit(
+                            workbook,
+                            targetSheet,
+                            options.ContentKind,
+                            options.Operation,
+                            sourceCell,
+                            operationDestination,
+                            out var operationStyleId))
+                    {
+                        (operationFormatEdits ??= []).Add((operationDestination, operationStyleId));
+                    }
                 }
                 else
                 {
@@ -286,7 +314,13 @@ public static class PasteCommandFactory
                 specialCells.Add((source, pastedCell));
             }
 
-            var specialCarriesFormatting = options.Operation == PasteSpecialOperation.None && ContentKindCarriesRichTextRuns(options.ContentKind);
+            // Only a mode==All paste ("Paste Special > All"/"All except borders"/etc.) carries the
+            // source's rich-text runs, hyperlinks, and merged regions -- a Values-only or
+            // Formulas-only paste (mode==Values/Formulas) must strip them just like it strips the
+            // source's cell style, matching the identical mode gate the non-special paste path below
+            // already applies (ContentKindCarriesRichTextRuns callsite for the plain/no-options case)
+            // (R26-paste-special-operation-deep-1).
+            var specialCarriesFormatting = mode == PasteCellsMode.All && options.Operation == PasteSpecialOperation.None && ContentKindCarriesRichTextRuns(options.ContentKind);
             var specialRichTextRuns = specialCarriesFormatting ? sourceSheet?.RichTextRuns : null;
             var specialHyperlinks = specialCarriesFormatting ? sourceSheet?.Hyperlinks : null;
             var specialHyperlinkMetadata = specialCarriesFormatting ? sourceSheet?.HyperlinkMetadata : null;
@@ -301,11 +335,15 @@ public static class PasteCommandFactory
                 specialHyperlinks,
                 specialHyperlinkMetadata);
 
-            return specialCarriesFormatting && sourceSheet is not null && sourceSheet.MergedRegions.Any(region => region.Overlaps(sourceRange))
-                ? new CompositeWorkbookCommand(
-                    "Paste Special",
-                    [pasteSpecialCommand, new PasteMergedRegionsCommand(targetSheetId, sourceRange, destination, options.Transpose)])
-                : pasteSpecialCommand;
+            var specialExtraCommands = new List<IWorkbookCommand>();
+            if (specialCarriesFormatting && sourceSheet is not null && sourceSheet.MergedRegions.Any(region => region.Overlaps(sourceRange)))
+                specialExtraCommands.Add(new PasteMergedRegionsCommand(targetSheetId, sourceRange, destination, options.Transpose));
+            if (operationFormatEdits is { Count: > 0 })
+                specialExtraCommands.Add(new PasteFormatsCommand(targetSheetId, operationFormatEdits));
+
+            return specialExtraCommands.Count == 0
+                ? pasteSpecialCommand
+                : new CompositeWorkbookCommand("Paste Special", [pasteSpecialCommand, .. specialExtraCommands]);
         }
 
         var rowDelta = (int)destination.Row - (int)sourceRange.Start.Row;
@@ -406,6 +444,76 @@ public static class PasteCommandFactory
         _ => false
     };
 
+    /// <summary>
+    /// Computes the destination style edit an arithmetic Paste Special "Operation" (Add/Subtract/
+    /// Multiply/Divide) should carry alongside the combined value, for the content kinds whose
+    /// non-Operation behavior (see <see cref="PasteCommandCellFactory.BuildPastedCell"/>) inherits
+    /// source formatting. PasteSpecialCellsCommand's own Operation handling
+    /// (<c>TryBuildCell</c>) only special-cases <see cref="PasteSpecialContentKind.ValuesAndNumberFormats"/>;
+    /// the other content kinds here would otherwise silently collapse to plain-value-only formatting
+    /// once an Operation was picked (R26-paste-special-operation-deep-3). Returns false (leaving
+    /// <paramref name="styleId"/> unset) when the content kind doesn't need a format edit, or when the
+    /// arithmetic itself would be a no-op (non-numeric destination, or blank combined with blank) --
+    /// matching TryBuildCell's own no-op skip, which leaves the destination's value AND format
+    /// entirely untouched in that case.
+    /// </summary>
+    private static bool TryComputeOperationFormatEdit(
+        Workbook workbook,
+        Sheet? targetSheet,
+        PasteSpecialContentKind contentKind,
+        PasteSpecialOperation operation,
+        Cell sourceCell,
+        CellAddress destinationAddress,
+        out StyleId styleId)
+    {
+        if (contentKind is not (PasteSpecialContentKind.AllExceptBorders
+            or PasteSpecialContentKind.ValuesAndSourceFormatting
+            or PasteSpecialContentKind.AllUsingSourceTheme
+            or PasteSpecialContentKind.FormulasAndNumberFormats))
+        {
+            styleId = default;
+            return false;
+        }
+
+        var destinationValue = targetSheet?.GetCell(destinationAddress)?.Value ?? BlankValue.Instance;
+        if (PasteArithmetic.ApplyOperation(destinationValue, sourceCell.Value, operation) is null)
+        {
+            styleId = default;
+            return false;
+        }
+
+        var destinationStyle = PasteCommandCellFactory.GetDestinationStyle(targetSheet, destinationAddress);
+        styleId = contentKind switch
+        {
+            PasteSpecialContentKind.AllExceptBorders => MergeAllExceptBorders(workbook, sourceCell.StyleId, destinationStyle),
+            PasteSpecialContentKind.FormulasAndNumberFormats => MergeNumberFormat(workbook, destinationStyle, sourceCell.StyleId),
+            // ValuesAndSourceFormatting / AllUsingSourceTheme: BuildPastedCell applies the source's
+            // style wholesale (no merge with the destination) when Operation is None; same here.
+            _ => sourceCell.StyleId
+        };
+        return true;
+    }
+
+    private static StyleId MergeNumberFormat(Workbook workbook, StyleId destinationStyleId, StyleId sourceStyleId)
+    {
+        var style = workbook.GetStyle(destinationStyleId).Clone();
+        style.NumberFormat = workbook.GetStyle(sourceStyleId).NumberFormat;
+        return workbook.RegisterStyle(style);
+    }
+
+    private static StyleId MergeAllExceptBorders(Workbook workbook, StyleId sourceStyleId, StyleId destinationStyleId)
+    {
+        var style = workbook.GetStyle(sourceStyleId).Clone();
+        var destinationStyle = workbook.GetStyle(destinationStyleId);
+        style.BorderTop = destinationStyle.BorderTop;
+        style.BorderRight = destinationStyle.BorderRight;
+        style.BorderBottom = destinationStyle.BorderBottom;
+        style.BorderLeft = destinationStyle.BorderLeft;
+        style.BorderDiagonalDown = destinationStyle.BorderDiagonalDown;
+        style.BorderDiagonalUp = destinationStyle.BorderDiagonalUp;
+        return workbook.RegisterStyle(style);
+    }
+
     private static IWorkbookCommand CreateTiledInternalPasteCommand(
         Workbook workbook,
         SheetId targetSheetId,
@@ -421,7 +529,12 @@ public static class PasteCommandFactory
         PasteSpecialOptions options)
     {
         var sourceLookup = sourceCells.ToDictionary(c => c.Source, c => c.Cell);
-        var mergedRegionCommands = sourceSheet is not null && sourceSheet.MergedRegions.Any(region => region.Overlaps(sourceRange))
+        // An arithmetic Operation paste only combines the destination cell's numeric value (see
+        // PasteSpecialCellsCommand.TryBuildCell) and must leave destination merge structure alone,
+        // matching the non-tiled path's identical Operation==None gate on merged-region carry-over
+        // a few lines above (R26-paste-special-operation-deep-2).
+        var mergedRegionCommands = options.Operation == PasteSpecialOperation.None &&
+            sourceSheet is not null && sourceSheet.MergedRegions.Any(region => region.Overlaps(sourceRange))
             ? BuildTiledMergedRegionCommands(targetSheetId, sourceRange, destination, targetRows, targetCols, options.Transpose)
             : null;
 
@@ -455,6 +568,7 @@ public static class PasteCommandFactory
         {
             var tiledPairs = new List<(CellAddress Source, CellAddress Destination)>(
                 (int)Math.Min(int.MaxValue, (long)targetRows * targetCols));
+            List<(CellAddress Address, StyleId StyleId)>? operationFormatEdits = null;
             foreach (var (sourceAddress, destinationAddress) in EnumerateTiledAddresses(
                 sourceRange,
                 targetSheetId,
@@ -463,16 +577,38 @@ public static class PasteCommandFactory
                 targetCols,
                 options.Transpose))
             {
-                if (!sourceLookup.ContainsKey(sourceAddress))
+                if (!sourceLookup.TryGetValue(sourceAddress, out var sourceCell))
                     continue;
 
                 tiledPairs.Add((sourceAddress, destinationAddress));
+
+                // See the non-tiled path's identical R26-paste-special-operation-deep-3 handling:
+                // these content kinds inherit source formatting even under a tiled arithmetic
+                // Operation paste.
+                if ((!options.SkipBlanks || !IsBlank(sourceCell)) &&
+                    TryComputeOperationFormatEdit(
+                        workbook,
+                        targetSheet,
+                        options.ContentKind,
+                        options.Operation,
+                        sourceCell,
+                        destinationAddress,
+                        out var operationStyleId))
+                {
+                    (operationFormatEdits ??= []).Add((destinationAddress, operationStyleId));
+                }
             }
 
             var specialCommand = new PasteSpecialCellsCommand(targetSheetId, sourceCells, tiledPairs, options);
-            return mergedRegionCommands is null
+            var operationExtraCommands = new List<IWorkbookCommand>();
+            if (mergedRegionCommands is not null)
+                operationExtraCommands.AddRange(mergedRegionCommands);
+            if (operationFormatEdits is { Count: > 0 })
+                operationExtraCommands.Add(new PasteFormatsCommand(targetSheetId, operationFormatEdits));
+
+            return operationExtraCommands.Count == 0
                 ? specialCommand
-                : new CompositeWorkbookCommand("Paste Special", [specialCommand, .. mergedRegionCommands]);
+                : new CompositeWorkbookCommand("Paste Special", [specialCommand, .. operationExtraCommands]);
         }
 
         var edits = new List<(CellAddress Address, Cell Cell)>((int)Math.Min(int.MaxValue, (long)targetRows * targetCols));

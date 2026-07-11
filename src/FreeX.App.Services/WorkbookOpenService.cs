@@ -1,4 +1,6 @@
+using System.Text.RegularExpressions;
 using FreeX.Core.Commands;
+using FreeX.Core.Formula;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 
@@ -177,13 +179,59 @@ public sealed class WorkbookOpenService
         IFileAdapter adapter,
         bool isOpenXmlExcelPackage)
     {
-        if (isOpenXmlExcelPackage && adapter is XlsxFileAdapter)
+        // Both the OOXML package (.xlsx/.xlsm/.xltx/.xltm) and legacy BIFF (.xls/.xlsb) loaders
+        // parse the source file's own "please fully recalculate" signal (calcPr fullCalcOnLoad /
+        // forceFullCalc for OOXML, the BIFF recalc-id record's ForceFormulaRecalculation for
+        // legacy) into these same workbook/sheet flags -- real Excel trusts a file's cached
+        // formula values unless that flag says otherwise, for either container format.
+        var hasTrustedCachedValues = (isOpenXmlExcelPackage && adapter is XlsxFileAdapter) ||
+                                      adapter is LegacyXlsFileAdapter;
+        if (!hasTrustedCachedValues)
+            return true;
+
+        if (workbook.FullCalculationOnLoad ||
+            workbook.ForceFullCalculation ||
+            workbook.Sheets.Any(sheet => sheet.FullCalculationOnLoad))
         {
-            return workbook.FullCalculationOnLoad ||
-                   workbook.ForceFullCalculation ||
-                   workbook.Sheets.Any(sheet => sheet.FullCalculationOnLoad);
+            return true;
         }
 
-        return true;
+        // Even when the cached values are otherwise trusted, real Excel still recalculates
+        // volatile functions (NOW/TODAY/RAND/...) on every open as long as calculation is not set
+        // to Manual -- opening a workbook always runs at least one Automatic calculation pass, and
+        // volatile cells are always dirty for that pass. Only Manual mode leaves a stale cached
+        // volatile value untouched until the next F9/edit.
+        return workbook.CalculationMode != WorkbookCalculationMode.Manual &&
+               WorkbookHasVolatileFormulas(workbook);
+    }
+
+    // Matches an identifier immediately followed by '(' (optionally separated by spaces, which the
+    // formula lexer also tolerates before an open paren) -- a candidate function-call name, used to
+    // detect volatile functions without a full parse of every cached formula.
+    private static readonly Regex FunctionCallNamePattern =
+        new(@"[A-Za-z_][A-Za-z0-9_.]*(?=[ \t]*\()", RegexOptions.Compiled);
+
+    private static bool WorkbookHasVolatileFormulas(Workbook workbook)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (!sheet.HasFormulas)
+                continue;
+
+            foreach (var address in sheet.EnumerateFormulaCells())
+            {
+                var formulaText = sheet.GetCell(address)?.FormulaText;
+                if (formulaText is null)
+                    continue;
+
+                foreach (Match match in FunctionCallNamePattern.Matches(formulaText))
+                {
+                    if (BuiltInFunctions.IsVolatile(match.Value.ToUpperInvariant()))
+                        return true;
+                }
+            }
+        }
+
+        return false;
     }
 }

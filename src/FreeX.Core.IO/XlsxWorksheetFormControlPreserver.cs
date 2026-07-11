@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
 using FreeX.Core.Model;
@@ -15,6 +16,7 @@ namespace FreeX.Core.IO;
 internal static class XlsxWorksheetFormControlPreserver
 {
     private static readonly XNamespace McNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+    private static readonly XNamespace DrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
     private const string VmlDrawingRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
 
@@ -74,7 +76,7 @@ internal static class XlsxWorksheetFormControlPreserver
 
             targetRoot.SetAttributeValue(XNamespace.Xmlns + "r", context.RelNs.NamespaceName);
             targetRoot.SetAttributeValue(XNamespace.Xmlns + "mc", McNs.NamespaceName);
-            InsertControlsInWorksheetOrder(targetRoot, context.WorkbookNs, CloneControlsBlock(sourceRoot, context.WorkbookNs));
+            InsertControlsInWorksheetOrder(targetRoot, context.WorkbookNs, CloneControlsBlock(sourceRoot, context.WorkbookNs, sheet));
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
             anyChange = true;
         }
@@ -87,8 +89,8 @@ internal static class XlsxWorksheetFormControlPreserver
     }
 
     /// <summary>
-    /// Rewrites each control's <c>checked</c>/<c>val</c>/<c>sel</c> <c>formControlPr</c> attributes
-    /// (in the TARGET archive's already-copied ctrlProp part — see
+    /// Rewrites each control's <c>checked</c>/<c>val</c>/<c>sel</c>/<c>fmlaLink</c>/<c>fmlaRange</c>
+    /// <c>formControlPr</c> attributes (in the TARGET archive's already-copied ctrlProp part — see
     /// <see cref="XlsxPackageMetadataMerger.CopyUnknownPackageParts"/>) from the corresponding
     /// <see cref="FormControlModel"/>'s live state, matched primarily by <c>shapeId</c> (unique per
     /// control) against <paramref name="sheet"/>.<see cref="Sheet.FormControls"/>, falling back to
@@ -166,9 +168,22 @@ internal static class XlsxWorksheetFormControlPreserver
         }
     }
 
-    /// <summary>Writes IsChecked/Value/SelectedIndex onto a <c>formControlPr</c> element's attributes.</summary>
+    /// <summary>
+    /// Writes IsChecked/Value/SelectedIndex/LinkedCell/ListFillRange onto a <c>formControlPr</c>
+    /// element's attributes. R26-form-controls-deep-1: LinkedCell/ListFillRange are shifted in
+    /// memory by <c>RowColumnShiftHelpers.AddressState.ShiftFormControls</c> on a structural edit
+    /// (row/column insert-delete), so they must be written back here the same way IsChecked/Value/
+    /// SelectedIndex already are, or a reload silently re-links the control to its stale, pre-edit
+    /// cell reference.
+    /// </summary>
     private static void ApplyControlStateToFormControlPr(XElement formControlPr, FormControlModel control)
     {
+        if (!string.IsNullOrWhiteSpace(control.LinkedCell))
+            formControlPr.SetAttributeValue("fmlaLink", control.LinkedCell);
+
+        if (!string.IsNullOrWhiteSpace(control.ListFillRange))
+            formControlPr.SetAttributeValue("fmlaRange", control.ListFillRange);
+
         switch (control.Kind)
         {
             case FormControlKind.CheckBox:
@@ -296,11 +311,97 @@ internal static class XlsxWorksheetFormControlPreserver
         return null;
     }
 
-    /// <summary>Clone the source controls container (direct or AlternateContent-wrapped) verbatim.</summary>
-    private static XElement CloneControlsBlock(XElement sourceRoot, XNamespace worksheetNs)
+    /// <summary>
+    /// Clone the source controls container (direct or AlternateContent-wrapped), then rewrite each
+    /// control's anchor from the live, possibly-shifted <see cref="FormControlModel"/> state (see
+    /// <see cref="ApplyControlAnchorsToClone"/>). R26-form-controls-deep-2: a structural edit
+    /// (row/column insert-delete) shifts <see cref="FormControlModel.Anchor"/> in memory via
+    /// <c>RowColumnShiftHelpers.AddressState.ShiftFormControls</c>, but a plain verbatim clone of the
+    /// pristine source controls block would silently revert to the pre-edit anchor on save.
+    /// </summary>
+    private static XElement CloneControlsBlock(XElement sourceRoot, XNamespace worksheetNs, Sheet? sheet)
     {
         var container = FindControlsContainer(sourceRoot, worksheetNs)!;
-        return new XElement(container);
+        var clone = new XElement(container);
+        if (sheet is not null)
+            ApplyControlAnchorsToClone(clone, worksheetNs, sheet);
+
+        return clone;
+    }
+
+    /// <summary>
+    /// Rewrites each control's <c>controlPr/anchor</c> <c>from</c>/<c>to</c> markers (in the just-
+    /// cloned controls block) from the corresponding <see cref="FormControlModel"/>'s live
+    /// <see cref="FormControlModel.Anchor"/>/<see cref="FormControlModel.AnchorOffsets"/> — matched
+    /// primarily by <c>shapeId</c>, falling back to document order when a shapeId is unavailable on
+    /// either side, mirroring <see cref="WriteControlStateToCtrlProps"/>'s matching.
+    /// </summary>
+    private static void ApplyControlAnchorsToClone(XElement clonedControlsBlock, XNamespace worksheetNs, Sheet sheet)
+    {
+        if (sheet.FormControls.Count == 0)
+            return;
+
+        var controlElements = EnumerateControlElements(clonedControlsBlock, worksheetNs + "control").ToList();
+        if (controlElements.Count == 0)
+            return;
+
+        var controlsByShapeId = sheet.FormControls
+            .Where(c => c.ShapeId is not null)
+            .ToDictionary(c => c.ShapeId!.Value, c => c);
+
+        for (var i = 0; i < controlElements.Count; i++)
+        {
+            var element = controlElements[i];
+            FormControlModel? control = null;
+            if (uint.TryParse(element.Attribute("shapeId")?.Value, out var shapeId))
+                controlsByShapeId.TryGetValue(shapeId, out control);
+
+            control ??= i < sheet.FormControls.Count ? sheet.FormControls[i] : null;
+            if (control?.Anchor is not { } anchor)
+                continue;
+
+            var anchorElement = element.Element(worksheetNs + "controlPr")?.Element(worksheetNs + "anchor");
+            if (anchorElement is null)
+                continue;
+
+            ApplyAnchorToElement(anchorElement, anchor, control.AnchorOffsets);
+        }
+    }
+
+    /// <summary>
+    /// Writes a live <see cref="FormControlModel.Anchor"/>/<see cref="FormControlModel.AnchorOffsets"/>
+    /// pair into a worksheet <c>controlPr/anchor</c>'s <c>from</c>/<c>to</c> markers, using the same
+    /// 0-based col/row + EMU colOff/rowOff shape that <see cref="XlsxFormControlMapper"/>'s
+    /// <c>ReadAnchor</c>/<c>ReadAnchorOffsets</c> read. Falls back to zero sub-cell offsets when
+    /// <paramref name="offsets"/> is unavailable.
+    /// </summary>
+    private static void ApplyAnchorToElement(XElement anchorElement, GridRange anchor, DrawingAnchorRange? offsets)
+    {
+        var ns = anchorElement.Name.Namespace;
+        var from = anchorElement.Element(ns + "from");
+        var to = anchorElement.Element(ns + "to");
+        if (from is null || to is null)
+            return;
+
+        SetAnchorMarker(from, anchor.Start.Col - 1, anchor.Start.Row - 1, offsets?.From.ColumnOffsetEmu ?? 0, offsets?.From.RowOffsetEmu ?? 0);
+        SetAnchorMarker(to, anchor.End.Col - 1, anchor.End.Row - 1, offsets?.To.ColumnOffsetEmu ?? 0, offsets?.To.RowOffsetEmu ?? 0);
+    }
+
+    private static void SetAnchorMarker(XElement marker, uint col, uint row, long colOffEmu, long rowOffEmu)
+    {
+        SetMarkerElementValue(marker, DrawingNs + "col", col);
+        SetMarkerElementValue(marker, DrawingNs + "colOff", colOffEmu);
+        SetMarkerElementValue(marker, DrawingNs + "row", row);
+        SetMarkerElementValue(marker, DrawingNs + "rowOff", rowOffEmu);
+    }
+
+    private static void SetMarkerElementValue(XElement marker, XName name, long value)
+    {
+        var element = marker.Element(name);
+        if (element is null)
+            return;
+
+        element.Value = value.ToString(CultureInfo.InvariantCulture);
     }
 
     private static void InsertControlsInWorksheetOrder(XElement worksheetRoot, XNamespace worksheetNs, XElement controlsBlock)

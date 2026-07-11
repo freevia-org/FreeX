@@ -26,7 +26,10 @@ public static partial class BuiltInFunctions
         // Excel: beta is scale (theta), so mean = alpha*beta
         if (x < 0 || alpha <= 0 || beta <= 0) return ErrorValue.Num;
         if (cum) return NumberResult(GammaInc(alpha, x / beta));
-        double pdf = Math.Exp((alpha - 1) * Math.Log(x) - x / beta - alpha * Math.Log(beta) - LogGamma(alpha));
+        // x==0 with alpha==1 is the exponential-density special case: x^(alpha-1) == 0^0 == 1,
+        // not the 0 * Math.Log(0) == 0 * -Infinity == NaN that a literal log-term evaluation produces.
+        double logXTerm = x == 0 && alpha == 1 ? 0.0 : (alpha - 1) * Math.Log(x);
+        double pdf = Math.Exp(logXTerm - x / beta - alpha * Math.Log(beta) - LogGamma(alpha));
         return NumberResult(pdf);
     }
 
@@ -113,7 +116,11 @@ public static partial class BuiltInFunctions
         double t = (x - A) / (B - A);
         if (cum) return NumberResult(BetaInc(alpha, beta, t));
         double lbeta = LogGamma(alpha) + LogGamma(beta) - LogGamma(alpha + beta);
-        double pdf = Math.Exp((alpha - 1) * Math.Log(t) + (beta - 1) * Math.Log(1 - t) - lbeta) / (B - A);
+        // t==0 with alpha==1 (t^0==1) and t==1 with beta==1 ((1-t)^0==1) are the Uniform(0,1)-style
+        // boundary special cases: a literal log-term evaluation hits 0 * Math.Log(0) == NaN instead.
+        double logTTerm = t == 0 && alpha == 1 ? 0.0 : (alpha - 1) * Math.Log(t);
+        double log1MinusTTerm = t == 1 && beta == 1 ? 0.0 : (beta - 1) * Math.Log(1 - t);
+        double pdf = Math.Exp(logTTerm + log1MinusTTerm - lbeta) / (B - A);
         return NumberResult(pdf);
     }
 

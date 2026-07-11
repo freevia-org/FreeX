@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text;
 
 using FreeX.Core.Model;
@@ -85,9 +84,9 @@ public static partial class BuiltInFunctions
         {
             DirectTextLiteralValue t => QuoteValueText(t.Value),
             TextValue t => QuoteValueText(t.Value),
-            BlankValue => QuoteValueText(""),
-            NumberValue n => n.Value.ToString(CultureInfo.InvariantCulture),
-            DateTimeValue d => d.Value.ToString(CultureInfo.InvariantCulture),
+            BlankValue => "",
+            NumberValue n => NumberToExcelText(n.Value),
+            DateTimeValue d => NumberToExcelText(d.Value),
             BoolValue b => b.Value ? "TRUE" : "FALSE",
             ErrorValue e => e.Code,
             _ => QuoteValueText(ToText(value))

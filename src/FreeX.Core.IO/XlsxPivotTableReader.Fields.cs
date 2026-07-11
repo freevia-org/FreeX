@@ -202,6 +202,19 @@ internal static partial class XlsxPivotTableReader
             return null;
         }
 
+        // R26-io-pivot-deep-1: XlsxPivotCacheReader.ReadSharedItemValues drops any <m/> (missing/blank)
+        // OOXML sharedItems child before this list is built, shifting every later item out of alignment
+        // with the raw OOXML index space the pageField's own @item attribute is defined against. When the
+        // field's declared sharedItems @count (SharedItemCount) is larger than this materialized list,
+        // at least one item was dropped and we can no longer tell which (if any) materialized entry the
+        // raw index now lands on -- indexing into it here would risk silently returning a caption for the
+        // WRONG item. Decline to resolve a name in that case (the same safe "no name" outcome the
+        // out-of-range branch below already produces) rather than ever returning a caption Excel did not
+        // intend.
+        var field = pivotCache.Fields[fieldIndex];
+        if (field.SharedItemCount is { } declaredCount && declaredCount > sharedItems.Count)
+            return null;
+
         var itemIndex = XlsxXmlAttributeReader.ReadIntAttribute(pageField, "item");
         return itemIndex is >= 0 && itemIndex.Value < sharedItems.Count
             ? sharedItems[itemIndex.Value]

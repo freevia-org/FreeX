@@ -610,7 +610,25 @@ internal static partial class XlsxPivotTableWriter
                     workbookNs + "calculatedItem",
                     new XAttribute("field", item.SourceFieldIndex.ToString(CultureInfo.InvariantCulture)),
                     new XAttribute("name", item.Name),
-                    new XAttribute("formula", item.Formula))));
+                    new XAttribute("formula", item.Formula),
+                    // CT_CalculatedItem declares pivotArea as a required child (minOccurs="1") that
+                    // identifies which field the calculated item targets; without it the part is
+                    // structurally invalid and real Excel repairs/drops the calculated item on open.
+                    new XElement(
+                        workbookNs + "pivotArea",
+                        new XAttribute("type", "normal"),
+                        new XAttribute("dataOnly", "0"),
+                        new XAttribute("labelOnly", "1"),
+                        new XAttribute("outline", "0"),
+                        new XAttribute("fieldPosition", "0"),
+                        new XElement(
+                            workbookNs + "references",
+                            new XAttribute("count", "1"),
+                            new XElement(
+                                workbookNs + "reference",
+                                new XAttribute("field", item.SourceFieldIndex.ToString(CultureInfo.InvariantCulture)),
+                                new XAttribute("count", "0"),
+                                new XAttribute("selected", "0")))))));
 
     private static XElement? ToPivotValueFiltersXml(IReadOnlyList<PivotValueFilterModel> filters, XNamespace workbookNs) =>
         filters.Count == 0

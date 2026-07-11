@@ -451,12 +451,16 @@ internal static class XlsxWorksheetOleControlNormalizer
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        var usedRelationshipIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var nextDrawingPartIndex = 0;
         var worksheetChanged = false;
         foreach (var objectProperties in objectPropertiesElements)
         {
             var relationshipId = objectProperties.Attribute(RelNs + "id")?.Value;
-            var relationship = FindPackageRelationshipById(drawingRelationships, relationshipId);
+            var relationship = FindUnusedValidPackageRelationship(
+                drawingRelationships,
+                [relationshipId],
+                usedRelationshipIds);
 
             if (relationship is null)
             {
@@ -465,7 +469,7 @@ internal static class XlsxWorksheetOleControlNormalizer
                     worksheetPath,
                     archive,
                     relationshipId);
-                relationship = FindFirstPackageRelationship(drawingRelationships);
+                relationship = FindNextUnusedPackageRelationship(drawingRelationships, usedRelationshipIds);
             }
 
             if (relationship is null)
@@ -501,6 +505,7 @@ internal static class XlsxWorksheetOleControlNormalizer
                 continue;
             }
 
+            usedRelationshipIds.Add(reboundId);
             worksheetChanged |= SetRelationshipId(objectProperties, reboundId);
             EnsureDrawingContentType(archive, relationship!, worksheetPath);
         }

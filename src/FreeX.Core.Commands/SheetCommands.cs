@@ -472,6 +472,13 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
     // X3: CF/DV formula rewrites across surviving sheets for the deleted-sheet #REF! pass
     private List<(Guid RuleId, string? OldValue, SheetId Sheet)>? _cfFormulaDeleteSnapshot;
     private List<(Guid RuleId, int Slot, string? OldValue, SheetId Sheet)>? _dvFormulaDeleteSnapshot;
+    // R26: FormControlModel.LinkedCell/ListFillRange hold sheet-qualified string "formulas" just
+    // like CF/DV above (mirrors RenameSheetCommand's P81 block, same fields, same FormulaRewriter
+    // path) and must be rewritten to #REF! across ALL surviving sheets when they reference the
+    // deleted sheet — otherwise a checkbox/spinner/list-box keeps saying the stale sheet name
+    // forever and can silently reattach to an unrelated sheet later re-created/renamed with the
+    // same name (FormControlInteractionService.TryResolveLinkedCell would then resolve it).
+    private List<(FormControlModel Control, string? OldLinkedCell, string? OldListFillRange)>? _formControlDeleteSnapshot;
     // Charts (on surviving sheets) whose DataRange pointed at the deleted sheet — remapped onto
     // their own host sheet so no dangling deleted-sheet reference remains.
     private List<(ChartModel Chart, GridRange OldValue)>? _chartDataRangeDeleteSnapshot;
@@ -572,6 +579,47 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
                         dv.Formula2 = rewritten;
                     }
                 }
+            }
+        }
+
+        // R26: rewrite FormControlModel.LinkedCell/ListFillRange across all surviving sheets
+        // that reference the deleted sheet, producing #REF! — mirrors RenameSheetCommand's P81
+        // block and the X3 CF/DV pass above (same FormulaRewriter path, same bare-ref fields).
+        _formControlDeleteSnapshot = [];
+        foreach (var s in ctx.Workbook.Sheets)
+        {
+            foreach (var control in s.FormControls)
+            {
+                string? newLinkedCell = control.LinkedCell;
+                string? newListFillRange = control.ListFillRange;
+                bool changed = false;
+
+                if (control.LinkedCell is { } linkedCell)
+                {
+                    var rewritten = FormulaRewriter.Rewrite(linkedCell, deleteOp, s.Name);
+                    if (rewritten is not null && rewritten != linkedCell)
+                    {
+                        newLinkedCell = rewritten;
+                        changed = true;
+                    }
+                }
+
+                if (control.ListFillRange is { } listFillRange)
+                {
+                    var rewritten = FormulaRewriter.Rewrite(listFillRange, deleteOp, s.Name);
+                    if (rewritten is not null && rewritten != listFillRange)
+                    {
+                        newListFillRange = rewritten;
+                        changed = true;
+                    }
+                }
+
+                if (!changed)
+                    continue;
+
+                _formControlDeleteSnapshot.Add((control, control.LinkedCell, control.ListFillRange));
+                control.LinkedCell = newLinkedCell;
+                control.ListFillRange = newListFillRange;
             }
         }
 
@@ -692,6 +740,13 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
                     }
                 }
             }
+
+            if (_formControlDeleteSnapshot is not null)
+                foreach (var (control, oldLinkedCell, oldListFillRange) in _formControlDeleteSnapshot)
+                {
+                    control.LinkedCell = oldLinkedCell;
+                    control.ListFillRange = oldListFillRange;
+                }
 
             if (_chartDataRangeDeleteSnapshot is not null)
                 foreach (var (chart, oldValue) in _chartDataRangeDeleteSnapshot)

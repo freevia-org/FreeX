@@ -778,13 +778,22 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Xlookup_OmittedIfNotFound_DefaultsToNA()
+    public void Xlookup_ExplicitlyEmptyIfNotFoundViaDoubleComma_ReturnsBlankNotNA()
     {
+        // Renamed/corrected for round-26 finding R26-meta-2 (FormulaEvaluator.LookupFastPaths.cs's
+        // TryEvaluateXlookupDirectRanges): the double-comma ",," is NOT an omitted argument -- the
+        // parser records it as an OmittedArgumentNode occupying argument position 3, which
+        // evaluates to BlankValue.Instance, same as an explicit blank cell reference would. Per
+        // real Excel (and mirroring round-25's slow-path fix, see
+        // R25_LookupModernTests.Xlookup_ExplicitlySuppliedBlankIfNotFound_ReturnsBlankNotNA), an
+        // explicitly-supplied-but-blank if_not_found is returned verbatim, not coerced to #N/A --
+        // only a genuinely omitted argument (no trailing comma at all) defaults to #N/A. This test
+        // previously asserted the old (buggy) #N/A result.
         var sheet = MakeSheet(
             (1, 1, new TextValue("A")), (2, 1, new TextValue("B")),
             (1, 2, new NumberValue(1)), (2, 2, new NumberValue(2)));
 
-        _eval.Evaluate("=XLOOKUP(\"Z\",A1:A2,B1:B2,,0)", sheet).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=XLOOKUP(\"Z\",A1:A2,B1:B2,,0)", sheet).Should().Be(new NumberValue(0));
     }
 
     [Fact]

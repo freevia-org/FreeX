@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace FreeX.Core.Model;
 
 public sealed partial class Sheet
@@ -152,10 +154,10 @@ public sealed partial class Sheet
             copy.StructuredTables.Add(CloneStructuredTable(table, newId));
 
         foreach (var cf in ConditionalFormats)
-            copy.ConditionalFormats.Add(CloneConditionalFormat(cf, newId));
+            copy.ConditionalFormats.Add(CloneConditionalFormat(cf, newId, Name, newName));
 
         foreach (var dv in DataValidations)
-            copy.DataValidations.Add(CloneDataValidation(dv, newId));
+            copy.DataValidations.Add(CloneDataValidation(dv, newId, Name, newName));
 
         // Note: Charts, TextBoxes, DrawingShapes, Pictures, and Sparklines are intentionally
         // left empty here. The caller must copy those drawing collections separately.
@@ -353,7 +355,7 @@ public sealed partial class Sheet
                 ? null
                 : new Dictionary<string, string>(filter.NativeAttributes, StringComparer.Ordinal));
 
-    private static ConditionalFormat CloneConditionalFormat(ConditionalFormat cf, SheetId newId)
+    private static ConditionalFormat CloneConditionalFormat(ConditionalFormat cf, SheetId newId, string sourceSheetName, string newSheetName)
     {
         IReadOnlyList<GridRange>? remappedAdditional = cf.AdditionalRanges is null
             ? null
@@ -399,7 +401,7 @@ public sealed partial class Sheet
             AboveAverage         = cf.AboveAverage,
             EqualAverage         = cf.EqualAverage,
             StdDevCount          = cf.StdDevCount,
-            FormulaText          = cf.FormulaText,
+            FormulaText          = RewriteSameSheetQualifiedFormula(cf.FormulaText, sourceSheetName, newSheetName),
             IconSetStyle         = cf.IconSetStyle,
             IconSetShowValue     = cf.IconSetShowValue,
             IconSetReverse       = cf.IconSetReverse,
@@ -420,15 +422,15 @@ public sealed partial class Sheet
         return clonedFormat;
     }
 
-    private static DataValidation CloneDataValidation(DataValidation dv, SheetId newId)
+    private static DataValidation CloneDataValidation(DataValidation dv, SheetId newId, string sourceSheetName, string newSheetName)
     {
         var clone = new DataValidation
         {
             AppliesTo         = RemapRange(dv.AppliesTo, newId),
             Type              = dv.Type,
             Operator          = dv.Operator,
-            Formula1          = dv.Formula1,
-            Formula2          = dv.Formula2,
+            Formula1          = RewriteSameSheetQualifiedFormula(dv.Formula1, sourceSheetName, newSheetName),
+            Formula2          = RewriteSameSheetQualifiedFormula(dv.Formula2, sourceSheetName, newSheetName),
             AllowBlank        = dv.AllowBlank,
             ShowDropdown      = dv.ShowDropdown,
             AlertStyle        = dv.AlertStyle,
@@ -445,6 +447,39 @@ public sealed partial class Sheet
         };
         clone.AdditionalRanges.AddRange(dv.AdditionalRanges.Select(range => RemapRange(range, newId)));
         return clone;
+    }
+
+    /// <summary>
+    /// R26-sheet-lifecycle-deep-2: rebases an explicit same-sheet-qualified reference (e.g.
+    /// <c>Sheet1!A1</c> or <c>'Sheet 1'!A1</c>) embedded in a Conditional Format / Data
+    /// Validation formula so a duplicated sheet's rule follows the COPY instead of continuing
+    /// to point at the source sheet by name — matching Excel's Move-or-Copy behavior and
+    /// mirroring how <c>DuplicateSheetDrawingCloner</c> already rebases the analogous verbatim
+    /// chart-range text. <see cref="ConditionalFormat.FormulaText"/> / <see cref="DataValidation.Formula1"/> /
+    /// <see cref="DataValidation.Formula2"/> are stored as raw strings (Core.Model has no formula
+    /// parser), so this is a targeted text substitution rather than a full AST rewrite: only
+    /// literal occurrences of the SOURCE sheet's own name used as a reference qualifier are
+    /// replaced. Qualifiers naming any OTHER sheet, and unqualified references (which already
+    /// implicitly follow the copy since they mean "this sheet"), are left untouched.
+    /// </summary>
+    private static string? RewriteSameSheetQualifiedFormula(string? formula, string sourceSheetName, string newSheetName)
+    {
+        if (string.IsNullOrEmpty(formula) || string.Equals(sourceSheetName, newSheetName, StringComparison.Ordinal))
+            return formula;
+
+        var newQualifier = SheetNameFormatter.QuoteIfNeeded(newSheetName) + "!";
+
+        // Already-quoted source qualifier, e.g. 'Sheet 1'!
+        var quotedOldQualifier = "'" + sourceSheetName.Replace("'", "''") + "'!";
+        var rewritten = formula.Replace(quotedOldQualifier, newQualifier, StringComparison.OrdinalIgnoreCase);
+
+        // Bare (unquoted) source qualifier, e.g. Sheet1! — guarded so it can't match a fragment
+        // of a longer identifier/qualifier (e.g. a source name of "Sheet1" must not match inside
+        // "OtherSheet1!") or re-touch the quoted form already handled above.
+        var pattern = "(?<![A-Za-z0-9_.'])" + Regex.Escape(sourceSheetName) + "!";
+        rewritten = Regex.Replace(rewritten, pattern, _ => newQualifier, RegexOptions.IgnoreCase);
+
+        return rewritten;
     }
 
     private void CopyLayoutCollectionsTo(Sheet copy)

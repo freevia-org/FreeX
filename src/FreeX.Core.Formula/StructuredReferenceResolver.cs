@@ -73,7 +73,14 @@ public static class StructuredReferenceResolver
                     return ResolveSectionColumn(sheet, table, section, columnName);
                 }
 
-                if (TryParseColumnRangeSelector(selector, out var startColumn, out var endColumn))
+                // A table column can legitimately be named with text containing a colon (e.g. "Q1:Q2") —
+                // that's ordinary header text, not "start:end" range syntax. Real Excel requires the
+                // explicit double-bracket form ([[Col1]:[Col2]]) for an actual column range; a bare,
+                // un-bracketed "Col1:Col2" selector that exactly matches one existing column's literal
+                // name resolves to that column, not to a range from Col1 through Col2.
+                var isBareColonSelector = !selector.Contains('[', StringComparison.Ordinal);
+                if (!(isBareColonSelector && FindColumnIndex(table, selector) >= 0) &&
+                    TryParseColumnRangeSelector(selector, out var startColumn, out var endColumn))
                     return ResolveSectionColumnRange(sheet, table, "#DATA", startColumn, endColumn);
 
                 if (TryResolveTableSelector(sheet, table, selector) is { } selectedRange)

@@ -91,8 +91,14 @@ public static partial class BuiltInFunctions
                 return new NumberValue(serial + 1);
             if (!uses1904DateSystem && year == 1900 && month == 3 && day == 0)
                 return new NumberValue(60);
-            if (!uses1904DateSystem && dt == new DateTime(1900, 3, 1) && month < 3)
-                return new NumberValue(60);
+            // Requested month < 3 (Jan/Feb of 1900) but the constructed date rolled forward
+            // on/after the phantom leap-day boundary (e.g. DATE(1900,2,30) real-rolls to
+            // Mar 2): the raw serial already counts one real day too many for the boundary
+            // it crossed, so subtract 1. This must fire for ANY dt >= Mar 1, 1900 (not just
+            // an exact match), so DATE(1900,2,30)=61 and DATE(1900,2,31)=62 as well as the
+            // exact DATE(1900,2,29)=60 case.
+            if (!uses1904DateSystem && year == 1900 && month < 3 && dt >= new DateTime(1900, 3, 1))
+                return new NumberValue(serial - 1);
             return new NumberValue(serial);
         }
         catch { return ErrorValue.Num; }
@@ -711,7 +717,15 @@ public static partial class BuiltInFunctions
         if (!TrySerialToDateTime(endDate, uses1904DateSystem, out var endRaw)) return ErrorValue.Num;
         var startDt = startRaw.Date;
         var endDt   = endRaw.Date;
-        double days = european ? Days30E360(startDt, endDt) : Days30US360Days360(startDt, endDt);
+        // The 1900 phantom leap day (serial 60) collapses onto the same DateTime as serial 59
+        // ("1900-02-28"), which would otherwise give it the wrong day-of-month component (28)
+        // for 30/360 day counting; DAY(60) is already special-cased to 29 elsewhere in this
+        // file (see DayScalar) -- match that here.
+        bool startIsFakeLeapDay = !uses1904DateSystem && IsExcelFakeLeapDay(startDate);
+        bool endIsFakeLeapDay   = !uses1904DateSystem && IsExcelFakeLeapDay(endDate);
+        double days = european
+            ? Days30E360(startDt, endDt, startIsFakeLeapDay, endIsFakeLeapDay)
+            : Days30US360Days360(startDt, endDt, startIsFakeLeapDay, endIsFakeLeapDay);
         return new NumberValue(Math.Truncate(days));
     }
 
@@ -740,19 +754,39 @@ public static partial class BuiltInFunctions
         if (!TrySerialToDateTime(endDate, uses1904DateSystem, out var endRaw)) return ErrorValue.Num;
         var startDt = startRaw.Date;
         var endDt   = endRaw.Date;
+        // The 1900 phantom leap day (serial 60) collapses onto the same DateTime as serial 59
+        // ("1900-02-28"): track which endpoint (if either) is really serial 60 so the day-of-
+        // month component used by basis 0/4 below can be corrected for it (DAY(60) is already
+        // special-cased to 29 elsewhere in this file -- see DayScalar), and keep the raw
+        // serials alongside the DateTimes so ordering/day-count can be done in serial space,
+        // which -- unlike the collapsed DateTimes -- still tells 59 and 60 apart.
+        bool startIsFakeLeapDay = !uses1904DateSystem && IsExcelFakeLeapDay(startDate);
+        bool endIsFakeLeapDay   = !uses1904DateSystem && IsExcelFakeLeapDay(endDate);
+        double startSerial = Math.Floor(ToNumber(startDate));
+        double endSerial   = Math.Floor(ToNumber(endDate));
         // Excel's YEARFRAC always returns a non-negative fraction regardless of
         // which date is earlier — normalize order up front so every basis's
         // day-count math (which is not symmetric under swap) yields the same
         // magnitude as the argument order (start, end) would.
-        if (startDt > endDt) (startDt, endDt) = (endDt, startDt);
-        double totalDays = DateToSerial(endDt, uses1904DateSystem) - DateToSerial(startDt, uses1904DateSystem);
+        if (startSerial > endSerial)
+        {
+            (startDt, endDt) = (endDt, startDt);
+            (startIsFakeLeapDay, endIsFakeLeapDay) = (endIsFakeLeapDay, startIsFakeLeapDay);
+            (startSerial, endSerial) = (endSerial, startSerial);
+        }
+        // Diff the raw serials directly rather than round-tripping through DateTime:
+        // ExcelDateSystem.SerialToDate maps both serial 59 and 60 onto the identical
+        // DateTime, so a DateTime-based diff silently collapses that boundary (e.g.
+        // YEARFRAC(59,60,3) would come out 0 instead of the correct 1/365). Same technique
+        // already used by DATEDIF's "D" unit and by DAYS.
+        double totalDays = ExcelDateSystem.SerialDayDifference(startSerial, endSerial);
         double result = basis switch
         {
             1 => totalDays / ActualActualDenominator(startDt, endDt),
             2 => totalDays / 360.0,
             3 => totalDays / 365.0,
-            4 => Days30E360(startDt, endDt) / 360.0,
-            _ => Days30US360(startDt, endDt) / 360.0
+            4 => Days30E360(startDt, endDt, startIsFakeLeapDay, endIsFakeLeapDay) / 360.0,
+            _ => Days30US360(startDt, endDt, startIsFakeLeapDay, endIsFakeLeapDay) / 360.0
         };
         return new NumberValue(result);
     }
@@ -804,19 +838,19 @@ public static partial class BuiltInFunctions
     // IsExcelNasdLastDayOfFebruary adjustment.  Excel's DAYS360(start,end,FALSE)
     // leaves February end-of-month dates alone — only the day-31 rule applies.
     // YEARFRAC basis-0 uses the full Days30US360 (with Feb-end adjustment) below.
-    private static double Days30US360Days360(DateTime d1, DateTime d2)
+    private static double Days30US360Days360(DateTime d1, DateTime d2, bool d1IsFakeLeapDay = false, bool d2IsFakeLeapDay = false)
     {
-        int y1 = d1.Year, m1 = d1.Month, dd1 = d1.Day;
-        int y2 = d2.Year, m2 = d2.Month, dd2 = d2.Day;
+        int y1 = d1.Year, m1 = d1.Month, dd1 = d1IsFakeLeapDay ? 29 : d1.Day;
+        int y2 = d2.Year, m2 = d2.Month, dd2 = d2IsFakeLeapDay ? 29 : d2.Day;
         if (dd1 == 31) dd1 = 30;
         if (dd2 == 31 && dd1 == 30) dd2 = 30;
         return 360.0 * (y2 - y1) + 30.0 * (m2 - m1) + (dd2 - dd1);
     }
 
-    private static double Days30US360(DateTime d1, DateTime d2)
+    private static double Days30US360(DateTime d1, DateTime d2, bool d1IsFakeLeapDay = false, bool d2IsFakeLeapDay = false)
     {
-        int y1 = d1.Year, m1 = d1.Month, dd1 = d1.Day;
-        int y2 = d2.Year, m2 = d2.Month, dd2 = d2.Day;
+        int y1 = d1.Year, m1 = d1.Month, dd1 = d1IsFakeLeapDay ? 29 : d1.Day;
+        int y2 = d2.Year, m2 = d2.Month, dd2 = d2IsFakeLeapDay ? 29 : d2.Day;
         if (IsExcelNasdLastDayOfFebruary(d1)) dd1 = 30;
         if (IsExcelNasdLastDayOfFebruary(d2) && dd1 == 30) dd2 = 30;
         if (dd1 == 31) dd1 = 30;
@@ -829,10 +863,10 @@ public static partial class BuiltInFunctions
         date.Month == 2 &&
         date.Day == DateTime.DaysInMonth(date.Year, 2);
 
-    private static double Days30E360(DateTime d1, DateTime d2)
+    private static double Days30E360(DateTime d1, DateTime d2, bool d1IsFakeLeapDay = false, bool d2IsFakeLeapDay = false)
     {
-        int y1 = d1.Year, m1 = d1.Month, dd1 = d1.Day;
-        int y2 = d2.Year, m2 = d2.Month, dd2 = d2.Day;
+        int y1 = d1.Year, m1 = d1.Month, dd1 = d1IsFakeLeapDay ? 29 : d1.Day;
+        int y2 = d2.Year, m2 = d2.Month, dd2 = d2IsFakeLeapDay ? 29 : d2.Day;
         if (dd1 == 31) dd1 = 30;
         if (dd2 == 31) dd2 = 30;
         return 360.0 * (y2 - y1) + 30.0 * (m2 - m1) + (dd2 - dd1);

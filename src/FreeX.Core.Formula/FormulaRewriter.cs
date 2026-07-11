@@ -19,7 +19,11 @@ public sealed record MoveRangeOp(
     int RowDelta,
     int ColDelta)                                                               : RewriteOperation;
 public sealed record RenameSheetOp(string OldSheetName, string NewSheetName)    : RewriteOperation;
-public sealed record DeleteSheetOp(string SheetName)                            : RewriteOperation;
+// DeletedTableNames: structured tables that were hosted on the deleted sheet (and so no longer
+// exist anywhere in the workbook). Optional/defaulted so existing callers that only rewrite
+// cell/range refs keep compiling unchanged; callers that also own the deleted sheet's
+// StructuredTables can populate it to get the matching Table[...] #REF! behavior below.
+public sealed record DeleteSheetOp(string SheetName, IReadOnlyList<string>? DeletedTableNames = null) : RewriteOperation;
 public sealed record RenameTableOp(string OldTableName, string NewTableName)    : RewriteOperation;
 
 // ── Partial-range (Insert/Delete Cells) operations ────────────────────────────
@@ -151,6 +155,19 @@ public static class FormulaRewriter
     private static FormulaNode RewriteStructuredReference(
         StructuredReferenceNode sr, RewriteOperation op, ref bool changed)
     {
+        if (op is DeleteSheetOp delSheet)
+        {
+            // The table's own host sheet was deleted, so it no longer exists anywhere in the
+            // workbook -- every remaining Table[...] reference to it is exactly as dead as a
+            // deleted defined name, and Excel shows #REF! (never #NAME?) for that case.
+            if (!string.IsNullOrEmpty(sr.TableName) && MatchesDeletedTable(sr.TableName, delSheet))
+            {
+                changed = true;
+                return new ErrorNode(ErrorValue.Ref);
+            }
+            return sr;
+        }
+
         if (op is not RenameTableOp rename ||
             string.IsNullOrEmpty(sr.TableName) ||
             !string.Equals(sr.TableName, rename.OldTableName, StringComparison.OrdinalIgnoreCase))
@@ -165,6 +182,16 @@ public static class FormulaRewriter
     private static FormulaNode RewriteStructuredCurrentRowReference(
         StructuredCurrentRowReferenceNode scr, RewriteOperation op, ref bool changed)
     {
+        if (op is DeleteSheetOp delSheet)
+        {
+            if (!string.IsNullOrEmpty(scr.TableName) && MatchesDeletedTable(scr.TableName, delSheet))
+            {
+                changed = true;
+                return new ErrorNode(ErrorValue.Ref);
+            }
+            return scr;
+        }
+
         if (op is not RenameTableOp rename ||
             string.IsNullOrEmpty(scr.TableName) ||
             !string.Equals(scr.TableName, rename.OldTableName, StringComparison.OrdinalIgnoreCase))
@@ -174,6 +201,20 @@ public static class FormulaRewriter
 
         changed = true;
         return scr with { TableName = rename.NewTableName };
+    }
+
+    private static bool MatchesDeletedTable(string tableName, DeleteSheetOp op)
+    {
+        if (op.DeletedTableNames is null)
+            return false;
+
+        foreach (var deletedTable in op.DeletedTableNames)
+        {
+            if (string.Equals(deletedTable, tableName, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
     }
 
     private static FunctionCallNode RewriteFunctionArgs(

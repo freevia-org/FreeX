@@ -73,7 +73,6 @@ public static partial class BuiltInFunctions
         for (int i = startIndex; i < flat.Count; i++)
         {
             acc = ctx.InvokeLambda(lambda, [acc, flat[i]]);
-            if (acc is ErrorValue accError) return accError;
         }
         return acc;
     }

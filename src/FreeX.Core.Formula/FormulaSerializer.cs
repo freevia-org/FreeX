@@ -78,9 +78,7 @@ public static class FormulaSerializer
             case StructuredReferenceNode sr:
                 sb.Append(sr.TableName);
                 sb.Append('[');
-                sb.Append(sr.ColumnName.Contains('[')
-                    ? sr.ColumnName
-                    : sr.ColumnName.Replace("]", "]]"));
+                AppendStructuredReferenceSelector(sr.ColumnName, sb);
                 sb.Append(']');
                 break;
 
@@ -325,4 +323,35 @@ public static class FormulaSerializer
 
     private static void WriteSheetName(string sheetName, StringBuilder sb) =>
         sb.Append(SheetNameFormatter.QuoteIfNeeded(sheetName));
+
+    // R26-table-structured-ref-deep-1: sr.ColumnName is whatever selector text the parser produced
+    // (Lexer.ReadStructuredReferenceSelectorSlow already stripped any apostrophe-escapes), so a bare
+    // (non-combined) selector such as a literal column name must have its escapable characters
+    // ('[', ']', '#', and an apostrophe itself — Lexer.IsEscapableStructuredReferenceChar's exact
+    // set) re-escaped with a leading apostrophe before being written back out. Skipping this (the
+    // previous behavior) turned a literal column named e.g. "#Data" back into the bare text
+    // "#Data", which re-parses as the #Data section keyword instead of the literal column, and left
+    // a literal name containing an unescaped '[' unparseable on the next read. A combined/bracketed
+    // selector (e.g. "[#Data],[Amount]" or "[Amount]:[Tax]") is written through unescaped instead —
+    // it is always wrapped in its own '[...]' pairs by the parser, so it is recognized by (and only
+    // by) a leading '[', which no bare selector can start with under this convention. Mirrors
+    // StructuredTableTotalsCommand.EscapeStructuredReferenceColumnName, the codebase's other writer
+    // of structured-reference selector text.
+    private static readonly char[] StructuredReferenceEscapableChars = ['[', ']', '#', '\''];
+
+    private static void AppendStructuredReferenceSelector(string selector, StringBuilder sb)
+    {
+        if (selector.StartsWith('[') || selector.AsSpan().IndexOfAny(StructuredReferenceEscapableChars) < 0)
+        {
+            sb.Append(selector);
+            return;
+        }
+
+        foreach (var ch in selector)
+        {
+            if (ch is '[' or ']' or '#' or '\'')
+                sb.Append('\'');
+            sb.Append(ch);
+        }
+    }
 }
