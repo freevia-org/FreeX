@@ -522,8 +522,8 @@ public sealed class Workbook
         if (name.Length > 255)
             return "Named range name is invalid: it cannot exceed 255 characters.";
 
-        if (!IsValidNamedRangeStart(name[0]) || name.Any(ch => !IsValidNamedRangeChar(ch)))
-            return "Named range name is invalid: use letters, numbers, underscores, and periods; start with a letter or underscore.";
+        if (!IsValidNamedRangeStart(name[0]) || name.Skip(1).Any(ch => !IsValidNamedRangeChar(ch)))
+            return "Named range name is invalid: use letters, numbers, underscores, and periods; start with a letter or underscore (or a backslash, for legacy macro-name compatibility).";
 
         if (CellAddress.TryParse(name, SheetId.New(), out _) || IsR1C1Reference(name))
             return "Named range name is invalid: it cannot look like a cell reference.";
@@ -531,8 +531,12 @@ public sealed class Workbook
         return null;
     }
 
+    // Excel allows a defined name's first character to be a letter, underscore, or
+    // backslash ('\') — the backslash form exists for Lotus 1-2-3 macro-key compatibility
+    // (e.g. "\P") and still appears in real-world xls->xlsx converted workbooks. A backslash
+    // is only valid as the leading character, never elsewhere in the name.
     private static bool IsValidNamedRangeStart(char ch) =>
-        char.IsLetter(ch) || ch == '_';
+        char.IsLetter(ch) || ch == '_' || ch == '\\';
 
     private static bool IsValidNamedRangeChar(char ch) =>
         char.IsLetterOrDigit(ch) || ch == '_' || ch == '.';

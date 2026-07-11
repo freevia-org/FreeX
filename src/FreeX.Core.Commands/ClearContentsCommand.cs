@@ -31,7 +31,23 @@ public sealed class ClearContentsCommand : IWorkbookCommand
             }
         }
 
-        if (CommandGuards.RejectIfSplitsArray(sheet, _range.AllCells()) is { } splitsArrayRejection)
+        // R25-spill-dynamic-deep-3: clearing ONLY a live spill's anchor cell (selected range is
+        // exactly that one cell) is legitimate -- Excel lets a spilling formula be deleted from its
+        // anchor alone, which removes the formula and its entire spill along with it.
+        // RejectIfSplitsArray otherwise treats the anchor like any other array member and requires
+        // every body cell to already be part of the selection, which would wrongly reject this case,
+        // so exclude just the anchor's own address from the check. A selection that includes the
+        // anchor alongside only SOME (not all) of the body, or a non-anchor member alone, still fails
+        // this narrow condition and falls through to the normal (correctly rejecting) check.
+        var guardCells = _range.AllCells();
+        if (_range.CellCount == 1 &&
+            sheet.TryGetSpillExtent(_range.Start, out var anchorSpillRows, out var anchorSpillCols) &&
+            (anchorSpillRows > 1 || anchorSpillCols > 1))
+        {
+            guardCells = guardCells.Where(address => address != _range.Start);
+        }
+
+        if (CommandGuards.RejectIfSplitsArray(sheet, guardCells) is { } splitsArrayRejection)
             return splitsArrayRejection;
 
         _snapshot = [];

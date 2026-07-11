@@ -38,43 +38,24 @@ public static partial class BuiltInFunctions
         if (searchMode is 1 or -1)
             return XmatchScalarLinear(lookupValue, lookupVector, matchMode, searchMode);
 
+        if (matchMode != 2)
+        {
+            var binaryError = TryFindBinaryLookupIndex(lookupVector, lookupValue, matchMode, descending: searchMode == -2, out int binaryIndex);
+            if (binaryError is not null) return binaryError;
+            return binaryIndex >= 0 ? new NumberValue(binaryIndex + 1) : ErrorValue.NA;
+        }
+
         GetLookupSearchBounds(lookupVector.Count, searchMode, out int start, out int end, out int step);
 
-        if (matchMode == 0)
+        string pattern = ToText(lookupValue);
+        for (int i = start; i != end; i += step)
         {
-            for (int i = start; i != end; i += step)
-            {
-                var candidate = lookupVector[i];
-                if (candidate is ErrorValue err) return err;
-                if (ScalarEquals(candidate, lookupValue))
-                    return new NumberValue(i + 1);
-            }
-            return ErrorValue.NA;
+            var candidate = lookupVector[i];
+            if (candidate is ErrorValue err) return err;
+            if (candidate is TextValue tv && WildcardMatch(tv.Value, pattern, ignoreCase: true))
+                return new NumberValue(i + 1);
         }
-
-        if (matchMode == 2)
-        {
-            string pattern = ToText(lookupValue);
-            for (int i = start; i != end; i += step)
-            {
-                var candidate = lookupVector[i];
-                if (candidate is ErrorValue err) return err;
-                if (candidate is TextValue tv && WildcardMatch(tv.Value, pattern, ignoreCase: true))
-                    return new NumberValue(i + 1);
-            }
-            return ErrorValue.NA;
-        }
-
-        if (matchMode == -1)
-        {
-            var error = TryFindApproximateMatchIndex(lookupVector, lookupValue, start, end, step, nextSmaller: true, out int best);
-            if (error is not null) return error;
-            return best >= 0 ? new NumberValue(best + 1) : ErrorValue.NA;
-        }
-
-        var nextLargerError = TryFindApproximateMatchIndex(lookupVector, lookupValue, start, end, step, nextSmaller: false, out int nextLarger);
-        if (nextLargerError is not null) return nextLargerError;
-        return nextLarger >= 0 ? new NumberValue(nextLarger + 1) : ErrorValue.NA;
+        return ErrorValue.NA;
     }
 
     private static ScalarValue XmatchScalarLinear(ScalarValue lookupValue, LookupRangeVector lookupVector, int matchMode, int searchMode)
@@ -143,7 +124,7 @@ public static partial class BuiltInFunctions
         var lookupValue = args[0];
 
         if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
-        ScalarValue ifNotFound = args.Count > 3 && args[3] is not BlankValue ? args[3] : ErrorValue.NA;
+        ScalarValue ifNotFound = args.Count > 3 ? args[3] : ErrorValue.NA;
         if (args.Count > 4 && args[4] is ErrorValue e4) return e4;
         if (args.Count > 5 && args[5] is ErrorValue e5) return e5;
         var matchModeArg = args.Count > 4 ? args[4] : BlankValue.Instance;
@@ -190,10 +171,13 @@ public static partial class BuiltInFunctions
 
         if (lookupValues.ColCount == 1)
         {
+            // Rows whose lookup missed (or errored) come back as a bare scalar rather than a
+            // RangeValue shaped like the multi-column return array; broadcast that scalar across
+            // every output column for that row instead of failing the whole array formula.
             int outputCols = -1;
             for (int r = 0; r < lookupValues.RowCount; r++)
             {
-                if (results[r, 0] is not RangeValue rv) return ErrorValue.Value;
+                if (results[r, 0] is not RangeValue rv) continue;
                 if (rv.RowCount != 1) return ErrorValue.Value;
                 if (outputCols < 0) outputCols = rv.ColCount;
                 else if (rv.ColCount != outputCols) return ErrorValue.Value;
@@ -202,9 +186,17 @@ public static partial class BuiltInFunctions
             var cells = new ScalarValue[lookupValues.RowCount, outputCols];
             for (int r = 0; r < lookupValues.RowCount; r++)
             {
-                var rv = (RangeValue)results[r, 0];
-                for (int c = 0; c < outputCols; c++)
-                    cells[r, c] = rv.Cells[0, c];
+                if (results[r, 0] is RangeValue rv)
+                {
+                    for (int c = 0; c < outputCols; c++)
+                        cells[r, c] = rv.Cells[0, c];
+                }
+                else
+                {
+                    var scalar = results[r, 0];
+                    for (int c = 0; c < outputCols; c++)
+                        cells[r, c] = scalar;
+                }
             }
 
             return new RangeValue(cells);
@@ -215,7 +207,7 @@ public static partial class BuiltInFunctions
             int outputRows = -1;
             for (int c = 0; c < lookupValues.ColCount; c++)
             {
-                if (results[0, c] is not RangeValue rv) return ErrorValue.Value;
+                if (results[0, c] is not RangeValue rv) continue;
                 if (rv.ColCount != 1) return ErrorValue.Value;
                 if (outputRows < 0) outputRows = rv.RowCount;
                 else if (rv.RowCount != outputRows) return ErrorValue.Value;
@@ -224,9 +216,17 @@ public static partial class BuiltInFunctions
             var cells = new ScalarValue[outputRows, lookupValues.ColCount];
             for (int c = 0; c < lookupValues.ColCount; c++)
             {
-                var rv = (RangeValue)results[0, c];
-                for (int r = 0; r < outputRows; r++)
-                    cells[r, c] = rv.Cells[r, 0];
+                if (results[0, c] is RangeValue rv)
+                {
+                    for (int r = 0; r < outputRows; r++)
+                        cells[r, c] = rv.Cells[r, 0];
+                }
+                else
+                {
+                    var scalar = results[0, c];
+                    for (int r = 0; r < outputRows; r++)
+                        cells[r, c] = scalar;
+                }
             }
 
             return new RangeValue(cells);
@@ -259,44 +259,24 @@ public static partial class BuiltInFunctions
         if (searchMode is 1 or -1)
             return XlookupScalarLinear(lookupValue, lookupVector, returnArr, lookupIsVertical, ifNotFound, matchMode, searchMode);
 
+        if (matchMode != 2)
+        {
+            var binaryError = TryFindBinaryLookupIndex(lookupVector, lookupValue, matchMode, descending: searchMode == -2, out int binaryIndex);
+            if (binaryError is not null) return binaryError;
+            return binaryIndex >= 0 ? XlookupReturnAt(returnArr, binaryIndex, lookupIsVertical) : ifNotFound;
+        }
+
         GetLookupSearchBounds(lookupVector.Count, searchMode, out int start, out int end, out int step);
 
-        if (matchMode == 0)
+        string pattern = ToText(lookupValue);
+        for (int i = start; i != end; i += step)
         {
-            // Exact match
-            for (int i = start; i != end; i += step)
-            {
-                var candidate = lookupVector[i];
-                if (candidate is ErrorValue err) return err;
-                if (ScalarEquals(candidate, lookupValue))
-                    return XlookupReturnAt(returnArr, i, lookupIsVertical);
-            }
-            return ifNotFound;
+            var candidate = lookupVector[i];
+            if (candidate is ErrorValue err) return err;
+            if (candidate is TextValue tv && WildcardMatch(tv.Value, pattern, ignoreCase: true))
+                return XlookupReturnAt(returnArr, i, lookupIsVertical);
         }
-        else if (matchMode == 2)
-        {
-            string pattern = ToText(lookupValue);
-            for (int i = start; i != end; i += step)
-            {
-                var candidate = lookupVector[i];
-                if (candidate is ErrorValue err) return err;
-                if (candidate is TextValue tv && WildcardMatch(tv.Value, pattern, ignoreCase: true))
-                    return XlookupReturnAt(returnArr, i, lookupIsVertical);
-            }
-            return ifNotFound;
-        }
-        else if (matchMode == -1)
-        {
-            var error = TryFindApproximateMatchIndex(lookupVector, lookupValue, start, end, step, nextSmaller: true, out int best);
-            if (error is not null) return error;
-            return best >= 0 ? XlookupReturnAt(returnArr, best, lookupIsVertical) : ifNotFound;
-        }
-        else
-        {
-            var error = TryFindApproximateMatchIndex(lookupVector, lookupValue, start, end, step, nextSmaller: false, out int best);
-            if (error is not null) return error;
-            return best >= 0 ? XlookupReturnAt(returnArr, best, lookupIsVertical) : ifNotFound;
-        }
+        return ifNotFound;
     }
 
     private static ScalarValue XlookupScalarLinear(
@@ -407,6 +387,156 @@ public static partial class BuiltInFunctions
         start = count - 1;
         end = -1;
         step = -1;
+    }
+
+    // Binary-search (search_mode 2/-2) lookup, mirroring the direct-range fast path in
+    // FormulaEvaluator.LookupFastPaths.cs (TryFindDirectBinaryLookupIndex and helpers) so that
+    // wrapped-range arguments (e.g. IF(TRUE,B1:B5)) that fall through to this slow path get the
+    // same binary-search semantics as a bare range reference.
+    private static ErrorValue? TryFindBinaryLookupIndex(
+        LookupRangeVector lookupVector,
+        ScalarValue lookupValue,
+        int matchMode,
+        bool descending,
+        out int matchIndex)
+    {
+        matchIndex = -1;
+        var error = TryFindBinaryCompareRange(lookupVector, lookupValue, descending, out int equalStart, out int equalEnd);
+        if (error is not null)
+            return error;
+
+        error = TryFindScalarEqualInRange(lookupVector, lookupValue, equalStart, equalEnd, descending, out matchIndex);
+        if (error is not null || matchIndex >= 0 || matchMode == 0)
+            return error;
+
+        if (equalStart < equalEnd)
+        {
+            matchIndex = descending ? equalEnd - 1 : equalStart;
+            return null;
+        }
+
+        return TryFindBinaryApproximateLookupIndex(lookupVector, equalStart, descending, nextSmaller: matchMode == -1, out matchIndex);
+    }
+
+    private static ErrorValue? TryFindScalarEqualInRange(
+        LookupRangeVector lookupVector,
+        ScalarValue lookupValue,
+        int start,
+        int end,
+        bool descending,
+        out int matchIndex)
+    {
+        matchIndex = -1;
+        if (start >= end)
+            return null;
+
+        if (descending)
+        {
+            for (int index = end - 1; index >= start; index--)
+            {
+                var candidate = lookupVector[index];
+                if (candidate is ErrorValue error) return error;
+                if (ScalarEquals(candidate, lookupValue))
+                {
+                    matchIndex = index;
+                    return null;
+                }
+            }
+
+            return null;
+        }
+
+        for (int index = start; index < end; index++)
+        {
+            var candidate = lookupVector[index];
+            if (candidate is ErrorValue error) return error;
+            if (ScalarEquals(candidate, lookupValue))
+            {
+                matchIndex = index;
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    private static ErrorValue? TryFindBinaryApproximateLookupIndex(
+        LookupRangeVector lookupVector,
+        int boundary,
+        bool descending,
+        bool nextSmaller,
+        out int matchIndex)
+    {
+        matchIndex = -1;
+        int candidateIndex = descending
+            ? (nextSmaller ? boundary : boundary - 1)
+            : (nextSmaller ? boundary - 1 : boundary);
+        if ((uint)candidateIndex >= (uint)lookupVector.Count)
+            return null;
+
+        var candidate = lookupVector[candidateIndex];
+        if (candidate is ErrorValue error) return error;
+
+        var rangeError = TryFindBinaryCompareRange(lookupVector, candidate, descending, out int candidateStart, out int candidateEnd);
+        if (rangeError is not null) return rangeError;
+
+        matchIndex = descending ? candidateEnd - 1 : candidateStart;
+        return null;
+    }
+
+    private static ErrorValue? TryFindBinaryCompareRange(
+        LookupRangeVector lookupVector,
+        ScalarValue lookupValue,
+        bool descending,
+        out int start,
+        out int end)
+    {
+        var error = TryFindBinarySearchBoundary(lookupVector, lookupValue, descending, upperBound: false, out start);
+        if (error is not null)
+        {
+            end = 0;
+            return error;
+        }
+
+        return TryFindBinarySearchBoundary(lookupVector, lookupValue, descending, upperBound: true, out end);
+    }
+
+    private static ErrorValue? TryFindBinarySearchBoundary(
+        LookupRangeVector lookupVector,
+        ScalarValue lookupValue,
+        bool descending,
+        bool upperBound,
+        out int boundary)
+    {
+        int low = 0;
+        int high = lookupVector.Count;
+        while (low < high)
+        {
+            int mid = low + ((high - low) / 2);
+            var candidate = lookupVector[mid];
+            if (candidate is ErrorValue error)
+            {
+                boundary = 0;
+                return error;
+            }
+
+            int comparison = CompareLookupSortOrder(candidate, lookupValue, descending);
+            if (upperBound ? comparison <= 0 : comparison < 0)
+                low = mid + 1;
+            else
+                high = mid;
+        }
+
+        boundary = low;
+        return null;
+    }
+
+    private static int CompareLookupSortOrder(ScalarValue candidate, ScalarValue lookupValue, bool descending)
+    {
+        int comparison = CompareScalar(candidate, lookupValue);
+        if (comparison == 0) return 0;
+        if (comparison < 0) return descending ? 1 : -1;
+        return descending ? -1 : 1;
     }
 
     private static ErrorValue? TryFindApproximateMatchIndexLinear(

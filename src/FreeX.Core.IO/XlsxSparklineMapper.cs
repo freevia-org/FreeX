@@ -174,12 +174,17 @@ internal static class XlsxSparklineMapper
                 continue;
 
             // ── IO4: preserve unknown <ext> children; only replace the sparkline ext ──
+            // A sparkline's Location (the cell it occupies) must be on this host sheet -- that's
+            // what makes it "this sheet's" sparkline -- but its DataRange (data source) may
+            // legitimately live on a DIFFERENT sheet (Excel's Sparkline "Edit Data" dialog allows
+            // picking a cross-sheet source range). Requiring DataRange.Sheet == sheet.Id here used
+            // to silently drop such cross-sheet sparklines entirely; instead only require that the
+            // source sheet still exists in the workbook (ResolveSheetName resolves its name below).
             var validSparklines = sheet.Sparklines
                 .Where(sparkline =>
-                    sparkline.DataRange.Start.Sheet == sheet.Id &&
-                    sparkline.DataRange.End.Sheet   == sheet.Id &&
-                    sparkline.Location.Sheet        == sheet.Id &&
-                    Enum.IsDefined(sparkline.Kind))
+                    sparkline.Location.Sheet == sheet.Id &&
+                    Enum.IsDefined(sparkline.Kind) &&
+                    ResolveSheetName(workbook, sheet, sparkline.DataRange.Start.Sheet) is not null)
                 .ToList();
 
             // Build the new sparklineGroups element.
@@ -196,7 +201,7 @@ internal static class XlsxSparklineMapper
                     .Select(group =>
                     {
                         var representative = group.First();
-                        return ToSparklineGroupXml(sheet, representative, group, x14Ns, xmNs);
+                        return ToSparklineGroupXml(workbook, sheet, representative, group, x14Ns, xmNs);
                     }));
 
             var newSparklineExt = new XElement(
@@ -275,6 +280,7 @@ internal static class XlsxSparklineMapper
     }
 
     private static XElement ToSparklineGroupXml(
+        Workbook workbook,
         Sheet sheet,
         SparklineModel representative,
         IEnumerable<SparklineModel> sparklines,
@@ -336,24 +342,48 @@ internal static class XlsxSparklineMapper
         AddColorElement(el, x14Ns, "colorHigh",      representative.HighPointColor);
         AddColorElement(el, x14Ns, "colorLow",       representative.LowPointColor);
 
-        // dateAxis (schema order: after the color elements, before the sparklines list)
-        if (representative.DateAxisRange is { } dateAxisRange)
+        // dateAxis (schema order: after the color elements, before the sparklines list).
+        // The date-axis range may reference a different sheet than the host sheet, same as a
+        // sparkline's data range; if that sheet no longer exists, omit the element rather than
+        // write a dangling/misattributed reference.
+        if (representative.DateAxisRange is { } dateAxisRange &&
+            ResolveSheetName(workbook, sheet, dateAxisRange.Start.Sheet) is { } dateAxisSheetName)
         {
             el.Add(new XElement(
                 x14Ns + "dateAxis",
-                new XElement(xmNs + "f", $"{SheetNameFormatter.QuoteIfNeeded(sheet.Name)}!{dateAxisRange}")));
+                new XElement(xmNs + "f", $"{SheetNameFormatter.QuoteIfNeeded(dateAxisSheetName)}!{dateAxisRange}")));
         }
 
-        // sparklines list
+        // sparklines list. Each sparkline's DataRange may live on a different sheet than the host
+        // sheet (Excel allows a cross-sheet sparkline source range); resolve the range's OWN sheet
+        // name rather than always qualifying with the host sheet's name, or the written formula
+        // would silently point at the wrong sheet's data. The caller's validSparklines filter
+        // already guarantees the source sheet still exists, so this always resolves.
         el.Add(new XElement(
             x14Ns + "sparklines",
-            sparklines.Select(sparkline => new XElement(
-                x14Ns + "sparkline",
-                new XElement(xmNs + "f",     $"{SheetNameFormatter.QuoteIfNeeded(sheet.Name)}!{sparkline.DataRange}"),
-                new XElement(xmNs + "sqref", sparkline.Location.ToA1())))));
+            sparklines.Select(sparkline =>
+            {
+                var dataSheetName = ResolveSheetName(workbook, sheet, sparkline.DataRange.Start.Sheet)
+                    ?? sheet.Name;
+                return new XElement(
+                    x14Ns + "sparkline",
+                    new XElement(xmNs + "f",     $"{SheetNameFormatter.QuoteIfNeeded(dataSheetName)}!{sparkline.DataRange}"),
+                    new XElement(xmNs + "sqref", sparkline.Location.ToA1()));
+            })));
 
         return el;
     }
+
+    /// <summary>
+    /// Resolves the sheet name to use as the qualifying prefix for a sparkline data-range or
+    /// date-axis formula (e.g. "Sheet2!$A$1:$E$1"). The referenced range may live on a different
+    /// sheet than <paramref name="hostSheet"/> (Excel's Sparkline "Edit Data" dialog allows picking
+    /// a cross-sheet source range), so this must resolve the range's ACTUAL sheet rather than
+    /// always assuming the host sheet -- otherwise the written formula silently points at the
+    /// wrong sheet's data. Returns null when the referenced sheet no longer exists in the workbook.
+    /// </summary>
+    private static string? ResolveSheetName(Workbook workbook, Sheet hostSheet, SheetId rangeSheet) =>
+        rangeSheet == hostSheet.Id ? hostSheet.Name : workbook.GetSheet(rangeSheet)?.Name;
 
     private static void AddColorElement(XElement parent, XNamespace x14Ns, string localName, CellColor? color)
     {

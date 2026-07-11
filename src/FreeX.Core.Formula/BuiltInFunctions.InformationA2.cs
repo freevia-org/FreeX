@@ -681,14 +681,19 @@ public static partial class BuiltInFunctions
             }
             if (arg is RangeValue rv)
             {
+                // See BuiltInFunctions.Subtotal.cs's isReference guard (R19-formula-functions-edge-1):
+                // a computed/virtual array (FILTER, SORT, ...) defaults its StartRow/StartCol to
+                // (1,1) with SheetName null, which must not be mistaken for a real sheet position
+                // when checking hidden rows / nested SUBTOTAL-AGGREGATE cells.
+                bool isReference = rv.SheetName is not null || rv.StartRow != 1 || rv.StartCol != 1;
                 for (int r = 0; r < rv.RowCount; r++)
                 {
                     uint absRow = rv.StartRow + (uint)r;
-                    if (ignoreHiddenRows && IsAggregateRowHidden(ctx, rv, absRow)) continue;
+                    if (ignoreHiddenRows && isReference && IsAggregateRowHidden(ctx, rv, absRow)) continue;
                     for (int c = 0; c < rv.ColCount; c++)
                     {
                         uint absCol = rv.StartCol + (uint)c;
-                        if (ignoreNestedAggregates && IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
+                        if (ignoreNestedAggregates && isReference && IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
                         var cell = rv.Cells[r, c];
                         if (cell is ErrorValue ce)
                         {
@@ -726,14 +731,19 @@ public static partial class BuiltInFunctions
 
             if (arg is RangeValue rv)
             {
+                // See BuiltInFunctions.Subtotal.cs's isReference guard (R19-formula-functions-edge-1):
+                // a computed/virtual array (FILTER, SORT, ...) defaults its StartRow/StartCol to
+                // (1,1) with SheetName null, which must not be mistaken for a real sheet position
+                // when checking hidden rows / nested SUBTOTAL-AGGREGATE cells.
+                bool isReference = rv.SheetName is not null || rv.StartRow != 1 || rv.StartCol != 1;
                 for (int r = 0; r < rv.RowCount; r++)
                 {
                     uint absRow = rv.StartRow + (uint)r;
-                    if (ignoreHiddenRows && IsAggregateRowHidden(ctx, rv, absRow)) continue;
+                    if (ignoreHiddenRows && isReference && IsAggregateRowHidden(ctx, rv, absRow)) continue;
                     for (int c = 0; c < rv.ColCount; c++)
                     {
                         uint absCol = rv.StartCol + (uint)c;
-                        if (ignoreNestedAggregates && IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
+                        if (ignoreNestedAggregates && isReference && IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
                         var cell = rv.Cells[r, c];
                         if (cell is ErrorValue ce)
                         {
@@ -780,14 +790,19 @@ public static partial class BuiltInFunctions
 
             if (arg is RangeValue rv)
             {
+                // See BuiltInFunctions.Subtotal.cs's isReference guard (R19-formula-functions-edge-1):
+                // a computed/virtual array (FILTER, SORT, ...) defaults its StartRow/StartCol to
+                // (1,1) with SheetName null, which must not be mistaken for a real sheet position
+                // when checking hidden rows / nested SUBTOTAL-AGGREGATE cells.
+                bool isReference = rv.SheetName is not null || rv.StartRow != 1 || rv.StartCol != 1;
                 for (int r = 0; r < rv.RowCount; r++)
                 {
                     uint absRow = rv.StartRow + (uint)r;
-                    if (ignoreHiddenRows && IsAggregateRowHidden(ctx, rv, absRow)) continue;
+                    if (ignoreHiddenRows && isReference && IsAggregateRowHidden(ctx, rv, absRow)) continue;
                     for (int c = 0; c < rv.ColCount; c++)
                     {
                         uint absCol = rv.StartCol + (uint)c;
-                        if (ignoreNestedAggregates && IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
+                        if (ignoreNestedAggregates && isReference && IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
                         var cell = rv.Cells[r, c];
                         if (cell is ErrorValue ce)
                         {
@@ -829,14 +844,19 @@ public static partial class BuiltInFunctions
 
             if (arg is RangeValue rv)
             {
+                // See BuiltInFunctions.Subtotal.cs's isReference guard (R19-formula-functions-edge-1):
+                // a computed/virtual array (FILTER, SORT, ...) defaults its StartRow/StartCol to
+                // (1,1) with SheetName null, which must not be mistaken for a real sheet position
+                // when checking hidden rows / nested SUBTOTAL-AGGREGATE cells.
+                bool isReference = rv.SheetName is not null || rv.StartRow != 1 || rv.StartCol != 1;
                 for (int r = 0; r < rv.RowCount; r++)
                 {
                     uint absRow = rv.StartRow + (uint)r;
-                    if (ignoreHiddenRows && IsAggregateRowHidden(ctx, rv, absRow)) continue;
+                    if (ignoreHiddenRows && isReference && IsAggregateRowHidden(ctx, rv, absRow)) continue;
                     for (int c = 0; c < rv.ColCount; c++)
                     {
                         uint absCol = rv.StartCol + (uint)c;
-                        if (ignoreNestedAggregates && IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
+                        if (ignoreNestedAggregates && isReference && IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
                         var cell = rv.Cells[r, c];
                         if (cell is ErrorValue ce)
                         {

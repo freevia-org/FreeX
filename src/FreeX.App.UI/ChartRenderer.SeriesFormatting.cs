@@ -811,6 +811,21 @@ public static partial class ChartRenderer
         var customPlus = ParseErrorBarRangeCache(chart.ErrorBarPlusRangeCacheXml);
         var customMinus = ParseErrorBarRangeCache(chart.ErrorBarMinusRangeCacheXml) ?? customPlus;
 
+        // ChartModel has no per-series error-bar list: the reader keeps only the FIRST <c:ser> that
+        // carried <c:errBars> in the source file, chart-wide (XlsxChartTrendlineErrorBarReader.
+        // ApplyErrorBars). For Standard Error/Percentage/Fixed Value that spec is either recomputed
+        // from each series' own values or a single chart-wide constant, so annotating every supporting
+        // series still matches Excel's "select the whole chart, add error bars" gesture. Custom-kind
+        // amounts, however, are a specific cached plus/minus value PER POINT read off the one series
+        // that owned the <c:errBars> element, so painting that exact cache onto unrelated series would
+        // fabricate whiskers Excel never drew there. Since the series identity itself wasn't kept, the
+        // best we can do here is restrict Custom to the single series whose own point count matches
+        // the cached range's length (the only series the cache could possibly belong to) instead of
+        // stamping it onto every series that happens to support error bars.
+        var isCustomKind = chart.ErrorBarKind == ChartErrorBarKind.Custom;
+        var customLength = customPlus?.Count ?? customMinus?.Count ?? 0;
+        var customApplied = false;
+
         // Snapshot first: we're about to append whisker LineSeries entries to model.Series and must
         // not walk into those while iterating the series this pass is meant to annotate.
         var targets = model.Series.ToArray();
@@ -818,6 +833,9 @@ public static partial class ChartRenderer
         {
             var points = GetErrorBarAnchorPoints(series, out var isBarOrientedHorizontal);
             if (points is null || points.Count == 0)
+                continue;
+
+            if (isCustomKind && (customApplied || points.Count != customLength))
                 continue;
 
             // A horizontal Bar chart always whiskers along its value axis (X). Everything else
@@ -856,7 +874,11 @@ public static partial class ChartRenderer
             }
 
             if (any)
+            {
                 model.Series.Add(whiskers);
+                if (isCustomKind)
+                    customApplied = true;
+            }
         }
     }
 

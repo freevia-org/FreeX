@@ -136,11 +136,13 @@ public static class CellTextOrientationLayoutPlanner
         {
             // Right (explicit, or General resolved to Right — numeric content in an LTR context, or
             // text content in an RTL context) anchors its RIGHT edge at the cell's right edge (minus a
-            // 2px pad).  When the text is wider than the cell, the left edge therefore lands to the
-            // LEFT of the cell — i.e. the text overflows leftward, exactly like Excel.  Do NOT clamp
-            // the position to keep the text inside the cell: clamping pins a too-wide right-aligned
-            // string to the LEFT edge so it spills RIGHTWARD into the next column (a visible bug).
-            HorizontalAlignment.Right => cellRect.Right - boundsWidth - 2,
+            // 2px pad and the indent, which Excel's Format Cells > Alignment > Indent applies to Right
+            // just as it does to Left — pulling the text away from the right border).  When the text is
+            // wider than the cell, the left edge therefore lands to the LEFT of the cell — i.e. the text
+            // overflows leftward, exactly like Excel.  Do NOT clamp the position to keep the text inside
+            // the cell: clamping pins a too-wide right-aligned string to the LEFT edge so it spills
+            // RIGHTWARD into the next column (a visible bug).
+            HorizontalAlignment.Right => cellRect.Right - boundsWidth - 2 - indentPixels,
             HorizontalAlignment.Justify or HorizontalAlignment.Distributed => cellRect.Left + (cellRect.Width - boundsWidth) / 2,
             HorizontalAlignment.Center => cellRect.Left + (cellRect.Width - boundsWidth) / 2,
             // Fill: text is repeated to fill width — the layout origin is still Left+2; rendering clips/repeats.

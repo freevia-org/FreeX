@@ -58,6 +58,8 @@ public static partial class BuiltInFunctions
     {
         if (guessValue is ErrorValue guessError) return guessError;
         double guess = guessValue is not BlankValue ? ToNumber(guessValue) : 0.1;
+        // 1 + guess must be > 0 for the Newton iteration to make sense (mirrors IRR's guard).
+        if (!double.IsFinite(guess) || guess <= -1) return ErrorValue.Num;
         var (vals, ve) = CollectRangeNumbers(valRange);
         var (datesRaw, de) = CollectRangeNumbers(dateRange);
         if (ve is not null) return ve;
@@ -76,6 +78,7 @@ public static partial class BuiltInFunctions
         if (!xirrHasPositive || !xirrHasNegative) return ErrorValue.Num;
         NormalizeDateSerialsToYearFractions(ds);
         double r = guess;
+        bool converged = false;
         for (int iter = 0; iter < 200; iter++)
         {
             double f = 0, df = 0;
@@ -90,40 +93,15 @@ public static partial class BuiltInFunctions
             double delta = f / df;
             r -= delta;
             if (r <= -1) { r = double.NaN; break; }
-            if (Math.Abs(delta) < 1e-10) break;
+            if (Math.Abs(delta) < 1e-10) { converged = true; break; }
         }
 
-        if (!double.IsFinite(r))
-        {
-            // Newton diverged — fall back to bisection over r ∈ (−0.99999, 10).
-            static double XirrNpv(IReadOnlyList<double> cashFlows, IReadOnlyList<double> dateFractions, double rate)
-            {
-                double result = 0;
-                for (int i = 0; i < cashFlows.Count; i++)
-                    result += cashFlows[i] / Math.Pow(1 + rate, dateFractions[i]);
-                return result;
-            }
-
-            const double lo = -0.99999, hi = 10.0;
-            double fLo = XirrNpv(cf, ds, lo);
-            double fHi = XirrNpv(cf, ds, hi);
-            if (!double.IsFinite(fLo) || !double.IsFinite(fHi) || fLo * fHi > 0)
-                return ErrorValue.Num;
-
-            double bLo = lo, bHi = hi;
-            for (int iter = 0; iter < 200; iter++)
-            {
-                double mid = (bLo + bHi) / 2;
-                double fMid = XirrNpv(cf, ds, mid);
-                if (!double.IsFinite(fMid)) return ErrorValue.Num;
-                if (Math.Abs(fMid) < 1e-10 || (bHi - bLo) < 1e-10) { r = mid; break; }
-                if (fLo * fMid < 0) { bHi = mid; fHi = fMid; }
-                else { bLo = mid; fLo = fMid; }
-                r = mid;
-            }
-        }
-
-        if (!double.IsFinite(r)) return ErrorValue.Num;
+        // Newton must actually converge to a verified root within the iteration budget
+        // (see IrrCashFlows for the identical rationale/reference to Excel's documented
+        // give-up-and-return-#NUM! behavior). A value that merely stayed finite after
+        // exhausting the iteration cap, or after Newton diverged, must not be silently
+        // replaced by an unrelated root from an unbounded, guess-blind global bisection.
+        if (!converged || !double.IsFinite(r)) return ErrorValue.Num;
         return NumberResult(r);
     }
 
@@ -255,6 +233,7 @@ public static partial class BuiltInFunctions
         if (!hasPositive || !hasNegative) return ErrorValue.Num;
 
         double r = guess;
+        bool converged = false;
         for (int iter = 0; iter < 100; iter++)
         {
             double f = 0, df = 0;
@@ -264,48 +243,23 @@ public static partial class BuiltInFunctions
                 f += cashflows[i] / denom;
                 if (i > 0) df -= i * cashflows[i] / (denom * (1 + r));
             }
-            if (Math.Abs(f) < 1e-10) break;
+            if (Math.Abs(f) < 1e-10) { converged = true; break; }
             if (Math.Abs(df) < 1e-15) { r = double.NaN; break; }
             double delta = f / df;
             r -= delta;
             if (r <= -1) { r = double.NaN; break; }
-            if (Math.Abs(delta) < 1e-10) break;
+            if (Math.Abs(delta) < 1e-10) { converged = true; break; }
         }
 
-        if (!double.IsFinite(r))
-        {
-            // Newton diverged — fall back to bisection over r ∈ (−0.99999, 10).
-            // Excel converges for ordinary investment patterns using this bracket.
-            static double IrrNpv(IReadOnlyList<double> cf, double rate)
-            {
-                double result = 0;
-                for (int i = 0; i < cf.Count; i++)
-                {
-                    double denom = Math.Pow(1 + rate, i);
-                    result += cf[i] / denom;
-                }
-                return result;
-            }
-
-            const double lo = -0.99999, hi = 10.0;
-            double fLo = IrrNpv(cashflows, lo);
-            double fHi = IrrNpv(cashflows, hi);
-            if (double.IsNaN(fLo) || double.IsNaN(fHi) || fLo * fHi > 0)
-                return ErrorValue.Num; // no sign change in bracket → #NUM!
-
-            double bLo = lo, bHi = hi;
-            for (int iter = 0; iter < 200; iter++)
-            {
-                double mid = (bLo + bHi) / 2;
-                double fMid = IrrNpv(cashflows, mid);
-                if (!double.IsFinite(fMid)) return ErrorValue.Num;
-                if (Math.Abs(fMid) < 1e-10 || (bHi - bLo) < 1e-10) { r = mid; break; }
-                if (fLo * fMid < 0) { bHi = mid; fHi = fMid; }
-                else { bLo = mid; fLo = fMid; }
-                r = mid;
-            }
-        }
-
-        return double.IsNaN(r) || double.IsInfinity(r) ? ErrorValue.Num : new NumberValue(r);
+        // Newton must actually converge to a verified root within the iteration budget.
+        // Matching Excel's documented behavior ("If IRR can't find a result that works
+        // after 20 tries, the #NUM! error value is returned"), a value that merely stayed
+        // finite after the iteration cap was exhausted (never satisfied the residual/delta
+        // convergence checks above), or that came from Newton overshooting past r = -1 /
+        // a vanishing derivative, is not a verified root and must return #NUM! — it must
+        // never be silently replaced by an unrelated root from an unbounded, guess-blind
+        // global bisection over the whole domain.
+        if (!converged || !double.IsFinite(r)) return ErrorValue.Num;
+        return new NumberValue(r);
     }
 }

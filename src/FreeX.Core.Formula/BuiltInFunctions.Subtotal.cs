@@ -80,8 +80,11 @@ public static partial class BuiltInFunctions
             1  => numeric.Count == 0 ? ErrorValue.DivByZero : NumberResult(numeric.Average),
             2  => new NumberValue(numeric.Count),
             3  => new NumberValue(countaCount),
-            4  => numeric.Count == 0 ? ErrorValue.DivByZero : NumberResult(numeric.Max),
-            5  => numeric.Count == 0 ? ErrorValue.DivByZero : NumberResult(numeric.Min),
+            // MAX/MIN return 0 for an all-non-numeric/empty range, matching the plain MAX()/MIN()
+            // functions (BuiltInFunctions.StatisticalCore.Aggregates.cs) and real Excel — unlike
+            // AVERAGE/STDEV/VAR (1,7,8,10,11) which genuinely error (#DIV/0!) on an empty sample.
+            4  => NumberResult(numeric.Count == 0 ? 0 : numeric.Max),
+            5  => NumberResult(numeric.Count == 0 ? 0 : numeric.Min),
             6  => NumberResult(numeric.Count == 0 ? 0 : numeric.Product),
             7  => numeric.Count < 2 ? ErrorValue.DivByZero : NumberResult(SubtotalStdDevS(statisticalValues!)),
             8  => numeric.Count == 0 ? ErrorValue.DivByZero : NumberResult(SubtotalStdDevP(statisticalValues!)),

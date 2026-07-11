@@ -5,6 +5,13 @@ namespace FreeX.Core.Formula;
 
 public static partial class NumberFormatter
 {
+    // Calibrated against Excel's canonical default-column-width example: at the real default
+    // column width (8.43 units / 64px), ViewportService's generic average-character estimate
+    // (EstimateCharacterWidth) yields 8, but Excel's General format actually displays up to 11
+    // characters there (e.g. "0.333333333" for 1/3). See FormatNumberGeneral for the full
+    // rationale.
+    private const int GeneralFormatDigitBudgetBonus = 3;
+
     private static string FormatGeneral(ScalarValue value, bool uses1904DateSystem = false, int? targetWidthCharacters = null) => value switch
     {
         NumberValue n => FormatNumberGeneral(n.Value, targetWidthCharacters),
@@ -66,13 +73,26 @@ public static partial class NumberFormatter
         // column width. .NET's "G" format specifier already picks fixed-point vs. scientific
         // the same way (fixed when the value's exponent is within [-5, precision), else
         // scientific) and trims insignificant trailing zeros, so trying decreasing precisions
-        // and keeping the first one that fits the available width reproduces Excel's behavior
-        // (e.g. width 11 yields "0.333333333" for 1/3, matching Excel's canonical example).
+        // and keeping the first one that fits the available character budget reproduces
+        // Excel's behavior (e.g. a budget of 11 yields "0.333333333" for 1/3, matching Excel's
+        // canonical example).
+        //
+        // `width` itself is the caller's *generic* average-character estimate for the column's
+        // pixel width (ViewportService.EstimateCharacterWidth, calibrated for things like
+        // auto-fit text sizing). General-format numbers pack tighter than that generic estimate
+        // assumes -- digits, the decimal point, sign, and the "E+" exponent marker are all
+        // narrower than an average character -- so Excel displays noticeably more of them than
+        // the raw character estimate suggests. Excel's own canonical example pins the ratio: at
+        // the real default column width (8.43 units / 64px), the generic estimate is 8
+        // characters, but Excel actually shows up to 11. Apply that calibrated bonus before
+        // fitting so the real default-width path reproduces Excel's digit budget instead of the
+        // generic (and too-narrow) text-sizing estimate.
+        var digitBudget = width + GeneralFormatDigitBudgetBonus;
         var narrowest = "";
         for (var precision = 15; precision >= 1; precision--)
         {
             var candidate = value.ToString("G" + precision, CultureInfo.InvariantCulture);
-            if (candidate.Length <= width)
+            if (candidate.Length <= digitBudget)
                 return candidate;
             narrowest = candidate;
         }

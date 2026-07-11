@@ -42,8 +42,9 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
     // contained IN it (e.g. a sparkline anchored at F1 plotting A1:D1, when A1:D1 is cut and pasted
     // elsewhere) must have its DataRange relocated too, mirroring _chartDataRangeSnapshot/
     // TranslateFullyContainedChartDataRanges for ChartModel.DataRange. Sparklines whose own Location
-    // falls inside the moved range are excluded (already handled via CaptureSourcePayloads/
-    // CloneSparklineAt, which intentionally leaves DataRange unchanged when only the anchor moves).
+    // falls inside the moved range are excluded here (handled instead via CaptureSourcePayloads/
+    // CloneSparklineAt, which translates DataRange too -- R25-meta-3 -- when it is also fully
+    // contained in the moved range, i.e. the sparkline and its data move together).
     private List<(SparklineModel Sparkline, GridRange OriginalDataRange)>? _sparklineDataRangeSnapshot;
     // R21-undo-redo-deep-2: pairs each relocated spill's original source anchor with its captured
     // payload (Apply already carries the destination Target alongside it) so Revert can re-establish
@@ -120,9 +121,25 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         // R20-array-dynamic-spill-3: every other cell-mutating command (Copy, Paste, Autofill,
         // ClearContents, Fill, ...) rejects an edit that would touch only PART of a dynamic-array/CSE
         // spill ("You cannot change part of an array"); Move omitted this guard, silently discarding
-        // a move of just a non-anchor spill member (or losing the array via the anchor-only move bug
-        // fixed below) instead of rejecting it like Excel does.
-        if (CommandGuards.RejectIfSplitsArray(sheet, affected) is { } splitsArrayRejection)
+        // a move of just a non-anchor spill member instead of rejecting it like Excel does.
+        //
+        // R25-spill-dynamic-deep-1: moving ONLY a live spill's anchor cell (source range is exactly
+        // that one cell) is legitimate -- Excel lets a spilled array's anchor be cut/moved on its own,
+        // and CaptureSourceSpillPayloads/SetSpillRange below relocates the live spill along with it.
+        // RejectIfSplitsArray otherwise treats the anchor like any other array member and requires
+        // every body cell to already be part of the move, which would wrongly reject this case, so
+        // exclude just the anchor's own address from the check. A source range that includes the
+        // anchor alongside only SOME (not all) of the body, or a non-anchor member alone, still fails
+        // this narrow condition and falls through to the normal (correctly rejecting) check.
+        var guardAddresses = affected;
+        if (_sourceRange.CellCount == 1 &&
+            sheet.TryGetSpillExtent(_sourceRange.Start, out var anchorSpillRows, out var anchorSpillCols) &&
+            (anchorSpillRows > 1 || anchorSpillCols > 1))
+        {
+            guardAddresses = affected.Where(address => address != _sourceRange.Start).ToList();
+        }
+
+        if (CommandGuards.RejectIfSplitsArray(sheet, guardAddresses) is { } splitsArrayRejection)
             return splitsArrayRejection;
 
         _snapshot = CaptureCellSnapshots(sheet, affected);
@@ -277,7 +294,19 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
                 sheet.HyperlinkMetadata.TryGetValue(source, out var metadata) ? metadata : null,
                 sheet.RichTextRuns.TryGetValue(source, out var richRuns) ? richRuns : null,
                 sparklinesByLocation is not null && sparklinesByLocation.TryGetValue(source, out var sourceSparkline)
-                    ? CloneSparklineAt(sourceSparkline, target)
+                    ? CloneSparklineAt(
+                        sourceSparkline,
+                        target,
+                        // R25-meta-3: when the sparkline's own DataRange is fully inside the moved
+                        // sourceRange too (i.e. the sparkline and its full data move together in one
+                        // MoveRange), translate DataRange by the same delta so it keeps following its
+                        // data at the destination instead of pointing at the now-cleared source cells.
+                        // TranslateFullyContainedSparklineDataRanges handles the opposite case (anchor
+                        // OUTSIDE sourceRange, DataRange inside it) before this method runs, so the two
+                        // are mutually exclusive and neither double-translates the other's case.
+                        sourceRange.Contains(sourceSparkline.DataRange)
+                            ? TranslateRange(sourceSparkline.DataRange, rowDelta, colDelta)
+                            : sourceSparkline.DataRange)
                     : null));
         }
 
@@ -664,10 +693,11 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
     /// on a different sheet than the data it plots, so every sheet in the workbook is checked, not
     /// just the sheet being moved. Sparklines whose own <see cref="SparklineModel.Location"/> falls
     /// inside <paramref name="sourceRange"/> are skipped here: those are relocated by
-    /// <see cref="CaptureSourcePayloads"/>/<see cref="CloneSparklineAt"/> instead, which intentionally
-    /// leaves DataRange unchanged when only the anchor cell moves. Returns the original
-    /// (sparkline, DataRange) pairs so <see cref="Revert"/> can restore them via
-    /// <see cref="RestoreSparklineDataRanges"/>.
+    /// <see cref="CaptureSourcePayloads"/>/<see cref="CloneSparklineAt"/> instead, which (R25-meta-3)
+    /// also translates DataRange when it is fully contained in <paramref name="sourceRange"/> -- i.e.
+    /// the sparkline and its data move together -- so the two methods cover disjoint cases and never
+    /// double-translate the same sparkline. Returns the original (sparkline, DataRange) pairs so
+    /// <see cref="Revert"/> can restore them via <see cref="RestoreSparklineDataRanges"/>.
     /// </summary>
     private static List<(SparklineModel Sparkline, GridRange OriginalDataRange)> TranslateFullyContainedSparklineDataRanges(
         Workbook workbook, GridRange sourceRange, int rowDelta, int colDelta)
@@ -762,10 +792,10 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
     // built-in `with` copy. A clone (rather than reusing the source instance with a mutated
     // Location) is required here because the source instance is also held by _sparklineSnapshot for
     // undo — mutating it in place would corrupt that snapshot's recorded source-cell state.
-    private static SparklineModel CloneSparklineAt(SparklineModel source, CellAddress location) => new()
+    private static SparklineModel CloneSparklineAt(SparklineModel source, CellAddress location, GridRange dataRange) => new()
     {
         Id = source.Id,
-        DataRange = source.DataRange,
+        DataRange = dataRange,
         Location = location,
         Kind = source.Kind,
         GroupId = source.GroupId,

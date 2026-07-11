@@ -20,25 +20,36 @@ public sealed class Round24NumberFormatterPrecisionTests
 {
     // ── R24-number-precision-edge-1 ──────────────────────────────────────────
 
+    // NOTE (R25-meta-2): these two facts used to be pinned by calling
+    // NumberFormatter.Format(..., "General", 11) -- passing the digit budget (11) directly as
+    // the width argument. But the real production caller (ViewportService.GetDisplayText) never
+    // passes 11 for the default column: it passes EstimateCharacterWidth(ColumnWidthToPixels(
+    // Sheet.DefaultColumnWidth)), i.e. EstimateCharacterWidth(64) = 8, a generic average-
+    // character estimate that under-counts Excel's actual General-format digit budget. The tests
+    // below now call with the real value (8) that flows from the real default column width, so
+    // they exercise the actual production path instead of a hand-picked stand-in.
+
     [Fact]
     public void General_LargeIntegerAtDefaultColumnWidth_FallsBackToScientificNotation()
     {
         // 10^14 is a 15-digit integer. At Excel's canonical default-column-width digit budget
-        // (11 characters), the plain integer can't fit, so Excel switches to "1E+14".
-        NumberFormatter.Format(new NumberValue(1e14), "General", 11)
+        // (11 characters -- reached from the real production width of 8), the plain integer
+        // can't fit, so Excel switches to "1E+14".
+        NumberFormatter.Format(new NumberValue(1e14), "General", 8)
             .Should().Be("1E+14");
     }
 
     [Fact]
     public void General_Fraction_AtDefaultColumnWidth_Shows9SignificantDigitsLikeExcel()
     {
-        // Excel's own canonical example: at the default column width, General format shows
-        // 1/3 as "0.333333333" (9 threes) and 2/3 as "0.666666667" (rounded), not FreeX's
-        // previous fixed-10-significant-digit "0.3333333333"/"0.6666666667".
-        NumberFormatter.Format(new NumberValue(1.0 / 3.0), "General", 11)
+        // Excel's own canonical example: at the default column width (production width 8,
+        // Excel's 11-character digit budget), General format shows 1/3 as "0.333333333"
+        // (9 threes) and 2/3 as "0.666666667" (rounded), not FreeX's previous fixed-10-
+        // significant-digit "0.3333333333"/"0.6666666667".
+        NumberFormatter.Format(new NumberValue(1.0 / 3.0), "General", 8)
             .Should().Be("0.333333333");
 
-        NumberFormatter.Format(new NumberValue(2.0 / 3.0), "General", 11)
+        NumberFormatter.Format(new NumberValue(2.0 / 3.0), "General", 8)
             .Should().Be("0.666666667");
     }
 

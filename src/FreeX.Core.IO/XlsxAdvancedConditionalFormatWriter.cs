@@ -77,6 +77,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 continue;
 
             List<ConditionalFormat>? newX14DataBars = null;
+            List<ConditionalFormat>? newX14IconSets = null;
             foreach (var cf in advancedRules)
             {
                 XlsxWorksheetConditionalFormattingPlacement.AddConditionalFormatting(
@@ -89,10 +90,16 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                     newX14DataBars ??= [];
                     newX14DataBars.Add(cf);
                 }
+                else if (cf.RuleType == CfRuleType.IconSet &&
+                    RequiresGeneratedOrExistingX14IconSet(cf, GetEffectiveIconSetStyle(cf)))
+                {
+                    newX14IconSets ??= [];
+                    newX14IconSets.Add(cf);
+                }
             }
 
-            if (newX14DataBars is not null)
-                AppendX14ConditionalFormattingsExt(root, newX14DataBars, workbookNs);
+            if (newX14DataBars is not null || newX14IconSets is not null)
+                AppendX14ConditionalFormattingsExt(root, newX14DataBars, newX14IconSets, workbookNs);
 
             RealignClassicRulePriorities(root, workbookNs, sheet);
 
@@ -235,7 +242,13 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 break;
             case CfRuleType.IconSet:
             {
-                var iconSetStyle = string.IsNullOrWhiteSpace(cf.IconSetStyle) ? "3TrafficLights1" : cf.IconSetStyle.Trim();
+                var iconSetStyle = GetEffectiveIconSetStyle(cf);
+                // Excel's base ST_IconSetType enum has no entry for x14-only styles (e.g. "3Stars",
+                // "3Triangles"); writing one straight into the legacy <iconSet iconSet="..."> attribute
+                // produces schema-invalid OOXML that Excel repairs/strips on open. Fall back to a valid
+                // base style there and carry the real style through the x14 extension instead, mirroring
+                // the DataBar case above.
+                var legacyIconSetStyle = IsX14OnlyIconSetStyle(iconSetStyle) ? "3TrafficLights1" : iconSetStyle;
                 var thresholdXmls = GetIconSetThresholds(cf, iconSetStyle)
                     .Select(threshold => ToCfvoXml(worksheetNs, threshold.Type, threshold.Value, threshold.GreaterThanOrEqual));
                 var overrideXmls = cf.IconOverrides
@@ -246,11 +259,23 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                         new XAttribute("iconId", o.IconId.ToString(CultureInfo.InvariantCulture))));
                 rule.Add(AddConditionalFormatPayloadNativeMetadata(new XElement(
                     worksheetNs + "iconSet",
-                    new XAttribute("iconSet", iconSetStyle),
+                    new XAttribute("iconSet", legacyIconSetStyle),
                     new XAttribute("showValue", cf.IconSetShowValue ? "1" : "0"),
                     new XAttribute("reverse", cf.IconSetReverse ? "1" : "0"),
                     thresholdXmls,
                     overrideXmls), cf, worksheetNs));
+                if (RequiresGeneratedOrExistingX14IconSet(cf, iconSetStyle) &&
+                    XlsxAdvancedConditionalFormatMetadata.TryGetExistingX14Id(cf) is null)
+                {
+                    XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+                    rule.Add(new XElement(
+                        worksheetNs + "extLst",
+                        new XElement(
+                            worksheetNs + "ext",
+                            new XAttribute("uri", "{B025F937-C7B1-47D3-B67F-A62EFF666E3E}"),
+                            new XElement(x14Ns + "id", GetX14DataBarId(cf)))));
+                }
+
                 break;
             }
             case CfRuleType.AboveAverage:
@@ -357,6 +382,45 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
 
     private static bool IsValidIconOverride(CfIconOverride icon) =>
         !string.IsNullOrWhiteSpace(icon.IconSet) && icon.IconId >= 0;
+
+    private static string GetEffectiveIconSetStyle(ConditionalFormat cf) =>
+        string.IsNullOrWhiteSpace(cf.IconSetStyle) ? "3TrafficLights1" : cf.IconSetStyle.Trim();
+
+    /// <summary>
+    /// Icon-set styles that exist only in the x14 extension (Excel 2010+) and have no member in the
+    /// base spreadsheetml ST_IconSetType enum. See <c>ConditionalFormatIconSetCatalog</c>'s style
+    /// roster comment for the same distinction on the read/authoring side.
+    /// </summary>
+    private static readonly HashSet<string> X14OnlyIconSetStyles = new(StringComparer.Ordinal)
+    {
+        "3Stars",
+        "3Triangles",
+    };
+
+    private static bool IsX14OnlyIconSetStyle(string iconSetStyle) => X14OnlyIconSetStyles.Contains(iconSetStyle);
+
+    /// <summary>
+    /// True when this icon-set rule needs an x14 extLst/x14:id link plus a matching x14
+    /// conditionalFormattings entry: either its style is x14-only (writing it into the legacy
+    /// &lt;iconSet iconSet="..."&gt; attribute alone would be schema-invalid), or the rule already
+    /// carries an x14 id from a prior load, so re-saving must not silently drop the x14 backing
+    /// (mirroring <see cref="XlsxAdvancedConditionalFormatMetadata.RequiresGeneratedOrExistingX14DataBar"/>).
+    /// </summary>
+    private static bool RequiresGeneratedOrExistingX14IconSet(ConditionalFormat cf, string iconSetStyle) =>
+        IsX14OnlyIconSetStyle(iconSetStyle) ||
+        XlsxAdvancedConditionalFormatMetadata.TryGetExistingX14Id(cf) is not null;
+
+    private static XElement ToX14IconSetCfvoXml(XNamespace x14Ns, XNamespace xmNs, CfThresholdModel threshold)
+    {
+        var element = new XElement(
+            x14Ns + "cfvo",
+            new XAttribute("type", XlsxAdvancedConditionalFormatMetadata.ToCfvoType(threshold.Type)));
+        if (!string.IsNullOrWhiteSpace(threshold.Value))
+            element.Add(new XElement(xmNs + "f", threshold.Value));
+        if (threshold.GreaterThanOrEqual.HasValue)
+            element.SetAttributeValue("gte", threshold.GreaterThanOrEqual.Value ? "1" : "0");
+        return element;
+    }
 
     private static void AddNativeAttributes(
         XElement element,
@@ -474,15 +538,17 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
 
     private static void AppendX14ConditionalFormattingsExt(
         XElement worksheetRoot,
-        IReadOnlyList<ConditionalFormat> newGradientFalseRules,
+        IReadOnlyList<ConditionalFormat>? newGradientFalseRules,
+        IReadOnlyList<ConditionalFormat>? newX14IconSets,
         XNamespace worksheetNs)
     {
         XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
         XNamespace xmNs = "http://schemas.microsoft.com/office/excel/2006/main";
         const string x14CfUri = "{78C0D931-6437-407d-A8EE-F0AAD7539E65}";
 
-        var x14CfElements = new List<XElement>(newGradientFalseRules.Count);
-        foreach (var cf in newGradientFalseRules)
+        var x14CfElements = new List<XElement>(
+            (newGradientFalseRules?.Count ?? 0) + (newX14IconSets?.Count ?? 0));
+        foreach (var cf in newGradientFalseRules ?? [])
         {
             var dataBar = new XElement(
                 x14Ns + "dataBar",
@@ -511,6 +577,33 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                     new XAttribute("type", "dataBar"),
                     new XAttribute("id", GetX14DataBarId(cf)),
                     dataBar),
+                new XElement(xmNs + "sqref", BuildSqref(cf))));
+        }
+
+        foreach (var cf in newX14IconSets ?? [])
+        {
+            var iconSetStyle = GetEffectiveIconSetStyle(cf);
+            var x14IconSet = new XElement(
+                x14Ns + "iconSet",
+                new XAttribute("iconSet", iconSetStyle),
+                new XAttribute("showValue", cf.IconSetShowValue ? "1" : "0"),
+                new XAttribute("reverse", cf.IconSetReverse ? "1" : "0"),
+                GetIconSetThresholds(cf, iconSetStyle).Select(threshold => ToX14IconSetCfvoXml(x14Ns, xmNs, threshold)),
+                cf.IconOverrides
+                    .Where(IsValidIconOverride)
+                    .Select(o => new XElement(
+                        x14Ns + "cfIcon",
+                        new XAttribute("iconSet", o.IconSet.Trim()),
+                        new XAttribute("iconId", o.IconId.ToString(CultureInfo.InvariantCulture)))));
+
+            // Same xm:sqref-as-trailing-child requirement as the data-bar case above.
+            x14CfElements.Add(new XElement(
+                x14Ns + "conditionalFormatting",
+                new XElement(
+                    x14Ns + "cfRule",
+                    new XAttribute("type", "iconSet"),
+                    new XAttribute("id", GetX14DataBarId(cf)),
+                    x14IconSet),
                 new XElement(xmNs + "sqref", BuildSqref(cf))));
         }
 

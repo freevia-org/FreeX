@@ -11,9 +11,7 @@ internal static class ConsolidationLabelPlanBuilder
         ConsolidateFunction function,
         bool useTopRowLabels,
         bool useLeftColumnLabels,
-        bool createLinksToSourceData,
-        uint rowCount,
-        uint colCount)
+        bool createLinksToSourceData)
     {
         var bodyStartRow = useTopRowLabels ? 1u : 0u;
         var bodyStartCol = useLeftColumnLabels ? 1u : 0u;
@@ -25,8 +23,12 @@ internal static class ConsolidationLabelPlanBuilder
         // lands in its own orphan bucket that BuildWrites never looks up, silently dropping its values.
         var buckets = new Dictionary<(string Row, string Col), ConsolidationBucket>(LabelKeyComparer);
 
+        // Each range contributes its own RowCount/ColCount (rather than a size shared across all
+        // ranges), so real Excel's "consolidate by category" scenario -- differently-shaped/sized
+        // source ranges matched by label text -- reads every range over its own full extent instead
+        // of being clipped to (or overrunning) another range's size.
         foreach (var range in sourceRanges)
-            CollectRange(ctx, range, rows, cols, buckets, useTopRowLabels, useLeftColumnLabels, bodyStartRow, bodyStartCol, rowCount, colCount);
+            CollectRange(ctx, range, rows, cols, buckets, useTopRowLabels, useLeftColumnLabels, bodyStartRow, bodyStartCol);
 
         return BuildWrites(
             ctx.Workbook,
@@ -49,19 +51,17 @@ internal static class ConsolidationLabelPlanBuilder
         bool useTopRowLabels,
         bool useLeftColumnLabels,
         uint bodyStartRow,
-        uint bodyStartCol,
-        uint rowCount,
-        uint colCount)
+        uint bodyStartCol)
     {
         var sourceSheet = ctx.GetSheet(range.Start.Sheet);
-        for (uint rowOffset = bodyStartRow; rowOffset < rowCount; rowOffset++)
+        for (uint rowOffset = bodyStartRow; rowOffset < range.RowCount; rowOffset++)
         {
             var rowLabel = useLeftColumnLabels
                 ? ConsolidationRules.LabelText(sourceSheet.GetValue(range.Start.Row + rowOffset, range.Start.Col))
                 : ConsolidationRules.RowPositionLabel(rowOffset - bodyStartRow);
             ConsolidationRules.AddUnique(rows, rowLabel);
 
-            for (uint colOffset = bodyStartCol; colOffset < colCount; colOffset++)
+            for (uint colOffset = bodyStartCol; colOffset < range.ColCount; colOffset++)
             {
                 var colLabel = useTopRowLabels
                     ? ConsolidationRules.LabelText(sourceSheet.GetValue(range.Start.Row, range.Start.Col + colOffset))

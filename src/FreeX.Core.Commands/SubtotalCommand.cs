@@ -126,6 +126,14 @@ public sealed class SubtotalCommand : IWorkbookCommand
         };
         foreach (var subtotalColumnOffset in _subtotalColumnOffsets)
         {
+            // The group-by column already got its "<Label> Total" text cell above; if it is
+            // also checked as a subtotal column (Excel allows this), skip it here rather than
+            // emitting a second edit for the same address. A duplicate address in `edits` would
+            // make EditCellsCommand snapshot the label text (just written) as the "old" value for
+            // undo instead of the true pre-Apply value, permanently corrupting that cell on Revert.
+            if (subtotalColumnOffset == _groupByColumnOffset)
+                continue;
+
             var formulaAddress = new CellAddress(_sheetId, subtotalRow.InsertRow, _range.Start.Col + subtotalColumnOffset);
             var formula = SubtotalPlanBuilder.BuildSubtotalFormula(
                 _functionNumber,

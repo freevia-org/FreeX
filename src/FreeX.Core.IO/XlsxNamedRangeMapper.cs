@@ -64,7 +64,8 @@ internal static class XlsxNamedRangeMapper
                 if (refersToBody.StartsWith('='))
                     refersToBody = refersToBody[1..].Trim();
                 if (string.IsNullOrWhiteSpace(refersToBody) ||
-                    !(IsFormulaExpression(refersToBody) || IsSheetSpanRefersTo(refersToBody)))
+                    !(IsFormulaExpression(refersToBody) || IsSheetSpanRefersTo(refersToBody) ||
+                      IsBareDefinedNameAliasRefersTo(workbook, refersToBody)))
                     continue;
 
                 var localSheetIdText = definedName.Attribute("localSheetId")?.Value;
@@ -114,14 +115,16 @@ internal static class XlsxNamedRangeMapper
                 // Strip the leading '=' if present.
                 var refersToBody = refersTo.StartsWith('=') ? refersTo[1..].Trim() : refersTo;
 
-                if (IsFormulaExpression(refersToBody) || IsSheetSpanRefersTo(refersToBody))
+                if (IsFormulaExpression(refersToBody) || IsSheetSpanRefersTo(refersToBody) ||
+                    IsBareDefinedNameAliasRefersTo(workbook, refersToBody))
                 {
-                    // Named formula, OR a 3-D sheet-span reference (e.g. Sheet1:Sheet3!$A$1): store
-                    // the bare expression/opaque refers-to text for on-demand evaluation/round-trip.
-                    // A sheet span can't be represented by the single-rectangle GridRange model below
-                    // (and ClosedXML's own namedRange.Ranges enumerates to zero items for it), so it
-                    // must be routed through this opaque-preserving branch instead of falling into the
-                    // "plain range" branch, where it would otherwise be silently dropped.
+                    // Named formula, a 3-D sheet-span reference (e.g. Sheet1:Sheet3!$A$1), or a bare
+                    // alias to another defined name (e.g. RefersTo="Name1"): store the bare
+                    // expression/opaque refers-to text for on-demand evaluation/round-trip. None of
+                    // these can be represented by the single-rectangle GridRange model below (and
+                    // ClosedXML's own namedRange.Ranges enumerates to zero items for all three), so
+                    // they must be routed through this opaque-preserving branch instead of falling
+                    // into the "plain range" branch, where they would otherwise be silently dropped.
                     if (workbook.ValidateNamedRangeName(namedRange.Name) is null)
                     {
                         if (scopeSheetId is { } fid)
@@ -202,12 +205,17 @@ internal static class XlsxNamedRangeMapper
     }
 
     /// <summary>
-    /// Returns true when the refers-to expression is a formula (function call, arithmetic, etc.)
-    /// rather than a plain cell/range reference like Sheet1!$A$1:$B$2 or Table[Column].
+    /// Returns true when the refers-to expression is a formula (function call, arithmetic, array
+    /// constant, etc.) rather than a plain cell/range reference like Sheet1!$A$1:$B$2 or
+    /// Table[Column].
     /// <para>
-    /// Detection strategy: scan for operators and parentheses that appear OUTSIDE of single-quoted
-    /// sheet-name sections. A plain range reference has sheet names quoted with apostrophes
-    /// ('Sheet Name'!$A$1) and cell addresses that contain only alphanumerics, $, !, and :.
+    /// Detection strategy: scan for operators, parentheses, and array-constant braces that appear
+    /// OUTSIDE of single-quoted sheet-name sections. A plain range reference has sheet names quoted
+    /// with apostrophes ('Sheet Name'!$A$1) and cell addresses that contain only alphanumerics, $,
+    /// !, and :. A leading '{' uniquely identifies an array constant (e.g. <c>{1,2;3,4}</c> or
+    /// <c>{"Mon","Tue","Wed"}</c>) — a valid Excel defined-name form that ClosedXML's
+    /// <c>IXLDefinedName.Ranges</c> enumerates to zero items for (no exception), so without this
+    /// check the plain-range branch in <see cref="LoadDefinedNames"/> would silently drop the name.
     /// </para>
     /// </summary>
     private static bool IsFormulaExpression(string refersToBody)
@@ -233,11 +241,31 @@ internal static class XlsxNamedRangeMapper
 
             // Outside a quoted section: any of these characters indicates a formula expression.
             // Plain range refs only have: alphanumeric, $, !, :, comma (multi-area), space.
-            if (ch is '(' or ')' or '+' or '-' or '*' or '/' or '^' or '&' or '%')
+            if (ch is '(' or ')' or '+' or '-' or '*' or '/' or '^' or '&' or '%' or '{' or '}')
                 return true;
         }
         return false;
     }
+
+    /// <summary>
+    /// Returns true when the refers-to expression is a bare reference to ANOTHER defined name (an
+    /// alias, e.g. name "Name2" with RefersTo <c>=Name1</c>) — a legal and commonly-used Excel
+    /// pattern. <see cref="IsFormulaExpression"/> classifies this as a plain range (no
+    /// operator/paren/brace characters) and it has no '!' so <see cref="IsSheetSpanRefersTo"/> also
+    /// misses it; ClosedXML's <c>IXLDefinedName.Ranges</c> enumerates to zero items for a bare
+    /// identifier (no exception), so the plain-range branch in <see cref="LoadDefinedNames"/> would
+    /// silently drop the name.
+    /// <para>
+    /// Detection: a genuine plain cell/range reference is always either sheet-qualified (containing
+    /// '!', which <see cref="Workbook.ValidateNamedRangeName"/> rejects as an invalid name
+    /// character) or shaped like a bare cell address / structured table reference (e.g. "A1" or
+    /// "Table1[Column1]", both of which <c>ValidateNamedRangeName</c> also rejects — the former for
+    /// looking like a cell reference, the latter for containing '[' / ']'). So any refers-to body
+    /// that IS itself a syntactically valid defined name can only be an alias to another name.
+    /// </para>
+    /// </summary>
+    private static bool IsBareDefinedNameAliasRefersTo(Workbook workbook, string refersToBody) =>
+        workbook.ValidateNamedRangeName(refersToBody) is null;
 
     /// <summary>
     /// Returns true when the refers-to expression is a 3-D "sheet span" reference, e.g.

@@ -373,7 +373,7 @@ internal static class XlsxStylesheetMetadataPreserver
             if (!restoredTargetFillIndexes.Add(targetFillId))
                 continue; // this target fill slot was already restored from another matched xf
 
-            targetFill.ReplaceNodes(sourceFillList[sourceFillId].Nodes().Select(n => new XElement((XElement)n)));
+            targetFill.ReplaceNodes(sourceFillList[sourceFillId].Elements().Select(n => new XElement(n)));
             changed = true;
         }
 

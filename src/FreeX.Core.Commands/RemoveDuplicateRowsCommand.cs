@@ -33,6 +33,9 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
     // is left anchored over vacated rows while the data it belonged to moves elsewhere — see
     // R20-merged-cells-deep-2.
     private List<GridRange>? _mergeSnapshot;
+    // Snapshot of the structured table (if any) whose Range this command shrank, so Revert can
+    // restore its original extent — see R25-remove-duplicates-consolidate-3.
+    private StructuredTableModel? _previousStructuredTable;
 
     public int RemovedRowCount { get; private set; }
 
@@ -57,6 +60,7 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
             return protectedOutcome;
 
         RemovedRowCount = 0;
+        _previousStructuredTable = null;
 
         // ── 1. Identify surviving rows (de-duplicate) ──────────────────────
         // Excel's Remove Duplicates treats text case-insensitively (e.g. "MAY"/"may" are
@@ -223,6 +227,31 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
 
         sheet.ReplaceMergedRegions(adjustedMerges);
 
+        // ── 6. Shrink a structured table's Range so it doesn't keep pointing at rows this
+        // command just vacated (banding/AutoFilter/structured refs would otherwise stay stale
+        // over now-blank trailing rows) — see R25-remove-duplicates-consolidate-3. Only applies
+        // when the operated range is exactly a table's data body: same column span, reaching to
+        // the table's own last row, with the table starting above the range (i.e. its header
+        // row(s) sit above _range, matching how RemoveDuplicatesPlanner.ExcludeHeaderRow already
+        // trims the header off before this command ever runs). A dedup over an unrelated or only
+        // partially-overlapping range never touches any table's Range.
+        for (var i = 0; i < sheet.StructuredTables.Count; i++)
+        {
+            var table = sheet.StructuredTables[i];
+            if (table.Range.Start.Col != _range.Start.Col || table.Range.End.Col != _range.End.Col)
+                continue;
+            if (table.Range.End.Row != _range.End.Row || table.Range.Start.Row >= _range.Start.Row)
+                continue;
+
+            _previousStructuredTable = table;
+            var newEndRow = _range.Start.Row + (uint)survivingRows.Count - 1;
+            var shrunkRange = new GridRange(
+                table.Range.Start,
+                new CellAddress(table.Range.End.Sheet, newEndRow, table.Range.End.Col));
+            sheet.StructuredTables[i] = StructuredTableDesignCommandHelpers.CopyTable(table, range: shrunkRange);
+            break;
+        }
+
         var affectedCells = allInRangeAddresses;
         return new CommandOutcome(true, AffectedCells: affectedCells);
     }
@@ -271,6 +300,13 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
         // Restore merged regions to their pre-Apply state (undoing the row remap/drop above).
         if (_mergeSnapshot is not null)
             sheet.ReplaceMergedRegions(_mergeSnapshot);
+
+        // Restore the structured table's Range to its pre-Apply extent (undoing the shrink above).
+        if (_previousStructuredTable is not null &&
+            CommandGuards.TryFindStructuredTableIndex(sheet, _previousStructuredTable.Id, out var tableIndex))
+        {
+            sheet.StructuredTables[tableIndex] = _previousStructuredTable;
+        }
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -288,7 +324,7 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
         {
             if (!first) parts.Append('\t');
             first = false;
-            var part = sheet.GetValue(row, col).ToString() ?? string.Empty;
+            var part = ScalarKeyPart(sheet.GetValue(row, col));
             parts.Append(part.Length);
             parts.Append(':');
             parts.Append(part);
@@ -296,6 +332,24 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
 
         return parts.ToString();
     }
+
+    /// <summary>
+    /// Returns the per-cell text used inside <see cref="BuildKey"/>'s length-prefixed row key.
+    /// Excel's Remove Duplicates compares the underlying value: a date literal and a plain number
+    /// holding the identical serial value are the same value (a date IS a number — only its display
+    /// format differs), so <see cref="NumberValue"/> and <see cref="DateTimeValue"/> must produce
+    /// the same key part for equal <c>Value</c>s, rather than the type-name-embedding default
+    /// record ToString() ("NumberValue { Value = ... }" vs "DateTimeValue { Value = ... }"), which
+    /// never compares equal even for numerically identical values. Every other scalar kind keeps
+    /// using its own default record ToString(), unchanged. Mirrors
+    /// ViewportConditionalFormatEvaluator.Aggregates.GetDuplicateValueKey's Number/DateTime bucket.
+    /// </summary>
+    private static string ScalarKeyPart(ScalarValue value) => value switch
+    {
+        NumberValue n => "N:" + n.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+        DateTimeValue d => "N:" + d.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+        _ => value.ToString() ?? string.Empty,
+    };
 
     private IEnumerable<uint> DuplicateKeyColumns()
     {

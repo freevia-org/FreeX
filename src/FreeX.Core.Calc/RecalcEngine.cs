@@ -56,8 +56,15 @@ public sealed class RecalcEngine
         IReadOnlyList<CellAddress> changedCells,
         bool resolveSpillDependents)
     {
-        if (changedCells.Count == 0 && _volatileCells.Count == 0)
+        if (changedCells.Count == 0 &&
+            _volatileCells.Count == 0 &&
+            // Mirror the fallthrough guard below (P73): an edit with no changed cells at all (e.g.
+            // Unmerge, which never populates CommandOutcome.AffectedCells) must still reach the
+            // spill-blocked-anchor retry pass further down instead of short-circuiting here first.
+            !(resolveSpillDependents && _spillBlockedAnchors.Count > 0))
+        {
             return EmptyReport;
+        }
 
         var changedFormulaCells = CollectChangedFormulaCells(workbook, changedCells);
 

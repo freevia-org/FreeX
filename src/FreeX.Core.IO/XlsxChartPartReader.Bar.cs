@@ -63,7 +63,11 @@ public static partial class XlsxChartPartReader
                 if (XlsxChartSeriesRangeReader.TryReadSeriesValueColumn(series, sheetId, sheetNameResolver) is { } barValueColumn)
                     result.SeriesColumnMappings.Add(new ChartSeriesColumnMapping(seriesIndex, barValueColumn));
 
-                if (barUsesSecondaryAxis && seriesIndex > 0)
+                // Secondary-axis membership comes straight from which value axis the series' own
+                // plot element (<c:barChart>) targets, so it is authoritative even for series index
+                // 0 — Excel allows "Format Data Series > Secondary Axis" on any series regardless of
+                // position (see the ComboLineSeriesIndexes comment below for the analogous fix).
+                if (barUsesSecondaryAxis)
                     result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
 
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
@@ -94,7 +98,10 @@ public static partial class XlsxChartPartReader
                 result.ComboLineSeriesIndexes.Add(seriesIndex);
                 if (XlsxChartSeriesRangeReader.TryReadSeriesValueColumn(series, sheetId, sheetNameResolver) is { } lineValueColumn)
                     result.SeriesColumnMappings.Add(new ChartSeriesColumnMapping(seriesIndex, lineValueColumn));
-                if (lineUsesSecondaryAxis && seriesIndex > 0)
+                // Same rationale as the barChart loop above: <c:lineChart> declaring the secondary
+                // axId is authoritative regardless of series index (a line series is frequently
+                // plotted first, at idx 0, over a primary-axis column series).
+                if (lineUsesSecondaryAxis)
                     result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
 
                 if (XlsxChartSeriesFormatReader.TryReadSeriesLine(series, seriesIndex, out var format))
@@ -127,7 +134,7 @@ public static partial class XlsxChartPartReader
                 result.ComboScatterSeriesIndexes.Add(seriesIndex);
                 if (XlsxChartSeriesRangeReader.TryReadSeriesValueColumn(series, sheetId, sheetNameResolver, "yVal") is { } scatterValueColumn)
                     result.SeriesColumnMappings.Add(new ChartSeriesColumnMapping(seriesIndex, scatterValueColumn));
-                if (scatterUsesSecondaryAxis && seriesIndex > 0)
+                if (scatterUsesSecondaryAxis)
                     result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
 
                 if (XlsxChartSeriesFormatReader.TryReadSeriesLine(series, seriesIndex, out var format))
@@ -172,8 +179,9 @@ public static partial class XlsxChartPartReader
             return false;
         }
 
+        // Secondary-axis membership is authoritative even for series index 0 (see the per-loop
+        // comments above) — do NOT drop index 0 here, matching the ComboLineSeriesIndexes fix below.
         result.SecondaryAxisSeriesIndexes = result.SecondaryAxisSeriesIndexes
-            .Where(index => index > 0)
             .Distinct()
             .Order()
             .ToList();
@@ -260,7 +268,10 @@ public static partial class XlsxChartPartReader
                         ranges.Add(range);
                 }
 
-                if (usesSecondaryAxis && seriesIndex > 0)
+                // See the combo-chart loops above: secondary-axis membership is authoritative for
+                // any series index, including 0 (Excel allows Format Data Series > Secondary Axis
+                // on the first series just as it does on any other).
+                if (usesSecondaryAxis)
                     result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
 
                 if (XlsxChartSeriesFormatReader.TryReadSeriesFill(series, seriesIndex, out var format))

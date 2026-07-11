@@ -162,12 +162,10 @@ public static class PasteCommandFactory
         var activeSheetName = targetSheet?.Name ?? "";
         var sourceSheet = workbook.GetSheet(sourceRange.Start.Sheet);
 
-        var shouldTileDestinationRange =
-            (targetRows > pasteRows || targetCols > pasteCols) &&
-            options.ContentKind != PasteSpecialContentKind.AllMergingConditionalFormats;
+        var shouldTileDestinationRange = targetRows > pasteRows || targetCols > pasteCols;
         if (shouldTileDestinationRange)
         {
-            return CreateTiledInternalPasteCommand(
+            var tiledPasteCommand = CreateTiledInternalPasteCommand(
                 workbook,
                 targetSheetId,
                 targetSheet,
@@ -180,6 +178,20 @@ public static class PasteCommandFactory
                 targetCols,
                 mode,
                 options);
+
+            // "All merging conditional formats" tiles its copied values/formats exactly like every
+            // other Paste Special content kind (R25-clipboard-paste-remaining-2); the conditional-format
+            // rule itself is still merged once, anchored at the destination's start, matching the
+            // non-tiled branch immediately below.
+            if (options.ContentKind != PasteSpecialContentKind.AllMergingConditionalFormats)
+                return tiledPasteCommand;
+
+            return new CompositeWorkbookCommand(
+                "Paste Special",
+                [
+                    tiledPasteCommand,
+                    new PasteConditionalFormatsCommand(targetSheetId, sourceRange, destination, options.Transpose)
+                ]);
         }
 
         if (options.ContentKind == PasteSpecialContentKind.AllMergingConditionalFormats)

@@ -234,6 +234,12 @@ internal static class XlsxClosedXmlCellMapper
                 XLAlignmentHorizontalValues.Justify => HorizontalAlignment.Justify,
                 XLAlignmentHorizontalValues.Distributed => HorizontalAlignment.Distributed,
                 XLAlignmentHorizontalValues.Fill => HorizontalAlignment.Fill,
+                // FreeX.Core.Model.HorizontalAlignment has no dedicated "Center Across Selection"
+                // member, so mapping centerContinuous straight to General would silently flip the
+                // text from centered to flush-left. Map it to plain Center instead: it keeps the
+                // text visually centered in its own cell (the closest available approximation to
+                // Excel's cross-cell centering) rather than discarding the alignment entirely.
+                XLAlignmentHorizontalValues.CenterContinuous => HorizontalAlignment.Center,
                 _ => HorizontalAlignment.General,
             },
             VerticalAlignment = xlStyle.Alignment.Vertical switch
@@ -318,7 +324,23 @@ internal static class XlsxClosedXmlCellMapper
                 _ => XLFontScheme.None,
             };
 
-        if (style.FillPatternStyle != CellFillPatternStyle.None)
+        if (style.GradientFill is { } gradientFill)
+        {
+            // ClosedXML has no gradient-fill API of its own: the real gradient XML is restored
+            // after the ClosedXML save by XlsxStylesheetMetadataPreserver.MergeStylesheetGradientFills,
+            // which matches a source xf to its rebuilt counterpart by a signature of font/border/
+            // numFmt/alignment/protection (fillId is deliberately excluded from that signature).
+            // If we leave the fill untouched here, a cell whose ONLY formatting is the gradient is
+            // indistinguishable from CellStyle.Default, so ClosedXML collapses it into the shared
+            // default style and omits its <c> element entirely — the cell (and its restorable xf
+            // slot) vanishes before the preserver ever runs. Stamp a solid placeholder (using the
+            // gradient's first stop color) so the cell keeps its own distinct, restorable cellXf;
+            // the preserver overwrites this placeholder with the real gradient content afterward.
+            var placeholderColor = gradientFill.Stops.Count > 0 ? gradientFill.Stops[0].Color : CellColor.White;
+            xlStyle.Fill.PatternType = XLFillPatternValues.Solid;
+            xlStyle.Fill.BackgroundColor = XLColor.FromArgb(255, placeholderColor.R, placeholderColor.G, placeholderColor.B);
+        }
+        else if (style.FillPatternStyle != CellFillPatternStyle.None)
         {
             xlStyle.Fill.PatternType = MapFillPatternStyleInverse(style.FillPatternStyle);
             if (style.FillThemeColor is { } fillThemeColor)

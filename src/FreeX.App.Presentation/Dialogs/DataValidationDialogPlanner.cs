@@ -182,12 +182,14 @@ public static class DataValidationDialogPlanner
     {
         ArgumentNullException.ThrowIfNull(input);
 
+        var formula1 = NormalizeFormula1(input.Type, input.Formula1);
+
         return new DataValidation
         {
             Id = input.Id,
             Type = input.Type,
             Operator = input.Operator,
-            Formula1 = NormalizeFormula1(input.Type, input.Formula1),
+            Formula1 = formula1,
             Formula2 = NormalizeFormula2(input.Type, input.Operator, input.Formula2),
             AllowBlank = input.AllowBlank,
             ShowDropdown = input.Type == DvType.List && input.ShowDropdown,
@@ -198,12 +200,35 @@ public static class DataValidationDialogPlanner
             PromptTitle = input.PromptTitle?.Trim() ?? "",
             PromptMessage = input.PromptMessage?.Trim() ?? "",
             ErrorMessage = input.ErrorMessage?.Trim() ?? "",
-            IsX14 = input.IsX14,
+            // Carried over verbatim if already true (never silently downgraded), and additionally
+            // auto-promoted for a freshly authored List source that Excel cannot evaluate from the
+            // legacy <dataValidation><formula1> slot: a formula-based source referencing another
+            // sheet (e.g. "=Sheet2!$A$1:$A$5") or one too long for the legacy element. Without this,
+            // a brand-new cross-sheet List rule would be saved with an inert legacy formula that
+            // Excel never reads. See DataValidation.IsX14 doc comment.
+            IsX14 = input.IsX14 || RequiresX14ForListSource(input.Type, formula1),
             NativeAttributes = input.NativeAttributes,
             NativeChildXmls = input.NativeChildXmls,
             NativeContainerAttributes = input.NativeContainerAttributes,
             NativeContainerChildXmls = input.NativeContainerChildXmls
         };
+    }
+
+    /// <summary>
+    /// True when a List rule's source formula needs the x14 extLst path because the legacy
+    /// &lt;dataValidation&gt;&lt;formula1&gt; slot can't carry it: a formula (not a literal
+    /// comma-separated item list) that references another sheet, or any source too long for the
+    /// legacy element (Excel's 255-character limit on the classic formula1 text).
+    /// </summary>
+    private static bool RequiresX14ForListSource(DvType type, string formula1)
+    {
+        if (type != DvType.List || formula1.Length == 0)
+            return false;
+
+        if (formula1.Length > 255)
+            return true;
+
+        return formula1.StartsWith('=') && formula1.Contains('!');
     }
 
     public static bool IsClearAllState(DataValidationRuleEditorInput input)

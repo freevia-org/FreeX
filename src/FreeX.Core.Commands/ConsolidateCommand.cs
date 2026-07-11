@@ -61,15 +61,19 @@ public sealed class ConsolidateCommand : IWorkbookCommand
         if (!WorksheetBounds.IsValidAddress(_destination))
             return new CommandOutcome(false, DestinationBoundsMessage);
 
+        // Consolidate-by-category (labels) matches source rows/columns by their label text, so
+        // real Excel explicitly allows differently-shaped/sized source ranges in that mode (that is
+        // the feature's primary use case). Only the position-based mode requires identically-sized
+        // ranges, since it aligns cells purely by offset with no label matching to fall back on.
+        if (_useTopRowLabels || _useLeftColumnLabels)
+            return ApplyByLabels(ctx);
+
         var rowCount = _sourceRanges[0].RowCount;
         var colCount = _sourceRanges[0].ColCount;
         if (_sourceRanges.Any(r => r.RowCount != rowCount || r.ColCount != colCount))
             return new CommandOutcome(false, "Consolidate source ranges must be the same size.");
         if (!WorksheetBounds.TryGetRectangleEnd(_destination, rowCount, colCount, out _))
             return new CommandOutcome(false, DestinationBoundsMessage);
-
-        if (_useTopRowLabels || _useLeftColumnLabels)
-            return ApplyByLabels(ctx, rowCount, colCount);
 
         return ApplyByPosition(ctx, rowCount, colCount);
     }
@@ -134,11 +138,13 @@ public sealed class ConsolidateCommand : IWorkbookCommand
         return new CommandOutcome(true, AffectedCells: affected);
     }
 
-    private CommandOutcome ApplyByLabels(ICommandContext ctx, uint rowCount, uint colCount)
+    private CommandOutcome ApplyByLabels(ICommandContext ctx)
     {
         var bodyStartRow = _useTopRowLabels ? 1u : 0u;
         var bodyStartCol = _useLeftColumnLabels ? 1u : 0u;
-        if (bodyStartRow >= rowCount || bodyStartCol >= colCount)
+        // Each source range is checked against its own size (not a shared size), since by-label
+        // consolidation allows differently-shaped source ranges.
+        if (_sourceRanges.Any(r => bodyStartRow >= r.RowCount || bodyStartCol >= r.ColCount))
             return new CommandOutcome(false, "Consolidate source ranges must include data cells.");
 
         var writes = ConsolidationLabelPlanBuilder.Build(
@@ -148,9 +154,7 @@ public sealed class ConsolidateCommand : IWorkbookCommand
             _function,
             _useTopRowLabels,
             _useLeftColumnLabels,
-            _createLinksToSourceData,
-            rowCount,
-            colCount);
+            _createLinksToSourceData);
 
         return WriteCells(ctx, writes);
     }

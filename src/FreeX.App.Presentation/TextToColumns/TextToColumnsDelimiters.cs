@@ -32,7 +32,7 @@ public static class TextToColumnsDelimiters
         TextToColumnsDelimiterKind.Space => " ",
         TextToColumnsDelimiterKind.Custom => string.IsNullOrEmpty(customDelimiter)
             ? throw new ArgumentException("Custom delimiter is required.", nameof(customDelimiter))
-            : customDelimiter,
+            : customDelimiter[0].ToString(),
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unsupported delimiter kind.")
     };
 

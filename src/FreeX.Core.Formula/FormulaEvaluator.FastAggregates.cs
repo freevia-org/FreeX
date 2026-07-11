@@ -554,12 +554,16 @@ public sealed partial class FormulaEvaluator
             // For CountBlank, the un-clamped nominal cell count is preserved separately (see
             // FastAggregateRange.NominalCellCount) so it can still count blanks across the
             // whole nominal range without ever iterating past the used-range-clamped extent.
+            // CountBlank additionally clamps for ANY range shape (not just full-column/row):
+            // a large but ordinary BOUNDED range (e.g. A1:B600000) must scan only its
+            // used-range intersection too, or a mostly-empty large range would either get
+            // rejected by the streaming cap below or force a slow full scan.
             long? nominalCellCount = null;
-            if (argument is FullColumnRangeRefNode or FullRowRangeRefNode)
-            {
-                if (kind == FastAggregateKind.CountBlank)
-                    nominalCellCount = FormulaSafetyLimits.GetRangeCellCount(startRow, startCol, endRow, endCol);
+            if (kind == FastAggregateKind.CountBlank)
+                nominalCellCount = FormulaSafetyLimits.GetRangeCellCount(startRow, startCol, endRow, endCol);
 
+            if (argument is FullColumnRangeRefNode or FullRowRangeRefNode || kind == FastAggregateKind.CountBlank)
+            {
                 if (!TryClampFullRangeToUsed(rangeRef.SheetName, context, ref startRow, ref startCol, ref endRow, ref endCol))
                 {
                     // No populated cells overlap the range: emit an empty range (endRow < startRow
@@ -599,11 +603,11 @@ public sealed partial class FormulaEvaluator
             var endCol = Math.Max(indirectRange.StartCol, indirectRange.EndCol);
 
             long? nominalCellCount = null;
-            if (indirectRange.IsFullColumnRange || indirectRange.IsFullRowRange)
-            {
-                if (kind == FastAggregateKind.CountBlank)
-                    nominalCellCount = FormulaSafetyLimits.GetRangeCellCount(startRow, startCol, endRow, endCol);
+            if (kind == FastAggregateKind.CountBlank)
+                nominalCellCount = FormulaSafetyLimits.GetRangeCellCount(startRow, startCol, endRow, endCol);
 
+            if (indirectRange.IsFullColumnRange || indirectRange.IsFullRowRange || kind == FastAggregateKind.CountBlank)
+            {
                 if (!TryClampFullRangeToUsed(indirectRange.SheetName, context, ref startRow, ref startCol, ref endRow, ref endCol))
                 {
                     range = new FastAggregateRange(indirectRange.SheetName, 1, 1, 0, 0, nominalCellCount);
@@ -656,11 +660,11 @@ public sealed partial class FormulaEvaluator
             bool isFullCol = startRow == 1 && endRow == CellAddress.MaxRow;
             bool isFullRow = startCol == 1 && endCol == CellAddress.MaxCol;
             long? nominalCellCount = null;
-            if (isFullCol || isFullRow)
-            {
-                if (kind == FastAggregateKind.CountBlank)
-                    nominalCellCount = FormulaSafetyLimits.GetRangeCellCount(startRow, startCol, endRow, endCol);
+            if (kind == FastAggregateKind.CountBlank)
+                nominalCellCount = FormulaSafetyLimits.GetRangeCellCount(startRow, startCol, endRow, endCol);
 
+            if (isFullCol || isFullRow || kind == FastAggregateKind.CountBlank)
+            {
                 if (!TryClampFullRangeToUsed(sheetName, context, ref startRow, ref startCol, ref endRow, ref endCol))
                 {
                     range = new FastAggregateRange(sheetName, 1, 1, 0, 0, nominalCellCount);
