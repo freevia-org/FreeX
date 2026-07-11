@@ -73,18 +73,20 @@ public sealed partial class FormulaEvaluator
         {
             if (context is SheetEvalContext sheetContext)
             {
+                // A null sheet here means range.SheetName is an external-workbook reference
+                // (already validated by IEvalContext.SheetExists when the range was resolved),
+                // not a missing sheet; GetCellValue's external fallback resolves it instead of
+                // wrongly reporting #REF!.
                 var sheet = ResolveFastAggregateSheet(range, sheetContext);
-                if (sheet is null)
-                {
-                    error = ErrorValue.Ref;
-                    return true;
-                }
 
                 for (var row = range.StartRow; row <= range.EndRow; row++)
                 {
                     for (var col = range.StartCol; col <= range.EndCol; col++)
                     {
-                        _ = TryDirectRangeNumber(sheet.GetValue(row, col), out _, out var cellError);
+                        var cellValue = sheet is not null
+                            ? sheet.GetValue(row, col)
+                            : context.GetCellValue(range.SheetName!, row, col);
+                        _ = TryDirectRangeNumber(cellValue, out _, out var cellError);
                         if (cellError is not null)
                         {
                             error = cellError;
@@ -123,14 +125,19 @@ public sealed partial class FormulaEvaluator
         {
             if (context is SheetEvalContext sheetContext)
             {
+                // A null sheet here means range.SheetName is an external-workbook reference
+                // (already validated by IEvalContext.SheetExists when the range was resolved),
+                // not a missing sheet; GetCellValue's external fallback resolves it instead of
+                // wrongly reporting #REF!.
                 var sheet = ResolveFastAggregateSheet(range, sheetContext);
-                if (sheet is null) return ErrorValue.Ref;
 
                 for (var row = range.StartRow; row <= range.EndRow; row++)
                 {
                     for (var col = range.StartCol; col <= range.EndCol; col++)
                     {
-                        var value = sheet.GetValue(row, col);
+                        var value = sheet is not null
+                            ? sheet.GetValue(row, col)
+                            : context.GetCellValue(range.SheetName!, row, col);
                         if (TryDirectRangeNumber(value, out var number, out var error))
                         {
                             total += number;
@@ -175,14 +182,19 @@ public sealed partial class FormulaEvaluator
         {
             if (context is SheetEvalContext sheetContext)
             {
+                // A null sheet here means range.SheetName is an external-workbook reference
+                // (already validated by IEvalContext.SheetExists when the range was resolved),
+                // not a missing sheet; GetCellValue's external fallback resolves it instead of
+                // wrongly reporting #REF!.
                 var sheet = ResolveFastAggregateSheet(range, sheetContext);
-                if (sheet is null) return ErrorValue.Ref;
 
                 for (var row = range.StartRow; row <= range.EndRow; row++)
                 {
                     for (var col = range.StartCol; col <= range.EndCol; col++)
                     {
-                        var value = sheet.GetValue(row, col);
+                        var value = sheet is not null
+                            ? sheet.GetValue(row, col)
+                            : context.GetCellValue(range.SheetName!, row, col);
                         if (TryDirectRangeNumber(value, out var number, out var error))
                         {
                             total += number;
@@ -233,14 +245,19 @@ public sealed partial class FormulaEvaluator
         {
             if (context is SheetEvalContext sheetContext)
             {
+                // A null sheet here means range.SheetName is an external-workbook reference
+                // (already validated by IEvalContext.SheetExists when the range was resolved),
+                // not a missing sheet; GetCellValue's external fallback resolves it instead of
+                // wrongly reporting #REF!.
                 var sheet = ResolveFastAggregateSheet(range, sheetContext);
-                if (sheet is null) return ErrorValue.Ref;
 
                 for (var row = range.StartRow; row <= range.EndRow; row++)
                 {
                     for (var col = range.StartCol; col <= range.EndCol; col++)
                     {
-                        var value = sheet.GetValue(row, col);
+                        var value = sheet is not null
+                            ? sheet.GetValue(row, col)
+                            : context.GetCellValue(range.SheetName!, row, col);
                         if (TryDirectRangeNumber(value, out var number, out var error))
                         {
                             if (result is null ||
@@ -294,14 +311,19 @@ public sealed partial class FormulaEvaluator
         {
             if (context is SheetEvalContext sheetContext)
             {
+                // A null sheet here means range.SheetName is an external-workbook reference
+                // (already validated by IEvalContext.SheetExists when the range was resolved),
+                // not a missing sheet; GetCellValue's external fallback resolves it instead of
+                // wrongly reporting #REF!.
                 var sheet = ResolveFastAggregateSheet(range, sheetContext);
-                if (sheet is null) return ErrorValue.Ref;
 
                 for (var row = range.StartRow; row <= range.EndRow; row++)
                 {
                     for (var col = range.StartCol; col <= range.EndCol; col++)
                     {
-                        var value = sheet.GetValue(row, col);
+                        var value = sheet is not null
+                            ? sheet.GetValue(row, col)
+                            : context.GetCellValue(range.SheetName!, row, col);
                         if (value is NumberValue or DateTimeValue)
                             count++;
                     }
@@ -331,19 +353,29 @@ public sealed partial class FormulaEvaluator
         long count = 0;
         foreach (var range in ranges)
         {
+            // Only the used-range-clamped Start/End rectangle (never the un-clamped nominal
+            // full-column/full-row extent) is actually scanned here, so a full-sheet
+            // COUNTBLANK(A:XFD) never iterates billions of cells. Everything counted below is
+            // the number of NON-blank cells found inside that scanned rectangle.
+            long nonBlank = 0;
             if (context is SheetEvalContext sheetContext)
             {
+                // A null sheet here means range.SheetName is an external-workbook reference
+                // (already validated by IEvalContext.SheetExists when the range was resolved),
+                // not a missing sheet; GetCellValue's external fallback resolves it instead of
+                // wrongly reporting #REF!.
                 var sheet = ResolveFastAggregateSheet(range, sheetContext);
-                if (sheet is null) return ErrorValue.Ref;
 
                 for (var row = range.StartRow; row <= range.EndRow; row++)
                 {
                     for (var col = range.StartCol; col <= range.EndCol; col++)
                     {
-                        var value = sheet.GetValue(row, col);
+                        var value = sheet is not null
+                            ? sheet.GetValue(row, col)
+                            : context.GetCellValue(range.SheetName!, row, col);
 
-                        if (value is BlankValue || value is TextValue { Value.Length: 0 })
-                            count++;
+                        if (value is not (BlankValue or TextValue { Value.Length: 0 }))
+                            nonBlank++;
                     }
                 }
             }
@@ -357,11 +389,23 @@ public sealed partial class FormulaEvaluator
                             ? context.GetCellValue(range.SheetName, row, col)
                             : context.GetCellValue(row, col);
 
-                        if (value is BlankValue || value is TextValue { Value.Length: 0 })
-                            count++;
+                        if (value is not (BlankValue or TextValue { Value.Length: 0 }))
+                            nonBlank++;
                     }
                 }
             }
+
+            // range.NominalCellCount carries the un-clamped nominal cell count when the
+            // rectangle above was narrowed from a full-column/full-row (or full-span
+            // named-range) extent down to the sheet's used range (see
+            // TryResolveFastAggregateRange). Every nominal cell outside that used-range-clamped
+            // rectangle is guaranteed blank (Sheet.GetUsedRange's bounding box covers every
+            // populated/formatted cell), so blanks = nominal cells - non-blank cells found
+            // inside the scanned rectangle. For an ordinary bounded range NominalCellCount is
+            // null, and the scanned rectangle already covers every cell that needs counting.
+            var totalCells = range.NominalCellCount
+                ?? FormulaSafetyLimits.GetRangeCellCount(range.StartRow, range.StartCol, range.EndRow, range.EndCol);
+            count += totalCells - nonBlank;
         }
 
         return NumberValueFor(count);
@@ -381,14 +425,20 @@ public sealed partial class FormulaEvaluator
         {
             if (context is SheetEvalContext sheetContext)
             {
+                // A null sheet here means range.SheetName is an external-workbook reference
+                // (already validated by IEvalContext.SheetExists when the range was resolved),
+                // not a missing sheet; GetCellValue's external fallback resolves it instead of
+                // wrongly reporting #REF!.
                 var sheet = ResolveFastAggregateSheet(range, sheetContext);
-                if (sheet is null) return ErrorValue.Ref;
 
                 for (var row = range.StartRow; row <= range.EndRow; row++)
                 {
                     for (var col = range.StartCol; col <= range.EndCol; col++)
                     {
-                        if (!AccumulateFastVarianceValue(sheet.GetValue(row, col), ref count, ref mean, ref m2, out var error))
+                        var value = sheet is not null
+                            ? sheet.GetValue(row, col)
+                            : context.GetCellValue(range.SheetName!, row, col);
+                        if (!AccumulateFastVarianceValue(value, ref count, ref mean, ref m2, out var error))
                             return error!;
                     }
                 }
@@ -501,20 +551,25 @@ public sealed partial class FormulaEvaluator
             // 16,384 columns. Excel aggregates only the populated extent; clamping to the
             // sheet's used range gives the same numeric result, keeps us under the streaming
             // cap (so e.g. SUM(A:C) no longer wrongly returns #REF!), and is far faster.
-            // COUNTBLANK is excluded: it must count blanks across the whole nominal range.
-            if (argument is FullColumnRangeRefNode or FullRowRangeRefNode
-                && kind != FastAggregateKind.CountBlank)
+            // For CountBlank, the un-clamped nominal cell count is preserved separately (see
+            // FastAggregateRange.NominalCellCount) so it can still count blanks across the
+            // whole nominal range without ever iterating past the used-range-clamped extent.
+            long? nominalCellCount = null;
+            if (argument is FullColumnRangeRefNode or FullRowRangeRefNode)
             {
+                if (kind == FastAggregateKind.CountBlank)
+                    nominalCellCount = FormulaSafetyLimits.GetRangeCellCount(startRow, startCol, endRow, endCol);
+
                 if (!TryClampFullRangeToUsed(rangeRef.SheetName, context, ref startRow, ref startCol, ref endRow, ref endCol))
                 {
                     // No populated cells overlap the range: emit an empty range (endRow < startRow
                     // so every aggregate loop iterates zero cells -> SUM/COUNT 0, AVERAGE #DIV/0!, etc.).
-                    range = new FastAggregateRange(rangeRef.SheetName, 1, 1, 0, 0);
+                    range = new FastAggregateRange(rangeRef.SheetName, 1, 1, 0, 0, nominalCellCount);
                     return FastAggregateRangeResolution.Range;
                 }
             }
 
-            var resolvedRange = new FastAggregateRange(rangeRef.SheetName, startRow, startCol, endRow, endCol);
+            var resolvedRange = new FastAggregateRange(rangeRef.SheetName, startRow, startCol, endRow, endCol, nominalCellCount);
 
             if (!TryAcceptFastAggregateRange(resolvedRange, kind, out error))
                 return FastAggregateRangeResolution.Error;
@@ -543,12 +598,15 @@ public sealed partial class FormulaEvaluator
             var endRow = Math.Max(indirectRange.StartRow, indirectRange.EndRow);
             var endCol = Math.Max(indirectRange.StartCol, indirectRange.EndCol);
 
-            if ((indirectRange.IsFullColumnRange || indirectRange.IsFullRowRange) &&
-                kind != FastAggregateKind.CountBlank)
+            long? nominalCellCount = null;
+            if (indirectRange.IsFullColumnRange || indirectRange.IsFullRowRange)
             {
+                if (kind == FastAggregateKind.CountBlank)
+                    nominalCellCount = FormulaSafetyLimits.GetRangeCellCount(startRow, startCol, endRow, endCol);
+
                 if (!TryClampFullRangeToUsed(indirectRange.SheetName, context, ref startRow, ref startCol, ref endRow, ref endCol))
                 {
-                    range = new FastAggregateRange(indirectRange.SheetName, 1, 1, 0, 0);
+                    range = new FastAggregateRange(indirectRange.SheetName, 1, 1, 0, 0, nominalCellCount);
                     return FastAggregateRangeResolution.Range;
                 }
             }
@@ -558,7 +616,8 @@ public sealed partial class FormulaEvaluator
                 startRow,
                 startCol,
                 endRow,
-                endCol);
+                endCol,
+                nominalCellCount);
 
             if (!TryAcceptFastAggregateRange(resolvedRange, kind, out error))
                 return FastAggregateRangeResolution.Error;
@@ -596,16 +655,20 @@ public sealed partial class FormulaEvaluator
             // MaxStreamingRangeCells, returning #REF! without this clamp.
             bool isFullCol = startRow == 1 && endRow == CellAddress.MaxRow;
             bool isFullRow = startCol == 1 && endCol == CellAddress.MaxCol;
-            if ((isFullCol || isFullRow) && kind != FastAggregateKind.CountBlank)
+            long? nominalCellCount = null;
+            if (isFullCol || isFullRow)
             {
+                if (kind == FastAggregateKind.CountBlank)
+                    nominalCellCount = FormulaSafetyLimits.GetRangeCellCount(startRow, startCol, endRow, endCol);
+
                 if (!TryClampFullRangeToUsed(sheetName, context, ref startRow, ref startCol, ref endRow, ref endCol))
                 {
-                    range = new FastAggregateRange(sheetName, 1, 1, 0, 0);
+                    range = new FastAggregateRange(sheetName, 1, 1, 0, 0, nominalCellCount);
                     return FastAggregateRangeResolution.Range;
                 }
             }
 
-            var resolvedRange = new FastAggregateRange(sheetName, startRow, startCol, endRow, endCol);
+            var resolvedRange = new FastAggregateRange(sheetName, startRow, startCol, endRow, endCol, nominalCellCount);
 
             if (!TryAcceptFastAggregateRange(resolvedRange, kind, out error))
                 return FastAggregateRangeResolution.Error;
@@ -621,12 +684,10 @@ public sealed partial class FormulaEvaluator
     {
         error = null;
 
-        // COUNTBLANK is intentionally left un-clamped by the used-range clamp above (it must
-        // count blanks across the whole nominal range), and its implementation streams
-        // cell-by-cell rather than materializing, so no cell-count safety cap applies to it.
-        if (kind == FastAggregateKind.CountBlank)
-            return true;
-
+        // COUNTBLANK now scans only the used-range-clamped Start/End rectangle (see
+        // TryResolveFastAggregateRange), never the un-clamped nominal full-column/full-row
+        // extent, so the same streaming cap that guards SUM/AVERAGE/etc. applies to the
+        // rectangle it actually iterates.
         var cellCount = FormulaSafetyLimits.GetRangeCellCount(
             range.StartRow,
             range.StartCol,
@@ -750,7 +811,14 @@ public sealed partial class FormulaEvaluator
         uint StartRow,
         uint StartCol,
         uint EndRow,
-        uint EndCol);
+        uint EndCol,
+        // Set only for CountBlank ranges that were narrowed from a full-column/full-row
+        // (or full-span named-range) nominal extent down to the sheet's used-range for
+        // scanning. Carries the un-clamped nominal cell count so EvaluateFastRangeOnlyCountBlank
+        // can add back the cells outside the used range (all guaranteed blank) without ever
+        // iterating them. Null for ordinary bounded ranges, where the scanned rectangle already
+        // covers the whole range.
+        long? NominalCellCount = null);
 
     private enum FastAggregateKind
     {

@@ -206,7 +206,9 @@ public static class PivotGroupFieldPlanner
         if (string.IsNullOrWhiteSpace(text))
             return true;
 
-        if (!double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.CurrentCulture, out var parsed) ||
+        var trimmed = text.Trim();
+        if ((!double.TryParse(trimmed, NumberStyles.Float, CultureInfo.CurrentCulture, out var parsed) &&
+             !double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed)) ||
             !double.IsFinite(parsed))
         {
             return false;
@@ -218,8 +220,15 @@ public static class PivotGroupFieldPlanner
 
     private static bool TryParsePositive(string? text, out double value)
     {
-        if (string.IsNullOrWhiteSpace(text) ||
-            !double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.CurrentCulture, out value) ||
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            value = 0;
+            return false;
+        }
+
+        var trimmed = text.Trim();
+        if ((!double.TryParse(trimmed, NumberStyles.Float, CultureInfo.CurrentCulture, out value) &&
+             !double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out value)) ||
             !double.IsFinite(value) ||
             value <= 0)
         {

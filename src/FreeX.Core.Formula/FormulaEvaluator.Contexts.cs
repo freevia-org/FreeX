@@ -190,7 +190,18 @@ public sealed partial class FormulaEvaluator
                 {
                     for (var c = c0; c <= c1; c++)
                     {
-                        resolved.Link.TryGetCachedValue(resolved.SheetIndex, r, c, out var cachedValue);
+                        // Mirror the scalar GetCellValue(sheetName, ...) behavior above: a cache miss
+                        // must throw (preserving the cell's last-known loaded value via RecalcEngine's
+                        // external-workbook-reference guard) instead of silently substituting Blank,
+                        // or a range-shaped external reference (e.g. inside MEDIAN/PRODUCT/VLOOKUP/
+                        // LARGE) would overwrite a correct loaded value with a wrong recomputed one.
+                        if (!resolved.Link.TryGetCachedValue(resolved.SheetIndex, r, c, out var cachedValue))
+                        {
+                            throw new FormulaParseException(
+                                $"External reference '{sheetName}' has no cached value for this cell; " +
+                                "preserving the last-known loaded value instead of recomputing to blank.");
+                        }
+
                         externalValues.Add(cachedValue ?? BlankValue.Instance);
                     }
                 }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
@@ -15,8 +16,24 @@ public sealed class CsvFileAdapter : IFileAdapter
         new FileFormatDescriptor(".csv", "CSV (Comma-separated values)", CanOpen: true, CanSave: true)
     ];
 
-    public Workbook Load(Stream stream) => DelimitedTextWorkbookReader.Load(stream, ',', allowSeparatorDirective: true);
+    public Workbook Load(Stream stream) =>
+        DelimitedTextWorkbookReader.Load(stream, ResolveLocaleDelimiter(), allowSeparatorDirective: true);
 
     public void Save(Workbook workbook, Stream stream) =>
-        DelimitedTextWorkbookWriter.Save(workbook, stream, ',');
+        DelimitedTextWorkbookWriter.Save(workbook, stream, ResolveLocaleDelimiter());
+
+    // Real Excel's plain File>Open/Save-As ".csv" (no "sep=" directive present) does not always use a
+    // comma: it uses the OS Regional Settings "List separator", which is ';' on de-DE/fr-FR/es-ES/etc.
+    // machines precisely because ',' is their decimal mark. Hardcoding ',' here tore a genuine
+    // semicolon-delimited European export apart (decimal-comma numbers like "1,50" contain a stray
+    // comma that used to be misread as a field break). "sep=" still overrides this via
+    // allowSeparatorDirective, so this only governs the no-directive default. Falls back to ',' if the
+    // current culture's separator is empty or collides with a character the format already reserves.
+    private static char ResolveLocaleDelimiter()
+    {
+        var separator = CultureInfo.CurrentCulture.TextInfo.ListSeparator;
+        return !string.IsNullOrEmpty(separator) && separator[0] is not ('\r' or '\n' or '"')
+            ? separator[0]
+            : ',';
+    }
 }

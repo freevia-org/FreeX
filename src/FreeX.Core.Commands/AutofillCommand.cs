@@ -155,7 +155,16 @@ public sealed class AutofillCommand : IWorkbookCommand
                 }
 
                 sheet.SetCell(addr, newCell);
-                CopyAnnotations(sheet, annotationSourceAddr, addr);
+                // A detected trend/list series computes a brand-new value for this cell that
+                // differs from annotationSourceAddr's own text (e.g. "Item1" -> "Item2"), so any
+                // character-position rich-text run formatting copied verbatim from the source
+                // would describe the wrong text -- stale runs, exactly like EditCellsCommand
+                // clears RichTextRuns/Hyperlinks whenever a cell's content is genuinely replaced
+                // rather than copied unchanged. Only the plain pattern-copy branch (no series
+                // detected) reproduces the source cell's exact value, so only it is safe to carry
+                // rich-text runs forward.
+                var copyRichTextRuns = scalarSeries is null && listSeries is null;
+                CopyAnnotations(sheet, annotationSourceAddr, addr, copyRichTextRuns);
             }
         }
 
@@ -279,9 +288,12 @@ public sealed class AutofillCommand : IWorkbookCommand
     /// <summary>
     /// Copies (or removes) a destination cell's hyperlink/rich-text annotations to match the
     /// source cell that produced its new value, so a fill never leaves stale annotations behind
-    /// (mirrors FillCellsCommand.Apply).
+    /// (mirrors FillCellsCommand.Apply). <paramref name="copyRichTextRuns"/> is false when the
+    /// destination's value was computed by a trend/list series rather than copied verbatim from
+    /// <paramref name="source"/>; in that case the source's per-character rich-text runs describe
+    /// text that no longer matches the new cell and must be dropped instead of copied.
     /// </summary>
-    private static void CopyAnnotations(Sheet sheet, CellAddress source, CellAddress target)
+    private static void CopyAnnotations(Sheet sheet, CellAddress source, CellAddress target, bool copyRichTextRuns = true)
     {
         if (sheet.Hyperlinks.TryGetValue(source, out var sourceTarget))
             sheet.Hyperlinks[target] = sourceTarget;
@@ -292,6 +304,12 @@ public sealed class AutofillCommand : IWorkbookCommand
             sheet.HyperlinkMetadata[target] = sourceMetadata;
         else
             sheet.HyperlinkMetadata.Remove(target);
+
+        if (!copyRichTextRuns)
+        {
+            sheet.RichTextRuns.Remove(target);
+            return;
+        }
 
         if (sheet.RichTextRuns.TryGetValue(source, out var sourceRuns))
             sheet.RichTextRuns[target] = sourceRuns;

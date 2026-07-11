@@ -1,3 +1,4 @@
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using System.Globalization;
 
@@ -18,21 +19,28 @@ internal static class AdvancedFilterPlanBuilder
         return headers;
     }
 
-    public static (List<List<(uint Col, IFilterCriterion Criterion)>> Rows, string? Error) BuildCriteriaRows(
+    public static (List<List<ICriteriaCheck>> Rows, string? Error) BuildCriteriaRows(
         Sheet sheet,
         GridRange criteriaRange,
         Dictionary<string, uint> headers)
     {
-        var result = new List<List<(uint Col, IFilterCriterion Criterion)>>();
+        var result = new List<List<ICriteriaCheck>>();
         if (criteriaRange.Start.Row >= criteriaRange.End.Row)
             return (result, null);
 
-        var criteriaColumns = new List<(uint CriteriaCol, uint ListCol)>();
+        // A blank header cell is Excel's convention for a computed/formula criteria column
+        // ("Using computed criteria" in Advanced Filter): it has no field of its own (ListCol
+        // is null), and each of its criteria-row cells is matched by re-evaluating that cell's
+        // formula against the candidate list row instead of comparing a single column's value.
+        var criteriaColumns = new List<(uint CriteriaCol, uint? ListCol)>();
         for (var col = criteriaRange.Start.Col; col <= criteriaRange.End.Col; col++)
         {
             var headerText = FilterValueFormatter.ToText(sheet.GetValue(criteriaRange.Start.Row, col));
             if (string.IsNullOrWhiteSpace(headerText))
+            {
+                criteriaColumns.Add((col, null));
                 continue;
+            }
             if (!headers.TryGetValue(headerText, out var listCol))
                 return ([], $"Criteria header '{headerText}' was not found in the list range.");
 
@@ -41,15 +49,29 @@ internal static class AdvancedFilterPlanBuilder
 
         for (var row = criteriaRange.Start.Row + 1; row <= criteriaRange.End.Row; row++)
         {
-            List<(uint Col, IFilterCriterion Criterion)>? criteriaRow = null;
+            List<ICriteriaCheck>? criteriaRow = null;
             foreach (var (criteriaCol, listCol) in criteriaColumns)
             {
-                var criteriaText = FilterValueFormatter.ToText(sheet.GetValue(row, criteriaCol));
-                if (criteriaText.Length == 0)
+                if (listCol is { } column)
+                {
+                    var criteriaText = FilterValueFormatter.ToText(sheet.GetValue(row, criteriaCol));
+                    if (criteriaText.Length == 0)
+                        continue;
+
+                    criteriaRow ??= new List<ICriteriaCheck>();
+                    criteriaRow.Add(new ColumnCriteriaCheck(column, CreateCriterion(criteriaText)));
+                    continue;
+                }
+
+                // Computed criteria column: only a formula cell contributes a condition; a
+                // blank or plain-value cell under a blank header has no field to compare
+                // against and is ignored, same as an empty criteria cell in a mapped column.
+                var cell = sheet.GetCell(row, criteriaCol);
+                if (cell?.FormulaText is not { Length: > 0 } formulaText)
                     continue;
 
-                criteriaRow ??= new List<(uint Col, IFilterCriterion Criterion)>();
-                criteriaRow.Add((listCol, CreateCriterion(criteriaText)));
+                criteriaRow ??= new List<ICriteriaCheck>();
+                criteriaRow.Add(new ComputedCriteriaCheck(sheet, formulaText, row, criteriaCol));
             }
 
             if (criteriaRow is not null)
@@ -62,7 +84,7 @@ internal static class AdvancedFilterPlanBuilder
     public static List<uint> MatchingRows(
         Sheet sheet,
         GridRange listRange,
-        IReadOnlyList<List<(uint Col, IFilterCriterion Criterion)>> criteriaRows,
+        IReadOnlyList<List<ICriteriaCheck>> criteriaRows,
         bool uniqueRecordsOnly = false)
     {
         var result = new List<uint>(GetRowResultCapacity(listRange));
@@ -102,14 +124,14 @@ internal static class AdvancedFilterPlanBuilder
     private static bool MatchesAnyCriteriaRow(
         Sheet sheet,
         uint row,
-        IReadOnlyList<List<(uint Col, IFilterCriterion Criterion)>> criteriaRows)
+        IReadOnlyList<List<ICriteriaCheck>> criteriaRows)
     {
         foreach (var criteriaRow in criteriaRows)
         {
             var matches = true;
-            foreach (var (col, criterion) in criteriaRow)
+            foreach (var check in criteriaRow)
             {
-                if (!criterion.Matches(sheet.GetValue(row, col)))
+                if (!check.Matches(sheet, row))
                 {
                     matches = false;
                     break;
@@ -121,6 +143,54 @@ internal static class AdvancedFilterPlanBuilder
         }
 
         return false;
+    }
+
+    /// <summary>One condition within a criteria row, matched against a candidate list row.</summary>
+    internal interface ICriteriaCheck
+    {
+        bool Matches(Sheet listSheet, uint row);
+    }
+
+    /// <summary>A plain field criterion: compares a single list column's value at the row.</summary>
+    internal sealed class ColumnCriteriaCheck(uint Col, IFilterCriterion Criterion) : ICriteriaCheck
+    {
+        public bool Matches(Sheet listSheet, uint row) => Criterion.Matches(listSheet.GetValue(row, Col));
+    }
+
+    /// <summary>
+    /// A computed/formula criterion (blank criteria header). The formula is authored as if it
+    /// were entered at its own criteria cell (<paramref name="FormulaRow"/>/<paramref name="FormulaCol"/>
+    /// on <paramref name="FormulaSheet"/>); matching a candidate list row re-evaluates it with its
+    /// relative references shifted down to that row, mirroring how conditional-format and
+    /// data-validation formulas already shift an authored formula to another cell
+    /// (<see cref="FormulaEvaluator.ShiftFormulaForCell"/>).
+    /// </summary>
+    internal sealed class ComputedCriteriaCheck(Sheet FormulaSheet, string FormulaText, uint FormulaRow, uint FormulaCol)
+        : ICriteriaCheck
+    {
+        private static readonly FormulaEvaluator Evaluator = new();
+
+        public bool Matches(Sheet listSheet, uint row)
+        {
+            try
+            {
+                var ast = FormulaEvaluator.ParseFormula(FormulaText);
+                var anchor = new CellAddress(FormulaSheet.Id, FormulaRow, FormulaCol);
+                var current = new CellAddress(FormulaSheet.Id, row, FormulaCol);
+                var shifted = FormulaEvaluator.ShiftFormulaForCell(ast, anchor, current);
+                var value = Evaluator.Evaluate(shifted, FormulaSheet, workbook: null, currentCell: current);
+                return value switch
+                {
+                    BoolValue b => b.Value,
+                    NumberValue n => n.Value != 0,
+                    _ => false
+                };
+            }
+            catch
+            {
+                return false;
+            }
+        }
     }
 
     private static IFilterCriterion CreateCriterion(string criteriaText)

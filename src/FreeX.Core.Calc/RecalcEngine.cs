@@ -1152,8 +1152,40 @@ public sealed class RecalcEngine
 
         var formulaCells = CollectFormulaCells(sheet);
 
-        var report = Recalculate(workbook, formulaCells);
-        return FilterReportForSheet(report, sheetId);
+        // Shift+F9 "Calculate Sheet" recalculates only the active worksheet (see
+        // WorkbookCellEditService.RecalculateSheet doc comment). RebuildFormulaDependencies just
+        // re-registered every volatile cell in the whole workbook into the shared _volatileCells
+        // set, and Recalculate unconditionally folds ALL of them into its dirty set -- which would
+        // silently re-evaluate (and mutate) volatile cells on OTHER sheets of this same workbook as
+        // a side effect. Temporarily hide those other-sheet volatile cells from _volatileCells for
+        // the duration of this call so only the target sheet's volatile cells are treated as dirty,
+        // then restore them so a later full/other-sheet recalc still tracks them correctly.
+        List<CellAddress>? otherSheetVolatileCells = null;
+        foreach (var addr in _volatileCells)
+        {
+            if (!addr.Sheet.Equals(sheetId))
+                (otherSheetVolatileCells ??= []).Add(addr);
+        }
+
+        if (otherSheetVolatileCells is not null)
+        {
+            foreach (var addr in otherSheetVolatileCells)
+                _volatileCells.Remove(addr);
+        }
+
+        try
+        {
+            var report = Recalculate(workbook, formulaCells);
+            return FilterReportForSheet(report, sheetId);
+        }
+        finally
+        {
+            if (otherSheetVolatileCells is not null)
+            {
+                foreach (var addr in otherSheetVolatileCells)
+                    _volatileCells.Add(addr);
+            }
+        }
     }
 
     private static List<CellAddress> CollectFormulaCells(Workbook workbook)

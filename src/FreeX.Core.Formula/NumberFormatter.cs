@@ -83,7 +83,7 @@ public static partial class NumberFormatter
         bool uses1904DateSystem = false)
     {
         if (string.IsNullOrEmpty(formatString) || IsGeneralFormat(formatString))
-            return new FormatResult(FormatGeneral(value, uses1904DateSystem));
+            return new FormatResult(FormatGeneral(value, uses1904DateSystem, targetWidthCharacters));
 
         // Pure text format
         if (formatString == "@")
@@ -201,6 +201,16 @@ public static partial class NumberFormatter
             {
                 sign = "-";
                 magnitude = -value;
+            }
+            else if (magnitude == 0)
+            {
+                // IEEE-754 negative zero (-0.0) fails `value < 0`, so it falls through this
+                // branch still carrying its sign bit. TryFormatPlainNumericSection below (and
+                // the "long" fast path in FormatNumberGeneral) format magnitude directly via
+                // .NET's own ToString, which -- unlike a cast to long -- preserves that sign
+                // bit as a literal "-". Normalize it away here so Excel's "never show negative
+                // zero" rule holds for the single most common numeric formats (e.g. "0.00").
+                magnitude = 0.0;
             }
 
             var singleSectionText = sections[0] == ""
@@ -389,6 +399,16 @@ public static partial class NumberFormatter
         bool uses1904DateSystem = false,
         int? targetWidthCharacters = null)
     {
+        // Excel never displays a negative sign for a zero value, in any format. IEEE-754
+        // negative zero (-0.0) satisfies none of the `value < 0` checks below, so without this
+        // it flows straight into format-specific branches (scientific notation in particular,
+        // via FormatScientific) that call .ToString() directly on the raw bit pattern and
+        // render the sign as a literal "-" -- bypassing the negative-zero strip further down
+        // this method (around IsNegativeZeroRepresentation), which only covers the plain
+        // .NET-custom-format path and runs too late for those early-return branches.
+        if (value == 0)
+            value = 0.0;
+
         if (TryFormatCjkNativeNumberText(value, format, out var cjkNativeNumberText))
             return cjkNativeNumberText;
 
@@ -396,7 +416,7 @@ public static partial class NumberFormatter
         string NativeDigits(string text) => ApplyNativeDigitSubstitution(text, nativeDigitFormat);
 
         if (string.IsNullOrEmpty(format) || IsGeneralFormat(format))
-            return FormatNumberGeneral(value);
+            return FormatNumberGeneral(value, targetWidthCharacters);
 
         if (TryResolveSpecialDateTimeLocaleToken(format, out var specialDateTimeToken))
         {

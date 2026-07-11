@@ -30,10 +30,15 @@ public static class SparklineSeriesReader
     /// skipped unless <see cref="SparklineModel.DisplayHidden"/> is set (Excel's "Show data in
     /// hidden rows and columns"), in which case hidden cells contribute to the series like any
     /// other; non-numeric (text) cells are always treated as blank. Blank cells are handled per
-    /// <see cref="SparklineModel.DisplayEmptyCellsAs"/>: <c>Gap</c> and <c>Zero</c> keep the cell's
-    /// position in the series (as <see cref="double.NaN"/> so the layout engine breaks the line, or
-    /// as <c>0</c>), while <c>Span</c> drops the position entirely so the surrounding points connect
-    /// across it, matching Excel's "Connect data points with line" option.
+    /// <see cref="SparklineModel.DisplayEmptyCellsAs"/>, and every mode keeps the cell's slot/index
+    /// in the returned series so downstream x-axis spacing (<see cref="SparklineLayoutEngine"/>'s
+    /// <c>i / (values.Count - 1)</c> layout) lines up with Excel regardless of how many blanks
+    /// appear: <c>Gap</c> stores <see cref="double.NaN"/> so the layout engine breaks the line at
+    /// that slot, <c>Zero</c> stores <c>0</c>, and <c>Span</c> ("Connect data points with line")
+    /// stores the value linearly interpolated between the nearest real values before and after the
+    /// blank run, which keeps the point on the straight line the two real points would otherwise
+    /// draw between them -- i.e. it renders as a direct connection, not a break -- while leaving the
+    /// blank's own slot (and every later slot) at its original position.
     /// </summary>
     public static IReadOnlyList<double> ReadSeries(Sheet sheet, SparklineModel sparkline)
     {
@@ -43,7 +48,7 @@ public static class SparklineSeriesReader
         if (!SparklineRangeLimits.IsSupportedDataRange(sparkline.DataRange))
             return [];
 
-        var series = new List<double>();
+        var raw = new List<double?>();
         var range = sparkline.DataRange;
         for (var row = range.Start.Row; row <= range.End.Row; row++)
         {
@@ -55,36 +60,77 @@ public static class SparklineSeriesReader
                 if (!sparkline.DisplayHidden && sheet.IsColEffectivelyHidden(col))
                     continue;
 
-                double? value = sheet.GetValue(row, col) switch
+                raw.Add(sheet.GetValue(row, col) switch
                 {
                     NumberValue number => number.Value,
                     DateTimeValue date => date.Value,
                     BoolValue boolean => boolean.Value ? 1 : 0,
                     _ => null,
-                };
+                });
+            }
+        }
 
-                if (value is { } v)
-                {
-                    series.Add(v);
-                    continue;
-                }
+        var series = new List<double>(raw.Count);
+        for (var i = 0; i < raw.Count; i++)
+        {
+            if (raw[i] is { } v)
+            {
+                series.Add(v);
+                continue;
+            }
 
-                switch (sparkline.DisplayEmptyCellsAs)
-                {
-                    case SparklineEmptyCellDisplay.Zero:
-                        series.Add(0);
-                        break;
-                    case SparklineEmptyCellDisplay.Span:
-                        // Drop the position so the line connects across the blank cell.
-                        break;
-                    case SparklineEmptyCellDisplay.Gap:
-                    default:
-                        series.Add(double.NaN);
-                        break;
-                }
+            switch (sparkline.DisplayEmptyCellsAs)
+            {
+                case SparklineEmptyCellDisplay.Zero:
+                    series.Add(0);
+                    break;
+                case SparklineEmptyCellDisplay.Span:
+                    series.Add(InterpolateSpanValue(raw, i));
+                    break;
+                case SparklineEmptyCellDisplay.Gap:
+                default:
+                    series.Add(double.NaN);
+                    break;
             }
         }
 
         return series;
+    }
+
+    /// <summary>
+    /// Computes the value a blank cell should contribute under "Connect data points with line": the
+    /// linear interpolation, weighted by slot distance, between the nearest real value before
+    /// <paramref name="index"/> and the nearest real value after it. When one side has no real value
+    /// (a leading or trailing run of blanks) there is nothing to connect to, so this falls back to
+    /// <see cref="double.NaN"/> just like <c>Gap</c> -- the layout engine already skips leading/
+    /// trailing non-finite slots without disturbing the spacing of the real points.
+    /// </summary>
+    private static double InterpolateSpanValue(IReadOnlyList<double?> raw, int index)
+    {
+        var before = -1;
+        for (var i = index - 1; i >= 0; i--)
+        {
+            if (raw[i] is not null)
+            {
+                before = i;
+                break;
+            }
+        }
+
+        var after = -1;
+        for (var i = index + 1; i < raw.Count; i++)
+        {
+            if (raw[i] is not null)
+            {
+                after = i;
+                break;
+            }
+        }
+
+        if (before < 0 || after < 0)
+            return double.NaN;
+
+        var t = (double)(index - before) / (after - before);
+        return raw[before]!.Value + ((raw[after]!.Value - raw[before]!.Value) * t);
     }
 }

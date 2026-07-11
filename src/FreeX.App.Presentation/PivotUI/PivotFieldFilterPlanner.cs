@@ -314,10 +314,16 @@ public static class PivotFieldFilterPlanner
         }
         else if (!ValueKindIsAverage(kind))
         {
+            // Try the caller's culture first, then fall back to invariant - the same
+            // convention every other numeric-entry parser in the app uses (ChartDialogValueParser,
+            // DrawingInputParser, PageSetupDialogModel, etc). NumberStyles.Any (which implies
+            // AllowThousands) is deliberately avoided: on a comma-decimal culture (e.g. de-DE,
+            // where '.' is the group separator) it silently reinterprets a period-decimal value
+            // like "1000.5" as the grouped integer 10005 instead of failing or parsing 1000.5.
             if (!NumericInputParser.TryParseFiniteDouble(
                     primaryText ?? string.Empty,
-                    NumberStyles.Any,
                     culture,
+                    CultureInfo.InvariantCulture,
                     out var parsed))
             {
                 error = PivotValueFilterValidationError.NumericValueRequired;
@@ -329,8 +335,8 @@ public static class PivotFieldFilterPlanner
             {
                 if (!NumericInputParser.TryParseFiniteDouble(
                         secondaryText ?? string.Empty,
-                        NumberStyles.Any,
                         culture,
+                        CultureInfo.InvariantCulture,
                         out var parsed2))
                 {
                     error = PivotValueFilterValidationError.NumericSecondValueRequired;

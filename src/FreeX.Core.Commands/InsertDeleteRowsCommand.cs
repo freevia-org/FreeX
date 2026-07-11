@@ -157,8 +157,31 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         return new CommandOutcome(
             true,
             AffectedCells: RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
-                Enumerable.Empty<CellAddress>(),
+                RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, movedSnapshot, _count, _formulaSnapshot),
                 _formulaSnapshot));
+    }
+
+    // R24-volatile-recalc-deep-3: a relocated formula cell whose text needs no rewrite (e.g. a
+    // volatile 0-arg function like NOW()/RAND() with no cell references) is never added to
+    // _formulaSnapshot by RewriteAllFormulas, so it would otherwise be absent from AffectedCells and
+    // RecalcEngine would never re-register its dependencies/volatile tracking at its new address
+    // (leaving a stale entry at the old, now-blank address and none at the new one). Surface such
+    // cells as primary affected cells so the post-command pipeline still registers them.
+    private static IEnumerable<CellAddress> RelocatedFormulaCellsPendingDependencyRefresh(
+        SheetId sheetId,
+        List<CellStateSnapshot> movedSnapshot,
+        uint count,
+        Dictionary<CellAddress, string> formulaSnapshot)
+    {
+        foreach (var snapshot in movedSnapshot)
+        {
+            if (snapshot.FormulaText is null)
+                continue;
+
+            var newAddr = new CellAddress(sheetId, snapshot.Row + count, snapshot.Col);
+            if (!formulaSnapshot.ContainsKey(newAddr))
+                yield return newAddr;
+        }
     }
 
     public void Revert(ICommandContext ctx)

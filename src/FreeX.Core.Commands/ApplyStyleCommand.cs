@@ -21,6 +21,7 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
     private readonly GridRange _range;
     private readonly StyleDiff _diff;
     private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
+    private List<(CellAddress Address, IReadOnlyList<CellTextRun> OldRuns)>? _richTextSnapshot;
 
     private const int BytesPerCell = 200;
 
@@ -63,6 +64,18 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
             var addr = new CellAddress(_sheetId, row, col);
             _snapshot.Add((addr, cell.Clone(), null));
             cell.StyleId = StyleDiffStyleCache.GetOrRegister(ctx.Workbook, _diff, cell.StyleId, styleCache);
+
+            // Whole-cell font-formatting commands (Bold/Italic/Underline/Strikethrough/Font Name/
+            // Font Size/Font Color) must win over stale per-run rich-text overrides for the same
+            // property. Matches Excel: applying direct formatting to a whole cell (no partial-text/
+            // edit-mode selection) clears per-character overrides for that property so the newly
+            // applied uniform value actually renders instead of being masked by old run formatting.
+            if (sheet.RichTextRuns.TryGetValue(addr, out var runs) && AffectsRichRunFont(_diff))
+            {
+                _richTextSnapshot ??= [];
+                _richTextSnapshot.Add((addr, runs));
+                sheet.RichTextRuns[addr] = ClearOverriddenRunProperties(runs, _diff);
+            }
         }
 
         // --- Pass 2: empty cells within the style-only create zone ---
@@ -149,6 +162,52 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
                 sheet.SetCell(addr, oldCell.Clone());
             }
         }
+
+        if (_richTextSnapshot is not null)
+        {
+            foreach (var (addr, oldRuns) in _richTextSnapshot)
+                sheet.RichTextRuns[addr] = oldRuns;
+        }
+    }
+
+    /// <summary>
+    /// True when <paramref name="diff"/> sets at least one property that has a corresponding
+    /// per-run override on <see cref="CellTextRun"/> (Bold, Italic, Underline, Strikethrough,
+    /// FontName, FontSize, or either font-color form).
+    /// </summary>
+    private static bool AffectsRichRunFont(StyleDiff diff) =>
+        diff.Bold is not null
+        || diff.Italic is not null
+        || diff.Underline is not null
+        || diff.Strikethrough is not null
+        || diff.FontName is not null
+        || diff.FontSize is not null
+        || diff.FontColor is not null
+        || diff.FontThemeColor is not null;
+
+    /// <summary>
+    /// Returns a copy of <paramref name="runs"/> with the per-run override cleared (set to null,
+    /// i.e. "inherit from the cell style") for every property that <paramref name="diff"/>
+    /// explicitly sets, so the newly applied whole-cell value is not masked by a stale run-level
+    /// override.
+    /// </summary>
+    private static List<CellTextRun> ClearOverriddenRunProperties(IReadOnlyList<CellTextRun> runs, StyleDiff diff)
+    {
+        var result = new List<CellTextRun>(runs.Count);
+        foreach (var run in runs)
+        {
+            result.Add(run with
+            {
+                Bold          = diff.Bold          is not null ? null : run.Bold,
+                Italic        = diff.Italic        is not null ? null : run.Italic,
+                Underline     = diff.Underline     is not null ? null : run.Underline,
+                Strikethrough = diff.Strikethrough is not null ? null : run.Strikethrough,
+                FontName      = diff.FontName      is not null ? null : run.FontName,
+                FontSize      = diff.FontSize      is not null ? null : run.FontSize,
+                FontColor     = (diff.FontColor is not null || diff.FontThemeColor is not null) ? null : run.FontColor,
+            });
+        }
+        return result;
     }
 
     /// <summary>

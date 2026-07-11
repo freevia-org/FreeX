@@ -10,7 +10,8 @@ public enum ScenarioManagerAction
     Show,
     Delete,
     List,
-    Report
+    Report,
+    Merge
 }
 
 public enum ScenarioManagerOperation
@@ -19,7 +20,8 @@ public enum ScenarioManagerOperation
     Show,
     Save,
     Delete,
-    SummaryReport
+    SummaryReport,
+    Merge
 }
 
 public enum ScenarioManagerPlanStatus
@@ -98,6 +100,9 @@ public static class ScenarioManagerPlanner
             case "report":
             case "summary":
                 action = ScenarioManagerAction.Report;
+                return true;
+            case "merge":
+                action = ScenarioManagerAction.Merge;
                 return true;
             default:
                 action = default;
@@ -275,6 +280,65 @@ public static class ScenarioManagerPlanner
             selectedScenario,
             scenarioCells,
             requestedResultCells);
+    }
+
+    public static ScenarioManagerPlan CreateMergePlan(
+        Workbook? workbook,
+        IReadOnlyList<WorkbookScenario>? sourceScenarios)
+    {
+        var normalizedSource = sourceScenarios ?? [];
+
+        if (CreateWorkbookUnavailablePlan(
+                workbook,
+                ScenarioManagerOperation.Merge,
+                [],
+                out var unavailablePlan))
+            return unavailablePlan;
+
+        var availableWorkbook = workbook!;
+        var scenarios = BuildScenarioChoices(availableWorkbook, null, out var selectedScenario);
+
+        if (normalizedSource.Count == 0)
+            return CreatePlan(
+                ScenarioManagerOperation.Merge,
+                ScenarioManagerPlanStatus.NoScenarios,
+                "The source sheet or workbook has no scenarios to merge.",
+                scenarios,
+                selectedScenario,
+                [],
+                []);
+
+        var mergeCells = NormalizeAddresses(normalizedSource.SelectMany(
+            scenario => scenario.ChangingCells.Select(cell => cell.Address)));
+
+        if (!AllScenarioCellsBelongToWorkbook(availableWorkbook, mergeCells))
+            return CreatePlan(
+                ScenarioManagerOperation.Merge,
+                ScenarioManagerPlanStatus.ChangingCellsOutsideWorkbook,
+                "Scenario changing cells must belong to this workbook.",
+                scenarios,
+                selectedScenario,
+                [],
+                []);
+
+        if (HasProtectedScenarioCells(availableWorkbook, mergeCells))
+            return CreatePlan(
+                ScenarioManagerOperation.Merge,
+                ScenarioManagerPlanStatus.ProtectedChangingCells,
+                "Scenario changing cells are protected on at least one worksheet.",
+                scenarios,
+                selectedScenario,
+                mergeCells,
+                []);
+
+        return CreatePlan(
+            ScenarioManagerOperation.Merge,
+            ScenarioManagerPlanStatus.Ready,
+            $"Ready to merge {normalizedSource.Count} {Pluralize(normalizedSource.Count, "scenario")} into this workbook.",
+            scenarios,
+            selectedScenario,
+            mergeCells,
+            []);
     }
 
     private static ScenarioManagerPlan CreateScenarioActionPlan(

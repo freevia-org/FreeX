@@ -431,7 +431,8 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         HashSet<uint> groupHiddenRows,
         Dictionary<uint, double> rowHeights)
     {
-        if (XlsxWorksheetXmlValueParser.IsTruthy(row.Attribute("hidden")?.Value))
+        var isHidden = XlsxWorksheetXmlValueParser.IsTruthy(row.Attribute("hidden")?.Value);
+        if (isHidden)
             hiddenRows.Add(rowNumber);
 
         if (TryReadRowHeight(row.Attribute("ht")?.Value, row.Attribute("customHeight")?.Value, out var height))
@@ -441,7 +442,11 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         if (int.TryParse(outlineStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var outlineLevel) && outlineLevel > 0)
         {
             rowOutlineLevels[rowNumber] = outlineLevel;
-            if (XlsxWorksheetXmlValueParser.IsTruthy(row.Attribute("collapsed")?.Value))
+            // `collapsed="1"` alone marks the (potentially still-visible) anchor row of a
+            // collapsed outline group in real Excel-authored files -- it does not mean the row
+            // itself is hidden. Only fold it into GroupHiddenRows when the row's own `hidden`
+            // attribute agrees, so a visible collapsed subtotal/summary row stays visible.
+            if (isHidden && XlsxWorksheetXmlValueParser.IsTruthy(row.Attribute("collapsed")?.Value))
                 groupHiddenRows.Add(rowNumber);
         }
     }
@@ -454,7 +459,8 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         HashSet<uint> groupHiddenRows,
         Dictionary<uint, double> rowHeights)
     {
-        if (XlsxWorksheetXmlValueParser.IsTruthy(row.GetAttribute("hidden")))
+        var isHidden = XlsxWorksheetXmlValueParser.IsTruthy(row.GetAttribute("hidden"));
+        if (isHidden)
             hiddenRows.Add(rowNumber);
 
         if (TryReadRowHeight(row.GetAttribute("ht"), row.GetAttribute("customHeight"), out var height))
@@ -464,7 +470,11 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         if (int.TryParse(outlineStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var outlineLevel) && outlineLevel > 0)
         {
             rowOutlineLevels[rowNumber] = outlineLevel;
-            if (XlsxWorksheetXmlValueParser.IsTruthy(row.GetAttribute("collapsed")))
+            // `collapsed="1"` alone marks the (potentially still-visible) anchor row of a
+            // collapsed outline group in real Excel-authored files -- it does not mean the row
+            // itself is hidden. Only fold it into GroupHiddenRows when the row's own `hidden`
+            // attribute agrees, so a visible collapsed subtotal/summary row stays visible.
+            if (isHidden && XlsxWorksheetXmlValueParser.IsTruthy(row.GetAttribute("collapsed")))
                 groupHiddenRows.Add(rowNumber);
         }
     }

@@ -38,6 +38,13 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
     private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
     private Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? _scopedNamedRangeSnapshot;
     private Dictionary<CellAddress, SparklineModel>? _sparklineSnapshot;
+    // R24-sparklines-1: a sparkline hosted OUTSIDE the moved range whose DataRange is fully
+    // contained IN it (e.g. a sparkline anchored at F1 plotting A1:D1, when A1:D1 is cut and pasted
+    // elsewhere) must have its DataRange relocated too, mirroring _chartDataRangeSnapshot/
+    // TranslateFullyContainedChartDataRanges for ChartModel.DataRange. Sparklines whose own Location
+    // falls inside the moved range are excluded (already handled via CaptureSourcePayloads/
+    // CloneSparklineAt, which intentionally leaves DataRange unchanged when only the anchor moves).
+    private List<(SparklineModel Sparkline, GridRange OriginalDataRange)>? _sparklineDataRangeSnapshot;
     // R21-undo-redo-deep-2: pairs each relocated spill's original source anchor with its captured
     // payload (Apply already carries the destination Target alongside it) so Revert can re-establish
     // the spill back at the source once RestoreCellSnapshot has put the anchor's formula cell back —
@@ -147,6 +154,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, moveOp);
         _chartDataRangeSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(ctx.Workbook);
         TranslateFullyContainedChartDataRanges(ctx.Workbook, _sourceRange, moveOp.RowDelta, moveOp.ColDelta);
+        _sparklineDataRangeSnapshot = TranslateFullyContainedSparklineDataRanges(ctx.Workbook, _sourceRange, moveOp.RowDelta, moveOp.ColDelta);
 
         var payloads = CaptureSourcePayloads(sheet, _sourceRange, _destination);
         // R20-array-dynamic-spill-1: capture any live spill rooted at a source cell BEFORE
@@ -180,6 +188,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
             RowColumnShiftHelpers.RestoreRuleFormulas(sheet, _cfFormulaSnapshot ?? [], _cfThresholdSnapshot ?? [], _dvFormulaSnapshot ?? []);
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(ctx.Workbook, _chartDataRangeSnapshot);
+        RestoreSparklineDataRanges(_sparklineDataRangeSnapshot);
         RowColumnShiftHelpers.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
         RowColumnShiftHelpers.RestoreScopedNamedRanges(ctx.Workbook, _scopedNamedRangeSnapshot);
 
@@ -646,6 +655,52 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
                     chart.DataRange = TranslateRange(chart.DataRange, rowDelta, colDelta);
             }
         }
+    }
+
+    /// <summary>
+    /// Relocates a sparkline's plain <see cref="SparklineModel.DataRange"/> when it falls entirely
+    /// inside the moved range, mirroring <see cref="TranslateFullyContainedChartDataRanges"/> for
+    /// <see cref="ChartModel.DataRange"/> (R24-sparklines-1). Like charts, a sparkline can be hosted
+    /// on a different sheet than the data it plots, so every sheet in the workbook is checked, not
+    /// just the sheet being moved. Sparklines whose own <see cref="SparklineModel.Location"/> falls
+    /// inside <paramref name="sourceRange"/> are skipped here: those are relocated by
+    /// <see cref="CaptureSourcePayloads"/>/<see cref="CloneSparklineAt"/> instead, which intentionally
+    /// leaves DataRange unchanged when only the anchor cell moves. Returns the original
+    /// (sparkline, DataRange) pairs so <see cref="Revert"/> can restore them via
+    /// <see cref="RestoreSparklineDataRanges"/>.
+    /// </summary>
+    private static List<(SparklineModel Sparkline, GridRange OriginalDataRange)> TranslateFullyContainedSparklineDataRanges(
+        Workbook workbook, GridRange sourceRange, int rowDelta, int colDelta)
+    {
+        var snapshot = new List<(SparklineModel, GridRange)>();
+        if (rowDelta == 0 && colDelta == 0)
+            return snapshot;
+
+        foreach (var hostSheet in workbook.Sheets)
+        {
+            foreach (var sparkline in hostSheet.Sparklines)
+            {
+                if (sourceRange.Contains(sparkline.Location))
+                    continue;
+
+                if (sourceRange.Contains(sparkline.DataRange))
+                {
+                    snapshot.Add((sparkline, sparkline.DataRange));
+                    sparkline.DataRange = TranslateRange(sparkline.DataRange, rowDelta, colDelta);
+                }
+            }
+        }
+
+        return snapshot;
+    }
+
+    private static void RestoreSparklineDataRanges(List<(SparklineModel Sparkline, GridRange OriginalDataRange)>? snapshot)
+    {
+        if (snapshot is null)
+            return;
+
+        foreach (var (sparkline, originalDataRange) in snapshot)
+            sparkline.DataRange = originalDataRange;
     }
 
     /// <summary>
