@@ -1820,8 +1820,37 @@ public sealed class WorkbookSession
         ActiveCell = address;
         ActiveSheet.ActiveRow = address.Row;
         ActiveSheet.ActiveCol = address.Col;
-        SetSingleSelectedRange(new GridRange(address, address));
+
+        // Mirror Excel / the WPF host: starting to edit a cell that already sits inside the current
+        // (possibly multi-cell) selection leaves the selection rectangle intact, so a following
+        // Ctrl+Enter fills the whole originally-selected range and a plain Enter can advance within
+        // it. The WPF host never touches SheetGrid.SelectedRange when an inline edit starts; the old
+        // unconditional collapse here silently shrank a multi-cell selection to the single edited
+        // cell the moment typing began, so live Ctrl+Enter only ever filled that one cell. Only
+        // collapse when the edited address falls OUTSIDE the current selection, which keeps the
+        // ActiveCell-inside-SelectedRange invariant for callers that begin an edit elsewhere.
+        if (!CurrentSelectionContains(address))
+            SetSingleSelectedRange(new GridRange(address, address));
+
         FormulaEditAddress = address;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="address"/> lies within the current selection — the primary
+    /// <see cref="SelectedRange"/> or any area of a multi-area <see cref="SelectedRanges"/>.
+    /// </summary>
+    private bool CurrentSelectionContains(CellAddress address)
+    {
+        if (SelectedRange.Contains(address))
+            return true;
+
+        foreach (var range in SelectedRanges)
+        {
+            if (range.Contains(address))
+                return true;
+        }
+
+        return false;
     }
 
     public void CancelFormulaEdit()

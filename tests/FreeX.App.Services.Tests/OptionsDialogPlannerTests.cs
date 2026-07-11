@@ -47,6 +47,7 @@ public sealed class OptionsDialogPlannerTests
             proofingIgnoreUppercase: true, proofingIgnoreNumbers: true,
             showFormulaBar: true, showGridlines: true, showHeadings: true,
             defaultFormat: ".xlsx", showScreenTips: true,
+            moveSelectionAfterEnter: true, afterEnterDirection: AppOptionsEnterDirection.Down,
             out _, out var error);
 
         ok.Should().BeFalse();
@@ -62,6 +63,7 @@ public sealed class OptionsDialogPlannerTests
             proofingIgnoreUppercase: true, proofingIgnoreNumbers: true,
             showFormulaBar: true, showGridlines: true, showHeadings: true,
             defaultFormat: ".xlsx", showScreenTips: true,
+            moveSelectionAfterEnter: true, afterEnterDirection: AppOptionsEnterDirection.Down,
             out _, out var error);
 
         ok.Should().BeFalse();
@@ -77,6 +79,7 @@ public sealed class OptionsDialogPlannerTests
             proofingIgnoreUppercase: false, proofingIgnoreNumbers: true,
             showFormulaBar: false, showGridlines: false, showHeadings: true,
             defaultFormat: ".json", showScreenTips: false,
+            moveSelectionAfterEnter: false, afterEnterDirection: AppOptionsEnterDirection.Up,
             out var input, out var error);
 
         ok.Should().BeTrue();
@@ -96,6 +99,8 @@ public sealed class OptionsDialogPlannerTests
         // Legacy .json maps to the native FreeX format.
         input.DefaultFormat.Should().Be(AppOptions.FreeXWorkbookDefaultFormat);
         input.ShowScreenTips.Should().BeFalse();
+        input.MoveSelectionAfterEnter.Should().BeFalse();
+        input.AfterEnterDirection.Should().Be(AppOptionsEnterDirection.Up);
     }
 
     [Fact]
@@ -124,6 +129,9 @@ public sealed class OptionsDialogPlannerTests
             proofingIgnoreUppercase: true, proofingIgnoreNumbers: false,
             showFormulaBar: true, showGridlines: true, showHeadings: true,
             defaultFormat: ".xlsx", showScreenTips: true,
+            // Distinct from `existing` (false / Right) so the projection proves these are now
+            // dialog-managed — the input wins, not the carried-over value.
+            moveSelectionAfterEnter: true, afterEnterDirection: AppOptionsEnterDirection.Down,
             out var input, out _);
 
         var projected = OptionsDialogPlanner.Project(existing, input);
@@ -134,13 +142,13 @@ public sealed class OptionsDialogPlannerTests
         projected.UserName.Should().Be("Grace");
         projected.ProofingIgnoreNumbers.Should().BeFalse();
         projected.ErrorCheckingEnabled.Should().BeTrue();
+        projected.MoveSelectionAfterEnter.Should().BeTrue();
+        projected.AfterEnterDirection.Should().Be(AppOptionsEnterDirection.Down);
 
         // Unmanaged fields are carried over verbatim.
         projected.AppLanguage.Should().Be("fr-FR");
         projected.CollapseRibbonAutomatically.Should().BeTrue();
         projected.FormulaBarExpanded.Should().BeTrue();
-        projected.MoveSelectionAfterEnter.Should().BeFalse();
-        projected.AfterEnterDirection.Should().Be(AppOptionsEnterDirection.Right);
         projected.ObjectsDisplay.Should().Be(AppOptionsObjectDisplay.Placeholders);
         projected.StatusBarShowMaximum.Should().BeTrue();
         projected.QuickAccessToolbarBelowRibbon.Should().BeTrue();
@@ -164,6 +172,21 @@ public sealed class OptionsDialogPlannerTests
     [InlineData(1, ".fxl")]
     public void IndexToDefaultFormat_RoundTrips(int index, string expectedFormat) =>
         OptionsDialogPlanner.IndexToDefaultFormat(index).Should().Be(expectedFormat);
+
+    [Theory]
+    [InlineData(AppOptionsEnterDirection.Down, 0)]
+    [InlineData(AppOptionsEnterDirection.Right, 1)]
+    [InlineData(AppOptionsEnterDirection.Up, 2)]
+    [InlineData(AppOptionsEnterDirection.Left, 3)]
+    public void AfterEnterDirectionIndex_RoundTrips(AppOptionsEnterDirection direction, int expectedIndex)
+    {
+        OptionsDialogPlanner.AfterEnterDirectionToIndex(direction).Should().Be(expectedIndex);
+        OptionsDialogPlanner.IndexToAfterEnterDirection(expectedIndex).Should().Be(direction);
+    }
+
+    [Fact]
+    public void IndexToAfterEnterDirection_FallsBackToDownForOutOfRangeIndex() =>
+        OptionsDialogPlanner.IndexToAfterEnterDirection(-1).Should().Be(AppOptionsEnterDirection.Down);
 
     [Fact]
     public void DefaultFontToIndex_FallsBackToCalibriForCustomFonts()

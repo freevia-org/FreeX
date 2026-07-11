@@ -508,6 +508,19 @@ public sealed class AvaloniaShellSourceTests
         optionsSource.Should().Contain("var projected = OptionsDialogPlanner.Project(current, input);");
         optionsSource.Should().Contain("AppOptionsStore.Save(projected)");
         optionsSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"OptionsDialog\");");
+
+        // Advanced ▸ Editing options: the "After pressing Enter, move selection" toggle and its
+        // direction picker are now live-bound to the persisted AppOptions (previously shipped
+        // disabled/hardcoded to Down), matching the WPF host's OptionsDialog.
+        optionsSource.Should().Contain("isChecked: current.MoveSelectionAfterEnter");
+        optionsSource.Should().Contain("AutomationProperties.SetAutomationId(moveAfterEnterBox, \"OptionsMoveSelectionAfterEnterCheckBox\");");
+        optionsSource.Should().Contain("selectedIndex: OptionsDialogPlanner.AfterEnterDirectionToIndex(current.AfterEnterDirection)");
+        optionsSource.Should().Contain("isEnabled: current.MoveSelectionAfterEnter");
+        optionsSource.Should().Contain("AutomationProperties.SetAutomationId(afterEnterDirectionBox, \"OptionsAfterEnterDirectionComboBox\");");
+        optionsSource.Should().Contain("moveAfterEnterBox.IsCheckedChanged +=");
+        optionsSource.Should().Contain("afterEnterDirectionBox.IsEnabled = moveAfterEnterBox.IsChecked == true;");
+        optionsSource.Should().Contain("moveAfterEnterBox.IsChecked == true,");
+        optionsSource.Should().Contain("OptionsDialogPlanner.IndexToAfterEnterDirection(afterEnterDirectionBox.SelectedIndex)");
         optionsSource.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"OptionsOkButton\");");
         optionsSource.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"OptionsCancelButton\");");
         optionsSource.Should().Contain("OptionsText(\"Options_CategoryQuickAccessToolbar\")");

@@ -268,20 +268,38 @@ public sealed partial class MainWindow
             OptionsCheckBox(OptionsText("Options_ShowQuickAnalysisOptionsOnSelection"), isChecked: true, isEnabled: false),
             OptionsCheckBox(OptionsText("Options_OptimizeDisplayForAccessibility"), isEnabled: false));
 
+        // ── Advanced (editing options) ────────────────────────────────────────────
+        // The "After pressing Enter, move selection" toggle + its direction picker edit the persisted
+        // AppOptions.MoveSelectionAfterEnter / AfterEnterDirection, which the shell forwards into
+        // ExcelEditKeyPlanner.GetIntent so Enter moves in the chosen direction (or not at all). Mirrors
+        // the WPF host's OptionsDialog (OptMoveAfterEnter / OptAfterEnterDirection).
+        var moveAfterEnterBox = OptionsCheckBox(
+            OptionsText("Options_AfterPressingEnterMoveSelection"),
+            isChecked: current.MoveSelectionAfterEnter);
+        AutomationProperties.SetAutomationId(moveAfterEnterBox, "OptionsMoveSelectionAfterEnterCheckBox");
+
+        var afterEnterDirectionBox = OptionsComboBox(
+            new[]
+            {
+                OptionsText("Options_AfterEnterDirectionDown"),
+                OptionsText("Options_AfterEnterDirectionRight"),
+                OptionsText("Options_AfterEnterDirectionUp"),
+                OptionsText("Options_AfterEnterDirectionLeft"),
+            },
+            selectedIndex: OptionsDialogPlanner.AfterEnterDirectionToIndex(current.AfterEnterDirection),
+            isEnabled: current.MoveSelectionAfterEnter,
+            minWidth: 140);
+        AutomationProperties.SetAutomationId(afterEnterDirectionBox, "OptionsAfterEnterDirectionComboBox");
+
+        // Match the WPF host's UpdateAfterEnterDirectionState: the direction only applies when the
+        // move-after-Enter toggle is on, so gray the picker out whenever the checkbox is cleared.
+        moveAfterEnterBox.IsCheckedChanged += (_, _) =>
+            afterEnterDirectionBox.IsEnabled = moveAfterEnterBox.IsChecked == true;
+
         var advancedPanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_EditingOptions")),
-            OptionsCheckBox(OptionsText("Options_AfterPressingEnterMoveSelection"), isChecked: true, isEnabled: false),
-            OptionsLabeled(OptionsText("Options_Direction"), OptionsComboBox(
-                new[]
-                {
-                    OptionsText("Options_AfterEnterDirectionDown"),
-                    OptionsText("Options_AfterEnterDirectionRight"),
-                    OptionsText("Options_AfterEnterDirectionUp"),
-                    OptionsText("Options_AfterEnterDirectionLeft"),
-                },
-                selectedIndex: 0,
-                isEnabled: false,
-                minWidth: 140), labelWidth: 160, fieldWidth: 140),
+            moveAfterEnterBox,
+            OptionsLabeled(OptionsText("Options_Direction"), afterEnterDirectionBox, labelWidth: 160, fieldWidth: 140),
             OptionsCheckBox(OptionsText("Options_EnableFillHandleAndCellDragAndDrop"), isChecked: true, isEnabled: false),
             OptionsCheckBox(OptionsText("Options_EnableAutoCompleteForCellValues"), isChecked: true, isEnabled: false),
             OptionsSectionHeader(OptionsText("Options_DisplayOptionsForThisWorkbook")),
@@ -496,6 +514,8 @@ public sealed partial class MainWindow
                     showHeadingsBox.IsChecked == true,
                     OptionsDialogPlanner.IndexToDefaultFormat(defaultFormatBox.SelectedIndex),
                     screenTipsBox.IsChecked == true,
+                    moveAfterEnterBox.IsChecked == true,
+                    OptionsDialogPlanner.IndexToAfterEnterDirection(afterEnterDirectionBox.SelectedIndex),
                     out var input,
                     out var inputError))
             {

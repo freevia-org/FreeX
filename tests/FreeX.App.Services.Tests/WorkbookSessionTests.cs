@@ -227,6 +227,60 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void BeginFormulaEdit_KeepsMultiCellSelectionWhenEditingCellInsideIt()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 10, 2));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(range);
+
+        session.BeginFormulaEdit(range.Start);
+
+        // Excel / the WPF host keep the whole selection rectangle highlighted while one cell inside
+        // it is edited, so a following Ctrl+Enter fills the full range. The old unconditional
+        // collapse here shrank B2:B10 to B2 before Ctrl+Enter could ever run.
+        session.SelectedRange.Should().Be(range);
+        session.SelectedRanges.Should().ContainSingle().Which.Should().Be(range);
+        session.ActiveCell.Should().Be(range.Start);
+        session.FormulaEditAddress.Should().Be(range.Start);
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public void BeginFormulaEdit_CollapsesSelectionWhenEditingCellOutsideIt()
+    {
+        // The collapse still happens for the rare caller that begins an edit somewhere outside the
+        // current selection: that preserves the invariant that the active cell sits inside the
+        // selection, matching a fresh single-cell edit.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 10, 2));
+        var outside = new CellAddress(sheet.Id, 5, 5);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(range);
+
+        session.BeginFormulaEdit(outside);
+
+        session.SelectedRange.Should().Be(new GridRange(outside, outside));
+        session.SelectedRanges.Should().ContainSingle().Which.Should().Be(new GridRange(outside, outside));
+        session.ActiveCell.Should().Be(outside);
+        session.FormulaEditAddress.Should().Be(outside);
+    }
+
+    [Fact]
     public void GoToReference_SelectsRangeAcrossSheetsWithoutDirtyingWorkbook()
     {
         var workbook = CreateWorkbook();

@@ -41,7 +41,9 @@ public static class OptionsDialogPlanner
         bool ShowGridlines,
         bool ShowHeadings,
         string DefaultFormat,
-        bool ShowScreenTips);
+        bool ShowScreenTips,
+        bool MoveSelectionAfterEnter,
+        AppOptionsEnterDirection AfterEnterDirection);
 
     /// <summary>Font names offered in the Options dialog's default-font picker (parity with the WPF host).</summary>
     public static IReadOnlyList<string> FontNames { get; } =
@@ -98,6 +100,8 @@ public static class OptionsDialogPlanner
         bool showHeadings,
         string? defaultFormat,
         bool showScreenTips,
+        bool moveSelectionAfterEnter,
+        AppOptionsEnterDirection afterEnterDirection,
         out OptionsDialogInput input,
         out OptionsInputError error)
     {
@@ -130,7 +134,9 @@ public static class OptionsDialogPlanner
             showGridlines,
             showHeadings,
             AppOptions.NormalizeDefaultFormat(defaultFormat),
-            showScreenTips);
+            showScreenTips,
+            moveSelectionAfterEnter,
+            afterEnterDirection);
         return true;
     }
 
@@ -163,14 +169,14 @@ public static class OptionsDialogPlanner
             ShowGridlines = input.ShowGridlines,
             ShowHeadings = input.ShowHeadings,
             DefaultFormat = input.DefaultFormat,
+            MoveSelectionAfterEnter = input.MoveSelectionAfterEnter,
+            AfterEnterDirection = input.AfterEnterDirection,
 
             // Carried over verbatim — not surfaced by this dialog.
             CollapseRibbonAutomatically = existing.CollapseRibbonAutomatically,
             AppLanguage = existing.AppLanguage,
             SpellCheckCustomDictionaryWords = existing.SpellCheckCustomDictionaryWords,
             FormulaBarExpanded = existing.FormulaBarExpanded,
-            MoveSelectionAfterEnter = existing.MoveSelectionAfterEnter,
-            AfterEnterDirection = existing.AfterEnterDirection,
             ObjectsDisplay = existing.ObjectsDisplay,
             StatusBarShowCellMode = existing.StatusBarShowCellMode,
             StatusBarShowEndMode = existing.StatusBarShowEndMode,
@@ -211,6 +217,28 @@ public static class OptionsDialogPlanner
     /// <summary>Maps a default-format picker index back to its format string.</summary>
     public static string IndexToDefaultFormat(int index) =>
         index == 1 ? AppOptions.FreeXWorkbookDefaultFormat : AppOptions.XlsxDefaultFormat;
+
+    /// <summary>
+    /// Maps an <see cref="AppOptionsEnterDirection"/> to its 0-based index in the Advanced tab's
+    /// "After pressing Enter, move selection" direction picker (Down, Right, Up, Left — matching the
+    /// WPF host's OptionsDialog).
+    /// </summary>
+    public static int AfterEnterDirectionToIndex(AppOptionsEnterDirection direction) => direction switch
+    {
+        AppOptionsEnterDirection.Right => 1,
+        AppOptionsEnterDirection.Up => 2,
+        AppOptionsEnterDirection.Left => 3,
+        _ => 0,
+    };
+
+    /// <summary>Maps an Advanced-tab direction picker index back to its <see cref="AppOptionsEnterDirection"/>.</summary>
+    public static AppOptionsEnterDirection IndexToAfterEnterDirection(int index) => index switch
+    {
+        1 => AppOptionsEnterDirection.Right,
+        2 => AppOptionsEnterDirection.Up,
+        3 => AppOptionsEnterDirection.Left,
+        _ => AppOptionsEnterDirection.Down,
+    };
 
     /// <summary>Resolves the default-font picker index, falling back to Calibri when the saved font is custom.</summary>
     public static int DefaultFontToIndex(string? fontName)

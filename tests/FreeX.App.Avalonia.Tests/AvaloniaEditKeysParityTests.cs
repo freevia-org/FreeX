@@ -152,13 +152,12 @@ public sealed class AvaloniaEditKeysParityTests
         // moves on).
         //
         // Note: this deliberately drives FormulaBox_KeyDown WITHOUT going through
-        // WorkbookSession.BeginFormulaEdit first. BeginFormulaEdit collapses the session's
-        // SelectedRange to the single edited cell as a side effect (a separate, pre-existing
-        // behavior difference from the WPF host, where SheetGrid.SelectedRange is never touched by
-        // starting an edit) — that lives in WorkbookSession.cs, outside this fix's owned files. This
-        // test instead isolates the actual fix under test: given whatever range is selected at the
-        // moment Ctrl+Enter fires, CommitEditAcrossSelection must fill every cell in it and restore
-        // the selection afterward.
+        // WorkbookSession.BeginFormulaEdit first, so it isolates the CommitEditAcrossSelection fix:
+        // given whatever range is selected at the moment Ctrl+Enter fires, it must fill every cell
+        // in it and restore the selection afterward. The companion test below
+        // (CtrlEnter_AfterBeginFormulaEdit_FillsWholeSelection) covers the realistic end-to-end
+        // path where BeginFormulaEdit runs first — that used to collapse the selection to the edited
+        // cell, but now preserves it when the edited cell is inside the selection (WorkbookSession.cs).
         await Session.Dispatch(() =>
         {
             var window = new MainWindow([]);
@@ -178,6 +177,39 @@ public sealed class AvaloniaEditKeysParityTests
 
             window.Session.SelectedRange.Should().Be(range,
                 "Ctrl+Enter must leave the whole original selection intact, unlike a plain Enter commit which collapses to one cell");
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task CtrlEnter_AfterBeginFormulaEdit_FillsWholeSelection()
+    {
+        // End-to-end guard for the live app: selecting a multi-cell range and then STARTING an edit
+        // (BeginFormulaEdit, as every real edit-entry point does) must leave the range intact so the
+        // subsequent Ctrl+Enter fills all of it. Before the WorkbookSession fix, BeginFormulaEdit
+        // collapsed SelectedRange to the single edited cell, so live Ctrl+Enter only ever filled the
+        // active cell — never the originally-selected range.
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("CleanFixture");
+            window.Session.SelectSheet(sheet.Id);
+            var range = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 4, 2));
+            window.Session.SelectRange(range);
+            window.Session.BeginFormulaEdit(range.Start);
+            window.FormulaBoxTextForTest = "99";
+
+            window.RaiseFormulaBoxKeyDownForTest(new KeyEventArgs { Key = Key.Enter, KeyModifiers = KeyModifiers.Control });
+
+            foreach (var address in range.AllCells())
+            {
+                sheet.GetValue(address).Should().Be(new NumberValue(99),
+                    $"Ctrl+Enter after starting the edit must still fill every selected cell, including {address}");
+            }
+
+            window.Session.SelectedRange.Should().Be(range,
+                "the multi-cell selection must survive BeginFormulaEdit so Ctrl+Enter fills the whole range");
 
             window.Close();
         }, CancellationToken.None);
