@@ -1,3 +1,4 @@
+using System.Xml.Linq;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -14,6 +15,73 @@ file static class ProtectionCommandPasswordHashing
         string.IsNullOrEmpty(typedPassword)
             ? null
             : ProtectionPasswordHelper.ToVerifiedLegacyPasswordHash(typedPassword);
+}
+
+file static class WorkbookProtectionMetadataCleaner
+{
+    /// <summary>
+    /// Names of the workbookProtection attributes that ProtectWorkbookCommand/UnprotectWorkbookCommand
+    /// directly manage: the legacy structure lock/password plus the modern ISO 29500 hash quartet a
+    /// prior Protect Workbook password may have left behind (see
+    /// XlsxWorkbookMetadataWriter.ApplyProtection, which re-applies whatever survives in the preserved
+    /// bag verbatim underneath a freshly-set password). Everything else the bag may carry --
+    /// lockWindows, lockRevision, revisionsPassword, the revisions hash quartet, ... -- is unrelated to
+    /// Structure protection and Core doesn't model it, so it must survive a Protect/Unprotect Workbook
+    /// unchanged (see R22-protection-security-3).
+    /// </summary>
+    private static readonly string[] ManagedAttributeNames =
+    [
+        "lockStructure",
+        "workbookPassword",
+        "workbookAlgorithmName",
+        "workbookHashValue",
+        "workbookSaltValue",
+        "workbookSpinCount",
+    ];
+
+    /// <summary>
+    /// Returns a copy of <paramref name="metadata"/> with only the structure-password attributes this
+    /// command manages removed from the preserved workbookProtection bag, leaving unrelated preserved
+    /// attributes (and any preserved child elements) intact. Never mutates <paramref name="metadata"/>
+    /// itself, so a command's captured "previous" bag (used by Revert/undo) stays untouched.
+    /// </summary>
+    public static NativeXmlPreserveBag? ClearManagedAttributes(NativeXmlPreserveBag? metadata)
+    {
+        if (metadata is null)
+            return null;
+
+        var raw = metadata.Get("workbookProtection");
+        if (string.IsNullOrWhiteSpace(raw))
+            return metadata;
+
+        XElement element;
+        try
+        {
+            element = XElement.Parse(raw);
+        }
+        catch
+        {
+            // Malformed preserved payload from an older save; leave it untouched rather than risk
+            // losing content we don't understand.
+            return metadata;
+        }
+
+        foreach (var name in ManagedAttributeNames)
+            element.Attribute(name)?.Remove();
+
+        var clone = metadata.Clone();
+        clone.Set(
+            "workbookProtection",
+            element.Attributes().Any() || element.HasElements
+                ? element.ToString(SaveOptions.DisableFormatting)
+                : null);
+
+        // If nothing unrelated survived, drop the bag entirely so the writer's
+        // "nothing to preserve" fast path (ApplyProtection) still applies, instead of leaving a
+        // functionally-empty bag object that would make it emit a stray empty workbookProtection
+        // element.
+        return clone.All.Count > 0 ? clone : null;
+    }
 }
 
 /// <summary>Protect a worksheet with undo support.</summary>
@@ -282,8 +350,11 @@ public sealed class ProtectWorkbookCommand : IWorkbookCommand
         // workbookSaltValue/workbookSpinCount quartet alongside the NEW password's legacy
         // workbookPassword hash, leaving two conflicting verifiers so Excel (which trusts the
         // modern hash) still unlocks with the revoked password while FreeX's own reader (legacy
-        // hash first) requires the new one.
-        ctx.Workbook.ProtectionMetadata = null;
+        // hash first) requires the new one. Only that managed quartet/structure-password slice of
+        // the bag is cleared -- unrelated preserved attributes Core doesn't model (lockWindows,
+        // lockRevision, revisionsPassword, ...) must survive untouched.
+        ctx.Workbook.ProtectionMetadata =
+            WorkbookProtectionMetadataCleaner.ClearManagedAttributes(ctx.Workbook.ProtectionMetadata);
         return new CommandOutcome(true);
     }
 
@@ -323,8 +394,11 @@ public sealed class UnprotectWorkbookCommand : IWorkbookCommand
 
         // Clear the preserved modern-hash verifier along with the password: a later Protect
         // Workbook with a new password must not have this stale bag re-applied underneath it (see
-        // ProtectWorkbookCommand.Apply).
-        ctx.Workbook.ProtectionMetadata = null;
+        // ProtectWorkbookCommand.Apply). Only that managed quartet/structure-password slice of the
+        // bag is cleared -- unrelated preserved attributes Core doesn't model (lockWindows,
+        // lockRevision, revisionsPassword, ...) must survive untouched.
+        ctx.Workbook.ProtectionMetadata =
+            WorkbookProtectionMetadataCleaner.ClearManagedAttributes(ctx.Workbook.ProtectionMetadata);
         return new CommandOutcome(true);
     }
 

@@ -14,6 +14,15 @@ namespace FreeX.App.UI.Tests;
 
 public sealed partial class ChartRendererTests
 {
+    // R22-chart-model-render-2: the bubble renderer no longer passes the size-column value straight
+    // through as the OxyPlot marker size -- it scales it into a pixel radius via
+    // ChartRenderer.Bubble.cs's ported BubbleRadius (mirroring the Avalonia ChartLayoutEngine
+    // reference), using the largest size value across every series in the chart. This helper
+    // reproduces that formula for the default Area/100% settings these tests exercise.
+    private static double ExpectedBubbleRadius(double size, double maxSize) =>
+        Math.Max(1.0, 20.0 * Math.Sqrt(Math.Clamp(Math.Abs(size) / maxSize, 0, 1)));
+
+
     [Fact]
     public void ScatterRenderer_UsesFirstNumericColumnAsXValues()
     {
@@ -134,7 +143,9 @@ public sealed partial class ChartRendererTests
 
         var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<ScatterSeries>().Subject;
         series.Title.Should().Be("Revenue");
-        series.Points.Select(point => (point.X, point.Y, point.Size)).Should().Equal((1, 10, 4), (2, 20, 8));
+        series.Points.Select(point => (point.X, point.Y, point.Size)).Should().Equal(
+            (1, 10, ExpectedBubbleRadius(4, 8)),
+            (2, 20, ExpectedBubbleRadius(8, 8)));
     }
 
     [Fact]
@@ -174,12 +185,18 @@ public sealed partial class ChartRendererTests
             [],
             []));
 
+        // The shared bubble-size maximum is 8 (the largest |size| across both series), so Series B's
+        // radii (sizes 3 and 6) scale relative to that same maximum rather than its own local max.
         var series = model.Series.Should().HaveCount(2).And.AllBeOfType<ScatterSeries>().Subject.Cast<ScatterSeries>().ToList();
         series[0].Title.Should().Be("Margin A");
-        series[0].Points.Select(point => (point.X, point.Y, point.Size)).Should().Equal((1, 10, 4), (2, 20, 8));
+        series[0].Points.Select(point => (point.X, point.Y, point.Size)).Should().Equal(
+            (1, 10, ExpectedBubbleRadius(4, 8)),
+            (2, 20, ExpectedBubbleRadius(8, 8)));
         series[0].MarkerFill.Should().Be(OxyColor.FromRgb(68, 114, 196));
         series[1].Title.Should().Be("Margin B");
-        series[1].Points.Select(point => (point.X, point.Y, point.Size)).Should().Equal((1, 7, 3), (2, 11, 6));
+        series[1].Points.Select(point => (point.X, point.Y, point.Size)).Should().Equal(
+            (1, 7, ExpectedBubbleRadius(3, 8)),
+            (2, 11, ExpectedBubbleRadius(6, 8)));
         series[1].MarkerFill.Should().Be(OxyColor.FromRgb(112, 173, 71));
     }
 
@@ -211,6 +228,8 @@ public sealed partial class ChartRendererTests
 
         var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<ScatterSeries>().Subject;
         series.Title.Should().Be("Revenue");
-        series.Points.Select(point => (point.X, point.Y, point.Size)).Should().Equal((1, 10, 4), (2, 20, 8));
+        series.Points.Select(point => (point.X, point.Y, point.Size)).Should().Equal(
+            (1, 10, ExpectedBubbleRadius(4, 8)),
+            (2, 20, ExpectedBubbleRadius(8, 8)));
     }
 }

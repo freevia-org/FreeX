@@ -194,8 +194,12 @@ internal static class XlsxConditionalFormatClosedXmlMapper
         if (style.Bold != def.Bold) xlStyle.Font.Bold = style.Bold;
         if (style.Italic != def.Italic) xlStyle.Font.Italic = style.Italic;
         if (style.Strikethrough != def.Strikethrough) xlStyle.Font.Strikethrough = style.Strikethrough;
-        if (style.Underline != def.Underline)
-            xlStyle.Font.Underline = style.Underline ? XLFontUnderlineValues.Single : XLFontUnderlineValues.None;
+        if (style.Underline != def.Underline || style.DoubleUnderline != def.DoubleUnderline)
+            xlStyle.Font.Underline = style.DoubleUnderline
+                ? XLFontUnderlineValues.Double
+                : style.Underline
+                    ? XLFontUnderlineValues.Single
+                    : XLFontUnderlineValues.None;
         if (style.FontColor != def.FontColor)
             xlStyle.Font.FontColor = XLColor.FromArgb(255, style.FontColor.R, style.FontColor.G, style.FontColor.B);
 
@@ -255,6 +259,16 @@ internal static class XlsxConditionalFormatClosedXmlMapper
         ApplyBorderEdge(xlStyle.Border, style.BorderRight, "right");
         ApplyBorderEdge(xlStyle.Border, style.BorderBottom, "bottom");
         ApplyBorderEdge(xlStyle.Border, style.BorderLeft, "left");
+
+        if (style.BorderDiagonalDown.Style != BorderStyle.None || style.BorderDiagonalUp.Style != BorderStyle.None)
+        {
+            // OOXML: diagonal border style/color is shared; diagonalDown/diagonalUp flags select which lines to draw.
+            var diagBorder = style.BorderDiagonalDown.Style != BorderStyle.None ? style.BorderDiagonalDown : style.BorderDiagonalUp;
+            xlStyle.Border.DiagonalBorder = MapBorderStyleInverse(diagBorder.Style);
+            xlStyle.Border.DiagonalBorderColor = XLColor.FromArgb(255, diagBorder.Color.R, diagBorder.Color.G, diagBorder.Color.B);
+            xlStyle.Border.DiagonalDown = style.BorderDiagonalDown.Style != BorderStyle.None;
+            xlStyle.Border.DiagonalUp = style.BorderDiagonalUp.Style != BorderStyle.None;
+        }
     }
 
     private static void ApplyBorderEdge(IXLBorder xlBorder, CellBorder edge, string side)
@@ -262,16 +276,7 @@ internal static class XlsxConditionalFormatClosedXmlMapper
         if (edge.Style == BorderStyle.None)
             return;
 
-        var xlStyle = edge.Style switch
-        {
-            BorderStyle.Thin => XLBorderStyleValues.Thin,
-            BorderStyle.Medium => XLBorderStyleValues.Medium,
-            BorderStyle.Thick => XLBorderStyleValues.Thick,
-            BorderStyle.Dashed => XLBorderStyleValues.Dashed,
-            BorderStyle.Dotted => XLBorderStyleValues.Dotted,
-            BorderStyle.Double => XLBorderStyleValues.Double,
-            _ => XLBorderStyleValues.None
-        };
+        var xlStyle = MapBorderStyleInverse(edge.Style);
 
         var xlColor = XLColor.FromArgb(255, edge.Color.R, edge.Color.G, edge.Color.B);
 
@@ -295,4 +300,22 @@ internal static class XlsxConditionalFormatClosedXmlMapper
                 break;
         }
     }
+
+    private static XLBorderStyleValues MapBorderStyleInverse(BorderStyle style) => style switch
+    {
+        BorderStyle.Thin => XLBorderStyleValues.Thin,
+        BorderStyle.Medium => XLBorderStyleValues.Medium,
+        BorderStyle.Thick => XLBorderStyleValues.Thick,
+        BorderStyle.Dashed => XLBorderStyleValues.Dashed,
+        BorderStyle.Dotted => XLBorderStyleValues.Dotted,
+        BorderStyle.Double => XLBorderStyleValues.Double,
+        BorderStyle.Hair => XLBorderStyleValues.Hair,
+        BorderStyle.SlantDashDot => XLBorderStyleValues.SlantDashDot,
+        BorderStyle.MediumDashed => XLBorderStyleValues.MediumDashed,
+        BorderStyle.DashDot => XLBorderStyleValues.DashDot,
+        BorderStyle.MediumDashDot => XLBorderStyleValues.MediumDashDot,
+        BorderStyle.DashDotDot => XLBorderStyleValues.DashDotDot,
+        BorderStyle.MediumDashDotDot => XLBorderStyleValues.MediumDashDotDot,
+        _ => XLBorderStyleValues.None,
+    };
 }

@@ -1748,6 +1748,11 @@ public partial class MainWindow
             _currentSheetId = copySheetIds.Count > 0
                 ? copySheetIds[^1]
                 : _workbook.Sheets[Math.Clamp(targetIndex, 0, _workbook.Sheets.Count - 1)].Id;
+
+            // Copying (and repositioning) sheets can change which sheets fall inside a 3-D
+            // span reference (e.g. =SUM(Sheet1:Sheet3!A1)), so recalculate just like the other
+            // structural sheet operations (rename/delete/duplicate/plain-move) do.
+            RecalculateWorkbook();
         }
         else
         {

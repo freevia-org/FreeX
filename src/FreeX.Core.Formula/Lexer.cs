@@ -66,6 +66,10 @@ public sealed class Lexer
 
             var token = ReadNextToken();
             tokens.Add(token);
+
+            if (tokens.Count > FormulaSafetyLimits.MaxParseTokens)
+                throw new FormulaParseException(
+                    $"Formula contains too many tokens; maximum is {FormulaSafetyLimits.MaxParseTokens}");
         }
 
         tokens.Add(new Token(TokenType.EndOfFormula, "", _pos));

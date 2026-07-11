@@ -40,6 +40,17 @@ public sealed class PasteCellsCommand : IWorkbookCommand
                 if (!CommandGuards.CanEditCell(ctx.Workbook, sheet, addr))
                     return CommandGuards.RejectSheetProtected();
             }
+
+            // This command always carries the source cell's full formatting (StyleId) into the
+            // destination -- it is only ever constructed for PasteCellsMode.All (see
+            // PasteCommandFactory), never for a values-only paste, which instead builds an
+            // EditCellsCommand that leaves the destination's own style untouched. So even when every
+            // destination cell is individually unlocked (CanEditCell above passes), a protected sheet
+            // must still require the FormatCells permission before this formatting change is allowed,
+            // matching every other formatting-capable command (ApplyStyleCommand, PasteFormatsCommand,
+            // MergeCellsCommand, GroupedApplyStyleCommand, PasteConditionalFormatsCommand).
+            if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatCells) is { } formatRejection)
+                return formatRejection;
         }
 
         if (CommandGuards.RejectIfSplitsArray(sheet, _cells.Select(c => c.Address)) is { } splitsArrayRejection)

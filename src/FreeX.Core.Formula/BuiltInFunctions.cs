@@ -277,6 +277,7 @@ public static partial class BuiltInFunctions
         ["PERCENTOF"]        = (PercentOf, 2, 2),
         ["MODE"]             = (ModeSngl, 1, 255),
         ["MODE.SNGL"]        = (ModeSngl, 1, 255),
+        ["MODE.MULT"]        = (ModeMult, 1, 255),
         ["CORREL"]           = (Correl, 2, 2),
         ["COVAR"]            = (CovarianceP, 2, 2),
         ["COVARIANCE.P"]     = (CovarianceP, 2, 2),
@@ -637,6 +638,39 @@ public static partial class BuiltInFunctions
     {
         if (!Functions.TryGetValue(name, out var entry)) return false;
         return count >= entry.MinArgs && count <= entry.MaxArgs;
+    }
+
+    // ── R22-statistical-functions-deep-2 ─────────────────────────────────────────
+    // MODE.MULT (array of every most-frequent value, in first-appearance order) was
+    // entirely unregistered, so calling it evaluated to #NAME? instead of a computed
+    // result.
+    // NOTE: the TREND / GROWTH / LINEST / LOGEST regression-array family was also
+    // implemented alongside MODE.MULT in this fix wave, but was deliberately reverted
+    // before merge -- the OLS regression support (~400 lines) and its known-incomplete
+    // "stats array" sub-feature could not be verified against real Excel in this
+    // environment, so it was judged too risky to ship. Only MODE.MULT is kept here.
+
+    private static ScalarValue ModeMult(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var (nums, err) = CollectNumbers(args);
+        if (err is not null) return err;
+
+        var freq = new Dictionary<double, int>();
+        var order = new List<double>();
+        foreach (var value in nums!)
+        {
+            if (!freq.ContainsKey(value)) order.Add(value);
+            freq[value] = freq.GetValueOrDefault(value) + 1;
+        }
+
+        if (freq.Count == 0) return ErrorValue.NA;
+        var maxFreq = freq.Values.Max();
+        if (maxFreq < 2) return ErrorValue.NA;
+
+        var modes = order.Where(key => freq[key] == maxFreq).ToList();
+        var result = new ScalarValue[modes.Count, 1];
+        for (var i = 0; i < modes.Count; i++) result[i, 0] = new NumberValue(modes[i]);
+        return new RangeValue(result);
     }
 
 }

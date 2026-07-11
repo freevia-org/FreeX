@@ -47,7 +47,12 @@ internal static class XlsxStructuredTableModelMapper
         var lastDataRow = table.TotalsRowShown && table.Range.End.Row > table.Range.Start.Row
             ? table.Range.End.Row - 1
             : table.Range.End.Row;
-        var firstDataRow = table.Range.Start.Row + 1;
+        // Mirrors TableStyleSections.From's header-row clamp: HeaderRowCount defaults to 1 (the
+        // common case) but a headerless table (Excel's "Table has headers" unchecked) legitimately
+        // has HeaderRowCount == 0, in which case Range.Start.Row IS itself a data row.
+        var rowCount = checked((int)table.Range.RowCount);
+        var headerRows = Math.Clamp(table.HeaderRowCount ?? 1, 0, rowCount);
+        var firstDataRow = table.Range.Start.Row + (uint)headerRows;
 
         var filters = BuildFilters(table).ToList();
         if (filters.Count == table.FilterColumns.Count)

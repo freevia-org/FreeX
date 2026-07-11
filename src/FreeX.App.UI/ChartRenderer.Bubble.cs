@@ -27,6 +27,22 @@ public static partial class ChartRenderer
         trendPoints = [];
 
         var xCol = chart.DataRange.Start.Col;
+
+        // Matches the Avalonia ChartLayoutEngine.LayoutBubble reference: the bubble radius scale is
+        // derived from the largest size value across every series in the chart, not just the current
+        // one, so a first pass collects that shared maximum before any points are laid out.
+        var maxSize = 0.0;
+        for (var sizeScanCol = xCol + 2; sizeScanCol <= endCol; sizeScanCol += 2)
+        {
+            for (uint row = dataStartRow; row <= endRow; row++)
+            {
+                if (TryGetNumericCell(cellLookup, row, sizeScanCol, out var scannedSize))
+                    maxSize = Math.Max(maxSize, Math.Abs(scannedSize));
+            }
+        }
+
+        var bubbleScale = Math.Max(0, chart.BubbleScale) / 100.0;
+
         var seriesIndex = 0;
         for (var yCol = xCol + 1; yCol <= endCol; yCol += 2)
         {
@@ -54,9 +70,10 @@ public static partial class ChartRenderer
                     x = fallbackIndex;
                 if (!TryGetNumericCell(cellLookup, row, yCol, out var y))
                     continue;
-                var size = TryGetNumericCell(cellLookup, row, sizeCol, out var rawSize)
-                    ? Math.Max(1, Math.Abs(rawSize))
-                    : 5;
+                var rawSize = TryGetNumericCell(cellLookup, row, sizeCol, out var sizeValue) ? sizeValue : 1;
+                if (rawSize < 0 && !chart.ShowNegativeBubbles)
+                    continue;
+                var size = BubbleRadius(Math.Abs(rawSize), maxSize, chart.BubbleSizeRepresents) * bubbleScale;
                 series.Points.Add(new ScatterPoint(x, y, size));
                 if (seriesIndex == 0)
                     trendPoints.Add(new DataPoint(x, y));
@@ -69,5 +86,21 @@ public static partial class ChartRenderer
         }
 
         return model;
+    }
+
+    // Mirrors ChartLayoutEngine.BubbleRadius (Avalonia renderer) so WPF and Avalonia draw bubbles at
+    // the same relative sizes: Area representation keeps bubble area proportional to the size value
+    // (radius scales with the square root of the size fraction), while Width scales the radius linearly.
+    private const double MaxBubbleRadius = 20.0;
+    private const double MinBubbleRadius = 1.0;
+
+    private static double BubbleRadius(double size, double maxSize, ChartBubbleSizeRepresents represents)
+    {
+        if (maxSize <= 0)
+            return MinBubbleRadius;
+
+        var fraction = Math.Clamp(size / maxSize, 0, 1);
+        var radiusFraction = represents == ChartBubbleSizeRepresents.Width ? fraction : Math.Sqrt(fraction);
+        return Math.Max(MinBubbleRadius, MaxBubbleRadius * radiusFraction);
     }
 }

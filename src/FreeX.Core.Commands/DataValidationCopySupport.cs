@@ -53,16 +53,27 @@ internal static class DataValidationCopySupport
         if (string.IsNullOrWhiteSpace(formula) || hostSheetName is null || (rowDelta == 0 && colDelta == 0))
             return formula;
 
+        // Real DV formulas are stored per OOXML convention with NO leading '=' (see
+        // XlsxDataValidationClosedXmlMapper.Load, DataValidationBoundsParser.TryEvaluateBoundFormula,
+        // and DataValidationService.ValidateCustom, which all defensively prepend '=' for this reason).
+        // Track whether the caller's text carried an explicit '=' so we can restore the exact storage
+        // form afterwards, but don't let its absence block the rewrite.
         var trimmed = formula.TrimStart();
-        if (!trimmed.StartsWith('=') || trimmed.Contains(','))
-            return formula;
+        var hasLeadingEquals = trimmed.StartsWith('=');
+        var expression = hasLeadingEquals ? trimmed[1..] : trimmed;
 
-        var expression = trimmed[1..];
         if (!LooksLikeCellReferenceFormula(expression))
             return formula;
 
+        // A comma is just as likely to be a function-argument separator (e.g. AND(A1>0,B1>0)) as an
+        // inline list-literal separator (e.g. "1,2,3") -- FormulaRewriter is a full AST rewriter and
+        // handles the former fine, while the latter simply fails to parse as an expression and falls
+        // through to the unchanged-formula return below.
         var rewritten = FormulaRewriter.Rewrite(expression, new PasteOffsetOp(rowDelta, colDelta), hostSheetName);
-        return rewritten is null ? formula : "=" + rewritten;
+        if (rewritten is null)
+            return formula;
+
+        return hasLeadingEquals ? "=" + rewritten : rewritten;
     }
 
     private static bool LooksLikeCellReferenceFormula(string expression)

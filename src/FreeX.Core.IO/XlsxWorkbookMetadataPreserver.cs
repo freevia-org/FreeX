@@ -78,7 +78,7 @@ internal static class XlsxWorkbookMetadataPreserver
             changed = true;
         if (MergeWorkbookProperties(sourceWorkbookProperties, targetRoot, workbookNs))
             changed = true;
-        if (MergeWorkbookProtection(sourceWorkbookProtection, targetRoot, workbookNs))
+        if (MergeWorkbookProtection(sourceWorkbookProtection, targetRoot, workbookNs, HasModeledWorkbookProtection(workbook)))
             changed = true;
         if (MergeCalculationProperties(sourceCalculationProperties, targetRoot, workbookNs))
             changed = true;
@@ -403,7 +403,16 @@ internal static class XlsxWorkbookMetadataPreserver
         return clone;
     }
 
-    private static bool MergeWorkbookProtection(XElement? sourceWorkbookProtection, XElement targetRoot, XNamespace workbookNs)
+    private static bool HasModeledWorkbookProtection(Workbook workbook) =>
+        workbook.IsStructureProtected ||
+        !string.IsNullOrWhiteSpace(workbook.StructureProtectionPassword) ||
+        workbook.ProtectionMetadata is not null;
+
+    private static bool MergeWorkbookProtection(
+        XElement? sourceWorkbookProtection,
+        XElement targetRoot,
+        XNamespace workbookNs,
+        bool hasModeledWorkbookProtection)
     {
         if (sourceWorkbookProtection is null)
             return false;
@@ -411,6 +420,15 @@ internal static class XlsxWorkbookMetadataPreserver
         var targetWorkbookProtection = targetRoot.Element(workbookNs + "workbookProtection");
         if (targetWorkbookProtection is null)
         {
+            // No target element means the CURRENT model state has no protection to write (see
+            // ApplyProtection's own early-return, which uses this same tri-state check). Most
+            // commonly this is exactly what a resave after "Unprotect Workbook" produces
+            // (IsStructureProtected/StructureProtectionPassword/ProtectionMetadata all cleared) --
+            // cloning the stale pre-edit source element back in here would silently resurrect the
+            // protection the user just removed, so leave the target alone in that case.
+            if (!hasModeledWorkbookProtection)
+                return false;
+
             var clone = new XElement(sourceWorkbookProtection);
             XlsxWorkbookProtectionNormalizer.NormalizeElement(clone);
             targetRoot.AddFirst(clone);

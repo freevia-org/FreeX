@@ -9,7 +9,7 @@ public sealed partial class FormulaEvaluator
         "PRODUCT", "SUMSQ", "SUMX2MY2", "SUMX2PY2", "SUMXMY2", "XOR", "GCD", "LCM",
         "VAR", "VAR.S", "VARA", "VARP", "VAR.P", "VARPA", "STDEVP", "STDEV.P", "STDEVA", "STDEVPA",
         "GEOMEAN", "HARMEAN", "AVEDEV",
-        "MODE", "MODE.SNGL",
+        "MODE", "MODE.SNGL", "MODE.MULT",
         "CONCATENATE",
         "NPV"
     };
@@ -20,9 +20,9 @@ public sealed partial class FormulaEvaluator
         "STDEV", "STDEV.S", "STDEVP", "STDEV.P", "STDEVA", "STDEVPA",
         "VAR", "VAR.S", "VAR.P", "VARP", "VARA", "VARPA",
         "MEDIAN",
-        "GEOMEAN", "HARMEAN", "AVEDEV",
+        "GEOMEAN", "HARMEAN", "AVEDEV", "DEVSQ",
         "COVAR", "COVARIANCE.P", "COVARIANCE.S", "INTERCEPT", "PEARSON", "RSQ", "SLOPE", "STEYX",
-        "MODE", "MODE.SNGL",
+        "MODE", "MODE.SNGL", "MODE.MULT",
         "NPV",
         "GCD", "LCM"
     };
@@ -35,7 +35,7 @@ public sealed partial class FormulaEvaluator
         "MEDIAN",
         "GEOMEAN", "HARMEAN", "AVEDEV",
         "COVAR", "COVARIANCE.P", "COVARIANCE.S", "INTERCEPT", "PEARSON", "RSQ", "SLOPE", "STEYX",
-        "MODE", "MODE.SNGL",
+        "MODE", "MODE.SNGL", "MODE.MULT",
         "NPV",
         "GCD", "LCM"
     };

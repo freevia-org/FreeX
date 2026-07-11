@@ -207,7 +207,7 @@ public static partial class NumberFormatter
                 ? ""
                 : TryFormatPlainNumericSection(magnitude, sections[0], out var plainNumericText)
                     ? plainNumericText
-                    : ApplyNumericFormat(magnitude, sections[0], uses1904DateSystem: uses1904DateSystem);
+                    : ApplyNumericFormat(magnitude, sections[0], uses1904DateSystem: uses1904DateSystem, targetWidthCharacters: targetWidthCharacters);
             singleSectionText = ApplyAccountingTargetWidth(singleSectionText, sections[0], targetWidthCharacters);
             // Excel never displays negative zero: if sign is "-" but the formatted text
             // is all zeros (after magnitude formatting), drop the sign.
@@ -242,7 +242,7 @@ public static partial class NumberFormatter
 
         string text = section.Format == ""
             ? ""
-            : ApplyNumericFormat(displayValue, section.Format, uses1904DateSystem: uses1904DateSystem);
+            : ApplyNumericFormat(displayValue, section.Format, uses1904DateSystem: uses1904DateSystem, targetWidthCharacters: targetWidthCharacters);
         text = ApplyAccountingTargetWidth(text, section.Format, targetWidthCharacters);
         return new FormatResult(text, section.ColorHex);
     }
@@ -386,7 +386,8 @@ public static partial class NumberFormatter
         double value,
         string format,
         bool preserveAccountingZeroDashAlignment = false,
-        bool uses1904DateSystem = false)
+        bool uses1904DateSystem = false,
+        int? targetWidthCharacters = null)
     {
         if (TryFormatCjkNativeNumberText(value, format, out var cjkNativeNumberText))
             return cjkNativeNumberText;
@@ -460,7 +461,7 @@ public static partial class NumberFormatter
             // section path both already hand this function a non-negative value, making this a
             // no-op for those callers.
             if (value < 0)
-                return BuildInvalidDateTimeIndicator(format, null);
+                return BuildInvalidDateTimeIndicator(format, targetWidthCharacters);
 
             try
             {

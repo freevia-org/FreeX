@@ -287,7 +287,14 @@ public static partial class BuiltInFunctions
 
         return unit switch
         {
-            "D"  => new NumberValue(DateToSerial(end, uses1904DateSystem) - DateToSerial(start, uses1904DateSystem)),
+            // Compute directly in serial space rather than round-tripping through DateTime:
+            // ExcelDateSystem.SerialToDate maps both the 1900 phantom-leap-day serial 60
+            // ("1900-02-29") and serial 59 ("1900-02-28") onto the same DateTime, so a
+            // DateTime-based difference silently collapses that boundary (e.g. DATEDIF(59,60,"D")
+            // would come out 0 instead of 1). Floor to match DATEDIF's whole-date semantics
+            // (time-of-day is discarded), then diff the raw serials directly.
+            "D"  => new NumberValue(ExcelDateSystem.SerialDayDifference(
+                        Math.Floor(ToNumber(startValue)), Math.Floor(ToNumber(endValue)))),
             "M"  => new NumberValue(MonthDiff(start, end)),
             "Y"  => new NumberValue(YearDiff(start, end)),
             "YM" => new NumberValue((int)MonthDiff(start, end) % 12),
@@ -333,17 +340,16 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue DateDifMD(DateTime start, DateTime end)
     {
-        try
-        {
-            // Clamp start.Day in case start is Feb 29 (leap) and end month is in a non-leap year.
-            int clampedStartDay = Math.Min(start.Day, DaysInExcelMonth(end.Year, end.Month));
-            if (end.Day >= clampedStartDay)
-                return new NumberValue(end.Day - clampedStartDay);
-            int prevYear  = end.Month == 1 ? end.Year - 1 : end.Year;
-            int prevMonth = end.Month == 1 ? 12 : end.Month - 1;
-            return new NumberValue(end.Day + DaysInExcelMonth(prevYear, prevMonth) - clampedStartDay);
-        }
-        catch (ArgumentOutOfRangeException) { return ErrorValue.Num; }
+        // Pure integer arithmetic — never constructs a DateTime, so it can never throw
+        // ArgumentOutOfRangeException and start.Day never needs clamping against any month's
+        // length (that clamp was copy-pasted from DateDifYD, which genuinely needs it because
+        // it builds a real DateTime anchor). Clamping here just silently corrupted ordinary
+        // MD pairs whenever start.Day is 29/30/31 and end's month is shorter.
+        if (end.Day >= start.Day)
+            return new NumberValue(end.Day - start.Day);
+        int prevYear  = end.Month == 1 ? end.Year - 1 : end.Year;
+        int prevMonth = end.Month == 1 ? 12 : end.Month - 1;
+        return new NumberValue(end.Day + DaysInExcelMonth(prevYear, prevMonth) - start.Day);
     }
 
     private static int DaysInExcelMonth(int year, int month) =>
@@ -678,9 +684,14 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue DaysScalar(ScalarValue endDate, ScalarValue startDate, bool uses1904DateSystem)
     {
-        if (!TrySerialToDateTime(endDate, uses1904DateSystem, out var endDt))   return ErrorValue.Num;
-        if (!TrySerialToDateTime(startDate, uses1904DateSystem, out var startDt)) return ErrorValue.Num;
-        return new NumberValue(DateToSerial(endDt, uses1904DateSystem) - DateToSerial(startDt, uses1904DateSystem));
+        // Validate both operands are representable dates, but compute the difference directly
+        // in serial space rather than round-tripping through DateTime: ExcelDateSystem.SerialToDate
+        // maps both the 1900 phantom-leap-day serial 60 ("1900-02-29") and serial 59
+        // ("1900-02-28") onto the same DateTime, so a DateTime-based difference silently
+        // collapses that boundary (e.g. DAYS(60,59) would come out 0 instead of 1).
+        if (!TrySerialToDateTime(endDate, uses1904DateSystem, out _))   return ErrorValue.Num;
+        if (!TrySerialToDateTime(startDate, uses1904DateSystem, out _)) return ErrorValue.Num;
+        return new NumberValue(ExcelDateSystem.SerialDayDifference(ToNumber(startDate), ToNumber(endDate)));
     }
 
     private static ScalarValue Days360(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

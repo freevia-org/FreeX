@@ -67,8 +67,17 @@ public static partial class DataValidationService
             if (result is RangeValue range)
                 return range.Flatten().Select(ToValidationText).ToArray();
 
-            if (result is not ErrorValue)
-                return new[] { ToValidationText(result) };
+            if (result is ErrorValue)
+            {
+                // A formula-based list source (e.g. a cascading =INDIRECT($A2) dropdown) that
+                // currently errors out has no valid list items. Falling through to
+                // ParseInlineListItems would treat the raw, unevaluated formula text itself as a
+                // single bogus list entry, surfacing "=INDIRECT($A2)" as a dropdown item and
+                // rejecting every real value the user enters/selects.
+                return Array.Empty<string>();
+            }
+
+            return new[] { ToValidationText(result) };
         }
 
         return ParseInlineListItems(formulaText);

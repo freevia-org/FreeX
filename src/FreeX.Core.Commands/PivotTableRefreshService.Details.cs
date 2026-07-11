@@ -60,6 +60,21 @@ public static partial class PivotTableRefreshService
         if (pivotTable.ReportLayout == PivotReportLayout.Compact && rowFields.Count > 1)
             return ReadCompactDetailRowSelection(sheet, pivotTable, outputRow, firstDataRow, rowFields.Count);
 
+        // A real subtotal row can only exist when WriteSubtotalRow's own gate
+        // (pivotTable.ShowSubtotals && rowFields.Count > 1) is satisfied, and even then a genuine
+        // subtotal row leaves every row-field column strictly after the caption blank -- it never
+        // writes a value into the innermost (last) row-field column, unlike a normal leaf data row,
+        // whose last row-field column is always populated (label-repeat suppression never applies
+        // to the innermost field; see ShouldSuppressRepeatedRowLabel). So a "<label> Total" caption
+        // is only treated as a real subtotal when subtotals are structurally possible AND the row's
+        // last row-field column is blank -- otherwise it's a legitimate item whose label happens to
+        // end in " Total".
+        var lastFieldColumn = pivotTable.TargetRange.Start.Col + (uint)(rowFields.Count - 1);
+        var canBeSubtotalRow =
+            pivotTable.ShowSubtotals &&
+            rowFields.Count > 1 &&
+            sheet.GetCell(outputRow, lastFieldColumn)?.Value is null or BlankValue;
+
         var keys = new List<string>();
         var isRowGrandTotal = false;
         var isSubtotal = false;
@@ -75,7 +90,7 @@ public static partial class PivotTableRefreshService
                 break;
             }
 
-            if (key.EndsWith(" Total", StringComparison.OrdinalIgnoreCase))
+            if (canBeSubtotalRow && key.EndsWith(" Total", StringComparison.OrdinalIgnoreCase))
             {
                 keys.Add(key[..^" Total".Length]);
                 isSubtotal = true;
@@ -104,7 +119,10 @@ public static partial class PivotTableRefreshService
         if (IsPivotGrandTotalCaption(pivotTable, label))
             return new DetailRowSelection([], IsRowGrandTotal: true, IsSubtotal: false);
 
-        if (label.EndsWith(" Total", StringComparison.OrdinalIgnoreCase))
+        // A real subtotal row can only exist when WriteSubtotalRow's own gate (ShowSubtotals with
+        // more than one row field, guaranteed true here by the caller) is satisfied -- with
+        // subtotals off, a "<label> Total" caption can only be a legitimate item value.
+        if (pivotTable.ShowSubtotals && label.EndsWith(" Total", StringComparison.OrdinalIgnoreCase))
             return new DetailRowSelection([label[..^" Total".Length]], IsRowGrandTotal: false, IsSubtotal: true);
 
         var keys = new List<string> { label };

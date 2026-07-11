@@ -7,6 +7,52 @@ public sealed partial class ViewportService
     private static bool IsRowHidden(Sheet sheet, uint row) =>
         sheet.IsRowEffectivelyHidden(row);
 
+    /// <summary>
+    /// True when <paramref name="row"/> is hidden but is the anchor (top-left) row of a merged
+    /// region that still has at least one other visible row. Excel simply collapses a hidden row
+    /// inside a taller merged block to zero height rather than hiding the whole merge, so the
+    /// anchor row must stay addressable (as a zero-height metric) for the merge's value/style --
+    /// which live on the anchor cell -- to still be surfaced at the still-visible remainder.
+    /// </summary>
+    private static bool IsHiddenMergeAnchorRowWithVisibleRemainder(Sheet sheet, uint row)
+    {
+        var regions = sheet.MergedRegions;
+        for (var i = 0; i < regions.Count; i++)
+        {
+            var region = regions[i];
+            if (region.Start.Row != row) continue;
+
+            for (var r = region.Start.Row; r <= region.End.Row; r++)
+            {
+                if (!IsRowHidden(sheet, r)) return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// True when <paramref name="col"/> is hidden but is the anchor (top-left) column of a merged
+    /// region that still has at least one other visible column. Mirrors
+    /// <see cref="IsHiddenMergeAnchorRowWithVisibleRemainder"/> for horizontal merges.
+    /// </summary>
+    private static bool IsHiddenMergeAnchorColWithVisibleRemainder(Sheet sheet, uint col)
+    {
+        var regions = sheet.MergedRegions;
+        for (var i = 0; i < regions.Count; i++)
+        {
+            var region = regions[i];
+            if (region.Start.Col != col) continue;
+
+            for (var c = region.Start.Col; c <= region.End.Col; c++)
+            {
+                if (!sheet.IsColEffectivelyHidden(c)) return true;
+            }
+        }
+
+        return false;
+    }
+
     private static IReadOnlyList<RowMetric> BuildFrozenAwareRowMetrics(Sheet sheet, uint startRow, double availableHeight)
     {
         var frozenRows = Math.Min(sheet.FrozenRows, CellAddress.MaxRow);
@@ -112,7 +158,14 @@ public sealed partial class ViewportService
         double topOffset = 0;
         for (uint row = startRow; row <= maxRow; row++)
         {
-            if (IsRowHidden(sheet, row)) continue;
+            if (IsRowHidden(sheet, row))
+            {
+                if (IsHiddenMergeAnchorRowWithVisibleRemainder(sheet, row))
+                    rowMetrics.Add(new RowMetric(row, 0, topOffset));
+
+                continue;
+            }
+
             double height = sheet.RowHeights.GetValueOrDefault(row, sheet.DefaultRowHeight);
             rowMetrics.Add(new RowMetric(row, height, topOffset));
             topOffset += height;
@@ -140,7 +193,14 @@ public sealed partial class ViewportService
         double leftOffset = 0;
         for (uint col = startCol; col <= maxCol; col++)
         {
-            if (sheet.IsColEffectivelyHidden(col)) continue;
+            if (sheet.IsColEffectivelyHidden(col))
+            {
+                if (IsHiddenMergeAnchorColWithVisibleRemainder(sheet, col))
+                    colMetrics.Add(new ColMetric(col, 0, leftOffset));
+
+                continue;
+            }
+
             double width = GetColumnWidthPixels(sheet, col);
             colMetrics.Add(new ColMetric(col, width, leftOffset));
             leftOffset += width;

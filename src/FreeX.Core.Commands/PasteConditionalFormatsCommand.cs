@@ -90,20 +90,20 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
             MaxColorSource = source.MaxColorSource,
             UseThreeColorScale = source.UseThreeColorScale,
             MinThresholdType = source.MinThresholdType,
-            MinThresholdValue = source.MinThresholdValue,
+            MinThresholdValue = RewriteThresholdValue(source.MinThresholdType, source.MinThresholdValue, hostSheetName, rowDelta, colDelta),
             MinThresholdGreaterThanOrEqual = source.MinThresholdGreaterThanOrEqual,
             MidThresholdType = source.MidThresholdType,
-            MidThresholdValue = source.MidThresholdValue,
+            MidThresholdValue = RewriteThresholdValue(source.MidThresholdType, source.MidThresholdValue, hostSheetName, rowDelta, colDelta),
             MidThresholdGreaterThanOrEqual = source.MidThresholdGreaterThanOrEqual,
             MaxThresholdType = source.MaxThresholdType,
-            MaxThresholdValue = source.MaxThresholdValue,
+            MaxThresholdValue = RewriteThresholdValue(source.MaxThresholdType, source.MaxThresholdValue, hostSheetName, rowDelta, colDelta),
             MaxThresholdGreaterThanOrEqual = source.MaxThresholdGreaterThanOrEqual,
             DataBarColor = source.DataBarColor,
             DataBarColorSource = source.DataBarColorSource,
             DataBarMinThresholdType = source.DataBarMinThresholdType,
-            DataBarMinThresholdValue = source.DataBarMinThresholdValue,
+            DataBarMinThresholdValue = RewriteThresholdValue(source.DataBarMinThresholdType, source.DataBarMinThresholdValue, hostSheetName, rowDelta, colDelta),
             DataBarMaxThresholdType = source.DataBarMaxThresholdType,
-            DataBarMaxThresholdValue = source.DataBarMaxThresholdValue,
+            DataBarMaxThresholdValue = RewriteThresholdValue(source.DataBarMaxThresholdType, source.DataBarMaxThresholdValue, hostSheetName, rowDelta, colDelta),
             DataBarShowValue = source.DataBarShowValue,
             DataBarMinLength = source.DataBarMinLength,
             DataBarMaxLength = source.DataBarMaxLength,
@@ -148,6 +148,19 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
 
         var rewritten = FormulaRewriter.Rewrite(formulaText, new PasteOffsetOp(rowDelta, colDelta), hostSheetName);
         return rewritten ?? formulaText;
+    }
+
+    // Mirrors RowColumnShiftHelpers.Rules.cs's RewriteThreshold: a colorScale/dataBar cfvo threshold
+    // whose ThresholdType is CfThresholdType.Formula holds a relative cell reference (e.g. "B1") that
+    // must be shifted by the same paste offset as the rule's own FormulaText. Non-Formula thresholds
+    // (Number/Percent/Percentile/Min/Max) hold literal values and must never be run through the
+    // formula rewriter.
+    private static string? RewriteThresholdValue(CfThresholdType type, string? value, string hostSheetName, int rowDelta, int colDelta)
+    {
+        if (type != CfThresholdType.Formula)
+            return value;
+
+        return RewriteFormulaText(value, hostSheetName, rowDelta, colDelta);
     }
 
     private CellAddress MapDestination(CellAddress source)

@@ -117,7 +117,9 @@ internal static class XlsxLegacyCommentPreserver
                 packageRelNs,
                 relNs,
                 targetWorksheetRelsXml,
-                sheet);
+                sheet,
+                sourceCommentsXml,
+                workbookNs);
 
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetRelsPath, targetWorksheetRelsXml);
 
@@ -384,7 +386,13 @@ internal static class XlsxLegacyCommentPreserver
     /// GAP 4 fix: builds a reconciled VML drawing that preserves the source <c>&lt;v:shape&gt;</c>
     /// (including style geometry and <c>&lt;x:Visible/&gt;</c>) for every unchanged note, drops
     /// shapes for deleted notes, and takes ClosedXML's generated shape for new notes.
-    /// Matching is by <c>&lt;x:Row&gt;</c>/<c>&lt;x:Column&gt;</c> (0-based) in ClientData.
+    /// Matching is primarily by <c>&lt;x:Row&gt;</c>/<c>&lt;x:Column&gt;</c> (0-based) in
+    /// ClientData; when a note's cell address changed since the source package was written
+    /// (row/column insert, delete, sort, or move — RowColumnShiftHelpers.ShiftCommentRows*/
+    /// Columns* already relocated the model's <see cref="Sheet.Comments"/> key, but the on-disk
+    /// VML shape is still anchored to the OLD cell), the shape is instead matched to its new
+    /// cell by comment text — a stable key that survives the address shift — and its ClientData
+    /// Row/Column/Anchor are retargeted to the new cell.
     /// Returns the relationship id of the VML part wired into the target worksheet rels, or
     /// <c>null</c> if no source VML exists (leave ClosedXML's output untouched).
     /// </summary>
@@ -397,7 +405,9 @@ internal static class XlsxLegacyCommentPreserver
         XNamespace packageRelNs,
         XNamespace relNs,
         XDocument targetWorksheetRelsXml,
-        Sheet sheet)
+        Sheet sheet,
+        XDocument sourceCommentsXml,
+        XNamespace workbookNs)
     {
         // Resolve source VML path.
         var sourceVmlRelId = sourceLegacyDrawing?.Attribute(relNs + "id")?.Value;
@@ -444,6 +454,11 @@ internal static class XlsxLegacyCommentPreserver
         // Index source note shapes by 0-based (row, col).
         var sourceShapesByCell = IndexNoteShapesByCell(sourceVml);
 
+        // Index the pristine source comments' text by their OLD 0-based (row, col), so a note
+        // whose cell moved since the source package was written can still be matched to its
+        // source shape (see TryFindShiftedSourceShape below).
+        var sourceTextByOldCell = IndexSourceCommentTextByCell(sourceCommentsXml, sheet, workbookNs);
+
         // Find ClosedXML's generated VML for new notes by scanning ALL VML entries in the target
         // archive. We cannot rely on the target worksheet rels here because XlsxWorksheetVml
         // ReferencePreserver may have already updated them to point to the source VML copy.
@@ -451,10 +466,13 @@ internal static class XlsxLegacyCommentPreserver
         // from any that are NOT the source path (i.e. ClosedXML's generated file).
         var targetShapesByCell = IndexAllTargetNoteShapes(targetArchive, sourceVmlPath);
 
-        // Build reconciled shape list: for each current note address, prefer source shape;
-        // fall back to target shape for new notes (not in source).
+        // Build reconciled shape list: for each current note address, prefer the source shape at
+        // the SAME cell; if none (the note's address shifted), try to find the source shape at
+        // its OLD cell by matching comment text and retarget it to the new cell; fall back to the
+        // target shape for genuinely new notes.
         var reconciledShapes = new List<XElement>(sheet.Comments.Count);
-        foreach (var address in sheet.Comments.Keys)
+        var consumedSourceCells = new HashSet<(uint Row, uint Col)>();
+        foreach (var (address, modelText) in sheet.Comments)
         {
             // CellAddress rows/cols are 1-based; VML ClientData uses 0-based.
             var key = (Row: address.Row - 1, Col: address.Col - 1);
@@ -462,6 +480,15 @@ internal static class XlsxLegacyCommentPreserver
             if (sourceShapesByCell.TryGetValue(key, out var sourceShape))
             {
                 shape = new XElement(sourceShape); // deep-clone; preserves geometry
+                consumedSourceCells.Add(key);
+            }
+            else if (TryFindShiftedSourceShape(
+                         sourceShapesByCell, sourceTextByOldCell, consumedSourceCells, modelText,
+                         out var shiftedKey, out var shiftedShape))
+            {
+                shape = new XElement(shiftedShape); // deep-clone; preserves geometry across the shift
+                RetargetNoteShapeToCell(shape, key.Row, key.Col);
+                consumedSourceCells.Add(shiftedKey);
             }
             else if (targetShapesByCell.TryGetValue(key, out var targetShape))
             {
@@ -539,6 +566,114 @@ internal static class XlsxLegacyCommentPreserver
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Indexes the pristine source comments XML's plain text by the comment's OLD 0-based
+    /// (row, col), using the same <c>&lt;t&gt;</c>-concatenation text extraction as
+    /// <see cref="XlsxWorksheetCommentReader"/> uses when loading notes into the model, so an
+    /// unchanged note's text compares equal regardless of which side it was read from.
+    /// </summary>
+    private static Dictionary<(uint Row, uint Col), string> IndexSourceCommentTextByCell(
+        XDocument sourceCommentsXml,
+        Sheet sheet,
+        XNamespace workbookNs)
+    {
+        var result = new Dictionary<(uint Row, uint Col), string>();
+        foreach (var (reference, text) in ReadLegacyCommentPlainTextByReference(sourceCommentsXml, workbookNs))
+        {
+            if (!CellAddress.TryParse(reference, sheet.Id, out var address))
+                continue;
+
+            result[(address.Row - 1, address.Col - 1)] = text;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// GAP 4 shift fix: finds the source VML note shape for a note whose cell address moved since
+    /// the source package was written (a row/column insert, delete, sort, or move already
+    /// relocated the note's key in <see cref="Sheet.Comments"/>, but the on-disk VML shape is still
+    /// anchored to the note's OLD cell). Matches by comment text — a stable key that survives the
+    /// address shift as long as the note's text itself was not also edited in the same save.
+    /// Skips any old cell already claimed (by an unmoved note or an earlier shifted match) so the
+    /// same source shape is never reused for two different current addresses.
+    /// </summary>
+    private static bool TryFindShiftedSourceShape(
+        Dictionary<(uint Row, uint Col), XElement> sourceShapesByCell,
+        Dictionary<(uint Row, uint Col), string> sourceTextByOldCell,
+        HashSet<(uint Row, uint Col)> consumedSourceCells,
+        string modelText,
+        out (uint Row, uint Col) matchedKey,
+        out XElement matchedShape)
+    {
+        foreach (var (oldKey, oldText) in sourceTextByOldCell)
+        {
+            if (consumedSourceCells.Contains(oldKey))
+                continue;
+            if (!string.Equals(oldText, modelText, StringComparison.Ordinal))
+                continue;
+            if (!sourceShapesByCell.TryGetValue(oldKey, out var shape))
+                continue;
+
+            matchedKey = oldKey;
+            matchedShape = shape;
+            return true;
+        }
+
+        matchedKey = default;
+        matchedShape = null!;
+        return false;
+    }
+
+    /// <summary>
+    /// Retargets a note shape reused from its OLD cell (via <see cref="TryFindShiftedSourceShape"/>)
+    /// to its NEW 0-based (row, col): updates ClientData <c>&lt;x:Row&gt;</c>/<c>&lt;x:Column&gt;</c>
+    /// (which <see cref="XlsxWorksheetCommentVisibilityReader"/> reads back as the authoritative
+    /// cell a pinned note belongs to) and shifts the <c>&lt;x:Anchor&gt;</c> cell-offset pair by the
+    /// same row/column delta so the box still renders at its new cell rather than the stale old one.
+    /// </summary>
+    private static void RetargetNoteShapeToCell(XElement shape, uint newRow0, uint newCol0)
+    {
+        var clientData = shape.Elements(ExcelVmlNs + "ClientData")
+            .FirstOrDefault(cd => string.Equals(
+                cd.Attribute("ObjectType")?.Value, "Note",
+                StringComparison.OrdinalIgnoreCase));
+        if (clientData is null)
+            return;
+
+        var rowElement = clientData.Element(ExcelVmlNs + "Row");
+        var colElement = clientData.Element(ExcelVmlNs + "Column");
+        if (rowElement is null || colElement is null ||
+            !uint.TryParse(rowElement.Value, out var oldRow0) ||
+            !uint.TryParse(colElement.Value, out var oldCol0))
+        {
+            return;
+        }
+
+        rowElement.Value = newRow0.ToString();
+        colElement.Value = newCol0.ToString();
+
+        // <x:Anchor> is "col1, colOffset1, row1, rowOffset1, col2, colOffset2, row2, rowOffset2" —
+        // shift the two row/col pairs by the same delta the cell itself moved by, preserving the
+        // box's relative offsets (and therefore its custom size/position).
+        var anchorElement = clientData.Element(ExcelVmlNs + "Anchor");
+        var anchorParts = anchorElement?.Value.Split(',').Select(part => part.Trim()).ToArray();
+        if (anchorParts is not { Length: 8 } ||
+            !int.TryParse(anchorParts[0], out var col1) || !int.TryParse(anchorParts[2], out var row1) ||
+            !int.TryParse(anchorParts[4], out var col2) || !int.TryParse(anchorParts[6], out var row2))
+        {
+            return;
+        }
+
+        var rowDelta = (int)newRow0 - (int)oldRow0;
+        var colDelta = (int)newCol0 - (int)oldCol0;
+        anchorParts[0] = (col1 + colDelta).ToString();
+        anchorParts[2] = (row1 + rowDelta).ToString();
+        anchorParts[4] = (col2 + colDelta).ToString();
+        anchorParts[6] = (row2 + rowDelta).ToString();
+        anchorElement!.Value = string.Join(", ", anchorParts);
     }
 
     /// <summary>

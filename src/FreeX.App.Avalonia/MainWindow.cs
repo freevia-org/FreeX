@@ -7417,7 +7417,9 @@ public sealed partial class MainWindow : Window
                 FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(args.KeyModifiers),
                 address,
                 pageSize: Math.Max(1, _session.Viewport.RowMetrics.Count - 1),
-                allowFormulaBarNavigationKeys: false);
+                allowFormulaBarNavigationKeys: false,
+                moveSelectionAfterEnter: MoveSelectionAfterEnter,
+                enterDirection: AfterEnterDirection);
 
             if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
             {
@@ -7441,6 +7443,18 @@ public sealed partial class MainWindow : Window
                 var rowDelta = GetCellIndexDelta(address.Row, adjustedTarget.Row);
                 var colDelta = GetCellIndexDelta(address.Col, adjustedTarget.Col);
                 CommitInlineCellEdit(rowDelta, colDelta);
+                args.Handled = true;
+            }
+            else if (intent.Action == ExcelEditKeyAction.CommitSelection)
+            {
+                var text = editor.Text ?? _inlineCellEditText ?? "";
+                _formulaBox.Text = text;
+                ClearInlineCellEditorState();
+                if (CommitEditAcrossSelection(address, text))
+                {
+                    RefreshShell("Ready");
+                    FocusShellRegion(ShellFocusTarget.Worksheet);
+                }
                 args.Handled = true;
             }
             else if (args.Key == Key.Escape)
@@ -14488,7 +14502,9 @@ public sealed partial class MainWindow : Window
             FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(e.KeyModifiers),
             current,
             pageSize: Math.Max(1, _session.Viewport.RowMetrics.Count - 1),
-            allowFormulaBarNavigationKeys: false);
+            allowFormulaBarNavigationKeys: false,
+            moveSelectionAfterEnter: MoveSelectionAfterEnter,
+            enterDirection: AfterEnterDirection);
 
         if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
         {
@@ -14516,6 +14532,24 @@ public sealed partial class MainWindow : Window
                 var rowDelta = GetCellIndexDelta(current.Row, adjustedTarget.Row);
                 var colDelta = GetCellIndexDelta(current.Col, adjustedTarget.Col);
                 _session.MoveActiveCell(rowDelta, colDelta);
+                RefreshShell("Ready");
+                FocusShellRegion(ShellFocusTarget.Worksheet);
+            }
+            else
+            {
+                _formulaBox.Focus();
+            }
+
+            e.Handled = true;
+        }
+        else if (intent.Action == ExcelEditKeyAction.CommitSelection)
+        {
+            if (_isOpening || _isSaving)
+            {
+                ShowSaveIssue("Finish saving before editing cells.");
+            }
+            else if (CommitEditAcrossSelection(current, _formulaBox.Text ?? ""))
+            {
                 RefreshShell("Ready");
                 FocusShellRegion(ShellFocusTarget.Worksheet);
             }
@@ -14723,6 +14757,43 @@ public sealed partial class MainWindow : Window
 
         _formulaBoxEditOriginalText = null;
         RefreshShell($"Edited {FormatCellReference(address)}");
+        return true;
+    }
+
+    // Ctrl+Enter ("fill selection with same value"): commits the same entered text into every
+    // cell of the current selection as a single undoable command, mirroring the WPF host's
+    // CommitEditAcrossSelection (MainWindow.Editing.cs). Unlike CommitAndMove, the selection is
+    // not collapsed to one cell -- Excel keeps the whole range selected after a Ctrl+Enter fill.
+    private bool CommitEditAcrossSelection(CellAddress current, string text)
+    {
+        if (_isOpening || _isSaving)
+        {
+            ShowSaveIssue("Finish saving before editing cells.");
+            return false;
+        }
+
+        var range = _session.SelectedRange;
+        var edits = new List<(CellAddress Address, Cell NewCell)>();
+        foreach (var address in range.AllCells())
+            edits.Add((address, CellEntryParser.CreateCell(text, address, UseR1C1ReferenceStyle)));
+
+        if (edits.Count == 0)
+            return false;
+
+        var result = _session.ExecuteReviewCommand(
+            new EditCellsCommand(_session.ActiveSheet.Id, edits),
+            fallbackAddress: current);
+
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Edit failed");
+            return false;
+        }
+
+        if (range.CellCount > 1)
+            _session.SelectRange(range);
+
+        _formulaBoxEditOriginalText = null;
         return true;
     }
 
@@ -24300,6 +24371,72 @@ public sealed partial class MainWindow : Window
             return value;
         }
     }
+
+    // Same write-time cache strategy as UseR1C1ReferenceStyle above, for the "After pressing
+    // Enter, move selection" option (Options ▸ Advanced): mirrors WPF's live
+    // <c>_options.MoveSelectionAfterEnter</c> / <c>_options.AfterEnterDirection</c> fields
+    // (MainWindow.Editing.cs), which are forwarded into ExcelEditKeyPlanner.GetIntent so Enter
+    // moves the active cell in the persisted direction (or not at all) instead of always Down.
+    private static bool? _cachedMoveSelectionAfterEnter;
+    private static DateTime _cachedMoveSelectionAfterEnterWriteTimeUtc;
+    private static string? _cachedMoveSelectionAfterEnterStorePath;
+
+    private static bool MoveSelectionAfterEnter
+    {
+        get
+        {
+            var storePath = AppOptionsStore.StorePath;
+            var writeTimeUtc = File.Exists(storePath) ? File.GetLastWriteTimeUtc(storePath) : DateTime.MinValue;
+
+            if (_cachedMoveSelectionAfterEnter is { } cached &&
+                _cachedMoveSelectionAfterEnterStorePath == storePath &&
+                _cachedMoveSelectionAfterEnterWriteTimeUtc == writeTimeUtc)
+            {
+                return cached;
+            }
+
+            var value = AppOptionsStore.Load().MoveSelectionAfterEnter;
+            _cachedMoveSelectionAfterEnter = value;
+            _cachedMoveSelectionAfterEnterStorePath = storePath;
+            _cachedMoveSelectionAfterEnterWriteTimeUtc = writeTimeUtc;
+            return value;
+        }
+    }
+
+    private static FormulaEditorEnterDirection? _cachedAfterEnterDirection;
+    private static DateTime _cachedAfterEnterDirectionWriteTimeUtc;
+    private static string? _cachedAfterEnterDirectionStorePath;
+
+    private static FormulaEditorEnterDirection AfterEnterDirection
+    {
+        get
+        {
+            var storePath = AppOptionsStore.StorePath;
+            var writeTimeUtc = File.Exists(storePath) ? File.GetLastWriteTimeUtc(storePath) : DateTime.MinValue;
+
+            if (_cachedAfterEnterDirection is { } cached &&
+                _cachedAfterEnterDirectionStorePath == storePath &&
+                _cachedAfterEnterDirectionWriteTimeUtc == writeTimeUtc)
+            {
+                return cached;
+            }
+
+            var value = ToFormulaEditorEnterDirection(AppOptionsStore.Load().AfterEnterDirection);
+            _cachedAfterEnterDirection = value;
+            _cachedAfterEnterDirectionStorePath = storePath;
+            _cachedAfterEnterDirectionWriteTimeUtc = writeTimeUtc;
+            return value;
+        }
+    }
+
+    private static FormulaEditorEnterDirection ToFormulaEditorEnterDirection(AppOptionsEnterDirection direction) =>
+        direction switch
+        {
+            AppOptionsEnterDirection.Right => FormulaEditorEnterDirection.Right,
+            AppOptionsEnterDirection.Up => FormulaEditorEnterDirection.Up,
+            AppOptionsEnterDirection.Left => FormulaEditorEnterDirection.Left,
+            _ => FormulaEditorEnterDirection.Down
+        };
 
     private static string FormatScalarValue(ScalarValue? value) => value switch
     {

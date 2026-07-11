@@ -4008,24 +4008,25 @@ public sealed class WorkbookSessionTests
         var result = session.SetSelectedRangeHyperlink(plan);
 
         result.Success.Should().BeTrue();
-        result.AffectedCells.Should().Equal(a1, b1);
+        // Matching Excel (and the WPF host's InsertLinkBtn_Click), Insert Hyperlink over a
+        // multi-cell selection only hyperlinks the anchor cell (range.Start) -- it must not fan
+        // the same display text/target across every cell in the range, which would clobber each
+        // cell's distinct existing content.
+        result.AffectedCells.Should().Equal(a1);
         session.ActiveCell.Should().Be(a1);
         session.SelectedRange.Should().Be(new GridRange(a1, b1));
         session.IsDirty.Should().BeTrue();
         session.CanUndo.Should().BeTrue();
         sheet.GetValue(a1).Should().Be(new TextValue("Team mail"));
-        sheet.GetValue(b1).Should().Be(new TextValue("Team mail"));
+        sheet.GetValue(b1).Should().Be(new TextValue("Old B"));
         sheet.GetValue(c1).Should().Be(new TextValue("Outside"));
         sheet.Hyperlinks[a1].Should().Be("mailto:review@example.test");
-        sheet.Hyperlinks[b1].Should().Be("mailto:review@example.test");
+        sheet.Hyperlinks.Should().NotContainKey(b1);
         sheet.HyperlinkMetadata[a1].Should().Be(new HyperlinkMetadata(
             HyperlinkTargetKind.EmailAddress,
             "Email team",
             "team@example.test"));
-        sheet.HyperlinkMetadata[b1].Should().Be(new HyperlinkMetadata(
-            HyperlinkTargetKind.EmailAddress,
-            "Email team",
-            "team@example.test"));
+        sheet.HyperlinkMetadata.Should().NotContainKey(b1);
 
         var undo = session.UndoLastEdit();
 

@@ -43,6 +43,29 @@ public static class CellMergePlanner
         if (sheet is not null && HasLiveSpillTarget(sheet, range))
             return [RejectSpillOverlapCommand.Instance];
 
+        // Excel's documented "Merge & Center" toggle gesture: selecting an already-merged cell (or any
+        // selection that is entirely covered by one existing merged region — e.g. a single-cell selection
+        // sitting inside a bigger merge) and clicking Merge & Center again unmerges the whole covering
+        // region, rather than failing with the "Range overlaps an existing merged region" conflict error
+        // that MergeCellsCommand raises for a genuine overlapping-merge request. A selection that only
+        // partially overlaps an existing region (straddles its boundary without being fully covered by
+        // it) is still a real conflict and falls through unchanged to the normal merge path below.
+        if (sheet is not null)
+        {
+            GridRange? coveringRegion = null;
+            foreach (var region in sheet.MergedRegions)
+            {
+                if (region.Contains(range))
+                {
+                    coveringRegion = region;
+                    break;
+                }
+            }
+
+            if (coveringRegion is { } toggleRegion)
+                return [new UnmergeCellsCommand(sheetId, toggleRegion)];
+        }
+
         var commands = new List<IWorkbookCommand>();
         if (contentResolution == MergeCellContentResolution.ConcatenateAllCells && sheet is not null)
         {

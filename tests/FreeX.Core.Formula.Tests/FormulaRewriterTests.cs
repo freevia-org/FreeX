@@ -171,10 +171,14 @@ public class FormulaRewriterTests
     }
 
     [Fact]
-    public void DeleteRows_FullRowRange_DeletedEndpointBecomesRef()
+    public void DeleteRows_FullRowRange_PartialOverlap_ShrinksToSurvivingSpan()
     {
+        // Deleting only row 1 of SUM(1:3) leaves rows 2-3 surviving, sliding up to become 1:2 —
+        // it must NOT collapse the whole reference to #REF! (see
+        // FormulaRewriterFullRangeDeletePartialOverlapTests for the full R22-cell-reference-rewrite-1
+        // coverage of this shrink behavior).
         var result = FormulaRewriter.Rewrite("SUM(1:3)", new DeleteRowsOp("Sheet1", 1, 1), "Sheet1");
-        result.Should().Be("SUM(#REF!)");
+        result.Should().Be("SUM(1:2)");
     }
 
     // ── DeleteCellsShiftUpOp ──────────────────────────────────────────────────
@@ -310,10 +314,14 @@ public class FormulaRewriterTests
     }
 
     [Fact]
-    public void DeleteCols_FullColumnRange_DeletedEndpointBecomesRef()
+    public void DeleteCols_FullColumnRange_PartialOverlap_ShrinksToSurvivingSpan()
     {
+        // Deleting only column A of SUM(A:C) leaves columns B-C surviving, sliding left to become
+        // A:B — it must NOT collapse the whole reference to #REF! (see
+        // FormulaRewriterFullRangeDeletePartialOverlapTests for the full R22-cell-reference-rewrite-1
+        // coverage of this shrink behavior).
         var result = FormulaRewriter.Rewrite("SUM(A:C)", new DeleteColsOp("Sheet1", 1, 1), "Sheet1");
-        result.Should().Be("SUM(#REF!)");
+        result.Should().Be("SUM(A:B)");
     }
 
     // ── PasteOffsetOp ─────────────────────────────────────────────────────────

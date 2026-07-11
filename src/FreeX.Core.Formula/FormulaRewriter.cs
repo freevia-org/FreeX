@@ -831,18 +831,34 @@ public static class FormulaRewriter
     private static FormulaNode RewriteFullColumnRangeDeleteCols(
         FullColumnRangeRefNode range, DeleteColsOp op, ref bool changed)
     {
-        var start = RewriteColumnDelete(range.StartColumnNumber, op, ref changed);
-        var end = RewriteColumnDelete(range.EndColumnNumber, op, ref changed);
-        if (start is null || end is null)
+        // A delete that only partially overlaps the range must SHRINK to the surviving columns
+        // (mirrors RewriteRangeDeleteCols' ShiftOrClampForDelete) — only #REF! when the ENTIRE
+        // span is inside the deleted band. Rewriting each endpoint independently (as before)
+        // wrongly collapsed the whole reference to #REF! whenever either endpoint alone fell
+        // inside the deleted band, even when the other endpoint survived outside it.
+        uint s = Math.Min(range.StartColumnNumber, range.EndColumnNumber);
+        uint e = Math.Max(range.StartColumnNumber, range.EndColumnNumber);
+        uint bandStart = op.StartCol, bandEnd = op.StartCol + op.Count - 1;
+
+        if (bandStart <= s && e <= bandEnd)
         {
             changed = true;
             return new ErrorNode(ErrorValue.Ref);
         }
 
+        var newStart = ShiftOrClampForDelete(s, bandStart, bandEnd, op.Count, isRangeStart: true);
+        var newEnd = ShiftOrClampForDelete(e, bandStart, bandEnd, op.Count, isRangeStart: false);
+        if (newStart == s && newEnd == e)
+            return range; // band entirely to the right of the range: no change
+
+        changed = true;
+        var (startCol, endCol) = range.StartColumnNumber <= range.EndColumnNumber
+            ? (newStart, newEnd)
+            : (newEnd, newStart);
         return range with
         {
-            StartColumnName = CellAddress.NumberToColumnName(start.Value),
-            EndColumnName = CellAddress.NumberToColumnName(end.Value)
+            StartColumnName = CellAddress.NumberToColumnName(startCol),
+            EndColumnName = CellAddress.NumberToColumnName(endCol)
         };
     }
 
@@ -892,15 +908,31 @@ public static class FormulaRewriter
     private static FormulaNode RewriteFullRowRangeDeleteRows(
         FullRowRangeRefNode range, DeleteRowsOp op, ref bool changed)
     {
-        var start = RewriteRowDelete(range.StartRow, op, ref changed);
-        var end = RewriteRowDelete(range.EndRow, op, ref changed);
-        if (start is null || end is null)
+        // A delete that only partially overlaps the range must SHRINK to the surviving rows
+        // (mirrors RewriteRangeDeleteRows' ShiftOrClampForDelete) — only #REF! when the ENTIRE
+        // span is inside the deleted band. Rewriting each endpoint independently (as before)
+        // wrongly collapsed the whole reference to #REF! whenever either endpoint alone fell
+        // inside the deleted band, even when the other endpoint survived outside it.
+        uint s = Math.Min(range.StartRow, range.EndRow);
+        uint e = Math.Max(range.StartRow, range.EndRow);
+        uint bandStart = op.StartRow, bandEnd = op.StartRow + op.Count - 1;
+
+        if (bandStart <= s && e <= bandEnd)
         {
             changed = true;
             return new ErrorNode(ErrorValue.Ref);
         }
 
-        return range with { StartRow = start.Value, EndRow = end.Value };
+        var newStart = ShiftOrClampForDelete(s, bandStart, bandEnd, op.Count, isRangeStart: true);
+        var newEnd = ShiftOrClampForDelete(e, bandStart, bandEnd, op.Count, isRangeStart: false);
+        if (newStart == s && newEnd == e)
+            return range; // band entirely below the range: no change
+
+        changed = true;
+        var (startRow, endRow) = range.StartRow <= range.EndRow
+            ? (newStart, newEnd)
+            : (newEnd, newStart);
+        return range with { StartRow = startRow, EndRow = endRow };
     }
 
     private static FormulaNode RewriteFullRowRangePaste(
@@ -947,21 +979,6 @@ public static class FormulaRewriter
         return (uint)newColumn;
     }
 
-    private static uint? RewriteColumnDelete(uint column, DeleteColsOp op, ref bool changed)
-    {
-        uint endCol = op.StartCol + op.Count - 1;
-        if (column >= op.StartCol && column <= endCol)
-            return null;
-
-        if (column > endCol)
-        {
-            changed = true;
-            return column - op.Count;
-        }
-
-        return column;
-    }
-
     private static uint? RewriteColumnPaste(uint column, bool isAbsolute, PasteOffsetOp op, ref bool changed)
     {
         if (isAbsolute || op.ColDelta == 0)
@@ -989,21 +1006,6 @@ public static class FormulaRewriter
 
         changed = true;
         return (uint)newRow;
-    }
-
-    private static uint? RewriteRowDelete(uint row, DeleteRowsOp op, ref bool changed)
-    {
-        uint endRow = op.StartRow + op.Count - 1;
-        if (row >= op.StartRow && row <= endRow)
-            return null;
-
-        if (row > endRow)
-        {
-            changed = true;
-            return row - op.Count;
-        }
-
-        return row;
     }
 
     private static uint? RewriteRowPaste(uint row, bool isAbsolute, PasteOffsetOp op, ref bool changed)

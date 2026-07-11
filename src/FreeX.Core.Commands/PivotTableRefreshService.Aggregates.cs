@@ -404,13 +404,20 @@ public static partial class PivotTableRefreshService
         if (dataField.BaseFieldIndex is not { } baseFieldIndex || !IsValidField(baseFieldIndex, headers.Count))
             return 0;
 
-        var currentItem = FirstBaseFieldItem(rows, baseFieldIndex);
+        // Identify items by their DISPLAYED group text (mirrors the RunningTotal ItemKey fix
+        // above) so a date/number-grouped base field ranks over the displayed buckets rather
+        // than every distinct raw per-row value.
+        var baseField = FindFieldModel(pivotTable, baseFieldIndex);
+        string ItemKey(IReadOnlyList<ScalarValue> row) =>
+            baseField is null ? KeyText(row[baseFieldIndex]) : GroupKeyText(row[baseFieldIndex], baseField);
+
+        var currentItem = FirstBaseFieldItem(rows, ItemKey);
         if (currentItem is null)
             return 0;
 
         // FIX 3: Use OrdinalIgnoreCase for item identity comparisons
         var valuesByItem = totalRows
-            .GroupBy(row => KeyText(row[baseFieldIndex]), StringComparer.OrdinalIgnoreCase)
+            .GroupBy(ItemKey, StringComparer.OrdinalIgnoreCase)
             .Select(group => (Item: group.Key, Value: AggregateDouble(group, dataField with { ShowValuesAs = PivotShowValuesAs.None }, pivotTable, headers)))
             .ToList();
         var ordered = dataField.ShowValuesAs == PivotShowValuesAs.RankLargest
@@ -432,14 +439,6 @@ public static partial class PivotTableRefreshService
         // Note: calculated field per-row evaluation is only used internally now;
         // group aggregation goes through EvaluateCalculatedFieldOnGroup in Aggregate.
         return BlankValue.Instance;
-    }
-
-    private static string? FirstBaseFieldItem(IEnumerable<IReadOnlyList<ScalarValue>> rows, int baseFieldIndex)
-    {
-        foreach (var row in rows)
-            return KeyText(row[baseFieldIndex]);
-
-        return null;
     }
 
     private static string? FirstBaseFieldItem(

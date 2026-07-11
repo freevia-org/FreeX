@@ -45,12 +45,13 @@ public static partial class BuiltInFunctions
     private static ScalarValue Product(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         double result = 1.0;
+        bool sawNumeric = false;
         foreach (var a in args)
         {
             if (a is ErrorValue e) return e;
             if (a is ReferencedScalarValue referenced)
             {
-                if (TryReferencedNumber(referenced, out double value, out var refError)) result *= value;
+                if (TryReferencedNumber(referenced, out double value, out var refError)) { result *= value; sawNumeric = true; }
                 else if (refError is not null) return refError;
                 continue;
             }
@@ -59,10 +60,11 @@ public static partial class BuiltInFunctions
                 if (!TryDirectTextNumber(direct, out double value)) return ErrorValue.Value;
                 if (!double.IsFinite(value)) return ErrorValue.Num;
                 result *= value;
+                sawNumeric = true;
             }
-            else if (a is NumberValue or BoolValue or DateTimeValue) result *= ToNumber(a);
+            else if (a is NumberValue or BoolValue or DateTimeValue) { result *= ToNumber(a); sawNumeric = true; }
         }
-        return NumberResult(result);
+        return NumberResult(sawNumeric ? result : 0);
     }
 
     private static ScalarValue SumSq(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

@@ -113,10 +113,26 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         if (_range.End.Row < _range.Start.Row || _range.End.Col < _range.Start.Col)
             return new CommandOutcome(true); // nothing to sort
 
-        // Excel rejects sorts that contain merged cells: sorting would move cell content
-        // out of sync with the merge region definitions.
-        if (sheet.MergedRegions.Any(m => _range.Overlaps(m)))
-            return new CommandOutcome(false, "Cannot sort a range that contains merged cells.");
+        // Excel rejects sorts that contain merged cells, UNLESS every merge overlapping the range
+        // is fully contained within it and all such merges are identically sized. In that uniform
+        // case (e.g. every row of the range merged the same way — a common "each record spans N
+        // cosmetic columns" layout), Excel treats each merge as one sortable row unit and moves it
+        // as a whole; the sort below already swaps entire rows intact and never touches
+        // MergedRegions, so the merge geometry stays put while the row content moves through it.
+        // Merges that only partially overlap the range, or that differ in size/shape from one
+        // another, still make the range unsortable — this mirrors Excel's own "This operation
+        // requires the merged cells to be identically sized" refusal.
+        var overlappingMerges = sheet.MergedRegions.Where(m => _range.Overlaps(m)).ToList();
+        if (overlappingMerges.Count > 0)
+        {
+            var firstRowSpan = overlappingMerges[0].RowCount;
+            var firstColSpan = overlappingMerges[0].ColCount;
+            bool uniform = overlappingMerges.All(m =>
+                _range.Contains(m) && m.RowCount == firstRowSpan && m.ColCount == firstColSpan);
+
+            if (!uniform)
+                return new CommandOutcome(false, "Cannot sort a range that contains merged cells.");
+        }
 
         uint startRow = _range.Start.Row;
         uint endRow   = _range.End.Row;

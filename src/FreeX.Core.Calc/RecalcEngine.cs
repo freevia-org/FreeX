@@ -92,6 +92,13 @@ public sealed class RecalcEngine
         // that read spill-target cells get a follow-up re-evaluation (those targets are not formula
         // cells and have no node in the dependency graph, so the topo sort cannot order them).
         var spillTargetsMayHaveChanged = false;
+        // Cells vacated by a spill that shrank or fully cleared this pass. Once ClearSpillRange
+        // (or the shrinking SetSpillRange) removes them from Sheet's spill-value table, the normal
+        // spill-target follow-up scan (which only enumerates CURRENTLY spilled cells) can no longer
+        // find them, so a formula that directly references one (e.g. B1=A2+1, where A2 was a spill
+        // member that just went blank) would otherwise stay stale forever. Captured here and fed
+        // into ResolveSpillTargetDependentsFixpoint so their direct dependents get one more pass.
+        List<CellAddress>? vacatedSpillCells = null;
 
         // Mark cyclic cells with error, or run iterative calc if enabled.
         // seenIterativeCells tracks which cyclic cells have already been handled by the iterative
@@ -191,7 +198,9 @@ public sealed class RecalcEngine
 
             // Did this cell own a spill before re-evaluation? If so, any outcome that does not
             // re-establish the same spill clears its target cells and downstream readers go stale.
-            var hadSpill = sheet.HasSpillValues && sheet.TryGetSpillExtent(addr, out _, out _);
+            uint priorSpillRows = 0, priorSpillCols = 0;
+            var hadSpill = sheet.HasSpillValues &&
+                sheet.TryGetSpillExtent(addr, out priorSpillRows, out priorSpillCols);
 
             try
             {
@@ -214,7 +223,11 @@ public sealed class RecalcEngine
                     // Legacy implicit intersection (@): resolve the range to the single cell that shares
                     // this formula's row/column instead of spilling.
                     sheet.ClearSpillRange(addr);
-                    if (hadSpill) spillTargetsMayHaveChanged = true;
+                    if (hadSpill)
+                    {
+                        spillTargetsMayHaveChanged = true;
+                        CaptureVacatedSpillCells(addr, priorSpillRows, priorSpillCols, 0, 0, ref vacatedSpillCells);
+                    }
                     cell.Value = ImplicitIntersection.Resolve(implicitRange, addr.Row, addr.Col);
                     _spillBlockedAnchors.Remove(addr);
                     AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, addr);
@@ -225,7 +238,11 @@ public sealed class RecalcEngine
                     if (sheet.IsSpillBlocked(addr, rv.RowCount, rv.ColCount))
                     {
                         cell.Value = ErrorValue.Spill;
-                        if (hadSpill) spillTargetsMayHaveChanged = true;
+                        if (hadSpill)
+                        {
+                            spillTargetsMayHaveChanged = true;
+                            CaptureVacatedSpillCells(addr, priorSpillRows, priorSpillCols, 0, 0, ref vacatedSpillCells);
+                        }
                         // Remember this anchor so a later recalc (triggered by an edit that clears
                         // the blocking cell, which has no dependency-graph edge back to us) retries
                         // it instead of leaving a stale #SPILL! forever. See field comment.
@@ -237,6 +254,11 @@ public sealed class RecalcEngine
                         cell.Value = rv.Cells[0, 0];
                         sheet.SetSpillRange(addr, rv);
                         spillTargetsMayHaveChanged = true;
+                        // A shrinking respill (e.g. 5 rows -> 3 rows) vacates the rows/cols beyond
+                        // the new extent; those cells drop out of Sheet's spill-value table and the
+                        // normal follow-up scan (EnumerateSpillTargetCells) can no longer see them.
+                        if (hadSpill)
+                            CaptureVacatedSpillCells(addr, priorSpillRows, priorSpillCols, rv.RowCount, rv.ColCount, ref vacatedSpillCells);
                         _spillBlockedAnchors.Remove(addr);
                         AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, addr);
                     }
@@ -244,7 +266,11 @@ public sealed class RecalcEngine
                 else
                 {
                     sheet.ClearSpillRange(addr);
-                    if (hadSpill) spillTargetsMayHaveChanged = true;
+                    if (hadSpill)
+                    {
+                        spillTargetsMayHaveChanged = true;
+                        CaptureVacatedSpillCells(addr, priorSpillRows, priorSpillCols, 0, 0, ref vacatedSpillCells);
+                    }
                     cell.Value = result;
                     _spillBlockedAnchors.Remove(addr);
                     AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, addr);
@@ -266,7 +292,11 @@ public sealed class RecalcEngine
                     continue;
 
                 sheet.ClearSpillRange(addr);
-                if (hadSpill) spillTargetsMayHaveChanged = true;
+                if (hadSpill)
+                {
+                    spillTargetsMayHaveChanged = true;
+                    CaptureVacatedSpillCells(addr, priorSpillRows, priorSpillCols, 0, 0, ref vacatedSpillCells);
+                }
                 cell.Value = ErrorValue.Value;
                 _spillBlockedAnchors.Remove(addr);
                 AddError(ref errors, addr, "#VALUE!");
@@ -274,7 +304,11 @@ public sealed class RecalcEngine
             catch (FormulaEvalException ex)
             {
                 sheet.ClearSpillRange(addr);
-                if (hadSpill) spillTargetsMayHaveChanged = true;
+                if (hadSpill)
+                {
+                    spillTargetsMayHaveChanged = true;
+                    CaptureVacatedSpillCells(addr, priorSpillRows, priorSpillCols, 0, 0, ref vacatedSpillCells);
+                }
                 cell.Value = new ErrorValue(ex.ErrorCode);
                 _spillBlockedAnchors.Remove(addr);
                 AddError(ref errors, addr, ex.ErrorCode);
@@ -289,7 +323,11 @@ public sealed class RecalcEngine
                 // Release: any unhandled exception from the evaluator (e.g. inverted range,
                 // overflow) must not crash the app — surface it as #VALUE! instead.
                 sheet.ClearSpillRange(addr);
-                if (hadSpill) spillTargetsMayHaveChanged = true;
+                if (hadSpill)
+                {
+                    spillTargetsMayHaveChanged = true;
+                    CaptureVacatedSpillCells(addr, priorSpillRows, priorSpillCols, 0, 0, ref vacatedSpillCells);
+                }
                 cell.Value = ErrorValue.Value;
                 _spillBlockedAnchors.Remove(addr);
                 AddError(ref errors, addr, "#VALUE!");
@@ -310,7 +348,7 @@ public sealed class RecalcEngine
         // (bounded by MaxSpillDependentPasses as a sane guard against runaway chains).
         if (resolveSpillDependents && spillTargetsMayHaveChanged)
         {
-            ResolveSpillTargetDependentsFixpoint(workbook, ref report);
+            ResolveSpillTargetDependentsFixpoint(workbook, ref report, vacatedSpillCells);
         }
 
         // Retry anchors that were showing #SPILL! as of some earlier pass. Excel re-spills the
@@ -914,7 +952,19 @@ public sealed class RecalcEngine
     /// the #SPILL! anchor retry path below (a re-spilled anchor's newly-populated targets need
     /// the same follow-up, or their readers would stay stale until the next full recalc/F9).
     /// </summary>
-    private void ResolveSpillTargetDependentsFixpoint(Workbook workbook, ref RecalcReport report)
+    /// <param name="vacatedSpillCells">
+    /// Cells that were spill members before this pass but were just vacated (their owning spill
+    /// shrank or fully cleared), so they are already gone from every sheet's live spill-value
+    /// table by the time this runs. <see cref="CollectSpillTargetDependentFormulaCells"/> normally
+    /// discovers dependents only by enumerating CURRENTLY spilled cells, which can no longer find
+    /// these — so they are fed in explicitly for the first pass only (their direct dependents need
+    /// exactly one re-evaluation to observe the now-blank/changed cell; they are not spill targets
+    /// themselves and never need to be re-checked on later passes).
+    /// </param>
+    private void ResolveSpillTargetDependentsFixpoint(
+        Workbook workbook,
+        ref RecalcReport report,
+        IReadOnlyList<CellAddress>? vacatedSpillCells = null)
     {
         // Track, per dependent cell, how many distinct spill-target precedents it read the
         // last time it was scheduled. A cell must only be skipped as "already handled" if its
@@ -925,7 +975,10 @@ public sealed class RecalcEngine
         var seenSpillDependentInputCounts = new Dictionary<CellAddress, int>();
         for (var pass = 0; pass < MaxSpillDependentPasses; pass++)
         {
-            var spillDependents = CollectSpillTargetDependentFormulaCells(workbook, out var inputCounts);
+            var spillDependents = CollectSpillTargetDependentFormulaCells(
+                workbook,
+                pass == 0 ? vacatedSpillCells : null,
+                out var inputCounts);
             spillDependents.RemoveAll(addr =>
             {
                 var currentCount = inputCounts[addr];
@@ -955,12 +1008,39 @@ public sealed class RecalcEngine
     /// since it was last scheduled (e.g. a chained spill that materializes on a later pass), which
     /// must not be treated as "already handled" even though its address was seen before.
     /// </summary>
+    /// <param name="extraTargets">
+    /// Additional cell addresses to treat as spill targets for this call only, even though they
+    /// are no longer present in any sheet's live spill-value table (e.g. cells vacated by a spill
+    /// that just shrank or cleared — see <see cref="ResolveSpillTargetDependentsFixpoint"/>).
+    /// </param>
     private List<CellAddress> CollectSpillTargetDependentFormulaCells(
         Workbook workbook,
+        IReadOnlyList<CellAddress>? extraTargets,
         out Dictionary<CellAddress, int> inputCounts)
     {
         List<CellAddress>? result = null;
         var counts = new Dictionary<CellAddress, int>();
+
+        void CollectDependentsOf(CellAddress spillTarget)
+        {
+            var deps = _graph.GetDirectDependents(spillTarget);
+            foreach (var dep in deps)
+            {
+                var depSheet = workbook.GetSheet(dep.Sheet);
+                if (depSheet?.GetCell(dep)?.HasFormula != true)
+                    continue;
+
+                if (counts.TryGetValue(dep, out var count))
+                {
+                    counts[dep] = count + 1;
+                    continue;
+                }
+
+                counts[dep] = 1;
+                result ??= [];
+                result.Add(dep);
+            }
+        }
 
         foreach (var sheet in workbook.Sheets)
         {
@@ -968,29 +1048,48 @@ public sealed class RecalcEngine
                 continue;
 
             foreach (var spillTarget in sheet.EnumerateSpillTargetCells())
-            {
-                var deps = _graph.GetDirectDependents(spillTarget);
-                foreach (var dep in deps)
-                {
-                    var depSheet = workbook.GetSheet(dep.Sheet);
-                    if (depSheet?.GetCell(dep)?.HasFormula != true)
-                        continue;
+                CollectDependentsOf(spillTarget);
+        }
 
-                    if (counts.TryGetValue(dep, out var count))
-                    {
-                        counts[dep] = count + 1;
-                        continue;
-                    }
-
-                    counts[dep] = 1;
-                    result ??= [];
-                    result.Add(dep);
-                }
-            }
+        if (extraTargets is not null)
+        {
+            foreach (var target in extraTargets)
+                CollectDependentsOf(target);
         }
 
         inputCounts = counts;
         return result ?? [];
+    }
+
+    /// <summary>
+    /// Records, into <paramref name="vacatedSpillCells"/>, every cell in the anchor's prior spill
+    /// extent (<paramref name="priorRows"/> x <paramref name="priorCols"/>, excluding the anchor
+    /// itself) that is not covered by its new extent (<paramref name="newRows"/> x
+    /// <paramref name="newCols"/> — pass 0,0 when the spill was fully cleared rather than shrunk).
+    /// These cells are about to disappear from Sheet's spill-value table, so any formula that
+    /// directly references one of them (e.g. B1=A2+1, where A2 was a spill member) would otherwise
+    /// never be re-evaluated. See R22-calc-engine-dependency-1.
+    /// </summary>
+    private static void CaptureVacatedSpillCells(
+        CellAddress anchor,
+        uint priorRows,
+        uint priorCols,
+        int newRows,
+        int newCols,
+        ref List<CellAddress>? vacatedSpillCells)
+    {
+        var keepRows = (uint)Math.Max(0, newRows);
+        var keepCols = (uint)Math.Max(0, newCols);
+        for (var r = 0u; r < priorRows; r++)
+        {
+            for (var c = 0u; c < priorCols; c++)
+            {
+                if (r == 0 && c == 0) continue;
+                if (r < keepRows && c < keepCols) continue;
+
+                (vacatedSpillCells ??= []).Add(new CellAddress(anchor.Sheet, anchor.Row + r, anchor.Col + c));
+            }
+        }
     }
 
     private static RecalcReport MergeRecalcReports(RecalcReport first, RecalcReport second)

@@ -513,6 +513,13 @@ public static partial class DataValidationService
             return null;
 
         var original = sheet.GetCell(address)?.Clone();
+        // Sheet.SetCell always tears down any live spill rooted at this address as a side effect
+        // (ClearSpillRange), so capture the spill payload BEFORE staging the candidate value and
+        // replay it in the finally block, mirroring CaptureSpillForRelocate's documented contract.
+        // Otherwise, validating a spill anchor cell (e.g. Data Validation > Circle Invalid Data,
+        // which validates every value-bearing cell including spill members) permanently blanks the
+        // spilled members, since restoring only the anchor Cell object does not resurrect them.
+        var capturedSpill = sheet.CaptureSpillForRelocate(address);
         try
         {
             // Write the candidate value into the cell so Formula1 can read it via its cell reference.
@@ -548,6 +555,9 @@ public static partial class DataValidationService
                 sheet.ClearCell(address);
             else
                 sheet.SetCell(address, original);
+
+            if (capturedSpill is not null)
+                sheet.SetSpillRange(address, capturedSpill);
         }
     }
 

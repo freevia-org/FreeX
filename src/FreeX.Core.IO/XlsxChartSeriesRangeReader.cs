@@ -411,14 +411,16 @@ internal static class XlsxChartSeriesRangeReader
             .Value;
     }
 
-    /// <summary>Reads all string values from a &lt;c:strCache&gt; inside the named container.</summary>
+    /// <summary>Reads all string values from a &lt;c:strCache&gt; (or &lt;c:numCache&gt; fallback) inside the named container.</summary>
     private static IReadOnlyList<string> ReadEmbeddedStringCacheValues(XElement series, string containerName)
     {
         var container = ElementByLocalName(series, containerName);
         if (container is null)
             return [];
 
-        var cache = FindDescendantByLocalName(container, "strCache");
+        // Try strRef/strCache first, then numRef/numCache (numeric/date category axes).
+        var cache = FindDescendantByLocalName(container, "strCache")
+                    ?? FindDescendantByLocalName(container, "numCache");
         if (cache is null)
             return [];
 

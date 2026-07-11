@@ -1364,6 +1364,12 @@ public sealed class WorkbookSession
         if (!result.Success)
             return result;
 
+        // Duplicating a sheet can change which sheets fall inside a 3-D span reference
+        // (e.g. =SUM(Sheet1:Sheet3!A1)), so recalculate the whole workbook just like the
+        // WPF host does after Duplicate Sheet -- the command's own AffectedCells is empty
+        // and would otherwise leave those span refs stale.
+        RecalculateWorkbook();
+
         var copyIndex = Math.Min(sourceIndex + 1, Workbook.Sheets.Count - 1);
         ApplySuccessfulNewWorksheetResult(Workbook.Sheets[copyIndex].Id);
         return result;
@@ -1410,6 +1416,11 @@ public sealed class WorkbookSession
         if (!result.Success)
             return result;
 
+        // Moving a sheet can change which sheets fall inside a 3-D span reference
+        // (e.g. =SUM(Sheet1:Sheet3!A1)), so recalculate the whole workbook just like the
+        // WPF host does after a sheet-tab drag/Move-or-Copy move -- the command's own
+        // AffectedCells is empty and would otherwise leave those span refs stale.
+        RecalculateWorkbook();
         ApplySuccessfulWorkbookMetadataResult(sheetId);
         return result;
     }
@@ -3618,19 +3629,16 @@ public sealed class WorkbookSession
         HyperlinkMetadata metadata)
     {
         var targetSheetIds = CurrentGroupedEditSheetIds();
-        var commands = new List<IWorkbookCommand>();
+        var commands = new List<IWorkbookCommand>(targetSheetIds.Count);
         foreach (var sheetId in targetSheetIds)
         {
-            var sheetRange = RemapRangeToSheet(range, sheetId);
-            foreach (var address in sheetRange.AllCells())
-            {
-                commands.Add(new SetHyperlinkCommand(
-                    sheetId,
-                    address,
-                    target,
-                    displayText,
-                    metadata));
-            }
+            var address = RemapRangeToSheet(range, sheetId).Start;
+            commands.Add(new SetHyperlinkCommand(
+                sheetId,
+                address,
+                target,
+                displayText,
+                metadata));
         }
 
         return ToCommand("Insert Hyperlink", commands);
