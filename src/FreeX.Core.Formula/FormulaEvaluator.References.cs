@@ -797,6 +797,17 @@ public sealed partial class FormulaEvaluator
     private ScalarValue EvaluateIsFormula(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count != 1) return ErrorValue.Value;
+
+        // ISFORMULA officially supports a multi-cell reference argument and returns one result
+        // per cell, spilling to match the reference's shape (e.g. ISFORMULA(A1:A3) in a
+        // dynamic-array context returns a 1x3 array), rather than collapsing to the top-left cell.
+        // Scoped to plain bounded ranges only (not full row/column, whose own top-left-collapse
+        // behaviour is deliberate — see FormulaPredicates_UseTopLeftCellForFullRowAndColumnReferences
+        // — and not 3-D sheet spans, which TryResolveReferenceTopLeftCell already rejects below).
+        if (IsMultiCellBoundedRangeRef(node.Arguments[0], out var rangeRef))
+            return BuildIsFormulaOrFormulaTextRangeValue(rangeRef, context,
+                cell => cell?.HasFormula == true ? TrueValue : FalseValue);
+
         var error = TryResolveReferenceTopLeftCell(
             node.Arguments[0],
             context,
@@ -810,6 +821,12 @@ public sealed partial class FormulaEvaluator
     private ScalarValue EvaluateFormulaText(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count != 1) return ErrorValue.NA;
+
+        // Same multi-cell spill requirement as ISFORMULA above: FORMULATEXT(A1:A3) returns one
+        // formula-text-or-#N/A result per cell, matching the reference's shape.
+        if (IsMultiCellBoundedRangeRef(node.Arguments[0], out var rangeRef))
+            return BuildIsFormulaOrFormulaTextRangeValue(rangeRef, context, FormulaTextCellValue);
+
         var error = TryResolveReferenceTopLeftCell(
             node.Arguments[0],
             context,
@@ -818,9 +835,66 @@ public sealed partial class FormulaEvaluator
             out var cell);
 
         if (error is not null) return error;
+        return FormulaTextCellValue(cell);
+    }
+
+    private static ScalarValue FormulaTextCellValue(Cell? cell)
+    {
         if (cell is null || !cell.HasFormula) return ErrorValue.NA;
         var formulaText = cell.FormulaText!;
         return new TextValue(formulaText.StartsWith('=') ? formulaText : "=" + formulaText);
+    }
+
+    // True only for a plain, single-sheet, bounded RangeRefNode (e.g. A1:A3, B5:A1) that spans
+    // more than one cell — deliberately excludes FullColumnRangeRefNode/FullRowRangeRefNode (whose
+    // top-left-collapse behaviour for ISFORMULA/FORMULATEXT is pinned by
+    // FormulaPredicates_UseTopLeftCellForFullRowAndColumnReferences) and 3-D sheet spans.
+    private static bool IsMultiCellBoundedRangeRef(FormulaNode node, out RangeRefNode range)
+    {
+        range = null!;
+        if (node is not RangeRefNode { EndSheetName: null } rr)
+            return false;
+
+        if (rr.Start.Row == rr.End.Row && rr.Start.ColumnNumber == rr.End.ColumnNumber)
+            return false;
+
+        range = rr;
+        return true;
+    }
+
+    // Materializes a multi-cell reference argument to ISFORMULA/FORMULATEXT into a RangeValue,
+    // applying cellValue per cell so the caller's function-level spilling machinery expands it
+    // across the corresponding cells (see EvaluateSpilling's "functions already produce a
+    // RangeValue when it yields an array" comment in FormulaEvaluator.cs).
+    private static ScalarValue BuildIsFormulaOrFormulaTextRangeValue(
+        RangeRefNode range,
+        IEvalContext context,
+        Func<Cell?, ScalarValue> cellValue)
+    {
+        if (range.SheetName is not null && !context.SheetExists(range.SheetName))
+            return ErrorValue.Ref;
+
+        range = ClampOpenEndedRangeToUsed(range, context);
+        uint r0 = Math.Min(range.Start.Row, range.End.Row);
+        uint r1 = Math.Max(range.Start.Row, range.End.Row);
+        uint c0 = Math.Min(range.Start.ColumnNumber, range.End.ColumnNumber);
+        uint c1 = Math.Max(range.Start.ColumnNumber, range.End.ColumnNumber);
+        long rows = r1 - r0 + 1;
+        long cols = c1 - c0 + 1;
+        if (rows * cols > FormulaSafetyLimits.MaxMaterializedRangeCells)
+            return ErrorValue.Ref;
+
+        var cells = new ScalarValue[(int)rows, (int)cols];
+        for (int ri = 0; ri < rows; ri++)
+            for (int ci = 0; ci < cols; ci++)
+            {
+                var cell = range.SheetName is not null
+                    ? context.TryGetCell(range.SheetName, r0 + (uint)ri, c0 + (uint)ci)
+                    : context.TryGetCell(r0 + (uint)ri, c0 + (uint)ci);
+                cells[ri, ci] = cellValue(cell);
+            }
+
+        return new RangeValue(cells, r0, c0) { SheetName = range.SheetName };
     }
 
     private ErrorValue? TryResolveReferenceTopLeftCell(

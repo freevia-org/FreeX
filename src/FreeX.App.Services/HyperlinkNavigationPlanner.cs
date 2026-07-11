@@ -1,3 +1,4 @@
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -40,38 +41,107 @@ public static class HyperlinkNavigationPlanner
         out HyperlinkNavigationPlan? plan)
     {
         plan = null;
-        if (sheet is null ||
-            !sheet.Hyperlinks.TryGetValue(address, out var target) ||
-            string.IsNullOrWhiteSpace(target))
+        if (sheet is null)
+            return false;
+
+        if (sheet.Hyperlinks.TryGetValue(address, out var target) && !string.IsNullOrWhiteSpace(target))
+        {
+            sheet.HyperlinkMetadata.TryGetValue(address, out var metadata);
+            var kind = metadata?.LinkType ?? HyperlinkTargetKind.ExistingFileOrWebPage;
+            var normalizedTarget = target.Trim();
+
+            if (kind == HyperlinkTargetKind.PlaceInThisDocument)
+            {
+                var reference = !string.IsNullOrWhiteSpace(metadata?.Bookmark)
+                    ? metadata.Bookmark.Trim()
+                    : normalizedTarget;
+                plan = new HyperlinkNavigationPlan(HyperlinkNavigationKind.WorksheetCell, reference, null);
+                return true;
+            }
+
+            if (kind is HyperlinkTargetKind.ExistingFileOrWebPage or HyperlinkTargetKind.CreateNewDocument &&
+                TryResolveLocalFileTarget(normalizedTarget, currentWorkbookPath, out var localPath))
+            {
+                plan = new HyperlinkNavigationPlan(
+                    HyperlinkNavigationKind.LocalFile,
+                    normalizedTarget,
+                    null,
+                    localPath);
+                return true;
+            }
+
+            plan = new HyperlinkNavigationPlan(HyperlinkNavigationKind.External, normalizedTarget, null);
+            return true;
+        }
+
+        // No explicit Insert-Hyperlink object on this cell. Excel also makes a cell whose sole
+        // hyperlink mechanism is a literal =HYPERLINK("target", ...) formula click-navigable, so
+        // fall back to inspecting the formula for a direct, literal-string HYPERLINK() call.
+        if (TryGetHyperlinkFormulaTarget(sheet, address, out var formulaTarget))
+        {
+            var normalizedFormulaTarget = formulaTarget.Trim();
+
+            // Excel's documented convention for an intra-workbook HYPERLINK() target is a leading
+            // '#' followed by the worksheet reference, e.g. "#Sheet2!A1".
+            if (normalizedFormulaTarget.StartsWith('#'))
+            {
+                plan = new HyperlinkNavigationPlan(
+                    HyperlinkNavigationKind.WorksheetCell,
+                    normalizedFormulaTarget[1..],
+                    null);
+                return true;
+            }
+
+            if (TryResolveLocalFileTarget(normalizedFormulaTarget, currentWorkbookPath, out var localPath))
+            {
+                plan = new HyperlinkNavigationPlan(
+                    HyperlinkNavigationKind.LocalFile,
+                    normalizedFormulaTarget,
+                    null,
+                    localPath);
+                return true;
+            }
+
+            plan = new HyperlinkNavigationPlan(HyperlinkNavigationKind.External, normalizedFormulaTarget, null);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// If the cell at <paramref name="address"/> holds a formula whose top-level call is
+    /// HYPERLINK(link_location, ...) with a literal string link_location, returns that literal text.
+    /// Non-literal (e.g. cell-reference) link_location arguments are not evaluated here and are left
+    /// unresolved, matching the planner's existing "no dynamic evaluation" scope.
+    /// </summary>
+    private static bool TryGetHyperlinkFormulaTarget(Sheet sheet, CellAddress address, out string target)
+    {
+        target = "";
+        var cell = sheet.GetCell(address);
+        if (cell?.FormulaText is not { } formulaText)
+            return false;
+
+        FormulaNode ast;
+        try
+        {
+            ast = FormulaEvaluator.ParseFormula(formulaText);
+        }
+        catch (FormulaParseException)
         {
             return false;
         }
 
-        sheet.HyperlinkMetadata.TryGetValue(address, out var metadata);
-        var kind = metadata?.LinkType ?? HyperlinkTargetKind.ExistingFileOrWebPage;
-        var normalizedTarget = target.Trim();
-
-        if (kind == HyperlinkTargetKind.PlaceInThisDocument)
+        if (ast is not FunctionCallNode { Arguments.Count: > 0 } call ||
+            !string.Equals(call.FunctionName, "HYPERLINK", StringComparison.OrdinalIgnoreCase))
         {
-            var reference = !string.IsNullOrWhiteSpace(metadata?.Bookmark)
-                ? metadata.Bookmark.Trim()
-                : normalizedTarget;
-            plan = new HyperlinkNavigationPlan(HyperlinkNavigationKind.WorksheetCell, reference, null);
-            return true;
+            return false;
         }
 
-        if (kind is HyperlinkTargetKind.ExistingFileOrWebPage or HyperlinkTargetKind.CreateNewDocument &&
-            TryResolveLocalFileTarget(normalizedTarget, currentWorkbookPath, out var localPath))
-        {
-            plan = new HyperlinkNavigationPlan(
-                HyperlinkNavigationKind.LocalFile,
-                normalizedTarget,
-                null,
-                localPath);
-            return true;
-        }
+        if (call.Arguments[0] is not StringNode { Value: { Length: > 0 } linkText })
+            return false;
 
-        plan = new HyperlinkNavigationPlan(HyperlinkNavigationKind.External, normalizedTarget, null);
+        target = linkText;
         return true;
     }
 

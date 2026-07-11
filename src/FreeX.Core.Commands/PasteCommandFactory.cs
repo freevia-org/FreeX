@@ -705,6 +705,13 @@ public static class PasteCommandFactory
     /// tile offset (mirroring the non-tiled paste path's single-offset merge recreation). Each
     /// command uses the same source-range-relative mapping and destination-collision skip as the
     /// non-tiled path; only the per-tile destination anchor differs.
+    ///
+    /// Only whole tiles that fit entirely within the tiled destination footprint are recreated: when
+    /// the destination selection is not an exact multiple of the source range's size, a trailing
+    /// partial tile is skipped rather than anchoring a merge that would span past the last selected
+    /// row/column (R27-merged-cells-deep-1). Excel never creates a merge that overhangs the pasted
+    /// destination; the per-cell value/format tiling in <see cref="EnumerateTiledAddresses"/> is
+    /// already bounded to <paramref name="targetRows"/>/<paramref name="targetCols"/> the same way.
     /// </summary>
     private static List<IWorkbookCommand> BuildTiledMergedRegionCommands(
         SheetId targetSheetId,
@@ -718,9 +725,9 @@ public static class PasteCommandFactory
         var colPeriod = transpose ? sourceRange.RowCount : sourceRange.ColCount;
 
         var commands = new List<IWorkbookCommand>();
-        for (var rowOffset = 0U; rowOffset < targetRows; rowOffset += rowPeriod)
+        for (var rowOffset = 0U; rowOffset + rowPeriod <= targetRows; rowOffset += rowPeriod)
         {
-            for (var colOffset = 0U; colOffset < targetCols; colOffset += colPeriod)
+            for (var colOffset = 0U; colOffset + colPeriod <= targetCols; colOffset += colPeriod)
             {
                 var tileDestination = new CellAddress(
                     targetSheetId,

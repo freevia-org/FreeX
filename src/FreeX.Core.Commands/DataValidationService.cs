@@ -305,6 +305,18 @@ public static partial class DataValidationService
         return diff <= WholeNumberTolerance * scale;
     }
 
+    // Same tolerance as IsEffectivelyWholeNumber, generalized to two arbitrary values. A
+    // formula result that has already been accepted as "effectively" a whole/decimal number
+    // by the checks above must not then be bit-exact-compared against its Equal/NotEqual
+    // bound — Between/NotBetween/GreaterThan/etc. are inherently insensitive to the same
+    // ordinary FP noise via >=/<=, so Equal/NotEqual need an equivalent tolerance to match.
+    private static bool IsEffectivelyEqual(double a, double b)
+    {
+        double diff = Math.Abs(a - b);
+        double scale = Math.Max(1.0, Math.Max(Math.Abs(a), Math.Abs(b)));
+        return diff <= WholeNumberTolerance * scale;
+    }
+
     private static string? ValidateNumeric(
         DataValidation dv,
         ScalarValue value,
@@ -344,8 +356,8 @@ public static partial class DataValidationService
         {
             DvOperator.Between             => numericValue >= v1 && numericValue <= v2,
             DvOperator.NotBetween          => numericValue < v1 || numericValue > v2,
-            DvOperator.Equal               => numericValue == v1,
-            DvOperator.NotEqual            => numericValue != v1,
+            DvOperator.Equal               => IsEffectivelyEqual(numericValue, v1),
+            DvOperator.NotEqual            => !IsEffectivelyEqual(numericValue, v1),
             DvOperator.GreaterThan         => numericValue > v1,
             DvOperator.LessThan            => numericValue < v1,
             DvOperator.GreaterThanOrEqual  => numericValue >= v1,

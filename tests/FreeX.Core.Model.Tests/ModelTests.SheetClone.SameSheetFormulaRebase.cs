@@ -113,6 +113,49 @@ public partial class SheetCloneTests
     }
 
     [Fact]
+    public void Sheet_Clone_DoesNotRebaseSheetNameFragmentInsideStringLiteral()
+    {
+        // R27-meta-4: the source sheet name appearing as ORDINARY quoted text (not as a reference
+        // qualifier) must not be touched by the same-sheet-qualifier rebase — a blind text
+        // substitution would otherwise corrupt the literal's semantics.
+        var wb = new Workbook("T");
+        var src = wb.AddSheet("Sheet1");
+        src.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(src.Id, 1, 2), new CellAddress(src.Id, 1, 2)),
+            RuleType = CfRuleType.Formula,
+            FormulaText = "EXACT(A1,\"Sheet1!\")"
+        });
+
+        var copy = src.Clone(SheetId.New(), "Sheet1 (2)");
+
+        copy.ConditionalFormats.Should().ContainSingle()
+            .Which.FormulaText.Should().Be("EXACT(A1,\"Sheet1!\")");
+    }
+
+    [Fact]
+    public void Sheet_Clone_RebasesGenuineSameSheetRefButLeavesStringLiteralSheetNameFragmentUnchanged()
+    {
+        // R27-meta-4: a formula that mixes a REAL same-sheet-qualified reference (must rebase to
+        // the copy) with an unrelated quoted text literal that happens to contain the source
+        // sheet's name (must NOT rebase) — both must be handled correctly in the same formula.
+        var wb = new Workbook("T");
+        var src = wb.AddSheet("Sheet1");
+        var validation = new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(src.Id, 3, 2), new CellAddress(src.Id, 3, 2)),
+            Type = DvType.Custom,
+            Formula1 = "AND(Sheet1!A1>0,EXACT(B1,\"Sheet1!\"))"
+        };
+        src.DataValidations.Add(validation);
+
+        var copy = src.Clone(SheetId.New(), "Sheet1 (2)");
+
+        copy.DataValidations.Should().ContainSingle()
+            .Which.Formula1.Should().Be("AND('Sheet1 (2)'!A1>0,EXACT(B1,\"Sheet1!\"))");
+    }
+
+    [Fact]
     public void Sheet_Clone_RebasesQuotedSourceSheetQualifierAndDoesNotRequireQuotingSimpleCopyName()
     {
         // Source sheet name needs quoting (embedded space); copy name is a simple identifier

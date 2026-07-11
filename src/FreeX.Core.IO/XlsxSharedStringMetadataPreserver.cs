@@ -101,8 +101,18 @@ internal static class XlsxSharedStringMetadataPreserver
                 var targetMatches = targetElements
                     .Where(item => HasRichSharedStringMetadata(item, workbookNs) && ReadSharedStringPlainText(item, workbookNs) == text)
                     .ToList();
-                var count = Math.Min(sourceMatches.Count, targetMatches.Count);
-                for (var i = 0; i < count; i++)
+
+                // R27: the target regenerates its SST from FreeX's own rich-run MODEL, which can
+                // fail to capture an rPr sub-element that distinguished two source occurrences
+                // (e.g. <scheme>). If that collapses >1 distinct source entries into fewer target
+                // entries (or vice versa), a count-mismatched positional pairing would graft one
+                // cell's exact rich XML onto a target entry that is now SHARED by other cells,
+                // silently overwriting their formatting instead of merely losing the unmodeled
+                // detail. Only pair 1:1 when the counts actually line up unambiguously.
+                if (sourceMatches.Count != targetMatches.Count)
+                    continue;
+
+                for (var i = 0; i < sourceMatches.Count; i++)
                 {
                     ReplaceSharedString(targetMatches[i], sourceMatches[i], workbookNs);
                     changed = true;

@@ -36,10 +36,7 @@ internal static class XlsxCustomViewMapper
             var splitRow = frozenRows == 0 && frozenCols == 0 ? rawYSplit : null;
             var splitColumn = frozenRows == 0 && frozenCols == 0 ? rawXSplit : null;
             var topLeftCell = customSheetView.Attribute("topLeftCell")?.Value;
-            var activeCell = customSheetView
-                .Elements(worksheetNs + "selection")
-                .Select(selection => selection.Attribute("activeCell")?.Value ?? selection.Attribute("sqref")?.Value)
-                .FirstOrDefault(reference => !string.IsNullOrWhiteSpace(reference));
+            var activeCell = ReadActiveSelectionCellReference(customSheetView, pane, worksheetNs);
 
             var pageMargins = customSheetView.Element(worksheetNs + "pageMargins");
             var pageSetup = customSheetView.Element(worksheetNs + "pageSetup");
@@ -88,6 +85,39 @@ internal static class XlsxCustomViewMapper
         }
 
         return customViews;
+    }
+
+    private static string? ReadActiveSelectionCellReference(XElement customSheetView, XElement? pane, XNamespace worksheetNs)
+    {
+        // Mirrors XlsxFileAdapter.SheetXmlLayout.ReadActiveSelectionCell: when the view is frozen/
+        // split into panes, Excel writes one <selection> per pane and marks the pane holding the
+        // true cursor via pane/@activePane (defaulting to "topLeft" when no pane element is
+        // present). A <selection> with no @pane attribute implicitly belongs to "topLeft". Picking
+        // the first <selection> in document order (rather than the one matching the active pane)
+        // silently reports the wrong active cell whenever the user's cursor was left in any pane
+        // other than the first one Excel happened to write.
+        var activePaneName = pane?.Attribute("activePane")?.Value;
+        if (string.IsNullOrWhiteSpace(activePaneName))
+            activePaneName = "topLeft";
+
+        string? fallbackReference = null;
+        foreach (var selection in customSheetView.Elements(worksheetNs + "selection"))
+        {
+            var reference = selection.Attribute("activeCell")?.Value ?? selection.Attribute("sqref")?.Value;
+            if (string.IsNullOrWhiteSpace(reference))
+                continue;
+
+            fallbackReference ??= reference;
+
+            var selectionPaneName = selection.Attribute("pane")?.Value;
+            if (string.IsNullOrWhiteSpace(selectionPaneName))
+                selectionPaneName = "topLeft";
+
+            if (string.Equals(selectionPaneName, activePaneName, StringComparison.Ordinal))
+                return reference;
+        }
+
+        return fallbackReference;
     }
 
     private static WorksheetPageOrientation? ParseOrientation(string? value) => value switch

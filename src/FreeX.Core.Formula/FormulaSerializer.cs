@@ -339,9 +339,25 @@ public static class FormulaSerializer
     // of structured-reference selector text.
     private static readonly char[] StructuredReferenceEscapableChars = ['[', ']', '#', '\''];
 
+    // R27-meta-3: the lexer strips apostrophe-escapes on read (ReadStructuredReferenceSelectorSlow),
+    // so a genuine "#Data" section keyword and a literal column escaped as "'#Data" both produce the
+    // IDENTICAL ColumnName ("#Data") — this layer cannot tell them apart. Blindly re-escaping every
+    // bare '#' (the round-26 behavior above) therefore corrupts the overwhelmingly common case — a
+    // real #Data/#Headers/#Totals/#All/#This Row keyword reference — into a literal-column escape on
+    // every reserialize, changing its meaning in Excel's structured-reference syntax. Recognize the
+    // fixed set of section keywords (mirrors StructuredReferenceResolver's own #ALL/#HEADERS/#DATA/
+    // #TOTALS/#THIS ROW handling) and pass them through unescaped, keeping the round-26 escaping only
+    // for selectors that are NOT a recognized keyword spelling (e.g. a literal name containing '[',
+    // ']', or an apostrophe). A literal column named exactly "#Data" is not distinguishable from the
+    // keyword at this layer and is treated as the keyword, favoring the common case.
+    private static readonly HashSet<string> StructuredReferenceSectionKeywords =
+        new(StringComparer.OrdinalIgnoreCase) { "#All", "#Data", "#Headers", "#Totals", "#This Row" };
+
     private static void AppendStructuredReferenceSelector(string selector, StringBuilder sb)
     {
-        if (selector.StartsWith('[') || selector.AsSpan().IndexOfAny(StructuredReferenceEscapableChars) < 0)
+        if (selector.StartsWith('[') ||
+            selector.AsSpan().IndexOfAny(StructuredReferenceEscapableChars) < 0 ||
+            StructuredReferenceSectionKeywords.Contains(selector.Trim()))
         {
             sb.Append(selector);
             return;

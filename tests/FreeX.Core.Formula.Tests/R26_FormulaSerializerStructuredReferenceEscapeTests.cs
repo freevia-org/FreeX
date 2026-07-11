@@ -4,24 +4,26 @@ using FluentAssertions;
 namespace FreeX.Core.Formula.Tests;
 
 /// <summary>
-/// Regression test for round-26 finding R26-table-structured-ref-deep-1 in FormulaSerializer.cs:
+/// Regression test for round-26 finding R26-table-structured-ref-deep-1, and round-27 finding
+/// R27-meta-3 which found round-26's fix over-corrected, in FormulaSerializer.cs:
 ///
 /// FormulaSerializer.WriteNode's StructuredReferenceNode case never re-escaped '#', a lone '[', or
 /// an apostrophe in sr.ColumnName -- it only doubled ']' (and skipped escaping entirely whenever the
 /// name contained '[', a heuristic meant for combined/bracketed selectors like "[#Data],[Amount]").
 /// Lexer.ReadStructuredReferenceSelectorSlow strips the apostrophe-escape on read (per
 /// IsEscapableStructuredReferenceChar's '[', ']', '#', "'" set), so a literal column named e.g.
-/// "#Data" (correctly written as Table1['#Data] in the source formula) loses the escape on any
-/// AST rewrite-and-reserialize (table rename, row/column insert-delete, ...): the re-serialized
-/// text "Table1[#Data]" re-parses to the SAME ColumnName ("#Data") but is no longer distinguishable
-/// from -- and evaluates the same as -- the #Data *section keyword* meaning the whole table body,
-/// not the literal column. A literal name containing an unescaped '[' (e.g. "A[B") was even worse:
-/// the old code wrote it out completely raw, producing text the Lexer cannot parse at all.
+/// "A[B" (correctly written as Table1[A'[B] in the source formula) loses the escape on any AST
+/// rewrite-and-reserialize (table rename, row/column insert-delete, ...), producing text the Lexer
+/// cannot even re-parse.
 ///
-/// Fixed by re-applying the same apostrophe-escape convention the Lexer understands (mirroring
+/// Round-26 fixed that by re-applying the apostrophe-escape convention (mirroring
 /// StructuredTableTotalsCommand.EscapeStructuredReferenceColumnName) to any bare (non-combined)
-/// selector, while still passing combined/bracketed selectors (which always start with '[') through
-/// unescaped so existing combined-selector round-trips are unaffected.
+/// selector -- but it escaped '#' unconditionally, which corrupts a genuine #Data/#Headers/#Totals/
+/// #All/#This Row section-keyword reference into an escaped-literal-column reference on every
+/// unrelated reserialize (round-27 finding R27-meta-3), since the Lexer strips the escape on read and
+/// a literal column named exactly "#Data" is indistinguishable from the keyword at this layer. Fixed
+/// by recognizing the fixed set of section keywords and passing them through unescaped, keeping the
+/// apostrophe-escape only for selectors that are not a recognized keyword spelling.
 /// </summary>
 public class R26_FormulaSerializerStructuredReferenceEscapeTests
 {
@@ -33,12 +35,17 @@ public class R26_FormulaSerializerStructuredReferenceEscapeTests
     }
 
     [Fact]
-    public void Serialize_LiteralColumnNameMatchingDataKeyword_KeepsApostropheEscape()
+    public void Serialize_LiteralColumnNameMatchingDataKeyword_IsIndistinguishableFromKeyword()
     {
-        // Bug case: a table column literally named "#Data" (escaped in source as '#Data) must
-        // still be written back out with the apostrophe escape after passing through the
-        // serializer, not as the bare "#Data" text (which reads back as the #Data section keyword).
-        RoundTrip("=SUM(Table1['#Data])").Should().Be("SUM(TABLE1['#Data])");
+        // R27-meta-3: Lexer.ReadStructuredReferenceSelectorSlow strips the apostrophe-escape on
+        // read, so a literal column escaped in source as '#Data and a genuine #Data section
+        // keyword both produce the identical ColumnName ("#Data") -- this layer has no way to
+        // tell them apart. Re-escaping unconditionally (the round-26 behavior) corrupted the far
+        // more common case -- a real #Data/#Headers/#Totals/#All/#This Row keyword reference --
+        // into a literal-column escape on every reserialize. The accepted, documented limitation
+        // is that a literal column named exactly "#Data" does not perfectly round-trip through a
+        // rewrite; it is treated as the keyword, favoring the common case.
+        RoundTrip("=SUM(Table1['#Data])").Should().Be("SUM(TABLE1[#Data])");
     }
 
     [Fact]
@@ -75,11 +82,13 @@ public class R26_FormulaSerializerStructuredReferenceEscapeTests
     [Fact]
     public void Serialize_SectionKeywordSelector_StillResolvesAsWholeTableKeyword()
     {
-        // Sibling already-working case: the #Data section keyword (no escape in the source) must
-        // still round-trip and keep meaning "the whole data body" -- unaffected by the fix, since
-        // the Lexer treats an escaped or unescaped '#Data' identically (the escape only matters for
-        // literal column names that happen to collide with a keyword spelling).
-        RoundTrip("=SUM(Table1[#Data])").Should().Be("SUM(TABLE1['#Data])");
+        // R27-meta-3: a genuine #Data section keyword (no escape in the source) must round-trip
+        // UNESCAPED and keep meaning "the whole data body". Escaping it (round-26's behavior)
+        // turns "TABLE1[#Data]" into "TABLE1['#Data]", which real Excel's structured-reference
+        // syntax parses as a literal column named "#Data", not the section keyword -- a
+        // meaning-changing corruption on any unrelated reserialize (row/column insert-delete,
+        // rename, etc.).
+        RoundTrip("=SUM(Table1[#Data])").Should().Be("SUM(TABLE1[#Data])");
     }
 
     [Fact]
@@ -88,5 +97,17 @@ public class R26_FormulaSerializerStructuredReferenceEscapeTests
         // Sibling already-working case (existing FormulaSerializerTests coverage): a combined
         // bracketed selector must still be written through as-is, not double-escaped.
         RoundTrip("=SUM(Sales[[#Data],[Amount]])").Should().Be("SUM(SALES[[#Data],[Amount]])");
+    }
+
+    [Theory]
+    [InlineData("#Headers")]
+    [InlineData("#Totals")]
+    [InlineData("#All")]
+    [InlineData("#This Row")]
+    public void Serialize_OtherSectionKeywordSelectors_RoundTripUnescaped(string keyword)
+    {
+        // R27-meta-3: every recognized section keyword -- not just #Data -- must round-trip
+        // unescaped, matching real Excel's structured-reference keyword syntax.
+        RoundTrip($"=SUM(Table1[{keyword}])").Should().Be($"SUM(TABLE1[{keyword}])");
     }
 }

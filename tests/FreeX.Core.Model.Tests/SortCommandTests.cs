@@ -360,6 +360,38 @@ public sealed class SortCommandTests
     [Fact]
     public void SortCommand_AllowsProtectedSheetWithSortPermission()
     {
+        // R27-protection-eval-deep-2: real Excel still blocks Sort on any range containing
+        // locked cells on a protected sheet regardless of the Sort permission checkbox — the
+        // range must be explicitly unlocked (Format Cells > Protection > Locked unchecked) for
+        // the permission grant to actually allow sorting it.
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(workbook);
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 1));
+        var unlockedStyle = workbook.RegisterStyle(new CellStyle { Locked = false });
+        var cellA = Cell.FromValue(new NumberValue(2));
+        cellA.StyleId = unlockedStyle;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), cellA);
+        var cellB = Cell.FromValue(new NumberValue(1));
+        cellB.StyleId = unlockedStyle;
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), cellB);
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.Sort);
+
+        var command = new SortCommand(sheet.Id, range, [new SortKey(0, true)]);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(1));
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void SortCommand_RejectsProtectedSheetWithSortPermissionButLockedCells()
+    {
+        // R27-protection-eval-deep-2: even with the Sort permission granted, Excel still blocks
+        // sorting a range that contains a locked cell on a protected sheet (cells default to
+        // Locked=true), unlike the sibling case above where the range was explicitly unlocked.
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
         var ctx = new TestCommandContext(workbook);
@@ -371,10 +403,11 @@ public sealed class SortCommandTests
 
         var command = new SortCommand(sheet.Id, range, [new SortKey(0, true)]);
 
-        command.Apply(ctx).Success.Should().BeTrue();
+        var outcome = command.Apply(ctx);
 
-        sheet.GetValue(1, 1).Should().Be(new NumberValue(1));
-        sheet.GetValue(2, 1).Should().Be(new NumberValue(2));
+        outcome.Success.Should().BeFalse();
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(2));
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(1));
     }
 
     [Fact]

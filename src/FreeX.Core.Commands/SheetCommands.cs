@@ -525,24 +525,28 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
         _scopedNamedFormulaSnapshot = ctx.Workbook.ScopedNamedFormulas
             .ToDictionary(p => p.Key, p => p.Value);
         var deletedSheetName = sheet.Name;
+        // R27: structured tables hosted on the deleted sheet no longer exist anywhere in the
+        // workbook, so cross-sheet Table[...] references to them must become #REF! — pass the
+        // captured names through to every DeleteSheetOp below (see DeleteSheetOp.DeletedTableNames).
+        var deletedTableNames = sheet.StructuredTables.Select(t => t.Name).ToList();
         ctx.Workbook.RemoveSheet(_sheetId);
         _formulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteAllFormulas(
-            ctx.Workbook, new DeleteSheetOp(deletedSheetName), _formulaSnapshot);
+            ctx.Workbook, new DeleteSheetOp(deletedSheetName, deletedTableNames), _formulaSnapshot);
         // Defined names whose refers-to is a formula expression are not covered by the named-range
         // pass above; rewrite their sheet-qualified references to the deleted sheet to #REF! too.
-        _namedFormulaSnapshot = RewriteNamedFormulasForDeletedSheet(ctx.Workbook, deletedSheetName);
+        _namedFormulaSnapshot = RewriteNamedFormulasForDeletedSheet(ctx.Workbook, deletedSheetName, deletedTableNames);
         // N3: sheet-scoped named formulas living on SURVIVING sheets can still reference the
         // deleted sheet in their text (e.g. Sheet1-scoped 'Foo' = '=Sheet2!A1*2' when Sheet2 is
         // deleted) — symmetric with the named-range pass above, which already rewrites scoped
         // named RANGES. RemoveSheet only purged the deleted sheet's OWN scoped formulas, so this
         // must run separately over what's left.
         _survivingScopedNamedFormulaRewriteSnapshot =
-            RewriteScopedNamedFormulasForDeletedSheet(ctx.Workbook, deletedSheetName);
+            RewriteScopedNamedFormulasForDeletedSheet(ctx.Workbook, deletedSheetName, deletedTableNames);
 
         // X3: rewrite CF FormulaText and DV Formula1/Formula2 on all surviving sheets
         // that reference the deleted sheet, producing #REF! — mirrors RenameSheetCommand T7.
-        var deleteOp = new DeleteSheetOp(deletedSheetName);
+        var deleteOp = new DeleteSheetOp(deletedSheetName, deletedTableNames);
         _cfFormulaDeleteSnapshot = [];
         _dvFormulaDeleteSnapshot = [];
         foreach (var s in ctx.Workbook.Sheets)
@@ -771,7 +775,7 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
     }
 
     private static Dictionary<string, string> RewriteNamedFormulasForDeletedSheet(
-        Workbook workbook, string deletedSheetName)
+        Workbook workbook, string deletedSheetName, IReadOnlyList<string> deletedTableNames)
     {
         Dictionary<string, string>? snapshot = null;
         // DeleteSheetOp only matches sheet-qualified references, so the host sheet name is
@@ -781,7 +785,8 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
         foreach (var name in workbook.NamedFormulas.Keys.ToList())
         {
             var original = workbook.NamedFormulas[name];
-            var rewritten = FormulaRewriter.Rewrite(original, new DeleteSheetOp(deletedSheetName), hostSheetName);
+            var rewritten = FormulaRewriter.Rewrite(
+                original, new DeleteSheetOp(deletedSheetName, deletedTableNames), hostSheetName);
             if (rewritten is null || rewritten == original)
                 continue; // null = no change or unparseable; leave the original untouched
 
@@ -802,7 +807,7 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
     /// sheet, not by which sheets the formula text references).
     /// </summary>
     private static Dictionary<(string Name, SheetId Sheet), string> RewriteScopedNamedFormulasForDeletedSheet(
-        Workbook workbook, string deletedSheetName)
+        Workbook workbook, string deletedSheetName, IReadOnlyList<string> deletedTableNames)
     {
         Dictionary<(string Name, SheetId Sheet), string>? snapshot = null;
         // DeleteSheetOp only matches sheet-qualified references, so the host sheet name passed to
@@ -812,7 +817,8 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
         {
             var sheet = workbook.Sheets.FirstOrDefault(s => s.Id == sheetId);
             var hostSheetName = sheet?.Name ?? string.Empty;
-            var rewritten = FormulaRewriter.Rewrite(original, new DeleteSheetOp(deletedSheetName), hostSheetName);
+            var rewritten = FormulaRewriter.Rewrite(
+                original, new DeleteSheetOp(deletedSheetName, deletedTableNames), hostSheetName);
             if (rewritten is null || rewritten == original)
                 continue; // null = no change or unparseable; leave the original untouched
 

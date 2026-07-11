@@ -83,7 +83,10 @@ public static partial class BuiltInFunctions
     {
         if (value is ErrorValue e) return e;
         var number = ToNumber(value);
-        return double.IsFinite(number) ? new NumberValue(1.0 - ErfApprox(number)) : ErrorValue.Num;
+        // Use the cancellation-free complementary error function (shared with NORMSDIST/NORMSCDF)
+        // instead of 1-erf(x), which loses all precision (and eventually rounds to exactly 0) for
+        // large x due to catastrophic cancellation against ErfApprox's ~1.5e-7 absolute error bound.
+        return double.IsFinite(number) ? new NumberValue(Erfc(number)) : ErrorValue.Num;
     }
 
     private static double ErfApprox(double x)

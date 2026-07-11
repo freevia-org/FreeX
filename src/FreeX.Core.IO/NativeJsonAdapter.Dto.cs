@@ -996,6 +996,17 @@ public sealed partial class NativeJsonAdapter
         public string? Id { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? MentionsXml { get; set; }
+        /// <summary>
+        /// The source <c>&lt;threadedComment&gt;/@personId</c> this root comment was loaded with
+        /// (see <see cref="ThreadedComment.SourcePersonId"/>); round-tripped so the mention ids
+        /// inside <see cref="MentionsXml"/> keep resolving after a native-JSON round trip and a
+        /// later re-save to XLSX.
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? SourcePersonId { get; set; }
+        /// <summary>See <see cref="ThreadedComment.MentionedPersonDisplayNames"/>.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public Dictionary<string, string>? MentionedPersonDisplayNames { get; set; }
         public List<CommentReplyDto> Replies { get; set; } = [];
     }
 
@@ -1011,6 +1022,12 @@ public sealed partial class NativeJsonAdapter
         public string? Id { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? MentionsXml { get; set; }
+        /// <summary>See <see cref="ThreadedCommentDto.SourcePersonId"/> (reply variant of the same concept).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? SourcePersonId { get; set; }
+        /// <summary>See <see cref="CommentReply.MentionedPersonDisplayNames"/>.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public Dictionary<string, string>? MentionedPersonDisplayNames { get; set; }
     }
 
     private class HyperlinkDto

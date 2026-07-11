@@ -15,7 +15,12 @@ public static partial class BuiltInFunctions
             return dataFieldError;
         if (args[1] is ErrorValue pivotRefError)
             return pivotRefError;
-        if (args[1] is not RangeValue { RowCount: 1, ColCount: 1 } pivotReference)
+        // Real Excel's pivot_table argument accepts "a reference to any cell, range of cells, or
+        // range named that is in a PivotTable" -- not just a single cell. FindPivotTableForReference
+        // only ever reads the reference's top-left cell (StartRow/StartCol), so a multi-cell range
+        // (e.g. a named range spanning the whole pivot) is resolved exactly the same way a 1x1
+        // reference is; only reject when the argument isn't a reference at all.
+        if (args[1] is not RangeValue pivotReference)
             return ErrorValue.Ref;
 
         var dataFieldCaption = PivotText(args[0]);

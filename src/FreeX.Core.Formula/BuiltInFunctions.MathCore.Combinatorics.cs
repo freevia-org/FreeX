@@ -56,10 +56,13 @@ public static partial class BuiltInFunctions
     {
         double dn = ToNumber(numberValue); double dk = ToNumber(chosenValue);
         if (!double.IsFinite(dn) || !double.IsFinite(dk)) return ErrorValue.Num;
-        if (dn < 0 || dn > int.MaxValue || dk < 0 || dk > int.MaxValue) return ErrorValue.Num;
-        int n = (int)Math.Truncate(dn); int k = (int)Math.Truncate(dk);
-        if (n < 0 || k < 0 || k > n) return ErrorValue.Num;
-        return CombinPositiveIntegers(n, k);
+        if (dn < 0 || dk < 0) return ErrorValue.Num;
+        dn = Math.Truncate(dn); dk = Math.Truncate(dk);
+        if (dk > dn) return ErrorValue.Num;
+        if (dk == 0) return new NumberValue(1);
+        if (dk == 1) return new NumberValue(dn);
+        if (dn > int.MaxValue || dk > int.MaxValue) return ErrorValue.Num;
+        return CombinPositiveIntegers((int)dn, (int)dk);
     }
 
     private static ScalarValue Combina(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -73,14 +76,18 @@ public static partial class BuiltInFunctions
     {
         double dn = ToNumber(numberValue); double dk = ToNumber(chosenValue);
         if (!double.IsFinite(dn) || !double.IsFinite(dk)) return ErrorValue.Num;
-        if (dn < 0 || dn > int.MaxValue || dk < 0 || dk > int.MaxValue) return ErrorValue.Num;
-        int n = (int)Math.Truncate(dn);
-        int k = (int)Math.Truncate(dk);
-        if (n == 0 && k > 0) return ErrorValue.Num;
-        if (k == 0) return new NumberValue(1);
-        if (k == 1) return new NumberValue(n);
-        if (n > 1029) return ErrorValue.Num;
-        if (k > 0 && n > 1029 - k + 1) return ErrorValue.Num;
+        if (dn < 0 || dk < 0) return ErrorValue.Num;
+        dn = Math.Truncate(dn); dk = Math.Truncate(dk);
+        if (dn == 0 && dk > 0) return ErrorValue.Num;
+        if (dk == 0) return new NumberValue(1);
+        if (dk == 1) return new NumberValue(dn);
+        if (dn > int.MaxValue || dk > int.MaxValue) return ErrorValue.Num;
+        int n = (int)dn;
+        int k = (int)dk;
+        // CombinPositiveIntegers(n+k-1, k) internally minimizes k to min(k, (n+k-1)-k) = min(k, n-1)
+        // and rejects when that minimized value exceeds 1029; pre-check the same quantity so we
+        // don't reject cases (e.g. large n with small k) that CombinPositiveIntegers would happily compute.
+        if (Math.Min(k, n - 1) > 1029) return ErrorValue.Num;
         return CombinPositiveIntegers(n + k - 1, k);
     }
 
@@ -95,9 +102,13 @@ public static partial class BuiltInFunctions
     {
         double dn = ToNumber(numberValue); double dk = ToNumber(chosenValue);
         if (!double.IsFinite(dn) || !double.IsFinite(dk)) return ErrorValue.Num;
-        if (dn < 0 || dn > int.MaxValue || dk < 0 || dk > int.MaxValue) return ErrorValue.Num;
-        int n = (int)Math.Truncate(dn); int k = (int)Math.Truncate(dk);
-        if (n < 0 || k < 0 || k > n) return ErrorValue.Num;
+        if (dn < 0 || dk < 0) return ErrorValue.Num;
+        dn = Math.Truncate(dn); dk = Math.Truncate(dk);
+        if (dk > dn) return ErrorValue.Num;
+        if (dk == 0) return new NumberValue(1);
+        if (dk == 1) return new NumberValue(dn);
+        if (dn > int.MaxValue || dk > int.MaxValue) return ErrorValue.Num;
+        int n = (int)dn; int k = (int)dk;
         double result = 1;
         for (int i = 0; i < k; i++)
             result *= (n - i);
@@ -115,10 +126,14 @@ public static partial class BuiltInFunctions
     {
         double dn = ToNumber(numberValue); double dk = ToNumber(chosenValue);
         if (!double.IsFinite(dn) || !double.IsFinite(dk)) return ErrorValue.Num;
-        if (dn < 0 || dk < 0 || dn > int.MaxValue || dk > int.MaxValue) return ErrorValue.Num;
-        int n = (int)Math.Truncate(dn);
-        int k = (int)Math.Truncate(dk);
-        if (n == 0 && k > 0) return ErrorValue.Num;
+        if (dn < 0 || dk < 0) return ErrorValue.Num;
+        dn = Math.Truncate(dn); dk = Math.Truncate(dk);
+        if (dn == 0 && dk > 0) return ErrorValue.Num;
+        if (dk == 0) return new NumberValue(1);
+        if (dk == 1) return new NumberValue(dn);
+        if (dn > int.MaxValue || dk > int.MaxValue) return ErrorValue.Num;
+        int n = (int)dn;
+        int k = (int)dk;
         return NumberResult(Math.Pow(n, k));
     }
 

@@ -45,7 +45,9 @@ public sealed partial class NativeJsonAdapter
                     CreatedAtUtc = ToUtc(reply.CreatedAtUtc),
                     ModifiedAtUtc = ToUtc(reply.ModifiedAtUtc),
                     Id = reply.Id,
-                    MentionsXml = reply.MentionsXml
+                    MentionsXml = reply.MentionsXml,
+                    SourcePersonId = reply.SourcePersonId,
+                    MentionedPersonDisplayNames = reply.MentionedPersonDisplayNames
                 })
                 .ToList();
             var comment = new ThreadedComment(
@@ -57,7 +59,9 @@ public sealed partial class NativeJsonAdapter
                 CreatedAtUtc = ToUtc(commentDto.CreatedAtUtc),
                 ModifiedAtUtc = ToUtc(commentDto.ModifiedAtUtc),
                 Id = commentDto.Id,
-                MentionsXml = commentDto.MentionsXml
+                MentionsXml = commentDto.MentionsXml,
+                SourcePersonId = commentDto.SourcePersonId,
+                MentionedPersonDisplayNames = commentDto.MentionedPersonDisplayNames
             };
             return (address, comment);
         }
@@ -107,6 +111,8 @@ public sealed partial class NativeJsonAdapter
         ModifiedAtUtc = ToUtc(pair.Value.ModifiedAtUtc),
         Id = pair.Value.Id,
         MentionsXml = pair.Value.MentionsXml,
+        SourcePersonId = pair.Value.SourcePersonId,
+        MentionedPersonDisplayNames = ToMentionedPersonDisplayNamesDto(pair.Value.MentionedPersonDisplayNames),
         Replies = pair.Value.Replies
             .OfType<CommentReply>()
             .Select(reply => new CommentReplyDto
@@ -116,10 +122,16 @@ public sealed partial class NativeJsonAdapter
                 CreatedAtUtc = ToUtc(reply.CreatedAtUtc),
                 ModifiedAtUtc = ToUtc(reply.ModifiedAtUtc),
                 Id = reply.Id,
-                MentionsXml = reply.MentionsXml
+                MentionsXml = reply.MentionsXml,
+                SourcePersonId = reply.SourcePersonId,
+                MentionedPersonDisplayNames = ToMentionedPersonDisplayNamesDto(reply.MentionedPersonDisplayNames)
             })
             .ToList()
     };
+
+    private static Dictionary<string, string>? ToMentionedPersonDisplayNamesDto(
+        IReadOnlyDictionary<string, string>? mentionedPersonDisplayNames) =>
+        mentionedPersonDisplayNames is null ? null : new Dictionary<string, string>(mentionedPersonDisplayNames);
 
     private static HyperlinkDto ToHyperlinkDto(Sheet sheet, KeyValuePair<CellAddress, string> pair)
     {

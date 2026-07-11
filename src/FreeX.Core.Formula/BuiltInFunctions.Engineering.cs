@@ -414,6 +414,7 @@ public static partial class BuiltInFunctions
         if (number is ErrorValue error) return error;
         if (!TryParseBaseNumber(number, fromBase, maxDigits, signThreshold, modulus, out var value)) return ErrorValue.Num;
         if (value < 0) return DecimalToBaseText(value, toBase, NegativeModulusForBase(toBase), 10, upper);
+        if (value > MaxPositiveValueForBase(toBase)) return ErrorValue.Num;
         return FormatBaseText(value, toBase, places, upper);
     }
 
@@ -512,6 +513,14 @@ public static partial class BuiltInFunctions
         2 => 1024L,
         8 => 1073741824L,
         16 => 1099511627776L,
+        _ => throw new ArgumentOutOfRangeException(nameof(toBase), toBase, null)
+    };
+
+    private static long MaxPositiveValueForBase(int toBase) => toBase switch
+    {
+        2 => 511L,
+        8 => 536870911L,
+        16 => 549755813887L,
         _ => throw new ArgumentOutOfRangeException(nameof(toBase), toBase, null)
     };
 

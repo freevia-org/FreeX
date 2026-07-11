@@ -41,6 +41,16 @@ public static partial class DataValidationService
             var allowed = ResolveListValues(source, sheet, anchor, address, workbook);
             if (allowed.Count > 0)
                 return ValidateListAgainstValues(dv, value, allowed);
+
+            // The source formula could not be resolved to any list items (e.g. a cascading
+            // =INDIRECT($A2) dropdown whose upstream cell is blank, so INDIRECT errors). Real
+            // Excel does not enforce List validation when the source formula can't be evaluated
+            // to a set of allowed values -- it accepts any entry rather than rejecting every
+            // value against the raw, unevaluated formula text. Falling through to the 2-arg
+            // ValidateList below would do exactly that: ParseInlineListItems("=INDIRECT($A2)")
+            // treats the literal formula string as the one and only allowed value, rejecting
+            // every real entry.
+            return null;
         }
 
         return ValidateList(dv, value);
@@ -522,6 +532,12 @@ public static partial class DataValidationService
             // format 1.5 as "1,5" and never match the "1.5" list item. Mirrors
             // DataValidationDropdownPlanner.FormatCellValue, which already uses InvariantCulture.
             NumberValue n => n.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            // Dates are stored as OADate serials (DateTimeValue), interchangeable with NumberValue
+            // for comparison purposes elsewhere (e.g. DataValidationService.ValidateDate/
+            // ValidateNumeric already treat NumberValue and DateTimeValue as the same OADate
+            // serial). Render the same way here so a date-formatted list source cell and a raw
+            // serial number typed/pasted into the validated cell compare equal.
+            DateTimeValue dt => dt.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
             BoolValue b   => b.Value ? "TRUE" : "FALSE",
             _             => value.ToString() ?? ""
         };

@@ -42,6 +42,13 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatCells) is { } protectedOutcome)
             return protectedOutcome;
+        // Excel keeps the Protection tab's Locked/Hidden checkboxes disabled whenever the sheet is
+        // protected, regardless of which protection permissions (including Format Cells) are
+        // granted -- the sheet must be unprotected first to change either flag. Enforce that as an
+        // always-on check independent of the FormatCells permission check above, so a "Format
+        // Cells" grant cannot be used to progressively unlock/hide cells while still protected.
+        if (sheet.IsProtected && (_diff.Locked is not null || _diff.Hidden is not null))
+            return CommandGuards.RejectSheetProtected();
         if (StyleDiffValidator.Validate(_diff) is { } validationOutcome)
             return validationOutcome;
 

@@ -1699,11 +1699,7 @@ public sealed partial class XlsxFileAdapter
             if (targetDefinedNames is null)
             {
                 targetDefinedNames = new XElement(workbookNs + "definedNames");
-                var sheets = root.Element(workbookNs + "sheets");
-                if (sheets is not null)
-                    sheets.AddAfterSelf(targetDefinedNames);
-                else
-                    root.Add(targetDefinedNames);
+                InsertRestoredDefinedNamesElement(root, workbookNs, targetDefinedNames);
                 changed = true;
             }
 
@@ -1781,7 +1777,26 @@ public sealed partial class XlsxFileAdapter
                     var newLocalSheetId = targetSheetNames.FindIndex(
                         name => string.Equals(name, scopeSheetName, StringComparison.OrdinalIgnoreCase));
                     if (newLocalSheetId < 0)
-                        continue;
+                    {
+                        // The old scope-sheet name isn't present under any current sheet. This is
+                        // ambiguous between the sheet having been deleted (drop the name, per the
+                        // comment above) and the sheet having simply been RENAMED with no other
+                        // structural change (the sheet - and this name's scope - is still there,
+                        // just under a new name). A rename alone never changes the sheet COUNT or
+                        // the relative ordering of the other sheets, so when the sheet count matches
+                        // the pristine source and the original ordinal position still exists, treat
+                        // it as a rename and keep the name scoped to that same position instead of
+                        // discarding it.
+                        if (targetSheetNames.Count == sourceSheetNamesByLocalId.Count &&
+                            oldLocalSheetId < targetSheetNames.Count)
+                        {
+                            newLocalSheetId = oldLocalSheetId;
+                        }
+                        else
+                        {
+                            continue;
+                        }
+                    }
 
                     localSheetIdAttr.Value = newLocalSheetId.ToString(System.Globalization.CultureInfo.InvariantCulture);
                     key = DefinedNameKey(resurrected);
@@ -1807,6 +1822,68 @@ public sealed partial class XlsxFileAdapter
                 var localSheetId = element.Attribute("localSheetId")?.Value ?? string.Empty;
                 return $"{name}\u001f{localSheetId}";
             }
+        }
+
+        // Mirrors XlsxWorkbookSchemaNormalizer.WorkbookChildOrder's CT_Workbook child sequence (the
+        // same ordering XlsxNamedRangeMapper.InsertDefinedNamesElement enforces for its own,
+        // separate defined-name write-back) so a newly-created <definedNames> element on THIS
+        // resurrection path - which runs strictly AFTER the schema normalizer's one-and-only reorder
+        // pass has already completed - lands after sheets/functionGroups/externalReferences and
+        // before calcPr/oleSize/etc, instead of unconditionally right after <sheets/>. Placing it
+        // before <externalReferences/> violates the CT_Workbook sequence and triggers Excel's
+        // "we found a problem with some content" repair prompt on open (R27-io-workbook-parts-deep-1).
+        private static readonly string[] RestoredDefinedNamesPrecedingSiblings =
+        {
+            "sheets",
+            "functionGroups",
+            "externalReferences",
+        };
+
+        private static readonly string[] RestoredDefinedNamesFollowingSiblings =
+        {
+            "calcPr",
+            "oleSize",
+            "customWorkbookViews",
+            "pivotCaches",
+            "smartTagPr",
+            "smartTagTypes",
+            "webPublishing",
+            "fileRecoveryPr",
+            "webPublishObjects",
+            "extLst",
+        };
+
+        private static void InsertRestoredDefinedNamesElement(XElement root, XNamespace workbookNs, XElement definedNames)
+        {
+            // Insert immediately after the last of sheets/functionGroups/externalReferences that is
+            // present, in document order, so definedNames lands after all three per the schema.
+            XElement? lastPrecedingSibling = null;
+            foreach (var localName in RestoredDefinedNamesPrecedingSiblings)
+            {
+                var element = root.Element(workbookNs + localName);
+                if (element is not null)
+                    lastPrecedingSibling = element;
+            }
+
+            if (lastPrecedingSibling is not null)
+            {
+                lastPrecedingSibling.AddAfterSelf(definedNames);
+                return;
+            }
+
+            // No sheets/functionGroups/externalReferences element found (unexpected but be
+            // defensive): insert before the first element that must follow definedNames, if any.
+            foreach (var localName in RestoredDefinedNamesFollowingSiblings)
+            {
+                var element = root.Element(workbookNs + localName);
+                if (element is not null)
+                {
+                    element.AddBeforeSelf(definedNames);
+                    return;
+                }
+            }
+
+            root.Add(definedNames);
         }
 
         // A defined name's refersTo body never makes it into the model (NamedRanges/

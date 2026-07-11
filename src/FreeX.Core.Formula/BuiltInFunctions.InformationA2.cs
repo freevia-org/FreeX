@@ -164,6 +164,7 @@ public static partial class BuiltInFunctions
             "h:mm:ssam/pm" => "D6",
             "h:mmam/pm" => "D7",
             "h:mm:ss" => "D8",
+            "h:mm" => "D9",
             _ => "G"
         };
     }
@@ -234,7 +235,11 @@ public static partial class BuiltInFunctions
         {
             var token = bracket.Trim();
             if (token.Length == 0) continue;
-            if (token.StartsWith("$-", StringComparison.Ordinal)) continue;
+            // A bracketed token beginning with '$' is always an OOXML locale/currency
+            // tag (e.g. "$-409", "$$-409", "$£-809", "$€-407"), never a color spec --
+            // Excel's color tokens are named colors ([Red], [Color10], ...) and only
+            // ever start with a letter.
+            if (token[0] == '$') continue;
             if (token[0] is '<' or '>' or '=') continue;
             if (token.Contains('=') || char.IsDigit(token[0])) continue;
             if (token.StartsWith("DBNum", StringComparison.OrdinalIgnoreCase)) continue;

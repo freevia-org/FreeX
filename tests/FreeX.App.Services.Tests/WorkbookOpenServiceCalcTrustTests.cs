@@ -9,17 +9,22 @@ namespace FreeX.App.Services.Tests;
 /// <summary>
 /// Round-26 findings R26-calc-chain-dependency-order-1 and -3: <c>ShouldRecalculateLoadedFormulas</c>
 /// must match real Excel's "trust the file's cached values unless told otherwise" behavior for BOTH
-/// container formats it can see (OOXML .xlsx and legacy BIFF .xls), while still always recalculating
-/// volatile functions (NOW/TODAY/RAND/...) on open as long as calculation is not set to Manual.
+/// container formats it can see (OOXML .xlsx and legacy BIFF .xls).
+///
+/// Round-27 finding R27-meta-1 reverted an over-broad round-26 addition that forced a FULL workbook
+/// recalculation whenever ANY volatile function (NOW/TODAY/RAND/OFFSET/INDIRECT/...) existed anywhere
+/// in the workbook. Real Excel does not do this on an Automatic-mode open with trusted cached values --
+/// it only marks the volatile cells (and their dependents) dirty, it never throws away every other
+/// cell's trusted cached value just because the file happens to contain one volatile function.
 /// </summary>
 public sealed class WorkbookOpenServiceCalcTrustTests
 {
     [Fact]
-    public async Task LoadAsync_XlsxWithVolatileFormulaRecalculatesEvenWithoutFullCalcOnLoad()
+    public async Task LoadAsync_XlsxWithIncidentalVolatileFormulaStillTrustsCachedValues()
     {
         using var temp = new TestTemporaryDirectory();
         var tempPath = Path.Combine(temp.Path, "volatile.xlsx");
-        await File.WriteAllBytesAsync(tempPath, CreateXlsxWithFormula("TODAY()", calcMode: "auto"));
+        await File.WriteAllBytesAsync(tempPath, CreateXlsxWithFormula("OFFSET(A1,0,0)", calcMode: "auto"));
         var recalculateCalled = false;
         var service = new WorkbookOpenService(_ => recalculateCalled = true);
 
@@ -30,8 +35,10 @@ public sealed class WorkbookOpenServiceCalcTrustTests
             new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
             new TestProgress<WorkbookOpenProgressUpdate>(_ => { }));
 
-        recalculateCalled.Should().BeTrue(
-            "real Excel recalculates volatile functions on every open in Automatic mode, even when the file has no fullCalcOnLoad flag");
+        recalculateCalled.Should().BeFalse(
+            "real Excel trusts a file's cached values on an Automatic-mode open and does not force a " +
+            "full workbook recalculation merely because the workbook contains an incidental volatile " +
+            "function (e.g. an OFFSET-based named range or a NOW() timestamp) with no fullCalcOnLoad flag");
     }
 
     [Fact]
@@ -52,26 +59,6 @@ public sealed class WorkbookOpenServiceCalcTrustTests
 
         recalculateCalled.Should().BeFalse(
             "a workbook with only non-volatile formulas and no fullCalcOnLoad flag should keep trusting its cached values");
-    }
-
-    [Fact]
-    public async Task LoadAsync_XlsxWithVolatileFormulaInManualCalcModeDoesNotRecalculate()
-    {
-        using var temp = new TestTemporaryDirectory();
-        var tempPath = Path.Combine(temp.Path, "volatile-manual.xlsx");
-        await File.WriteAllBytesAsync(tempPath, CreateXlsxWithFormula("TODAY()", calcMode: "manual"));
-        var recalculateCalled = false;
-        var service = new WorkbookOpenService(_ => recalculateCalled = true);
-
-        await service.LoadAsync(
-            tempPath,
-            new XlsxFileAdapter(),
-            ".xlsx",
-            new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
-            new TestProgress<WorkbookOpenProgressUpdate>(_ => { }));
-
-        recalculateCalled.Should().BeFalse(
-            "real Excel does not auto-recalculate anything -- including volatile functions -- on open when calculation is set to Manual");
     }
 
     [Fact]

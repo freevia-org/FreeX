@@ -46,6 +46,11 @@ public sealed class FillCellsCommand : IWorkbookCommand
             return CommandGuards.RejectSheetProtected();
         if (CommandGuards.RejectIfSplitsArray(sheet, targets) is { } splitsArrayRejection)
             return splitsArrayRejection;
+        // Excel refuses to fill (Ctrl+D/Ctrl+R) across a merged region: the merge's non-anchor
+        // cells must never receive independent content, and a fill that only partially covers a
+        // merge would leave the merge's data model out of sync (mirrors AutofillCommand/MoveRangeCommand's merge guard).
+        if (sheet.MergedRegions.Any(region => _range.Overlaps(region)))
+            return new CommandOutcome(false, "Cannot fill a range that intersects merged cells.");
 
         _snapshot = [];
         _hyperlinkSnapshot = [];

@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace FreeX.Core.Model;
@@ -450,8 +451,8 @@ public sealed partial class Sheet
     }
 
     /// <summary>
-    /// R26-sheet-lifecycle-deep-2: rebases an explicit same-sheet-qualified reference (e.g.
-    /// <c>Sheet1!A1</c> or <c>'Sheet 1'!A1</c>) embedded in a Conditional Format / Data
+    /// R26-sheet-lifecycle-deep-2 / R27-meta-4: rebases an explicit same-sheet-qualified reference
+    /// (e.g. <c>Sheet1!A1</c> or <c>'Sheet 1'!A1</c>) embedded in a Conditional Format / Data
     /// Validation formula so a duplicated sheet's rule follows the COPY instead of continuing
     /// to point at the source sheet by name — matching Excel's Move-or-Copy behavior and
     /// mirroring how <c>DuplicateSheetDrawingCloner</c> already rebases the analogous verbatim
@@ -460,7 +461,10 @@ public sealed partial class Sheet
     /// parser), so this is a targeted text substitution rather than a full AST rewrite: only
     /// literal occurrences of the SOURCE sheet's own name used as a reference qualifier are
     /// replaced. Qualifiers naming any OTHER sheet, and unqualified references (which already
-    /// implicitly follow the copy since they mean "this sheet"), are left untouched.
+    /// implicitly follow the copy since they mean "this sheet"), are left untouched. The
+    /// substitution is also skipped inside double-quoted text literals (Excel's <c>""</c>-escaped
+    /// string syntax) so a sheet name that merely occurs as ordinary quoted text — e.g.
+    /// <c>=EXACT(A1,"Data!")</c> — is never mistaken for a reference qualifier and rewritten.
     /// </summary>
     private static string? RewriteSameSheetQualifiedFormula(string? formula, string sourceSheetName, string newSheetName)
     {
@@ -471,15 +475,61 @@ public sealed partial class Sheet
 
         // Already-quoted source qualifier, e.g. 'Sheet 1'!
         var quotedOldQualifier = "'" + sourceSheetName.Replace("'", "''") + "'!";
-        var rewritten = formula.Replace(quotedOldQualifier, newQualifier, StringComparison.OrdinalIgnoreCase);
 
         // Bare (unquoted) source qualifier, e.g. Sheet1! — guarded so it can't match a fragment
         // of a longer identifier/qualifier (e.g. a source name of "Sheet1" must not match inside
         // "OtherSheet1!") or re-touch the quoted form already handled above.
         var pattern = "(?<![A-Za-z0-9_.'])" + Regex.Escape(sourceSheetName) + "!";
-        rewritten = Regex.Replace(rewritten, pattern, _ => newQualifier, RegexOptions.IgnoreCase);
 
-        return rewritten;
+        return ReplaceOutsideStringLiterals(formula, segment =>
+        {
+            var rewritten = segment.Replace(quotedOldQualifier, newQualifier, StringComparison.OrdinalIgnoreCase);
+            return Regex.Replace(rewritten, pattern, _ => newQualifier, RegexOptions.IgnoreCase);
+        });
+    }
+
+    /// <summary>
+    /// Applies <paramref name="transform"/> to every part of <paramref name="formula"/> that falls
+    /// OUTSIDE an Excel double-quoted text literal (<c>"..."</c>, with <c>""</c> as an escaped quote
+    /// character inside the literal), leaving the contents of any string literal byte-for-byte
+    /// untouched. This is what keeps <see cref="RewriteSameSheetQualifiedFormula"/> from reaching
+    /// into ordinary quoted text that merely happens to contain a matching substring.
+    /// </summary>
+    private static string ReplaceOutsideStringLiterals(string formula, Func<string, string> transform)
+    {
+        var result = new StringBuilder(formula.Length);
+        var i = 0;
+        while (i < formula.Length)
+        {
+            if (formula[i] == '"')
+            {
+                var literalStart = i;
+                i++;
+                while (i < formula.Length)
+                {
+                    if (formula[i] == '"')
+                    {
+                        if (i + 1 < formula.Length && formula[i + 1] == '"')
+                        {
+                            i += 2; // "" escaped quote character inside the literal
+                            continue;
+                        }
+                        i++; // closing quote
+                        break;
+                    }
+                    i++;
+                }
+                result.Append(formula, literalStart, i - literalStart);
+                continue;
+            }
+
+            var segmentStart = i;
+            while (i < formula.Length && formula[i] != '"')
+                i++;
+            result.Append(transform(formula[segmentStart..i]));
+        }
+
+        return result.ToString();
     }
 
     private void CopyLayoutCollectionsTo(Sheet copy)

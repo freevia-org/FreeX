@@ -113,6 +113,23 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         if (_range.End.Row < _range.Start.Row || _range.End.Col < _range.Start.Col)
             return new CommandOutcome(true); // nothing to sort
 
+        // R27-protection-eval-deep-2: Excel documents that Sort is blocked on any range
+        // containing locked cells on a protected worksheet "whether or not this element is
+        // selected" — the Sort permission checked above only ever matters for a range that is
+        // entirely unlocked. Without this, granting Sort alone would let a user rearrange data
+        // the sheet owner explicitly locked (the default style for every cell).
+        if (sheet.IsProtected)
+        {
+            for (var row = _range.Start.Row; row <= _range.End.Row; row++)
+            {
+                for (var col = _range.Start.Col; col <= _range.End.Col; col++)
+                {
+                    if (!CommandGuards.CanEditCell(ctx.Workbook, sheet, new CellAddress(_sheetId, row, col)))
+                        return CommandGuards.RejectSheetProtected();
+                }
+            }
+        }
+
         // Excel rejects sorts that contain merged cells, UNLESS every merge overlapping the range
         // is fully contained within it, spans exactly one row (a horizontal, cosmetic multi-column
         // merge), and all such merges are identically sized. In that uniform case (e.g. every row
@@ -209,8 +226,34 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
                     bool aBlank = IsBlankOrError(a.Payloads[index].Cell);
                     bool bBlank = IsBlankOrError(b.Payloads[index].Cell);
                     if (aBlank != bBlank)
-                        return aBlank ? 1 : -1; // blank always goes last
-                    if (aBlank) // both blank — equal on this key, try next
+                        return aBlank ? 1 : -1; // blank/error always goes last
+                    if (aBlank)
+                    {
+                        // R27-sort-deep-2: within the "goes last" bucket, Excel's fixed
+                        // precedence puts errors above blanks — independent of direction, same
+                        // as the blank-last rule itself.
+                        bool aError = a.Payloads[index].Cell?.Value is ErrorValue;
+                        bool bError = b.Payloads[index].Cell?.Value is ErrorValue;
+                        if (aError != bError)
+                            return aError ? -1 : 1;
+                        continue; // both blank, or both error — equal on this key, try next
+                    }
+                }
+                else if ((sortOn == SortOn.CellColor || sortOn == SortOn.FontColor) && targetColor is null)
+                {
+                    // R27-sort-deep-3: with no specific target color chosen, "no fill"/"no font
+                    // color" must always sort last, direction-independent — same fixed-last rule
+                    // as blanks above. CompareNullableColor already encodes that ordering as an
+                    // absolute value for the null-vs-non-null case, so it must not be run through
+                    // the ascending/descending negation below (unlike the two-colors-present case,
+                    // which still goes through CompareKey/negation unchanged).
+                    var aColor = sortOn == SortOn.CellColor ? GetStyle(ctx.Workbook, a.Payloads[index].Cell).FillColor : GetStyle(ctx.Workbook, a.Payloads[index].Cell).FontColor;
+                    var bColor = sortOn == SortOn.CellColor ? GetStyle(ctx.Workbook, b.Payloads[index].Cell).FillColor : GetStyle(ctx.Workbook, b.Payloads[index].Cell).FontColor;
+                    bool aNoFill = aColor is null;
+                    bool bNoFill = bColor is null;
+                    if (aNoFill != bNoFill)
+                        return aNoFill ? 1 : -1; // no fill/font color always goes last
+                    if (aNoFill) // both no-fill — equal on this key, try next
                         continue;
                 }
 
@@ -318,8 +361,31 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
                     bool aBlank = IsBlankOrError(a.Payloads[index].Cell);
                     bool bBlank = IsBlankOrError(b.Payloads[index].Cell);
                     if (aBlank != bBlank)
-                        return aBlank ? 1 : -1; // blank always goes last
-                    if (aBlank) // both blank — equal on this key, try next
+                        return aBlank ? 1 : -1; // blank/error always goes last
+                    if (aBlank)
+                    {
+                        // R27-sort-deep-2: within the "goes last" bucket, Excel's fixed
+                        // precedence puts errors above blanks — independent of direction, same
+                        // as the blank-last rule itself.
+                        bool aError = a.Payloads[index].Cell?.Value is ErrorValue;
+                        bool bError = b.Payloads[index].Cell?.Value is ErrorValue;
+                        if (aError != bError)
+                            return aError ? -1 : 1;
+                        continue; // both blank, or both error — equal on this key, try next
+                    }
+                }
+                else if ((sortOn == SortOn.CellColor || sortOn == SortOn.FontColor) && targetColor is null)
+                {
+                    // R27-sort-deep-3: with no specific target color chosen, "no fill"/"no font
+                    // color" must always sort last, direction-independent — mirrors the guard in
+                    // Apply's top-to-bottom comparator above.
+                    var aColor = sortOn == SortOn.CellColor ? GetStyle(workbook, a.Payloads[index].Cell).FillColor : GetStyle(workbook, a.Payloads[index].Cell).FontColor;
+                    var bColor = sortOn == SortOn.CellColor ? GetStyle(workbook, b.Payloads[index].Cell).FillColor : GetStyle(workbook, b.Payloads[index].Cell).FontColor;
+                    bool aNoFill = aColor is null;
+                    bool bNoFill = bColor is null;
+                    if (aNoFill != bNoFill)
+                        return aNoFill ? 1 : -1; // no fill/font color always goes last
+                    if (aNoFill) // both no-fill — equal on this key, try next
                         continue;
                 }
 

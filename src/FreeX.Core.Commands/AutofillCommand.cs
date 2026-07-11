@@ -19,14 +19,18 @@ public sealed class AutofillCommand : IWorkbookCommand
     private List<(CellAddress Addr, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
     private List<(CellAddress Address, bool HadTarget, string? Target, bool HadMetadata, HyperlinkMetadata? Metadata)>? _hyperlinkSnapshot;
     private List<(CellAddress Address, bool HadRuns, IReadOnlyList<CellTextRun>? Runs)>? _richTextRunsSnapshot;
+    private List<GridRange>? _createdMergedRegions;
 
     public string Label => "Autofill";
 
     /// <param name="ctrlHeld">
     /// True when the user held Ctrl while releasing the fill-handle drag. Excel uses Ctrl to flip
-    /// the fill handle's default behavior: a detected series (2+ source cells, or any text/list
-    /// series) becomes a plain copy of the last value, while a single plain number/date cell
-    /// (which otherwise just copies) becomes an incrementing series instead.
+    /// the fill handle's default behavior for a detected series (2+ source cells, or any
+    /// text/list series): it becomes a plain copy of the last value instead. For a LONE plain
+    /// number/date cell (no natural multi-cell series to detect), the default itself is
+    /// type-dependent: a number defaults to a copy (Ctrl forces an incrementing series instead),
+    /// while a date defaults to a day-increment series (Ctrl forces a copy instead) -- see
+    /// <see cref="WantsSingleCellSeriesDefault"/>.
     /// </param>
     public AutofillCommand(SheetId sheetId, GridRange sourceRange, GridRange fillRange, bool ctrlHeld = false)
     {
@@ -49,8 +53,19 @@ public sealed class AutofillCommand : IWorkbookCommand
         // Excel refuses to fill across a merged region: the merge's non-anchor cells must never
         // receive independent content, and a fill that only partially covers a merge would leave
         // the merge's data model out of sync (mirrors MoveRangeCommand/SortCommand's merge guard).
-        if (sheet.MergedRegions.Any(region => _fillRange.Overlaps(region) || _sourceRange.Overlaps(region)))
-            return new CommandOutcome(false, "Cannot autofill a range that intersects merged cells.");
+        // The one shape Excel DOES allow through: the whole source range is a single uniformly
+        // sized merge (e.g. a "Q1" header merged across 2 columns) -- that tiles new,
+        // identically-sized merges across the fill range instead of refusing outright, mirroring
+        // SortCommand's own uniform-merge carve-out.
+        var overlappingMerges = sheet.MergedRegions.Where(region => _fillRange.Overlaps(region) || _sourceRange.Overlaps(region)).ToList();
+        if (overlappingMerges.Count > 0)
+        {
+            var tileSize = TryGetUniformMergeTileSize(overlappingMerges, plan);
+            if (tileSize is null)
+                return new CommandOutcome(false, "Cannot autofill a range that intersects merged cells.");
+
+            return ApplyMergeTiledFill(ctx, sheet, plan, tileSize.Value);
+        }
 
         for (var row = _fillRange.Start.Row; row <= _fillRange.End.Row; row++)
         {
@@ -69,13 +84,16 @@ public sealed class AutofillCommand : IWorkbookCommand
         var sourceLength = plan.Axis == FillAxis.Vertical ? (int)_sourceRange.RowCount : (int)_sourceRange.ColCount;
         var naturalScalarSeries = sourceHasFormula ? null : TryCreateScalarSeries(sheet, plan);
         var naturalListSeries = sourceHasFormula || naturalScalarSeries is not null ? null : TryCreateListSeries(sheet, plan);
-        // Ctrl flips the natural default: a detected series (scalar trend, or any text/list
-        // series) becomes a plain copy; a lone plain number/date (no natural series) becomes a
-        // forced increment-by-1 series instead. Ctrl has no effect on formula fills.
+        // Ctrl flips the natural default for a detected series (a 2+ cell scalar trend, or any
+        // text/list series): it becomes a plain copy instead. Ctrl has no effect on formula fills.
         var forceCopyOnly = !sourceHasFormula && _ctrlHeld && (naturalScalarSeries is not null || naturalListSeries is not null);
-        var scalarSeries = forceCopyOnly
-            ? null
-            : naturalScalarSeries ?? (!sourceHasFormula && _ctrlHeld ? TryCreateForcedSingleCellSeries(sheet, plan) : null);
+        // A lone plain number/date cell (no natural multi-cell series above) has a type-dependent
+        // default instead of always defaulting to copy -- see WantsSingleCellSeriesDefault.
+        var forcedSeries = !sourceHasFormula && naturalScalarSeries is null && naturalListSeries is null
+            && _sourceRange.CellCount == 1 && WantsSingleCellSeriesDefault(sourceCell?.Value, _ctrlHeld)
+                ? TryCreateForcedSingleCellSeries(sourceCell, plan)
+                : null;
+        var scalarSeries = forceCopyOnly ? null : naturalScalarSeries ?? forcedSeries;
         var listSeries = forceCopyOnly ? null : naturalListSeries;
 
         var capacity = GetFillCellCapacity();
@@ -111,13 +129,13 @@ public sealed class AutofillCommand : IWorkbookCommand
                 if (scalarSeries is not null)
                 {
                     newCell = Cell.FromValue(scalarSeries.CreateValue(scalarSeries.LastValue + scalarSeries.Step * offset));
-                    newCell.StyleId = sourceCell.StyleId;
+                    newCell.StyleId = ResolvePatternSourceStyleId(sheet, plan, addr, sourceLength, sourceCell);
                     annotationSourceAddr = sourceAddr;
                 }
                 else if (listSeries is not null)
                 {
                     newCell = Cell.FromValue(listSeries.ValueAt(offset));
-                    newCell.StyleId = sourceCell.StyleId;
+                    newCell.StyleId = ResolvePatternSourceStyleId(sheet, plan, addr, sourceLength, sourceCell);
                     annotationSourceAddr = sourceAddr;
                 }
                 else
@@ -222,10 +240,172 @@ public sealed class AutofillCommand : IWorkbookCommand
         return new CommandOutcome(true, AffectedCells: writtenCells);
     }
 
+    /// <summary>
+    /// Excel allows exactly one merged-cell autofill shape through: the whole source range is a
+    /// SINGLE merged region, and the fill range is an exact multiple of that merge's size along
+    /// the fill axis (e.g. a "Q1" header merged across 2 columns, filled right into a 4-column
+    /// range to produce two more same-size "Q2"/"Q3" merges). The merge's long axis must run
+    /// parallel to the fill direction: a horizontal fill only accepts single-ROW merges, a
+    /// vertical fill only accepts single-COLUMN merges. Any other overlap -- a partial merge, a
+    /// destination that already has its own (potentially differently sized) merges, or a merge
+    /// whose long axis crosses the fill direction -- still refuses, matching Excel's own "merged
+    /// cells need to be identically sized" refusal.
+    /// </summary>
+    private (uint RowSpan, uint ColSpan)? TryGetUniformMergeTileSize(IReadOnlyList<GridRange> overlappingMerges, FillPlan plan)
+    {
+        if (overlappingMerges.Count != 1 || overlappingMerges[0] != _sourceRange)
+            return null;
+
+        var merge = overlappingMerges[0];
+        if (plan.Axis == FillAxis.Horizontal)
+        {
+            if (merge.RowCount != 1 || merge.ColCount < 2)
+                return null;
+            if (_fillRange.RowCount != 1 || _fillRange.ColCount % merge.ColCount != 0)
+                return null;
+        }
+        else
+        {
+            if (merge.ColCount != 1 || merge.RowCount < 2)
+                return null;
+            if (_fillRange.ColCount != 1 || _fillRange.RowCount % merge.RowCount != 0)
+                return null;
+        }
+
+        return (merge.RowCount, merge.ColCount);
+    }
+
+    /// <summary>
+    /// Handles the merged-cell autofill shape <see cref="TryGetUniformMergeTileSize"/> allows
+    /// through: tiles new, identically-sized merged regions across the fill range, continuing
+    /// whatever series/pattern the lone source merge's anchor value would otherwise produce (the
+    /// same series detection a single plain source cell gets -- <see cref="TryCreateForcedSingleCellSeries"/>
+    /// / <see cref="TryCreateSingleCellListSeries"/> -- since a merge's non-anchor cells never
+    /// hold an independent value to build a multi-cell trend from). Every new tile's non-anchor
+    /// cells are left independent-content-free, matching the merge invariant that only a merge's
+    /// top-left anchor cell may hold a value.
+    /// </summary>
+    private CommandOutcome ApplyMergeTiledFill(ICommandContext ctx, Sheet sheet, FillPlan plan, (uint RowSpan, uint ColSpan) tileSize)
+    {
+        for (var row = _fillRange.Start.Row; row <= _fillRange.End.Row; row++)
+        {
+            for (var col = _fillRange.Start.Col; col <= _fillRange.End.Col; col++)
+            {
+                if (!CommandGuards.CanEditCell(ctx.Workbook, sheet, new CellAddress(_sheetId, row, col)))
+                    return CommandGuards.RejectSheetProtected();
+            }
+        }
+        if (CommandGuards.RejectIfSplitsArray(sheet, _fillRange.AllCells()) is { } splitsArrayRejection)
+            return splitsArrayRejection;
+
+        var sourceAnchor = _sourceRange.Start;
+        var sourceCell = sheet.GetCell(sourceAnchor);
+        var sourceHasFormula = sourceCell is { HasFormula: true, FormulaText: not null };
+        var naturalListSeries = sourceHasFormula ? null : TryCreateSingleCellListSeries(sourceCell, plan);
+        var forceCopyOnly = !sourceHasFormula && _ctrlHeld && naturalListSeries is not null;
+        var wantsForcedScalarSeries = !sourceHasFormula && naturalListSeries is null
+            && WantsSingleCellSeriesDefault(sourceCell?.Value, _ctrlHeld);
+        var scalarSeries = forceCopyOnly ? null : (wantsForcedScalarSeries ? TryCreateForcedSingleCellSeries(sourceCell, plan) : null);
+        var listSeries = forceCopyOnly ? null : naturalListSeries;
+
+        var isVerticalTile = plan.Axis == FillAxis.Vertical;
+        var reversed = plan.Direction is FillDirection.Up or FillDirection.Left;
+        var tileCount = isVerticalTile
+            ? (int)(_fillRange.RowCount / tileSize.RowSpan)
+            : (int)(_fillRange.ColCount / tileSize.ColSpan);
+
+        var capacity = GetFillCellCapacity();
+        _snapshot = new List<(CellAddress Addr, Cell? OldCell, StyleId? OldStyleOnly)>(capacity);
+        _hyperlinkSnapshot = new List<(CellAddress Address, bool HadTarget, string? Target, bool HadMetadata, HyperlinkMetadata? Metadata)>(capacity);
+        _richTextRunsSnapshot = new List<(CellAddress Address, bool HadRuns, IReadOnlyList<CellTextRun>? Runs)>(capacity);
+        _createdMergedRegions = [];
+        var writtenCells = new List<CellAddress>(capacity);
+
+        for (var t = 0; t < tileCount; t++)
+        {
+            uint tileRowStart, tileColStart;
+            if (isVerticalTile)
+            {
+                tileRowStart = reversed
+                    ? _fillRange.End.Row - (uint)(t + 1) * tileSize.RowSpan + 1
+                    : _fillRange.Start.Row + (uint)t * tileSize.RowSpan;
+                tileColStart = _fillRange.Start.Col;
+            }
+            else
+            {
+                tileRowStart = _fillRange.Start.Row;
+                tileColStart = reversed
+                    ? _fillRange.End.Col - (uint)(t + 1) * tileSize.ColSpan + 1
+                    : _fillRange.Start.Col + (uint)t * tileSize.ColSpan;
+            }
+
+            var tileRange = new GridRange(
+                new CellAddress(_sheetId, tileRowStart, tileColStart),
+                new CellAddress(_sheetId, tileRowStart + tileSize.RowSpan - 1, tileColStart + tileSize.ColSpan - 1));
+            var anchor = tileRange.Start;
+
+            foreach (var addr in tileRange.AllCells())
+            {
+                var oldCell = sheet.GetCell(addr);
+                var oldStyleOnly = oldCell is null ? sheet.GetStyleOnly(addr.Row, addr.Col) : null;
+                _snapshot.Add((addr, oldCell?.Clone(), oldStyleOnly));
+                SnapshotAnnotations(sheet, addr);
+                writtenCells.Add(addr);
+            }
+
+            var offset = t + 1;
+            Cell newCell;
+            if (scalarSeries is not null)
+            {
+                newCell = Cell.FromValue(scalarSeries.CreateValue(scalarSeries.LastValue + scalarSeries.Step * offset));
+            }
+            else if (listSeries is not null)
+            {
+                newCell = Cell.FromValue(listSeries.ValueAt(offset));
+            }
+            else if (sourceHasFormula)
+            {
+                var rowOffset = (int)anchor.Row - (int)sourceAnchor.Row;
+                var colOffset = (int)anchor.Col - (int)sourceAnchor.Col;
+                var shifted = FormulaRewriter.Rewrite(sourceCell!.FormulaText!, new PasteOffsetOp(rowOffset, colOffset), sheet.Name)
+                    ?? sourceCell.FormulaText!;
+                newCell = Cell.FromFormula(shifted);
+            }
+            else
+            {
+                newCell = Cell.FromValue(sourceCell?.Value ?? BlankValue.Instance);
+            }
+
+            newCell.StyleId = sourceCell?.StyleId ?? StyleId.Default;
+            sheet.SetCell(anchor, newCell);
+            foreach (var addr in tileRange.AllCells())
+            {
+                if (addr == anchor) continue;
+                sheet.ClearCell(addr);
+                ClearAnnotations(sheet, addr);
+            }
+
+            var copyRichTextRuns = scalarSeries is null && listSeries is null;
+            CopyAnnotations(sheet, sourceAnchor, anchor, copyRichTextRuns);
+
+            sheet.AddMergedRegion(tileRange);
+            _createdMergedRegions.Add(tileRange);
+        }
+
+        return new CommandOutcome(true, AffectedCells: writtenCells);
+    }
+
     public void Revert(ICommandContext ctx)
     {
         if (_snapshot is null) return;
         var sheet = ctx.GetSheet(_sheetId);
+
+        if (_createdMergedRegions is not null)
+        {
+            foreach (var region in _createdMergedRegions)
+                sheet.RemoveMergedRegion(region);
+        }
+
         foreach (var (addr, oldCell, oldStyleOnly) in _snapshot)
         {
             if (oldCell is null)
@@ -426,6 +606,20 @@ public sealed class AutofillCommand : IWorkbookCommand
         }
     }
 
+    /// <summary>
+    /// Resolves the style a detected trend/list series destination cell should carry. Excel
+    /// continues the source SELECTION's own per-cell format pattern (e.g. an alternating
+    /// Currency/General pair) cyclically into the series-filled cells rather than stamping every
+    /// destination with the single edge cell's format -- this reuses the exact same cyclic
+    /// position <see cref="ResolvePatternSourceAddress"/> already computes for the plain
+    /// pattern-copy path below.
+    /// </summary>
+    private StyleId ResolvePatternSourceStyleId(Sheet sheet, FillPlan plan, CellAddress addr, int sourceLength, Cell fallback)
+    {
+        var patternSourceAddr = ResolvePatternSourceAddress(plan, addr, sourceLength);
+        return sheet.GetCell(patternSourceAddr)?.StyleId ?? fallback.StyleId;
+    }
+
     private int GetFillCellCapacity()
     {
         var count = _fillRange.CellCount;
@@ -477,18 +671,27 @@ public sealed class AutofillCommand : IWorkbookCommand
     }
 
     /// <summary>
-    /// Ctrl-drag from a single plain number/date cell (no natural multi-cell series to detect)
-    /// forces an incrementing series with a step of 1 day/unit, instead of the default copy.
+    /// Excel's default fill-handle action for a LONE plain number/date source (no natural
+    /// multi-cell trend or text/list series detected) depends on the value's type: a number
+    /// defaults to a copy (Ctrl forces the +1/day increment series below instead); a date
+    /// defaults to the day-increment series itself (Ctrl forces a copy instead). Without this
+    /// distinction, a single date cell would (wrongly) just copy by default like a plain number.
     /// </summary>
-    private ScalarSeries? TryCreateForcedSingleCellSeries(Sheet sheet, FillPlan plan)
-    {
-        if (_sourceRange.CellCount != 1)
-            return null;
+    private static bool WantsSingleCellSeriesDefault(ScalarValue? value, bool ctrlHeld) =>
+        value is DateTimeValue ? !ctrlHeld : ctrlHeld;
 
-        var value = sheet.GetCell(_sourceRange.Start)?.Value;
+    /// <summary>
+    /// Builds the incrementing series (step of 1 day/unit) for a lone plain number/date source
+    /// cell, per <see cref="WantsSingleCellSeriesDefault"/>. Takes the source cell directly
+    /// (rather than a <see cref="_sourceRange"/>-relative lookup) so it can also serve
+    /// <see cref="ApplyMergeTiledFill"/>'s single merged-cell source, which spans multiple grid
+    /// cells even though it is logically one source value.
+    /// </summary>
+    private static ScalarSeries? TryCreateForcedSingleCellSeries(Cell? sourceCell, FillPlan plan)
+    {
         Func<double, ScalarValue> createValue;
         double seed;
-        switch (value)
+        switch (sourceCell?.Value)
         {
             case NumberValue number:
                 createValue = serial => new NumberValue(serial);
@@ -531,6 +734,22 @@ public sealed class AutofillCommand : IWorkbookCommand
 
         return TryCreateTrailingNumberSeries(values, plan)
             ?? TryCreateBuiltInListSeries(values, plan);
+    }
+
+    /// <summary>
+    /// Single-source-cell variant of <see cref="TryCreateListSeries"/> for
+    /// <see cref="ApplyMergeTiledFill"/>'s merged source, whose logical "cell" is one anchor
+    /// value rather than a <see cref="_sourceRange"/> of individually addressable cells (the
+    /// merge's non-anchor cells hold no independent value at all, so the multi-cell overload's
+    /// per-cell scan over <see cref="_sourceRange"/> cannot be reused directly).
+    /// </summary>
+    private static ListSeries? TryCreateSingleCellListSeries(Cell? sourceCell, FillPlan plan)
+    {
+        if (sourceCell?.Value is not TextValue text)
+            return null;
+
+        return TryCreateTrailingNumberSeries([text.Value], plan)
+            ?? TryCreateBuiltInListSeries([text.Value], plan);
     }
 
     /// <summary>Text ending in a run of digits (optionally with leading zeros): "Item 1" -&gt; "Item 2", ...</summary>

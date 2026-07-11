@@ -166,4 +166,84 @@ public sealed class HyperlinkNavigationPlannerTests
             .BeFalse();
         missingPlan.Should().BeNull();
     }
+
+    [Fact]
+    public void TryCreatePlan_CreatesExternalPlanForBareHyperlinkFormula()
+    {
+        // R27-lookup-reference-remaining-3: a cell whose sole hyperlink mechanism is a literal
+        // =HYPERLINK(...) formula (no Insert-Hyperlink object) must still be click-navigable.
+        var sheetId = SheetId.New();
+        var sheet = new Sheet(sheetId, "Sheet1");
+        var address = new CellAddress(sheetId, 1, 1);
+        sheet.SetFormula(address, "HYPERLINK(\"https://example.com\",\"Click me\")");
+
+        HyperlinkNavigationPlanner.TryCreatePlan(sheet, address, out var plan).Should().BeTrue();
+
+        plan.Should().Be(new HyperlinkNavigationPlan(
+            HyperlinkNavigationKind.External,
+            "https://example.com",
+            null));
+    }
+
+    [Fact]
+    public void TryCreatePlan_CreatesWorksheetPlanForHyperlinkFormulaWithHashTarget()
+    {
+        var sheetId = SheetId.New();
+        var sheet = new Sheet(sheetId, "Sheet1");
+        var address = new CellAddress(sheetId, 1, 1);
+        sheet.SetFormula(address, "HYPERLINK(\"#'Data Sheet'!B2\",\"Go\")");
+
+        HyperlinkNavigationPlanner.TryCreatePlan(sheet, address, out var plan).Should().BeTrue();
+
+        plan.Should().Be(new HyperlinkNavigationPlan(
+            HyperlinkNavigationKind.WorksheetCell,
+            "'Data Sheet'!B2",
+            null));
+    }
+
+    [Fact]
+    public void TryCreatePlan_PrefersExplicitHyperlinkObjectOverHyperlinkFormulaOnSameCell()
+    {
+        // Sibling already-working case: an explicit Insert-Hyperlink object still wins even when the
+        // cell also happens to contain a =HYPERLINK(...) formula (e.g. authored, then a link applied).
+        var sheetId = SheetId.New();
+        var sheet = new Sheet(sheetId, "Sheet1");
+        var address = new CellAddress(sheetId, 1, 1);
+        sheet.SetFormula(address, "HYPERLINK(\"https://formula.example\",\"Click me\")");
+        sheet.Hyperlinks[address] = " https://explicit.example/report ";
+        sheet.HyperlinkMetadata[address] = new HyperlinkMetadata(HyperlinkTargetKind.ExistingFileOrWebPage);
+
+        HyperlinkNavigationPlanner.TryCreatePlan(sheet, address, out var plan).Should().BeTrue();
+
+        plan.Should().Be(new HyperlinkNavigationPlan(
+            HyperlinkNavigationKind.External,
+            "https://explicit.example/report",
+            null));
+    }
+
+    [Fact]
+    public void TryCreatePlan_RejectsHyperlinkFormulaWithNonLiteralLinkArgument()
+    {
+        // Cell-reference link_location arguments are intentionally left unresolved (no dynamic
+        // evaluation performed here) rather than misreporting a plan.
+        var sheetId = SheetId.New();
+        var sheet = new Sheet(sheetId, "Sheet1");
+        var address = new CellAddress(sheetId, 1, 1);
+        sheet.SetFormula(address, "HYPERLINK(A2,\"Click me\")");
+
+        HyperlinkNavigationPlanner.TryCreatePlan(sheet, address, out var plan).Should().BeFalse();
+        plan.Should().BeNull();
+    }
+
+    [Fact]
+    public void TryCreatePlan_RejectsNonHyperlinkFormulaCell()
+    {
+        var sheetId = SheetId.New();
+        var sheet = new Sheet(sheetId, "Sheet1");
+        var address = new CellAddress(sheetId, 1, 1);
+        sheet.SetFormula(address, "SUM(A1:A2)");
+
+        HyperlinkNavigationPlanner.TryCreatePlan(sheet, address, out var plan).Should().BeFalse();
+        plan.Should().BeNull();
+    }
 }
