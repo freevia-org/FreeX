@@ -478,9 +478,28 @@ internal static class XlsxPackageMetadataMerger
     {
         XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         var referencedPropertiesParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var itemPart in targetIndex.EntryNames()
-                     .Where(IsCustomXmlItemPart)
-                     .ToList())
+        var itemParts = targetIndex.EntryNames().Where(IsCustomXmlItemPart).ToList();
+
+        // Pre-pass: for every item, find the properties part it unambiguously (exactly one
+        // candidate) already relates to via its own, untouched relationship graph, and count how
+        // many items claim each such target. A target claimed by exactly one item is that item's
+        // real, authoritative OPC relationship -- not merely a same-numbered filename coincidence
+        // -- and must be trusted as-is below rather than overridden by the paired-by-number guess.
+        // A target claimed by two or more items is a genuine conflict (e.g. a "misbound" source
+        // file) that the paired-by-number guess exists to repair.
+        var ownTargetUsageCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var itemPart in itemParts)
+        {
+            var ownTarget = FindOwnUnambiguousExistingCustomXmlPropertiesTarget(targetIndex, itemPart);
+            if (string.IsNullOrWhiteSpace(ownTarget))
+                continue;
+
+            ownTargetUsageCounts[ownTarget] = ownTargetUsageCounts.TryGetValue(ownTarget, out var existing)
+                ? existing + 1
+                : 1;
+        }
+
+        foreach (var itemPart in itemParts)
         {
             var relationshipPartPath = XlsxPackagePath.GetRelationshipPartPath(itemPart);
             var relationshipEntry = targetIndex.Get(relationshipPartPath);
@@ -516,6 +535,13 @@ internal static class XlsxPackageMetadataMerger
                     StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
+            var existingTargetRelationships = customXmlPropertiesRelationships
+                .Where(relationship => TargetsExistingCustomXmlPropertiesPart(relationship, targetIndex, itemPart))
+                .ToList();
+            var ownUniqueTarget = existingTargetRelationships.Count == 1
+                ? ResolveRelationshipTarget(itemPart, existingTargetRelationships[0])
+                : null;
+
             var pairedPropertiesPart = GetPairedCustomXmlPropertiesPart(itemPart);
             var selectedPropertiesPart = "";
             var selectedRelationship = FindExistingCustomXmlPropertiesRelationship(
@@ -523,7 +549,14 @@ internal static class XlsxPackageMetadataMerger
                 targetIndex,
                 itemPart);
 
-            if (!string.IsNullOrWhiteSpace(pairedPropertiesPart) && targetIndex.Contains(pairedPropertiesPart))
+            if (!string.IsNullOrWhiteSpace(ownUniqueTarget) &&
+                ownTargetUsageCounts.TryGetValue(ownUniqueTarget, out var usageCount) &&
+                usageCount == 1)
+            {
+                selectedPropertiesPart = ownUniqueTarget;
+                selectedRelationship = existingTargetRelationships[0];
+            }
+            else if (!string.IsNullOrWhiteSpace(pairedPropertiesPart) && targetIndex.Contains(pairedPropertiesPart))
             {
                 selectedPropertiesPart = pairedPropertiesPart;
                 selectedRelationship = FindCustomXmlPropertiesRelationshipTargeting(
@@ -558,6 +591,41 @@ internal static class XlsxPackageMetadataMerger
         }
 
         return referencedPropertiesParts;
+    }
+
+    private static string? FindOwnUnambiguousExistingCustomXmlPropertiesTarget(ArchiveEntryIndex targetIndex, string itemPart)
+    {
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationshipEntry = targetIndex.Get(XlsxPackagePath.GetRelationshipPartPath(itemPart));
+        if (relationshipEntry is null)
+            return null;
+
+        XDocument relationshipXml;
+        try
+        {
+            relationshipXml = XlsxPackageXmlEditor.LoadXml(relationshipEntry);
+        }
+        catch
+        {
+            return null;
+        }
+
+        var root = relationshipXml.Root;
+        if (root is null)
+            return null;
+
+        var existingTargetRelationships = root
+            .Elements(relationshipNs + "Relationship")
+            .Where(relationship => string.Equals(
+                NormalizeRelationshipType(relationship),
+                CustomXmlPropertiesRelationshipType,
+                StringComparison.OrdinalIgnoreCase))
+            .Where(relationship => TargetsExistingCustomXmlPropertiesPart(relationship, targetIndex, itemPart))
+            .ToList();
+
+        return existingTargetRelationships.Count == 1
+            ? ResolveRelationshipTarget(itemPart, existingTargetRelationships[0])
+            : null;
     }
 
     private static XElement? FindExistingCustomXmlPropertiesRelationship(

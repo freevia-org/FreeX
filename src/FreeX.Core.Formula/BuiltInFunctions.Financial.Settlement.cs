@@ -103,6 +103,10 @@ public static partial class BuiltInFunctions
             return ErrorValue.Num;
         if (!TryGetFinancialBasis(basisValue, out int basis)) return ErrorValue.Num;
         if (rate <= 0 || par <= 0 || frequency <= 0) return ErrorValue.Num;
+        int freq = (int)Math.Truncate(frequency);
+        // Excel: ACCRINT returns #NUM! for any frequency other than 1, 2 or 4 (same rule enforced by
+        // every sibling bond/coupon function in this file set -- see R28-financial-functions-deep-2-2).
+        if (freq != 1 && freq != 2 && freq != 4) return ErrorValue.Num;
         if (!TryGetFinancialDate(issue, out DateTime sd) ||
             !TryGetFinancialDate(firstInterest, out DateTime fi) ||
             !TryGetFinancialDate(settlement, out DateTime sett)) return ErrorValue.Num;
@@ -111,8 +115,49 @@ public static partial class BuiltInFunctions
         // precedes settlement (Excel ACCRINT semantics). Previously calc_method/first_interest were ignored.
         bool calcMethod = calcMethodValue is BlankValue || ToBool(calcMethodValue);
         DateTime accrualStart = !calcMethod && sett > fi ? fi : sd;
-        double dcf = DayCountFraction(accrualStart, sett, basis);
+        // Basis 1 (Actual/Actual) must accrue over the bond's own quasi-coupon periods (Excel's documented
+        // ACCRINT = par*(rate/frequency)*Sum(Ai/NLi)), not a single calendar-year-split fraction over the
+        // whole span -- a leap day inside the span otherwise throws off an accrual that should land on an
+        // exact whole number of coupon periods (see R28-financial-functions-deep-2-3). This is only
+        // unambiguous for the common "regular" first coupon (first_interest exactly one period after
+        // issue); an irregular/odd first coupon needs the fuller odd-period sub-division Excel documents,
+        // which is out of scope here, so that case keeps the existing whole-span fraction -- as do bases
+        // 0/2/3/4, which use a fixed period length so the whole-span and summed-period fractions are
+        // algebraically identical (left untouched).
+        double dcf = basis == 1 && sd.AddMonths(12 / freq) == fi
+            ? AccrintActualActualCouponFraction(sd, accrualStart, sett, freq)
+            : DayCountFraction(accrualStart, sett, basis);
         return NumberResult(par * rate * dcf);
+    }
+
+    // Sum of Ai/NLi over the quasi-coupon periods (anchored at the issue date, each 12/frequency months
+    // long) that overlap [accrualStart, settlement], divided by frequency. Period boundaries are computed
+    // directly from the issue date via AddMonths(k * monthsPerPeriod) rather than iteratively from the
+    // previous boundary, so an end-of-month issue date (e.g. Aug 31) keeps landing on the matching
+    // end-of-month coupon date every period instead of drifting (Feb 29 + 6 months = Aug 29, not Aug 31,
+    // if re-added from the already-clamped date).
+    private static double AccrintActualActualCouponFraction(DateTime issue, DateTime accrualStart, DateTime settlement, int frequency)
+    {
+        if (settlement <= accrualStart) return 0.0;
+        int months = 12 / frequency;
+        int k = 0;
+        while (issue.AddMonths((k + 1) * months) <= accrualStart) k++;
+
+        double periods = 0.0;
+        DateTime periodStart = issue.AddMonths(k * months);
+        while (periodStart < settlement)
+        {
+            DateTime periodEnd = issue.AddMonths((k + 1) * months);
+            DateTime segStart = periodStart > accrualStart ? periodStart : accrualStart;
+            DateTime segEnd = periodEnd < settlement ? periodEnd : settlement;
+            double normalLength = (periodEnd - periodStart).TotalDays;
+            if (segEnd > segStart && normalLength > 0)
+                periods += (segEnd - segStart).TotalDays / normalLength;
+            k++;
+            periodStart = periodEnd;
+        }
+
+        return periods / frequency;
     }
 
     private static ScalarValue Accrintm(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

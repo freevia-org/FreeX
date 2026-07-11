@@ -462,6 +462,19 @@ public class ProtectionGuardCoverageTests
                     PasteSpecialOperation.Add);
             },
 
+            // Pastes external (non-FreeX) clipboard text as plain values, honoring the destination's
+            // Text (@) number format (R28-clipboard-external-formats-deep-3). Its Apply delegates to
+            // a real EditCellsCommand, so it rejects a fully-protected sheet the same way that command
+            // does.
+            ["ExternalTextPasteValuesCommand"] = (wb, sheet) =>
+            {
+                var addr = new CellAddress(sheet.Id, 1, 1);
+                return new ExternalTextPasteValuesCommand(
+                    sheet.Id,
+                    [(addr, "1")],
+                    preserveText: false);
+            },
+
             ["PasteMergedRegionsCommand"] = (wb, sheet) =>
             {
                 // Recreating a copied merge at the destination is a FormatCells-gated edit,

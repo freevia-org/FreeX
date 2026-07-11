@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Text;
 using FluentAssertions;
 using FreeX.Core.IO;
+using FreeX.Core.Model;
 using NPOI.HSSF.UserModel;
 
 namespace FreeX.App.Services.Tests;
@@ -16,11 +17,17 @@ namespace FreeX.App.Services.Tests;
 /// in the workbook. Real Excel does not do this on an Automatic-mode open with trusted cached values --
 /// it only marks the volatile cells (and their dependents) dirty, it never throws away every other
 /// cell's trusted cached value just because the file happens to contain one volatile function.
+///
+/// Round-28 finding R28-meta-1: round-27's revert went too far the other way and left volatile cells
+/// completely un-recalculated on open (their stale cached value from the last save persisted
+/// indefinitely). <see cref="WorkbookOpenServiceVolatileRecalcTests"/> covers the corrected, selective
+/// behavior (volatile cells + dependents recompute; the FULL-recalc callback below still never fires
+/// for this case -- see the updated test immediately below).
 /// </summary>
 public sealed class WorkbookOpenServiceCalcTrustTests
 {
     [Fact]
-    public async Task LoadAsync_XlsxWithIncidentalVolatileFormulaStillTrustsCachedValues()
+    public async Task LoadAsync_XlsxWithIncidentalVolatileFormulaRecalculatesOnlyThatCellNotTheWholeWorkbook()
     {
         using var temp = new TestTemporaryDirectory();
         var tempPath = Path.Combine(temp.Path, "volatile.xlsx");
@@ -28,7 +35,7 @@ public sealed class WorkbookOpenServiceCalcTrustTests
         var recalculateCalled = false;
         var service = new WorkbookOpenService(_ => recalculateCalled = true);
 
-        await service.LoadAsync(
+        var result = await service.LoadAsync(
             tempPath,
             new XlsxFileAdapter(),
             ".xlsx",
@@ -39,6 +46,11 @@ public sealed class WorkbookOpenServiceCalcTrustTests
             "real Excel trusts a file's cached values on an Automatic-mode open and does not force a " +
             "full workbook recalculation merely because the workbook contains an incidental volatile " +
             "function (e.g. an OFFSET-based named range or a NOW() timestamp) with no fullCalcOnLoad flag");
+
+        var sheet = result.Workbook.GetSheet("FormulaCases");
+        sheet!.GetCell(1, 3)!.Value.Should().Be(new NumberValue(2),
+            "real Excel still refreshes a volatile OFFSET formula on open even though it trusts the " +
+            "rest of the file's cached values -- the stale cached <v>5</v> from the file must not survive");
     }
 
     [Fact]

@@ -104,11 +104,7 @@ public static class PasteCommandFactory
         if (options.Operation != PasteSpecialOperation.None)
             return new ExternalTextPasteSpecialCommand(targetSheetId, edits, preserveText, options.Operation);
 
-        var plainEdits = new List<(CellAddress Address, Cell Cell)>(edits.Count);
-        foreach (var (address, text) in edits)
-            plainEdits.Add((address, Cell.FromValue(preserveText ? new TextValue(text) : ParseClipboardValue(text))));
-
-        return new EditCellsCommand(targetSheetId, plainEdits);
+        return new ExternalTextPasteValuesCommand(targetSheetId, edits, preserveText);
     }
 
     public static IWorkbookCommand CreateInternalPasteCommand(
@@ -918,7 +914,103 @@ public static class PasteCommandFactory
             return new BoolValue(text.Equals("TRUE", StringComparison.OrdinalIgnoreCase));
         }
 
+        // Excel auto-converts a percent literal and a recognizable date literal on paste exactly as
+        // it would for typed entry (see FreeX.App.Services.CellEntryParser.TryParsePercent /
+        // TryParseCurrentCultureDate, which this mirrors); external clipboard paste previously had no
+        // equivalent for either, so e.g. "45%" or "6/15/2026" copied from Notepad landed as literal
+        // text instead of the number/date Excel would store.
+        if (TryParsePastePercent(text, out var percentValue))
+        {
+            return new NumberValue(percentValue);
+        }
+
+        if (TryParsePasteDate(text, out var pasteDate))
+        {
+            return DateTimeValue.FromDateTime(pasteDate);
+        }
+
         return new TextValue(text);
+    }
+
+    // Trailing '%' (e.g. "45%") -> Excel stores the underlying fraction (0.45), not the literal 45.
+    private static bool TryParsePastePercent(string text, out double value)
+    {
+        value = default;
+        if (text.Length < 2 || text[^1] != '%')
+            return false;
+
+        if (!double.TryParse(
+                text[..^1],
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.CurrentCulture,
+                out var number) ||
+            !double.IsFinite(number))
+        {
+            return false;
+        }
+
+        value = number / 100d;
+        return true;
+    }
+
+    // Only attempt a date parse when the text already "looks like" a date (at least two digit
+    // groups, plus either a recognized date separator with 3+ groups or a letter, e.g. a month
+    // name) - otherwise DateTime.TryParse is lenient enough to misread plain numbers/text (matching
+    // CellEntryParser.LooksLikeDateCandidate's same reasoning for typed entry).
+    private static bool TryParsePasteDate(string text, out DateTime dateTime)
+    {
+        dateTime = default;
+        if (string.IsNullOrEmpty(System.Globalization.CultureInfo.CurrentCulture.Name) ||
+            !LooksLikePasteDateCandidate(text))
+        {
+            return false;
+        }
+
+        return DateTime.TryParse(
+                text,
+                System.Globalization.CultureInfo.CurrentCulture,
+                System.Globalization.DateTimeStyles.NoCurrentDateDefault,
+                out dateTime) &&
+            dateTime.Date != DateTime.MinValue.Date;
+    }
+
+    private static bool LooksLikePasteDateCandidate(string text)
+    {
+        // '/' and '-' are universally treated by Excel as date separators regardless of locale;
+        // '.' only counts when it is the current culture's own actual date separator, otherwise a
+        // plain decimal-looking string would be misread as a date instead of staying text.
+        var cultureDateSeparator = System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.DateSeparator;
+
+        var digitGroups = 0;
+        var inDigitGroup = false;
+        var hasDateSeparator = false;
+        var hasLetter = false;
+
+        foreach (var c in text)
+        {
+            if (char.IsDigit(c))
+            {
+                if (!inDigitGroup)
+                {
+                    digitGroups++;
+                    inDigitGroup = true;
+                }
+
+                continue;
+            }
+
+            inDigitGroup = false;
+            hasDateSeparator |= c is '/' or '-' ||
+                (cultureDateSeparator.Length == 1 && c == cultureDateSeparator[0]);
+            hasLetter |= char.IsLetter(c);
+        }
+
+        if (digitGroups < 2)
+        {
+            return false;
+        }
+
+        return (hasDateSeparator && digitGroups >= 3) || hasLetter;
     }
 
     /// <summary>
@@ -946,6 +1038,66 @@ public static class PasteCommandFactory
         }
 
         return double.TryParse(text, System.Globalization.NumberStyles.Any, UsCulture, out number);
+    }
+}
+
+/// <summary>
+/// Pastes external (non-FreeX) clipboard text as plain values, honoring the destination cell's
+/// existing Text (@) number format the way Excel does — a cell pre-formatted as Text (the standard
+/// technique for protecting zip codes/IDs from losing leading zeros, e.g. pasting "00501") keeps a
+/// pasted numeric-looking field as literal text instead of being coerced to a number. The
+/// destination's format is only knowable once the sheet is reachable via <see cref="ICommandContext"/>,
+/// so (unlike a precomputed <see cref="EditCellsCommand"/>) the actual cell values are resolved inside
+/// <see cref="Apply"/> and then handed to a real <see cref="EditCellsCommand"/>, which does the rest
+/// of the edit (undo snapshot, table auto-expand, rich text/hyperlink clearing, etc.) unchanged.
+/// </summary>
+internal sealed class ExternalTextPasteValuesCommand : IWorkbookCommand, IAffectedCellsCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly IReadOnlyList<(CellAddress Address, string Text)> _edits;
+    private readonly bool _preserveText;
+    private readonly IReadOnlyList<CellAddress> _affectedCells;
+    private EditCellsCommand? _inner;
+
+    public string Label => _edits.Count == 1 ? "Edit Cell" : $"Edit {_edits.Count} Cells";
+
+    public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
+
+    public ExternalTextPasteValuesCommand(
+        SheetId sheetId,
+        IReadOnlyList<(CellAddress Address, string Text)> edits,
+        bool preserveText)
+    {
+        _sheetId = sheetId;
+        _edits = edits;
+        _preserveText = preserveText;
+        _affectedCells = edits.Select(e => e.Address).ToList();
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        var plainEdits = new List<(CellAddress Address, Cell NewCell)>(_edits.Count);
+        foreach (var (address, text) in _edits)
+        {
+            var value = _preserveText || IsDestinationTextFormatted(ctx, sheet, address)
+                ? new TextValue(text)
+                : PasteCommandFactory.ParseClipboardValue(text);
+            plainEdits.Add((address, Cell.FromValue(value)));
+        }
+
+        _inner = new EditCellsCommand(_sheetId, plainEdits);
+        return _inner.Apply(ctx);
+    }
+
+    public void Revert(ICommandContext ctx) => _inner?.Revert(ctx);
+
+    private static bool IsDestinationTextFormatted(ICommandContext ctx, Sheet sheet, CellAddress address)
+    {
+        var styleId = sheet.GetCell(address)?.StyleId ??
+            sheet.GetStyleOnly(address.Row, address.Col) ??
+            StyleId.Default;
+        return ctx.Workbook.GetStyle(styleId).NumberFormat == "@";
     }
 }
 

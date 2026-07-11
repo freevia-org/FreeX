@@ -654,6 +654,41 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 var splitColumn = xlSheet.SheetView.SplitColumn > 0
                     ? (uint?)xlSheet.SheetView.SplitColumn
                     : null;
+
+                // ClosedXML never populates SplitRow/SplitColumn for state="split" (only for its
+                // own freeze-pane API), so the above is always null here. A split divider always
+                // sits exactly on a row/column boundary -- that's how Excel positions it -- so the
+                // persisted xSplit/ySplit twips position can be inverted back to the row/column
+                // index it was computed from, mirroring XlsxWorksheetViewWriter's
+                // SplitRowToTwips/SplitColumnToTwips in reverse. Only trust the reconstruction when
+                // EVERY split axis present on the pane resolves to an exact boundary match: if one
+                // axis doesn't (e.g. the row heights/column widths on reload no longer match what
+                // produced the original pixel position), the whole reconstruction is unreliable and
+                // both axes are left null rather than guessed at.
+                if ((splitRow is null || splitColumn is null) && xmlLayout?.PaneState is "split")
+                {
+                    var invertedRow = xmlLayout.PaneRowSplit is { } ySplitTwips
+                        ? InvertSplitTwipsToIndex(
+                            ySplitTwips,
+                            row => sheet.RowHeights.TryGetValue(row, out var height) ? height : sheet.DefaultRowHeight,
+                            CellAddress.MaxRow)
+                        : null;
+                    var invertedColumn = xmlLayout.PaneColumnSplit is { } xSplitTwips
+                        ? InvertSplitTwipsToIndex(
+                            xSplitTwips,
+                            col => SplitCharacterWidthToPixels(sheet.ColumnWidths.TryGetValue(col, out var width) ? width : sheet.DefaultColumnWidth),
+                            CellAddress.MaxCol)
+                        : null;
+
+                    var rowAxisOk = xmlLayout.PaneRowSplit is null || invertedRow is not null;
+                    var columnAxisOk = xmlLayout.PaneColumnSplit is null || invertedColumn is not null;
+                    if (rowAxisOk && columnAxisOk)
+                    {
+                        splitRow ??= invertedRow;
+                        splitColumn ??= invertedColumn;
+                    }
+                }
+
                 if (splitRow > 0)
                     sheet.SplitRow = splitRow;
                 if (splitColumn > 0)
@@ -858,6 +893,47 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             materializationDiagnostics,
             sourceSnapshotDiagnostics);
         return workbook;
+    }
+
+    // Twentieths-of-a-point per pixel (96 DPI), matching XlsxWorksheetViewWriter's own
+    // TwipsPerPixel constant used to produce a state="split" pane's xSplit/ySplit values.
+    private const double SplitTwipsPerPixel = 15.0;
+
+    /// <summary>
+    /// Inverts a state="split" pane's xSplit/ySplit twips position back into the row/column index
+    /// it was computed from, by walking forward accumulating <paramref name="sizeForIndex"/> (row
+    /// height or column width in pixels) exactly as XlsxWorksheetViewWriter's
+    /// SplitRowToTwips/SplitColumnToTwips does going the other way. Returns the first index whose
+    /// cumulative extent rounds to <paramref name="targetTwips"/>, or null if no boundary matches
+    /// (the position is mid-row/column, or lies beyond <paramref name="maxIndex"/>).
+    /// </summary>
+    private static uint? InvertSplitTwipsToIndex(uint targetTwips, Func<uint, double> sizeForIndex, uint maxIndex)
+    {
+        var cumulativePixels = 0.0;
+        for (var index = 1u; index <= maxIndex; index++)
+        {
+            var cumulativeTwips = (uint)Math.Max(0, Math.Round(cumulativePixels * SplitTwipsPerPixel, MidpointRounding.AwayFromZero));
+            if (cumulativeTwips == targetTwips)
+                return index;
+            if (cumulativeTwips > targetTwips)
+                return null;
+
+            cumulativePixels += sizeForIndex(index);
+        }
+
+        return null;
+    }
+
+    // Mirrors XlsxWorksheetViewWriter's own CharacterWidthToPixels (duplicated here rather than
+    // sharing a helper across an internal split in the same project's view-write/view-read halves).
+    private static double SplitCharacterWidthToPixels(double width)
+    {
+        if (!double.IsFinite(width) || width <= 0)
+            return 0;
+
+        return width < 1
+            ? Math.Round(width * 12.0, MidpointRounding.AwayFromZero)
+            : Math.Round(width * 7.0 + 5.0, MidpointRounding.AwayFromZero);
     }
 
     private static XlsxLoadPhaseDiagnostics MeasureLoadPhase(Action action)

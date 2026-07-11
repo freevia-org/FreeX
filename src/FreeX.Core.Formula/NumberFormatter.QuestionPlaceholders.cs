@@ -117,6 +117,13 @@ public static partial class NumberFormatter
         var formatIndex = integerFormat.Length - 1;
         for (var textIndex = zeroInteger.Length - 1; textIndex >= 0; textIndex--)
         {
+            // Group-separator characters (e.g. the ',' inserted by .NET's own thousands
+            // grouping) have no corresponding placeholder in integerFormat -- NextIntegerFormatChar
+            // already skips literal ',' and '\' on the format side, so the text side must skip
+            // its own non-digit characters too, or the two walks desync.
+            if (!char.IsDigit(chars[textIndex]))
+                continue;
+
             var formatChar = NextIntegerFormatChar(integerFormat, ref formatIndex);
             if (formatChar is null)
                 break;

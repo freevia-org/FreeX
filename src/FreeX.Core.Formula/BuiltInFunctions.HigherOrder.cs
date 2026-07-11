@@ -22,8 +22,20 @@ public static partial class BuiltInFunctions
             arrays.Add(args[i] is RangeValue rv ? rv : SingleCellArray(args[i]));
         }
 
-        int rows = arrays[0].RowCount, cols = arrays[0].ColCount;
-        if (arrays.Any(a => a.RowCount != rows || a.ColCount != cols)) return ErrorValue.Value;
+        // A 1x1 array — whether from a genuine single-cell range (e.g. A2:A2) or from
+        // wrapping a plain scalar argument via SingleCellArray (e.g. a bare cell ref like
+        // B1) — broadcasts against every other array's shape, matching real Excel's MAP
+        // scalar-broadcast rule. Arrays that are NOT 1x1 must still all share one shape.
+        int rows = 1, cols = 1;
+        foreach (var a in arrays)
+        {
+            if (a.RowCount == 1 && a.ColCount == 1) continue;
+            rows = a.RowCount;
+            cols = a.ColCount;
+            break;
+        }
+        if (arrays.Any(a => !(a.RowCount == 1 && a.ColCount == 1) && (a.RowCount != rows || a.ColCount != cols)))
+            return ErrorValue.Value;
         if (lambda.Parameters.Count != arrays.Count) return ErrorValue.Value;
 
         var result = new ScalarValue[rows, cols];
@@ -32,7 +44,10 @@ public static partial class BuiltInFunctions
             for (int c = 0; c < cols; c++)
             {
                 for (int k = 0; k < arrays.Count; k++)
-                    invokeArgs[k] = arrays[k].At(r + 1, c + 1);
+                {
+                    var a = arrays[k];
+                    invokeArgs[k] = a.RowCount == 1 && a.ColCount == 1 ? a.At(1, 1) : a.At(r + 1, c + 1);
+                }
                 var value = ctx.InvokeLambda(lambda, invokeArgs);
                 if (value is RangeValue) return ErrorValue.Calc;
                 result[r, c] = value;

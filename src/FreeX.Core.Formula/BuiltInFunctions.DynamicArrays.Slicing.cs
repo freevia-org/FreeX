@@ -74,30 +74,32 @@ public static partial class BuiltInFunctions
             count = 0;
             return false;
         }
-        if (raw > int.MaxValue || raw <= int.MinValue)
-        {
-            start = 0;
-            count = 0;
-            return false;
-        }
 
-        int requested = (int)raw;
-        if (requested == 0)
+        // Compare/clamp using the double magnitude rather than truncating to Int32 first. Excel treats a
+        // rows/cols count whose magnitude reaches or exceeds the array's dimension length - including
+        // magnitudes far outside Int32 range, e.g. =TAKE(A1:C3,1E10) - as "the whole dimension or more":
+        // TAKE clamps to the full dimension and DROP reports #CALC! (dropping more than the whole array),
+        // neither of which is the #VALUE! error a naive Int32 range check produces. Truncating a huge or
+        // boundary double to Int32 first would also risk overflow (e.g. Math.Abs(int.MinValue)).
+        double magnitude = Math.Abs(raw);
+        if (magnitude < 1)
         {
             start = 0;
             count = 0;
             error = ErrorValue.Calc;
             return false;
         }
+
+        bool isNegative = raw < 0;
 
         if (isTake)
         {
-            count = Math.Min(Math.Abs(requested), dimensionLength);
-            start = requested > 0 ? 0 : dimensionLength - count;
+            count = magnitude >= dimensionLength ? dimensionLength : (int)magnitude;
+            start = isNegative ? dimensionLength - count : 0;
             return count > 0;
         }
 
-        if (Math.Abs(requested) >= dimensionLength)
+        if (magnitude >= dimensionLength)
         {
             start = 0;
             count = 0;
@@ -105,15 +107,16 @@ public static partial class BuiltInFunctions
             return false;
         }
 
-        if (requested > 0)
+        int requested = (int)magnitude;
+        if (isNegative)
         {
-            start = requested;
+            start = 0;
             count = dimensionLength - requested;
         }
         else
         {
-            start = 0;
-            count = dimensionLength + requested;
+            start = requested;
+            count = dimensionLength - requested;
         }
 
         return count > 0;

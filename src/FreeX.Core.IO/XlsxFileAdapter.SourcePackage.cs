@@ -9,6 +9,7 @@ public sealed partial class XlsxFileAdapter
 {
     private const string ChartExStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartStyle";
     private const string ChartExColorStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartColorStyle";
+    private const string QueryTableRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/queryTable";
 
     // Source package snapshot and native package-part preservation for loaded workbook saves.
     private static SourcePackagePartSummary PreserveSourcePackageParts(Workbook workbook, Stream generatedPackage)
@@ -47,6 +48,8 @@ public sealed partial class XlsxFileAdapter
             XlsxPivotXmlReferencePreserver.Preserve(sourceArchive, generatedArchive, context);
         if (sourceParts.HasStructuredTables)
             XlsxStructuredTableReferencePreserver.Preserve(sourceArchive, generatedArchive, context);
+        if (sourceParts.HasQueryTables)
+            PreserveRenumberedWorksheetQueryTableRelationships(sourceArchive, generatedArchive, context);
         if (sourceParts.HasExternalLinks)
             XlsxExternalLinkReferencePreserver.Preserve(sourceArchive, generatedArchive);
         if (sourceParts.HasUnsupportedSheetParts)
@@ -100,6 +103,7 @@ public sealed partial class XlsxFileAdapter
         public bool HasSharedStrings;
         public bool HasLegacyComments;
         public bool HasFormControls;
+        public bool HasQueryTables;
     }
 
     private static SourcePackagePartSummary InspectSourcePackageParts(ZipArchive archive)
@@ -122,6 +126,7 @@ public sealed partial class XlsxFileAdapter
             summary.HasSharedStrings |= fullName.Equals("xl/sharedStrings.xml", StringComparison.OrdinalIgnoreCase);
             summary.HasLegacyComments |= fullName.StartsWith("xl/comments", StringComparison.OrdinalIgnoreCase);
             summary.HasFormControls |= fullName.StartsWith("xl/ctrlProps/", StringComparison.OrdinalIgnoreCase);
+            summary.HasQueryTables |= fullName.StartsWith("xl/queryTables/", StringComparison.OrdinalIgnoreCase);
 
             if (summary.HasPivotPackageParts &&
                 summary.HasStructuredTables &&
@@ -131,7 +136,8 @@ public sealed partial class XlsxFileAdapter
                 summary.HasPrinterSettings &&
                 summary.HasSharedStrings &&
                 summary.HasLegacyComments &&
-                summary.HasFormControls)
+                summary.HasFormControls &&
+                summary.HasQueryTables)
             {
                 break;
             }
@@ -241,6 +247,107 @@ public sealed partial class XlsxFileAdapter
         }
 
         return excludedPaths;
+    }
+
+    // R28-io-connections-querytable-deep-1: when a retained sheet's worksheet part is renumbered on
+    // save (e.g. an earlier sheet is deleted/reordered so the generated package writes worksheetN.xml
+    // under a different N), GetExcludedWorksheetPackagePartPaths above excludes the OLD worksheet-rels
+    // part wholesale -- its literal path no longer matches any target sheet's own rels path, so
+    // MergeRelationshipParts never even inspects it. Every other per-sheet feature (tables, pivots,
+    // drawings, VML, form controls, legacy comments, unsupported-sheet parts) has its own by-name
+    // preserver that re-attaches its worksheet relationship(s) at the sheet's NEW path; queryTable /
+    // External Data Range never did, so the worksheet -> queryTable relationship (and with it the
+    // range's refresh / Data > Connections binding) was silently dropped even though xl/queryTables/*.xml
+    // and xl/connections.xml themselves survive untouched (via the generic unknown-part passthrough) as
+    // now-orphaned parts. Re-attach the relationship by sheet NAME, the same pattern every sibling
+    // preserver above already uses.
+    private static void PreserveRenumberedWorksheetQueryTableRelationships(
+        ZipArchive sourceArchive,
+        ZipArchive generatedArchive,
+        XlsxSourcePackagePreservationContext? context)
+    {
+        if (context is null)
+            return;
+
+        foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
+        {
+            if (!IsWorksheetPartPath(sourceWorksheetPath))
+                continue;
+            if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
+                continue; // Sheet was removed entirely -- nothing to re-attach.
+
+            var normalizedSourcePath = XlsxPackagePath.NormalizePackagePath(sourceWorksheetPath);
+            var normalizedTargetPath = XlsxPackagePath.NormalizePackagePath(targetWorksheetPath);
+            if (string.Equals(normalizedSourcePath, normalizedTargetPath, StringComparison.OrdinalIgnoreCase))
+                continue; // Unchanged path -- the normal same-path relationship merge already covers it.
+
+            var sourceRelsPath = XlsxPackagePath.GetRelationshipPartPath(normalizedSourcePath);
+            var sourceRelsEntry = sourceArchive.GetEntry(sourceRelsPath);
+            if (sourceRelsEntry is null)
+                continue;
+
+            var sourceRelsXml = XlsxPackageXmlEditor.LoadXml(sourceRelsEntry);
+            var queryTableRelationships = sourceRelsXml.Root?
+                .Elements(context.PackageRelNs + "Relationship")
+                .Where(relationship => string.Equals(
+                    relationship.Attribute("Type")?.Value?.Trim(),
+                    QueryTableRelationshipType,
+                    StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (queryTableRelationships is null || queryTableRelationships.Count == 0)
+                continue;
+
+            var targetRelsPath = XlsxPackagePath.GetRelationshipPartPath(normalizedTargetPath);
+            var targetRelsEntry = generatedArchive.GetEntry(targetRelsPath);
+            var targetRelsXml = targetRelsEntry is not null
+                ? XlsxPackageXmlEditor.LoadXml(targetRelsEntry)
+                : new XDocument(new XElement(context.PackageRelNs + "Relationships"));
+            var targetRoot = targetRelsXml.Root;
+            if (targetRoot is null)
+                continue;
+
+            var existingIds = targetRoot
+                .Elements(context.PackageRelNs + "Relationship")
+                .Select(element => element.Attribute("Id")?.Value)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var changed = false;
+            foreach (var sourceRelationship in queryTableRelationships)
+            {
+                var target = sourceRelationship.Attribute("Target")?.Value;
+                if (string.IsNullOrWhiteSpace(target))
+                    continue;
+
+                // Already present (e.g. this preserver ran more than once, or the target already had
+                // its own equivalent relationship) -- avoid adding a duplicate.
+                var alreadyPresent = targetRoot
+                    .Elements(context.PackageRelNs + "Relationship")
+                    .Any(existing =>
+                        string.Equals(existing.Attribute("Target")?.Value, target, StringComparison.OrdinalIgnoreCase) &&
+                        string.Equals(existing.Attribute("Type")?.Value?.Trim(), QueryTableRelationshipType, StringComparison.OrdinalIgnoreCase));
+                if (alreadyPresent)
+                    continue;
+
+                // Both the old and new worksheet parts live directly under xl/worksheets/, so a
+                // relative Target string (e.g. "../queryTables/queryTable1.xml") resolves identically
+                // from either path -- copy the relationship verbatim rather than recomputing its Target.
+                var copy = new XElement(sourceRelationship);
+                var id = copy.Attribute("Id")?.Value;
+                if (string.IsNullOrWhiteSpace(id) || existingIds.Contains(id))
+                {
+                    id = XlsxPackageXmlEditor.NextRelationshipId(targetRelsXml, context.PackageRelNs);
+                    copy.SetAttributeValue("Id", id);
+                }
+
+                targetRoot.Add(copy);
+                existingIds.Add(id!);
+                changed = true;
+            }
+
+            if (changed)
+                XlsxPackageXmlEditor.ReplaceXml(generatedArchive, targetRelsPath, targetRelsXml);
+        }
     }
 
     private static IEnumerable<string> GetLegacyDrawingHfDependencyPaths(

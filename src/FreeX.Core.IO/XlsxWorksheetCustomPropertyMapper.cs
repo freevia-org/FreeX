@@ -34,14 +34,15 @@ internal static class XlsxWorksheetCustomPropertyMapper
         {
             var name = customProperty.Attribute("name")?.Value;
             if (string.IsNullOrWhiteSpace(name) ||
-                !TryReadCustomPropertyId(customProperty, relNs, relationshipTargets, out var id) ||
+                !TryReadCustomPropertyId(customProperty, relNs, relationshipTargets, out var id, out var targetPath) ||
                 id <= 0 ||
                 !seen.Add(name))
             {
                 continue;
             }
 
-            properties.Add(new WorksheetCustomProperty(name, id, ReadMetadata(customProperty)));
+            var binPayload = archive is not null ? TryReadCustomPropertyBinPayload(archive, targetPath, name) : null;
+            properties.Add(new WorksheetCustomProperty(name, id, ReadMetadata(customProperty, binPayload)));
         }
 
         return properties;
@@ -169,7 +170,7 @@ internal static class XlsxWorksheetCustomPropertyMapper
             insertionPoint.AddBeforeSelf(customProperties);
     }
 
-    private static NativeXmlPreserveBag? ReadMetadata(XElement customProperty)
+    private static NativeXmlPreserveBag? ReadMetadata(XElement customProperty, string? binPayloadBase64)
     {
         var attrs = new Dictionary<string, string>(StringComparer.Ordinal);
         XlsxWorksheetNativeMetadataHelpers.ReadNativeAttributes(customProperty, attrs, ModeledCustomPropertyAttributes);
@@ -179,15 +180,49 @@ internal static class XlsxWorksheetCustomPropertyMapper
             .ToList();
 
         var serialized = XmlNativeBagSerializer.Serialize(attrs, children);
-        if (serialized is null)
+        if (serialized is null && binPayloadBase64 is null)
             return null;
 
         var bag = new NativeXmlPreserveBag();
-        bag.Set("customPr", serialized);
+        if (serialized is not null)
+            bag.Set("customPr", serialized);
+        if (binPayloadBase64 is not null)
+            bag.Set(CustomPropertyBinPayloadMetadataKey, binPayloadBase64);
         return bag;
     }
 
+    private static string? TryReadCustomPropertyBinPayload(ZipArchive archive, string? targetPath, string propertyName)
+    {
+        if (string.IsNullOrWhiteSpace(targetPath))
+            return null;
+
+        var entry = archive.GetEntry(targetPath);
+        if (entry is null)
+            return null;
+
+        using var entryStream = entry.Open();
+        using var buffer = new MemoryStream();
+        entryStream.CopyTo(buffer);
+        var bytes = buffer.ToArray();
+
+        // FreeX's own placeholder writer encodes just the property's name as UTF-16LE with
+        // no BOM. Skip capturing that trivial, fully-reconstructible case so a plain
+        // FreeX-authored round trip (nothing beyond the modeled Name/Id) stays exactly as
+        // before -- no Metadata noise -- while genuinely different (real Excel/VBA-authored)
+        // payload bytes are still captured and preserved.
+        if (bytes.AsSpan().SequenceEqual(Encoding.Unicode.GetBytes(propertyName)))
+            return null;
+
+        return Convert.ToBase64String(bytes);
+    }
+
     private static readonly IReadOnlyCollection<string> ModeledCustomPropertyAttributes = ["name", "id"];
+
+    // Key used to stash the original xl/customProperty/*.bin bytes (base64-encoded) in the
+    // property's preserve bag so a later full-rebuild save can write back the real,
+    // Excel/VBA-authored payload instead of a fabricated placeholder. See
+    // R28-io-unknown-part-passthrough-deep-1.
+    private const string CustomPropertyBinPayloadMetadataKey = "customPropertyBin";
 
     private static XElement ToXml(WorksheetCustomProperty property, XNamespace workbookNs, XNamespace relNs, string relationshipId)
     {
@@ -205,18 +240,21 @@ internal static class XlsxWorksheetCustomPropertyMapper
         XElement customProperty,
         XNamespace relNs,
         IReadOnlyDictionary<string, string> relationshipTargets,
-        out int id)
+        out int id,
+        out string? targetPath)
     {
+        targetPath = null;
         var legacyId = customProperty.Attribute("id")?.Value;
         if (TryReadCustomPropertyId(legacyId, out id))
             return true;
 
         var relationshipId = customProperty.Attribute(relNs + "id")?.Value;
         if (!string.IsNullOrWhiteSpace(relationshipId) &&
-            relationshipTargets.TryGetValue(relationshipId, out var targetPath) &&
-            TryReadCustomPropertyIdFromPartPath(targetPath, out id))
+            relationshipTargets.TryGetValue(relationshipId, out var resolvedTarget))
         {
-            return true;
+            targetPath = resolvedTarget;
+            if (TryReadCustomPropertyIdFromPartPath(resolvedTarget, out id))
+                return true;
         }
 
         return TryReadCustomPropertyId(relationshipId, out id);
@@ -283,7 +321,23 @@ internal static class XlsxWorksheetCustomPropertyMapper
         archive.GetEntry(customPropertyPath)?.Delete();
         var entry = archive.CreateEntry(customPropertyPath, CompressionLevel.Optimal);
         using var stream = entry.Open();
-        var bytes = Encoding.Unicode.GetBytes(property.Name);
+        var bytes = TryGetPreservedCustomPropertyBinPayload(property) ?? Encoding.Unicode.GetBytes(property.Name);
         stream.Write(bytes, 0, bytes.Length);
+    }
+
+    private static byte[]? TryGetPreservedCustomPropertyBinPayload(WorksheetCustomProperty property)
+    {
+        var base64 = property.Metadata?.Get(CustomPropertyBinPayloadMetadataKey);
+        if (string.IsNullOrEmpty(base64))
+            return null;
+
+        try
+        {
+            return Convert.FromBase64String(base64);
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
     }
 }

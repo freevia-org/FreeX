@@ -3051,12 +3051,14 @@ public partial class FileAdapterSmokeTests
         // A real (non-frozen) <pane state="split"> stores xSplit/ySplit as OOXML
         // twentieths-of-a-point pixel positions, not row/column counts (see
         // XlsxAdapter_Load_GenuineExcelSplitPane_DoesNotMisreadTwipsAsRowColumnIndex).
-        // This FreeX-authored file writes the raw XML pane directly (never via ClosedXML's
-        // own freeze-pane API), so ClosedXML's SheetView.SplitRow/SplitColumn stay 0 on
-        // reload and the reader correctly reports no split rather than misreading the raw
-        // xSplit/ySplit value as a row/column index.
-        loadedSheet.SplitRow.Should().BeNull();
-        loadedSheet.SplitColumn.Should().BeNull();
+        // ClosedXML's own SheetView.SplitRow/SplitColumn stay 0 on reload (they are only
+        // populated for its freeze-pane API), but since a split divider always sits exactly on
+        // a row/column boundary, the reader can invert the persisted xSplit/ySplit twips
+        // position back to the row/column index it was computed from (R28-view-zoom-sheetpr-
+        // commands-2), so this FreeX-authored split survives its own save+reload round trip
+        // instead of being silently dropped.
+        loadedSheet.SplitRow.Should().Be(8u);
+        loadedSheet.SplitColumn.Should().Be(4u);
         loadedSheet.FrozenRows.Should().Be(0);
         loadedSheet.FrozenCols.Should().Be(0);
     }

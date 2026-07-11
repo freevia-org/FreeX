@@ -191,4 +191,33 @@ public class LexerTests
 
         act.Should().Throw<FormulaParseException>();
     }
+
+    [Fact]
+    public void Lexer_FunctionName_WithPlainSpaceBeforeParen_IsRecognized()
+    {
+        // Sibling case that already worked before the fix — must keep working.
+        var tokens = new Lexer("=SUM (A1:A2)").Tokenize();
+        tokens[0].Type.Should().Be(TokenType.FunctionName);
+        tokens[0].Value.Should().Be("SUM");
+    }
+
+    [Theory]
+    [InlineData("=SUM (A1:A2)")] // non-breaking space (U+00A0)
+    [InlineData("=SUM\t(A1:A2)")] // tab
+    public void Lexer_FunctionName_WithNonAsciiWhitespaceBeforeParen_IsRecognized(string formula)
+    {
+        var tokens = new Lexer(formula).Tokenize();
+        tokens[0].Type.Should().Be(TokenType.FunctionName);
+        tokens[0].Value.Should().Be("SUM");
+    }
+
+    [Theory]
+    [InlineData("=TRUE ()")]
+    [InlineData("=TRUE\t()")]
+    public void Lexer_TrueLiteral_WithNonAsciiWhitespaceBeforeParen_IsRecognizedAsFunctionCall(string formula)
+    {
+        var tokens = new Lexer(formula).Tokenize();
+        tokens[0].Type.Should().Be(TokenType.FunctionName);
+        tokens[0].Value.Should().Be("TRUE");
+    }
 }

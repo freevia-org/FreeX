@@ -129,12 +129,17 @@ public sealed partial class FormulaEvaluator
 
     private ScalarValue InvokeLambdaWithArgs(LambdaValue lambda, IReadOnlyList<FormulaNode> argNodes, IEvalContext context)
     {
-        if (argNodes.Count != lambda.Parameters.Count) return ErrorValue.Value;
+        // Excel allows trailing optional parameters to be omitted either by simply supplying
+        // fewer arguments (f(5) for a 2-parameter lambda) or via an explicit trailing comma
+        // (f(5,)) -- both must bind the missing parameter to the "omitted" sentinel so
+        // ISOMITTED can detect it. Only a call that supplies MORE arguments than the lambda
+        // declares parameters is an error.
+        if (argNodes.Count > lambda.Parameters.Count) return ErrorValue.Value;
         if (lambda.Parameters.Any(ConflictsWithR1C1Reference)) return ErrorValue.Value;
 
-        var args = new ScalarValue[argNodes.Count];
-        for (int i = 0; i < argNodes.Count; i++)
-            args[i] = argNodes[i] is OmittedArgumentNode
+        var args = new ScalarValue[lambda.Parameters.Count];
+        for (int i = 0; i < lambda.Parameters.Count; i++)
+            args[i] = i >= argNodes.Count || argNodes[i] is OmittedArgumentNode
                 ? OmittedLambdaArgumentValue.Instance
                 : EvaluateArrayOperand(argNodes[i], context);
         return context.InvokeLambda(lambda, args);

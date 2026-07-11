@@ -48,7 +48,12 @@ internal static class DelimitedTextWorkbookWriter
 
         if (workbook.Sheets.Count == 0) return;
 
-        var sheet = workbook.Sheets[0];
+        // Real Excel's CSV/TXT Save-As exports the active (currently selected) sheet, not the
+        // first sheet in tab order — those can differ once the user has switched tabs.
+        var activeSheetIndex = workbook.ActiveSheetIndex is { } index && index >= 0 && index < workbook.Sheets.Count
+            ? index
+            : 0;
+        var sheet = workbook.Sheets[activeSheetIndex];
         var rowCapacity = EstimateRowCapacity(sheet);
         var cellsPerRowCapacity = EstimateCellsPerRowCapacity(sheet, rowCapacity);
         var rowLookup = new Dictionary<uint, DelimitedTextRowBucket>(rowCapacity);

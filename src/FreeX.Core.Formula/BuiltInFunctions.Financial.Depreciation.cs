@@ -68,7 +68,7 @@ public static partial class BuiltInFunctions
             else if (p <= ilife)
                 dep = (cost - accumulated) * rate;
             else
-                dep = (cost - accumulated) * rate * (12 - imonth + 1) / 12.0;
+                dep = (cost - accumulated) * rate * (12 - imonth) / 12.0;
             if (p < iper) accumulated += dep;
         }
         return NumberResult(dep);

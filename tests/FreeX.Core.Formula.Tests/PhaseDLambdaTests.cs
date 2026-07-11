@@ -270,10 +270,26 @@ public class PhaseDLambdaTests
         Set(1, 1, new NumberValue(1));
         Set(1, 2, new NumberValue(2));
         Set(2, 1, new NumberValue(1));
+        Set(2, 2, new NumberValue(2));
+        Set(3, 1, new NumberValue(3));
 
-        // A1:B1 is 1x2, A2 is 1x1 → size mismatch
-        var result = Eval("=MAP(A1:B1, A2:A2, LAMBDA(a, b, a+b))");
+        // A1:B1 is 1x2, A2:A3 is 2x1 → neither is a 1x1 scalar, so shapes genuinely
+        // conflict and must still error (real Excel: #VALUE!).
+        var result = Eval("=MAP(A1:B1, A2:A3, LAMBDA(a, b, a+b))");
         Assert.Equal(ErrorValue.Value, result);
+    }
+
+    [Fact]
+    public void Map_SingleCellRangeArgument_BroadcastsAgainstLargerArray()
+    {
+        Set(1, 1, new NumberValue(1));
+        Set(1, 2, new NumberValue(2));
+        Set(2, 1, new NumberValue(10));
+
+        // A1:B1 is 1x2, A2:A2 is a genuine 1x1 range → it broadcasts (real Excel: no error).
+        var result = Rv(Eval("=MAP(A1:B1, A2:A2, LAMBDA(a, b, a+b))"));
+        Assert.Equal(11.0, Num(result.At(1, 1)));
+        Assert.Equal(12.0, Num(result.At(1, 2)));
     }
 
     [Fact]

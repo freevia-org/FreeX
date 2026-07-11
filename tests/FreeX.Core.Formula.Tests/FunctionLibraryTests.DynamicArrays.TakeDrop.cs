@@ -166,16 +166,56 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void TakeAndDrop_HugeFiniteSliceCount_ReturnsValueError()
+    public void Take_HugeSliceCountBeyondInt32Range_ClampsToWholeDimension()
     {
+        // Real Excel: a rows/cols count whose magnitude exceeds the array's size - even one far outside
+        // Int32 range, e.g. 1E10 - is treated as "take everything", not as an error. This also covers the
+        // exact Int32.MinValue boundary (-2147483648), which is a legally-representable finite double.
         var sheet = MakeSheet((1,1,new NumberValue(1)), (2,1,new NumberValue(2)));
 
-        _eval.Evaluate("=TAKE(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=TAKE(A1:A2,-2147483648)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=TAKE(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=DROP(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=DROP(A1:A2,-2147483648)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=DROP(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Value);
+        foreach (var formula in new[]
+                 {
+                     "=TAKE(A1:A2,2147483648)",
+                     "=TAKE(A1:A2,-2147483648)",
+                     "=TAKE(A1:A2,-2147483649)",
+                     "=TAKE(A1:A2,1E10)",
+                     "=TAKE(A1:A2,-1E10)",
+                 })
+        {
+            var rv = _eval.Evaluate(formula, sheet).Should().BeOfType<RangeValue>().Subject;
+            rv.RowCount.Should().Be(2, because: formula);
+            rv.ColCount.Should().Be(1, because: formula);
+            rv.Cells[0, 0].Should().Be(new NumberValue(1), because: formula);
+            rv.Cells[1, 0].Should().Be(new NumberValue(2), because: formula);
+        }
+    }
+
+    [Fact]
+    public void Take_InRangeSliceCountLargerThanDimension_StillClampsToWholeDimension()
+    {
+        // Sibling already-working case: an in-range (fits in Int32) but still oversized count already
+        // clamped correctly before this fix, and must continue to do so.
+        var sheet = MakeSheet((1,1,new NumberValue(1)), (2,1,new NumberValue(2)));
+
+        var rv = _eval.Evaluate("=TAKE(A1:A2,100)", sheet).Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(2);
+        rv.Cells[0, 0].Should().Be(new NumberValue(1));
+        rv.Cells[1, 0].Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Drop_HugeSliceCountBeyondInt32Range_ReturnsCalcError()
+    {
+        // Dropping more rows than exist is a #CALC! error in Excel regardless of whether the requested
+        // magnitude fits in Int32 - it must not surface as #VALUE! just because the raw count overflows
+        // Int32 range (e.g. 1E10, or the exact Int32.MinValue boundary).
+        var sheet = MakeSheet((1,1,new NumberValue(1)), (2,1,new NumberValue(2)));
+
+        _eval.Evaluate("=DROP(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Calc);
+        _eval.Evaluate("=DROP(A1:A2,-2147483648)", sheet).Should().Be(ErrorValue.Calc);
+        _eval.Evaluate("=DROP(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Calc);
+        _eval.Evaluate("=DROP(A1:A2,1E10)", sheet).Should().Be(ErrorValue.Calc);
+        _eval.Evaluate("=DROP(A1:A2,-1E10)", sheet).Should().Be(ErrorValue.Calc);
     }
 
     [Fact]

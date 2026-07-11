@@ -2338,14 +2338,15 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         saved.Position = 0;
         var reloadedSheet = new XlsxFileAdapter().Load(saved).GetSheetAt(0);
         // Per OOXML, a real (non-frozen) <pane state="split"> stores xSplit/ySplit as
-        // twentieths-of-a-point pixel positions, not row/column counts, so the reader must
-        // not reinterpret the raw XML value as a row/column index (see
-        // XlsxAdapter_Load_GenuineExcelSplitPane_DoesNotMisreadTwipsAsRowColumnIndex). Since
-        // ClosedXML only populates SheetView.SplitRow/SplitColumn for its own freeze-pane
-        // API -- never for a raw <pane state="split"> written directly to XML, as this
-        // FreeX-authored fixture is -- the round trip correctly yields no split here.
-        reloadedSheet.SplitRow.Should().BeNull();
-        reloadedSheet.SplitColumn.Should().BeNull();
+        // twentieths-of-a-point pixel positions, not row/column counts. ClosedXML only
+        // populates SheetView.SplitRow/SplitColumn for its own freeze-pane API -- never for a
+        // raw <pane state="split"> written directly to XML, as this FreeX-authored fixture is
+        // -- but since a split divider always sits exactly on a row/column boundary, the reader
+        // inverts the persisted xSplit/ySplit twips position back to the row/column index it
+        // was computed from (R28-view-zoom-sheetpr-commands-2), so the split survives the
+        // round trip instead of being silently dropped.
+        reloadedSheet.SplitRow.Should().Be(3u);
+        reloadedSheet.SplitColumn.Should().Be(2u);
         reloadedSheet.ViewTopRow.Should().Be(1);
         reloadedSheet.ViewLeftCol.Should().Be(1);
         reloadedSheet.FrozenRows.Should().Be(0);

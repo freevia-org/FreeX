@@ -23,7 +23,19 @@ public sealed partial class FormulaEvaluator
             return EvaluateAstAware(node, context);
 
         if (!BuiltInFunctions.TryGet(functionName, out var entry))
+        {
+            // Not a built-in and not a LET-scoped binding: check for a workbook/sheet-defined
+            // Name Manager name whose RefersTo is a LAMBDA (Excel's "custom function via Name
+            // Manager" pattern, e.g. FACT -> =LAMBDA(n, IF(n<=1,1,n*FACT(n-1)))). Only a
+            // formula-backed name that actually resolves to a callable LambdaValue can be
+            // invoked with call syntax; anything else (a plain range/value name, or no such
+            // name at all) still yields #NAME? like Excel.
+            if (TryEvaluateNamedFormula(functionName, context, out var namedFormulaValue) &&
+                namedFormulaValue is LambdaValue namedLambda)
+                return InvokeLambdaWithArgs(namedLambda, node.Arguments, context);
+
             return ErrorValue.Name;
+        }
 
         // Short-circuit functions evaluate arguments lazily to avoid propagating errors from untaken branches.
         if (functionName is "IF" or "IFERROR" or "IFNA" or "CHOOSE" or "IFS" or "SWITCH")

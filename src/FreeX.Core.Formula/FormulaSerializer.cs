@@ -55,6 +55,21 @@ public static class FormulaSerializer
                 sb.Append(e.Error.Code);
                 break;
 
+            case ArrayConstantNode arr:
+                sb.Append('{');
+                for (int r = 0; r < arr.Rows.Count; r++)
+                {
+                    if (r > 0) sb.Append(';');
+                    var row = arr.Rows[r];
+                    for (int c = 0; c < row.Count; c++)
+                    {
+                        if (c > 0) sb.Append(',');
+                        WriteNode(row[c], sb);
+                    }
+                }
+                sb.Append('}');
+                break;
+
             case CellRefNode cr:
                 WriteCellRef(cr, sb);
                 break;

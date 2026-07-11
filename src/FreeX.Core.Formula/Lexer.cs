@@ -375,7 +375,7 @@ public sealed class Lexer
         // Check if it's a function name (followed by open paren) — must come before boolean check
         // so that TRUE() and FALSE() are treated as zero-arg function calls.
         var lookAhead = _pos;
-        while (lookAhead < _text.Length && _text[lookAhead] == ' ')
+        while (lookAhead < _text.Length && char.IsWhiteSpace(_text[lookAhead]))
             lookAhead++;
 
         if (lookAhead < _text.Length && _text[lookAhead] == '(')

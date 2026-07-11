@@ -618,7 +618,15 @@ public sealed partial class XlsxFileAdapter
         bool SourceHasCustomViews = false,
         bool? SourceNeedsPackageGraphNormalization = null,
         XlsxOfficeRevisionAttributeFacts? SourceOfficeRevisionAttributes = null,
-        string? SourceDrawingModelFingerprint = null)
+        string? SourceDrawingModelFingerprint = null,
+        // The in-model Sheet.Id (a stable GUID assigned once per Sheet object, unlike the sheet
+        // NAME) for each sheet, captured in the same order as the pristine <sheets> element this
+        // snapshot's Buffer holds, at the moment this snapshot became the pristine baseline (load,
+        // rebase, or a fresh full-save/patch-save re-baseline). Lets RestorePatchWorkbookDefinedNames
+        // (R28-meta-3) tell a genuine sheet RENAME (the same Sheet object survives, just renamed)
+        // apart from a same-ordinal delete+add-a-different-sheet (a brand-new Sheet.Id) when a
+        // sheet-scoped defined name's old scope name can no longer be found by name alone.
+        IReadOnlyList<SheetId>? SourceSheetIdsByLocalId = null)
     {
         private const int FingerprintCellLimit = 100_000;
         private const int FingerprintCompressedStyleOnlyCellLimit = 1_250_000;
@@ -741,7 +749,8 @@ public sealed partial class XlsxFileAdapter
                 IsCellPatchBaselineLazy: true,
                 IsCellPatchEligibilityLazy: true,
                 SourceHasCustomViews: workbook.CustomViews.Count > 0,
-                SourceDrawingModelFingerprint: CreateDrawingModelFingerprint(workbook));
+                SourceDrawingModelFingerprint: CreateDrawingModelFingerprint(workbook),
+                SourceSheetIdsByLocalId: workbook.Sheets.Select(s => s.Id).ToArray());
         }
 
         public static XlsxSourcePackage Capture(MemoryStream stream, Workbook workbook)
@@ -814,6 +823,7 @@ public sealed partial class XlsxFileAdapter
                 workbook,
                 sheetXmlLayout,
                 sourceHasWorkbookCustomViews);
+            var sourceSheetIds = workbook.Sheets.Select(s => s.Id).ToArray();
             if (stream.TryGetBuffer(out var buffer))
             {
                 if (allowBufferReuse &&
@@ -838,7 +848,8 @@ public sealed partial class XlsxFileAdapter
                         IsCellPatchEligibilityLazy: true,
                         SourceHasCustomViews: sourceHasCustomViews,
                         SourceNeedsPackageGraphNormalization: sourceNeedsPackageGraphNormalization,
-                        SourceDrawingModelFingerprint: CreateDrawingModelFingerprint(workbook));
+                        SourceDrawingModelFingerprint: CreateDrawingModelFingerprint(workbook),
+                        SourceSheetIdsByLocalId: sourceSheetIds);
                 }
 
                 var copiedBytes = buffer.Array is not null &&
@@ -863,7 +874,8 @@ public sealed partial class XlsxFileAdapter
                     IsCellPatchEligibilityLazy: true,
                     SourceHasCustomViews: sourceHasCustomViews,
                     SourceNeedsPackageGraphNormalization: sourceNeedsPackageGraphNormalization,
-                    SourceDrawingModelFingerprint: CreateDrawingModelFingerprint(workbook));
+                    SourceDrawingModelFingerprint: CreateDrawingModelFingerprint(workbook),
+                    SourceSheetIdsByLocalId: sourceSheetIds);
             }
 
             var bytes = ReadBytes(stream);
@@ -883,7 +895,8 @@ public sealed partial class XlsxFileAdapter
                 IsCellPatchEligibilityLazy: true,
                 SourceHasCustomViews: sourceHasCustomViews,
                 SourceNeedsPackageGraphNormalization: sourceNeedsPackageGraphNormalization,
-                SourceDrawingModelFingerprint: CreateDrawingModelFingerprint(workbook));
+                SourceDrawingModelFingerprint: CreateDrawingModelFingerprint(workbook),
+                SourceSheetIdsByLocalId: sourceSheetIds);
         }
 
         private static bool SourcePackageHasCustomViews(
@@ -1053,7 +1066,7 @@ public sealed partial class XlsxFileAdapter
                 stream.Position = 0;
 
             using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
-            RestorePatchWorkbookDefinedNames(archive, sourceWorkbookDefinedNames, workbook, XlsxNamedRangeMapper.GetLiveDefinedNameKeys(workbook), ReadSourceSheetNamesByLocalId());
+            RestorePatchWorkbookDefinedNames(archive, sourceWorkbookDefinedNames, workbook, XlsxNamedRangeMapper.GetLiveDefinedNameKeys(workbook), ReadSourceSheetNamesByLocalId(), SourceSheetIdsByLocalId ?? []);
         }
 
         public bool TrySavePatchedCellValues(
@@ -1188,7 +1201,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchWorkbookCalculationProperties(archive);
                 NormalizePatchWorkbookExternalReferences(archive);
                 NormalizePatchWorkbookDefinedNames(archive);
-                RestorePatchWorkbookDefinedNames(archive, sourceWorkbookDefinedNames, workbook, XlsxNamedRangeMapper.GetLiveDefinedNameKeys(workbook), ReadSourceSheetNamesByLocalId());
+                RestorePatchWorkbookDefinedNames(archive, sourceWorkbookDefinedNames, workbook, XlsxNamedRangeMapper.GetLiveDefinedNameKeys(workbook), ReadSourceSheetNamesByLocalId(), SourceSheetIdsByLocalId ?? []);
                 NormalizePatchWorkbookOleSize(archive);
                 NormalizePatchWorkbookPivotCaches(archive);
                 NormalizePatchPivotTableDefinitions(archive);
@@ -1399,7 +1412,11 @@ public sealed partial class XlsxFileAdapter
                     SourceHasCustomViews: workbook.CustomViews.Count > 0,
                     SourceNeedsPackageGraphNormalization: false,
                     SourceOfficeRevisionAttributes: null,
-                    SourceDrawingModelFingerprint: CreateDrawingModelFingerprint(workbook)));
+                    SourceDrawingModelFingerprint: CreateDrawingModelFingerprint(workbook),
+                    // Patch-save is only eligible when every sheet's identity (Sheet.Id) and name
+                    // are unchanged from the baseline (see change_sheet_identity_or_style_only_cells
+                    // above), so the pristine per-ordinal Sheet.Id list carries forward unchanged.
+                    SourceSheetIdsByLocalId: SourceSheetIdsByLocalId));
             }
             else
             {
@@ -1672,7 +1689,8 @@ public sealed partial class XlsxFileAdapter
             XElement? sourceDefinedNames,
             Workbook workbook,
             HashSet<string> liveModelDefinedNameKeys,
-            IReadOnlyList<string> sourceSheetNamesByLocalId)
+            IReadOnlyList<string> sourceSheetNamesByLocalId,
+            IReadOnlyList<SheetId> sourceSheetIdsByLocalId)
         {
             if (sourceDefinedNames is null)
                 return;
@@ -1778,19 +1796,34 @@ public sealed partial class XlsxFileAdapter
                         name => string.Equals(name, scopeSheetName, StringComparison.OrdinalIgnoreCase));
                     if (newLocalSheetId < 0)
                     {
-                        // The old scope-sheet name isn't present under any current sheet. This is
-                        // ambiguous between the sheet having been deleted (drop the name, per the
-                        // comment above) and the sheet having simply been RENAMED with no other
-                        // structural change (the sheet - and this name's scope - is still there,
-                        // just under a new name). A rename alone never changes the sheet COUNT or
-                        // the relative ordering of the other sheets, so when the sheet count matches
-                        // the pristine source and the original ordinal position still exists, treat
-                        // it as a rename and keep the name scoped to that same position instead of
-                        // discarding it.
-                        if (targetSheetNames.Count == sourceSheetNamesByLocalId.Count &&
-                            oldLocalSheetId < targetSheetNames.Count)
+                        // The old scope-sheet name isn't present under any current sheet BY NAME.
+                        // This is ambiguous between the sheet having been deleted (drop the name,
+                        // per the comment above) and the sheet having simply been RENAMED with no
+                        // other structural change (the sheet - and this name's scope - is still
+                        // there, just under a new name). Count+ordinal alone can't tell those apart:
+                        // deleting a sheet and adding an unrelated new one at the same ordinal also
+                        // leaves the count and position matching. Disambiguate by identity instead -
+                        // a rename keeps the SAME Sheet object (and its stable Sheet.Id) alive in the
+                        // model; a delete+add always produces a brand-new Sheet.Id that was never
+                        // present at this snapshot's pristine load/rebase. Only treat this as a
+                        // rename when the ORIGINAL sheet's Sheet.Id genuinely still exists.
+                        var renamedSheetIndex = -1;
+                        if (oldLocalSheetId < sourceSheetIdsByLocalId.Count)
                         {
-                            newLocalSheetId = oldLocalSheetId;
+                            var originalSheetId = sourceSheetIdsByLocalId[oldLocalSheetId];
+                            for (var sheetIndex = 0; sheetIndex < workbook.Sheets.Count; sheetIndex++)
+                            {
+                                if (workbook.Sheets[sheetIndex].Id == originalSheetId)
+                                {
+                                    renamedSheetIndex = sheetIndex;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (renamedSheetIndex >= 0)
+                        {
+                            newLocalSheetId = renamedSheetIndex;
                         }
                         else
                         {
