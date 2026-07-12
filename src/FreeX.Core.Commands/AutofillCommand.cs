@@ -128,13 +128,14 @@ public sealed class AutofillCommand : IWorkbookCommand
                 CellAddress annotationSourceAddr;
                 if (scalarSeries is not null)
                 {
-                    newCell = Cell.FromValue(scalarSeries.CreateValue(scalarSeries.LastValue + scalarSeries.Step * offset));
+                    var (seriesAnchor, seriesStep) = scalarSeries.LineFor(addr);
+                    newCell = Cell.FromValue(scalarSeries.CreateValue(seriesAnchor + seriesStep * offset));
                     newCell.StyleId = ResolvePatternSourceStyleId(sheet, plan, addr, sourceLength, sourceCell);
                     annotationSourceAddr = sourceAddr;
                 }
                 else if (listSeries is not null)
                 {
-                    newCell = Cell.FromValue(listSeries.ValueAt(offset));
+                    newCell = Cell.FromValue(listSeries.LineFor(addr)(offset));
                     newCell.StyleId = ResolvePatternSourceStyleId(sheet, plan, addr, sourceLength, sourceCell);
                     annotationSourceAddr = sourceAddr;
                 }
@@ -357,11 +358,12 @@ public sealed class AutofillCommand : IWorkbookCommand
             Cell newCell;
             if (scalarSeries is not null)
             {
-                newCell = Cell.FromValue(scalarSeries.CreateValue(scalarSeries.LastValue + scalarSeries.Step * offset));
+                var (seriesAnchor, seriesStep) = scalarSeries.LineFor(anchor);
+                newCell = Cell.FromValue(scalarSeries.CreateValue(seriesAnchor + seriesStep * offset));
             }
             else if (listSeries is not null)
             {
-                newCell = Cell.FromValue(listSeries.ValueAt(offset));
+                newCell = Cell.FromValue(listSeries.LineFor(anchor)(offset));
             }
             else if (sourceHasFormula)
             {
@@ -628,9 +630,12 @@ public sealed class AutofillCommand : IWorkbookCommand
 
     private ScalarSeries? TryCreateScalarSeries(Sheet sheet, FillPlan plan)
     {
-        var isVertical = _sourceRange.ColCount == 1 && _sourceRange.RowCount >= 2;
-        var isHorizontal = _sourceRange.RowCount == 1 && _sourceRange.ColCount >= 2;
-        if (!isVertical && !isHorizontal)
+        // A trend can only be fitted across 2+ samples along the axis actually being filled: a
+        // single row filled DOWN (or a single column filled RIGHT) has only one source value per
+        // destination line, so it must fall through to Apply()'s per-line copy/lone-cell
+        // defaults instead of (wrongly) fitting a trend across the orthogonal axis using the
+        // source's OTHER dimension.
+        if (plan.Axis == FillAxis.Vertical ? _sourceRange.RowCount < 2 : _sourceRange.ColCount < 2)
             return null;
 
         var values = _sourceRange.AllCells()
@@ -645,29 +650,81 @@ public sealed class AutofillCommand : IWorkbookCommand
         else
             return null;
 
-        var numbers = values.Select(value => value switch
+        // Excel fits an independent least-squares trend per LINE of the source: each column of
+        // a rectangular (multi-row AND multi-column) source continues its own series when
+        // filling down/up, and each row continues its own series when filling left/right,
+        // rather than flattening the whole rectangle into one shared sequence. A source shaped
+        // along a single line (the classic 1-column or 1-row case) naturally reduces to exactly
+        // one line below.
+        var lines = new Dictionary<uint, (double Anchor, double Step)>();
+        foreach (var (lineKey, cells) in EnumerateSeriesLines(plan))
         {
-            NumberValue number => number.Value,
-            DateTimeValue date => date.Value,
-            _ => 0
-        }).ToList();
+            var numbers = cells.Select(addr => ToSeriesNumber(sheet.GetCell(addr)?.Value)).ToList();
+            lines[lineKey] = FitScalarLine(numbers, plan);
+        }
+
+        return new ScalarSeries(lines, plan.Axis, createValue);
+    }
+
+    private static double ToSeriesNumber(ScalarValue? value) => value switch
+    {
+        NumberValue number => number.Value,
+        DateTimeValue date => date.Value,
+        _ => 0
+    };
+
+    /// <summary>
+    /// Fits one series line's least-squares regression, anchored at the fill's starting edge.
+    /// Excel's fill handle continues the fitted regression line itself, not a step applied from
+    /// the raw edge value: for a non-collinear line (e.g. 1, 2, 6) the fitted line's intercept
+    /// differs from any single sampled point, so anchoring on the actual first/last value would
+    /// offset every filled cell by that fitted-vs-actual gap. Anchor on the regression line's
+    /// value at the source's edge index instead, so anchor + step*offset always lies on the
+    /// fitted line (this reduces to the plain edge value -- the old behavior -- whenever the
+    /// line is already perfectly linear, since the line then passes exactly through every
+    /// sampled point).
+    /// </summary>
+    private static (double Anchor, double Step) FitScalarLine(IReadOnlyList<double> numbers, FillPlan plan)
+    {
         var naturalSlope = ComputeLinearFitSlope(numbers);
-        // Excel's fill handle continues the least-squares regression line itself, not a step
-        // applied from the raw edge value: for a non-collinear source (e.g. 1, 2, 6) the fitted
-        // line's intercept differs from any single sampled point, so anchoring on the actual
-        // first/last value would offset every filled cell by that fitted-vs-actual gap. Anchor on
-        // the regression line's value at the source's edge index instead, so
-        // anchor + step*offset always lies on the fitted line (this reduces to the plain edge
-        // value -- the old behavior -- whenever the source is already perfectly linear, since the
-        // line then passes exactly through every sampled point).
         var meanX = (numbers.Count - 1) / 2.0;
         var intercept = numbers.Average() - naturalSlope * meanX;
         var anchor = plan.Direction is FillDirection.Up or FillDirection.Left
             ? intercept
             : intercept + naturalSlope * (numbers.Count - 1);
         var step = plan.Direction is FillDirection.Up or FillDirection.Left ? -naturalSlope : naturalSlope;
+        return (anchor, step);
+    }
 
-        return new ScalarSeries(anchor, step, plan.Axis, createValue);
+    /// <summary>
+    /// Splits <see cref="_sourceRange"/> into the independent series lines Excel fits/continues
+    /// separately when dragging the fill handle: one line per column (keyed by column) when
+    /// filling down/up, one line per row (keyed by row) when filling left/right. A source
+    /// shaped along the fill axis (e.g. a single column filled down) yields exactly one line
+    /// covering the whole range.
+    /// </summary>
+    private IEnumerable<(uint LineKey, IReadOnlyList<CellAddress> Cells)> EnumerateSeriesLines(FillPlan plan)
+    {
+        if (plan.Axis == FillAxis.Vertical)
+        {
+            for (var col = _sourceRange.Start.Col; col <= _sourceRange.End.Col; col++)
+            {
+                var cells = new List<CellAddress>();
+                for (var row = _sourceRange.Start.Row; row <= _sourceRange.End.Row; row++)
+                    cells.Add(new CellAddress(_sheetId, row, col));
+                yield return (col, cells);
+            }
+        }
+        else
+        {
+            for (var row = _sourceRange.Start.Row; row <= _sourceRange.End.Row; row++)
+            {
+                var cells = new List<CellAddress>();
+                for (var col = _sourceRange.Start.Col; col <= _sourceRange.End.Col; col++)
+                    cells.Add(new CellAddress(_sheetId, row, col));
+                yield return (row, cells);
+            }
+        }
     }
 
     /// <summary>
@@ -706,7 +763,8 @@ public sealed class AutofillCommand : IWorkbookCommand
         }
 
         var step = plan.Direction is FillDirection.Up or FillDirection.Left ? -1 : 1;
-        return new ScalarSeries(seed, step, plan.Axis, createValue);
+        var lines = new Dictionary<uint, (double Anchor, double Step)> { [0] = (seed, step) };
+        return new ScalarSeries(lines, plan.Axis, createValue);
     }
 
     /// <summary>
@@ -719,21 +777,29 @@ public sealed class AutofillCommand : IWorkbookCommand
     /// </summary>
     private ListSeries? TryCreateListSeries(Sheet sheet, FillPlan plan)
     {
-        var isVertical = _sourceRange.ColCount == 1 && _sourceRange.RowCount >= 1;
-        var isHorizontal = _sourceRange.RowCount == 1 && _sourceRange.ColCount >= 1;
-        if (!isVertical && !isHorizontal)
-            return null;
-
         var texts = _sourceRange.AllCells()
             .Select(addr => sheet.GetCell(addr)?.Value)
             .Select(value => value is TextValue text ? text.Value : null)
             .ToList();
         if (texts.Any(text => text is null))
             return null;
-        var values = texts.Cast<string>().ToList();
 
-        return TryCreateTrailingNumberSeries(values, plan)
-            ?? TryCreateBuiltInListSeries(values, plan);
+        // Same per-line split as TryCreateScalarSeries: each column continues its own list
+        // series when filling down/up, each row when filling left/right, instead of flattening a
+        // rectangular (multi-row AND multi-column) source into one shared sequence.
+        var lines = new Dictionary<uint, Func<int, ScalarValue>>();
+        foreach (var (lineKey, cells) in EnumerateSeriesLines(plan))
+        {
+            var lineValues = cells.Select(addr => ((TextValue)sheet.GetCell(addr)!.Value).Value).ToList();
+            var lineFunc = TryCreateTrailingNumberSeries(lineValues, plan)
+                ?? TryCreateBuiltInListSeries(lineValues, plan);
+            if (lineFunc is null)
+                return null;
+
+            lines[lineKey] = lineFunc;
+        }
+
+        return new ListSeries(lines, plan.Axis);
     }
 
     /// <summary>
@@ -748,12 +814,16 @@ public sealed class AutofillCommand : IWorkbookCommand
         if (sourceCell?.Value is not TextValue text)
             return null;
 
-        return TryCreateTrailingNumberSeries([text.Value], plan)
+        var lineFunc = TryCreateTrailingNumberSeries([text.Value], plan)
             ?? TryCreateBuiltInListSeries([text.Value], plan);
+        if (lineFunc is null)
+            return null;
+
+        return new ListSeries(new Dictionary<uint, Func<int, ScalarValue>> { [0] = lineFunc }, plan.Axis);
     }
 
     /// <summary>Text ending in a run of digits (optionally with leading zeros): "Item 1" -&gt; "Item 2", ...</summary>
-    private static ListSeries? TryCreateTrailingNumberSeries(IReadOnlyList<string> values, FillPlan plan)
+    private static Func<int, ScalarValue>? TryCreateTrailingNumberSeries(IReadOnlyList<string> values, FillPlan plan)
     {
         var parsed = values.Select(TrySplitTrailingNumber).ToList();
         if (parsed.Any(part => part is null))
@@ -771,14 +841,14 @@ public sealed class AutofillCommand : IWorkbookCommand
         var lastNumber = plan.Direction is FillDirection.Up or FillDirection.Left ? numbers[0] : numbers[^1];
         var directedStep = plan.Direction is FillDirection.Up or FillDirection.Left ? -step : step;
 
-        return new ListSeries(plan.Axis, offset =>
+        return offset =>
         {
             var next = (long)Math.Round(lastNumber + directedStep * offset);
             var digits = next.ToString(System.Globalization.CultureInfo.InvariantCulture);
             if (next >= 0 && digits.Length < width)
                 digits = digits.PadLeft(width, '0');
             return new TextValue(prefix + digits);
-        });
+        };
     }
 
     private static (string Prefix, int Width, long Number)? TrySplitTrailingNumber(string text)
@@ -805,7 +875,7 @@ public sealed class AutofillCommand : IWorkbookCommand
     ];
 
     /// <summary>Excel's built-in weekday/month name lists, wrapping around after the last entry.</summary>
-    private static ListSeries? TryCreateBuiltInListSeries(IReadOnlyList<string> values, FillPlan plan)
+    private static Func<int, ScalarValue>? TryCreateBuiltInListSeries(IReadOnlyList<string> values, FillPlan plan)
     {
         foreach (var list in BuiltInLists)
         {
@@ -823,11 +893,11 @@ public sealed class AutofillCommand : IWorkbookCommand
             if (directedStep == 0)
                 directedStep = 1;
 
-            return new ListSeries(plan.Axis, offset =>
+            return offset =>
             {
                 var index = Mod(lastIndex + directedStep * (int)offset, list.Length);
                 return new TextValue(list[index]);
-            });
+            };
         }
 
         return null;
@@ -863,20 +933,41 @@ public sealed class AutofillCommand : IWorkbookCommand
         return (n * sumXY - sumX * sumY) / denominator;
     }
 
-    /// <param name="LastValue">
-    /// The series' anchor value at the fill's starting edge (offset 0): for
-    /// <see cref="TryCreateForcedSingleCellSeries"/> this is the literal seed cell value, but for
-    /// <see cref="TryCreateScalarSeries"/> it is the least-squares regression line's fitted value
-    /// at the source's edge index (not necessarily the actual sampled cell value), so that
-    /// <c>LastValue + Step * offset</c> always lies on the fitted trend line.
+    /// <param name="Lines">
+    /// Per-line (Anchor, Step) pairs, keyed by column (filling down/up) or row (filling
+    /// left/right): each line of a rectangular source continues its own independently-fitted
+    /// trend rather than sharing one flattened sequence. Anchor is the line's fitted value at
+    /// the fill's starting edge (offset 0): for <see cref="TryCreateForcedSingleCellSeries"/> it
+    /// is the literal seed cell value, but for <see cref="TryCreateScalarSeries"/> it is the
+    /// least-squares regression line's fitted value at the source's edge index (not necessarily
+    /// the actual sampled cell value), so that <c>Anchor + Step * offset</c> always lies on the
+    /// fitted line. A series with exactly one line (the lone-cell and single-column/row-source
+    /// cases) always resolves to that line via <see cref="LineFor"/>'s fallback, regardless of
+    /// which key it happens to be stored under.
     /// </param>
     private sealed record ScalarSeries(
-        double LastValue,
-        double Step,
+        IReadOnlyDictionary<uint, (double Anchor, double Step)> Lines,
         FillAxis Axis,
-        Func<double, ScalarValue> CreateValue);
+        Func<double, ScalarValue> CreateValue)
+    {
+        public (double Anchor, double Step) LineFor(CellAddress addr)
+        {
+            var key = Axis == FillAxis.Vertical ? addr.Col : addr.Row;
+            return Lines.TryGetValue(key, out var line) ? line : Lines.Values.First();
+        }
+    }
 
-    private sealed record ListSeries(FillAxis Axis, Func<int, ScalarValue> ValueAt);
+    /// <summary>
+    /// Per-line list-series functions, keyed the same way as <see cref="ScalarSeries.Lines"/>.
+    /// </summary>
+    private sealed record ListSeries(IReadOnlyDictionary<uint, Func<int, ScalarValue>> Lines, FillAxis Axis)
+    {
+        public Func<int, ScalarValue> LineFor(CellAddress addr)
+        {
+            var key = Axis == FillAxis.Vertical ? addr.Col : addr.Row;
+            return Lines.TryGetValue(key, out var valueAt) ? valueAt : Lines.Values.First();
+        }
+    }
 
     private readonly record struct FillPlan(FillDirection Direction, FillAxis Axis);
 

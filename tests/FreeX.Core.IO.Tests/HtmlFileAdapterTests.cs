@@ -80,6 +80,52 @@ public sealed class HtmlFileAdapterTests
     }
 
     [Fact]
+    public void Load_CoercesDateAndTimeLiteralsWrittenByTheSaver()
+    {
+        // These are exactly the shapes HtmlTableWriter.FormatDate emits (date-only, date+time, and a
+        // time-only value anchored to the OADate epoch day 1899-12-30). A round-tripped date/time cell
+        // must keep its numeric type instead of reloading as text (R29-non-xlsx-format-roundtrip-1).
+        var wb = Load("<table><tr><td>2024-01-31</td><td>2024-01-31 13:45:30</td><td>13:45:30</td></tr></table>");
+        var sheet = wb.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(DateTimeValue.FromDateTime(new DateTime(2024, 1, 31)));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(DateTimeValue.FromDateTime(new DateTime(2024, 1, 31, 13, 45, 30)));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(new DateTimeValue(new TimeSpan(13, 45, 30).TotalDays));
+    }
+
+    [Fact]
+    public void Load_TextThatIsNotAnExactDateLiteralStaysText()
+    {
+        // Sibling case: don't over-match. Plain text and date-ish text in a format the writer never
+        // produces (US-style month/day/year) must stay a string, not get coerced into a date.
+        var wb = Load("<table><tr><td>hello</td><td>1/31/2024</td></tr></table>");
+        var sheet = wb.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("hello"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new TextValue("1/31/2024"));
+    }
+
+    [Fact]
+    public void RoundTrip_PreservesDateAndDateTimeValues()
+    {
+        var wb = new Workbook("Untitled");
+        var sheet = wb.AddSheet("Sheet1");
+        var dateOnly = DateTimeValue.FromDateTime(new DateTime(2024, 1, 31));
+        var dateTime = DateTimeValue.FromDateTime(new DateTime(2024, 1, 31, 13, 45, 30));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), dateOnly);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), dateTime);
+        // Sibling case already covered elsewhere (Load_CoercesNumbersBooleansAndErrors /
+        // RoundTrip_PreservesValuesAndMergeGeometry): plain numbers/booleans keep working alongside dates.
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new NumberValue(42));
+
+        var got = RoundTrip(wb).Sheets.Single();
+
+        got.GetValue(new CellAddress(got.Id, 1, 1)).Should().Be(dateOnly);
+        got.GetValue(new CellAddress(got.Id, 1, 2)).Should().Be(dateTime);
+        got.GetValue(new CellAddress(got.Id, 1, 3)).Should().Be(new NumberValue(42));
+    }
+
+    [Fact]
     public void Load_DecodesEntitiesAndStripsInnerTags()
     {
         var wb = Load("<table><tr><td>a &amp; b &lt;c&gt;</td><td><b>bold</b> text</td></tr></table>");

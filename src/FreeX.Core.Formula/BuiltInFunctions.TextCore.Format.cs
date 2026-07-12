@@ -131,7 +131,15 @@ public static partial class BuiltInFunctions
         double rounded = decimals <= 15 ? RoundWithExcelDigits(value, decimals) : value;
         int displayDecimals = Math.Clamp(decimals, 0, 99); // .NET "N"/"F" format supports 0-99 only
         string format = (useCommas ? "N" : "F") + displayDecimals;
-        return rounded.ToString(format, System.Globalization.CultureInfo.InvariantCulture);
+        string text = rounded.ToString(format, System.Globalization.CultureInfo.InvariantCulture);
+
+        // Excel honors the full requested decimal count even past .NET's 99-digit "N"/"F" cap
+        // (e.g. FIXED(1,100) shows "1." followed by 100 zeros). The value has no further
+        // significant digits beyond what RoundWithExcelDigits/the "F99" text already produced
+        // for decimals this large, so pad with trailing zeros instead of silently truncating.
+        if (decimals > 99)
+            text += new string('0', decimals - 99);
+        return text;
     }
 
 }

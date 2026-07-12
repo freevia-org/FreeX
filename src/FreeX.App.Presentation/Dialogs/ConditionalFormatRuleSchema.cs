@@ -64,6 +64,21 @@ public enum CfInputField
     /// <summary>The color-scale maximum color.</summary>
     ColorScaleMaxColor,
 
+    /// <summary>The data-bar minimum threshold value (Number/Percent/Percentile/Formula types).</summary>
+    DataBarMinValue,
+
+    /// <summary>The data-bar maximum threshold value (Number/Percent/Percentile/Formula types).</summary>
+    DataBarMaxValue,
+
+    /// <summary>The color-scale minimum threshold value (Number/Percent/Percentile/Formula types).</summary>
+    ColorScaleMinValue,
+
+    /// <summary>The color-scale midpoint threshold value (Number/Percent/Percentile/Formula types).</summary>
+    ColorScaleMidValue,
+
+    /// <summary>The color-scale maximum threshold value (Number/Percent/Percentile/Formula types).</summary>
+    ColorScaleMaxValue,
+
     /// <summary>Whether the color scale uses three colors (with a midpoint) rather than two.</summary>
     UseThreeColorScale,
 
@@ -322,6 +337,13 @@ public sealed record ConditionalFormatRuleSchema(
 
         if (!IsParseableColor(input.MaxColor))
             errors.Add(new CfValidationError(CfInputField.ColorScaleMaxColor, "A valid maximum color is required."));
+
+        ValidateThresholdValue(input.ColorScaleMinType, input.ColorScaleMinValue, CfInputField.ColorScaleMinValue, errors);
+
+        if (input.UseThreeColorScale)
+            ValidateThresholdValue(input.ColorScaleMidType, input.ColorScaleMidValue, CfInputField.ColorScaleMidValue, errors);
+
+        ValidateThresholdValue(input.ColorScaleMaxType, input.ColorScaleMaxValue, CfInputField.ColorScaleMaxValue, errors);
     }
 
     private static void ValidateDataBar(CfRuleInput input, List<CfValidationError> errors)
@@ -331,6 +353,43 @@ public sealed record ConditionalFormatRuleSchema(
 
         if (!ConditionalFormatInputParser.TryParseOptionalPercent(input.DataBarMaxLength, out _))
             errors.Add(new CfValidationError(CfInputField.DataBarMaxLength, "Enter a maximum bar length from 0 to 100."));
+
+        ValidateThresholdValue(input.DataBarMinType, input.DataBarMinValue, CfInputField.DataBarMinValue, errors);
+        ValidateThresholdValue(input.DataBarMaxType, input.DataBarMaxValue, CfInputField.DataBarMaxValue, errors);
+    }
+
+    /// <summary>
+    /// Validates a data-bar/color-scale threshold's typed value against its selected threshold type.
+    /// <see cref="CfThresholdType.Min"/>/<see cref="CfThresholdType.Max"/> are automatic and ignore any
+    /// typed text. <see cref="CfThresholdType.Number"/>/<see cref="CfThresholdType.Percent"/>/
+    /// <see cref="CfThresholdType.Percentile"/> require a value that parses the same way
+    /// <see cref="ConditionalFormatStatistics.TryResolveThreshold"/> parses it at render time — without
+    /// this check, non-numeric text (or a blank box) silently resolves to no bar/scale at all instead of
+    /// being rejected the way real Excel's "Please enter a valid entry" guard rejects it.
+    /// <see cref="CfThresholdType.Formula"/> requires non-blank text (the formula itself).
+    /// </summary>
+    private static void ValidateThresholdValue(
+        CfThresholdType type,
+        string? value,
+        CfInputField field,
+        List<CfValidationError> errors)
+    {
+        switch (type)
+        {
+            case CfThresholdType.Min:
+            case CfThresholdType.Max:
+                break;
+
+            case CfThresholdType.Formula:
+                if (string.IsNullOrWhiteSpace(value))
+                    errors.Add(new CfValidationError(field, "A formula is required."));
+                break;
+
+            default:
+                if (!ConditionalFormatStatistics.TryParseInvariant(value, out _))
+                    errors.Add(new CfValidationError(field, "Enter a valid number."));
+                break;
+        }
     }
 
     /// <summary>

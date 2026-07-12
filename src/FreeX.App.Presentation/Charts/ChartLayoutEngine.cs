@@ -573,7 +573,8 @@ public static class ChartLayoutEngine
         ChartSeriesData series,
         AxisScale categoryScale,
         AxisScale valueScale,
-        List<DataLabelBox> dataLabels)
+        List<DataLabelBox> dataLabels,
+        bool emitGapBreakPoint = true)
     {
         var chart = request.Chart;
         var points = new List<SeriesPoint>();
@@ -581,11 +582,32 @@ public static class ChartLayoutEngine
         {
             double v;
             if (series.Values[i] is { } actual)
+            {
                 v = actual;
+            }
             else if (chart.BlankDisplayMode == ChartBlankDisplayMode.Zero)
+            {
                 v = 0;
+            }
+            else if (emitGapBreakPoint)
+            {
+                // Gap: emit an explicit NaN-valued point (mirrors the WPF renderer's
+                // `DataPoint(i, double.NaN)` in ChartRenderer.SeriesFormatting.cs) so a NaN-aware
+                // line/area renderer breaks the connecting geometry at this index, instead of
+                // silently omitting the index — an omitted index lets the line/area jump straight
+                // across the gap (round-29 finding R29-chart-render-pixel-deep-2). No data label
+                // for a blank point.
+                var gapPos = new LayoutPoint(categoryScale.Transform(i), valueScale.Transform(double.NaN));
+                points.Add(new SeriesPoint(i, i, double.NaN, gapPos));
+                continue;
+            }
             else
-                continue; // Gap: skip the point so the line breaks.
+            {
+                // Gap, but this call is for a marker-only overlay (combo scatter): Excel never
+                // draws a marker for a blank cell regardless of BlankDisplayMode, so the point is
+                // omitted rather than given a NaN placeholder (see LayoutComboScatterSeries).
+                continue;
+            }
 
             var pos = new LayoutPoint(categoryScale.Transform(i), valueScale.Transform(v));
             points.Add(new SeriesPoint(i, i, v, pos));
@@ -603,7 +625,10 @@ public static class ChartLayoutEngine
 
     // Combo scatter overlay: same category-index x positions as the line overlay, but rendered as
     // unconnected markers (ScatterPoints), mirroring the source renderer's IsComboScatterSeries path
-    // (a ScatterSeries with circle markers, no connecting line).
+    // (a ScatterSeries with circle markers, no connecting line). Blanks are always omitted here
+    // (emitGapBreakPoint: false) — unlike a connected line, a marker-only overlay has no line to
+    // break, and the WPF reference renderer's combo-scatter path never plots a point for a blank
+    // cell regardless of BlankDisplayMode (see ChartRenderer.cs's IsComboScatterSeries branch).
     private static SeriesLayout LayoutComboScatterSeries(
         ChartLayoutRequest request,
         ChartSeriesData series,
@@ -611,7 +636,7 @@ public static class ChartLayoutEngine
         AxisScale valueScale,
         List<DataLabelBox> dataLabels)
     {
-        var line = LayoutLineSeries(request, series, categoryScale, valueScale, dataLabels);
+        var line = LayoutLineSeries(request, series, categoryScale, valueScale, dataLabels, emitGapBreakPoint: false);
         return new SeriesLayout
         {
             SeriesIndex = series.SeriesIndex,

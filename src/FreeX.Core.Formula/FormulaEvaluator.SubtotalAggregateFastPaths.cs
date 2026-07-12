@@ -309,12 +309,38 @@ public sealed partial class FormulaEvaluator
             }
 
             var gridRange = resolved.Value;
+            var sheetName = context.TryGetSheetName(gridRange.Start.Sheet);
+            var startRow = gridRange.Start.Row;
+            var startCol = gridRange.Start.Col;
+            var endRow = gridRange.End.Row;
+            var endCol = gridRange.End.Col;
+
+            // A named range that spans a full column/row (e.g. Data = Sheet1!$A:$A) resolves to
+            // the full 1,048,576-row / 16,384-col grid extent, which exceeds
+            // MaxMaterializedRangeCells below and would wrongly return #REF! even though the
+            // identical literal range (=COUNTIF(A:A,...)) is clamped and works. Clamp it to the
+            // sheet's used range first, mirroring the literal-range clamp just below
+            // (ClampOpenEndedRangeToUsed) and the equivalent named-range clamp in
+            // FormulaEvaluator.FastAggregates.cs.
+            var isFullCol = startRow == 1 && endRow == CellAddress.MaxRow;
+            var isFullRow = startCol == 1 && endCol == CellAddress.MaxCol;
+            if (isFullCol || isFullRow)
+            {
+                if (!TryClampFullRangeToUsed(sheetName, context, ref startRow, ref startCol, ref endRow, ref endCol))
+                {
+                    // Nothing populated on the sheet: zero cells to aggregate rather than the huge nominal range.
+                    range = new DirectRangeArgument(sheetName, 1, 1, 0, 0);
+                    result = BlankValue.Instance;
+                    return DirectRangeFastPathState.Success;
+                }
+            }
+
             return TryCreateDirectRangeArgument(
-                context.TryGetSheetName(gridRange.Start.Sheet),
-                gridRange.Start.Row,
-                gridRange.Start.Col,
-                gridRange.End.Row,
-                gridRange.End.Col,
+                sheetName,
+                startRow,
+                startCol,
+                endRow,
+                endCol,
                 out range,
                 out result);
         }

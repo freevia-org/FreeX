@@ -213,6 +213,28 @@ public partial class PhaseCFinancialTests
     }
 
     [Fact]
+    public void Tbilleq_DsmAtOneEightyTwoBoundary_StillUsesLinearFormula()
+    {
+        // DSM == 182 stays on the <=182 linear branch: (365*disc)/(360-disc*dsm)
+        // Settlement = 43831 (2020-01-01), maturity = 44013 (182 days later), discount = 0.05
+        // = (365*0.05) / (360 - 0.05*182) = 18.25 / 350.9 ≈ 0.052008
+        double result = Calc("TBILLEQ(43831,44013,0.05)");
+        result.Should().BeApproximately(0.052008, 0.0001);
+    }
+
+    [Fact]
+    public void Tbilleq_DsmBeyondOneEightyTwo_UsesBondEquivalentYieldQuadratic()
+    {
+        // Excel switches to the BEY quadratic formula for 182 < DSM <= 365:
+        // BEY = (-2*(M/365) + 2*sqrt((M/365)^2 - (2*M/365-1)*(1-100/P))) / (2*M/365-1)
+        // where P = TBILLPRICE(settlement, maturity, discount).
+        // Settlement = 43831 (2020-01-01), maturity = 44105 (274 days later), discount = 0.06
+        // Expected ≈ 6.31% (matches Excel's published bond-equivalent-yield example).
+        double result = Calc("TBILLEQ(43831,44105,0.06)");
+        result.Should().BeApproximately(0.0631, 0.0005);
+    }
+
+    [Fact]
     public void Coupnum_SemiAnnual_FiveYearBond()
     {
         // Settlement ~2020-01-15 (43845), Maturity ~2025-01-15 (45672), freq=2

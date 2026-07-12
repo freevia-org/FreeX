@@ -7,6 +7,12 @@ public static partial class DataValidationService
 {
     private static readonly string MissingBlankCellText = ToValidationText(BlankValue.Instance);
 
+    // Real Excel's default List-validation rejection dialog (no custom ErrorMessage authored)
+    // is this fixed, generic sentence -- it never enumerates the source list's actual values,
+    // regardless of how many items the source has (mirrors the sibling default fallbacks below,
+    // e.g. "Value must be a number.", which describe the rule rather than dumping its data).
+    private const string GenericListErrorMessage = "Value must match one of the list items.";
+
     private static string? ValidateList(DataValidation dv, ScalarValue value)
     {
         if (string.IsNullOrEmpty(dv.Formula1))
@@ -34,8 +40,13 @@ public static partial class DataValidationService
                 if (rangeMatch)
                     return null;
 
-                if (!string.IsNullOrEmpty(dv.ErrorMessage))
-                    return dv.ErrorMessage;
+                // The fast path above has already determined there is no match against the
+                // source range/named range, so return directly instead of falling through to
+                // ResolveListValues below. For a source spanning a column's full nominal extent
+                // (e.g. "=$A$1:$A$1048576") that fallback would otherwise materialize and re-scan
+                // up to ~1,048,576 list items (RangeListItems) just to report a rejection that is
+                // already known.
+                return dv.ErrorMessage ?? GenericListErrorMessage;
             }
 
             var allowed = ResolveListValues(source, sheet, anchor, address, workbook);
@@ -517,7 +528,12 @@ public static partial class DataValidationService
                 return null;
         }
 
-        return dv.ErrorMessage ?? $"Invalid entry. Allowed values: {string.Join(", ", allowedValues)}";
+        // Mirrors real Excel: the default rejection message is this fixed, generic sentence --
+        // Excel never enumerates the allowed source values into the dialog, no matter how many
+        // items the list has. Building a string.Join here would additionally re-enumerate (and,
+        // for a large range/named source, allocate a multi-megabyte string from) the very list
+        // the loop above just scanned looking for a match.
+        return dv.ErrorMessage ?? GenericListErrorMessage;
     }
 
     private static string ToValidationText(ScalarValue value)

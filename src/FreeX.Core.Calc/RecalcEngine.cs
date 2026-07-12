@@ -1474,6 +1474,25 @@ public sealed class RecalcEngine
             case UnaryOpNode unary:
                 return CollectReferences(unary.Operand, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack);
 
+            // A1#:B5 spill-range-union reference (ANCHORARRAY(anchor, end), see Parser.cs's ':' handling
+            // after a '#' anchor). FormulaEvaluator.Functions.cs EvaluateAnchorArray reads every cell in
+            // the bounding rectangle that unions the anchor's spill extent with the end cell -- not just
+            // the anchor and end cells themselves -- so register a dependency edge across the whole
+            // rectangle between them (a conservative superset of the true, spill-extent-dependent union)
+            // rather than the single-cell edges the generic FunctionCallNode case below would add. Only
+            // handles the plain same-sheet CellRefNode/CellRefNode shape the parser always produces for
+            // this operator; anything else (e.g. a named-range anchor) falls through to the generic case.
+            case FunctionCallNode anchorArray when anchorArray.FunctionName == "ANCHORARRAY" &&
+                anchorArray.Arguments.Count == 2 &&
+                anchorArray.Arguments[0] is CellRefNode { SheetName: null } anchorCell &&
+                anchorArray.Arguments[1] is CellRefNode { SheetName: null } endCell:
+            {
+                refs.AddRange(new GridRange(
+                    new CellAddress(defaultSheetId, anchorCell.Row, anchorCell.ColumnNumber),
+                    new CellAddress(defaultSheetId, endCell.Row, endCell.ColumnNumber)));
+                return false;
+            }
+
             case FunctionCallNode func:
             {
                 var containsVolatileFunction = IsVolatileFunctionName(func.FunctionName);

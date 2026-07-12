@@ -454,7 +454,8 @@ public partial class MainWindow
                 clip.SourceRange,
                 clip.Cells,
                 currentRange,
-                choice);
+                choice,
+                isCut: clip.IsCut);
         }
 
         var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);

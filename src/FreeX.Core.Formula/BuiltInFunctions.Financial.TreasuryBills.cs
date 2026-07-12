@@ -24,7 +24,18 @@ public static partial class BuiltInFunctions
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         double dsm = (md - sd).TotalDays;
         if (dsm <= 0 || dsm > 365) return ErrorValue.Num;
-        return NumberResult((365 * discount) / (360 - discount * dsm));
+        if (dsm <= 182)
+            return NumberResult((365 * discount) / (360 - discount * dsm));
+
+        // 182 < DSM <= 365: Excel's documented bond-equivalent-yield quadratic.
+        // P = TBILLPRICE(settlement, maturity, discount); M = DSM.
+        // BEY = (-2*(M/365) + sqrt((M/365)^2 - (2*M/365-1)*(1-100/P)) * 2) / (2*M/365 - 1)
+        double price = 100 * (1 - discount * dsm / 360.0);
+        double y = dsm / 365.0;
+        double a = 2 * y - 1;
+        double radicand = y * y - a * (1 - 100 / price);
+        if (price <= 0 || radicand < 0 || a == 0) return ErrorValue.Num;
+        return NumberResult((-2 * y + 2 * Math.Sqrt(radicand)) / a);
     }
 
     private static ScalarValue Tbillprice(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

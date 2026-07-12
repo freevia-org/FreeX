@@ -23,11 +23,19 @@ namespace FreeX.App.Services.Tests;
 /// indefinitely). <see cref="WorkbookOpenServiceVolatileRecalcTests"/> covers the corrected, selective
 /// behavior (volatile cells + dependents recompute; the FULL-recalc callback below still never fires
 /// for this case -- see the updated test immediately below).
+///
+/// Round-29 findings R29-meta-1/R29-meta-2 moved that selective volatile recalc out of
+/// <see cref="WorkbookOpenService.LoadAsync"/> entirely and into
+/// <see cref="WorkbookSessionFactory.Create"/> (see <see cref="WorkbookOpenServiceVolatileRecalcTests"/>
+/// for the up-to-date, session-level coverage of the recalc itself, including a defined-name-hidden
+/// volatility case LoadAsync's old per-cell text scan could never have caught). The test immediately
+/// below now only pins that an incidental volatile formula still does not trip the FULL-recalc
+/// callback -- LoadAsync alone no longer touches the cell's value at all.
 /// </summary>
 public sealed class WorkbookOpenServiceCalcTrustTests
 {
     [Fact]
-    public async Task LoadAsync_XlsxWithIncidentalVolatileFormulaRecalculatesOnlyThatCellNotTheWholeWorkbook()
+    public async Task LoadAsync_XlsxWithIncidentalVolatileFormulaDoesNotTriggerFullRecalcCallback()
     {
         using var temp = new TestTemporaryDirectory();
         var tempPath = Path.Combine(temp.Path, "volatile.xlsx");
@@ -48,9 +56,11 @@ public sealed class WorkbookOpenServiceCalcTrustTests
             "function (e.g. an OFFSET-based named range or a NOW() timestamp) with no fullCalcOnLoad flag");
 
         var sheet = result.Workbook.GetSheet("FormulaCases");
-        sheet!.GetCell(1, 3)!.Value.Should().Be(new NumberValue(2),
-            "real Excel still refreshes a volatile OFFSET formula on open even though it trusts the " +
-            "rest of the file's cached values -- the stale cached <v>5</v> from the file must not survive");
+        sheet!.GetCell(1, 3)!.Value.Should().Be(new NumberValue(5),
+            "LoadAsync's trusted-cache branch no longer performs the selective volatile recalc itself " +
+            "(round 29 moved it to WorkbookSessionFactory.Create, which builds the session's own " +
+            "dependency graph exactly once) -- the file's stale cached <v>5</v> is left in place until " +
+            "a session actually opens this workbook");
     }
 
     [Fact]

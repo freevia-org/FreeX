@@ -4,11 +4,19 @@ namespace FreeX.App.Presentation.FormatCells;
 
 public static class FormatCellsInputParser
 {
+    /// <summary>
+    /// Excel's Format Cells &gt; Font &gt; Size box rejects values outside 1-409 points
+    /// (inclusive) with a "between 1 and 409" style error, regardless of how large a
+    /// finite number is typed.
+    /// </summary>
+    public const double MaxFontSize = 409;
+
     public static double? TryParseFontSize(string text)
     {
         if ((double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.CurrentCulture, out var currentCultureSize) ||
              double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out currentCultureSize)) &&
             currentCultureSize > 0 &&
+            currentCultureSize <= MaxFontSize &&
             double.IsFinite(currentCultureSize))
         {
             return currentCultureSize;

@@ -1,7 +1,4 @@
-using System.Text.RegularExpressions;
-using FreeX.Core.Calc;
 using FreeX.Core.Commands;
-using FreeX.Core.Formula;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 
@@ -129,18 +126,15 @@ public sealed class WorkbookOpenService
         else
         {
             cancellationToken.ThrowIfCancellationRequested();
-            // Trusted cached values are kept as-is, but real Excel still refreshes volatile
+            // Trusted cached values are kept as-is here. Real Excel still refreshes volatile
             // functions (NOW/TODAY/RAND/OFFSET/INDIRECT/...) on an Automatic-mode open even though
-            // it does not force a full recalculation of the rest of the workbook (Manual mode does
-            // not even do that much -- Excel leaves everything, including volatiles, untouched
-            // until an explicit F9/edit). A cheap text scan (no AST parse) checks whether the
-            // workbook has any volatile-function calls at all before paying for the
-            // dependency-tracked recalc pass scoped to just those cells and their dependents.
-            var recalculatedVolatileCells =
-                workbook.CalculationMode != WorkbookCalculationMode.Manual &&
-                WorkbookHasVolatileFormulas(workbook) &&
-                RecalculateVolatileFormulasOnLoad(workbook);
-            if ((materializedDynamicStyles || recalculatedVolatileCells) && adapter is XlsxFileAdapter dynamicStyleAdapter)
+            // it does not force a full recalculation of the rest of the workbook, but that scoped
+            // pass needs an accurate, already-built dependency graph to catch volatility hidden
+            // behind a defined name (e.g. =SUM(SalesRange) where SalesRange=OFFSET(...)) -- so it
+            // is left to the session engine that opens this workbook next
+            // (WorkbookSessionFactory.Create runs it right after RebuildFormulaDependencies)
+            // instead of duplicated here against a second, throwaway graph.
+            if (materializedDynamicStyles && adapter is XlsxFileAdapter dynamicStyleAdapter)
                 dynamicStyleAdapter.RebaseLoadedPackageSnapshot(workbook);
             ReportProgress(progress, WorkbookOpenPhase.Calculating, TimeSpan.Zero, 98);
         }
@@ -205,60 +199,12 @@ public sealed class WorkbookOpenService
         // force a full workbook recalculation merely because the workbook happens to contain a
         // volatile function (NOW/TODAY/RAND/OFFSET/INDIRECT/...) somewhere -- it only marks the
         // volatile cells themselves (and their dependents) dirty for the next calculation pass.
-        // LoadAsync's non-recalculating branch runs that narrower pass itself via
-        // RecalculateVolatileFormulasOnLoad instead of forcing a full recalc here.
+        // That narrower pass is left to whichever session engine opens this workbook next
+        // (WorkbookSessionFactory.Create), which runs it against its own already-built
+        // dependency graph right after RebuildFormulaDependencies instead of this load path
+        // building a second, throwaway graph just to answer the question.
         return workbook.FullCalculationOnLoad ||
                workbook.ForceFullCalculation ||
                workbook.Sheets.Any(sheet => sheet.FullCalculationOnLoad);
-    }
-
-    /// <summary>
-    /// Runs a throwaway, dependency-tracked recalculation pass scoped to only the workbook's
-    /// volatile-function cells (NOW/TODAY/RAND/OFFSET/INDIRECT/...) and their dependents, leaving
-    /// every other formula's trusted cached value untouched. Used when
-    /// <see cref="ShouldRecalculateLoadedFormulas"/> declined a full recalc (the file's cached
-    /// values are otherwise trusted) but real Excel would still refresh volatiles on open.
-    /// RecalcEngine.Recalculate with an empty changed-cell set only evaluates cells it already
-    /// tracks as volatile (populated by RebuildFormulaDependencies) plus their dependents, so this
-    /// is a cheap no-op when the workbook has no volatile formulas. Callers should gate this with
-    /// <see cref="WorkbookHasVolatileFormulas"/> first to skip the dependency-graph rebuild
-    /// entirely for the common case of a workbook with none.
-    /// </summary>
-    private static bool RecalculateVolatileFormulasOnLoad(Workbook workbook)
-    {
-        var recalcEngine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
-        recalcEngine.RebuildFormulaDependencies(workbook);
-        var report = recalcEngine.Recalculate(workbook, []);
-        return report.RecalculatedCells.Count > 0;
-    }
-
-    // Matches an identifier immediately followed by '(' (optionally separated by spaces, which the
-    // formula lexer also tolerates before an open paren) -- a candidate function-call name, used to
-    // detect volatile functions without a full parse of every cached formula.
-    private static readonly Regex FunctionCallNamePattern =
-        new(@"[A-Za-z_][A-Za-z0-9_.]*(?=[ \t]*\()", RegexOptions.Compiled);
-
-    private static bool WorkbookHasVolatileFormulas(Workbook workbook)
-    {
-        foreach (var sheet in workbook.Sheets)
-        {
-            if (!sheet.HasFormulas)
-                continue;
-
-            foreach (var address in sheet.EnumerateFormulaCells())
-            {
-                var formulaText = sheet.GetCell(address)?.FormulaText;
-                if (formulaText is null)
-                    continue;
-
-                foreach (Match match in FunctionCallNamePattern.Matches(formulaText))
-                {
-                    if (BuiltInFunctions.IsVolatile(match.Value.ToUpperInvariant()))
-                        return true;
-                }
-            }
-        }
-
-        return false;
     }
 }

@@ -257,12 +257,38 @@ public sealed partial class FormulaEvaluator
         if (range.EndSheetName is not null)
             return ErrorValue.Value;
 
-        // A bare range reference outside a function context returns the first value
-        // (This matches Excel's implicit intersection behavior for simple cases).
+        // A bare range reference outside a function context implicitly intersects with the
+        // formula's own row/column (Excel's legacy @ behaviour), e.g. C5 = "=A1:A10" reads A5,
+        // not A1 — not the range's top-left cell. This mirrors ResolveImplicitIntersection, the
+        // same-project helper backing the explicit @ operator (FormulaEvaluator.Operators.cs), so
+        // a bare multi-cell range and an explicit @range agree on which cell they read.
         // Excel normalizes a reversed range (e.g. B5:A1) to its top-left corner (A1:B5)
-        // before reading it, so pick the min row/col rather than trusting range.Start literally.
+        // before reading it, so pick the min/max row/col rather than trusting range.Start/End literally.
         uint topRow = Math.Min(range.Start.Row, range.End.Row);
+        uint bottomRow = Math.Max(range.Start.Row, range.End.Row);
         uint leftColumn = Math.Min(range.Start.ColumnNumber, range.End.ColumnNumber);
+        uint rightColumn = Math.Max(range.Start.ColumnNumber, range.End.ColumnNumber);
+
+        if (context.CurrentCellAddress is { } current && (bottomRow > topRow || rightColumn > leftColumn))
+        {
+            // Row-vector (single row) ranges intersect purely on column, column-vector (single
+            // column) ranges intersect purely on row, and a genuine 2-D rectangle requires both
+            // axes to match — otherwise the formula cell is off-axis and Excel returns #VALUE!.
+            bool rowInBounds = current.Row >= topRow && current.Row <= bottomRow;
+            bool colInBounds = current.Col >= leftColumn && current.Col <= rightColumn;
+            uint? targetRow = bottomRow == topRow ? topRow : rowInBounds ? current.Row : null;
+            uint? targetColumn = rightColumn == leftColumn ? leftColumn : colInBounds ? current.Col : null;
+
+            if (targetRow is not { } resolvedRow || targetColumn is not { } resolvedColumn)
+                return ErrorValue.Value;
+
+            return range.SheetName is not null
+                ? context.GetCellValue(range.SheetName, resolvedRow, resolvedColumn)
+                : context.GetCellValue(resolvedRow, resolvedColumn);
+        }
+
+        // No current-cell context (e.g. a direct Evaluate(text, sheet) call with no currentCell)
+        // or the range is already a single cell: fall back to the historical top-left reading.
         return range.SheetName is not null
             ? context.GetCellValue(range.SheetName, topRow, leftColumn)
             : context.GetCellValue(topRow, leftColumn);

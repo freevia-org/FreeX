@@ -13,16 +13,88 @@ internal static class DataValidationBoundsParser
     /// (file/model layer) is unaffected.
     /// </summary>
     public static bool TryParseNumberBound(string? text, out double value) =>
-        double.TryParse(
-            text,
-            System.Globalization.NumberStyles.Any,
-            System.Globalization.CultureInfo.CurrentCulture,
-            out value) ||
-        double.TryParse(
-            text,
-            System.Globalization.NumberStyles.Any,
-            System.Globalization.CultureInfo.InvariantCulture,
-            out value);
+        TryParseNumberBoundCore(text, System.Globalization.CultureInfo.CurrentCulture, out value) ||
+        TryParseNumberBoundCore(text, System.Globalization.CultureInfo.InvariantCulture, out value);
+
+    // .NET's NumberStyles.AllowThousands parsing does not validate that group separators actually
+    // fall on 3-digit boundaries, so under a '.'-grouping culture (e.g. de-DE, es-ES, it-IT) an
+    // invariant dot-decimal bound like "1.5" (the OOXML/model literal for Formula1/Formula2 is
+    // always dot-decimal regardless of UI locale) is silently misread by the CurrentCulture attempt
+    // as the grouped integer 15 instead of failing over to the InvariantCulture attempt below.
+    // Guard against that the same way src/FreeX.Core.IO/DelimitedTextWorkbookReader.cs's
+    // TryParseFiniteNumber/HasValidGroupingShape does, so a genuine dot-decimal literal correctly
+    // fails the CurrentCulture attempt under a comma-decimal locale and falls through to
+    // InvariantCulture, while a genuine comma-decimal literal (e.g. de-DE "1,5") still parses
+    // correctly on the CurrentCulture attempt.
+    private static bool TryParseNumberBoundCore(string? text, System.Globalization.CultureInfo culture, out double value)
+    {
+        if (double.TryParse(text, System.Globalization.NumberStyles.Any, culture, out value) &&
+            HasValidGroupingShape(text, culture))
+        {
+            return true;
+        }
+
+        value = default;
+        return false;
+    }
+
+    private static bool HasValidGroupingShape(ReadOnlySpan<char> field, System.Globalization.CultureInfo culture)
+    {
+        var numberFormat = culture.NumberFormat;
+        var groupSeparator = numberFormat.NumberGroupSeparator;
+        if (string.IsNullOrEmpty(groupSeparator))
+            return true;
+
+        var groupIndex = field.IndexOf(groupSeparator, StringComparison.Ordinal);
+        if (groupIndex < 0)
+            return true; // No grouping separator present — nothing to validate.
+
+        var decimalSeparator = numberFormat.NumberDecimalSeparator;
+        var decimalIndex = string.IsNullOrEmpty(decimalSeparator)
+            ? -1
+            : field.IndexOf(decimalSeparator, StringComparison.Ordinal);
+
+        var integerPart = decimalIndex >= 0 ? field[..decimalIndex] : field;
+
+        // Strip a single leading sign so it doesn't get counted as part of the first digit group.
+        if (integerPart.Length > 0 && (integerPart[0] == '+' || integerPart[0] == '-'))
+            integerPart = integerPart[1..];
+
+        var groups = new List<int>();
+        var currentGroupDigits = 0;
+        var index = 0;
+        while (index < integerPart.Length)
+        {
+            if (integerPart[index..].StartsWith(groupSeparator, StringComparison.Ordinal))
+            {
+                groups.Add(currentGroupDigits);
+                currentGroupDigits = 0;
+                index += groupSeparator.Length;
+                continue;
+            }
+
+            if (!char.IsDigit(integerPart[index]))
+                return true; // Not a plain grouped-digit shape (e.g. currency symbols) — let styles decide.
+
+            currentGroupDigits++;
+            index++;
+        }
+
+        groups.Add(currentGroupDigits);
+
+        // Valid Excel/.NET-style grouping: every group except the first has exactly 3 digits, and
+        // the first group has 1-3 digits.
+        if (groups[0] is < 1 or > 3)
+            return false;
+
+        for (var i = 1; i < groups.Count; i++)
+        {
+            if (groups[i] != 3)
+                return false;
+        }
+
+        return true;
+    }
 
     /// <summary>
     /// Resolves a Formula1/Formula2 numeric bound, evaluating it as a formula (e.g. a cell

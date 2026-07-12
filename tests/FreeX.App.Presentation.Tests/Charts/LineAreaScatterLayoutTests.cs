@@ -35,12 +35,56 @@ public sealed class LineAreaScatterLayoutTests
     [Fact]
     public void Line_with_gap_breaks_the_sequence()
     {
+        // Round-29 finding R29-chart-render-pixel-deep-2: the blank index must still be present in
+        // Points (not omitted) with a NaN value/position, so a NaN-aware polyline renderer breaks
+        // the line here instead of jumping straight from the previous point to the next one. This
+        // test used to assert the blank index was skipped entirely (Points.Count == 2) — that pinned
+        // the bug (an omitted point is indistinguishable from "no data at this category" and let the
+        // renderer connect straight across the gap); it has been corrected below.
         var request = Request(Chart(ChartType.Line, c => c.BlankDisplayMode = ChartBlankDisplayMode.Gap),
             ["A", "B", "C"], [Series(0, "S1", 10, null, 30)]);
         var layout = ChartLayoutEngine.Layout(request);
 
-        layout.Series[0].Points.Should().HaveCount(2);
-        layout.Series[0].Points.Select(p => p.PointIndex).Should().Equal(0, 2);
+        var points = layout.Series[0].Points;
+        points.Should().HaveCount(3);
+        points.Select(p => p.PointIndex).Should().Equal(0, 1, 2);
+        points[1].DataY.Should().Be(double.NaN);
+        points[1].Position.Y.Should().Be(double.NaN);
+        // The gap point's X is still a valid, correctly-spaced category position.
+        points[1].Position.X.Should().BeGreaterThan(points[0].Position.X);
+        points[1].Position.X.Should().BeLessThan(points[2].Position.X);
+        // The surrounding real points are unaffected.
+        points[0].DataY.Should().Be(10);
+        points[2].DataY.Should().Be(30);
+    }
+
+    [Fact]
+    public void Line_with_zero_blank_mode_still_substitutes_zero_not_a_gap()
+    {
+        // Sibling already-working case: BlankDisplayMode.Zero must keep substituting a real
+        // zero-valued point (unaffected by the Gap-mode NaN-point fix above).
+        var request = Request(Chart(ChartType.Line, c => c.BlankDisplayMode = ChartBlankDisplayMode.Zero),
+            ["A", "B", "C"], [Series(0, "S1", 10, null, 30)]);
+        var layout = ChartLayoutEngine.Layout(request);
+
+        var points = layout.Series[0].Points;
+        points.Should().HaveCount(3);
+        points.Select(p => p.PointIndex).Should().Equal(0, 1, 2);
+        points[1].DataY.Should().Be(0);
+        points[1].Position.Y.Should().NotBe(double.NaN);
+    }
+
+    [Fact]
+    public void Area_with_gap_emits_a_nan_point_for_the_blank_index()
+    {
+        // Area reuses LayoutLineSeries, so it must get the same break-marking fix as Line.
+        var request = Request(Chart(ChartType.Area, c => c.BlankDisplayMode = ChartBlankDisplayMode.Gap),
+            ["A", "B", "C"], [Series(0, "S1", 10, null, 30)]);
+        var layout = ChartLayoutEngine.Layout(request);
+
+        var points = layout.Series[0].Points;
+        points.Should().HaveCount(3);
+        points[1].DataY.Should().Be(double.NaN);
     }
 
     [Fact]

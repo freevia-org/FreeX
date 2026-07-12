@@ -26,6 +26,7 @@ public sealed class WorkbookSessionFactory
             (workbookId, ctx) => XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(ctx.Workbook, out _));
         var cellEditService = new WorkbookCellEditService(commandBus, recalcEngine);
         recalcEngine.RebuildFormulaDependencies(workbook);
+        RecalculateVolatileCellsOnOpen(workbook, recalcEngine, adapterCatalog);
 
         return new WorkbookSession(
             source,
@@ -126,5 +127,49 @@ public sealed class WorkbookSessionFactory
             includeObjects,
             adapters,
             viewportService);
+    }
+
+    /// <summary>
+    /// Real Excel refreshes volatile functions (NOW/TODAY/RAND/OFFSET/INDIRECT/...) on an
+    /// Automatic-mode open even for a workbook whose other cached formula values are trusted
+    /// as-is -- it does not force a full recalculation of the rest of the workbook just because a
+    /// volatile function appears somewhere (Manual mode does not even do that much; Excel leaves
+    /// everything, including volatiles, untouched until an explicit F9/edit). <paramref
+    /// name="recalcEngine"/>'s dependency graph was just rebuilt by <see
+    /// cref="RecalcEngine.RebuildFormulaDependencies"/> above, so its internal volatile-cell
+    /// tracking is already accurate -- including volatility hidden behind a defined name (e.g.
+    /// =SUM(SalesRange) where SalesRange=OFFSET(...): RecalcEngine.CollectReferences recurses
+    /// into a NamedRangeNode's formula text and propagates its volatility up). Recalculate with an
+    /// empty changed-cell set only evaluates cells already tracked as volatile plus their
+    /// dependents, so this is a cheap no-op for the common case of a workbook with none, and there
+    /// is no separate throwaway dependency graph built just to answer that question first.
+    /// </summary>
+    private static void RecalculateVolatileCellsOnOpen(
+        Workbook workbook,
+        RecalcEngine recalcEngine,
+        IReadOnlyList<IFileAdapter> adapterCatalog)
+    {
+        if (workbook.CalculationMode == WorkbookCalculationMode.Manual)
+            return;
+
+        var report = recalcEngine.Recalculate(workbook, []);
+        if (report.RecalculatedCells.Count == 0)
+            return;
+
+        // Keep a since-loaded xlsx package snapshot's cached values in sync with the freshly
+        // recalculated volatile cells, so a save without any further edits writes the refreshed
+        // values instead of the stale ones read from disk. Rebase is a no-op for a workbook with
+        // no tracked source package (new workbook, non-xlsx format, etc.) -- see
+        // XlsxFileAdapter.RebaseLoadedPackageSnapshot. The package snapshot is keyed by workbook
+        // identity in a static table, so any XlsxFileAdapter instance from the catalog can rebase
+        // it; it need not be the specific instance that originally loaded the file.
+        foreach (var adapter in adapterCatalog)
+        {
+            if (adapter is XlsxFileAdapter xlsxAdapter)
+            {
+                xlsxAdapter.RebaseLoadedPackageSnapshot(workbook);
+                break;
+            }
+        }
     }
 }

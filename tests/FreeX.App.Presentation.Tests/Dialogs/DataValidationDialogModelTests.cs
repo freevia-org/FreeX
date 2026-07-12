@@ -345,8 +345,11 @@ public sealed class DataValidationDialogModelTests
     }
 
     [Fact]
-    public void Validate_ListFormulaRangeOverDropdownLimit_FailsOnFormula1()
+    public void Validate_ListFormulaRangeOver10000Cells_IsAccepted()
     {
+        // Excel places no upper bound on the size of a range referenced as a List validation
+        // source (a full-column reference is a legal source); a prior arbitrary 10,000-cell cap
+        // here rejected this ordinary same-sheet column reference (R29-dialogs-validation-logic-2).
         var model = DataValidationDialogModel.ForType(DvType.List);
 
         var result = model.Validate(new DvCriteriaInput
@@ -355,9 +358,7 @@ public sealed class DataValidationDialogModelTests
             Formula1 = "=$A$1:$A$10001"
         });
 
-        result.IsValid.Should().BeFalse();
-        result.FirstError!.Target.Should().Be(DvValidationTarget.Formula1);
-        result.FirstError!.Kind.Should().Be(DvValidationErrorKind.InvalidListCriteria);
+        result.IsValid.Should().BeTrue();
     }
 
     [Theory]

@@ -592,8 +592,13 @@ public sealed partial class FormulaEvaluator
         if (value is not RangeValue range)
             return value;
 
+        // ANCHORARRAY(ref) / ANCHORARRAY(ref, end) is the internal shape the parser produces for the
+        // '#' spill-anchor operator (A1# / A1#:B5, see Parser.cs's WrapSpillAnchor) — a genuine
+        // worksheet reference to a spill range, not a computed array, so it belongs in this whitelist
+        // alongside the other reference node kinds.
         bool isReferenceLikeOperand = operandNode is RangeRefNode or FullColumnRangeRefNode or FullRowRangeRefNode
-            or NamedRangeNode or StructuredReferenceNode or StructuredCurrentRowReferenceNode;
+            or NamedRangeNode or StructuredReferenceNode or StructuredCurrentRowReferenceNode
+            or FunctionCallNode { FunctionName: "ANCHORARRAY" };
 
         if (!isReferenceLikeOperand)
         {

@@ -38,6 +38,7 @@ public static class GoToSpecialService
     private const int ColumnKeyBits = 15;
     private const int MinimumRuleRangesForIndex = 8;
     private const long MaximumIndexedRuleCells = 250_000;
+    private const long MaximumDirectScanCells = 1_000_000;
 
     public static IReadOnlyList<CellAddress> Find(
         Sheet sheet,
@@ -84,7 +85,19 @@ public static class GoToSpecialService
         if (kind == GoToSpecialKind.ConditionalFormats)
             return FindConditionalFormats(sheet.ConditionalFormats, range);
 
-        foreach (var address in range.AllCells())
+        var scanRange = range;
+        if (scanRange.CellCount > MaximumDirectScanCells)
+        {
+            // An explicit whole-sheet/whole-row/whole-column selection (e.g. Ctrl+A twice,
+            // then Go To Special) nominally spans up to ~17 billion cells. Real Excel always
+            // intersects Go To Special's search with the sheet's actual used range rather than
+            // scanning the full nominal grid, so do the same here -- otherwise this becomes an
+            // effectively unbounded per-cell scan regardless of how little data the sheet has.
+            if (sheet.GetUsedRange() is not { } usedRange || !GridRange.TryIntersect(scanRange, usedRange, out scanRange))
+                return result;
+        }
+
+        foreach (var address in scanRange.AllCells())
         {
             if (kind == GoToSpecialKind.VisibleCellsOnly)
             {

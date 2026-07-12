@@ -8513,6 +8513,13 @@ public sealed partial class XlsxFileAdapter
         {
             var rowName = worksheetNs + "row";
             XElement? insertBefore = null;
+            // Scan the whole row collection rather than breaking on the first row number greater
+            // than the target: <row r="..."> elements are not guaranteed to appear in ascending
+            // document order (schema-valid but non-Excel-authored sources can emit them out of
+            // order). Breaking early would miss the true match further in the document and
+            // fabricate a duplicate <row> for the same r value. Remember only the first
+            // greater-numbered row seen, so the insertion point still matches the common
+            // ascending-order case exactly.
             foreach (var rowElement in sheetData.Elements(rowName))
             {
                 if (!uint.TryParse(rowElement.Attribute("r")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rowNumber))
@@ -8521,11 +8528,8 @@ public sealed partial class XlsxFileAdapter
                 if (rowNumber == row)
                     return rowElement;
 
-                if (rowNumber > row)
-                {
+                if (rowNumber > row && insertBefore is null)
                     insertBefore = rowElement;
-                    break;
-                }
             }
 
             var created = new XElement(rowName, new XAttribute("r", row.ToString(CultureInfo.InvariantCulture)));

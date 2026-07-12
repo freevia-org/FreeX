@@ -7,8 +7,12 @@ namespace FreeX.Core.IO;
 /// Converts spreadsheet formulas between FreeX's A1 model form and OpenDocument's OpenFormula
 /// reference syntax. ODF wraps every cell/range reference in square brackets and prefixes the column
 /// with a dot for the current sheet (<c>[.A1]</c>), or <c>[$'Sheet 2'.A1]</c> / <c>[$Sheet2.A1]</c>
-/// for a cross-sheet reference. A range is <c>[.A1:.B2]</c>. The stored formula carries a leading
-/// <c>of:=</c> (or just <c>=</c>); this converter works on the body after that prefix.
+/// for a cross-sheet reference. A range is <c>[.A1:.B2]</c>. A FreeX 3-D sheet-span reference (e.g.
+/// <c>Sheet1:Sheet3!A1</c>, produced/consumed by Parser.cs's span grammar) is represented in
+/// OpenFormula using distinct start/end sheet names on an ordinary bracketed range — <c>[$Sheet1.A1:
+/// $Sheet3.A1]</c> — the same shape LibreOffice itself emits for a genuine 3-D reference. The stored
+/// formula carries a leading <c>of:=</c> (or just <c>=</c>); this converter works on the body after
+/// that prefix.
 ///
 /// Only reference-shaped tokens are rewritten: string literals (<c>"…"</c> with the <c>""</c> escape)
 /// pass through verbatim, function names / numbers / operators are untouched. The scan is deliberately
@@ -22,11 +26,17 @@ internal static class OdsFormulaConverter
     /// ',' as the function-argument separator, but OpenFormula requires ';' (Parser.cs only accepts
     /// ';' inside array constants); every top-level, non-string-literal ',' is therefore translated to
     /// ';' so multi-argument functions (IF, VLOOKUP, SUMIF, ...) stay valid in LibreOffice/Calc.
+    /// Inside an array constant's <c>{...}</c>, FreeX already uses ';' as its own row separator
+    /// (Parser.cs ParseArrayConstant), so translating its ',' column separator to ';' too would make
+    /// row and column separators collide; OpenFormula's array syntax instead uses '|' for rows (its
+    /// ';' matches the ordinary column/argument separator), so a ';' seen inside <c>{...}</c> is
+    /// translated to '|' instead.
     /// </summary>
     public static string ToOdf(string a1Formula)
     {
         var builder = new StringBuilder(a1Formula.Length + 8);
         var i = 0;
+        var arrayDepth = 0;
         while (i < a1Formula.Length)
         {
             var c = a1Formula[i];
@@ -47,7 +57,12 @@ internal static class OdsFormulaConverter
                 continue;
             }
 
-            builder.Append(c == ',' ? ';' : c);
+            if (c == '{')
+                arrayDepth++;
+            else if (c == '}' && arrayDepth > 0)
+                arrayDepth--;
+
+            builder.Append(arrayDepth > 0 && c == ';' ? '|' : c == ',' ? ';' : c);
             i++;
         }
 
@@ -58,7 +73,10 @@ internal static class OdsFormulaConverter
     /// Converts an OpenFormula bracketed formula body to FreeX A1 form. Bracketed references become
     /// plain A1 (current-sheet) or <c>Sheet!A1</c> (cross-sheet); a leading <c>of:</c> namespace prefix
     /// on function names is stripped. OpenFormula's ';' argument separator is translated back to the
-    /// ',' FreeX's parser expects (mirror of the translation <see cref="ToOdf"/> performs).
+    /// ',' FreeX's parser expects (mirror of the translation <see cref="ToOdf"/> performs). Inside an
+    /// array constant's <c>{...}</c>, OpenFormula's '|' row separator is translated back to FreeX's
+    /// ';' (its ';' column separator still becomes ',', same as the ordinary case), mirroring
+    /// <see cref="ToOdf"/>'s array-specific rewrite.
     /// </summary>
     public static string ToA1(string odfFormula)
     {
@@ -66,6 +84,7 @@ internal static class OdsFormulaConverter
         var s = odfFormula;
         var builder = new StringBuilder(s.Length);
         var i = 0;
+        var arrayDepth = 0;
         while (i < s.Length)
         {
             var c = s[i];
@@ -98,7 +117,12 @@ internal static class OdsFormulaConverter
                 continue;
             }
 
-            builder.Append(c == ';' ? ',' : c);
+            if (c == '{')
+                arrayDepth++;
+            else if (c == '}' && arrayDepth > 0)
+                arrayDepth--;
+
+            builder.Append(arrayDepth > 0 && c == '|' ? ';' : c == ';' ? ',' : c);
             i++;
         }
 
@@ -112,11 +136,24 @@ internal static class OdsFormulaConverter
         end = start;
         odf = "";
 
-        // Optional sheet prefix: SheetName! or 'Sheet Name'!
+        // Optional sheet prefix: SheetName! or 'Sheet Name'!, or a 3-D sheet-span prefix
+        // (StartSheet:EndSheet! / 'StartSheet:EndSheet'!, e.g. Sheet1:Sheet3!A1). A span is
+        // represented in OpenFormula as an ordinary bracketed range whose two endpoints carry
+        // different sheet names (the same shape FormatOdfRange already produces for
+        // "Data!A1:Other!B2"), so once the span prefix is recognized the rest of this method's
+        // existing range machinery handles it unchanged.
         var i = start;
         string? sheetPrefix = null;
-        if (TryReadSheetPrefix(s, ref i, out var sheetName))
+        string? spanEndSheet = null;
+        if (TryReadSheetSpanPrefix(s, ref i, out var spanStartSheet, out var spanEndSheetName))
+        {
+            sheetPrefix = spanStartSheet;
+            spanEndSheet = spanEndSheetName;
+        }
+        else if (TryReadSheetPrefix(s, ref i, out var sheetName))
+        {
             sheetPrefix = sheetName;
+        }
 
         if (!TryReadCellRef(s, ref i, out var firstRef))
         {
@@ -128,20 +165,98 @@ internal static class OdsFormulaConverter
         {
             var afterColon = i + 1;
             var j = afterColon;
-            // A range endpoint may itself carry a sheet prefix in 3-D refs; handle the common 1-sheet case.
+            // A range endpoint may itself carry a sheet prefix in 3-D refs; handle the common 1-sheet
+            // case. A span's own range body is never itself re-sheet-qualified (Parser.cs rejects
+            // e.g. "Sheet1:Sheet3!A1:Sheet1!B5"), so only look for one when this isn't already a span.
             string? secondSheet = null;
-            if (TryReadSheetPrefix(s, ref j, out var sheet2))
+            if (spanEndSheet is null && TryReadSheetPrefix(s, ref j, out var sheet2))
                 secondSheet = sheet2;
             if (TryReadCellRef(s, ref j, out var secondRef))
             {
                 end = j;
-                odf = FormatOdfRange(sheetPrefix, firstRef, secondSheet ?? sheetPrefix, secondRef);
+                odf = FormatOdfRange(sheetPrefix, firstRef, spanEndSheet ?? secondSheet ?? sheetPrefix, secondRef);
                 return true;
             }
         }
 
         end = i;
-        odf = FormatOdfRef(sheetPrefix, firstRef);
+        odf = spanEndSheet is null
+            ? FormatOdfRef(sheetPrefix, firstRef)
+            // Bare single-cell span (e.g. Sheet1:Sheet3!A1, no range body): the same cell on both
+            // endpoints, differing only by sheet — exactly what real 3-D references over a single
+            // cell mean.
+            : FormatOdfRange(sheetPrefix, firstRef, spanEndSheet, firstRef);
+        return true;
+    }
+
+    /// <summary>
+    /// Attempts to read FreeX's 3-D sheet-span prefix — <c>StartSheet:EndSheet!</c>, or the
+    /// whole-span-quoted <c>'StartSheet:EndSheet'!</c> form FormulaSerializer emits when either sheet
+    /// name needs quoting (Parser.cs's ':' cannot appear inside a real sheet name, so a colon found
+    /// inside a quoted name unambiguously marks the span separator) — used by 3-D references like
+    /// <c>SUM(Sheet1:Sheet3!A1)</c>. Distinct from an ordinary single-sheet prefix
+    /// (<see cref="TryReadSheetPrefix"/>): here the ':' separates two sheet names ahead of a single
+    /// '!', rather than joining two fully sheet-qualified "Sheet!Cell:Sheet!Cell" endpoints (which
+    /// TryReadA1Reference's range branch already handles for its second endpoint). Only the
+    /// both-quoted-together and both-unquoted forms are recognized — the two shapes
+    /// FormulaSerializer.WriteSheetSpanName can actually produce; mixed quoting (only one side
+    /// quoted) is left unrecognized and falls through unchanged, same as before this method existed.
+    /// </summary>
+    private static bool TryReadSheetSpanPrefix(string s, ref int index, out string startSheet, out string endSheet)
+    {
+        startSheet = "";
+        endSheet = "";
+        var i = index;
+        if (i >= s.Length) return false;
+
+        if (s[i] == '\'')
+        {
+            // Whole span quoted together: 'Start:End'!...
+            var sb = new StringBuilder();
+            var j = i + 1;
+            while (j < s.Length)
+            {
+                if (s[j] == '\'')
+                {
+                    if (j + 1 < s.Length && s[j + 1] == '\'') { sb.Append('\''); j += 2; continue; }
+                    j++;
+                    break;
+                }
+                sb.Append(s[j]);
+                j++;
+            }
+            if (j >= s.Length || s[j] != '!')
+                return false;
+
+            var content = sb.ToString();
+            var colon = content.IndexOf(':');
+            if (colon < 0)
+                return false; // A plain quoted sheet name (no span) — let TryReadSheetPrefix handle it.
+
+            startSheet = content[..colon];
+            endSheet = content[(colon + 1)..];
+            index = j + 1;
+            return true;
+        }
+
+        // Unquoted start sheet name, up to the span ':'.
+        var startNameBegin = i;
+        while (i < s.Length && (char.IsLetterOrDigit(s[i]) || s[i] == '_' || s[i] == '.'))
+            i++;
+        if (i == startNameBegin || i >= s.Length || s[i] != ':')
+            return false;
+
+        // Unquoted end sheet name, up to the span '!'.
+        var endNameBegin = i + 1;
+        var k = endNameBegin;
+        while (k < s.Length && (char.IsLetterOrDigit(s[k]) || s[k] == '_' || s[k] == '.'))
+            k++;
+        if (k == endNameBegin || k >= s.Length || s[k] != '!')
+            return false;
+
+        startSheet = s.Substring(startNameBegin, i - startNameBegin);
+        endSheet = s.Substring(endNameBegin, k - endNameBegin);
+        index = k + 1;
         return true;
     }
 

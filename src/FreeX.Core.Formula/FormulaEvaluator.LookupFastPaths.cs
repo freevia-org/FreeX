@@ -449,10 +449,13 @@ public sealed partial class FormulaEvaluator
                     return error;
 
                 if (BuiltInFunctions.ApproxLookupTypeClass(candidate) != lookupClass) continue;
+                // Full scan keeping the last qualifying candidate (no early break): Excel's
+                // approximate match does not verify sortedness, so an out-of-order row that
+                // already exceeds the lookup value must not abort the scan and yield #N/A when a
+                // valid match exists later. Mirrors BuiltInFunctions.Lookup.Legacy's slow path
+                // (R29-lookup-repass-1) so the literal-range fast path agrees with it.
                 if (BuiltInFunctions.CompareScalar(candidate, lookupValue) <= 0)
                     best = index;
-                else
-                    break;
             }
 
             return best >= 0 ? resultReader.GetValue(best) : ErrorValue.NA;
@@ -502,10 +505,10 @@ public sealed partial class FormulaEvaluator
                     return error;
 
                 if (BuiltInFunctions.ApproxLookupTypeClass(candidate) != lookupClass) continue;
+                // Full scan keeping the last qualifying candidate (no early break) -- see the
+                // rationale on EvaluateLegacyLookupDirectTable above (R29-lookup-repass-1).
                 if (BuiltInFunctions.CompareScalar(candidate, lookupValue) <= 0)
                     best = index;
-                else
-                    break;
             }
 
             return best >= 0 ? new NumberValue(best + 1) : ErrorValue.NA;
@@ -521,10 +524,11 @@ public sealed partial class FormulaEvaluator
                     return error;
 
                 if (BuiltInFunctions.ApproxLookupTypeClass(candidate) != lookupClass) continue;
+                // Full scan keeping the last qualifying candidate (no early break) -- descending
+                // MATCH mirror of the R29-lookup-repass-1 fix; do not abort on the first row that
+                // falls below the lookup value.
                 if (BuiltInFunctions.CompareScalar(candidate, lookupValue) >= 0)
                     descendingBest = index;
-                else
-                    break;
             }
 
             return descendingBest >= 0 ? new NumberValue(descendingBest + 1) : ErrorValue.NA;

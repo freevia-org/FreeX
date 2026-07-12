@@ -69,8 +69,11 @@ public sealed class ChartDataLabelTextPlannerTests
     }
 
     [Fact]
-    public void FormatPieDataLabel_CombinesSeriesCategoryAndPercentage()
+    public void FormatPieDataLabel_CombinesSeriesCategoryValueAndPercentage()
     {
+        // ShowDataLabelValue defaults to true, and Excel independently toggles ShowDataLabelPercentage
+        // (both showVal and showPercent can be set at once, e.g. the "Value, Percentage" preset), so
+        // both figures must appear - value before percentage, per Excel's fixed data-label order.
         var chart = new ChartModel
         {
             ShowDataLabelSeriesName = true,
@@ -80,7 +83,35 @@ public sealed class ChartDataLabelTextPlannerTests
         };
 
         ChartDataLabelTextPlanner.FormatPieDataLabel(chart, "Share", "Q1", 1234.5, 0.42)
-            .Should().Be($"Share{Environment.NewLine}Q1{Environment.NewLine}42%");
+            .Should().Be($"Share{Environment.NewLine}Q1{Environment.NewLine}1234.5{Environment.NewLine}42%");
+    }
+
+    [Fact]
+    public void FormatPieDataLabel_ShowsValueThenPercentageWhenBothEnabled()
+    {
+        var chart = new ChartModel
+        {
+            ShowDataLabelValue = true,
+            ShowDataLabelPercentage = true,
+            DataLabelSeparator = ChartDataLabelSeparator.Space,
+            DataLabelNumberFormat = ChartDataLabelNumberFormat.General
+        };
+
+        ChartDataLabelTextPlanner.FormatPieDataLabel(chart, "Share", "Q1", 42, 0.35)
+            .Should().Be("42 35%");
+    }
+
+    [Fact]
+    public void FormatPieDataLabel_ShowsOnlyPercentageWhenValueDisabled()
+    {
+        var chart = new ChartModel
+        {
+            ShowDataLabelValue = false,
+            ShowDataLabelPercentage = true
+        };
+
+        ChartDataLabelTextPlanner.FormatPieDataLabel(chart, "Share", "Q1", 42, 0.35)
+            .Should().Be("35%");
     }
 
     [Fact]

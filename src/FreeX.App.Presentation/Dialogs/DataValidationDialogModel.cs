@@ -149,8 +149,6 @@ public sealed record DataValidationDialogModel(
     bool AllowBlankDefault,
     bool ShowDropdownDefault)
 {
-    public const int MaximumListSourceItems = 10_000;
-
     /// <summary>The full operator set, in the order the desktop dialog lists them.</summary>
     public static readonly IReadOnlyList<DvOperator> AllOperators =
     [
@@ -349,11 +347,10 @@ public sealed record DataValidationDialogModel(
 
     private static bool IsListCriteria(string text)
     {
-        if (!IsFormulaCriteria(text))
-            return HasInlineListItem(text);
-
-        return !TryGetSimpleFormulaRangeCellCount(text, out var cellCount) ||
-               cellCount <= MaximumListSourceItems;
+        // Excel places no upper bound on the size of a range referenced as a List validation
+        // source (a full-column reference is a legal source), so any well-formed formula
+        // reference is accepted regardless of how many cells it spans.
+        return IsFormulaCriteria(text) || HasInlineListItem(text);
     }
 
     private static bool IsCustomCriteria(string text) =>
@@ -420,53 +417,6 @@ public sealed record DataValidationDialogModel(
         }
 
         return !inQuotes && (hasItemText || currentHasText);
-    }
-
-    private static bool TryGetSimpleFormulaRangeCellCount(string text, out long cellCount)
-    {
-        cellCount = 0;
-        var formulaBody = text.AsSpan().Trim();
-        if (formulaBody.IsEmpty || formulaBody[0] != '=')
-            return false;
-
-        formulaBody = formulaBody[1..].Trim();
-        var sheetSeparator = formulaBody.LastIndexOf('!');
-        if (sheetSeparator >= 0)
-            formulaBody = formulaBody[(sheetSeparator + 1)..].Trim();
-
-        var colon = formulaBody.IndexOf(':');
-        if (colon < 0)
-        {
-            if (!TryParseA1Address(formulaBody, out _, out _))
-                return false;
-
-            cellCount = 1;
-            return true;
-        }
-
-        if (!TryParseA1Address(formulaBody[..colon], out var startRow, out var startCol) ||
-            !TryParseA1Address(formulaBody[(colon + 1)..], out var endRow, out var endCol))
-        {
-            return false;
-        }
-
-        var rowCount = Math.Abs((long)endRow - startRow) + 1;
-        var colCount = Math.Abs((long)endCol - startCol) + 1;
-        cellCount = rowCount * colCount;
-        return true;
-    }
-
-    private static bool TryParseA1Address(ReadOnlySpan<char> text, out uint row, out uint col)
-    {
-        row = 0;
-        col = 0;
-        var normalized = text.Trim().ToString().Replace("$", "", StringComparison.Ordinal);
-        if (!CellAddress.TryParse(normalized, default, out var address))
-            return false;
-
-        row = address.Row;
-        col = address.Col;
-        return true;
     }
 
     private static bool TryParseNumber(string text, out double value) =>

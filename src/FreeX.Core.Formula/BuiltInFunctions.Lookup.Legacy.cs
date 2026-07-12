@@ -30,8 +30,11 @@ public static partial class BuiltInFunctions
 
         if (rangeLookup)
         {
-            // Approximate match: table must be sorted ascending on first column.
-            // Return last row where first-col value <= lookupValue.
+            // Approximate match: table is expected to be sorted ascending on the first column, but
+            // Excel does not verify this and still returns a deterministic (non-error) result for
+            // genuinely unsorted data rather than aborting on the first out-of-order value. Scan the
+            // full column and keep the last row where first-col value <= lookupValue (matches the
+            // no-early-break scan already used by the LOOKUP() vector form below).
             // Excel skips entries whose type class differs from the lookup value's type class
             // (blanks are always skipped; text headers above numeric data do not abort the scan).
             int lookupClass = ApproxLookupTypeClass(lookupValue);
@@ -43,8 +46,6 @@ public static partial class BuiltInFunctions
                 if (ApproxLookupTypeClass(cv) != lookupClass) continue;
                 if (CompareScalar(cv, lookupValue) <= 0)
                     bestRow = r;
-                else
-                    break;
             }
             if (bestRow < 0) return ErrorValue.NA;
             return table.At(bestRow, colIndex);
@@ -89,7 +90,9 @@ public static partial class BuiltInFunctions
 
         if (rangeLookup)
         {
-            // Approximate match: scan first row ascending.
+            // Approximate match: scan first row ascending, without aborting on the first
+            // out-of-order value (see VlookupScalar for why: Excel still returns a deterministic
+            // result for genuinely unsorted data instead of erroring on the first descending cell).
             // Skip entries whose type class differs from the lookup value's type class.
             int lookupClass = ApproxLookupTypeClass(lookupValue);
             int bestCol = -1;
@@ -100,8 +103,6 @@ public static partial class BuiltInFunctions
                 if (ApproxLookupTypeClass(cv) != lookupClass) continue;
                 if (CompareScalar(cv, lookupValue) <= 0)
                     bestCol = c;
-                else
-                    break;
             }
             if (bestCol < 0) return ErrorValue.NA;
             return table.At(rowIndex, bestCol);
@@ -228,7 +229,8 @@ public static partial class BuiltInFunctions
         }
         else if (matchType == 1)
         {
-            // Ascending approximate: largest value <= lookupValue.
+            // Ascending approximate: largest value <= lookupValue. Scan the whole vector without
+            // aborting on the first out-of-order value (see VlookupScalar for why).
             // Skip entries whose type class differs from the lookup value's type class.
             int lookupClass = ApproxLookupTypeClass(lookupValue);
             int best = -1;
@@ -239,8 +241,6 @@ public static partial class BuiltInFunctions
                 if (ApproxLookupTypeClass(candidate) != lookupClass) continue;
                 if (CompareScalar(candidate, lookupValue) <= 0)
                     best = i;
-                else
-                    break;
             }
             if (best < 0) return ErrorValue.NA;
             return new NumberValue(best + 1);
@@ -248,7 +248,8 @@ public static partial class BuiltInFunctions
         else // matchType == -1
         {
             // Descending approximate: smallest value >= lookupValue.
-            // Assumes the lookup vector is sorted descending, matching Excel's contract.
+            // Assumes the lookup vector is sorted descending, matching Excel's contract, but scans
+            // the whole vector without aborting on the first out-of-order value (see VlookupScalar).
             // Skip entries whose type class differs from the lookup value's type class.
             int lookupClass = ApproxLookupTypeClass(lookupValue);
             int best = -1;
@@ -259,8 +260,6 @@ public static partial class BuiltInFunctions
                 if (ApproxLookupTypeClass(candidate) != lookupClass) continue;
                 if (CompareScalar(candidate, lookupValue) >= 0)
                     best = i;
-                else
-                    break;
             }
             if (best < 0) return ErrorValue.NA;
             return new NumberValue(best + 1);

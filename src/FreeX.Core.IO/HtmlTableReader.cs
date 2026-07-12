@@ -123,6 +123,26 @@ internal static class HtmlTableReader
             return new NumberValue(num);
         }
 
+        // Date/time literals written by HtmlTableWriter.FormatDate: date-only ("yyyy-MM-dd"), date+time
+        // ("yyyy-MM-dd HH:mm:ss"), or time-only ("HH:mm:ss", anchored to the OADate epoch day so only the
+        // fractional time-of-day part is kept). Without this branch a round-tripped date/time cell reloads
+        // as plain text instead of its original serial value.
+        if (DateTime.TryParseExact(text, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out var dateOnly))
+        {
+            return DateTimeValue.FromDateTime(dateOnly);
+        }
+        if (DateTime.TryParseExact(text, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out var dateTime))
+        {
+            return DateTimeValue.FromDateTime(dateTime);
+        }
+        if (DateTime.TryParseExact(text, "HH:mm:ss", CultureInfo.InvariantCulture,
+                DateTimeStyles.NoCurrentDateDefault, out var timeOnly))
+        {
+            return new DateTimeValue(timeOnly.TimeOfDay.TotalDays);
+        }
+
         return new TextValue(text);
     }
 

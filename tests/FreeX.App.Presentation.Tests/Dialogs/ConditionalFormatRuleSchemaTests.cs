@@ -260,7 +260,10 @@ public sealed class ConditionalFormatRuleSchemaTests
             UseThreeColorScale = true,
             MinColor = "99,190,123",
             MidColor = "255,235,132",
-            MaxColor = "248,105,107"
+            MaxColor = "248,105,107",
+            // ColorScaleMidType defaults to Percentile (matching the dialog's default midpoint
+            // type), so a value is required — mirrors the dialog's own "50" default text.
+            ColorScaleMidValue = "50"
         };
 
         schema.Validate(input).IsValid.Should().BeTrue();
