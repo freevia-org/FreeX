@@ -37,4 +37,22 @@ public sealed class CellEntryParserLargeIntegerSignificantDigitTests
 
         cell.Value.Should().BeOfType<NumberValue>().Which.Value.Should().Be(123456789d);
     }
+
+    // R35-meta-1: the R34 significant-digit rewrite dropped the UPPER clamp on `scale`, so a
+    // small-magnitude value (|value| < 0.1 => scale > 15) fed Math.Round(double, scale>15) which
+    // throws ArgumentOutOfRangeException -- a crash for one of the most common numeric shapes.
+    [Theory]
+    [InlineData("0.05", 0.05)]
+    [InlineData("0.001", 0.001)]
+    [InlineData("0.099", 0.099)]
+    [InlineData("0.1", 0.1)]
+    [InlineData("-0.0005", -0.0005)]
+    public void CreateCell_SmallMagnitudeDecimal_DoesNotThrowAndKeepsValue(string typed, double expected)
+    {
+        using var cultureScope = TestCultureScope.CurrentCulture("en-US");
+
+        var cell = CellEntryParser.CreateCell(typed, Anchor, useR1C1ReferenceStyle: false);
+
+        cell.Value.Should().BeOfType<NumberValue>().Which.Value.Should().BeApproximately(expected, 1e-15);
+    }
 }

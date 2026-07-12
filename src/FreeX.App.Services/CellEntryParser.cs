@@ -124,7 +124,10 @@ public static class CellEntryParser
             return Math.Truncate(value / divisor) * divisor;
         }
 
-        return Math.Round(value, scale, MidpointRounding.AwayFromZero);
+        // Math.Round(double,int) only accepts digits in [0, 15]; a small-magnitude value (|value| <
+        // 0.1) gives scale > 15, which would throw. A double already carries at most ~15-17
+        // significant digits, so rounding at the 15th place is a safe no-op for those values.
+        return Math.Round(value, Math.Min(scale, 15), MidpointRounding.AwayFromZero);
     }
 
     // Trailing '%' (e.g. "50%") -> Excel stores the underlying fraction (0.5), not the literal 50.
