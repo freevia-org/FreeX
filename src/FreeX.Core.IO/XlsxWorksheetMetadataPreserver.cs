@@ -330,7 +330,8 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 if (sourceBlock.Name == workbookNs + "scenarios")
                     continue;
 
-                if (ShouldSkipClearedModeledWorksheetBlock(sourceBlock.Name, workbookNs, workbook, sheetName))
+                if (ShouldSkipClearedModeledWorksheetBlock(
+                        sourceBlock.Name, workbookNs, workbook, sheetName, sourceArchive, sourceWorksheetPath))
                     continue;
 
                 if (targetRoot.Element(sourceBlock.Name) is not null)
@@ -661,7 +662,8 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 if (sourceBlock.Name == workbookNs + "scenarios")
                     continue;
 
-                if (ShouldSkipClearedModeledWorksheetBlock(sourceBlock.Name, workbookNs, workbook, sheetName))
+                if (ShouldSkipClearedModeledWorksheetBlock(
+                        sourceBlock.Name, workbookNs, workbook, sheetName, sourceArchive, sourceWorksheetPath))
                     continue;
 
                 if (targetRoot.Element(sourceBlock.Name) is not null)
@@ -701,7 +703,9 @@ internal static partial class XlsxWorksheetMetadataPreserver
         XName sourceBlockName,
         XNamespace workbookNs,
         Workbook workbook,
-        string sheetName)
+        string sheetName,
+        ZipArchive sourceArchive,
+        string sourceWorksheetPath)
     {
         var sheet = workbook.GetSheet(sheetName);
         if (sheet is null)
@@ -721,6 +725,32 @@ internal static partial class XlsxWorksheetMetadataPreserver
 
         if (sourceBlockName == workbookNs + "autoFilter")
             return sheet.AutoFilter is null;
+
+        if (sourceBlockName == workbookNs + "legacyDrawing")
+        {
+            // The plain <legacyDrawing> marker points at the VML part that holds legacy (VML) cell-
+            // comment note geometry AND legacy form-control shape geometry. When the user has deleted
+            // every legacy note and there are no legacy form controls left, nothing in the model needs
+            // the marker any more, so restoring it verbatim would keep a dangling reference alive and
+            // block XlsxLegacyCommentPreserver's companion VML purge (which conservatively refuses to
+            // remove a VML part still pointed at by a live <legacyDrawing> marker). Mirror the comment-
+            // side gate that XlsxWorksheetVmlReferencePreserver.CanPreserveLegacyDrawing uses
+            // (sheet.Comments.Count) and the form-control side (sheet.FormControls). (Header/footer VML
+            // uses the distinct <legacyDrawingHF> marker handled below, so it is unaffected.)
+            //
+            // Crucially, only skip when the source worksheet ACTUALLY had modeled legacy comments that
+            // are now gone — i.e. the empty model is a deletion, not a legacyDrawing FreeX never
+            // modeled as comments. A <legacyDrawing> can also mark an unknown/unmodeled VML that must
+            // round-trip verbatim (e.g. the generated-worksheet-legacy-drawing-001 corpus fixture: a
+            // legacyDrawing→VML with an image and no comments part at all) or Excel's legacy threaded-
+            // comment shim (never surfaced into Sheet.Comments); in both cases Sheet.Comments is
+            // legitimately empty with nothing deleted, so dropping the marker would orphan a VML part
+            // that is still needed. XlsxWorksheetCommentReader.Read applies the same shim filtering the
+            // loader used, so a positive count means real notes were modeled from this source sheet.
+            return sheet.Comments.Count == 0 &&
+                   sheet.FormControls.Count == 0 &&
+                   XlsxWorksheetCommentReader.Read(sourceArchive, sourceWorksheetPath).Count > 0;
+        }
 
         if (sourceBlockName == workbookNs + "legacyDrawingHF")
             return !XlsxHeaderFooterPictureReaderWriter.HasPictures(sheet);
