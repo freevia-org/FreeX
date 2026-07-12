@@ -32,6 +32,7 @@ public static partial class BuiltInFunctions
         Add(UnitCategory.Weight, "sg", 14593.903);
         Add(UnitCategory.Weight, "cwt", 45359.237);
         Add(UnitCategory.Weight, "uk_cwt", 50802.345);
+        Add(UnitCategory.Weight, "u", 1.66053886e-24);
 
         // Distance (base = meter)
         Add(UnitCategory.Distance, "m", 1);
@@ -44,7 +45,7 @@ public static partial class BuiltInFunctions
         Add(UnitCategory.Distance, "yd", 0.9144);
         Add(UnitCategory.Distance, "ang", 1e-10);
         Add(UnitCategory.Distance, "ell", 1.143);
-        Add(UnitCategory.Distance, "Pica", 0.000423333);
+        Add(UnitCategory.Distance, "Pica", 0.00423333333);
         Add(UnitCategory.Distance, "Picapt", 0.000352777778);
         Add(UnitCategory.Distance, "pica", 0.00423333333);
         Add(UnitCategory.Distance, "cm", 0.01);

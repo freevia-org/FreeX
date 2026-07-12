@@ -102,7 +102,7 @@ public static class PasteCommandFactory
         }
 
         if (options.Operation != PasteSpecialOperation.None)
-            return new ExternalTextPasteSpecialCommand(targetSheetId, edits, preserveText, options.Operation);
+            return new ExternalTextPasteSpecialCommand(targetSheetId, edits, options.Operation);
 
         return new ExternalTextPasteValuesCommand(targetSheetId, edits, preserveText);
     }
@@ -214,7 +214,11 @@ public static class PasteCommandFactory
             options.SkipBlanks ||
             options.ContentKind != PasteSpecialContentKind.Default)
         {
-            if (mode == PasteCellsMode.Formats && options.Operation == PasteSpecialOperation.None)
+            // Paste Special "Formats" mode always ignores Operation (like Comments/Validation/
+            // ColumnWidths modes below), the same way it ignores it in the tiled branch and the
+            // plain-options branch further down -- Formats+Add must copy formatting only, never
+            // silently combine values with no format applied (R30-clipboard-paste-special-ops-1).
+            if (mode == PasteCellsMode.Formats)
             {
                 return new PasteFormatsCommand(
                     targetSheetId,
@@ -534,7 +538,9 @@ public static class PasteCommandFactory
             ? BuildTiledMergedRegionCommands(targetSheetId, sourceRange, destination, targetRows, targetCols, options.Transpose)
             : null;
 
-        if (mode == PasteCellsMode.Formats && options.Operation == PasteSpecialOperation.None)
+        // Same Formats-always-ignores-Operation rule as the non-tiled branch above
+        // (R30-clipboard-paste-special-ops-1).
+        if (mode == PasteCellsMode.Formats)
         {
             var formats = new List<(CellAddress Address, StyleId StyleId)>((int)Math.Min(int.MaxValue, (long)targetRows * targetCols));
             foreach (var (sourceAddress, destinationAddress) in EnumerateTiledAddresses(
@@ -1113,7 +1119,6 @@ internal sealed class ExternalTextPasteSpecialCommand : IWorkbookCommand, IAffec
 {
     private readonly SheetId _sheetId;
     private readonly IReadOnlyList<(CellAddress Address, string Text)> _edits;
-    private readonly bool _preserveText;
     private readonly PasteSpecialOperation _operation;
     private readonly IReadOnlyList<CellAddress> _affectedCells;
     private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
@@ -1125,12 +1130,10 @@ internal sealed class ExternalTextPasteSpecialCommand : IWorkbookCommand, IAffec
     public ExternalTextPasteSpecialCommand(
         SheetId sheetId,
         IReadOnlyList<(CellAddress Address, string Text)> edits,
-        bool preserveText,
         PasteSpecialOperation operation)
     {
         _sheetId = sheetId;
         _edits = edits;
-        _preserveText = preserveText;
         _operation = operation;
         _affectedCells = edits.Select(e => e.Address).ToList();
     }
@@ -1153,7 +1156,12 @@ internal sealed class ExternalTextPasteSpecialCommand : IWorkbookCommand, IAffec
         {
             _snapshot.Add((address, sheet.GetCell(address)?.Clone(), sheet.GetStyleOnly(address.Row, address.Col)));
 
-            var sourceValue = _preserveText ? new TextValue(text) : PasteCommandFactory.ParseClipboardValue(text);
+            // An arithmetic Operation always needs the pasted text parsed numerically -- forcing it
+            // to TextValue here (as the no-Operation values-only paste does for a Text/UnicodeText
+            // clipboard source) makes PasteArithmetic.ApplyOperation's TryNumber check fail for every
+            // cell, silently skipping the whole paste (e.g. 10 + "5" produced no change instead of 15)
+            // (R30-clipboard-paste-special-ops-3).
+            var sourceValue = PasteCommandFactory.ParseClipboardValue(text);
             var existing = sheet.GetCell(address)?.Clone() ?? Cell.FromValue(BlankValue.Instance);
             existing.StyleId = sheet.GetStyleOnly(address.Row, address.Col) ?? existing.StyleId;
             var result = PasteArithmetic.ApplyOperation(existing.Value, sourceValue, _operation);

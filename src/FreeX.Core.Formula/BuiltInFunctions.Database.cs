@@ -101,10 +101,7 @@ public static partial class BuiltInFunctions
                 matchCount++;
                 var cell = database.Cells[r, fieldCol.Value];
                 if (cell is ErrorValue ev)
-                {
                     firstError ??= ev;
-                    continue;
-                }
                 matches.Add(cell);
             }
         }
@@ -186,13 +183,23 @@ public static partial class BuiltInFunctions
         });
 
     private static ScalarValue DCount(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-        => EvaluateDatabaseNumericAggregate(args, nums => new NumberValue(nums.Count));
+    {
+        if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
+        // Mirrors plain COUNT: ignore an error in a matched field cell rather than
+        // propagating it -- only numeric matches are counted.
+        var (matches, _, _) = DatabaseExtract(db, f, cr);
+        int count = 0;
+        foreach (var v in matches)
+            if (TryCellNumber(v, out _)) count++;
+        return new NumberValue(count);
+    }
 
     private static ScalarValue DCountA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
-        var (matches, e, _) = DatabaseExtract(db, f, cr);
-        if (e is not null) return e;
+        // Mirrors plain COUNTA: an error in a matched field cell still counts as a
+        // non-blank present value rather than being propagated.
+        var (matches, _, _) = DatabaseExtract(db, f, cr);
         int count = 0;
         foreach (var v in matches)
             if (v is not BlankValue && !(v is TextValue tv && tv.Value.Length == 0)) count++;
@@ -229,7 +236,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue DProduct(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
         => EvaluateDatabaseNumericAggregate(args, nums =>
         {
-            if (nums.Count == 0) return new NumberValue(1);
+            if (nums.Count == 0) return NumberResult(0);
             double prod = 1;
             foreach (var x in nums) prod *= x;
             return NumberResult(prod);

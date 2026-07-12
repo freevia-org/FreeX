@@ -40,7 +40,8 @@ public static partial class NumberFormatter
         }
 
         var denominatorPattern = FractionDenominatorPlaceholderRegex.Match(stripped);
-        int maxDenominator = denominatorPattern.Success && denominatorPattern.Groups[1].Value.Length >= 2 ? 99 : 9;
+        int denominatorPlaceholderWidth = denominatorPattern.Success ? denominatorPattern.Groups[1].Value.Length : 1;
+        int maxDenominator = (int)Math.Pow(10, denominatorPlaceholderWidth) - 1;
         var (numeratorWidth, denominatorWidth) = GetFractionPlaceholderWidths(stripped, fixedDenominator);
 
         double absValue = Math.Abs(value);
@@ -63,13 +64,13 @@ public static partial class NumberFormatter
         var sign = value < 0 ? "-" : "";
         if (numerator == 0)
         {
-            if (!hasWholeSection && fixedDenominator is { } fd)
+            if (!hasWholeSection)
             {
-                // Pure fraction format with no whole-number section (e.g. "?/8").
-                // Value is 0 or rounds to 0/fd — still render the fraction "0/8" so
-                // the denominator stays visible, matching Excel's display.
+                // Pure fraction format with no whole-number section (e.g. "?/8" or "?/?").
+                // Value is 0 or rounds to 0 — still render the fraction (e.g. "0/8" or
+                // "0/1") so the denominator stays visible, matching Excel's display.
                 string numStr = FormatFractionPart(0, numeratorWidth, padLeft: true);
-                string denStr = fd.ToString(CultureInfo.InvariantCulture);
+                string denStr = FormatFractionPart(denominator, denominatorWidth, padLeft: false);
                 return prefix + sign + numStr + "/" + denStr + suffix;
             }
 

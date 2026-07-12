@@ -217,23 +217,34 @@ internal static partial class XlsxChartXmlWriter
         var secondaryIndexes = GetSecondaryAxisSeriesIndexes(chart, ChartTypeSupport.GetDataSeriesCount(chart));
         if (secondaryIndexes.Count > 0)
         {
+            // R30-io-chart-series-cache-deep-2: prefer the secondary axis's OWN captured title/min/max/
+            // number-format (set by XlsxChartAxisReader on a round-tripped chart); fall back to cloning
+            // the primary (Y) axis's settings when nothing was captured, matching the prior behavior for
+            // a chart built programmatically (never read from an XLSX file).
+            var secondaryAxisMinimum = chart.SecondaryAxisMinimum ?? chart.YAxisMinimum;
+            var secondaryAxisMaximum = chart.SecondaryAxisMaximum ?? chart.YAxisMaximum;
+            var secondaryHasOwnNumberFormat = !string.IsNullOrWhiteSpace(chart.SecondaryAxisNumberFormatCode)
+                || chart.SecondaryAxisNumberFormat != ChartDataLabelNumberFormat.General;
+            var secondaryAxisNumberFormat = secondaryHasOwnNumberFormat ? chart.SecondaryAxisNumberFormat : valueAxisNumberFormat.Format;
+            var secondaryAxisNumberFormatCode = chart.SecondaryAxisNumberFormatCode ?? valueAxisNumberFormat.FormatCode;
+            var secondaryAxisNumberFormatSourceLinked = chart.SecondaryAxisNumberFormatSourceLinked ?? valueAxisNumberFormat.SourceLinked;
             yield return ToValueAxisXml(
-                null,
+                chart.SecondaryAxisTitle,
                 null,
                 SecondaryValueAxisId,
                 CategoryAxisId,
                 "r",
                 chart.HideYAxis,
-                chart.YAxisMinimum,
-                chart.YAxisMaximum,
+                secondaryAxisMinimum,
+                secondaryAxisMaximum,
                 chart.YAxisMajorUnit,
                 chart.YAxisMinorUnit,
                 chart.YAxisLogScale,
                 chart.YAxisLogBase,
                 chart.YAxisReverseOrder,
-                valueAxisNumberFormat.Format,
-                valueAxisNumberFormat.FormatCode,
-                valueAxisNumberFormat.SourceLinked,
+                secondaryAxisNumberFormat,
+                secondaryAxisNumberFormatCode,
+                secondaryAxisNumberFormatSourceLinked,
                 false,
                 false,
                 null,

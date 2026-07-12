@@ -68,7 +68,6 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(number)) return ErrorValue.Num;
         double rawOrder = orderValue is not BlankValue ? ToNumber(orderValue) : 0;
         if (!double.IsFinite(rawOrder)) return ErrorValue.Num;
-        int order  = (int)rawOrder;
 
         var (nums, err) = CollectRangeNumbers(range);
         if (err is not null) return err;
@@ -76,7 +75,7 @@ public static partial class BuiltInFunctions
         if (!nums!.Contains(number)) return ErrorValue.NA;
 
         int rank;
-        if (order == 0)
+        if (rawOrder == 0)
             rank = nums.Count(x => x > number) + 1;  // descending
         else
             rank = nums.Count(x => x < number) + 1;  // ascending

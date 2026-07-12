@@ -26,7 +26,7 @@ public sealed class WorkbookSessionFactory
             (workbookId, ctx) => XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(ctx.Workbook, out _));
         var cellEditService = new WorkbookCellEditService(commandBus, recalcEngine);
         recalcEngine.RebuildFormulaDependencies(workbook);
-        RecalculateVolatileCellsOnOpen(workbook, recalcEngine, adapterCatalog);
+        ApplyOnOpenVolatileRecalc(recalcEngine, workbook, adapterCatalog);
 
         return new WorkbookSession(
             source,
@@ -135,19 +135,24 @@ public sealed class WorkbookSessionFactory
     /// as-is -- it does not force a full recalculation of the rest of the workbook just because a
     /// volatile function appears somewhere (Manual mode does not even do that much; Excel leaves
     /// everything, including volatiles, untouched until an explicit F9/edit). <paramref
-    /// name="recalcEngine"/>'s dependency graph was just rebuilt by <see
-    /// cref="RecalcEngine.RebuildFormulaDependencies"/> above, so its internal volatile-cell
-    /// tracking is already accurate -- including volatility hidden behind a defined name (e.g.
-    /// =SUM(SalesRange) where SalesRange=OFFSET(...): RecalcEngine.CollectReferences recurses
-    /// into a NamedRangeNode's formula text and propagates its volatility up). Recalculate with an
-    /// empty changed-cell set only evaluates cells already tracked as volatile plus their
+    /// name="recalcEngine"/>'s dependency graph must already be rebuilt (e.g. via <see
+    /// cref="RecalcEngine.RebuildFormulaDependencies"/>) before calling this, so its internal
+    /// volatile-cell tracking is accurate -- including volatility hidden behind a defined name
+    /// (e.g. =SUM(SalesRange) where SalesRange=OFFSET(...): RecalcEngine.CollectReferences
+    /// recurses into a NamedRangeNode's formula text and propagates its volatility up). Recalculate
+    /// with an empty changed-cell set only evaluates cells already tracked as volatile plus their
     /// dependents, so this is a cheap no-op for the common case of a workbook with none, and there
     /// is no separate throwaway dependency graph built just to answer that question first.
+    ///
+    /// Public and static so every host that opens a workbook onto a live <see cref="RecalcEngine"/>
+    /// can share this exact policy: <see cref="Create"/> uses it for every session it builds, and
+    /// the WPF host's File&gt;Open path (which does not go through <see cref="Create"/>) calls it
+    /// directly after its own <see cref="RecalcEngine.RebuildFormulaDependencies"/> call.
     /// </summary>
-    private static void RecalculateVolatileCellsOnOpen(
-        Workbook workbook,
+    public static void ApplyOnOpenVolatileRecalc(
         RecalcEngine recalcEngine,
-        IReadOnlyList<IFileAdapter> adapterCatalog)
+        Workbook workbook,
+        IEnumerable<IFileAdapter> adapterCatalog)
     {
         if (workbook.CalculationMode == WorkbookCalculationMode.Manual)
             return;

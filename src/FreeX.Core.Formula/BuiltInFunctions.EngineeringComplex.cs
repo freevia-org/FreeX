@@ -234,7 +234,13 @@ public static partial class BuiltInFunctions
         var right = ParseComplexArgument(rightValue);
         if (right.Error is not null) return right.Error;
 
-        return ComplexTextResult(left.Real - right.Real, left.Imaginary - right.Imaginary, left.Suffix);
+        // Excel rejects mixing "i" and "j" notation across arguments. Pure real
+        // arguments (no imaginary component) don't carry an explicit suffix, so
+        // they never conflict with the other operand's notation.
+        if (left.Imaginary != 0 && right.Imaginary != 0 && left.Suffix != right.Suffix) return ErrorValue.Num;
+
+        var suffix = left.Imaginary != 0 ? left.Suffix : right.Suffix;
+        return ComplexTextResult(left.Real - right.Real, left.Imaginary - right.Imaginary, suffix);
     }
 
     private static ScalarValue ImProduct(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -307,12 +313,18 @@ public static partial class BuiltInFunctions
         var right = ParseComplexArgument(rightValue);
         if (right.Error is not null) return right.Error;
 
+        // Excel rejects mixing "i" and "j" notation across arguments. Pure real
+        // arguments (no imaginary component) don't carry an explicit suffix, so
+        // they never conflict with the other operand's notation.
+        if (left.Imaginary != 0 && right.Imaginary != 0 && left.Suffix != right.Suffix) return ErrorValue.Num;
+
         var denominator = right.Real * right.Real + right.Imaginary * right.Imaginary;
         if (denominator == 0) return ErrorValue.Num;
 
         var real = (left.Real * right.Real + left.Imaginary * right.Imaginary) / denominator;
         var imaginary = (left.Imaginary * right.Real - left.Real * right.Imaginary) / denominator;
-        return ComplexTextResult(real, imaginary, left.Suffix);
+        var suffix = left.Imaginary != 0 ? left.Suffix : right.Suffix;
+        return ComplexTextResult(real, imaginary, suffix);
     }
 
     private static ScalarValue ImCos(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

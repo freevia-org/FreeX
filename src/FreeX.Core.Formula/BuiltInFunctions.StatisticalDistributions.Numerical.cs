@@ -256,6 +256,21 @@ public static partial class BuiltInFunctions
     {
         if (p <= 0 || p >= 1) throw new FormulaEvalException("#NUM!", "p out of range");
         double lo = -1e9, hi = 1e9;
+        // Heavy-tailed low-df distributions can have quantiles far beyond +-1e9 (e.g. T.INV
+        // near 0 or 1 for df=1). Expand whichever side doesn't yet bracket the target so the
+        // bisection below finds the real root instead of clamping to the initial window edge.
+        for (int i = 0; i < 1100 && TCdf(lo, df) >= p; i++)
+        {
+            hi = lo;
+            lo *= 2.0;
+            if (double.IsInfinity(lo)) break;
+        }
+        for (int i = 0; i < 1100 && TCdf(hi, df) <= p; i++)
+        {
+            lo = hi;
+            hi *= 2.0;
+            if (double.IsInfinity(hi)) break;
+        }
         for (int i = 0; i < 300; i++)
         {
             double mid = (lo + hi) / 2.0;
@@ -288,6 +303,15 @@ public static partial class BuiltInFunctions
         if (p <= 0) return 0;
         if (p >= 1) throw new FormulaEvalException("#NUM!", "p >= 1");
         double lo = 0, hi = 1e9;
+        // F-distributions with a small denominator df have a heavy right tail (decays like
+        // x^(-d2/2)), so the initial window can undershoot for p close to 1. Expand hi until
+        // it brackets the target rather than silently clamping the bisection to 1e9.
+        for (int i = 0; i < 1100 && FCdf(hi, d1, d2) <= p; i++)
+        {
+            lo = hi;
+            hi *= 2.0;
+            if (double.IsInfinity(hi)) break;
+        }
         for (int i = 0; i < 300; i++)
         {
             double mid = (lo + hi) / 2.0;

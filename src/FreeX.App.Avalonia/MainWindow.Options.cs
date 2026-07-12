@@ -660,7 +660,15 @@ public sealed partial class MainWindow
 
         var result = _session.ExecuteReviewCommand(new SetIterativeCalculationOptionsCommand(enabled, maxIterations, maxChange));
         if (!result.Success)
+        {
             RefreshShell(result.ErrorMessage ?? UiText.Get("ShellLoc_CouldNotChangeCalcMode"));
+            return;
+        }
+
+        // Toggling iterative calculation changes whether circular-reference cells resolve at all
+        // (Excel re-evaluates them the moment the setting changes), so any existing #CIRCULAR!
+        // cells would otherwise stay stale until an unrelated edit forces a recalc.
+        _session.RecalculateWorkbook();
     }
 
     private static bool TryParseMaxIterations(string? text, out int maxIterations)

@@ -46,6 +46,9 @@ public static partial class BuiltInFunctions
         for (int k = 1; k <= n; k++)
             price += c / Math.Pow(1 + y, k - 1 + a);
         price += redemption / Math.Pow(1 + y, n - 1 + a);
+        // PRICE/YIELD quote the clean price: subtract accrued interest for the partial
+        // first period so the dirty (full) price above is converted to Excel's clean price.
+        price -= c * (1 - a);
         return price;
     }
 

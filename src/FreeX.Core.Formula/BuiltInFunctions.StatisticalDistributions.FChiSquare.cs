@@ -70,7 +70,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue FInvScalar(ScalarValue probabilityValue, double d1, double d2)
     {
         double prob = ToNumber(probabilityValue);
-        if (d1 < 1 || d2 < 1 || prob <= 0 || prob >= 1) return ErrorValue.Num;
+        if (d1 < 1 || d2 < 1 || prob < 0 || prob >= 1) return ErrorValue.Num;
         return NumberResult(FInv(prob, d1, d2));
     }
 
@@ -92,7 +92,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue FInvRtScalar(ScalarValue probabilityValue, double d1, double d2)
     {
         double prob = ToNumber(probabilityValue);
-        if (d1 < 1 || d2 < 1 || prob <= 0 || prob >= 1) return ErrorValue.Num;
+        if (d1 < 1 || d2 < 1 || prob <= 0 || prob > 1) return ErrorValue.Num;
         return NumberResult(FInv(1.0 - prob, d1, d2));
     }
 

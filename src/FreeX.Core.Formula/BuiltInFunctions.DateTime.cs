@@ -306,7 +306,7 @@ public static partial class BuiltInFunctions
             "YM" => new NumberValue((int)MonthDiff(start, end) % 12),
             "YD" => DateDifYD(start, end, uses1904DateSystem),
             "MD" => DateDifMD(start, end),
-            _    => ErrorValue.Value
+            _    => ErrorValue.Num
         };
     }
 
@@ -931,7 +931,7 @@ public static partial class BuiltInFunctions
                 }
             }
         }
-        else if (arg is not null && TryCellNumber(arg, out double s))
+        else if (arg is not null && TryHolidayScalarNumber(arg, out double s))
         {
             if (!TrySerialToDateTime(new NumberValue(s), uses1904DateSystem, out var holiday))
             {
@@ -941,5 +941,18 @@ public static partial class BuiltInFunctions
             holidays.Add(holiday.Date);
         }
         return true;
+    }
+
+    // A single (non-range) holiday argument is coerced the same way the start/end/days
+    // scalar arguments already are (see ToNumber): a text-literal or text-cell date such as
+    // "1/2/2024" must parse to its serial number rather than being silently dropped. This
+    // intentionally does NOT extend to text cells inside a holidays *range* above — matching
+    // how ranges elsewhere (e.g. SUM) ignore text cells while a direct scalar argument coerces.
+    private static bool TryHolidayScalarNumber(ScalarValue value, out double number)
+    {
+        if (TryCellNumber(value, out number)) return true;
+        if (value is DirectTextLiteralValue or TextValue)
+            return ExcelTextNumberParser.TryParse(ToText(value), out number);
+        return false;
     }
 }

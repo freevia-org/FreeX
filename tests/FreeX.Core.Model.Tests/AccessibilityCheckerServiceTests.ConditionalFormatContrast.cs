@@ -5398,7 +5398,9 @@ public sealed partial class AccessibilityCheckerServiceTests
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialBondYieldFunctions()
     {
         AssertFormulaFinancialBondYieldFunctionContrastLocations("PRICE($A1,$C1,$D1,$E1,$G1,$H1)>105", "B1", "B2", "B8");
-        AssertFormulaFinancialBondYieldFunctionContrastLocations("YIELD($A1,$C1,$D1,$F1,$G1,$H1)>0.08", "B1", "B2", "B4", "B8");
+        // R30-financial-coupon-2: PRICE/YIELD now return the Excel CLEAN price (accrued
+        // interest subtracted), so YIELD for this bond no longer exceeds 0.08 at B4.
+        AssertFormulaFinancialBondYieldFunctionContrastLocations("YIELD($A1,$C1,$D1,$F1,$G1,$H1)>0.08", "B1", "B2", "B8");
         AssertFormulaFinancialBondYieldFunctionContrastLocations("DURATION($A1,$C1,$D1,$E1,$H1)>4", "B1", "B2", "B8");
         AssertFormulaFinancialBondYieldFunctionContrastLocations("MDURATION($A1,$C1,$D1,$E1,$H1)>4", "B1", "B2", "B8");
     }

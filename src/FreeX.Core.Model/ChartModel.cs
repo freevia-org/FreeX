@@ -194,6 +194,19 @@ public sealed class ChartModel
     public ChartAxisCrossBetween? YAxisCrossBetween { get; set; }
     public ChartAxisDisplayUnit? YAxisDisplayUnit { get; set; }
     public double? YAxisCustomDisplayUnit { get; set; }
+
+    /// <summary>
+    /// The secondary value axis's own title/min/max/number-format (combo charts, e.g. bar-primary +
+    /// line-secondary). Null/default means "not captured" — the writer then falls back to cloning the
+    /// primary (Y) axis's settings, matching prior behavior for charts never round-tripped through the
+    /// XLSX reader.
+    /// </summary>
+    public string? SecondaryAxisTitle { get; set; }
+    public double? SecondaryAxisMinimum { get; set; }
+    public double? SecondaryAxisMaximum { get; set; }
+    public ChartDataLabelNumberFormat SecondaryAxisNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
+    public string? SecondaryAxisNumberFormatCode { get; set; }
+    public bool? SecondaryAxisNumberFormatSourceLinked { get; set; }
     public ChartLegendPosition LegendPosition { get; set; } = ChartLegendPosition.Right;
     public bool LegendOverlay { get; set; }
     public bool ShowLegend { get; set; } = true;
@@ -224,6 +237,13 @@ public sealed class ChartModel
     public double DataLabelLeaderLineThickness { get; set; } = 1;
     public ChartLineDashStyle DataLabelLeaderLineDashStyle { get; set; } = ChartLineDashStyle.Solid;
     public bool ShowLinearTrendline { get; set; }
+
+    /// <summary>
+    /// 0-based index of the series the captured trendline was read from (defaults to 0 for a
+    /// programmatically-created chart that never went through the XLSX reader). Round-tripping
+    /// must reattach the trendline to this same series rather than always series 0.
+    /// </summary>
+    public int TrendlineSeriesIndex { get; set; }
     public string? TrendlineName { get; set; }
     public ChartTrendlineType TrendlineType { get; set; } = ChartTrendlineType.Linear;
     public int TrendlinePeriod { get; set; } = 2;
@@ -250,6 +270,13 @@ public sealed class ChartModel
     public double TrendlineThickness { get; set; } = 1.5;
     public ChartLineDashStyle TrendlineDashStyle { get; set; } = ChartLineDashStyle.Dash;
     public bool ShowErrorBars { get; set; }
+
+    /// <summary>
+    /// 0-based index of the series the captured error bars were read from (defaults to 0 for a
+    /// programmatically-created chart that never went through the XLSX reader). Round-tripping
+    /// must reattach the error bars to this same series rather than always series 0.
+    /// </summary>
+    public int ErrorBarSeriesIndex { get; set; }
     public ChartErrorBarKind ErrorBarKind { get; set; } = ChartErrorBarKind.StandardError;
     public ChartErrorBarAxisDirection ErrorBarAxisDirection { get; set; } = ChartErrorBarAxisDirection.Y;
     public ChartErrorBarDirection ErrorBarDirection { get; set; } = ChartErrorBarDirection.Both;

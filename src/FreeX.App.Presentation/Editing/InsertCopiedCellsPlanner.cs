@@ -56,11 +56,12 @@ public static class InsertCopiedCellsPlanner
             PasteCellsMode.All,
             default);
 
-        // Mirror ClipboardPastePlanner.ShouldClearCutSourceAfterPaste's guard (used by the ordinary
-        // Ctrl+V-after-Cut path): only clear when the source doesn't overlap where the cut cells just
-        // landed, so a self-overlapping insert never wipes out the paste it just made.
-        if (ClipboardPastePlanner.ShouldClearCutSourceAfterPaste(
-                isCut, sourceRange, destinationRange, PasteMode.All, default, keepColumnWidths: false))
+        // Unlike the ordinary Ctrl+V-after-Cut path (ClipboardPastePlanner.ShouldClearCutSourceAfterPaste),
+        // this composite always clears the source when isCut is true, with no overlap guard: the clear
+        // below runs BEFORE the insert/paste and targets the pre-shift (original) source coordinates, so
+        // it can never collide with where the pasted cells land -- overlap is only a hazard for the
+        // in-place overwrite paste that guard was written for.
+        if (isCut)
         {
             // The clear runs BEFORE the insert/paste (not after, unlike the ordinary paste-after-cut
             // composite) because an EntireRow/EntireColumn insert shifts every cell at/after the

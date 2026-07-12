@@ -37,40 +37,45 @@ public sealed class FreeXR12Q4Tests
     // 2020-03-31 / maturity 2025-08-31 / frequency 2, the previous coupon
     // date is 2020-02-28, so actual calendar days = 32 but Excel's 30/360
     // day count = 33.
+    // Settlement 2020-03-31, maturity 2025-08-31 (month-end), freq 2. Excel uses the
+    // END-OF-MONTH coupon schedule for a month-end maturity, so pcd = 2020-02-29 and
+    // ncd = 2020-08-31 (NOT the drifted 2020-02-28 / 2020-08-28 an AddMonths-on-the-
+    // shrinking-result walk used to produce — R30-financial-coupon-1).
     [Fact]
     public void Coupdaybs_DefaultBasisUses30360DayCount()
     {
-        Number("COUPDAYBS(DATE(2020,3,31),DATE(2025,8,31),2)").Should().Be(33.0);
+        // 30/360 US from pcd 2020-02-29 to settlement 2020-03-31 = 30 + (31-29) = 32.
+        Number("COUPDAYBS(DATE(2020,3,31),DATE(2025,8,31),2)").Should().Be(32.0);
     }
 
     [Fact]
     public void Coupdaybs_Basis1UsesActualCalendarDays()
     {
-        Number("COUPDAYBS(DATE(2020,3,31),DATE(2025,8,31),2,1)").Should().Be(32.0);
+        // Actual days from pcd 2020-02-29 to settlement 2020-03-31 = 31.
+        Number("COUPDAYBS(DATE(2020,3,31),DATE(2025,8,31),2,1)").Should().Be(31.0);
     }
 
     [Fact]
     public void Coupdaybs_Basis4Uses30360EuropeanDayCount()
     {
-        // European 30/360 clamps both day-31 endpoints unconditionally (dd1=31->30
-        // here), giving 32 versus the US-basis 33 for the same settlement/pcd pair.
-        Number("COUPDAYBS(DATE(2020,3,31),DATE(2025,8,31),2,4)").Should().Be(32.0);
+        // European 30/360 clamps a day-31 endpoint to 30 (settlement 31->30), giving
+        // 30 + (30-29) = 31 from pcd 2020-02-29.
+        Number("COUPDAYBS(DATE(2020,3,31),DATE(2025,8,31),2,4)").Should().Be(31.0);
     }
 
-    // COUPDAYSNC has the same defect: basis 0/4 must use 30/360 day counting
-    // for the settlement-to-next-coupon span, not actual calendar days.
     [Fact]
     public void Coupdaysnc_DefaultBasisUses30360DayCount()
     {
-        // Next coupon after 2020-03-31 (freq=2, maturity 2025-08-31) is 2020-08-28.
-        // Actual days = 150; 30/360 US day count (31st clamped to 30th) = 148.
-        Number("COUPDAYSNC(DATE(2020,3,31),DATE(2025,8,31),2)").Should().Be(148.0);
+        // Next coupon after 2020-03-31 (freq=2, month-end maturity 2025-08-31) is 2020-08-31.
+        // 30/360 US from settlement 2020-03-31 to ncd 2020-08-31 = (8-3)*30 = 150.
+        Number("COUPDAYSNC(DATE(2020,3,31),DATE(2025,8,31),2)").Should().Be(150.0);
     }
 
     [Fact]
     public void Coupdaysnc_Basis1UsesActualCalendarDays()
     {
-        Number("COUPDAYSNC(DATE(2020,3,31),DATE(2025,8,31),2,1)").Should().Be(150.0);
+        // Actual days from settlement 2020-03-31 to ncd 2020-08-31 = 153.
+        Number("COUPDAYSNC(DATE(2020,3,31),DATE(2025,8,31),2,1)").Should().Be(153.0);
     }
 
     private double Number(string formula)

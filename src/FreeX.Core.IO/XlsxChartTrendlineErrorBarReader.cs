@@ -19,6 +19,11 @@ internal static class XlsxChartTrendlineErrorBarReader
             return;
 
         chart.ShowLinearTrendline = true;
+        // R30-io-chart-series-cache-deep-1: this is a chart-global capture (only the first series in
+        // document order that carries a <c:trendline> is kept), so remember WHICH series it came from —
+        // every <c:ser> is required by the OOXML schema to carry its own <c:idx>, so this is always
+        // available — otherwise the writer has no way to reattach it to anything but series 0.
+        chart.TrendlineSeriesIndex = XlsxChartSeriesRangeReader.ReadSeriesIndex(series, 0);
         chart.TrendlineName = trendline.Element(ChartNs + "name")?.Value;
         chart.TrendlineType = FromXlsxTrendlineType(trendline.Element(ChartNs + "trendlineType")?.Attribute("val")?.Value);
         if (int.TryParse(trendline.Element(ChartNs + "period")?.Attribute("val")?.Value, out var period))
@@ -49,6 +54,9 @@ internal static class XlsxChartTrendlineErrorBarReader
             return;
 
         chart.ShowErrorBars = true;
+        // R30-io-chart-series-cache-deep-1: see the matching comment in ApplyTrendline above — track
+        // which series this chart-global capture actually came from.
+        chart.ErrorBarSeriesIndex = XlsxChartSeriesRangeReader.ReadSeriesIndex(series, 0);
         chart.ErrorBarKind = FromXlsxErrorBarKind(errorBars.Element(ChartNs + "errValType")?.Attribute("val")?.Value);
         chart.ErrorBarAxisDirection = FromXlsxErrorBarAxisDirection(errorBars.Element(ChartNs + "errDir")?.Attribute("val")?.Value);
         chart.ErrorBarDirection = FromXlsxErrorBarDirection(errorBars.Element(ChartNs + "errBarType")?.Attribute("val")?.Value);

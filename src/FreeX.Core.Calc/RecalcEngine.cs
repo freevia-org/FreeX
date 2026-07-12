@@ -155,6 +155,20 @@ public sealed class RecalcEngine
                 foreach (var addr in plan.OrderedCells)
                     dirtyCells.Add(addr);
 
+                if (plan.CyclicCells.Count > 0)
+                {
+                    // A cell already marked cyclic above (its #CIRCULAR! error, or its
+                    // iterative-converged value, was just recorded) must not be resurrected into
+                    // this second, volatile-driven pass: GetEvaluationOrder below is scoped to only
+                    // dirtyCells, so if a cyclic cell's partner isn't also in this restricted set,
+                    // the edge back to that partner is invisible and the cell looks acyclic -
+                    // letting it be freshly (and wrongly) re-evaluated, e.g. clobbering #CIRCULAR!
+                    // with a real number for a volatile formula that is also part of a circular
+                    // reference (A1="=IFERROR(B1,0)+NOW()", B1="=A1").
+                    foreach (var cyclic in plan.CyclicCells)
+                        dirtyCells.Remove(cyclic);
+                }
+
                 // Volatile functions (OFFSET/INDIRECT/CELL/...) can dynamically read a cell that has
                 // no registered dependency edge back to them (only their static argument cells get an
                 // edge - see CollectReferences' FunctionCallNode case). Left unordered relative to an

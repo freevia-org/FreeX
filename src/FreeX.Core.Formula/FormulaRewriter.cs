@@ -254,19 +254,51 @@ public static class FormulaRewriter
         RangeRefNode rr, RewriteOperation op, string hostSheetName, ref bool changed)
     {
         // TODO(H28 3-D sheet-span refs): a span (EndSheetName set, e.g. Sheet1:Sheet3!A1) is passed
-        // through untouched for every structural op — insert/delete rows or columns, cell moves,
-        // sheet rename/delete. None of the row/col shift or delete-shrink math below understands
-        // "this reference spans multiple sheets", and RenameSheetOp/DeleteSheetOp only ever look at
-        // rr.SheetName (the span's start sheet), so blindly reusing that logic here would silently
-        // mis-rewrite (or wrongly #REF!) references to the *other* spanned sheets. Leaving the span
-        // untouched is conservative: the formula text is unchanged, so it still means exactly what it
-        // said before the structural edit (correct for edits on sheets outside the span; potentially
-        // stale — same as Excel would need to fully re-resolve — for edits on a spanned sheet whose
-        // row/col shift should have shown up in this reference). Full span-aware rewriting (per-sheet
-        // shift math, and #REF!-ing only the sheets actually removed) is intentionally out of scope
-        // for this change.
+        // through untouched for row/col structural ops — insert/delete rows or columns, cell moves.
+        // None of the row/col shift or delete-shrink math below understands "this reference spans
+        // multiple sheets", so blindly reusing that logic here would silently mis-rewrite (or wrongly
+        // #REF!) references to the *other* spanned sheets. Leaving the span untouched for those ops is
+        // conservative: the formula text is unchanged, so it still means exactly what it said before
+        // the structural edit (correct for edits on sheets outside the span; potentially stale — same
+        // as Excel would need to fully re-resolve — for edits on a spanned sheet whose row/col shift
+        // should have shown up in this reference). Full span-aware rewriting (per-sheet shift math) is
+        // intentionally out of scope for this change. DeleteSheetOp contracting the span when an
+        // endpoint sheet is removed is also still TODO (needs sheet-order/membership machinery beyond
+        // this file); a delete of an endpoint sheet leaves the span's sheet name stale rather than
+        // contracting it, which the caller compensates for by forcing a recalc (see R30-...-3dref-1).
+        // RenameSheetOp, however, is purely textual — the span's endpoint sheet *names* live directly
+        // on rr.SheetName/rr.EndSheetName, so a rename can (and must) be applied without touching the
+        // per-cell shift math at all.
         if (rr.EndSheetName is not null)
+        {
+            if (op is RenameSheetOp renameSpan)
+            {
+                var newStartSheet = rr.SheetName;
+                var newEndSheet = rr.EndSheetName;
+                bool spanChanged = false;
+
+                if (newStartSheet is not null &&
+                    string.Equals(newStartSheet, renameSpan.OldSheetName, StringComparison.OrdinalIgnoreCase))
+                {
+                    newStartSheet = renameSpan.NewSheetName;
+                    spanChanged = true;
+                }
+
+                if (string.Equals(newEndSheet, renameSpan.OldSheetName, StringComparison.OrdinalIgnoreCase))
+                {
+                    newEndSheet = renameSpan.NewSheetName;
+                    spanChanged = true;
+                }
+
+                if (spanChanged)
+                {
+                    changed = true;
+                    return rr with { SheetName = newStartSheet, EndSheetName = newEndSheet };
+                }
+            }
+
             return rr;
+        }
 
         // For sheet-qualified ranges, the sheet is on rr.SheetName and Start has SheetName set.
         // End may have SheetName = null; use the range's SheetName as its effective sheet.

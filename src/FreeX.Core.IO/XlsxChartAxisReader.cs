@@ -65,7 +65,12 @@ internal static class XlsxChartAxisReader
         // instead of X means that write no longer clobbers this one.
         ApplyCategoryAxisProperties(categoryAxis, chart, categoryAxisOnY: valueAxisOnX);
         ApplyAxisLabelFormatting(categoryAxis, chart, useXAxis: true);
-        var valueAxis = plotArea.Element(ChartNs + "valAx");
+        // Combo charts (e.g. bar-primary + line-secondary) carry TWO <c:valAx> elements — the primary
+        // is always emitted first (see XlsxChartXmlWriter.Axes.cs), so plain positional indexing (as
+        // used throughout this non-scatter branch, which never matches axes by axId either) is enough
+        // to find the secondary one without a schema-breaking axId lookup.
+        var valueAxisElements = plotArea.Elements(ChartNs + "valAx").ToList();
+        var valueAxis = valueAxisElements.Count > 0 ? valueAxisElements[0] : null;
         chart.YAxisTitle = ReadAxisTitle(valueAxis);
         chart.YAxisTitleLayout = XlsxChartMetadataReader.ReadManualLayout(AxisTitleLayout(valueAxis));
         chart.HideYAxis = ReadBool(valueAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
@@ -79,6 +84,27 @@ internal static class XlsxChartAxisReader
         // axis. Column/line/etc. keep the value axis on Y as before.
         ApplyValueAxisProperties(valueAxis, chart, useXAxis: valueAxisOnX);
         ApplyAxisLabelFormatting(valueAxis, chart, useXAxis: false);
+
+        // R30-io-chart-series-cache-deep-2: the secondary value axis (second <c:valAx>, e.g. a combo
+        // chart's line-on-secondary-axis series group) has its OWN title/min/max/number-format that must
+        // not be conflated with the primary axis captured above.
+        ApplySecondaryAxisProperties(valueAxisElements.Count > 1 ? valueAxisElements[1] : null, chart);
+    }
+
+    private static void ApplySecondaryAxisProperties(XElement? axisElement, ChartModel chart)
+    {
+        if (axisElement is null)
+            return;
+
+        chart.SecondaryAxisTitle = ReadAxisTitle(axisElement);
+        var scaling = axisElement.Element(ChartNs + "scaling");
+        chart.SecondaryAxisMinimum = ReadDouble(scaling?.Element(ChartNs + "min")?.Attribute("val")?.Value);
+        chart.SecondaryAxisMaximum = ReadDouble(scaling?.Element(ChartNs + "max")?.Attribute("val")?.Value);
+        var numberFormatElement = axisElement.Element(ChartNs + "numFmt");
+        var numberFormatCode = numberFormatElement?.Attribute("formatCode")?.Value;
+        chart.SecondaryAxisNumberFormat = FromXlsxNumberFormatCode(numberFormatCode);
+        chart.SecondaryAxisNumberFormatCode = numberFormatCode;
+        chart.SecondaryAxisNumberFormatSourceLinked = ReadNullableBool(numberFormatElement?.Attribute("sourceLinked")?.Value);
     }
 
     public static ChartDataLabelNumberFormat FromXlsxNumberFormatCode(string? formatCode) =>

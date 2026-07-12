@@ -183,12 +183,18 @@ internal static class XlsxWorksheetViewWriter
             // (or default) row heights/column widths above it -- before being written as xSplit/
             // ySplit, or Excel renders the divider at the raw index value's twips position
             // (effectively no split for any typical split index).
+            var existingPanes = sheetView.Elements(worksheetNs + "pane").ToList();
+            // Preserve the existing pane's activePane attribute (which cell quadrant/pane the
+            // user's cursor is in) -- it is independent of the split geometry itself, and a
+            // rebuilt <pane> element that drops it silently resets the active pane to the OOXML
+            // default "topLeft" on any save that merely touches an unrelated view attribute.
+            var existingActivePane = existingPanes.Count > 0 ? existingPanes[0].Attribute("activePane")?.Value : null;
             var pane = new XElement(
                 worksheetNs + "pane",
                 sheet.SplitColumn is { } splitColumn ? new XAttribute("xSplit", SplitColumnToTwips(sheet, splitColumn)) : null,
                 sheet.SplitRow is { } splitRow ? new XAttribute("ySplit", SplitRowToTwips(sheet, splitRow)) : null,
-                new XAttribute("state", "split"));
-            var existingPanes = sheetView.Elements(worksheetNs + "pane").ToList();
+                new XAttribute("state", "split"),
+                !string.IsNullOrWhiteSpace(existingActivePane) ? new XAttribute("activePane", existingActivePane) : null);
             if (existingPanes.Count != 1 ||
                 !XNode.DeepEquals(existingPanes[0], pane))
             {
@@ -217,7 +223,12 @@ internal static class XlsxWorksheetViewWriter
     {
         double heightPixels = 0;
         for (var row = 1u; row < splitRow; row++)
+        {
+            if (sheet.IsRowEffectivelyHidden(row))
+                continue;
+
             heightPixels += sheet.RowHeights.TryGetValue(row, out var height) ? height : sheet.DefaultRowHeight;
+        }
 
         return FormatTwips(heightPixels);
     }
@@ -227,6 +238,9 @@ internal static class XlsxWorksheetViewWriter
         double widthPixels = 0;
         for (var col = 1u; col < splitColumn; col++)
         {
+            if (sheet.IsColEffectivelyHidden(col))
+                continue;
+
             var characterWidth = sheet.ColumnWidths.TryGetValue(col, out var width) ? width : sheet.DefaultColumnWidth;
             widthPixels += CharacterWidthToPixels(characterWidth);
         }

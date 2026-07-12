@@ -1755,6 +1755,12 @@ public sealed class WorkbookSession
         if (!result.Success)
             return result;
 
+        // Deleting a sheet can change which sheets fall inside a 3-D span reference
+        // (e.g. =SUM(Sheet1:Sheet3!A1)), so recalculate the whole workbook just like the
+        // WPF host does after Move/Duplicate Sheet -- the command's own AffectedCells is
+        // empty and would otherwise leave those span refs stale.
+        RecalculateWorkbook();
+
         ApplySuccessfulWorkbookStructureResult(preferredSheetId ?? Workbook.Sheets[0].Id);
         return result;
     }
@@ -1776,6 +1782,12 @@ public sealed class WorkbookSession
             new RenameSheetCommand(ActiveSheet.Id, newName));
         if (!result.Success)
             return result;
+
+        // Renaming a sheet can change which sheets fall inside a 3-D span reference
+        // (e.g. =SUM(Sheet1:Sheet3!A1)), so recalculate the whole workbook just like the
+        // WPF host does after Move/Duplicate Sheet -- the command's own AffectedCells is
+        // empty and would otherwise leave those span refs stale.
+        RecalculateWorkbook();
 
         ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
         return result;
@@ -5223,7 +5235,10 @@ public sealed class WorkbookSession
 
     private static bool ShouldFillSelectedDestinationRange(bool isCut, PasteSpecialOptions options) =>
         !isCut &&
-        options.Operation == PasteSpecialOperation.None &&
+        // An arithmetic Operation (Add/Subtract/Multiply/Divide) must still tile across a larger
+        // selected destination just like a plain paste — Excel applies the operation cell-by-cell
+        // to every destination cell, tiling the (possibly 1-cell) clipboard source across the whole
+        // selection, not just the anchor cell (R16-paste-special-matrix-1).
         options.ContentKind != PasteSpecialContentKind.AllMergingConditionalFormats;
 
     private GridRange GetSinglePasteDestinationRange(CellAddress destination) =>

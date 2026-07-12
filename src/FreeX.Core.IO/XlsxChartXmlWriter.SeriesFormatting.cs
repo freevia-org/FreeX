@@ -203,7 +203,7 @@ internal static partial class XlsxChartXmlWriter
         XNamespace chartNs,
         XNamespace drawingNs)
     {
-        if (!chart.ShowLinearTrendline || seriesIndex != 0 || !ChartTypeSupport.SupportsTrendlines(chart.Type))
+        if (!chart.ShowLinearTrendline || seriesIndex != chart.TrendlineSeriesIndex || !ChartTypeSupport.SupportsTrendlines(chart.Type))
             return null;
 
         return new XElement(chartNs + "trendline",
@@ -351,7 +351,7 @@ internal static partial class XlsxChartXmlWriter
         XNamespace chartNs,
         XNamespace drawingNs)
     {
-        if (!chart.ShowErrorBars || seriesIndex != 0 || !SupportsErrorBars(chart.Type))
+        if (!chart.ShowErrorBars || seriesIndex != chart.ErrorBarSeriesIndex || !SupportsErrorBars(chart.Type))
             return null;
 
         return new XElement(chartNs + "errBars",

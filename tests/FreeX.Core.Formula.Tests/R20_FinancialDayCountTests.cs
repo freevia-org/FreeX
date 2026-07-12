@@ -87,13 +87,15 @@ public sealed class R20_financial_daycount_Tests
         //                        -> a = 90/180 = 0.5 exactly
         //   basis=1 (Actual/Actual): E = actual days Jan1->Jul1 = 181, DSC = actual days Apr1->Jul1 = 91
         //                        -> a = 91/181 ≈ 0.50276243
-        // Price = (coupon + redemption) / (1+y)^a for a single-period bond, so the two
-        // bases must yield distinct, computable prices.
+        // Dirty price = (coupon + redemption) / (1+y)^a for a single-period bond; PRICE()
+        // then subtracts the accrued interest for the stub period (coupon * (1-a)) to quote
+        // Excel's clean price, so the two bases must yield distinct, computable clean prices.
+        // (R30-formula-financial-coupon-2: values below are clean, not dirty, prices.)
         double priceBasis0 = Calc("PRICE(DATE(2023,4,1),DATE(2023,7,1),0.05,0.06,100,2,0)");
         double priceBasis1 = Calc("PRICE(DATE(2023,4,1),DATE(2023,7,1),0.05,0.06,100,2,1)");
 
-        priceBasis0.Should().BeApproximately(100.9962510118, 1e-6);
-        priceBasis1.Should().BeApproximately(100.9880045855, 1e-6);
+        priceBasis0.Should().BeApproximately(99.74625101184004, 1e-9);
+        priceBasis1.Should().BeApproximately(99.7449106628569, 1e-9);
         priceBasis0.Should().NotBe(priceBasis1);
     }
 

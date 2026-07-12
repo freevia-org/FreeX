@@ -133,21 +133,31 @@ public static partial class BuiltInFunctions
         return basis is >= 0 and <= 4;
     }
 
-    private static DateTime CouponDateBefore(DateTime settlement, DateTime maturity, int frequency)
+    // Walk backward from the ORIGINAL maturity by increasing multiples of `months`,
+    // rather than repeatedly calling AddMonths on the shrinking result -- the latter
+    // compounds .NET's day-of-month clamp (e.g. Aug-31 -> Feb-29 -> Aug-29) for
+    // month-end maturities whose schedule crosses February. Each schedule candidate
+    // (both the one before settlement and the one after) is derived from `maturity`
+    // directly so no candidate ever inherits another candidate's clamped day.
+    private static (DateTime Pcd, DateTime Ncd) CouponDatesAround(DateTime settlement, DateTime maturity, int frequency)
     {
         int months = 12 / frequency;
+        int k = 0;
         DateTime prev = maturity;
-        // Walk backward from maturity until we pass settlement
         while (prev > settlement)
-            prev = prev.AddMonths(-months);
-        return prev;
+        {
+            k++;
+            prev = maturity.AddMonths(-k * months);
+        }
+        DateTime next = maturity.AddMonths(-(k - 1) * months);
+        return (prev, next);
     }
 
+    private static DateTime CouponDateBefore(DateTime settlement, DateTime maturity, int frequency)
+        => CouponDatesAround(settlement, maturity, frequency).Pcd;
+
     private static DateTime CouponDateAfter(DateTime settlement, DateTime maturity, int frequency)
-    {
-        DateTime prev = CouponDateBefore(settlement, maturity, frequency);
-        return prev.AddMonths(12 / frequency);
-    }
+        => CouponDatesAround(settlement, maturity, frequency).Ncd;
 
     // ── Odd coupon period functions ──────────────────────────────────────
 

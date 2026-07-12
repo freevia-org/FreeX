@@ -653,6 +653,11 @@ public partial class MainWindow
             // dependents until a manual F9 or save/reopen. Rebuild unconditionally after every load,
             // matching the Avalonia host's WorkbookSessionFactory.Create.
             _recalcEngine.RebuildFormulaDependencies(_workbook);
+            // This host does not route File > Open through WorkbookSessionFactory.Create, so it
+            // must apply the same on-open selective volatile-cell refresh (NOW/OFFSET/etc.) that
+            // Create() applies for the Avalonia host -- otherwise Automatic-mode volatile cells
+            // stay stale (showing their on-disk cached values) until the next edit or F9.
+            WorkbookSessionFactory.ApplyOnOpenVolatileRecalc(_recalcEngine, _workbook, _fileAdapters);
             InvalidateToolbarVisualState();
             _workbook.Name = plan.DisplayName;
             _worksheetSelections.Clear();
@@ -1001,12 +1006,18 @@ public partial class MainWindow
             _workbook.MaxCalculationIterations != calcSettings.MaxCalculationIterations ||
             _workbook.MaxCalculationChange != calcSettings.MaxCalculationChange)
         {
-            TryExecuteCommand(
-                new SetIterativeCalculationOptionsCommand(
-                    calcSettings.IterativeCalculation,
-                    calcSettings.MaxCalculationIterations,
-                    calcSettings.MaxCalculationChange),
-                "Calculation Options");
+            // Toggling iterative calculation changes whether circular-reference cells resolve at
+            // all (Excel re-evaluates them the moment the setting changes), so any existing
+            // #CIRCULAR! cells would otherwise stay stale until an unrelated edit forces a recalc.
+            if (TryExecuteCommand(
+                    new SetIterativeCalculationOptionsCommand(
+                        calcSettings.IterativeCalculation,
+                        calcSettings.MaxCalculationIterations,
+                        calcSettings.MaxCalculationChange),
+                    "Calculation Options"))
+            {
+                RecalculateWorkbook();
+            }
         }
     }
 

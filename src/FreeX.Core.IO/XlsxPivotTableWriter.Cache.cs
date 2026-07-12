@@ -126,7 +126,37 @@ internal static partial class XlsxPivotTableWriter
             field.NumberFormatId is { } numFmtId ? new XAttribute("numFmtId", numFmtId.ToString(CultureInfo.InvariantCulture)) : null,
             field.IsDatabaseField ? null : new XAttribute("databaseField", "0"),
             string.IsNullOrWhiteSpace(field.Formula) ? null : new XAttribute("formula", field.Formula),
-            ToPivotCacheSharedItemsXml(field, workbookNs));
+            ToPivotCacheSharedItemsXml(field, workbookNs),
+            ToPivotCacheFieldGroupXml(field, workbookNs));
+
+    // R30-io-pivot-cache-deep-3: date/number-range grouping (field.Grouping/GroupStart/GroupEnd/
+    // GroupInterval) was previously only preserved in a FreeX-private extLst extension, which real Excel
+    // and any other OOXML consumer ignores. Emit the native CT_FieldGroup/CT_RangePr element the reader
+    // (XlsxPivotCacheReader.ReadPivotCacheFieldGroup) already parses back in, so a fresh workbook's first
+    // save keeps the grouping visible in real Excel.
+    private static XElement? ToPivotCacheFieldGroupXml(PivotCacheFieldModel field, XNamespace workbookNs)
+    {
+        var groupBy = field.Grouping switch
+        {
+            PivotFieldGrouping.Year => "years",
+            PivotFieldGrouping.Quarter => "quarters",
+            PivotFieldGrouping.Month => "months",
+            PivotFieldGrouping.Day => "days",
+            PivotFieldGrouping.NumberRange => "range",
+            _ => null
+        };
+        if (groupBy is null)
+            return null;
+
+        return new XElement(
+            workbookNs + "fieldGroup",
+            new XElement(
+                workbookNs + "rangePr",
+                new XAttribute("groupBy", groupBy),
+                field.GroupStart is { } groupStart ? new XAttribute("startNum", groupStart.ToString(CultureInfo.InvariantCulture)) : null,
+                field.GroupEnd is { } groupEnd ? new XAttribute("endNum", groupEnd.ToString(CultureInfo.InvariantCulture)) : null,
+                field.GroupInterval is { } groupInterval ? new XAttribute("groupInterval", groupInterval.ToString(CultureInfo.InvariantCulture)) : null));
+    }
 
     private static XElement ToPivotCacheSharedItemsXml(PivotCacheFieldModel field, XNamespace workbookNs)
     {

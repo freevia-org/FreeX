@@ -458,7 +458,6 @@ public class ProtectionGuardCoverageTests
                 return new ExternalTextPasteSpecialCommand(
                     sheet.Id,
                     [(addr, "1")],
-                    preserveText: false,
                     PasteSpecialOperation.Add);
             },
 

@@ -31,6 +31,24 @@ internal static class XlsxStructuredTableWriter
                 StringComparer.OrdinalIgnoreCase)
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
+
+        // Reserve every table PackagePart already claimed anywhere in the workbook up front, so a
+        // freshly generated "xl/tables/tableN.xml" name can never collide with (and silently
+        // overwrite) another table that kept its own preserved package part.
+        var claimedTablePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var otherSheet in workbook.Sheets)
+        {
+            foreach (var otherTable in otherSheet.StructuredTables)
+            {
+                if (string.IsNullOrWhiteSpace(otherTable.PackagePart))
+                    continue;
+
+                var otherPath = XlsxPackagePath.NormalizePackagePath(otherTable.PackagePart);
+                if (otherPath.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase))
+                    claimedTablePaths.Add(otherPath);
+            }
+        }
+
         var tablePartIndex = 1;
 
         foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
@@ -65,12 +83,23 @@ internal static class XlsxStructuredTableWriter
             foreach (var table in sheet.StructuredTables)
             {
                 var tablePath = string.IsNullOrWhiteSpace(table.PackagePart)
-                    ? $"xl/tables/table{tablePartIndex}.xml"
+                    ? null
                     : XlsxPackagePath.NormalizePackagePath(table.PackagePart);
-                if (!tablePath.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase))
-                    tablePath = $"xl/tables/table{tablePartIndex}.xml";
+                if (tablePath is null || !tablePath.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Generate the next path not already claimed by another table's preserved
+                    // package part (or by another table generated earlier in this same save).
+                    do
+                    {
+                        tablePath = $"xl/tables/table{tablePartIndex}.xml";
+                        tablePartIndex++;
+                    } while (!claimedTablePaths.Add(tablePath));
+                }
+                else
+                {
+                    claimedTablePaths.Add(tablePath);
+                }
 
-                tablePartIndex++;
                 XlsxPackageXmlEditor.ReplaceXml(archive, tablePath, ToXml(table, tablePath));
                 XlsxPackageXmlEditor.EnsureSpecificContentType(
                     archive,
@@ -248,12 +277,34 @@ internal static class XlsxStructuredTableWriter
     {
         var element = AddAutoFilterNativeMetadata(new XElement(
             workbookNs + "autoFilter",
-            new XAttribute("ref", table.Range.ToString()),
+            new XAttribute("ref", GetAutoFilterRange(table).ToString()),
             table.FilterColumns.Select(filterColumn => ToFilterColumnXml(filterColumn, workbookNs))),
             table,
             workbookNs);
         XlsxWorksheetAutoFilterNormalizer.NormalizeElement(element);
         return element;
+    }
+
+    /// <summary>
+    /// The table's own <c>ref</c> legitimately spans header+data+totals rows, but Excel scopes
+    /// <c>&lt;autoFilter ref&gt;</c> to the header+data rows only, excluding the totals row -- so
+    /// filtering never hides or misinterprets the totals row as ordinary filterable data.
+    /// </summary>
+    private static GridRange GetAutoFilterRange(StructuredTableModel table)
+    {
+        if (!table.TotalsRowShown)
+            return table.Range;
+
+        var totalsRowCount = Math.Max(1, table.TotalsRowCount ?? 1);
+        var start = table.Range.Start;
+        var end = table.Range.End;
+        if (end.Row <= start.Row)
+            return table.Range;
+
+        var clampedEndRow = Math.Max(start.Row, end.Row - (uint)totalsRowCount);
+        return clampedEndRow == end.Row
+            ? table.Range
+            : new GridRange(start, new CellAddress(end.Sheet, clampedEndRow, end.Col));
     }
 
     private static XElement AddAutoFilterNativeMetadata(

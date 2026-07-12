@@ -114,9 +114,12 @@ public static partial class BuiltInFunctions
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
         int months = 12 / frequency;
+        // Offset each schedule candidate from the ORIGINAL maturity (md.AddMonths(-count*months)),
+        // not from the shrinking `d`, to avoid compounding .NET's day-of-month clamp for
+        // month-end maturities whose backward schedule crosses February (see CouponDateBefore).
         int count = 0;
         DateTime d = md;
-        while (d > sd) { count++; d = d.AddMonths(-months); }
+        while (d > sd) { count++; d = md.AddMonths(-count * months); }
         return NumberResult((double)count);
     }
 

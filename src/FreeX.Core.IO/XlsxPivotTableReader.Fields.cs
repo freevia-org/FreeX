@@ -17,8 +17,20 @@ internal static partial class XlsxPivotTableReader
         var pivotFields = pivotFieldsElement.Elements(workbookNs + "pivotField").ToList();
         for (var fieldIndex = 0; fieldIndex < pivotFields.Count && fieldIndex < pivotCache.Fields.Count; fieldIndex++)
         {
-            var sharedItems = pivotCache.Fields[fieldIndex].SharedItems;
+            var field = pivotCache.Fields[fieldIndex];
+            var sharedItems = field.SharedItems;
             if (sharedItems is null || sharedItems.Count == 0)
+                continue;
+
+            // R30-io-pivot-cache-deep-2: XlsxPivotCacheReader.ReadSharedItemValues drops any <m/>
+            // (missing/blank) OOXML sharedItems child before this list is built, shifting every later
+            // item out of alignment with the raw OOXML index space the pivotField's own item @x attribute
+            // is defined against. When the field's declared sharedItems @count (SharedItemCount) is larger
+            // than this materialized list, at least one item was dropped and we can no longer tell which
+            // materialized entry a given raw index now lands on -- indexing into it here would risk
+            // silently hiding/keeping the wrong item. Decline to resolve a selection in that case, mirroring
+            // the same guard ReadNativePageFieldSelectedItem already applies for the identical hazard.
+            if (field.SharedItemCount is { } declaredCount && declaredCount > sharedItems.Count)
                 continue;
 
             var hiddenIndexes = pivotFields[fieldIndex]
