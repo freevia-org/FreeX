@@ -174,6 +174,17 @@ public sealed record SeriesLayout
     /// <summary>For area series, the baseline pixel Y the fill drops to (the zero line).</summary>
     public double AreaBaseline { get; init; }
 
+    /// <summary>
+    /// For a stacked-area band (<see cref="SeriesGeometryKind.Area"/> produced by the stacked/100%-stacked
+    /// area path), the per-category bottom polyline — the cumulative top of the bands below this one —
+    /// in the same category order as <see cref="Points"/>. When non-empty the area-fill consumers fill
+    /// the ribbon between <see cref="Points"/> (the band's top) and these points (the band's bottom),
+    /// giving a true variable-baseline stack that matches the WPF renderer's
+    /// <c>AreaSeries.Points</c>/<c>Points2</c>. Empty for a plain (non-stacked) area, which instead
+    /// fills down to the flat scalar <see cref="AreaBaseline"/> (the zero line).
+    /// </summary>
+    public IReadOnlyList<SeriesPoint> BaselinePoints { get; init; } = [];
+
     /// <summary>For surface/heatmap series, the laid-out grid cells (row × col, each pre-colored). Empty otherwise.</summary>
     public IReadOnlyList<SurfaceCell> SurfaceCells { get; init; } = [];
 

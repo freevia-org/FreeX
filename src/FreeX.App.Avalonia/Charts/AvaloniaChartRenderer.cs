@@ -757,11 +757,27 @@ public sealed class AvaloniaChartRenderer
         foreach (var p in series.Points)
             points.Add(new AvaloniaPoint(p.Position.X, p.Position.Y));
 
-        // Close the polygon down to the baseline so the fill drops to the zero line.
-        var last = series.Points[^1].Position;
-        var first = series.Points[0].Position;
-        points.Add(new AvaloniaPoint(last.X, series.AreaBaseline));
-        points.Add(new AvaloniaPoint(first.X, series.AreaBaseline));
+        if (series.BaselinePoints.Count > 0)
+        {
+            // Stacked-area band: close the ring back along the per-category bottom baseline (the
+            // cumulative top of the bands below), walked in reverse so the polygon fills exactly the
+            // ribbon between this band's top and its variable baseline — the shell analogue of
+            // WPF/OxyPlot's AreaSeries.Points/Points2. Matches the WPF stacked-area render.
+            for (var i = series.BaselinePoints.Count - 1; i >= 0; i--)
+            {
+                var b = series.BaselinePoints[i].Position;
+                points.Add(new AvaloniaPoint(b.X, b.Y));
+            }
+        }
+        else
+        {
+            // Plain (non-stacked) area: close the polygon down to the flat scalar baseline (zero line).
+            var last = series.Points[^1].Position;
+            var first = series.Points[0].Position;
+            points.Add(new AvaloniaPoint(last.X, series.AreaBaseline));
+            points.Add(new AvaloniaPoint(first.X, series.AreaBaseline));
+        }
+
         return points;
     }
 

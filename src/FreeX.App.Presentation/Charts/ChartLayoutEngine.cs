@@ -308,8 +308,12 @@ public static class ChartLayoutEngine
         var legend = LegendLayoutBuilder.Build(request, out var plot);
         var categoryCount = ResolveCategoryCount(request);
 
-        var isStacked = chart.Type is ChartType.StackedColumn or ChartType.PercentStackedColumn;
-        var isPercent = chart.Type == ChartType.PercentStackedColumn;
+        // Stacked/100%-stacked column AND area both share the running-stack value range and category
+        // axis; the two families differ only in the geometry builder chosen below (bars vs bands).
+        var isStacked = chart.Type is ChartType.StackedColumn or ChartType.PercentStackedColumn
+            or ChartType.StackedArea or ChartType.PercentStackedArea;
+        var isStackedArea = chart.Type is ChartType.StackedArea or ChartType.PercentStackedArea;
+        var isPercent = chart.Type is ChartType.PercentStackedColumn or ChartType.PercentStackedArea;
 
         // Category axis: columns center categories over [-0.5, count-0.5]; line/area use [0, count-1].
         var isColumnFamily = chart.Type is ChartType.Column or ChartType.ThreeDColumn
@@ -338,7 +342,10 @@ public static class ChartLayoutEngine
 
         if (isStacked)
         {
-            LayoutStackedColumns(request, categoryCount, isPercent, categoryScale, valueScale, seriesLayouts, dataLabels);
+            if (isStackedArea)
+                LayoutStackedAreas(request, categoryCount, isPercent, categoryScale, valueScale, seriesLayouts, dataLabels);
+            else
+                LayoutStackedColumns(request, categoryCount, isPercent, categoryScale, valueScale, seriesLayouts, dataLabels);
         }
         else
         {
@@ -380,13 +387,10 @@ public static class ChartLayoutEngine
                 {
                     laid = chart.Type switch
                     {
-                        // StackedArea/PercentStackedArea currently render as filled area bands from
-                        // the zero baseline (same as the plain Area path) rather than as a cumulative
-                        // stack: the portable SeriesLayout only carries a scalar AreaBaseline, so a
-                        // variable per-category stack baseline needs a follow-up geometry change. This
-                        // keeps them drawn (not skipped) so opening a stacked-area workbook does not
-                        // regress from the pre-fix overlapping-area rendering.
-                        ChartType.Area or ChartType.StackedArea or ChartType.PercentStackedArea or ChartType.ThreeDArea =>
+                        // Stacked/100%-stacked area are handled by LayoutStackedAreas above (true
+                        // cumulative bands); only plain Area / 3-D Area reach this non-stacked path,
+                        // which fills each band down to the flat zero baseline.
+                        ChartType.Area or ChartType.ThreeDArea =>
                             LayoutAreaSeries(request, series, categoryScale, yScale, baseY, dataLabels),
                         _ => LayoutLineSeries(request, series, categoryScale, yScale, dataLabels),
                     };
@@ -572,6 +576,80 @@ public static class ChartLayoutEngine
                 Name = series.Name,
                 Kind = SeriesGeometryKind.Columns,
                 Bars = bars,
+            });
+        }
+    }
+
+    /// <summary>
+    /// Lays out Stacked Area / 100%-Stacked Area as one filled band per series, each riding on the
+    /// cumulative baseline of the bands below it — the area-family analogue of
+    /// <see cref="LayoutStackedColumns"/> and a mirror of the WPF renderer's <c>BuildStackedAreaModel</c>.
+    /// Each band's top polyline is emitted as <see cref="SeriesLayout.Points"/> and its bottom (the
+    /// running stack base) as <see cref="SeriesLayout.BaselinePoints"/>, so an area-fill consumer fills
+    /// exactly the ribbon this series contributes (a true variable per-category baseline) instead of the
+    /// old stopgap that dropped every band to the flat zero line. For <paramref name="isPercent"/> each
+    /// category's stack is normalized to 100% via the same per-category totals
+    /// (<see cref="StackedTotals"/>/<see cref="NormalizePercent"/>) the stacked column/bar path uses.
+    /// A blank/non-numeric cell contributes 0 so the band stays continuous and the layers above keep a
+    /// well-defined baseline (Excel stacks a blank area point as zero), matching WPF. A series promoted
+    /// to a combo line overlay is drawn as a line over the stack and does not participate in the running
+    /// totals (same as <see cref="LayoutStackedColumns"/>).
+    /// </summary>
+    private static void LayoutStackedAreas(
+        ChartLayoutRequest request,
+        int categoryCount,
+        bool isPercent,
+        AxisScale categoryScale,
+        AxisScale valueScale,
+        List<SeriesLayout> seriesLayouts,
+        List<DataLabelBox> dataLabels)
+    {
+        var chart = request.Chart;
+        var (posTotals, negTotals) = StackedTotals(request, categoryCount);
+        var posBases = new double[categoryCount];
+        var negBases = new double[categoryCount];
+        // Fallback zero-line baseline (only consulted if a consumer ignores BaselinePoints); the real
+        // per-category bottom is carried in each band's BaselinePoints.
+        var baselineY = valueScale.Transform(Clamp0(valueScale));
+
+        foreach (var series in request.Series)
+        {
+            // A series promoted to a combo line overlay is drawn as a line over the stack instead of a
+            // stacked band, and does not participate in the running stack totals (mirrors
+            // LayoutStackedColumns / WPF BuildStackedAreaModel, which `continue` before touching bases).
+            // Its own data labels still ride over the stack (WPF calls AddLineDataLabelAnnotations), so
+            // the real dataLabels list is threaded through — unlike the stacked bands, which emit none.
+            if (IsComboLineSeries(chart, series.SeriesIndex))
+            {
+                seriesLayouts.Add(LayoutLineSeries(request, series, categoryScale, valueScale, dataLabels));
+                continue;
+            }
+
+            var topPoints = new List<SeriesPoint>(categoryCount);
+            var bottomPoints = new List<SeriesPoint>(categoryCount);
+            for (var i = 0; i < categoryCount; i++)
+            {
+                // Blank/non-numeric ⇒ 0 so the band is continuous and higher layers keep a defined base.
+                var raw = i < series.Values.Count && series.Values[i] is { } v ? v : 0;
+                var display = isPercent ? NormalizePercent(raw, i, posTotals, negTotals) : raw;
+                var start = display >= 0 ? posBases[i] : negBases[i];
+                var end = start + display;
+
+                var x = categoryScale.Transform(i);
+                topPoints.Add(new SeriesPoint(i, i, end, new LayoutPoint(x, valueScale.Transform(end))));
+                bottomPoints.Add(new SeriesPoint(i, i, start, new LayoutPoint(x, valueScale.Transform(start))));
+
+                if (display >= 0) posBases[i] = end; else negBases[i] = end;
+            }
+
+            seriesLayouts.Add(new SeriesLayout
+            {
+                SeriesIndex = series.SeriesIndex,
+                Name = series.Name,
+                Kind = SeriesGeometryKind.Area,
+                Points = topPoints,
+                BaselinePoints = bottomPoints,
+                AreaBaseline = baselineY,
             });
         }
     }
