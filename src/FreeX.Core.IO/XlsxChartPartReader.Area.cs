@@ -189,4 +189,20 @@ public static partial class XlsxChartPartReader
         chart = result;
         return true;
     }
+
+    /// <summary>
+    /// Maps a <c>&lt;c:areaChart&gt;</c>'s <c>&lt;c:grouping val="…"/&gt;</c> to the matching Area
+    /// <see cref="ChartType"/> (mirroring <see cref="ReadBarChartType"/> for the bar/column family):
+    /// <c>stacked</c> → <see cref="ChartType.StackedArea"/>, <c>percentStacked</c> →
+    /// <see cref="ChartType.PercentStackedArea"/>, and <c>standard</c> / missing → plain
+    /// <see cref="ChartType.Area"/>. Without this, a Stacked or 100%-Stacked Area chart round-trips
+    /// as a plain overlapping Area chart.
+    /// </summary>
+    private static ChartType ReadAreaChartType(XElement? areaChart) =>
+        areaChart?.Element(ChartNs + "grouping")?.Attribute("val")?.Value switch
+        {
+            "stacked" => ChartType.StackedArea,
+            "percentStacked" => ChartType.PercentStackedArea,
+            _ => ChartType.Area
+        };
 }

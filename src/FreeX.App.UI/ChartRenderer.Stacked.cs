@@ -191,6 +191,111 @@ public static partial class ChartRenderer
     }
 
     /// <summary>
+    /// Builds a Stacked Area / 100%-Stacked Area chart: one filled <see cref="AreaSeries"/> band per
+    /// data column, each riding on the cumulative baseline of the bands below it (mirroring
+    /// <see cref="BuildStackedColumnModel"/>/<see cref="BuildStackedBarModel"/> for the area family).
+    /// Without this a stacked area chart renders as independent overlapping areas with no cumulative
+    /// baseline. For <paramref name="normalizeToPercent"/> each category's stack is scaled to 100%
+    /// via the same per-category totals used by the stacked column/bar path. The band's top polyline
+    /// is <see cref="AreaSeries.Points"/> and its bottom (the running stack base) is
+    /// <see cref="AreaSeries.Points2"/>, so OxyPlot fills exactly the segment this series contributes.
+    /// </summary>
+    private static PlotModel BuildStackedAreaModel(
+        ChartModel chart,
+        PlotModel model,
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
+        IReadOnlyList<string> categories,
+        uint dataStartRow,
+        uint endRow,
+        uint dataStartCol,
+        uint endCol,
+        uint headerRow,
+        bool normalizeToPercent,
+        WorkbookTheme theme,
+        ChartPointDataLabelFormatLookup pointDataLabelFormats)
+    {
+        // Area charts plot by point (row) index, so the running-stack bases are sized to the row
+        // span rather than the category count (categories may be empty, unlike the column path).
+        var pointCount = endRow >= dataStartRow ? (int)(endRow - dataStartRow + 1) : 0;
+        var (positiveTotals, negativeTotals) = normalizeToPercent
+            ? CalculateStackedPercentTotals(cellLookup, pointCount, dataStartRow, endRow, dataStartCol, endCol)
+            : ([], []);
+        var (percentAxisMinimum, percentAxisMaximum) =
+            GetStackedPercentAxisBounds(normalizeToPercent, positiveTotals, negativeTotals);
+
+        // Same category/value axes as the plain Area path (zero-based indexed categories). Stacked
+        // charts do not split series across a secondary axis, so none is added.
+        model.Axes.Add(CreateZeroBasedIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories));
+        model.Axes.Add(new LinearAxis
+        {
+            Position = AxisPosition.Left,
+            Title = chart.YAxisTitle,
+            Minimum = percentAxisMinimum,
+            Maximum = percentAxisMaximum
+        });
+
+        var positiveBases = new double[pointCount];
+        var negativeBases = new double[pointCount];
+        for (uint col = dataStartCol; col <= endCol; col++)
+        {
+            if (!ShouldRenderColumnAsSeries(chart, col, dataStartCol, endCol))
+                continue;
+
+            var seriesIndex = GetSeriesIndex(chart, col, dataStartCol, endCol);
+            var seriesName = chart.FirstRowIsHeader && cellLookup.TryGetValue((headerRow, col), out var hdr)
+                ? hdr.DisplayText
+                : $"Series {seriesIndex + 1}";
+
+            if (IsComboLineSeries(chart, seriesIndex))
+            {
+                // A series promoted to a combo line overlay is drawn over the stack and does not
+                // participate in the running stack totals (mirrors BuildStackedColumnModel).
+                var lineSeries = CreateLineSeries(chart, seriesName, seriesIndex, theme);
+                var pointIndex = 0;
+                for (uint row = dataStartRow; row <= endRow; row++, pointIndex++)
+                {
+                    if (TryGetNumericCell(cellLookup, row, col, out var value))
+                        lineSeries.Points.Add(new DataPoint(pointIndex, value));
+                }
+                AddLineDataLabelAnnotations(model, chart, theme, pointDataLabelFormats, lineSeries, seriesName, seriesIndex, categories);
+                model.Series.Add(lineSeries);
+                continue;
+            }
+
+            var series = new AreaSeries
+            {
+                Title = IsLegendEntryDeleted(chart, seriesIndex) ? "" : seriesName,
+                LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 1)
+            };
+            ApplyAreaFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
+            ApplyNativeDataLabelStyle(series, chart, theme);
+
+            var i = 0;
+            for (uint row = dataStartRow; row <= endRow && i < pointCount; row++, i++)
+            {
+                // A non-numeric/blank cell contributes 0 so the band stays continuous and the layers
+                // above keep a well-defined baseline (Excel stacks a blank area point as zero).
+                var hasValue = TryGetNumericCell(cellLookup, row, col, out var value);
+                var displayValue = hasValue ? NormalizeStackedValue(value, i, positiveTotals, negativeTotals) : 0;
+                var start = displayValue >= 0 ? positiveBases[i] : negativeBases[i];
+                var end = start + displayValue;
+                series.Points.Add(new DataPoint(i, end));
+                series.Points2.Add(new DataPoint(i, start));
+                if (displayValue >= 0)
+                    positiveBases[i] = end;
+                else
+                    negativeBases[i] = end;
+                if (hasValue && ShouldUseAnnotationLabels(chart))
+                    AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), i, end, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
+            }
+
+            model.Series.Add(series);
+        }
+
+        return model;
+    }
+
+    /// <summary>
     /// Detects the "progress-bar" idiom used by Excel for a horizontal completion bar (Contextures /
     /// ExcelExamples1 "todo" chart20): N stacked-bar series, each a SINGLE cell stacked within ONE
     /// category, with NO <c:cat> (so the model collapses to one column x N rows and 0 categories).

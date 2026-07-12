@@ -58,7 +58,7 @@ public static partial class XlsxChartPartReader
         else if (areaChart is not null && lineChart is not null)
             read = TryReadAreaLineComboChart(chartXml, plotArea, areaCharts, lineCharts, sheetId, sheetNameResolver, out chart);
         else if (areaCharts.Count > 0)
-            read = TryReadAreaChart(chartXml, plotArea, areaCharts, sheetId, ChartType.Area, sheetNameResolver, out chart);
+            read = TryReadAreaChart(chartXml, plotArea, areaCharts, sheetId, ReadAreaChartType(areaChart), sheetNameResolver, out chart);
         else if (threeDAreaChart is not null)
             read = TryReadAreaChart(chartXml, plotArea, threeDAreaCharts, sheetId, ChartType.ThreeDArea, sheetNameResolver, out chart);
         else if (barChart is not null && lineChart is not null && scatterCharts.Count > 0)

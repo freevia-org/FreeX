@@ -32,6 +32,8 @@ public sealed partial class ChartCommandTests
     [InlineData(ChartType.Scatter)]
     [InlineData(ChartType.Bubble)]
     [InlineData(ChartType.Area)]
+    [InlineData(ChartType.StackedArea)]
+    [InlineData(ChartType.PercentStackedArea)]
     [InlineData(ChartType.ThreeDArea)]
     [InlineData(ChartType.Radar)]
     [InlineData(ChartType.Stock)]
@@ -90,7 +92,7 @@ public sealed partial class ChartCommandTests
     [Fact]
     public void ChartTypeSupport_IdentifiesComboLineOverlayChartTypes()
     {
-        var supportedTypes = new[] { ChartType.Column, ChartType.StackedColumn, ChartType.PercentStackedColumn, ChartType.Area, ChartType.ThreeDArea };
+        var supportedTypes = new[] { ChartType.Column, ChartType.StackedColumn, ChartType.PercentStackedColumn, ChartType.Area, ChartType.StackedArea, ChartType.PercentStackedArea, ChartType.ThreeDArea };
         var unsupportedTypes = Enum.GetValues<ChartType>().Except(supportedTypes);
 
         supportedTypes.Should().OnlyContain(type => ChartTypeSupport.SupportsComboLineOverlay(type));
@@ -148,6 +150,8 @@ public sealed partial class ChartCommandTests
             ChartType.Scatter,
             ChartType.Bubble,
             ChartType.Area,
+            ChartType.StackedArea,
+            ChartType.PercentStackedArea,
             ChartType.ThreeDArea
         };
         var unsupportedTypes = Enum.GetValues<ChartType>().Except(supportedTypes);
@@ -170,6 +174,8 @@ public sealed partial class ChartCommandTests
             ChartType.Scatter,
             ChartType.Bubble,
             ChartType.Area,
+            ChartType.StackedArea,
+            ChartType.PercentStackedArea,
             ChartType.ThreeDArea
         };
 

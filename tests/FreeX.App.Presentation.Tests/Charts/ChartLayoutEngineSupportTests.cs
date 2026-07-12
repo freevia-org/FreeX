@@ -18,6 +18,8 @@ public sealed class ChartLayoutEngineSupportTests
     [InlineData(ChartType.ThreeDBar)]
     [InlineData(ChartType.Line)]
     [InlineData(ChartType.Area)]
+    [InlineData(ChartType.StackedArea)]
+    [InlineData(ChartType.PercentStackedArea)]
     [InlineData(ChartType.Scatter)]
     [InlineData(ChartType.Bubble)]
     [InlineData(ChartType.Radar)]

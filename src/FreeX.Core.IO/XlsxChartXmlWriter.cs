@@ -134,7 +134,8 @@ internal static partial class XlsxChartXmlWriter
         }
 
         if ((secondaryIndexes.Count > 0 || comboLineIndexes.Count > 0) &&
-            chart.Type is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn or ChartType.Area or ChartType.ThreeDArea)
+            chart.Type is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn
+                or ChartType.Area or ChartType.StackedArea or ChartType.PercentStackedArea or ChartType.ThreeDArea)
         {
             var primaryBase = Enumerable.Range(0, seriesCount)
                 .Where(index => !secondaryIndexes.Contains(index) && !comboLineIndexes.Contains(index))
@@ -184,8 +185,8 @@ internal static partial class XlsxChartXmlWriter
             ChartType.ThreeDSurface => new XElement(chartNs + "surface3DChart",
                 new XElement(chartNs + "wireframe", new XAttribute("val", "0")),
                 BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)),
-            ChartType.Area => new XElement(chartNs + "areaChart",
-                new XElement(chartNs + "grouping", new XAttribute("val", "standard")),
+            ChartType.Area or ChartType.StackedArea or ChartType.PercentStackedArea => new XElement(chartNs + "areaChart",
+                new XElement(chartNs + "grouping", new XAttribute("val", ToXlsxAreaGrouping(chart.Type))),
                 BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)),
             ChartType.ThreeDArea => new XElement(chartNs + "area3DChart",
                 new XElement(chartNs + "grouping", new XAttribute("val", "standard")),
@@ -477,6 +478,16 @@ internal static partial class XlsxChartXmlWriter
             ChartType.StackedColumn or ChartType.StackedBar => "stacked",
             ChartType.PercentStackedColumn or ChartType.PercentStackedBar => "percentStacked",
             _ => "clustered"
+        };
+
+    // c:areaChart uses ST_Grouping (percentStacked | standard | stacked) — no "clustered" member,
+    // unlike the bar/column ST_BarGrouping above — so a plain/3-D Area chart writes "standard".
+    private static string ToXlsxAreaGrouping(ChartType chartType) =>
+        chartType switch
+        {
+            ChartType.StackedArea => "stacked",
+            ChartType.PercentStackedArea => "percentStacked",
+            _ => "standard"
         };
 
     private static string FormatSheetRange(string sheetName, uint startRow, uint startCol, uint endRow, uint endCol)

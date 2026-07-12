@@ -330,7 +330,7 @@ public static partial class ChartRenderer
 
         if (chart.Type is ChartType.Line or ChartType.ThreeDLine)
             DrawDirectLineChart(dc, data, plot, minimum, maximum, fillArea: false);
-        else if (chart.Type is ChartType.Area or ChartType.ThreeDArea)
+        else if (chart.Type is ChartType.Area or ChartType.StackedArea or ChartType.PercentStackedArea or ChartType.ThreeDArea)
             DrawDirectLineChart(dc, data, plot, minimum, maximum, fillArea: true);
         else if (chart.Type == ChartType.Scatter)
             DrawDirectScatterChart(dc, data, plot, minimum, maximum);

@@ -991,6 +991,20 @@ internal static partial class XlsxCorpusFixtureFactory
         });
         sheet.Charts.Add(new ChartModel
         {
+            Type = ChartType.StackedArea,
+            DataRange = dataRange,
+            Title = "Stacked Area",
+            ShowLegend = true
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.PercentStackedArea,
+            DataRange = dataRange,
+            Title = "Percent Stacked Area",
+            ShowLegend = true
+        });
+        sheet.Charts.Add(new ChartModel
+        {
             Type = ChartType.ThreeDColumn,
             DataRange = dataRange,
             Title = "3D Column",

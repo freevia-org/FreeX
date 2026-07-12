@@ -194,6 +194,14 @@ public static partial class ChartRenderer
             return stackedBarModel;
         }
 
+        if (chart.Type is ChartType.StackedArea or ChartType.PercentStackedArea)
+        {
+            var stackedAreaModel = BuildStackedAreaModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, chart.Type == ChartType.PercentStackedArea, theme, pointDataLabelFormats);
+            ApplyAxisBounds(stackedAreaModel, chart, theme);
+            AddChartDataTableAnnotations(stackedAreaModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
+            return stackedAreaModel;
+        }
+
         if (chart.Type == ChartType.Bubble)
         {
             var bubbleModel = BuildBubbleModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme, pointDataLabelFormats, out var trendPoints);

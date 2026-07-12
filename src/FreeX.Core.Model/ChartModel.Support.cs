@@ -15,6 +15,8 @@ public enum ChartType
     Scatter,
     Bubble,
     Area,
+    StackedArea,
+    PercentStackedArea,
     Radar,
     Stock,
     Surface,

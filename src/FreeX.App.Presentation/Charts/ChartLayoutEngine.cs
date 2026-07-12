@@ -116,6 +116,8 @@ public static class ChartLayoutEngine
             or ChartType.Line
             or ChartType.ThreeDLine
             or ChartType.Area
+            or ChartType.StackedArea
+            or ChartType.PercentStackedArea
             or ChartType.ThreeDArea
             or ChartType.Scatter
             or ChartType.Bubble
@@ -378,7 +380,13 @@ public static class ChartLayoutEngine
                 {
                     laid = chart.Type switch
                     {
-                        ChartType.Area or ChartType.ThreeDArea =>
+                        // StackedArea/PercentStackedArea currently render as filled area bands from
+                        // the zero baseline (same as the plain Area path) rather than as a cumulative
+                        // stack: the portable SeriesLayout only carries a scalar AreaBaseline, so a
+                        // variable per-category stack baseline needs a follow-up geometry change. This
+                        // keeps them drawn (not skipped) so opening a stacked-area workbook does not
+                        // regress from the pre-fix overlapping-area rendering.
+                        ChartType.Area or ChartType.StackedArea or ChartType.PercentStackedArea or ChartType.ThreeDArea =>
                             LayoutAreaSeries(request, series, categoryScale, yScale, baseY, dataLabels),
                         _ => LayoutLineSeries(request, series, categoryScale, yScale, dataLabels),
                     };

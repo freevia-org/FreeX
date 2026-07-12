@@ -44,6 +44,8 @@ public static class ChartTypeSupport
             or ChartType.Scatter
             or ChartType.Bubble
             or ChartType.Area
+            or ChartType.StackedArea
+            or ChartType.PercentStackedArea
             or ChartType.Radar
             or ChartType.Stock
             or ChartType.Surface
@@ -69,7 +71,8 @@ public static class ChartTypeSupport
         type is not ChartType.Pie and not ChartType.ThreeDPie and not ChartType.Doughnut;
 
     public static bool SupportsComboLineOverlay(ChartType type) =>
-        type is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn or ChartType.Area or ChartType.ThreeDArea;
+        type is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn
+            or ChartType.Area or ChartType.StackedArea or ChartType.PercentStackedArea or ChartType.ThreeDArea;
 
     public static bool SupportsComboLineOverlay(ChartModel chart) =>
         SupportsComboLineOverlay(chart.Type) && GetDataSeriesCount(chart) >= 2;
@@ -78,7 +81,7 @@ public static class ChartTypeSupport
         type is ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar or ChartType.ThreeDBar or ChartType.Scatter or ChartType.Bubble;
 
     public static bool SupportsYAxisLogScale(ChartType type) =>
-        type is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn or ChartType.Line or ChartType.ThreeDLine or ChartType.Scatter or ChartType.Bubble or ChartType.Area or ChartType.ThreeDArea;
+        type is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn or ChartType.Line or ChartType.ThreeDLine or ChartType.Scatter or ChartType.Bubble or ChartType.Area or ChartType.StackedArea or ChartType.PercentStackedArea or ChartType.ThreeDArea;
 
     public static bool SupportsXAxisBounds(ChartType type) => SupportsXAxisLogScale(type);
 
@@ -104,7 +107,7 @@ public static class ChartTypeSupport
             or ChartType.ThreeDBar;
 
     public static bool SupportsPercentageDataLabels(ChartType type) =>
-        type is ChartType.Pie or ChartType.ThreeDPie or ChartType.Doughnut or ChartType.PercentStackedColumn or ChartType.PercentStackedBar;
+        type is ChartType.Pie or ChartType.ThreeDPie or ChartType.Doughnut or ChartType.PercentStackedColumn or ChartType.PercentStackedBar or ChartType.PercentStackedArea;
 
     public static bool SupportsFirstSliceAngle(ChartType type) =>
         type is ChartType.Pie or ChartType.ThreeDPie or ChartType.Doughnut;
