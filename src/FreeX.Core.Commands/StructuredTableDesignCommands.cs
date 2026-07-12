@@ -163,6 +163,21 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
                 affectedCells.AddRange(totalsAffected);
         }
 
+        // A formula elsewhere in the workbook that references this table by a structured reference
+        // (e.g. D1=SUM(Table1[Amount])) had its dependency-graph edges registered against the
+        // table's PRE-resize extent. Growing/shrinking the table's Range above does not by itself
+        // touch that formula, so unless it is surfaced here, the standard post-command pipeline
+        // (WorkbookCellEditService.UpdateFormulaDependencies, driven off AffectedCells) never
+        // re-registers it -- leaving it wired to the stale range forever, so a later edit to a
+        // newly-added row would not dirty/recalculate it. Listing it here forces that re-registration
+        // (against the now-live, resized table) without altering the formula text itself.
+        var seenAffected = new HashSet<CellAddress>(affectedCells);
+        foreach (var address in FindFormulaCellsReferencingTable(ctx.Workbook, resizedTable))
+        {
+            if (seenAffected.Add(address))
+                affectedCells.Add(address);
+        }
+
         return new CommandOutcome(true, AffectedCells: affectedCells);
     }
 
@@ -285,6 +300,74 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
             _previousCells[address] = sheet.GetCell(address)?.Clone();
         sheet.SetCell(address, cell);
     }
+
+    /// <summary>
+    /// Finds every formula cell in the workbook whose AST contains a structured reference
+    /// (<see cref="StructuredReferenceNode"/> or <see cref="StructuredCurrentRowReferenceNode"/>)
+    /// naming <paramref name="table"/> explicitly (by <see cref="StructuredTableModel.Name"/> or
+    /// <see cref="StructuredTableModel.DisplayName"/>) -- i.e. formulas anywhere else in the
+    /// workbook that depend on this table, whose registered dependencies need refreshing after a
+    /// resize. A malformed formula is skipped rather than surfaced (it has no resolvable
+    /// dependencies either way).
+    /// </summary>
+    private static IEnumerable<CellAddress> FindFormulaCellsReferencingTable(Workbook workbook, StructuredTableModel table)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            foreach (var address in sheet.EnumerateFormulaCells())
+            {
+                var cell = sheet.GetCell(address);
+                if (cell?.FormulaText is null)
+                    continue;
+
+                FormulaNode ast;
+                try
+                {
+                    ast = cell.CachedAst as FormulaNode ?? FormulaEvaluator.ParseFormula(cell.FormulaText);
+                }
+                catch (FormulaParseException)
+                {
+                    continue;
+                }
+
+                if (ReferencesTableByName(ast, table.Name, table.DisplayName))
+                    yield return address;
+            }
+        }
+    }
+
+    private static bool ReferencesTableByName(FormulaNode node, string tableName, string? displayName)
+    {
+        switch (node)
+        {
+            case StructuredReferenceNode structuredRef:
+                return MatchesTableName(structuredRef.TableName, tableName, displayName);
+            case StructuredCurrentRowReferenceNode currentRowRef:
+                return MatchesTableName(currentRowRef.TableName, tableName, displayName);
+            case BinaryOpNode binary:
+                return ReferencesTableByName(binary.Left, tableName, displayName) ||
+                       ReferencesTableByName(binary.Right, tableName, displayName);
+            case UnaryOpNode unary:
+                return ReferencesTableByName(unary.Operand, tableName, displayName);
+            case FunctionCallNode call:
+                foreach (var argument in call.Arguments)
+                {
+                    if (ReferencesTableByName(argument, tableName, displayName))
+                        return true;
+                }
+                return false;
+            default:
+                // NumberNode, StringNode, BooleanNode, CellRefNode, RangeRefNode,
+                // FullColumnRangeRefNode, FullRowRangeRefNode, NamedRangeNode, ErrorNode,
+                // ArrayConstantNode, and OmittedArgumentNode never nest a structured reference.
+                return false;
+        }
+    }
+
+    private static bool MatchesTableName(string? candidate, string tableName, string? displayName) =>
+        !string.IsNullOrWhiteSpace(candidate) &&
+        (string.Equals(candidate, tableName, StringComparison.OrdinalIgnoreCase) ||
+         (displayName is not null && string.Equals(candidate, displayName, StringComparison.OrdinalIgnoreCase)));
 
     private static string? ValidateResizeRange(StructuredTableModel table, GridRange range)
     {

@@ -236,6 +236,12 @@ public sealed partial class FormulaEvaluator
             if (hasValue != hasDate)
                 return ErrorValue.Num;
 
+            // Excel's XNPV returns #NUM! when any date precedes the first (anchor) date
+            // (mirrors the slow-path guard in BuiltInFunctions.Financial.CashFlow.cs,
+            // R32-formula-financial-remaining-1).
+            if (dateSerial < firstDateSerial)
+                return ErrorValue.Num;
+
             var yearFraction = (ExcelDateSystem.SerialToDate(dateSerial) - firstDate).TotalDays / 365.0;
             result += cashFlow / Math.Pow(1 + rate, yearFraction);
         }

@@ -635,8 +635,12 @@ public sealed partial class XlsxFileAdapter
                 xlRun.Italic = italic;
 
             if (run.Underline is { } underline)
+                // R32: preserve double/double-accounting underline instead of always
+                // downgrading to Single (mirrors CellStyle.DoubleUnderline for whole-cell fonts).
                 xlRun.Underline = underline
-                    ? XLFontUnderlineValues.Single
+                    ? run.DoubleUnderline == true
+                        ? XLFontUnderlineValues.Double
+                        : XLFontUnderlineValues.Single
                     : XLFontUnderlineValues.None;
 
             if (run.Strikethrough is { } strike)
@@ -650,6 +654,22 @@ public sealed partial class XlsxFileAdapter
 
             if (run.FontColor is { } runColor)
                 xlRun.FontColor = MapRunColorToXLColor(runColor);
+
+            // R32: charset/family — underlying enum values match the raw OOXML numeric codes,
+            // so a direct cast round-trips faithfully (e.g. charset=128 -> ShiftJIS).
+            if (run.Charset is { } charset)
+                xlRun.FontCharSet = (XLFontCharSet)charset;
+
+            if (run.Family is { } family)
+                xlRun.FontFamilyNumbering = (XLFontFamilyNumberingValues)family;
+
+            if (run.Scheme is { } scheme)
+                xlRun.FontScheme = scheme switch
+                {
+                    "major" => XLFontScheme.Major,
+                    "minor" => XLFontScheme.Minor,
+                    _       => XLFontScheme.None,
+                };
 
             xlRun.VerticalAlignment = run.VertAlign switch
             {

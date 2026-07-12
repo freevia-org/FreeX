@@ -511,7 +511,7 @@ public static partial class NumberFormatter
 
             if (format.All(c => c is '?' || char.IsWhiteSpace(c)) &&
                 !ShouldRenderQuestionOnlyFormat(prefix, suffix))
-                return NativeDigits(prefix + suffix);
+                return NativeDigits(prefix + RenderQuestionOnlyAlignment(format) + suffix);
 
             if (string.IsNullOrEmpty(format))
                 return NativeDigits(prefix + suffix);

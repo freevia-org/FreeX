@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
@@ -93,7 +94,12 @@ internal static class HtmlTableWriter
 
                     var css = style is not null ? BuildCss(style, workbook.Theme) : "";
                     var styleAttr = css.Length > 0 ? $" style=\"{css}\"" : "";
-                    var display = HtmlText.Escape(DisplayValue(value));
+                    var display = HtmlText.Escape(DisplayValue(value, style, workbook));
+                    if (sheet.Hyperlinks.TryGetValue(new CellAddress(sheet.Id, r, c), out var hyperlink) &&
+                        !string.IsNullOrEmpty(hyperlink))
+                    {
+                        display = $"<a href=\"{HtmlText.Escape(hyperlink)}\">{display}</a>";
+                    }
                     writer.Write($"<td{spanAttrs}{styleAttr}>{display}</td>");
                 }
                 writer.WriteLine("</tr>");
@@ -107,16 +113,38 @@ internal static class HtmlTableWriter
 
     // ---- value display ----------------------------------------------------------------------------
 
-    private static string DisplayValue(ScalarValue value) => value switch
+    private static string DisplayValue(ScalarValue value, CellStyle? style, Workbook workbook)
     {
-        BlankValue => "",
-        NumberValue n => FormatNumber(n.Value),
-        DateTimeValue d => FormatDate(d),
-        BoolValue b => b.Value ? "TRUE" : "FALSE",
-        TextValue t => t.Value,
-        ErrorValue e => e.Code,
-        _ => value.ToString() ?? "",
-    };
+        // Honor the cell's NumberFormat (e.g. "0%", a date/time pattern, custom currency) for
+        // numbers/dates so the exported HTML shows what the user actually sees in the grid ("50%"
+        // instead of the raw invariant "0.5", a formatted date instead of a bare OADate serial) —
+        // matching PortablePdfPageContentPlanner.GetDisplayText. A cell with no style or the default
+        // "General" format keeps the prior self-contained invariant rendering below, so plain
+        // number/date round-trips (no explicit format) are unaffected.
+        if (style is not null &&
+            !string.IsNullOrEmpty(style.NumberFormat) &&
+            !string.Equals(style.NumberFormat, "General", StringComparison.OrdinalIgnoreCase) &&
+            value is NumberValue or DateTimeValue)
+        {
+            return NumberFormatter.FormatWithColor(
+                value,
+                style.NumberFormat,
+                workbook.IndexedColors,
+                workbook.Theme,
+                workbook.Uses1904DateSystem).Text;
+        }
+
+        return value switch
+        {
+            BlankValue => "",
+            NumberValue n => FormatNumber(n.Value),
+            DateTimeValue d => FormatDate(d),
+            BoolValue b => b.Value ? "TRUE" : "FALSE",
+            TextValue t => t.Value,
+            ErrorValue e => e.Code,
+            _ => value.ToString() ?? "",
+        };
+    }
 
     private static string FormatNumber(double v)
     {

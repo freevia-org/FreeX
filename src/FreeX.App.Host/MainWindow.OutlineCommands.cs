@@ -47,11 +47,13 @@ public partial class MainWindow
     {
         IWorkbookCommand CreateCommand()
         {
-            var axis = SheetGrid.SelectedRange is { } range
-                ? OutlineGroupingService.GetGroupingAxis(range)
-                : OutlineGroupingAxis.Rows;
-            return axis == OutlineGroupingAxis.Columns
-                ? new CollapseColGroupCommand(_currentSheetId, 1)
+            var range = SheetGrid.SelectedRange;
+            var axis = range is { } r ? OutlineGroupingService.GetGroupingAxis(r) : OutlineGroupingAxis.Rows;
+            if (axis == OutlineGroupingAxis.Columns)
+                return new CollapseColGroupCommand(_currentSheetId, 1);
+
+            return range is { } rowRange
+                ? new CollapseRowGroupCommand(_currentSheetId, 1, rowRange.Start.Row, rowRange.End.Row)
                 : new CollapseRowGroupCommand(_currentSheetId, 1);
         }
 
@@ -70,11 +72,13 @@ public partial class MainWindow
     {
         IWorkbookCommand CreateCommand()
         {
-            var axis = SheetGrid.SelectedRange is { } range
-                ? OutlineGroupingService.GetGroupingAxis(range)
-                : OutlineGroupingAxis.Rows;
-            return axis == OutlineGroupingAxis.Columns
-                ? new ExpandColGroupCommand(_currentSheetId, 1)
+            var range = SheetGrid.SelectedRange;
+            var axis = range is { } r ? OutlineGroupingService.GetGroupingAxis(r) : OutlineGroupingAxis.Rows;
+            if (axis == OutlineGroupingAxis.Columns)
+                return new ExpandColGroupCommand(_currentSheetId, 1);
+
+            return range is { } rowRange
+                ? new ExpandRowGroupCommand(_currentSheetId, 1, rowRange.Start.Row, rowRange.End.Row)
                 : new ExpandRowGroupCommand(_currentSheetId, 1);
         }
 

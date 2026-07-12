@@ -65,19 +65,86 @@ public sealed class GroupRowsCommand : IWorkbookCommand
     }
 }
 
-/// <summary>Collapses (hides) all rows whose outline level is >= the given level.</summary>
+/// <summary>
+/// Resolves the single contiguous row-outline group nearest a selection, so ribbon
+/// Hide/Show-Detail commands can scope themselves to "the group at the cursor" (matching
+/// Excel) instead of acting on the whole sheet.
+/// </summary>
+internal static class RowOutlineGroupScope
+{
+    /// <summary>
+    /// Given a selection [selectionStart, selectionEnd], finds the innermost contiguous run of
+    /// rows sharing an outline level that the selection sits inside (or immediately borders, for
+    /// the case where the selection is on the group's summary/toggle row). Returns null when the
+    /// selection isn't associated with any group.
+    /// </summary>
+    public static (uint Start, uint End, int Level)? Resolve(
+        IReadOnlyDictionary<uint, int> levels, uint selectionStart, uint selectionEnd)
+    {
+        uint anchor = 0;
+        var found = false;
+        for (var r = selectionStart; r <= selectionEnd; r++)
+        {
+            if (levels.TryGetValue(r, out var lvl) && lvl > 0)
+            {
+                anchor = r;
+                found = true;
+                break;
+            }
+        }
+
+        if (!found)
+        {
+            if (selectionStart > 0 && levels.TryGetValue(selectionStart - 1, out var above) && above > 0)
+            {
+                anchor = selectionStart - 1;
+                found = true;
+            }
+            else if (levels.TryGetValue(selectionEnd + 1, out var below) && below > 0)
+            {
+                anchor = selectionEnd + 1;
+                found = true;
+            }
+        }
+
+        if (!found)
+            return null;
+
+        var level = levels[anchor];
+
+        var start = anchor;
+        while (start > 0 && levels.TryGetValue(start - 1, out var prevLevel) && prevLevel >= level)
+            start--;
+
+        var end = anchor;
+        while (levels.TryGetValue(end + 1, out var nextLevel) && nextLevel >= level)
+            end++;
+
+        return (start, end, level);
+    }
+}
+
+/// <summary>
+/// Collapses (hides) rows whose outline level is >= the given level. When a selection is
+/// supplied, only the specific contiguous group at that selection is affected (matching Excel);
+/// omitting the selection preserves the legacy sheet-wide behavior for existing callers.
+/// </summary>
 public sealed class CollapseRowGroupCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
     private readonly int _level;
+    private readonly uint? _selectionStart;
+    private readonly uint? _selectionEnd;
     private HashSet<uint>? _newly;
 
     public string Label => "Collapse Group";
 
-    public CollapseRowGroupCommand(SheetId sheetId, int level)
+    public CollapseRowGroupCommand(SheetId sheetId, int level, uint? selectionStart = null, uint? selectionEnd = null)
     {
         _sheetId = sheetId;
         _level   = level;
+        _selectionStart = selectionStart;
+        _selectionEnd   = selectionEnd ?? selectionStart;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -87,6 +154,24 @@ public sealed class CollapseRowGroupCommand : IWorkbookCommand
             return protectedOutcome;
 
         _newly = [];
+
+        if (_selectionStart is { } selStart)
+        {
+            if (RowOutlineGroupScope.Resolve(sheet.RowOutlineLevels, selStart, _selectionEnd ?? selStart) is not { } group)
+                return new CommandOutcome(true);
+
+            foreach (var (row, lvl) in sheet.RowOutlineLevels)
+            {
+                if (row < group.Start || row > group.End || lvl < group.Level)
+                    continue;
+                if (sheet.GroupHiddenRows.Contains(row))
+                    continue;
+                sheet.GroupHiddenRows.Add(row);
+                _newly.Add(row);
+            }
+            return new CommandOutcome(true);
+        }
+
         foreach (var (row, lvl) in sheet.RowOutlineLevels)
         {
             if (lvl >= _level && !sheet.GroupHiddenRows.Contains(row))
@@ -107,19 +192,27 @@ public sealed class CollapseRowGroupCommand : IWorkbookCommand
     }
 }
 
-/// <summary>Expands (shows) all rows whose outline level is >= the given level.</summary>
+/// <summary>
+/// Expands (shows) rows whose outline level is >= the given level. When a selection is
+/// supplied, only the specific contiguous group at that selection is affected (matching Excel);
+/// omitting the selection preserves the legacy sheet-wide behavior for existing callers.
+/// </summary>
 public sealed class ExpandRowGroupCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
     private readonly int _level;
+    private readonly uint? _selectionStart;
+    private readonly uint? _selectionEnd;
     private HashSet<uint>? _removed;
 
     public string Label => "Expand Group";
 
-    public ExpandRowGroupCommand(SheetId sheetId, int level)
+    public ExpandRowGroupCommand(SheetId sheetId, int level, uint? selectionStart = null, uint? selectionEnd = null)
     {
         _sheetId = sheetId;
         _level   = level;
+        _selectionStart = selectionStart;
+        _selectionEnd   = selectionEnd ?? selectionStart;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -129,6 +222,24 @@ public sealed class ExpandRowGroupCommand : IWorkbookCommand
             return protectedOutcome;
 
         _removed = [];
+
+        if (_selectionStart is { } selStart)
+        {
+            if (RowOutlineGroupScope.Resolve(sheet.RowOutlineLevels, selStart, _selectionEnd ?? selStart) is not { } group)
+                return new CommandOutcome(true);
+
+            foreach (var row in sheet.GroupHiddenRows.ToList())
+            {
+                if (row < group.Start || row > group.End)
+                    continue;
+                if (!sheet.RowOutlineLevels.TryGetValue(row, out var lvl) || lvl < group.Level)
+                    continue;
+                sheet.GroupHiddenRows.Remove(row);
+                _removed.Add(row);
+            }
+            return new CommandOutcome(true);
+        }
+
         foreach (var row in sheet.GroupHiddenRows.ToList())
         {
             if (sheet.RowOutlineLevels.TryGetValue(row, out var lvl) && lvl >= _level)

@@ -86,16 +86,15 @@ public static partial class NumberFormatter
                 : text.Insert(directiveFillIndex, fill);
         }
 
-        int fillIndex = FindAccountingFillInsertionIndex(text);
-        if (fillIndex < 0)
-        {
-            var trailingSkipSpaces = CountTrailingSkipDirectives(format);
-            return trailingSkipSpaces > 0
-                ? text + new string(' ', trailingSkipSpaces)
-                : text;
-        }
-
-        return text.Insert(fillIndex, new string(' ', fillWidth));
+        // No asterisk anywhere in the format (TryGetFillDirective above already handles
+        // every genuine "<symbol>* " stretch idiom), so any remaining "_)"/"_x" here is a
+        // fixed single-character reserve, not a stretch-to-width directive. Never insert a
+        // gap mid-string (e.g. right after a "$" prefix) for this case -- only append the
+        // reserved trailing space(s), matching the no-symbol-prefix "0_)" idiom.
+        var trailingSkipSpaces = CountTrailingSkipDirectives(format);
+        return trailingSkipSpaces > 0
+            ? text + new string(' ', trailingSkipSpaces)
+            : text;
     }
 
     private static int CountTrailingSkipDirectives(string format)

@@ -50,11 +50,15 @@ internal static class XlsxRichRunReader
             bool?  bold          = null;
             bool?  italic        = null;
             bool?  underline     = null;
+            bool?  doubleUnderline = null;
             bool?  strikethrough = null;
             string? fontName     = null;
             double? fontSize     = null;
             CellRunColor? fontColor = null;
             var vertAlign        = CellTextRunVertAlign.None;
+            int?    charset      = null;
+            int?    family       = null;
+            string? scheme       = null;
 
             if (rPr is not null)
             {
@@ -74,12 +78,17 @@ internal static class XlsxRichRunReader
                     anyFormatting = true;
                 }
 
-                // Underline: <u/> (any non-"none" value counts)
+                // Underline: <u/> (any non-"none" value counts). "double"/"doubleAccounting"
+                // are additionally flagged via DoubleUnderline (R32: previously collapsed to a
+                // bare bool, silently downgrading double underline to single on the next save).
                 var uEl = rPr.Element(workbookNs + "u");
                 if (uEl is not null)
                 {
                     var uVal = uEl.Attribute("val")?.Value;
                     underline = !string.Equals(uVal, "none", StringComparison.OrdinalIgnoreCase);
+                    if (underline == true)
+                        doubleUnderline = string.Equals(uVal, "double", StringComparison.OrdinalIgnoreCase) ||
+                                           string.Equals(uVal, "doubleAccounting", StringComparison.OrdinalIgnoreCase);
                     anyFormatting = true;
                 }
 
@@ -97,6 +106,35 @@ internal static class XlsxRichRunReader
                 if (!string.IsNullOrWhiteSpace(rFontVal))
                 {
                     fontName = rFontVal;
+                    anyFormatting = true;
+                }
+
+                // Charset: <charset val="…"/> (R32: raw OOXML charset code, e.g. 128 = ShiftJIS)
+                var charsetEl = rPr.Element(workbookNs + "charset");
+                var charsetVal = charsetEl?.Attribute("val")?.Value;
+                if (!string.IsNullOrWhiteSpace(charsetVal) &&
+                    int.TryParse(charsetVal, NumberStyles.Integer, CultureInfo.InvariantCulture, out var charsetNum))
+                {
+                    charset = charsetNum;
+                    anyFormatting = true;
+                }
+
+                // Family: <family val="…"/> (R32: raw OOXML font-family-numbering code, 0-5)
+                var familyEl = rPr.Element(workbookNs + "family");
+                var familyVal = familyEl?.Attribute("val")?.Value;
+                if (!string.IsNullOrWhiteSpace(familyVal) &&
+                    int.TryParse(familyVal, NumberStyles.Integer, CultureInfo.InvariantCulture, out var familyNum))
+                {
+                    family = familyNum;
+                    anyFormatting = true;
+                }
+
+                // Scheme: <scheme val="major|minor|none"/> (R32: theme-font-following hint)
+                var schemeEl = rPr.Element(workbookNs + "scheme");
+                var schemeVal = schemeEl?.Attribute("val")?.Value;
+                if (!string.IsNullOrWhiteSpace(schemeVal))
+                {
+                    scheme = schemeVal;
                     anyFormatting = true;
                 }
 
@@ -135,7 +173,8 @@ internal static class XlsxRichRunReader
                 }
             }
 
-            runs.Add(new CellTextRun(text, bold, italic, underline, strikethrough, fontName, fontSize, fontColor, vertAlign));
+            runs.Add(new CellTextRun(text, bold, italic, underline, strikethrough, fontName, fontSize, fontColor, vertAlign,
+                doubleUnderline, charset, family, scheme));
         }
 
         // Single unstyled run → no need to populate the parallel map.

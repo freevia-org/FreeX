@@ -1879,6 +1879,17 @@ public sealed class WorkbookSession
             throw new InvalidOperationException("Cell edit address must belong to the active sheet.");
 
         var cell = CellEntryParser.CreateCell(text, address, useR1C1ReferenceStyle);
+
+        // Enforce Stop-style data validation rules the same way the WPF host's
+        // TryCreateCellFromEntryText does, so a Stop-alert DV rule actually blocks bad entries
+        // on the Avalonia shell instead of being purely decorative. Warning/Information styles
+        // (DataValidationInvalidEntryAction.AskToContinue) need a user-facing prompt with
+        // Yes/No/Cancel semantics that has no seam in this host-agnostic session yet, so those
+        // are intentionally left to pass through unchanged for now -- only Block is enforced here.
+        var blockMessage = TryGetBlockingValidationMessage(cell, address);
+        if (blockMessage != null)
+            return new WorkbookCellEditResult(false, blockMessage, [], RecalcReport: null);
+
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
             CreateEditCellsCommand([(address, cell)]));
@@ -1888,6 +1899,38 @@ public sealed class WorkbookSession
 
         ApplySuccessfulEditResult(result, address);
         return result;
+    }
+
+    /// <summary>
+    /// Returns the violation message for the first applicable data-validation rule that
+    /// blocks <paramref name="cell"/> at <paramref name="address"/> (a Stop-alert rule with
+    /// <c>ShowErrorMessage</c> set), or null if no rule blocks the entry.
+    /// </summary>
+    private string? TryGetBlockingValidationMessage(Cell cell, CellAddress address)
+    {
+        var sheet = Workbook.GetSheet(address.Sheet);
+        if (sheet == null)
+            return null;
+
+        var value = cell.HasFormula
+            ? new FreeX.Core.Formula.FormulaEvaluator().Evaluate(cell.FormulaText!, sheet, Workbook, currentCell: address)
+            : cell.Value;
+
+        foreach (var dv in DataValidationService.GetApplicable(sheet, address))
+        {
+            var msg = DataValidationService.Validate(dv, value, sheet, address, Workbook);
+            if (msg == null)
+                continue;
+
+            if (DataValidationService.GetInvalidEntryAction(dv) == DataValidationInvalidEntryAction.Block)
+                return msg;
+
+            // AskToContinue (Warning/Information) is not enforced yet -- only the first
+            // violated rule matters for Excel's "first rule wins" behavior, so stop here.
+            break;
+        }
+
+        return null;
     }
 
     public WorkbookCellEditResult InsertAutoSumFormula(string functionName)

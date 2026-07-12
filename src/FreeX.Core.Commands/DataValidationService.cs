@@ -317,6 +317,14 @@ public static partial class DataValidationService
         return diff <= WholeNumberTolerance * scale;
     }
 
+    // Three-way compare that treats values within IsEffectivelyEqual's tolerance as equal.
+    // Between/NotBetween/GreaterThan/LessThan/GreaterOrEqual/LessOrEqual bound checks must use
+    // this instead of raw double comparisons, otherwise a value already accepted as
+    // "effectively" a whole/decimal number (e.g. 10.000000000000002 ~ 10) can still be rejected
+    // at the bound itself (10.000000000000002 <= 10 is false with a raw comparison).
+    private static int CompareTolerant(double a, double b) =>
+        IsEffectivelyEqual(a, b) ? 0 : a.CompareTo(b);
+
     private static string? ValidateNumeric(
         DataValidation dv,
         ScalarValue value,
@@ -354,14 +362,14 @@ public static partial class DataValidationService
 
         bool passes = dv.Operator switch
         {
-            DvOperator.Between             => numericValue >= v1 && numericValue <= v2,
-            DvOperator.NotBetween          => numericValue < v1 || numericValue > v2,
+            DvOperator.Between             => CompareTolerant(numericValue, v1) >= 0 && CompareTolerant(numericValue, v2) <= 0,
+            DvOperator.NotBetween          => CompareTolerant(numericValue, v1) < 0 || CompareTolerant(numericValue, v2) > 0,
             DvOperator.Equal               => IsEffectivelyEqual(numericValue, v1),
             DvOperator.NotEqual            => !IsEffectivelyEqual(numericValue, v1),
-            DvOperator.GreaterThan         => numericValue > v1,
-            DvOperator.LessThan            => numericValue < v1,
-            DvOperator.GreaterThanOrEqual  => numericValue >= v1,
-            DvOperator.LessThanOrEqual     => numericValue <= v1,
+            DvOperator.GreaterThan         => CompareTolerant(numericValue, v1) > 0,
+            DvOperator.LessThan            => CompareTolerant(numericValue, v1) < 0,
+            DvOperator.GreaterThanOrEqual  => CompareTolerant(numericValue, v1) >= 0,
+            DvOperator.LessThanOrEqual     => CompareTolerant(numericValue, v1) <= 0,
             _                              => true
         };
 

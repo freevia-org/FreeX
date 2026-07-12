@@ -76,7 +76,9 @@ public static partial class BuiltInFunctions
             else if (cf[i] < 0) xirrHasNegative = true;
         }
         if (!xirrHasPositive || !xirrHasNegative) return ErrorValue.Num;
-        NormalizeDateSerialsToYearFractions(ds);
+        // Excel's documented XIRR contract: "dates" must not contain any date that precedes
+        // the first (anchor) date; such input returns #NUM! rather than converging to a rate.
+        if (!NormalizeDateSerialsToYearFractions(ds)) return ErrorValue.Num;
         double r = guess;
         bool converged = false;
         for (int iter = 0; iter < 200; iter++)
@@ -150,6 +152,10 @@ public static partial class BuiltInFunctions
                 !TryReadNextRangeNumber(dateRange, ref dateRow, ref dateCol, out var dateSerial))
                 return ErrorValue.Num;
 
+            // Excel's documented XNPV contract: "If any number in dates precedes the starting
+            // date, XNPV returns the #NUM! error value."
+            if (dateSerial < firstDateSerial) return ErrorValue.Num;
+
             var yearFraction = (SerialToDate(dateSerial) - firstDate).TotalDays / 365.0;
             result += cashFlow / Math.Pow(1 + rate, yearFraction);
         }
@@ -186,11 +192,21 @@ public static partial class BuiltInFunctions
         return false;
     }
 
-    private static void NormalizeDateSerialsToYearFractions(List<double> serials)
+    /// <summary>
+    /// Converts date serials in-place to year-fractions relative to the first (anchor) date.
+    /// Returns false if any date precedes the anchor date, matching Excel's documented XIRR
+    /// contract that dates must not precede the starting date.
+    /// </summary>
+    private static bool NormalizeDateSerialsToYearFractions(List<double> serials)
     {
-        var firstDate = SerialToDate(serials[0]);
+        var firstSerial = serials[0];
+        var firstDate = SerialToDate(firstSerial);
         for (var i = 0; i < serials.Count; i++)
+        {
+            if (serials[i] < firstSerial) return false;
             serials[i] = (SerialToDate(serials[i]) - firstDate).TotalDays / 365.0;
+        }
+        return true;
     }
 
     private static ScalarValue Npv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

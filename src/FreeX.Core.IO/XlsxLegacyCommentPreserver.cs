@@ -223,6 +223,16 @@ internal static class XlsxLegacyCommentPreserver
         var matchedCount = 0;
         var reconciledEntries = new List<XElement>(sheet.Comments.Count);
         var sourceRefsHandled = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var consumedAddresses = new HashSet<CellAddress>();
+
+        // R32-io-hyperlink-comment-deep-3: source entries whose address is no longer modeled
+        // are not necessarily deleted -- a row/column insert/delete may simply have shifted the
+        // note to a new address (RowColumnShiftHelpers.ShiftCommentRows*/Columns* already
+        // relocated the model's Sheet.Comments key). Queue them for a shift-aware, text-matching
+        // fallback pass below instead of dropping them immediately, so rich-text formatting and
+        // custom authors survive the shift (mirrors PreserveReconciledVmlDrawing's
+        // TryFindShiftedSourceShape for the VML side).
+        var unmatchedSourceEntries = new List<(XElement Element, string PlainText)>();
 
         foreach (var (sourceRef, sourceElement) in sourceCommentElements)
         {
@@ -231,40 +241,56 @@ internal static class XlsxLegacyCommentPreserver
                 continue; // ref unparseable — drop it
 
             if (!sheet.Comments.TryGetValue(address, out var modelText))
-                continue; // note was deleted — drop it
-
-            var entryToAdd = new XElement(sourceElement); // deep-clone
-
-            // Text reconciliation: update if text changed.
-            if (!string.Equals(ReadCommentPlainText(entryToAdd, workbookNs), modelText, StringComparison.Ordinal))
-                entryToAdd = UpdateCommentText(entryToAdd, modelText, workbookNs);
-
-            // Author reconciliation (GAP 2): if the model's CommentAuthors has a different value
-            // than the source XML author, update the authorId to point to the new author.
-            var modelAuthor = sheet.CommentAuthors.TryGetValue(address, out var ma) ? ma : string.Empty;
-            var sourceAuthorIdStr = entryToAdd.Attribute("authorId")?.Value;
-            var sourceAuthorName = string.Empty;
-            if (int.TryParse(sourceAuthorIdStr, out var sourceAuthorIdx) &&
-                sourceAuthorIdx >= 0 && sourceAuthorIdx < sourceAuthors.Count)
             {
-                sourceAuthorName = sourceAuthors[sourceAuthorIdx];
-            }
-
-            if (!string.Equals(modelAuthor, sourceAuthorName, StringComparison.Ordinal))
-            {
-                // Need to find or add the new author in the reconciled list.
-                var newAuthorIdx = reconciledAuthors.FindIndex(a =>
-                    string.Equals(a, modelAuthor, StringComparison.Ordinal));
-                if (newAuthorIdx < 0)
+                // R32-io-hyperlink-comment-deep-1: Excel's legacy threaded-comment compatibility
+                // shim is by design never modeled into Sheet.Comments even when its thread is
+                // still alive (XlsxWorksheetCommentReader.IsLegacyThreadedCommentShim) -- keep it
+                // untouched rather than treating it as a deleted note.
+                if (IsLegacyThreadedCommentShimEntry(sourceElement, workbookNs, sourceAuthors) &&
+                    sheet.ThreadedComments.ContainsKey(address))
                 {
-                    newAuthorIdx = reconciledAuthors.Count;
-                    reconciledAuthors.Add(modelAuthor);
+                    reconciledEntries.Add(new XElement(sourceElement));
+                    matchedCount++;
+                    continue;
                 }
-                entryToAdd.SetAttributeValue("authorId", newAuthorIdx.ToString());
+
+                unmatchedSourceEntries.Add((sourceElement, ReadCommentPlainText(sourceElement, workbookNs)));
+                continue; // note was deleted (or shifted — resolved in the fallback pass below)
             }
 
-            reconciledEntries.Add(entryToAdd);
+            consumedAddresses.Add(address);
+            reconciledEntries.Add(ReconcileCommentEntry(
+                sourceElement, modelText, address, sheet, sourceAuthors, reconciledAuthors, workbookNs));
             matchedCount++;
+        }
+
+        // Shift-aware fallback pass: match a still-unmatched source entry to a model note at a
+        // currently-unconsumed address by comparing plain text (a stable key that survives an
+        // address shift as long as the note's text itself was not also edited in the same save).
+        if (unmatchedSourceEntries.Count > 0)
+        {
+            var candidateAddresses = sheet.Comments.Keys
+                .Where(addr => !consumedAddresses.Contains(addr))
+                .ToList();
+
+            foreach (var (sourceElement, plainText) in unmatchedSourceEntries)
+            {
+                var matchIndex = candidateAddresses.FindIndex(addr =>
+                    string.Equals(sheet.Comments[addr], plainText, StringComparison.Ordinal));
+                if (matchIndex < 0)
+                    continue;
+
+                var newAddress = candidateAddresses[matchIndex];
+                candidateAddresses.RemoveAt(matchIndex);
+                consumedAddresses.Add(newAddress);
+                sourceRefsHandled.Add(newAddress.ToA1());
+
+                var shiftedEntry = new XElement(sourceElement);
+                shiftedEntry.SetAttributeValue("ref", newAddress.ToA1());
+                reconciledEntries.Add(ReconcileCommentEntry(
+                    shiftedEntry, plainText, newAddress, sheet, sourceAuthors, reconciledAuthors, workbookNs));
+                matchedCount++;
+            }
         }
 
         // Require at least one source entry to be usable.
@@ -344,6 +370,79 @@ internal static class XlsxLegacyCommentPreserver
             resultList.Add(entry); // already deep-cloned above
 
         return result;
+    }
+
+    /// <summary>
+    /// Reconciles a single (deep-cloned) source <c>&lt;comment&gt;</c> element against its current
+    /// model text and author: rewrites the text run(s) when the model text differs (losing
+    /// rich-text formatting only for THAT change) and remaps <c>authorId</c> into
+    /// <paramref name="reconciledAuthors"/> when the model's author differs from the source's.
+    /// Shared by the direct-match path and the shift-aware fallback in
+    /// <see cref="TryBuildReconciledCommentsXml"/> so both preserve rich text/author identically.
+    /// </summary>
+    private static XElement ReconcileCommentEntry(
+        XElement sourceElement,
+        string modelText,
+        CellAddress address,
+        Sheet sheet,
+        List<string> sourceAuthors,
+        List<string> reconciledAuthors,
+        XNamespace workbookNs)
+    {
+        var entryToAdd = new XElement(sourceElement); // deep-clone
+
+        // Text reconciliation: update if text changed.
+        if (!string.Equals(ReadCommentPlainText(entryToAdd, workbookNs), modelText, StringComparison.Ordinal))
+            entryToAdd = UpdateCommentText(entryToAdd, modelText, workbookNs);
+
+        // Author reconciliation (GAP 2): if the model's CommentAuthors has a different value
+        // than the source XML author, update the authorId to point to the new author.
+        var modelAuthor = sheet.CommentAuthors.TryGetValue(address, out var ma) ? ma : string.Empty;
+        var sourceAuthorIdStr = entryToAdd.Attribute("authorId")?.Value;
+        var sourceAuthorName = string.Empty;
+        if (int.TryParse(sourceAuthorIdStr, out var sourceAuthorIdx) &&
+            sourceAuthorIdx >= 0 && sourceAuthorIdx < sourceAuthors.Count)
+        {
+            sourceAuthorName = sourceAuthors[sourceAuthorIdx];
+        }
+
+        if (!string.Equals(modelAuthor, sourceAuthorName, StringComparison.Ordinal))
+        {
+            // Need to find or add the new author in the reconciled list.
+            var newAuthorIdx = reconciledAuthors.FindIndex(a =>
+                string.Equals(a, modelAuthor, StringComparison.Ordinal));
+            if (newAuthorIdx < 0)
+            {
+                newAuthorIdx = reconciledAuthors.Count;
+                reconciledAuthors.Add(modelAuthor);
+            }
+            entryToAdd.SetAttributeValue("authorId", newAuthorIdx.ToString());
+        }
+
+        return entryToAdd;
+    }
+
+    /// <summary>
+    /// True when this legacy <c>&lt;comment&gt;</c> element is Excel's backward-compat mirror of a
+    /// threaded comment rather than a genuine, independently-authored Note: the legacy author is
+    /// literally "tc={GUID}", or the text starts with the fixed "[Threaded comment]" compatibility
+    /// banner. Mirrors <c>XlsxWorksheetCommentReader.IsLegacyThreadedCommentShim</c>.
+    /// </summary>
+    private static bool IsLegacyThreadedCommentShimEntry(
+        XElement commentElement,
+        XNamespace workbookNs,
+        IReadOnlyList<string> authors)
+    {
+        var text = ReadCommentPlainText(commentElement, workbookNs);
+        var author = "";
+        if (int.TryParse(commentElement.Attribute("authorId")?.Value, out var authorIdx) &&
+            authorIdx >= 0 && authorIdx < authors.Count)
+        {
+            author = authors[authorIdx];
+        }
+
+        return author.StartsWith("tc=", StringComparison.OrdinalIgnoreCase) ||
+            text.StartsWith("[Threaded comment]", StringComparison.Ordinal);
     }
 
     private static XElement UpdateCommentText(XElement commentElement, string newText, XNamespace workbookNs)
@@ -675,7 +774,15 @@ internal static class XlsxLegacyCommentPreserver
             // CellAddress rows/cols are 1-based; VML ClientData uses 0-based.
             var key = (Row: address.Row - 1, Col: address.Col - 1);
             XElement? shape;
-            if (sourceShapesByCell.TryGetValue(key, out var sourceShape))
+            // R32-io-hyperlink-comment-deep-2: a direct (row,col) match against the UNSHIFTED
+            // source index is only valid when the shape actually belongs to THIS comment. When a
+            // row/col insert shifts two adjacent notes, one note's NEW cell can coincide with a
+            // sibling note's OLD cell — verify via sourceTextByOldCell (and honor
+            // consumedSourceCells) before accepting it, else fall through to the shift-aware match.
+            if (!consumedSourceCells.Contains(key) &&
+                sourceShapesByCell.TryGetValue(key, out var sourceShape) &&
+                (!sourceTextByOldCell.TryGetValue(key, out var sourceTextAtKey) ||
+                 string.Equals(sourceTextAtKey, modelText, StringComparison.Ordinal)))
             {
                 shape = new XElement(sourceShape); // deep-clone; preserves geometry
                 consumedSourceCells.Add(key);
@@ -702,6 +809,34 @@ internal static class XlsxLegacyCommentPreserver
             // Apply ShownComments model state: set or clear the <x:Visible/> element.
             ApplyVisibleFlag(shape, sheet.ShownComments.Contains(address));
             reconciledShapes.Add(shape);
+        }
+
+        // R32-io-hyperlink-comment-deep-1: keep the VML shape for Excel's legacy
+        // threaded-comment compatibility shim when its thread is still alive, mirroring the
+        // equivalent fix in TryBuildReconciledCommentsXml -- the shim's cell is never a key in
+        // sheet.Comments, so the loop above never visits it and BuildReconciledVml would
+        // otherwise silently drop its shape (it strips every existing Note shape from the
+        // source and only re-adds shapes for sheet.Comments entries).
+        var sourceCommentAuthorsForShim = sourceCommentsXml.Root?
+            .Element(workbookNs + "authors")?
+            .Elements(workbookNs + "author")
+            .Select(a => a.Value)
+            .ToList() ?? [];
+        foreach (var (sourceRef, sourceCommentElement) in ReadLegacyCommentElementsByReference(sourceCommentsXml, workbookNs))
+        {
+            if (!CellAddress.TryParse(sourceRef, sheet.Id, out var shimAddress) ||
+                !sheet.ThreadedComments.ContainsKey(shimAddress) ||
+                !IsLegacyThreadedCommentShimEntry(sourceCommentElement, workbookNs, sourceCommentAuthorsForShim))
+            {
+                continue;
+            }
+
+            var shimKey = (Row: shimAddress.Row - 1, Col: shimAddress.Col - 1);
+            if (consumedSourceCells.Contains(shimKey) || !sourceShapesByCell.TryGetValue(shimKey, out var shimShape))
+                continue;
+
+            consumedSourceCells.Add(shimKey);
+            reconciledShapes.Add(new XElement(shimShape)); // deep-clone; left untouched (no Visible-flag rewrite)
         }
 
         // Build the reconciled VML document: keep source header boilerplate (shapelayout,

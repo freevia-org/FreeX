@@ -24,8 +24,8 @@ internal static class DataValidationCopySupport
             AppliesTo = range,
             Type = source.Type,
             Operator = source.Operator,
-            Formula1 = RewriteValidationFormula(source.Formula1, hostSheetName, rowDelta, colDelta),
-            Formula2 = RewriteValidationFormula(source.Formula2, hostSheetName, rowDelta, colDelta),
+            Formula1 = RewriteValidationFormula(source.Formula1, source.Type, hostSheetName, rowDelta, colDelta),
+            Formula2 = RewriteValidationFormula(source.Formula2, source.Type, hostSheetName, rowDelta, colDelta),
             AllowBlank = source.AllowBlank,
             ShowDropdown = source.ShowDropdown,
             AlertStyle = source.AlertStyle,
@@ -48,7 +48,7 @@ internal static class DataValidationCopySupport
         return clone;
     }
 
-    private static string? RewriteValidationFormula(string? formula, string? hostSheetName, int rowDelta, int colDelta)
+    private static string? RewriteValidationFormula(string? formula, DvType type, string? hostSheetName, int rowDelta, int colDelta)
     {
         if (string.IsNullOrWhiteSpace(formula) || hostSheetName is null || (rowDelta == 0 && colDelta == 0))
             return formula;
@@ -61,6 +61,18 @@ internal static class DataValidationCopySupport
         var trimmed = formula.TrimStart();
         var hasLeadingEquals = trimmed.StartsWith('=');
         var expression = hasLeadingEquals ? trimmed[1..] : trimmed;
+
+        // A List rule's Source is authored into Formula1 in one of two textually similar
+        // shapes: a genuine range/named-range formula (always written with a leading '=', e.g.
+        // "=$A$1:$A$5") or an inline literal list of items (e.g. "Yes,No" or even a single
+        // cell-ref-shaped item like "A1") that must be copied verbatim. The leading '=' is the
+        // actual runtime authority on which shape it is -- see DataValidationService.ListSources
+        // (ValidateList/ResolveListValues), which branches on source.StartsWith('=') the same
+        // way. Without this guard, an inline literal such as "A1" satisfies
+        // LooksLikeCellReferenceFormula below (it contains a digit) and gets silently rewritten
+        // into a shifted cell reference (e.g. "B2") instead of being preserved as-is.
+        if (type == DvType.List && !hasLeadingEquals)
+            return formula;
 
         if (!LooksLikeCellReferenceFormula(expression))
             return formula;

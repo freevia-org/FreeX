@@ -123,7 +123,12 @@ public static partial class BuiltInFunctions
 
         var lookupValue = args[0];
 
-        if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
+        // if_not_found (args[3]) is only consulted when the lookup actually fails to find a
+        // match -- like IFNA's lazy value_if_na -- so it must NOT be checked for an error (or
+        // otherwise short-circuited) up front: a successful lookup returns the found value even
+        // when if_not_found itself would evaluate to an error (e.g. a fallback chain of nested
+        // XLOOKUPs, or XLOOKUP(key, table, result, NA())). The XlookupScalar/XlookupScalarLinear
+        // helpers below already only read `ifNotFound` on their not-found branches.
         ScalarValue ifNotFound = args.Count > 3 ? args[3] : ErrorValue.NA;
         if (args.Count > 4 && args[4] is ErrorValue e4) return e4;
         if (args.Count > 5 && args[5] is ErrorValue e5) return e5;

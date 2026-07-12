@@ -125,4 +125,15 @@ public sealed record CellTextRun(
     string? FontName,
     double? FontSize,
     CellRunColor? FontColor,
-    CellTextRunVertAlign VertAlign = CellTextRunVertAlign.None);
+    CellTextRunVertAlign VertAlign = CellTextRunVertAlign.None,
+    // When Underline is true, distinguishes a double/double-accounting underline
+    // (<u val="double"/> or val="doubleAccounting") from a plain single underline.
+    // Mirrors CellStyle.DoubleUnderline for whole-cell fonts. null/false means single;
+    // ignored when Underline is not true.
+    bool? DoubleUnderline = null,
+    // Raw OOXML <charset val="…"/> value (e.g. 128 = ShiftJIS), if present.
+    int? Charset = null,
+    // Raw OOXML <family val="…"/> value (0-5), if present.
+    int? Family = null,
+    // Raw OOXML <scheme val="major|minor|none"/> value, if present.
+    string? Scheme = null);

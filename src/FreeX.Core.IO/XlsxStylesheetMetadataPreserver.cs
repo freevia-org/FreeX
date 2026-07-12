@@ -346,6 +346,32 @@ internal static class XlsxStylesheetMetadataPreserver
         if (targetSolidFillsByRgb.Count == 0)
             return false;
 
+        // A genuine (non-gradient) source cellXf whose own solid fill colour happens to equal some
+        // gradient's first-stop colour is a landmine: XlsxClosedXmlCellMapper.ApplyStyle stamps the
+        // gradient cell's placeholder as PatternType=Solid + that exact colour, which is byte-for-byte
+        // the same ClosedXML Fill value as the genuine solid cell. ClosedXML's style cache legitimately
+        // dedups equal Fill values into ONE rebuilt <fill>, so that colour's target fill ends up shared
+        // between the gradient placeholder and the unrelated genuine cell. Track every such colour so
+        // the restore below can refuse to touch it rather than risk overwriting the genuine cell's fill.
+        var genuineSolidRgbs = new HashSet<int>();
+        for (var i = 0; i < sourceCellXfs.Count; i++)
+        {
+            if (resolvedGradients.TryGet(i, out var placeholderGradient) &&
+                placeholderGradient is { Stops.Count: > 0 })
+            {
+                continue; // this cellXf is itself a gradient placeholder, not a genuine solid fill.
+            }
+
+            if (!TryGetIntAttribute(sourceCellXfs[i], "fillId", out var xfFillId) ||
+                xfFillId < 0 || xfFillId >= sourceFillList.Count)
+            {
+                continue;
+            }
+
+            if (TryGetSolidFillRgbKey(sourceFillList[xfFillId], workbookNs, out var solidRgb, sourceTheme, sourceIndexedColors))
+                genuineSolidRgbs.Add(solidRgb);
+        }
+
         var changed = false;
         var restoredSourceFillIndexes = new HashSet<int>();
         for (var sourceXfIndex = 0; sourceXfIndex < sourceCellXfs.Count; sourceXfIndex++)
@@ -370,6 +396,14 @@ internal static class XlsxStylesheetMetadataPreserver
                 continue;
 
             var placeholderRgb = RgbKey(gradient.Stops[0].Color);
+
+            // This colour is also a genuine solid cell's fill colour elsewhere in the workbook — the
+            // rebuilt target fill for it may be shared between that cell and this gradient's
+            // placeholder. Don't risk overwriting the genuine cell; leave this gradient as its solid
+            // placeholder rather than corrupt unrelated content.
+            if (genuineSolidRgbs.Contains(placeholderRgb))
+                continue;
+
             if (!targetSolidFillsByRgb.TryGetValue(placeholderRgb, out var candidates) || candidates.Count == 0)
                 continue;
 
@@ -386,7 +420,14 @@ internal static class XlsxStylesheetMetadataPreserver
     // A rebuilt solid placeholder fill (stamped by ApplyStyle from a gradient's first-stop colour) is
     // a <patternFill patternType="solid"> whose <fgColor> carries the explicit sRGB. Returns its
     // 24-bit RGB key, or false for any non-solid pattern or a foreground without a readable sRGB.
-    private static bool TryGetSolidFillRgbKey(XElement fill, XNamespace workbookNs, out int rgbKey)
+    // When a theme/indexed palette is supplied (source-side lookups), theme and indexed foreground
+    // colours are resolved to concrete RGB too, not just literal sRGB attributes.
+    private static bool TryGetSolidFillRgbKey(
+        XElement fill,
+        XNamespace workbookNs,
+        out int rgbKey,
+        FreeX.Core.Model.WorkbookTheme? theme = null,
+        FreeX.Core.Model.WorkbookIndexedColorPalette? indexedColors = null)
     {
         rgbKey = 0;
         var patternFill = fill.Element(workbookNs + "patternFill");
@@ -396,7 +437,11 @@ internal static class XlsxStylesheetMetadataPreserver
             return false;
         }
 
-        if (!XlsxColorReader.TryReadCellColor(patternFill.Element(workbookNs + "fgColor"), out var color))
+        var fgColor = patternFill.Element(workbookNs + "fgColor");
+        var resolved = theme is not null && indexedColors is not null
+            ? XlsxColorReader.TryReadCellColor(fgColor, theme, indexedColors, out var color)
+            : XlsxColorReader.TryReadCellColor(fgColor, out color);
+        if (!resolved)
             return false;
 
         rgbKey = RgbKey(color);

@@ -38,7 +38,10 @@ internal static class XlsxRichRunWriter
                 run.FontName is not null ||
                 run.FontSize is not null ||
                 run.FontColor is not null ||
-                run.VertAlign != CellTextRunVertAlign.None)
+                run.VertAlign != CellTextRunVertAlign.None ||
+                run.Charset is not null ||
+                run.Family is not null ||
+                run.Scheme is not null)
             {
                 var rPr = new XElement(worksheetNs + "rPr");
 
@@ -47,6 +50,14 @@ internal static class XlsxRichRunWriter
                 if (run.FontName is { } rFont)
                     rPr.Add(new XElement(worksheetNs + "rFont",
                         new XAttribute("val", rFont)));
+
+                if (run.Charset is { } charset)
+                    rPr.Add(new XElement(worksheetNs + "charset",
+                        new XAttribute("val", charset.ToString(CultureInfo.InvariantCulture))));
+
+                if (run.Family is { } family)
+                    rPr.Add(new XElement(worksheetNs + "family",
+                        new XAttribute("val", family.ToString(CultureInfo.InvariantCulture))));
 
                 if (run.Bold is { } b)
                 {
@@ -79,8 +90,15 @@ internal static class XlsxRichRunWriter
                 if (run.Underline is { } u)
                 {
                     var uEl = new XElement(worksheetNs + "u");
-                    if (!u) uEl.SetAttributeValue("val", "none");
-                    // When u=true, omit val attribute — OOXML default is "single".
+                    if (!u)
+                        uEl.SetAttributeValue("val", "none");
+                    else if (run.DoubleUnderline == true)
+                        // R32: preserve double/double-accounting underline (read back as "double";
+                        // OOXML re-reads this identically to Excel's own doubleAccounting on most
+                        // consumers, and matches CellStyle's DoubleUnderline collapse behavior).
+                        uEl.SetAttributeValue("val", "double");
+                    // When u=true (single) and DoubleUnderline is not true, omit val attribute —
+                    // OOXML default is "single".
                     rPr.Add(uEl);
                 }
 
@@ -90,6 +108,10 @@ internal static class XlsxRichRunWriter
                             run.VertAlign == CellTextRunVertAlign.Superscript
                                 ? "superscript"
                                 : "subscript")));
+
+                if (run.Scheme is { } scheme)
+                    rPr.Add(new XElement(worksheetNs + "scheme",
+                        new XAttribute("val", scheme)));
 
                 r.Add(rPr);
             }

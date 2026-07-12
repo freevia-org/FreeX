@@ -28,6 +28,10 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
     private Dictionary<(Guid Id, int Slot), string?>? _cfThresholdSnapshot;
     private Dictionary<(Guid Id, int Slot), string?>? _dvFormulaSnapshot;
     private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
+    // R32-commands-clipboard-deep-1: snapshot of sheet.MergedRegions before Apply relocates any
+    // merge that is fully contained in the moved _sourceRange (i.e. the merge(s) being moved along
+    // with the selection), so Revert can restore the original merge geometry at the source.
+    private List<GridRange>? _mergedRegionsSnapshot;
     // R16-structural-edit-shift-sweep-1/2/3 + R16-chart-datasource-editing-2: a plain (non-verbatim)
     // chart.DataRange, workbook/sheet-scoped defined names, and a moved cell's sparkline are all
     // address-bearing state that a Cut+Paste move must relocate along with the cells themselves —
@@ -99,7 +103,14 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         }
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (sheet.MergedRegions.Any(range => _sourceRange.Overlaps(range) || targetRange.Overlaps(range)))
+        // R32-commands-clipboard-deep-1: a merge fully contained in _sourceRange is the merge being
+        // moved (it relocates along with the selection below), not a collision -- excluding it here
+        // is what lets Excel's ordinary "cut a merged cell, paste to an empty destination" gesture
+        // succeed instead of being rejected against its own source-range self-overlap. Any OTHER
+        // merge (only partially overlapping the source, or sitting anywhere in the target) is still
+        // a real collision and remains rejected.
+        var movingMerges = sheet.MergedRegions.Where(range => _sourceRange.Contains(range)).ToList();
+        if (sheet.MergedRegions.Any(range => !movingMerges.Contains(range) && (_sourceRange.Overlaps(range) || targetRange.Overlaps(range))))
             return new CommandOutcome(false, "Cannot move a range that intersects merged cells.");
 
         var affected = CreateAffectedCellList(_sourceRange, targetRange);
@@ -161,6 +172,14 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         TranslateFullyContainedNamedRanges(ctx.Workbook, _sourceRange, _destination);
 
         var moveOp = CreateMoveRangeOp(sheet, _sourceRange, _destination);
+        if (movingMerges.Count > 0)
+        {
+            _mergedRegionsSnapshot = sheet.MergedRegions.ToList();
+            var relocatedMerges = sheet.MergedRegions.Select(range =>
+                movingMerges.Contains(range) ? TranslateRange(range, moveOp.RowDelta, moveOp.ColDelta) : range);
+            sheet.ReplaceMergedRegions(relocatedMerges);
+        }
+
         _formulaSnapshot = [];
         RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, moveOp, _formulaSnapshot);
         _cfFormulaSnapshot = [];
@@ -208,6 +227,8 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         RestoreSparklineDataRanges(_sparklineDataRangeSnapshot);
         RowColumnShiftHelpers.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
         RowColumnShiftHelpers.RestoreScopedNamedRanges(ctx.Workbook, _scopedNamedRangeSnapshot);
+        if (_mergedRegionsSnapshot is not null)
+            sheet.ReplaceMergedRegions(_mergedRegionsSnapshot);
 
         foreach (var snapshot in _snapshot)
             RestoreCellSnapshot(sheet, snapshot);

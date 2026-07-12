@@ -556,17 +556,37 @@ internal static class XlsxWorkbookMetadataPreserver
 
         var changed = false;
         var mergedTargetViewKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var originalSourceView in sourceViews)
+        // The first <workbookView> is always the "primary" one: XlsxWorkbookMetadataWriter.
+        // ApplyWorkbookViewProperties targets it positionally and may already have rewritten
+        // its firstSheet/activeTab to the workbook's current sheet-selection state before this
+        // preservation pass runs, while the cloned source view below still carries the
+        // pre-edit values. Keying the merge on those mutable attributes would then never
+        // match (see WorkbookViewIdentityKey), causing the stale source view to be appended
+        // as a bogus second window instead of merged in place. Match the primary view by
+        // position instead, and only fall back to key-based identity matching for any
+        // additional views, which represent genuine extra windows (Window > New Window) that
+        // ApplyWorkbookViewProperties never touches.
+        var primaryTargetView = targetViews.Count > 0 ? targetViews[0] : null;
+        var primaryTargetViewMerged = false;
+        for (var sourceIndex = 0; sourceIndex < sourceViews.Count; sourceIndex++)
         {
-            var sourceView = CloneWorkbookViewForPreservation(originalSourceView);
+            var sourceView = CloneWorkbookViewForPreservation(sourceViews[sourceIndex]);
             var raw = sourceView.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
             if (existingRawViews.Contains(raw))
                 continue;
 
-            var sourceViewKey = WorkbookViewIdentityKey(sourceView);
             XElement? targetView = null;
-            if (IsPrimaryWorkbookView(sourceView) && !mergedTargetViewKeys.Contains(sourceViewKey))
-                targetView = FindWorkbookViewByIdentityKey(targetViews, sourceViewKey);
+            if (sourceIndex == 0 && !primaryTargetViewMerged && primaryTargetView is not null)
+            {
+                targetView = primaryTargetView;
+            }
+            else
+            {
+                var sourceViewKey = WorkbookViewIdentityKey(sourceView);
+                if (IsPrimaryWorkbookView(sourceView) && !mergedTargetViewKeys.Contains(sourceViewKey))
+                    targetView = FindWorkbookViewByIdentityKey(targetViews, sourceViewKey);
+            }
+
             if (targetView is not null)
             {
                 XName[] modeledPrimaryViewAttributes =
@@ -580,7 +600,10 @@ internal static class XlsxWorkbookMetadataPreserver
                     changed = true;
                 if (XlsxWorkbookViewNormalizer.NormalizeWorkbookViewElement(targetView))
                     changed = true;
-                mergedTargetViewKeys.Add(sourceViewKey);
+                if (ReferenceEquals(targetView, primaryTargetView))
+                    primaryTargetViewMerged = true;
+                else
+                    mergedTargetViewKeys.Add(WorkbookViewIdentityKey(targetView));
                 continue;
             }
 

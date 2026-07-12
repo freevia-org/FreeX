@@ -144,6 +144,19 @@ public static partial class BuiltInFunctions
             return (values.Count, values, null);
         }
 
+        if (value is ReferencedScalarValue referenced)
+        {
+            // A bare single-cell reference (e.g. A1, as opposed to a colon-range like A1:A1)
+            // arrives wrapped in ReferencedScalarValue. Unwrap it the same way every other
+            // ReferenceProvenanceAggregate function does (see TryReferencedNumber usages in
+            // BuiltInFunctions.StatisticalCore.Aggregates.cs) instead of calling ToNumber on
+            // the wrapper itself, which has no case for it and throws #VALUE!.
+            if (TryReferencedNumber(referenced, out var refNumber, out var refError))
+                return (1, [refNumber], null);
+            if (refError is not null) return (0, [], refError);
+            return (1, [null], null);
+        }
+
         return (1, [ToNumber(value)], null);
     }
 

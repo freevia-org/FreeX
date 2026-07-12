@@ -89,7 +89,18 @@ internal static partial class XlsxPivotTableReader
         foreach (var item in items)
         {
             var rawIndex = XlsxXmlAttributeReader.ReadIntAttribute(item, "x");
-            if (rawIndex is not { } index || index < 0 || index >= declaredCount || !seenRawIndexes.Add(index))
+            if (rawIndex is not { } index)
+            {
+                // An <item> with no "x" attribute is the trailing default/subtotal marker
+                // (<item t="default"/>) that Excel -- and FreeX's own writer,
+                // XlsxPivotTableWriter.cs:443-445 -- always appends after enumerating the real
+                // per-value items. It has no corresponding raw shared-item index at all, so it is
+                // not part of the raw-index space we are reconstructing and must simply be
+                // skipped, not treated as an ambiguity that invalidates the whole reconstruction.
+                continue;
+            }
+
+            if (index < 0 || index >= declaredCount || !seenRawIndexes.Add(index))
                 return null;
 
             if (XlsxXmlAttributeReader.ReadBoolAttribute(item, "m"))

@@ -22,6 +22,10 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand
     private readonly CellAddress _destination;
     private IReadOnlyList<CellAddress> _affectedCells = [];
     private List<CellSnapshot>? _snapshot;
+    // R32-commands-clipboard-deep-2: merges cloned at the destination (translated copies of any
+    // merge fully contained in _sourceRange), so Revert can remove exactly the ones this Apply
+    // added without disturbing any pre-existing merge that happened to already sit there.
+    private List<GridRange>? _addedMergedRegions;
 
     public string Label => "Copy Cells";
 
@@ -68,7 +72,14 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         }
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (sheet.MergedRegions.Any(range => _sourceRange.Overlaps(range) || targetRange.Overlaps(range)))
+        // R32-commands-clipboard-deep-2: a merge fully contained in _sourceRange is the merge being
+        // copied (a translated clone of it is added at the destination below), not a collision --
+        // excluding it here is what lets Excel's ordinary Ctrl+drag-copy of a merged cell onto an
+        // empty destination succeed instead of being rejected against its own source-range
+        // self-overlap. Any OTHER merge (only partially overlapping the source, or already sitting
+        // anywhere in the target) is still a real collision and remains rejected.
+        var copiedMerges = sheet.MergedRegions.Where(range => _sourceRange.Contains(range)).ToList();
+        if (sheet.MergedRegions.Any(range => !copiedMerges.Contains(range) && (_sourceRange.Overlaps(range) || targetRange.Overlaps(range))))
             return new CommandOutcome(false, "Cannot copy a range that intersects merged cells.");
 
         var destinationCells = targetRange.AllCells().ToList();
@@ -104,6 +115,14 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         foreach (var payload in payloads)
             WritePayload(sheet, payload);
 
+        if (copiedMerges.Count > 0)
+        {
+            _addedMergedRegions = copiedMerges
+                .Select(range => TranslateRange(range, rowDelta, colDelta))
+                .ToList();
+            sheet.ReplaceMergedRegions(sheet.MergedRegions.Concat(_addedMergedRegions));
+        }
+
         _affectedCells = destinationCells;
         return new CommandOutcome(true, AffectedCells: _affectedCells);
     }
@@ -114,6 +133,12 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
+        if (_addedMergedRegions is { Count: > 0 })
+        {
+            var added = _addedMergedRegions;
+            sheet.ReplaceMergedRegions(sheet.MergedRegions.Where(range => !added.Contains(range)));
+        }
+
         foreach (var snapshot in _snapshot)
             RestoreCellSnapshot(sheet, snapshot);
     }
@@ -318,6 +343,11 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand
 
     private static int GetSafeListCapacity(long cellCount) =>
         cellCount is > 0 and <= 1_000_000 ? (int)cellCount : 0;
+
+    private static GridRange TranslateRange(GridRange range, long rowDelta, long colDelta) =>
+        new GridRange(
+            new CellAddress(range.Start.Sheet, (uint)(range.Start.Row + rowDelta), (uint)(range.Start.Col + colDelta)),
+            new CellAddress(range.End.Sheet,   (uint)(range.End.Row   + rowDelta), (uint)(range.End.Col   + colDelta)));
 
     private sealed record CellSnapshot(
         CellAddress Address,

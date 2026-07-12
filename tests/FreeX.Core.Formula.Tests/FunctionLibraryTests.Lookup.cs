@@ -768,13 +768,31 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Xlookup_IfNotFoundError_PropagatesError()
+    public void Xlookup_MatchFound_IgnoresErroringIfNotFound()
     {
+        // Renamed/corrected for round-32 finding R32-formula-lookup-modern-1: if_not_found is only
+        // consulted when the lookup actually fails to find a match -- like IFNA's lazy
+        // value_if_na. "B" IS found in A1:A2 (at B2 = 2), so the found value must be returned even
+        // though if_not_found (NA()) would itself evaluate to an error -- matching real Excel. This
+        // test previously asserted the old (buggy) #N/A result, which came from eagerly
+        // short-circuiting on if_not_found before the lookup even ran.
         var sheet = MakeSheet(
             (1, 1, new TextValue("A")), (2, 1, new TextValue("B")),
             (1, 2, new NumberValue(1)), (2, 2, new NumberValue(2)));
 
-        _eval.Evaluate("=XLOOKUP(\"B\",A1:A2,B1:B2,NA())", sheet).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=XLOOKUP(\"B\",A1:A2,B1:B2,NA())", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Xlookup_GenuineNotFound_StillPropagatesIfNotFoundError()
+    {
+        // Sibling already-working case: a genuine miss must still surface if_not_found, even when
+        // it evaluates to an error.
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("A")), (2, 1, new TextValue("B")),
+            (1, 2, new NumberValue(1)), (2, 2, new NumberValue(2)));
+
+        _eval.Evaluate("=XLOOKUP(\"Z\",A1:A2,B1:B2,NA())", sheet).Should().Be(ErrorValue.NA);
     }
 
     [Fact]

@@ -35,7 +35,9 @@ namespace FreeX.Core.IO;
 ///     Cell display strings are produced by the same logic used by
 ///     <see cref="DelimitedTextWorkbookWriter"/>: numbers via <c>InvariantCulture</c> round-trip
 ///     formatting, date/time values formatted as ISO dates/times, booleans as TRUE/FALSE, errors as
-///     their code string (e.g. #VALUE!), formulas as their formula text.
+///     their code string (e.g. #VALUE!). Formula cells write their calculated
+///     <see cref="Cell.Value"/> (never the formula source text), matching Excel's plain-text
+///     Save-As behaviour.
 ///   </item>
 /// </list>
 /// </para>
@@ -192,13 +194,14 @@ internal static class PrnWorkbookWriter
     /// Produces the plain-text display string for a cell, using the same serialisation logic as
     /// <see cref="DelimitedTextWorkbookWriter"/> (invariant-culture numbers, ISO dates, etc.).
     /// </summary>
+    /// <remarks>
+    /// A formula cell's calculated <see cref="Cell.Value"/> is written here, never its formula
+    /// source text — matching <c>DelimitedTextWorkbookWriter.WriteCellField</c> (CSV), whose
+    /// comment documents this exact rule: real Excel's plain-text Save-As formats always write a
+    /// formula cell's calculated result, not the formula itself.
+    /// </remarks>
     private static string GetCellDisplayText(Cell cell)
     {
-        if (cell.FormulaText is { } formulaText)
-            return formulaText.StartsWith("=", StringComparison.Ordinal)
-                ? formulaText
-                : $"={formulaText}";
-
         return cell.Value switch
         {
             NumberValue number => FormatNumber(number.Value),
@@ -211,13 +214,8 @@ internal static class PrnWorkbookWriter
     }
 
     /// <summary>Returns true for value types that Excel right-aligns in cells by default.</summary>
-    private static bool IsRightAlignValue(Cell cell)
-    {
-        if (cell.FormulaText is not null)
-            return false; // formula cells could produce anything; treat as left-align
-
-        return cell.Value is NumberValue or DateTimeValue or BoolValue;
-    }
+    private static bool IsRightAlignValue(Cell cell) =>
+        cell.Value is NumberValue or DateTimeValue or BoolValue;
 
     private static string FormatNumber(double value)
     {

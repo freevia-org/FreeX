@@ -1,3 +1,4 @@
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -8,7 +9,7 @@ namespace FreeX.Core.Commands;
 /// existed in the target scope, its old range is restored on Revert; if it was newly created,
 /// it is removed on Revert.
 /// </summary>
-public sealed class DefineNamedRangeCommand : IWorkbookCommand
+public sealed class DefineNamedRangeCommand : IWorkbookCommand, IAffectedCellsCommand
 {
     private readonly string _name;
     private readonly GridRange _range;
@@ -20,6 +21,15 @@ public sealed class DefineNamedRangeCommand : IWorkbookCommand
     private bool _existed;
     private GridRange _previousRange;
     private NamedRangeMetadata? _previousMetadata;
+    private List<CellAddress> _affectedCells = [];
+
+    /// <summary>
+    /// Formula cells that reference <c>_name</c> and must be recalculated. Empty when the name was
+    /// newly created (nothing could have referenced it yet); populated with every referencing
+    /// formula cell when redefining an existing name, matching Excel's Name Manager/New Name
+    /// behavior of recalculating dependents immediately after a "Refers To" edit.
+    /// </summary>
+    public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
 
     public string Label => $"Define Named Range '{_name}'";
 
@@ -71,7 +81,10 @@ public sealed class DefineNamedRangeCommand : IWorkbookCommand
             if (_existed)
                 ctx.Workbook.TryGetScopedNamedRangeMetadata(_name, scopeSheetId, out _previousMetadata);
             ctx.Workbook.DefineNamedRange(_name, _range, _metadata, scopeSheetId);
-            return new CommandOutcome(true);
+            _affectedCells = _existed
+                ? NamedDefinitionRecalcHelper.FindCellsReferencingName(ctx.Workbook, _name, scopeSheetId)
+                : [];
+            return new CommandOutcome(true, AffectedCells: _affectedCells);
         }
 
         _existed = ctx.Workbook.TryGetNamedRange(_name, out _previousRange);
@@ -81,7 +94,10 @@ public sealed class DefineNamedRangeCommand : IWorkbookCommand
         if (_existed && ctx.Workbook.TryGetNamedRangeMetadata(_name, out var metadata))
             _previousMetadata = metadata;
         ctx.Workbook.DefineNamedRange(_name, _range, _metadata);
-        return new CommandOutcome(true);
+        _affectedCells = _existed
+            ? NamedDefinitionRecalcHelper.FindCellsReferencingName(ctx.Workbook, _name, null)
+            : [];
+        return new CommandOutcome(true, AffectedCells: _affectedCells);
     }
 
     public void Revert(ICommandContext ctx)
@@ -207,7 +223,7 @@ public sealed class RemoveNamedRangeCommand : IWorkbookCommand
 /// existed in the target scope, its old formula text is restored on Revert; if newly created, it
 /// is removed on Revert.
 /// </summary>
-public sealed class DefineNamedFormulaCommand : IWorkbookCommand
+public sealed class DefineNamedFormulaCommand : IWorkbookCommand, IAffectedCellsCommand
 {
     private readonly string _name;
     private readonly string _formulaText;
@@ -216,6 +232,14 @@ public sealed class DefineNamedFormulaCommand : IWorkbookCommand
     // Snapshot captured during Apply for undo
     private bool _existed;
     private string? _previousFormulaText;
+    private List<CellAddress> _affectedCells = [];
+
+    /// <summary>
+    /// Formula cells that reference <c>_name</c> and must be recalculated. See
+    /// <see cref="DefineNamedRangeCommand.AffectedCells"/> for why this is populated only on
+    /// redefine.
+    /// </summary>
+    public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
 
     public string Label => $"Define Named Formula '{_name}'";
 
@@ -245,12 +269,18 @@ public sealed class DefineNamedFormulaCommand : IWorkbookCommand
         {
             _existed = ctx.Workbook.ScopedNamedFormulas.TryGetValue((_name, scopeSheetId), out _previousFormulaText);
             ctx.Workbook.DefineNamedFormula(_name, _formulaText, scopeSheetId);
-            return new CommandOutcome(true);
+            _affectedCells = _existed
+                ? NamedDefinitionRecalcHelper.FindCellsReferencingName(ctx.Workbook, _name, scopeSheetId)
+                : [];
+            return new CommandOutcome(true, AffectedCells: _affectedCells);
         }
 
         _existed = ctx.Workbook.NamedFormulas.TryGetValue(_name, out _previousFormulaText);
         ctx.Workbook.NamedFormulas[_name] = _formulaText;
-        return new CommandOutcome(true);
+        _affectedCells = _existed
+            ? NamedDefinitionRecalcHelper.FindCellsReferencingName(ctx.Workbook, _name, null)
+            : [];
+        return new CommandOutcome(true, AffectedCells: _affectedCells);
     }
 
     public void Revert(ICommandContext ctx)
@@ -448,4 +478,72 @@ public sealed class CreateNamedRangesFromSelectionCommand : IWorkbookCommand
     }
 
     private sealed record NamedRangeSnapshot(GridRange Range, NamedRangeMetadata Metadata);
+}
+
+/// <summary>
+/// Shared helper for <see cref="DefineNamedRangeCommand"/> and <see cref="DefineNamedFormulaCommand"/>:
+/// when a defined name is REDEFINED (not newly created), Excel immediately recalculates every
+/// formula that references it (e.g. a Name Manager "Refers To" edit). Neither command's mutation of
+/// <see cref="Workbook.NamedRanges"/>/<see cref="Workbook.NamedFormulas"/>/their scoped counterparts
+/// touches the dependency graph or any formula cell's CachedAst, so without explicitly reporting the
+/// referencing cells as AffectedCells, RecalculateIfAutomatic has nothing to recompute and those
+/// formulas keep showing their stale pre-redefine value.
+/// </summary>
+internal static class NamedDefinitionRecalcHelper
+{
+    /// <summary>
+    /// Finds every formula cell whose parsed AST references <paramref name="name"/> (via a
+    /// <see cref="NamedRangeNode"/>, possibly nested inside binary/unary operators or function
+    /// arguments — mirroring the traversal <see cref="FormulaAuditingService"/> already uses to
+    /// collect precedents). When <paramref name="scopeSheetId"/> is set (a sheet-scoped name), only
+    /// that sheet's formulas are scanned, since a sheet-scoped name (Excel "localSheetId") has no
+    /// qualified Sheet!Name syntax here — <see cref="NamedRangeNode"/> carries only a bare name, so
+    /// it is never reachable from another sheet's formulas. A workbook-global redefine scans every
+    /// sheet; a formula on a sheet that shadows the global name with its own same-named scoped
+    /// definition may be reported too, but that is harmless over-inclusion — it is simply
+    /// recomputed to the same value it already had, since actual name resolution (elsewhere) is
+    /// unaffected by this scan.
+    /// </summary>
+    internal static List<CellAddress> FindCellsReferencingName(Workbook workbook, string name, SheetId? scopeSheetId)
+    {
+        var result = new List<CellAddress>();
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (scopeSheetId is { } scope && !sheet.Id.Equals(scope))
+                continue;
+
+            foreach (var address in sheet.EnumerateFormulaCells())
+            {
+                var cell = sheet.GetCell(address.Row, address.Col);
+                if (cell?.FormulaText is not { } formulaText)
+                    continue;
+
+                if (ReferencesName(formulaText, name))
+                    result.Add(address);
+            }
+        }
+        return result;
+    }
+
+    private static bool ReferencesName(string formulaText, string name)
+    {
+        try
+        {
+            var ast = new Parser(new Lexer(formulaText).Tokenize()).Parse();
+            return ReferencesName(ast, name);
+        }
+        catch (FormulaParseException)
+        {
+            return false;
+        }
+    }
+
+    private static bool ReferencesName(FormulaNode node, string name) => node switch
+    {
+        NamedRangeNode named => string.Equals(named.Name, name, StringComparison.OrdinalIgnoreCase),
+        BinaryOpNode binary => ReferencesName(binary.Left, name) || ReferencesName(binary.Right, name),
+        UnaryOpNode unary => ReferencesName(unary.Operand, name),
+        FunctionCallNode function => function.Arguments.Any(arg => ReferencesName(arg, name)),
+        _ => false
+    };
 }

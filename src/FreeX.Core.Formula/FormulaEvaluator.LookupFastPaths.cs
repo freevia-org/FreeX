@@ -191,27 +191,6 @@ public sealed partial class FormulaEvaluator
         var lookupReader = CreateDirectLookupReader(lookupVector, context);
         var returnReader = CreateDirectLookupReader(returnVector, context);
 
-        ScalarValue ifNotFound = ErrorValue.NA;
-        if (node.Arguments.Count > 3)
-        {
-            var ifNotFoundValue = EvaluateNode(node.Arguments[3], context);
-            if (ifNotFoundValue is ErrorValue ifNotFoundError)
-            {
-                result = ifNotFoundError;
-                return true;
-            }
-
-            if (ifNotFoundValue is RangeValue)
-                return false;
-
-            // Mirror the slow path (Xlookup in BuiltInFunctions.Lookup.Modern.cs): an
-            // explicitly-supplied if_not_found argument is returned verbatim -- including
-            // when it evaluates to blank -- and must not be coerced to #N/A. Only an
-            // omitted argument (args.Count <= 3, handled by the ifNotFound initializer
-            // above) defaults to #N/A.
-            ifNotFound = ifNotFoundValue;
-        }
-
         var matchModeValue = node.Arguments.Count > 4
             ? EvaluateNode(node.Arguments[4], context)
             : BlankValue.Instance;
@@ -258,9 +237,37 @@ public sealed partial class FormulaEvaluator
             return true;
         }
 
-        result = matchIndex >= 0
-            ? returnReader.GetValue(matchIndex)
-            : ifNotFound;
+        if (matchIndex >= 0)
+        {
+            result = returnReader.GetValue(matchIndex);
+            return true;
+        }
+
+        // if_not_found (arg[3]) is evaluated lazily -- only when the lookup actually fails
+        // to find a match -- so a found lookup value is returned even when if_not_found
+        // would itself evaluate to an error (e.g. a fallback chain of nested XLOOKUPs, or
+        // XLOOKUP(key, table, result, NA())). This mirrors IFNA's lazy value_if_na handling
+        // and the slow path in BuiltInFunctions.Lookup.Modern.cs.
+        if (node.Arguments.Count <= 3)
+        {
+            result = ErrorValue.NA;
+            return true;
+        }
+
+        var ifNotFoundValue = EvaluateNode(node.Arguments[3], context);
+        if (ifNotFoundValue is ErrorValue ifNotFoundError)
+        {
+            result = ifNotFoundError;
+            return true;
+        }
+
+        if (ifNotFoundValue is RangeValue)
+            return false;
+
+        // Mirror the slow path (Xlookup in BuiltInFunctions.Lookup.Modern.cs): an
+        // explicitly-supplied if_not_found argument is returned verbatim -- including
+        // when it evaluates to blank -- and must not be coerced to #N/A.
+        result = ifNotFoundValue;
         return true;
     }
 

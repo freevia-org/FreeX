@@ -125,25 +125,43 @@ public static partial class BuiltInFunctions
 
     private static bool ContainsFunctionCall(string text, string functionName)
     {
-        var startIndex = 0;
-        while (true)
+        // Scan the raw formula source character-by-character, tracking whether the cursor is
+        // inside a "..." string literal (with Excel's "" doubled-quote escape) so that a
+        // function-name-shaped substring that only occurs INSIDE a quoted string constant
+        // (e.g. ="SUBTOTAL("&"9,B1:B2)") is never mistaken for a real nested call.
+        bool inString = false;
+        for (int i = 0; i < text.Length; i++)
         {
-            var idx = text.IndexOf(functionName, startIndex, StringComparison.OrdinalIgnoreCase);
-            if (idx < 0) return false;
+            var ch = text[i];
+            if (ch == '"')
+            {
+                if (inString && i + 1 < text.Length && text[i + 1] == '"')
+                {
+                    i++; // escaped "" inside a string literal - stays inside the literal
+                    continue;
+                }
+                inString = !inString;
+                continue;
+            }
+            if (inString) continue;
+
+            if (i + functionName.Length > text.Length) continue;
+            if (string.Compare(text, i, functionName, 0, functionName.Length, StringComparison.OrdinalIgnoreCase) != 0)
+                continue;
 
             // Reject matches that are part of a longer identifier (e.g. "MYSUBTOTAL(" must not
             // match "SUBTOTAL(") by requiring the preceding character not be an identifier character.
-            var precededByIdentifierChar = idx > 0 &&
-                (char.IsLetterOrDigit(text[idx - 1]) || text[idx - 1] == '_' || text[idx - 1] == '.');
+            var precededByIdentifierChar = i > 0 &&
+                (char.IsLetterOrDigit(text[i - 1]) || text[i - 1] == '_' || text[i - 1] == '.');
             if (!precededByIdentifierChar)
             {
-                var cursor = idx + functionName.Length;
+                var cursor = i + functionName.Length;
                 while (cursor < text.Length && char.IsWhiteSpace(text[cursor])) cursor++;
                 if (cursor < text.Length && text[cursor] == '(') return true;
             }
-
-            startIndex = idx + 1;
         }
+
+        return false;
     }
 
     private static bool IsSubtotalStatisticalFunction(int baseFunc)

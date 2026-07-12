@@ -35,7 +35,7 @@ public class NumberFormatterTests
     [Theory]
     [InlineData(1234.5, "$ 1,234.50")]
     [InlineData(-1234.5, "$ (1,234.50)")]
-    [InlineData(0, "$ -")]
+    [InlineData(0, "$ -  ")]
     public void AccountingSubset_RemovesSpacingDirectivesAndPreservesVisibleLiterals(double value, string expected)
     {
         const string format = "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)";
@@ -48,7 +48,7 @@ public class NumberFormatterTests
     [Theory]
     [InlineData(1234.5, 14, "$     1,234.50")]
     [InlineData(-1234.5, 14, "$   (1,234.50)")]
-    [InlineData(0, 14, "$            -")]
+    [InlineData(0, 14, "$          -  ")]
     [InlineData(123456789, 8, "$ 123,456,789.00")]
     public void AccountingSubset_ExpandsFillSpaceToRequestedCharacterWidth(
         double value,
@@ -64,9 +64,9 @@ public class NumberFormatterTests
 
     [Theory]
     [InlineData("_(EUR* #,##0.00_);_(EUR* (#,##0.00);_(EUR* \"-\"??_);_(@_)", 1234.5, "EUR 1,234.50")]
-    [InlineData("_(GBP* #,##0.00_);_(GBP* (#,##0.00);_(GBP* \"-\"??_);_(@_)", 0, "GBP -")]
+    [InlineData("_(GBP* #,##0.00_);_(GBP* (#,##0.00);_(GBP* \"-\"??_);_(@_)", 0, "GBP -  ")]
     [InlineData("_(\u20B4* #,##0.00_);_(\u20B4* (#,##0.00);_(\u20B4* \"-\"??_);_(@_)", 1234.5, "\u20B4 1,234.50")]
-    [InlineData("_(\u20B9* #,##0.00_);_(\u20B9* (#,##0.00);_(\u20B9* \"-\"??_);_(@_)", 0, "\u20B9 -")]
+    [InlineData("_(\u20B9* #,##0.00_);_(\u20B9* (#,##0.00);_(\u20B9* \"-\"??_);_(@_)", 0, "\u20B9 -  ")]
     public void AccountingSubset_PreservesRawMultiCharacterSymbolFillGap(
         string format,
         double value,
@@ -537,8 +537,8 @@ public class NumberFormatterTests
     [InlineData("([$\u20AC-407]#,##0.00)", 1234.5, "(\u20AC1.234,50)")]
     [InlineData("[$\u20AC-407]* #,##0.00", 1234.5, "\u20AC 1.234,50")]
     [InlineData("[$CHF-807]* #,##0.00", 1234.5, "CHF 1'234.50")]
-    [InlineData("[$\u20AC-407]* \"-\"??", 0, "\u20AC -")]
-    [InlineData("[$CHF-807]* \"-\"??", 0, "CHF -")]
+    [InlineData("[$\u20AC-407]* \"-\"??", 0, "\u20AC -  ")]
+    [InlineData("[$CHF-807]* \"-\"??", 0, "CHF -  ")]
     public void CustomNumberSubset_PreservesVisibleCurrencyFromLocaleTokens(
         string format,
         double value,

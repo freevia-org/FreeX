@@ -239,10 +239,11 @@ public sealed partial class MainWindow
     // its grid rendering to wire it to; that remains a separate, grid-rendering-level gap.)
     private void ShowOutlineDetail()
     {
-        var axis = OutlineGroupingService.GetGroupingAxis(_session.SelectedRange);
+        var range = _session.SelectedRange;
+        var axis = OutlineGroupingService.GetGroupingAxis(range);
         var result = axis == OutlineGroupingAxis.Columns
             ? _session.ExecuteReviewCommand(new ExpandColGroupCommand(_session.ActiveSheet.Id, 1))
-            : _session.ExecuteReviewCommand(new ExpandRowGroupCommand(_session.ActiveSheet.Id, 1));
+            : _session.ExecuteReviewCommand(new ExpandRowGroupCommand(_session.ActiveSheet.Id, 1, range.Start.Row, range.End.Row));
         RefreshShell(result.Success
             ? UiText.Get("RibbonWire_ShownDetail")
             : result.ErrorMessage ?? UiText.Get("RibbonWire_ShowDetailFailed"));
@@ -250,10 +251,11 @@ public sealed partial class MainWindow
 
     private void HideOutlineDetail()
     {
-        var axis = OutlineGroupingService.GetGroupingAxis(_session.SelectedRange);
+        var range = _session.SelectedRange;
+        var axis = OutlineGroupingService.GetGroupingAxis(range);
         var result = axis == OutlineGroupingAxis.Columns
             ? _session.ExecuteReviewCommand(new CollapseColGroupCommand(_session.ActiveSheet.Id, 1))
-            : _session.ExecuteReviewCommand(new CollapseRowGroupCommand(_session.ActiveSheet.Id, 1));
+            : _session.ExecuteReviewCommand(new CollapseRowGroupCommand(_session.ActiveSheet.Id, 1, range.Start.Row, range.End.Row));
         RefreshShell(result.Success
             ? UiText.Get("RibbonWire_HidDetail")
             : result.ErrorMessage ?? UiText.Get("RibbonWire_HideDetailFailed"));
