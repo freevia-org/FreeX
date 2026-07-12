@@ -5,12 +5,26 @@ using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
 
+/// <summary>
+/// A sparkline parsed from a single worksheet's XML in isolation (before the full workbook and its
+/// sheet-name → <see cref="SheetId"/> map exist), paired with the raw sheet-name qualifiers from its
+/// data-range and date-axis <c>&lt;xm:f&gt;</c> formulas. Excel's Sparkline "Edit Data" dialog allows a
+/// cross-sheet source range (e.g. a sparkline hosted on Sheet1 whose data is <c>Sheet2!$A$1:$E$1</c>),
+/// so the qualifying sheet NAME must be preserved here and resolved to the correct sheet by the caller
+/// once the workbook is assembled. A <see langword="null"/> qualifier means the formula had no sheet
+/// prefix (the common same-sheet case) — the caller anchors that range to the host sheet.
+/// </summary>
+internal sealed record XlsxSparklineLayout(
+    SparklineModel Sparkline,
+    string? DataRangeSheetName,
+    string? DateAxisSheetName);
+
 internal static class XlsxSparklineMapper
 {
     // The URI that identifies the sparkline <ext> inside the worksheet extLst.
     private const string SparklineExtUri = "{05C60535-1F16-4fd2-B633-F4F36F0B64E0}";
 
-    public static IReadOnlyList<SparklineModel> Read(
+    public static IReadOnlyList<XlsxSparklineLayout> Read(
         XDocument worksheetXml,
         WorkbookTheme theme,
         WorkbookIndexedColorPalette indexedColors)
@@ -19,7 +33,7 @@ internal static class XlsxSparklineMapper
         if (extensionList is null)
             return [];
 
-        var result = new List<SparklineModel>();
+        var result = new List<XlsxSparklineLayout>();
         var tempSheet = SheetId.New();
         int groupCounter = 0;
 
@@ -66,7 +80,7 @@ internal static class XlsxSparklineMapper
             var lowColor      = ReadColorElement(group, "colorLow", theme, indexedColors);
 
             // ── date axis ──────────────────────────────────────────────────────
-            var dateAxisRange = ReadDateAxisRange(group, tempSheet);
+            var (dateAxisRange, dateAxisSheetName) = ReadDateAxisRange(group, tempSheet);
 
             foreach (var sparkline in group.Descendants().Where(element =>
                          string.Equals(element.Name.LocalName, "sparkline", StringComparison.OrdinalIgnoreCase)))
@@ -76,43 +90,49 @@ internal static class XlsxSparklineMapper
                 if (string.IsNullOrWhiteSpace(formula) || string.IsNullOrWhiteSpace(location))
                     continue;
 
-                var bang      = formula.LastIndexOf('!');
-                var rangeText = bang >= 0 ? formula[(bang + 1)..] : formula;
+                // Preserve any cross-sheet qualifier (e.g. "Sheet2!") from the data formula rather than
+                // discarding it: the bare range is parsed against a placeholder sheet here, and the
+                // qualifier's sheet NAME is carried on the layout so the caller can resolve it to the
+                // real SheetId once the workbook (and its sheet-name map) is assembled.
+                var (dataSheetName, rangeText) = SplitSheetQualifiedFormula(formula);
                 rangeText = rangeText.Replace("$", "", StringComparison.Ordinal);
                 location  = location.Replace("$", "", StringComparison.Ordinal);
                 try
                 {
-                    result.Add(new SparklineModel
-                    {
-                        DataRange        = GridRange.Parse(rangeText, tempSheet),
-                        Location         = CellAddress.Parse(location, tempSheet),
-                        Kind             = kind,
-                        GroupId          = groupId,
-                        LineWeight       = lineWeight,
-                        ShowMarkers      = showMarkers,
-                        ShowHighPoint    = showHigh,
-                        ShowLowPoint     = showLow,
-                        ShowFirstPoint   = showFirst,
-                        ShowLastPoint    = showLast,
-                        ShowNegativePoints = showNegative,
-                        ShowAxis         = showAxis,
-                        DisplayHidden    = displayHidden,
-                        RightToLeft      = rightToLeft,
-                        MinAxisType      = minAxisType,
-                        MaxAxisType      = maxAxisType,
-                        ManualMin        = manualMin,
-                        ManualMax        = manualMax,
-                        DisplayEmptyCellsAs = emptyCells,
-                        SeriesColor      = seriesColor,
-                        NegativeColor    = negativeColor,
-                        AxisColor        = axisColor,
-                        MarkersColor     = markersColor,
-                        HighPointColor   = highColor,
-                        LowPointColor    = lowColor,
-                        FirstPointColor  = firstColor,
-                        LastPointColor   = lastColor,
-                        DateAxisRange    = dateAxisRange,
-                    });
+                    result.Add(new XlsxSparklineLayout(
+                        new SparklineModel
+                        {
+                            DataRange        = GridRange.Parse(rangeText, tempSheet),
+                            Location         = CellAddress.Parse(location, tempSheet),
+                            Kind             = kind,
+                            GroupId          = groupId,
+                            LineWeight       = lineWeight,
+                            ShowMarkers      = showMarkers,
+                            ShowHighPoint    = showHigh,
+                            ShowLowPoint     = showLow,
+                            ShowFirstPoint   = showFirst,
+                            ShowLastPoint    = showLast,
+                            ShowNegativePoints = showNegative,
+                            ShowAxis         = showAxis,
+                            DisplayHidden    = displayHidden,
+                            RightToLeft      = rightToLeft,
+                            MinAxisType      = minAxisType,
+                            MaxAxisType      = maxAxisType,
+                            ManualMin        = manualMin,
+                            ManualMax        = manualMax,
+                            DisplayEmptyCellsAs = emptyCells,
+                            SeriesColor      = seriesColor,
+                            NegativeColor    = negativeColor,
+                            AxisColor        = axisColor,
+                            MarkersColor     = markersColor,
+                            HighPointColor   = highColor,
+                            LowPointColor    = lowColor,
+                            FirstPointColor  = firstColor,
+                            LastPointColor   = lastColor,
+                            DateAxisRange    = dateAxisRange,
+                        },
+                        dataSheetName,
+                        dateAxisSheetName));
                 }
                 catch
                 {
@@ -396,28 +416,53 @@ internal static class XlsxSparklineMapper
     /// <summary>
     /// Reads the group's optional &lt;x14:dateAxis&gt;&lt;xm:f&gt;range&lt;/xm:f&gt;&lt;/x14:dateAxis&gt;
     /// (Excel's sparkline "Date Axis Type" setting). The formula may be sheet-qualified
-    /// (e.g. "Sheet1!$A$1:$A$5"); only the range portion is kept, resolved against
-    /// <paramref name="sheet"/> like the sparkline data-range/location references.
+    /// (e.g. "Sheet1!$A$1:$A$5") and — like the sparkline data range — may point at a DIFFERENT sheet
+    /// than the host. The bare range is parsed against the placeholder <paramref name="sheet"/> and the
+    /// qualifier's sheet NAME is returned alongside so the caller can resolve it to the real SheetId.
+    /// Returns <c>(null, null)</c> when there is no date axis or the range is malformed.
     /// </summary>
-    private static GridRange? ReadDateAxisRange(XElement group, SheetId sheet)
+    private static (GridRange? Range, string? SheetName) ReadDateAxisRange(XElement group, SheetId sheet)
     {
         var dateAxis = group.Elements().FirstOrDefault(e =>
             string.Equals(e.Name.LocalName, "dateAxis", StringComparison.OrdinalIgnoreCase));
         var formula = FindChildByLocalName(dateAxis, "f")?.Value;
         if (string.IsNullOrWhiteSpace(formula))
-            return null;
+            return (null, null);
 
-        var bang = formula.LastIndexOf('!');
-        var rangeText = bang >= 0 ? formula[(bang + 1)..] : formula;
+        var (sheetName, rangeText) = SplitSheetQualifiedFormula(formula);
         rangeText = rangeText.Replace("$", "", StringComparison.Ordinal);
         try
         {
-            return GridRange.ParseCellOrRange(rangeText, sheet);
+            return (GridRange.ParseCellOrRange(rangeText, sheet), sheetName);
         }
         catch
         {
-            return null;
+            return (null, null);
         }
+    }
+
+    /// <summary>
+    /// Splits a sparkline <c>&lt;xm:f&gt;</c> formula into its optional sheet-name qualifier and the bare
+    /// range text: <c>Sheet2!$A$1:$E$1</c> → (<c>Sheet2</c>, <c>$A$1:$E$1</c>);
+    /// <c>'My Data'!A1:B2</c> → (<c>My Data</c>, <c>A1:B2</c>); an unqualified <c>$A$1:$E$1</c> →
+    /// (<see langword="null"/>, <c>$A$1:$E$1</c>). The sheet name is un-quoted per the OOXML rule
+    /// (outer single quotes stripped, embedded <c>''</c> collapsed to <c>'</c>) so the caller can match
+    /// it against the workbook's sheet names. Mirrors the same-purpose logic in
+    /// <see cref="XlsxChartSeriesRangeReader.TryParseFormulaRange"/> so charts and sparklines resolve
+    /// cross-sheet qualifiers identically.
+    /// </summary>
+    private static (string? SheetName, string RangeText) SplitSheetQualifiedFormula(string formula)
+    {
+        var bang = formula.LastIndexOf('!');
+        if (bang < 0)
+            return (null, formula);
+
+        var sheetName = formula[..bang]
+            .Trim()
+            .Trim('\'')
+            .Replace("''", "'", StringComparison.Ordinal);
+        var rangeText = formula[(bang + 1)..];
+        return (sheetName.Length == 0 ? null : sheetName, rangeText);
     }
 
     private static CellColor? ReadColorElement(

@@ -72,7 +72,7 @@ public sealed partial class XlsxFileAdapter
         IReadOnlyList<XlsxPicturePackagePart> PictureParts,
         IReadOnlyList<XlsxTextBoxPackagePart> TextBoxParts,
         IReadOnlyList<XlsxShapePackagePart> ShapeParts,
-        IReadOnlyList<SparklineModel> Sparklines,
+        IReadOnlyList<XlsxSparklineLayout> Sparklines,
         IReadOnlyList<FormControlModel> FormControls,
         IReadOnlyList<ConditionalFormat> AdvancedConditionalFormats,
         IReadOnlyList<int> ClassicConditionalFormatPriorities,

@@ -231,13 +231,24 @@ public sealed partial class XlsxFileAdapter
                 shape.Id);
         }
         ApplyLoadedDrawingObjectZOrder(sheet, loadedDrawingObjectOrder);
-        foreach (var sparkline in layout.Sparklines)
+        foreach (var sparklineLayout in layout.Sparklines)
         {
+            var sparkline = sparklineLayout.Sparkline;
+            // A sparkline's data range (and optional date-axis range) may live on a DIFFERENT sheet
+            // than its host: Excel's Sparkline "Edit Data" dialog allows a cross-sheet source range,
+            // whose <xm:f> formula carries a "Sheet2!" qualifier. XlsxSparklineMapper.Read preserved
+            // that qualifier's sheet NAME (it had no sheet-id map yet); resolve it to the real SheetId
+            // now via sheetNameResolver. A null qualifier (the common same-sheet case) or a name that
+            // no longer exists falls back to the host sheet — matching the pre-fix behaviour there.
+            var dataRangeSheetId = ResolveSparklineRangeSheetId(
+                sparklineLayout.DataRangeSheetName, sheetNameResolver, sheet.Id);
+            var dateAxisSheetId = ResolveSparklineRangeSheetId(
+                sparklineLayout.DateAxisSheetName, sheetNameResolver, sheet.Id);
             sheet.Sparklines.Add(new SparklineModel
             {
                 DataRange = new GridRange(
-                    new CellAddress(sheet.Id, sparkline.DataRange.Start.Row, sparkline.DataRange.Start.Col),
-                    new CellAddress(sheet.Id, sparkline.DataRange.End.Row, sparkline.DataRange.End.Col)),
+                    new CellAddress(dataRangeSheetId, sparkline.DataRange.Start.Row, sparkline.DataRange.Start.Col),
+                    new CellAddress(dataRangeSheetId, sparkline.DataRange.End.Row, sparkline.DataRange.End.Col)),
                 Location = new CellAddress(sheet.Id, sparkline.Location.Row, sparkline.Location.Col),
                 Kind                = sparkline.Kind,
                 GroupId             = sparkline.GroupId,
@@ -266,8 +277,8 @@ public sealed partial class XlsxFileAdapter
                 DisplayEmptyCellsAs = sparkline.DisplayEmptyCellsAs,
                 DateAxisRange       = sparkline.DateAxisRange is { } dateAxisRange
                     ? new GridRange(
-                        new CellAddress(sheet.Id, dateAxisRange.Start.Row, dateAxisRange.Start.Col),
-                        new CellAddress(sheet.Id, dateAxisRange.End.Row, dateAxisRange.End.Col))
+                        new CellAddress(dateAxisSheetId, dateAxisRange.Start.Row, dateAxisRange.Start.Col),
+                        new CellAddress(dateAxisSheetId, dateAxisRange.End.Row, dateAxisRange.End.Col))
                     : null,
             });
         }
@@ -368,6 +379,22 @@ public sealed partial class XlsxFileAdapter
         sheet.FullCalculationOnLoad = layout.FullCalculationOnLoad;
         sheet.PhoneticProperties = layout.PhoneticProperties;
     }
+
+    /// <summary>
+    /// Resolves the sheet a sparkline data-range/date-axis reference lives on. When the source
+    /// <c>&lt;xm:f&gt;</c> formula carried a sheet-name qualifier (a cross-sheet source range), that
+    /// name is looked up in <paramref name="sheetNameResolver"/> to obtain the correct
+    /// <see cref="SheetId"/>. When the qualifier is absent (the common same-sheet case) or names a
+    /// sheet that no longer exists, the reference is anchored to <paramref name="hostSheetId"/>.
+    /// </summary>
+    private static SheetId ResolveSparklineRangeSheetId(
+        string? qualifyingSheetName,
+        IReadOnlyDictionary<string, SheetId> sheetNameResolver,
+        SheetId hostSheetId) =>
+        qualifyingSheetName is not null &&
+        sheetNameResolver.TryGetValue(qualifyingSheetName, out var resolved)
+            ? resolved
+            : hostSheetId;
 
     private static void AddLoadedDrawingObjectOrder(
         List<(int OrderIndex, DrawingObjectZOrderEntry Entry)> order,

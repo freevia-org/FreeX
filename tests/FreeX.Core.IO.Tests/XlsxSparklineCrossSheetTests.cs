@@ -118,6 +118,61 @@ public sealed class XlsxSparklineCrossSheetTests
             "the date-axis formula must qualify with its own referenced sheet (Source), not the host sheet (Data)");
     }
 
+    // ── Bug case (read side): cross-sheet range resolves back to the source sheet on load ──
+
+    [Fact]
+    public void CrossSheetRanges_RoundTripThroughLoad_AnchoredToSourceSheet_NotHost()
+    {
+        // The READ-side half of R25-io-validation-cf-extlst-1: before the fix, XlsxSparklineMapper.Read
+        // discarded the "Source!" qualifier and the loader force-anchored the reloaded DataRange (and
+        // DateAxisRange) onto the HOST sheet, so a genuine cross-sheet sparkline came back pointing at
+        // the wrong sheet's cells. This full Save→Load round trip pins that both ranges now resolve to
+        // the sheet the <xm:f> qualifier actually named.
+        var workbook = new Workbook("SparklineCrossSheetRoundTrip");
+        var data = workbook.AddSheet("Data");     // host sheet: hosts the sparkline itself
+        var source = workbook.AddSheet("Source"); // data-source sheet: different from the host
+
+        for (uint col = 1; col <= 5; col++)
+        {
+            source.SetCell(new CellAddress(source.Id, 1, col), new NumberValue(col));
+            source.SetCell(new CellAddress(source.Id, 2, col), new NumberValue(46023 + col));
+        }
+
+        data.Sparklines.Add(new SparklineModel
+        {
+            DataRange = new GridRange(new CellAddress(source.Id, 1, 1), new CellAddress(source.Id, 1, 5)),
+            Location = new CellAddress(data.Id, 2, 2),
+            Kind = SparklineKind.Line,
+            DateAxisRange = new GridRange(new CellAddress(source.Id, 2, 1), new CellAddress(source.Id, 2, 5)),
+        });
+
+        using var saved = SaveXlsx(workbook);
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        var reloadedData = reloaded.GetSheet("Data")!;
+        var reloadedSource = reloaded.GetSheet("Source")!;
+
+        reloadedData.Sparklines.Should().HaveCount(1);
+        var reloadedSparkline = reloadedData.Sparklines[0];
+
+        // Location stays on the host sheet (a sparkline always occupies a cell on its own sheet).
+        reloadedSparkline.Location.Sheet.Should().Be(reloadedData.Id);
+
+        // The data range must resolve to the SOURCE sheet's id -- the whole point of the read-side fix.
+        reloadedSparkline.DataRange.Start.Sheet.Should().Be(reloadedSource.Id,
+            "the reloaded data range must point at the Source sheet the <xm:f> qualifier named, not the host (Data) sheet");
+        reloadedSparkline.DataRange.End.Sheet.Should().Be(reloadedSource.Id);
+        reloadedSparkline.DataRange.Start.Row.Should().Be(1);
+        reloadedSparkline.DataRange.Start.Col.Should().Be(1);
+        reloadedSparkline.DataRange.End.Col.Should().Be(5);
+
+        // The cross-sheet date-axis range must likewise resolve back to Source, not the host sheet.
+        reloadedSparkline.DateAxisRange.Should().NotBeNull();
+        reloadedSparkline.DateAxisRange!.Value.Start.Sheet.Should().Be(reloadedSource.Id);
+        reloadedSparkline.DateAxisRange!.Value.End.Sheet.Should().Be(reloadedSource.Id);
+    }
+
     // ── Representative already-working case: same-sheet data range (no regression) ─
 
     [Fact]

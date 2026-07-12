@@ -324,7 +324,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     {
         var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxSparklineMapper.cs");
         var readMethod = source[
-            source.IndexOf("public static IReadOnlyList<SparklineModel> Read", StringComparison.Ordinal)..
+            source.IndexOf("public static IReadOnlyList<XlsxSparklineLayout> Read", StringComparison.Ordinal)..
             source.IndexOf("public static void Save", StringComparison.Ordinal)];
 
         readMethod.Should().Contain("FindChildByLocalName(worksheetXml.Root, \"extLst\")");
