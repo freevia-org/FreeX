@@ -650,11 +650,16 @@ public static partial class ChartRenderer
 
     private static bool UsesSecondaryAxis(ChartModel chart, int seriesIndex)
     {
-        if (!chart.ShowSecondaryAxis || seriesIndex <= 0)
+        // Secondary-axis membership is authoritative for ANY series, including index 0 — Excel's
+        // Format Data Series > Secondary Axis works on the first series just as on any other
+        // (R25-chart-axis-series-deep-1). Only the empty-list default legitimately excludes the first
+        // series (below): an explicit assignment list that contains 0 must move series 0 to secondary.
+        if (!chart.ShowSecondaryAxis || seriesIndex < 0)
             return false;
 
-        return chart.SecondaryAxisSeriesIndexes.Count == 0 ||
-               chart.SecondaryAxisSeriesIndexes.Contains(seriesIndex);
+        return chart.SecondaryAxisSeriesIndexes.Count == 0
+            ? seriesIndex > 0
+            : chart.SecondaryAxisSeriesIndexes.Contains(seriesIndex);
     }
 
     private static bool IsComboLineSeries(ChartModel chart, int seriesIndex)
@@ -760,7 +765,10 @@ public static partial class ChartRenderer
 
         return chart.SecondaryAxisSeriesIndexes.Count == 0
             ? seriesCount > 1
-            : chart.SecondaryAxisSeriesIndexes.Any(index => index > 0 && index < seriesCount);
+            // An explicit list may legitimately put the FIRST series (index 0) on the secondary axis
+            // (R25-chart-axis-series-deep-1), so accept index >= 0 here — otherwise a chart whose only
+            // secondary-axis series is series 0 would never get a secondary axis drawn.
+            : chart.SecondaryAxisSeriesIndexes.Any(index => index >= 0 && index < seriesCount);
     }
 
     private static void ConfigureLegend(PlotModel model, ChartModel chart, WorkbookTheme theme)

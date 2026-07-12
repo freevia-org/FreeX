@@ -83,8 +83,11 @@ public sealed class R25_ChartBarReaderSecondaryAxisSeriesZeroTests
     [Fact]
     public void TryReadSupportedChart_PlainBarChart_SecondaryAxisAtNonZeroIndex_StillWorks()
     {
-        // Same "already-working" proof for the non-combo TryReadBarChart path (a single <c:barChart>
-        // with two series, one of them moved to the secondary value axis).
+        // Same "already-working" proof for the non-combo TryReadBarChart path. Series 0 stays on the
+        // PRIMARY value axis and series 1 is moved to the SECONDARY — which OOXML expresses as two
+        // <c:barChart> plot groups (a single group's axId set applies to ALL its series, so same-group
+        // series cannot straddle two value axes). Group 0 references the primary valAx (222); group 1
+        // references the secondary valAx (333, axPos="r").
         var sheetId = new SheetId(Guid.NewGuid());
         var chartXml = ParseChartXml("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
@@ -99,6 +102,11 @@ public sealed class R25_ChartBarReaderSecondaryAxisSeriesZeroTests
                       <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
                       <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
                     </c:ser>
+                    <c:axId val="111"/>
+                    <c:axId val="222"/>
+                  </c:barChart>
+                  <c:barChart>
+                    <c:barDir val="col"/>
                     <c:ser>
                       <c:idx val="1"/>
                       <c:order val="1"/>
@@ -137,17 +145,7 @@ public sealed class R25_ChartBarReaderSecondaryAxisSeriesZeroTests
         chart.SecondaryAxisSeriesIndexes.Should().Equal(1);
     }
 
-    [Fact(Skip =
-        "Blocked on a companion fix outside this bucket's file scope: ChartSeriesIndexSanitizer." +
-        "SanitizeSeriesIndexes (ChartSeriesIndexSanitizer.cs) still filters `index > 0`, so it strips " +
-        "series index 0 back out of SecondaryAxisSeriesIndexes immediately after XlsxChartSanitizer." +
-        "SanitizeLoadedChart runs (called from inside XlsxChartPartReader.Bar.cs, right before every " +
-        "return). The reader-side fix in XlsxChartPartReader.Bar.cs (this bucket) is applied and " +
-        "correct in isolation, but the sanitizer (and, downstream, ChartRenderer.SeriesFormatting." +
-        "UsesSecondaryAxis + XlsxChartXmlWriter.Series.GetSecondaryAxisSeriesIndexes) must also switch " +
-        "from `index > 0` to `index >= 0` — mirroring the SanitizeComboIndexes precedent already used " +
-        "for ComboLineSeriesIndexes — before this scenario is observable end-to-end. Un-skip once that " +
-        "companion fix lands.")]
+    [Fact]
     public void TryReadSupportedChart_BarLineCombo_LineAtIndexZeroOnSecondaryAxis_ShouldPreserveSecondaryAxis()
     {
         // Mirrors the finding's failure scenario: a Line series at idx 0 ("Utilization %") plotted on
@@ -208,5 +206,236 @@ public sealed class R25_ChartBarReaderSecondaryAxisSeriesZeroTests
         chart.Type.Should().Be(ChartType.Column);
         chart.ShowSecondaryAxis.Should().BeTrue();
         chart.SecondaryAxisSeriesIndexes.Should().Contain(0);
+    }
+
+    [Fact]
+    public void TryReadSupportedChart_AreaChart_SeriesZeroOnSecondaryAxis_ShouldPreserveSecondaryAxis()
+    {
+        // Same bug pattern as the bar reader, in XlsxChartPartReader.Area.cs: two <c:areaChart> plot
+        // groups where the idx-0 series lives on the SECONDARY value axis (axPos="r") and the idx-1
+        // series stays on the primary. The reader used to strip index 0 (`&& seriesIndex > 0`).
+        var sheetId = new SheetId(Guid.NewGuid());
+        var chartXml = ParseChartXml("""
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+              <c:chart>
+                <c:plotArea>
+                  <c:areaChart>
+                    <c:ser>
+                      <c:idx val="0"/>
+                      <c:order val="0"/>
+                      <c:tx><c:strRef><c:f>Sheet1!$B$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                    </c:ser>
+                    <c:axId val="111"/>
+                    <c:axId val="333"/>
+                  </c:areaChart>
+                  <c:areaChart>
+                    <c:ser>
+                      <c:idx val="1"/>
+                      <c:order val="1"/>
+                      <c:tx><c:strRef><c:f>Sheet1!$C$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$C$2:$C$4</c:f></c:numRef></c:val>
+                    </c:ser>
+                    <c:axId val="111"/>
+                    <c:axId val="222"/>
+                  </c:areaChart>
+                  <c:catAx>
+                    <c:axId val="111"/>
+                    <c:axPos val="b"/>
+                    <c:crossAx val="222"/>
+                  </c:catAx>
+                  <c:valAx>
+                    <c:axId val="222"/>
+                    <c:axPos val="l"/>
+                    <c:crossAx val="111"/>
+                  </c:valAx>
+                  <c:valAx>
+                    <c:axId val="333"/>
+                    <c:axPos val="r"/>
+                    <c:crossAx val="111"/>
+                  </c:valAx>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        var result = XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart);
+
+        result.Should().BeTrue();
+        chart.Type.Should().Be(ChartType.Area);
+        chart.ShowSecondaryAxis.Should().BeTrue();
+        chart.SecondaryAxisSeriesIndexes.Should().Contain(0);
+    }
+
+    [Fact]
+    public void TryReadSupportedChart_LineChart_SeriesZeroOnSecondaryAxis_ShouldPreserveSecondaryAxis()
+    {
+        // XlsxChartPartReader.Line.cs (TryReadLineChart): two <c:lineChart> plot groups, the idx-0
+        // line on the secondary value axis, the idx-1 line on the primary. Route: two lineCharts and
+        // no bar/area/scatter -> TryReadLineChart.
+        var sheetId = new SheetId(Guid.NewGuid());
+        var chartXml = ParseChartXml("""
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+              <c:chart>
+                <c:plotArea>
+                  <c:lineChart>
+                    <c:ser>
+                      <c:idx val="0"/>
+                      <c:order val="0"/>
+                      <c:tx><c:strRef><c:f>Sheet1!$B$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                    </c:ser>
+                    <c:axId val="111"/>
+                    <c:axId val="333"/>
+                  </c:lineChart>
+                  <c:lineChart>
+                    <c:ser>
+                      <c:idx val="1"/>
+                      <c:order val="1"/>
+                      <c:tx><c:strRef><c:f>Sheet1!$C$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$C$2:$C$4</c:f></c:numRef></c:val>
+                    </c:ser>
+                    <c:axId val="111"/>
+                    <c:axId val="222"/>
+                  </c:lineChart>
+                  <c:catAx>
+                    <c:axId val="111"/>
+                    <c:axPos val="b"/>
+                    <c:crossAx val="222"/>
+                  </c:catAx>
+                  <c:valAx>
+                    <c:axId val="222"/>
+                    <c:axPos val="l"/>
+                    <c:crossAx val="111"/>
+                  </c:valAx>
+                  <c:valAx>
+                    <c:axId val="333"/>
+                    <c:axPos val="r"/>
+                    <c:crossAx val="111"/>
+                  </c:valAx>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        var result = XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart);
+
+        result.Should().BeTrue();
+        chart.Type.Should().Be(ChartType.Line);
+        chart.ShowSecondaryAxis.Should().BeTrue();
+        chart.SecondaryAxisSeriesIndexes.Should().Contain(0);
+    }
+
+    [Fact]
+    public void TryReadSupportedChart_ScatterChart_SeriesZeroOnSecondaryAxis_ShouldPreserveSecondaryAxis()
+    {
+        // XlsxChartPartReader.Scatter.cs: two <c:scatterChart> plot groups, the idx-0 series on the
+        // secondary value axis (axPos="r") and the idx-1 series on the primary. The reader used to
+        // strip index 0 (`&& modelSeriesIndex > 0`).
+        var sheetId = new SheetId(Guid.NewGuid());
+        var chartXml = ParseChartXml("""
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+              <c:chart>
+                <c:plotArea>
+                  <c:scatterChart>
+                    <c:scatterStyle val="lineMarker"/>
+                    <c:ser>
+                      <c:idx val="0"/>
+                      <c:order val="0"/>
+                      <c:tx><c:strRef><c:f>Sheet1!$B$1</c:f></c:strRef></c:tx>
+                      <c:xVal><c:numRef><c:f>Sheet1!$A$2:$A$4</c:f></c:numRef></c:xVal>
+                      <c:yVal><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:yVal>
+                    </c:ser>
+                    <c:axId val="111"/>
+                    <c:axId val="333"/>
+                  </c:scatterChart>
+                  <c:scatterChart>
+                    <c:scatterStyle val="lineMarker"/>
+                    <c:ser>
+                      <c:idx val="1"/>
+                      <c:order val="1"/>
+                      <c:tx><c:strRef><c:f>Sheet1!$C$1</c:f></c:strRef></c:tx>
+                      <c:xVal><c:numRef><c:f>Sheet1!$A$2:$A$4</c:f></c:numRef></c:xVal>
+                      <c:yVal><c:numRef><c:f>Sheet1!$C$2:$C$4</c:f></c:numRef></c:yVal>
+                    </c:ser>
+                    <c:axId val="111"/>
+                    <c:axId val="222"/>
+                  </c:scatterChart>
+                  <c:valAx>
+                    <c:axId val="111"/>
+                    <c:axPos val="b"/>
+                    <c:crossAx val="222"/>
+                  </c:valAx>
+                  <c:valAx>
+                    <c:axId val="222"/>
+                    <c:axPos val="l"/>
+                    <c:crossAx val="111"/>
+                  </c:valAx>
+                  <c:valAx>
+                    <c:axId val="333"/>
+                    <c:axPos val="r"/>
+                    <c:crossAx val="111"/>
+                  </c:valAx>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        var result = XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart);
+
+        result.Should().BeTrue();
+        chart.Type.Should().Be(ChartType.Scatter);
+        chart.ShowSecondaryAxis.Should().BeTrue();
+        chart.SecondaryAxisSeriesIndexes.Should().Contain(0);
+    }
+
+    [Fact]
+    public void XlsxAdapter_RoundTrip_ColumnChart_SecondaryAxisSeriesZero_SurvivesSave()
+    {
+        // read -> write -> read: a Column chart whose FIRST series (index 0) is on the secondary axis
+        // must round-trip through the XLSX writer (XlsxChartXmlWriter.GetSecondaryAxisSeriesIndexes)
+        // instead of being silently dropped on save.
+        var workbook = new Workbook("R25SecondaryAxisZero");
+        var sheet = workbook.AddSheet("Sheet1");
+        // A = categories, B = series 0 (secondary axis), C = series 1 (primary axis).
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Cat"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Util%"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Headcount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Q1"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(0.8));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(12));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Q2"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(0.9));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(15));
+
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            FirstRowIsHeader = true,
+            FirstColIsCategories = true,
+            ShowSecondaryAxis = true,
+            // The FIRST series is the one on the secondary axis — the exact case the finding says was
+            // dropped on save (GetSecondaryAxisSeriesIndexes filtered `index > 0`).
+            SecondaryAxisSeriesIndexes = [0],
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 3, 3)),
+        };
+        sheet.Charts.Add(chart);
+
+        var adapter = new XlsxFileAdapter();
+        using var ms = new MemoryStream();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+        var reloaded = adapter.Load(ms).GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+
+        reloaded.ShowSecondaryAxis.Should().BeTrue(
+            "a chart whose only secondary-axis series is series 0 must still report a secondary axis after save+load");
+        reloaded.SecondaryAxisSeriesIndexes.Should().Contain(0,
+            "series 0's secondary-axis assignment must survive the XLSX writer instead of being filtered out");
     }
 }

@@ -159,9 +159,10 @@ public partial class FileAdapterSmokeTests
 
         var chart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
         chart.ExplodedSliceIndex.Should().Be(-1);
-        chart.SecondaryAxisSeriesIndexes.Should().Equal(1);
-        // Combo line membership now keeps index 0 (Excel can draw the line series first); only the
-        // out-of-range (-1, 2) and duplicate entries are dropped. Secondary axis still excludes 0.
+        // Secondary-axis AND combo-line membership both keep index 0 — Excel allows the first series
+        // on the secondary axis (R25-chart-axis-series-deep-1) just as it can be drawn as the combo
+        // line; only the out-of-range (-1, 2) and duplicate entries are dropped.
+        chart.SecondaryAxisSeriesIndexes.Should().Equal(0, 1);
         chart.ComboLineSeriesIndexes.Should().Equal(0, 1);
         chart.SeriesFormats.Should().ContainSingle().Which.Should().Be(
             new ChartSeriesFormat(0, FillColor: new CellColor(0, 114, 178), StrokeThickness: 0.5));
@@ -179,7 +180,11 @@ public partial class FileAdapterSmokeTests
             Type = ChartType.Column,
             DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 3)),
             ShowSecondaryAxis = true,
-            SecondaryAxisSeriesIndexes = [-1, 0, 2]
+            // All three indexes are out of range for this 2-series chart (-1 is negative; 2 and 3 are
+            // >= seriesCount). Index 0 is now a VALID secondary-axis target (R25-chart-axis-series-deep-1),
+            // so it must NOT appear here — this test exercises the "no valid target left -> clear the
+            // secondary axis entirely" branch, which requires the sanitized set to be empty.
+            SecondaryAxisSeriesIndexes = [-1, 2, 3]
         });
 
         var ms = new MemoryStream();

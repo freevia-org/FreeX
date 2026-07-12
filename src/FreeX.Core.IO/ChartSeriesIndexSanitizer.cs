@@ -16,8 +16,9 @@ internal static class ChartSeriesIndexSanitizer
 
         // Combo line/scatter membership may legitimately include series index 0 — Excel can put
         // the <c:lineChart>/<c:scatterChart> series first (e.g. a shaded target-band chart where the
-        // Qty line is idx 0 over bar helper columns). Allow idx 0 here (unlike the secondary axis,
-        // which is meaningless for the first series).
+        // Qty line is idx 0 over bar helper columns). Allow idx 0 here — exactly as SanitizeSeriesIndexes
+        // now does for the secondary axis (Excel's Format Data Series > Secondary Axis works on ANY
+        // series regardless of position, including the first).
         chart.ComboLineSeriesIndexes = SanitizeComboIndexes(chart.ComboLineSeriesIndexes, seriesCount);
         if (!ChartTypeSupport.SupportsComboLineOverlay(chart)
             || (chart.UseComboLineForSecondarySeries && chart.ComboLineSeriesIndexes.Count == 0))
@@ -31,7 +32,10 @@ internal static class ChartSeriesIndexSanitizer
 
     private static List<int> SanitizeSeriesIndexes(IEnumerable<int> indexes, int seriesCount) =>
         indexes
-            .Where(index => index > 0 && index < seriesCount)
+            // Keep index 0: a secondary-axis assignment is valid for ANY series, including the first
+            // (mirrors SanitizeComboIndexes below). R25-chart-axis-series-deep-1 — a `> 0` filter here
+            // silently re-stripped series 0 right after the readers recorded it.
+            .Where(index => index >= 0 && index < seriesCount)
             .Distinct()
             .Order()
             .ToList();

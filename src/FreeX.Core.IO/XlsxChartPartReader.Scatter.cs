@@ -36,7 +36,10 @@ public static partial class XlsxChartPartReader
                         ranges.Add(range);
                 }
 
-                if (usesSecondaryAxis && modelSeriesIndex > 0)
+                // Secondary-axis membership follows the series' own <c:scatterChart> value axis, so
+                // it is authoritative even for series index 0 — Excel allows Format Data Series >
+                // Secondary Axis on the first series too (R25-chart-axis-series-deep-1, mirrors Bar.cs).
+                if (usesSecondaryAxis)
                     result.SecondaryAxisSeriesIndexes.Add(modelSeriesIndex);
 
                 if (XlsxChartSeriesFormatReader.TryReadSeriesLine(series, modelSeriesIndex, out var format))

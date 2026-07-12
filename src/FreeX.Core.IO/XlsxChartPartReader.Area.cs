@@ -38,7 +38,11 @@ public static partial class XlsxChartPartReader
                         ranges.Add(range);
                 }
 
-                if (usesSecondaryAxis && seriesIndex > 0)
+                // Secondary-axis membership comes straight from which value axis the series' own
+                // <c:areaChart> targets, so it is authoritative even for series index 0 — Excel
+                // allows Format Data Series > Secondary Axis on the first series too
+                // (R25-chart-axis-series-deep-1). Mirrors the XlsxChartPartReader.Bar.cs fix.
+                if (usesSecondaryAxis)
                     result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
 
                 if (XlsxChartSeriesFormatReader.TryReadSeriesFill(series, seriesIndex, out var format))
@@ -68,7 +72,10 @@ public static partial class XlsxChartPartReader
                 }
 
                 result.ComboLineSeriesIndexes.Add(seriesIndex);
-                if (usesSecondaryAxis && seriesIndex > 0)
+                // Same rationale as the areaChart loop above: a <c:lineChart> that declares the
+                // secondary axId is authoritative regardless of series index — a line overlay is
+                // frequently plotted first, at idx 0, over the primary-axis area series.
+                if (usesSecondaryAxis)
                     result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
 
                 if (XlsxChartSeriesFormatReader.TryReadSeriesLine(series, seriesIndex, out var format))
@@ -87,13 +94,16 @@ public static partial class XlsxChartPartReader
             return false;
         }
 
+        // Do NOT drop index 0 from either list — secondary-axis and combo-line membership are both
+        // authoritative for the first series (R25-chart-axis-series-deep-1). Mirrors Bar.cs; the
+        // sanitizer bounds these against the real series count.
         result.SecondaryAxisSeriesIndexes = result.SecondaryAxisSeriesIndexes
-            .Where(index => index > 0)
+            .Where(index => index >= 0)
             .Distinct()
             .Order()
             .ToList();
         result.ComboLineSeriesIndexes = result.ComboLineSeriesIndexes
-            .Where(index => index > 0)
+            .Where(index => index >= 0)
             .Distinct()
             .Order()
             .ToList();
@@ -149,7 +159,9 @@ public static partial class XlsxChartPartReader
                         ranges.Add(range);
                 }
 
-                if (usesSecondaryAxis && seriesIndex > 0)
+                // Authoritative for any series index, including 0 (R25-chart-axis-series-deep-1) —
+                // see the combo reader above and XlsxChartPartReader.Bar.cs.
+                if (usesSecondaryAxis)
                     result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
 
                 if (XlsxChartSeriesFormatReader.TryReadSeriesFill(series, seriesIndex, out var format))

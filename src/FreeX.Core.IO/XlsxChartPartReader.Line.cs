@@ -80,7 +80,10 @@ public static partial class XlsxChartPartReader
                         ranges.Add(range);
                 }
 
-                if (usesSecondaryAxis && seriesIndex > 0)
+                // Secondary-axis membership follows the series' own <c:lineChart> value axis, so it
+                // is authoritative even for series index 0 — Excel allows Format Data Series >
+                // Secondary Axis on the first series too (R25-chart-axis-series-deep-1, mirrors Bar.cs).
+                if (usesSecondaryAxis)
                     result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
 
                 if (XlsxChartSeriesFormatReader.TryReadSeriesLine(series, seriesIndex, out var format))
@@ -99,8 +102,10 @@ public static partial class XlsxChartPartReader
             return false;
         }
 
+        // Keep index 0 — a secondary-axis assignment is valid for the first series too
+        // (R25-chart-axis-series-deep-1); the sanitizer bounds this against the real series count.
         result.SecondaryAxisSeriesIndexes = result.SecondaryAxisSeriesIndexes
-            .Where(index => index > 0)
+            .Where(index => index >= 0)
             .Distinct()
             .Order()
             .ToList();
@@ -155,7 +160,10 @@ public static partial class XlsxChartPartReader
                         ranges.Add(range);
                 }
 
-                if (usesSecondaryAxis && seriesIndex > 0)
+                // Secondary-axis membership follows the series' own <c:lineChart> value axis, so it
+                // is authoritative even for series index 0 — Excel allows Format Data Series >
+                // Secondary Axis on the first series too (R25-chart-axis-series-deep-1, mirrors Bar.cs).
+                if (usesSecondaryAxis)
                     result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
 
                 if (XlsxChartSeriesFormatReader.TryReadSeriesLine(series, seriesIndex, out var format))

@@ -1306,7 +1306,8 @@ public static class ChartLayoutEngine
         if (!chart.ShowSecondaryAxis || !ChartTypeSupport.SupportsSecondaryAxis(chart.Type) || request.Series.Count < 2)
             return false;
 
-        // At least one non-first series must actually map to the secondary axis.
+        // At least one series must actually map to the secondary axis (any series, including the
+        // first — see UsesSecondaryAxis).
         foreach (var series in request.Series)
         {
             if (UsesSecondaryAxis(chart, series.SeriesIndex))
@@ -1316,16 +1317,19 @@ public static class ChartLayoutEngine
         return false;
     }
 
-    // Mirrors the source renderer: a series uses the secondary axis when the chart enables it, the
-    // series is not the first, and either no explicit assignment list is given (all but the first
-    // go secondary) or the list contains this series index.
+    // Mirrors the source renderer (ChartRenderer.SeriesFormatting.UsesSecondaryAxis): a series uses
+    // the secondary axis when the chart enables it and either an explicit assignment list contains
+    // this series index — valid for ANY series, including the first (R25-chart-axis-series-deep-1,
+    // Excel's Format Data Series > Secondary Axis works on series 0 too) — or no list is given, in
+    // which case Excel's implicit default sends every series AFTER the first to the secondary axis.
     private static bool UsesSecondaryAxis(ChartModel chart, int seriesIndex)
     {
-        if (!chart.ShowSecondaryAxis || seriesIndex <= 0)
+        if (!chart.ShowSecondaryAxis || seriesIndex < 0)
             return false;
 
         return chart.SecondaryAxisSeriesIndexes.Count == 0
-            || chart.SecondaryAxisSeriesIndexes.Contains(seriesIndex);
+            ? seriesIndex > 0
+            : chart.SecondaryAxisSeriesIndexes.Contains(seriesIndex);
     }
 
     // Mirrors the source renderer's IsComboLineSeries: membership in ComboLineSeriesIndexes is

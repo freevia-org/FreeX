@@ -354,8 +354,11 @@ internal static partial class XlsxChartXmlWriter
         if (chart.SecondaryAxisSeriesIndexes.Count == 0)
             return Enumerable.Range(1, seriesCount - 1).ToHashSet();
 
+        // Keep index 0: an explicit secondary-axis assignment is valid for ANY series, including the
+        // first (R25-chart-axis-series-deep-1), so a series-0 assignment round-trips back out to XLSX
+        // instead of being silently dropped on save. Mirrors GetComboLineSeriesIndexes below.
         return chart.SecondaryAxisSeriesIndexes
-            .Where(index => index > 0 && index < seriesCount)
+            .Where(index => index >= 0 && index < seriesCount)
             .Distinct()
             .ToHashSet();
     }
