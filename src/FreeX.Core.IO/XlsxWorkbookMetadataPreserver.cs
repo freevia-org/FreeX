@@ -6,7 +6,11 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxWorkbookMetadataPreserver
 {
-    public static void Preserve(ZipArchive sourceArchive, ZipArchive targetArchive, Workbook workbook)
+    public static void Preserve(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        Workbook workbook,
+        IReadOnlyList<SheetId> sourceSheetIdsByLocalId)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
@@ -86,7 +90,7 @@ internal static class XlsxWorkbookMetadataPreserver
             changed = true;
         if (MergeCustomWorkbookViews(sourceCustomWorkbookViews, targetRoot, workbookNs, XlsxCustomViewMapper.GetModeledIds(workbook)))
             changed = true;
-        if (MergeDefinedNames(sourceDefinedNames, targetRoot, workbookNs, sourceWorkbookXml))
+        if (MergeDefinedNames(sourceDefinedNames, targetRoot, workbookNs, sourceWorkbookXml, workbook, sourceSheetIdsByLocalId))
             changed = true;
         if (MergeChildBlock(sourceOleSize, targetRoot, workbookNs + "oleSize"))
             changed = true;
@@ -664,7 +668,9 @@ internal static class XlsxWorkbookMetadataPreserver
         XElement? sourceDefinedNames,
         XElement targetRoot,
         XNamespace workbookNs,
-        XDocument sourceWorkbookXml)
+        XDocument sourceWorkbookXml,
+        Workbook workbook,
+        IReadOnlyList<SheetId> sourceSheetIdsByLocalId)
     {
         var sourceNames = sourceDefinedNames?
             .Elements(workbookNs + "definedName")
@@ -698,6 +704,15 @@ internal static class XlsxWorkbookMetadataPreserver
             .ToHashSet(StringComparer.OrdinalIgnoreCase)
             ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // Keys (name + current local-sheet scope) of every defined name still live in the workbook
+        // model, in the same format DefinedNameKey produces here AFTER the localSheetId remap below
+        // (that remap targets the current model/target sheet order, matching GetLiveDefinedNameKeys's
+        // model-order localSheetId). A model-representable source name whose remapped key is absent
+        // here was deleted from the Name Manager - resurrecting it from the pristine source snapshot
+        // would silently bring it back forever, so it is gated out just as
+        // RestorePatchWorkbookDefinedNames gates the patch-save path.
+        var liveModelDefinedNameKeys = XlsxNamedRangeMapper.GetLiveDefinedNameKeys(workbook);
+
         var changed = false;
         foreach (var sourceName in sourceNames)
         {
@@ -714,7 +729,39 @@ internal static class XlsxWorkbookMetadataPreserver
                 var newLocalSheetId = targetSheetNames.FindIndex(
                     name => string.Equals(name, scopeSheetName, StringComparison.OrdinalIgnoreCase));
                 if (newLocalSheetId < 0)
-                    continue;
+                {
+                    // The old scope-sheet name isn't present under any current sheet BY NAME. This is
+                    // ambiguous between the sheet having been DELETED (drop the name, per P112) and
+                    // the sheet having simply been RENAMED with no other structural change (the sheet
+                    // - and this name's scope - is still there, just under a new name). Count+ordinal
+                    // alone can't tell those apart: deleting a sheet and adding an unrelated one at
+                    // the same ordinal also leaves the count and position matching. Disambiguate by
+                    // identity instead - a rename keeps the SAME Sheet object (and its stable
+                    // Sheet.Id) alive; a delete+add always produces a brand-new Sheet.Id that was
+                    // never present at this snapshot's pristine load/rebase. Only treat this as a
+                    // rename when the ORIGINAL sheet's Sheet.Id genuinely still exists (mirrors
+                    // R27-io-workbook-parts-deep-2 / R28-meta-3 in RestorePatchWorkbookDefinedNames;
+                    // that path otherwise silently picks up the slack for this specific case, but the
+                    // drop is still visible for other rename combinations without this fix).
+                    var renamedSheetIndex = -1;
+                    if (oldLocalSheetId < sourceSheetIdsByLocalId.Count)
+                    {
+                        var originalSheetId = sourceSheetIdsByLocalId[oldLocalSheetId];
+                        for (var sheetIndex = 0; sheetIndex < workbook.Sheets.Count; sheetIndex++)
+                        {
+                            if (workbook.Sheets[sheetIndex].Id == originalSheetId)
+                            {
+                                renamedSheetIndex = sheetIndex;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (renamedSheetIndex < 0)
+                        continue;
+
+                    newLocalSheetId = renamedSheetIndex;
+                }
 
                 localSheetIdAttr.Value = newLocalSheetId.ToString(System.Globalization.CultureInfo.InvariantCulture);
             }
@@ -722,6 +769,26 @@ internal static class XlsxWorkbookMetadataPreserver
             var key = DefinedNameKey(candidate);
             if (existingKeys.Contains(key))
                 continue;
+
+            // Liveness gate: never resurrect a model-representable name the user deleted from the
+            // Name Manager. Names FreeX cannot round-trip through the model (validator-rejected, or
+            // an unmodelable refers-to such as a constant/#REF!/external-workbook reference) and
+            // Excel-reserved names (Print_Area etc.) are absent from liveModelDefinedNameKeys for
+            // reasons unrelated to deletion - they were never loaded into the model - so they stay
+            // exempt from the gate and are still preserved. Mirrors RestorePatchWorkbookDefinedNames'
+            // resurrection gate. (A model-representable name that IS live was already re-emitted into
+            // the target by the name write-back, so it is caught by the existingKeys check above and
+            // never reaches here.)
+            var sourceNameAttr = candidate.Attribute("name")?.Value;
+            var isModelRepresentable = !string.IsNullOrWhiteSpace(sourceNameAttr) &&
+                workbook.ValidateNamedRangeName(sourceNameAttr) is null &&
+                !XlsxNamedRangeMapper.IsUnmodelableDefinedNameRefersTo(candidate.Value);
+            if (isModelRepresentable &&
+                !liveModelDefinedNameKeys.Contains(key) &&
+                !XlsxNamedRangeMapper.IsExcelReservedDefinedName(sourceNameAttr))
+            {
+                continue;
+            }
 
             if (targetDefinedNames is null)
             {

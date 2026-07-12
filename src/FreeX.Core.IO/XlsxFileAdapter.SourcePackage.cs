@@ -42,7 +42,11 @@ public sealed partial class XlsxFileAdapter
         XlsxCustomRibbonPackageGraphNormalizer.NormalizePackage(generatedArchive);
         XlsxPackageMetadataMerger.NormalizeCustomXmlPackageGraph(generatedArchive);
         XlsxDocumentPropertiesPreserver.Preserve(sourceArchive, generatedArchive);
-        XlsxWorkbookMetadataPreserver.Preserve(sourceArchive, generatedArchive, workbook);
+        XlsxWorkbookMetadataPreserver.Preserve(
+            sourceArchive,
+            generatedArchive,
+            workbook,
+            sourcePackage.SourceSheetIdsByLocalId ?? []);
         XlsxStylesheetMetadataPreserver.Preserve(sourceArchive, generatedArchive);
         if (sourceParts.HasPivotPackageParts)
             XlsxPivotXmlReferencePreserver.Preserve(sourceArchive, generatedArchive, context);

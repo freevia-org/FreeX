@@ -706,4 +706,62 @@ internal static class XlsxNamedRangeMapper
                trimmedName.StartsWith("_xlnm.", StringComparison.OrdinalIgnoreCase) ||
                ExcelReservedDefinedNames.Contains(trimmedName);
     }
+
+    // A defined name's refersTo body never makes it into the model (NamedRanges/
+    // NamedFormulas/ScopedNamedFormulas) when it is a constant literal (e.g. 0.21 or "Hello"),
+    // an external-workbook reference (e.g. [1]Sheet1!$A$1), or a broken reference (#REF!).
+    // IsFormulaExpression treats all three as "not a formula" (no operator/parenthesis characters),
+    // so LoadWorkbookDefinedNameFormulasFromPackage / LoadDefinedNames silently skip them, and they
+    // are equally not a resolvable plain range reference (ClosedXML has nothing to resolve for a
+    // constant, an external workbook index, or a #REF! error). ValidateNamedRangeName only inspects
+    // the NAME text, so it happily passes all three, which would otherwise make a caller's
+    // isModelRepresentable check true for content FreeX can never model - the defined-name
+    // resurrection gates (RestorePatchWorkbookDefinedNames and XlsxWorkbookMetadataPreserver.
+    // MergeDefinedNames) must detect that case directly (matching the same never-loaded-in-the-
+    // first-place reasoning already applied to validator-rejected names) so they never mistake such
+    // a name's absence from the live model for a user deletion.
+    internal static bool IsUnmodelableDefinedNameRefersTo(string refersTo)
+    {
+        var body = refersTo.Trim();
+        if (body.StartsWith('='))
+            body = body[1..].Trim();
+
+        if (body.Length == 0)
+            return true;
+
+        // Broken reference, anywhere in the body (Excel keeps these; FreeX has no #REF! model).
+        if (body.Contains("#REF!", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // External-workbook reference: '[<index>]SheetName!...' (optionally with the sheet name
+        // single-quoted, e.g. '[1]Sheet1'!$A$1). FreeX only models references into the current
+        // workbook, so any external-workbook marker is unmodelable regardless of what follows.
+        var externalRefOpen = body.IndexOf('[');
+        var externalRefClose = externalRefOpen >= 0 ? body.IndexOf(']', externalRefOpen + 1) : -1;
+        if (externalRefOpen >= 0 &&
+            externalRefClose > externalRefOpen &&
+            int.TryParse(
+                body.Substring(externalRefOpen + 1, externalRefClose - externalRefOpen - 1),
+                out _))
+        {
+            return true;
+        }
+
+        // A plain range/cell reference always contains a '!' scope separator (SheetName!$A$1) or
+        // is a bare cell/range address without one; formula expressions were already excluded by
+        // the ValidateNamedRangeName/IsFormulaExpression checks made by the caller before this
+        // helper runs on the remaining "not a formula" bodies. Anything left with no '!' and no
+        // digit-bearing cell-address shape (e.g. a text/number/boolean constant such as 0.21 or
+        // "Hello") is a constant literal, which is never loaded into the model.
+        if (!body.Contains('!'))
+        {
+            var looksLikeBareCellAddress = body.Length > 0 &&
+                (body[0] == '$' || char.IsLetter(body[0])) &&
+                body.Any(char.IsDigit);
+            if (!looksLikeBareCellAddress)
+                return true;
+        }
+
+        return false;
+    }
 }
