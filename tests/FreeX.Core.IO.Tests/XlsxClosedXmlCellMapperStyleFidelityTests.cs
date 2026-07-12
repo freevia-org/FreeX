@@ -158,14 +158,11 @@ public sealed class XlsxClosedXmlCellMapperStyleFidelityTests
         // Before the fix, ApplyStyle never referenced style.GradientFill, so a gradient-only
         // cell was indistinguishable from CellStyle.Default: ClosedXML silently omitted its <c>
         // element entirely (sheet.GetStyleOnly returned null after reload — the cell vanished).
-        // This is what the fix in ApplyStyle addresses: every gradient-only cell must still
-        // carry its OWN distinct, non-default fill (never dropped, never silently merged with
-        // the workbook's shared default/no-fill slot).
-        //
-        // Note: full gradient CONTENT restoration after a full rebuild also depends on
-        // XlsxStylesheetMetadataPreserver.MergeStylesheetGradientFills's cellXf signature match,
-        // which is a separate mechanism in a different file (out of this bucket's scope) — it is
-        // not asserted here.
+        // ApplyStyle now stamps a distinct solid placeholder so the cell keeps its own restorable
+        // cellXf, and XlsxStylesheetMetadataPreserver then overwrites that placeholder with the real
+        // gradient content. A full save runs both mechanisms, so the reloaded cell carries the actual
+        // GRADIENT (not merely a placeholder colour) — never dropped, never collapsed onto the
+        // workbook's shared default/no-fill slot.
         var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "CellGradientFillLinear.xlsx");
         File.Exists(path).Should().BeTrue($"gradient fixture must be copied to output: {path}");
 
@@ -188,18 +185,18 @@ public sealed class XlsxClosedXmlCellMapperStyleFidelityTests
         var style2 = StyleAt(reloaded, reloadedSheet, 7u, 2u);
         var style3 = StyleAt(reloaded, reloadedSheet, 12u, 2u);
 
-        // None of the three gradient-only cells were dropped, and none fell back to a
-        // colorless/default fill (the historical "vanishes entirely" bug).
-        style1.FillColor.Should().NotBeNull("R2C2's gradient-derived fill must not be lost");
-        style2.FillColor.Should().NotBeNull("R7C2's gradient-derived fill must not be lost");
-        style3.FillColor.Should().NotBeNull("R12C2's gradient-derived fill must not be lost");
+        // None of the three gradient-only cells were dropped or collapsed to the shared default:
+        // each carries its own restored gradient (a gradient fill clears the solid FillColor, so the
+        // presence of GradientFill — not FillColor — is the post-restore evidence the cell survived).
+        style1.GradientFill.Should().NotBeNull("R2C2's gradient must survive the rebuild");
+        style2.GradientFill.Should().NotBeNull("R7C2's gradient must survive the rebuild");
+        style3.GradientFill.Should().NotBeNull("R12C2's gradient must survive the rebuild");
 
-        // The three must remain distinguishable from each other — none collapsed onto the
-        // workbook's shared default fillId (which would also silently corrupt every other
-        // plain cell in the workbook, per the finding's evidence).
-        style1.FillColor.Should().NotBe(style2.FillColor);
-        style2.FillColor.Should().NotBe(style3.FillColor);
-        style1.FillColor.Should().NotBe(style3.FillColor);
+        // The three must remain distinguishable from each other — none collapsed onto another's
+        // (or the shared default) fill, which would silently corrupt unrelated cells too.
+        style1.GradientFill!.Stops[0].Color.Should().NotBe(style2.GradientFill!.Stops[0].Color);
+        style2.GradientFill!.Stops[0].Color.Should().NotBe(style3.GradientFill!.Stops[0].Color);
+        style1.GradientFill!.Stops[0].Color.Should().NotBe(style3.GradientFill!.Stops[0].Color);
     }
 
     private static CellStyle StyleAt(Workbook wb, Sheet sheet, uint row, uint col)

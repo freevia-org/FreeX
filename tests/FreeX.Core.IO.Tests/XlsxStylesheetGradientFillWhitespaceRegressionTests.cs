@@ -9,9 +9,15 @@ namespace FreeX.Core.IO.Tests;
 /// crashed with an InvalidCastException while restoring a gradient fill whenever the source
 /// styles.xml's &lt;fill&gt;&lt;gradientFill&gt; entry carried insignificant whitespace between
 /// the tags (e.g. from any pretty-printing tool/editor, or a plain XDocument.Save with default
-/// formatting). MergeStylesheetGradientFills replaced the target &lt;fill&gt;'s children via
+/// formatting). The old merge replaced the target &lt;fill&gt;'s children via
 /// `sourceFill.Nodes().Select(n => (XElement)n)`, and `.Nodes()` includes the whitespace XText
-/// node sitting between the tags, which cannot be cast to XElement.
+/// node sitting between the tags, which cannot be cast to XElement. The current merge clones the
+/// &lt;gradientFill&gt; element directly, so it must keep tolerating that whitespace.
+///
+/// The rebuilt target here uses the realistic shape a full ClosedXML rebuild produces: a distinct
+/// solid placeholder fill whose foreground is the gradient's first-stop colour (stamped by
+/// XlsxClosedXmlCellMapper.ApplyStyle), which the preserver correlates by colour and overwrites
+/// with the real gradient.
 /// </summary>
 public sealed class XlsxStylesheetGradientFillWhitespaceRegressionTests
 {
@@ -45,18 +51,20 @@ public sealed class XlsxStylesheetGradientFillWhitespaceRegressionTests
             </cellXfs>
             """)));
 
-        // Rebuilt target: same signature xf but still pointing at the plain (no-fill) fill —
-        // simulates ClosedXML's full-rebuild path, which knows nothing about gradients.
+        // Rebuilt target: the gradient's cell now carries a solid placeholder fill whose foreground
+        // is the gradient's first-stop colour (FFFF0000) — exactly what a full ClosedXML rebuild +
+        // ApplyStyle produces. The preserver correlates by that colour and swaps the gradient back in.
         using var targetPackage = XlsxPackageTestFixtures.CreatePackage(("xl/styles.xml", StyleSheet(
             """
-            <fills count="1">
+            <fills count="2">
               <fill><patternFill patternType="none"/></fill>
+              <fill><patternFill patternType="solid"><fgColor rgb="FFFF0000"/></patternFill></fill>
             </fills>
             """,
             """
             <cellXfs count="2">
               <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
-              <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+              <xf numFmtId="0" fontId="0" fillId="1" borderId="0" xfId="0" applyFill="1"/>
             </cellXfs>
             """)));
 
@@ -86,8 +94,8 @@ public sealed class XlsxStylesheetGradientFillWhitespaceRegressionTests
             """<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="0" fillId="1" borderId="0" xfId="0" applyFill="1"/></cellXfs>""")));
 
         using var targetPackage = XlsxPackageTestFixtures.CreatePackage(("xl/styles.xml", StyleSheet(
-            """<fills count="1"><fill><patternFill patternType="none"/></fill></fills>""",
-            """<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>""")));
+            """<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF00FF00"/></patternFill></fill></fills>""",
+            """<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="0" fillId="1" borderId="0" xfId="0" applyFill="1"/></cellXfs>""")));
 
         Preserve(sourcePackage, targetPackage);
 

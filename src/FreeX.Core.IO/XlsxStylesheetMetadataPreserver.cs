@@ -27,7 +27,7 @@ internal static class XlsxStylesheetMetadataPreserver
         var changed = false;
         if (MergeStylesheetColors(sourceStylesXml.Root?.Element(workbookNs + "colors"), targetRoot, workbookNs))
             changed = true;
-        if (MergeStylesheetGradientFills(sourceStylesXml.Root, targetRoot, workbookNs))
+        if (MergeStylesheetGradientFills(sourceStylesXml, targetRoot, sourceArchive, workbookNs))
             changed = true;
         if (MergeStylesheetDifferentialStyles(sourceStylesXml.Root?.Element(workbookNs + "dxfs"), targetRoot, workbookNs))
             changed = true;
@@ -277,124 +277,134 @@ internal static class XlsxStylesheetMetadataPreserver
         reader.Prefix == "xmlns" ||
         (reader.Prefix.Length == 0 && reader.LocalName == "xmlns");
 
-    // Attributes of a cellXfs <xf> element that participate in its "rendered style" identity for
-    // the purpose of correlating a source xf with its rebuilt counterpart. fillId is deliberately
-    // excluded: it is exactly the reference that differs (or gets renumbered) across the rebuild,
-    // so it cannot be part of the signature used to find the corresponding target xf.
-    private static readonly string[] CellXfSignatureAttributes =
-    [
-        "numFmtId", "fontId", "borderId", "quotePrefix", "pivotButton",
-        "applyNumberFormat", "applyFont", "applyBorder", "applyAlignment", "applyProtection"
-    ];
-
     /// <summary>
-    /// Copies gradient fill entries from the source styles.xml fills section into the target.
-    /// ClosedXML does not know about gradient fills; when a loaded workbook is saved, ClosedXML
-    /// rebuilds styles.xml from its own style cache: fills, cellXfs, and every other index space
-    /// are renumbered and resized, so a source fillId (or raw fill-list position) generally does
-    /// not name the same fill in the rebuilt target. This method instead correlates each source
-    /// cellXfs entry that references a gradient fill with its counterpart in the rebuilt target
-    /// cellXfs by comparing the rest of the xf's rendered style (number format, font, border,
-    /// alignment/protection children — everything except the fill itself), then restores the
-    /// gradient at that target xf's own fillId.
+    /// Restores gradient fill content that ClosedXML drops when it rebuilds styles.xml from its own
+    /// style cache (ClosedXML has no gradient-fill model). To stop a gradient-only cell from
+    /// collapsing into the shared default style (which would delete its cell element and its
+    /// restorable fill slot outright), <see cref="XlsxClosedXmlCellMapper"/>.ApplyStyle stamps a
+    /// solid placeholder fill whose foreground colour is the gradient's first (lowest-position) stop
+    /// colour. This method performs the exact inverse: it resolves each source cellXf's gradient with
+    /// the same reader and workbook theme the loader used (so the first-stop colour matches the
+    /// stamped placeholder byte for byte), finds the rebuilt target's solid placeholder fill of that
+    /// colour, and swaps the real source gradient content back in.
     /// </summary>
-    private static bool MergeStylesheetGradientFills(XElement? sourceRoot, XElement targetRoot, XNamespace workbookNs)
+    /// <remarks>
+    /// Correlating by placeholder colour rather than by cellXf style signature is deliberate. A full
+    /// rebuild renumbers and reshapes every index space: fontId/borderId/numFmtId references are
+    /// renumbered, and ClosedXML re-emits every apply* flag plus a fully expanded alignment/protection
+    /// child even for otherwise-default xfs. A minimally-authored source xf (as real Excel files emit)
+    /// and its rebuilt counterpart therefore share almost no raw attribute text, so a raw-attribute
+    /// signature match never fires for real files. The placeholder colour is the one signal ApplyStyle
+    /// deliberately carries across the rebuild.
+    /// </remarks>
+    private static bool MergeStylesheetGradientFills(
+        XDocument sourceStylesXml,
+        XElement targetRoot,
+        ZipArchive sourceArchive,
+        XNamespace workbookNs)
     {
+        var sourceRoot = sourceStylesXml.Root;
         var sourceFills = sourceRoot?.Element(workbookNs + "fills");
         if (sourceFills is null)
             return false;
 
         var sourceFillList = sourceFills.Elements(workbookNs + "fill").ToList();
-        var sourceGradientFillIndexes = new HashSet<int>();
-        for (var i = 0; i < sourceFillList.Count; i++)
-        {
-            if (sourceFillList[i].Element(workbookNs + "gradientFill") is not null)
-                sourceGradientFillIndexes.Add(i);
-        }
-
-        if (sourceGradientFillIndexes.Count == 0)
+        if (!sourceFillList.Any(fill => fill.Element(workbookNs + "gradientFill") is not null))
             return false;
 
         var sourceCellXfs = sourceRoot?.Element(workbookNs + "cellXfs")?.Elements(workbookNs + "xf").ToList();
         if (sourceCellXfs is not { Count: > 0 })
             return false;
 
-        var targetFills = targetRoot.Element(workbookNs + "fills");
-        var targetCellXfs = targetRoot.Element(workbookNs + "cellXfs")?.Elements(workbookNs + "xf").ToList();
-        if (targetFills is null || targetCellXfs is not { Count: > 0 })
+        var targetFillList = targetRoot.Element(workbookNs + "fills")?.Elements(workbookNs + "fill").ToList();
+        if (targetFillList is not { Count: > 0 })
             return false;
 
-        var targetFillList = targetFills.Elements(workbookNs + "fill").ToList();
+        // Resolve every source cellXf's gradient (theme/indexed/sRGB stop colours all resolved to
+        // concrete RGB) with the SAME reader + workbook theme the loader used, so the first-stop
+        // colour we compute equals the solid placeholder ApplyStyle stamped during the rebuild.
+        var sourceTheme = XlsxWorkbookThemeReader.Load(sourceArchive);
+        var sourceIndexedColors = XlsxIndexedColorPaletteMapper.Load(sourceStylesXml);
+        var resolvedGradients = XlsxCellGradientFillReader.Read(sourceStylesXml, sourceTheme, sourceIndexedColors);
+        if (!resolvedGradients.HasAny)
+            return false;
 
-        // Group target xf indexes by their style signature so each source xf can find its
-        // rebuilt counterpart even though absolute cellXfs positions are not preserved.
-        var targetXfsBySignature = new Dictionary<string, List<int>>(StringComparer.Ordinal);
-        for (var i = 0; i < targetCellXfs.Count; i++)
+        // Bucket the rebuilt target's solid fills by their foreground RGB. Several placeholders can
+        // share a colour (ClosedXML deduplicates identical fills), so each colour maps to a queue and
+        // every target fill is consumed at most once.
+        var targetSolidFillsByRgb = new Dictionary<int, Queue<XElement>>();
+        foreach (var targetFill in targetFillList)
         {
-            var signature = ComputeCellXfSignature(targetCellXfs[i]);
-            if (!targetXfsBySignature.TryGetValue(signature, out var list))
-                targetXfsBySignature[signature] = list = [];
-            list.Add(i);
+            if (TryGetSolidFillRgbKey(targetFill, workbookNs, out var rgbKey))
+            {
+                if (!targetSolidFillsByRgb.TryGetValue(rgbKey, out var queue))
+                    targetSolidFillsByRgb[rgbKey] = queue = new Queue<XElement>();
+                queue.Enqueue(targetFill);
+            }
         }
 
-        var changed = false;
-        var restoredTargetFillIndexes = new HashSet<int>();
-        var consumedTargetXfIndexes = new HashSet<int>();
+        if (targetSolidFillsByRgb.Count == 0)
+            return false;
 
+        var changed = false;
+        var restoredSourceFillIndexes = new HashSet<int>();
         for (var sourceXfIndex = 0; sourceXfIndex < sourceCellXfs.Count; sourceXfIndex++)
         {
-            var sourceXf = sourceCellXfs[sourceXfIndex];
-            if (!TryGetIntAttribute(sourceXf, "fillId", out var sourceFillId) ||
-                !sourceGradientFillIndexes.Contains(sourceFillId) ||
-                sourceFillId >= sourceFillList.Count)
+            if (!resolvedGradients.TryGet(sourceXfIndex, out var gradient) ||
+                gradient is not { Stops.Count: > 0 })
             {
                 continue;
             }
 
-            var signature = ComputeCellXfSignature(sourceXf);
-            if (!targetXfsBySignature.TryGetValue(signature, out var candidateTargetXfs))
-                continue;
-
-            var targetXfIndex = candidateTargetXfs.FirstOrDefault(idx => !consumedTargetXfIndexes.Contains(idx), -1);
-            if (targetXfIndex < 0)
-                targetXfIndex = candidateTargetXfs[0];
-            consumedTargetXfIndexes.Add(targetXfIndex);
-
-            if (!TryGetIntAttribute(targetCellXfs[targetXfIndex], "fillId", out var targetFillId) ||
-                targetFillId >= targetFillList.Count)
+            // Restore each source gradient fill at most once: ClosedXML kept a single placeholder for
+            // it, however many cellXfs referenced it (their placeholders deduplicate to one fill).
+            if (!TryGetIntAttribute(sourceCellXfs[sourceXfIndex], "fillId", out var sourceFillId) ||
+                sourceFillId < 0 || sourceFillId >= sourceFillList.Count ||
+                !restoredSourceFillIndexes.Add(sourceFillId))
             {
                 continue;
             }
 
-            var targetFill = targetFillList[targetFillId];
-            if (targetFill.Element(workbookNs + "gradientFill") is not null)
-                continue; // already a gradient — no change needed
+            var sourceGradientFill = sourceFillList[sourceFillId].Element(workbookNs + "gradientFill");
+            if (sourceGradientFill is null)
+                continue;
 
-            if (!restoredTargetFillIndexes.Add(targetFillId))
-                continue; // this target fill slot was already restored from another matched xf
+            var placeholderRgb = RgbKey(gradient.Stops[0].Color);
+            if (!targetSolidFillsByRgb.TryGetValue(placeholderRgb, out var candidates) || candidates.Count == 0)
+                continue;
 
-            targetFill.ReplaceNodes(sourceFillList[sourceFillId].Elements().Select(n => new XElement(n)));
+            // Overwrite the solid placeholder with a clone of the real source gradient. Cloning the
+            // gradientFill element directly (rather than the source fill's child nodes) skips any
+            // insignificant whitespace text node sitting between the fill and gradientFill tags.
+            candidates.Dequeue().ReplaceNodes(new XElement(sourceGradientFill));
             changed = true;
         }
 
         return changed;
     }
 
-    private static string ComputeCellXfSignature(XElement xf)
+    // A rebuilt solid placeholder fill (stamped by ApplyStyle from a gradient's first-stop colour) is
+    // a <patternFill patternType="solid"> whose <fgColor> carries the explicit sRGB. Returns its
+    // 24-bit RGB key, or false for any non-solid pattern or a foreground without a readable sRGB.
+    private static bool TryGetSolidFillRgbKey(XElement fill, XNamespace workbookNs, out int rgbKey)
     {
-        var parts = new List<string>(CellXfSignatureAttributes.Length + 2);
-        foreach (var attributeName in CellXfSignatureAttributes)
-            parts.Add(xf.Attribute(attributeName)?.Value ?? string.Empty);
+        rgbKey = 0;
+        var patternFill = fill.Element(workbookNs + "patternFill");
+        if (patternFill is null ||
+            !string.Equals(patternFill.Attribute("patternType")?.Value, "solid", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
 
-        var alignment = xf.Element(xf.Name.Namespace + "alignment");
-        parts.Add(alignment is null ? string.Empty : alignment.ToString(SaveOptions.DisableFormatting));
+        if (!XlsxColorReader.TryReadCellColor(patternFill.Element(workbookNs + "fgColor"), out var color))
+            return false;
 
-        var protection = xf.Element(xf.Name.Namespace + "protection");
-        parts.Add(protection is null ? string.Empty : protection.ToString(SaveOptions.DisableFormatting));
-        const string separator = "";
-
-        return string.Join(separator, parts);
+        rgbKey = RgbKey(color);
+        return true;
     }
+
+    private static int RgbKey(FreeX.Core.Model.CellColor color) =>
+        (color.R << 16) | (color.G << 8) | color.B;
 
     private static bool TryGetIntAttribute(XElement element, string attributeName, out int value)
     {
